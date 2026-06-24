@@ -229,6 +229,11 @@ def parse_employees(xlsx_path: Path) -> tuple[list[dict[str, Any]], list[str]]:
     ws = wb[sheet_name]
 
     rows: list[dict[str, Any]] = []
+    # G-number is the primary key; the v3 sheet occasionally carries the same
+    # ID twice (a person entered twice, or a typo'd G-number). Writing both
+    # would abort the whole import on a UNIQUE constraint, so keep the first
+    # occurrence and skip-log the rest.
+    seen_ids: dict[str, int] = {}
     for row_idx, row in enumerate(ws.iter_rows(min_row=2, values_only=True), start=2):
         # row indices are 0-based; column 1 is ID
         if not row or row[1] is None:
@@ -241,9 +246,16 @@ def parse_employees(xlsx_path: Path) -> tuple[list[dict[str, Any]], list[str]]:
         if not emp_id:
             skipped.append(f"row {row_idx}: blank ID")
             continue
+        if emp_id in seen_ids:
+            skipped.append(
+                f"row {row_idx} ({emp_id}): duplicate ID, first seen at "
+                f"row {seen_ids[emp_id]} — kept first, skipped this row"
+            )
+            continue
         if not _coerce_str(emp.get("name_en")):
             skipped.append(f"row {row_idx} ({emp_id}): blank name_en")
             continue
+        seen_ids[emp_id] = row_idx
         emp["id"] = emp_id
         emp["name_en"] = _coerce_str(emp["name_en"]) or ""
         for k in ("name_ar", "nationality", "contact", "uae_id_no",
