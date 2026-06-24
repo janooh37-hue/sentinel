@@ -15,6 +15,28 @@ import '@fortune-sheet/react/dist/index.css'
 
 import { api } from '@/lib/api'
 
+/**
+ * Normalize LuckyExcel output for Fortune-sheet.
+ *
+ * Fortune-sheet's React layer does `insertedImgs = sheet.images` then
+ * `insertedImgs.map(...)`, so each sheet's `images` MUST be an array. LuckyExcel
+ * emits `images` as an object keyed by id (legacy LuckySheet shape) for any file
+ * with embedded drawings, which makes `.map` throw and crashes the whole viewer.
+ * Coerce `images` to an array (object -> its values) so such files render.
+ */
+function normalizeSheets(raw: unknown): Sheet[] {
+  const sheets = Array.isArray(raw) ? raw : []
+  return sheets.map((s) => {
+    const sheet = s as Record<string, unknown>
+    const imgs = sheet.images
+    let images: unknown[]
+    if (Array.isArray(imgs)) images = imgs
+    else if (imgs && typeof imgs === 'object') images = Object.values(imgs)
+    else images = []
+    return { ...sheet, images } as unknown as Sheet
+  })
+}
+
 export default function XlsxViewer({
   entryId,
   index,
@@ -41,7 +63,7 @@ export default function XlsxViewer({
           })
         })
         if (!cancelled) {
-          setSheets(parsed as Sheet[])
+          setSheets(normalizeSheets(parsed))
           setStatus('ready')
         }
       } catch {
