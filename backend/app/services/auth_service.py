@@ -155,6 +155,51 @@ def approve_user(
     return user
 
 
+def link_self(db: Session, user: User, *, employee_id: str | None) -> User:
+    """Set the signed-in user's *own* ``employee_id`` (self-service link).
+
+    This is the path the AccountMenu/Email-settings "Link your employee record"
+    picker uses. Identity is derived from ``User.employee_id`` (not the email
+    account), so this is what actually flips ``identity.linked``.
+
+    Policy (mirrors the UI gating): the initial claim is self-service, but
+    *changing* or *clearing* an existing link is admin-only — an operator can't
+    hop identities once linked. Raises ``AppError`` on a forbidden change or an
+    unknown employee.
+    """
+    is_admin = user.role == ADMIN_ROLE
+    target = (employee_id or "").strip().upper() or None
+
+    if user.employee_id is not None and target != user.employee_id and not is_admin:
+        raise AppError(
+            "LINK_CHANGE_FORBIDDEN",
+            "Only an admin can change an existing employee link.",
+            http_status=403,
+        )
+
+    if target is not None and db.get(Employee, target) is None:
+        raise AppError(
+            "EMPLOYEE_NOT_FOUND", f"Employee {target} not found", http_status=404
+        )
+
+    user.employee_id = target
+    # Keep the display_name useful when the account had none (e.g. bootstrap
+    # admin that registered before the roster existed).
+    if target is not None and not user.display_name:
+        employee = db.get(Employee, target)
+        if employee is not None:
+            user.display_name = employee.name_en
+    _audit(db, user.display_name or user.email, "link_self", user)
+    db.commit()
+    db.refresh(user)
+
+    # Fill the legacy admin slot if this admin is the first to claim an employee.
+    if target is not None and is_admin:
+        identity_service.promote_to_admin_if_vacant(db, target)
+
+    return user
+
+
 def reject_user(
     db: Session, user_id: int, *, reason: str | None = None, actor: str | None = None
 ) -> User:
@@ -631,6 +676,7 @@ __all__ = [
     "count_active_admins",
     "count_users",
     "get_by_email",
+    "link_self",
     "list_audit",
     "list_users",
     "register",

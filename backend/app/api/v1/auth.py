@@ -34,6 +34,7 @@ from app.schemas.auth import (
     AuditEntryRead,
     CapabilityRead,
     DefaultManagerRequest,
+    LinkSelfRequest,
     LoginRequest,
     RegisterRequest,
     RegisterResult,
@@ -149,6 +150,22 @@ def verify_password(
     """
     auth_service.verify_password_for(db, user, payload.password)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.post("/me/link", response_model=SessionUser)
+def link_my_employee(
+    body: LinkSelfRequest,
+    user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[Session, Depends(get_db)],
+) -> SessionUser:
+    """Link the signed-in user to their own employee record (G-number).
+
+    Sets ``User.employee_id`` — the authoritative identity source — so the
+    "Link your employee record" picker actually flips ``identity.linked``.
+    Changing/clearing an existing link is admin-only (enforced in the service).
+    """
+    updated = auth_service.link_self(db, user, employee_id=body.employee_id)
+    return auth_service.to_session_user(db, updated)
 
 
 @router.post("/me/signature", response_model=SessionUser)

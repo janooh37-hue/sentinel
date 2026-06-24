@@ -84,6 +84,15 @@ class SetRoleRequest(BaseModel):
     role: str
 
 
+class LinkSelfRequest(BaseModel):
+    """Set (or clear, admin-only) the signed-in user's own employee link.
+
+    ``employee_id`` is the G-number to claim; ``null`` clears the link.
+    """
+
+    employee_id: str | None = Field(default=None, max_length=16)
+
+
 class DefaultManagerRequest(BaseModel):
     """Set/clear the single-holder default-manager flag (spec 2026-06-11 §5)."""
 
@@ -159,6 +168,7 @@ __all__ = [
     "ApproveRequest",
     "AuditEntryRead",
     "CapabilityRead",
+    "LinkSelfRequest",
     "LoginRequest",
     "RegisterRequest",
     "RegisterResult",

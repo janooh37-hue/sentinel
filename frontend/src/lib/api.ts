@@ -1373,6 +1373,11 @@ export const api = {
     request<RegisterResult>('POST', '/auth/register', payload),
   verifyAuthPassword: (password: string) =>
     request<void>('POST', '/auth/verify-password', { password }),
+  /** Link the signed-in user to their own employee record (G-number). Sets
+   * `User.employee_id` — the authoritative identity source — so the link
+   * picker actually flips `identity.linked`. Pass `null` to clear (admin). */
+  linkMyEmployee: (employee_id: string | null) =>
+    request<SessionUser>('POST', '/auth/me/link', { employee_id }),
   listAuthUsers: () => request<AdminUserRead[]>('GET', '/auth/users'),
   approveAuthUser: (id: number, role: string, employee_id?: string | null) =>
     request<AdminUserRead>('POST', `/auth/users/${id}/approve`, { role, employee_id }),

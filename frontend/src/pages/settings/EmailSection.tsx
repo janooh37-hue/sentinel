@@ -27,6 +27,7 @@ import {
 import { api, ApiError } from '@/lib/api'
 import type { EmailAccountUpsert } from '@/lib/api'
 import { useIdentity } from '@/lib/useIdentity'
+import { useAuth } from '@/lib/authContext'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import { EmployeePicker } from '@/pages/application/EmployeePicker'
 import { SignatureSection } from './SignatureSection'
@@ -76,6 +77,7 @@ export function EmailSection(): React.JSX.Element {
   })
 
   const { identity, isAdmin } = useIdentity()
+  const { setUser } = useAuth()
   const [linkPickerId, setLinkPickerId] = useState<string | null>(null)
   const [isChangingLink, setIsChangingLink] = useState(false)
 
@@ -151,38 +153,22 @@ export function EmailSection(): React.JSX.Element {
       toast.error(err instanceof ApiError ? err.message : String(err)),
   })
 
+  // Identity is the signed-in *user's* `employee_id` (not the email account's
+  // linked_employee_id), so the link must write the user via /auth/me/link.
   const linkMutation = useMutation({
-    mutationFn: (employee_id: string | null) =>
-      api.upsertEmailAccount({
-        ...form,
-        imap_host: 'imap.ionos.com',
-        imap_port: 993,
-        use_ssl: true,
-        smtp_host: 'smtp.ionos.com',
-        smtp_port: 587,
-        smtp_use_tls: true,
-        linked_employee_id: employee_id,
-        password: undefined,
-      }),
-    onSuccess: (acc) => {
-      const wasAdminVacant = !identity?.is_admin && !identity?.linked
-      if (wasAdminVacant && acc.linked_employee_id) {
-        toast.success(
-          t('settings.email.linkAdminGranted', {
-            name: acc.linked_employee_id,
-            id: acc.linked_employee_id,
-          }),
-        )
-      } else if (acc.linked_employee_id) {
+    mutationFn: (employee_id: string | null) => api.linkMyEmployee(employee_id),
+    onSuccess: (user) => {
+      // Update the auth cache so `identity.linked` flips immediately.
+      setUser(user)
+      if (user.employee_id) {
         toast.success(
           t('settings.email.linkSuccess', {
-            name: acc.linked_employee_id,
-            id: acc.linked_employee_id,
+            name: user.name_en ?? user.employee_id,
+            id: user.employee_id,
           }),
         )
       }
-      void qc.invalidateQueries({ queryKey: ['email-account'] })
-      void qc.invalidateQueries({ queryKey: ['identity'] })
+      void qc.invalidateQueries({ queryKey: ['auth-me'] })
       setIsChangingLink(false)
       setLinkPickerId(null)
     },
