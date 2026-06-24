@@ -30,6 +30,7 @@ import {
 import { RoleGate } from '@/components/shell/RoleGate'
 import { CapabilityGate } from '@/components/shell/CapabilityGate'
 import { useAuth } from '@/lib/authContext'
+import { copyToClipboard } from '@/lib/clipboard'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import { EmailSection } from './EmailSection'
 import { SigningSignatureSection } from './SigningSignatureSection'
@@ -680,8 +681,9 @@ function AdvancedSection({
   })
 
   function copyPath(path: string): void {
-    void navigator.clipboard.writeText(path)
-    toast.success(t('settings.advanced.pathCopiedToast'))
+    void copyToClipboard(path).then((ok) => {
+      if (ok) toast.success(t('settings.advanced.pathCopiedToast'))
+    })
   }
 
   return (

@@ -27,6 +27,7 @@ import {
 import { api, ApiError } from '@/lib/api'
 import { setLanguage } from '@/lib/i18n'
 import { useAuth } from '@/lib/authContext'
+import { copyToClipboard } from '@/lib/clipboard'
 import './LoginPage.css'
 
 type Screen = 'picker' | 'form' | 'request' | 'requestSent' | 'forgot' | 'locked'
@@ -205,7 +206,8 @@ export function LoginPage(): React.JSX.Element {
   }
 
   function copyEmail(): void {
-    void navigator.clipboard?.writeText(t('auth.itEmail')).then(() => {
+    void copyToClipboard(t('auth.itEmail')).then((ok) => {
+      if (!ok) return
       setCopied(true)
       window.setTimeout(() => setCopied(false), 1500)
     })

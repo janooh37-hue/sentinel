@@ -8,6 +8,7 @@ import { Component, type ErrorInfo, type ReactNode } from 'react'
 import { Button } from '@/components/ui/button'
 import { APP_VERSION } from '@/lib/appVersion'
 import { api } from '@/lib/api'
+import { copyToClipboard } from '@/lib/clipboard'
 
 interface Props {
   children: ReactNode
@@ -48,7 +49,7 @@ export class ErrorBoundary extends Component<Props, State> {
       error: this.state.error?.message,
       stack: this.state.error?.stack,
     }
-    void navigator.clipboard.writeText(JSON.stringify(blob, null, 2))
+    void copyToClipboard(JSON.stringify(blob, null, 2))
   }
 
   private reload = (): void => {
