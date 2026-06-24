@@ -1,0 +1,752 @@
+{
+  "Leave Application Form": {
+    "category": "personnel",
+    "name_en": "Leave Application Form",
+    "name_ar": "نموذج طلب إجازة",
+    "form_number": "300-003",
+    "fields": [
+      {
+        "key": "leave_type",
+        "type": "select",
+        "label_en": "Leave Type",
+        "label_ar": "نوع الإجازة",
+        "required": true,
+        "options": [
+          "Annual Leave",
+          "Sick Leave",
+          "Compassionate Leave",
+          "Duty Leave",
+          "Emergency Leave",
+          "Hajj Leave",
+          "Others"
+        ]
+      },
+      {
+        "key": "start_date",
+        "type": "date",
+        "label_en": "Leave Start",
+        "label_ar": "تاريخ بداية الإجازة",
+        "required": true
+      },
+      {
+        "key": "end_date",
+        "type": "date",
+        "label_en": "Leave End",
+        "label_ar": "تاريخ نهاية الإجازة",
+        "required": true
+      },
+      {
+        "key": "total_days",
+        "type": "text",
+        "label_en": "Total Days",
+        "label_ar": "إجمالي الأيام",
+        "required": false
+      },
+      {
+        "key": "manager_id",
+        "type": "manager_picker",
+        "label_en": "Approving Manager",
+        "label_ar": "المدير المعتمد",
+        "required": false
+      },
+      {
+        "key": "submitter_id",
+        "type": "submitter_picker",
+        "label_en": "Submitter",
+        "label_ar": "مقدم الطلب",
+        "required": false
+      },
+      {
+        "key": "hand_sign_employee",
+        "type": "hand_sign_checkbox",
+        "label_en": "Embed my saved signature",
+        "label_ar": "تضمين توقيعي المحفوظ",
+        "required": false
+      },
+      {
+        "key": "employee_sig_path",
+        "type": "signature",
+        "label_en": "Employee Signature",
+        "label_ar": "توقيع الموظف",
+        "required": false
+      }
+    ]
+  },
+  "Violation Form": {
+    "category": "personnel",
+    "name_en": "Violation Form",
+    "name_ar": "نموذج مخالفة",
+    "form_number": "300-004",
+    "fields": [
+      {
+        "key": "violations",
+        "type": "violation_checkboxes",
+        "label_en": "Violations",
+        "label_ar": "المخالفات",
+        "required": true
+      },
+      {
+        "key": "explanation",
+        "type": "textarea",
+        "label_en": "Explanation / Remarks",
+        "label_ar": "التفسير / الملاحظات",
+        "required": false
+      },
+      {
+        "key": "manager_id",
+        "type": "manager_picker",
+        "label_en": "Project Manager",
+        "label_ar": "مدير المشروع",
+        "required": false
+      },
+      {
+        "key": "hand_sign_employee",
+        "type": "hand_sign_checkbox",
+        "label_en": "Embed my saved signature",
+        "label_ar": "تضمين توقيعي المحفوظ",
+        "required": false
+      },
+      {
+        "key": "employee_sig_path",
+        "type": "signature",
+        "label_en": "Employee Signature",
+        "label_ar": "توقيع الموظف",
+        "required": false
+      }
+    ]
+  },
+  "Passport Release Form": {
+    "category": "personnel",
+    "name_en": "Passport Request",
+    "name_ar": "طلب جواز السفر",
+    "form_number": "300-004",
+    "fields": [
+      {
+        "key": "reason",
+        "type": "text",
+        "label_en": "Reason",
+        "label_ar": "السبب",
+        "required": true
+      },
+      {
+        "key": "return_date",
+        "type": "date",
+        "label_en": "Expected Return Date",
+        "label_ar": "تاريخ الإعادة المتوقع",
+        "required": false
+      },
+      {
+        "key": "manager_id",
+        "type": "manager_picker",
+        "label_en": "Line Manager",
+        "label_ar": "المدير المباشر",
+        "required": false
+      },
+      {
+        "key": "hand_sign_employee",
+        "type": "hand_sign_checkbox",
+        "label_en": "Embed my saved signature",
+        "label_ar": "تضمين توقيعي المحفوظ",
+        "required": false
+      },
+      {
+        "key": "employee_sig_path",
+        "type": "signature",
+        "label_en": "Employee Signature",
+        "label_ar": "توقيع الموظف",
+        "required": false
+      }
+    ]
+  },
+  "Duty Resumption Form": {
+    "category": "personnel",
+    "name_en": "Duty Resumption Form",
+    "name_ar": "نموذج استئناف العمل",
+    "form_number": "300-016",
+    "fields": [
+      {
+        "key": "first_date_leave",
+        "type": "date",
+        "label_en": "First Date of Leave",
+        "label_ar": "أول يوم إجازة",
+        "required": true
+      },
+      {
+        "key": "last_date_leave",
+        "type": "date",
+        "label_en": "Last Date of Leave",
+        "label_ar": "آخر يوم إجازة",
+        "required": true
+      },
+      {
+        "key": "leave_type",
+        "type": "text",
+        "label_en": "Leave Type",
+        "label_ar": "نوع الإجازة",
+        "required": false
+      },
+      {
+        "key": "resumption_date",
+        "type": "date",
+        "label_en": "Duty Resumption Date",
+        "label_ar": "تاريخ استئناف العمل",
+        "required": true
+      },
+      {
+        "key": "delay_reason",
+        "type": "textarea",
+        "label_en": "Reason for Delay (if any)",
+        "label_ar": "سبب التأخير (إن وجد)",
+        "required": false
+      },
+      {
+        "key": "manager_id",
+        "type": "manager_picker",
+        "label_en": "Line Manager",
+        "label_ar": "المدير المباشر",
+        "required": false
+      },
+      {
+        "key": "submitter_id",
+        "type": "submitter_picker",
+        "label_en": "Submitter",
+        "label_ar": "مقدم الطلب",
+        "required": false
+      },
+      {
+        "key": "hand_sign_employee",
+        "type": "hand_sign_checkbox",
+        "label_en": "Embed my saved signature",
+        "label_ar": "تضمين توقيعي المحفوظ",
+        "required": false
+      },
+      {
+        "key": "employee_sig_path",
+        "type": "signature",
+        "label_en": "Employee Signature",
+        "label_ar": "توقيع الموظف",
+        "required": false
+      }
+    ]
+  },
+  "Salary Transfer Request": {
+    "category": "personnel",
+    "name_en": "Salary Transfer Request",
+    "name_ar": "نموذج طلب تحويل راتب",
+    "form_number": "300-024",
+    "fields": [
+      {
+        "key": "bank_name",
+        "type": "text",
+        "label_en": "Bank Name",
+        "label_ar": "اسم البنك",
+        "required": true
+      },
+      {
+        "key": "branch",
+        "type": "text",
+        "label_en": "Branch",
+        "label_ar": "الفرع",
+        "required": false
+      },
+      {
+        "key": "account_number",
+        "type": "text",
+        "label_en": "Account Number",
+        "label_ar": "رقم الحساب",
+        "required": true
+      },
+      {
+        "key": "iban",
+        "type": "text",
+        "label_en": "IBAN",
+        "label_ar": "الآيبان",
+        "required": false
+      },
+      {
+        "key": "hand_sign_employee",
+        "type": "hand_sign_checkbox",
+        "label_en": "Embed my saved signature",
+        "label_ar": "تضمين توقيعي المحفوظ",
+        "required": false
+      },
+      {
+        "key": "employee_sig_path",
+        "type": "signature",
+        "label_en": "Employee Signature",
+        "label_ar": "توقيع الموظف",
+        "required": false
+      }
+    ]
+  },
+  "Salary Deduction Form": {
+    "category": "personnel",
+    "name_en": "Salary Deduction Form",
+    "name_ar": "نموذج خصم راتب",
+    "form_number": "300-013",
+    "fields": [
+      {
+        "key": "reason",
+        "type": "text",
+        "label_en": "Reason for Deduction",
+        "label_ar": "سبب الخصم",
+        "required": true
+      },
+      {
+        "key": "amount",
+        "type": "text",
+        "label_en": "Amount (AED)",
+        "label_ar": "المبلغ (درهم)",
+        "required": true
+      },
+      {
+        "key": "details",
+        "type": "textarea",
+        "label_en": "Additional Details",
+        "label_ar": "تفاصيل إضافية",
+        "required": false
+      },
+      {
+        "key": "hand_sign_employee",
+        "type": "hand_sign_checkbox",
+        "label_en": "Embed my saved signature",
+        "label_ar": "تضمين توقيعي المحفوظ",
+        "required": false
+      },
+      {
+        "key": "employee_sig_path",
+        "type": "signature",
+        "label_en": "Employee Signature",
+        "label_ar": "توقيع الموظف",
+        "required": false
+      }
+    ]
+  },
+  "Employee Clearance Form": {
+    "category": "personnel",
+    "name_en": "Employee Clearance Form",
+    "name_ar": "نموذج إخلاء طرف",
+    "form_number": "300-009",
+    "fields": [
+      {
+        "key": "issue_date",
+        "type": "date",
+        "label_en": "Issue Date",
+        "label_ar": "تاريخ الإصدار",
+        "required": false
+      },
+      {
+        "key": "termination_date",
+        "type": "date",
+        "label_en": "Termination / Last Working Date",
+        "label_ar": "تاريخ انتهاء الخدمة",
+        "required": false
+      },
+      {
+        "key": "clearance_table",
+        "type": "clearance_table",
+        "label_en": "Clearance Items",
+        "label_ar": "بنود إخلاء الطرف",
+        "required": false
+      }
+    ]
+  },
+  "HR Request Form": {
+    "category": "personnel",
+    "name_en": "HR Request Form",
+    "name_ar": "نموذج طلب موارد بشرية",
+    "form_number": "300-014",
+    "fields": [
+      {
+        "key": "doc_selections",
+        "type": "select",
+        "label_en": "Requested Documents",
+        "label_ar": "المستندات المطلوبة",
+        "required": true,
+        "options": [
+          "insurance_card",
+          "id_card",
+          "employment_certificate",
+          "salary_certificate",
+          "salary_transfer_letter",
+          "salary_pay_slip",
+          "experience_certificate"
+        ]
+      },
+      {
+        "key": "please_specify",
+        "type": "text",
+        "label_en": "Other (please specify)",
+        "label_ar": "أخرى (يرجى التحديد)",
+        "required": false
+      },
+      {
+        "key": "addressed_to",
+        "type": "text",
+        "label_en": "Addressed To",
+        "label_ar": "إلى",
+        "required": false
+      },
+      {
+        "key": "purpose",
+        "type": "textarea",
+        "label_en": "Purpose",
+        "label_ar": "الغرض",
+        "required": false
+      },
+      {
+        "key": "manager_id",
+        "type": "manager_picker",
+        "label_en": "Line Manager",
+        "label_ar": "المدير المباشر",
+        "required": false
+      },
+      {
+        "key": "hand_sign_employee",
+        "type": "hand_sign_checkbox",
+        "label_en": "Embed my saved signature",
+        "label_ar": "تضمين توقيعي المحفوظ",
+        "required": false
+      },
+      {
+        "key": "employee_sig_path",
+        "type": "signature",
+        "label_en": "Employee Signature",
+        "label_ar": "توقيع الموظف",
+        "required": false
+      }
+    ]
+  },
+  "Resignation Declaration": {
+    "category": "personnel",
+    "name_en": "Resignation Declaration",
+    "name_ar": "إقرار استقالة",
+    "form_number": "300-010",
+    "fields": [
+      {
+        "key": "hand_sign_employee",
+        "type": "hand_sign_checkbox",
+        "label_en": "Embed my saved signature",
+        "label_ar": "تضمين توقيعي المحفوظ",
+        "required": false
+      },
+      {
+        "key": "employee_sig_path",
+        "type": "signature",
+        "label_en": "Employee Signature",
+        "label_ar": "توقيع الموظف",
+        "required": false
+      }
+    ]
+  },
+  "Resignation Letter": {
+    "category": "personnel",
+    "name_en": "Resignation Letter",
+    "name_ar": "خطاب استقالة",
+    "form_number": "301-010",
+    "fields": [
+      {
+        "key": "reason",
+        "type": "arabic_rich",
+        "label_en": "Resignation Reason",
+        "label_ar": "سبب الاستقالة",
+        "required": false
+      },
+      {
+        "key": "hand_sign_employee",
+        "type": "hand_sign_checkbox",
+        "label_en": "Embed my saved signature",
+        "label_ar": "تضمين توقيعي المحفوظ",
+        "required": false
+      },
+      {
+        "key": "employee_sig_path",
+        "type": "signature",
+        "label_en": "Employee Signature",
+        "label_ar": "توقيع الموظف",
+        "required": false
+      }
+    ]
+  },
+  "Leave Undertaking": {
+    "category": "personnel",
+    "name_en": "Leave Undertaking",
+    "name_ar": "تعهد إجازة",
+    "form_number": "301-003",
+    "fields": [
+      {
+        "key": "start_date",
+        "type": "date",
+        "label_en": "Leave Start",
+        "label_ar": "تاريخ بداية الإجازة",
+        "required": true
+      },
+      {
+        "key": "end_date",
+        "type": "date",
+        "label_en": "Leave End",
+        "label_ar": "تاريخ نهاية الإجازة",
+        "required": true
+      },
+      {
+        "key": "submitter_id",
+        "type": "submitter_picker",
+        "label_en": "Submitter",
+        "label_ar": "مقدم الطلب",
+        "required": false
+      }
+    ]
+  },
+  "General Book": {
+    "category": "admin",
+    "name_en": "General Book",
+    "name_ar": "كتاب عام",
+    "form_number": "300-003",
+    "fields": [
+      {
+        "key": "recipient_id",
+        "type": "recipient_picker",
+        "label_en": "To (Recipient)",
+        "label_ar": "إلى (المستلم)",
+        "required": false
+      },
+      {
+        "key": "subject",
+        "type": "text",
+        "label_en": "Subject",
+        "label_ar": "الموضوع",
+        "required": true
+      },
+      {
+        "key": "body",
+        "type": "arabic_rich_full",
+        "label_en": "Body",
+        "label_ar": "نص الكتاب",
+        "required": true
+      },
+      {
+        "key": "cc",
+        "type": "recipient_multi_picker",
+        "label_en": "CC (optional)",
+        "label_ar": "نسخة إلى (اختياري)",
+        "required": false
+      },
+      {
+        "key": "manager_id",
+        "type": "manager_picker",
+        "label_en": "Signing Manager",
+        "label_ar": "المدير الموقع",
+        "required": false
+      }
+    ]
+  },
+  "Acknowledgment Form": {
+    "category": "admin",
+    "name_en": "Acknowledgment Form",
+    "name_ar": "نموذج استلام",
+    "form_number": "300-003",
+    "fields": [
+      {
+        "key": "items",
+        "type": "items_table",
+        "label_en": "Acknowledged Items",
+        "label_ar": "البنود المستلمة",
+        "required": false
+      },
+      {
+        "key": "hand_sign_employee",
+        "type": "hand_sign_checkbox",
+        "label_en": "Embed my saved signature",
+        "label_ar": "تضمين توقيعي المحفوظ",
+        "required": false
+      },
+      {
+        "key": "employee_sig_path",
+        "type": "signature",
+        "label_en": "Recipient Signature",
+        "label_ar": "توقيع المستلم",
+        "required": false
+      }
+    ]
+  },
+  "Material Request Form": {
+    "category": "admin",
+    "name_en": "Material Request Form",
+    "name_ar": "نموذج طلب مواد",
+    "form_number": "300-001",
+    "fields": [
+      {
+        "key": "delivery_location",
+        "type": "text",
+        "label_en": "Delivery Location",
+        "label_ar": "موقع التسليم",
+        "required": false
+      },
+      {
+        "key": "shipping_address",
+        "type": "text",
+        "label_en": "Shipping Address",
+        "label_ar": "عنوان الشحن",
+        "required": false
+      },
+      {
+        "key": "delivery_date",
+        "type": "date",
+        "label_en": "Required Delivery Date",
+        "label_ar": "تاريخ التسليم المطلوب",
+        "required": false
+      },
+      {
+        "key": "items",
+        "type": "items_table",
+        "label_en": "Requested Items",
+        "label_ar": "المواد المطلوبة",
+        "required": true
+      },
+      {
+        "key": "motivation",
+        "type": "textarea",
+        "label_en": "Justification",
+        "label_ar": "المبرر",
+        "required": false
+      },
+      {
+        "key": "manager_id",
+        "type": "manager_picker",
+        "label_en": "Verifier / Project Manager",
+        "label_ar": "المراجع / مدير المشروع",
+        "required": false
+      },
+      {
+        "key": "hand_sign_employee",
+        "type": "hand_sign_checkbox",
+        "label_en": "Embed my saved signature",
+        "label_ar": "تضمين توقيعي المحفوظ",
+        "required": false
+      },
+      {
+        "key": "employee_sig_path",
+        "type": "signature",
+        "label_en": "Employee Signature",
+        "label_ar": "توقيع الموظف",
+        "required": false
+      }
+    ]
+  },
+  "Leave Permit Form": {
+    "category": "admin",
+    "name_en": "Leave Permit Form",
+    "name_ar": "تصريح خروج",
+    "form_number": "301-004",
+    "fields": [
+      {
+        "key": "leave_reason",
+        "type": "text",
+        "label_en": "Leave Reason",
+        "label_ar": "سبب الخروج",
+        "required": true
+      },
+      {
+        "key": "duration_hours",
+        "type": "text",
+        "label_en": "Duration (hours)",
+        "label_ar": "المدة (ساعات)",
+        "required": false
+      },
+      {
+        "key": "unit_branch",
+        "type": "text",
+        "label_en": "Unit / Branch",
+        "label_ar": "السرية / الفرع",
+        "required": false
+      },
+      {
+        "key": "manager_id",
+        "type": "manager_picker",
+        "label_en": "Project Manager",
+        "label_ar": "مدير المشروع",
+        "required": false
+      }
+    ]
+  },
+  "Administrative Leave Form": {
+    "category": "admin",
+    "name_en": "Administrative Leave Form",
+    "name_ar": "طلب إجازة إدارية",
+    "form_number": "301-005",
+    "fields": [
+      {
+        "key": "leave_reason",
+        "type": "text",
+        "label_en": "Leave Reason",
+        "label_ar": "سبب الإجازة",
+        "required": true
+      },
+      {
+        "key": "duration",
+        "type": "text",
+        "label_en": "Duration",
+        "label_ar": "المدة",
+        "required": false
+      },
+      {
+        "key": "start_date",
+        "type": "date",
+        "label_en": "Leave Start Date",
+        "label_ar": "تاريخ بداية الإجازة",
+        "required": false
+      },
+      {
+        "key": "end_date",
+        "type": "date",
+        "label_en": "Leave End Date",
+        "label_ar": "تاريخ نهاية الإجازة",
+        "required": false
+      },
+      {
+        "key": "unit_branch",
+        "type": "text",
+        "label_en": "Unit / Branch",
+        "label_ar": "السرية / الفرع",
+        "required": false
+      },
+      {
+        "key": "manager_id",
+        "type": "manager_picker",
+        "label_en": "Project Manager",
+        "label_ar": "مدير المشروع",
+        "required": false
+      }
+    ]
+  },
+  "Warning Form": {
+    "category": "personnel",
+    "name_en": "Warning Form",
+    "name_ar": "نموذج إنذار",
+    "form_number": "301-004",
+    "fields": [
+      {
+        "key": "violation_type",
+        "type": "violation_combo",
+        "label_en": "Violation Type",
+        "label_ar": "نوع المخالفة",
+        "required": true
+      }
+    ]
+  },
+  "Passport Release List": {
+    "category": "admin",
+    "name_en": "Passport Release",
+    "name_ar": "استلام جواز السفر",
+    "form_number": "300-004b",
+    "fields": [
+      {
+        "key": "items",
+        "type": "employees_table",
+        "label_en": "Employees",
+        "label_ar": "الموظفون",
+        "required": true
+      }
+    ]
+  }
+}

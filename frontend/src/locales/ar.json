@@ -1,0 +1,2505 @@
+{
+  "auth": {
+    "eyebrow": "مساحة العمليات",
+    "heroTitle": "تسجيل الدخول إلى GSSG Manager",
+    "heroSub": "وحدة تحكم داخلية لشؤون الموارد البشرية والسجل والمستندات. استخدم البريد المرتبط برقم G الخاص بك.",
+    "meta": "GSSG Manager",
+    "secureSession": "جلسة آمنة",
+    "cardEyebrow": "تسجيل الدخول",
+    "welcome": "مرحباً بعودتك",
+    "welcomeName": "مرحباً بعودتك، {{name}}",
+    "cardSub": "استخدم البريد الإلكتروني المرتبط برقم G الخاص بك للمتابعة.",
+    "pickerTitle": "اختر حسابك",
+    "pickerSub": "تم تسجيل الدخول مؤخراً على هذا الجهاز. اختر حساباً للمتابعة.",
+    "useAnotherAccount": "استخدم حساباً آخر",
+    "email": "البريد الإلكتروني",
+    "emailPlaceholder": "name@gssg.ae",
+    "password": "كلمة المرور",
+    "passwordPlaceholder": "••••••••",
+    "confirmPassword": "تأكيد كلمة المرور",
+    "gNumber": "رقم G",
+    "gNumberPlaceholder": "G-0000",
+    "forgot": "نسيت كلمة المرور؟",
+    "signIn": "تسجيل الدخول",
+    "signingIn": "جاري الدخول…",
+    "switchAccount": "تبديل الحساب",
+    "show": "إظهار كلمة المرور",
+    "hide": "إخفاء كلمة المرور",
+    "lastSignIn": "آخر دخول",
+    "requestAccess": "طلب الوصول",
+    "haveAccount": "لديك حساب بالفعل؟",
+    "requestTitle": "طلب الوصول",
+    "requestSub": "حساب جديد؟ أدخل بريد العمل ورقم G الخاص بك. سيراجع المسؤول التفاصيل ويحدد صلاحياتك قبل السماح بتسجيل الدخول.",
+    "submitForReview": "إرسال للمراجعة",
+    "requestSentTitle": "تم إرسال الطلب",
+    "requestSentText": "تم إرسال طلبك إلى فريق المسؤولين. ستتمكن من تسجيل الدخول بعد اعتماد حسابك.",
+    "step1": "تفاصيلك",
+    "step2": "مراجعة المسؤول",
+    "step3": "تم منح الوصول",
+    "forgotTitle": "نسيت كلمة المرور",
+    "forgotSub": "إعادة التعيين الذاتي غير متاحة. تواصل مع مسؤول تقنية المعلومات وسيقوم بتعيين كلمة مرور مؤقتة جديدة لك.",
+    "lockedTitle": "الحساب مقفل",
+    "lockedText": "محاولات فاشلة كثيرة. تواصل مع قسم تقنية المعلومات لإلغاء القفل؛ سيُستأنف تسجيل الدخول بعد إلغاء القفل من قِبل المسؤول.",
+    "backToSignIn": "العودة لتسجيل الدخول",
+    "itContact": "دعم تقنية المعلومات",
+    "itName": "علي المنصوري",
+    "itEmail": "it@gssg.ae",
+    "itExt": "تحويلة 8842",
+    "itHours": "الأحد – الخميس · 08:00 – 17:00 توقيت الخليج",
+    "copy": "نسخ",
+    "copied": "تم النسخ",
+    "attemptsLeft": "المحاولات المتبقية: {{count}}",
+    "errPending": "حسابك في انتظار موافقة المسؤول.",
+    "errGeneric": "حدث خطأ ما. حاول مرة أخرى.",
+    "passwordsMismatch": "كلمتا المرور غير متطابقتين.",
+    "passwordTooShort": "يجب أن تكون كلمة المرور 8 أحرف على الأقل.",
+    "emailRequired": "البريد الإلكتروني مطلوب.",
+    "smallPrint": "بتسجيل الدخول، فإنك توافق على سياسة الاستخدام المقبول لـ GSSG.",
+    "signOut": "تسجيل الخروج",
+    "langToggle": "English"
+  },
+  "app": {
+    "title": "إدارة GSSG"
+  },
+  "branding": {
+    "tagline": "المجموعة العالمية للخدمات الأمنية"
+  },
+  "nav": {
+    "dashboard": "لوحة التحكم",
+    "employees": "الموظفون",
+    "ledger": "المراسلات",
+    "leaves": "الإجازات",
+    "services": "الخدمات",
+    "records": "المستندات",
+    "settings": "الإعدادات",
+    "menu": "القائمة",
+    "bell": {
+      "awaitingReturn_zero": "لا موظفين بانتظار المباشرة",
+      "awaitingReturn_one": "موظف واحد بانتظار المباشرة",
+      "awaitingReturn_two": "موظفان بانتظار المباشرة",
+      "awaitingReturn_few": "{{count}} موظفين بانتظار المباشرة",
+      "awaitingReturn_many": "{{count}} موظفًا بانتظار المباشرة",
+      "awaitingReturn_other": "{{count}} بانتظار المباشرة",
+      "awaitingReturnTitle": "بانتظار نموذج المباشرة",
+      "awaitingApprovalTitle": "بانتظار موافقتك",
+      "awaitingApproval_zero": "لا مستندات بانتظار توقيعك",
+      "awaitingApproval_one": "مستند واحد بانتظار توقيعك",
+      "awaitingApproval_two": "مستندان بانتظار توقيعك",
+      "awaitingApproval_few": "{{count}} مستندات بانتظار توقيعك",
+      "awaitingApproval_many": "{{count}} مستنداً بانتظار توقيعك",
+      "awaitingApproval_other": "{{count}} مستند بانتظار توقيعك",
+      "notify": {
+        "approval": "مستند بانتظار موافقتك",
+        "leave": "طلب إجازة بحاجة إلى إجراء",
+        "scan": "تم إرفاق نسخة ممسوحة بسجل",
+        "email": "بريد جديد في صندوق الوارد"
+      }
+    }
+  },
+  "shortcuts": {
+    "title": "اختصارات لوحة المفاتيح",
+    "subtitle": "الاختصارات المتاحة في هذه الصفحة.",
+    "focusSearch": "تركيز شريط البحث",
+    "newItem": "عنصر جديد في الصفحة الحالية",
+    "showHelp": "عرض هذا الدليل"
+  },
+  "appBar": {
+    "account": "الحساب",
+    "linkAccountCta": "اربط هذا الحساب بموظف",
+    "lockApp": "قفل التطبيق",
+    "emailSettings": "إعدادات البريد الإلكتروني",
+    "notifications": "الإشعارات",
+    "markAllRead": "تحديد الكل كمقروء",
+    "noNotifications": "لا توجد إشعارات غير مقروءة",
+    "hasAttachment": "يحتوي على مرفق",
+    "moreUnread": "+ {{count}} إشعارات أخرى غير مقروءة",
+    "viewAllInbox": "عرض الكل في البريد الوارد",
+    "sync": {
+      "never": "لم تتم المزامنة",
+      "justNow": "تمت المزامنة الآن",
+      "minutesAgo": "تمت المزامنة منذ {{n}} د",
+      "hoursAgo": "تمت المزامنة منذ {{n}} س"
+    }
+  },
+  "lockScreen": {
+    "title": "التطبيق مقفل",
+    "password": "كلمة المرور",
+    "unlock": "إلغاء القفل",
+    "welcomeName": "مرحبًا بعودتك، {{name}}"
+  },
+  "common": {
+    "save": "حفظ",
+    "cancel": "إلغاء",
+    "delete": "حذف",
+    "edit": "تعديل",
+    "add": "إضافة",
+    "remove": "إزالة",
+    "undo": "تراجع",
+    "search": "بحث",
+    "loading": "جارٍ التحميل…",
+    "noResults": "لا توجد نتائج",
+    "yes": "نعم",
+    "no": "لا",
+    "close": "إغلاق",
+    "next": "التالي",
+    "previous": "السابق",
+    "confirm": "تأكيد",
+    "replace": "استبدال",
+    "download": "تنزيل",
+    "preview": "معاينة",
+    "filename": "اسم الملف",
+    "size": "الحجم",
+    "modified": "آخر تعديل",
+    "actions": "الإجراءات",
+    "language": "اللغة",
+    "english": "English",
+    "arabic": "العربية",
+    "saving": "جارٍ الحفظ…",
+    "savedToast": "تم الحفظ",
+    "createdToast": "تم الإنشاء",
+    "updatedToast": "تم التحديث",
+    "deletedToast": "تم الحذف",
+    "errorToast": "حدث خطأ",
+    "loadError": "تعذّر التحميل. تحقّق من اتصالك وحاول مرة أخرى.",
+    "retry": "إعادة المحاولة"
+  },
+  "a11y": {
+    "skipToContent": "تخطٍّ إلى المحتوى الرئيسي"
+  },
+  "editor": {
+    "loadFailed": "تعذّر تحميل محرّر النصوص — يتم استخدام مربع نص عادي.",
+    "template": {
+      "saveTitle": "حفظ كقالب",
+      "loadTitle": "تحميل قالب",
+      "saveTooltip": "حفظ كقالب",
+      "loadTooltip": "تحميل قالب",
+      "nameLabel": "اسم القالب",
+      "namePlaceholder": "مثال: رأس مراسلات قياسي",
+      "modeLabel": "الوضع",
+      "modeInsert": "إدراج عند المؤشر",
+      "modeReplace": "استبدال كل المحتوى",
+      "empty": "لا توجد قوالب محفوظة بعد. احفظ أول قالب من المحرر.",
+      "savedToast": "تم حفظ القالب: {{name}}",
+      "deletedToast": "تم حذف القالب",
+      "confirmDelete": "حذف القالب \"{{name}}\"؟"
+    },
+    "table": {
+      "tooltip": "إدراج جدول GSSG"
+    }
+  },
+  "employees": {
+    "intake": {
+      "reviewAndApply": "راجع البيانات الممسوحة وطبّقها على سجل هذا الموظف."
+    },
+    "title": "الموظفون",
+    "eyebrow": "العمليات",
+    "newEmployee": "موظف جديد",
+    "pageMeta": "{{total}} موظفًا · {{active}} نشط",
+    "chips": {
+      "all": "الكل",
+      "active": "نشط",
+      "onLeave": "في إجازة",
+      "resigned": "مستقيل",
+      "terminated": "مفصول"
+    },
+    "statusPill": {
+      "onLeave": "في إجازة",
+      "hasCase": "لديه قضية"
+    },
+    "filters": {
+      "status": "الحالة",
+      "department": "القسم",
+      "all": "الكل"
+    },
+    "tabs": {
+      "profile": "الملف الشخصي",
+      "leaves": "سجل الإجازات",
+      "violations": "المخالفات",
+      "vault": "الملفات والتوقيع"
+    },
+    "sections": {
+      "identity": "الهوية",
+      "employment": "العمل",
+      "contact": "التواصل والمستندات"
+    },
+    "detail": {
+      "view": "عرض",
+      "edit": "تعديل الملف"
+    },
+    "fields": {
+      "id": "رقم الموظف",
+      "name_en": "الاسم (إنجليزي)",
+      "name_ar": "الاسم (عربي)",
+      "dob": "تاريخ الميلاد",
+      "doj": "تاريخ الالتحاق",
+      "doj_company": "تاريخ الالتحاق بالشركة",
+      "department": "القسم",
+      "position": "المسمى الوظيفي",
+      "position_ar": "المسمى الوظيفي (عربي)",
+      "status": "الحالة",
+      "end_date": "تاريخ نهاية الخدمة",
+      "passport_no": "رقم الجواز",
+      "passport_expiry": "انتهاء صلاحية الجواز",
+      "uae_id_no": "رقم الهوية الإماراتية",
+      "uae_id_expiry": "انتهاء صلاحية الهوية الإماراتية",
+      "nationality": "الجنسية",
+      "contact": "رقم التواصل",
+      "notes": "ملاحظات",
+      "other": "أخرى"
+    },
+    "status": {
+      "Active": "نشط",
+      "Resigned": "مستقيل",
+      "Terminated": "مفصول"
+    },
+    "validation": {
+      "endDateRequired": "تاريخ نهاية الخدمة مطلوب عند تغيير الحالة عن نشط",
+      "idRequired": "رقم الموظف مطلوب",
+      "nameEnRequired": "الاسم بالإنجليزية مطلوب"
+    },
+    "kpi": {
+      "total": "إجمالي الموظفين",
+      "active": "نشط",
+      "resigned": "مستقيل",
+      "terminated": "مفصول"
+    },
+    "list": {
+      "empty": "لا يوجد موظفون",
+      "emptyFiltered": "لا يوجد موظفون يطابقون هذه المرشحات",
+      "selectPrompt": "اختر موظفًا لعرض التفاصيل",
+      "recent": "المستخدمون مؤخراً",
+      "showAll": "عرض الكل ({{count}})",
+      "showRecents": "عرض المستخدمين مؤخراً",
+      "noRecents": "لا يوجد موظفون مستخدمون مؤخراً — ابحث أو اضغط عرض الكل."
+    },
+    "toast": {
+      "created": "تم إنشاء الموظف",
+      "updated": "تم تحديث الموظف",
+      "signatureSaved": "تم حفظ التوقيع",
+      "photoSaved": "تم تحديث الصورة",
+      "photoRemoved": "تمت إزالة الصورة"
+    },
+    "photo": {
+      "title": "الصورة",
+      "cta": "رفع صورة",
+      "hint": "PNG أو JPG، اسحب وأفلت أو انقر",
+      "change": "تغيير الصورة"
+    }
+  },
+  "violations": {
+    "title": "المخالفات",
+    "add": "تسجيل مخالفة",
+    "fields": {
+      "violation_type": "نوع المخالفة",
+      "date": "التاريخ",
+      "description": "الوصف",
+      "action_taken": "الإجراء المتخذ",
+      "deduction_days": "الخصم (أيام)",
+      "status": "الحالة"
+    },
+    "status": {
+      "Open": "مفتوحة",
+      "Closed": "مغلقة"
+    },
+    "confirmDelete": "حذف هذه المخالفة؟",
+    "empty": "لا توجد مخالفات مسجلة",
+    "toast": {
+      "created": "تم تسجيل المخالفة",
+      "updated": "تم تحديث المخالفة",
+      "deleted": "تم حذف المخالفة"
+    }
+  },
+  "leaves": {
+    "title": "سجل الإجازات",
+    "subtitle": "السجلات وأرصدة الاستحقاق لجميع الموظفين",
+    "empty": "لا توجد إجازات تطابق هذه المرشحات.",
+    "tabs": {
+      "records": "السجلات",
+      "balance": "الرصيد"
+    },
+    "status": {
+      "Generated": "تم الإنشاء",
+      "Pending": "قيد الانتظار",
+      "Approved": "مقبولة",
+      "Rejected": "مرفوضة",
+      "Cancelled": "ملغاة",
+      "Completed": "مكتملة"
+    },
+    "display": {
+      "Recorded": "مسجّلة",
+      "Requested": "مطلوبة",
+      "Confirmed": "مؤكّدة",
+      "PreApproved": "معتمدة مسبقًا",
+      "Scheduled": "مجدولة",
+      "AwaitingCertificate": "بانتظار الشهادة",
+      "AwaitingReturn": "بانتظار المباشرة",
+      "Completed": "مكتملة",
+      "Rejected": "مرفوضة",
+      "Cancelled": "ملغاة",
+      "Unknown": "—"
+    },
+    "type": {
+      "Annual Leave": "إجازة سنوية",
+      "Sick Leave": "إجازة مرضية",
+      "Emergency Leave": "إجازة طارئة",
+      "Unpaid Leave": "إجازة بدون راتب",
+      "Hajj Leave": "إجازة حج",
+      "Maternity Leave": "إجازة أمومة",
+      "Compassionate Leave": "إجازة تعزية",
+      "Duty Leave": "إجازة مهمة رسمية",
+      "Others": "أخرى",
+      "National Service": "الخدمة الوطنية",
+      "Administrative Leave": "إجازة إدارية",
+      "Leave Permit": "تصريح خروج (٨ ساعات)"
+    },
+    "filters": {
+      "employee": "الموظف…",
+      "status": "الحالة",
+      "leaveType": "نوع الإجازة",
+      "from": "من تاريخ",
+      "to": "إلى تاريخ",
+      "search": "بحث…",
+      "clear": "مسح المرشحات",
+      "button": "المرشحات",
+      "title": "المرشحات"
+    },
+    "columns": {
+      "id": "الرقم",
+      "employee": "الموظف",
+      "leaveType": "النوع",
+      "startDate": "البداية",
+      "endDate": "النهاية",
+      "days": "الأيام",
+      "status": "الحالة",
+      "updatedAt": "تاريخ التحديث"
+    },
+    "balance": {
+      "annualRemaining": "الرصيد السنوي المتبقي (من 30)",
+      "sickRemaining": "رصيد المرضية المتبقي (من 90)",
+      "carryOver": "أيام الترحيل",
+      "eligible": "مستحق",
+      "probation": "فترة التجربة",
+      "asOf": "حتى تاريخ",
+      "selectEmployee": "اختر موظفًا لعرض رصيده.",
+      "daysRemaining": "يوم متبقي",
+      "daysLabel": "يوم",
+      "takenLabel": "{{taken}} مستخدم",
+      "progressLabel": "{{taken}} من {{total}} يوم مستخدم"
+    },
+    "eyebrow": "العمليات",
+    "actions": {
+      "approve": "قبول",
+      "reject": "رفض",
+      "markPending": "تحديد كقيد الانتظار",
+      "softDelete": "تأكيد الحذف",
+      "confirmDelete": "إزالة هذا السجل نهائيًا؟"
+    },
+    "fields": {
+      "leave_type": "النوع",
+      "start_date": "من",
+      "end_date": "إلى",
+      "days": "الأيام",
+      "status": "الحالة"
+    },
+    "toast": {
+      "approved": "تم قبول الإجازة",
+      "rejected": "تم رفض الإجازة",
+      "cancelled": "أُلغيت الإجازة",
+      "markedPending": "تم تعليق الإجازة",
+      "deleted": "تم حذف الإجازة",
+      "datesChanged": "حُدّثت التواريخ",
+      "certificateUploaded": "أُضيفت الشهادة — اكتمل السجل"
+    },
+    "emptyUnfiltered": "لا توجد سجلات إجازات بعد",
+    "report": {
+      "eyebrow": "العمليات — سجل الإجازات {{year}}",
+      "asOf": "حتى {{date}}",
+      "pendingChip_zero": "لا إجراءات معلّقة",
+      "pendingChip_one": "إجراء واحد معلّق",
+      "pendingChip_two": "إجراءان معلّقان",
+      "pendingChip_few": "{{count}} إجراءات معلّقة",
+      "pendingChip_many": "{{count}} إجراءً معلّقًا",
+      "pendingChip_other": "{{count}} إجراءً معلّقًا",
+      "awaitingReturnChip_zero": "لا بانتظار المباشرة",
+      "awaitingReturnChip_one": "موظف واحد بانتظار المباشرة",
+      "awaitingReturnChip_two": "موظفان بانتظار المباشرة",
+      "awaitingReturnChip_few": "{{count}} موظفين بانتظار المباشرة",
+      "awaitingReturnChip_many": "{{count}} موظفًا بانتظار المباشرة",
+      "awaitingReturnChip_other": "{{count}} بانتظار المباشرة",
+      "endingSoonChip_zero": "لا إجازات تنتهي قريبًا",
+      "endingSoonChip_one": "إجازة واحدة تنتهي قريبًا",
+      "endingSoonChip_two": "إجازتان تنتهيان قريبًا",
+      "endingSoonChip_few": "{{count}} إجازات تنتهي قريبًا",
+      "endingSoonChip_many": "{{count}} إجازةً تنتهي قريبًا",
+      "endingSoonChip_other": "{{count}} تنتهي قريبًا",
+      "fig1Caption": "الشكل 1 — الأيام المأخوذة حسب النوع",
+      "fig1Ytd": "(منذ بداية السنة)",
+      "fig2Caption": "الشكل 2 — أيام الإجازات حسب الشهر",
+      "fig3Caption": "الشكل 3 — نتائج الطلبات",
+      "scopeAllYear": "{{year}}",
+      "fig2Hint": "اختر شهرًا لتركيز التقرير",
+      "fig2Current": "الشهر الحالي",
+      "onLeaveToday": "في إجازة اليوم: {{n}}",
+      "resetScope": "السنة كاملة {{year}}",
+      "viewData": "عرض البيانات",
+      "colKind": "النوع",
+      "colRecords": "السجلات",
+      "colDays": "الأيام",
+      "colEmployees": "الموظفون",
+      "colAvg": "متوسط الأيام",
+      "colShare": "الحصة",
+      "colMonth": "الشهر",
+      "colTopKind": "النوع الأبرز",
+      "colOutcome": "النتيجة",
+      "colPct": "%",
+      "colLead": "وسيط المهلة من التقديم إلى البدء",
+      "leadDays_zero": "لا أيام",
+      "leadDays_one": "يوم واحد",
+      "leadDays_two": "يومان",
+      "leadDays_few": "{{count}} أيام",
+      "leadDays_many": "{{count}} يومًا",
+      "leadDays_other": "{{count}} يومًا",
+      "insightSick": "الإجازات المرضية تمثل {{pct}}% من أيام الإجازات",
+      "insightBusiest": "الشهر الأكثر غيابًا: {{month}}",
+      "outcome": {
+        "settled": "محسومة",
+        "inMotion": "قيد الإجراء",
+        "rejected": "مرفوضة",
+        "cancelled": "ملغاة"
+      },
+      "groupNone": "بدون",
+      "groupKind": "حسب النوع",
+      "groupMonth": "حسب الشهر",
+      "groupLabel": "تجميع",
+      "searchPlaceholder": "ابحث بالاسم أو الرقم الوظيفي…",
+      "totalsRecords_zero": "لا سجلات",
+      "totalsRecords_one": "سجل واحد",
+      "totalsRecords_two": "سجلان",
+      "totalsRecords_few": "{{count}} سجلات",
+      "totalsRecords_many": "{{count}} سجلًا",
+      "totalsRecords_other": "{{count}} سجلًا",
+      "totalsDays_zero": "لا أيام",
+      "totalsDays_one": "يوم واحد",
+      "totalsDays_two": "يومان",
+      "totalsDays_few": "{{count}} أيام",
+      "totalsDays_many": "{{count}} يومًا",
+      "totalsDays_other": "{{count}} يومًا",
+      "totalsEmployees_zero": "لا موظفين",
+      "totalsEmployees_one": "موظف واحد",
+      "totalsEmployees_two": "موظفان",
+      "totalsEmployees_few": "{{count}} موظفين",
+      "totalsEmployees_many": "{{count}} موظفًا",
+      "totalsEmployees_other": "{{count}} موظفًا",
+      "emptyFiltered": "لا توجد سجلات مطابقة لهذا النطاق.",
+      "clearFilters": "مسح عوامل التصفية",
+      "profileCurrent": "الإجازة الحالية",
+      "profileNotOnLeave": "ليس في إجازة حاليًا",
+      "profileReturns_zero": "يعود اليوم",
+      "profileReturns_one": "يعود بعد يوم واحد",
+      "profileReturns_two": "يعود بعد يومين",
+      "profileReturns_few": "يعود بعد {{count}} أيام",
+      "profileReturns_many": "يعود بعد {{count}} يومًا",
+      "profileReturns_other": "يعود بعد {{count}} يومًا",
+      "profileLast": "آخر إجازة مأخوذة",
+      "profileNone": "لا توجد إجازة مكتملة بعد",
+      "profileDaysTaken": "الأيام المأخوذة في {{year}}",
+      "profilePending": "طلبات قيد الانتظار",
+      "profileFilter": "تصفية التقرير لهذا الموظف",
+      "profileClose": "إغلاق الملف",
+      "balanceAnnual": "سنوي",
+      "balanceSick": "مرضي",
+      "balanceCarry": "مُرحَّل: {{n}}",
+      "balanceOf": "{{remaining}} من {{total}}",
+      "approve": "قبول",
+      "reject": "رفض",
+      "cancel": "إلغاء الإجازة",
+      "fileReturn": "تسجيل المباشرة",
+      "markPending": "تحديد كقيد الانتظار",
+      "quickApprove": "قبول",
+      "quickReject": "رفض",
+      "expandRow": "عرض تفاصيل السجل",
+      "notes": "ملاحظات",
+      "filed": "تاريخ التقديم",
+      "period": "الفترة",
+      "scopedToEmployee": "التقرير: {{name}}",
+      "scopedToMonth": "التقرير: {{month}}",
+      "delay": "تأجيل",
+      "delayHint": "اختر تاريخ البداية الجديد — تتبعه المدة",
+      "extend": "تمديد",
+      "extendWeek": "+ أسبوع",
+      "extendCustom": "تاريخ نهاية مخصص",
+      "uploadCertificate": "إضافة شهادة",
+      "viewCertificate": "عرض الشهادة",
+      "awaitingCertificate": "انتهت الخدمة — أضف شهادة الإتمام لإغلاق هذا السجل",
+      "confirmEmail": {
+        "button": "إرسال طلب تأكيد ({{n}})",
+        "subject": "تأكيد الإجازات — {{n}} موظف",
+        "intro": "يرجى تأكيد الإجازات المخطط لها التالية:",
+        "colName": "الموظف",
+        "colPeriod": "الفترة",
+        "colDays": "الأيام"
+      }
+    },
+    "ns": {
+      "dialogTitle": "سجل خدمة وطنية جديد",
+      "description": "أسبوعان افتراضيًا — يمكن التأجيل أو التمديد من السجل لاحقًا.",
+      "start": "البداية",
+      "end": "النهاية",
+      "notes": "ملاحظات",
+      "create": "إنشاء السجل",
+      "created": "أُنشئ سجل الخدمة الوطنية"
+    },
+    "return": {
+      "title": "تسجيل نموذج المباشرة",
+      "description": "يسجّل مباشرة الموظف للعمل ويغلق الإجازة.",
+      "leaveStart": "بداية الإجازة",
+      "leaveEnd": "نهاية الإجازة",
+      "resumptionDate": "تاريخ المباشرة",
+      "delayReason": "سبب التأخير (إن وجد)",
+      "fileButton": "تسجيل وإكمال",
+      "filed": "تم تسجيل نموذج المباشرة — اكتملت الإجازة"
+    }
+  },
+  "vault": {
+    "folders": {
+      "uae_id": "الهوية الإماراتية",
+      "passport": "جواز السفر",
+      "other": "مستندات أخرى",
+      "leaves": "نماذج الإجازات",
+      "violations": "نماذج المخالفات"
+    },
+    "upload": "رفع",
+    "dropHere": "أفلت الملفات هنا أو انقر للرفع",
+    "empty": "لا توجد ملفات",
+    "confirmDelete": "حذف {{filename}}؟",
+    "signature": {
+      "title": "التوقيع",
+      "save": "حفظ التوقيع",
+      "clear": "مسح",
+      "saved": "تم حفظ التوقيع"
+    },
+    "toast": {
+      "uploaded": "تم رفع الملف",
+      "deleted": "تم حذف الملف"
+    }
+  },
+  "basket": {
+    "kind": {
+      "sick": "إجازة مرضية",
+      "annual": "إجازة سنوية",
+      "compassionate": "إجازة وفاة",
+      "duty": "إجازة مهمة عمل",
+      "emergency": "إجازة طارئة",
+      "hajj": "إجازة حج",
+      "others": "إجازة أخرى"
+    },
+    "tray": {
+      "title": "سلال البريد",
+      "empty": "لم تُجمع أي مستندات بعد",
+      "send": "إرسال كبريد واحد",
+      "clear": "مسح",
+      "remove": "إزالة",
+      "count_zero": "لا مستندات",
+      "count_one": "مستند واحد",
+      "count_two": "مستندان",
+      "count_few": "{{count}} مستندات",
+      "count_many": "{{count}} مستندات",
+      "count_other": "{{count}} مستندات",
+      "added": "أُضيف إلى سلة {{kind}}",
+      "alreadyIn": "موجود بالفعل في سلة {{kind}}"
+    },
+    "tile": {
+      "empty": "سلة البريد فارغة — تُجمع المستندات المُنشأة هنا",
+      "pending_one": "مستند واحد بانتظار الإرسال",
+      "pending_two": "مستندان بانتظار الإرسال",
+      "pending_few": "{{count}} مستندات بانتظار الإرسال",
+      "pending_many": "{{count}} مستندًا بانتظار الإرسال",
+      "pending_other": "{{count}} مستند بانتظار الإرسال"
+    },
+    "add": "إضافة إلى البريد",
+    "addN": "إضافة إلى البريد ({{count}})",
+    "addError": "تعذّر الإضافة إلى السلة — السجل غير موجود"
+  },
+  "books": {
+    "title": "دفتر المراجع",
+    "subtitle": "سجل الأرقام المرجعية لجميع الفئات الـ 12",
+    "eyebrow": "العمليات",
+    "pageMeta": "{{total}} إدخال · سجل الأرقام المرجعية",
+    "stampPreview": "معاينة الختم",
+    "newEntry": "إدخال جديد",
+    "empty": "لا توجد إدخالات تطابق هذه المرشحات.",
+    "confirmDelete": "حذف مؤقت لهذا الإدخال؟ يبقى في السجلات ولا يُعاد استخدام الرقم المرجعي.",
+    "filters": {
+      "category": "الفئة",
+      "direction": "الاتجاه",
+      "dateFrom": "من",
+      "dateTo": "إلى",
+      "search": "الموضوع",
+      "clear": "مسح المرشحات",
+      "status": "الحالة",
+      "statusAll": "الكل"
+    },
+    "direction": {
+      "all": "الكل",
+      "incoming": "وارد",
+      "outgoing": "صادر"
+    },
+    "columns": {
+      "ref": "الرقم المرجعي",
+      "subject": "الموضوع",
+      "category": "الفئة",
+      "direction": "الاتجاه",
+      "date": "التاريخ",
+      "linkedDoc": "المستند",
+      "stampStyle": "نمط الختم",
+      "approval": "الموافقة"
+    },
+    "stampStyle": {
+      "header": "نص الترويسة",
+      "boldTopRight": "أعلى اليمين (عريض)",
+      "watermark": "علامة مائية"
+    },
+    "kpi": {
+      "total": "الإجمالي",
+      "thisMonth": "هذا الشهر",
+      "incoming": "الوارد",
+      "outgoing": "الصادر"
+    },
+    "toast": {
+      "created": "تم إنشاء إدخال الدفتر",
+      "deleted": "تم حذف المسودة"
+    },
+    "emptyUnfiltered": "لا توجد إدخالات بعد",
+    "approval": {
+      "awaitingTitle": "الدفاتر · في انتظار موافقتك",
+      "awaitingEmpty": "لا يوجد ما ينتظر موافقتك",
+      "open": "فتح القيد",
+      "approve": "موافقة",
+      "signApprove": "التوقيع والموافقة",
+      "signed": "تم توقيع الدفتر والموافقة عليه",
+      "noSignatureHint": "أضف توقيعك في الإعدادات قبل الموافقة.",
+      "signingManager": "المدير الموقّع",
+      "selectApprover": "اختر مديراً للتوقيع…",
+      "singleSignerHint": "يقوم مدير واحد بالتوقيع والموافقة على هذا الدفتر.",
+      "reject": "رفض",
+      "return": "إعادة",
+      "addNote": "إضافة ملاحظة",
+      "priority": "الأولوية",
+      "high": "عالية",
+      "normal": "عادية",
+      "approvalChain": "سلسلة الموافقة",
+      "submitter": "مقدم الطلب",
+      "approved": "تمت الموافقة على الدفتر",
+      "rejected": "تم رفض الدفتر",
+      "returned": "تم إعادة الدفتر للمراجعة",
+      "noteAdded": "تمت إضافة الملاحظة",
+      "submittedAt": "تاريخ التقديم",
+      "sheetDescription": "راجع تفاصيل الدفتر وسلسلة الموافقة واتخذ الإجراء المناسب.",
+      "submitForApproval": "تقديم للموافقة",
+      "addApprover": "إضافة معتمد",
+      "stageLabel": "عنوان المرحلة",
+      "needsApproval": "يتطلب موافقة",
+      "submitted": "تم التقديم للموافقة",
+      "stateDraft": "مسودة",
+      "statePending": "قيد الانتظار",
+      "stateAwaitingScan": "بانتظار النسخة الموقعة",
+      "stateAwaitingSignature": "بانتظار التوقيع",
+      "stateApproved": "تمت الموافقة",
+      "signedScanned": "موقع · نسخة ممسوحة",
+      "stateRejected": "مرفوض",
+      "stateReturned": "مُعاد",
+      "reasonLabel": "السبب",
+      "reasonPlaceholder": "وضّح ما الذي يجب تغييره…",
+      "reasonRequired": "السبب مطلوب.",
+      "reasonOrMark": "أضِف سببًا — اكتب ملاحظة أعلاه، أو اترك تعليقًا على المستند.",
+      "cancelDecision": "إلغاء",
+      "noApproversTitle": "لا يمكن لأحد التوقيع بعد",
+      "noApproversBody": "يجب على مدير أو مسؤول رفع توقيع في الإعدادات ← التوقيع قبل إمكانية إرسال المعاملة للاعتماد.",
+      "noApproversSelfHint": "يمكنك التوقيع — ارفع توقيعك في الإعدادات.",
+      "goToSettings": "فتح الإعدادات ← التوقيع",
+      "changeManager": "تغيير",
+      "managerNoSignature": "لا يوجد توقيع محفوظ لهذا المدير — يجب إضافة توقيع في الإعدادات ← التوقيع قبل الموافقة.",
+      "managerNoSignatureLink": "الإعدادات ← التوقيع",
+      "managerNotLinked": "لا يوجد مدير مرتبط بهذا المستند. يرجى اختيار مدير للتوقيع.",
+      "reviewers": "المراجعون",
+      "reviewersHint": "يمكن للمراجعين التعليق وطلب التعديلات قبل الاعتماد."
+    },
+    "annotations": {
+      "pin": "دبوس",
+      "highlight": "تظليل",
+      "hint": "انقر لوضع دبوس · اسحب للتظليل",
+      "markN": "علامة {{n}}",
+      "delete": "حذف العلامة",
+      "composerPlaceholder": "ما الذي يجب تصحيحه هنا؟",
+      "save": "حفظ",
+      "cancel": "إلغاء",
+      "viewHint": "صحّح هنا، ثم راجِع وأعد الإرسال."
+    },
+    "versions": {
+      "title": "سجل النسخ",
+      "current": "الحالية",
+      "revise": "تعديل وإعادة الإنشاء",
+      "reviseHint": "أُعيد — يمكنك التعديل وإعادة الإرسال",
+      "prefillFailed": "تعذّر تحميل بيانات النموذج المحفوظة للتعديل.",
+      "signedPdf": "PDF موقّع",
+      "trigger": {
+        "initial": "أولي",
+        "revision": "مراجعة"
+      }
+    },
+    "executedCopy": {
+      "title": "النسخة الموقّعة"
+    },
+    "record": {
+      "submittedBy": "مقدَّم من",
+      "loading": "جارٍ التحميل…",
+      "loadError": "تعذّر تحميل هذا السجل.",
+      "untitled": "بدون عنوان",
+      "back": "العودة إلى السجلات",
+      "print": "طباعة",
+      "downloadSigned": "تنزيل PDF الموقّع",
+      "noDocument": "لا يوجد مستند في هذا السجل.",
+      "progress": "التقدّم",
+      "stationSubmitted": "تم التقديم",
+      "stationRevised": "تم التعديل",
+      "stationReturned": "أُعيد",
+      "stationRejected": "مرفوض",
+      "stationAwaiting": "في انتظار التوقيع",
+      "stationAwaitingScan": "بانتظار النسخة الموقعة",
+      "stationSigned": "موقّع",
+      "stationSignedScanned": "موقع · نسخة ممسوحة",
+      "stationNotSubmitted": "لم يُقدَّم",
+      "metaManager": "المدير",
+      "metaPending": "قيد الانتظار",
+      "metaDraft": "مسودة",
+      "metaAwaitingScan": "قيد التوقيع الورقي",
+      "metaScanned": "أُودعت النسخة الموقعة"
+    },
+    "preview": {
+      "description": "معاينة مستند المسودة",
+      "openPdf": "فتح PDF",
+      "noDocument": "لا يوجد مستند في هذه المسودة بعد.",
+      "draftBadge": "مسودة — لم تُرسل",
+      "editContinue": "تعديل / متابعة",
+      "editUnavailable": "لا تحتوي هذه المسودة على حقول محفوظة ولا يمكن تعديلها.",
+      "discard": "حذف",
+      "discardConfirmTitle": "حذف هذه المسودة؟",
+      "discardConfirmBody": "سيؤدي ذلك إلى إزالة السجل غير المُرسَل نهائيًا."
+    },
+    "formKind": {
+      "all": "كل النماذج",
+      "leave": "طلب إجازة",
+      "salary": "تحويل راتب",
+      "duty": "استئناف عمل",
+      "hr": "طلب موارد بشرية",
+      "passport": "جواز السفر",
+      "material": "طلب مواد",
+      "other": "سجلات أخرى"
+    },
+    "spine": {
+      "all": "كل السجلات",
+      "none": "مسودات",
+      "pending": "قيد الاعتماد",
+      "awaiting_scan": "بانتظار النسخة",
+      "returned": "معاد",
+      "approved": "معتمد",
+      "rejected": "مرفوض"
+    },
+    "pane": {
+      "noPapersTitle": "لا أوراق بعد",
+      "noPapersBody": "أنشئ الوثيقة لترى صفحاتها هنا.",
+      "generated": "PDF المُنشأ",
+      "signedCopy": "النسخة الموقعة",
+      "scan": "مسح ضوئي",
+      "addScan": "إضافة مسح",
+      "addScanHint": "امسح أو أسقط ورقة معادة — يطابق OCR المرجع المختوم ويودعها هنا",
+      "scanReading": "قراءة المسح (OCR)…",
+      "scanFiledHere": "أُودع في {{ref}} — حُفظ مع أوراقه",
+      "scanMatchedOther": "مرجع المسح يطابق {{ref}}",
+      "scanFileToOther": "إيداعه في {{ref}}",
+      "scanNoRef": "لم يُعثر على مرجع مختوم — وجّهه من درج المسح",
+      "fit": "ملاءمة",
+      "fullPreview": "معاينة كاملة",
+      "zoomIn": "تكبير",
+      "zoomOut": "تصغير",
+      "openRecord": "فتح السجل الكامل",
+      "continueDraft": "متابعة التحرير",
+      "revise": "مراجعة وإعادة تقديم",
+      "scanSignedCopy": "مسح النسخة الموقعة",
+      "signedCopyFiled": "أُودعت النسخة الموقعة في {{ref}} — تم اعتماد السجل",
+      "signedCopyTitle": "هل هذه هي النسخة الموقعة؟",
+      "signedCopyBody": "الاعتماد يحفظها كنسخة موقعة ويعتمد {{ref}}. اختر إرفاق فقط لحفظها دون اعتماد.",
+      "approveSignedCopy": "اعتماد — نسخة موقعة",
+      "justAttach": "إرفاق فقط",
+      "papers": "{{count}} أوراق",
+      "searchPlaceholder": "ابحث بالمرجع أو النموذج أو الموظف…"
+    },
+    "reviewers": {
+      "title": "المراجعون",
+      "awaiting": "بانتظار المراجعة",
+      "reviewed": "تمت المراجعة",
+      "changesRequested": "طُلب إجراء تعديلات",
+      "seenOn": "اطُّلع عليه · {{date}}",
+      "notSeen": "لم يُطَّلع عليه بعد",
+      "recorded": "تم تسجيل المراجعة",
+      "approveReviewed": "اعتماد بعد المراجعة",
+      "requestChanges": "طلب تعديلات",
+      "overrideBanner_zero": "لم يطلب أي مراجع إجراء تعديلات",
+      "overrideBanner_one": "طلب مراجع واحد إجراء تعديلات — لا يزال بإمكانك التوقيع والاعتماد.",
+      "overrideBanner_two": "طلب مراجعان إجراء تعديلات — لا يزال بإمكانك التوقيع والاعتماد.",
+      "overrideBanner_few": "طلب {{count}} مراجعين إجراء تعديلات — لا يزال بإمكانك التوقيع والاعتماد.",
+      "overrideBanner_many": "طلب {{count}} مراجعًا إجراء تعديلات — لا يزال بإمكانك التوقيع والاعتماد.",
+      "overrideBanner_other": "طلب {{count}} مراجعًا إجراء تعديلات — لا يزال بإمكانك التوقيع والاعتماد."
+    }
+  },
+  "ledger": {
+    "title": "سجل المراسلات",
+    "subtitle": "سجل المراسلات والتواصل",
+    "pageMeta_zero": "لا إدخالات · هذا الشهر",
+    "pageMeta_one": "إدخال واحد · هذا الشهر",
+    "pageMeta_two": "إدخالان · هذا الشهر",
+    "pageMeta_few": "{{count}} إدخالات · هذا الشهر",
+    "pageMeta_many": "{{count}} إدخالاً · هذا الشهر",
+    "pageMeta_other": "{{count}} إدخالاً · هذا الشهر",
+    "newEntry": "إدخال جديد",
+    "compose": "إنشاء بريد",
+    "composeQuoteHeader": "في {{when}}، كتب {{from}}:",
+    "loggedBy": "تم التسجيل بواسطة",
+    "filter": {
+      "all": "الكل",
+      "directions": "الاتجاهات"
+    },
+    "month": {
+      "in": "{{n}} وارد",
+      "out": "{{n}} صادر",
+      "int": "{{n}} داخلي"
+    },
+    "thread": {
+      "label": "المحادثة",
+      "current": "المعروض حاليًا",
+      "count": "{{count}} رسائل في هذه المحادثة",
+      "empty": "لا توجد رسائل سابقة في هذه المحادثة"
+    },
+    "smartLink": {
+      "employee": "فتح الموظف",
+      "book": "فتح المرجع"
+    },
+    "sync": {
+      "never": "لم تتم المزامنة",
+      "justNow": "تمت المزامنة الآن",
+      "minutes_zero": "تمت المزامنة للتو",
+      "minutes_one": "تمت المزامنة منذ دقيقة",
+      "minutes_two": "تمت المزامنة منذ دقيقتين",
+      "minutes_few": "تمت المزامنة منذ {{count}} دقائق",
+      "minutes_many": "تمت المزامنة منذ {{count}} دقيقة",
+      "minutes_other": "تمت المزامنة منذ {{count}} دقيقة",
+      "hours_zero": "تمت المزامنة للتو",
+      "hours_one": "تمت المزامنة منذ ساعة",
+      "hours_two": "تمت المزامنة منذ ساعتين",
+      "hours_few": "تمت المزامنة منذ {{count}} ساعات",
+      "hours_many": "تمت المزامنة منذ {{count}} ساعة",
+      "hours_other": "تمت المزامنة منذ {{count}} ساعة",
+      "now": "مزامنة الآن",
+      "syncing": "جارٍ المزامنة…"
+    },
+    "empty": "لا توجد إدخالات مراسلات تطابق هذه المرشحات.",
+    "confirmDelete": "حذف مؤقت لهذا الإدخال؟",
+    "direction": {
+      "incoming": "وارد",
+      "outgoing": "صادر",
+      "internal": "داخلي"
+    },
+    "channel": {
+      "email": "بريد إلكتروني",
+      "phone": "هاتف",
+      "in_person": "شخصياً",
+      "fax": "فاكس",
+      "letter": "رسالة",
+      "other": "أخرى"
+    },
+    "filters": {
+      "direction": "الاتجاه",
+      "channel": "القناة",
+      "dateFrom": "من تاريخ",
+      "dateTo": "إلى تاريخ",
+      "counterparty": "الطرف…",
+      "search": "بحث…",
+      "tag": "وسم…",
+      "clear": "مسح المرشحات",
+      "button": "المرشحات",
+      "title": "المرشحات",
+      "quick": "مرشحات سريعة",
+      "hasAttachment": "بمرفقات",
+      "thisWeek": "هذا الأسبوع",
+      "sentFromApp": "مرسلة من التطبيق",
+      "starred": "المميّزة بنجمة",
+      "drafts": "المسودات"
+    },
+    "attachments": {
+      "downloadAll": "تنزيل الكل",
+      "preview": "معاينة",
+      "previewUnavailable": "المعاينة غير متاحة لهذا النوع من الملفات",
+      "previewLoadFailed": "تعذّر تحميل المعاينة",
+      "renderFailed": "تعذّر عرض هذا الملف"
+    },
+    "outlook": {
+      "hasAttachment": "يحتوي مرفقاً",
+      "tabs": {
+        "all": "الكل",
+        "unread": "غير المقروء"
+      },
+      "sortDate": "حسب التاريخ",
+      "searchMail": "بحث في البريد",
+      "searchLog": "بحث في سجل المراسلات",
+      "bands": {
+        "today": "اليوم",
+        "lastWeek": "الأسبوع الماضي"
+      },
+      "empty": {
+        "drafts": "لا توجد مسودّات.",
+        "trash": "سلة المحذوفات فارغة.",
+        "default": "لا شيء هنا بعد.",
+        "heading": "انقر على رسالة لعرض محتواها هنا",
+        "desc": "اختر رسالة من القائمة لقراءتها أو الردّ عليها أو اتخاذ إجراء."
+      },
+      "tipLabel": "نصيحة:",
+      "tips": [
+        "اكتب أي رقم G في الرسالة فيُربط الموظف تلقائياً — دون بحث.",
+        "استخدم «إضافة مرجع» لإرفاق كتاب أو سجل بردّك.",
+        "انقر ＋ بجوار المُستلِم لحفظه في دفتر العناوين.",
+        "يحتفظ «ردّ للكل» بحقول إلى ونسخة الأصلية — المستلمون مُعبّؤون مسبقاً."
+      ],
+      "newEmail": "رسالة جديدة",
+      "newEmailStub": "الإنشاء — قادم في المرحلة 6",
+      "rulesStub": "قواعد الالتقاط التلقائي — قادمة في المرحلة 7",
+      "foldersTrigger": "المجلدات",
+      "collapseFolders": "طي المجلدات",
+      "expandFolders": "توسيع المجلدات",
+      "orgShared": "المؤسسة · مشترك · تلقائي",
+      "corrLog": "سجل المراسلات",
+      "folders": {
+        "inbox": "الوارد",
+        "drafts": "المسودّات",
+        "sent": "المُرسَل",
+        "starred": "المميّزة",
+        "trash": "المهملات"
+      },
+      "categories": {
+        "hr_letters": "خطابات الموارد البشرية",
+        "salary_bank": "الرواتب / البنوك",
+        "leaves": "الإجازات",
+        "gov_nat": "حكومي / الخدمة الوطنية",
+        "incoming_stamped": "واردة (مختومة)"
+      },
+      "logrow": {
+        "autoLogged": "مُسجَّل تلقائياً",
+        "generatedBy": "أنشأها",
+        "forLbl": "لـ"
+      },
+      "recipients": {
+        "to": "إلى",
+        "cc": "نسخة",
+        "bcc": "نسخة مخفية",
+        "noEmail": "لا يوجد بريد إلكتروني — يُربط بالمراجع"
+      },
+      "autocomplete": {
+        "addressBook": "دفتر العناوين",
+        "employees": "الموظفون",
+        "saved": "محفوظ"
+      },
+      "composeBusy": "أنهِ مسودتك الحالية أو أغلقها أولاً.",
+      "ref": {
+        "label": "مرجع",
+        "add": "إضافة مرجع",
+        "searchPlaceholder": "ابحث في الكتب والسجلات والموظفين…",
+        "booksRecords": "كتب / سجلات",
+        "employees": "الموظفون",
+        "pdf": "PDF",
+        "attachPdf": "إرفاق ملف PDF الخاص بالمرجع عند توفّره"
+      },
+      "saveContact": "إضافة إلى دفتر العناوين",
+      "savedContact": "محفوظ في دفتر العناوين",
+      "reply": "ردّ",
+      "replyAll": "ردّ للكل",
+      "forward": "إعادة توجيه",
+      "delete": "حذف",
+      "movedToTrash": "نُقل إلى المهملات",
+      "draftDeleted": "حُذفت المسودة",
+      "draftOpenError": "تعذّر فتح هذه المسودة",
+      "more": "المزيد",
+      "back": "رجوع",
+      "record": {
+        "loading": "جارٍ تحميل السجل…",
+        "notFound": "السجل غير موجود.",
+        "ref": "المرجع",
+        "subject": "الموضوع",
+        "generatedBy": "أنشأها",
+        "linkedEmployee": "الموظفون المرتبطون",
+        "category": "الفئة",
+        "status": "الحالة",
+        "signed": "موقّع",
+        "awaiting": "بانتظار"
+      },
+      "context": "الأشخاص في هذه الرسالة",
+      "peopleIn": "الأشخاص في هذه الرسالة · {{count}}",
+      "peopleSheet": "الأشخاص ({{count}})",
+      "cxIdle": "افتح رسالة لرؤية الأشخاص المعنيين بها.",
+      "startRenewal": "بدء التجديد",
+      "recentActivity": "النشاط الأخير",
+      "facts": {
+        "joined": "تاريخ الالتحاق",
+        "mobile": "الجوال",
+        "nationality": "الجنسية",
+        "leave": "رصيد الإجازات",
+        "years": "{{count}} سنوات",
+        "days": "{{count}} يوماً",
+        "expiresIn": "ينتهي خلال {{count}} يوماً",
+        "expired": "انتهى منذ {{count}} يوماً",
+        "expiry": {
+          "uae_id": "الهوية الإماراتية",
+          "passport": "جواز السفر"
+        }
+      },
+      "quick": {
+        "record": "فتح السجل",
+        "generate": "إنشاء",
+        "email": "بريد"
+      },
+      "collapse": "طيّ اللوحة",
+      "expand": "عرض اللوحة",
+      "linkedRecords": "سجلات مرتبطة · {{count}}",
+      "signed": "موقّع",
+      "awaiting": "بانتظار",
+      "attVault": "المرفقات ← الخزنة",
+      "fileVault": "حفظ في الخزنة",
+      "rules": {
+        "title": "سجل المراسلات — قواعد الالتقاط التلقائي",
+        "description": "تقوم كل قاعدة بحفظ المراسلات المطابقة في فئة سجل المراسلات تلقائيًا.",
+        "empty": "لا توجد قواعد بعد. أضف واحدة أدناه.",
+        "add": "＋ إضافة قاعدة",
+        "ofType": "من نوع",
+        "when": "عند",
+        "fileAs": "← يُحفظ كـ",
+        "condition": "بحيث",
+        "condKey": "الحقل",
+        "condValue": "القيمة",
+        "toggle": "تبديل القاعدة",
+        "delete": "حذف القاعدة",
+        "newRule": "قاعدة جديدة",
+        "save": "حفظ القاعدة",
+        "pickCategory": "اختر فئة…",
+        "categories": "الفئات",
+        "newCategory": "＋ فئة جديدة…",
+        "addCategory": "إضافة فئة",
+        "deleteCategory": "حذف الفئة",
+        "nameEn": "الاسم بالإنجليزية",
+        "nameAr": "الاسم بالعربية",
+        "adminOnly": "للمسؤول فقط",
+        "triggers": {
+          "document_generated": "إنشاء مستند",
+          "book_signed": "توقيع كتاب",
+          "intake_classified": "تصنيف مسح وارد",
+          "email_sent": "إرسال بريد"
+        }
+      },
+      "sync": {
+        "updatedAgo": "آخر تحديث {{when}}",
+        "justNow": "الآن",
+        "minutesAgo_zero": "قبل أقل من دقيقة",
+        "minutesAgo_one": "قبل دقيقة",
+        "minutesAgo_two": "قبل دقيقتين",
+        "minutesAgo_few": "قبل {{count}} دقائق",
+        "minutesAgo_many": "قبل {{count}} دقيقة",
+        "minutesAgo_other": "قبل {{count}} دقيقة",
+        "hoursAgo_zero": "قبل أقل من ساعة",
+        "hoursAgo_one": "قبل ساعة",
+        "hoursAgo_two": "قبل ساعتين",
+        "hoursAgo_few": "قبل {{count}} ساعات",
+        "hoursAgo_many": "قبل {{count}} ساعة",
+        "hoursAgo_other": "قبل {{count}} ساعة",
+        "daysAgo_one": "قبل يوم",
+        "daysAgo_two": "قبل يومين",
+        "daysAgo_few": "قبل {{count}} أيام",
+        "daysAgo_many": "قبل {{count}} يوماً",
+        "daysAgo_other": "قبل {{count}} يوم",
+        "never": "لم تتم المزامنة بعد",
+        "syncing": "جارٍ المزامنة…",
+        "failed": "فشلت المزامنة",
+        "retry": "إعادة المحاولة",
+        "off": "المزامنة متوقفة",
+        "openSettings": "الإعدادات",
+        "syncNow": "مزامنة الآن",
+        "inProgress": "المزامنة قيد التشغيل"
+      },
+      "allMail": "كل البريد",
+      "allMailHint": "عرض صندوق بريد المكتب بالكامل (للمشرف)",
+      "myMail": "بريدي"
+    },
+    "lists": {
+      "label": "القوائم",
+      "manage": "إدارة القوائم",
+      "empty": "لا توجد قوائم محفوظة بعد",
+      "new": "قائمة جديدة",
+      "saveCurrent": "حفظ الحالية",
+      "applyTitle": "إلى: {{to}} · نسخة: {{cc}}",
+      "title": "قوائم المستلمين",
+      "desc": "احفظ مجموعات مستلمي “إلى/نسخة” وطبّقها بنقرة واحدة.",
+      "name": "اسم القائمة",
+      "namePlaceholder": "مثال: الرواتب",
+      "addMember": "إضافة مستلم",
+      "create": "إنشاء قائمة",
+      "save": "حفظ التغييرات",
+      "saved": "تم حفظ القائمة",
+      "nameTaken": "توجد قائمة بهذا الاسم بالفعل",
+      "deleteTitle": "حذف هذه القائمة؟",
+      "deleteDesc": "حذف “{{name}}”؟ لا يمكن التراجع عن هذا."
+    },
+    "star": {
+      "toggle": "تمييز بنجمة"
+    },
+    "search": {
+      "placeholder": "ابحث في السجل…",
+      "noResults": "لا توجد نتائج لـ \"{{q}}\"",
+      "results": "{{count}} نتيجة"
+    },
+    "suggestEmployee": {
+      "title": "تطابق محتمل لموظف",
+      "body": "تم رصد {{gnumber}} في هذه الرسالة. ربطها بـ {{name}}؟",
+      "button": "تعيين كمرتبط",
+      "linked": "تم الربط بـ {{id}}"
+    },
+    "draftCompose": {
+      "lastSaved": "تم الحفظ · {{time}}",
+      "saving": "جارٍ الحفظ…",
+      "saveTitle": "حفظ هذه الرسالة كمسودة؟",
+      "saveDesc": "احتفظ بها في المسودات لإكمالها لاحقًا، أو تجاهلها.",
+      "saveAndClose": "حفظ كمسودة",
+      "discard": "تجاهل",
+      "keepEditing": "متابعة التحرير"
+    },
+    "vault": {
+      "sendToVault": "إرسال إلى الخزينة",
+      "dialog": {
+        "title": "إرسال المرفق إلى الخزينة",
+        "kind": "المجلد",
+        "confirm": "إرسال",
+        "sentTo": "تم الإرسال إلى خزينة {{id}}"
+      }
+    },
+    "form": {
+      "entryDate": "التاريخ",
+      "direction": "الاتجاه",
+      "channel": "القناة",
+      "counterparty": "الطرف",
+      "subject": "الموضوع",
+      "notes": "ملاحظات",
+      "tags": "الوسوم (مفصولة بفاصلة)",
+      "attachments": "المرفقات",
+      "relatedBook": "الكتاب المرتبط",
+      "relatedEmployee": "الموظف المرتبط",
+      "save": "حفظ",
+      "cancel": "إلغاء"
+    },
+    "toast": {
+      "created": "تم إنشاء إدخال المراسلات",
+      "updated": "تم تحديث الإدخال",
+      "deleted": "تم حذف الإدخال"
+    },
+    "emptyUnfiltered": "لا توجد مراسلات مسجلة بعد"
+  },
+  "settings": {
+    "title": "الإعدادات",
+    "subtitle": "تخصيص التطبيق وإدارة البيانات",
+    "sections": {
+      "appearance": "المظهر",
+      "defaults": "الإعدادات الافتراضية",
+      "submitters": "مقدمو الطلبات",
+      "system": "معلومات النظام",
+      "advanced": "متقدم"
+    },
+    "eyebrow": "النظام",
+    "savedToast": "تم حفظ الإعدادات",
+    "account": {
+      "title": "حسابك",
+      "description": "الحساب الذي سجّلت الدخول به حالياً.",
+      "email": "البريد الإلكتروني",
+      "name": "الاسم",
+      "role": "الدور",
+      "employeeId": "رقم الموظف",
+      "roleAdmin": "مسؤول",
+      "roleManager": "مدير",
+      "roleOperator": "مشغّل"
+    },
+    "appearance": {
+      "title": "المظهر",
+      "description": "يتم ضبط حجم النص والمظهر من شريط التنقل العلوي.",
+      "hint": "استخدم منزلق Aa والمفتاح المظلم/الفاتح في الأعلى لتخصيص العرض.",
+      "sentryLabel": "المشاركة في تقارير الأعطال (Sentry)",
+      "sentryHint": "يساعد على تحسين الاستقرار. لا تُرسل بيانات شخصية.",
+      "theme": "المظهر",
+      "themeLight": "فاتح",
+      "themeDark": "داكن",
+      "language": "اللغة",
+      "fontScale": "حجم الخط",
+      "fontSm": "صغير",
+      "fontMd": "متوسط",
+      "fontLg": "كبير"
+    },
+    "defaults": {
+      "title": "الإعدادات الافتراضية",
+      "description": "القيم الافتراضية المستخدمة عند إنشاء المستندات.",
+      "stampStyle": "نمط الختم الافتراضي",
+      "stampHeader": "نص الترويسة",
+      "stampBoldTopRight": "أعلى اليمين (عريض)",
+      "stampWatermark": "علامة مائية",
+      "defaultManager": "المدير الافتراضي"
+    },
+    "submitters": {
+      "title": "مقدمو الطلبات",
+      "description": "قائمة الأشخاص الذين يمكن اختيارهم كمقدم طلب على النماذج.",
+      "add": "إضافة مقدم طلب",
+      "name": "الاسم",
+      "employeeId": "رقم الموظف",
+      "empty": "لا يوجد مقدمو طلبات",
+      "cancel": "إلغاء",
+      "addAction": "إضافة",
+      "delete": "حذف",
+      "confirmDelete": "حذف مقدم الطلب؟",
+      "addedToast": "تمت إضافة مقدم الطلب",
+      "deletedToast": "تم حذف مقدم الطلب"
+    },
+    "managers": {
+      "title": "المديرون",
+      "description": "اربط كل مدير بحساب دخول حتى يعمل توجيه الموافقات تلقائياً.",
+      "noAccount": "لا يوجد حساب مرتبط",
+      "linkedToast": "تم ربط حساب المدير",
+      "empty": "لم يُضَف أي مدير بعد."
+    },
+    "system": {
+      "title": "النظام",
+      "description": "معلومات تشخيصية وفحص التحديثات.",
+      "version": "الإصدار",
+      "database": "قاعدة البيانات",
+      "logFile": "ملف السجل",
+      "dataDir": "مجلد البيانات",
+      "python": "إصدار Python",
+      "platform": "النظام",
+      "uptime": "وقت التشغيل",
+      "checkUpdates": "التحقق من التحديثات",
+      "checking": "جاري التحقق…",
+      "upToDate": "أنت تستخدم أحدث إصدار",
+      "updateAvailable": "تحديث متاح: {{version}}",
+      "checkFailed": "تعذّر التحقق من التحديثات"
+    },
+    "advanced": {
+      "title": "متقدم",
+      "description": "إعدادات للمشرفين فقط.",
+      "adminGate": "بوابة المسؤول",
+      "adminGateEnabled": "مفعّل",
+      "adminGateOnToast": "تم تفعيل بوابة المسؤول",
+      "adminGateOffToast": "تم تعطيل بوابة المسؤول",
+      "dataDir": "مجلد البيانات",
+      "logFile": "ملف السجل",
+      "copy": "نسخ",
+      "pathCopiedToast": "تم نسخ المسار",
+      "openInExplorer": "فتح في المستكشف",
+      "openExplorerNote": "يفتح عبر pywebview عند تشغيله كتطبيق"
+    },
+    "email": {
+      "heading": "تكامل البريد الإلكتروني",
+      "description": "اربط حساب البريد الإلكتروني (IMAP) لاستيراد الرسائل تلقائياً إلى السجل العام كقيود واردة وصادرة. كلمة المرور تُشفَّر محلياً على هذا الجهاز.",
+      "syncIntervalSuffix": "دقيقة (٠ لإيقاف)",
+      "adminBadge": "مدير",
+      "ionosOnly": "يستخدم GSSG بريد IONOS فقط. لا يتم دعم مزودي البريد الآخرين.",
+      "linkHeading": "اربط سجل الموظف الخاص بك",
+      "linkHint": "يجعل التطبيق يضع اسمك تلقائياً كمقدم وموقّع على النماذج.",
+      "linkButton": "ربط",
+      "skipLink": "تخطي",
+      "linkedHeading": "الموظف المرتبط",
+      "changeLink": "تغيير",
+      "linkAdminOnly": "يمكن لمسؤول التطبيق فقط تغيير الموظف المرتبط",
+      "linkSuccess": "تم الربط باسم {{name}} ({{id}})",
+      "linkAdminGranted": "تم الربط باسم {{name}} ({{id}}) — مدير",
+      "confirmDelete": "إزالة حساب البريد الإلكتروني؟",
+      "confirmDeleteDesc": "سيؤدي هذا إلى إزالة حساب البريد الإلكتروني وإيقاف المزامنة."
+    },
+    "signature": {
+      "title": "توقيع البريد الإلكتروني",
+      "description": "يُلحق برسائل البريد الصادرة عند تفعيله من شريط الإنشاء.",
+      "save": "حفظ التوقيع",
+      "saved": "تم حفظ التوقيع",
+      "placeholder": "اكتب توقيعك هنا…"
+    },
+    "signingSignature": {
+      "title": "توقيع الاعتماد",
+      "description": "يُضمَّن في ملف PDF الخاص بالدفتر عند موافقتك وتوقيعك عليه. منفصل عن توقيع البريد الإلكتروني وتوقيع ملف الموظف.",
+      "onFile": "التوقيع محفوظ",
+      "save": "حفظ التوقيع",
+      "saved": "تم حفظ توقيع الاعتماد",
+      "clear": "مسح",
+      "replace": "استبدال",
+      "remove": "إزالة",
+      "removed": "تمت إزالة توقيع الاعتماد"
+    },
+    "sigAppearance": {
+      "title": "مظهر التوقيع",
+      "description": "حجم ووزن توقيعك على المستندات المُنشأة.",
+      "size": "الحجم",
+      "boldness": "السماكة",
+      "noSignature": "ارفع توقيعك أعلاه لمعاينته.",
+      "pageScaleHint": "معروض بالحجم الفعلي على الصفحة",
+      "level": {
+        "none": "بدون",
+        "light": "خفيف",
+        "medium": "متوسط",
+        "bold": "غامق"
+      }
+    }
+  },
+  "migration": {
+    "welcome": {
+      "title": "الترحيل من GSSG v3.5.4",
+      "subtitle": "استيراد الموظفين والإجازات وسجلات الكتب وملفات الخزينة من مجلد البيانات الحالي للإصدار 3.5.4 إلى الإصدار 4. سيتم إنشاء نسخة احتياطية مؤرخة قبل أي تغيير."
+    },
+    "pickPath": {
+      "label": "مجلد بيانات v3",
+      "placeholder": "مثال: C:\\Users\\...\\Gssg_manger\\data"
+    },
+    "preview": {
+      "heading": "جاهز للاستيراد",
+      "confirm": "المتابعة مع الاستيراد"
+    },
+    "importing": {
+      "status": "جاري الاستيراد… قد يستغرق هذا دقيقة."
+    },
+    "summary": {
+      "heading": "اكتمل الترحيل",
+      "detail": "تم استيراد {{employees}} موظف، {{leaves}} إجازة، {{books}} سجل كتاب. نُسخت الملفات الأصلية إلى {{backup}}."
+    },
+    "skip": {
+      "title": "تخطي الترحيل؟",
+      "confirm": "يمكنك تشغيل هذا لاحقًا من الإعدادات ← النظام. تخطي الآن؟"
+    },
+    "error": {
+      "heading": "فشل الترحيل"
+    },
+    "steps": {
+      "welcome": "مرحبًا",
+      "pickPath": "مجلد البيانات",
+      "preview": "معاينة",
+      "importing": "استيراد",
+      "done": "تم"
+    },
+    "buttons": {
+      "next": "التالي",
+      "back": "رجوع",
+      "skip": "تخطي الآن",
+      "proceed": "استيراد",
+      "done": "تم",
+      "runMigration": "الترحيل من v3"
+    },
+    "counts": {
+      "employees": "الموظفون",
+      "leaves": "الإجازات",
+      "books": "الكتب",
+      "vaultFiles": "ملفات الخزينة",
+      "violations": "المخالفات"
+    }
+  },
+  "expiry": {
+    "title": "انتهاء صلاحية الوثائق",
+    "subtitle": "انتهاء صلاحية الهوية الإماراتية وجواز السفر للموظفين النشطين",
+    "eyebrow": "الموارد البشرية · الانتهاء",
+    "filters": {
+      "type": "نوع الوثيقة",
+      "typeAll": "جميع الوثائق",
+      "typeUaeId": "الهوية الإماراتية",
+      "typePassport": "جواز السفر",
+      "window": "النافذة الزمنية",
+      "window30": "تنتهي خلال ≤30 يومًا",
+      "window90": "تنتهي خلال ≤90 يومًا",
+      "windowExpired": "المنتهية فقط",
+      "windowAll": "الكل (بلا حد)",
+      "searchPlaceholder": "بحث بالاسم أو الرقم…"
+    },
+    "docType": {
+      "uae_id": "الهوية الإماراتية",
+      "passport": "جواز السفر"
+    },
+    "urgency": {
+      "expired": "انتهت منذ {{days}} يوم",
+      "critical": "تنتهي خلال {{days}} يوم",
+      "soon": "تنتهي خلال {{days}} يوم"
+    },
+    "expiryDate": "الانتهاء",
+    "empty": "لا توجد وثائق منتهية تطابق مرشحاتك.",
+    "dashboardTitle": "تنتهي قريباً",
+    "bellTitle": "وثائق منتهية",
+    "bellCount": "{{count}} عاجل",
+    "viewAll": "عرض الكل",
+    "awaitingReturnDash": "بانتظار نموذج المباشرة",
+    "awaitingReturnDashCount_zero": "لا موظفين",
+    "awaitingReturnDashCount_one": "موظف واحد بانتظار",
+    "awaitingReturnDashCount_two": "موظفان بانتظار",
+    "awaitingReturnDashCount_few": "{{count}} موظفين بانتظار",
+    "awaitingReturnDashCount_many": "{{count}} موظفًا بانتظار",
+    "awaitingReturnDashCount_other": "{{count}} بانتظار"
+  },
+  "viewer": {
+    "title": "معاينة",
+    "unavailable": "المعاينة غير متاحة لهذا النوع من الملفات",
+    "rotate": "تدوير",
+    "zoomIn": "تكبير",
+    "zoomOut": "تصغير",
+    "reset": "ملاءمة / إعادة",
+    "openNewTab": "فتح في تبويب جديد"
+  },
+  "errors": {
+    "generic": "حدث خطأ ما",
+    "network": "تعذر الاتصال بالخادم"
+  },
+  "compose": {
+    "window": {
+      "minimize": "تصغير",
+      "maximize": "تكبير",
+      "restore": "استعادة"
+    },
+    "includeSignature": "إدراج التوقيع",
+    "invalidAddress": "عنوان بريد إلكتروني غير صالح: {{address}}",
+    "replyNoAddress": "لم يُعثر على عنوان بريد إلكتروني لـ \"{{counterparty}}\" — أدخله يدوياً.",
+    "attachmentsTooLarge": "تتجاوز المرفقات الحد المسموح {{max}}",
+    "toRequired": "مطلوب مستلم واحد على الأقل",
+    "subjectRequired": "الموضوع مطلوب",
+    "to": "إلى",
+    "cc": "نسخة",
+    "subject": "الموضوع",
+    "body": "الرسالة",
+    "send": "إرسال",
+    "sent": "تم إرسال البريد",
+    "attachments": "المرفقات",
+    "dropFiles": "أسقط الملفات هنا أو انقر للتصفح",
+    "title": {
+      "reply": "ردّ",
+      "replyAll": "الرد على الكل",
+      "forward": "إعادة توجيه",
+      "new": "بريد جديد"
+    }
+  },
+  "actions": {
+    "edit": "تعديل",
+    "addLeave": "إضافة إجازة",
+    "generateDoc": "إصدار مستند"
+  },
+  "empSig": {
+    "title": "توقيع الموظف",
+    "loaded": "محمّل من الملف الشخصي",
+    "none": "لا يوجد توقيع محفوظ",
+    "embed": "تضمين في هذا النموذج",
+    "savedOn": "محفوظ في ملف {{id}}",
+    "updatedAt": "آخر تحديث {{date}}",
+    "justNow": "الآن",
+    "blankHint": "تبقى الخانة فارغة — يوقّع الموظف بالحبر بعد الطباعة",
+    "thisFormOnly": "يُستخدم لهذا النموذج فقط — لم يُحفظ في الملف الشخصي",
+    "replace": "استبدال…",
+    "cancel": "إلغاء",
+    "drawHint": "ارسم توقيع الموظف هنا",
+    "save": "حفظ",
+    "clear": "مسح",
+    "upload": "رفع صورة…",
+    "saveToProfile": "حفظ في الملف الشخصي",
+    "removed": "تمت إزالة التوقيع",
+    "saved": "تم حفظ التوقيع",
+    "remove": "إزالة",
+    "removeConfirmTitle": "إزالة التوقيع المحفوظ؟",
+    "removeConfirmBody": "لن تتضمن النماذج توقيعًا لهذا الموظف حتى يتم حفظ توقيع جديد.",
+    "uploadBadType": "اختر صورة PNG أو JPG",
+    "submitterTitle": "مقدّم الطلب يوقّع الصفحة 1",
+    "submitterSigns": "في الطلب (الصفحة 1)، يُستخدم توقيع {{name}} بدلاً من توقيع الموظف.",
+    "submitterNoSig": "لا يوجد توقيع محفوظ لـ {{name}} — ستُطبع خانة التوقيع في الصفحة 1 فارغة.",
+    "submitterNotLinked": "{{name}} غير مرتبط بموظف — ستُطبع خانة التوقيع في الصفحة 1 فارغة.",
+    "submitterAppliesP2": "ينطبق التوقيع أدناه على التعهّد (الصفحة 2)."
+  },
+  "employee": {
+    "notFound": "لم يتم العثور على الموظف.",
+    "joined": "التحق في {{date}}",
+    "tab": {
+      "documents": "المستندات",
+      "profile": "الملف الشخصي",
+      "leaves": "الإجازات",
+      "violations": "المخالفات",
+      "activity": "النشاط",
+      "showingRecent": "عرض {{shown}} من {{total}}"
+    },
+    "stats": {
+      "documents": "المستندات",
+      "documentsDelta": "{{count}} مسجل",
+      "leaves": "أيام الإجازات",
+      "leavesDelta": "من أصل {{allowed}} يوم",
+      "violations": "المخالفات",
+      "violationsClean": "سجل نظيف",
+      "violationsCount": "{{count}} مسجلة",
+      "ledger": "قيود السجل",
+      "ledgerDelta": "أحدث الأنشطة",
+      "tenure": "مدة الخدمة",
+      "tenureDelta": "منذ الالتحاق",
+      "daysUnit": "{{n}} يوم",
+      "yearsUnit": "{{n}} سنة"
+    },
+    "docs": {
+      "total": "الإجمالي: {{count}} مستندات لـ {{name}}",
+      "empty": "لا توجد مستندات بعد."
+    },
+    "leaves": {
+      "empty": "لا توجد سجلات إجازات."
+    },
+    "violations": {
+      "empty": "لا توجد مخالفات — سجل نظيف."
+    },
+    "activity": {
+      "empty": "لا توجد أنشطة حديثة."
+    },
+    "profile": {
+      "idEn": "رقم الموظف",
+      "nameEn": "الاسم (إنجليزي)",
+      "nameAr": "الاسم (عربي)",
+      "position": "المسمى الوظيفي",
+      "department": "القسم",
+      "doj": "تاريخ الالتحاق",
+      "status": "الحالة"
+    },
+    "identity": {
+      "title": "وثائق الهوية",
+      "addScan": "إضافة نسخة",
+      "noScan": "لا توجد نسخة مرفقة"
+    }
+  },
+  "application": {
+    "title": "النماذج",
+    "eyebrow": "المستندات",
+    "heading": "إنشاء مستند",
+    "meta": "{{count}} نموذجًا · اختر نموذجًا للبدء",
+    "servicesTitle": "الخدمات",
+    "searchServices": "بحث في الخدمات…",
+    "noServicesMatch": "لا توجد نماذج مطابقة لبحثك.",
+    "nsCategory": "سجل",
+    "code": {
+      "has": "يحمل رمز مرجع قابل للمسح",
+      "none": "بدون رمز مرجع"
+    },
+    "actions": {
+      "preview": "معاينة",
+      "saveBook": "حفظ الكتاب",
+      "waitingForPreview": "بانتظار المعاينة…",
+      "saved": "تم الحفظ",
+      "generate": "إنشاء المستند"
+    },
+    "previewFirstHint": "اعرض المعاينة أولًا — يظهر زر الحفظ بعد إنشاء المستند.",
+    "saveBookHint": "جارٍ إنشاء المعاينة…",
+    "saveReadyHint": "مرضٍ؟ احفظ لتثبيت رقم المرجع وإضافته إلى السجلات.",
+    "savedHint": "تم الحفظ. تم تثبيت رقم المرجع وإضافة الكتاب إلى السجلات.",
+    "selectedRecipients": "المستلمون المختارون",
+    "removeRecipient": "إزالة {{name}}",
+    "savedSignature": {
+      "heading": "توقيعك المحفوظ",
+      "use": "استخدام التوقيع المحفوظ",
+      "inUse": "قيد الاستخدام — أرسل كما هو أو استبدله",
+      "replace": "استبدال"
+    },
+    "cc": {
+      "searchPlaceholder": "إضافة نسخة…",
+      "addNew": "+ إضافة جهة جديدة للنسخة",
+      "manage": "إدارة جهات النسخة",
+      "addedToast": "تمت إضافة جهة النسخة",
+      "empty": "لم تتم إضافة نسخة بعد",
+      "selected": "قائمة النسخة",
+      "remove": "إزالة {{name}} من النسخة"
+    },
+    "violationCombo": {
+      "placeholder": "ابحث أو اكتب نوع المخالفة…",
+      "addCustom": "إضافة «{{query}}»",
+      "noMatches": "لا توجد أنواع مطابقة — تابع الكتابة لإضافة نوع مخصّص",
+      "selected": "أنواع المخالفات المحددة",
+      "remove": "إزالة {{type}}"
+    },
+    "formCard": {
+      "fallbackTitle": "نموذج",
+      "description": "يتم تعبئته تلقائيًا من بيانات الموظف. الحقول الإلزامية مميزة بعلامة *.",
+      "emptyHint": "اختر نموذجًا من القائمة الجانبية لبدء التعبئة."
+    },
+    "employeeHeader": {
+      "title": "الموظف",
+      "change": "تغيير"
+    },
+    "noSelection": "— بدون اختيار —",
+    "searchManagers": "البحث عن مدير…",
+    "clearManager": "إزالة المدير",
+    "managerPickerHint": "تركه فارغًا يعني أن خلية المدير ستكون فارغة في النموذج (وليس المدير الافتراضي).",
+    "manageSubmitters": "إدارة مقدمي الطلبات",
+    "submitterManagementTitle": "إدارة مقدمي الطلبات",
+    "submitterManagementStub": "إدارة مقدمي الطلبات — قريبًا.",
+    "searchRecipients": "البحث عن مستلم…",
+    "addRecipient": "إضافة مستلم",
+    "manageRecipients": "إدارة المستلمين",
+    "recipientManagementTitle": "إدارة المستلمين",
+    "recipientNamePlaceholder": "اسم المستلم",
+    "recipientNameArPlaceholder": "الاسم بالعربية (اختياري)",
+    "annualCompanionHint": "سيتم إنشاء تعهد الإجازة أيضًا",
+    "pickerLoadError": "تعذّر تحميل القائمة",
+    "groups": {
+      "Applicant": "مقدم الطلب",
+      "Manager": "المدير",
+      "Signatures": "التوقيعات"
+    },
+    "validation": {
+      "required": "حقل مطلوب",
+      "invalidDate": "يجب أن يكون تاريخاً صالحاً (YYYY-MM-DD)"
+    },
+    "itemsTable": {
+      "addRow": "+ إضافة سطر",
+      "code": "الرمز",
+      "description": "الوصف",
+      "unit": "الوحدة",
+      "qty": "الكمية",
+      "remarks": "ملاحظات",
+      "empty": "لا توجد بنود — أضف سطراً للبدء."
+    },
+    "clearance": {
+      "department": "القسم",
+      "item": "البند",
+      "status": "الحالة",
+      "remarks": "ملاحظات",
+      "yes": "تم الإخلاء",
+      "no": "لم يتم",
+      "allYes": "تم الإخلاء للكل",
+      "allNo": "لم يتم للكل",
+      "departments": {
+        "operations": "العمليات",
+        "supply_chain": "سلسلة الإمداد",
+        "it": "تقنية المعلومات",
+        "finance": "المالية",
+        "hr": "الموارد البشرية"
+      },
+      "items": {
+        "documents": "المستندات",
+        "armed_license": "رخصة السلاح",
+        "cicpa_card": "بطاقة CICPA",
+        "id_card": "بطاقة الهوية",
+        "tonfa": "الهراوة",
+        "radio": "جهاز اللاسلكي",
+        "keys": "المفاتيح",
+        "weapon_id": "معرّف السلاح",
+        "pistol_rifle": "مسدس/بندقية",
+        "taser_gun": "مسدس صاعق",
+        "handcuff": "القيود",
+        "pepper_spray": "رذاذ الفلفل",
+        "ammunition": "الذخيرة",
+        "access_cards": "بطاقات الدخول",
+        "electronic_devices": "الأجهزة الإلكترونية",
+        "others": "أخرى",
+        "riot_equipment": "معدات مكافحة الشغب",
+        "traffic_fine": "المخالفات المرورية",
+        "mobile": "الهاتف المحمول",
+        "sim_card": "شريحة الاتصال",
+        "pc_backup": "النسخ الاحتياطي للحاسوب",
+        "email": "البريد الإلكتروني",
+        "dms": "نظام إدارة المستندات",
+        "bio_metric_access": "الدخول بالبصمة",
+        "erp": "نظام تخطيط الموارد",
+        "share_folder": "المجلد المشترك",
+        "payment_deduction": "الدفع / الخصم",
+        "passport": "جواز السفر",
+        "medical_insurance_card": "بطاقة التأمين الطبي"
+      }
+    },
+    "formList": {
+      "title": "النماذج",
+      "personnel": "شؤون الموظفين",
+      "admin": "النماذج الإدارية"
+    },
+    "employeePicker": {
+      "placeholder": "اختر موظفًا…",
+      "search": "ابحث عن موظف…"
+    },
+    "tabs": {
+      "fields": "الحقول",
+      "preview": "معاينة"
+    },
+    "submit": "إنشاء",
+    "editFields": "تعديل الحقول",
+    "newForm": "نموذج جديد",
+    "downloadPdf": "تنزيل PDF",
+    "downloadDocx": "تنزيل DOCX",
+    "pdfUnavailable": "PDF غير متاح؛ نزّل DOCX بدلاً منه",
+    "noDocuments": "لم يتم إنشاء أي مستندات",
+    "prevDoc": "المستند السابق",
+    "nextDoc": "المستند التالي",
+    "jobStatus": {
+      "queued": "جاري الإنشاء…",
+      "running": "جاري الإنشاء…",
+      "done": "تم",
+      "failed": "فشل"
+    },
+    "noTemplateSelected": "اختر نموذجًا للبدء",
+    "noEmployeeSelected": "اختر موظفًا أولاً",
+    "toast": {
+      "generated": "تم إنشاء المستند",
+      "previewed": "تم عرض المعاينة",
+      "saved": "تم الحفظ برقم {{ref}}"
+    },
+    "attachments": {
+      "title": "المرفقات",
+      "required": "مطلوب",
+      "optional": "اختياري",
+      "addOptional": "إضافة مرفق (اختياري)",
+      "upload": "رفع",
+      "fromRecords": "من السجلات",
+      "notAttached": "لم يُرفق بعد",
+      "uploading": "جارٍ الرفع…",
+      "uploaded": "مرفوع",
+      "uploadFailed": "تعذّر رفع المرفق",
+      "requiredCount": "المطلوب: {{filled}} من {{total}} مرفق",
+      "requiredHint": "⚠ أرفق «{{slot}}» قبل الحفظ",
+      "remove": "إزالة المرفق",
+      "dismiss": "إغلاق الصف",
+      "extra": "إضافة مرفق",
+      "extraHint": "كل ما يُرفق هنا يُدمج في ملف PDF الناتج.",
+      "pickerTitle": "إرفاق من السجلات",
+      "pickerSubtitle": "ابحث عن سجل بالمرجع أو الموضوع ثم اختر إحدى أوراقه.",
+      "pickerSearch": "ابحث في السجلات بالمرجع أو الموضوع…",
+      "pickerGenerated": "ملف PDF المُنشأ",
+      "pickerEmpty": "لا توجد سجلات مطابقة.",
+      "pickerNoPapers": "لا توجد أوراق في هذا السجل بعد."
+    },
+    "employeesTable": {
+      "gNumber": "الرقم الوظيفي",
+      "add": "إضافة",
+      "addAnother": "+ إضافة آخر",
+      "cap": "{{n}}/15",
+      "id": "الرقم",
+      "name": "الاسم",
+      "nationality": "الجنسية",
+      "passport": "رقم الجواز",
+      "notFound": "لا يوجد موظف بهذا الرقم الوظيفي.",
+      "duplicate": "مضاف مسبقاً.",
+      "lookupError": "تعذّر البحث. حاول مرة أخرى.",
+      "max": "حتى 15 موظفاً."
+    }
+  },
+  "dashboard": {
+    "title": "لوحة المعلومات",
+    "subtitle": "نظرة سريعة على اليوم",
+    "welcomeBack": "مرحبًا بعودتك، {{name}}",
+    "welcomeBackGuest": "مرحبًا بعودتك",
+    "greeting": {
+      "morning": "صباح الخير",
+      "afternoon": "مساء الخير",
+      "evening": "مساء الخير"
+    },
+    "hero": {
+      "onLeaveChip": "في إجازة اليوم",
+      "allPresent": "الجميع حاضر اليوم",
+      "returnsSingle": "يعود من الإجازة اليوم",
+      "returnPlural": "يعودون من الإجازة اليوم",
+      "peopleCount": "{{n}} موظفين",
+      "reviewLeave": "مراجعة سجلات الإجازات",
+      "seeAll": "عرض الكل",
+      "calm": "يوم هادئ. {{n}} في الموقع، لا عودة من الإجازات اليوم.",
+      "calmUpcoming": "{{n}} يعودون لاحقًا هذا الأسبوع."
+    },
+    "heroSubtitle_zero": "لا توجد مستندات بانتظار اهتمامك",
+    "heroSubtitle_one": "مستند واحد بانتظار اهتمامك",
+    "heroSubtitle_two": "مستندان بانتظار اهتمامك",
+    "heroSubtitle_few": "{{count}} مستندات بانتظار اهتمامك",
+    "heroSubtitle_many": "{{count}} مستندًا بانتظار اهتمامك",
+    "heroSubtitle_other": "{{count}} مستند بانتظار اهتمامك",
+    "heroLeavesReturning_zero": "لا توجد إجازات تنتهي هذا الأسبوع",
+    "heroLeavesReturning_one": "إجازة واحدة تنتهي هذا الأسبوع",
+    "heroLeavesReturning_two": "إجازتان تنتهيان هذا الأسبوع",
+    "heroLeavesReturning_few": "{{count}} إجازات تنتهي هذا الأسبوع",
+    "heroLeavesReturning_many": "{{count}} إجازة تنتهي هذا الأسبوع",
+    "heroLeavesReturning_other": "{{count}} إجازة تنتهي هذا الأسبوع",
+    "myWidgets": "أدواتي",
+    "editMyWidgets": "تعديل أدواتي",
+    "editQuickActions": "تعديل الإجراءات السريعة",
+    "quickActions": "إجراءات سريعة",
+    "quickActionsEmpty": "لم يتم إعداد إجراءات سريعة. انقر على \"تعديل الإجراءات السريعة\" لإضافة بعضها.",
+    "viewAll": "عرض الكل",
+    "editWidgets": {
+      "customizeTitle": "تخصيص لوحة التحكم",
+      "customizeDescription": "اختر مكان ظهور كل أداة. استخدم محدّد المنطقة والأسهم.",
+      "zones": {
+        "top": "الأعلى (بطاقات كبيرة)",
+        "under_workspace": "أسفل مساحة العمل",
+        "under_quick_actions": "أسفل الإجراءات السريعة",
+        "hidden": "مخفية"
+      },
+      "zonePicker": "النقل إلى منطقة",
+      "topFull": "منطقة الأعلى ممتلئة (الحد الأقصى {{count}})",
+      "topOnlyBigCards": "البطاقات الكبيرة فقط يمكن وضعها في الأعلى",
+      "zoneFull": "هذه المنطقة ممتلئة (الحد الأقصى {{count}})",
+      "title": "تعديل أدواتي",
+      "description": "أعد ترتيب أو أخفِ الأدوات في لوحتك.",
+      "quickActionsTitle": "تعديل الإجراءات السريعة",
+      "quickActionsDescription": "أعد ترتيب أو أخفِ بطاقات الإجراءات السريعة في لوحتك.",
+      "reset": "إعادة إلى الافتراضي",
+      "save": "حفظ",
+      "cancel": "إلغاء",
+      "moveUp": "تحريك لأعلى",
+      "moveDown": "تحريك لأسفل",
+      "showAria": "إظهار {{name}}",
+      "hideAria": "إخفاء {{name}}",
+      "maxVisibleHint": "الحد الأقصى {{count}} أدوات معروضة في وقت واحد",
+      "quickActionsMaxVisibleHint": "الحد الأقصى {{count}} إجراءات سريعة معروضة في وقت واحد"
+    },
+    "widgetLabels": {
+      "pending": "المستندات المنجزة",
+      "workspace": "بيئة عملي",
+      "violations": "المخالفات المفتوحة",
+      "drafts": "المسودات",
+      "ledger": "غير المقروء في السجل",
+      "on_leave_today": "في إجازة اليوم",
+      "upcoming_leave": "العائدون قريباً",
+      "recent_docs": "المستندات الأخيرة",
+      "email_sync_status": "مزامنة البريد",
+      "waiting_approvals": "بانتظار الاعتماد",
+      "waiting_approvals_cta": "مراجعة",
+      "waiting_approvals_aria_zero": "بانتظار الاعتماد: {{count}}. مراجعة.",
+      "waiting_approvals_aria_one": "بانتظار الاعتماد: {{count}}. مراجعة.",
+      "waiting_approvals_aria_two": "بانتظار الاعتماد: {{count}}. مراجعة.",
+      "waiting_approvals_aria_few": "بانتظار الاعتماد: {{count}}. مراجعة.",
+      "waiting_approvals_aria_many": "بانتظار الاعتماد: {{count}}. مراجعة.",
+      "waiting_approvals_aria_other": "بانتظار الاعتماد: {{count}}. مراجعة.",
+      "expiring_soon": "قرب الانتهاء",
+      "recent_ledger": "أحدث المراسلات"
+    },
+    "quickActionLabels": {
+      "hr": "طلبات الموارد البشرية",
+      "violations": "المخالفات",
+      "leaves": "الإجازات",
+      "books": "دفاتر المراجع",
+      "acknowledgment": "إقرار",
+      "salary_transfer_request": "تحويل الراتب",
+      "salary_deduction": "خصم من الراتب",
+      "violation": "مخالفة جديدة",
+      "employee_clearance": "إخلاء طرف",
+      "leave_application": "طلب إجازة",
+      "passport_release": "طلب جواز",
+      "duty_resumption": "استئناف الخدمة",
+      "material_request": "طلب مواد",
+      "general_book": "السجل العام",
+      "hr_request": "طلب موارد بشرية",
+      "resignation_declaration": "إفادة استقالة",
+      "resignation_letter": "خطاب استقالة",
+      "leave_undertaking": "تعهد إجازة",
+      "leave_permit": "تصريح إجازة",
+      "administrative_leave": "إجازة إدارية"
+    },
+    "quickActionDesc": {
+      "hr": "إصدار واعتماد ومتابعة مستندات الموارد البشرية.",
+      "violations": "فتح وتصعيد وإغلاق القضايا.",
+      "leaves": "إدارة أرصدة الإجازات والطلبات.",
+      "books": "البحث وختم دفتر السجلات.",
+      "acknowledgment": "تسجيل إقرار موظف.",
+      "salary_transfer_request": "طلب تحويل حساب الراتب.",
+      "salary_deduction": "إصدار إشعار خصم من الراتب.",
+      "violation": "تسجيل مخالفة جديدة.",
+      "employee_clearance": "إصدار نموذج إخلاء طرف.",
+      "leave_application": "تقديم طلب إجازة موظف.",
+      "passport_release": "طلب استلام جواز سفر محفوظ.",
+      "duty_resumption": "تسجيل العودة للعمل بعد إجازة.",
+      "material_request": "طلب مواد من المخازن.",
+      "general_book": "فتح السجل العام.",
+      "hr_request": "تقديم طلب موارد بشرية.",
+      "resignation_declaration": "تقديم إفادة استقالة.",
+      "resignation_letter": "تحرير خطاب استقالة.",
+      "leave_undertaking": "تسجيل تعهد إجازة.",
+      "leave_permit": "إصدار تصريح إجازة قصيرة.",
+      "administrative_leave": "تقديم إجازة إدارية."
+    },
+    "pending": {
+      "title": "المستندات المنجزة",
+      "review": "عرض",
+      "currency": "مستند",
+      "footnote_zero": "لا مستندات هذا الشهر",
+      "footnote_one": "مستند واحد هذا الشهر",
+      "footnote_two": "مستندان هذا الشهر",
+      "footnote_few": "{{count}} مستندات هذا الشهر",
+      "footnote_many": "{{count}} مستندًا هذا الشهر",
+      "footnote_other": "{{count}} مستند هذا الشهر"
+    },
+    "workspace": {
+      "title": "بيئة عملي",
+      "staff": "الموظفون",
+      "active_zero": "لا أحد نشط",
+      "active_one": "موظف نشط",
+      "active_two": "موظفان نشطان",
+      "active_few": "{{count}} موظفين نشطين",
+      "active_many": "{{count}} موظفًا نشطًا",
+      "active_other": "{{count}} نشط",
+      "onLeave_zero": "لا أحد في إجازة",
+      "onLeave_one": "واحد في إجازة",
+      "onLeave_two": "اثنان في إجازة",
+      "onLeave_few": "{{count}} في إجازة",
+      "onLeave_many": "{{count}} في إجازة",
+      "onLeave_other": "{{count}} في إجازة"
+    },
+    "widgets": {
+      "violations": {
+        "header": "المخالفات المفتوحة",
+        "action": "مراجعة",
+        "active": "نشطة",
+        "escalated": "مصعدة",
+        "pendingClose": "بانتظار الإغلاق",
+        "deltaWarn": "{{count}} مفتوحة",
+        "deltaSteady": "— ثابت"
+      },
+      "drafts": {
+        "header": "المسودات",
+        "action": "مراجعة المسودات",
+        "promotion": "ترقية",
+        "leave": "إجازة",
+        "violation": "مخالفة",
+        "deltaWarn": "{{count}} غير مُرسَلة",
+        "deltaSteady": "تم إرسال الكل"
+      },
+      "ledger": {
+        "header": "غير المقروء في السجل",
+        "action": "فتح الوارد",
+        "incoming": "وارد",
+        "outgoing": "صادر",
+        "internal": "داخلي",
+        "deltaWarn_zero": "↑ {{count}} اليوم",
+        "deltaWarn_one": "↑ {{count}} اليوم",
+        "deltaWarn_two": "↑ {{count}} اليوم",
+        "deltaWarn_few": "↑ {{count}} اليوم",
+        "deltaWarn_many": "↑ {{count}} اليوم",
+        "deltaWarn_other": "↑ {{count}} اليوم",
+        "deltaSteady": "— ثابت",
+        "metaRecent_zero": "لا شيء خلال آخر 24 ساعة",
+        "metaRecent_one": "واحد خلال آخر 24 ساعة",
+        "metaRecent_two": "اثنان خلال آخر 24 ساعة",
+        "metaRecent_few": "{{count}} خلال آخر 24 ساعة",
+        "metaRecent_many": "{{count}} خلال آخر 24 ساعة",
+        "metaRecent_other": "{{count}} خلال آخر 24 ساعة"
+      },
+      "onLeaveToday": {
+        "header": "في إجازة اليوم",
+        "action": "عرض التفاصيل",
+        "deltaHigh": "مرتفع",
+        "deltaNormal": "طبيعي"
+      },
+      "upcomingLeave": {
+        "header": "العائدون قريباً",
+        "action": "عرض",
+        "returningTomorrow": "يعودون غداً",
+        "thisWeek": "هذا الأسبوع",
+        "deltaSoon": "قريباً",
+        "deltaSteady": "هادئ"
+      },
+      "recentDocs": {
+        "header": "المستندات الأخيرة",
+        "action": "تصفح",
+        "deltaActive": "نشط",
+        "deltaIdle": "خامل",
+        "metaRecent_zero": "لا شيء في الشريحة الأخيرة",
+        "metaRecent_one": "واحد في الشريحة الأخيرة",
+        "metaRecent_two": "اثنان في الشريحة الأخيرة",
+        "metaRecent_few": "{{count}} في الشريحة الأخيرة",
+        "metaRecent_many": "{{count}} في الشريحة الأخيرة",
+        "metaRecent_other": "{{count}} في الشريحة الأخيرة"
+      },
+      "emailSync": {
+        "header": "مزامنة البريد",
+        "lastSync": "آخر مزامنة",
+        "interval": "الفاصل",
+        "status": "الحالة",
+        "never": "مطلقاً",
+        "minutesAgo_zero": "قبل أقل من دقيقة",
+        "minutesAgo_one": "قبل دقيقة",
+        "minutesAgo_two": "قبل دقيقتين",
+        "minutesAgo_few": "قبل {{count}} دقائق",
+        "minutesAgo_many": "قبل {{count}} دقيقة",
+        "minutesAgo_other": "قبل {{count}} دقيقة",
+        "hoursAgo_zero": "قبل أقل من ساعة",
+        "hoursAgo_one": "قبل ساعة",
+        "hoursAgo_two": "قبل ساعتين",
+        "hoursAgo_few": "قبل {{count}} ساعات",
+        "hoursAgo_many": "قبل {{count}} ساعة",
+        "hoursAgo_other": "قبل {{count}} ساعة",
+        "daysAgo_one": "قبل يوم",
+        "daysAgo_two": "قبل يومين",
+        "daysAgo_few": "قبل {{count}} أيام",
+        "daysAgo_many": "قبل {{count}} يوماً",
+        "daysAgo_other": "قبل {{count}} يوم",
+        "minutesUnit_zero": "0 دقيقة",
+        "minutesUnit_one": "دقيقة",
+        "minutesUnit_two": "دقيقتان",
+        "minutesUnit_few": "{{count}} دقائق",
+        "minutesUnit_many": "{{count}} دقيقة",
+        "minutesUnit_other": "{{count}} دقيقة",
+        "intervalOff": "متوقف",
+        "statusActive": "فعّال",
+        "statusOff": "متوقف",
+        "deltaOff": "متوقف",
+        "deltaLive": "مباشر",
+        "deltaSynced": "متزامن",
+        "actionSync": "زامن الآن",
+        "actionConfigure": "إعداد"
+      }
+    },
+    "services": {
+      "hr": {
+        "title": "طلبات الموارد البشرية",
+        "description": "إصدار واعتماد ومتابعة مستندات الموارد البشرية."
+      },
+      "violations": {
+        "title": "المخالفات",
+        "description": "فتح القضايا وتصعيدها وإغلاقها."
+      },
+      "leaves": {
+        "title": "الإجازات",
+        "description": "إدارة أرصدة الإجازات وطلباتها."
+      },
+      "books": {
+        "title": "دفاتر المراجع",
+        "description": "البحث في دفتر السجلات وختمه."
+      }
+    },
+    "kpi": {
+      "totalEmployees": "إجمالي الموظفين",
+      "onLeaveToday": "في إجازة اليوم",
+      "presentToday": "حاضرون اليوم",
+      "formsThisMonth": "نماذج هذا الشهر"
+    },
+    "quickNav": {
+      "title": "انتقال سريع",
+      "employees": "الموظفون",
+      "application": "النماذج",
+      "leaves": "سجل الإجازات",
+      "books": "دفتر المراجع",
+      "ledger": "سجل المراسلات"
+    },
+    "onLeave": {
+      "title": "في إجازة اليوم",
+      "empty": "لا أحد في إجازة اليوم",
+      "until": "حتى {{date}}"
+    },
+    "upcoming": {
+      "title": "العائدون خلال 7 أيام",
+      "empty": "لا عودة متوقعة هذا الأسبوع",
+      "endsIn": "تنتهي خلال {{days}} يوم",
+      "endsToday": "تنتهي اليوم",
+      "endsTomorrow": "تنتهي غدًا"
+    },
+    "recent": {
+      "title": "النشاط الأخير",
+      "documents": "أحدث المستندات",
+      "ledger": "أحدث المراسلات",
+      "empty": "لا يوجد بعد"
+    }
+  },
+  "extraction": {
+    "dropzone": {
+      "label": "مسح المستند",
+      "cta": "مسح مستند",
+      "hint": {
+        "generic": "أسقط صورة أو ملف PDF هنا، أو انقر للاستعراض",
+        "bank_iban": "أسقط خطاب بنكي أو مستند تحويل الراتب",
+        "sick_leave": "أسقط شهادة الإجازة المرضية"
+      },
+      "scanning": "جارٍ المسح…",
+      "errorGeneric": "فشل المسح — حاول مجدداً",
+      "errorUnavailable": "خدمة التعرف الضوئي على الحروف غير متوفرة على الخادم"
+    },
+    "panel": {
+      "title": "الحقول المستخرجة",
+      "subtitle": "راجع القيم المستخرجة وعدّلها قبل تطبيقها على النموذج.",
+      "ambiguity": "تم التعرف على: {{type}} — أو {{alts}}؟",
+      "confident": "موثوق",
+      "review": "مراجعة",
+      "apply": "تطبيق",
+      "dismiss": "إغلاق",
+      "matched": "تطابق مع {{name}} ({{id}}) — {{pct}}% نسبة الثقة",
+      "matchedNoPct": "تطابق مع {{name}} ({{id}})"
+    },
+    "doctype": {
+      "emirates_id": "الهوية الإماراتية",
+      "passport": "جواز السفر",
+      "bank_iban": "خطاب بنكي",
+      "sick_leave": "إجازة مرضية",
+      "unknown": "مستند"
+    },
+    "fields": {
+      "name_en": "الاسم (إنجليزي)",
+      "name_ar": "الاسم (عربي)",
+      "nationality": "الجنسية",
+      "dob": "تاريخ الميلاد",
+      "uae_id_no": "رقم الهوية الإماراتية",
+      "passport_no": "رقم الجواز",
+      "expiry": "تاريخ الانتهاء",
+      "passport_expiry": "انتهاء صلاحية الجواز",
+      "uae_id_expiry": "انتهاء صلاحية الهوية الإماراتية",
+      "iban": "رقم الآيبان",
+      "account_number": "رقم الحساب",
+      "bank_name": "البنك",
+      "branch": "الفرع",
+      "leave_from": "الإجازة من",
+      "leave_to": "الإجازة إلى",
+      "leave_days": "أيام الإجازة",
+      "certificate_no": "رقم الشهادة",
+      "clinic": "العيادة"
+    },
+    "duplicateGuard": {
+      "title": "قد يكون هذا السجل موجوداً",
+      "body": "{{name}} ({{id}}) تطابق بنسبة {{pct}}٪. هل تريد فتح السجل الموجود بدلاً من ذلك؟",
+      "openRecord": "فتح السجل الموجود"
+    },
+    "salaryTransfer": {
+      "saveIbanToEmployee": "حفظ رقم الآيبان في سجل الموظف أيضاً",
+      "ibanSaved": "تم حفظ رقم الآيبان في سجل الموظف",
+      "ibanSaveError": "تعذّر حفظ رقم الآيبان في سجل الموظف"
+    }
+  },
+  "intake": {
+    "eyebrow": "المستندات",
+    "scanButton": "مسح",
+    "drawerTitle": "مسح مستند",
+    "pageTitle": "استقبال المسح",
+    "pageSubtitle": "امسح نموذجاً مُعاداً أو مستنداً وارداً. سيتعرف GSSG Manager على النوع ويوجهه إلى المكان المناسب.",
+    "scanAnother": "مسح مستند آخر",
+    "returnedForm": {
+      "title": "تم التعرف على النموذج المُعاد",
+      "attach": "إرفاق",
+      "dismiss": "إغلاق",
+      "attached": "تم إرفاق {{ref}}",
+      "viewRecord": "عرض السجل",
+      "isSignedCopy": "هل هذه هي النسخة الموقعة؟",
+      "approve": "اعتماد — نسخة موقعة",
+      "justAttach": "إرفاق فقط",
+      "approved": "تم اعتماد {{ref}}",
+      "stateDraft": "مسودة",
+      "statePending": "قيد الاعتماد",
+      "stateAwaitingScan": "بانتظار المسح"
+    },
+    "external": {
+      "detected": "تم التعرف على المستند",
+      "matched": "تطابق مع {{name}} ({{id}}) — {{pct}}% نسبة الثقة",
+      "matchedNoPct": "تطابق مع {{name}} ({{id}})",
+      "fields": "الحقول المستخرجة",
+      "openRecord": "فتح سجل {{name}}",
+      "createEmployee": "إنشاء موظف جديد",
+      "newSalaryTransfer": "تحويل راتب جديد",
+      "newLeave": "إجازة جديدة (مرضية)",
+      "manualTitle": "توجيه يدوي",
+      "openForm": "فتح نموذج",
+      "logLedger": "تسجيل في السجل"
+    },
+    "error": {
+      "generic": "فشل المسح — حاول مجدداً",
+      "unavailable": "خدمة التعرف الضوئي على الحروف غير متوفرة على الخادم",
+      "unsupportedType": "يُقبل ملفات الصور وملفات PDF فقط",
+      "tooLarge": "يتجاوز الملف الحد المسموح {{max}}"
+    }
+  },
+  "dutyLocations": {
+    "tile": {
+      "name": "أماكن العمل والنقل الداخلي",
+      "category": "شؤون الموظفين"
+    },
+    "page": {
+      "title": "أماكن العمل والنقل الداخلي",
+      "subtitle": "توزيع كل موظف على وحدته ونقطته — انقل الموظفين بين الوحدات والنقاط لإنشاء كتاب نقل في الكتب العامة.",
+      "loadError": "تعذّر تحميل التوزيع. يُرجى المحاولة مرة أخرى."
+    },
+    "rail": {
+      "units": "الوحدات",
+      "totalAssigned": "المُوزّعون: {{assigned}} / {{total}}",
+      "unassignedCount_zero": "غير محدد: ٠",
+      "unassignedCount_one": "غير محدد: موظف واحد",
+      "unassignedCount_two": "غير محدد: موظفان",
+      "unassignedCount_few": "غير محدد: {{count}} موظفين",
+      "unassignedCount_many": "غير محدد: {{count}} موظفًا",
+      "unassignedCount_other": "غير محدد: {{count}}"
+    },
+    "unassigned": "غير محدد",
+    "column": {
+      "id": "الرقم",
+      "name": "الاسم",
+      "position": "المسمى الوظيفي"
+    },
+    "roster": {
+      "summary": "{{employees}} موظف · {{posts}} نقطة",
+      "searchPlaceholder": "بحث بالاسم أو الرقم…",
+      "noPost": "بدون نقطة محددة",
+      "empty": "لا يوجد موظفون في هذه الوحدة.",
+      "selectRow": "اختيار {{name}}"
+    },
+    "field": {
+      "unit": "الوحدة",
+      "post": "النقطة",
+      "unitPlaceholder": "اختر أو اكتب وحدة…",
+      "postPlaceholder": "اختر أو اكتب نقطة…"
+    },
+    "assign": {
+      "title": "تحديد مكان العمل",
+      "edit": "تحديد / تعديل مكان العمل",
+      "saved": "تم تحديث مكان العمل."
+    },
+    "selection": {
+      "count_zero": "لا يوجد محدد",
+      "count_one": "محدد واحد",
+      "count_two": "محددان",
+      "count_few": "{{count}} محددين",
+      "count_many": "{{count}} محددًا",
+      "count_other": "{{count}} محدد",
+      "clear": "مسح",
+      "transfer": "نقل المحدد ←"
+    },
+    "transfer": {
+      "title": "نقل داخلي",
+      "subtitle_one": "نقل موظف واحد",
+      "subtitle_two": "نقل موظفين اثنين",
+      "subtitle_few": "نقل {{count}} موظفين",
+      "subtitle_many": "نقل {{count}} موظفًا",
+      "subtitle_other": "نقل {{count}} موظف",
+      "movingLabel": "الموظفون المنقولون",
+      "destUnit": "إلى الوحدة",
+      "destPost": "إلى النقطة",
+      "effectiveDate": "تاريخ السريان",
+      "reason": "السبب (اختياري)",
+      "reasonPlaceholder": "إعادة توزيع / احتياج تشغيلي…",
+      "generate": "إنشاء كتاب النقل ←",
+      "success": "تم إنشاء كتاب النقل {{ref}}.",
+      "viewRecord": "عرض السجل"
+    }
+  },
+  "scanInbox": {
+    "eyebrow": "المستندات",
+    "pageTitle": "صندوق المسح",
+    "pageSubtitle": "تُمسح المستندات الواردة بالبريد تلقائيًا. الواضحة تُحفظ من تلقاء نفسها، وغير المؤكدة تنتظرك هنا.",
+    "empty": "لا شيء للفرز — كل شيء مكتمل.",
+    "loadError": "تعذّر تحميل صندوق المسح.",
+    "sections": {
+      "confirm": "بحاجة إلى تأكيد",
+      "unrouted": "غير موجّهة",
+      "autoFiled": "محفوظة تلقائيًا مؤخرًا",
+      "error": "تعذّرت القراءة"
+    },
+    "fromEmail": "من {{sender}}",
+    "subjectLine": "{{subject}}",
+    "detected": "النوع: {{type}}",
+    "confirmBook": "نعتقد أن هذا هو {{ref}}. هل تُرفق النسخة الموقعة بذلك السجل؟",
+    "confirmEmployee": "يبدو أنه {{type}} للموظف {{name}}. هل يُحفظ في مستنداته؟",
+    "manual": "تعذّرت المطابقة تلقائيًا — وجّهه يدويًا.",
+    "autoFiledBook": "حُفظ في {{ref}}",
+    "autoFiledEmployee": "حُفظ في مستندات {{name}}",
+    "errorRead": "تعذّرت قراءة هذا المستند — وجّهه يدويًا.",
+    "actions": {
+      "confirm": "تأكيد",
+      "pickEmployee": "اختر موظفًا",
+      "pickRecord": "اختر سجلًا آخر",
+      "dismiss": "تجاهل",
+      "undo": "تراجع",
+      "openEmail": "فتح البريد",
+      "notForm": "ليس نموذج GSSG"
+    },
+    "toast": {
+      "filed": "تم الحفظ",
+      "dismissed": "تم التجاهل",
+      "undone": "تم التراجع",
+      "error": "فشل الإجراء"
+    },
+    "bellTitle": "صندوق المسح",
+    "bellCount_zero": "لا مستندات للفرز",
+    "bellCount_one": "مستند واحد للفرز",
+    "bellCount_two": "مستندان للفرز",
+    "bellCount_few": "{{count}} مستندات للفرز",
+    "bellCount_many": "{{count}} مستندًا للفرز",
+    "bellCount_other": "{{count}} للفرز"
+  },
+  "access": {
+    "eyebrow": "الإدارة",
+    "title": "طلبات الوصول",
+    "meta": "{{pending}} قيد المراجعة · {{active}} نشط · {{suspended}} موقوف",
+    "loadError": "تعذّر تحميل المستخدمين.",
+    "notAuthorized": "تحتاج إلى صلاحية المسؤول لعرض هذه الصفحة.",
+    "tabs": {
+      "pending": "قيد المراجعة",
+      "active": "المستخدمون النشطون",
+      "suspended": "موقوف",
+      "history": "السجل"
+    },
+    "pending": {
+      "emptyTitle": "كل شيء على ما يرام.",
+      "emptySub": "لا توجد طلبات وصول قيد الانتظار. ستظهر الطلبات الجديدة هنا.",
+      "newBadge": "جديد",
+      "requested": "طُلب",
+      "email": "البريد",
+      "gNumber": "رقم G",
+      "linked": "الموظف المرتبط",
+      "notLinked": "غير مرتبط بموظف",
+      "unverifiedLink": "تم الإدخال ذاتيًا — تحقّق قبل الموافقة",
+      "rolePrompt": "الموافقة كـ",
+      "approve": "موافقة",
+      "approving": "جاري الموافقة…",
+      "reject": "رفض",
+      "expand": "عرض التفاصيل",
+      "collapse": "إخفاء التفاصيل",
+      "roles": {
+        "admin": "مسؤول",
+        "adminHint": "صلاحيات كاملة · يوافق على الآخرين",
+        "manager": "مدير",
+        "managerHint": "إدارة الموارد البشرية والسجل والكتب",
+        "operator": "موظف",
+        "operatorHint": "الوصول اليومي القياسي"
+      }
+    },
+    "active": {
+      "name": "الاسم",
+      "role": "الدور",
+      "lastSeen": "آخر ظهور",
+      "joined": "انضم",
+      "you": "أنت",
+      "reset": "إعادة تعيين كلمة المرور",
+      "changeRole": "تغيير الدور",
+      "editPermissions": "تعديل الصلاحيات",
+      "suspend": "إيقاف",
+      "reactivate": "إعادة تفعيل",
+      "never": "أبدًا",
+      "rowActions": "إجراءات الصف",
+      "empty": "لا يوجد مستخدمون نشطون.",
+      "suspendedEmpty": "لا يوجد مستخدمون موقوفون."
+    },
+    "defaultManager": {
+      "badge": "المدير الافتراضي",
+      "make": "تعيين كمدير افتراضي",
+      "remove": "إزالة تعيين المدير الافتراضي",
+      "notEligible": "يتطلب حسابًا نشطًا وصلاحية اعتماد الكتب وتوقيعًا مرفوعًا (الإعدادات ← التوقيع)."
+    },
+    "history": {
+      "empty": "لا يوجد نشاط بعد.",
+      "by": "بواسطة",
+      "as": "كـ",
+      "reason": "السبب",
+      "actions": {
+        "approve": "تمت الموافقة",
+        "reject": "تم الرفض",
+        "set_role": "تغيّر الدور",
+        "reset_password": "إعادة تعيين كلمة المرور",
+        "lock": "تم الإيقاف",
+        "unlock": "تمت إعادة التفعيل",
+        "set_status": "تغيّرت الحالة"
+      }
+    },
+    "reject": {
+      "title": "رفض هذا الطلب؟",
+      "body": "سيُطلب من {{name}} التواصل مع تقنية المعلومات. يبقى البريد ورقم G محفوظين.",
+      "reasonLabel": "السبب (يُسجَّل في سجل التدقيق)",
+      "reasonPlaceholder": "رقم G غير مدرج في كشف الموارد البشرية…",
+      "cancel": "إلغاء",
+      "confirm": "رفض الطلب"
+    },
+    "resetModal": {
+      "title": "إعادة تعيين كلمة المرور",
+      "body": "عيّن كلمة مرور مؤقتة لـ {{name}}. يمكنه تغييرها بعد تسجيل الدخول.",
+      "label": "كلمة المرور الجديدة",
+      "placeholder": "٨ أحرف على الأقل",
+      "generate": "توليد",
+      "cancel": "إلغاء",
+      "confirm": "إعادة التعيين"
+    },
+    "roleModal": {
+      "title": "تغيير دور {{name}}",
+      "cancel": "إلغاء",
+      "confirm": "حفظ الدور"
+    },
+    "toast": {
+      "approved": "تمت الموافقة على {{name}}",
+      "rejected": "تم رفض الطلب",
+      "roleChanged": "تم تحديث الدور",
+      "passwordReset": "تمت إعادة تعيين كلمة المرور",
+      "suspended": "تم إيقاف المستخدم",
+      "reactivated": "تمت إعادة تفعيل المستخدم"
+    },
+    "bell": {
+      "requestPrefix": "طلب وصول",
+      "title": "طلبات الوصول",
+      "viewAll": "مراجعة طلبات الوصول"
+    },
+    "settingsCard": {
+      "title": "طلبات الوصول",
+      "desc": "وافق على من طلبوا الوصول، وأدر المستخدمين الحاليين.",
+      "review": "مراجعة الطلبات",
+      "none": "لا توجد طلبات قيد الانتظار",
+      "pending": "{{count}} قيد الانتظار"
+    },
+    "roleName": {
+      "admin": "مسؤول",
+      "manager": "مدير",
+      "operator": "موظف"
+    },
+    "permissions": {
+      "title": "الصلاحيات",
+      "eyebrow": "الإدارة",
+      "subtitle": "امنح أو اسحب صلاحيات فردية لكل مستخدم. الأدوار تحدد الإعدادات الافتراضية، والتجاوزات تُضاف فوقها.",
+      "selectUser": "المستخدم",
+      "loadError": "تعذّر تحميل الصلاحيات.",
+      "empty": "لا يوجد مستخدمون لإدارتهم بعد.",
+      "rolePreset": "الدور",
+      "legend": {
+        "default": "موروثة من الدور",
+        "grant": "ممنوحة",
+        "deny": "مرفوضة"
+      },
+      "state": {
+        "default": "افتراضي",
+        "grant": "منح",
+        "deny": "رفض"
+      },
+      "inherited": "افتراضي الدور: {{state}}",
+      "overridden": "تم التجاوز",
+      "adminAll": "المسؤولون يملكون جميع الصلاحيات دائمًا — لا تُطبَّق التجاوزات.",
+      "saved": "تم تحديث الصلاحية.",
+      "saveError": "تعذّر تحديث الصلاحية.",
+      "domains": {
+        "app": "التطبيق",
+        "employees": "الموظفون",
+        "leaves": "الإجازات",
+        "violations": "المخالفات",
+        "documents": "المستندات",
+        "books": "السجلات",
+        "ledger": "السجل",
+        "email": "البريد",
+        "settings": "الإعدادات",
+        "submitters": "مقدّمو الطلبات",
+        "editor_templates": "قوالب المحرر",
+        "users": "المستخدمون",
+        "system": "النظام"
+      },
+      "caps": {
+        "app.access": "الوصول إلى التطبيق",
+        "employees.view": "عرض الموظفين",
+        "employees.edit": "إنشاء / تعديل الموظفين + الخزنة",
+        "leaves.view": "عرض الإجازات",
+        "leaves.edit": "تعديل / حذف الإجازات",
+        "violations.view": "عرض المخالفات",
+        "violations.manage": "إنشاء / تعديل / حذف المخالفات",
+        "documents.generate": "إنشاء المستندات",
+        "documents.scan": "مسح المستندات بالتعرّف الضوئي",
+        "books.view": "عرض السجلات",
+        "books.manage": "إنشاء / تعديل / حذف السجلات",
+        "books.approve": "اعتماد / رفض السجلات",
+        "ledger.view": "عرض السجل",
+        "ledger.edit": "تعديل قيود السجل + المسودّات",
+        "ledger.send": "إرسال البريد من السجل",
+        "email.manage": "إدارة صندوق بريدك",
+        "settings.view": "عرض الإعدادات",
+        "settings.edit": "تغيير الإعدادات",
+        "submitters.manage": "إدارة مقدّمي الطلبات",
+        "editor_templates.manage": "إدارة قوالب المحرر",
+        "users.manage": "إدارة المستخدمين + الصلاحيات",
+        "system.admin": "مفتاح المسؤول + ترحيل الإصدار الثالث"
+      }
+    }
+  }
+}

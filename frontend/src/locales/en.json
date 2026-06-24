@@ -1,0 +1,2362 @@
+{
+  "auth": {
+    "eyebrow": "Operations workspace",
+    "heroTitle": "Sign in to GSSG Manager",
+    "heroSub": "Internal HR, ledger and document operations console. Use the email tied to your G-number.",
+    "meta": "GSSG Manager",
+    "secureSession": "Secure session",
+    "cardEyebrow": "Sign in",
+    "welcome": "Welcome back",
+    "welcomeName": "Welcome back, {{name}}",
+    "cardSub": "Use the email connected to your G-number to continue.",
+    "pickerTitle": "Choose your account",
+    "pickerSub": "Recently signed in on this device. Select an account to continue.",
+    "useAnotherAccount": "Use another account",
+    "email": "Email",
+    "emailPlaceholder": "name@gssg.ae",
+    "password": "Password",
+    "passwordPlaceholder": "••••••••",
+    "confirmPassword": "Confirm password",
+    "gNumber": "G-number",
+    "gNumberPlaceholder": "G-0000",
+    "forgot": "Forgot password?",
+    "signIn": "Sign in",
+    "signingIn": "Signing in…",
+    "switchAccount": "Switch account",
+    "show": "Show password",
+    "hide": "Hide password",
+    "lastSignIn": "Last sign-in",
+    "requestAccess": "Request access",
+    "haveAccount": "Already have an account?",
+    "requestTitle": "Request access",
+    "requestSub": "New here? Enter your work email and G-number. An admin will review your details and set your permissions before you can sign in.",
+    "submitForReview": "Submit for review",
+    "requestSentTitle": "Request sent",
+    "requestSentText": "Your request was sent to the admin team. You'll be able to sign in once an admin approves your account.",
+    "step1": "Your details",
+    "step2": "Admin review",
+    "step3": "Access granted",
+    "forgotTitle": "Forgot password",
+    "forgotSub": "Self-service reset isn't available. Contact your IT admin and they'll set a new temporary password for you.",
+    "lockedTitle": "Account locked",
+    "lockedText": "Too many failed attempts. Contact IT to unlock your account; sign-in resumes after an admin clears the lock.",
+    "backToSignIn": "Back to sign in",
+    "itContact": "IT support",
+    "itName": "Ali Al Mansoori",
+    "itEmail": "it@gssg.ae",
+    "itExt": "Ext. 8842",
+    "itHours": "Sun – Thu · 08:00 – 17:00 GST",
+    "copy": "Copy",
+    "copied": "Copied",
+    "attemptsLeft": "Attempts left: {{count}}",
+    "errPending": "Your account is awaiting admin approval.",
+    "errGeneric": "Something went wrong. Try again.",
+    "passwordsMismatch": "Passwords don't match.",
+    "passwordTooShort": "Password must be at least 8 characters.",
+    "emailRequired": "Email is required.",
+    "smallPrint": "By signing in you agree to GSSG's acceptable use policy.",
+    "signOut": "Sign out",
+    "langToggle": "العربية"
+  },
+  "app": {
+    "title": "GSSG Manager"
+  },
+  "branding": {
+    "tagline": "Global Security Services Group"
+  },
+  "nav": {
+    "dashboard": "Dashboard",
+    "employees": "Employees",
+    "ledger": "Ledger",
+    "leaves": "Leaves",
+    "services": "Services",
+    "records": "Records",
+    "settings": "Settings",
+    "menu": "Menu",
+    "bell": {
+      "awaitingReturn": "{{count}} awaiting return form",
+      "awaitingReturnTitle": "Awaiting return form",
+      "awaitingApprovalTitle": "Awaiting your approval",
+      "awaitingApproval": "{{count}} document needs your signature",
+      "awaitingApproval_other": "{{count}} documents need your signature",
+      "notify": {
+        "approval": "A document needs your approval",
+        "leave": "A leave request needs action",
+        "scan": "A scan was attached to a record",
+        "email": "New email in your inbox"
+      }
+    }
+  },
+  "shortcuts": {
+    "title": "Keyboard shortcuts",
+    "subtitle": "Available shortcuts on this page.",
+    "focusSearch": "Focus search",
+    "newItem": "New item on current page",
+    "showHelp": "Show this help"
+  },
+  "appBar": {
+    "account": "Account",
+    "linkAccountCta": "Link this account to an employee",
+    "lockApp": "Lock app",
+    "emailSettings": "Email settings",
+    "notifications": "Notifications",
+    "markAllRead": "Mark all read",
+    "noNotifications": "No unread notifications",
+    "hasAttachment": "Has attachment",
+    "moreUnread": "+ {{count}} more unread",
+    "viewAllInbox": "View all in inbox",
+    "sync": {
+      "never": "Never synced",
+      "justNow": "Synced just now",
+      "minutesAgo": "Synced {{n}} min ago",
+      "hoursAgo": "Synced {{n}} hr ago"
+    }
+  },
+  "lockScreen": {
+    "title": "App locked",
+    "password": "Password",
+    "unlock": "Unlock",
+    "welcomeName": "Welcome back, {{name}}"
+  },
+  "common": {
+    "save": "Save",
+    "cancel": "Cancel",
+    "delete": "Delete",
+    "edit": "Edit",
+    "add": "Add",
+    "remove": "Remove",
+    "undo": "Undo",
+    "search": "Search",
+    "loading": "Loading…",
+    "noResults": "No results",
+    "yes": "Yes",
+    "no": "No",
+    "close": "Close",
+    "next": "Next",
+    "previous": "Previous",
+    "confirm": "Confirm",
+    "replace": "Replace",
+    "download": "Download",
+    "preview": "Preview",
+    "filename": "Filename",
+    "size": "Size",
+    "modified": "Modified",
+    "actions": "Actions",
+    "language": "Language",
+    "english": "English",
+    "arabic": "العربية",
+    "saving": "Saving…",
+    "savedToast": "Saved",
+    "createdToast": "Created",
+    "updatedToast": "Updated",
+    "deletedToast": "Deleted",
+    "errorToast": "Something went wrong",
+    "loadError": "Couldn't load this. Check your connection and try again.",
+    "retry": "Retry"
+  },
+  "a11y": {
+    "skipToContent": "Skip to main content"
+  },
+  "editor": {
+    "loadFailed": "Rich text editor could not load — using a plain text box.",
+    "template": {
+      "saveTitle": "Save as template",
+      "loadTitle": "Load template",
+      "saveTooltip": "Save as template",
+      "loadTooltip": "Load template",
+      "nameLabel": "Template name",
+      "namePlaceholder": "e.g. Standard correspondence header",
+      "modeLabel": "Mode",
+      "modeInsert": "Insert at cursor",
+      "modeReplace": "Replace all content",
+      "empty": "No saved templates yet. Save your first one from the editor.",
+      "savedToast": "Template saved: {{name}}",
+      "deletedToast": "Template deleted",
+      "confirmDelete": "Delete template \"{{name}}\"?"
+    },
+    "table": {
+      "tooltip": "Insert GSSG table"
+    }
+  },
+  "employees": {
+    "intake": {
+      "reviewAndApply": "Review the scanned data and apply to this employee record."
+    },
+    "title": "Employees",
+    "eyebrow": "Operations",
+    "newEmployee": "New employee",
+    "pageMeta": "{{total}} employees · {{active}} active",
+    "chips": {
+      "all": "All",
+      "active": "Active",
+      "onLeave": "On leave",
+      "resigned": "Resigned",
+      "terminated": "Terminated"
+    },
+    "statusPill": {
+      "onLeave": "On leave",
+      "hasCase": "Has case"
+    },
+    "filters": {
+      "status": "Status",
+      "department": "Department",
+      "all": "All"
+    },
+    "tabs": {
+      "profile": "Profile",
+      "leaves": "Leave history",
+      "violations": "Violations",
+      "vault": "Files & signature"
+    },
+    "sections": {
+      "identity": "Identity",
+      "employment": "Employment",
+      "contact": "Contact & documents"
+    },
+    "detail": {
+      "view": "View",
+      "edit": "Edit profile"
+    },
+    "fields": {
+      "id": "Employee ID",
+      "name_en": "Name (English)",
+      "name_ar": "Name (Arabic)",
+      "dob": "Date of birth",
+      "doj": "Date of joining",
+      "doj_company": "Joining (company)",
+      "department": "Department",
+      "position": "Position",
+      "position_ar": "Position (Arabic)",
+      "status": "Status",
+      "end_date": "End date",
+      "passport_no": "Passport No.",
+      "passport_expiry": "Passport Expiry",
+      "uae_id_no": "UAE ID No.",
+      "uae_id_expiry": "Emirates ID Expiry",
+      "nationality": "Nationality",
+      "contact": "Contact",
+      "notes": "Notes",
+      "other": "Other"
+    },
+    "status": {
+      "Active": "Active",
+      "Resigned": "Resigned",
+      "Terminated": "Terminated"
+    },
+    "validation": {
+      "endDateRequired": "End date is required when status is not Active",
+      "idRequired": "Employee ID is required",
+      "nameEnRequired": "Name (English) is required"
+    },
+    "kpi": {
+      "total": "Total workforce",
+      "active": "Active",
+      "resigned": "Resigned",
+      "terminated": "Terminated"
+    },
+    "list": {
+      "empty": "No employees found",
+      "emptyFiltered": "No employees match these filters",
+      "selectPrompt": "Select an employee to view details",
+      "recent": "Recent",
+      "showAll": "Show all {{count}}",
+      "showRecents": "Show recent",
+      "noRecents": "No recent employees yet — search or show all to pick one."
+    },
+    "toast": {
+      "created": "Employee created",
+      "updated": "Employee updated",
+      "signatureSaved": "Signature saved",
+      "photoSaved": "Photo updated",
+      "photoRemoved": "Photo removed"
+    },
+    "photo": {
+      "title": "Photo",
+      "cta": "Upload a photo",
+      "hint": "PNG or JPG, drag & drop or click",
+      "change": "Change photo"
+    }
+  },
+  "violations": {
+    "title": "Violations",
+    "add": "Log violation",
+    "fields": {
+      "violation_type": "Violation",
+      "date": "Date",
+      "description": "Description",
+      "action_taken": "Action taken",
+      "deduction_days": "Deduction (days)",
+      "status": "Status"
+    },
+    "status": {
+      "Open": "Open",
+      "Closed": "Closed"
+    },
+    "confirmDelete": "Delete this violation?",
+    "empty": "No violations recorded",
+    "toast": {
+      "created": "Violation logged",
+      "updated": "Violation updated",
+      "deleted": "Violation deleted"
+    }
+  },
+  "leaves": {
+    "title": "Leave History",
+    "subtitle": "Records and accrual balances for all employees",
+    "empty": "No leaves match these filters.",
+    "tabs": {
+      "records": "Records",
+      "balance": "Balance"
+    },
+    "status": {
+      "Generated": "Generated",
+      "Pending": "Pending",
+      "Approved": "Approved",
+      "Rejected": "Rejected",
+      "Cancelled": "Cancelled",
+      "Completed": "Completed"
+    },
+    "display": {
+      "Recorded": "Recorded",
+      "Requested": "Requested",
+      "Confirmed": "Confirmed",
+      "PreApproved": "Pre-approved",
+      "Scheduled": "Scheduled",
+      "AwaitingCertificate": "Awaiting certificate",
+      "AwaitingReturn": "Awaiting return",
+      "Completed": "Completed",
+      "Rejected": "Rejected",
+      "Cancelled": "Cancelled",
+      "Unknown": "—"
+    },
+    "type": {
+      "Annual Leave": "Annual Leave",
+      "Sick Leave": "Sick Leave",
+      "Emergency Leave": "Emergency Leave",
+      "Unpaid Leave": "Unpaid Leave",
+      "Hajj Leave": "Hajj Leave",
+      "Maternity Leave": "Maternity Leave",
+      "Compassionate Leave": "Compassionate Leave",
+      "Duty Leave": "Duty Leave",
+      "Others": "Others",
+      "National Service": "National Service",
+      "Administrative Leave": "Administrative Leave",
+      "Leave Permit": "Permit (8 hours)"
+    },
+    "filters": {
+      "employee": "Employee…",
+      "status": "Status",
+      "leaveType": "Leave type",
+      "from": "From date",
+      "to": "To date",
+      "search": "Search…",
+      "clear": "Clear filters",
+      "button": "Filters",
+      "title": "Filters"
+    },
+    "columns": {
+      "id": "ID",
+      "employee": "Employee",
+      "leaveType": "Type",
+      "startDate": "Start",
+      "endDate": "End",
+      "days": "Days",
+      "status": "Status",
+      "updatedAt": "Updated"
+    },
+    "balance": {
+      "annualRemaining": "Annual remaining (of 30)",
+      "sickRemaining": "Sick remaining (of 90)",
+      "carryOver": "Carry-over days",
+      "eligible": "Eligible",
+      "probation": "Probation",
+      "asOf": "As of",
+      "selectEmployee": "Select an employee to view their balance.",
+      "daysRemaining": "days remaining",
+      "daysLabel": "days",
+      "takenLabel": "{{taken}} taken",
+      "progressLabel": "{{taken}} of {{total}} days taken"
+    },
+    "eyebrow": "Operations",
+    "actions": {
+      "approve": "Approve",
+      "reject": "Reject",
+      "markPending": "Mark Pending",
+      "softDelete": "Confirm delete",
+      "confirmDelete": "Permanently remove this record?"
+    },
+    "fields": {
+      "leave_type": "Type",
+      "start_date": "Start",
+      "end_date": "End",
+      "days": "Days",
+      "status": "Status"
+    },
+    "toast": {
+      "approved": "Leave approved",
+      "rejected": "Leave rejected",
+      "cancelled": "Leave cancelled",
+      "markedPending": "Leave marked pending",
+      "deleted": "Leave removed",
+      "datesChanged": "Dates updated",
+      "certificateUploaded": "Certificate added — record completed"
+    },
+    "emptyUnfiltered": "No leave records yet",
+    "report": {
+      "eyebrow": "Operations — Leave Register {{year}}",
+      "asOf": "as of {{date}}",
+      "pendingChip_one": "{{count}} pending action",
+      "pendingChip_other": "{{count}} pending actions",
+      "awaitingReturnChip_one": "{{count}} awaiting return",
+      "awaitingReturnChip_other": "{{count}} awaiting return",
+      "endingSoonChip_one": "{{count}} ending soon",
+      "endingSoonChip_other": "{{count}} ending soon",
+      "fig1Caption": "Fig. 1 — Days taken by kind",
+      "fig1Ytd": "(year to date)",
+      "fig2Caption": "Fig. 2 — Leave days by month",
+      "fig3Caption": "Fig. 3 — Request outcomes",
+      "scopeAllYear": "{{year}}",
+      "fig2Hint": "Select a month to focus the report",
+      "fig2Current": "current",
+      "onLeaveToday": "{{n}} on leave today",
+      "resetScope": "All year {{year}}",
+      "viewData": "View data",
+      "colKind": "Kind",
+      "colRecords": "Records",
+      "colDays": "Days",
+      "colEmployees": "Employees",
+      "colAvg": "Avg days",
+      "colShare": "Share",
+      "colMonth": "Month",
+      "colTopKind": "Top kind",
+      "colOutcome": "Outcome",
+      "colPct": "%",
+      "colLead": "Median filed→start",
+      "leadDays_one": "{{count}} d",
+      "leadDays_other": "{{count}} d",
+      "insightSick": "Sick leave is {{pct}}% of leave days",
+      "insightBusiest": "busiest month: {{month}}",
+      "outcome": {
+        "settled": "Settled",
+        "inMotion": "In motion",
+        "rejected": "Rejected",
+        "cancelled": "Cancelled"
+      },
+      "groupNone": "None",
+      "groupKind": "By kind",
+      "groupMonth": "By month",
+      "groupLabel": "Group",
+      "searchPlaceholder": "Search name or G-number…",
+      "totalsRecords_one": "{{count}} record",
+      "totalsRecords_other": "{{count}} records",
+      "totalsDays_one": "{{count}} day",
+      "totalsDays_other": "{{count}} days",
+      "totalsEmployees_one": "{{count}} employee",
+      "totalsEmployees_other": "{{count}} employees",
+      "emptyFiltered": "No records match this scope.",
+      "clearFilters": "Clear filters",
+      "profileCurrent": "Current leave",
+      "profileNotOnLeave": "Not currently on leave",
+      "profileReturns_one": "returns in {{count}} day",
+      "profileReturns_other": "returns in {{count}} days",
+      "profileLast": "Last leave taken",
+      "profileNone": "No completed leave yet",
+      "profileDaysTaken": "Days taken in {{year}}",
+      "profilePending": "Pending requests",
+      "profileFilter": "Filter report to this employee",
+      "profileClose": "Close profile",
+      "balanceAnnual": "Annual",
+      "balanceSick": "Sick",
+      "balanceCarry": "Carry-over: {{n}}",
+      "balanceOf": "{{remaining}} of {{total}}",
+      "approve": "Approve",
+      "reject": "Reject",
+      "cancel": "Cancel leave",
+      "fileReturn": "File return form",
+      "markPending": "Mark Pending",
+      "quickApprove": "Approve",
+      "quickReject": "Reject",
+      "expandRow": "Show record details",
+      "notes": "Notes",
+      "filed": "Filed",
+      "period": "Period",
+      "scopedToEmployee": "Scoped to {{name}}",
+      "scopedToMonth": "Scoped to {{month}}",
+      "delay": "Delay",
+      "delayHint": "Pick the new start — the duration follows",
+      "extend": "Extend",
+      "extendWeek": "+1 week",
+      "extendCustom": "Custom end date",
+      "uploadCertificate": "Add certificate",
+      "viewCertificate": "View certificate",
+      "awaitingCertificate": "Service ended — add the completion certificate to close this record",
+      "confirmEmail": {
+        "button": "Email confirmation request ({{n}})",
+        "subject": "Leave confirmation — {{n}} employee(s)",
+        "intro": "Please confirm the following planned leaves:",
+        "colName": "Employee",
+        "colPeriod": "Period",
+        "colDays": "Days"
+      }
+    },
+    "ns": {
+      "dialogTitle": "New National Service record",
+      "description": "Two weeks by default — delay or extend on the record afterwards.",
+      "start": "Start",
+      "end": "End",
+      "notes": "Notes",
+      "create": "Create record",
+      "created": "National Service record created"
+    },
+    "return": {
+      "title": "File return form",
+      "description": "Records the employee's return to duty and closes the leave.",
+      "leaveStart": "Leave start",
+      "leaveEnd": "Leave end",
+      "resumptionDate": "Return (resumption) date",
+      "delayReason": "Reason for delay (if any)",
+      "fileButton": "File & complete",
+      "filed": "Return form filed — leave completed"
+    }
+  },
+  "vault": {
+    "folders": {
+      "uae_id": "UAE ID",
+      "passport": "Passport",
+      "other": "Other documents",
+      "leaves": "Leave forms",
+      "violations": "Violation forms"
+    },
+    "upload": "Upload",
+    "dropHere": "Drop files here or click to upload",
+    "empty": "No files",
+    "confirmDelete": "Delete {{filename}}?",
+    "signature": {
+      "title": "Signature",
+      "save": "Save signature",
+      "clear": "Clear",
+      "saved": "Signature saved"
+    },
+    "toast": {
+      "uploaded": "File uploaded",
+      "deleted": "File deleted"
+    }
+  },
+  "basket": {
+    "kind": {
+      "sick": "Sick Leave",
+      "annual": "Annual Leave",
+      "compassionate": "Compassionate Leave",
+      "duty": "Duty Leave",
+      "emergency": "Emergency Leave",
+      "hajj": "Hajj Leave",
+      "others": "Other Leave"
+    },
+    "tray": {
+      "title": "Email baskets",
+      "empty": "No documents collected yet",
+      "send": "Send as one email",
+      "clear": "Clear",
+      "remove": "Remove",
+      "count_one": "{{count}} document",
+      "count_other": "{{count}} documents",
+      "added": "Added to the {{kind}} basket",
+      "alreadyIn": "Already in the {{kind}} basket"
+    },
+    "tile": {
+      "empty": "Email basket is empty — generated documents collect here",
+      "pending_one": "{{count}} document waiting to email",
+      "pending_other": "{{count}} documents waiting to email"
+    },
+    "add": "Add to email",
+    "addN": "Add to email ({{count}})",
+    "addError": "Could not add to basket — record not found"
+  },
+  "books": {
+    "title": "Book Reference",
+    "subtitle": "Ref-number log across all 12 categories",
+    "eyebrow": "Operations",
+    "pageMeta": "{{total}} entries · ref-number log",
+    "stampPreview": "Stamp preview",
+    "newEntry": "New entry",
+    "empty": "No book entries match these filters.",
+    "confirmDelete": "Soft-delete this entry? It stays in records; ref number is not reused.",
+    "filters": {
+      "category": "Category",
+      "direction": "Direction",
+      "dateFrom": "From",
+      "dateTo": "To",
+      "search": "Subject",
+      "clear": "Clear filters",
+      "status": "Status",
+      "statusAll": "All"
+    },
+    "direction": {
+      "all": "All",
+      "incoming": "Incoming",
+      "outgoing": "Outgoing"
+    },
+    "columns": {
+      "ref": "Ref",
+      "subject": "Subject",
+      "category": "Category",
+      "direction": "Direction",
+      "date": "Date",
+      "linkedDoc": "Document",
+      "stampStyle": "Stamp style",
+      "approval": "Approval"
+    },
+    "stampStyle": {
+      "header": "Header Text",
+      "boldTopRight": "Bold Top-Right",
+      "watermark": "Watermark"
+    },
+    "kpi": {
+      "total": "Total",
+      "thisMonth": "This month",
+      "incoming": "Incoming",
+      "outgoing": "Outgoing"
+    },
+    "toast": {
+      "created": "Book entry created",
+      "deleted": "Draft discarded"
+    },
+    "emptyUnfiltered": "No book entries yet",
+    "approval": {
+      "awaitingTitle": "Books · awaiting your approval",
+      "awaitingEmpty": "Nothing awaiting your approval",
+      "open": "Open book entry",
+      "approve": "Approve",
+      "signApprove": "Sign & approve",
+      "signed": "Book signed & approved",
+      "noSignatureHint": "Add your signing signature in Settings before approving.",
+      "signingManager": "Signing manager",
+      "selectApprover": "Select a signing manager…",
+      "singleSignerHint": "One manager signs and approves this book.",
+      "reject": "Reject",
+      "return": "Return",
+      "addNote": "Add note",
+      "priority": "Priority",
+      "high": "High",
+      "normal": "Normal",
+      "approvalChain": "Approval chain",
+      "submitter": "Submitter",
+      "approved": "Book approved",
+      "rejected": "Book rejected",
+      "returned": "Book returned for revision",
+      "noteAdded": "Note added",
+      "submittedAt": "Submitted",
+      "sheetDescription": "Review book details, approval chain, and take an action.",
+      "submitForApproval": "Submit for approval",
+      "addApprover": "Add approver",
+      "stageLabel": "Stage label",
+      "needsApproval": "Needs approval",
+      "submitted": "Submitted for approval",
+      "stateDraft": "Draft",
+      "statePending": "Pending",
+      "stateAwaitingScan": "Awaiting signed copy",
+      "stateAwaitingSignature": "Awaiting signature",
+      "stateApproved": "Approved",
+      "signedScanned": "Signed · scanned",
+      "stateRejected": "Rejected",
+      "stateReturned": "Returned",
+      "reasonLabel": "Reason",
+      "reasonPlaceholder": "Explain what needs to change…",
+      "reasonRequired": "A reason is required.",
+      "reasonOrMark": "Add a reason — type a note above, or leave a comment on the document.",
+      "cancelDecision": "Cancel",
+      "noApproversTitle": "No one can sign yet",
+      "noApproversBody": "A manager or admin must upload a signature in Settings → Signing before a book can be submitted for approval.",
+      "noApproversSelfHint": "You can sign — upload your signature in Settings.",
+      "goToSettings": "Open Settings → Signing",
+      "changeManager": "Change",
+      "managerNoSignature": "This manager has no signature on file yet — they'll need to add one in Settings → Signing before they can sign.",
+      "managerNoSignatureLink": "Settings → Signing",
+      "managerNotLinked": "No manager is linked to this document. Please select a signing manager.",
+      "reviewers": "Reviewers",
+      "reviewersHint": "Reviewers can comment and request changes before approval."
+    },
+    "annotations": {
+      "pin": "Pin",
+      "highlight": "Highlight",
+      "hint": "Click to pin · drag to highlight",
+      "markN": "Mark {{n}}",
+      "delete": "Delete mark",
+      "composerPlaceholder": "What needs fixing here?",
+      "save": "Save",
+      "cancel": "Cancel",
+      "viewHint": "Fix here, then revise & resubmit."
+    },
+    "versions": {
+      "title": "Version history",
+      "current": "current",
+      "revise": "Revise & regenerate",
+      "reviseHint": "Returned — you can revise & resubmit",
+      "prefillFailed": "Couldn't load the saved form data to revise.",
+      "signedPdf": "Signed PDF",
+      "trigger": {
+        "initial": "Initial",
+        "revision": "Revision"
+      }
+    },
+    "executedCopy": {
+      "title": "Executed copy"
+    },
+    "record": {
+      "submittedBy": "Submitted by",
+      "loading": "Loading…",
+      "loadError": "Couldn't load this record.",
+      "untitled": "Untitled",
+      "back": "Back to records",
+      "print": "Print",
+      "downloadSigned": "Download signed PDF",
+      "noDocument": "No document on this record.",
+      "progress": "Progress",
+      "stationSubmitted": "Submitted",
+      "stationRevised": "Revised",
+      "stationReturned": "Returned",
+      "stationRejected": "Rejected",
+      "stationAwaiting": "Awaiting signature",
+      "stationAwaitingScan": "Awaiting signed copy",
+      "stationSigned": "Signed",
+      "stationSignedScanned": "Signed · scanned",
+      "stationNotSubmitted": "Not submitted",
+      "metaManager": "manager",
+      "metaPending": "pending",
+      "metaDraft": "draft",
+      "metaAwaitingScan": "out for signing",
+      "metaScanned": "signed copy filed"
+    },
+    "preview": {
+      "description": "Draft document preview",
+      "openPdf": "Open PDF",
+      "noDocument": "No document on this draft yet.",
+      "draftBadge": "Draft — not submitted",
+      "editContinue": "Edit / Continue",
+      "editUnavailable": "This draft has no saved fields and can't be edited.",
+      "discard": "Discard",
+      "discardConfirmTitle": "Discard this draft?",
+      "discardConfirmBody": "This permanently removes the unsubmitted record."
+    },
+    "formKind": {
+      "all": "All forms",
+      "leave": "Leave Application",
+      "salary": "Salary Transfer",
+      "duty": "Duty Resumption",
+      "hr": "HR Request",
+      "passport": "Passport",
+      "material": "Material Request",
+      "other": "Other records"
+    },
+    "spine": {
+      "all": "All records",
+      "none": "Drafts",
+      "pending": "In approval",
+      "awaiting_scan": "Awaiting copy",
+      "returned": "Returned",
+      "approved": "Approved",
+      "rejected": "Rejected"
+    },
+    "pane": {
+      "noPapersTitle": "No papers yet",
+      "noPapersBody": "Generate the document to see its pages here.",
+      "generated": "Generated PDF",
+      "signedCopy": "Signed copy",
+      "scan": "Scan",
+      "addScan": "Add scan",
+      "addScanHint": "Scan or drop a returned paper — OCR matches the stamped ref and files it here",
+      "scanReading": "Reading scan (OCR)…",
+      "scanFiledHere": "Filed to {{ref}} — saved with its papers",
+      "scanMatchedOther": "The scan's ref matches {{ref}}",
+      "scanFileToOther": "File it to {{ref}}",
+      "scanNoRef": "No stamped ref found — route it from the Scan drawer instead",
+      "fit": "Fit",
+      "fullPreview": "Full preview",
+      "zoomIn": "Zoom in",
+      "zoomOut": "Zoom out",
+      "openRecord": "Open full record",
+      "continueDraft": "Continue editing",
+      "revise": "Revise & resubmit",
+      "scanSignedCopy": "Scan signed copy",
+      "signedCopyFiled": "Signed copy filed to {{ref}} — record approved",
+      "signedCopyTitle": "Is this the signed copy?",
+      "signedCopyBody": "Approving files it as the signed copy and marks {{ref}} approved. Choose Just attach to file it without approving.",
+      "approveSignedCopy": "Approve — signed copy",
+      "justAttach": "Just attach",
+      "papers": "{{count}} papers",
+      "searchPlaceholder": "Search ref, form, employee…"
+    },
+    "reviewers": {
+      "title": "Reviewers",
+      "awaiting": "Awaiting review",
+      "reviewed": "Reviewed",
+      "changesRequested": "Changes requested",
+      "seenOn": "Seen · {{date}}",
+      "notSeen": "Not seen yet",
+      "recorded": "Review recorded",
+      "approveReviewed": "Approve as reviewed",
+      "requestChanges": "Request changes",
+      "overrideBanner_one": "{{count}} reviewer requested changes — you can still sign & approve.",
+      "overrideBanner_other": "{{count}} reviewers requested changes — you can still sign & approve."
+    }
+  },
+  "ledger": {
+    "title": "Ledger",
+    "subtitle": "Correspondence and communication log",
+    "pageMeta_one": "{{count}} entry · this month",
+    "pageMeta_other": "{{count}} entries · this month",
+    "newEntry": "New entry",
+    "compose": "Compose email",
+    "composeQuoteHeader": "On {{when}}, {{from}} wrote:",
+    "loggedBy": "Logged by",
+    "filter": {
+      "all": "All",
+      "directions": "Directions"
+    },
+    "month": {
+      "in": "{{n}} in",
+      "out": "{{n}} out",
+      "int": "{{n}} internal"
+    },
+    "thread": {
+      "label": "Thread",
+      "current": "Viewing",
+      "count": "{{count}} messages in this thread",
+      "empty": "No earlier messages in this thread"
+    },
+    "smartLink": {
+      "employee": "Open employee",
+      "book": "Open book"
+    },
+    "sync": {
+      "never": "Never synced",
+      "justNow": "Synced just now",
+      "minutes_one": "Synced {{count}} min ago",
+      "minutes_other": "Synced {{count}} min ago",
+      "hours_one": "Synced {{count}} hr ago",
+      "hours_other": "Synced {{count}} hr ago",
+      "now": "Sync now",
+      "syncing": "Syncing…"
+    },
+    "empty": "No correspondence entries match these filters.",
+    "confirmDelete": "Soft-delete this entry?",
+    "direction": {
+      "incoming": "Incoming",
+      "outgoing": "Outgoing",
+      "internal": "Internal"
+    },
+    "channel": {
+      "email": "Email",
+      "phone": "Phone",
+      "in_person": "In person",
+      "fax": "Fax",
+      "letter": "Letter",
+      "other": "Other"
+    },
+    "filters": {
+      "direction": "Direction",
+      "channel": "Channel",
+      "dateFrom": "From date",
+      "dateTo": "To date",
+      "counterparty": "Counterparty…",
+      "search": "Search…",
+      "tag": "Tag…",
+      "clear": "Clear filters",
+      "button": "Filters",
+      "title": "Filters",
+      "quick": "Quick filters",
+      "hasAttachment": "Has attachment",
+      "thisWeek": "This week",
+      "sentFromApp": "Sent from app",
+      "starred": "Starred",
+      "drafts": "Drafts"
+    },
+    "attachments": {
+      "downloadAll": "Download all",
+      "preview": "Preview",
+      "previewUnavailable": "Preview isn't available for this file type",
+      "previewLoadFailed": "Couldn't load the preview",
+      "renderFailed": "Couldn't render this file"
+    },
+    "outlook": {
+      "hasAttachment": "Has attachment",
+      "tabs": {
+        "all": "All",
+        "unread": "Unread"
+      },
+      "sortDate": "By Date",
+      "searchMail": "Search mail",
+      "searchLog": "Search the Correspondence Log",
+      "bands": {
+        "today": "Today",
+        "lastWeek": "Last week"
+      },
+      "empty": {
+        "drafts": "No drafts.",
+        "trash": "Trash is empty.",
+        "default": "Nothing here yet.",
+        "heading": "Click an email to see its content here",
+        "desc": "Select a message from the list to read it, reply, or take action."
+      },
+      "tipLabel": "Tip:",
+      "tips": [
+        "Type any G-number in an email and it auto-links the employee — no lookup needed.",
+        "Use \"Add reference\" to attach a Book or record to your reply.",
+        "Click ＋ next to a recipient to save them to your address book.",
+        "Reply-All keeps the original To and Cc — recipients are pre-filled."
+      ],
+      "newEmail": "New email",
+      "newEmailStub": "Compose — coming in Phase 6",
+      "rulesStub": "Auto-capture rules — coming in Phase 7",
+      "foldersTrigger": "Folders",
+      "collapseFolders": "Collapse folders",
+      "expandFolders": "Expand folders",
+      "orgShared": "Organisation · shared · auto",
+      "corrLog": "Correspondence Log",
+      "folders": {
+        "inbox": "Inbox",
+        "drafts": "Drafts",
+        "sent": "Sent",
+        "starred": "Starred",
+        "trash": "Trash"
+      },
+      "categories": {
+        "hr_letters": "HR letters",
+        "salary_bank": "Salary / bank",
+        "leaves": "Leaves",
+        "gov_nat": "Government / NAT",
+        "incoming_stamped": "Incoming (stamped)"
+      },
+      "logrow": {
+        "autoLogged": "auto-logged",
+        "generatedBy": "Generated by",
+        "forLbl": "for"
+      },
+      "recipients": {
+        "to": "To",
+        "cc": "Cc",
+        "bcc": "Bcc",
+        "noEmail": "No email on file — links to references"
+      },
+      "autocomplete": {
+        "addressBook": "Address book",
+        "employees": "Employees",
+        "saved": "Saved"
+      },
+      "composeBusy": "Finish or close your current draft first.",
+      "ref": {
+        "label": "Ref",
+        "add": "Add reference",
+        "searchPlaceholder": "Search books, records, employees…",
+        "booksRecords": "Books / records",
+        "employees": "Employees",
+        "pdf": "PDF",
+        "attachPdf": "Attach the reference's PDF when available"
+      },
+      "saveContact": "Add to address book",
+      "savedContact": "Saved to address book",
+      "reply": "Reply",
+      "replyAll": "Reply All",
+      "forward": "Forward",
+      "delete": "Delete",
+      "movedToTrash": "Moved to Trash",
+      "draftDeleted": "Draft deleted",
+      "draftOpenError": "Couldn't open this draft",
+      "more": "More",
+      "back": "Back",
+      "record": {
+        "loading": "Loading record…",
+        "notFound": "Record not found.",
+        "ref": "Reference",
+        "subject": "Subject",
+        "generatedBy": "Generated by",
+        "linkedEmployee": "Linked employee(s)",
+        "category": "Category",
+        "status": "Status",
+        "signed": "Signed",
+        "awaiting": "Awaiting"
+      },
+      "context": "People in this email",
+      "peopleIn": "People in this email · {{count}}",
+      "peopleSheet": "People ({{count}})",
+      "cxIdle": "Open a message to see the people it's about.",
+      "startRenewal": "Start renewal",
+      "recentActivity": "Recent activity",
+      "facts": {
+        "joined": "Joined",
+        "mobile": "Mobile",
+        "nationality": "Nationality",
+        "leave": "Leave balance",
+        "years": "{{count}} yrs",
+        "days": "{{count}} days",
+        "expiresIn": "Expires in {{count}} days",
+        "expired": "Expired {{count}} days ago",
+        "expiry": {
+          "uae_id": "Emirates ID",
+          "passport": "Passport"
+        }
+      },
+      "quick": {
+        "record": "Open record",
+        "generate": "Generate",
+        "email": "Email"
+      },
+      "collapse": "Collapse panel",
+      "expand": "Expand panel",
+      "linkedRecords": "Linked records · {{count}}",
+      "signed": "Signed",
+      "awaiting": "Awaiting",
+      "attVault": "Attachments → vault",
+      "fileVault": "File to vault",
+      "rules": {
+        "title": "Correspondence Log — auto-capture rules",
+        "description": "Each rule files matching correspondence into a Correspondence Log category automatically.",
+        "empty": "No rules yet. Add one below.",
+        "add": "＋ Add rule",
+        "ofType": "of type",
+        "when": "When",
+        "fileAs": "→ file as",
+        "condition": "with",
+        "condKey": "field",
+        "condValue": "value",
+        "toggle": "Toggle rule",
+        "delete": "Delete rule",
+        "newRule": "New rule",
+        "save": "Save rule",
+        "pickCategory": "Pick a category…",
+        "categories": "Categories",
+        "newCategory": "＋ New category…",
+        "addCategory": "Add category",
+        "deleteCategory": "Delete category",
+        "nameEn": "English name",
+        "nameAr": "Arabic name",
+        "adminOnly": "Admin only",
+        "triggers": {
+          "document_generated": "Document generated",
+          "book_signed": "Book signed",
+          "intake_classified": "Intake scan classified",
+          "email_sent": "Email sent"
+        }
+      },
+      "sync": {
+        "updatedAgo": "Updated {{when}}",
+        "justNow": "just now",
+        "minutesAgo_one": "{{count}} min ago",
+        "minutesAgo_other": "{{count}} min ago",
+        "hoursAgo_one": "{{count}}h ago",
+        "hoursAgo_other": "{{count}}h ago",
+        "daysAgo_one": "{{count}}d ago",
+        "daysAgo_other": "{{count}}d ago",
+        "never": "Not synced yet",
+        "syncing": "Syncing…",
+        "failed": "Sync failed",
+        "retry": "Retry",
+        "off": "Sync off",
+        "openSettings": "Settings",
+        "syncNow": "Sync now",
+        "inProgress": "Sync in progress"
+      },
+      "allMail": "All mail",
+      "allMailHint": "Show the whole office inbox (admin)",
+      "myMail": "My mail"
+    },
+    "lists": {
+      "label": "Lists",
+      "manage": "Manage lists",
+      "empty": "No saved lists yet",
+      "new": "New list",
+      "saveCurrent": "Save current",
+      "applyTitle": "To: {{to}} · Cc: {{cc}}",
+      "title": "Recipient lists",
+      "desc": "Save groups of To/Cc recipients and apply them in one click.",
+      "name": "List name",
+      "namePlaceholder": "e.g. Payroll",
+      "addMember": "Add recipient",
+      "create": "Create list",
+      "save": "Save changes",
+      "saved": "List saved",
+      "nameTaken": "A list with this name already exists",
+      "deleteTitle": "Delete this list?",
+      "deleteDesc": "Delete “{{name}}”? This cannot be undone."
+    },
+    "star": {
+      "toggle": "Star this entry"
+    },
+    "search": {
+      "placeholder": "Search ledger…",
+      "noResults": "No results for \"{{q}}\"",
+      "results": "{{count}} results"
+    },
+    "suggestEmployee": {
+      "title": "Possible employee match",
+      "body": "Detected {{gnumber}} in this message. Link to {{name}}?",
+      "button": "Set as related",
+      "linked": "Linked to {{id}}"
+    },
+    "draftCompose": {
+      "lastSaved": "Saved · {{time}}",
+      "saving": "Saving…",
+      "saveTitle": "Save this as a draft?",
+      "saveDesc": "Keep it in Drafts to finish later, or discard it.",
+      "saveAndClose": "Save draft",
+      "discard": "Discard",
+      "keepEditing": "Keep editing"
+    },
+    "vault": {
+      "sendToVault": "Send to vault",
+      "dialog": {
+        "title": "Send attachment to vault",
+        "kind": "Folder",
+        "confirm": "Send",
+        "sentTo": "Sent to {{id}}'s vault"
+      }
+    },
+    "form": {
+      "entryDate": "Date",
+      "direction": "Direction",
+      "channel": "Channel",
+      "counterparty": "Counterparty",
+      "subject": "Subject",
+      "notes": "Notes",
+      "tags": "Tags (comma-separated)",
+      "attachments": "Attachments",
+      "relatedBook": "Related book",
+      "relatedEmployee": "Related employee",
+      "save": "Save",
+      "cancel": "Cancel"
+    },
+    "toast": {
+      "created": "Ledger entry created",
+      "updated": "Ledger entry updated",
+      "deleted": "Ledger entry removed"
+    },
+    "emptyUnfiltered": "No correspondence logged yet"
+  },
+  "settings": {
+    "title": "Settings",
+    "subtitle": "Customize the application and manage data",
+    "sections": {
+      "appearance": "Appearance",
+      "defaults": "Defaults",
+      "submitters": "Submitters",
+      "system": "System",
+      "advanced": "Advanced"
+    },
+    "eyebrow": "System",
+    "savedToast": "Settings saved",
+    "account": {
+      "title": "Your account",
+      "description": "The account you are currently signed in with.",
+      "email": "Email",
+      "name": "Name",
+      "role": "Role",
+      "employeeId": "Employee ID",
+      "roleAdmin": "Admin",
+      "roleManager": "Manager",
+      "roleOperator": "Operator"
+    },
+    "appearance": {
+      "title": "Appearance",
+      "description": "Text size and theme are set from the top navigation.",
+      "hint": "Use the Aa slider and the moon/sun toggle in the top bar to customize the display.",
+      "sentryLabel": "Share crash reports (Sentry)",
+      "sentryHint": "Helps improve stability. No personal data is sent.",
+      "theme": "Theme",
+      "themeLight": "Light",
+      "themeDark": "Dark",
+      "language": "Language",
+      "fontScale": "Font size",
+      "fontSm": "Small",
+      "fontMd": "Medium",
+      "fontLg": "Large"
+    },
+    "defaults": {
+      "title": "Defaults",
+      "description": "Defaults applied when generating documents.",
+      "stampStyle": "Default stamp style",
+      "stampHeader": "Header Text",
+      "stampBoldTopRight": "Bold Top-Right",
+      "stampWatermark": "Watermark",
+      "defaultManager": "Default manager"
+    },
+    "submitters": {
+      "title": "Submitters",
+      "description": "People who can be picked as the submitter on application forms.",
+      "add": "Add submitter",
+      "name": "Name",
+      "employeeId": "Employee ID",
+      "empty": "No submitters yet",
+      "cancel": "Cancel",
+      "addAction": "Add",
+      "delete": "Delete",
+      "confirmDelete": "Delete submitter?",
+      "addedToast": "Submitter added",
+      "deletedToast": "Submitter deleted"
+    },
+    "managers": {
+      "title": "Managers",
+      "description": "Link each manager to a login account so approval routing works automatically.",
+      "noAccount": "No linked account",
+      "linkedToast": "Manager account linked",
+      "empty": "No managers configured."
+    },
+    "system": {
+      "title": "System",
+      "description": "Diagnostic information and update check.",
+      "version": "Version",
+      "database": "Database",
+      "logFile": "Log file",
+      "dataDir": "Data directory",
+      "python": "Python",
+      "platform": "Platform",
+      "uptime": "Uptime",
+      "checkUpdates": "Check for updates",
+      "checking": "Checking…",
+      "upToDate": "You're up to date",
+      "updateAvailable": "Update available: {{version}}",
+      "checkFailed": "Update check failed"
+    },
+    "advanced": {
+      "title": "Advanced",
+      "description": "Administrator-only options.",
+      "adminGate": "Admin gate",
+      "adminGateEnabled": "Enabled",
+      "adminGateOnToast": "Admin gate enabled",
+      "adminGateOffToast": "Admin gate disabled",
+      "dataDir": "Data directory",
+      "logFile": "Log file",
+      "copy": "Copy",
+      "pathCopiedToast": "Path copied",
+      "openInExplorer": "Open in Explorer",
+      "openExplorerNote": "Opens via pywebview bridge when running packaged"
+    },
+    "email": {
+      "heading": "Email integration",
+      "description": "Connect an IMAP mailbox so incoming and outgoing messages are auto-imported into the General Ledger. Password is encrypted locally on this machine.",
+      "syncIntervalSuffix": "minutes (0 to disable)",
+      "adminBadge": "Admin",
+      "ionosOnly": "GSSG uses IONOS for email. Other providers are not supported.",
+      "linkHeading": "Link your employee record",
+      "linkHint": "Helps the app default the submitter and signer on every form you fill in.",
+      "linkButton": "Link",
+      "skipLink": "Skip",
+      "linkedHeading": "Linked employee",
+      "changeLink": "Change",
+      "linkAdminOnly": "Only the app admin can change the linked employee",
+      "linkSuccess": "Linked as {{name}} ({{id}})",
+      "linkAdminGranted": "Linked as {{name}} ({{id}}) — admin",
+      "confirmDelete": "Remove email account?",
+      "confirmDeleteDesc": "This will remove the email account and stop syncing."
+    },
+    "signature": {
+      "title": "Email signature",
+      "description": "Appended to outgoing email when enabled on the compose toolbar.",
+      "save": "Save signature",
+      "saved": "Signature saved",
+      "placeholder": "Type your signature here…"
+    },
+    "signingSignature": {
+      "title": "Signing signature",
+      "description": "Embedded in a book's PDF when you approve and sign it. Separate from the email signature and the employee-vault signature.",
+      "onFile": "Signature on file",
+      "save": "Save signature",
+      "saved": "Signing signature saved",
+      "clear": "Clear",
+      "replace": "Replace",
+      "remove": "Remove",
+      "removed": "Signing signature removed"
+    },
+    "sigAppearance": {
+      "title": "Signature appearance",
+      "description": "How your signature is sized and weighted on generated documents.",
+      "size": "Size",
+      "boldness": "Boldness",
+      "noSignature": "Upload your signature above to see a preview.",
+      "pageScaleHint": "Shown at actual scale on the page",
+      "level": {
+        "none": "None",
+        "light": "Light",
+        "medium": "Medium",
+        "bold": "Bold"
+      }
+    }
+  },
+  "migration": {
+    "welcome": {
+      "title": "Migrate from GSSG v3.5.4",
+      "subtitle": "Import your employees, leaves, book records, and vault files from the existing v3.5.4 data directory into v4. A timestamped backup will be created before anything is changed."
+    },
+    "pickPath": {
+      "label": "v3 data directory",
+      "placeholder": "e.g. C:\\Users\\You\\Documents\\projects\\Gssg_manger\\data"
+    },
+    "preview": {
+      "heading": "Ready to import",
+      "confirm": "Proceed with import"
+    },
+    "importing": {
+      "status": "Importing… this may take a minute."
+    },
+    "summary": {
+      "heading": "Migration complete",
+      "detail": "Imported {{employees}} employees, {{leaves}} leaves, {{books}} books. Originals backed up to {{backup}}."
+    },
+    "skip": {
+      "title": "Skip migration?",
+      "confirm": "You can run this later from Settings → System. Skip for now?"
+    },
+    "error": {
+      "heading": "Migration failed"
+    },
+    "steps": {
+      "welcome": "Welcome",
+      "pickPath": "Data directory",
+      "preview": "Preview",
+      "importing": "Importing",
+      "done": "Done"
+    },
+    "buttons": {
+      "next": "Next",
+      "back": "Back",
+      "skip": "Skip for now",
+      "proceed": "Import",
+      "done": "Done",
+      "runMigration": "Migrate from v3"
+    },
+    "counts": {
+      "employees": "Employees",
+      "leaves": "Leaves",
+      "books": "Books",
+      "vaultFiles": "Vault files",
+      "violations": "Violations"
+    }
+  },
+  "expiry": {
+    "title": "Document Expiry",
+    "subtitle": "Emirates ID and passport expiry across active employees",
+    "eyebrow": "HR · Expiry",
+    "filters": {
+      "type": "Document type",
+      "typeAll": "All documents",
+      "typeUaeId": "Emirates ID",
+      "typePassport": "Passport",
+      "window": "Window",
+      "window30": "Expiring in ≤30 days",
+      "window90": "Expiring in ≤90 days",
+      "windowExpired": "Expired only",
+      "windowAll": "All (no limit)",
+      "searchPlaceholder": "Search by name or ID…"
+    },
+    "docType": {
+      "uae_id": "Emirates ID",
+      "passport": "Passport"
+    },
+    "urgency": {
+      "expired": "Expired {{days}}d ago",
+      "critical": "Expires in {{days}}d",
+      "soon": "Expires in {{days}}d"
+    },
+    "expiryDate": "Expiry",
+    "empty": "No expiring documents match your filters.",
+    "dashboardTitle": "Expiring Soon",
+    "bellTitle": "Expiring documents",
+    "bellCount": "{{count}} urgent",
+    "viewAll": "View all",
+    "awaitingReturnDash": "Awaiting return form",
+    "awaitingReturnDashCount_one": "{{count}} employee awaiting",
+    "awaitingReturnDashCount_other": "{{count}} employees awaiting"
+  },
+  "viewer": {
+    "title": "Preview",
+    "unavailable": "Preview isn't available for this file type",
+    "rotate": "Rotate",
+    "zoomIn": "Zoom in",
+    "zoomOut": "Zoom out",
+    "reset": "Fit / reset",
+    "openNewTab": "Open in new tab"
+  },
+  "errors": {
+    "generic": "Something went wrong",
+    "network": "Could not reach the server"
+  },
+  "compose": {
+    "window": {
+      "minimize": "Minimize",
+      "maximize": "Maximize",
+      "restore": "Restore"
+    },
+    "includeSignature": "Include signature",
+    "invalidAddress": "Not a valid email address: {{address}}",
+    "replyNoAddress": "No email address found for \"{{counterparty}}\" — enter one manually.",
+    "attachmentsTooLarge": "Attachments exceed the {{max}} limit",
+    "toRequired": "At least one recipient is required",
+    "subjectRequired": "Subject is required",
+    "to": "To",
+    "cc": "Cc",
+    "subject": "Subject",
+    "body": "Message",
+    "send": "Send",
+    "sent": "Email sent",
+    "attachments": "Attachments",
+    "dropFiles": "Drop files here or click to browse",
+    "title": {
+      "reply": "Reply",
+      "replyAll": "Reply All",
+      "forward": "Forward",
+      "new": "New email"
+    }
+  },
+  "actions": {
+    "edit": "Edit",
+    "addLeave": "Add leave",
+    "generateDoc": "Generate document"
+  },
+  "empSig": {
+    "title": "Employee signature",
+    "loaded": "Loaded from profile",
+    "none": "No signature on file",
+    "embed": "Embed in this form",
+    "savedOn": "Saved on the profile of {{id}}",
+    "updatedAt": "updated {{date}}",
+    "justNow": "just now",
+    "blankHint": "Cell stays blank — the employee signs by ink after printing",
+    "thisFormOnly": "Used for this form only — not saved to the profile",
+    "replace": "Replace…",
+    "cancel": "Cancel",
+    "drawHint": "Draw the employee's signature here",
+    "save": "Save",
+    "clear": "Clear",
+    "upload": "Upload image…",
+    "saveToProfile": "Save to profile",
+    "removed": "Signature removed",
+    "saved": "Signature saved",
+    "remove": "Remove",
+    "removeConfirmTitle": "Remove saved signature?",
+    "removeConfirmBody": "Forms will no longer embed a signature for this employee until a new one is saved.",
+    "uploadBadType": "Choose a PNG or JPG image",
+    "submitterTitle": "Submitter signs page 1",
+    "submitterSigns": "On the application (page 1), {{name}}'s signature is used in place of the employee's.",
+    "submitterNoSig": "{{name}} has no saved signature — page 1's signature cell will print blank.",
+    "submitterNotLinked": "{{name}} isn't linked to an employee — page 1's signature cell will print blank.",
+    "submitterAppliesP2": "The signature below applies to the undertaking (page 2)."
+  },
+  "employee": {
+    "notFound": "Employee not found.",
+    "joined": "Joined {{date}}",
+    "tab": {
+      "documents": "Documents",
+      "profile": "Profile",
+      "leaves": "Leaves",
+      "violations": "Violations",
+      "activity": "Activity",
+      "showingRecent": "Showing {{shown}} of {{total}}"
+    },
+    "stats": {
+      "documents": "Documents",
+      "documentsDelta": "{{count}} on file",
+      "leaves": "Leaves taken",
+      "leavesDelta": "of {{allowed}} allowed",
+      "violations": "Violations",
+      "violationsClean": "Clean record",
+      "violationsCount": "{{count}} on file",
+      "ledger": "Ledger entries",
+      "ledgerDelta": "Recent activity",
+      "tenure": "Tenure",
+      "tenureDelta": "Since join",
+      "daysUnit": "{{n}}d",
+      "yearsUnit": "{{n}}y"
+    },
+    "docs": {
+      "total": "Total: {{count}} documents for {{name}}",
+      "empty": "No documents on file yet."
+    },
+    "leaves": {
+      "empty": "No leave records on file."
+    },
+    "violations": {
+      "empty": "No violations on file — clean record."
+    },
+    "activity": {
+      "empty": "No recent activity."
+    },
+    "profile": {
+      "idEn": "Employee ID",
+      "nameEn": "Name (EN)",
+      "nameAr": "Name (AR)",
+      "position": "Position",
+      "department": "Department",
+      "doj": "Date of joining",
+      "status": "Status"
+    },
+    "identity": {
+      "title": "Identity documents",
+      "addScan": "Add scan",
+      "noScan": "No scan attached"
+    }
+  },
+  "application": {
+    "title": "Application",
+    "eyebrow": "Documents",
+    "heading": "Generate document",
+    "meta": "{{count}} templates · select a form to begin",
+    "servicesTitle": "Services",
+    "searchServices": "Search services…",
+    "noServicesMatch": "No forms match your search.",
+    "nsCategory": "Record",
+    "code": {
+      "has": "Carries a scannable ref code",
+      "none": "No ref code"
+    },
+    "actions": {
+      "preview": "Preview",
+      "saveBook": "Save book",
+      "waitingForPreview": "Waiting for preview…",
+      "saved": "Saved",
+      "generate": "Generate document"
+    },
+    "previewFirstHint": "Preview first — Save appears once the document renders.",
+    "saveBookHint": "Generating preview…",
+    "saveReadyHint": "Looks good? Save to commit a ref and add it to Records.",
+    "savedHint": "Saved. The reference number is allocated and the book is in Records.",
+    "selectedRecipients": "Selected recipients",
+    "removeRecipient": "Remove {{name}}",
+    "savedSignature": {
+      "heading": "Your signature on file",
+      "use": "Use saved signature",
+      "inUse": "In use — submit as-is or replace",
+      "replace": "Replace"
+    },
+    "cc": {
+      "searchPlaceholder": "Add CC…",
+      "addNew": "+ Add new CC contact",
+      "manage": "Manage CC contacts",
+      "addedToast": "CC contact added",
+      "empty": "No one CC'd yet",
+      "selected": "CC list",
+      "remove": "Remove {{name}} from CC"
+    },
+    "violationCombo": {
+      "placeholder": "Search or type a violation type…",
+      "addCustom": "Add \"{{query}}\"",
+      "noMatches": "No matching types — keep typing to add a custom one",
+      "selected": "Selected violation types",
+      "remove": "Remove {{type}}"
+    },
+    "formCard": {
+      "fallbackTitle": "Form",
+      "description": "Auto-fills from the employee record. Required fields are marked with an asterisk.",
+      "emptyHint": "Pick a form on the left to start filling it in."
+    },
+    "employeeHeader": {
+      "title": "Employee",
+      "change": "Change"
+    },
+    "noSelection": "— No selection —",
+    "searchManagers": "Search managers…",
+    "clearManager": "Clear manager",
+    "managerPickerHint": "Leaving this blank means the manager cell will be empty on the form (not the default manager).",
+    "manageSubmitters": "Manage submitters",
+    "submitterManagementTitle": "Submitter management",
+    "submitterManagementStub": "Submitter management — coming soon.",
+    "searchRecipients": "Search recipients…",
+    "addRecipient": "Add recipient",
+    "manageRecipients": "Manage recipients",
+    "recipientManagementTitle": "Recipient management",
+    "recipientNamePlaceholder": "Recipient name",
+    "recipientNameArPlaceholder": "Name (Arabic, optional)",
+    "annualCompanionHint": "Will also generate Leave Undertaking",
+    "pickerLoadError": "Could not load list",
+    "groups": {
+      "Applicant": "Applicant",
+      "Manager": "Manager",
+      "Signatures": "Signatures"
+    },
+    "validation": {
+      "required": "Required",
+      "invalidDate": "Must be a valid date (YYYY-MM-DD)"
+    },
+    "itemsTable": {
+      "addRow": "+ Add row",
+      "code": "Code",
+      "description": "Description",
+      "unit": "Unit",
+      "qty": "Qty",
+      "remarks": "Remarks",
+      "empty": "No items — add a row to begin."
+    },
+    "clearance": {
+      "department": "Department",
+      "item": "Item",
+      "status": "Status",
+      "remarks": "Remarks",
+      "yes": "Cleared",
+      "no": "Not",
+      "allYes": "All Cleared",
+      "allNo": "All Not",
+      "departments": {
+        "operations": "Operations",
+        "supply_chain": "Supply Chain",
+        "it": "IT",
+        "finance": "Finance",
+        "hr": "HR"
+      },
+      "items": {
+        "documents": "Documents",
+        "armed_license": "Armed License",
+        "cicpa_card": "CICPA Card",
+        "id_card": "ID Card",
+        "tonfa": "Tonfa",
+        "radio": "Radio",
+        "keys": "Keys",
+        "weapon_id": "Weapon ID",
+        "pistol_rifle": "Pistol/Rifle",
+        "taser_gun": "Taser Gun",
+        "handcuff": "Handcuff",
+        "pepper_spray": "Pepper Spray",
+        "ammunition": "Ammunition",
+        "access_cards": "Access Cards",
+        "electronic_devices": "Electronic Devices",
+        "others": "Others",
+        "riot_equipment": "RIOT Equipment",
+        "traffic_fine": "Traffic Fine",
+        "mobile": "Mobile",
+        "sim_card": "SIM Card",
+        "pc_backup": "PC Backup",
+        "email": "Email",
+        "dms": "DMS",
+        "bio_metric_access": "Bio-Metric Access",
+        "erp": "ERP",
+        "share_folder": "Share Folder",
+        "payment_deduction": "Payment / Deduction",
+        "passport": "Passport",
+        "medical_insurance_card": "Medical Insurance Card"
+      }
+    },
+    "formList": {
+      "title": "Forms",
+      "personnel": "Personnel",
+      "admin": "Administrative"
+    },
+    "employeePicker": {
+      "placeholder": "Pick an employee…",
+      "search": "Search employees…"
+    },
+    "tabs": {
+      "fields": "Fields",
+      "preview": "Preview"
+    },
+    "submit": "Generate",
+    "editFields": "Edit fields",
+    "newForm": "New form",
+    "downloadPdf": "Download PDF",
+    "downloadDocx": "Download DOCX",
+    "pdfUnavailable": "PDF not available; download DOCX instead",
+    "noDocuments": "No documents generated",
+    "prevDoc": "Previous document",
+    "nextDoc": "Next document",
+    "jobStatus": {
+      "queued": "Generating…",
+      "running": "Generating…",
+      "done": "Done",
+      "failed": "Failed"
+    },
+    "noTemplateSelected": "Select a form to begin",
+    "noEmployeeSelected": "Pick an employee first",
+    "toast": {
+      "generated": "Document generated",
+      "previewed": "Preview rendered",
+      "saved": "Saved as {{ref}}"
+    },
+    "attachments": {
+      "title": "Attachments",
+      "required": "required",
+      "optional": "optional",
+      "addOptional": "Add attachment (optional)",
+      "upload": "Upload",
+      "fromRecords": "From Records",
+      "notAttached": "Not attached yet",
+      "uploading": "Uploading…",
+      "uploaded": "uploaded",
+      "uploadFailed": "Could not stage the attachment",
+      "requiredCount": "Required: {{filled}} of {{total}} attached",
+      "requiredHint": "⚠ Attach “{{slot}}” to save",
+      "remove": "Remove attachment",
+      "dismiss": "Dismiss row",
+      "extra": "Add attachment",
+      "extraHint": "Anything attached here merges into the generated PDF.",
+      "pickerTitle": "Attach from Records",
+      "pickerSubtitle": "Search a record by ref or subject, then pick one of its papers.",
+      "pickerSearch": "Search records by ref or subject…",
+      "pickerGenerated": "Generated PDF",
+      "pickerEmpty": "No records match.",
+      "pickerNoPapers": "No papers on this record yet."
+    },
+    "employeesTable": {
+      "gNumber": "G-number",
+      "add": "Add",
+      "addAnother": "+ Add another",
+      "cap": "{{n}}/15",
+      "id": "ID",
+      "name": "Name",
+      "nationality": "Nationality",
+      "passport": "Passport No",
+      "notFound": "No employee with that G-number.",
+      "duplicate": "Already added.",
+      "lookupError": "Lookup failed. Try again.",
+      "max": "Up to 15 employees."
+    }
+  },
+  "dashboard": {
+    "title": "Dashboard",
+    "subtitle": "Today at a glance",
+    "welcomeBack": "Welcome back, {{name}}",
+    "welcomeBackGuest": "Welcome back",
+    "greeting": {
+      "morning": "Good morning",
+      "afternoon": "Good afternoon",
+      "evening": "Good evening"
+    },
+    "hero": {
+      "onLeaveChip": "on leave today",
+      "allPresent": "All present today",
+      "returnsSingle": "returns from leave today",
+      "returnPlural": "return from leave today",
+      "peopleCount": "{{n}} people",
+      "reviewLeave": "Review leave records",
+      "seeAll": "See all",
+      "calm": "Quiet day. {{n}} on site, nothing returning today.",
+      "calmUpcoming": "{{n}} returning later this week."
+    },
+    "heroSubtitle_one": "{{count}} document needs your attention",
+    "heroSubtitle_other": "{{count}} documents need your attention",
+    "heroLeavesReturning_one": "{{count}} leave returning this week",
+    "heroLeavesReturning_other": "{{count}} leaves returning this week",
+    "myWidgets": "My Widgets",
+    "editMyWidgets": "Edit My Widgets",
+    "editQuickActions": "Edit Quick Actions",
+    "quickActions": "Quick Actions",
+    "quickActionsEmpty": "No quick actions configured. Click Edit Quick Actions to add some.",
+    "viewAll": "View All",
+    "editWidgets": {
+      "customizeTitle": "Customize Dashboard",
+      "customizeDescription": "Choose where each widget appears. Use the zone selector and arrows.",
+      "zones": {
+        "top": "Top (big cards)",
+        "under_workspace": "Under Workspace",
+        "under_quick_actions": "Under Quick Actions",
+        "hidden": "Hidden"
+      },
+      "zonePicker": "Move to zone",
+      "topFull": "Top zone is full (max {{count}})",
+      "topOnlyBigCards": "Only big cards can go in the Top zone",
+      "zoneFull": "This zone is full (max {{count}})",
+      "title": "Edit My Widgets",
+      "description": "Reorder or hide the widgets on your dashboard.",
+      "quickActionsTitle": "Edit Quick Actions",
+      "quickActionsDescription": "Reorder or hide the quick-action tiles on your dashboard.",
+      "reset": "Reset to defaults",
+      "save": "Save",
+      "cancel": "Cancel",
+      "moveUp": "Move up",
+      "moveDown": "Move down",
+      "showAria": "Show {{name}}",
+      "hideAria": "Hide {{name}}",
+      "maxVisibleHint": "Max {{count}} widgets visible at a time",
+      "quickActionsMaxVisibleHint": "Max {{count}} quick actions visible at a time"
+    },
+    "widgetLabels": {
+      "pending": "Documents Completed",
+      "workspace": "My Workspace",
+      "violations": "Open Violations",
+      "drafts": "Drafts",
+      "ledger": "Ledger unread",
+      "on_leave_today": "On Leave Today",
+      "upcoming_leave": "Upcoming Returns",
+      "recent_docs": "Recent Documents",
+      "email_sync_status": "Email Sync",
+      "waiting_approvals": "Waiting Approvals",
+      "waiting_approvals_cta": "Review",
+      "waiting_approvals_aria_one": "Waiting approvals: {{count}}. Review.",
+      "waiting_approvals_aria_other": "Waiting approvals: {{count}}. Review.",
+      "expiring_soon": "Expiring Soon",
+      "recent_ledger": "Recent Ledger"
+    },
+    "quickActionLabels": {
+      "hr": "HR Requests",
+      "violations": "Violations",
+      "leaves": "Leaves",
+      "books": "Book Refs",
+      "acknowledgment": "Acknowledgment",
+      "salary_transfer_request": "Salary Transfer",
+      "salary_deduction": "Salary Deduction",
+      "violation": "New Violation",
+      "employee_clearance": "Clearance",
+      "leave_application": "Leave Application",
+      "passport_release": "Passport Request",
+      "duty_resumption": "Duty Resumption",
+      "material_request": "Material Request",
+      "general_book": "General Book",
+      "hr_request": "HR Request",
+      "resignation_declaration": "Resignation Decl.",
+      "resignation_letter": "Resignation Letter",
+      "leave_undertaking": "Leave Undertaking",
+      "leave_permit": "Leave Permit",
+      "administrative_leave": "Admin Leave"
+    },
+    "quickActionDesc": {
+      "hr": "Issue, approve, and track HR documents.",
+      "violations": "Open, escalate, and close cases.",
+      "leaves": "Manage leave balances and applications.",
+      "books": "Search and stamp the records book.",
+      "acknowledgment": "Record an employee acknowledgment.",
+      "salary_transfer_request": "Request a salary account transfer.",
+      "salary_deduction": "Issue a salary deduction notice.",
+      "violation": "File a new disciplinary violation.",
+      "employee_clearance": "Issue a clearance / exit form.",
+      "leave_application": "Apply for an employee leave.",
+      "passport_release": "Request custody of a passport.",
+      "duty_resumption": "Mark return to duty after leave.",
+      "material_request": "Request stores or material.",
+      "general_book": "Open the general records book.",
+      "hr_request": "Submit an HR request.",
+      "resignation_declaration": "File a resignation declaration.",
+      "resignation_letter": "Compose a resignation letter.",
+      "leave_undertaking": "Record a leave undertaking.",
+      "leave_permit": "Issue a short leave permit.",
+      "administrative_leave": "File an administrative leave."
+    },
+    "pending": {
+      "title": "Documents Completed",
+      "review": "View",
+      "currency": "DOCS",
+      "footnote_one": "{{count}} document this month",
+      "footnote_other": "{{count}} documents this month"
+    },
+    "workspace": {
+      "title": "My Workspace",
+      "staff": "STAFF",
+      "active_one": "{{count}} active",
+      "active_other": "{{count}} active",
+      "onLeave_one": "{{count}} on leave",
+      "onLeave_other": "{{count}} on leave"
+    },
+    "widgets": {
+      "violations": {
+        "header": "Open Violations",
+        "action": "Review",
+        "active": "Active",
+        "escalated": "Escalated",
+        "pendingClose": "Pending close",
+        "deltaWarn": "{{count}} open",
+        "deltaSteady": "— stable"
+      },
+      "drafts": {
+        "header": "Drafts",
+        "action": "Review drafts",
+        "promotion": "Promotion",
+        "leave": "Leave",
+        "violation": "Violation",
+        "deltaWarn": "{{count}} unsubmitted",
+        "deltaSteady": "All submitted"
+      },
+      "ledger": {
+        "header": "Ledger unread",
+        "action": "Open inbox",
+        "incoming": "Incoming",
+        "outgoing": "Outgoing",
+        "internal": "Internal",
+        "deltaWarn_one": "↑ {{count}} today",
+        "deltaWarn_other": "↑ {{count}} today",
+        "deltaSteady": "— stable",
+        "metaRecent_one": "{{count}} in the last 24h",
+        "metaRecent_other": "{{count}} in the last 24h"
+      },
+      "onLeaveToday": {
+        "header": "On Leave Today",
+        "action": "View details",
+        "deltaHigh": "High",
+        "deltaNormal": "Normal"
+      },
+      "upcomingLeave": {
+        "header": "Upcoming Returns",
+        "action": "View",
+        "returningTomorrow": "Returning tomorrow",
+        "thisWeek": "This week",
+        "deltaSoon": "Soon",
+        "deltaSteady": "Quiet"
+      },
+      "recentDocs": {
+        "header": "Recent Documents",
+        "action": "Browse",
+        "deltaActive": "Active",
+        "deltaIdle": "Idle",
+        "metaRecent_one": "{{count}} in the recent slice",
+        "metaRecent_other": "{{count}} in the recent slice"
+      },
+      "emailSync": {
+        "header": "Email Sync",
+        "lastSync": "Last sync",
+        "interval": "Interval",
+        "status": "Status",
+        "never": "never",
+        "minutesAgo_one": "{{count}} min ago",
+        "minutesAgo_other": "{{count}} min ago",
+        "hoursAgo_one": "{{count}}h ago",
+        "hoursAgo_other": "{{count}}h ago",
+        "daysAgo_one": "{{count}}d ago",
+        "daysAgo_other": "{{count}}d ago",
+        "minutesUnit_one": "{{count}} min",
+        "minutesUnit_other": "{{count}} min",
+        "intervalOff": "Off",
+        "statusActive": "Active",
+        "statusOff": "Off",
+        "deltaOff": "Off",
+        "deltaLive": "Live",
+        "deltaSynced": "Synced",
+        "actionSync": "Sync now",
+        "actionConfigure": "Configure"
+      }
+    },
+    "services": {
+      "hr": {
+        "title": "HR Requests",
+        "description": "Issue, approve, and track HR documents."
+      },
+      "violations": {
+        "title": "Violations",
+        "description": "Open, escalate, and close cases."
+      },
+      "leaves": {
+        "title": "Leaves",
+        "description": "Manage leave balances and applications."
+      },
+      "books": {
+        "title": "Book Refs",
+        "description": "Search and stamp the records book."
+      }
+    },
+    "kpi": {
+      "totalEmployees": "Total employees",
+      "onLeaveToday": "On leave today",
+      "presentToday": "Present today",
+      "formsThisMonth": "Forms this month"
+    },
+    "quickNav": {
+      "title": "Jump to",
+      "employees": "Employees",
+      "application": "Application",
+      "leaves": "Leave History",
+      "books": "Book Reference",
+      "ledger": "Ledger"
+    },
+    "onLeave": {
+      "title": "On leave today",
+      "empty": "No one is on leave today",
+      "until": "Until {{date}}"
+    },
+    "upcoming": {
+      "title": "Returning in the next 7 days",
+      "empty": "No returns expected this week",
+      "endsIn": "Ends in {{days}} days",
+      "endsToday": "Ends today",
+      "endsTomorrow": "Ends tomorrow"
+    },
+    "recent": {
+      "title": "Recent activity",
+      "documents": "Latest documents",
+      "ledger": "Latest correspondence",
+      "empty": "Nothing yet"
+    }
+  },
+  "extraction": {
+    "dropzone": {
+      "label": "Scan document",
+      "cta": "Scan a document",
+      "hint": {
+        "generic": "Drop an image or PDF here, or click to browse",
+        "bank_iban": "Drop a bank letter or salary transfer document",
+        "sick_leave": "Drop a sick-leave certificate"
+      },
+      "scanning": "Scanning…",
+      "errorGeneric": "Scan failed — try again",
+      "errorUnavailable": "OCR is not available on the server"
+    },
+    "panel": {
+      "title": "Scanned fields",
+      "subtitle": "Review and edit the extracted values before applying them to the form.",
+      "ambiguity": "Detected: {{type}} — or {{alts}}?",
+      "confident": "Confident",
+      "review": "Review",
+      "apply": "Apply",
+      "dismiss": "Dismiss",
+      "matched": "Matched to {{name}} ({{id}}) — {{pct}}% confidence",
+      "matchedNoPct": "Matched to {{name}} ({{id}})"
+    },
+    "doctype": {
+      "emirates_id": "Emirates ID",
+      "passport": "Passport",
+      "bank_iban": "Bank letter",
+      "sick_leave": "Sick leave",
+      "unknown": "Document"
+    },
+    "fields": {
+      "name_en": "Name (English)",
+      "name_ar": "Name (Arabic)",
+      "nationality": "Nationality",
+      "dob": "Date of birth",
+      "uae_id_no": "UAE ID No.",
+      "passport_no": "Passport No.",
+      "expiry": "Expiry date",
+      "passport_expiry": "Passport Expiry",
+      "uae_id_expiry": "Emirates ID Expiry",
+      "iban": "IBAN",
+      "account_number": "Account Number",
+      "bank_name": "Bank",
+      "branch": "Branch",
+      "leave_from": "Leave from",
+      "leave_to": "Leave to",
+      "leave_days": "Leave days",
+      "certificate_no": "Certificate No.",
+      "clinic": "Clinic"
+    },
+    "duplicateGuard": {
+      "title": "This may already exist",
+      "body": "{{name}} ({{id}}) matches at {{pct}}%. Open the existing record instead?",
+      "openRecord": "Open existing record"
+    },
+    "salaryTransfer": {
+      "saveIbanToEmployee": "Also save IBAN to this employee's record",
+      "ibanSaved": "IBAN saved to employee record",
+      "ibanSaveError": "Could not save IBAN to employee record"
+    }
+  },
+  "intake": {
+    "eyebrow": "Documents",
+    "scanButton": "Scan",
+    "drawerTitle": "Scan document",
+    "pageTitle": "Scan intake",
+    "pageSubtitle": "Scan a returned form or inbound document. GSSG Manager recognises the type and routes it to the right place.",
+    "scanAnother": "Scan another document",
+    "returnedForm": {
+      "title": "Returned form recognised",
+      "attach": "Attach",
+      "dismiss": "Dismiss",
+      "attached": "{{ref}} attached",
+      "viewRecord": "View record",
+      "isSignedCopy": "Is this the signed copy?",
+      "approve": "Approve — signed copy",
+      "justAttach": "Just attach",
+      "approved": "Approved {{ref}}",
+      "stateDraft": "Draft",
+      "statePending": "Pending",
+      "stateAwaitingScan": "Awaiting scan"
+    },
+    "external": {
+      "detected": "Document recognised",
+      "matched": "Matched to {{name}} ({{id}}) — {{pct}}% confidence",
+      "matchedNoPct": "Matched to {{name}} ({{id}})",
+      "fields": "Extracted fields",
+      "openRecord": "Open {{name}}'s record",
+      "createEmployee": "Create new employee",
+      "newSalaryTransfer": "New Salary Transfer",
+      "newLeave": "New Leave (Sick)",
+      "manualTitle": "Route manually",
+      "openForm": "Open a form",
+      "logLedger": "Log to ledger"
+    },
+    "error": {
+      "generic": "Scan failed — try again",
+      "unavailable": "OCR is not available on the server",
+      "unsupportedType": "Only images and PDF files are accepted",
+      "tooLarge": "File exceeds the {{max}} limit"
+    }
+  },
+  "dutyLocations": {
+    "tile": {
+      "name": "Duty Locations & Transfers",
+      "category": "Personnel"
+    },
+    "page": {
+      "title": "Duty Locations & Internal Transfers",
+      "subtitle": "Where each employee stands — move staff between units & posts to generate a General Book transfer letter.",
+      "loadError": "Couldn't load the roster. Please try again."
+    },
+    "rail": {
+      "units": "Units",
+      "totalAssigned": "Assigned: {{assigned}} / {{total}}",
+      "unassignedCount_zero": "Unassigned: 0",
+      "unassignedCount_one": "Unassigned: 1",
+      "unassignedCount_other": "Unassigned: {{count}}"
+    },
+    "unassigned": "Unassigned",
+    "column": {
+      "id": "No.",
+      "name": "Name",
+      "position": "Position"
+    },
+    "roster": {
+      "summary": "{{employees}} employees · {{posts}} posts",
+      "searchPlaceholder": "Search by name or number…",
+      "noPost": "No post set",
+      "empty": "No employees in this unit.",
+      "selectRow": "Select {{name}}"
+    },
+    "field": {
+      "unit": "Unit",
+      "post": "Post",
+      "unitPlaceholder": "Pick or type a unit…",
+      "postPlaceholder": "Pick or type a post…"
+    },
+    "assign": {
+      "title": "Assign duty location",
+      "edit": "Assign / edit duty location",
+      "saved": "Duty location updated."
+    },
+    "selection": {
+      "count_zero": "0 selected",
+      "count_one": "1 selected",
+      "count_other": "{{count}} selected",
+      "clear": "Clear",
+      "transfer": "Transfer selected →"
+    },
+    "transfer": {
+      "title": "Internal transfer",
+      "subtitle_one": "Moving 1 employee",
+      "subtitle_other": "Moving {{count}} employees",
+      "movingLabel": "Employees being moved",
+      "destUnit": "Destination unit",
+      "destPost": "Destination post",
+      "effectiveDate": "Effective date",
+      "reason": "Reason (optional)",
+      "reasonPlaceholder": "Re-distribution / operational need…",
+      "generate": "Generate General Book letter →",
+      "success": "Transfer letter {{ref}} generated.",
+      "viewRecord": "View record"
+    }
+  },
+  "scanInbox": {
+    "eyebrow": "Documents",
+    "pageTitle": "Scan Inbox",
+    "pageSubtitle": "Documents arriving by email are scanned automatically. Confident ones file themselves; uncertain ones wait here for you.",
+    "empty": "Nothing to triage — you're all caught up.",
+    "loadError": "Couldn't load the scan inbox.",
+    "sections": {
+      "confirm": "Needs confirmation",
+      "unrouted": "Unrouted",
+      "autoFiled": "Recently auto-filed",
+      "error": "Couldn't read"
+    },
+    "fromEmail": "From {{sender}}",
+    "subjectLine": "{{subject}}",
+    "detected": "Detected: {{type}}",
+    "confirmBook": "We think this is {{ref}}. File the signed copy to that record?",
+    "confirmEmployee": "Looks like a {{type}} for {{name}}. File to their documents?",
+    "manual": "Couldn't match this automatically — route it.",
+    "autoFiledBook": "Filed to {{ref}}",
+    "autoFiledEmployee": "Filed to {{name}}'s documents",
+    "errorRead": "Couldn't read this document — route it manually.",
+    "actions": {
+      "confirm": "Confirm",
+      "pickEmployee": "Pick employee",
+      "pickRecord": "Pick a different record",
+      "dismiss": "Dismiss",
+      "undo": "Undo",
+      "openEmail": "Open email",
+      "notForm": "Not a GSSG form"
+    },
+    "toast": {
+      "filed": "Filed",
+      "dismissed": "Dismissed",
+      "undone": "Undone",
+      "error": "Action failed"
+    },
+    "bellTitle": "Scan inbox",
+    "bellCount_one": "{{count}} document to triage",
+    "bellCount_other": "{{count}} documents to triage"
+  },
+  "access": {
+    "eyebrow": "Administration",
+    "title": "Access requests",
+    "meta": "{{pending}} pending · {{active}} active · {{suspended}} suspended",
+    "loadError": "Couldn't load users.",
+    "notAuthorized": "You need admin access to view this page.",
+    "tabs": {
+      "pending": "Pending",
+      "active": "Active users",
+      "suspended": "Suspended",
+      "history": "History"
+    },
+    "pending": {
+      "emptyTitle": "You're up to date.",
+      "emptySub": "No pending access requests. New requests show up here and ping the bell.",
+      "newBadge": "New",
+      "requested": "Requested",
+      "email": "Email",
+      "gNumber": "G-number",
+      "linked": "Linked employee",
+      "notLinked": "Not linked to an employee",
+      "unverifiedLink": "Self-claimed — verify before approving",
+      "rolePrompt": "Approve as",
+      "approve": "Approve",
+      "approving": "Approving…",
+      "reject": "Reject",
+      "expand": "Show details",
+      "collapse": "Hide details",
+      "roles": {
+        "admin": "Admin",
+        "adminHint": "Full access · can approve others",
+        "manager": "Manager",
+        "managerHint": "Manage HR, ledger and books",
+        "operator": "Operator",
+        "operatorHint": "Standard day-to-day access"
+      }
+    },
+    "active": {
+      "name": "Name",
+      "role": "Role",
+      "lastSeen": "Last seen",
+      "joined": "Joined",
+      "you": "You",
+      "reset": "Reset password",
+      "changeRole": "Change role",
+      "editPermissions": "Edit permissions",
+      "suspend": "Suspend",
+      "reactivate": "Reactivate",
+      "never": "Never",
+      "rowActions": "Row actions",
+      "empty": "No active users.",
+      "suspendedEmpty": "No suspended users."
+    },
+    "defaultManager": {
+      "badge": "Default manager",
+      "make": "Make default manager",
+      "remove": "Remove default manager",
+      "notEligible": "Needs an active account, the approve-books permission and an uploaded signature (Settings → Signing)."
+    },
+    "history": {
+      "empty": "No activity yet.",
+      "by": "by",
+      "as": "as",
+      "reason": "Reason",
+      "actions": {
+        "approve": "Approved",
+        "reject": "Rejected",
+        "set_role": "Role changed",
+        "reset_password": "Password reset",
+        "lock": "Suspended",
+        "unlock": "Reactivated",
+        "set_status": "Status changed"
+      }
+    },
+    "reject": {
+      "title": "Reject this request?",
+      "body": "{{name}} will be told to contact IT. The email and G-number stay on file.",
+      "reasonLabel": "Reason (recorded in the audit log)",
+      "reasonPlaceholder": "G-number doesn't match HR roster…",
+      "cancel": "Cancel",
+      "confirm": "Reject request"
+    },
+    "resetModal": {
+      "title": "Reset password",
+      "body": "Set a temporary password for {{name}}. They can change it after signing in.",
+      "label": "New password",
+      "placeholder": "At least 8 characters",
+      "generate": "Generate",
+      "cancel": "Cancel",
+      "confirm": "Reset password"
+    },
+    "roleModal": {
+      "title": "Change role for {{name}}",
+      "cancel": "Cancel",
+      "confirm": "Save role"
+    },
+    "toast": {
+      "approved": "{{name}} approved",
+      "rejected": "Request rejected",
+      "roleChanged": "Role updated",
+      "passwordReset": "Password reset",
+      "suspended": "User suspended",
+      "reactivated": "User reactivated"
+    },
+    "bell": {
+      "requestPrefix": "Access request",
+      "title": "Access requests",
+      "viewAll": "Review access requests"
+    },
+    "settingsCard": {
+      "title": "Access requests",
+      "desc": "Approve people who requested access, and manage existing users.",
+      "review": "Review requests",
+      "none": "No pending requests",
+      "pending": "{{count}} pending"
+    },
+    "roleName": {
+      "admin": "Admin",
+      "manager": "Manager",
+      "operator": "Operator"
+    },
+    "permissions": {
+      "title": "Permissions",
+      "eyebrow": "Administration",
+      "subtitle": "Grant or revoke individual capabilities per user. Roles set the defaults; overrides layer on top.",
+      "selectUser": "User",
+      "loadError": "Couldn't load permissions.",
+      "empty": "No users to manage yet.",
+      "rolePreset": "Role preset",
+      "legend": {
+        "default": "Inherited from role",
+        "grant": "Granted",
+        "deny": "Denied"
+      },
+      "state": {
+        "default": "Default",
+        "grant": "Grant",
+        "deny": "Deny"
+      },
+      "inherited": "Role default: {{state}}",
+      "overridden": "Overridden",
+      "adminAll": "Admins always have every capability — overrides don't apply.",
+      "saved": "Permission updated.",
+      "saveError": "Couldn't update the permission.",
+      "domains": {
+        "app": "Application",
+        "employees": "Employees",
+        "leaves": "Leaves",
+        "violations": "Violations",
+        "documents": "Documents",
+        "books": "Books",
+        "ledger": "Ledger",
+        "email": "Email",
+        "settings": "Settings",
+        "submitters": "Submitters",
+        "editor_templates": "Editor templates",
+        "users": "Users",
+        "system": "System"
+      },
+      "caps": {
+        "app.access": "Access the app",
+        "employees.view": "View employees",
+        "employees.edit": "Create / edit employees + vault",
+        "leaves.view": "View leaves",
+        "leaves.edit": "Edit / delete leaves",
+        "violations.view": "View violations",
+        "violations.manage": "Create / edit / delete violations",
+        "documents.generate": "Generate documents",
+        "documents.scan": "Scan documents with OCR",
+        "books.view": "View books",
+        "books.manage": "Create / edit / delete books",
+        "books.approve": "Approve / reject books",
+        "ledger.view": "View ledger",
+        "ledger.edit": "Edit ledger entries + drafts",
+        "ledger.send": "Send email from the ledger",
+        "email.manage": "Manage your mailbox",
+        "settings.view": "View settings",
+        "settings.edit": "Change settings",
+        "submitters.manage": "Manage submitters",
+        "editor_templates.manage": "Manage editor templates",
+        "users.manage": "Manage users + permissions",
+        "system.admin": "Admin key + v3 migration"
+      }
+    }
+  }
+}

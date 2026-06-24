@@ -1,0 +1,32 @@
+# GSSG Manager — TLS terminator in front of uvicorn (Phase 5).
+#
+# uvicorn binds 127.0.0.1:8765 (loopback only); Caddy owns :443 on the LAN
+# IP/hostname. Same-origin → no CORS changes needed.
+#
+# Choose ONE site address block below, then run:
+#   caddy run --config Caddyfile
+#
+# ─────────────────────────────────────────────────────────────────────────────
+# (A) Real domain + automatic ACME — phones trust it out of the box.
+#     DNS A-record must point to the LAN server's IP; port 80 must be open for
+#     the ACME HTTP-01 challenge.
+# ─────────────────────────────────────────────────────────────────────────────
+# gssg.example.ae {
+#     reverse_proxy 127.0.0.1:8765
+# }
+
+# ─────────────────────────────────────────────────────────────────────────────
+# (B) LAN IP / internal hostname with an internal CA or self-signed cert.
+#     Phones must install and trust the CA cert before push works on iOS/Android.
+#     See PHASE5-RUNBOOK.md §Cert-strategy for details.
+# ─────────────────────────────────────────────────────────────────────────────
+# https://gssg.lan {
+#     tls /etc/caddy/gssg.crt /etc/caddy/gssg.key   # or: tls internal
+#     reverse_proxy 127.0.0.1:8765
+# }
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Security note: behind Caddy, X-Forwarded-For is set automatically.
+# The per-IP rate limiter in app/core/ratelimit.py keys on request.client.host.
+# Trust X-Forwarded-For ONLY behind this proxy you control (see runbook §XFF).
+# ─────────────────────────────────────────────────────────────────────────────

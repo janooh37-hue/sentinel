@@ -1,0 +1,511 @@
+/* ============================================================
+   LOGIN SCREEN — GSSG Manager (hero layout)
+   Ported from the Claude Design handoff (project/Login.html).
+   All selectors scoped under .gssg-login; every var(--*) is a
+   token already defined globally in index.css (light + dark).
+   ============================================================ */
+
+.gssg-login {
+  min-height: 100vh;
+  background: var(--bg);
+  overflow-x: hidden;
+  color: var(--text);
+}
+
+/* ── Top chrome ── */
+.gssg-login .top-chrome {
+  position: relative;
+  z-index: 5;
+  height: 56px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 0 28px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+}
+.gssg-login .top-chrome__brand { display: flex; align-items: center; gap: 10px; }
+.gssg-login .top-chrome__logo {
+  width: 30px; height: 30px; border-radius: 99px;
+  box-shadow: 0 0 0 1px var(--border); flex-shrink: 0; object-fit: cover;
+}
+.gssg-login .top-chrome__mark { display: flex; flex-direction: column; line-height: 1.05; }
+.gssg-login .top-chrome__wordmark {
+  font-size: 13.5px; font-weight: 700; color: var(--primary); letter-spacing: -0.015em;
+}
+.gssg-login .top-chrome__tagline {
+  font-size: 9.5px; color: var(--text-muted); letter-spacing: 0.04em; margin-top: 2px;
+}
+[dir="rtl"] .gssg-login .top-chrome__tagline {
+  font-family: var(--font-arabic); font-size: 11px; letter-spacing: 0;
+}
+.gssg-login .top-chrome__eyebrow {
+  margin-inline-start: 16px; padding-inline-start: 16px;
+  border-inline-start: 1px solid var(--hairline);
+  font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase;
+  color: var(--text-faint); font-weight: 600;
+}
+.gssg-login .top-chrome__spacer { margin-inline-start: auto; }
+.gssg-login .top-chrome__lang {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 6px 10px; font-size: 12px; color: var(--text);
+  border-radius: 10px; cursor: pointer; transition: background 120ms;
+  background: transparent; border: 0; font-family: inherit;
+}
+.gssg-login .top-chrome__lang:hover { background: var(--surface-tinted); }
+
+/* ── Stage / hero band ── */
+.gssg-login .stage { min-height: calc(100vh - 56px); position: relative; padding: 0 24px 60px; }
+.gssg-login .hero-band {
+  position: relative;
+  margin: -1px -24px 0;
+  height: 280px;
+  background: var(--hero-grad);
+  overflow: hidden;
+  display: flex; flex-direction: column; justify-content: center;
+  padding: 0 60px;
+}
+.gssg-login .hero-band__title {
+  color: var(--on-primary);
+  font-size: 30px; font-weight: 700; letter-spacing: -0.015em;
+  line-height: 1.15; max-width: 620px;
+}
+.gssg-login .hero-band__sub {
+  color: rgba(255, 255, 255, 0.74);
+  font-size: 13px; font-weight: 400; margin-top: 8px;
+  max-width: 540px; line-height: 1.55;
+}
+.gssg-login .hero-band__meta {
+  position: absolute; top: 20px; inset-inline-end: 28px;
+  color: rgba(255, 255, 255, 0.55);
+  font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.04em;
+  display: inline-flex; align-items: center; gap: 8px;
+}
+.gssg-login .hero-band__meta-dot {
+  width: 6px; height: 6px; border-radius: 99px; background: #4ade80;
+  box-shadow: 0 0 12px 1px rgba(74, 222, 128, 0.6);
+  animation: gssg-pulse-dot 2.4s ease-in-out infinite;
+}
+.gssg-login .hero-band__halo {
+  position: absolute; top: -120px; inset-inline-end: -80px; width: 380px; height: 380px;
+  border-radius: 99px;
+  background: radial-gradient(circle, rgba(255, 255, 255, 0.08) 0%, rgba(255, 255, 255, 0) 65%);
+  pointer-events: none;
+}
+.gssg-login .card-wrap {
+  margin-top: -100px;
+  display: flex; flex-direction: column; align-items: center;
+  position: relative; z-index: 2;
+}
+
+/* ── Card ── */
+.gssg-login .card {
+  width: 440px; max-width: 100%;
+  background: var(--surface);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg);
+  padding: 32px 32px 28px;
+  display: flex; flex-direction: column; gap: 18px;
+  animation: gssg-card-rise 420ms var(--ease-out-expo, cubic-bezier(0.16, 1, 0.3, 1)) both;
+}
+.gssg-login .card__head { display: flex; flex-direction: column; gap: 6px; }
+.gssg-login .card__eyebrow {
+  font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase;
+  color: var(--text-muted); font-weight: 600;
+}
+.gssg-login .card__title {
+  font-size: 22px; font-weight: 700; color: var(--text);
+  letter-spacing: -0.015em; line-height: 1.2;
+}
+.gssg-login .card__sub {
+  font-size: 13px; color: var(--text-muted); line-height: 1.55; margin-top: 2px;
+}
+
+/* ── Fields ── */
+.gssg-login .field { display: flex; flex-direction: column; gap: 6px; }
+.gssg-login .field__lbl {
+  font-size: 11px; font-weight: 600; color: var(--text-muted); letter-spacing: 0.02em;
+  display: flex; align-items: center; justify-content: space-between;
+}
+.gssg-login .field__inp {
+  height: 42px; padding: 0 14px;
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  font-family: var(--font-sans); font-size: 14px; color: var(--text);
+  transition: border-color 120ms, box-shadow 120ms;
+  outline: none; width: 100%; box-sizing: border-box;
+}
+.gssg-login .field__inp:focus {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px color-mix(in oklab, var(--primary) 18%, transparent);
+}
+.gssg-login .field__inp::placeholder { color: var(--text-faint); }
+.gssg-login .field__inp--mono { font-family: var(--font-mono); letter-spacing: 0.02em; }
+.gssg-login .field__inp--error {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px color-mix(in oklab, var(--accent) 14%, transparent);
+}
+.gssg-login .field__wrap { position: relative; }
+.gssg-login .field__wrap .field__inp { padding-inline-start: 40px; }
+.gssg-login .field__wrap-icon {
+  position: absolute; inset-inline-start: 14px; top: 50%; transform: translateY(-50%);
+  color: var(--text-faint); pointer-events: none; display: inline-flex;
+}
+.gssg-login .field__wrap:focus-within .field__wrap-icon { color: var(--primary); }
+.gssg-login .field__reveal {
+  position: absolute; inset-inline-end: 6px; top: 50%; transform: translateY(-50%);
+  width: 32px; height: 32px; border-radius: 8px;
+  border: 0; background: transparent; cursor: pointer; color: var(--text-faint);
+  display: inline-flex; align-items: center; justify-content: center;
+  transition: background 120ms, color 120ms;
+}
+.gssg-login .field__reveal:hover { background: var(--surface-tinted); color: var(--text); }
+.gssg-login .field__err {
+  display: flex; align-items: center; gap: 6px;
+  font-size: 12px; color: var(--accent); font-weight: 500; margin-top: 2px;
+}
+.gssg-login .field__err svg { flex-shrink: 0; }
+
+/* ── Buttons ── */
+.gssg-login .btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  height: 44px; padding: 0 18px;
+  border-radius: var(--radius-md);
+  font-family: inherit; font-weight: 600; font-size: 14px; letter-spacing: -0.005em;
+  border: 0; cursor: pointer;
+  transition: background 150ms, color 150ms, box-shadow 150ms, transform 150ms;
+  white-space: nowrap; box-sizing: border-box;
+}
+.gssg-login .btn--primary { background: var(--primary); color: var(--on-primary); width: 100%; }
+.gssg-login .btn--primary:hover { background: var(--primary-hover); }
+.gssg-login .btn--primary:focus-visible {
+  box-shadow: 0 0 0 3px color-mix(in oklab, var(--primary) 30%, transparent); outline: none;
+}
+.gssg-login .btn--primary[disabled] { opacity: 0.55; cursor: not-allowed; }
+.gssg-login .btn--ghost {
+  background: transparent; color: var(--text-muted);
+  height: 36px; padding: 0 12px; font-size: 13px; font-weight: 500;
+}
+.gssg-login .btn--ghost:hover { background: var(--surface-tinted); color: var(--text); }
+.gssg-login .btn--link {
+  background: transparent; color: var(--primary); padding: 0; height: auto;
+  font-size: 13px; font-weight: 500;
+}
+.gssg-login .btn--link:hover { text-decoration: underline; text-underline-offset: 3px; }
+.gssg-login .spin {
+  width: 14px; height: 14px; border-radius: 50%;
+  border: 1.8px solid currentColor; border-top-color: transparent;
+  animation: gssg-spin 0.7s linear infinite; flex-shrink: 0;
+}
+
+/* ── Footer row ── */
+.gssg-login .card__foot {
+  display: flex; align-items: center; justify-content: space-between;
+  padding-top: 14px; border-top: 1px solid var(--hairline); margin-top: 4px;
+  font-size: 12.5px; color: var(--text-muted);
+}
+
+/* ── User card (picked account) ── */
+.gssg-login .user-card {
+  display: flex; align-items: center; gap: 12px; padding: 12px 14px;
+  background: var(--surface-tinted); border-radius: var(--radius-md);
+  border: 1px solid var(--hairline);
+}
+.gssg-login .user-card__ava {
+  width: 40px; height: 40px; border-radius: 99px;
+  background: var(--primary); color: #fff;
+  display: inline-flex; align-items: center; justify-content: center;
+  font-family: var(--font-mono); font-size: 13px; font-weight: 600; flex-shrink: 0;
+}
+.gssg-login .user-card__body { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1; }
+.gssg-login .user-card__name {
+  font-size: 14px; font-weight: 600; color: var(--text);
+  display: flex; align-items: center; gap: 8px;
+}
+.gssg-login .user-card__meta {
+  font-size: 11.5px; color: var(--text-muted);
+  display: flex; align-items: center; gap: 8px;
+  font-family: var(--font-mono); letter-spacing: 0.01em;
+}
+.gssg-login .user-card__meta .dot { width: 3px; height: 3px; border-radius: 99px; background: var(--text-faint); }
+.gssg-login .user-card__switch {
+  background: transparent; border: 0; color: var(--primary); font-family: inherit;
+  font-size: 12px; font-weight: 500; cursor: pointer; padding: 4px 8px; border-radius: 8px;
+  transition: background 120ms;
+}
+.gssg-login .user-card__switch:hover { background: var(--surface); }
+.gssg-login .role-chip {
+  display: inline-flex; align-items: center; padding: 1px 8px; border-radius: var(--radius-pill);
+  font-size: 9.5px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase;
+  background: var(--primary-soft); color: var(--primary);
+}
+
+/* ── Account picker ── */
+.gssg-login .picker { display: flex; flex-direction: column; gap: 8px; }
+.gssg-login .picker__row {
+  display: flex; align-items: center; gap: 12px; padding: 10px 12px;
+  border-radius: var(--radius-md); background: var(--surface);
+  border: 1px solid var(--hairline); cursor: pointer; text-align: start;
+  font-family: inherit; position: relative;
+  transition: background 150ms, border-color 150ms, transform 150ms;
+}
+.gssg-login .picker__row:hover {
+  background: var(--surface-tinted); border-color: var(--border-strong); transform: translateX(2px);
+}
+[dir="rtl"] .gssg-login .picker__row:hover { transform: translateX(-2px); }
+.gssg-login .picker__ava {
+  width: 36px; height: 36px; border-radius: 99px; color: #fff;
+  display: inline-flex; align-items: center; justify-content: center;
+  font-family: var(--font-mono); font-size: 12px; font-weight: 600; flex-shrink: 0;
+}
+.gssg-login .picker__body { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1; }
+.gssg-login .picker__name { font-size: 13.5px; font-weight: 600; color: var(--text); }
+.gssg-login .picker__meta {
+  font-size: 11px; color: var(--text-muted); font-family: var(--font-mono);
+  display: flex; align-items: center; gap: 6px;
+}
+.gssg-login .picker__chev { color: var(--text-faint); transition: transform 200ms; display: inline-flex; }
+.gssg-login .picker__row:hover .picker__chev { transform: translateX(2px); color: var(--primary); }
+[dir="rtl"] .gssg-login .picker__chev { transform: scaleX(-1); }
+[dir="rtl"] .gssg-login .picker__row:hover .picker__chev { transform: translateX(-2px) scaleX(-1); }
+
+/* ── Info / locked / forgot panels ── */
+.gssg-login .info {
+  padding: 14px 16px; border-radius: var(--radius-md);
+  background: var(--accent-soft);
+  border: 1px solid color-mix(in oklab, var(--accent) 25%, transparent);
+  display: flex; gap: 12px;
+}
+.gssg-login .info--ok {
+  background: var(--success-soft);
+  border-color: color-mix(in oklab, var(--success) 25%, transparent);
+}
+.gssg-login .info__icon { color: var(--accent); flex-shrink: 0; margin-top: 1px; display: inline-flex; }
+.gssg-login .info--ok .info__icon { color: var(--success); }
+.gssg-login .info__text { font-size: 12.5px; color: var(--text); line-height: 1.55; }
+
+/* ── IT contact ── */
+.gssg-login .it-contact {
+  display: flex; flex-direction: column; gap: 10px; padding: 14px 16px;
+  border-radius: var(--radius-md); background: var(--surface-tinted);
+  border: 1px solid var(--hairline);
+}
+.gssg-login .it-contact__head {
+  font-size: 10.5px; font-weight: 600; letter-spacing: 0.08em;
+  text-transform: uppercase; color: var(--text-muted);
+}
+.gssg-login .it-contact__rows { display: flex; flex-direction: column; gap: 8px; }
+.gssg-login .it-contact__row {
+  display: flex; align-items: center; gap: 10px; font-size: 13px; color: var(--text);
+}
+.gssg-login .it-contact__row svg { color: var(--text-faint); flex-shrink: 0; }
+.gssg-login .it-contact__row b { font-family: var(--font-mono); font-weight: 500; }
+.gssg-login .it-contact__copy {
+  margin-inline-start: auto; padding: 2px 8px; border-radius: 6px;
+  background: var(--surface); border: 1px solid var(--hairline);
+  font-size: 10.5px; color: var(--text-muted); cursor: pointer; font-family: inherit;
+  transition: background 120ms, color 120ms, border-color 120ms;
+}
+.gssg-login .it-contact__copy:hover { color: var(--primary); border-color: var(--primary); }
+
+/* ── Steps strap (request access) ── */
+.gssg-login .steps {
+  display: flex; gap: 6px; padding: 4px 0 2px; align-items: center;
+  font-size: 10px; letter-spacing: 0.06em; text-transform: uppercase; font-weight: 600;
+  color: var(--text-faint);
+}
+.gssg-login .steps span { display: inline-flex; align-items: center; gap: 6px; }
+.gssg-login .steps span::before {
+  content: ""; width: 14px; height: 14px; border-radius: 99px; background: var(--border);
+  display: inline-flex;
+}
+.gssg-login .steps span[data-active="true"] { color: var(--primary); }
+.gssg-login .steps span[data-active="true"]::before { background: var(--primary); }
+.gssg-login .steps__sep { width: 16px; height: 1px; background: var(--border); }
+
+/* ── Stage footer + small print ── */
+.gssg-login .stage-footer {
+  position: absolute; bottom: 16px; inset-inline: 0; text-align: center;
+  font-size: 11px; color: var(--text-faint); font-family: var(--font-mono);
+  letter-spacing: 0.04em; pointer-events: none;
+}
+.gssg-login .small-print {
+  font-size: 11px; color: var(--text-faint); text-align: center; margin-top: 14px;
+  letter-spacing: 0.01em;
+}
+
+[dir="rtl"] .gssg-login .flip-x { transform: scaleX(-1); }
+
+@keyframes gssg-card-rise {
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes gssg-pulse-dot { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+@keyframes gssg-spin { to { transform: rotate(360deg); } }
+
+@media (prefers-reduced-motion: reduce) {
+  .gssg-login .card { animation: none; }
+  .gssg-login .hero-band__meta-dot { animation: none; }
+  .gssg-login .spin { animation-duration: 1.4s; }
+}
+
+/* ── Mobile — below md (767px) ──────────────────────────────────────────────
+   Desktop (≥768px) layout is completely unchanged; every rule here is
+   additive and scoped to max-width: 767px only.
+   ────────────────────────────────────────────────────────────────────────── */
+@media (max-width: 767px) {
+
+  /* 1. Top-chrome: collapse to a transparent overlay so only the lang pill
+        is visible; it floats at the end of the hero header area. */
+  .gssg-login .top-chrome {
+    position: absolute;
+    inset-inline-end: 0;
+    top: 0;
+    /* wide enough for the lang pill only; height matches lang pill */
+    height: auto;
+    background: transparent;
+    border-bottom: none;
+    padding: 12px 14px;
+    z-index: 10;
+    /* Only the lang button needs to be visible */
+    gap: 0;
+    justify-content: flex-end;
+  }
+
+  /* Hide desktop-only chrome items */
+  .gssg-login .top-chrome__brand,
+  .gssg-login .top-chrome__eyebrow,
+  .gssg-login .top-chrome__spacer {
+    display: none;
+  }
+
+  /* Style the lang pill for hero contrast (white-on-dark) */
+  .gssg-login .top-chrome__lang {
+    background: rgba(255, 255, 255, 0.14);
+    color: #fff;
+    border-radius: 99px;
+    font-size: 12px;
+    padding: 6px 12px;
+  }
+  .gssg-login .top-chrome__lang:hover {
+    background: rgba(255, 255, 255, 0.25);
+  }
+
+  /* 2. Stage: remove desktop horizontal padding; stack vertically */
+  .gssg-login .stage {
+    padding: 0 0 48px;
+    min-height: calc(100vh);
+  }
+
+  /* 3. Hero band: compact height, vertical stack, add crest badge via
+        ::before pseudo-element (logo image in a rounded tile). */
+  .gssg-login .hero-band {
+    margin: 0;
+    height: auto;
+    min-height: 130px;
+    padding: 22px 18px 44px; /* extra bottom padding so card overlaps */
+    flex-direction: column;
+    justify-content: flex-end;
+    align-items: flex-start;
+    gap: 0;
+  }
+
+  /* Crest tile shown only on mobile — rendered as a pseudo-element
+     so the TSX markup is untouched */
+  .gssg-login .hero-band::before {
+    content: '';
+    display: block;
+    width: 50px;
+    height: 50px;
+    border-radius: 14px;
+    background:
+      rgba(255, 255, 255, 0.12)
+      url('/brand/gssg-logo.png') center / 36px 36px no-repeat;
+    box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.2);
+    margin-bottom: 14px;
+    flex-shrink: 0;
+  }
+
+  /* Hero title: smaller on mobile */
+  .gssg-login .hero-band__title {
+    font-size: 22px;
+    max-width: none;
+  }
+
+  /* Hero sub: tighten */
+  .gssg-login .hero-band__sub {
+    font-size: 12px;
+    margin-top: 6px;
+    max-width: 30ch;
+  }
+
+  /* Status meta pill: keep top-end but adjust position for no top-chrome */
+  .gssg-login .hero-band__meta {
+    top: 14px;
+    inset-inline-end: 14px;
+  }
+
+  /* 4. Card wrap: remove the large negative overlap; use a smaller one
+        so the card feels "lifted" over the hero bottom */
+  .gssg-login .card-wrap {
+    margin-top: -28px;
+    padding: 0 16px;
+  }
+
+  /* 5. Card: full-width, tighter padding */
+  .gssg-login .card {
+    width: 100%;
+    max-width: none;
+    padding: 20px 18px 18px;
+    gap: 14px;
+    border-radius: var(--radius-lg);
+  }
+
+  /* Card title smaller on mobile */
+  .gssg-login .card__title {
+    font-size: 18px;
+  }
+
+  /* 6. Fields: slightly taller tap targets on mobile */
+  .gssg-login .field__inp {
+    height: 46px;
+  }
+
+  /* 7. Primary button: taller tap target */
+  .gssg-login .btn--primary {
+    height: 48px;
+    font-size: 15px;
+  }
+
+  /* 8. Card footer: allow wrapping on very small phones */
+  .gssg-login .card__foot {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  /* 9. "or" divider (shown between submit and request access) —
+        add a visual divider between primary and secondary actions
+        using the existing card__foot separator line. The design shows
+        an "or" divider + outlined request button; we approximate with
+        the existing footer separator. No extra markup needed. */
+
+  /* 10. Stage footer: hide (the hero footprint already has the meta pill) */
+  .gssg-login .stage-footer {
+    display: none;
+  }
+
+  /* 11. Small print: tighten */
+  .gssg-login .small-print {
+    margin: 10px 16px 0;
+    text-align: center;
+  }
+
+  /* 12. Picker rows: full-width tap zone */
+  .gssg-login .picker__row {
+    padding: 12px 10px;
+  }
+
+  /* RTL: flip-x arrow direction is already logical; no override needed */
+}
+

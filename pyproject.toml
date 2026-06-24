@@ -1,0 +1,99 @@
+[project]
+name = "gssg-manager"
+version = "4.0.0a0"
+description = "GSSG Manager — local FastAPI + React + pywebview app"
+requires-python = ">=3.12,<3.13"
+readme = "README.md"
+dependencies = [
+    "pytesseract>=0.3.13",
+    "Pillow>=12.2.0",
+    "mrz>=0.6.2",
+    "rapidfuzz>=3.14.5",
+    "aztec-code-generator>=0.12",
+    "zxing-cpp>=3.0.0",
+    "pywebpush>=2.0.0",
+]
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["backend"]
+include = ["app*"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+src = ["backend"]
+extend-exclude = ["venv", "frontend", "data", "output"]
+
+[tool.ruff.lint]
+select = [
+    "E",   # pycodestyle errors
+    "W",   # pycodestyle warnings
+    "F",   # pyflakes
+    "I",   # isort
+    "B",   # flake8-bugbear
+    "UP",  # pyupgrade
+    "SIM", # flake8-simplify
+    "RUF", # ruff-specific
+]
+ignore = ["E501"]  # line length is enforced by formatter
+
+[tool.ruff.lint.per-file-ignores]
+"backend/tests/**" = ["B011"]
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+files = ["backend/app", "backend/main.py"]
+exclude = ["venv", "frontend", "data", "backend/tests"]
+plugins = ["pydantic.mypy"]
+
+[[tool.mypy.overrides]]
+module = [
+    "webview",
+    "webview.*",
+    "docx2pdf",
+    "win32com",
+    "win32com.*",
+    "docxtpl",
+    "openpyxl",
+    "openpyxl.*",
+    "fitz",
+    "fitz.*",
+    "lxml",
+    "lxml.*",
+    "apscheduler",
+    "apscheduler.*",
+    "mrz",
+    "mrz.*",
+    "pytesseract",
+    "aztec_code_generator",
+    "zxingcpp",
+    "py_vapid",
+    "py_vapid.*",
+    "pywebpush",
+    "pywebpush.*",
+    "http_ece",
+]
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+minversion = "7.0"
+testpaths = ["backend/tests"]
+pythonpath = ["backend"]
+addopts = "-ra --strict-markers --strict-config"
+filterwarnings = [
+    "error",
+    "ignore::DeprecationWarning",
+]
+
+[tool.coverage.run]
+source = ["backend/app"]
+branch = true
+
+[tool.coverage.report]
+show_missing = true
+skip_covered = false

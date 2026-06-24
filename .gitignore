@@ -1,0 +1,96 @@
+# Python
+venv/
+.venv/
+__pycache__/
+*.py[cod]
+*$py.class
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+.coverage
+htmlcov/
+*.egg-info/
+
+# Frontend
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/
+
+# Built artifacts (frontend → backend bundle)
+backend/app/static/assets/
+backend/app/static/index.html
+
+# Runtime data
+data/
+output/
+*.bak
+
+# Scratch / throwaway artifacts + local PII test docs (never commit real ID/medical scans)
+.tmp/
+
+# Env / secrets
+.env
+.env.local
+
+# Off-DB secret keys — NEVER commit these
+data/.vapid_key
+data/.email_key
+
+# Editor
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+Thumbs.db
+.DS_Store
+
+# Claude Code locally-installed skills (tooling, not project source)
+.claude/skills/
+# …but track the hand-authored, team-shared skills (re-include the dir, re-ignore
+# every subdir, then allow ours):
+!.claude/skills/
+.claude/skills/*/
+!.claude/skills/db-sync/
+!.claude/skills/verify-ui/
+
+# ruflo / claude-flow generated scaffolding + state (tooling, regenerable via `ruflo init upgrade`)
+.claude/agents/
+.claude/commands/
+.claude/helpers/
+.claude-flow/
+# …but track the hand-authored, team-shared reviewer subagents:
+!.claude/agents/
+.claude/agents/*
+!.claude/agents/bilingual-rtl-reviewer.md
+!.claude/agents/migration-parity-reviewer.md
+
+# Stray bootstrap binary (uv copy used to rebuild venv)
+/uv.exe
+
+# Logs (uvicorn dev output, npm, etc.)
+*.log
+
+# Playwright MCP debug artifacts (console logs, page snapshots, screenshots)
+.playwright-mcp/
+
+# Design handoff bundles (Claude Design exports — not source)
+GSSG Manager Design System-handoff/
+GSSG Manager Design System-handoff.zip
+.design-package/
+
+# Audit verification screenshots (heavy PNG evidence — findings .md + index.html stay tracked)
+audit-report/screens/
+
+# Skill scratch dirs + one-off review/report artifacts (heavy, not source)
+.superpowers/brainstorm/
+*-report.html
+*-review.html
+report-assets/
+audit-report/weekly-health-*.html
+app-form-leave.yml
+.superpowers/
+
+# impeccable /live session state (local tooling)
+**/.impeccable/

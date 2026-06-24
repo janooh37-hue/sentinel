@@ -1,0 +1,625 @@
+@import "tailwindcss";
+@plugin "tailwindcss-animate";
+
+/* --- Fonts (bundled offline via @fontsource) ------------------------------- */
+@import "@fontsource-variable/inter/index.css";
+@import "@fontsource/ibm-plex-mono/400.css";
+@import "@fontsource/ibm-plex-mono/500.css";
+/* 600/700: bold mono (figure counts, day totals) — without these the browser
+   fakes the weight from the 500 face and the numerals look smeared. */
+@import "@fontsource/ibm-plex-mono/600.css";
+@import "@fontsource/ibm-plex-mono/700.css";
+@import "@fontsource/noto-sans-arabic/400.css";
+@import "@fontsource/noto-sans-arabic/500.css";
+@import "@fontsource/noto-sans-arabic/700.css";
+
+/* --- Design tokens --------------------------------------------------------- */
+
+@theme inline {
+  --color-background: var(--bg);
+  --color-foreground: var(--text);
+  --color-surface: var(--surface);
+  --color-surface-raised: var(--surface-raised);
+  --color-surface-tinted: var(--surface-tinted);
+  --color-primary: var(--primary);
+  --color-primary-hover: var(--primary-hover);
+  --color-primary-soft: var(--primary-soft);
+  --color-primary-on-soft: var(--primary-on-soft);
+  --color-primary-foreground: var(--on-primary);
+  --color-accent: var(--accent);
+  --color-accent-hover: var(--accent-hover);
+  --color-accent-soft: var(--accent-soft);
+  --color-success: var(--success);
+  --color-success-soft: var(--success-soft);
+  --color-warning: var(--warning);
+  --color-warning-foreground: var(--warning-foreground);
+  --color-warning-soft: var(--warning-soft);
+  --color-info: var(--info);
+  --color-info-soft: var(--info-soft);
+  --color-rail: var(--rail);
+  --color-rail-2: var(--rail-2);
+  --color-rail-3: var(--rail-3);
+  --color-rail-text: var(--rail-text);
+  --color-rail-faint: var(--rail-faint);
+  --color-rail-line: var(--rail-line);
+  --color-rail-success: var(--rail-success);
+  --color-rail-warning: var(--rail-warning);
+  --color-green-grad-a: var(--green-grad-a);
+  --color-green-grad-b: var(--green-grad-b);
+  --color-amber-grad-a: var(--amber-grad-a);
+  --color-amber-grad-b: var(--amber-grad-b);
+  --color-blue-grad-a: var(--blue-grad-a);
+  --color-blue-grad-b: var(--blue-grad-b);
+  --color-muted-foreground: var(--text-muted);
+  --color-faint: var(--text-faint);
+  --color-border: var(--border);
+  --color-border-strong: var(--border-strong);
+  --color-hairline: var(--hairline);
+  --color-ring: var(--primary);
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-pill: 99px;
+  --font-sans: "Inter Variable", "Inter", ui-sans-serif, system-ui, sans-serif;
+  /* Noto Sans Arabic sits before the generic fallback: Plex Mono has no
+     Arabic glyphs, so Arabic words inside mono runs (figure captions, group
+     subheaders, totals) fall back to the app's Arabic face instead of a
+     random system font — the prototype's `[dir="rtl"] .mono` behavior. */
+  --font-mono: "IBM Plex Mono", ui-monospace, "SF Mono", Consolas, "Noto Sans Arabic", monospace;
+  --font-arabic: "Noto Sans Arabic", "Inter Variable", system-ui, sans-serif;
+}
+
+:root {
+  --bg: #f5f4f1;
+  --surface: #ffffff;
+  --surface-raised: #fafaf6;
+  --surface-tinted: #f0eee8;
+  --primary: #0d2845;
+  --primary-hover: #1d3a5e;
+  --primary-soft: #e8edf3;
+  --primary-on-soft: #0d2845;
+  --on-primary: #ffffff;
+  --accent: #c8102e;
+  --accent-hover: #a30d24;
+  --accent-soft: #fbe5e8;
+  --success: #047857;
+  --success-soft: #d6f0e4;
+  --warning: #92400e;
+  --warning-foreground: #ffffff;
+  --warning-soft: #fbedd8;
+  --info: #1d4ed8;
+  --info-soft: #e0e8f8;
+  --text: #1c1f24;
+  --text-muted: #5a6068;
+  --text-faint: #8b9098;
+  --border: #e6e4dd;
+  --border-strong: #d4d1c8;
+  --hairline: #efece5;
+  --hero-grad: linear-gradient(135deg, #0a1f3a 0%, #0d2845 50%, #1d3a5e 100%);
+  --mountain: rgba(13, 40, 69, 0.18);
+
+  /* Motion system (per spacing-motion.html). Durations map to the spec's
+     three tiers; out-expo is the default easing for entrances/hovers/pops. */
+  --motion-fast: 120ms;
+  --motion-base: 200ms;
+  /* Route/page entrance. Trimmed from 420ms → 220ms: this replays on every
+     navigation (dozens/day), so it must read as snappy, not staged (Emil's
+     <300ms ceiling for daily-use tools). Curve unchanged. */
+  --motion-entrance: 220ms;
+  --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-spring: cubic-bezier(0.34, 1.35, 0.64, 1);
+  /* iOS-native sheet/drawer curve (Vaul). Used for the mobile nav drawer and
+     the bottom-sheet approval dialog so panel slides feel platform-familiar. */
+  --ease-ios: cubic-bezier(0.32, 0.72, 0, 1);
+
+  /* Ledger Outlook rail + direction-avatar gradients (from the signed-off
+     prototype docs/prototypes/ledger-outlook-redesign.html :root). The rail is
+     a deeper navy than the app chrome for the Outlook folder-rail feel; the
+     grad pairs colour the direction-keyed message-list avatars (green=incoming,
+     amber=outgoing, blue=internal). Semantic — never hardcode these hex in
+     components. */
+  --rail: #16243a;
+  --rail-2: #1d3150;
+  --rail-3: #243c5f;
+  --rail-text: #c5d2e4;
+  --rail-faint: #7e93b3;
+  --rail-line: #2c405f;
+  --rail-success: #34d399;
+  --rail-warning: #fbbf24;
+  --green-grad-a: #10b981;
+  --green-grad-b: #047857;
+  --amber-grad-a: #f59e0b;
+  --amber-grad-b: #b45309;
+  --blue-grad-a: #3b82f6;
+  --blue-grad-b: #1e3a8a;
+
+  /* Tip card (reading-pane empty-state 💡) — the prototype's indigo .tipcard,
+     tokenized so the component carries no inline hex. */
+  --tip-grad-a: #eef2ff;
+  --tip-grad-b: #f5f3ff;
+  --tip-border: #e0e0f5;
+  --tip-text: #43439a;
+  --tip-strong: #2a2a7a;
+  --tip-dot: #c5c5e8;
+  --tip-dot-active: #6a6ad0;
+}
+
+[data-theme="dark"] {
+  --bg: #0a0e18;
+  --surface: #131826;
+  --surface-raised: #1a2034;
+  --surface-tinted: #1f263b;
+  --primary: #5778cf;
+  --primary-hover: #7491db;
+  --primary-soft: #1c2849;
+  --primary-on-soft: #7491db;
+  --on-primary: #0a0e18;
+  --accent: #ef4858;
+  --accent-hover: #f56b78;
+  --accent-soft: #3a1820;
+  --success: #34d399;
+  --success-soft: #142d23;
+  --warning: #fbbf24;
+  --warning-foreground: #1c1f24;
+  --warning-soft: #3a2a10;
+  --info: #60a5fa;
+  --info-soft: #1c2940;
+  --text: #e6e9f2;
+  --text-muted: #8a93a7;
+  --text-faint: #5f6678;
+  --border: #2a3148;
+  --border-strong: #3a4360;
+  --hairline: #1f263b;
+  --hero-grad: linear-gradient(135deg, #050816 0%, #0d1428 50%, #1a2540 100%);
+  --mountain: rgba(87, 120, 207, 0.22);
+
+  /* Ledger Outlook rail — already a deep navy in the light theme, so it sits
+     naturally in dark mode; nudge it a touch darker than the dark surface so the
+     rail still reads as a distinct pane. Gradient anchors shift to the brighter
+     dark-palette variants for avatar contrast against the dark list. */
+  --rail: #0e1726;
+  --rail-2: #15233b;
+  --rail-3: #1c2e49;
+  --rail-text: #aebcd2;
+  --rail-faint: #6b7c98;
+  --rail-line: #233048;
+  --rail-success: #34d399;
+  --rail-warning: #fbbf24;
+  --green-grad-a: #34d399;
+  --green-grad-b: #059669;
+  --amber-grad-a: #fbbf24;
+  --amber-grad-b: #d97706;
+  --blue-grad-a: #60a5fa;
+  --blue-grad-b: #2563eb;
+
+  /* Tip card — dark indigo so it reads on near-black without glare. */
+  --tip-grad-a: #1b1b3a;
+  --tip-grad-b: #222247;
+  --tip-border: #353565;
+  --tip-text: #c7c7f0;
+  --tip-strong: #e2e2ff;
+  --tip-dot: #45456e;
+  --tip-dot-active: #8f8fe0;
+}
+
+/* Discrete font-scale stops. The AaSlider snaps to one of these four
+   values, but legacy persisted values (13–15, 17–18, 20–23) are also
+   mapped to the nearest stop so an out-of-band setting still renders
+   sensibly without a server round-trip. */
+[data-font-scale="13"],
+[data-font-scale="14"],
+[data-font-scale="15"],
+[data-font-scale="16"] { font-size: 16px; }
+[data-font-scale="17"],
+[data-font-scale="18"],
+[data-font-scale="19"] { font-size: 19px; }
+[data-font-scale="20"],
+[data-font-scale="21"],
+[data-font-scale="22"] { font-size: 22px; }
+[data-font-scale="23"],
+[data-font-scale="24"] { font-size: 24px; }
+
+/* TopNav chrome at large content scales (UI-02). The nav is a dense row of
+   em-sized controls (logo, 5 links, then AaSlider + lang + theme + scan +
+   baskets + bell + settings + avatar). Left to inherit the 22/24px content
+   scale it blows past the viewport and the whole PAGE scrolls horizontally —
+   counterproductive for the low-vision audience the AaSlider serves.
+   Two-pronged, applied only at the upper scale stops so the default layout is
+   untouched:
+     1. Cap the header's OWN base font (chrome scales independently of content —
+        page headings/tables/forms still grow).
+     2. Let the header wrap and tighten its fixed gaps/padding, so when the row
+        still can't fit, the action cluster flows onto a second line instead of
+        forcing a horizontal scrollbar. Every icon/wayfinding cue is kept. */
+[data-font-scale="20"] [data-topnav],
+[data-font-scale="21"] [data-topnav],
+[data-font-scale="22"] [data-topnav],
+[data-font-scale="23"] [data-topnav],
+[data-font-scale="24"] [data-topnav] {
+  font-size: 18px;
+  flex-wrap: wrap;
+  gap: 0.625rem 1.25rem;
+  padding-left: 1.25rem;
+  padding-right: 1.25rem;
+}
+[data-font-scale="20"] [data-topnav] > nav,
+[data-font-scale="21"] [data-topnav] > nav,
+[data-font-scale="22"] [data-topnav] > nav,
+[data-font-scale="23"] [data-topnav] > nav,
+[data-font-scale="24"] [data-topnav] > nav {
+  margin-inline-start: 0.25rem;
+  flex: 1 1 auto;
+}
+[data-font-scale="20"] [data-topnav] > .ms-auto,
+[data-font-scale="21"] [data-topnav] > .ms-auto,
+[data-font-scale="22"] [data-topnav] > .ms-auto,
+[data-font-scale="23"] [data-topnav] > .ms-auto,
+[data-font-scale="24"] [data-topnav] > .ms-auto {
+  gap: 0.875rem;
+}
+
+* {
+  border-color: var(--border);
+}
+
+html, body, #root {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-sans);
+  font-feature-settings: "ss01", "cv11";
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+/* Arabic content uses the Naskh family. The `:lang(ar)` selector picks it up
+   automatically once <html lang="ar"> is set by i18n.ts. */
+:lang(ar),
+[dir="rtl"] {
+  font-family: var(--font-arabic);
+}
+
+/* Email bodies render in the SENDER's own fonts ("as sent"), never the app UI
+   font. The reading pane wraps Arabic mail in `dir="rtl"`, which would otherwise
+   pull `--font-arabic` (our Naskh UI face) into the message — so un-styled email
+   text (e.g. a Word/Outlook table's English cells) renders in the wrong face.
+   Scope an email-safe default here; inline fonts the email declares still win.
+   The descendant selectors outrank the global `[dir="rtl"]` rule above. */
+.email-body,
+.email-body [dir="rtl"],
+.email-body :lang(ar) {
+  font-family: Arial, "Segoe UI", "Noto Sans Arabic", sans-serif;
+}
+
+/* Tabular numerics for IDs, dates, and counts. Reset font-feature-settings so
+   IBM Plex Mono does not inherit the body's "ss01" (Inter slashed-zero set)
+   which in Plex Mono activates a slashed 0 that reads as a null/error glyph.
+   "tnum" keeps tabular figures; "ss01" and "cv11" are dropped. */
+.font-mono,
+[class*="tabular"] {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum";
+}
+
+/* Discreet scrollbars — Oracle/Workday-style. */
+*::-webkit-scrollbar { width: 8px; height: 8px; }
+*::-webkit-scrollbar-track { background: transparent; }
+*::-webkit-scrollbar-thumb {
+  background: var(--border-strong);
+  border-radius: 4px;
+  border: 2px solid var(--bg);
+}
+*::-webkit-scrollbar-thumb:hover { background: var(--text-muted); }
+
+/* Focus ring — single, calm, no animation. */
+:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+/* ─── AaSlider thumb (TopNav font-scale picker) ─── */
+.aa-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--primary);
+  border: 2px solid var(--surface);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.2);
+  cursor: pointer;
+  transition: transform 0.15s;
+}
+.aa-slider::-webkit-slider-thumb:hover { transform: scale(1.2); }
+.aa-slider::-moz-range-thumb {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--primary);
+  border: 2px solid var(--surface);
+  cursor: pointer;
+}
+
+
+/* ─── Smart-link chips (employee/book refs auto-detected in email bodies) ─── */
+[data-smart-link='employee'] {
+  display: inline;
+  text-decoration: none;
+  padding: 0 0.25rem;
+  border-radius: 0.25rem;
+  background: color-mix(in oklab, var(--primary) 10%, transparent);
+  color: var(--primary);
+  font-weight: 600;
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  transition: background 0.12s;
+}
+[data-smart-link='employee']:hover {
+  background: color-mix(in oklab, var(--primary) 22%, transparent);
+}
+[data-smart-link='book'] {
+  display: inline;
+  text-decoration: none;
+  padding: 0 0.25rem;
+  border-radius: 0.25rem;
+  background: color-mix(in oklab, var(--accent) 10%, transparent);
+  color: var(--accent);
+  font-weight: 600;
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  transition: background 0.12s;
+}
+[data-smart-link='book']:hover {
+  background: color-mix(in oklab, var(--accent) 22%, transparent);
+}
+[data-smart-link]:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px color-mix(in oklab, var(--primary) 45%, transparent);
+  border-radius: 0.25rem;
+}
+
+/* ─── Motion utilities (shared entrance / stagger / shimmer) ─────────────────
+   Replaces the per-page inline <style> keyframes that Dashboard (dash-anim)
+   and Services (svc-anim) used to duplicate. Reduced-motion guarded once. */
+@keyframes gssg-fade-up {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes gssg-shimmer {
+  from { background-position: -120% 0; }
+  to   { background-position: 120% 0; }
+}
+
+.anim-fade-up {
+  animation: gssg-fade-up var(--motion-entrance) var(--ease-out-expo) both;
+}
+
+/* Origin-aware popover enter (hand-rolled popovers that mount via `{open && …}`
+   and so can't use Radix data-state). Grows from the trigger corner: fade +
+   small translate down + slight scale. Enter-only by design — exits on these
+   conditional renders are a quick unmount; a fast fade-in is the polish that
+   matters (Jakub: exits subtler than enters). Set --pop-origin per consumer. */
+@keyframes gssg-pop-in {
+  from { opacity: 0; transform: translateY(-6px) scale(0.97); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+.anim-pop-in {
+  transform-origin: var(--pop-origin, top center);
+  animation: gssg-pop-in 180ms var(--ease-out-expo) both;
+}
+/* Popovers anchored to the inline-end edge grow from that corner in both
+   writing directions. */
+.anim-pop-in-end { --pop-origin: top right; }
+[dir="rtl"] .anim-pop-in-end { --pop-origin: top left; }
+
+/* Gentle scrim fade for full-screen overlays (lock screen, shortcuts) so they
+   don't hard-cut over the whole app. Opacity-only — no vestibular zoom. */
+@keyframes gssg-scrim-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+.anim-scrim-in {
+  animation: gssg-scrim-in 200ms ease-out both;
+}
+
+/* Contextual icon swap (eye show/hide, copy→check). Replays on key change so
+   the state change registers instead of silently swapping (Jakub). */
+@keyframes gssg-icon-swap {
+  from { opacity: 0; transform: scale(0.7); filter: blur(2px); }
+  to   { opacity: 1; transform: scale(1); filter: blur(0); }
+}
+.anim-icon-swap {
+  animation: gssg-icon-swap 150ms var(--ease-out-expo) both;
+}
+
+/* Empty-state reveal (Jhey, selective). One-shot, gently staggered: the icon
+   settles, then the message fades up. `backwards` fill prevents the flash
+   before the delayed step starts. Reserved for rare first-time-ish surfaces
+   (the empty notifications inbox) — opt-in via the EmptyState `animated` prop. */
+@keyframes gssg-empty-icon {
+  from { opacity: 0; transform: scale(0.85); }
+  to   { opacity: 1; transform: scale(1); }
+}
+.anim-empty > .anim-empty-icon {
+  animation: gssg-empty-icon 360ms var(--ease-spring) backwards;
+}
+.anim-empty > .anim-empty-text {
+  animation: gssg-fade-up 320ms var(--ease-out-expo) 90ms backwards;
+}
+
+/* Approval-submitted milestone: a brief one-shot settle on the success toast's
+   check icon. Approvals are rare (frequency gate), so a touch of celebration
+   fits. Spring settle, no loop. */
+@keyframes gssg-check-settle {
+  0%   { transform: scale(0.3) rotate(-12deg); opacity: 0; }
+  55%  { transform: scale(1.18) rotate(0deg); opacity: 1; }
+  100% { transform: scale(1) rotate(0deg); opacity: 1; }
+}
+.anim-check-settle {
+  animation: gssg-check-settle 460ms var(--ease-spring) both;
+}
+
+/* Stagger a list's direct children; consumers set `--i` per item to offset. */
+.anim-stagger > * {
+  animation: gssg-fade-up var(--motion-entrance) var(--ease-out-expo) both;
+  animation-delay: calc(var(--i, 0) * 40ms);
+}
+
+.skeleton-shimmer {
+  background: linear-gradient(
+    90deg,
+    var(--surface-tinted) 0%,
+    var(--hairline) 40%,
+    var(--surface-tinted) 80%
+  );
+  background-size: 200% 100%;
+  animation: gssg-shimmer 1.5s linear infinite;
+}
+
+/* ─── Panel motion (shared sheet/drawer + bottom-sheet) ──────────────────────
+   Direction-aware so the slide originates from the inline-start edge in both
+   LTR (from the left) and RTL (from the right). Drawer uses the iOS curve so
+   it reads as platform-familiar (Emil/Vaul). Reduced-motion: the .animate-in
+   guard above neutralizes these; we also disable the keyframes here. */
+@keyframes gssg-sheet-in {
+  from { transform: translateX(var(--sheet-from, -100%)); }
+  to   { transform: translateX(0); }
+}
+@keyframes gssg-sheet-out {
+  from { transform: translateX(0); }
+  to   { transform: translateX(var(--sheet-from, -100%)); }
+}
+.sheet-panel {
+  --sheet-from: -100%;
+}
+[dir="rtl"] .sheet-panel {
+  --sheet-from: 100%;
+}
+.sheet-panel[data-state="open"] {
+  animation: gssg-sheet-in 300ms var(--ease-ios) both;
+}
+.sheet-panel[data-state="closed"] {
+  animation: gssg-sheet-out 250ms var(--ease-ios) both;
+}
+
+/* Bottom sheet — slides up from the bottom edge (RTL-agnostic; vertical).
+   Scoped to the mobile viewport: above `md` the dialog is a centered modal
+   that keeps its `-translate-x/y-1/2` centering transform and animates with
+   the zoom/fade utilities instead (which only touch scale + opacity, so the
+   static centering transform is preserved). */
+@keyframes gssg-bottomsheet-in {
+  from { transform: translateY(100%); }
+  to   { transform: translateY(0); }
+}
+@keyframes gssg-bottomsheet-out {
+  from { transform: translateY(0); }
+  to   { transform: translateY(100%); }
+}
+@media (max-width: 767px) {
+  .bottom-sheet[data-state="open"] {
+    animation: gssg-bottomsheet-in 320ms var(--ease-ios) both;
+  }
+  .bottom-sheet[data-state="closed"] {
+    animation: gssg-bottomsheet-out 260ms var(--ease-ios) both;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sheet-panel[data-state],
+  .bottom-sheet[data-state] {
+    animation: none !important;
+  }
+}
+
+/* Desktop branch of the bottom-sheet dialog: zoom + fade in step with the
+   scrim (scale/opacity only, so the centering translate is preserved). */
+@media (min-width: 768px) {
+  .bottom-sheet[data-state="open"] {
+    animation: gssg-modal-in 200ms var(--ease-out-expo) both;
+  }
+  .bottom-sheet[data-state="closed"] {
+    animation: gssg-modal-out 150ms var(--ease-out-expo) both;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .bottom-sheet[data-state] { animation: none !important; }
+  }
+}
+
+/* End-anchored detail drawer (BookDetailDrawer): a bottom-sheet on mobile and a
+   full-height side panel pinned to the inline-end edge above md. Mobile reuses
+   the bottom-sheet slide-up; desktop slides in from the inline-end edge (right
+   in LTR, left in RTL). Same iOS curve as the start-edge sheet. Reduced-motion
+   guarded. */
+@keyframes gssg-drawer-end-in {
+  from { transform: translateX(var(--drawer-from, 100%)); }
+  to   { transform: translateX(0); }
+}
+@keyframes gssg-drawer-end-out {
+  from { transform: translateX(0); }
+  to   { transform: translateX(var(--drawer-from, 100%)); }
+}
+.drawer-end { --drawer-from: 100%; }
+[dir="rtl"] .drawer-end { --drawer-from: -100%; }
+@media (max-width: 767px) {
+  .drawer-end[data-state="open"]   { animation: gssg-bottomsheet-in 320ms var(--ease-ios) both; }
+  .drawer-end[data-state="closed"] { animation: gssg-bottomsheet-out 260ms var(--ease-ios) both; }
+}
+@media (min-width: 768px) {
+  .drawer-end[data-state="open"]   { animation: gssg-drawer-end-in 300ms var(--ease-ios) both; }
+  .drawer-end[data-state="closed"] { animation: gssg-drawer-end-out 250ms var(--ease-ios) both; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .drawer-end[data-state] { animation: none !important; }
+}
+
+/* Centered-modal materialize (content + scrim together). Used by the desktop
+   approval dialog and the Radix dialogs (WidgetEdit, SubmitterManager) that
+   only faded the overlay before. These boxes center via
+   `-translate-x-1/2 -translate-y-1/2`, which in Tailwind v4 emit the standalone
+   `translate:` property — a *separate*, composing property from `transform`.
+   So the keyframe must animate `transform: scale()` only; re-adding the
+   `translate(-50%,-50%)` here would stack on top of the utility's `translate:`
+   and shove the box to -100%/-100% (the upper-left anchor bug). */
+@keyframes gssg-modal-in {
+  from { opacity: 0; transform: scale(0.96); }
+  to   { opacity: 1; transform: scale(1); }
+}
+@keyframes gssg-modal-out {
+  from { opacity: 1; transform: scale(1); }
+  to   { opacity: 0; transform: scale(0.97); }
+}
+.modal-centered[data-state="open"] {
+  animation: gssg-modal-in 200ms var(--ease-out-expo) both;
+}
+.modal-centered[data-state="closed"] {
+  animation: gssg-modal-out 150ms var(--ease-out-expo) both;
+}
+@media (prefers-reduced-motion: reduce) {
+  .modal-centered[data-state] { animation: none !important; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .anim-fade-up,
+  .anim-stagger > *,
+  .anim-pop-in,
+  .anim-scrim-in,
+  .anim-icon-swap,
+  .anim-empty > .anim-empty-icon,
+  .anim-empty > .anim-empty-text,
+  .anim-check-settle,
+  .skeleton-shimmer {
+    animation: none;
+  }
+  /* tailwindcss-animate's animate-in/out utilities (dialogs, sheets, the
+     bottom-sheet, popover, select, tooltip) don't ship a reduced-motion
+     guard — neutralize them globally so every enter/exit lands instantly
+     while preserving the final state. */
+  .animate-in,
+  .animate-out {
+    animation: none !important;
+  }
+}
