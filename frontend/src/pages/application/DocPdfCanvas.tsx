@@ -18,7 +18,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { AlertCircle, Loader2 } from 'lucide-react'
+import { AlertCircle, Download, Loader2 } from 'lucide-react'
 import * as pdfjsLib from 'pdfjs-dist'
 import pdfWorkerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url'
 
@@ -46,10 +46,18 @@ function toBase64Url(url: string): string {
 
 export default function DocPdfCanvas({
   pdfUrl,
+  docxUrl,
   renderOverlay,
 }: {
   /** Inline PDF download URL, e.g. `/api/v1/documents/{id}/download?format=pdf`. */
   pdfUrl: string
+  /**
+   * Optional DOCX download URL. When the PDF fails to render (e.g. the pdf.js
+   * worker asset 404s in the packaged build), the error state offers this as a
+   * download so the operator isn't dead-ended — the same escape hatch the
+   * "PDF unavailable" state provides.
+   */
+  docxUrl?: string
   /**
    * Optional overlay slot. Receives the rendered page boxes (CSS px, relative to
    * the scroll content) and is painted absolutely inside the scroll container so
@@ -61,6 +69,11 @@ export default function DocPdfCanvas({
   const containerRef = useRef<HTMLDivElement | null>(null)
   const wrapperRef = useRef<HTMLDivElement | null>(null)
   const [status, setStatus] = useState<'loading' | 'ready' | 'error'>('loading')
+  // 'missing' = the PDF was never generated (backend 404 / PDF_NOT_AVAILABLE);
+  // 'render' = the bytes came back but pdf.js (or the worker asset) couldn't
+  // paint them. Distinct messages so operators can tell "no PDF was produced"
+  // from "the PDF is broken".
+  const [errorKind, setErrorKind] = useState<'missing' | 'render'>('render')
   const [pages, setPages] = useState<PageBox[]>([])
 
   const measure = useCallback((): void => {
@@ -83,8 +96,14 @@ export default function DocPdfCanvas({
       try {
         // Fetch base64 (text/plain) so neither IDM nor Chrome's built-in PDF
         // viewer can sniff the response and intercept it (returning empty 204).
-        const res = await fetch(toBase64Url(pdfUrl))
-        if (!res.ok) throw new Error(`HTTP ${res.status}`)
+        const res = await fetch(toBase64Url(pdfUrl), { credentials: 'same-origin' })
+        if (!res.ok) {
+          // 404 here means the backend has no PDF on disk for this doc
+          // (PDF_NOT_AVAILABLE / FILE_NOT_FOUND) — i.e. DOCX→PDF conversion
+          // produced nothing. Flag it so the error state says so plainly.
+          if (!cancelled) setErrorKind(res.status === 404 ? 'missing' : 'render')
+          throw new Error(`HTTP ${res.status}`)
+        }
         const data = base64ToBytes(await res.text())
         if (cancelled) return
         // `disableFontFace`: draw glyph outlines directly rather than via the
@@ -148,13 +167,28 @@ export default function DocPdfCanvas({
         </div>
       )}
       {status === 'error' && (
-        <div className="flex flex-1 flex-col items-center justify-center gap-2 text-muted-foreground">
+        <div className="flex flex-1 flex-col items-center justify-center gap-3 text-muted-foreground">
           <AlertCircle className="h-6 w-6" />
           <span className="text-sm">
-            {t('ledger.attachments.renderFailed', {
-              defaultValue: "Couldn't render this file",
-            })}
+            {errorKind === 'missing'
+              ? t('application.pdfNotGenerated', {
+                  defaultValue:
+                    "No PDF was generated for this document — download the DOCX instead.",
+                })
+              : t('ledger.attachments.renderFailed', {
+                  defaultValue: "Couldn't render this file",
+                })}
           </span>
+          {docxUrl && (
+            <a
+              href={docxUrl}
+              download
+              className="inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground hover:bg-primary/90"
+            >
+              <Download className="h-3.5 w-3.5" strokeWidth={1.8} />
+              {t('application.downloadDocx')}
+            </a>
+          )}
         </div>
       )}
       <div ref={wrapperRef} className="relative flex flex-col items-center">

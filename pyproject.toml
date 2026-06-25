@@ -6,12 +6,16 @@ requires-python = ">=3.12,<3.13"
 readme = "README.md"
 dependencies = [
     "pytesseract>=0.3.13",
+    "PyMuPDF>=1.24",  # fitz — every PDF rasterise / text-layer path needs it
     "Pillow>=12.2.0",
     "mrz>=0.6.2",
     "rapidfuzz>=3.14.5",
     "aztec-code-generator>=0.12",
     "zxing-cpp>=3.0.0",
     "pywebpush>=2.0.0",
+    # DOCX -> PDF (Word COM); Windows-only. See requirements.txt for the rationale.
+    "docx2pdf>=0.1.8; sys_platform == 'win32'",
+    "pywin32>=306; sys_platform == 'win32'",
 ]
 
 [build-system]

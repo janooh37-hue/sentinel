@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import io
 import math
+import os
 import shutil
 import threading
 from dataclasses import dataclass
@@ -40,8 +41,31 @@ class OcrResult:
     language: str = _LANGS
 
 
+# Standard UB-Mannheim install locations, checked when the binary is not on
+# PATH. A Windows service can launch with the PATH it inherited *before*
+# Tesseract was installed, so relying on PATH alone makes OCR spuriously
+# "unavailable" until the next full reboot — falling back to the known install
+# dir avoids that.
+_WINDOWS_TESSERACT_PATHS = (
+    r"C:\Program Files\Tesseract-OCR\tesseract.exe",
+    r"C:\Program Files (x86)\Tesseract-OCR\tesseract.exe",
+)
+
+
+def _resolve_tesseract_cmd() -> str | None:
+    """Locate the tesseract binary: PATH first, then the standard Windows
+    install dirs. Returns the command/full path, or ``None`` if not found."""
+    found = shutil.which("tesseract")
+    if found:
+        return found
+    for cand in _WINDOWS_TESSERACT_PATHS:
+        if os.path.isfile(cand):
+            return cand
+    return None
+
+
 def tesseract_available() -> bool:
-    return shutil.which("tesseract") is not None
+    return _resolve_tesseract_cmd() is not None
 
 
 def _prepare(image: Image.Image) -> Image.Image:
@@ -52,16 +76,33 @@ def _prepare(image: Image.Image) -> Image.Image:
 
 
 def extract_text(image: Image.Image) -> OcrResult:
-    if not tesseract_available():
+    cmd = _resolve_tesseract_cmd()
+    if cmd is None:
         raise OcrUnavailableError(
             "Tesseract is not installed. See docs/superpowers/ocr-server-setup.md."
         )
     import pytesseract
 
+    # Point pytesseract at the resolved binary — covers the case where it was
+    # found in the standard install dir rather than on PATH.
+    pytesseract.pytesseract.tesseract_cmd = cmd
+
     img = _prepare(image)
-    text = pytesseract.image_to_string(img, lang=_LANGS, config=_PSM)
-    # mean word confidence from the data frame, normalised 0..1
-    data = pytesseract.image_to_data(img, lang=_LANGS, config=_PSM, output_type=pytesseract.Output.DICT)
+    try:
+        text = pytesseract.image_to_string(img, lang=_LANGS, config=_PSM)
+        # mean word confidence from the data frame, normalised 0..1
+        data = pytesseract.image_to_data(
+            img, lang=_LANGS, config=_PSM, output_type=pytesseract.Output.DICT
+        )
+    except pytesseract.TesseractError as exc:
+        # Binary is present but the run failed — almost always a missing
+        # language pack (we request "ara+eng"). Surface it as "unavailable" so
+        # the API maps it to a clean 503 instead of an unhandled 500.
+        raise OcrUnavailableError(
+            f"Tesseract failed to run with languages {_LANGS!r}. The 'ara' and "
+            "'eng' language packs must both be installed. "
+            "See docs/superpowers/ocr-server-setup.md."
+        ) from exc
     confs = [int(c) for c in data.get("conf", []) if str(c).lstrip("-").isdigit() and int(c) >= 0]
     confidence = (sum(confs) / len(confs) / 100.0) if confs else 0.0
     return OcrResult(text=text, confidence=confidence)
@@ -81,7 +122,10 @@ def pdf_to_images(pdf_bytes: bytes, *, dpi: int = 200) -> list[Image.Image]:
     try:
         with fitz.open(stream=pdf_bytes, filetype="pdf") as doc:
             for page in doc:
-                pix = page.get_pixmap(dpi=dpi)
+                # alpha=False guarantees a 3-channel (RGB) pixmap so
+                # Image.frombytes("RGB", …) below never trips over a 4-byte
+                # (RGBA/CMYK) sample buffer. Mirrors vault_service's rasteriser.
+                pix = page.get_pixmap(dpi=dpi, alpha=False)
                 images.append(Image.frombytes("RGB", (pix.width, pix.height), pix.samples))
     except (fitz.FileDataError, fitz.EmptyFileError) as exc:
         raise InvalidImageError("The uploaded PDF is not readable.") from exc

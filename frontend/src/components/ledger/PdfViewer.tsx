@@ -38,7 +38,7 @@ export default function PdfViewer({
       try {
         // Fetch base64 (text/plain) so the browser never sees a %PDF body to
         // claim for its PDF stream handler; pdf.js renders the decoded bytes.
-        const res = await fetch(base64Url)
+        const res = await fetch(base64Url, { credentials: 'same-origin' })
         if (!res.ok) throw new Error(`HTTP ${res.status}`)
         const data = base64ToBytes(await res.text())
         if (cancelled) return

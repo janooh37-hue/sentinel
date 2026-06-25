@@ -393,6 +393,16 @@ def download_document(
         file_path = settings.data_dir / row.pdf_path
         media_type = "application/pdf"
         ext = ".pdf"
+    elif format == "pdf":
+        # PDF explicitly requested but conversion never produced one (e.g. a
+        # DRAFT preview on a host without Word). Return a clean signal instead
+        # of silently serving DOCX bytes mislabeled as a PDF — the caller can
+        # branch to the "PDF unavailable, download DOCX" state.
+        raise NotFoundError(
+            "PDF_NOT_AVAILABLE",
+            f"No PDF rendition exists for document {document_id}",
+            id=document_id,
+        )
     else:
         file_path = settings.data_dir / row.docx_path
         media_type = _DOCX_MEDIA_TYPE

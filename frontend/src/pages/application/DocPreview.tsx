@@ -101,7 +101,7 @@ export function DocPreview({ documents }: DocPreviewProps): React.JSX.Element {
           }
         >
           {/* key on the URL so cycling docs remounts the renderer cleanly */}
-          <DocPdfCanvas key={pdfUrl} pdfUrl={pdfUrl} />
+          <DocPdfCanvas key={pdfUrl} pdfUrl={pdfUrl} docxUrl={docxUrl} />
         </Suspense>
       ) : (
         <div className="flex flex-1 flex-col items-center justify-center gap-4 text-center">

@@ -50,7 +50,7 @@ function PaperCanvas({ paper, width }: { paper: Paper; width: number }): React.J
     void (async () => {
       try {
         setStatus('loading')
-        const res = await fetch(toBase64Url(paper.url))
+        const res = await fetch(toBase64Url(paper.url), { credentials: 'same-origin' })
         if (!res.ok) throw new Error(`HTTP ${res.status}`)
         const data = base64ToBytes(await res.text())
         if (cancelled || !host) return

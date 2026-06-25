@@ -20,6 +20,14 @@ pytesseract>=0.3.13,<0.4
 rapidfuzz>=3.9,<4.0
 mrz>=0.6.2,<1.0  # passport MRZ (TD3) parser for OCR passport extraction
 
+# DOCX -> PDF conversion (Word COM). The PdfChain tries docx2pdf, then
+# win32com (pywin32), then a PowerShell-COM shell-out. Without these two
+# packages installed ONLY the slow PowerShell fallback works — every preview
+# then shells out to Word (~6s/doc) instead of converting in-process. Both are
+# Windows-only (the host requires Microsoft Word for any of the methods).
+docx2pdf>=0.1.8; sys_platform == "win32"
+pywin32>=306; sys_platform == "win32"
+
 # Dev / quality
 ruff>=0.7,<1.0
 mypy>=1.13,<2.0
