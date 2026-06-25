@@ -1,29 +1,30 @@
-# GSSG Manager — TLS terminator in front of uvicorn (Phase 5).
+# GSSG Manager — TLS terminator in front of uvicorn (Phase 5, LIVE config).
 #
-# uvicorn binds 127.0.0.1:8765 (loopback only); Caddy owns :443 on the LAN
-# IP/hostname. Same-origin → no CORS changes needed.
+# Caddy owns :443 (and :80 → :443 redirect) on the LAN and reverse-proxies to
+# uvicorn on 127.0.0.1:8765. Same-origin, so no CORS changes needed.
 #
-# Choose ONE site address block below, then run:
-#   caddy run --config Caddyfile
+# Run (as a Windows service via scripts/install-caddy-service.ps1):
+#   caddy run --config deploy/Caddyfile
+#
+# Access from LAN devices:  https://gssg.lan/
+#   * DNS: add a UniFi "Local DNS record"  gssg.lan -> 192.168.15.102
+#   * Cert: Caddy's internal CA signs the cert. Install/trust the root CA once
+#     per device — export it with:  scripts/export-caddy-ca.ps1
 #
 # ─────────────────────────────────────────────────────────────────────────────
-# (A) Real domain + automatic ACME — phones trust it out of the box.
-#     DNS A-record must point to the LAN server's IP; port 80 must be open for
-#     the ACME HTTP-01 challenge.
-# ─────────────────────────────────────────────────────────────────────────────
-# gssg.example.ae {
-#     reverse_proxy 127.0.0.1:8765
-# }
+{
+	# Persist the internal CA + issued certs in a fixed, exportable location so
+	# the root CA can be distributed to LAN devices (phones/PCs trust it once).
+	storage file_system {
+		root C:/Tools/caddy/data
+	}
+}
 
-# ─────────────────────────────────────────────────────────────────────────────
-# (B) LAN IP / internal hostname with an internal CA or self-signed cert.
-#     Phones must install and trust the CA cert before push works on iOS/Android.
-#     See PHASE5-RUNBOOK.md §Cert-strategy for details.
-# ─────────────────────────────────────────────────────────────────────────────
-# https://gssg.lan {
-#     tls /etc/caddy/gssg.crt /etc/caddy/gssg.key   # or: tls internal
-#     reverse_proxy 127.0.0.1:8765
-# }
+# LAN HTTPS via Caddy's internal CA. uvicorn stays on loopback:8765.
+https://gssg.lan {
+	tls internal
+	reverse_proxy 127.0.0.1:8765
+}
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Security note: behind Caddy, X-Forwarded-For is set automatically.
