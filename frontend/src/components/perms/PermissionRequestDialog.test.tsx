@@ -98,4 +98,31 @@ describe('PermissionRequestDialog', () => {
     expect(onClose).toHaveBeenCalledOnce()
     expect(api.requestPermission).not.toHaveBeenCalled()
   })
+
+  it('keeps the dialog open when request fails', async () => {
+    const onClose = vi.fn()
+    vi.mocked(api.requestPermission).mockRejectedValueOnce(new Error('boom'))
+
+    render(
+      <Wrapper>
+        <PermissionRequestDialog
+          capability="documents.scan"
+          label="Scan documents"
+          description="Lets you OCR-scan uploaded documents."
+          open
+          onClose={onClose}
+        />
+      </Wrapper>,
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: /request/i }))
+
+    // Wait for the mutation to settle
+    await waitFor(() => {
+      expect(api.requestPermission).toHaveBeenCalledOnce()
+    })
+
+    // Dialog should NOT close on error
+    expect(onClose).not.toHaveBeenCalled()
+  })
 })
