@@ -21,7 +21,12 @@
 }
 
 # LAN HTTPS via Caddy's internal CA. uvicorn stays on loopback:8765.
-https://gssg.lan {
+# Served under several names so devices need NO DNS/router config:
+#   * gssgit.local — resolves on phones/Macs (and Win10+) via mDNS, zero setup
+#   * gssgit       — this Windows host's name (PCs via NetBIOS/LLMNR)
+#   * gssg.lan     — optional, if a UniFi/router local-DNS record is added later
+# All share one internal CA, so the same root cert trusts every name.
+https://gssgit.local, https://gssgit, https://gssg.lan {
 	tls internal
 	reverse_proxy 127.0.0.1:8765
 }
