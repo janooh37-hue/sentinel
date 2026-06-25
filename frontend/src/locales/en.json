@@ -581,6 +581,13 @@
     "newEntry": "New entry",
     "empty": "No book entries match these filters.",
     "confirmDelete": "Soft-delete this entry? It stays in records; ref number is not reused.",
+    "bulk": {
+      "delete": "Delete",
+      "deleteTitle": "Delete {{count}} selected record(s)?",
+      "deleteBody": "Soft-delete the selected entries? They stay in records and ref numbers are not reused.",
+      "deleted": "Deleted {{count}} record(s)",
+      "deleteError": "Couldn't delete {{count}} record(s)"
+    },
     "filters": {
       "category": "Category",
       "direction": "Direction",

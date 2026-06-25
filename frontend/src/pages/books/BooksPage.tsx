@@ -14,7 +14,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useNavigate, useSearchParams } from 'react-router-dom'
-import { ArrowDownLeft, ArrowUpRight, BookOpen, Plus, Send } from 'lucide-react'
+import { ArrowDownLeft, ArrowUpRight, BookOpen, Plus, Send, Trash2 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 
@@ -22,6 +22,7 @@ import { api, ApiError } from '@/lib/api'
 import type { BookRead } from '@/lib/api'
 import { addToBasket } from '@/lib/emailBasket'
 import { buildRecordBasketItem } from './recordsBasket'
+import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import { EmptyState } from '@/components/ui/empty-state'
 import { Input } from '@/components/ui/input'
 import { SkeletonRow } from '@/components/ui/skeleton'
@@ -302,6 +303,25 @@ export function BooksPage(): React.JSX.Element {
     })
   }, [])
 
+  // Bulk soft-delete of the checkbox selection. Uses the same DELETE /books/{id}
+  // endpoint as a single delete (sets deleted_at; ref numbers are not reused).
+  const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false)
+  const deleteMutation = useMutation({
+    mutationFn: async (ids: number[]) => {
+      const results = await Promise.allSettled(ids.map((id) => api.deleteBook(id)))
+      const failed = results.filter((r) => r.status === 'rejected').length
+      return { total: ids.length, failed }
+    },
+    onSuccess: ({ total, failed }) => {
+      void qc.invalidateQueries({ queryKey: ['books'] })
+      setSelectedForBasket(new Set())
+      const removed = total - failed
+      if (removed > 0) toast.success(t('books.bulk.deleted', { count: removed }))
+      if (failed > 0) toast.error(t('books.bulk.deleteError', { count: failed }))
+    },
+    onError: (err) => toast.error(err instanceof ApiError ? err.message : String(err)),
+  })
+
   const handleAddToEmail = useCallback(async () => {
     const ids = [...selectedForBasket]
     const results = await Promise.allSettled(
@@ -428,6 +448,17 @@ export function BooksPage(): React.JSX.Element {
                       >
                         {t('basket.addN', { count: selectedForBasket.size })}
                       </button>
+                      {canManage && (
+                        <button
+                          type="button"
+                          onClick={() => setConfirmDeleteOpen(true)}
+                          disabled={deleteMutation.isPending}
+                          className="ms-auto inline-flex items-center gap-1.5 rounded-full border border-accent/40 px-3 py-1 text-xs font-semibold text-accent transition-colors hover:bg-accent/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-1 disabled:opacity-50"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" strokeWidth={2} />
+                          {t('books.bulk.delete')}
+                        </button>
+                      )}
                     </div>
                   )}
                   <RecordsList
@@ -557,6 +588,16 @@ export function BooksPage(): React.JSX.Element {
         bookId={previewBookId}
         onClose={() => setPreviewBookId(null)}
         onSubmitForApproval={(id) => { setPreviewBookId(null); setSubmitBookId(id) }}
+      />
+
+      <ConfirmDialog
+        open={confirmDeleteOpen}
+        onOpenChange={setConfirmDeleteOpen}
+        title={t('books.bulk.deleteTitle', { count: selectedForBasket.size })}
+        description={t('books.bulk.deleteBody')}
+        confirmLabel={t('books.bulk.delete')}
+        onConfirm={() => deleteMutation.mutate([...selectedForBasket])}
+        destructive
       />
     </div>
   )
