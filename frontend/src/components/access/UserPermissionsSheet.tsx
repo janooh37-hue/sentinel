@@ -9,6 +9,12 @@
  *
  * Capabilities are grouped by domain (collapsible). Admin users always have every
  * capability (lockout protection), so the controls are disabled for them.
+ *
+ * Deferred: per-override expiry chip ("expires at …"). The backend auto-expires
+ * temporary grants server-side, but GET /permissions does not yet return per-
+ * override expiry timestamps, so we cannot display a chip here yet. Wire this up
+ * once the backend adds `overrides_meta: Record<string, { expires_at: string }>`
+ * to UserPermissionRead (separate backend task).
  */
 
 import { useMemo, useState } from 'react'
@@ -75,7 +81,7 @@ function EffectToggle({
             aria-pressed={selected}
             onClick={() => onChange(opt.id)}
             className={cn(
-              'px-2.5 py-1 text-xs font-medium transition-colors',
+              'px-3 py-1.5 text-xs font-medium transition-colors',
               'border-e border-border last:border-e-0',
               selected ? opt.active : 'bg-surface text-muted-foreground hover:bg-surface-tinted',
               disabled && 'cursor-not-allowed opacity-50',
@@ -110,14 +116,16 @@ function DomainGroup({
 
   return (
     <Card>
-      <CardHeader>
+      <CardHeader className="py-3">
         <button
           type="button"
           onClick={() => setOpen((v) => !v)}
           className="flex flex-1 items-center justify-between gap-2 text-start"
           aria-expanded={open}
         >
-          <CardTitle>{t(`access.permissions.domains.${domain}`, domain)}</CardTitle>
+          <CardTitle className="text-base">
+            {t(`access.permissions.domains.${domain}`, domain)}
+          </CardTitle>
           <ChevronDown
             className={cn('h-4 w-4 text-muted-foreground transition-transform', open && 'rotate-180')}
             strokeWidth={1.7}
@@ -130,17 +138,24 @@ function DomainGroup({
             const isDefault = roleDefaults.has(cap.id)
             const override = perms.overrides[cap.id]
             const value: Effect = override ?? 'default'
+            const description = t(`perms.caps.${cap.id}.desc`, { defaultValue: cap.description })
             return (
               <div
                 key={cap.id}
-                className="flex flex-wrap items-center justify-between gap-3 px-4 py-3"
+                className="flex flex-col gap-3 px-5 py-4 sm:flex-row sm:items-start sm:justify-between"
               >
-                <div className="flex min-w-0 flex-col">
-                  <span className="truncate text-sm text-foreground">
+                {/* Label + description + chips */}
+                <div className="flex min-w-0 flex-col gap-1">
+                  <span className="text-sm font-medium text-foreground">
                     {t(`access.permissions.caps.${cap.id}`, { defaultValue: cap.label })}
                   </span>
-                  <span className="flex items-center gap-2 text-xs text-muted-foreground">
-                    <span className="font-mono text-[0.9em] text-muted-foreground/70" dir="ltr">{cap.id}</span>
+                  {description && (
+                    <span className="text-xs leading-relaxed text-muted-foreground">
+                      {description}
+                    </span>
+                  )}
+                  <span className="mt-1 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                    <span className="font-mono text-[0.8em] text-muted-foreground/60" dir="ltr">{cap.id}</span>
                     <span
                       className={cn(
                         'inline-flex items-center rounded px-1.5 py-px text-[0.65em] font-semibold uppercase tracking-[0.06em]',
@@ -160,11 +175,14 @@ function DomainGroup({
                     )}
                   </span>
                 </div>
-                <EffectToggle
-                  value={isAdmin ? 'grant' : value}
-                  disabled={isAdmin || saving === cap.id}
-                  onChange={(next) => onSet(cap.id, next)}
-                />
+                {/* Tri-state toggle — right-aligned on wider viewports */}
+                <div className="shrink-0 sm:pt-0.5">
+                  <EffectToggle
+                    value={isAdmin ? 'grant' : value}
+                    disabled={isAdmin || saving === cap.id}
+                    onChange={(next) => onSet(cap.id, next)}
+                  />
+                </div>
               </div>
             )
           })}
@@ -226,19 +244,22 @@ export function UserPermissionsSheet({
 
   return (
     <Sheet open onOpenChange={(o) => { if (!o) onClose() }}>
-      <SheetContent className="w-full max-w-md">
+      <SheetContent className="w-full max-w-2xl">
         <SheetTitle className="sr-only">
           {t('access.permissions.title')} — {userLabel(user)}
         </SheetTitle>
 
         {/* Header: user + role chip */}
-        <div className="flex items-start justify-between gap-3 border-b border-border px-4 py-3">
-          <div className="min-w-0 space-y-1">
+        <div className="flex items-start justify-between gap-4 border-b border-border px-6 py-4">
+          <div className="min-w-0 space-y-1.5">
             <span className="text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">
-              {t('access.permissions.title')}
+              {t('access.permissions.sheetEyebrow')}
             </span>
-            <p className="truncate text-sm font-semibold text-foreground" dir="auto">
+            <p className="truncate text-base font-semibold text-foreground" dir="auto">
               {userLabel(user)}
+            </p>
+            <p className="text-sm text-muted-foreground">
+              {t('access.permissions.sheetSubtitle')}
             </p>
             <span
               className={cn(
@@ -258,22 +279,22 @@ export function UserPermissionsSheet({
         </div>
 
         {/* Scrollable matrix */}
-        <div className="flex-1 space-y-3 overflow-y-auto px-4 py-4">
+        <div className="flex-1 space-y-4 overflow-y-auto px-6 py-5">
           {capsQuery.isError ? (
             <EmptyState message={t('access.permissions.loadError')} />
           ) : (
             <>
               {perms?.is_admin && (
-                <div className="flex items-center gap-2 rounded-md border border-border bg-accent-soft/40 px-3 py-2.5 text-sm text-foreground">
+                <div className="flex items-center gap-2.5 rounded-lg border border-border bg-accent-soft/40 px-4 py-3 text-sm text-foreground">
                   <ShieldCheck className="h-4 w-4 shrink-0 text-accent" strokeWidth={1.8} />
                   {t('access.permissions.adminAll')}
                 </div>
               )}
 
               {permsQuery.isLoading || capsQuery.isLoading || !perms ? (
-                <div className="space-y-3">
-                  <Skeleton className="h-32 w-full" />
-                  <Skeleton className="h-32 w-full" />
+                <div className="space-y-4">
+                  <Skeleton className="h-40 w-full" />
+                  <Skeleton className="h-40 w-full" />
                 </div>
               ) : (
                 grouped.map(({ domain, caps }) => (

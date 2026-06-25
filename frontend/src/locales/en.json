@@ -2324,6 +2324,8 @@
       "title": "Permissions",
       "eyebrow": "Administration",
       "subtitle": "Grant or revoke individual capabilities per user. Roles set the defaults; overrides layer on top.",
+      "sheetEyebrow": "User permissions",
+      "sheetSubtitle": "Each toggle sets an override on top of the user's role defaults.",
       "selectUser": "User",
       "loadError": "Couldn't load permissions.",
       "empty": "No users to manage yet.",
