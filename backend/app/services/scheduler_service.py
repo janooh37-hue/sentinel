@@ -27,7 +27,7 @@ from sqlalchemy import select
 
 from app.db.models import User
 from app.db.session import SessionLocal
-from app.services import email_service, notification_service, push_service, scan_inbox_service
+from app.services import email_service, notification_service, perm_service, push_service, scan_inbox_service
 
 log = logging.getLogger(__name__)
 
@@ -36,6 +36,8 @@ _SCAN_DRAIN_JOB_ID = "scan-inbox-drain"
 _SCAN_DRAIN_INTERVAL_MINUTES = 1
 _PUSH_NOTIFIER_JOB_ID = "push-notifier"
 _PUSH_NOTIFIER_INTERVAL_MINUTES = 1
+_GRANT_SWEEP_JOB_ID = "grant-sweep"
+_GRANT_SWEEP_INTERVAL_MINUTES = 1
 
 _scheduler: BackgroundScheduler | None = None
 _lock = Lock()
@@ -85,6 +87,16 @@ def _run_scan_drain() -> None:
     n = run_drain_once()
     if n:
         log.info("scheduler: scan-inbox drained %d item(s)", n)
+
+
+def _run_grant_sweep() -> None:
+    with SessionLocal() as session:
+        try:
+            n = perm_service.sweep_expired_grants(session)
+            if n:
+                log.info("scheduler: revoked %d expired permission grant(s)", n)
+        except Exception:
+            log.exception("scheduler: grant sweep failed")
 
 
 # Localized notification copy per kind.
@@ -251,6 +263,15 @@ def start() -> None:
             )
             log.info(
                 "scheduler: push notifier every %d min", _PUSH_NOTIFIER_INTERVAL_MINUTES
+            )
+            _scheduler.add_job(
+                _run_grant_sweep,
+                trigger=IntervalTrigger(minutes=_GRANT_SWEEP_INTERVAL_MINUTES),
+                id=_GRANT_SWEEP_JOB_ID,
+                replace_existing=True,
+            )
+            log.info(
+                "scheduler: grant sweep every %d min", _GRANT_SWEEP_INTERVAL_MINUTES
             )
 
 
