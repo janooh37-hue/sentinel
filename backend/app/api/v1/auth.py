@@ -353,7 +353,7 @@ def set_user_permission(
 ) -> UserPermissionRead:
     """Set or clear one per-user capability override (grant/deny/null)."""
     user = auth_service.require_user(db, user_id)
-    perm_service.set_user_override(db, user.id, body.capability, body.effect, actor=admin)
+    perm_service.set_user_override(db, user.id, body.capability, body.effect, actor=admin, expires_at=body.expires_at)
     auth_service.audit_permission_change(
         db, actor=_actor(admin), user=user, capability=body.capability, effect=body.effect
     )

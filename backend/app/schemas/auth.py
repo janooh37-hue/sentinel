@@ -157,11 +157,15 @@ class SetPermissionRequest(BaseModel):
     """Set or clear a single per-user capability override.
 
     ``effect`` is ``grant`` / ``deny`` to set, or ``null`` to clear (revert to
-    the role default).
+    the role default).  ``expires_at`` makes a grant time-limited; omit (or
+    pass ``null``) for a permanent grant.  Expiry is only meaningful for
+    ``grant`` effects; it is stored for ``deny`` too but has no resolution
+    impact.
     """
 
     capability: str = Field(min_length=1, max_length=64)
     effect: str | None = None
+    expires_at: datetime | None = None
 
 
 __all__ = [
