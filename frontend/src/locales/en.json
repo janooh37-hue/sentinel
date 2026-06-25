@@ -2397,6 +2397,7 @@
       "pending": "A request is already pending for this permission"
     },
     "noAccessPage": "You don't have access to this page",
-    "requestAccess": "Request access"
+    "requestAccess": "Request access",
+    "caps": {}
   }
 }
