@@ -213,7 +213,19 @@ function Invoke-Build {
     Write-Host '  Building frontend (pnpm run build) ...' -ForegroundColor Cyan
     Push-Location $FrontendDir
     try {
-        pnpm run build
+        # pnpm/vite emit progress and warnings (notably the chunk-size notice)
+        # on stderr. Under the script-wide $ErrorActionPreference='Stop',
+        # PowerShell 5.1 promotes ANY native-command stderr line to a
+        # terminating NativeCommandError — a false "build failed" even when the
+        # build exits 0. Demote stderr to plain output for this call and judge
+        # success solely by the exit code.
+        $prevEAP = $ErrorActionPreference
+        $ErrorActionPreference = 'Continue'
+        try {
+            pnpm run build 2>&1 | ForEach-Object { Write-Host $_ }
+        } finally {
+            $ErrorActionPreference = $prevEAP
+        }
         if ($LASTEXITCODE -ne 0) { throw "frontend build failed (exit $LASTEXITCODE)" }
     } finally {
         Pop-Location
