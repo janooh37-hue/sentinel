@@ -2339,6 +2339,21 @@
       "suspended": "موقوف",
       "history": "السجل"
     },
+    "permReq": {
+      "tab": "طلبات الصلاحيات",
+      "grantOnce": "منح مؤقت",
+      "grantPermanent": "منح دائم",
+      "refuse": "رفض",
+      "window2h": "ساعتان",
+      "windowToday": "اليوم",
+      "windowWeek": "هذا الأسبوع",
+      "asked": "طُلب",
+      "empty": "لا توجد طلبات صلاحيات قيد الانتظار.",
+      "refuseNotePlaceholder": "ملاحظة اختيارية للمقدّم…",
+      "cancel": "إلغاء",
+      "toastGranted": "تم منح الصلاحية.",
+      "toastRefused": "تم رفض الطلب."
+    },
     "pending": {
       "emptyTitle": "كل شيء على ما يرام.",
       "emptySub": "لا توجد طلبات وصول قيد الانتظار. ستظهر الطلبات الجديدة هنا.",

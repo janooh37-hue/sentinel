@@ -2196,6 +2196,21 @@
       "suspended": "Suspended",
       "history": "History"
     },
+    "permReq": {
+      "tab": "Permission requests",
+      "grantOnce": "Grant once",
+      "grantPermanent": "Grant permanently",
+      "refuse": "Refuse",
+      "window2h": "2 h",
+      "windowToday": "Today",
+      "windowWeek": "This week",
+      "asked": "Asked",
+      "empty": "No pending permission requests.",
+      "refuseNotePlaceholder": "Optional note for the requester…",
+      "cancel": "Cancel",
+      "toastGranted": "Permission granted.",
+      "toastRefused": "Request refused."
+    },
     "pending": {
       "emptyTitle": "You're up to date.",
       "emptySub": "No pending access requests. New requests show up here and ping the bell.",

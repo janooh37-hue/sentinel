@@ -19,6 +19,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
+import { useSearchParams } from 'react-router-dom'
 import { toast } from 'sonner'
 import {
   AlertTriangle,
@@ -41,6 +42,7 @@ import {
 
 import { api, ApiError, type AdminUserRead, type AuditEntryRead } from '@/lib/api'
 import { useAuth } from '@/lib/authContext'
+import { PermissionRequestsTab } from '@/components/access/PermissionRequestsTab'
 import { UserPermissionsSheet } from '@/components/access/UserPermissionsSheet'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import {
@@ -54,7 +56,7 @@ import { EmptyState } from '@/components/ui/empty-state'
 import { Skeleton } from '@/components/ui/skeleton'
 
 type Role = 'admin' | 'manager' | 'operator'
-type TabId = 'pending' | 'active' | 'suspended' | 'history'
+type TabId = 'pending' | 'active' | 'suspended' | 'history' | 'permission-requests'
 
 const ROLE_ORDER: Role[] = ['admin', 'manager', 'operator']
 
@@ -762,7 +764,27 @@ export function AccessRequestsPage(): React.JSX.Element {
   const { t } = useTranslation()
   const qc = useQueryClient()
   const { user } = useAuth()
-  const [tab, setTab] = useState<TabId>('pending')
+  const [searchParams, setSearchParams] = useSearchParams()
+  // One-shot URL → state sync: ?tab=permission-requests deep-links into that tab.
+  const initialTab = ((): TabId => {
+    const p = searchParams.get('tab')
+    if (p === 'permission-requests') return 'permission-requests'
+    return 'pending'
+  })()
+  const [tab, setTab] = useState<TabId>(initialTab)
+
+  // Clear the ?tab param after reading it so the URL stays clean.
+  useEffect(() => {
+    if (searchParams.has('tab')) {
+      setSearchParams((prev) => {
+        const n = new URLSearchParams(prev)
+        n.delete('tab')
+        return n
+      }, { replace: true })
+    }
+  // Only run on mount — intentionally no deps to avoid loop.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
   const [rejectTarget, setRejectTarget] = useState<AdminUserRead | null>(null)
   const [resetTarget, setResetTarget] = useState<AdminUserRead | null>(null)
   const [roleTarget, setRoleTarget] = useState<AdminUserRead | null>(null)
@@ -898,6 +920,7 @@ export function AccessRequestsPage(): React.JSX.Element {
           <TabButton active={tab === 'active'} count={active.length} label={t('access.tabs.active')} onClick={() => setTab('active')} />
           <TabButton active={tab === 'suspended'} count={suspended.length} label={t('access.tabs.suspended')} onClick={() => setTab('suspended')} />
           <TabButton active={tab === 'history'} count={null} label={t('access.tabs.history')} onClick={() => setTab('history')} />
+          <TabButton active={tab === 'permission-requests'} count={null} label={t('access.permReq.tab')} onClick={() => setTab('permission-requests')} />
         </div>
 
         {usersQuery.isPending && tab !== 'history' ? (
@@ -970,6 +993,8 @@ export function AccessRequestsPage(): React.JSX.Element {
               ) : (
                 <HistoryList items={auditQuery.data ?? []} />
               ))}
+
+            {tab === 'permission-requests' && <PermissionRequestsTab />}
           </>
         )}
       </div>
