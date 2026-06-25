@@ -317,6 +317,7 @@ def list_capabilities(
             id=cap.id,
             domain=cap.domain,
             label=cap.label,
+            description=cap.description,
             default_roles=[
                 role for role, caps in ROLE_DEFAULTS.items() if cap.id in caps
             ],

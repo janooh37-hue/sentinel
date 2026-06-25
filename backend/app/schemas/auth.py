@@ -132,6 +132,7 @@ class CapabilityRead(BaseModel):
     id: str
     domain: str
     label: str
+    description: str
     default_roles: list[str]
 
 

@@ -1041,6 +1041,39 @@ class PushSent(Base):
     )
 
 
+class PermissionRequest(Base):
+    """Employee-initiated permission request (migration 0042).
+
+    An employee requests a capability; an admin reviews and grants/denies.
+    ``status`` transitions: pending → approved | denied.
+    """
+
+    __tablename__ = "permission_requests"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    user_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    )
+    capability: Mapped[str] = mapped_column(String(64), nullable=False)
+    status: Mapped[str] = mapped_column(
+        String(16), nullable=False, default="pending", server_default="pending"
+    )
+    decision: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    note: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, default=_utcnow, server_default=func.current_timestamp()
+    )
+    decided_by_user_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    decided_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+    __table_args__ = (
+        Index("ix_permission_requests_user_id", "user_id"),
+        Index("ix_permission_requests_status", "status"),
+    )
+
+
 __all__ = [
     "REF_SEQUENCE_ID",
     "AppSetting",
@@ -1060,6 +1093,7 @@ __all__ = [
     "Leave",
     "LedgerEntry",
     "Manager",
+    "PermissionRequest",
     "PushSubscription",
     "RolePermission",
     "ScanInbox",
