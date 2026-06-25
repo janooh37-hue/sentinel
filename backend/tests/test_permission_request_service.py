@@ -13,14 +13,16 @@ def test_create_request_for_missing_cap(db_session):
 
 def test_cannot_request_cap_already_held(db_session):
     u = make_user(db_session, role="operator")  # operators have books.view
-    with pytest.raises(AppError):
+    with pytest.raises(AppError) as ei:
         prs.create_request(db_session, u, "books.view")
+    assert ei.value.code == "ALREADY_GRANTED"
 
 
 def test_cannot_request_sensitive_cap(db_session):
     u = make_user(db_session, role="operator")
-    with pytest.raises(AppError):
+    with pytest.raises(AppError) as ei:
         prs.create_request(db_session, u, "users.manage")
+    assert ei.value.code == "FORBIDDEN_REQUEST"
 
 
 def test_duplicate_request_collapses(db_session):
