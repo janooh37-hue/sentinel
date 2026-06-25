@@ -43,6 +43,10 @@ def create_request(db: Session, user: User, capability: str) -> PermissionReques
     db.add(row)
     db.commit()
     db.refresh(row)
+    from app.core.permissions import CAPABILITIES
+    label = next((c.label for c in CAPABILITIES if c.id == capability), capability)
+    from app.services import admin_notify
+    admin_notify.notify_admins_new_request(db, user, label, row.id)
     return row
 
 
