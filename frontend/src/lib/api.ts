@@ -278,7 +278,7 @@ export interface CapabilityRead {
 
 // Permission requests (Task 10 — employee permission-request UI).
 // Hand-mirrored from backend/app/schemas/auth.py PermissionRequestRead.
-export type PermissionRequestStatus = 'pending' | 'approved' | 'denied' | 'expired'
+export type PermissionRequestStatus = 'pending' | 'granted' | 'refused'
 export interface PermissionRequestRead {
   id: number
   user_id: number

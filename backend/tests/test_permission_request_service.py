@@ -1,7 +1,7 @@
 # backend/tests/test_permission_request_service.py
 import pytest
 from app.api.errors import AppError
-from app.services import permission_request_service as prs, perm_service
+from app.services import permission_request_service as prs, perm_service, admin_notify
 from tests.conftest import make_user
 
 
@@ -58,3 +58,26 @@ def test_decide_refuse(db_session):
     prs.decide(db_session, r.id, admin=admin, decision="refused", note="not now")
     assert r.status == "refused"
     assert "books.approve" not in perm_service.effective_caps(db_session, u)
+
+
+def test_rerequest_notifies_admins(db_session, monkeypatch):
+    """notify_admins_new_request must fire for both initial and duplicate requests."""
+    calls: list[tuple] = []
+
+    def fake_notify(db, user, label, request_id):
+        calls.append((user.id, label, request_id))
+
+    monkeypatch.setattr(admin_notify, "notify_admins_new_request", fake_notify)
+
+    u = make_user(db_session, role="operator")
+
+    # First request — should notify once.
+    a = prs.create_request(db_session, u, "books.approve")
+    assert len(calls) == 1, "expected one notify call on first request"
+    assert calls[0][2] == a.id
+
+    # Re-request on the same (user, capability) — should notify again.
+    b = prs.create_request(db_session, u, "books.approve")
+    assert a.id == b.id, "re-request must collapse to the same row"
+    assert len(calls) == 2, "expected a second notify call on re-request"
+    assert calls[1][2] == b.id

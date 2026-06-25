@@ -36,13 +36,16 @@ def create_request(db: Session, user: User, capability: str) -> PermissionReques
         )
     )
     if existing is not None:
+        # Re-request: refresh timestamp so admins see it as newly active.
         existing.created_at = datetime.now(UTC).replace(tzinfo=None)
         db.commit()
-        return existing
-    row = PermissionRequest(user_id=user.id, capability=capability, status="pending")
-    db.add(row)
-    db.commit()
-    db.refresh(row)
+        row = existing
+    else:
+        row = PermissionRequest(user_id=user.id, capability=capability, status="pending")
+        db.add(row)
+        db.commit()
+        db.refresh(row)
+    # Notify admins for both new requests and re-requests.
     from app.core.permissions import CAPABILITIES
     label = next((c.label for c in CAPABILITIES if c.id == capability), capability)
     from app.services import admin_notify
@@ -56,7 +59,7 @@ def list_pending(db: Session) -> list[PermissionRequest]:
     ))
 
 
-def decide(db, request_id, *, admin, decision, window=None, note=None) -> PermissionRequest:
+def decide(db: Session, request_id: int, *, admin: User, decision: str, window: str | None = None, note: str | None = None) -> PermissionRequest:
     row = db.get(PermissionRequest, request_id)
     if row is None or row.status != "pending":
         raise AppError("REQUEST_NOT_PENDING", "Request not found or already decided.", http_status=404)
