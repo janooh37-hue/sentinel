@@ -15,7 +15,7 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
 from app.api.errors import AppError
@@ -106,6 +106,7 @@ def set_user_override(
     effect: str | None,
     *,
     actor: User | None = None,
+    expires_at: datetime | None = None,
 ) -> None:
     """Set or clear a single per-user override.
 
@@ -144,10 +145,31 @@ def set_user_override(
         if existing is not None:
             db.delete(existing)
     elif existing is None:
-        db.add(UserPermission(user_id=user_id, capability=capability, effect=effect))
+        db.add(UserPermission(user_id=user_id, capability=capability, effect=effect, expires_at=expires_at))
     else:
         existing.effect = effect
+        existing.expires_at = expires_at
     db.commit()
+
+
+# ─── Expiry sweep ─────────────────────────────────────────────────────────────
+
+
+def sweep_expired_grants(db: Session) -> int:
+    """Delete expired grant rows (effect='grant' with expires_at <= now).
+
+    Returns the number of deleted rows.
+    """
+    now = datetime.now(UTC).replace(tzinfo=None)
+    res = db.execute(
+        delete(UserPermission).where(
+            UserPermission.effect == "grant",
+            UserPermission.expires_at.is_not(None),
+            UserPermission.expires_at <= now,
+        )
+    )
+    db.commit()
+    return int(getattr(res, "rowcount", 0) or 0)
 
 
 # ─── Seeding (used by migration 0018 + idempotent boot safety) ────────────────
@@ -177,4 +199,5 @@ __all__ = [
     "role_default_caps",
     "seed_role_defaults",
     "set_user_override",
+    "sweep_expired_grants",
 ]
