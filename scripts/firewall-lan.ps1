@@ -1,6 +1,9 @@
 # scripts/firewall-lan.ps1
 # Open (or close) the LAN port for GSSG Manager on the Windows firewall.
-# Restricted to the local subnet + Private profile -- NOT any network.
+# Restricted to the local subnet -- NOT any remote address. Covers both the
+# Private and Public profiles because Windows sometimes reclassifies the office
+# Ethernet as Public (esp. domain/VPN setups), which would silently drop LAN
+# access if the rule were Private-only. LocalSubnet keeps it safe on Public.
 #
 # Run as Administrator.
 # Open:  powershell -ExecutionPolicy Bypass -File .\scripts\firewall-lan.ps1 -Port 8765
@@ -44,8 +47,8 @@ New-NetFirewallRule `
     -Protocol TCP `
     -LocalPort $Port `
     -Action Allow `
-    -Profile Private `
+    -Profile Private, Public `
     -RemoteAddress LocalSubnet | Out-Null
 
-Write-Host "Allowed inbound TCP $Port from LocalSubnet (Private profile)." -ForegroundColor Green
+Write-Host "Allowed inbound TCP $Port from LocalSubnet (Private + Public profiles)." -ForegroundColor Green
 Write-Host "Coworkers reach the app at: http://$($env:COMPUTERNAME):$Port/"
