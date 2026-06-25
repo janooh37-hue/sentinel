@@ -11,7 +11,8 @@ import logging
 import re
 from collections.abc import Sequence
 from datetime import UTC, date, datetime, timedelta
-from pathlib import Path
+from functools import lru_cache
+from pathlib import Path, PurePath
 from typing import Any
 
 from sqlalchemy import Integer, func, or_, select
@@ -940,6 +941,98 @@ def resolve_attachment_path(relative_path: str) -> Path | None:
     if not candidate.is_file():
         return None
     return candidate
+
+
+# ---------------------------------------------------------------------------
+# Imported-record document resolution
+#
+# v3-imported books store the file's OLD absolute location in ``doc_path``
+# (e.g. ``Y:\...\employee_files\G3289\leaves\LeaveApp_...docx`` or a UNC /
+# per-user AppData path) and carry no generated Document/BookVersion. The
+# importer already copied the file into the employee's vault, so we locate it
+# there by (G-number + filename stem) and serve it in place — no DB rewrite,
+# no second copy. A .pdf rendition (if present) is preferred for inline view.
+# ---------------------------------------------------------------------------
+
+
+@lru_cache(maxsize=4096)
+def _resolve_imported_paths(
+    doc_path: str, employee_id: str | None
+) -> tuple[str | None, str, str] | None:
+    """Find the local vault file for an imported record.
+
+    Returns ``(pdf_rel, original_rel, filename)`` where ``*_rel`` are
+    ``data_dir``-relative POSIX paths (``pdf_rel`` is ``None`` when no PDF
+    rendition exists) and ``filename`` is the original file's name. Returns
+    ``None`` when nothing matches in the employee's vault.
+
+    Memoised: ``doc_path``/``employee_id`` are stable per book, so the first
+    request warms the cache and later ones skip the filesystem walk.
+    """
+    if not employee_id:
+        return None
+    settings = get_settings()
+    base = settings.vault_dir / employee_id
+    if not base.is_dir():
+        return None
+    stem = PurePath(doc_path.replace("\\", "/")).stem
+    matches = [p for p in base.rglob("*") if p.is_file() and p.stem == stem]
+    if not matches:
+        return None
+    data_dir = settings.data_dir.resolve()
+
+    def rel(p: Path) -> str:
+        return p.resolve().relative_to(data_dir).as_posix()
+
+    pdf = next((p for p in matches if p.suffix.lower() == ".pdf"), None)
+    original = pdf or matches[0]
+    return (rel(pdf) if pdf is not None else None, rel(original), original.name)
+
+
+def imported_document_of(book: Book) -> dict[str, Any] | None:
+    """Build the ``ImportedDocRead`` payload for a book, or ``None``.
+
+    Only applies to imported records: a book with a stale ``doc_path`` and no
+    current-version generated document. Books with a real generated Document
+    are served by the normal ``/documents/{id}/download`` path and return
+    ``None`` here so the client doesn't show a duplicate paper.
+    """
+    if not book.doc_path:
+        return None
+    current = book.versions[-1] if book.versions else None
+    if current is not None and current.document_id is not None:
+        return None
+    resolved = _resolve_imported_paths(book.doc_path, book.employee_id)
+    if resolved is None:
+        return None
+    pdf_rel, _original_rel, filename = resolved
+    fmt = filename.rsplit(".", 1)[-1].lower() if "." in filename else ""
+    base = f"/api/v1/books/{book.id}/imported-document"
+    return {
+        "pdf_url": (f"{base}?format=pdf" if pdf_rel is not None else None),
+        "download_url": f"{base}?format=original",
+        "filename": filename,
+        "format": fmt,
+    }
+
+
+def resolve_imported_file(book: Book, *, prefer: str) -> Path | None:
+    """Resolve an imported record to the absolute vault file to serve.
+
+    ``prefer='pdf'`` returns the PDF rendition (``None`` if absent);
+    ``prefer='original'`` returns the best available file in its stored format.
+    Reuses ``resolve_attachment_path`` for the containment + existence guard.
+    """
+    if not book.doc_path:
+        return None
+    resolved = _resolve_imported_paths(book.doc_path, book.employee_id)
+    if resolved is None:
+        return None
+    pdf_rel, original_rel, _filename = resolved
+    rel = pdf_rel if prefer == "pdf" else original_rel
+    if rel is None:
+        return None
+    return resolve_attachment_path(rel)
 
 
 def _image_to_pdf_bytes(data: bytes, ext: str) -> bytes:

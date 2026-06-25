@@ -488,11 +488,20 @@ export type ApproverOptionRead = components['schemas']['ApproverOptionRead']
 // re-exports now — the earlier hand-mirroring is no longer needed.
 export type BookVersionRead = components['schemas']['BookVersionRead']
 
+// `imported_doc` (v3-imported records served from the employee vault) is
+// hand-merged until `npm run gen:api` folds it into the generated schema.
+export interface ImportedDocRead {
+  pdf_url?: string | null
+  download_url: string
+  filename: string
+  format: string
+}
 export type BookRead = components['schemas']['BookRead'] & {
   doc_manager_user_id?: number | null
   doc_manager_name?: string | null
   doc_manager_has_signature?: boolean
   your_step_kind?: 'approver' | 'reviewer' | null
+  imported_doc?: ImportedDocRead | null
 }
 
 // Annotation overlay (Slice 3). Hand-typed mirror of schemas.book.BookAnnotationRead

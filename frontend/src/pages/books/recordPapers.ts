@@ -8,7 +8,7 @@
  */
 import { currentBookDocId } from '@/lib/bookDocument'
 
-export type PaperKind = 'generated' | 'signed' | 'scan'
+export type PaperKind = 'generated' | 'signed' | 'scan' | 'imported'
 
 export interface Paper {
   kind: PaperKind
@@ -27,11 +27,18 @@ interface VersionLike {
   signed_pdf_url?: string | null
 }
 
+interface ImportedDocLike {
+  pdf_url?: string | null
+  download_url: string
+  filename: string
+}
+
 interface BookLike {
   id: number
   ref_number: string
   attachment_paths?: string[] | null
   versions?: VersionLike[] | null
+  imported_doc?: ImportedDocLike | null
 }
 
 const IMAGE_EXT = /\.(png|jpe?g|gif|webp|bmp)$/i
@@ -47,6 +54,19 @@ export function papersOf(book: BookLike): Paper[] {
       url,
       downloadUrl: url,
       filename: `${book.ref_number}.pdf`,
+      isPdf: true,
+    })
+  }
+
+  // v3-imported record: the file lives in the employee vault (no generated
+  // document). Show it as a paper only when a PDF rendition is viewable; the
+  // docx-only case is offered as a download on the record page instead.
+  if (book.imported_doc?.pdf_url) {
+    papers.push({
+      kind: 'imported',
+      url: book.imported_doc.pdf_url,
+      downloadUrl: book.imported_doc.download_url,
+      filename: book.imported_doc.filename,
       isPdf: true,
     })
   }
@@ -91,5 +111,6 @@ export function paperCountOf(book: BookLike): number {
       : undefined
   const generated = currentBookDocId(book) !== undefined ? 1 : 0
   const signed = current?.status === 'approved' && current.signed_pdf_url ? 1 : 0
-  return generated + signed + (book.attachment_paths?.length ?? 0)
+  const imported = book.imported_doc?.pdf_url ? 1 : 0
+  return generated + signed + imported + (book.attachment_paths?.length ?? 0)
 }

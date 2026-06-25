@@ -252,9 +252,11 @@ export function BookRecordPage(): React.JSX.Element {
 
   const versions = book?.versions ?? []
   const current = versions.length ? versions[versions.length - 1] : undefined
+  // Prefer the generated document; fall back to a v3-imported record's PDF
+  // (served from the employee vault) when the book has no generated version.
   const pdfUrl = current?.document_id
     ? `/api/v1/documents/${current.document_id}/download?format=pdf`
-    : null
+    : (book?.imported_doc?.pdf_url ?? null)
 
   const submitter = book?.submitted_by_name ?? '—'
   const state = book?.approval_state ?? 'none'
@@ -612,13 +614,28 @@ export function BookRecordPage(): React.JSX.Element {
                   }
                 />
               </Suspense>
+            ) : isPending ? (
+              <div className="flex h-full min-h-[400px] items-center justify-center text-[0.85em] text-muted-foreground">
+                <Loader2 className="h-6 w-6 animate-spin" />
+              </div>
+            ) : book?.imported_doc ? (
+              // Imported record whose vault file isn't a PDF (e.g. .docx) — no
+              // inline preview, so offer the original for download.
+              <div className="flex h-full min-h-[400px] flex-col items-center justify-center gap-3 text-center text-[0.85em] text-muted-foreground">
+                <span className="max-w-[40ch]">{t('books.record.importedNoPreview')}</span>
+                <a
+                  href={book.imported_doc.download_url}
+                  download={book.imported_doc.filename}
+                  className="inline-flex items-center gap-1.5 rounded-full bg-primary px-3.5 py-1.5 text-[0.95em] font-semibold text-primary-foreground hover:bg-primary-hover"
+                >
+                  {t('books.record.downloadImported', {
+                    format: book.imported_doc.format.toUpperCase(),
+                  })}
+                </a>
+              </div>
             ) : (
               <div className="flex h-full min-h-[400px] items-center justify-center text-[0.85em] text-muted-foreground">
-                {isPending ? (
-                  <Loader2 className="h-6 w-6 animate-spin" />
-                ) : (
-                  t('books.record.noDocument')
-                )}
+                {t('books.record.noDocument')}
               </div>
             )}
           </div>

@@ -188,7 +188,9 @@ export function RecordPaperViewer({
       ? t('books.pane.generated')
       : p.kind === 'signed'
         ? t('books.pane.signedCopy')
-        : t('books.pane.scan')
+        : p.kind === 'imported'
+          ? t('books.pane.imported')
+          : t('books.pane.scan')
 
   return (
     <div className={cn('flex min-h-0 flex-1 flex-col', isOverlay && 'h-full')}>

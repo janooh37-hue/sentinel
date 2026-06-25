@@ -138,6 +138,25 @@ class BookAnnotationRead(ORMBase):
     created_at: datetime
 
 
+class ImportedDocRead(BaseModel):
+    """The local vault file backing a v3-imported record.
+
+    Imported books store a stale absolute ``doc_path`` (the old pre-migration
+    location) and have no generated Document/BookVersion, so the normal
+    ``/documents/{id}/download`` route can't reach their file. The backend
+    resolves ``doc_path`` to the copy already sitting in the employee's vault
+    and exposes it here so the client can view / download it.
+    """
+
+    # Inline-viewable PDF URL — None when only a non-PDF (e.g. .docx) rendition
+    # exists in the vault, in which case the client offers a download instead.
+    pdf_url: str | None = None
+    # Always present: downloads the best available file in its original format.
+    download_url: str
+    filename: str
+    format: str  # lowercase extension without dot, e.g. "pdf" | "docx"
+
+
 class BookRead(ORMBase):
     id: int
     ref_number: str
@@ -153,6 +172,9 @@ class BookRead(ORMBase):
     direction: str | None
     stamp_style: str | None
     doc_id: int | None = None  # mapped from doc_path placeholder; always None for now
+    # Set (detail + list enrichment) for v3-imported records whose original
+    # file lives in the employee's vault rather than as a generated Document.
+    imported_doc: ImportedDocRead | None = None
     created_at: datetime
     deleted_at: datetime | None
     priority: str

@@ -138,6 +138,9 @@ def _enrich_path_fields(item: BookRead, row: Book) -> BookRead:
     if current is not None and item.versions:
         item.versions[-1].signed_source = _signed_source_of(current)
         item.versions[-1].signed_pdf_url = _signed_pdf_url_of(current)
+    # v3-imported records: surface the file copied into the employee vault so
+    # it's viewable/downloadable (no generated Document on these books).
+    item.imported_doc = book_service.imported_document_of(row)
     return item
 
 
@@ -259,6 +262,7 @@ def get_book(
     item.signing_path = form_policy.signing_path_of(
         current.template_id if current is not None else None
     )
+    item.imported_doc = book_service.imported_document_of(row)
     return item
 
 
@@ -565,6 +569,43 @@ def get_book_attachment(
             headers={"X-Content-Type-Options": "nosniff"},
         )
     return FileResponse(abs_path, filename=name, media_type="application/octet-stream")
+
+
+@router.get("/{book_id}/imported-document")
+def get_imported_document(
+    book_id: int,
+    db: Annotated[Session, Depends(get_db)],
+    _user: Annotated[User, Depends(require_capability("books.view"))],
+    format: Annotated[Literal["pdf", "original"], Query()] = "pdf",
+    encoding: Annotated[str | None, Query(pattern="^base64$")] = None,
+) -> Response:
+    """Serve the local vault file backing a v3-imported record.
+
+    Imported books carry a stale absolute ``doc_path`` (the old pre-migration
+    location) and have no generated Document/BookVersion, so the normal
+    ``GET /documents/{id}/download`` route can't reach their file. This resolves
+    ``doc_path`` to the copy already sitting in the employee's vault and serves
+    it in place: ``format=pdf`` for inline viewing (with the ``encoding=base64``
+    IDM-bypass used by the pdf.js viewer), ``format=original`` to download the
+    stored file (e.g. the .docx when no PDF rendition exists).
+    """
+    book = book_service.get_book(db, book_id)
+    abs_path = book_service.resolve_imported_file(book, prefer=format)
+    if abs_path is None:
+        raise HTTPException(status_code=404, detail="imported document not available")
+    if format == "pdf":
+        if encoding == "base64":
+            return Response(
+                content=base64.b64encode(abs_path.read_bytes()),
+                media_type="text/plain",
+                headers={"X-Content-Type-Options": "nosniff"},
+            )
+        return FileResponse(
+            abs_path, filename=abs_path.name, media_type="application/pdf"
+        )
+    return FileResponse(
+        abs_path, filename=abs_path.name, media_type="application/octet-stream"
+    )
 
 
 __all__ = ["categories_router", "router"]
