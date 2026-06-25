@@ -30,6 +30,22 @@ export async function registerServiceWorker(): Promise<ServiceWorkerRegistration
 // Web Push subscription helpers (Task 2)
 // ---------------------------------------------------------------------------
 
+/**
+ * The device's current UI language ('en'|'ar'), read from the same source
+ * i18next uses (localStorage `gssg.lang`, then `navigator.language`). Sent to
+ * the backend at subscribe time so pushes to this device are localized.
+ */
+function currentLocale(): 'en' | 'ar' {
+  try {
+    const stored = window.localStorage.getItem('gssg.lang')
+    if (stored?.toLowerCase().startsWith('ar')) return 'ar'
+    if (stored?.toLowerCase().startsWith('en')) return 'en'
+  } catch {
+    /* localStorage unavailable (private mode) — fall through to navigator */
+  }
+  return (navigator.language || 'en').toLowerCase().startsWith('ar') ? 'ar' : 'en'
+}
+
 function urlBase64ToUint8Array(base64: string): ArrayBuffer {
   const padding = '='.repeat((4 - (base64.length % 4)) % 4)
   const b64 = (base64 + padding).replace(/-/g, '+').replace(/_/g, '/')
@@ -57,6 +73,7 @@ export async function subscribeToPush(): Promise<PushSubscription | null> {
   await api.subscribePush({
     endpoint: sub.endpoint,
     keys: { p256dh: json.keys!.p256dh, auth: json.keys!.auth },
+    locale: currentLocale(),
   })
   return sub
 }

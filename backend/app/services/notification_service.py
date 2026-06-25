@@ -9,6 +9,7 @@ larger scale; for a handful of users the diff loop is correct + trivial.
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from datetime import UTC, datetime
 
 from sqlalchemy.orm import Session
@@ -23,6 +24,50 @@ from app.services import (
     perm_service,
     scan_inbox_service,
 )
+
+
+@dataclass(frozen=True)
+class ActionableItem:
+    """One owned, actionable item for Web Push — carries its own deep link."""
+
+    kind: str  # 'approval' | 'scan' | 'email'
+    ref: str  # opaque, stable per-kind key, e.g. 'book:42'
+    url: str  # frontend deep-link path the notification click navigates to
+    label: str  # short human label (ref number / id) for the body text
+
+
+def actionable_items(db: Session, user: User) -> list[ActionableItem]:
+    """Per-user OWNED actionable items for Web Push, each with a deep link.
+
+    Mirrors the *owned* categories of ``relevant_counts`` (approvals, scans,
+    emails) but returns the actual items (with ids) so the notifier pushes each
+    one exactly once and the click deep-links to it. Org-wide **leaves** are
+    intentionally excluded here: they have no owner, so a per-user push would
+    ping every user about every leave. Leaves stay in the in-app bell via
+    ``relevant_counts``.
+    """
+    items: list[ActionableItem] = []
+
+    # Approvals — books whose current pending step is assigned to this user.
+    if perm_service.has_capability(db, user, "books.approve"):
+        for book in book_service.list_awaiting(db, user_id=user.id):
+            label = book.ref_number or book.subject or f"#{book.id}"
+            items.append(
+                ActionableItem("approval", f"book:{book.id}", f"/books/{book.id}", label)
+            )
+
+    # Scans — owned inbox items needing action (matches counts()'s "total").
+    for state in ("awaiting_confirmation", "unrouted"):
+        for s in scan_inbox_service.list_items(
+            db, owner_user_id=user.id, state=state
+        ):
+            items.append(ActionableItem("scan", f"scan:{s.id}", "/scan-inbox", f"#{s.id}"))
+
+    # Emails — unread received mail in this user's mailbox.
+    for eid in ledger_service.unread_email_ids(db, owner_user_id=user.id):
+        items.append(ActionableItem("email", f"email:{eid}", "/ledger", f"#{eid}"))
+
+    return items
 
 _LEAVE_PAGE = 500  # == leaves LIST_MAX_LIMIT in api/v1/leaves.py
 

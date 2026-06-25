@@ -37,7 +37,7 @@ def subscribe(
 ) -> Response:
     """Upsert a push subscription for the signed-in user."""
     push_service.store_subscription(
-        db, user.id, payload, request.headers.get("user-agent")
+        db, user.id, payload, request.headers.get("user-agent"), payload.locale
     )
     return Response(status_code=status.HTTP_201_CREATED)
 

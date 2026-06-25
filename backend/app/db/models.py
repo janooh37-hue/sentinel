@@ -997,6 +997,9 @@ class PushSubscription(Base):
     p256dh: Mapped[str] = mapped_column(String(128), nullable=False)
     auth: Mapped[str] = mapped_column(String(64), nullable=False)
     user_agent: Mapped[str | None] = mapped_column(String(256), nullable=True)
+    # UI language at subscribe time ('en' | 'ar' | …) so pushes can be localized
+    # per device. NULL → treat as English.
+    locale: Mapped[str | None] = mapped_column(String(8), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime, default=_utcnow, server_default=func.current_timestamp()
     )
@@ -1007,6 +1010,33 @@ class PushSubscription(Base):
             "user_id", "endpoint", name="uq_push_subscriptions_user_endpoint"
         ),
         Index("ix_push_subscriptions_user_id", "user_id"),
+    )
+
+
+class PushSent(Base):
+    """Durable per-(user, item) push ledger (migration 0041).
+
+    One row per actionable item we've already pushed a user about, so the
+    notifier sends each new item exactly ONCE and survives process restarts —
+    the previous in-memory count-digest re-notified every still-open item on
+    every boot. ``ref`` is an opaque per-kind item key (e.g. ``"book:42"``).
+    """
+
+    __tablename__ = "push_sent"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    user_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    )
+    kind: Mapped[str] = mapped_column(String(16), nullable=False)
+    ref: Mapped[str] = mapped_column(String(64), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, default=_utcnow, server_default=func.current_timestamp()
+    )
+
+    __table_args__ = (
+        UniqueConstraint("user_id", "kind", "ref", name="uq_push_sent_user_kind_ref"),
+        Index("ix_push_sent_user_id", "user_id"),
     )
 
 

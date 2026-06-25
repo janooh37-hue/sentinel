@@ -1448,8 +1448,11 @@ export const api = {
 
   // --- web push (Phase 5 LAN) ---
   getVapidPublicKey: () => request<{ public_key: string }>('GET', '/push/vapid-public-key'),
-  subscribePush: (sub: { endpoint: string; keys: { p256dh: string; auth: string } }) =>
-    request<void>('POST', '/push/subscribe', sub),
+  subscribePush: (sub: {
+    endpoint: string
+    keys: { p256dh: string; auth: string }
+    locale?: string
+  }) => request<void>('POST', '/push/subscribe', sub),
   unsubscribePush: (endpoint: string) =>
     request<void>('DELETE', '/push/subscribe', { endpoint }),
 }

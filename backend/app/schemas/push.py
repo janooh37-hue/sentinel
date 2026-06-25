@@ -13,6 +13,8 @@ class PushKeys(BaseModel):
 class PushSubscriptionIn(BaseModel):
     endpoint: str
     keys: PushKeys
+    # Device UI language ('en'/'ar') so pushes to this endpoint are localized.
+    locale: str | None = None
 
 
 class EndpointIn(BaseModel):

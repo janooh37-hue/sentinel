@@ -517,6 +517,22 @@ def unread_email_count(db: Session, owner_user_id: int | None = None) -> int:
     return int(db.execute(stmt).scalar_one())
 
 
+def unread_email_ids(db: Session, owner_user_id: int | None = None) -> list[int]:
+    """Ids behind ``unread_email_count`` (same filter) — for per-item push.
+
+    Kept beside ``unread_email_count`` so the two never diverge.
+    """
+    stmt = select(LedgerEntry.id).where(
+        LedgerEntry.channel == "email",
+        LedgerEntry.direction.in_(("incoming", "internal")),
+        LedgerEntry.read_at.is_(None),
+        LedgerEntry.deleted_at.is_(None),
+    )
+    if owner_user_id is not None:
+        stmt = stmt.where(LedgerEntry.owner_user_id == owner_user_id)
+    return list(db.execute(stmt).scalars())
+
+
 def mark_entry_read(
     db: Session, entry_id: int, owner_user_id: int | None = None
 ) -> LedgerEntry:
@@ -841,6 +857,7 @@ __all__ = [
     "soft_delete_entry",
     "toggle_star",
     "unread_email_count",
+    "unread_email_ids",
     "update_entry",
     "upsert_draft",
 ]
