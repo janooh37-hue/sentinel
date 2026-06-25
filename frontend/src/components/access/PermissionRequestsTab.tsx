@@ -74,7 +74,7 @@ function PermissionRequestCard({
 
   const [refuseOpen, setRefuseOpen] = useState(false)
   const [refuseNote, setRefuseNote] = useState('')
-  const [window, setWindow] = useState<Window>('2h')
+  const [grantWindow, setGrantWindow] = useState<Window>('2h')
 
   const windows: { id: Window; label: string }[] = [
     { id: '2h', label: t('access.permReq.window2h') },
@@ -129,9 +129,9 @@ function PermissionRequestCard({
                 key={w.id}
                 type="button"
                 disabled={deciding}
-                onClick={() => setWindow(w.id)}
+                onClick={() => setGrantWindow(w.id)}
                 className={`rounded-full px-2.5 py-1 text-[0.75em] font-medium transition-colors ${
-                  window === w.id
+                  grantWindow === w.id
                     ? 'bg-primary text-primary-foreground'
                     : 'text-muted-foreground hover:text-foreground'
                 } disabled:opacity-50`}
@@ -143,7 +143,7 @@ function PermissionRequestCard({
           <button
             type="button"
             disabled={deciding}
-            onClick={() => onDecide(req.id, 'once', { window })}
+            onClick={() => onDecide(req.id, 'once', { window: grantWindow })}
             className="inline-flex items-center gap-1.5 rounded-full bg-primary px-3.5 py-1.5 text-[0.82em] font-semibold text-primary-foreground transition-colors hover:bg-primary-hover disabled:opacity-60"
           >
             {deciding ? (

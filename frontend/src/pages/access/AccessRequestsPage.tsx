@@ -766,12 +766,11 @@ export function AccessRequestsPage(): React.JSX.Element {
   const { user } = useAuth()
   const [searchParams, setSearchParams] = useSearchParams()
   // One-shot URL → state sync: ?tab=permission-requests deep-links into that tab.
-  const initialTab = ((): TabId => {
+  const [tab, setTab] = useState<TabId>(() => {
     const p = searchParams.get('tab')
     if (p === 'permission-requests') return 'permission-requests'
     return 'pending'
-  })()
-  const [tab, setTab] = useState<TabId>(initialTab)
+  })
 
   // Clear the ?tab param after reading it so the URL stays clean.
   useEffect(() => {
