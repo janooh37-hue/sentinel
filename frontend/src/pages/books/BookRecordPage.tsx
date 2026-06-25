@@ -254,8 +254,14 @@ export function BookRecordPage(): React.JSX.Element {
   const current = versions.length ? versions[versions.length - 1] : undefined
   // Prefer the generated document; fall back to a v3-imported record's PDF
   // (served from the employee vault) when the book has no generated version.
+  // The download URL is identical before and after signing (the backend swaps
+  // in the signed artifact once the version is locked), so append a `rev` marker
+  // when a signed PDF exists — without it the canvas keeps showing the cached
+  // unsigned bytes and the just-applied manager signature never appears on screen.
   const pdfUrl = current?.document_id
-    ? `/api/v1/documents/${current.document_id}/download?format=pdf`
+    ? `/api/v1/documents/${current.document_id}/download?format=pdf${
+        current.signed_pdf_url ? '&rev=signed' : ''
+      }`
     : (book?.imported_doc?.pdf_url ?? null)
 
   const submitter = book?.submitted_by_name ?? '—'
@@ -346,9 +352,12 @@ export function BookRecordPage(): React.JSX.Element {
   const signMutation = useMutation({
     mutationFn: () => api.signBook(book!.id),
     onSuccess: () => {
+      // Stay on the record (do NOT navigate away): the refetch flips the state
+      // to approved and the desk reloads the signed PDF, so the signer sees
+      // their signature land on the document — the confirmation managers expect
+      // from "Sign & approve". Reject/return still navigate back to the list.
       invalidateAll()
       toast.success(t('books.approval.signed'))
-      navigate('/books')
     },
     onError: (err) => {
       if (err instanceof ApiError && err.code === 'NO_SIGNATURE') {
@@ -405,8 +414,9 @@ export function BookRecordPage(): React.JSX.Element {
         @media (prefers-reduced-motion:reduce){.rec-live-node,.rec-live-rail{animation:none}}
       `}</style>
 
-      {/* header */}
-      <header className="flex items-center gap-3.5 border-b border-hairline bg-gradient-to-b from-surface to-surface-tinted/40 px-5 py-3.5">
+      {/* header — wraps on phone-width so the action cluster flows onto its own
+          row instead of overflowing the viewport (mobile is the approval surface). */}
+      <header className="flex flex-wrap items-center gap-x-3.5 gap-y-2.5 border-b border-hairline bg-gradient-to-b from-surface to-surface-tinted/40 px-4 py-3 sm:px-5 sm:py-3.5">
         <button
           type="button"
           onClick={() => navigate('/books')}
@@ -415,7 +425,7 @@ export function BookRecordPage(): React.JSX.Element {
         >
           <ArrowLeft className="h-4 w-4 rtl:-scale-x-100" strokeWidth={2.2} />
         </button>
-        <div className="min-w-0">
+        <div className="min-w-0 flex-1">
           <div className="font-mono text-[0.72em] font-semibold tracking-wide text-primary">
             {book?.ref_number ?? '—'}
           </div>
@@ -438,7 +448,7 @@ export function BookRecordPage(): React.JSX.Element {
             <StatePill state={state} signingPath={book.signing_path} signedSource={signedSource} />
           )}
         </div>
-        <div className="ms-auto flex items-center gap-2">
+        <div className="ms-auto flex flex-wrap items-center justify-end gap-2">
           <HeaderBtn
             icon={<Printer className="h-3.5 w-3.5" />}
             label={t('books.record.print')}

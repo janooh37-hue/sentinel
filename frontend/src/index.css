@@ -306,6 +306,23 @@ body {
   font-feature-settings: "tnum";
 }
 
+/* Mobile Safari zooms in on any form control whose font-size is under 16px the
+   moment it gains focus, then zooms back out on blur. With the app's em-based
+   control sizing several inputs land near 14px at the default content scale, so
+   focusing a field (e.g. the approval return/reject reason box) visually
+   "breaks" the layout — the page scales up and the field you're typing in
+   scrolls out of view until you tap Done. Pin form controls to a 16px floor on
+   phone-width viewports to suppress the zoom; the designed em sizing is kept on
+   larger screens, and the 1rem term lets the accessibility font-scale still
+   grow controls past 16px. */
+@media (max-width: 767px) {
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
+  textarea,
+  select {
+    font-size: max(16px, 1rem);
+  }
+}
+
 /* Discreet scrollbars — Oracle/Workday-style. */
 *::-webkit-scrollbar { width: 8px; height: 8px; }
 *::-webkit-scrollbar-track { background: transparent; }
