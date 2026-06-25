@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Install the security certificate — Windows</title>
+<style>
+  :root{ --blue:#1f4e79; --light:#eef3f9; --green:#1b7f4b; --amber:#fff7e6; --amberb:#e0a800; }
+  *{ box-sizing:border-box; }
+  body{ font-family:"Segoe UI",Arial,sans-serif; color:#222; margin:0; line-height:1.5; }
+  .wrap{ max-width:760px; margin:0 auto; padding:28px 34px; }
+  header{ border-bottom:4px solid var(--blue); padding-bottom:14px; margin-bottom:8px; }
+  h1{ color:var(--blue); font-size:26px; margin:0 0 4px; }
+  .sub{ color:#555; font-size:14px; }
+  .url{ display:inline-block; background:var(--blue); color:#fff; padding:4px 12px; border-radius:6px; font-weight:600; letter-spacing:.3px; }
+  h2{ color:var(--blue); font-size:19px; margin:26px 0 10px; padding:7px 12px; background:var(--light); border-left:5px solid var(--blue); border-radius:4px; }
+  ol{ counter-reset:step; list-style:none; padding-left:0; margin:0; }
+  ol li{ counter-increment:step; position:relative; padding:8px 0 8px 46px; min-height:34px; }
+  ol li::before{ content:counter(step); position:absolute; left:0; top:6px; width:30px; height:30px;
+    background:var(--blue); color:#fff; border-radius:50%; text-align:center; line-height:30px; font-weight:700; font-size:15px; }
+  .path{ background:#f1f1f1; border:1px solid #ddd; border-radius:4px; padding:1px 6px; font-family:Consolas,monospace; font-size:13px; }
+  .btn{ background:#e7eef7; border:1px solid #b9cde8; border-radius:4px; padding:1px 7px; font-weight:600; color:var(--blue); }
+  .tip{ background:var(--amber); border:1px solid var(--amberb); border-radius:6px; padding:10px 14px; margin:14px 0; font-size:14px; }
+  .tip b{ color:#9a6b00; }
+  .ok{ color:var(--green); font-weight:600; }
+  .lead{ font-size:15px; background:var(--light); padding:12px 16px; border-radius:8px; margin:14px 0 4px; }
+  footer{ margin-top:30px; padding-top:12px; border-top:1px solid #ddd; color:#888; font-size:12px; }
+  @page{ margin:14mm; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>💻 Install the App Certificate — Windows PC</h1>
+    <div class="sub">GSSG Manager · one-time setup (about 1 minute)</div>
+  </header>
+
+  <p class="lead">To open the app at <span class="url">https://gssgit</span> on a Windows PC, install this small
+  security certificate <b>once</b>. It simply tells Windows to trust our office server. Safe — it holds no passwords.</p>
+
+  <div class="tip"><b>First:</b> copy the file <span class="path">gssg-ca.crt</span> onto the PC
+  (USB drive, email, or a shared folder).</div>
+
+  <h2>Install steps</h2>
+  <ol>
+    <li><b>Double-click</b> the file <span class="path">gssg-ca.crt</span>.</li>
+    <li>In the window that opens, click <span class="btn">Install Certificate…</span></li>
+    <li>For <b>Store Location</b>, choose <span class="btn">Local Machine</span>, then click <span class="btn">Next</span>.
+      <br>(Approve the admin / User Account Control prompt if it appears.)</li>
+    <li>Choose <b>"Place all certificates in the following store"</b>, then click <span class="btn">Browse…</span></li>
+    <li>Select <b>"Trusted Root Certification Authorities"</b> → click <span class="btn">OK</span> →
+      <span class="btn">Next</span> → <span class="btn">Finish</span>.</li>
+    <li>A security warning appears — click <span class="btn">Yes</span> to confirm.</li>
+    <li>You'll see <i>"The import was successful."</i> Click <span class="btn">OK</span>.</li>
+    <li>Open <b>Edge</b> or <b>Chrome</b> and go to <span class="url">https://gssgit</span>.
+      <span class="ok">✓ The app loads with a padlock and no warning.</span></li>
+  </ol>
+
+  <div class="tip"><b>"Local Machine" is greyed out / no admin rights?</b> Choose <span class="btn">Current User</span>
+  instead in step 3 — the rest of the steps are identical, and it works for your login.</div>
+
+  <h2>Which address to use</h2>
+  <ol>
+    <li><span class="url">https://gssgit</span> — simplest, works on Windows.</li>
+    <li><span class="url">https://gssgit.local</span> — also works (and is what phones use).</li>
+  </ol>
+
+  <h2>❓ If it doesn't open</h2>
+  <ol>
+    <li>Make sure the PC is on the <b>same office network</b> as the server.</li>
+    <li>Type the full address with <b>https</b>: <span class="url">https://gssgit</span></li>
+    <li>If you see a certificate warning, the cert wasn't placed in
+      <b>"Trusted Root Certification Authorities"</b> — repeat steps 4–5.</li>
+  </ol>
+
+  <footer>GSSG Manager — internal LAN access guide. The certificate contains no passwords and is safe to install.
+  Keep this for setting up new PCs.</footer>
+</div>
+</body>
+</html>

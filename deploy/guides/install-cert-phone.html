@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Install the security certificate — Phone</title>
+<style>
+  :root{ --blue:#1f4e79; --light:#eef3f9; --green:#1b7f4b; --amber:#fff7e6; --amberb:#e0a800; }
+  *{ box-sizing:border-box; }
+  body{ font-family:"Segoe UI",Arial,sans-serif; color:#222; margin:0; line-height:1.5; }
+  .wrap{ max-width:760px; margin:0 auto; padding:28px 34px; }
+  header{ border-bottom:4px solid var(--blue); padding-bottom:14px; margin-bottom:8px; }
+  h1{ color:var(--blue); font-size:26px; margin:0 0 4px; }
+  .sub{ color:#555; font-size:14px; }
+  .url{ display:inline-block; background:var(--blue); color:#fff; padding:4px 12px; border-radius:6px; font-weight:600; letter-spacing:.3px; }
+  h2{ color:var(--blue); font-size:19px; margin:26px 0 10px; padding:7px 12px; background:var(--light); border-left:5px solid var(--blue); border-radius:4px; }
+  ol{ counter-reset:step; list-style:none; padding-left:0; margin:0; }
+  ol li{ counter-increment:step; position:relative; padding:8px 0 8px 46px; min-height:34px; }
+  ol li::before{ content:counter(step); position:absolute; left:0; top:6px; width:30px; height:30px;
+    background:var(--blue); color:#fff; border-radius:50%; text-align:center; line-height:30px; font-weight:700; font-size:15px; }
+  .path{ background:#f1f1f1; border:1px solid #ddd; border-radius:4px; padding:1px 6px; font-family:Consolas,monospace; font-size:13px; white-space:nowrap; }
+  .tip{ background:var(--amber); border:1px solid var(--amberb); border-radius:6px; padding:10px 14px; margin:14px 0; font-size:14px; }
+  .tip b{ color:#9a6b00; }
+  .key{ background:#fde8e8; border:1px solid #e0a0a0; border-radius:6px; padding:10px 14px; margin:12px 0; font-size:14px; }
+  .ok{ color:var(--green); font-weight:600; }
+  .lead{ font-size:15px; background:var(--light); padding:12px 16px; border-radius:8px; margin:14px 0 4px; }
+  footer{ margin-top:30px; padding-top:12px; border-top:1px solid #ddd; color:#888; font-size:12px; }
+  @page{ margin:14mm; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>📱 Install the App Certificate — Phone</h1>
+    <div class="sub">GSSG Manager · one-time setup (about 2 minutes)</div>
+  </header>
+
+  <p class="lead">To open the app at <span class="url">https://gssgit.local</span> on your phone, you install a small
+  security certificate <b>once</b>. This is safe — it just tells your phone to trust our office server.
+  You only do this a single time per device.</p>
+
+  <div class="tip"><b>First:</b> get the file <span class="path">gssg-ca.crt</span> onto your phone — the easiest ways are
+  <b>AirDrop</b> (iPhone), or <b>email it to yourself</b> and open it on the phone, or download it from a shared folder.</div>
+
+  <h2>🍎 iPhone / iPad</h2>
+  <ol>
+    <li>Get the file <span class="path">gssg-ca.crt</span> onto the phone (AirDrop or email), then <b>tap it</b>.
+      You'll see a message: <i>"Profile Downloaded"</i>.</li>
+    <li>Open <span class="path">Settings</span> → <span class="path">General</span> → <span class="path">VPN &amp; Device Management</span>.</li>
+    <li>Under <b>Downloaded Profile</b>, tap the profile named <b>"Caddy Local Authority"</b>.</li>
+    <li>Tap <b>Install</b> (top-right) → enter your phone passcode → tap <b>Install</b> again to confirm.</li>
+    <li>Now the important extra step: go to <span class="path">Settings</span> → <span class="path">General</span> →
+      <span class="path">About</span> → <span class="path">Certificate Trust Settings</span>.</li>
+    <li>Turn <b>ON</b> the switch next to <b>"Caddy Local Authority"</b>, then tap <b>Continue</b>.</li>
+    <li>Open <b>Safari</b> and go to <span class="url">https://gssgit.local</span>.
+      <span class="ok">✓ The app loads with a padlock and no warning.</span></li>
+  </ol>
+
+  <div class="key"><b>⚠️ Don't skip step 5–6.</b> On iPhone the certificate is <u>not trusted</u> until you turn on the
+  switch under <b>Certificate Trust Settings</b>. Without it, Safari will still show "Not Secure".</div>
+
+  <h2>🤖 Android</h2>
+  <ol>
+    <li>Get the file <span class="path">gssg-ca.crt</span> onto the phone (email it to yourself, USB cable, or download).</li>
+    <li>Open <span class="path">Settings</span> and search for <b>"CA certificate"</b> (or go to
+      <span class="path">Security</span> → <span class="path">More security settings</span> →
+      <span class="path">Encryption &amp; credentials</span>).</li>
+    <li>Tap <b>Install a certificate</b> → <b>CA certificate</b>.</li>
+    <li>If a warning appears, tap <b>Install anyway</b>, then browse to and select <span class="path">gssg-ca.crt</span>.</li>
+    <li>You'll see <i>"Certificate installed"</i> / <i>"CA certificate is installed"</i>.</li>
+    <li>Open <b>Chrome</b> and go to <span class="url">https://gssgit.local</span>.
+      <span class="ok">✓ The app loads with a padlock.</span></li>
+  </ol>
+
+  <div class="tip"><b>Menus look different?</b> Android wording varies by brand (Samsung, Xiaomi, Oppo…). Just open
+  Settings and <b>search "CA certificate"</b> — that always finds the right screen.</div>
+
+  <h2>❓ If it still doesn't open</h2>
+  <ol>
+    <li>Make sure the phone is on the <b>same Wi-Fi</b> as the office (not mobile data, not a guest network).</li>
+    <li>Type the address exactly: <span class="url">https://gssgit.local</span> (with the <b>https</b>).</li>
+    <li>Still stuck? Try <span class="path">https://gssgit.local/</span> (with a slash), or ask IT to confirm the
+      certificate shows as <b>"Caddy Local Authority"</b> and is trusted.</li>
+  </ol>
+
+  <footer>GSSG Manager — internal LAN access guide. The certificate contains no passwords and is safe to install.
+  Keep this for new devices.</footer>
+</div>
+</body>
+</html>
