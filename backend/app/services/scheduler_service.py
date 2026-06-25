@@ -99,6 +99,13 @@ _KIND_META: dict[str, tuple[str, str, str, str, str]] = {
         "مستند بانتظار توقيعك",
         "مستندات بانتظار توقيعك",
     ),
+    "review": (
+        "/books?status=pending",
+        "document awaiting your review",
+        "documents awaiting your review",
+        "مستند بانتظار مراجعتك",
+        "مستندات بانتظار مراجعتك",
+    ),
     "scan": (
         "/scan-inbox",
         "scan awaiting review",
@@ -123,13 +130,25 @@ def _build_push(
     """Localized (en/ar) (title, body) pairs + the click deep-link URL."""
     section_url, en_sing, en_plur, ar_sing, ar_plur = meta
     n = len(new_items)
-    if kind == "approval" and n == 1:
-        # Single new approval → name it and deep-link straight to the record.
+    if kind in ("approval", "review") and n == 1:
+        # Single new approval/review → name it, say sign-vs-review, who it's
+        # from, and deep-link straight to the record.
         item = new_items[0]
+        verb_en = "signature" if kind == "approval" else "review"
+        verb_ar = "توقيعك" if kind == "approval" else "مراجعتك"
+        subj = f" — {item.subject}" if item.subject else ""
+        from_en = f" (from {item.requester})" if item.requester else ""
+        from_ar = f" (من {item.requester})" if item.requester else ""
         return (
             {
-                "en": (_TITLE["en"], f"Document {item.label} awaiting your signature"),
-                "ar": (_TITLE["ar"], f"المستند {item.label} بانتظار توقيعك"),
+                "en": (
+                    _TITLE["en"],
+                    f"{item.label}{subj} · awaiting your {verb_en}{from_en}",
+                ),
+                "ar": (
+                    _TITLE["ar"],
+                    f"{item.label}{subj} · بانتظار {verb_ar}{from_ar}",
+                ),
             },
             item.url,
         )

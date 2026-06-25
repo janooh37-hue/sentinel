@@ -27,13 +27,21 @@ self.addEventListener('notificationclick', (event) => {
   event.notification.close()
   const url = (event.notification.data && event.notification.data.url) || '/'
   event.waitUntil(
-    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((cs) => {
+    (async () => {
+      const cs = await self.clients.matchAll({ type: 'window', includeUncontrolled: true })
+      // Prefer routing inside an already-open app window: focus it and let
+      // React Router navigate client-side. `WindowClient.navigate()` is
+      // unreliable in iOS standalone PWAs (it can land on a blank page), so we
+      // postMessage instead and only fall back to a full load when no window
+      // is open.
       for (const c of cs) {
         if ('focus' in c) {
-          return c.navigate(url).catch(() => self.clients.openWindow(url)).then(() => c.focus())
+          await c.focus()
+          c.postMessage({ type: 'notification-navigate', url })
+          return
         }
       }
-      return self.clients.openWindow(url)
-    }),
+      await self.clients.openWindow(url)
+    })(),
   )
 })

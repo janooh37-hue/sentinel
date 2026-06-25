@@ -1,4 +1,4 @@
-import { lazy, Suspense, useState } from 'react'
+import { lazy, Suspense, useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { BrowserRouter, Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom'
@@ -125,6 +125,22 @@ function Shell(): React.JSX.Element {
   // Phase 4 LAN — SSE notification stream. Enabled only when the session is
   // resolved so it doesn't open a connection that 401s immediately.
   useNotificationStream(status === 'authed')
+
+  // Web Push deep-link: the service worker postMessages the target path when a
+  // notification is clicked; route client-side (React Router) so an already-open
+  // app — notably iOS standalone PWAs — navigates to the item instead of doing a
+  // blank full reload.
+  useEffect(() => {
+    if (typeof navigator === 'undefined' || !('serviceWorker' in navigator)) return
+    const onMessage = (e: MessageEvent): void => {
+      const data = e.data as { type?: string; url?: string } | null
+      if (data?.type === 'notification-navigate' && typeof data.url === 'string') {
+        navigate(data.url)
+      }
+    }
+    navigator.serviceWorker.addEventListener('message', onMessage)
+    return () => navigator.serviceWorker.removeEventListener('message', onMessage)
+  }, [navigate])
 
   // Chrome-less surfaces — full-bleed previews live under /mockups/* and
   // shouldn't render the TopNav, LockOverlay, or the auth gate.

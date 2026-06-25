@@ -30,10 +30,12 @@ from app.services import (
 class ActionableItem:
     """One owned, actionable item for Web Push — carries its own deep link."""
 
-    kind: str  # 'approval' | 'scan' | 'email'
+    kind: str  # 'approval' (sign) | 'review' | 'scan' | 'email'
     ref: str  # opaque, stable per-kind key, e.g. 'book:42'
     url: str  # frontend deep-link path the notification click navigates to
     label: str  # short human label (ref number / id) for the body text
+    subject: str | None = None  # richer context for single-item bodies
+    requester: str | None = None  # who submitted it (approvals/reviews)
 
 
 def actionable_items(db: Session, user: User) -> list[ActionableItem]:
@@ -45,16 +47,30 @@ def actionable_items(db: Session, user: User) -> list[ActionableItem]:
     intentionally excluded here: they have no owner, so a per-user push would
     ping every user about every leave. Leaves stay in the in-app bell via
     ``relevant_counts``.
+
+    Approval-chain items are split by the user's role on the pending step so
+    the copy is correct: ``approval`` (the signing manager → "sign") vs
+    ``review`` (an advisory reviewer → "review"). Assignment to the step IS the
+    authorization to act, so — unlike the books.approve-gated bell count — we
+    notify every assignee, including reviewers who don't hold books.approve.
     """
     items: list[ActionableItem] = []
 
-    # Approvals — books whose current pending step is assigned to this user.
-    if perm_service.has_capability(db, user, "books.approve"):
-        for book in book_service.list_awaiting(db, user_id=user.id):
-            label = book.ref_number or book.subject or f"#{book.id}"
-            items.append(
-                ActionableItem("approval", f"book:{book.id}", f"/books/{book.id}", label)
+    # Approval chain — books whose current pending step is assigned to this user.
+    for book in book_service.list_awaiting(db, user_id=user.id):
+        role = book_service.your_step_kind(book, user.id)
+        kind = "review" if role == "reviewer" else "approval"
+        label = book.ref_number or book.subject or f"#{book.id}"
+        items.append(
+            ActionableItem(
+                kind,
+                f"book:{book.id}",
+                f"/books/{book.id}",
+                label,
+                subject=book.subject,
+                requester=book_service.submitter_name(db, book),
             )
+        )
 
     # Scans — owned inbox items needing action (matches counts()'s "total").
     for state in ("awaiting_confirmation", "unrouted"):

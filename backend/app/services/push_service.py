@@ -46,6 +46,16 @@ def store_subscription(
     ``locale`` is the device's UI language ('en'/'ar') so pushes to this
     endpoint can be localized; re-subscribing refreshes it.
     """
+    # An endpoint identifies one device/browser, owned by whoever is currently
+    # signed in there. Drop any claim on it by a DIFFERENT user so a shared
+    # device (e.g. two people signing in on the same phone) doesn't receive
+    # both users' notifications — the "double message" bug.
+    db.execute(
+        delete(PushSubscription).where(
+            PushSubscription.endpoint == sub.endpoint,
+            PushSubscription.user_id != user_id,
+        )
+    )
     existing = db.scalar(
         select(PushSubscription).where(
             PushSubscription.user_id == user_id,
