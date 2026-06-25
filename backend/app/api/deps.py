@@ -67,6 +67,7 @@ def require_capability(capability: str) -> Callable[..., User]:
                 "FORBIDDEN",
                 f"Missing capability: {capability}",
                 http_status=403,
+                details={"capability": capability},
             )
         return user
 
