@@ -97,7 +97,7 @@ export function SubmitterPickerField({
             </Select>
           )}
         />
-        <CapabilityGate cap="submitters.manage">
+        <CapabilityGate cap="submitters.manage" requestable>
           <Button
             type="button"
             variant="secondary"

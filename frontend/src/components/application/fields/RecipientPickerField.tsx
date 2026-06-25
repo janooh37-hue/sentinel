@@ -215,7 +215,7 @@ export function RecipientPickerField({
               )}
 
               {/* Manage button — requires books.manage capability */}
-              <CapabilityGate cap="books.manage">
+              <CapabilityGate cap="books.manage" requestable>
                 <Button
                   type="button"
                   variant="secondary"

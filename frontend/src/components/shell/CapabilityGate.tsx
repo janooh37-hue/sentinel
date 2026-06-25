@@ -70,6 +70,11 @@ function GateInner({
   if (has(cap)) return <>{children}</>
 
   // Lock mode — show children wrapped in a clickable lock affordance.
+  // We intentionally use a <span role="button"> instead of <button> so that
+  // children that are themselves <button> or <a> elements do not produce
+  // nested interactive elements (invalid HTML, breaks a11y/hydration).
+  // The child is rendered with pointer-events-none + reduced opacity so its
+  // own click never fires — the wrapper intercepts and opens the dialog.
   if (requestable && !SENSITIVE_CAPS.has(cap)) {
     const catalogEntry = catalogQuery.data?.find((c) => c.id === cap)
     const label = catalogEntry?.label ?? cap
@@ -77,15 +82,24 @@ function GateInner({
 
     return (
       <>
-        <button
-          type="button"
+        <span
+          role="button"
+          tabIndex={0}
           className="relative inline-flex cursor-pointer items-center gap-1 opacity-70"
           onClick={() => setDialogOpen(true)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault()
+              setDialogOpen(true)
+            }
+          }}
           aria-label={t('perms.locked', { label, defaultValue: `You need permission for ${label}. Click to request access.` })}
         >
           <Lock className="h-3.5 w-3.5 shrink-0" />
-          {children}
-        </button>
+          {/* aria-hidden: the child is visually present but inert — the span
+              wrapper above is the single interactive affordance. */}
+          <span className="pointer-events-none" aria-hidden="true">{children}</span>
+        </span>
         <PermissionRequestDialog
           capability={cap}
           label={label}
