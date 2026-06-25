@@ -272,7 +272,22 @@ export interface CapabilityRead {
   id: string
   domain: string
   label: string
+  description: string
   default_roles: Array<'operator' | 'manager' | 'admin'>
+}
+
+// Permission requests (Task 10 — employee permission-request UI).
+// Hand-mirrored from backend/app/schemas/auth.py PermissionRequestRead.
+export type PermissionRequestStatus = 'pending' | 'approved' | 'denied' | 'expired'
+export interface PermissionRequestRead {
+  id: number
+  user_id: number
+  requester_name: string | null
+  capability: string
+  capability_label: string
+  status: PermissionRequestStatus
+  decision: string | null
+  created_at: string
 }
 
 export interface UserPermissionRead {
@@ -1419,6 +1434,21 @@ export const api = {
       capability,
       effect,
     }),
+
+  // --- permission requests (Task 10) ---
+  /** Submit a capability request for the signed-in user.
+   * The backend is idempotent — if a pending request already exists for this
+   * capability it returns the existing row rather than 409. */
+  requestPermission: (capability: string) =>
+    request<unknown>('POST', '/permissions/requests', { capability }),
+  /** List permission requests — admins see all, operators see their own. */
+  listPermissionRequests: () =>
+    request<PermissionRequestRead[]>('GET', '/permissions/requests'),
+  /** Admin: approve or deny a request. */
+  decidePermissionRequest: (
+    id: number,
+    body: { decision: string; window?: string; note?: string },
+  ) => request<unknown>('POST', `/permissions/requests/${id}/decide`, body),
 
   // --- expiry (Phase B) ---
   getExpiry: (within = 90, type: 'all' | 'uae_id' | 'passport' = 'all') =>

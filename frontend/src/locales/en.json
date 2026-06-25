@@ -2368,5 +2368,18 @@
         "system.admin": "Admin key + v3 migration"
       }
     }
+  },
+  "perms": {
+    "locked": "You need permission for {{label}}. Click to request access.",
+    "request": {
+      "title": "Request permission",
+      "body": "You don't have permission to {{label}}. {{description}} Would you like to request access?",
+      "send": "Request",
+      "close": "Close",
+      "sent": "Request sent",
+      "pending": "A request is already pending for this permission"
+    },
+    "noAccessPage": "You don't have access to this page",
+    "requestAccess": "Request access"
   }
 }
