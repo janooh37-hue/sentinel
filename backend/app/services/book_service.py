@@ -419,6 +419,15 @@ def submit_for_approval(
             "login account in Settings → Managers, or pick one.",
         )
     approver_id = resolved_id  # lenient: signature enforced at sign-time, not here
+    # Validate the approver is a real, active account before we build the step.
+    # BookApprovalStep.assignee_user_id is a NOT-NULL FK (ondelete=RESTRICT), so a
+    # stale/deleted id would otherwise blow up as an opaque 500 at db.commit().
+    approver = db.get(User, approver_id)
+    if approver is None or approver.status != "active":
+        raise ValidationFailedError(
+            "APPROVER_NOT_ELIGIBLE",
+            "The chosen signing manager is not an active user account.",
+        )
 
     # Reviewers: active accounts, deduped, never the approver.
     seen: set[int] = set()
@@ -776,8 +785,11 @@ def list_approver_candidates(db: Session) -> list[ApproverOptionRead]:
     for user in users:
         if not perm_service.has_capability(db, user, "books.approve"):
             continue
-        if not user.signature_path:
-            continue
+        # Lenient by design: a signature-less approver is still eligible to be
+        # picked here — the signature is enforced later, at sign-time, and the
+        # submit dialog shows a "no signature on file" warning. Filtering them
+        # out here empties the picker and hides the Submit button entirely when
+        # no approver happens to have a signature yet.
         out.append(
             ApproverOptionRead(
                 id=user.id,

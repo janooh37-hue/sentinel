@@ -134,7 +134,7 @@ export function SubmitForApprovalDialog({ bookId, onClose }: Props): React.JSX.E
       onClose()
     },
     onError: (err) => {
-      if (err instanceof ApiError && err.message === 'APPROVER_REQUIRED') {
+      if (err instanceof ApiError && err.code === 'APPROVER_REQUIRED') {
         toast.error(t('books.approval.managerNotLinked'))
       } else {
         toast.error(err instanceof ApiError ? err.message : String(err))

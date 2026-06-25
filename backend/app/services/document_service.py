@@ -1320,6 +1320,18 @@ def generate_document(
             db.add(initial_row)
             db.flush()
             _state_version = initial_row
+        else:
+            # Committed save but no book_categories row for cat_code: the doc
+            # file is produced yet no Book is created, so it never appears in
+            # Records. This is a misconfiguration (unseeded category), not a
+            # normal path — log it loudly so the silent drop is diagnosable.
+            log.warning(
+                "Generated document %s committed but book_categories row for "
+                "cat_code=%r is missing — no Book created, doc will NOT appear "
+                "in Records.",
+                doc_row.id,
+                cat_code,
+            )
 
     # ------------------------------------------------------------------
     # 11b-2. Per-path generation states (spec §4) — runs for new books AND
