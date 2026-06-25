@@ -13,6 +13,8 @@ defaults so the gate works without a seed step.
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
+
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -67,8 +69,11 @@ def effective_caps(db: Session, user: User) -> set[str]:
         .scalars()
         .all()
     )
+    now = datetime.now(UTC).replace(tzinfo=None)
     for ov in overrides:
         if ov.effect == "grant":
+            if ov.expires_at is not None and ov.expires_at <= now:
+                continue  # expired temporary grant
             caps.add(ov.capability)
         elif ov.effect == "deny":
             caps.discard(ov.capability)

@@ -875,6 +875,7 @@ class UserPermission(Base):
     )
     capability: Mapped[str] = mapped_column(String(64), primary_key=True)
     effect: Mapped[str] = mapped_column(String(8), nullable=False)
+    expires_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
     __table_args__ = (
         CheckConstraint("effect IN ('grant', 'deny')", name="ck_user_perm_effect"),
