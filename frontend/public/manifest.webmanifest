@@ -1,6 +1,6 @@
 {
   "name": "GSSG Manager",
-  "short_name": "GSSG",
+  "short_name": "GSSG Manager",
   "description": "GSSG HR document and approval workspace.",
   "start_url": "/",
   "scope": "/",
