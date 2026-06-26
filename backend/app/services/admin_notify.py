@@ -17,8 +17,8 @@ def active_admins(db: Session) -> list[User]:
 def notify_admins_new_request(db: Session, requester: User, capability_label: str, request_id: int) -> None:
     name = requester.display_name or requester.email
     messages = {
-        "en": ("GSSG Manager", f"{name} requested '{capability_label}' access"),
-        "ar": ("مدير GSSG", f"طلب {name} صلاحية '{capability_label}'"),
+        "en": ("GSSG Manager", f"New access request\n{name} is requesting “{capability_label}”"),
+        "ar": ("GSSG Manager", f"طلب صلاحية جديد\n{name} يطلب الوصول إلى ”{capability_label}“"),
     }
     for admin in active_admins(db):
         try:

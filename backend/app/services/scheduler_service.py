@@ -99,77 +99,121 @@ def _run_grant_sweep() -> None:
             log.exception("scheduler: grant sweep failed")
 
 
-# Localized notification copy per kind.
-#   section_url            — deep link when several new items of this kind
-#   (en_sing, en_plur)     — English noun, singular / plural
-#   (ar_sing, ar_plur)     — Arabic noun, singular / plural
-_KIND_META: dict[str, tuple[str, str, str, str, str]] = {
-    "approval": (
-        "/books?status=pending",
-        "document awaiting your signature",
-        "documents awaiting your signature",
-        "مستند بانتظار توقيعك",
-        "مستندات بانتظار توقيعك",
-    ),
-    "review": (
-        "/books?status=pending",
-        "document awaiting your review",
-        "documents awaiting your review",
-        "مستند بانتظار مراجعتك",
-        "مستندات بانتظار مراجعتك",
-    ),
-    "scan": (
-        "/scan-inbox",
-        "scan awaiting review",
-        "scans awaiting review",
-        "ملف ممسوح بانتظار المراجعة",
-        "ملفات ممسوحة بانتظار المراجعة",
-    ),
-    "email": (
-        "/ledger",
-        "unread email",
-        "unread emails",
-        "رسالة بريد غير مقروءة",
-        "رسائل بريد غير مقروءة",
-    ),
+# The notification title is always the app name, in both languages, because the
+# installed PWA already shows it as the grey header — keeping it as the bold line
+# is what the operator asked for. All the useful, specific detail lives in the
+# body. ``_KIND_META`` only holds each kind's section deep-link now.
+_APP_NAME = "GSSG Manager"
+_KIND_META: dict[str, str] = {
+    "approval": "/books?status=pending",
+    "review": "/books?status=pending",
+    "scan": "/scan-inbox",
+    "email": "/ledger",
 }
-_TITLE = {"en": "GSSG Manager", "ar": "مدير GSSG"}
+
+
+def _localized(en: str, ar: str) -> dict[str, tuple[str, str]]:
+    """Title is the app name in both languages; body is the localized copy."""
+    return {"en": (_APP_NAME, en), "ar": (_APP_NAME, ar)}
+
+
+def _attachments_line(n: int) -> tuple[str, str]:
+    """The email body's attachment ("size") line, EN/AR. Empty when none."""
+    if not n:
+        return "", ""
+    en = "1 attachment" if n == 1 else f"{n} attachments"
+    ar = "مرفق واحد" if n == 1 else f"{n} مرفقات"
+    return en, ar
+
+
+def _email_push(new_items: list, section_url: str) -> tuple[dict, str]:
+    """Email push — name the sender, subject, a content preview and attachment
+    count (single), or summarize the burst and name the latest (several)."""
+    n = len(new_items)
+    if n == 1:
+        it = new_items[0]
+        sender = it.requester or "Unknown sender"
+        subject = it.subject or "(no subject)"
+        att_en, att_ar = _attachments_line(it.attachments)
+        en_lines = [f"New email · {sender}", subject]
+        ar_lines = [f"بريد جديد · {sender}", subject]
+        if it.preview:
+            en_lines.append(it.preview)
+            ar_lines.append(it.preview)
+        if att_en:
+            en_lines.append(att_en)
+            ar_lines.append(att_ar)
+        return _localized("\n".join(en_lines), "\n".join(ar_lines)), it.url
+    latest = new_items[0]
+    who = latest.requester or "Unknown sender"
+    subj = latest.subject or "(no subject)"
+    return (
+        _localized(
+            f"{n} new emails\nLatest · {who} — {subj}",
+            f"{n} رسائل بريد جديدة\nالأحدث · {who} — {subj}",
+        ),
+        section_url,
+    )
+
+
+def _doc_push(kind: str, new_items: list, section_url: str) -> tuple[dict, str]:
+    """Approval / review push — name the record, who it's from, deep-link to it
+    (single); count the queue (several)."""
+    n = len(new_items)
+    is_sign = kind == "approval"
+    if n == 1:
+        it = new_items[0]
+        subj = f" — {it.subject}" if it.subject else ""
+        from_en = f"\nFrom {it.requester}" if it.requester else ""
+        from_ar = f"\nمن {it.requester}" if it.requester else ""
+        head_en = "Signature needed" if is_sign else "Review needed"
+        head_ar = "بانتظار توقيعك" if is_sign else "بانتظار مراجعتك"
+        return (
+            _localized(
+                f"{head_en} · {it.label}{subj}{from_en}",
+                f"{head_ar} · {it.label}{subj}{from_ar}",
+            ),
+            it.url,
+        )
+    noun_en = "documents awaiting your signature" if is_sign else "documents awaiting your review"
+    noun_ar = "مستندات بانتظار توقيعك" if is_sign else "مستندات بانتظار مراجعتك"
+    return _localized(f"{n} {noun_en}", f"{n} {noun_ar}"), section_url
+
+
+def _scan_push(new_items: list, section_url: str) -> tuple[dict, str]:
+    """Scan-inbox push — a scanned document is waiting to be reviewed/routed."""
+    n = len(new_items)
+    if n == 1:
+        label = new_items[0].label
+        return (
+            _localized(
+                f"New scan to review · {label}\nWaiting in your scan inbox",
+                f"ملف ممسوح جديد للمراجعة · {label}\nبانتظار المراجعة في صندوق الوارد",
+            ),
+            new_items[0].url,
+        )
+    return (
+        _localized(
+            f"{n} scanned documents awaiting your review",
+            f"{n} مستندات ممسوحة بانتظار مراجعتك",
+        ),
+        section_url,
+    )
 
 
 def _build_push(
-    kind: str, new_items: list, meta: tuple[str, str, str, str, str]
+    kind: str, new_items: list, section_url: str
 ) -> tuple[dict[str, tuple[str, str]], str]:
-    """Localized (en/ar) (title, body) pairs + the click deep-link URL."""
-    section_url, en_sing, en_plur, ar_sing, ar_plur = meta
-    n = len(new_items)
-    if kind in ("approval", "review") and n == 1:
-        # Single new approval/review → name it, say sign-vs-review, who it's
-        # from, and deep-link straight to the record.
-        item = new_items[0]
-        verb_en = "signature" if kind == "approval" else "review"
-        verb_ar = "توقيعك" if kind == "approval" else "مراجعتك"
-        subj = f" — {item.subject}" if item.subject else ""
-        from_en = f" (from {item.requester})" if item.requester else ""
-        from_ar = f" (من {item.requester})" if item.requester else ""
-        return (
-            {
-                "en": (
-                    _TITLE["en"],
-                    f"{item.label}{subj} · awaiting your {verb_en}{from_en}",
-                ),
-                "ar": (
-                    _TITLE["ar"],
-                    f"{item.label}{subj} · بانتظار {verb_ar}{from_ar}",
-                ),
-            },
-            item.url,
-        )
-    body_en = f"{n} {en_sing if n == 1 else en_plur}"
-    body_ar = f"{n} {ar_sing if n == 1 else ar_plur}"
-    return (
-        {"en": (_TITLE["en"], body_en), "ar": (_TITLE["ar"], body_ar)},
-        section_url,
-    )
+    """Localized {lang: (title, body)} pairs + the click deep-link URL.
+
+    Title is always the app name; the body is specific, professional copy that
+    says exactly what arrived. Dispatches per kind.
+    """
+    if kind == "email":
+        return _email_push(new_items, section_url)
+    if kind == "scan":
+        return _scan_push(new_items, section_url)
+    return _doc_push(kind, new_items, section_url)
 
 
 def _notify_user(session, user: User) -> None:
@@ -180,7 +224,7 @@ def _notify_user(session, user: User) -> None:
     by_kind: dict[str, list] = {}
     for it in items:
         by_kind.setdefault(it.kind, []).append(it)
-    for kind, meta in _KIND_META.items():
+    for kind, section_url in _KIND_META.items():
         current = by_kind.get(kind, [])
         current_refs = {it.ref for it in current}
         already = push_service.sent_refs(session, user.id, kind)
@@ -189,7 +233,7 @@ def _notify_user(session, user: User) -> None:
         push_service.prune_sent(session, user.id, kind, current_refs)
         if not new_items:
             continue
-        messages, url = _build_push(kind, new_items, meta)
+        messages, url = _build_push(kind, new_items, section_url)
         push_service.send_to_user(session, user.id, messages, url)
         push_service.mark_sent(session, user.id, kind, [it.ref for it in new_items])
 

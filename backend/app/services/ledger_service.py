@@ -533,6 +533,32 @@ def unread_email_ids(db: Session, owner_user_id: int | None = None) -> list[int]
     return list(db.execute(stmt).scalars())
 
 
+def unread_emails(
+    db: Session, owner_user_id: int | None = None, *, limit: int | None = None
+) -> list[LedgerEntry]:
+    """Full unread received-email rows (same filter as ``unread_email_ids``),
+    newest first — so push notifications can name the sender, subject, a content
+    preview and attachment count instead of a bare count.
+
+    Kept beside ``unread_email_ids`` so the filter never diverges.
+    """
+    stmt = (
+        select(LedgerEntry)
+        .where(
+            LedgerEntry.channel == "email",
+            LedgerEntry.direction.in_(("incoming", "internal")),
+            LedgerEntry.read_at.is_(None),
+            LedgerEntry.deleted_at.is_(None),
+        )
+        .order_by(LedgerEntry.entry_date.desc(), LedgerEntry.id.desc())
+    )
+    if owner_user_id is not None:
+        stmt = stmt.where(LedgerEntry.owner_user_id == owner_user_id)
+    if limit is not None:
+        stmt = stmt.limit(limit)
+    return list(db.execute(stmt).scalars())
+
+
 def mark_entry_read(
     db: Session, entry_id: int, owner_user_id: int | None = None
 ) -> LedgerEntry:
@@ -858,6 +884,7 @@ __all__ = [
     "toggle_star",
     "unread_email_count",
     "unread_email_ids",
+    "unread_emails",
     "update_entry",
     "upsert_draft",
 ]

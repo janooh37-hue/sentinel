@@ -9,6 +9,7 @@ larger scale; for a handful of users the diff loop is correct + trivial.
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from datetime import UTC, datetime
 
@@ -35,7 +36,42 @@ class ActionableItem:
     url: str  # frontend deep-link path the notification click navigates to
     label: str  # short human label (ref number / id) for the body text
     subject: str | None = None  # richer context for single-item bodies
-    requester: str | None = None  # who submitted it (approvals/reviews)
+    requester: str | None = None  # who submitted it / email sender
+    preview: str | None = None  # short plain-text content preview (emails)
+    attachments: int = 0  # attachment count, for the email body's "size" line
+
+
+_TAG_RE = re.compile(r"<[^>]+>")
+_WS_RE = re.compile(r"\s+")
+_ADDR_RE = re.compile(r"\s*<[^>]*>\s*$")
+
+
+def _email_preview(notes_html: str | None, limit: int = 140) -> str:
+    """Flatten an email body's HTML to a single-line plain-text preview.
+
+    Block tags become spaces so words don't run together; remaining tags are
+    stripped and whitespace collapsed. Truncated on a word boundary with an
+    ellipsis so the push body reads like a real mail preview.
+    """
+    if not notes_html:
+        return ""
+    text = re.sub(r"(?i)<\s*(br|/p|/div|/li|/tr|/h[1-6])\s*/?>", " ", notes_html)
+    text = _WS_RE.sub(" ", _TAG_RE.sub("", text)).strip()
+    if len(text) <= limit:
+        return text
+    cut = text[: limit + 1]
+    sp = cut.rfind(" ")
+    return (cut[:sp] if sp > limit * 0.6 else cut[:limit]).rstrip() + "…"
+
+
+def _sender_name(counterparty: str | None) -> str:
+    """Display name for a "Name <addr@host>" counterparty — the name if present,
+    otherwise the bare address. Never the raw "Name <addr>" pair (too long)."""
+    cp = (counterparty or "").strip()
+    if not cp:
+        return "Unknown sender"
+    name = _ADDR_RE.sub("", cp).strip().strip('"')
+    return name or cp
 
 
 def actionable_items(db: Session, user: User) -> list[ActionableItem]:
@@ -79,9 +115,22 @@ def actionable_items(db: Session, user: User) -> list[ActionableItem]:
         ):
             items.append(ActionableItem("scan", f"scan:{s.id}", "/scan-inbox", f"#{s.id}"))
 
-    # Emails — unread received mail in this user's mailbox.
-    for eid in ledger_service.unread_email_ids(db, owner_user_id=user.id):
-        items.append(ActionableItem("email", f"email:{eid}", "/ledger", f"#{eid}"))
+    # Emails — unread received mail in this user's mailbox. Carry the sender,
+    # subject, a content preview and attachment count so the push body says what
+    # the mail actually is, not just "1 unread email".
+    for e in ledger_service.unread_emails(db, owner_user_id=user.id):
+        items.append(
+            ActionableItem(
+                "email",
+                f"email:{e.id}",
+                "/ledger",
+                f"#{e.id}",
+                subject=e.subject,
+                requester=_sender_name(e.counterparty),
+                preview=_email_preview(e.notes_html),
+                attachments=len(e.attachment_paths or []),
+            )
+        )
 
     return items
 
