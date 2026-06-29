@@ -6,7 +6,7 @@ import * as api from '../../lib/api'
 
 // useCapabilities returns { capabilities: Set<string>, isLoading: boolean, has: (cap) => boolean }
 // We use a mutable ref so individual tests can override the `has` predicate.
-let mockHas = (c: string) => c === 'employees.notify'
+let mockHas: (c: string) => boolean = (c) => c === 'employees.notify'
 
 vi.mock('../../lib/useCapabilities', () => ({
   useCapabilities: () => ({
