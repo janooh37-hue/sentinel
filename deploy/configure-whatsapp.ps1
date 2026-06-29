@@ -63,8 +63,21 @@ if (-not $NoValidate) {
         $detail = $_.ErrorDetails.Message
         if (-not $detail) { $detail = $_.Exception.Message }
         Write-Host ("  Validation FAILED: {0}" -f $detail) -ForegroundColor Red
-        Write-Host '  Check the API key, base URL, and sender number. Nothing was written.' -ForegroundColor Yellow
-        Write-Host '  (Re-run with -NoValidate to write .env anyway.)' -ForegroundColor Yellow
+        # A 3xx redirect means the base URL is wrong (usually the generic host).
+        # The Location header reveals your real account-specific base URL.
+        $loc = $null
+        $resp = $_.Exception.Response
+        if ($resp -and $resp.Headers) { try { $loc = $resp.Headers['Location'] } catch {} }
+        if ($loc) {
+            try { $correct = ([Uri]$loc).GetLeftPart([System.UriPartial]::Authority) }
+            catch { $correct = $loc }
+            Write-Host ("  Infobip redirected to: {0}" -f $loc) -ForegroundColor Cyan
+            Write-Host ("  --> Use this as -BaseUrl: {0}" -f $correct) -ForegroundColor Green
+        } else {
+            Write-Host '  A redirect usually means -BaseUrl is the generic host. Use your' -ForegroundColor Yellow
+            Write-Host '  account-specific URL from the Infobip portal (https://<subdomain>.api.infobip.com).' -ForegroundColor Yellow
+        }
+        Write-Host '  Nothing was written. (Re-run with -NoValidate to write .env anyway.)' -ForegroundColor Yellow
         exit 1
     }
 }
