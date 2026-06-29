@@ -112,7 +112,9 @@ scope for this change.
 **`schemas/duty.py` — `DutyTransferRequest`:**
 - Remove `effective_date` and `reason`.
 - Add `recipient_id: int | None = None`, `manager_id: int | None = None`,
-  `cc_ids: list[int] | None = None`.
+  `cc: list[str] | None = None` (recipient **names**, matching the General Book
+  CC field — `MultiRecipientPickerField` emits `string[]` names, and the General
+  Book adapter joins them into the `{{ cc }}` token).
 - Keep `employee_ids` (1..500), `to_unit`, `to_post`.
 
 **`services/duty_service.py`:**
@@ -132,8 +134,8 @@ scope for this change.
 **`lib/api.ts` types:** mirror the new `DutyTransferRequest` shape.
 
 **`pages/dutyLocations/transferRequest.ts`:** build the new body —
-`{ employee_ids, to_unit, to_post, recipient_id, manager_id, cc_ids }`.
-Drop `effective_date`/`reason`.
+`{ employee_ids, to_unit, to_post, recipient_id, manager_id, cc }` (`cc` =
+recipient names). Drop `effective_date`/`reason`.
 
 **`pages/dutyLocations/TransferDialog.tsx`:**
 - Remove the effective-date and reason inputs.
@@ -141,7 +143,7 @@ Drop `effective_date`/`reason`.
   existing field components can be reused as-is:
   - `RecipientPickerField` → `recipient_id` (addressee)
   - `ManagerPickerField` → `manager_id` (signing manager)
-  - `MultiRecipientPickerField` → `cc_ids` (printed CC names)
+  - `MultiRecipientPickerField` → `cc` (printed CC names, `string[]`)
 - **Defaults:** pre-select the last-used recipient / manager / CC, persisted in
   `localStorage` (empty on first use). Non-hardcoded; overridable each time.
 - Keep `to_unit`/`to_post` comboboxes and the "moving" employee list.
