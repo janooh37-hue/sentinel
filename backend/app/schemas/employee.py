@@ -35,6 +35,8 @@ EMPLOYEE_STATUSES: Final[tuple[EmployeeStatus, ...]] = (
     EMPLOYEE_STATUS_TERMINATED,
 )
 
+MsgLanguage = Literal["ar", "en"]
+
 # Upper bounds for free-text fields so a single write can't bloat the shared DB
 # (API-02). Short identity/contact fields get a tight cap; free-form prose
 # (notes/other) gets a generous one.
@@ -75,6 +77,7 @@ class EmployeeCreate(BaseModel):
     uae_id_no: str | None = Field(default=None, max_length=_FIELD_TEXT_MAX)
     nationality: str | None = Field(default=None, max_length=_FIELD_TEXT_MAX)
     contact: str | None = Field(default=None, max_length=_FIELD_TEXT_MAX)
+    msg_language: MsgLanguage = "ar"
     passport_expiry: date | None = None
     uae_id_expiry: date | None = None
     iban: str | None = Field(default=None, max_length=_FIELD_TEXT_MAX)
@@ -104,6 +107,7 @@ class EmployeeUpdate(BaseModel):
     uae_id_no: str | None = Field(default=None, max_length=_FIELD_TEXT_MAX)
     nationality: str | None = Field(default=None, max_length=_FIELD_TEXT_MAX)
     contact: str | None = Field(default=None, max_length=_FIELD_TEXT_MAX)
+    msg_language: MsgLanguage | None = None
     passport_expiry: date | None = None
     uae_id_expiry: date | None = None
     iban: str | None = Field(default=None, max_length=_FIELD_TEXT_MAX)
@@ -133,6 +137,7 @@ class EmployeeRead(ORMBase):
     uae_id_no: str | None
     nationality: str | None
     contact: str | None
+    msg_language: str = "ar"
     passport_expiry: date | None
     uae_id_expiry: date | None
     iban: str | None

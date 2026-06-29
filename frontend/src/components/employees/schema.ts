@@ -50,6 +50,7 @@ export const employeeFormSchema = z
     uae_id_no: optionalText(32),
     nationality: optionalText(64),
     contact: optionalText(64),
+    msg_language: z.enum(['ar', 'en']).default('ar'),
     passport_expiry: optionalDate,
     uae_id_expiry: optionalDate,
   })

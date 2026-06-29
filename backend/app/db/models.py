@@ -79,6 +79,11 @@ class Employee(Base):
     passport_expiry: Mapped[date | None] = mapped_column(Date, nullable=True)
     iban: Mapped[str | None] = mapped_column(String(34), nullable=True)
     contact: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    # Preferred WhatsApp-notification language ('ar' | 'en'). Default Arabic;
+    # operators flip the few non-Arabic speakers to 'en' in the employee form.
+    msg_language: Mapped[str] = mapped_column(
+        String(2), default="ar", server_default="ar"
+    )
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow, onupdate=_utcnow)
 
@@ -356,6 +361,35 @@ class Violation(Base):
     documents: Mapped[list[Document]] = relationship(back_populates="violation")
 
     __table_args__ = (Index("ix_violations_employee_date", "employee_id", "date"),)
+
+
+class WhatsAppMessage(Base):
+    """One WhatsApp send attempt (success or failure) for an employee.
+
+    Powers the per-record "Sent ✓ / Failed" badge and is the audit trail.
+    ``event_ref`` is a stable per-record key (``"<event_type>:<id>"``) so a
+    record's send history is queryable without touching the source row.
+    Re-sends are first-class: each attempt is its own row.
+    """
+
+    __tablename__ = "whatsapp_messages"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    employee_id: Mapped[str] = mapped_column(ForeignKey("employees.id"))
+    event_type: Mapped[str] = mapped_column(String(32))
+    event_ref: Mapped[str] = mapped_column(String(64))
+    language: Mapped[str] = mapped_column(String(2))
+    phone: Mapped[str] = mapped_column(String(32))
+    template: Mapped[str] = mapped_column(String(64))
+    status: Mapped[str] = mapped_column(String(16))  # 'sent' | 'failed'
+    provider_msg_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    sent_by: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
+
+    __table_args__ = (
+        Index("ix_whatsapp_messages_event", "event_type", "event_ref"),
+    )
 
 
 class Manager(Base):

@@ -63,6 +63,15 @@ class Settings(BaseSettings):
     # Set via env: GSSG_SECURE_COOKIES=1
     secure_cookies: bool = False
 
+    # --- WhatsApp Business Cloud API (employee notifications) ----------------
+    # All GSSG_WHATSAPP_* env vars. Disabled by default so the "Send" button is
+    # hidden until an operator provisions a token + phone-number-id.
+    whatsapp_enabled: bool = False
+    whatsapp_token: str = ""              # Meta permanent access token (secret)
+    whatsapp_phone_number_id: str = ""    # the WhatsApp Business phone-number id
+    whatsapp_api_base: str = "https://graph.facebook.com/v21.0"
+    whatsapp_country_code: str = "971"    # default CC for normalizing contact
+
     @property
     def db_path(self) -> Path:
         return self.data_dir / "gssg.db"

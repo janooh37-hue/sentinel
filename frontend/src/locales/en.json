@@ -235,6 +235,9 @@
       "uae_id_expiry": "Emirates ID Expiry",
       "nationality": "Nationality",
       "contact": "Contact",
+      "msg_language": "Notification language",
+      "msgLanguageAr": "Arabic",
+      "msgLanguageEn": "English",
       "notes": "Notes",
       "other": "Other"
     },
@@ -2387,6 +2390,14 @@
         "system.admin": "Admin key + v3 migration"
       }
     }
+  },
+  "whatsapp": {
+    "send": "Notify on WhatsApp",
+    "resend": "Resend WhatsApp",
+    "sending": "Sending…",
+    "sendTitle": "Send a WhatsApp message to this employee",
+    "confirmResend": "Already sent. Send again?",
+    "failed": "Send failed"
   },
   "perms": {
     "locked": "You need permission for {{label}}. Click to request access.",

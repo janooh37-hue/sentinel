@@ -114,6 +114,7 @@ function blankDefaults(): EmployeeFormValues {
     uae_id_no: '',
     nationality: '',
     contact: '',
+    msg_language: 'ar',
     passport_expiry: '',
     uae_id_expiry: '',
   }
@@ -140,6 +141,7 @@ function fromInitial(initial: Partial<EmployeeRead>): EmployeeFormValues {
     uae_id_no: initial.uae_id_no ?? '',
     nationality: initial.nationality ?? '',
     contact: initial.contact ?? '',
+    msg_language: initial.msg_language ?? 'ar',
     passport_expiry: initial.passport_expiry ?? '',
     uae_id_expiry: initial.uae_id_expiry ?? '',
   }
@@ -354,6 +356,24 @@ export function EmployeeForm({
           </Field>
           <Field id="contact" label={fld('contact')}>
             <Input id="contact" {...register('contact')} className="font-mono" />
+          </Field>
+          {/* Preferred WhatsApp message language */}
+          <Field id="msg_language" label={fld('msg_language')}>
+            <Controller
+              control={control}
+              name="msg_language"
+              render={({ field }) => (
+                <Select value={field.value} onValueChange={field.onChange}>
+                  <SelectTrigger id="msg_language">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="ar">{t('employees.fields.msgLanguageAr')}</SelectItem>
+                    <SelectItem value="en">{t('employees.fields.msgLanguageEn')}</SelectItem>
+                  </SelectContent>
+                </Select>
+              )}
+            />
           </Field>
           <Field id="other" label={fld('other')}>
             <Input id="other" {...register('other')} />
