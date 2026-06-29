@@ -34,6 +34,7 @@ CAPABILITIES: Final[tuple[Capability, ...]] = (
     Capability("app.access", "app", "Access the app", "Sign in and see the dashboard, document fields, and read-only chrome."),
     Capability("employees.view", "employees", "View employees", "See the employee directory and individual employee records."),
     Capability("employees.edit", "employees", "Create / edit employees + vault", "Add and edit employees and manage their document vault."),
+    Capability("employees.notify", "employees", "Notify employees via WhatsApp", "Send WhatsApp confirmations to employees for leaves, duty resumptions, and violations."),
     Capability("leaves.view", "leaves", "View leaves", "See leave records and their status."),
     Capability("leaves.edit", "leaves", "Edit / delete leaves", "Create, edit, and delete leave records."),
     Capability("violations.view", "violations", "View violations", "See recorded violations."),
@@ -86,6 +87,7 @@ _OPERATOR_CAPS: Final[frozenset[str]] = frozenset(
 _MANAGER_CAPS: Final[frozenset[str]] = _OPERATOR_CAPS | frozenset(
     {
         "employees.edit",
+        "employees.notify",
         "leaves.edit",
         "violations.manage",
         "books.manage",
