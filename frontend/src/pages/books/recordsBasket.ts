@@ -24,7 +24,7 @@ import { subjectEmployeePart } from './formKind'
 // ---------------------------------------------------------------------------
 
 export interface RecordDetailInput {
-  book: Pick<BookRead, 'id' | 'ref_number' | 'subject' | 'employee_id'>
+  book: Pick<BookRead, 'id' | 'ref_number' | 'subject' | 'employee_id' | 'created_at'>
   cur: Pick<BookVersionRead, 'document_id' | 'template_id'>
   fields: Record<string, unknown>
   emp:
@@ -111,6 +111,7 @@ export function deriveRecordItem({
         : typeof fields['last_working_day'] === 'string'
           ? fields['last_working_day']
           : undefined,
+    bookDate: typeof book.created_at === 'string' ? book.created_at.slice(0, 10) : undefined,
   }
 }
 

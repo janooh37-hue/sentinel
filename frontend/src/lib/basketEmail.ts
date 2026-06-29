@@ -122,6 +122,33 @@ const STANDARD_CLOSING = buildClosing([
   'واقبلوا فائق الإحترام والتقدير ،،،',
 ])
 
+const TRANSFER_SUBJECT = 'النقل' // General Book subject minted by /duty/transfer
+
+/** ISO → DD/MM/YYYY, ZERO-PADDED (the office writes transfers as 11/06/2026).
+ *  Note: the shared `dmy()` strips leading zeros, so it must NOT be used here. */
+function dmyPad(iso: string): string {
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso)
+  return m ? `${m[3]}/${m[2]}/${m[1]}` : iso
+}
+
+function isTransfer(item: EmailBasketItem): boolean {
+  return item.formKind === 'General Book' && item.detail === TRANSFER_SUBJECT
+}
+
+function transferEmailBody(item: EmailBasketItem): string {
+  const date = dmyPad(item.bookDate ?? '')
+  const ref = esc(item.ref)
+  const intro =
+    'يطيب لنا أن نتقدم إليكم بخالص التحية و التقدير , يرجى العلم أنه ولغايات تنظيمية في العمل ' +
+    `تم نقل المذكورين بالجدول المبين مضمون الكتاب الرقم ${ref} تاريخ ${esc(date)} م ` +
+    'إلى الجهات المبينة بجانب أسمائهم إعتباراً من تاريخه .'
+  return (
+    p('السلام عليكم ورحمة الله وبركاته :') +
+    p(intro) +
+    buildClosing(['للتفضل بالعلم ولإجراءاتكم لطفاً.', 'هذا وتفضلوا بقبول فائق الإحترام والتقدير.'])
+  )
+}
+
 const SALARY_TRANSFER = 'Salary Transfer Request'
 
 function salaryTransferIntro(items: EmailBasketItem[], plural: boolean): string {
@@ -269,6 +296,7 @@ export function buildBasketSubject(items: EmailBasketItem[]): string {
   if (lt === 'Sick') return 'الاجازات المرضية'
   if (lt === 'Annual') return 'طلب اجازة سنوية'
   if (lt) return LEAVE_AR[lt] ?? 'إجازة'
+  if (isTransfer(items[0])) return `تنقلات يوم ${dmyPad(items[0].bookDate ?? '')}`
   const fk = items[0].formKind
   if (fk === SALARY_TRANSFER) return 'طلب تحويل راتب'
   if (fk === PASSPORT_FORM) return 'طلب جواز السفر'
@@ -285,6 +313,8 @@ export function buildBasketBodyHtml(items: EmailBasketItem[]): string {
   const plural = items.length > 1
   const leaveType = items[0].leaveType
   const formKind = items[0].formKind
+
+  if (isTransfer(items[0])) return transferEmailBody(items[0])
 
   let body: string
   let closing = STANDARD_CLOSING
