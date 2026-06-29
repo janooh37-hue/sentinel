@@ -7,6 +7,7 @@ letter body is server-built HTML — a formal Arabic intro paragraph, a red-head
 one row per moved employee, and two closing lines — which the General Book
 renderer (``core/arabic_rtl.html_to_docx`` via ``_pp_general_book``) turns into
 a real, variable-length RTL Word table. Subject constant: ``النقل``.
+When every selected employee is currently unassigned, the move is initial placement and no book/email is produced.
 ``recipient_id``, ``manager_id``, and ``cc`` are forwarded into the General Book
 pipeline's ``fields`` dict; the adapter resolves the addressee name and joins CC.
 
@@ -145,7 +146,18 @@ def transfer(
             )
         employees.append(emp)
 
-    # Build the body from CURRENT (FROM) locations BEFORE mutating.
+    # No-book path: when EVERY selected employee is currently unassigned, this is
+    # initial placement, not a transfer needing a formal letter — just move them.
+    all_unassigned = all(not (e.duty_unit or "").strip() for e in employees)
+    if all_unassigned:
+        for emp in employees:
+            emp.duty_unit = to_unit
+            emp.duty_post = to_post
+        db.commit()
+        return DutyTransferResult(moved=[emp.id for emp in employees])
+
+    # Otherwise mint the transfer letter. Build the body from CURRENT (FROM)
+    # locations BEFORE mutating.
     body_html = _build_body_html(employees, to_unit=to_unit, to_post=to_post)
 
     # Stage the moves on this session; generate_document's single commit
@@ -171,12 +183,8 @@ def transfer(
         commit=True,
     )
 
-    # generate_document creates the Book row in the same commit and now returns
-    # its id directly (WF-04) — no fragile by-ref re-lookup / book_id=0 sentinel.
-    book_id = result.book_id or 0
-
     return DutyTransferResult(
-        book_id=book_id,
+        book_id=result.book_id,
         ref=result.ref_number,
         document_id=result.document_id,
         moved=[emp.id for emp in employees],

@@ -47,3 +47,52 @@ def test_transfer_forwards_letter_metadata_and_moves(db_session, monkeypatch):
     moved = db_session.get(Employee, "G3309")
     assert moved.duty_unit == "السرية الثانية" and moved.duty_post == "ليوان"
     assert result.book_id == 7 and result.moved == ["G3309"]
+
+
+def test_transfer_all_unassigned_skips_book(db_session, monkeypatch):
+    # Two employees with NO current duty place.
+    for eid in ("G100", "G200"):
+        db_session.add(Employee(id=eid, name_en=eid, name_ar=eid, duty_unit=None, duty_post=None))
+    db_session.commit()
+
+    called = {"n": 0}
+
+    def fake_generate(*a, **k):
+        called["n"] += 1
+        raise AssertionError("generate_document must NOT be called for an all-unassigned move")
+
+    monkeypatch.setattr(duty_service.document_service, "generate_document", fake_generate)
+
+    result = duty_service.transfer(
+        db_session, employee_ids=["G100", "G200"],
+        to_unit="السرية الأولى", to_post="ليوان",
+    )
+
+    assert called["n"] == 0
+    assert result.book_id is None and result.ref is None and result.document_id is None
+    assert result.moved == ["G100", "G200"]
+    moved = db_session.get(Employee, "G100")
+    assert moved.duty_unit == "السرية الأولى" and moved.duty_post == "ليوان"
+
+
+def test_transfer_mixed_assignment_mints_book(db_session, monkeypatch):
+    db_session.add(Employee(id="G100", name_en="a", name_ar="a", duty_unit=None, duty_post=None))
+    db_session.add(Employee(id="G300", name_en="b", name_ar="b", duty_unit="السرية الثالثة", duty_post="تفتيش"))
+    db_session.commit()
+
+    import types
+    captured = {}
+
+    def fake_generate(db, *, employee_id, template_id, fields, current_user, commit):
+        captured["fields"] = fields
+        return types.SimpleNamespace(book_id=11, ref_number="R-11", document_id=22)
+
+    monkeypatch.setattr(duty_service.document_service, "generate_document", fake_generate)
+
+    result = duty_service.transfer(
+        db_session, employee_ids=["G100", "G300"],
+        to_unit="السرية الأولى", to_post=None,
+    )
+
+    assert "fields" in captured            # book path taken (≥1 already placed)
+    assert result.book_id == 11
