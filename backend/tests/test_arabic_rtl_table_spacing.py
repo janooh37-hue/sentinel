@@ -13,6 +13,7 @@ def test_table_cell_paragraphs_have_zero_spacing():
     cell_para = doc.tables[0].rows[0].cells[0].paragraphs[0]
     assert cell_para.paragraph_format.space_before == Pt(0)
     assert cell_para.paragraph_format.space_after == Pt(0)
+    assert cell_para.paragraph_format.line_spacing == 1.0
 
 
 def test_narrative_paragraph_spacing_untouched():

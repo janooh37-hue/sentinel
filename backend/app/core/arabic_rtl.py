@@ -872,7 +872,6 @@ def _render_table(
     default_family: str,
     default_size: float,
 ) -> None:
-    from docx.shared import Pt
     """Render an lxml ``<table>`` node as a real RTL Word ``Table`` inserted
     inline at the walker's current position.
 
@@ -883,6 +882,7 @@ def _render_table(
     ``_walk_inline`` so nested formatting survives. Cell style cascades
     table → row → cell (cell wins).
     """
+    from docx.shared import Pt
     attrs: dict[str, str] = dict(node.attrib) if hasattr(node, "attrib") else {}
     rtl = _table_rtl(node, attrs)
     table_style = attrs.get("style", "")

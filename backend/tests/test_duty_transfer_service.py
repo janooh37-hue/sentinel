@@ -80,7 +80,6 @@ def test_transfer_mixed_assignment_mints_book(db_session, monkeypatch):
     db_session.add(Employee(id="G300", name_en="b", name_ar="b", duty_unit="السرية الثالثة", duty_post="تفتيش"))
     db_session.commit()
 
-    import types
     captured = {}
 
     def fake_generate(db, *, employee_id, template_id, fields, current_user, commit):
@@ -96,3 +95,5 @@ def test_transfer_mixed_assignment_mints_book(db_session, monkeypatch):
 
     assert "fields" in captured            # book path taken (≥1 already placed)
     assert result.book_id == 11
+    assert result.ref == "R-11"
+    assert result.document_id == 22

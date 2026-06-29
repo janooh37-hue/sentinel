@@ -7,6 +7,7 @@ letter body is server-built HTML — a formal Arabic intro paragraph, a red-head
 one row per moved employee, and two closing lines — which the General Book
 renderer (``core/arabic_rtl.html_to_docx`` via ``_pp_general_book``) turns into
 a real, variable-length RTL Word table. Subject constant: ``النقل``.
+
 When every selected employee is currently unassigned, the move is initial placement and no book/email is produced.
 ``recipient_id``, ``manager_id``, and ``cc`` are forwarded into the General Book
 pipeline's ``fields`` dict; the adapter resolves the addressee name and joins CC.

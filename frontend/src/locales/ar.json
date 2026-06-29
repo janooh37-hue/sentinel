@@ -2281,7 +2281,8 @@
       "generate": "إنشاء كتاب النقل ←",
       "success": "تم إنشاء كتاب النقل {{ref}}.",
       "viewRecord": "عرض السجل",
-      "movedNoBook": "تم نقل {{count}} موظف"
+      "movedNoBook_one": "تم نقل موظف واحد",
+      "movedNoBook_other": "تم نقل {{count}} من الموظفين"
     }
   },
   "scanInbox": {
