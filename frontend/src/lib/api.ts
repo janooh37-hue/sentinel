@@ -148,8 +148,9 @@ export interface DutyTransferRequest {
   employee_ids: string[]
   to_unit: string
   to_post: string | null
-  effective_date: string // ISO yyyy-mm-dd
-  reason: string | null
+  recipient_id: number | null
+  manager_id: number | null
+  cc: string[] | null
 }
 
 export interface DutyTransferResult {
