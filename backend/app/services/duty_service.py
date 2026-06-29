@@ -2,10 +2,13 @@
 
 ``transfer`` moves one or more employees to a destination duty unit/post and
 mints an official **General Book** transfer letter as the audit record. The
-letter body is server-built HTML — a short Arabic narrative plus a ``<table>``
-with one row per moved employee (م · الرقم · الاسم · من · إلى) — which the
-General Book renderer (``core/arabic_rtl.html_to_docx`` via ``_pp_general_book``)
-turns into a real, variable-length RTL Word table. No template change needed.
+letter body is server-built HTML — a formal Arabic intro paragraph, a red-header
+5-column ``<table>`` (الرقم الوظيفي · المسمى الوظيفي · الاسم · من · إلى) with
+one row per moved employee, and two closing lines — which the General Book
+renderer (``core/arabic_rtl.html_to_docx`` via ``_pp_general_book``) turns into
+a real, variable-length RTL Word table. Subject constant: ``النقل``.
+``recipient_id``, ``manager_id``, and ``cc`` are forwarded into the General Book
+pipeline's ``fields`` dict; the adapter resolves the addressee name and joins CC.
 
 Transaction note: ``document_service.generate_document`` owns its own commit. We
 stage the employee ``duty_unit``/``duty_post`` mutations on the same session
@@ -19,7 +22,6 @@ General Book.
 from __future__ import annotations
 
 import html
-from datetime import date
 
 from sqlalchemy.orm import Session
 
@@ -29,7 +31,33 @@ from app.schemas.duty import DutyTransferResult
 from app.services import document_service
 
 _UNSPECIFIED = "غير محدد"
-_SUBJECT = "تنقلات داخلية"
+_SUBJECT = "النقل"
+
+_INTRO = (
+    "يطيب لنا أن نتقدم لسيادتكم بخالص التحية و التقدير , يرجى العلم أنه "
+    "ولغايات تنظيمية في العمل تم نقل المذكورين بالجدول المرفق إلى الجهات "
+    "المبينة بجانب أسمائهم إعتباراً من تاريخه ."
+)
+_CLOSING_1 = "للتفضل بالعلم وأمركم حول تعديل الكشوفات لديكم ولإجراءاتكم لطفاً."
+_CLOSING_2 = "هذا وتفضلوا بقبول فائق الإحترام والتقدير."
+
+_COLS = ["الرقم الوظيفي", "المسمى الوظيفي", "الاسم", "من", "إلى"]
+_TH = (
+    "border:1px solid #000000;background:#C00000;color:#ffffff;"
+    "padding:4px 9px;text-align:center;font-weight:bold"
+)
+_TD = "border:1px solid #000000;padding:4px 9px;text-align:center"
+
+
+def _location_label(unit: str | None, post: str | None) -> str:
+    """``unit - post`` / just the unit / ``غير محدد`` when empty."""
+    unit = (unit or "").strip()
+    post = (post or "").strip()
+    if unit and post:
+        return f"{unit} - {post}"
+    if unit:
+        return unit
+    return _UNSPECIFIED
 
 
 def _employee_display_name(emp: Employee) -> str:
@@ -37,56 +65,39 @@ def _employee_display_name(emp: Employee) -> str:
     return (emp.name_ar or emp.name_en or emp.id or "").strip()
 
 
-def _location_label(unit: str | None, post: str | None) -> str:
-    """``unit — post`` (Arabic dash) / just the unit / ``غير محدد`` when empty."""
-    unit = (unit or "").strip()
-    post = (post or "").strip()
-    if unit and post:
-        return f"{unit} — {post}"
-    if unit:
-        return unit
-    return _UNSPECIFIED
-
-
 def _build_body_html(
-    employees: list[Employee],
-    *,
-    to_unit: str,
-    to_post: str | None,
-    effective_date: date,
-    reason: str | None,
+    employees: list[Employee], *, to_unit: str, to_post: str | None
 ) -> str:
-    """Narrative paragraph + a from→to ``<table>`` (one ``<tr>`` per employee)."""
+    """Formal intro + a red-header from→to ``<table>`` + the two closing lines.
+
+    The ``من`` column reads each employee's CURRENT unit/post, so callers must
+    build the body BEFORE staging the move. No effective date or reason is
+    rendered — the letter uses ``إعتباراً من تاريخه`` verbatim (see the spec).
+    """
     to_label = _location_label(to_unit, to_post)
-    eff = effective_date.strftime("%d-%m-%Y")
 
-    narrative = (
-        f"<p>تقرر نقل الموظفين المدرجة أسماؤهم أدناه إلى "
-        f"{html.escape(to_label)} اعتباراً من تاريخ {html.escape(eff)}."
-    )
-    if reason and reason.strip():
-        narrative += f" السبب: {html.escape(reason.strip())}."
-    narrative += "</p>"
-
-    rows: list[str] = [
-        "<tr>"
-        "<th>م</th><th>الرقم</th><th>الاسم</th>"
-        "<th>من</th><th>إلى</th>"
-        "</tr>"
-    ]
-    for idx, emp in enumerate(employees, start=1):
-        from_label = _location_label(emp.duty_unit, emp.duty_post)
+    head = "".join(f'<th style="{_TH}">{html.escape(c)}</th>' for c in _COLS)
+    rows = [f"<tr>{head}</tr>"]
+    for emp in employees:
+        cells = [
+            html.escape(emp.id),
+            html.escape((emp.position_ar or "").strip()),
+            html.escape(_employee_display_name(emp)),
+            html.escape(_location_label(emp.duty_unit, emp.duty_post)),
+            html.escape(to_label),
+        ]
         rows.append(
-            "<tr>"
-            f"<td>{idx}</td>"
-            f"<td>{html.escape(emp.id)}</td>"
-            f"<td>{html.escape(_employee_display_name(emp))}</td>"
-            f"<td>{html.escape(from_label)}</td>"
-            f"<td>{html.escape(to_label)}</td>"
-            "</tr>"
+            "<tr>" + "".join(f'<td style="{_TD}">{c}</td>' for c in cells) + "</tr>"
         )
-    table = "<table>" + "".join(rows) + "</table>"
-    return narrative + table
+    table = (
+        '<table dir="rtl" style="border-collapse:collapse">'
+        + "".join(rows)
+        + "</table>"
+    )
+
+    intro = f"<p>{html.escape(_INTRO)}</p>"
+    closing = f"<p>{html.escape(_CLOSING_1)}</p><p>{html.escape(_CLOSING_2)}</p>"
+    return intro + table + closing
 
 
 def transfer(
@@ -95,8 +106,9 @@ def transfer(
     employee_ids: list[str],
     to_unit: str,
     to_post: str | None,
-    effective_date: date,
-    reason: str | None,
+    recipient_id: int | None = None,
+    manager_id: int | None = None,
+    cc: list[str] | None = None,
     current_user: User | None = None,
 ) -> DutyTransferResult:
     """Move employees to ``to_unit``/``to_post`` and mint the transfer letter.
@@ -133,13 +145,7 @@ def transfer(
         employees.append(emp)
 
     # Build the body from CURRENT (FROM) locations BEFORE mutating.
-    body_html = _build_body_html(
-        employees,
-        to_unit=to_unit,
-        to_post=to_post,
-        effective_date=effective_date,
-        reason=reason,
-    )
+    body_html = _build_body_html(employees, to_unit=to_unit, to_post=to_post)
 
     # Stage the moves on this session; generate_document's single commit
     # persists them together with the doc/Book rows.
@@ -147,11 +153,19 @@ def transfer(
         emp.duty_unit = to_unit
         emp.duty_post = to_post
 
+    fields: dict = {"subject": _SUBJECT, "body": body_html}
+    if recipient_id is not None:
+        fields["recipient_id"] = recipient_id
+    if manager_id is not None:
+        fields["manager_id"] = manager_id
+    if cc:
+        fields["cc"] = cc
+
     result = document_service.generate_document(
         db,
         employee_id=None,  # admin form — no bound employee
         template_id="General Book",
-        fields={"subject": _SUBJECT, "body": body_html},
+        fields=fields,
         current_user=current_user,
         commit=True,
     )

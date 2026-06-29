@@ -32,7 +32,8 @@ def transfer(
         employee_ids=payload.employee_ids,
         to_unit=payload.to_unit,
         to_post=payload.to_post,
-        effective_date=payload.effective_date,
-        reason=payload.reason,
+        recipient_id=payload.recipient_id,
+        manager_id=payload.manager_id,
+        cc=payload.cc,
         current_user=user,
     )
