@@ -15,6 +15,7 @@ interface Props {
 export function SendWhatsAppButton({ eventType, recordId }: Props) {
   const { t } = useTranslation()
   const caps = useCapabilities()
+  const [enabled, setEnabled] = useState(false)
   const [last, setLast] = useState<WhatsAppStatus | null>(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -22,12 +23,12 @@ export function SendWhatsAppButton({ eventType, recordId }: Props) {
   useEffect(() => {
     let alive = true
     getWhatsAppStatus(eventType, recordId)
-      .then((s) => { if (alive) setLast(s) })
+      .then((res) => { if (alive) { setEnabled(res.enabled); setLast(res.last) } })
       .catch(() => {})
     return () => { alive = false }
   }, [eventType, recordId])
 
-  if (!caps.has('employees.notify')) return null
+  if (!caps.has('employees.notify') || !enabled) return null
 
   const alreadySent = last?.status === 'sent'
 

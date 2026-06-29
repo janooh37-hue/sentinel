@@ -24,7 +24,7 @@ describe('SendWhatsAppButton', () => {
   })
 
   it('shows Send when never sent, then calls sendWhatsApp on click', async () => {
-    vi.spyOn(api, 'getWhatsAppStatus').mockResolvedValue(null)
+    vi.spyOn(api, 'getWhatsAppStatus').mockResolvedValue({ enabled: true, last: null })
     const send = vi.spyOn(api, 'sendWhatsApp').mockResolvedValue({
       status: 'sent', message_id: 'wamid.1', error: null,
     })
@@ -36,7 +36,7 @@ describe('SendWhatsAppButton', () => {
 
   it('renders nothing without the capability', async () => {
     mockHas = () => false
-    vi.spyOn(api, 'getWhatsAppStatus').mockResolvedValue(null)
+    vi.spyOn(api, 'getWhatsAppStatus').mockResolvedValue({ enabled: true, last: null })
     const { container } = render(<SendWhatsAppButton eventType="violation" recordId={1} />)
     // Wait a tick so the mount effect runs
     await waitFor(() => expect(container).toBeEmptyDOMElement())

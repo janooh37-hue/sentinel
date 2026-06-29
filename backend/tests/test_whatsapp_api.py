@@ -101,3 +101,12 @@ def test_status_null_when_never_sent(api_db):
               params={"event_type": "leave_approved", "record_id": 7})
     assert s.status_code == 200
     assert s.json()["last"] is None
+
+
+def test_status_reports_enabled_true(api_db):
+    _leave(api_db)
+    c = _client(api_db, _user(api_db))
+    s = c.get("/api/v1/whatsapp/status",
+              params={"event_type": "leave_approved", "record_id": 7})
+    assert s.status_code == 200
+    assert s.json()["enabled"] is True

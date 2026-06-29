@@ -15,6 +15,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
 from app.api.deps import require_capability
+from app.config import get_settings
 from app.db.models import User
 from app.db.session import get_db
 from app.schemas.whatsapp import (
@@ -54,7 +55,8 @@ def get_status(
 ) -> WhatsAppStatusResponse:
     row = whatsapp_service.last_status(db, event_type, record_id)
     return WhatsAppStatusResponse(
-        last=WhatsAppStatusItem.model_validate(row) if row else None
+        enabled=get_settings().whatsapp_enabled,
+        last=WhatsAppStatusItem.model_validate(row) if row else None,
     )
 
 

@@ -34,4 +34,5 @@ class WhatsAppStatusItem(ORMBase):
 
 
 class WhatsAppStatusResponse(BaseModel):
+    enabled: bool = False
     last: WhatsAppStatusItem | None = None

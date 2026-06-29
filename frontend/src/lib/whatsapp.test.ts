@@ -20,9 +20,11 @@ describe('whatsapp api', () => {
 
   it('returns null status when last is null', async () => {
     vi.spyOn(globalThis, 'fetch').mockResolvedValue(
-      new Response(JSON.stringify({ last: null }),
+      new Response(JSON.stringify({ enabled: true, last: null }),
         { status: 200, headers: { 'Content-Type': 'application/json' } }),
     )
-    expect(await getWhatsAppStatus('leave_approved', 7)).toBeNull()
+    const result = await getWhatsAppStatus('leave_approved', 7)
+    expect(result.last).toBeNull()
+    expect(result.enabled).toBe(true)
   })
 })

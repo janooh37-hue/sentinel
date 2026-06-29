@@ -1484,12 +1484,12 @@ export const api = {
   // --- Employee WhatsApp notifications ---
   sendWhatsApp: (eventType: WhatsAppEventType, recordId: number): Promise<WhatsAppSendResponse> =>
     request<WhatsAppSendResponse>('POST', '/whatsapp/send', { event_type: eventType, record_id: recordId }),
-  getWhatsAppStatus: async (eventType: WhatsAppEventType, recordId: number): Promise<WhatsAppStatus | null> => {
-    const res = await request<{ last: WhatsAppStatus | null }>(
+  getWhatsAppStatus: async (eventType: WhatsAppEventType, recordId: number): Promise<{ enabled: boolean; last: WhatsAppStatus | null }> => {
+    const res = await request<{ enabled: boolean; last: WhatsAppStatus | null }>(
       'GET',
       `/whatsapp/status?event_type=${eventType}&record_id=${recordId}`,
     )
-    return res.last
+    return res
   },
 
   // --- web push (Phase 5 LAN) ---
@@ -1531,10 +1531,10 @@ export function sendWhatsApp(
 export async function getWhatsAppStatus(
   eventType: WhatsAppEventType,
   recordId: number,
-): Promise<WhatsAppStatus | null> {
-  const res = await request<{ last: WhatsAppStatus | null }>(
+): Promise<{ enabled: boolean; last: WhatsAppStatus | null }> {
+  const res = await request<{ enabled: boolean; last: WhatsAppStatus | null }>(
     'GET',
     `/whatsapp/status?event_type=${eventType}&record_id=${recordId}`,
   )
-  return res.last
+  return res
 }
