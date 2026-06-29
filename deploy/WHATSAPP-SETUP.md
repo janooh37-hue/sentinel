@@ -1,92 +1,157 @@
-# WhatsApp Notifications Setup
+# WhatsApp Notifications Setup (via Infobip)
 
-Enable employee notifications via WhatsApp Business Cloud API for key HR events:
-leave approvals, duty resumptions, and disciplinary violations. Messages are
-text-only, bilingual (Arabic by default, English for opted-in employees), and
-manually triggered by an admin "Send to employee" button on each record.
+Employee WhatsApp notifications for leave approvals, duty resumptions, and
+violations. Messages are text-only, bilingual (Arabic by default, English per
+employee), and sent manually by an admin via the "Notify on WhatsApp" button on
+each record. Delivery goes through **Infobip** (a WhatsApp Business provider),
+which avoids Meta's direct developer-account onboarding.
 
 ---
 
-## Enable the feature
+## 1. Enable the feature (env vars)
 
-Set the following environment variables in the service startup or `.env`:
+Set these in the service environment or `C:\Users\Admin\sentinel\.env`:
 
-| Variable | Purpose | Default | Example |
-|---|---|---|---|
-| `GSSG_WHATSAPP_ENABLED` | Master on/off; button is hidden until `true` | `false` | `true` |
-| `GSSG_WHATSAPP_TOKEN` | Meta permanent access token (secret) | empty | `EAABs… (100+ chars)` |
-| `GSSG_WHATSAPP_PHONE_NUMBER_ID` | WhatsApp Business phone-number id from Meta | empty | `120201234567890` |
-| `GSSG_WHATSAPP_API_BASE` | Meta Graph API base URL | `https://graph.facebook.com/v21.0` | (use default) |
-| `GSSG_WHATSAPP_COUNTRY_CODE` | Default country code for normalizing phone numbers | `971` | (UAE: `971`, edit if different) |
+| Variable | Purpose | Example |
+|---|---|---|
+| `GSSG_WHATSAPP_ENABLED` | Master on/off; button hidden until `true` | `true` |
+| `GSSG_WHATSAPP_TOKEN` | **Infobip API key** (secret) | `a1b2c3...` |
+| `GSSG_WHATSAPP_API_BASE` | **Infobip base URL** (no trailing slash) | `https://xxxxx.api.infobip.com` |
+| `GSSG_WHATSAPP_SENDER` | Registered WhatsApp **sender number**, international format, digits only | `447860099299` |
+| `GSSG_WHATSAPP_COUNTRY_CODE` | Default country code for normalizing employee phone numbers | `971` |
+
+**Where to find these in the Infobip portal:**
+- **API key + Base URL:** Infobip homepage → *Developers* / *API Keys* (the base URL is shown as `https://<your-subdomain>.api.infobip.com`).
+- **Sender number:** *Channels and Numbers → WhatsApp → Senders*. On a free trial Infobip gives you a shared **test sender**; for production you register your own number.
 
 **Example `.env` snippet:**
 ```
 GSSG_WHATSAPP_ENABLED=true
-GSSG_WHATSAPP_TOKEN=EAABs1234567890abcdef…
-GSSG_WHATSAPP_PHONE_NUMBER_ID=120201234567890
+GSSG_WHATSAPP_TOKEN=your-infobip-api-key
+GSSG_WHATSAPP_API_BASE=https://xxxxx.api.infobip.com
+GSSG_WHATSAPP_SENDER=447860099299
 GSSG_WHATSAPP_COUNTRY_CODE=971
 ```
 
----
-
-## One-time Meta setup (outside the app)
-
-1. **Create a Meta Business Account** and complete business verification.
-   - Go to [business.facebook.com](https://business.facebook.com).
-
-2. **Obtain a dedicated WhatsApp Business phone number** (not an existing personal WhatsApp).
-   - This number will be used as the sender identity.
-
-3. **Register and approve the six message templates** in WhatsApp Manager:
-   - All templates are in the **Utility** category.
-   - Register these six (3 event types × 2 languages):
-     - `leave_approved_en` / `leave_approved_ar` — leave approval notifications
-     - `duty_resumption_en` / `duty_resumption_ar` — return-to-duty notifications
-     - `violation_en` / `violation_ar` — disciplinary record notifications
-   - Each template must be approved by Meta before live sends succeed.
-   - The template body and variable order are fixed; do not edit the template
-     copy once approved.
-
-4. **Provision the credentials into the app:**
-   - Extract the `GSSG_WHATSAPP_TOKEN` from Meta's App → Tokens.
-   - Extract the `GSSG_WHATSAPP_PHONE_NUMBER_ID` from WhatsApp Manager →
-     Phone Numbers.
-   - Set both in the service environment or `.env`.
-
-5. **Restart the service** and confirm:
-   - Any employee record with an approved leave/return/violation now shows a
-     "Send to employee" button.
-   - The button is only visible if the employee has a phone number in their
-     contact field.
+After editing `.env`, run `mng restart`.
 
 ---
 
-## Message details
+## 2. Register the six templates (Infobip portal)
 
-- **Languages:** Messages respect the employee's `msg_language` setting (Arabic
-  by default; change in the employee edit form for English speakers).
-- **Text-only:** No attachments; file upload capability is designed for but not
-  implemented.
-- **Permissions:** Sending requires the `employees.notify` capability in the
-  role-based permission system.
-- **Audit:** Every send attempt (success or failure) logs a row in the
-  `whatsapp_messages` table; the record view shows `Sent ✓ <date>` or
-  `Failed – <reason>`.
+In the Infobip portal: **Channels and Numbers → WhatsApp → Templates → Create
+template**. Create **six** templates (3 events × 2 languages). For each:
+
+- **Category:** `Utility`
+- **Name:** exactly as below (lowercase + underscores)
+- **Language:** English or Arabic as indicated
+- **Body:** paste the text exactly, keeping the `{{1}} {{2}} …` placeholders in order
+- **Sample values:** use the examples given (Infobip requires a sample per placeholder for approval)
+
+> The placeholder **order is the contract** — it must match what the app sends
+> (`backend/app/services/whatsapp_templates.py`). Don't reorder or renumber.
+
+### leave_approved_en — English
+```
+Dear {{1}},
+Your {{2}} leave has been approved.
+Start: {{3}} ({{4}})
+End: {{5}} ({{6}})
+Duration: {{7}} day(s).
+Al Wathba Rehabilitation Centre
+```
+Samples: `John Smith`, `Annual`, `05/07/2026`, `Sunday`, `09/07/2026`, `Thursday`, `5`
+
+### leave_approved_ar — Arabic
+```
+عزيزي {{1}}،
+تمت الموافقة على إجازتك ({{2}}).
+تاريخ البداية: {{3}} ({{4}})
+تاريخ النهاية: {{5}} ({{6}})
+المدة: {{7}} يوم.
+إدارة مركز الإصلاح والتأهيل بالوثبة
+```
+Samples: `جون سميث`, `سنوية`, `05/07/2026`, `الأحد`, `09/07/2026`, `الخميس`, `5`
+
+### duty_resumption_en — English
+```
+Dear {{1}},
+Your return to duty on {{2}} ({{3}}) has been recorded.
+Welcome back.
+Al Wathba Rehabilitation Centre
+```
+Samples: `John Smith`, `10/07/2026`, `Friday`
+
+### duty_resumption_ar — Arabic
+```
+عزيزي {{1}}،
+تم تسجيل مباشرتك للعمل بتاريخ {{2}} ({{3}}).
+أهلاً بعودتك.
+إدارة مركز الإصلاح والتأهيل بالوثبة
+```
+Samples: `جون سميث`, `10/07/2026`, `الجمعة`
+
+### violation_en — English
+```
+Dear {{1}},
+A {{2}} has been recorded on {{3}} ({{4}}).
+Action: {{5}}.
+Please contact HR for any clarification.
+Al Wathba Rehabilitation Centre
+```
+Samples: `John Smith`, `Sleeping on Duty`, `01/07/2026`, `Wednesday`, `2 day(s) deduction`
+
+### violation_ar — Arabic
+```
+عزيزي {{1}}،
+تم تسجيل {{2}} بتاريخ {{3}} ({{4}}).
+الإجراء: {{5}}.
+يرجى مراجعة الموارد البشرية لأي استفسار.
+إدارة مركز الإصلاح والتأهيل بالوثبة
+```
+Samples: `جون سميث`, `النوم أثناء الخدمة`, `01/07/2026`, `الأربعاء`, `خصم 2 يوم`
+
+Templates are submitted to WhatsApp and enter **PENDING**, then **APPROVED**
+(usually minutes to a few hours for Utility). Check status with the helper:
+
+```
+powershell -NoProfile -ExecutionPolicy Bypass -File deploy\whatsapp-templates-status.ps1 `
+  -BaseUrl https://xxxxx.api.infobip.com -ApiKey YOUR_KEY -Sender 447860099299
+```
+
+It prints each template's status and tells you when all six are APPROVED.
 
 ---
+
+## 3. Test it end-to-end
+
+1. In the Infobip portal, add **your own mobile** as a test recipient (trial
+   senders can only message verified test numbers).
+2. Make sure that mobile is in a test employee's **contact** field.
+3. With `.env` set and `mng restart` done, approve that employee's leave and
+   click **Notify on WhatsApp** → you should receive the message.
+
+---
+
+## Notes
+
+- **Languages:** each message uses the employee's `msg_language` (Arabic by
+  default; change per employee in the edit form). The app sends Infobip the
+  language code `ar` or `en`, which must match the registered template language.
+- **Text-only:** no attachments.
+- **Permissions:** sending requires the `employees.notify` capability.
+- **Audit:** every attempt (success or failure) is logged in `whatsapp_messages`;
+  the record shows `Sent ✓ <date>` or `Failed – <reason>`.
+- **Provider isolation:** all Infobip-specific HTTP lives in
+  `backend/app/services/whatsapp_client.py`. Switching providers again means
+  editing only that one file.
 
 ## Troubleshooting
 
-- **Button not showing:** Ensure `GSSG_WHATSAPP_ENABLED=true` and the service
-  has restarted.
-- **"No valid phone number" error:** The employee's contact field is empty,
-  unparseable, or not in E.164 format. Verify the number starts with `+971` or
-  another valid country code.
-- **"Message rejected by API":** The template is not approved in Meta's
-  WhatsApp Manager, or the variable order in the template does not match the
-  app's registration. Check Meta's queue for approvals.
-- **Send hangs or times out:** Outbound HTTPS must be open from the server to
-  `https://graph.facebook.com`. Test:
-  ```powershell
-  Test-NetConnection -ComputerName graph.facebook.com -Port 443
-  ```
+- **Button not showing:** `GSSG_WHATSAPP_ENABLED=true` and the service restarted.
+- **"No valid phone number":** the employee's contact field is empty/unparseable.
+- **Template/parameter errors from Infobip:** the template isn't APPROVED, the
+  name/language doesn't match, or the placeholder count differs from what the
+  app sends. Re-check against section 2.
+- **Connectivity:** the server needs outbound HTTPS to your Infobip base URL.
+  Test: `Test-NetConnection -ComputerName xxxxx.api.infobip.com -Port 443`.

@@ -63,14 +63,16 @@ class Settings(BaseSettings):
     # Set via env: GSSG_SECURE_COOKIES=1
     secure_cookies: bool = False
 
-    # --- WhatsApp Business Cloud API (employee notifications) ----------------
+    # --- WhatsApp via Infobip (employee notifications) -----------------------
     # All GSSG_WHATSAPP_* env vars. Disabled by default so the "Send" button is
-    # hidden until an operator provisions a token + phone-number-id.
+    # hidden until an operator provisions the Infobip key + base URL + sender.
     whatsapp_enabled: bool = False
-    whatsapp_token: str = ""              # Meta permanent access token (secret)
-    whatsapp_phone_number_id: str = ""    # the WhatsApp Business phone-number id
-    whatsapp_api_base: str = "https://graph.facebook.com/v21.0"
-    whatsapp_country_code: str = "971"    # default CC for normalizing contact
+    whatsapp_token: str = ""               # Infobip API key (secret)
+    whatsapp_api_base: str = ""            # Infobip base URL, e.g. https://xxxxx.api.infobip.com
+    whatsapp_sender: str = ""              # registered WhatsApp sender number (intl format)
+    whatsapp_country_code: str = "971"     # default CC for normalizing contact
+    # Legacy (Meta) — unused by the Infobip client; kept so old env/config is ignored cleanly.
+    whatsapp_phone_number_id: str = ""
 
     @property
     def db_path(self) -> Path:
