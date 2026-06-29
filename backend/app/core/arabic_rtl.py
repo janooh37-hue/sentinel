@@ -882,6 +882,7 @@ def _render_table(
     ``_walk_inline`` so nested formatting survives. Cell style cascades
     table → row → cell (cell wins).
     """
+    from docx.shared import Pt
     attrs: dict[str, str] = dict(node.attrib) if hasattr(node, "attrib") else {}
     rtl = _table_rtl(node, attrs)
     table_style = attrs.get("style", "")
@@ -948,6 +949,13 @@ def _render_table(
             for rr in para.runs:
                 rr.text = ""
             _apply_block_fmt(para, cblk)
+            # Hug the text: zero the inherited paragraph spacing so rows don't
+            # render taller than their content. An explicit cascaded line-height
+            # (cblk.line_height) still wins; otherwise force single spacing.
+            para.paragraph_format.space_before = Pt(0)
+            para.paragraph_format.space_after = Pt(0)
+            if not cblk.line_height:
+                para.paragraph_format.line_spacing = 1.0
 
             if cell_node is not None:
                 sub: _WalkState = {

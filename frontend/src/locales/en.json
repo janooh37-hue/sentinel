@@ -2141,7 +2141,9 @@
       "reasonPlaceholder": "Re-distribution / operational need…",
       "generate": "Generate General Book letter →",
       "success": "Transfer letter {{ref}} generated.",
-      "viewRecord": "View record"
+      "viewRecord": "View record",
+      "movedNoBook_one": "Moved 1 employee",
+      "movedNoBook_other": "Moved {{count}} employees"
     }
   },
   "scanInbox": {

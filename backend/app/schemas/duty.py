@@ -24,7 +24,7 @@ class DutyTransferRequest(BaseModel):
 
 
 class DutyTransferResult(BaseModel):
-    book_id: int
-    ref: str
-    document_id: int
+    book_id: int | None = None
+    ref: str | None = None
+    document_id: int | None = None
     moved: list[str]
