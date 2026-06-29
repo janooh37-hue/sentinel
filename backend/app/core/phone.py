@@ -27,7 +27,8 @@ def normalize_phone(raw: str | None, default_cc: str = "971") -> str | None:
         return "+" + digits if digits.isdigit() and len(digits) >= _MIN_DIGITS else None
     # No '+': bare digits. Decide whether the CC is already present.
     if s.startswith(default_cc):
-        return "+" + s if len(s) >= _MIN_DIGITS else None
+        local = s[len(default_cc):]
+        return "+" + s if len(local) >= 6 else None
     if s.startswith("0"):           # local with trunk 0 → drop it, prepend CC
         s = s[1:]
     if len(s) < 6:                  # local part too short to be real

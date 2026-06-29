@@ -21,3 +21,8 @@ def test_normalizes_uae_numbers(raw, expected):
 @pytest.mark.parametrize("raw", [None, "", "   ", "abc", "12", "n/a"])
 def test_rejects_unusable(raw):
     assert normalize_phone(raw) is None
+
+
+def test_rejects_short_local_part_with_country_code():
+    # 5-digit local part after the 971 CC is too short → None, not "+97112345"
+    assert normalize_phone("97112345") is None
