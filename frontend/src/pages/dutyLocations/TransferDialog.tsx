@@ -90,12 +90,16 @@ export function TransferDialog({
       saveTransferDefaults({ recipientId: v.recipient_id, managerId: v.manager_id, cc: v.cc })
       void qc.invalidateQueries({ queryKey: ['employees'] })
       void qc.invalidateQueries({ queryKey: ['books'] })
-      toast.success(t('dutyLocations.transfer.success', { ref: result.ref }), {
-        action: {
-          label: t('dutyLocations.transfer.viewRecord'),
-          onClick: () => navigate(`/books/${result.book_id}`),
-        },
-      })
+      if (result.book_id == null) {
+        toast.success(t('dutyLocations.transfer.movedNoBook', { count: result.moved.length }))
+      } else {
+        toast.success(t('dutyLocations.transfer.success', { ref: result.ref }), {
+          action: {
+            label: t('dutyLocations.transfer.viewRecord'),
+            onClick: () => navigate(`/books/${result.book_id}`),
+          },
+        })
+      }
       onTransferred()
       onOpenChange(false)
     },

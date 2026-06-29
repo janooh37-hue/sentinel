@@ -154,9 +154,9 @@ export interface DutyTransferRequest {
 }
 
 export interface DutyTransferResult {
-  book_id: number
-  ref: string
-  document_id: number
+  book_id: number | null
+  ref: string | null
+  document_id: number | null
   moved: string[]
 }
 
