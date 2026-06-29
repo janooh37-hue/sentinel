@@ -2,10 +2,13 @@
 
 ``transfer`` moves one or more employees to a destination duty unit/post and
 mints an official **General Book** transfer letter as the audit record. The
-letter body is server-built HTML — a short Arabic narrative plus a ``<table>``
-with one row per moved employee (م · الرقم · الاسم · من · إلى) — which the
-General Book renderer (``core/arabic_rtl.html_to_docx`` via ``_pp_general_book``)
-turns into a real, variable-length RTL Word table. No template change needed.
+letter body is server-built HTML — a formal Arabic intro paragraph, a red-header
+5-column ``<table>`` (الرقم الوظيفي · المسمى الوظيفي · الاسم · من · إلى) with
+one row per moved employee, and two closing lines — which the General Book
+renderer (``core/arabic_rtl.html_to_docx`` via ``_pp_general_book``) turns into
+a real, variable-length RTL Word table. Subject constant: ``النقل``.
+``recipient_id``, ``manager_id``, and ``cc`` are forwarded into the General Book
+pipeline's ``fields`` dict; the adapter resolves the addressee name and joins CC.
 
 Transaction note: ``document_service.generate_document`` owns its own commit. We
 stage the employee ``duty_unit``/``duty_post`` mutations on the same session
@@ -19,7 +22,6 @@ General Book.
 from __future__ import annotations
 
 import html
-from datetime import date
 
 from sqlalchemy.orm import Session
 
@@ -104,8 +106,9 @@ def transfer(
     employee_ids: list[str],
     to_unit: str,
     to_post: str | None,
-    effective_date: date,
-    reason: str | None,
+    recipient_id: int | None = None,
+    manager_id: int | None = None,
+    cc: list[str] | None = None,
     current_user: User | None = None,
 ) -> DutyTransferResult:
     """Move employees to ``to_unit``/``to_post`` and mint the transfer letter.
@@ -142,13 +145,7 @@ def transfer(
         employees.append(emp)
 
     # Build the body from CURRENT (FROM) locations BEFORE mutating.
-    body_html = _build_body_html(
-        employees,
-        to_unit=to_unit,
-        to_post=to_post,
-        effective_date=effective_date,
-        reason=reason,
-    )
+    body_html = _build_body_html(employees, to_unit=to_unit, to_post=to_post)
 
     # Stage the moves on this session; generate_document's single commit
     # persists them together with the doc/Book rows.
@@ -156,11 +153,19 @@ def transfer(
         emp.duty_unit = to_unit
         emp.duty_post = to_post
 
+    fields: dict = {"subject": _SUBJECT, "body": body_html}
+    if recipient_id is not None:
+        fields["recipient_id"] = recipient_id
+    if manager_id is not None:
+        fields["manager_id"] = manager_id
+    if cc:
+        fields["cc"] = cc
+
     result = document_service.generate_document(
         db,
         employee_id=None,  # admin form — no bound employee
         template_id="General Book",
-        fields={"subject": _SUBJECT, "body": body_html},
+        fields=fields,
         current_user=current_user,
         commit=True,
     )
