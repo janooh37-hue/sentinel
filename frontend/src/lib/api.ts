@@ -1477,6 +1477,17 @@ export const api = {
   getNotificationCounts: () =>
     request<NotificationCounts>('GET', '/notifications/counts'),
 
+  // --- Employee WhatsApp notifications ---
+  sendWhatsApp: (eventType: WhatsAppEventType, recordId: number): Promise<WhatsAppSendResponse> =>
+    request<WhatsAppSendResponse>('POST', '/whatsapp/send', { event_type: eventType, record_id: recordId }),
+  getWhatsAppStatus: async (eventType: WhatsAppEventType, recordId: number): Promise<WhatsAppStatus | null> => {
+    const res = await request<{ last: WhatsAppStatus | null }>(
+      'GET',
+      `/whatsapp/status?event_type=${eventType}&record_id=${recordId}`,
+    )
+    return res.last
+  },
+
   // --- web push (Phase 5 LAN) ---
   getVapidPublicKey: () => request<{ public_key: string }>('GET', '/push/vapid-public-key'),
   subscribePush: (sub: {
@@ -1486,4 +1497,40 @@ export const api = {
   }) => request<void>('POST', '/push/subscribe', sub),
   unsubscribePush: (endpoint: string) =>
     request<void>('DELETE', '/push/subscribe', { endpoint }),
+}
+
+// --- Employee WhatsApp notifications --------------------------------------
+export type WhatsAppEventType = 'leave_approved' | 'duty_resumption' | 'violation'
+
+export interface WhatsAppSendResponse {
+  status: 'sent' | 'failed'
+  message_id: string | null
+  error: string | null
+}
+
+export interface WhatsAppStatus {
+  event_type: string
+  event_ref: string
+  language: string
+  status: string
+  error: string | null
+  created_at: string
+}
+
+export function sendWhatsApp(
+  eventType: WhatsAppEventType,
+  recordId: number,
+): Promise<WhatsAppSendResponse> {
+  return request<WhatsAppSendResponse>('POST', '/whatsapp/send', { event_type: eventType, record_id: recordId })
+}
+
+export async function getWhatsAppStatus(
+  eventType: WhatsAppEventType,
+  recordId: number,
+): Promise<WhatsAppStatus | null> {
+  const res = await request<{ last: WhatsAppStatus | null }>(
+    'GET',
+    `/whatsapp/status?event_type=${eventType}&record_id=${recordId}`,
+  )
+  return res.last
 }
