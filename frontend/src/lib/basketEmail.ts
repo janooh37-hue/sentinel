@@ -140,7 +140,7 @@ function transferEmailBody(item: EmailBasketItem): string {
   const ref = esc(item.ref)
   const intro =
     'يطيب لنا أن نتقدم إليكم بخالص التحية و التقدير , يرجى العلم أنه ولغايات تنظيمية في العمل ' +
-    `تم نقل المذكورين بالجدول المبين مضمون الكتاب الرقم ${ref} تاريخ ${esc(date)} م ` +
+    `تم نقل المذكورين بالجدول المبين مضمون الكتاب الرقم ${ref} تاريخ ${date} م ` +
     'إلى الجهات المبينة بجانب أسمائهم إعتباراً من تاريخه .'
   return (
     p('السلام عليكم ورحمة الله وبركاته :') +
@@ -292,11 +292,11 @@ function genericIntroLine(plural: boolean): string {
 
 export function buildBasketSubject(items: EmailBasketItem[]): string {
   if (items.length === 0) return ''
+  if (isTransfer(items[0])) return `تنقلات يوم ${dmyPad(items[0].bookDate ?? '')}`
   const lt = items[0].leaveType
   if (lt === 'Sick') return 'الاجازات المرضية'
   if (lt === 'Annual') return 'طلب اجازة سنوية'
   if (lt) return LEAVE_AR[lt] ?? 'إجازة'
-  if (isTransfer(items[0])) return `تنقلات يوم ${dmyPad(items[0].bookDate ?? '')}`
   const fk = items[0].formKind
   if (fk === SALARY_TRANSFER) return 'طلب تحويل راتب'
   if (fk === PASSPORT_FORM) return 'طلب جواز السفر'

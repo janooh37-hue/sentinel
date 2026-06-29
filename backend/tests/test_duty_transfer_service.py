@@ -1,8 +1,8 @@
 # backend/tests/test_duty_transfer_service.py
 import types
+
 from app.db.models import Employee
 from app.services import duty_service
-from app.schemas.duty import DutyTransferRequest
 
 
 def _seed(db, **kw):

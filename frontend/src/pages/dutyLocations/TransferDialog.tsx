@@ -66,7 +66,7 @@ export function TransferDialog({
 
   const employeeIds = useMemo(() => employees.map((e) => e.id), [employees])
 
-  const initial = loadTransferDefaults()
+  const [initial] = useState(loadTransferDefaults)
   const methods = useForm<{ recipient_id: number | null; manager_id: number | null; cc: string[] }>({
     defaultValues: { recipient_id: initial.recipientId, manager_id: initial.managerId, cc: initial.cc },
   })
@@ -79,15 +79,15 @@ export function TransferDialog({
           employeeIds,
           toUnit,
           toPost,
-          recipientId: v.recipient_id ?? null,
-          managerId: v.manager_id ?? null,
-          cc: v.cc ?? [],
+          recipientId: v.recipient_id,
+          managerId: v.manager_id,
+          cc: v.cc,
         }),
       )
     },
     onSuccess: (result) => {
       const v = methods.getValues()
-      saveTransferDefaults({ recipientId: v.recipient_id ?? null, managerId: v.manager_id ?? null, cc: v.cc ?? [] })
+      saveTransferDefaults({ recipientId: v.recipient_id, managerId: v.manager_id, cc: v.cc })
       void qc.invalidateQueries({ queryKey: ['employees'] })
       void qc.invalidateQueries({ queryKey: ['books'] })
       toast.success(t('dutyLocations.transfer.success', { ref: result.ref }), {
