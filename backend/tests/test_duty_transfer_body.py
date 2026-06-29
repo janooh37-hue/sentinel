@@ -32,3 +32,11 @@ def test_body_has_intro_columns_rows_and_closing():
     assert "#C00000" in html
     assert "للتفضل بالعلم وأمركم حول تعديل الكشوفات لديكم ولإجراءاتكم لطفاً." in html
     assert "هذا وتفضلوا بقبول فائق الإحترام والتقدير." in html
+
+
+def test_body_has_blank_line_around_table():
+    html = _build_body_html(
+        [_emp()], to_unit="السرية الثانية", to_post="ليوان",
+    )
+    assert "<p>&nbsp;</p><table" in html      # blank line before the table
+    assert "</table><p>&nbsp;</p>" in html    # blank line after the table

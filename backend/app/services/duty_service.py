@@ -47,6 +47,7 @@ _TH = (
     "padding:4px 9px;text-align:center;font-weight:bold"
 )
 _TD = "border:1px solid #000000;padding:4px 9px;text-align:center"
+_SPACER = "<p>&nbsp;</p>"
 
 
 def _location_label(unit: str | None, post: str | None) -> str:
@@ -97,7 +98,7 @@ def _build_body_html(
 
     intro = f"<p>{html.escape(_INTRO)}</p>"
     closing = f"<p>{html.escape(_CLOSING_1)}</p><p>{html.escape(_CLOSING_2)}</p>"
-    return intro + table + closing
+    return intro + _SPACER + table + _SPACER + closing
 
 
 def transfer(
