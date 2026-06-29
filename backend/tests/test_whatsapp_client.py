@@ -41,6 +41,27 @@ def test_send_text_success_builds_template_payload(monkeypatch):
     assert msg["content"]["templateData"]["body"]["placeholders"] == ["A", "B"]
 
 
+def test_send_text_tolerates_schemeless_base_and_plus_sender(monkeypatch):
+    monkeypatch.setenv("GSSG_WHATSAPP_TOKEN", "tok")
+    monkeypatch.setenv("GSSG_WHATSAPP_API_BASE", "eeyed3.api.infobip.com/")  # no scheme, trailing /
+    monkeypatch.setenv("GSSG_WHATSAPP_SENDER", "+447860088970")             # leading +
+    from app.config import get_settings
+    get_settings.cache_clear()
+    captured = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        captured["url"] = str(request.url)
+        import json
+        captured["body"] = json.loads(request.content)
+        return httpx.Response(200, json={"messages": [{"messageId": "mid-2"}]})
+
+    monkeypatch.setattr(wc, "_transport", httpx.MockTransport(handler))
+    res = wc.send_text("+971501234567", "violation_en", "en", ["X"])
+    assert res.ok is True
+    assert captured["url"] == "https://eeyed3.api.infobip.com/whatsapp/1/message/template"
+    assert captured["body"]["messages"][0]["from"] == "447860088970"  # no +
+
+
 def test_send_text_api_error_maps_message(monkeypatch):
     _settings(monkeypatch)
 

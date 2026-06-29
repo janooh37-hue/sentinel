@@ -43,7 +43,12 @@ def _post(url: str, headers: dict, payload: dict) -> httpx.Response:
 
 def send_text(phone: str, template_name: str, lang: str, params: list[str]) -> SendResult:
     cfg = get_settings()
-    url = f"{cfg.whatsapp_api_base}/whatsapp/1/message/template"
+    # Tolerate a base URL saved without a scheme (e.g. "eeyed3.api.infobip.com")
+    # or with a trailing slash; Infobip needs https://.
+    base = cfg.whatsapp_api_base.strip().rstrip("/")
+    if base and "://" not in base:
+        base = "https://" + base
+    url = f"{base}/whatsapp/1/message/template"
     headers = {
         "Authorization": f"App {cfg.whatsapp_token}",
         "Content-Type": "application/json",
@@ -52,7 +57,8 @@ def send_text(phone: str, template_name: str, lang: str, params: list[str]) -> S
     payload = {
         "messages": [
             {
-                "from": cfg.whatsapp_sender,
+                # Infobip's "from" wants digits in international format (no +).
+                "from": cfg.whatsapp_sender.strip().removeprefix("+"),
                 "to": phone.removeprefix("+"),
                 "content": {
                     "templateName": template_name,

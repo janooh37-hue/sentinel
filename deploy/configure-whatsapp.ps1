@@ -50,6 +50,7 @@ param(
 
 $ErrorActionPreference = 'Stop'
 $BaseUrl = $BaseUrl.TrimEnd('/')
+if ($BaseUrl -notmatch '^https?://') { $BaseUrl = "https://$BaseUrl" }  # ensure scheme
 $envPath = 'C:\Users\Admin\sentinel\.env'
 
 # --- Optional credential check ----------------------------------------------
