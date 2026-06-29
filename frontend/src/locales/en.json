@@ -235,6 +235,9 @@
       "uae_id_expiry": "Emirates ID Expiry",
       "nationality": "Nationality",
       "contact": "Contact",
+      "msg_language": "Notification language",
+      "msgLanguageAr": "Arabic",
+      "msgLanguageEn": "English",
       "notes": "Notes",
       "other": "Other"
     },

@@ -87,6 +87,8 @@ export type EmployeeRead = components['schemas']['EmployeeRead'] & {
   // Duty-location columns — present on the backend ahead of `gen:api`.
   duty_unit?: string | null
   duty_post?: string | null
+  // WhatsApp notification language — present on the backend ahead of `gen:api`.
+  msg_language?: 'ar' | 'en' | null
 }
 export type EmployeeListItem = components['schemas']['EmployeeListItem'] & {
   has_photo?: boolean
@@ -104,6 +106,8 @@ export type EmployeeUpdate = components['schemas']['EmployeeUpdate'] & {
   // Duty-location columns — accepted by PATCH ahead of `gen:api`.
   duty_unit?: string | null
   duty_post?: string | null
+  // WhatsApp notification language — accepted by PATCH ahead of `gen:api`.
+  msg_language?: 'ar' | 'en' | null
 }
 export type EmployeeStatus = EmployeeRead['status']
 export type EmployeeDetailRead = components['schemas']['EmployeeDetailRead']

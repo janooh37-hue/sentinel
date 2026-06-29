@@ -244,6 +244,9 @@
       "uae_id_expiry": "انتهاء صلاحية الهوية الإماراتية",
       "nationality": "الجنسية",
       "contact": "رقم التواصل",
+      "msg_language": "لغة الإشعارات",
+      "msgLanguageAr": "العربية",
+      "msgLanguageEn": "الإنجليزية",
       "notes": "ملاحظات",
       "other": "أخرى"
     },
