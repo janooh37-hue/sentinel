@@ -35,6 +35,7 @@ import { StatusBadge } from './StatusBadge'
 import { LeaveEmployeePicker } from './LeaveEmployeePicker'
 import { leaveEmployeeName } from './leaveEmployeeName'
 import { LeavesReport } from './report/LeavesReport'
+import { SendWhatsAppButton } from '@/components/whatsapp/SendWhatsAppButton'
 
 // ─── types ──────────────────────────────────────────────────────────────────
 
@@ -490,6 +491,14 @@ function LeaveDetailDrawer({
                   {t('leaves.report.fileReturn')}
                 </Button>
               </div>
+            )}
+
+            {/* WhatsApp notifications */}
+            {leave.status === 'Approved' && (
+              <SendWhatsAppButton eventType="leave_approved" recordId={leave.id} />
+            )}
+            {(!!leave.return_date || !!leave.return_doc_path) && (
+              <SendWhatsAppButton eventType="duty_resumption" recordId={leave.id} />
             )}
 
             {/* NS controls: Delay / Extend / Certificate.

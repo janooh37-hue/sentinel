@@ -2391,6 +2391,14 @@
       }
     }
   },
+  "whatsapp": {
+    "send": "Notify on WhatsApp",
+    "resend": "Resend WhatsApp",
+    "sending": "Sending…",
+    "sendTitle": "Send a WhatsApp message to this employee",
+    "confirmResend": "Already sent. Send again?",
+    "failed": "Send failed"
+  },
   "perms": {
     "locked": "You need permission for {{label}}. Click to request access.",
     "request": {
