@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
     Register the six GSSG WhatsApp message templates with Meta's Graph API.
 
@@ -23,19 +23,47 @@
 .PARAMETER Version
     Graph API version. Defaults to v21.0 (matches GSSG_WHATSAPP_API_BASE).
 
+.PARAMETER Status
+    Don't create anything — just list the current templates and their approval
+    status (name, language, status, rejected reason).
+
 .EXAMPLE
     ./register-whatsapp-templates.ps1 -WabaId 1234567890 -Token EAAB...
+
+.EXAMPLE
+    ./register-whatsapp-templates.ps1 -WabaId 1234567890 -Token EAAB... -Status
 #>
 
 [CmdletBinding()]
 param(
     [Parameter(Mandatory)] [string] $WabaId,
     [Parameter(Mandatory)] [string] $Token,
-    [string] $Version = 'v21.0'
+    [string] $Version = 'v21.0',
+    [switch] $Status
 )
 
 $ErrorActionPreference = 'Stop'
 $uri = "https://graph.facebook.com/$Version/$WabaId/message_templates"
+$headers = @{ Authorization = "Bearer $Token" }
+
+# -Status: poll the current templates and show their approval state, then exit.
+if ($Status) {
+    $fields = 'name,language,status,category,rejected_reason'
+    $resp = Invoke-RestMethod -Method Get -Uri "$($uri)?fields=$fields&limit=100" -Headers $headers
+    if (-not $resp.data) {
+        Write-Host 'No templates found on this WhatsApp Business Account.' -ForegroundColor Yellow
+        return
+    }
+    $resp.data | Sort-Object name, language |
+        Format-Table name, language, status, category, rejected_reason -AutoSize
+    $pending = @($resp.data | Where-Object { $_.status -ne 'APPROVED' }).Count
+    if ($pending -eq 0) {
+        Write-Host 'All templates APPROVED — ready to enable GSSG_WHATSAPP_ENABLED=true.' -ForegroundColor Green
+    } else {
+        Write-Host ("{0} template(s) not yet APPROVED." -f $pending) -ForegroundColor Yellow
+    }
+    return
+}
 
 # Each entry: name, language, body text, and one example value-set (one string
 # per {{n}} variable, in order). Example values are required by Meta for any
@@ -73,7 +101,6 @@ $templates = @(
     }
 )
 
-$headers = @{ Authorization = "Bearer $Token" }
 $ok = 0; $fail = 0
 
 foreach ($t in $templates) {
