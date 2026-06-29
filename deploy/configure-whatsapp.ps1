@@ -51,6 +51,7 @@ param(
 $ErrorActionPreference = 'Stop'
 $BaseUrl = $BaseUrl.TrimEnd('/')
 if ($BaseUrl -notmatch '^https?://') { $BaseUrl = "https://$BaseUrl" }  # ensure scheme
+$Sender = $Sender.TrimStart('+')   # Infobip wants digits (also in the URL path)
 $envPath = 'C:\Users\Admin\sentinel\.env'
 
 # --- Optional credential check ----------------------------------------------

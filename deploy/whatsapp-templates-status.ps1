@@ -31,7 +31,10 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
-$uri = "{0}/whatsapp/2/senders/{1}/templates" -f $BaseUrl.TrimEnd('/'), $Sender
+$base = $BaseUrl.TrimEnd('/')
+if ($base -notmatch '^https?://') { $base = "https://$base" }   # ensure scheme
+$Sender = $Sender.TrimStart('+')                                # Infobip wants digits
+$uri = "{0}/whatsapp/2/senders/{1}/templates" -f $base, $Sender
 $headers = @{ Authorization = "App $ApiKey" }
 
 $WANT = @(
