@@ -640,3 +640,56 @@ body {
     animation: none !important;
   }
 }
+
+/* --- Print: isolate the document "paper" -----------------------------------
+   The record screen (BookRecordPage) is printed to be physically signed.
+   window.print() otherwise dumps the whole app shell — header, nav, the
+   progress timeline, action buttons — onto the page. Reveal ONLY the
+   .print-paper region (the PDF canvas on the desk) and expand its scroll
+   container so EVERY page prints, not just the one currently in view.
+   visibility (not display) is used to hide the chrome: display:none on an
+   ancestor can't be undone on a descendant, but visibility can. */
+@media print {
+  body * {
+    visibility: hidden !important;
+  }
+  .print-paper,
+  .print-paper * {
+    visibility: visible !important;
+  }
+  /* Lift the paper to the page origin and let it span the sheet. */
+  .print-paper {
+    position: absolute !important;
+    left: 0 !important;
+    top: 0 !important;
+    width: 100% !important;
+    max-width: none !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+  /* DocPdfCanvas is a fixed-height scroll box on screen — let it grow so all
+     pages flow onto paper instead of clipping to the viewport. */
+  .print-paper .overflow-auto {
+    height: auto !important;
+    max-height: none !important;
+    overflow: visible !important;
+    border: 0 !important;
+    background: transparent !important;
+  }
+  /* Strip the on-screen page treatment (drop shadow / rounded / tint) so the
+     printed sheet is just the document, and keep each page intact. */
+  .print-paper canvas {
+    box-shadow: none !important;
+    border-radius: 0 !important;
+    margin: 0 auto !important;
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+  /* Screen-only review marks never belong on the signed paper. */
+  [data-print-hide] {
+    display: none !important;
+  }
+  @page {
+    margin: 12mm;
+  }
+}
