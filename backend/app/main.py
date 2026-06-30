@@ -213,17 +213,31 @@ def create_app() -> FastAPI:
             name="assets",
         )
 
+        # The SPA entry (index.html) and the unhashed service worker are the
+        # only files whose CONTENTS change without their URL changing, so they
+        # must never be heuristically cached — otherwise a returning browser /
+        # installed PWA keeps loading an old bundle and never sees new features
+        # (e.g. the Send-SMS button) after a deploy. `no-cache` still allows a
+        # cheap 304 revalidation via ETag. The hashed /assets/* chunks have
+        # content-addressed names, so they stay immutable and freely cacheable.
+        _NO_CACHE = {"Cache-Control": "no-cache"}
+        _ALWAYS_REVALIDATE = {"sw.js", "manifest.webmanifest"}
+
+        def _index() -> FileResponse:
+            return FileResponse(STATIC_DIR / "index.html", headers=_NO_CACHE)
+
         @app.get("/", include_in_schema=False)
         def root() -> FileResponse:
-            return FileResponse(STATIC_DIR / "index.html")
+            return _index()
 
         @app.get("/{full_path:path}", include_in_schema=False)
         def spa_fallback(full_path: str) -> FileResponse:
             # Any non-API GET falls back to index.html so React Router works.
             candidate = STATIC_DIR / full_path
             if candidate.is_file():
-                return FileResponse(candidate)
-            return FileResponse(STATIC_DIR / "index.html")
+                headers = _NO_CACHE if candidate.name in _ALWAYS_REVALIDATE else None
+                return FileResponse(candidate, headers=headers)
+            return _index()
 
     log.info("FastAPI app ready (dev_mode=%s, data_dir=%s)", settings.dev_mode, settings.data_dir)
     return app
