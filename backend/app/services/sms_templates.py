@@ -32,7 +32,7 @@ def _leave_approved(leave, emp: Employee, lang: str) -> str:
         )
     return (
         f"Dear {name},\n"
-        f"Your {typ} leave has been approved.\n"
+        f"Your {typ} has been approved.\n"
         f"Start: {s} ({sw})\n"
         f"End: {e} ({ew})\n"
         f"Duration: {days} day(s).\n"

@@ -19,12 +19,30 @@ def test_leave_approved_english_full_text():
     text = st.render_text("leave_approved", "en", leave, emp)
     assert text == (
         "Dear John Smith,\n"
-        "Your Annual Leave leave has been approved.\n"
+        "Your Annual Leave has been approved.\n"
         "Start: 05/07/2026 (Sunday)\n"
         "End: 09/07/2026 (Thursday)\n"
         "Duration: 5 day(s).\n"
         "Al Wathba Rehabilitation Centre"
     )
+
+
+def test_leave_approved_english_no_doubled_leave_word():
+    emp = _emp(msg_language="en")
+    leave = Leave(id=8, employee_id="G1", leave_type="Annual Leave",  # english-only
+                  start_date=date(2026, 7, 5), end_date=date(2026, 7, 9), days=5)
+    text = st.render_text("leave_approved", "en", leave, emp)
+    assert "Your Annual Leave has been approved." in text
+    assert "Leave leave" not in text
+
+
+def test_leave_approved_arabic_no_english_leak_when_english_only_stored():
+    emp = _emp()
+    leave = Leave(id=8, employee_id="G1", leave_type="Annual Leave",  # english-only
+                  start_date=date(2026, 7, 5), end_date=date(2026, 7, 9), days=5)
+    text = st.render_text("leave_approved", "ar", leave, emp)
+    assert "(الإجازة السنوية)" in text
+    assert "Annual" not in text
 
 
 def test_leave_approved_arabic_has_signature_and_weekday():
