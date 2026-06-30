@@ -2399,6 +2399,14 @@
     "confirmResend": "Already sent. Send again?",
     "failed": "Send failed"
   },
+  "sms": {
+    "send": "Notify by SMS",
+    "resend": "Resend SMS",
+    "sending": "Sending…",
+    "sendTitle": "Send an SMS to this employee",
+    "confirmResend": "Already sent. Send again?",
+    "failed": "Send failed"
+  },
   "perms": {
     "locked": "You need permission for {{label}}. Click to request access.",
     "request": {

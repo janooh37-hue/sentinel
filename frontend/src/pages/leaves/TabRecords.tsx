@@ -36,6 +36,7 @@ import { LeaveEmployeePicker } from './LeaveEmployeePicker'
 import { leaveEmployeeName } from './leaveEmployeeName'
 import { LeavesReport } from './report/LeavesReport'
 import { SendWhatsAppButton } from '@/components/whatsapp/SendWhatsAppButton'
+import { SendSmsButton } from '@/components/sms/SendSmsButton'
 
 // ─── types ──────────────────────────────────────────────────────────────────
 
@@ -499,6 +500,13 @@ function LeaveDetailDrawer({
             )}
             {(!!leave.return_date || !!leave.return_doc_path) && (
               <SendWhatsAppButton eventType="duty_resumption" recordId={leave.id} />
+            )}
+            {/* SMS notifications */}
+            {leave.status === 'Approved' && (
+              <SendSmsButton eventType="leave_approved" recordId={leave.id} />
+            )}
+            {(!!leave.return_date || !!leave.return_doc_path) && (
+              <SendSmsButton eventType="duty_resumption" recordId={leave.id} />
             )}
 
             {/* NS controls: Delay / Extend / Certificate.

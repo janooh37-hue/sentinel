@@ -33,6 +33,7 @@ import {
 } from '@/components/ui/table'
 import type { ViolationCreate, ViolationRead, ViolationUpdate } from '@/lib/api'
 import { SendWhatsAppButton } from '@/components/whatsapp/SendWhatsAppButton'
+import { SendSmsButton } from '@/components/sms/SendSmsButton'
 
 interface Props {
   rows: ViolationRead[]
@@ -136,6 +137,7 @@ export function ViolationsTable({
                     <TableCell>
                       <div className="flex items-center justify-end gap-1.5">
                         <SendWhatsAppButton eventType="violation" recordId={row.id} />
+                        <SendSmsButton eventType="violation" recordId={row.id} />
                         <Button
                           type="button"
                           variant="ghost"

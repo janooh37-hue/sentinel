@@ -1538,3 +1538,38 @@ export async function getWhatsAppStatus(
   )
   return res
 }
+
+// --- Employee SMS notifications (on-site SIM gateway) ----------------------
+export type SmsEventType = 'leave_approved' | 'duty_resumption' | 'violation'
+
+export interface SmsSendResponse {
+  status: 'sent' | 'failed'
+  message_id: string | null
+  error: string | null
+}
+
+export interface SmsStatus {
+  event_type: string
+  event_ref: string
+  language: string
+  status: string
+  error: string | null
+  created_at: string
+}
+
+export function sendSms(
+  eventType: SmsEventType,
+  recordId: number,
+): Promise<SmsSendResponse> {
+  return request<SmsSendResponse>('POST', '/sms/send', { event_type: eventType, record_id: recordId })
+}
+
+export async function getSmsStatus(
+  eventType: SmsEventType,
+  recordId: number,
+): Promise<{ enabled: boolean; last: SmsStatus | null }> {
+  return request<{ enabled: boolean; last: SmsStatus | null }>(
+    'GET',
+    `/sms/status?event_type=${eventType}&record_id=${recordId}`,
+  )
+}
