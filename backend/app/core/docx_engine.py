@@ -47,7 +47,11 @@ from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.opc.exceptions import PackageNotFoundError
 from docx.shared import Pt, RGBColor
 
-from app.core._docx_helpers import fill_image_behind_text_on_x_mark, replace_paragraph_text
+from app.core._docx_helpers import (
+    fill_image_behind_text_on_x_mark,
+    float_inline_images_in_cell,
+    replace_paragraph_text,
+)
 from app.core.constants import (
     ARABIC_WEEKDAYS,
     DEFAULT_MANAGER_NAME,
@@ -397,6 +401,22 @@ def _pp_admin_leave(doc: Any, ctx: dict[str, Any]) -> None:
         log.warning("Admin Leave: t2 r3 c1 missing — post-process skipped")
 
 
+def _pp_material_request(doc: Any, ctx: dict[str, Any]) -> None:
+    """Float the manager signature behind text in the verifier "Signature" cell
+    (table 4, row 5, cell 3) so the image doesn't grow that row and push the
+    form onto a second page (SC-0425 regression). The ``{{ manager_sig }}``
+    token places the image inline; we convert it in place to a behind-text
+    float. No-op when no manager signature was embedded."""
+    if not ctx.get("manager_sig_path"):
+        return
+    try:
+        cell = doc.tables[4].rows[5].cells[3]
+    except IndexError:
+        log.warning("Material Request: t4 r5 c3 missing — signature float skipped")
+        return
+    float_inline_images_in_cell(cell)
+
+
 def _pp_general_book_cc(doc: Any, ctx: dict[str, Any]) -> None:
     """Render each CC recipient as its own right-aligned, bulleted line, each
     prefixed with the "نسخة إلى:" label (not just the first recipient).
@@ -587,7 +607,10 @@ _FORM_REGISTRY: dict[str, dict[str, Any]] = {
         "post_process": _pp_resignation_letter,
     },
     "Leave Undertaking": {"adapter": _adapt_leave_undertaking, "post_process": None},
-    "Material Request Form": {"adapter": _adapt_material_request, "post_process": None},
+    "Material Request Form": {
+        "adapter": _adapt_material_request,
+        "post_process": _pp_material_request,
+    },
     "Leave Application Form": {"adapter": _adapt_common, "post_process": None},
     "Passport Release Form": {"adapter": _adapt_common, "post_process": None},
     "Duty Resumption Form": {"adapter": _adapt_common, "post_process": None},

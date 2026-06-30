@@ -1722,7 +1722,11 @@ def render_signed_pdf(
         employee=employee,
         employee_id=book.employee_id,
         fields=fields,
-        manager_id=None,
+        # The manager chosen at generation is recorded on book.doc_manager_id,
+        # NOT in version.fields — re-render with it so the signed copy keeps the
+        # same verifier name/title (else the {{ manager_name }} cell renders
+        # blank; SC-0425 regression).
+        manager_id=book.doc_manager_id,
         submitter_id=None,
         embed_signature=None,
         current_user=None,

@@ -186,6 +186,66 @@ def fill_image_behind_text_on_x_mark(
             return False
 
 
+def _convert_inline_drawing_to_anchor(drawing: Any) -> bool:
+    """Turn an inline ``<w:drawing>`` image into a 'behind text' floating anchor
+    so it stops contributing to its cell/row height. Returns True if converted,
+    False if the drawing carried no inline element (already a float)."""
+    inline = drawing.find(f"{{{_WP_NS}}}inline")
+    if inline is None:
+        return False
+    extent = inline.find(f"{{{_WP_NS}}}extent")
+    cx = extent.get("cx") if extent is not None else None
+    cy = extent.get("cy") if extent is not None else None
+    anchor_xml = (
+        f'<wp:anchor xmlns:wp="{_WP_NS}" '
+        'distT="0" distB="0" distL="0" distR="0" simplePos="0" '
+        'relativeHeight="251660000" behindDoc="1" locked="0" '
+        'layoutInCell="1" allowOverlap="1">'
+        '<wp:simplePos x="0" y="0"/>'
+        '<wp:positionH relativeFrom="column">'
+        "<wp:posOffset>0</wp:posOffset></wp:positionH>"
+        '<wp:positionV relativeFrom="paragraph">'
+        "<wp:posOffset>0</wp:posOffset></wp:positionV>"
+        f'<wp:extent cx="{cx or 1143000}" cy="{cy or 457200}"/>'
+        '<wp:effectExtent l="0" t="0" r="0" b="0"/>'
+        "<wp:wrapNone/>"
+        "</wp:anchor>"
+    )
+    anchor = parse_xml(anchor_xml)
+    ns_uri = {"wp": _WP_NS, "a": _A_NS}
+    for prefixed in ("wp:docPr", "wp:cNvGraphicFramePr", "a:graphic"):
+        prefix, local = prefixed.split(":")
+        child = inline.find(f"{{{ns_uri[prefix]}}}{local}")
+        if child is not None:
+            anchor.append(child)
+    drawing.remove(inline)
+    drawing.append(anchor)
+    return True
+
+
+def float_inline_images_in_cell(cell: Any) -> int:
+    """Convert every inline image already placed in ``cell`` into a behind-text
+    floating image (zero layout height). Returns the count converted.
+
+    Compact forms (e.g. Material Request) render the manager signature inline
+    via a ``{{ token }}``; left inline it grows the signature row and bumps the
+    table onto a second page. Floating it behind text keeps the form on one
+    page while the signature stays visible in the same spot.
+    """
+    converted = 0
+    for para in cell.paragraphs:
+        for run in para.runs:
+            drawing = run._element.find(qn("w:drawing"))
+            if drawing is None:
+                continue
+            try:
+                if _convert_inline_drawing_to_anchor(drawing):
+                    converted += 1
+            except (ValueError, AttributeError):
+                continue
+    return converted
+
+
 def insert_floating_image_in_header(
     header: Any,
     image_bytes: bytes,
