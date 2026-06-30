@@ -32,6 +32,7 @@ from app.api.v1 import ledger as ledger_v1
 from app.api.v1 import managers as managers_v1
 from app.api.v1 import notifications as notifications_v1
 from app.api.v1 import permissions as permissions_v1
+from app.api.v1 import sms as sms_v1
 from app.api.v1 import whatsapp as whatsapp_v1
 from app.api.v1 import push as push_v1
 from app.api.v1 import recipients as recipients_v1
@@ -200,6 +201,7 @@ def create_app() -> FastAPI:
     app.include_router(scan_inbox_v1.router, prefix="/api/v1", dependencies=auth_gate)
     app.include_router(notifications_v1.router, prefix="/api/v1", dependencies=auth_gate)
     app.include_router(whatsapp_v1.router, prefix="/api/v1", dependencies=auth_gate)
+    app.include_router(sms_v1.router, prefix="/api/v1", dependencies=auth_gate)
     app.include_router(push_v1.router, prefix="/api/v1", dependencies=auth_gate)
     app.include_router(permissions_v1.router, prefix="/api/v1", dependencies=auth_gate)
 

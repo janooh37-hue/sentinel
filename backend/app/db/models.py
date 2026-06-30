@@ -392,6 +392,34 @@ class WhatsAppMessage(Base):
     )
 
 
+class SmsMessage(Base):
+    """One SMS send attempt (success or failure) for an employee.
+
+    Mirrors WhatsAppMessage but for the on-site SIM gateway channel: no
+    ``template`` column (SMS sends full text), and ``provider_msg_id`` holds
+    the gateway's message id. Re-sends are first-class: each attempt is its
+    own row. ``event_ref`` (``"<event_type>:<id>"``) keys a record's history.
+    """
+
+    __tablename__ = "sms_messages"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    employee_id: Mapped[str] = mapped_column(ForeignKey("employees.id"))
+    event_type: Mapped[str] = mapped_column(String(32))
+    event_ref: Mapped[str] = mapped_column(String(64))
+    language: Mapped[str] = mapped_column(String(2))
+    phone: Mapped[str] = mapped_column(String(32))
+    status: Mapped[str] = mapped_column(String(16))  # 'sent' | 'failed'
+    provider_msg_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    sent_by: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
+
+    __table_args__ = (
+        Index("ix_sms_messages_event", "event_type", "event_ref"),
+    )
+
+
 class Manager(Base):
     __tablename__ = "managers"
 
