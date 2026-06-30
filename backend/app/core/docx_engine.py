@@ -402,19 +402,22 @@ def _pp_admin_leave(doc: Any, ctx: dict[str, Any]) -> None:
 
 
 def _pp_material_request(doc: Any, ctx: dict[str, Any]) -> None:
-    """Float the manager signature behind text in the verifier "Signature" cell
-    (table 4, row 5, cell 3) so the image doesn't grow that row and push the
-    form onto a second page (SC-0425 regression). The ``{{ manager_sig }}``
-    token places the image inline; we convert it in place to a behind-text
-    float. No-op when no manager signature was embedded."""
-    if not ctx.get("manager_sig_path"):
-        return
+    """Float the signature images behind text so they don't grow their row and
+    push the form onto a second page (SC-0425 regression). The ``{{ *_sig }}``
+    tokens place the images inline; we convert them in place to behind-text
+    floats, bottom-aligned so each signature rests on its cell's line and
+    overflows UP into the empty cell above (the unused Contact cell) instead of
+    hanging down across the section divider.
+
+    Cells (table 4): r2/c3 = employee "Signature", r5/c3 = manager
+    "Signature". No-op for whichever signature wasn't embedded."""
     try:
-        cell = doc.tables[4].rows[5].cells[3]
+        sig_cells = [doc.tables[4].rows[2].cells[3], doc.tables[4].rows[5].cells[3]]
     except IndexError:
-        log.warning("Material Request: t4 r5 c3 missing — signature float skipped")
+        log.warning("Material Request: signature cell missing — float skipped")
         return
-    float_inline_images_in_cell(cell)
+    for cell in sig_cells:
+        float_inline_images_in_cell(cell, bottom_align=True)
 
 
 def _pp_general_book_cc(doc: Any, ctx: dict[str, Any]) -> None:

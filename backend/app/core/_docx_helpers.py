@@ -186,16 +186,30 @@ def fill_image_behind_text_on_x_mark(
             return False
 
 
-def _convert_inline_drawing_to_anchor(drawing: Any) -> bool:
+# One line of body text, in EMU (~14pt). Used to bottom-align a floated
+# signature to its (single-line) cell so it sits on the signature line and
+# rises UP into the empty cell above, rather than hanging down past it.
+_ONE_LINE_EMU = 177800
+
+
+def _convert_inline_drawing_to_anchor(drawing: Any, *, bottom_align: bool = False) -> bool:
     """Turn an inline ``<w:drawing>`` image into a 'behind text' floating anchor
     so it stops contributing to its cell/row height. Returns True if converted,
-    False if the drawing carried no inline element (already a float)."""
+    False if the drawing carried no inline element (already a float).
+
+    ``bottom_align``: lift the image up by (its height − one line) so its bottom
+    sits on the cell's single text line and the rest overflows upward into the
+    (typically empty) cell above, instead of downward across the section below.
+    """
     inline = drawing.find(f"{{{_WP_NS}}}inline")
     if inline is None:
         return False
     extent = inline.find(f"{{{_WP_NS}}}extent")
     cx = extent.get("cx") if extent is not None else None
     cy = extent.get("cy") if extent is not None else None
+    v_offset = 0
+    if bottom_align and cy is not None:
+        v_offset = min(0, _ONE_LINE_EMU - int(cy))
     anchor_xml = (
         f'<wp:anchor xmlns:wp="{_WP_NS}" '
         'distT="0" distB="0" distL="0" distR="0" simplePos="0" '
@@ -205,7 +219,7 @@ def _convert_inline_drawing_to_anchor(drawing: Any) -> bool:
         '<wp:positionH relativeFrom="column">'
         "<wp:posOffset>0</wp:posOffset></wp:positionH>"
         '<wp:positionV relativeFrom="paragraph">'
-        "<wp:posOffset>0</wp:posOffset></wp:positionV>"
+        f"<wp:posOffset>{v_offset}</wp:posOffset></wp:positionV>"
         f'<wp:extent cx="{cx or 1143000}" cy="{cy or 457200}"/>'
         '<wp:effectExtent l="0" t="0" r="0" b="0"/>'
         "<wp:wrapNone/>"
@@ -223,7 +237,7 @@ def _convert_inline_drawing_to_anchor(drawing: Any) -> bool:
     return True
 
 
-def float_inline_images_in_cell(cell: Any) -> int:
+def float_inline_images_in_cell(cell: Any, *, bottom_align: bool = False) -> int:
     """Convert every inline image already placed in ``cell`` into a behind-text
     floating image (zero layout height). Returns the count converted.
 
@@ -231,6 +245,10 @@ def float_inline_images_in_cell(cell: Any) -> int:
     via a ``{{ token }}``; left inline it grows the signature row and bumps the
     table onto a second page. Floating it behind text keeps the form on one
     page while the signature stays visible in the same spot.
+
+    ``bottom_align`` lifts each image so its bottom rests on the cell's text
+    line (rising into the empty cell above) — see
+    ``_convert_inline_drawing_to_anchor``.
     """
     converted = 0
     for para in cell.paragraphs:
@@ -239,7 +257,7 @@ def float_inline_images_in_cell(cell: Any) -> int:
             if drawing is None:
                 continue
             try:
-                if _convert_inline_drawing_to_anchor(drawing):
+                if _convert_inline_drawing_to_anchor(drawing, bottom_align=bottom_align):
                     converted += 1
             except (ValueError, AttributeError):
                 continue

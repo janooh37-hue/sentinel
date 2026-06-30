@@ -23,10 +23,13 @@ from app.services.document_service import _TEMPLATES_DIR
 
 
 def _make_sig_png(path: Path) -> Path:
+    # A diagonal stroke so the ink bounding box has real width AND height
+    # (a flat 1px line crops to ~zero height and can't be bottom-aligned).
     img = Image.new("RGBA", (400, 168), (255, 255, 255, 0))
-    # a few opaque pixels so prepare_signature has ink to dilate
     for x in range(40, 360):
-        img.putpixel((x, 84), (0, 0, 0, 255))
+        y = 20 + int((x - 40) * 120 / 320)
+        for dy in (-1, 0, 1):
+            img.putpixel((x, y + dy), (0, 0, 0, 255))
     img.save(path)
     return path
 
@@ -58,3 +61,10 @@ def test_manager_signature_is_floated_behind_text(tmp_path):
     # and bump the table onto a second page.
     assert 'behindDoc="1"' in cell_xml, "manager signature is not floated behind text"
     assert "wp:inline" not in cell_xml, "manager signature is still inline (adds height)"
+    # ...and lifted UP (negative vertical offset) so it rests on the signature
+    # line and rises into the empty Contact cell above, instead of hanging down
+    # across the "Supply Chain" divider below.
+    import re
+
+    voffsets = re.findall(r"<wp:positionV[^>]*>\s*<wp:posOffset>(-?\d+)</wp:posOffset>", cell_xml)
+    assert voffsets and int(voffsets[0]) < 0, f"signature not lifted up (vOffset={voffsets})"
