@@ -83,14 +83,14 @@ def _violation(v, emp: Employee, lang: str) -> str:
             f"عزيزي {name}،\n"
             f"تم تسجيل {typ} بتاريخ {ds} ({wd}).\n"
             f"الإجراء: {action}.\n"
-            f"يرجى مراجعة الموارد البشرية لأي استفسار.\n"
+            f"يرجى مراجعة مكتب الإدارة لأي استفسار.\n"
             f"{_SIGNATURE_AR}"
         )
     return (
         f"Dear {name},\n"
         f"A {typ} has been recorded on {ds} ({wd}).\n"
         f"Action: {action}.\n"
-        f"Please contact HR for any clarification.\n"
+        f"Please contact the administration office for any clarification.\n"
         f"{_SIGNATURE_EN}"
     )
 

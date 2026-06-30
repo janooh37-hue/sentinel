@@ -103,7 +103,7 @@ def test_violation_falls_back_to_deduction():
         "Dear John Smith,\n"
         "A Sleeping on Duty has been recorded on 01/07/2026 (Wednesday).\n"
         "Action: 2 day(s) deduction.\n"
-        "Please contact HR for any clarification.\n"
+        "Please contact the administration office for any clarification.\n"
         "Al Wathba Rehabilitation Centre"
     )
 
