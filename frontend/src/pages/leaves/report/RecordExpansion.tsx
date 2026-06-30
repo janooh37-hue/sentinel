@@ -18,7 +18,10 @@ import { api, ApiError } from '@/lib/api'
 import type { LeaveListItem, LeaveStatus } from '@/lib/api'
 import { Button } from '@/components/ui/button'
 
-import { actionsFor, displayState, lifecycleGroup } from '../lifecycle'
+import { SendSmsButton } from '@/components/sms/SendSmsButton'
+import { SendWhatsAppButton } from '@/components/whatsapp/SendWhatsAppButton'
+
+import { actionsFor, canonStatus, displayState, lifecycleGroup } from '../lifecycle'
 import { NsControls } from '../NsControls'
 import { ReturnFormDialog } from '../ReturnFormDialog'
 import { StatusBadge } from '../StatusBadge'
@@ -238,6 +241,17 @@ export function RecordExpansion({
               >
                 {t('leaves.report.fileReturn')}
               </Button>
+            </div>
+          )}
+
+          {/* Notify the employee on approval. canonStatus() normalises the
+              stored bilingual/legacy status ("Approved - موافق", "Generated …")
+              to "Approved" — a raw === would hide the button on every real
+              record. Mirrors the mobile drawer (TabRecords). */}
+          {canonStatus(row.status) === 'Approved' && (
+            <div className="flex flex-wrap items-center gap-2">
+              <SendWhatsAppButton eventType="leave_approved" recordId={row.id} />
+              <SendSmsButton eventType="leave_approved" recordId={row.id} />
             </div>
           )}
 
