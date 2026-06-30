@@ -27,7 +27,7 @@ import { EmptyState } from '@/components/ui/empty-state'
 import { FilterSheet } from '@/components/ui/filter-sheet'
 import { Input } from '@/components/ui/input'
 import { SkeletonRow } from '@/components/ui/skeleton'
-import { actionsFor, displayState, lifecycleGroup } from './lifecycle'
+import { actionsFor, canonStatus, displayState, lifecycleGroup } from './lifecycle'
 import { NationalServiceDialog } from './NationalServiceDialog'
 import { NsControls } from './NsControls'
 import { ReturnFormDialog } from './ReturnFormDialog'
@@ -494,15 +494,18 @@ function LeaveDetailDrawer({
               </div>
             )}
 
-            {/* WhatsApp notifications */}
-            {leave.status === 'Approved' && (
+            {/* WhatsApp notifications. canonStatus() normalises the stored
+                bilingual/legacy status ("Approved - موافق", "Generated …") to
+                the canonical "Approved" — a raw === miss would hide the button
+                on every real record. */}
+            {canonStatus(leave.status) === 'Approved' && (
               <SendWhatsAppButton eventType="leave_approved" recordId={leave.id} />
             )}
             {(!!leave.return_date || !!leave.return_doc_path) && (
               <SendWhatsAppButton eventType="duty_resumption" recordId={leave.id} />
             )}
             {/* SMS notifications */}
-            {leave.status === 'Approved' && (
+            {canonStatus(leave.status) === 'Approved' && (
               <SendSmsButton eventType="leave_approved" recordId={leave.id} />
             )}
             {(!!leave.return_date || !!leave.return_doc_path) && (
