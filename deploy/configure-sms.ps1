@@ -73,6 +73,8 @@ if (-not $NoValidate) {
         if ($resp) { $status = [int]$resp.StatusCode }
         if ($status -eq 401) {
             Write-Host '  401 Unauthorized - gateway is reachable but username/password is wrong.' -ForegroundColor Red
+        } elseif ($null -ne $status) {
+            Write-Host ("  HTTP {0} - gateway is reachable but returned an unexpected status (credentials may still be valid)." -f $status) -ForegroundColor Yellow
         } else {
             $detail = $_.Exception.Message
             Write-Host ("  Connection FAILED: {0}" -f $detail) -ForegroundColor Red
@@ -85,12 +87,12 @@ if (-not $NoValidate) {
 
 # --- Upsert the values into .env --------------------------------------------
 $values = [ordered]@{
-    'GSSG_SMS_ENABLED'      = $(if ($Enable) { 'true' } else { 'false' })
     'GSSG_SMS_GATEWAY_URL'  = $GatewayUrl
     'GSSG_SMS_USERNAME'     = $Username
     'GSSG_SMS_PASSWORD'     = $Password
     'GSSG_SMS_COUNTRY_CODE' = $CountryCode
 }
+if ($Enable) { $values['GSSG_SMS_ENABLED'] = 'true' }
 
 $lines = @()
 if (Test-Path $envPath) { $lines = @(Get-Content -Path $envPath) }
@@ -109,13 +111,15 @@ foreach ($key in $values.Keys) {
 
 Write-Host ''
 Write-Host ("Updated {0}:" -f $envPath) -ForegroundColor Green
-Write-Host ("  GSSG_SMS_ENABLED      = {0}" -f $values['GSSG_SMS_ENABLED'])
+if ($Enable) {
+    Write-Host '  GSSG_SMS_ENABLED      = true'
+}
 Write-Host ("  GSSG_SMS_GATEWAY_URL  = {0}" -f $values['GSSG_SMS_GATEWAY_URL'])
 Write-Host ("  GSSG_SMS_USERNAME     = {0}" -f $values['GSSG_SMS_USERNAME'])
 Write-Host  "  GSSG_SMS_PASSWORD     = ******** (hidden)"
 Write-Host ("  GSSG_SMS_COUNTRY_CODE = {0}" -f $values['GSSG_SMS_COUNTRY_CODE'])
 Write-Host ''
 if (-not $Enable) {
-    Write-Host 'Note: GSSG_SMS_ENABLED=false. Re-run with -Enable once the phone is ready and tested.' -ForegroundColor Yellow
+    Write-Host 'Note: GSSG_SMS_ENABLED not written. Re-run with -Enable once the phone is ready and tested.' -ForegroundColor Yellow
 }
 Write-Host 'Next: restart the service ->  mng restart' -ForegroundColor Cyan
