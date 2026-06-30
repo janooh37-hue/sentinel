@@ -9,57 +9,17 @@ of the registered template body, so it is not produced here.
 
 from __future__ import annotations
 
-from datetime import date
-
-from app.core.constants import ARABIC_WEEKDAYS
 from app.db.models import Employee
-
-EVENT_LEAVE_APPROVED = "leave_approved"
-EVENT_DUTY_RESUMPTION = "duty_resumption"
-EVENT_VIOLATION = "violation"
-
-# Monday-first to match datetime.weekday() and ARABIC_WEEKDAYS' ordering.
-ENGLISH_WEEKDAYS: tuple[str, ...] = (
-    "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday",
+from app.services.notify_format import (
+    EVENT_DUTY_RESUMPTION,
+    EVENT_LEAVE_APPROVED,
+    EVENT_VIOLATION,
+    action_text as _action_text,
+    employee_name as _name,
+    fmt_date as _fmt_date,
+    type_label as _type_label,
+    weekday as _weekday,
 )
-
-
-def _english_part(value: str) -> str:
-    return value.partition(" - ")[0].strip() or value.strip()
-
-
-def _arabic_part(value: str) -> str:
-    return value.partition(" - ")[2].strip() or value.strip()
-
-
-def _type_label(value: str, lang: str) -> str:
-    return _arabic_part(value) if lang == "ar" else _english_part(value)
-
-
-def _name(emp: Employee, lang: str) -> str:
-    if lang == "ar":
-        return emp.name_ar or emp.name_en
-    return emp.name_en or emp.name_ar or ""
-
-
-def _fmt_date(d: date) -> str:
-    return d.strftime("%d/%m/%Y")
-
-
-def _weekday(d: date, lang: str) -> str:
-    table = ARABIC_WEEKDAYS if lang == "ar" else ENGLISH_WEEKDAYS
-    return table[d.weekday()]
-
-
-def _action_text(action_taken: str | None, deduction_days: int, lang: str) -> str:
-    if action_taken and action_taken.strip():
-        return action_taken.strip()
-    if deduction_days:
-        return (
-            f"خصم {deduction_days} يوم" if lang == "ar"
-            else f"{deduction_days} day(s) deduction"
-        )
-    return "—"
 
 
 def _build_leave_approved(leave, emp: Employee, lang: str) -> list[str]:
