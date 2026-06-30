@@ -573,6 +573,7 @@ export function BookRecordPage(): React.JSX.Element {
         <div
           className="border-b border-warning/30 bg-warning/10 px-5 py-2.5 text-[0.78em] text-warning"
           data-testid="override-banner"
+          data-print-hide
         >
           {t('books.reviewers.overrideBanner', { count: changesRequestedCount(currentSteps) })}
         </div>
@@ -580,7 +581,7 @@ export function BookRecordPage(): React.JSX.Element {
 
       {/* inline reason panel for return / reject */}
       {decision && (
-        <div className="border-b border-hairline bg-surface px-5 py-3.5">
+        <div className="border-b border-hairline bg-surface px-5 py-3.5" data-print-hide>
           <label
             htmlFor="rec-reason"
             className="mb-1.5 block text-[0.78em] font-semibold text-foreground"
