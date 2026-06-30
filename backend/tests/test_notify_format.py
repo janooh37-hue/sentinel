@@ -59,11 +59,23 @@ def test_type_label_generic_unknown_and_violation():
     assert nf.type_label("Violation", "en") == "Violation"
 
 
-def test_type_label_arabic_only_value_falls_through():
-    # Free-text Arabic violation with no English half: Arabic stays, and EN has
-    # nothing better to show than the original.
+def test_type_label_known_arabic_freetext_maps_to_english():
+    # A known Arabic-only violation type renders English on the EN channel.
     assert nf.type_label("ترك مكان العمل", "ar") == "ترك مكان العمل"
-    assert nf.type_label("ترك مكان العمل", "en") == "ترك مكان العمل"
+    assert nf.type_label("ترك مكان العمل", "en") == "Leaving the workplace"
+
+
+def test_type_label_unknown_arabic_only_value_falls_through():
+    # An unmapped Arabic free-text value has no English form; it stays as-is.
+    assert nf.type_label("نص غير معروف", "ar") == "نص غير معروف"
+    assert nf.type_label("نص غير معروف", "en") == "نص غير معروف"
+
+
+def test_action_text_translates_known_arabic_action_for_english():
+    assert nf.action_text("إنذار خطي", 0, "en") == "Written warning"
+    assert nf.action_text("إنذار خطي", 0, "ar") == "إنذار خطي"
+    # Unknown free-text action is shown verbatim in both languages.
+    assert nf.action_text("Custom note", 0, "en") == "Custom note"
 
 
 def test_employee_name_prefers_language():

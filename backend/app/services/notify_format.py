@@ -57,9 +57,30 @@ _TYPE_CANON: dict[str, tuple[str, str]] = {
     "violation": ("Violation", "مخالفة"),
 }
 
+# Arabic-only free-text labels (HR types these directly) keyed by the exact
+# stored string, so the English template shows English instead of leaking
+# Arabic. Extend as new Arabic types/actions appear.
+_TYPE_CANON_AR: dict[str, tuple[str, str]] = {
+    "ترك مكان العمل": ("Leaving the workplace", "ترك مكان العمل"),
+}
+
+# Disciplinary actions entered in Arabic → English (for the English channel).
+_ACTION_AR_EN: dict[str, str] = {
+    "إنذار خطي": "Written warning",
+    "إنذار شفهي": "Verbal warning",
+}
+
 
 def _has_arabic(s: str) -> bool:
     return any("؀" <= ch <= "ۿ" for ch in s)
+
+
+def _canon(value: str) -> tuple[str, str] | None:
+    """Resolve a stored type to canonical (English, Arabic), or None."""
+    entry = _TYPE_CANON.get(_english_lead(value).lower())
+    if entry:
+        return entry
+    return _TYPE_CANON_AR.get(value.strip())
 
 
 def _english_lead(value: str) -> str:
@@ -86,11 +107,11 @@ def type_label(value: str, lang: str) -> str:
         ar = arabic_part(v)
         if " - " in v and _has_arabic(ar):
             return ar
-        entry = _TYPE_CANON.get(_english_lead(v).lower())
+        entry = _canon(v)
         return entry[1] if entry else ar
     if " - " in v:
         return english_part(v)
-    entry = _TYPE_CANON.get(_english_lead(v).lower())
+    entry = _canon(v)
     return entry[0] if entry else english_part(v)
 
 
@@ -111,7 +132,11 @@ def weekday(d: date, lang: str) -> str:
 
 def action_text(action_taken: str | None, deduction_days: int, lang: str) -> str:
     if action_taken and action_taken.strip():
-        return action_taken.strip()
+        a = action_taken.strip()
+        # Keep the English channel English: translate known Arabic actions.
+        if lang == "en":
+            return _ACTION_AR_EN.get(a, a)
+        return a
     if deduction_days:
         return (
             f"خصم {deduction_days} يوم" if lang == "ar"

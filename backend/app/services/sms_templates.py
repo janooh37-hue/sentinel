@@ -21,21 +21,35 @@ def _leave_approved(leave, emp: Employee, lang: str) -> str:
     s, sw = nf.fmt_date(leave.start_date), nf.weekday(leave.start_date, lang)
     e, ew = nf.fmt_date(leave.end_date), nf.weekday(leave.end_date, lang)
     days = str(leave.days)
+    # Annual Leave gets the extra ID-card reminder + a sign-off.
+    is_annual = nf.type_label(leave.leave_type, "en") == "Annual Leave"
     if lang == "ar":
+        annual = (
+            "يرجى إحضار بطاقة العمل إلى المكتب لتجنب أي مخالفة.\n"
+            "إجازة سعيدة.\n"
+            if is_annual else ""
+        )
         return (
             f"عزيزي {name}،\n"
             f"تمت الموافقة على إجازتك ({typ}).\n"
             f"تاريخ البداية: {s} ({sw})\n"
             f"تاريخ النهاية: {e} ({ew})\n"
             f"المدة: {days} يوم.\n"
+            f"{annual}"
             f"{_SIGNATURE_AR}"
         )
+    annual = (
+        "Please bring your work ID to the office to avoid any violation.\n"
+        "Have a nice vacation.\n"
+        if is_annual else ""
+    )
     return (
         f"Dear {name},\n"
         f"Your {typ} has been approved.\n"
         f"Start: {s} ({sw})\n"
         f"End: {e} ({ew})\n"
         f"Duration: {days} day(s).\n"
+        f"{annual}"
         f"{_SIGNATURE_EN}"
     )
 

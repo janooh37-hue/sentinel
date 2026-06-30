@@ -23,8 +23,31 @@ def test_leave_approved_english_full_text():
         "Start: 05/07/2026 (Sunday)\n"
         "End: 09/07/2026 (Thursday)\n"
         "Duration: 5 day(s).\n"
+        "Please bring your work ID to the office to avoid any violation.\n"
+        "Have a nice vacation.\n"
         "Al Wathba Rehabilitation Centre"
     )
+
+
+def test_annual_leave_adds_idcard_and_signoff_both_languages():
+    emp = _emp()
+    leave = Leave(id=9, employee_id="G1", leave_type="Annual Leave",
+                  start_date=date(2026, 7, 5), end_date=date(2026, 7, 9), days=5)
+    ar = st.render_text("leave_approved", "ar", leave, emp)
+    assert "يرجى إحضار بطاقة العمل إلى المكتب لتجنب أي مخالفة." in ar
+    assert "إجازة سعيدة." in ar
+    en = st.render_text("leave_approved", "en", leave, emp)
+    assert "Please bring your work ID to the office to avoid any violation." in en
+    assert "Have a nice vacation." in en
+
+
+def test_non_annual_leave_has_no_idcard_lines():
+    emp = _emp(msg_language="en")
+    leave = Leave(id=10, employee_id="G1", leave_type="Sick Leave - الإجازة المرضية",
+                  start_date=date(2026, 7, 5), end_date=date(2026, 7, 9), days=5)
+    en = st.render_text("leave_approved", "en", leave, emp)
+    assert "work ID" not in en
+    assert "Have a nice vacation." not in en
 
 
 def test_leave_approved_english_no_doubled_leave_word():
