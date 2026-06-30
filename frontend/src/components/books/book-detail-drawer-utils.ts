@@ -32,3 +32,19 @@ export function footerActionFor(
   if (state === 'none' && caps.canManage) return 'submit'
   return 'none'
 }
+
+/**
+ * Whether an admin may file a physically-signed scan back onto the record from
+ * the record page. Independent of `footerActionFor` / assignee: an operator who
+ * handles requests for others (print → sign on paper → scan back) needs this
+ * while the request is out for signature (`pending`) or explicitly at the
+ * printer (`awaiting_scan`). Approved/draft/returned/rejected don't take a
+ * signed copy here (those have their own moves). Requires both `books.manage`
+ * and `documents.scan` — the same gate the Records pane uses for ＋Add-scan.
+ */
+export function canFileSignedCopy(
+  state: string,
+  caps: { canManage: boolean; canScan: boolean },
+): boolean {
+  return caps.canManage && caps.canScan && (state === 'pending' || state === 'awaiting_scan')
+}

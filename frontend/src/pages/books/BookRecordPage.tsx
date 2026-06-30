@@ -8,7 +8,7 @@
  * (sign / decide-with-reason / revise / submit + query invalidation).
  */
 
-import { Suspense, lazy, useEffect, useMemo, useState } from 'react'
+import { Suspense, lazy, useEffect, useMemo, useRef, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
@@ -28,7 +28,7 @@ import {
 import { api, ApiError, type BookApprovalStepRead, type BookDecideAction, type BookVersionRead } from '@/lib/api'
 import { useAuth } from '@/lib/authContext'
 import { useCapabilities } from '@/lib/useCapabilities'
-import { footerActionFor } from '@/components/books/book-detail-drawer-utils'
+import { canFileSignedCopy, footerActionFor } from '@/components/books/book-detail-drawer-utils'
 import {
   changesRequestedCount,
   isApproverAssignee,
@@ -43,6 +43,7 @@ import { hasCommentBearingMark } from '@/components/books/annotation-utils'
 import { cn } from '@/lib/utils'
 
 import { sealDescriptor, signedSourceOf, type SealTone } from './bookStateLabel'
+import { useAddScan } from './useAddScan'
 
 const DocPdfCanvas = lazy(() => import('@/pages/application/DocPdfCanvas'))
 
@@ -235,9 +236,14 @@ export function BookRecordPage(): React.JSX.Element {
   const { has } = useCapabilities()
   const canApprove = has('books.approve')
   const canManage = has('books.manage')
+  // Filing a physically-signed scan back uses the same gate as the Records
+  // pane's ＋Add-scan (books.manage + documents.scan).
+  const canScan = has('documents.scan')
   // Revise regenerates via POST /documents/generate, which requires this cap;
   // without it the committed Save would 403.
   const canGenerate = has('documents.generate')
+
+  const fileSignedRef = useRef<HTMLInputElement | null>(null)
 
   const [submitOpen, setSubmitOpen] = useState(false)
   // Inline reason panel for return/reject (backend requires a non-empty reason).
@@ -267,6 +273,12 @@ export function BookRecordPage(): React.JSX.Element {
   const submitter = book?.submitted_by_name ?? '—'
   const state = book?.approval_state ?? 'none'
   const signedSource = book ? signedSourceOf(book) : null
+
+  // Admin "file the signed scan back" — available regardless of who the
+  // assigned approver is, so an operator handling requests for others can
+  // close out the paper flow (print → sign → scan) from the record page.
+  const addScan = useAddScan(book?.id ?? null)
+  const showFileSigned = canFileSignedCopy(state, { canManage, canScan })
 
   const stations = useMemo(
     () =>
@@ -455,6 +467,36 @@ export function BookRecordPage(): React.JSX.Element {
             onClick={() => window.print()}
           />
 
+          {showFileSigned && (
+            <>
+              <HeaderBtn
+                icon={<Upload className="h-3.5 w-3.5" />}
+                label={t('books.pane.scanSignedCopy')}
+                tone="navy-solid"
+                disabled={addScan.busy}
+                onClick={() => fileSignedRef.current?.click()}
+              />
+              <input
+                ref={fileSignedRef}
+                type="file"
+                accept="application/pdf,image/*"
+                className="hidden"
+                onChange={(e) => {
+                  const f = e.target.files?.[0]
+                  if (f && book) {
+                    // as_signed=true: the backend flips the record to approved
+                    // with a scan-back signed copy. Refetch so the desk reloads
+                    // the signed PDF and the timeline lands on "Signed · scanned".
+                    void addScan
+                      .fileSignedCopy(f, book.ref_number)
+                      .then(() => void refetch())
+                  }
+                  e.target.value = ''
+                }}
+              />
+            </>
+          )}
+
           {action === 'decide' && (
             <>
               <HeaderBtn
@@ -602,7 +644,7 @@ export function BookRecordPage(): React.JSX.Element {
               'radial-gradient(150% 100% at 40% -10%, var(--surface) 0%, var(--surface-tinted) 70%, var(--bg) 100%)',
           }}
         >
-          <div className="relative w-full max-w-[640px]">
+          <div className="print-paper relative w-full max-w-[640px]">
             {pdfUrl ? (
               <Suspense fallback={<DeskLoading />}>
                 <DocPdfCanvas
@@ -610,15 +652,20 @@ export function BookRecordPage(): React.JSX.Element {
                   renderOverlay={
                     annotatable
                       ? (pages) => (
-                          <BookAnnotationLayer
-                            pages={pages}
-                            annotations={annotations}
-                            mode={annMode}
-                            currentUserId={user?.id}
-                            busy={createMark.isPending || deleteMark.isPending}
-                            onCreate={(m) => createMark.mutate(m)}
-                            onDelete={(id) => deleteMark.mutate(id)}
-                          />
+                          // Annotation pins are screen-only review marks — hidden
+                          // on the printed copy (display:contents keeps placement
+                          // math anchored to the canvas wrapper on screen).
+                          <div data-print-hide style={{ display: 'contents' }}>
+                            <BookAnnotationLayer
+                              pages={pages}
+                              annotations={annotations}
+                              mode={annMode}
+                              currentUserId={user?.id}
+                              busy={createMark.isPending || deleteMark.isPending}
+                              onCreate={(m) => createMark.mutate(m)}
+                              onDelete={(id) => deleteMark.mutate(id)}
+                            />
+                          </div>
                         )
                       : undefined
                   }
