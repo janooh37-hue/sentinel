@@ -26,6 +26,8 @@ import { useCapabilities } from '@/lib/useCapabilities'
 import { useFocusTrap } from '@/lib/useFocusTrap'
 import { cn } from '@/lib/utils'
 
+import { canFileSignedCopy } from '@/components/books/book-detail-drawer-utils'
+
 import { signedSourceOf } from './bookStateLabel'
 import { formKindOf, subjectEmployeePart } from './formKind'
 import { papersOf } from './recordPapers'
@@ -53,7 +55,9 @@ export function RecordPane({
 }): React.JSX.Element {
   const { t } = useTranslation()
   const { has } = useCapabilities()
-  const canScan = has('documents.scan') && has('books.manage')
+  const canManage = has('books.manage')
+  const canScanCap = has('documents.scan')
+  const canScan = canScanCap && canManage
   const fileRef = useRef<HTMLInputElement | null>(null)
   const addScan = useAddScan(book?.id ?? null)
 
@@ -104,6 +108,10 @@ export function RecordPane({
   const kind = formKindOf(book.subject)
   const who = subjectEmployeePart(book.subject)
   const state = book.approval_state
+  // Same gate as the record page (BookRecordPage): an admin files the
+  // physically-signed scan back for a request out for signature (pending) or
+  // at the printer (awaiting_scan). Shared helper keeps both surfaces aligned.
+  const showFileSigned = canFileSignedCopy(state, { canManage, canScan: canScanCap })
 
   const addScanSlot = canScan ? (
     <button
@@ -177,16 +185,18 @@ export function RecordPane({
         {state === 'returned' && (
           <PaneBtn primary onClick={() => onOpenRecord(book.id)}>{t('books.pane.revise')}</PaneBtn>
         )}
-        {/* awaiting_scan: the signed paper is out at the printer — the primary
-            action files it back, via the SAME hidden input as the ＋Add-scan frame */}
-        {state === 'awaiting_scan' && canScan && (
+        {/* pending (out for in-app signature) + awaiting_scan (paper at the
+            printer): file the signed copy back, via the SAME hidden input as the
+            ＋Add-scan frame. Mirrors the record page's "Scan signed copy" action
+            so both surfaces offer it. */}
+        {showFileSigned && (
           <PaneBtn primary disabled={addScan.busy} onClick={() => fileRef.current?.click()}>
             {t('books.pane.scanSignedCopy')}
           </PaneBtn>
         )}
         {state !== 'none' && (
           <PaneBtn
-            primary={state !== 'returned' && !(state === 'awaiting_scan' && canScan)}
+            primary={state !== 'returned' && !showFileSigned}
             onClick={() => onOpenRecord(book.id)}
           >
             {t('books.pane.openRecord')}
