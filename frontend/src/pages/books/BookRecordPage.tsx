@@ -28,7 +28,11 @@ import {
 import { api, ApiError, type BookApprovalStepRead, type BookDecideAction, type BookVersionRead } from '@/lib/api'
 import { useAuth } from '@/lib/authContext'
 import { useCapabilities } from '@/lib/useCapabilities'
-import { canFileSignedCopy, footerActionFor } from '@/components/books/book-detail-drawer-utils'
+import {
+  canFileSignedCopy,
+  canSendForApproval,
+  footerActionFor,
+} from '@/components/books/book-detail-drawer-utils'
 import {
   changesRequestedCount,
   isApproverAssignee,
@@ -279,6 +283,10 @@ export function BookRecordPage(): React.JSX.Element {
   // close out the paper flow (print → sign → scan) from the record page.
   const addScan = useAddScan(book?.id ?? null)
   const showFileSigned = canFileSignedCopy(state, { canManage, canScan })
+  // "Send for approval" (digital route): submit a draft, or re-route a still
+  // pending request to a different signing manager. Both routes are offered
+  // side by side so the operator picks per request.
+  const showSendForApproval = canSendForApproval(state, { canManage })
 
   const stations = useMemo(
     () =>
@@ -467,12 +475,21 @@ export function BookRecordPage(): React.JSX.Element {
             onClick={() => window.print()}
           />
 
+          {showSendForApproval && (
+            <HeaderBtn
+              icon={<Send className="h-3.5 w-3.5" />}
+              label={t('books.approval.submitForApproval')}
+              tone="navy-solid"
+              onClick={() => setSubmitOpen(true)}
+            />
+          )}
+
           {showFileSigned && (
             <>
               <HeaderBtn
                 icon={<Upload className="h-3.5 w-3.5" />}
                 label={t('books.pane.scanSignedCopy')}
-                tone="navy-solid"
+                tone="plain"
                 disabled={addScan.busy}
                 onClick={() => fileSignedRef.current?.click()}
               />
@@ -533,15 +550,6 @@ export function BookRecordPage(): React.JSX.Element {
             <div data-testid="record-reviewer-actions">
               <ReviewerActions bookId={book.id} onDone={() => navigate('/books')} />
             </div>
-          )}
-
-          {action === 'submit' && (
-            <HeaderBtn
-              icon={<Send className="h-3.5 w-3.5" />}
-              label={t('books.approval.submitForApproval')}
-              tone="navy-solid"
-              onClick={() => setSubmitOpen(true)}
-            />
           )}
 
           {action === 'revise' && (

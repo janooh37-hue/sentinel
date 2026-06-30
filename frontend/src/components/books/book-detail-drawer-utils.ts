@@ -34,17 +34,33 @@ export function footerActionFor(
 }
 
 /**
- * Whether an admin may file a physically-signed scan back onto the record from
- * the record page. Independent of `footerActionFor` / assignee: an operator who
- * handles requests for others (print → sign on paper → scan back) needs this
- * while the request is out for signature (`pending`) or explicitly at the
- * printer (`awaiting_scan`). Approved/draft/returned/rejected don't take a
- * signed copy here (those have their own moves). Requires both `books.manage`
- * and `documents.scan` — the same gate the Records pane uses for ＋Add-scan.
+ * Whether an admin may file a physically-signed scan back onto the record.
+ * Independent of `footerActionFor` / assignee: an operator who handles requests
+ * for others (print → sign on paper → scan back) needs this on a draft (`none`,
+ * the paper route as a first move), while a request is out for in-app signature
+ * (`pending`), or when the paper is explicitly at the printer (`awaiting_scan`).
+ * Approved/returned/rejected don't take a signed copy here (those have their own
+ * moves). Requires both `books.manage` and `documents.scan` — the same gate the
+ * Records pane uses for ＋Add-scan.
  */
 export function canFileSignedCopy(
   state: string,
   caps: { canManage: boolean; canScan: boolean },
 ): boolean {
-  return caps.canManage && caps.canScan && (state === 'pending' || state === 'awaiting_scan')
+  return (
+    caps.canManage &&
+    caps.canScan &&
+    (state === 'none' || state === 'pending' || state === 'awaiting_scan')
+  )
+}
+
+/**
+ * Whether the "Send for approval" (digital route) action shows — i.e. submit a
+ * draft, or RE-ROUTE a still-pending request to a different signing manager.
+ * Mirrors the backend `submit_for_approval`, which rebuilds the chain for
+ * `none`/`pending` but rejects `awaiting_scan` ("file the scan instead") and an
+ * already-approved version. Requires `books.manage`.
+ */
+export function canSendForApproval(state: string, caps: { canManage: boolean }): boolean {
+  return caps.canManage && (state === 'none' || state === 'pending')
 }

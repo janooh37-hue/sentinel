@@ -26,7 +26,7 @@ import { useCapabilities } from '@/lib/useCapabilities'
 import { useFocusTrap } from '@/lib/useFocusTrap'
 import { cn } from '@/lib/utils'
 
-import { canFileSignedCopy } from '@/components/books/book-detail-drawer-utils'
+import { canFileSignedCopy, canSendForApproval } from '@/components/books/book-detail-drawer-utils'
 
 import { signedSourceOf } from './bookStateLabel'
 import { formKindOf, subjectEmployeePart } from './formKind'
@@ -112,6 +112,9 @@ export function RecordPane({
   // physically-signed scan back for a request out for signature (pending) or
   // at the printer (awaiting_scan). Shared helper keeps both surfaces aligned.
   const showFileSigned = canFileSignedCopy(state, { canManage, canScan: canScanCap })
+  // Send for approval (digital route): submit a draft or re-route a pending
+  // request — offered next to Scan signed copy so both routes are available.
+  const showSendForApproval = canSendForApproval(state, { canManage })
 
   const addScanSlot = canScan ? (
     <button
@@ -177,20 +180,22 @@ export function RecordPane({
 
       <div className="flex shrink-0 flex-wrap gap-2 border-t border-hairline px-3.5 py-2.5">
         {state === 'none' && (
-          <>
-            <PaneBtn primary onClick={() => onContinueDraft(book.id)}>{t('books.pane.continueDraft')}</PaneBtn>
-            <PaneBtn onClick={() => onSubmit(book.id)}>{t('books.approval.submitForApproval')}</PaneBtn>
-          </>
+          <PaneBtn primary onClick={() => onContinueDraft(book.id)}>{t('books.pane.continueDraft')}</PaneBtn>
+        )}
+        {/* Send for approval (digital route): submit a draft or re-route a
+            pending request, offered alongside Scan signed copy. */}
+        {showSendForApproval && (
+          <PaneBtn onClick={() => onSubmit(book.id)}>{t('books.approval.submitForApproval')}</PaneBtn>
         )}
         {state === 'returned' && (
           <PaneBtn primary onClick={() => onOpenRecord(book.id)}>{t('books.pane.revise')}</PaneBtn>
         )}
-        {/* pending (out for in-app signature) + awaiting_scan (paper at the
-            printer): file the signed copy back, via the SAME hidden input as the
-            ＋Add-scan frame. Mirrors the record page's "Scan signed copy" action
-            so both surfaces offer it. */}
+        {/* none / pending / awaiting_scan: file the signed copy back, via the
+            SAME hidden input as the ＋Add-scan frame. Mirrors the record page's
+            "Scan signed copy" so both surfaces offer the paper route. On a draft
+            it sits beside Continue Draft, so it's not the primary there. */}
         {showFileSigned && (
-          <PaneBtn primary disabled={addScan.busy} onClick={() => fileRef.current?.click()}>
+          <PaneBtn primary={state !== 'none'} disabled={addScan.busy} onClick={() => fileRef.current?.click()}>
             {t('books.pane.scanSignedCopy')}
           </PaneBtn>
         )}
