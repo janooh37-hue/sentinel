@@ -159,6 +159,14 @@ COMPANION_FORM_PAIRS: Final[Mapping[str, str]] = MappingProxyType(
     }
 )
 
+# --- Companion template ids (never shown as standalone services) -----------
+# These forms auto-generate alongside their primary (see
+# document_service._COMPANION_RULES). They must never appear as their own
+# gallery tile or quick-action, so `list_templates()` filters them out.
+COMPANION_TEMPLATE_IDS: Final[frozenset[str]] = frozenset(
+    {"Leave Undertaking", "Resignation Declaration"}
+)
+
 
 # --- Violation numbering (maps to the printed GSSG-NAT 300-004 form rows) ---
 # Section headers occupy template rows 6 (Grooming), 15 (PSFRD Requirements) and
