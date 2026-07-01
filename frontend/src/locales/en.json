@@ -1390,7 +1390,15 @@
   },
   "errors": {
     "generic": "Something went wrong",
-    "network": "Could not reach the server"
+    "network": "Could not reach the server",
+    "boundary": {
+      "bodyLead": "This screen lost its connection.",
+      "bodyReassure": "Nothing you did is lost",
+      "bodyTail": "— reload to reconnect and pick up where you left off.",
+      "copyDiagnostic": "Copy diagnostic",
+      "reload": "Reload",
+      "hint": "If it keeps happening, send the diagnostic to the admin office."
+    }
   },
   "compose": {
     "window": {
