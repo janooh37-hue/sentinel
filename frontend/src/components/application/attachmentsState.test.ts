@@ -6,6 +6,7 @@ import {
   emptyAttachmentsState,
   SICK_ONLY_SLOT_KEY,
   seedStagedSlot,
+  attachmentsWithSeed,
 } from './attachmentsState'
 
 const slot = (key: string): AttachmentSlotRead => ({
@@ -49,5 +50,29 @@ describe('seedStagedSlot', () => {
     expect(out.slots[SICK_ONLY_SLOT_KEY]).toEqual({
       kind: 'staged', token: 'tok', filename: 'scan.pdf', size: 42,
     })
+  })
+})
+
+describe('attachmentsWithSeed', () => {
+  const slots = [slot(SICK_ONLY_SLOT_KEY)]
+  it('seeds onto a restored draft without dropping existing content', () => {
+    const draft = { ...emptyAttachmentsState(), slots: { other: staged }, extras: [staged] }
+    const out = attachmentsWithSeed(draft, [slot('other'), slot(SICK_ONLY_SLOT_KEY)],
+      { slotKey: SICK_ONLY_SLOT_KEY, staged: { token: 'm', filename: 'cert.pdf', size: 9 } })
+    expect(out.slots[SICK_ONLY_SLOT_KEY]).toEqual({ kind: 'staged', token: 'm', filename: 'cert.pdf', size: 9 })
+    expect(out.slots.other).toEqual(staged)   // draft content survives
+    expect(out.extras).toEqual([staged])
+  })
+  it('seeds onto an empty base when there is no draft', () => {
+    const out = attachmentsWithSeed(null, slots, { slotKey: SICK_ONLY_SLOT_KEY, staged: { token: 'm', filename: 'c', size: 1 } })
+    expect(out.slots[SICK_ONLY_SLOT_KEY]?.token).toBe('m')
+  })
+  it('does not seed when the slot is absent', () => {
+    const out = attachmentsWithSeed(null, [slot('other')], { slotKey: SICK_ONLY_SLOT_KEY, staged: { token: 'm', filename: 'c', size: 1 } })
+    expect(out.slots[SICK_ONLY_SLOT_KEY]).toBeUndefined()
+  })
+  it('returns the base unchanged when there is no pending seed', () => {
+    const draft = { ...emptyAttachmentsState(), slots: { other: staged } }
+    expect(attachmentsWithSeed(draft, slots, undefined)).toEqual(draft)
   })
 })

@@ -43,11 +43,11 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { TemplateForm } from '@/components/application/TemplateForm'
 import { AttachmentsBlock } from '@/components/application/AttachmentsBlock'
 import {
+  attachmentsWithSeed,
   emptyAttachmentsState,
   filterStateToSlots,
   missingRequired,
   parseAttachmentsState,
-  seedStagedSlot,
   toGenerateSpecs,
   visibleAttachmentSlots,
 } from '@/components/application/attachmentsState'
@@ -267,7 +267,7 @@ export function ApplicationPage(): React.JSX.Element {
   // Preview stays available regardless (it renders the form only).
   const missingSlotKeys = missingRequired(visibleSlots, attachmentsState)
   const firstMissingSlot =
-    attachmentSlots.find((s) => s.key === missingSlotKeys[0]) ?? null
+    visibleSlots.find((s) => s.key === missingSlotKeys[0]) ?? null
   const firstMissingSlotLabel = firstMissingSlot
     ? isAr
       ? firstMissingSlot.label_ar || firstMissingSlot.label_en
@@ -487,21 +487,6 @@ export function ApplicationPage(): React.JSX.Element {
   // would loop) keeps the effect stable.
   const schemaReady = !!schemaQuery.data
 
-  // Seed the medical_certificate slot from the intake-staged scan once the
-  // schema (and thus the slot) is available. Runs at most once per mount
-  // (pendingAttachment cleared immediately after seeding).
-  useEffect(() => {
-    if (!pendingAttachment || !schemaReady) return
-    const hasSlot = (schemaQuery.data?.attachment_slots ?? []).some(
-      (s) => s.key === pendingAttachment.slotKey,
-    )
-    if (!hasSlot) return
-    setAttachmentsState((prev) =>
-      seedStagedSlot(prev, pendingAttachment.slotKey, pendingAttachment.staged),
-    )
-    setPendingAttachment(undefined)
-  }, [pendingAttachment, schemaReady, schemaQuery.data])
-
   const reviseAppliedRef = useRef(false)
   useEffect(() => {
     if (!selectedTemplate || !schemaReady) return
@@ -517,18 +502,24 @@ export function ApplicationPage(): React.JSX.Element {
       return
     }
     const draft = loadDraft(selectedTemplate)
+    let base: AttachmentsState | null = null
     if (draft) {
       // The draft payload carries the attachments state under a reserved
       // `__attachments` key (spec §6: a refresh keeps staged tokens). Split
       // it out before resetting RHF so the form never sees the blob.
       const { __attachments, ...values } = draft
       form.reset(values)
-      const restored = parseAttachmentsState(__attachments)
-      if (restored) {
-        attachmentsDirtyRef.current = false
-        setAttachmentsState(restored)
-      }
+      base = parseAttachmentsState(__attachments)
+      if (base) attachmentsDirtyRef.current = false
     }
+    // Seed the intake-staged scan on top of the restored draft (or onto an
+    // empty state). attachmentsWithSeed is a pure function so draft content
+    // is never dropped even when a pendingAttachment is present.
+    const slots = schemaQuery.data?.attachment_slots ?? []
+    if (base || pendingAttachment) {
+      setAttachmentsState(attachmentsWithSeed(base, slots, pendingAttachment))
+    }
+    if (pendingAttachment) setPendingAttachment(undefined)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedTemplate, schemaReady, reviseFields])
 

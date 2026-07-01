@@ -100,6 +100,21 @@ export function filterStateToSlots(
   return { ...state, slots: kept }
 }
 
+/** Compose the attachments state shown when a form (re)opens: the restored
+ * draft (or an empty state) with an intake-staged scan seeded on top. The
+ * seed only applies when its slot exists in `slots`, so a scan can never be
+ * dropped by a restored draft and never lands on a form without the slot. */
+export function attachmentsWithSeed(
+  base: AttachmentsState | null,
+  slots: AttachmentSlotRead[],
+  pending: { slotKey: string; staged: { token: string; filename: string; size: number } } | undefined,
+): AttachmentsState {
+  const start = base ?? emptyAttachmentsState()
+  if (!pending) return start
+  if (!slots.some((s) => s.key === pending.slotKey)) return start
+  return seedStagedSlot(start, pending.slotKey, pending.staged)
+}
+
 /** Pre-fill one slot with a staged upload (used to auto-carry an intake scan). */
 export function seedStagedSlot(
   state: AttachmentsState,

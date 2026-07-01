@@ -22,6 +22,7 @@ import { Link, useNavigate } from 'react-router-dom'
 import { toast } from 'sonner'
 
 import { ApiError, api, type ExternalOut, type IntakeResponse, type ReturnedFormOut, type StagedAttachmentRead } from '@/lib/api'
+import { SICK_ONLY_SLOT_KEY } from '@/components/application/attachmentsState'
 import type { ExtractionResponse } from '@/lib/extraction'
 import { pickEmployeeName } from '@/lib/employeeName'
 import { Button } from '@/components/ui/button'
@@ -361,7 +362,7 @@ function ExternalCard({ result, file, onDismiss }: ExternalCardProps): React.JSX
         | undefined
       try {
         const stagedRes = await api.stageAttachment(file)
-        injectedAttachment = { slotKey: 'medical_certificate', staged: stagedRes }
+        injectedAttachment = { slotKey: SICK_ONLY_SLOT_KEY, staged: stagedRes }
       } catch {
         // Non-fatal: fall back to manual attach on the form.
       }
