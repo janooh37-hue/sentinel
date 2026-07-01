@@ -17,7 +17,14 @@ from sqlalchemy.orm import Session
 
 from app.core.constants import STAMP_STYLE_HEADER
 from app.db.models import AppSetting
-from app.schemas.settings import AppSettingsRead, AppSettingsUpdate, DashboardLayout
+from app.schemas.settings import (
+    DASHBOARD_QUICK_ACTION_IDS,
+    AppSettingsRead,
+    AppSettingsUpdate,
+    DashboardLayout,
+)
+
+_VALID_QUICK_ACTION_IDS = frozenset(DASHBOARD_QUICK_ACTION_IDS)
 
 # Well-known key for the singleton row that owns the dashboard_layout JSON
 # column. The column is nullable and only populated on this one row; all
@@ -109,14 +116,27 @@ def _get_dashboard_layout(db: Session) -> DashboardLayout | None:
 
     Returns ``None`` when either the row doesn't exist or the column is NULL —
     in both cases the frontend falls back to its built-in defaults.
+
+    Quick-action ids that are no longer known (e.g. a template removed from the
+    quick-launcher) are dropped rather than failing validation, so a layout
+    saved before the removal still loads.
     """
     row = db.execute(
         select(AppSetting).where(AppSetting.key == _DASHBOARD_LAYOUT_KEY)
     ).scalar_one_or_none()
     if row is None or row.dashboard_layout is None:
         return None
-    # Already a dict thanks to the JSON column; let pydantic validate the shape.
-    return DashboardLayout.model_validate(row.dashboard_layout)
+    raw = row.dashboard_layout
+    if isinstance(raw, dict) and isinstance(raw.get("quick_actions"), list):
+        raw = {
+            **raw,
+            "quick_actions": [
+                qa
+                for qa in raw["quick_actions"]
+                if isinstance(qa, dict) and qa.get("id") in _VALID_QUICK_ACTION_IDS
+            ],
+        }
+    return DashboardLayout.model_validate(raw)
 
 
 def _set_dashboard_layout(db: Session, layout: DashboardLayout | None) -> None:
