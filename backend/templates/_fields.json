@@ -2,7 +2,7 @@
   "Leave Application Form": {
     "category": "personnel",
     "name_en": "Leave Application Form",
-    "name_ar": "نموذج طلب إجازة",
+    "name_ar": "طلب إجازة",
     "form_number": "300-003",
     "fields": [
       {
@@ -75,7 +75,7 @@
   "Violation Form": {
     "category": "personnel",
     "name_en": "Violation Form",
-    "name_ar": "نموذج مخالفة",
+    "name_ar": "مخالفة",
     "form_number": "300-004",
     "fields": [
       {
@@ -161,7 +161,7 @@
   "Duty Resumption Form": {
     "category": "personnel",
     "name_en": "Duty Resumption Form",
-    "name_ar": "نموذج استئناف العمل",
+    "name_ar": "استئناف العمل",
     "form_number": "300-016",
     "fields": [
       {
@@ -232,7 +232,7 @@
   "Salary Transfer Request": {
     "category": "personnel",
     "name_en": "Salary Transfer Request",
-    "name_ar": "نموذج طلب تحويل راتب",
+    "name_ar": "طلب تحويل راتب",
     "form_number": "300-024",
     "fields": [
       {
@@ -282,7 +282,7 @@
   "Salary Deduction Form": {
     "category": "personnel",
     "name_en": "Salary Deduction Form",
-    "name_ar": "نموذج خصم راتب",
+    "name_ar": "خصم راتب",
     "form_number": "300-013",
     "fields": [
       {
@@ -325,7 +325,7 @@
   "Employee Clearance Form": {
     "category": "personnel",
     "name_en": "Employee Clearance Form",
-    "name_ar": "نموذج إخلاء طرف",
+    "name_ar": "إخلاء طرف",
     "form_number": "300-009",
     "fields": [
       {
@@ -354,7 +354,7 @@
   "HR Request Form": {
     "category": "personnel",
     "name_en": "HR Request Form",
-    "name_ar": "نموذج طلب موارد بشرية",
+    "name_ar": "طلب موارد بشرية",
     "form_number": "300-014",
     "fields": [
       {
@@ -543,7 +543,7 @@
   "Acknowledgment Form": {
     "category": "admin",
     "name_en": "Acknowledgment Form",
-    "name_ar": "نموذج استلام",
+    "name_ar": "استلام المواد",
     "form_number": "300-003",
     "fields": [
       {
@@ -572,7 +572,7 @@
   "Material Request Form": {
     "category": "admin",
     "name_en": "Material Request Form",
-    "name_ar": "نموذج طلب مواد",
+    "name_ar": "طلب مواد",
     "form_number": "300-001",
     "fields": [
       {
@@ -722,7 +722,7 @@
   "Warning Form": {
     "category": "personnel",
     "name_en": "Warning Form",
-    "name_ar": "نموذج إنذار",
+    "name_ar": "إنذار",
     "form_number": "301-004",
     "fields": [
       {

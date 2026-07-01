@@ -213,8 +213,8 @@ VIOLATION_STATUS_LIST: Final[tuple[str, ...]] = (
 # --- Admin-Affairs form labels (used by the form-picker UI) -----------------
 
 ADMIN_TYPES: Final[tuple[str, ...]] = (
-    "Acknowledgment Form - نموذج استلام",
-    "Material Request Form - نموذج طلب مواد",
+    "Acknowledgment Form - استلام المواد",
+    "Material Request Form - طلب مواد",
     "Leave Permit Form - تصريح خروج",
     "Administrative Leave Form - طلب إجازة إدارية",
     "General Book - كتاب عام",

@@ -23,3 +23,23 @@ def test_companion_schema_still_accessible():
     # from the *listing*, we do not remove the template.
     detail = template_service.get_template_fields("Leave Undertaking")
     assert detail.meta.id == "Leave Undertaking"
+
+
+def test_arabic_names_have_no_form_prefix():
+    for meta in template_service.list_templates().items:
+        assert not meta.name_ar.startswith("نموذج"), meta.id
+
+
+def test_acknowledgment_arabic_name_is_material_receipt():
+    names = {m.id: m.name_ar for m in template_service.list_templates().items}
+    assert names["Acknowledgment Form"] == "استلام المواد"
+
+
+def test_admin_types_labels_have_no_form_prefix():
+    from app.core.constants import ADMIN_TYPES
+
+    joined = "\n".join(ADMIN_TYPES)
+    assert "نموذج استلام" not in joined
+    assert "نموذج طلب مواد" not in joined
+    assert "Acknowledgment Form - استلام المواد" in ADMIN_TYPES
+    assert "Material Request Form - طلب مواد" in ADMIN_TYPES
