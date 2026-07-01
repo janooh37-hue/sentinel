@@ -255,9 +255,7 @@ async def stage_attachment(
     """
     data = await upload.read()
     staged = staging_service.stage(data, upload.filename or "")
-    return StagedAttachmentRead(
-        token=staged.token, filename=staged.filename, size=staged.size
-    )
+    return StagedAttachmentRead(token=staged.token, filename=staged.filename, size=staged.size)
 
 
 @jobs_router.get("/{job_id}", response_model=JobStatusResponse)
@@ -304,9 +302,7 @@ def get_document(
     # unsigned (or missing) docs preserve the documents.generate gate. The
     # cap check runs before the 404 so a denied caller can't probe doc ids.
     locked = (
-        book_service.is_document_signed_locked(db, document_id)[0]
-        if row is not None
-        else False
+        book_service.is_document_signed_locked(db, document_id)[0] if row is not None else False
     )
     required_cap = "books.view" if locked else "documents.generate"
     if not perm_service.has_capability(db, user, required_cap):
@@ -354,9 +350,7 @@ def download_document(
 
     settings = get_settings()
 
-    _DOCX_MEDIA_TYPE = (
-        "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-    )
+    _DOCX_MEDIA_TYPE = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
 
     # Once a version is SIGNED, the editable DOCX is locked: deny it, and serve
     # the signed artifact for any other format. The signed artifact may be a
@@ -438,7 +432,7 @@ def download_document(
             headers={"X-Content-Type-Options": "nosniff"},
         )
 
-    filename = f"{row.ref_number}_{row.template_id.replace(' ', '_')}{ext}"
+    filename = document_service.download_filename_for(row, ext)
     # PDFs are served inline so the preview iframe can render them; the
     # frontend uses <a download> for explicit downloads which overrides
     # disposition client-side. DOCX always downloads.
