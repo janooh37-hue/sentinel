@@ -44,9 +44,11 @@ import { TemplateForm } from '@/components/application/TemplateForm'
 import { AttachmentsBlock } from '@/components/application/AttachmentsBlock'
 import {
   emptyAttachmentsState,
+  filterStateToSlots,
   missingRequired,
   parseAttachmentsState,
   toGenerateSpecs,
+  visibleAttachmentSlots,
 } from '@/components/application/attachmentsState'
 import type { AttachmentsState } from '@/components/application/attachmentsState'
 import { ApiError } from '@/lib/api'
@@ -229,17 +231,6 @@ export function ApplicationPage(): React.JSX.Element {
     attachmentsDirtyRef.current = true
     setAttachmentsState(next)
   }, [])
-  // Save-book gating: every required slot must be filled before commit.
-  // Preview stays available regardless (it renders the form only).
-  const missingSlotKeys = missingRequired(attachmentSlots, attachmentsState)
-  const firstMissingSlot =
-    attachmentSlots.find((s) => s.key === missingSlotKeys[0]) ?? null
-  const firstMissingSlotLabel = firstMissingSlot
-    ? isAr
-      ? firstMissingSlot.label_ar || firstMissingSlot.label_en
-      : firstMissingSlot.label_en
-    : ''
-
   // Admin-category templates (e.g. General Book) have no employee binding —
   // the backend allows employee_id=null for them, so we hide the picker entirely
   // and don't gate Generate on a selection. See document_service.generate_document.
@@ -252,6 +243,23 @@ export function ApplicationPage(): React.JSX.Element {
     resolver: zodSchema ? zodResolver(zodSchema) : undefined,
     defaultValues: {},
   })
+
+  const leaveType = form.watch('leave_type') as string | undefined
+  const visibleSlots = useMemo(
+    () => visibleAttachmentSlots(attachmentSlots, leaveType),
+    [attachmentSlots, leaveType],
+  )
+
+  // Save-book gating: every required slot must be filled before commit.
+  // Preview stays available regardless (it renders the form only).
+  const missingSlotKeys = missingRequired(visibleSlots, attachmentsState)
+  const firstMissingSlot =
+    attachmentSlots.find((s) => s.key === missingSlotKeys[0]) ?? null
+  const firstMissingSlotLabel = firstMissingSlot
+    ? isAr
+      ? firstMissingSlot.label_ar || firstMissingSlot.label_en
+      : firstMissingSlot.label_en
+    : ''
 
   // Revise mode — fetch the originating book and prefill the form ONCE from its
   // latest version's stored field snapshot. The detail payload omits the raw
@@ -365,7 +373,7 @@ export function ApplicationPage(): React.JSX.Element {
     // attachment-free). An empty list is sent as undefined so a revise with
     // untouched attachments reuses the book's existing merged set (backend
     // treats None as "keep").
-    const attachmentSpecs = toGenerateSpecs(attachmentsState)
+    const attachmentSpecs = toGenerateSpecs(filterStateToSlots(attachmentsState, visibleSlots))
 
     return {
       // Admin-category forms generate unattached — see document_service.
@@ -801,7 +809,7 @@ export function ApplicationPage(): React.JSX.Element {
                           free-form extras, on EVERY form (spec 2026-06-11 §6).
                           Required slots gate Save book (not Preview). */}
                       <AttachmentsBlock
-                        slots={attachmentSlots}
+                        slots={visibleSlots}
                         state={attachmentsState}
                         onChange={handleAttachmentsChange}
                       />

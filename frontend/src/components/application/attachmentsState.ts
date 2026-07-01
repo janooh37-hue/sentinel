@@ -72,6 +72,34 @@ export function missingRequired(
     .map((slot) => slot.key)
 }
 
+/** The medical-certificate slot rides the shared "Leave Application Form"
+ * template but is only meaningful for Sick Leave. */
+export const SICK_ONLY_SLOT_KEY = 'medical_certificate'
+
+/** Slots to render for the current leave type: the sick-only slot is dropped
+ * unless leaveType is exactly "Sick Leave". */
+export function visibleAttachmentSlots(
+  slots: AttachmentSlotRead[],
+  leaveType: string | undefined,
+): AttachmentSlotRead[] {
+  if (leaveType === 'Sick Leave') return slots
+  return slots.filter((s) => s.key !== SICK_ONLY_SLOT_KEY)
+}
+
+/** Strip slot values whose slot is not in `slots` (e.g. a hidden
+ * medical_certificate) so they never ride the generate payload. */
+export function filterStateToSlots(
+  state: AttachmentsState,
+  slots: AttachmentSlotRead[],
+): AttachmentsState {
+  const allowed = new Set(slots.map((s) => s.key))
+  const kept: AttachmentsState['slots'] = {}
+  for (const [k, v] of Object.entries(state.slots)) {
+    if (allowed.has(k)) kept[k] = v
+  }
+  return { ...state, slots: kept }
+}
+
 // ---------------------------------------------------------------------------
 // localStorage draft round-trip (formDrafts carries the state under a reserved
 // `__attachments` key so a refresh keeps staged tokens — spec §6).
