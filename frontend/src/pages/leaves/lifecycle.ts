@@ -28,6 +28,10 @@ const RECORD_TYPES: ReadonlySet<string> = new Set([
   'administrative leave', 'leave permit', 'passport release', 'duty resumption',
 ])
 
+/** The only request-group kind that closes out with a Duty Resumption.
+ * v3 rows sometimes stored the bare word 'Annual'. */
+const ANNUAL: ReadonlySet<string> = new Set(['annual leave', 'annual'])
+
 export function canonStatus(raw: string): string {
   const s = englishPart(raw).trim()
   return s === 'Generated' ? 'Approved' : s
@@ -39,6 +43,14 @@ export function lifecycleGroup(leaveType: string): LifecycleGroup {
   if (kind === 'Sick Leave') return 'sick'
   if (kind === 'National Service') return 'ns'
   return 'request'
+}
+
+/** Kinds that close out with a Duty Resumption (return) form: only Annual Leave
+ * and National Service. Every other request-group kind is terminal once
+ * Approved. Mirrors leave_lifecycle.is_returnable. */
+export function isReturnable(leaveType: string): boolean {
+  if (ANNUAL.has(englishPart(leaveType).trim().toLowerCase())) return true
+  return lifecycleGroup(leaveType) === 'ns'
 }
 
 /** end-date inclusive: an NS row is overdue strictly after its last day. */
@@ -69,7 +81,11 @@ export function displayState(
     case 'request':
       if (s === 'Pending') return 'Requested'
       if (s === 'Completed') return 'Confirmed'
-      if (s === 'Approved') return isOverdue(endDate, todayIso) ? 'AwaitingReturn' : 'Confirmed'
+      if (s === 'Approved') {
+        // Only returnable kinds (Annual) await a return; others are terminal.
+        return isReturnable(leaveType) && isOverdue(endDate, todayIso)
+          ? 'AwaitingReturn' : 'Confirmed'
+      }
       return 'Unknown'
   }
 }
@@ -83,7 +99,8 @@ export function actionsFor(
   if (group === 'request') {
     if (s === 'Pending') return ['approve', 'reject', 'cancel']
     if (s === 'Approved') {
-      return isOverdue(endDate, todayIso) ? ['return', 'cancel'] : ['cancel']
+      return isReturnable(leaveType) && isOverdue(endDate, todayIso)
+        ? ['return', 'cancel'] : ['cancel']
     }
     return []
   }
@@ -105,7 +122,8 @@ export function needsAction(
   const group = lifecycleGroup(leaveType)
   if (group === 'request') {
     if (s === 'Pending') return true
-    if (s === 'Approved') return isOverdue(endDate, todayIso) // awaiting return
+    // Only returnable kinds (Annual) await a return; others are terminal.
+    if (s === 'Approved') return isReturnable(leaveType) && isOverdue(endDate, todayIso)
     return false
   }
   if (group === 'ns') return s === 'Pending' && isOverdue(endDate, todayIso)
@@ -127,7 +145,8 @@ export function endingSoon(
   const group = lifecycleGroup(leaveType)
   const s = canonStatus(status)
   const active =
-    (group === 'request' && s === 'Approved') || (group === 'ns' && s === 'Pending')
+    (group === 'request' && s === 'Approved' && isReturnable(leaveType)) ||
+    (group === 'ns' && s === 'Pending')
   if (!active) return false
   const end = endDate.slice(0, 10)
   if (end < todayIso) return false

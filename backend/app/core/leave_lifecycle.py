@@ -28,6 +28,9 @@ LifecycleGroup = Literal["sick", "request", "record", "national_service"]
 
 _SICK = "sick leave"
 _NS = "national service"
+# The only request-group kind that closes out with a Duty Resumption. v3 rows
+# sometimes stored the bare word "annual".
+_ANNUAL = frozenset({"annual leave", "annual"})
 _RECORD_TYPES = frozenset(
     {"administrative leave", "leave permit", "passport release", "duty resumption"}
 )
@@ -94,24 +97,30 @@ def accepts_certificate(leave_type: str) -> bool:
 
 
 def is_returnable(leave_type: str) -> bool:
-    """Kinds that require a Duty Resumption (return) form to close out."""
-    return classify_group(leave_type) in ("request", "national_service")
+    """Kinds that require a Duty Resumption (return) form to close out.
+
+    Only Annual Leave and National Service. Every other request-group kind
+    (Compassionate, Duty, Emergency, Hajj, legacy 'Others') is terminal once
+    Approved — no return form, no resumption document.
+    """
+    if _english_part(leave_type).lower() in _ANNUAL:
+        return True
+    return classify_group(leave_type) == "national_service"
 
 
 def can_file_return(leave_type: str, status: str, *, has_certificate: bool) -> bool:
     """Whether a return form may be filed now.
 
-    request: only from Approved (Generated aliases to Approved).
+    Annual Leave: only from Approved (Generated aliases to Approved).
     national_service: only from Pending AND with a certificate already on file.
-    Completed / Rejected / Cancelled are never fileable.
+    Non-returnable kinds, and Completed / Rejected / Cancelled, are never fileable.
     """
-    group = classify_group(leave_type)
+    if not is_returnable(leave_type):
+        return False
     s = canonical_status(status)
-    if group == "request":
-        return s == "Approved"
-    if group == "national_service":
+    if classify_group(leave_type) == "national_service":
         return s == "Pending" and has_certificate
-    return False
+    return s == "Approved"
 
 
 def _is_overdue(end_date: str, today_iso: str) -> bool:
@@ -132,7 +141,8 @@ def needs_action(leave_type: str, status: str, end_date: str, today_iso: str) ->
         if s == "Pending":
             return True
         if s == "Approved":
-            return _is_overdue(end_date, today_iso)  # awaiting return
+            # Only returnable kinds (Annual) await a return; others are terminal.
+            return is_returnable(leave_type) and _is_overdue(end_date, today_iso)
         return False
     if group == "national_service":
         return s == "Pending" and _is_overdue(end_date, today_iso)
