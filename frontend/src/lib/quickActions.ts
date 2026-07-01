@@ -145,23 +145,11 @@ export const QUICK_ACTION_META: Record<QuickActionId, QuickActionMeta> = {
     intent: 'new',
     slug: slugifyQuickActionId('HR Request Form'),
   },
-  'Resignation Declaration': {
-    emoji: '📝',
-    href: formHref('Resignation Declaration'),
-    intent: 'new',
-    slug: slugifyQuickActionId('Resignation Declaration'),
-  },
   'Resignation Letter': {
     emoji: '✉️',
     href: formHref('Resignation Letter'),
     intent: 'new',
     slug: slugifyQuickActionId('Resignation Letter'),
-  },
-  'Leave Undertaking': {
-    emoji: '🤝',
-    href: formHref('Leave Undertaking'),
-    intent: 'new',
-    slug: slugifyQuickActionId('Leave Undertaking'),
   },
   'Leave Permit Form': {
     emoji: '🎫',

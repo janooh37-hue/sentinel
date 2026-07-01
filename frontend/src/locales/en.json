@@ -1810,9 +1810,7 @@
       "material_request": "Material Request",
       "general_book": "General Book",
       "hr_request": "HR Request",
-      "resignation_declaration": "Resignation Decl.",
       "resignation_letter": "Resignation Letter",
-      "leave_undertaking": "Leave Undertaking",
       "leave_permit": "Leave Permit",
       "administrative_leave": "Admin Leave"
     },
@@ -1832,9 +1830,7 @@
       "material_request": "Request stores or material.",
       "general_book": "Open the general records book.",
       "hr_request": "Submit an HR request.",
-      "resignation_declaration": "File a resignation declaration.",
       "resignation_letter": "Compose a resignation letter.",
-      "leave_undertaking": "Record a leave undertaking.",
       "leave_permit": "Issue a short leave permit.",
       "administrative_leave": "File an administrative leave."
     },

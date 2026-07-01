@@ -1901,9 +1901,7 @@
       "material_request": "طلب مواد",
       "general_book": "السجل العام",
       "hr_request": "طلب موارد بشرية",
-      "resignation_declaration": "إفادة استقالة",
       "resignation_letter": "خطاب استقالة",
-      "leave_undertaking": "تعهد إجازة",
       "leave_permit": "تصريح إجازة",
       "administrative_leave": "إجازة إدارية"
     },
@@ -1923,9 +1921,7 @@
       "material_request": "طلب مواد من المخازن.",
       "general_book": "فتح السجل العام.",
       "hr_request": "تقديم طلب موارد بشرية.",
-      "resignation_declaration": "تقديم إفادة استقالة.",
       "resignation_letter": "تحرير خطاب استقالة.",
-      "leave_undertaking": "تسجيل تعهد إجازة.",
       "leave_permit": "إصدار تصريح إجازة قصيرة.",
       "administrative_leave": "تقديم إجازة إدارية."
     },

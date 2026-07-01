@@ -86,9 +86,7 @@ export const QUICK_ACTION_IDS = [
   'Material Request Form',
   'General Book',
   'HR Request Form',
-  'Resignation Declaration',
   'Resignation Letter',
-  'Leave Undertaking',
   'Leave Permit Form',
   'Administrative Leave Form',
 ] as const

@@ -3290,7 +3290,7 @@ export interface components {
              * Id
              * @enum {string}
              */
-            id: "hr" | "violations" | "leaves" | "books" | "Acknowledgment Form" | "Salary Transfer Request" | "Salary Deduction Form" | "Violation Form" | "Employee Clearance Form" | "Leave Application Form" | "Passport Release Form" | "Duty Resumption Form" | "Material Request Form" | "General Book" | "HR Request Form" | "Resignation Declaration" | "Resignation Letter" | "Leave Undertaking" | "Leave Permit Form" | "Administrative Leave Form";
+            id: "hr" | "violations" | "leaves" | "books" | "Acknowledgment Form" | "Salary Transfer Request" | "Salary Deduction Form" | "Violation Form" | "Employee Clearance Form" | "Leave Application Form" | "Passport Release Form" | "Duty Resumption Form" | "Material Request Form" | "General Book" | "HR Request Form" | "Resignation Letter" | "Leave Permit Form" | "Administrative Leave Form";
             /**
              * Visible
              * @default true
