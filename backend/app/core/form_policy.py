@@ -3,6 +3,7 @@
 Code, not _fields.json: the JSON is regenerable and carries no metadata channel.
 Keys are template_ids from core.constants.TEMPLATE_FILES.
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -58,6 +59,16 @@ ATTACHMENT_SLOTS: dict[str, list[AttachmentSlot]] = {
             required=False,
             hint_en="Some banks don't issue a clearance — attach it only when the old bank provides one.",
             hint_ar="بعض البنوك لا تصدر مخالصة — أرفقها فقط عند توفرها.",
+        ),
+    ],
+    "Leave Application Form": [
+        AttachmentSlot(
+            key="medical_certificate",
+            label_en="Medical certificate / sick-leave report",
+            label_ar="التقرير الطبي / تقرير الإجازة المرضية",
+            required=False,
+            hint_en="Attach the scanned sick-leave report; it is appended to the form PDF.",
+            hint_ar="أرفق تقرير الإجازة المرضية الممسوح؛ يُلحق بنموذج النموذج.",
         ),
     ],
 }
