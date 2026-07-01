@@ -56,9 +56,14 @@ def test_annual_leave_document_uses_gnumber_plus_arabic(db_session, emp):
     db_session.add(leave)
     db_session.flush()
     row = _doc(db_session, leave_id=leave.id)
+    from app.services.document_service import load_fields_meta
+
+    expected_ar = (load_fields_meta().get("Leave Application Form") or {}).get("name_ar", "")
     name = document_service.download_filename_for(row, ".pdf")
     assert name.startswith("G3082_")
     assert name.endswith(".pdf")
+    if expected_ar:
+        assert expected_ar in name  # the Arabic form name must appear, not just the G-number
 
 
 def test_document_without_employee_falls_back_to_ref(db_session):
