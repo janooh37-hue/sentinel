@@ -34,7 +34,7 @@ import { ChevronLeft, ChevronRight, Eye, FileText, Mail, Pencil, QrCode, RotateC
 import { toast } from 'sonner'
 
 import { api } from '@/lib/api'
-import type { DocumentGenerateRequest, TemplateMeta } from '@/lib/api'
+import type { DocumentGenerateRequest, StagedAttachmentRead, TemplateMeta } from '@/lib/api'
 import type { ExtractionResponse } from '@/lib/extraction'
 import type { TemplateDetailResponse, TemplateField } from '@/components/application/types'
 import { buildZodSchema } from '@/lib/applicationFormSchema'
@@ -47,6 +47,7 @@ import {
   filterStateToSlots,
   missingRequired,
   parseAttachmentsState,
+  seedStagedSlot,
   toGenerateSpecs,
   visibleAttachmentSlots,
 } from '@/components/application/attachmentsState'
@@ -107,6 +108,18 @@ export function ApplicationPage(): React.JSX.Element {
     const s = location.state as { injectedExtraction?: ExtractionResponse } | null
     return s?.injectedExtraction
   })
+  // Intake scan auto-carry — the IntakePanel stages the scan and passes a token
+  // in router state so ApplicationPage can seed the medical_certificate slot once
+  // the form schema loads (Task 4).
+  const [pendingAttachment, setPendingAttachment] = useState<
+    { slotKey: string; staged: StagedAttachmentRead } | undefined
+  >(() => {
+    const s = location.state as {
+      injectedAttachment?: { slotKey: string; staged: StagedAttachmentRead }
+    } | null
+    return s?.injectedAttachment
+  })
+
   // Revise mode — the BookDetailDrawer's "Revise & regenerate" navigates here
   // with `{ reviseBookId }` in router state. Captured once on mount; we prefill
   // the originating form and thread `revise_of_book_id` into the committed save
@@ -116,7 +129,7 @@ export function ApplicationPage(): React.JSX.Element {
     return s?.reviseBookId ?? null
   })
   useEffect(() => {
-    if (pendingInjection || reviseBookId !== null) {
+    if (pendingInjection || reviseBookId !== null || pendingAttachment) {
       navigate(location.pathname + location.search, { replace: true, state: {} })
     }
     // Run once on mount only.
@@ -473,6 +486,22 @@ export function ApplicationPage(): React.JSX.Element {
   // (not the derived ``schema`` object — that's recomputed every render and
   // would loop) keeps the effect stable.
   const schemaReady = !!schemaQuery.data
+
+  // Seed the medical_certificate slot from the intake-staged scan once the
+  // schema (and thus the slot) is available. Runs at most once per mount
+  // (pendingAttachment cleared immediately after seeding).
+  useEffect(() => {
+    if (!pendingAttachment || !schemaReady) return
+    const hasSlot = (schemaQuery.data?.attachment_slots ?? []).some(
+      (s) => s.key === pendingAttachment.slotKey,
+    )
+    if (!hasSlot) return
+    setAttachmentsState((prev) =>
+      seedStagedSlot(prev, pendingAttachment.slotKey, pendingAttachment.staged),
+    )
+    setPendingAttachment(undefined)
+  }, [pendingAttachment, schemaReady, schemaQuery.data])
+
   const reviseAppliedRef = useRef(false)
   useEffect(() => {
     if (!selectedTemplate || !schemaReady) return

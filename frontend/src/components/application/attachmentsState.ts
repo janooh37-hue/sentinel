@@ -100,6 +100,26 @@ export function filterStateToSlots(
   return { ...state, slots: kept }
 }
 
+/** Pre-fill one slot with a staged upload (used to auto-carry an intake scan). */
+export function seedStagedSlot(
+  state: AttachmentsState,
+  slotKey: string,
+  staged: { token: string; filename: string; size: number },
+): AttachmentsState {
+  return {
+    ...state,
+    slots: {
+      ...state.slots,
+      [slotKey]: {
+        kind: 'staged',
+        token: staged.token,
+        filename: staged.filename,
+        size: staged.size,
+      },
+    },
+  }
+}
+
 // ---------------------------------------------------------------------------
 // localStorage draft round-trip (formDrafts carries the state under a reserved
 // `__attachments` key so a refresh keeps staged tokens — spec §6).

@@ -5,6 +5,7 @@ import {
   filterStateToSlots,
   emptyAttachmentsState,
   SICK_ONLY_SLOT_KEY,
+  seedStagedSlot,
 } from './attachmentsState'
 
 const slot = (key: string): AttachmentSlotRead => ({
@@ -37,5 +38,16 @@ describe('filterStateToSlots', () => {
     const out = filterStateToSlots(state, [slot('keep')])
     expect(Object.keys(out.slots)).toEqual(['keep'])
     expect(out.extras).toEqual(state.extras)
+  })
+})
+
+describe('seedStagedSlot', () => {
+  it('sets a staged value on the given slot', () => {
+    const out = seedStagedSlot(emptyAttachmentsState(), SICK_ONLY_SLOT_KEY, {
+      token: 'tok', filename: 'scan.pdf', size: 42,
+    })
+    expect(out.slots[SICK_ONLY_SLOT_KEY]).toEqual({
+      kind: 'staged', token: 'tok', filename: 'scan.pdf', size: 42,
+    })
   })
 })
