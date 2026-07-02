@@ -19,21 +19,12 @@ import { useTranslation } from 'react-i18next'
 import * as pdfjsLib from 'pdfjs-dist'
 import pdfWorkerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url'
 
+import { base64ToBytes, toBase64Url } from '@/lib/pdf'
 import { cn } from '@/lib/utils'
 
 import type { Paper } from './recordPapers'
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorkerUrl
-
-function toBase64Url(url: string): string {
-  return url.includes('?') ? `${url}&encoding=base64` : `${url}?encoding=base64`
-}
-function base64ToBytes(b64: string): Uint8Array {
-  const bin = atob(b64)
-  const out = new Uint8Array(bin.length)
-  for (let i = 0; i < bin.length; i += 1) out[i] = bin.charCodeAt(i)
-  return out
-}
 
 /** Renders one paper (PDF pages stacked, or an image) at `width` px. */
 function PaperCanvas({ paper, width }: { paper: Paper; width: number }): React.JSX.Element {
