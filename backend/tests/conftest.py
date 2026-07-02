@@ -1,8 +1,11 @@
 # backend/tests/conftest.py
 from __future__ import annotations
 
+from collections.abc import Callable, Iterator
+from contextlib import contextmanager
+
 import pytest
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, event
 from sqlalchemy.orm import Session, sessionmaker
 
 from app.db import session as session_mod
@@ -27,6 +30,39 @@ def db_session(monkeypatch) -> Session:
         yield db
     finally:
         db.close()
+
+
+class _QueryCounter:
+    count: int = 0
+
+
+@pytest.fixture()
+def count_queries(db_session: Session) -> Callable[[], object]:
+    """Context manager that counts SQL statements executed on the test engine.
+
+    Usage::
+
+        with count_queries() as q:
+            do_work()
+        assert q.count <= N
+    """
+    engine = db_session.get_bind()
+
+    @contextmanager
+    def _counter() -> Iterator[_QueryCounter]:
+        counter = _QueryCounter()
+        counter.count = 0
+
+        def _on_exec(conn, cursor, statement, parameters, context, executemany):
+            counter.count += 1
+
+        event.listen(engine, "before_cursor_execute", _on_exec)
+        try:
+            yield counter
+        finally:
+            event.remove(engine, "before_cursor_execute", _on_exec)
+
+    return _counter
 
 
 def make_user(db: Session, *, role="operator", status="active", email="u@x.ae") -> User:

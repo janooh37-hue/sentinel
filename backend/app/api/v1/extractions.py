@@ -20,6 +20,7 @@ from app.db.models import DocumentExtraction, Employee
 from app.db.session import get_db
 from app.schemas.extraction import ExtractedFieldOut, ExtractionResponse
 from app.services.extraction_service import run_pipeline
+from app.services.vault_service import MAX_UPLOAD_BYTES
 
 router = APIRouter(prefix="/extractions", tags=["extractions"])
 
@@ -45,7 +46,13 @@ def create_extraction(
     _: Annotated[object, Depends(require_capability("documents.scan"))],
     file: Annotated[UploadFile, File()],
 ) -> ExtractionResponse:
-    raw = file.file.read()
+    raw = file.file.read(MAX_UPLOAD_BYTES + 1)
+    if len(raw) > MAX_UPLOAD_BYTES:
+        raise ValidationFailedError(
+            "EXTRACTION_FILE_TOO_LARGE",
+            f"File exceeds {MAX_UPLOAD_BYTES} bytes",
+            max_bytes=MAX_UPLOAD_BYTES,
+        )
     with _OCR_GATE:
         try:
             text = _ocr_file(raw)
@@ -73,9 +80,7 @@ def create_extraction(
     db.commit()
     db.refresh(row)
 
-    matched = next(
-        (e for e in employees if e.id == result.matched_employee_id), None
-    )
+    matched = next((e for e in employees if e.id == result.matched_employee_id), None)
 
     return ExtractionResponse(
         id=row.id,
