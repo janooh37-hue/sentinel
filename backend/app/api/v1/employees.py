@@ -18,6 +18,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile, status
 from fastapi.responses import FileResponse, Response
+from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -43,6 +44,7 @@ from app.services import (
     employee_detail_service,
     employee_service,
     leave_service,
+    passport_ocr_service,
     photo_service,
     vault_service,
     violation_service,
@@ -469,6 +471,39 @@ def get_employee_photo(
         str(abs_path),
         filename=row.filename,
         headers={"Cache-Control": "private, max-age=60"},
+    )
+
+
+# --- Passport OCR (on-demand suggest, never writes) --------------------------
+
+
+class PassportSuggestion(BaseModel):
+    number: str | None
+    confidence: float
+    method: str
+    source_snippet: str | None
+    scan_filename: str | None
+
+
+@router.post("/{employee_id}/passport/extract", response_model=PassportSuggestion)
+def extract_passport(
+    employee_id: str,
+    db: Annotated[Session, Depends(get_db)],
+    _user: Annotated[object, Depends(require_capability("employees.edit"))],
+) -> PassportSuggestion:
+    result = passport_ocr_service.extract_passport_for_employee(db, employee_id)
+    if result is None:
+        raise NotFoundError(
+            "PASSPORT_SCAN_NOT_FOUND",
+            f"Employee {employee_id!r} has no passport scan to read",
+            employee_id=employee_id,
+        )
+    return PassportSuggestion(
+        number=result.number,
+        confidence=result.confidence,
+        method=result.method,
+        source_snippet=result.source_snippet,
+        scan_filename=result.scan_filename,
     )
 
 
