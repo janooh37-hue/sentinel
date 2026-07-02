@@ -16,6 +16,11 @@
 import type { components, paths } from './api.types'
 import type { ExtractedFieldOut } from './extraction'
 
+// Passport OCR extract (Task 8).
+// Re-exported from the generated schema; declared here so consumers import from
+// '@/lib/api' rather than reaching into api.types directly.
+export type PassportSuggestion = components['schemas']['PassportSuggestion']
+
 // Phase B — Expiry Dashboard + Alerts
 export interface ExpiryItem {
   employee_id: string
@@ -78,17 +83,16 @@ export type DashboardLayout = components['schemas']['DashboardLayout']
 export type DashboardWidgetConfig = components['schemas']['DashboardWidgetConfig']
 export type DashboardQuickActionConfig = components['schemas']['DashboardQuickActionConfig']
 
-// `has_photo` is served by the backend but may not yet be in the generated
-// spec; `position_ar` is on the backend EmployeeListItem but missing from the
-// list projection in the current spec. Augment until `gen:api` reconciles.
+// After gen:api (Task 8), the generated EmployeeRead now carries has_photo,
+// photo_version, duty_unit, duty_post, passport_no_source, has_passport_scan,
+// and msg_language directly. Retain the augment only for fields that remain
+// absent from the generated schema (currently none needed, but keep the
+// intersection form so the pattern is clear for future additions).
 export type EmployeeRead = components['schemas']['EmployeeRead'] & {
+  // All previously hand-mirrored fields are now in the generated schema.
+  // Keeping this intersection allows future augments without refactoring consumers.
   has_photo?: boolean
   photo_version?: string | null
-  // Duty-location columns — present on the backend ahead of `gen:api`.
-  duty_unit?: string | null
-  duty_post?: string | null
-  // WhatsApp notification language — present on the backend ahead of `gen:api`.
-  msg_language?: 'ar' | 'en' | null
 }
 export type EmployeeListItem = components['schemas']['EmployeeListItem'] & {
   has_photo?: boolean
@@ -495,8 +499,10 @@ export type BookCreate = components['schemas']['BookCreate']
 export type BookUpdate = components['schemas']['BookUpdate']
 export type BookListResponse = components['schemas']['BookListResponse']
 export type BookCategoryRead = components['schemas']['BookCategoryRead']
+// `kind`, `seen_at`, `assignee_name` are now in the generated schema (gen:api,
+// Task 8).  Retain the augment without re-narrowing `kind` so it stays
+// compatible with the `string` the generated schema carries.
 export type BookApprovalStepRead = components['schemas']['BookApprovalStepRead'] & {
-  kind?: 'approver' | 'reviewer'
   seen_at?: string | null
   assignee_name?: string | null
 }
@@ -516,11 +522,12 @@ export interface ImportedDocRead {
   filename: string
   format: string
 }
+// `your_step_kind` is now in the generated schema (gen:api, Task 8); drop the
+// hand-narrowed augment so the wider `string | null` from the schema stays intact.
 export type BookRead = components['schemas']['BookRead'] & {
   doc_manager_user_id?: number | null
   doc_manager_name?: string | null
   doc_manager_has_signature?: boolean
-  your_step_kind?: 'approver' | 'reviewer' | null
   imported_doc?: ImportedDocRead | null
 }
 
@@ -766,6 +773,11 @@ export const api = {
     request<EmployeeRead>('POST', '/employees', payload),
   updateEmployee: (id: string, payload: EmployeeUpdate) =>
     request<EmployeeRead>('PATCH', `/employees/${encodeURIComponent(id)}`, payload),
+
+  /** POST /employees/{id}/passport/extract — OCR-extract passport number from
+   * the employee's passport vault scan. Never writes; caller must PATCH to save. */
+  extractPassport: (employeeId: string) =>
+    request<PassportSuggestion>('POST', `/employees/${encodeURIComponent(employeeId)}/passport/extract`),
 
   // --- duty locations & internal transfers ---
   transferDuty: (body: DutyTransferRequest) =>

@@ -17,6 +17,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile, status
 from fastapi.responses import FileResponse, Response
+from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -26,7 +27,7 @@ from app.api.errors import NotFoundError, ValidationFailedError
 from app.config import get_settings
 from app.core import signature as signature_core
 from app.core.vault_manager import Vault
-from app.db.models import User, VaultFile
+from app.db.models import Employee, User, VaultFile
 from app.db.session import get_db
 from app.schemas import employee_detail as detail_schemas
 from app.schemas.employee import (
@@ -43,11 +44,14 @@ from app.services import (
     employee_detail_service,
     employee_service,
     leave_service,
+    passport_ocr_service,
     photo_service,
     vault_service,
     violation_service,
 )
 from app.services.employee_service import LIST_DEFAULT_LIMIT, LIST_MAX_LIMIT
+
+log = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/employees", tags=["employees"])
 violations_router = APIRouter(prefix="/violations", tags=["violations"])
@@ -57,6 +61,13 @@ def _photo_fields(db: Session, employee_id: str) -> dict[str, object]:
     """has_photo + photo_version for a single employee read response."""
     version = photo_service.get_photo_version(db, employee_id)
     return {"has_photo": version is not None, "photo_version": version}
+
+
+def _passport_scan_field(employee_id: str) -> dict[str, object]:
+    from app.services import vault_service
+
+    tree = vault_service.list_tree(employee_id)
+    return {"has_passport_scan": bool(tree.folders.get("passport"))}
 
 
 # --- Employees ---------------------------------------------------------------
@@ -448,6 +459,39 @@ def get_employee_photo(
         str(abs_path),
         filename=row.filename,
         headers={"Cache-Control": "private, max-age=60"},
+    )
+
+
+# --- Passport OCR (on-demand suggest, never writes) --------------------------
+
+
+class PassportSuggestion(BaseModel):
+    number: str | None
+    confidence: float
+    method: str
+    source_snippet: str | None
+    scan_filename: str | None
+
+
+@router.post("/{employee_id}/passport/extract", response_model=PassportSuggestion)
+def extract_passport(
+    employee_id: str,
+    db: Annotated[Session, Depends(get_db)],
+    _user: Annotated[object, Depends(require_capability("employees.edit"))],
+) -> PassportSuggestion:
+    result = passport_ocr_service.extract_passport_for_employee(db, employee_id)
+    if result is None:
+        raise NotFoundError(
+            "PASSPORT_SCAN_NOT_FOUND",
+            f"Employee {employee_id!r} has no passport scan to read",
+            employee_id=employee_id,
+        )
+    return PassportSuggestion(
+        number=result.number,
+        confidence=result.confidence,
+        method=result.method,
+        source_snippet=result.source_snippet,
+        scan_filename=result.scan_filename,
     )
 
 
