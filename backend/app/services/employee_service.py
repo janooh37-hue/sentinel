@@ -100,11 +100,13 @@ def create_employee(db: Session, payload: EmployeeCreate) -> Employee:
     return row
 
 
-def update_employee(
-    db: Session, employee_id: str, payload: EmployeeUpdate
-) -> Employee:
+def update_employee(db: Session, employee_id: str, payload: EmployeeUpdate) -> Employee:
     row = get_employee(db, employee_id)
     data: dict[str, Any] = payload.model_dump(exclude_unset=True)
+
+    # A human-entered/confirmed passport number is provenance 'manual'.
+    if "passport_no" in data:
+        data["passport_no_source"] = "manual"
 
     # Merge the patch over the current row to evaluate the invariant.
     merged_status = data.get("status", row.status)

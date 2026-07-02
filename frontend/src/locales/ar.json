@@ -287,6 +287,17 @@
       "cta": "رفع صورة",
       "hint": "PNG أو JPG، اسحب وأفلت أو انقر",
       "change": "تغيير الصورة"
+    },
+    "passport": {
+      "label": "رقم الجواز",
+      "readFromScan": "قراءة من المسح",
+      "suggested": "مقترح",
+      "notFound": "لم يُعثر على رقم جواز سفر في المسح.",
+      "badge": {
+        "verified": "مُوثّق",
+        "review": "بحاجة لمراجعة",
+        "missing": "غير متوفر"
+      }
     }
   },
   "violations": {

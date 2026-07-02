@@ -226,6 +226,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/auth/me/link": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Link My Employee
+         * @description Link the signed-in user to their own employee record (G-number).
+         *
+         *     Sets ``User.employee_id`` — the authoritative identity source — so the
+         *     "Link your employee record" picker actually flips ``identity.linked``.
+         *     Changing/clearing an existing link is admin-only (enforced in the service).
+         */
+        post: operations["link_my_employee_api_v1_auth_me_link_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/auth/me/signature": {
         parameters: {
             query?: never;
@@ -737,6 +761,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/employees/{employee_id}/passport/extract": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Extract Passport */
+        post: operations["extract_passport_api_v1_employees__employee_id__passport_extract_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/violations/{violation_id}": {
         parameters: {
             query?: never;
@@ -989,6 +1030,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/managers/{manager_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Link Manager Account
+         * @description Link or unlink a login account to a manager row.
+         *
+         *     Requires ``settings.edit`` — admin-only by default.
+         */
+        patch: operations["link_manager_account_api_v1_managers__manager_id__patch"];
+        trace?: never;
+    };
     "/api/v1/submitters": {
         parameters: {
             query?: never;
@@ -1137,6 +1200,29 @@ export interface paths {
          *     swallowed by the int path param.
          */
         get: operations["list_approvers_api_v1_books_approvers_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/books/reviewer-candidates": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Reviewer Candidates
+         * @description Active accounts pickable as reviewers (any active user; no signature gate).
+         *
+         *     Declared before ``/{book_id}`` so the literal ``reviewer-candidates`` segment
+         *     isn't swallowed by the int path param.
+         */
+        get: operations["list_reviewer_candidates_api_v1_books_reviewer_candidates_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1314,6 +1400,86 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/books/{book_id}/review": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Review Book
+         * @description Advisory reviewer verdict — authorized by assignment (any active account).
+         */
+        post: operations["review_book_api_v1_books__book_id__review_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/books/{book_id}/seen": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Mark Book Seen
+         * @description Mark the record seen by the caller. Idempotent; no-op if not a participant.
+         */
+        post: operations["mark_book_seen_api_v1_books__book_id__seen_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/books/{book_id}/reviewers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Add Reviewers
+         * @description Append advisory reviewer steps to the current pending version.
+         */
+        post: operations["add_reviewers_api_v1_books__book_id__reviewers_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/books/{book_id}/reviewers/{user_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Remove Reviewer
+         * @description Remove a pending reviewer step from the current version.
+         */
+        delete: operations["remove_reviewer_api_v1_books__book_id__reviewers__user_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/books/{book_id}/attachments": {
         parameters: {
             query?: never;
@@ -1354,6 +1520,34 @@ export interface paths {
          *     ``GET /documents/{id}/download`` (see that route's docstring).
          */
         get: operations["get_book_attachment_api_v1_books__book_id__attachments__index__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/books/{book_id}/imported-document": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Imported Document
+         * @description Serve the local vault file backing a v3-imported record.
+         *
+         *     Imported books carry a stale absolute ``doc_path`` (the old pre-migration
+         *     location) and have no generated Document/BookVersion, so the normal
+         *     ``GET /documents/{id}/download`` route can't reach their file. This resolves
+         *     ``doc_path`` to the copy already sitting in the employee's vault and serves
+         *     it in place: ``format=pdf`` for inline viewing (with the ``encoding=base64``
+         *     IDM-bypass used by the pdf.js viewer), ``format=original`` to download the
+         *     stored file (e.g. the .docx when no PDF rendition exists).
+         */
+        get: operations["get_imported_document_api_v1_books__book_id__imported_document_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -2404,6 +2598,74 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/whatsapp/send": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Send */
+        post: operations["send_api_v1_whatsapp_send_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/whatsapp/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Status */
+        get: operations["get_status_api_v1_whatsapp_status_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/sms/send": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Send */
+        post: operations["send_api_v1_sms_send_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/sms/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Status */
+        get: operations["get_status_api_v1_sms_status_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/push/vapid-public-key": {
         parameters: {
             query?: never;
@@ -2443,6 +2705,50 @@ export interface paths {
          * @description Remove the push subscription for the given endpoint.
          */
         delete: operations["unsubscribe_api_v1_push_subscribe_delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/permissions/requests": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Requests
+         * @description List all pending permission requests. Requires users.manage capability.
+         */
+        get: operations["list_requests_api_v1_permissions_requests_get"];
+        put?: never;
+        /**
+         * Create Request
+         * @description Any signed-in user can request a capability.
+         */
+        post: operations["create_request_api_v1_permissions_requests_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/permissions/requests/{request_id}/decide": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Decide Request
+         * @description Approve or refuse a permission request. Requires users.manage capability.
+         */
+        post: operations["decide_request_api_v1_permissions_requests__request_id__decide_post"];
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -2629,16 +2935,6 @@ export interface components {
              * @default false
              */
             is_default: boolean;
-        };
-        /**
-         * ApproverSpec
-         * @description One link the submitter adds to the approval chain.
-         */
-        ApproverSpec: {
-            /** User Id */
-            user_id: number;
-            /** Stage Label */
-            stage_label: string;
         };
         /** AttachmentSlotRead */
         AttachmentSlotRead: {
@@ -2861,6 +3157,15 @@ export interface components {
             note: string | null;
             /** Decided At */
             decided_at: string | null;
+            /**
+             * Kind
+             * @default approver
+             */
+            kind: string;
+            /** Seen At */
+            seen_at?: string | null;
+            /** Assignee Name */
+            assignee_name?: string | null;
         };
         /** BookCategoryRead */
         BookCategoryRead: {
@@ -2938,6 +3243,7 @@ export interface components {
             stamp_style: string | null;
             /** Doc Id */
             doc_id?: number | null;
+            imported_doc?: components["schemas"]["ImportedDocRead"] | null;
             /**
              * Created At
              * Format: date-time
@@ -2957,6 +3263,17 @@ export interface components {
             submitted_by_name?: string | null;
             /** Submitted By G */
             submitted_by_g?: string | null;
+            /** Doc Manager User Id */
+            doc_manager_user_id?: number | null;
+            /** Doc Manager Name */
+            doc_manager_name?: string | null;
+            /**
+             * Doc Manager Has Signature
+             * @default false
+             */
+            doc_manager_has_signature: boolean;
+            /** Your Step Kind */
+            your_step_kind?: string | null;
             /** Approval Steps */
             approval_steps?: components["schemas"]["BookApprovalStepRead"][];
             /** Attachment Paths */
@@ -2972,8 +3289,10 @@ export interface components {
              * @enum {string}
              */
             priority: "Normal" | "High";
-            /** Approvers */
-            approvers: components["schemas"]["ApproverSpec"][];
+            /** Approver User Id */
+            approver_user_id?: number | null;
+            /** Reviewer User Ids */
+            reviewer_user_ids?: number[];
         };
         /**
          * BookUpdate
@@ -3043,6 +3362,8 @@ export interface components {
             domain: string;
             /** Label */
             label: string;
+            /** Description */
+            description: string;
             /** Default Roles */
             default_roles: string[];
         };
@@ -3254,6 +3575,11 @@ export interface components {
             /** Path */
             path: string;
         };
+        /** CreateRequestIn */
+        CreateRequestIn: {
+            /** Capability */
+            capability: string;
+        };
         /** DashboardLayout */
         DashboardLayout: {
             /** Widgets */
@@ -3453,6 +3779,15 @@ export interface components {
              */
             zone: "top" | "under_workspace" | "under_quick_actions";
         };
+        /** DecideIn */
+        DecideIn: {
+            /** Decision */
+            decision: string;
+            /** Window */
+            window?: string | null;
+            /** Note */
+            note?: string | null;
+        };
         /**
          * DefaultManagerRequest
          * @description Set/clear the single-holder default-manager flag (spec 2026-06-11 §5).
@@ -3576,22 +3911,21 @@ export interface components {
             to_unit: string;
             /** To Post */
             to_post?: string | null;
-            /**
-             * Effective Date
-             * Format: date
-             */
-            effective_date: string;
-            /** Reason */
-            reason?: string | null;
+            /** Recipient Id */
+            recipient_id?: number | null;
+            /** Manager Id */
+            manager_id?: number | null;
+            /** Cc */
+            cc?: string[] | null;
         };
         /** DutyTransferResult */
         DutyTransferResult: {
             /** Book Id */
-            book_id: number;
+            book_id?: number | null;
             /** Ref */
-            ref: string;
+            ref?: string | null;
             /** Document Id */
-            document_id: number;
+            document_id?: number | null;
             /** Moved */
             moved: string[];
         };
@@ -3861,6 +4195,12 @@ export interface components {
             nationality?: string | null;
             /** Contact */
             contact?: string | null;
+            /**
+             * Msg Language
+             * @default ar
+             * @enum {string}
+             */
+            msg_language: "ar" | "en";
             /** Passport Expiry */
             passport_expiry?: string | null;
             /** Uae Id Expiry */
@@ -3969,6 +4309,11 @@ export interface components {
             nationality: string | null;
             /** Contact */
             contact: string | null;
+            /**
+             * Msg Language
+             * @default ar
+             */
+            msg_language: string;
             /** Passport Expiry */
             passport_expiry: string | null;
             /** Uae Id Expiry */
@@ -3992,6 +4337,13 @@ export interface components {
             has_photo: boolean;
             /** Photo Version */
             photo_version?: string | null;
+            /** Passport No Source */
+            passport_no_source?: string | null;
+            /**
+             * Has Passport Scan
+             * @default false
+             */
+            has_passport_scan: boolean;
         };
         /** EmployeeStatsRead */
         EmployeeStatsRead: {
@@ -4046,6 +4398,8 @@ export interface components {
             nationality?: string | null;
             /** Contact */
             contact?: string | null;
+            /** Msg Language */
+            msg_language?: ("ar" | "en") | null;
             /** Passport Expiry */
             passport_expiry?: string | null;
             /** Uae Id Expiry */
@@ -4250,6 +4604,26 @@ export interface components {
              * @default false
              */
             is_manager: boolean;
+        };
+        /**
+         * ImportedDocRead
+         * @description The local vault file backing a v3-imported record.
+         *
+         *     Imported books store a stale absolute ``doc_path`` (the old pre-migration
+         *     location) and have no generated Document/BookVersion, so the normal
+         *     ``/documents/{id}/download`` route can't reach their file. The backend
+         *     resolves ``doc_path`` to the copy already sitting in the employee's vault
+         *     and exposes it here so the client can view / download it.
+         */
+        ImportedDocRead: {
+            /** Pdf Url */
+            pdf_url?: string | null;
+            /** Download Url */
+            download_url: string;
+            /** Filename */
+            filename: string;
+            /** Format */
+            format: string;
         };
         /**
          * JobDocumentItem
@@ -4691,12 +5065,27 @@ export interface components {
             /** Offset */
             offset: number;
         };
+        /**
+         * LinkSelfRequest
+         * @description Set (or clear, admin-only) the signed-in user's own employee link.
+         *
+         *     ``employee_id`` is the G-number to claim; ``null`` clears the link.
+         */
+        LinkSelfRequest: {
+            /** Employee Id */
+            employee_id?: string | null;
+        };
         /** LoginRequest */
         LoginRequest: {
             /** Email */
             email: string;
             /** Password */
             password: string;
+        };
+        /** ManagerLinkUpdate */
+        ManagerLinkUpdate: {
+            /** User Id */
+            user_id?: number | null;
         };
         /** ManagerRead */
         ManagerRead: {
@@ -4710,6 +5099,10 @@ export interface components {
             title: string | null;
             /** Active */
             active: boolean;
+            /** User Id */
+            user_id?: number | null;
+            /** User Name */
+            user_name?: string | null;
         };
         /** MarkAllReadResponse */
         MarkAllReadResponse: {
@@ -4765,6 +5158,41 @@ export interface components {
             /** Emails */
             emails: number;
         };
+        /** PassportSuggestion */
+        PassportSuggestion: {
+            /** Number */
+            number: string | null;
+            /** Confidence */
+            confidence: number;
+            /** Method */
+            method: string;
+            /** Source Snippet */
+            source_snippet: string | null;
+            /** Scan Filename */
+            scan_filename: string | null;
+        };
+        /** PermissionRequestRead */
+        PermissionRequestRead: {
+            /** Id */
+            id: number;
+            /** User Id */
+            user_id: number;
+            /** Requester Name */
+            requester_name: string;
+            /** Capability */
+            capability: string;
+            /** Capability Label */
+            capability_label: string;
+            /** Status */
+            status: string;
+            /** Decision */
+            decision: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+        };
         /** PushKeys */
         PushKeys: {
             /** P256Dh */
@@ -4777,6 +5205,8 @@ export interface components {
             /** Endpoint */
             endpoint: string;
             keys: components["schemas"]["PushKeys"];
+            /** Locale */
+            locale?: string | null;
         };
         /** RecentDocumentRead */
         RecentDocumentRead: {
@@ -4987,6 +5417,21 @@ export interface components {
             /** Employee Name */
             employee_name?: string | null;
         };
+        /** ReviewRequest */
+        ReviewRequest: {
+            /**
+             * Decision
+             * @enum {string}
+             */
+            decision: "reviewed" | "changes_requested";
+            /** Note */
+            note?: string | null;
+        };
+        /** ReviewersAddRequest */
+        ReviewersAddRequest: {
+            /** User Ids */
+            user_ids: number[];
+        };
         /** RouteRequest */
         RouteRequest: {
             /** Employee Id */
@@ -5125,13 +5570,18 @@ export interface components {
          * @description Set or clear a single per-user capability override.
          *
          *     ``effect`` is ``grant`` / ``deny`` to set, or ``null`` to clear (revert to
-         *     the role default).
+         *     the role default).  ``expires_at`` makes a grant time-limited; omit (or
+         *     pass ``null``) for a permanent grant.  Expiry is only meaningful for
+         *     ``grant`` effects; it is stored for ``deny`` too but has no resolution
+         *     impact.
          */
         SetPermissionRequest: {
             /** Capability */
             capability: string;
             /** Effect */
             effect?: string | null;
+            /** Expires At */
+            expires_at?: string | null;
         };
         /** SetRoleRequest */
         SetRoleRequest: {
@@ -5153,6 +5603,55 @@ export interface components {
             size_mm: number;
             /** Boldness */
             boldness: number;
+        };
+        /** SmsSendRequest */
+        SmsSendRequest: {
+            /**
+             * Event Type
+             * @enum {string}
+             */
+            event_type: "leave_approved" | "duty_resumption" | "violation";
+            /** Record Id */
+            record_id: number;
+        };
+        /** SmsSendResponse */
+        SmsSendResponse: {
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "sent" | "failed";
+            /** Message Id */
+            message_id?: string | null;
+            /** Error */
+            error?: string | null;
+        };
+        /** SmsStatusItem */
+        SmsStatusItem: {
+            /** Event Type */
+            event_type: string;
+            /** Event Ref */
+            event_ref: string;
+            /** Language */
+            language: string;
+            /** Status */
+            status: string;
+            /** Error */
+            error: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+        };
+        /** SmsStatusResponse */
+        SmsStatusResponse: {
+            /**
+             * Enabled
+             * @default false
+             */
+            enabled: boolean;
+            last?: components["schemas"]["SmsStatusItem"] | null;
         };
         /**
          * StagedAttachmentRead
@@ -5501,6 +6000,55 @@ export interface components {
             /** Doc Path */
             doc_path?: string | null;
         };
+        /** WhatsAppSendRequest */
+        WhatsAppSendRequest: {
+            /**
+             * Event Type
+             * @enum {string}
+             */
+            event_type: "leave_approved" | "duty_resumption" | "violation";
+            /** Record Id */
+            record_id: number;
+        };
+        /** WhatsAppSendResponse */
+        WhatsAppSendResponse: {
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "sent" | "failed";
+            /** Message Id */
+            message_id?: string | null;
+            /** Error */
+            error?: string | null;
+        };
+        /** WhatsAppStatusItem */
+        WhatsAppStatusItem: {
+            /** Event Type */
+            event_type: string;
+            /** Event Ref */
+            event_ref: string;
+            /** Language */
+            language: string;
+            /** Status */
+            status: string;
+            /** Error */
+            error: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+        };
+        /** WhatsAppStatusResponse */
+        WhatsAppStatusResponse: {
+            /**
+             * Enabled
+             * @default false
+             */
+            enabled: boolean;
+            last?: components["schemas"]["WhatsAppStatusItem"] | null;
+        };
     };
     responses: never;
     parameters: never;
@@ -5842,6 +6390,41 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    link_my_employee_api_v1_auth_me_link_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LinkSelfRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SessionUser"];
+                };
             };
             /** @description Validation Error */
             422: {
@@ -7126,6 +7709,39 @@ export interface operations {
             };
         };
     };
+    extract_passport_api_v1_employees__employee_id__passport_extract_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                employee_id: string;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PassportSuggestion"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     delete_violation_api_v1_violations__violation_id__delete: {
         parameters: {
             query?: never;
@@ -7747,6 +8363,43 @@ export interface operations {
             };
         };
     };
+    link_manager_account_api_v1_managers__manager_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                manager_id: number;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ManagerLinkUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ManagerRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     list_submitters_api_v1_submitters_get: {
         parameters: {
             query?: never;
@@ -8082,6 +8735,37 @@ export interface operations {
         };
     };
     list_approvers_api_v1_books_approvers_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApproverOptionRead"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_reviewer_candidates_api_v1_books_reviewer_candidates_get: {
         parameters: {
             query?: never;
             header?: never;
@@ -8537,6 +9221,145 @@ export interface operations {
             };
         };
     };
+    review_book_api_v1_books__book_id__review_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                book_id: number;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReviewRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BookRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    mark_book_seen_api_v1_books__book_id__seen_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                book_id: number;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    add_reviewers_api_v1_books__book_id__reviewers_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                book_id: number;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReviewersAddRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BookRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    remove_reviewer_api_v1_books__book_id__reviewers__user_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                book_id: number;
+                user_id: number;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BookRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     add_book_attachment_api_v1_books__book_id__attachments_post: {
         parameters: {
             query?: never;
@@ -8583,6 +9406,42 @@ export interface operations {
             path: {
                 book_id: number;
                 index: number;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_imported_document_api_v1_books__book_id__imported_document_get: {
+        parameters: {
+            query?: {
+                format?: "pdf" | "original";
+                encoding?: string | null;
+            };
+            header?: never;
+            path: {
+                book_id: number;
             };
             cookie?: {
                 gssg_session?: string | null;
@@ -11022,6 +11881,144 @@ export interface operations {
             };
         };
     };
+    send_api_v1_whatsapp_send_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WhatsAppSendRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WhatsAppSendResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_status_api_v1_whatsapp_status_get: {
+        parameters: {
+            query: {
+                event_type: string;
+                record_id: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WhatsAppStatusResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    send_api_v1_sms_send_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SmsSendRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SmsSendResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_status_api_v1_sms_status_get: {
+        parameters: {
+            query: {
+                event_type: string;
+                record_id: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SmsStatusResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     vapid_public_key_api_v1_push_vapid_public_key_get: {
         parameters: {
             query?: never;
@@ -11109,6 +12106,109 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_requests_api_v1_permissions_requests_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PermissionRequestRead"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_request_api_v1_permissions_requests_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateRequestIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PermissionRequestRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    decide_request_api_v1_permissions_requests__request_id__decide_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                request_id: number;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DecideIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PermissionRequestRead"];
+                };
             };
             /** @description Validation Error */
             422: {

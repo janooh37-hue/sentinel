@@ -73,6 +73,7 @@ class Employee(Base):
     duty_post: Mapped[str | None] = mapped_column(String(128), nullable=True)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
     passport_no: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    passport_no_source: Mapped[str | None] = mapped_column(String(16), nullable=True)
     uae_id_no: Mapped[str | None] = mapped_column(String(32), nullable=True)
     nationality: Mapped[str | None] = mapped_column(String(64), nullable=True)
     uae_id_expiry: Mapped[date | None] = mapped_column(Date, nullable=True)

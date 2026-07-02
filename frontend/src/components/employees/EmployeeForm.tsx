@@ -141,7 +141,7 @@ function fromInitial(initial: Partial<EmployeeRead>): EmployeeFormValues {
     uae_id_no: initial.uae_id_no ?? '',
     nationality: initial.nationality ?? '',
     contact: initial.contact ?? '',
-    msg_language: initial.msg_language ?? 'ar',
+    msg_language: (initial.msg_language as 'ar' | 'en' | undefined) ?? 'ar',
     passport_expiry: initial.passport_expiry ?? '',
     uae_id_expiry: initial.uae_id_expiry ?? '',
   }

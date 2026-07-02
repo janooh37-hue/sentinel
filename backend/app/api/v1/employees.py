@@ -12,12 +12,14 @@ router lives at ``/violations`` for the two ID-scoped violation routes
 from __future__ import annotations
 
 import base64
+import logging
 from datetime import UTC, date, datetime
 from pathlib import Path
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile, status
 from fastapi.responses import FileResponse, Response
+from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -26,7 +28,7 @@ from app.api.errors import NotFoundError, ValidationFailedError
 from app.config import get_settings
 from app.core import signature as signature_core
 from app.core.vault_manager import Vault
-from app.db.models import User, VaultFile
+from app.db.models import Employee, User, VaultFile
 from app.db.session import get_db
 from app.schemas import employee_detail as detail_schemas
 from app.schemas.employee import (
@@ -43,11 +45,14 @@ from app.services import (
     employee_detail_service,
     employee_service,
     leave_service,
+    passport_ocr_service,
     photo_service,
     vault_service,
     violation_service,
 )
 from app.services.employee_service import LIST_DEFAULT_LIMIT, LIST_MAX_LIMIT
+
+log = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/employees", tags=["employees"])
 violations_router = APIRouter(prefix="/violations", tags=["violations"])
@@ -57,6 +62,13 @@ def _photo_fields(db: Session, employee_id: str) -> dict[str, object]:
     """has_photo + photo_version for a single employee read response."""
     version = photo_service.get_photo_version(db, employee_id)
     return {"has_photo": version is not None, "photo_version": version}
+
+
+def _passport_scan_field(employee_id: str) -> dict[str, object]:
+    from app.services import vault_service
+
+    tree = vault_service.list_tree(employee_id)
+    return {"has_passport_scan": bool(tree.folders.get("passport"))}
 
 
 # --- Employees ---------------------------------------------------------------
@@ -85,16 +97,12 @@ def list_employees(
     # One query for the set of employees with a vault photo — avoids N+1.
     photo_ids = set(
         db.execute(
-            select(VaultFile.employee_id)
-            .where(VaultFile.kind == "photo")
-            .distinct()
+            select(VaultFile.employee_id).where(VaultFile.kind == "photo").distinct()
         ).scalars()
     )
     return EmployeeListResponse(
         items=[
-            EmployeeListItem.model_validate(r).model_copy(
-                update={"has_photo": r.id in photo_ids}
-            )
+            EmployeeListItem.model_validate(r).model_copy(update={"has_photo": r.id in photo_ids})
             for r in rows
         ],
         total=total,
@@ -110,9 +118,7 @@ def create_employee(
     _user: Annotated[User, Depends(require_capability("employees.edit"))],
 ) -> EmployeeRead:
     row = employee_service.create_employee(db, payload)
-    return EmployeeRead.model_validate(row).model_copy(
-        update=_photo_fields(db, row.id)
-    )
+    return EmployeeRead.model_validate(row).model_copy(update=_photo_fields(db, row.id))
 
 
 @router.get("/{employee_id}", response_model=EmployeeRead)
@@ -123,7 +129,7 @@ def get_employee(
 ) -> EmployeeRead:
     row = employee_service.get_employee(db, employee_id)
     return EmployeeRead.model_validate(row).model_copy(
-        update=_photo_fields(db, row.id)
+        update={**_photo_fields(db, row.id), **_passport_scan_field(row.id)}
     )
 
 
@@ -136,16 +142,14 @@ def update_employee(
 ) -> EmployeeRead:
     row = employee_service.update_employee(db, employee_id, payload)
     return EmployeeRead.model_validate(row).model_copy(
-        update=_photo_fields(db, row.id)
+        update={**_photo_fields(db, row.id), **_passport_scan_field(row.id)}
     )
 
 
 # --- Employee detail (aggregate for the Employee Detail page) ----------------
 
 
-@router.get(
-    "/{employee_id}/detail", response_model=detail_schemas.EmployeeDetailRead
-)
+@router.get("/{employee_id}/detail", response_model=detail_schemas.EmployeeDetailRead)
 def get_employee_detail(
     employee_id: str,
     db: Annotated[Session, Depends(get_db)],
@@ -217,14 +221,10 @@ def update_violation(
     db: Annotated[Session, Depends(get_db)],
     _user: Annotated[User, Depends(require_capability("violations.manage"))],
 ) -> ViolationRead:
-    return ViolationRead.model_validate(
-        violation_service.update(db, violation_id, payload)
-    )
+    return ViolationRead.model_validate(violation_service.update(db, violation_id, payload))
 
 
-@violations_router.delete(
-    "/{violation_id}", status_code=status.HTTP_204_NO_CONTENT
-)
+@violations_router.delete("/{violation_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_violation(
     violation_id: int,
     db: Annotated[Session, Depends(get_db)],
@@ -263,9 +263,18 @@ async def upload_to_vault(
 ) -> VaultEntry:
     employee_service.get_employee(db, employee_id)
     data = await upload.read()
-    return vault_service.save_upload(
-        employee_id, kind, upload.filename or "upload", data
-    )
+    entry = vault_service.save_upload(employee_id, kind, upload.filename or "upload", data)
+    if kind == "passport":
+        # Best-effort: fill passport_no from a validated MRZ. Never fail the
+        # upload if OCR is unavailable or the scan is unreadable.
+        try:
+            result = passport_ocr_service.extract_passport_for_employee(db, employee_id)
+            emp = db.get(Employee, employee_id)
+            if result is not None and emp is not None:
+                passport_ocr_service.apply_passport_extraction(db, emp, result)
+        except Exception:
+            log.warning("passport auto-extract failed for %s", employee_id, exc_info=True)
+    return entry
 
 
 @router.delete(
@@ -337,9 +346,7 @@ def _signature_path_for(employee_id: str) -> Path:
     separators — never dereference a path that escapes the vault root.
     """
     vault_root = get_settings().vault_dir.resolve()
-    path = signature_core.vault_path(
-        Vault(get_settings().vault_dir), employee_id
-    ).resolve()
+    path = signature_core.vault_path(Vault(get_settings().vault_dir), employee_id).resolve()
     if vault_root not in path.parents:
         raise HTTPException(status_code=400, detail="invalid signature path")
     return path
@@ -359,13 +366,9 @@ async def upload_signature(
     data = await upload.read()
     try:
         data = signature_core.normalize_to_png(data)
-        path = signature_core.save(
-            data, employee_id, Vault(get_settings().vault_dir)
-        )
+        path = signature_core.save(data, employee_id, Vault(get_settings().vault_dir))
     except signature_core.SignatureError as exc:
-        raise ValidationFailedError(
-            "SIGNATURE_INVALID", str(exc), employee_id=employee_id
-        ) from exc
+        raise ValidationFailedError("SIGNATURE_INVALID", str(exc), employee_id=employee_id) from exc
     return {"path": str(path), "filename": path.name}
 
 
@@ -405,9 +408,7 @@ def get_employee_signature(
     )
 
 
-@router.delete(
-    "/{employee_id}/signature", status_code=status.HTTP_204_NO_CONTENT
-)
+@router.delete("/{employee_id}/signature", status_code=status.HTTP_204_NO_CONTENT)
 def delete_employee_signature(
     employee_id: str,
     db: Annotated[Session, Depends(get_db)],
@@ -432,9 +433,7 @@ async def upload_employee_photo(
     """Replace the employee's avatar photo (one per employee)."""
     employee_service.get_employee(db, employee_id)
     data = await upload.read()
-    row = photo_service.save_photo(
-        db, employee_id, upload.filename or "photo.png", data
-    )
+    row = photo_service.save_photo(db, employee_id, upload.filename or "photo.png", data)
     return {
         "filename": row.filename,
         "size_bytes": row.size_bytes,
@@ -442,9 +441,7 @@ async def upload_employee_photo(
     }
 
 
-@router.delete(
-    "/{employee_id}/photo", status_code=status.HTTP_204_NO_CONTENT
-)
+@router.delete("/{employee_id}/photo", status_code=status.HTTP_204_NO_CONTENT)
 def delete_employee_photo(
     employee_id: str,
     db: Annotated[Session, Depends(get_db)],
@@ -488,6 +485,39 @@ def get_employee_photo(
         str(abs_path),
         filename=row.filename,
         headers={"Cache-Control": "private, max-age=60"},
+    )
+
+
+# --- Passport OCR (on-demand suggest, never writes) --------------------------
+
+
+class PassportSuggestion(BaseModel):
+    number: str | None
+    confidence: float
+    method: str
+    source_snippet: str | None
+    scan_filename: str | None
+
+
+@router.post("/{employee_id}/passport/extract", response_model=PassportSuggestion)
+def extract_passport(
+    employee_id: str,
+    db: Annotated[Session, Depends(get_db)],
+    _user: Annotated[object, Depends(require_capability("employees.edit"))],
+) -> PassportSuggestion:
+    result = passport_ocr_service.extract_passport_for_employee(db, employee_id)
+    if result is None:
+        raise NotFoundError(
+            "PASSPORT_SCAN_NOT_FOUND",
+            f"Employee {employee_id!r} has no passport scan to read",
+            employee_id=employee_id,
+        )
+    return PassportSuggestion(
+        number=result.number,
+        confidence=result.confidence,
+        method=result.method,
+        source_snippet=result.source_snippet,
+        scan_filename=result.scan_filename,
     )
 
 

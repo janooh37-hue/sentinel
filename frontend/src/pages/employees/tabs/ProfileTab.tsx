@@ -8,6 +8,7 @@ import { useTranslation } from 'react-i18next'
 
 import { IdentityDocCard } from '@/components/employees/IdentityDocCard'
 import { SignaturePad } from '@/components/employees/SignaturePad'
+import { PassportField } from './PassportField'
 import { api } from '@/lib/api'
 import type { EmployeeRead } from '@/lib/api'
 import { pickPosition } from '@/lib/employeePosition'
@@ -30,6 +31,10 @@ export function ProfileTab({ employee }: Props): React.JSX.Element {
 
   const invalidateVault = (): void => {
     void qc.invalidateQueries({ queryKey: ['vault', employee.id] })
+  }
+
+  const invalidateEmployee = (): void => {
+    void qc.invalidateQueries({ queryKey: ['employee-detail', employee.id] })
   }
 
   const fields: { k: string; v: string | null | undefined }[] = [
@@ -72,24 +77,35 @@ export function ProfileTab({ employee }: Props): React.JSX.Element {
           </div>
         ) : (
           tree && (
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <IdentityDocCard
+            <>
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <IdentityDocCard
+                  employeeId={employee.id}
+                  kind="uae_id"
+                  docNumber={employee.uae_id_no ?? null}
+                  entry={tree.folders.uae_id?.[0] ?? null}
+                  canEdit={canEdit}
+                  onChanged={invalidateVault}
+                />
+                <IdentityDocCard
+                  employeeId={employee.id}
+                  kind="passport"
+                  docNumber={employee.passport_no ?? null}
+                  entry={tree.folders.passport?.[0] ?? null}
+                  canEdit={canEdit}
+                  onChanged={invalidateVault}
+                />
+              </div>
+              {/* Passport OCR field — badge + editable number + Read from scan */}
+              <PassportField
                 employeeId={employee.id}
-                kind="uae_id"
-                docNumber={employee.uae_id_no ?? null}
-                entry={tree.folders.uae_id?.[0] ?? null}
+                passportNo={employee.passport_no ?? null}
+                source={employee.passport_no_source ?? null}
+                hasScan={employee.has_passport_scan}
                 canEdit={canEdit}
-                onChanged={invalidateVault}
+                onSaved={invalidateEmployee}
               />
-              <IdentityDocCard
-                employeeId={employee.id}
-                kind="passport"
-                docNumber={employee.passport_no ?? null}
-                entry={tree.folders.passport?.[0] ?? null}
-                canEdit={canEdit}
-                onChanged={invalidateVault}
-              />
-            </div>
+            </>
           )
         )}
       </section>
