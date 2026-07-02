@@ -278,6 +278,16 @@
       "cta": "Upload a photo",
       "hint": "PNG or JPG, drag & drop or click",
       "change": "Change photo"
+    },
+    "passport": {
+      "label": "Passport No.",
+      "readFromScan": "Read from scan",
+      "suggested": "Suggested",
+      "badge": {
+        "verified": "Verified",
+        "review": "Needs review",
+        "missing": "Missing"
+      }
     }
   },
   "violations": {
