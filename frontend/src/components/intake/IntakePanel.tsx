@@ -21,7 +21,8 @@ import { useTranslation } from 'react-i18next'
 import { Link, useNavigate } from 'react-router-dom'
 import { toast } from 'sonner'
 
-import { ApiError, api, type ExternalOut, type IntakeResponse, type ReturnedFormOut } from '@/lib/api'
+import { ApiError, api, type ExternalOut, type IntakeResponse, type ReturnedFormOut, type StagedAttachmentRead } from '@/lib/api'
+import { SICK_ONLY_SLOT_KEY } from '@/components/application/attachmentsState'
 import type { ExtractionResponse } from '@/lib/extraction'
 import { pickEmployeeName } from '@/lib/employeeName'
 import { Button } from '@/components/ui/button'
@@ -315,10 +316,11 @@ export function ReturnedFormCard({ result, file, onDismiss }: ReturnedFormCardPr
 
 interface ExternalCardProps {
   result: ExternalOut
+  file: File
   onDismiss: () => void
 }
 
-function ExternalCard({ result, onDismiss }: ExternalCardProps): React.JSX.Element {
+function ExternalCard({ result, file, onDismiss }: ExternalCardProps): React.JSX.Element {
   const { t, i18n } = useTranslation()
   const navigate = useNavigate()
 
@@ -338,7 +340,7 @@ function ExternalCard({ result, onDismiss }: ExternalCardProps): React.JSX.Eleme
       )
     : null
 
-  function handleRoute(): void {
+  async function handleRoute(): Promise<void> {
     const { route_kind } = result
     const id = result.matched_employee_id
 
@@ -355,9 +357,19 @@ function ExternalCard({ result, onDismiss }: ExternalCardProps): React.JSX.Eleme
       })
     } else if (route_kind === 'leave') {
       const q = matched && id ? `&employee_id=${id}` : ''
-      navigate(`/application?form=${result.route_form_slug ?? 'leave_application'}${q}`, {
-        state: { injectedExtraction: injection },
-      })
+      let injectedAttachment:
+        | { slotKey: string; staged: StagedAttachmentRead }
+        | undefined
+      try {
+        const stagedRes = await api.stageAttachment(file)
+        injectedAttachment = { slotKey: SICK_ONLY_SLOT_KEY, staged: stagedRes }
+      } catch {
+        // Non-fatal: fall back to manual attach on the form.
+      }
+      navigate(
+        `/application?form=${result.route_form_slug ?? 'leave_application'}${q}`,
+        { state: { injectedExtraction: injection, injectedAttachment } },
+      )
     }
     // manual handled separately (two buttons)
   }
@@ -449,7 +461,7 @@ function ExternalCard({ result, onDismiss }: ExternalCardProps): React.JSX.Eleme
               <Button type="button" variant="ghost" size="sm" onClick={onDismiss}>
                 {t('extraction.panel.dismiss')}
               </Button>
-              <Button type="button" size="sm" onClick={handleRoute}>
+              <Button type="button" size="sm" onClick={() => void handleRoute()}>
                 {result.route_kind === 'employee' && matched
                   ? t('intake.external.openRecord', { name: matchedName })
                   : result.route_kind === 'employee'
@@ -500,7 +512,7 @@ export function IntakePanel(): React.JSX.Element {
       )}
 
       {resultState && resultState.result.mode === 'external' && (
-        <ExternalCard result={resultState.result} onDismiss={handleDismiss} />
+        <ExternalCard result={resultState.result} file={resultState.file} onDismiss={handleDismiss} />
       )}
 
       {resultState && (

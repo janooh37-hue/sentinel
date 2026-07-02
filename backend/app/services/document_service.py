@@ -151,9 +151,9 @@ _FIELDS_JSON = _TEMPLATES_DIR / "_fields.json"
 _COMPANION_RULES: dict[str, Callable[[dict[str, Any]], str | None]] = {
     "Resignation Letter": lambda _data: "Resignation Declaration",
     "Leave Application Form": (
-        lambda data: "Leave Undertaking"
-        if str(data.get("leave_type", "")).startswith("Annual")
-        else None
+        lambda data: (
+            "Leave Undertaking" if str(data.get("leave_type", "")).startswith("Annual") else None
+        )
     ),
 }
 
@@ -261,11 +261,7 @@ def _flatten_rich_fields(template_id: str, fields: dict[str, Any]) -> dict[str, 
     """Return a copy of `fields` with any ``arabic_rich``/``arabic_rich_full``
     values flattened from HTML to plain text (see ``_html_to_text``)."""
     meta = load_fields_meta().get(template_id, {})
-    rich_keys = {
-        f["key"]
-        for f in meta.get("fields", [])
-        if f.get("type") in _RICH_FIELD_TYPES
-    }
+    rich_keys = {f["key"] for f in meta.get("fields", []) if f.get("type") in _RICH_FIELD_TYPES}
     if not rich_keys:
         return fields
     out = dict(fields)
@@ -354,7 +350,8 @@ def _purge_superseded_drafts(
         Document.id.not_in(referenced),
     )
     stmt = stmt.where(
-        Document.employee_id.is_(None) if employee_id is None
+        Document.employee_id.is_(None)
+        if employee_id is None
         else Document.employee_id == employee_id
     )
     data_dir = get_settings().data_dir
@@ -497,9 +494,7 @@ def resolve_manager(
     if explicit_manager_id is not None:
         return db.get(Manager, explicit_manager_id)
 
-    account = db.execute(
-        select(EmailAccount).where(EmailAccount.id == 1)
-    ).scalar_one_or_none()
+    account = db.execute(select(EmailAccount).where(EmailAccount.id == 1)).scalar_one_or_none()
     if account is not None and account.linked_employee_id:
         # Try Manager.employee_id match first (if that column exists on Manager).
         manager_col_emp = getattr(Manager, "employee_id", None)
@@ -513,9 +508,7 @@ def resolve_manager(
         emp = db.get(Employee, account.linked_employee_id)
         if emp is not None and emp.name_en:
             row = db.execute(
-                select(Manager).where(
-                    func.lower(Manager.name_en) == emp.name_en.lower()
-                )
+                select(Manager).where(func.lower(Manager.name_en) == emp.name_en.lower())
             ).scalar_one_or_none()
             if row is not None:
                 return row
@@ -636,9 +629,7 @@ def _build_template_data(
     # hides the line via a Jinja {% if %} guard).
     # ------------------------------------------------------------------
     if template_id == "General Book":
-        data["submitter_g"] = (
-            (current_user.employee_id or "") if current_user is not None else ""
-        )
+        data["submitter_g"] = (current_user.employee_id or "") if current_user is not None else ""
 
     # ------------------------------------------------------------------
     # 4c. Administrative Leave Form — auto-count this employee's admin leaves
@@ -658,9 +649,7 @@ def _build_template_data(
         now = datetime.now()
         month_start = date(now.year, now.month, 1)
         month_end = (
-            date(now.year + 1, 1, 1)
-            if now.month == 12
-            else date(now.year, now.month + 1, 1)
+            date(now.year + 1, 1, 1) if now.month == 12 else date(now.year, now.month + 1, 1)
         )
         count = (
             db.query(Leave)
@@ -713,14 +702,8 @@ def _build_template_data(
     if not embed_emp:
         data.pop("sig2_path", None)
         data.pop("employee_sig_path", None)
-    elif (
-        employee is not None
-        and not data.get("sig2_path")
-        and not data.get("employee_sig_path")
-    ):
-        saved_sig = signature_core.vault_path(
-            Vault(get_settings().vault_dir), employee.id
-        )
+    elif employee is not None and not data.get("sig2_path") and not data.get("employee_sig_path"):
+        saved_sig = signature_core.vault_path(Vault(get_settings().vault_dir), employee.id)
         if saved_sig.is_file():
             data["employee_sig_path"] = str(saved_sig)
 
@@ -744,9 +727,7 @@ def _submitter_sign_path(db: Session, submitter_id: int) -> str | None:
     if sub_row is None:
         return None
     if sub_row.employee_id:
-        saved = signature_core.vault_path(
-            Vault(get_settings().vault_dir), sub_row.employee_id
-        )
+        saved = signature_core.vault_path(Vault(get_settings().vault_dir), sub_row.employee_id)
         if saved.is_file():
             return str(saved)
     if sub_row.stored_sig_path and Path(sub_row.stored_sig_path).is_file():
@@ -776,11 +757,7 @@ def _resolve_attachment_sources(
     for spec in specs:
         path: Path | None
         if spec.source == "staged":
-            path = (
-                staging_service.resolve(spec.staged_token)
-                if spec.staged_token
-                else None
-            )
+            path = staging_service.resolve(spec.staged_token) if spec.staged_token else None
             if path is None:
                 raise ValidationFailedError(
                     "STAGED_ATTACHMENT_MISSING",
@@ -816,11 +793,7 @@ def _resolve_attachment_sources(
             else:  # record_attachment
                 paths = list(book.attachment_paths or [])
                 idx = spec.attachment_index
-                rel = (
-                    paths[idx]
-                    if idx is not None and 0 <= idx < len(paths)
-                    else None
-                )
+                rel = paths[idx] if idx is not None and 0 <= idx < len(paths) else None
                 path = book_service.resolve_attachment_path(rel) if rel else None
                 if path is None:
                     raise ValidationFailedError(
@@ -971,7 +944,9 @@ def generate_document(
     revise_book: Book | None = None
     if revise_of_book_id is not None:
         if not commit:
-            raise ValidationFailedError("REVISE_REQUIRES_COMMIT", "Revise mode cannot run as a preview")
+            raise ValidationFailedError(
+                "REVISE_REQUIRES_COMMIT", "Revise mode cannot run as a preview"
+            )
         revise_book = db.get(Book, revise_of_book_id)
         if revise_book is None or revise_book.deleted_at is not None:
             raise NotFoundError(
@@ -1015,8 +990,7 @@ def generate_document(
         missing = [
             s.key
             for s in slots
-            if s.required
-            and not any(x.slot_key == s.key for x in attachment_specs)
+            if s.required and not any(x.slot_key == s.key for x in attachment_specs)
         ]
         if missing:
             raise ValidationFailedError(
@@ -1143,9 +1117,7 @@ def generate_document(
     # ------------------------------------------------------------------
     if commit:
         DocxEngine.stamp_ref_number(docx_path, raw_ref, STAMP_STYLE_HEADER)
-        DocxEngine.stamp_aztec_code(
-            docx_path, raw_ref, corner=aztec_corner_for(template_id)
-        )
+        DocxEngine.stamp_aztec_code(docx_path, raw_ref, corner=aztec_corner_for(template_id))
 
     # ------------------------------------------------------------------
     # 10. Convert primary DOCX to PDF
@@ -1161,9 +1133,7 @@ def generate_document(
     if pdf_path is None:
         # Graceful None (e.g. no Word/LibreOffice on the host) is otherwise
         # silent; log it so a host-config issue is diagnosable from the logs.
-        log.warning(
-            "PDF unavailable for %s — conversion returned no file", docx_path
-        )
+        log.warning("PDF unavailable for %s — conversion returned no file", docx_path)
         # No silent attachment loss (spec §6 failure mode): a merge was
         # pending (fresh specs or a revise reuse) but there is no PDF to merge
         # into. Abort the generation — the transaction rolls back and staged
@@ -1234,9 +1204,7 @@ def generate_document(
                 # (B1: file deletion is irreversible; must not run before the
                 # transaction is durably committed).
                 if old_doc is not None:
-                    superseded_files.extend(
-                        p for p in (old_doc.docx_path, old_doc.pdf_path) if p
-                    )
+                    superseded_files.extend(p for p in (old_doc.docx_path, old_doc.pdf_path) if p)
                     db.delete(old_doc)
                 latest.document_id = doc_row.id
                 latest.fields = dict(fields)
@@ -1252,7 +1220,9 @@ def generate_document(
                 # version (existing behavior).
                 next_no = (
                     db.execute(
-                        select(func.max(BookVersion.version_no)).where(BookVersion.book_id == revise_book.id)
+                        select(func.max(BookVersion.version_no)).where(
+                            BookVersion.book_id == revise_book.id
+                        )
                     ).scalar_one_or_none()
                     or 0
                 ) + 1
@@ -1278,9 +1248,7 @@ def generate_document(
             # Snapshot/subject must hold a NAME (never the G-number/employee_id):
             # English name preferred, Arabic fallback, else empty string.
             _emp_name = (
-                (employee.name_en or employee.name_ar)
-                if employee is not None
-                else ""
+                (employee.name_en or employee.name_ar) if employee is not None else ""
             ) or ""
             # Prefer the operator-entered subject token (General Book has a
             # free-text موضوع/Subject field); fall back to the form-type label.
@@ -1366,9 +1334,7 @@ def generate_document(
                             "generated_by_user_id": (
                                 current_user.id if current_user is not None else None
                             ),
-                            "signing_manager_id": (
-                                _auto_mgr.id if _auto_mgr is not None else None
-                            ),
+                            "signing_manager_id": (_auto_mgr.id if _auto_mgr is not None else None),
                             "signing_manager_name": (
                                 (_auto_mgr.name_en or _auto_mgr.name_ar)
                                 if _auto_mgr is not None
@@ -1389,9 +1355,7 @@ def generate_document(
                     assignee_id = linked.id
             if assignee_id is None:
                 default_mgr = db.execute(
-                    select(User).where(
-                        User.is_default_manager.is_(True), User.status == "active"
-                    )
+                    select(User).where(User.is_default_manager.is_(True), User.status == "active")
                 ).scalar_one_or_none()
                 assignee_id = default_mgr.id if default_mgr is not None else None
             if assignee_id is not None:
@@ -1428,9 +1392,7 @@ def generate_document(
             att_dir.mkdir(parents=True, exist_ok=True)
             persisted: list[dict[str, str | None]] = []
             for spec, src in _ordered_attachment_specs(resolved_attachments, slots):
-                dest = Vault.collision_safe_name(
-                    att_dir, f"{spec.slot_key or 'extra'}_{src.name}"
-                )
+                dest = Vault.collision_safe_name(att_dir, f"{spec.slot_key or 'extra'}_{src.name}")
                 shutil.copyfile(src, dest)
                 persisted.append(
                     {
@@ -1455,11 +1417,7 @@ def generate_document(
 
             for item in reuse_merged:
                 rel_path = item.get("path")
-                src_path = (
-                    book_service.resolve_attachment_path(rel_path)
-                    if rel_path
-                    else None
-                )
+                src_path = book_service.resolve_attachment_path(rel_path) if rel_path else None
                 if src_path is None:
                     log.warning(
                         "merged attachment %s missing for book %s — skipped on re-merge",
@@ -1520,18 +1478,22 @@ def generate_document(
         # cutoff on the same clock so the window is correct on machines whose
         # local time != UTC (this dev box is UTC+4).
         _dup_cutoff = datetime.now(UTC).replace(tzinfo=None) - timedelta(minutes=2)
-        existing_leave = db.execute(
-            select(Leave)
-            .where(
-                Leave.employee_id == employee_id,
-                Leave.leave_type == leave_row.leave_type,
-                Leave.start_date == leave_row.start_date,
-                Leave.end_date == leave_row.end_date,
-                Leave.deleted_at.is_(None),
-                Leave.created_at >= _dup_cutoff,
+        existing_leave = (
+            db.execute(
+                select(Leave)
+                .where(
+                    Leave.employee_id == employee_id,
+                    Leave.leave_type == leave_row.leave_type,
+                    Leave.start_date == leave_row.start_date,
+                    Leave.end_date == leave_row.end_date,
+                    Leave.deleted_at.is_(None),
+                    Leave.created_at >= _dup_cutoff,
+                )
+                .order_by(Leave.id.desc())
             )
-            .order_by(Leave.id.desc())
-        ).scalars().first()
+            .scalars()
+            .first()
+        )
         if existing_leave is not None:
             log.info(
                 "leave-row dedup: reusing leave %d for employee %s (%s %s→%s)",
@@ -1585,15 +1547,11 @@ def generate_document(
             # rendered WITHOUT enforcing _SUBMITTER_REQUIRED_IDS here — its
             # adapter (_adapt_leave_undertaking) degrades gracefully, leaving the
             # submitter block blank rather than failing the whole leave packet.
-            comp_filename = _build_docx_filename(
-                companion_template_id, primary_name, ts
-            )
+            comp_filename = _build_docx_filename(companion_template_id, primary_name, ts)
             comp_docx_path = Vault.collision_safe_name(out_dir, comp_filename)
             engine.fill(companion_template_id, data, comp_docx_path)
             if commit:
-                DocxEngine.stamp_ref_number(
-                    comp_docx_path, raw_ref, STAMP_STYLE_HEADER
-                )
+                DocxEngine.stamp_ref_number(comp_docx_path, raw_ref, STAMP_STYLE_HEADER)
                 DocxEngine.stamp_aztec_code(
                     comp_docx_path,
                     raw_ref,
@@ -1604,9 +1562,7 @@ def generate_document(
             try:
                 comp_pdf_path = convert_docx_to_pdf(comp_docx_path)
             except Exception:
-                log.warning(
-                    "PDF conversion failed for companion %s", comp_docx_path, exc_info=True
-                )
+                log.warning("PDF conversion failed for companion %s", comp_docx_path, exc_info=True)
 
             comp_row = Document(
                 employee_id=employee_id,
@@ -1653,7 +1609,10 @@ def generate_document(
                 _sup_resolved: Path = _sup_p.resolve()
             except OSError:
                 continue
-            if _post_data_dir_resolved not in _sup_resolved.parents and _sup_resolved != _post_data_dir_resolved:
+            if (
+                _post_data_dir_resolved not in _sup_resolved.parents
+                and _sup_resolved != _post_data_dir_resolved
+            ):
                 log.warning("Refusing to unlink path outside data_dir (post-commit): %s", _sup_p)
                 continue
             with contextlib.suppress(OSError):
@@ -1679,7 +1638,9 @@ def purge_orphan_draft_documents(db: Session) -> int:
                 Document.ref_number == "DRAFT",
                 Document.id.not_in(referenced),
             )
-        ).scalars().all()
+        )
+        .scalars()
+        .all()
     )
     data_dir = get_settings().data_dir
     for doc in rows:
@@ -1755,9 +1716,7 @@ def render_signed_pdf(
     docx_name = _build_docx_filename(
         template_id, (employee.name_en if employee is not None else "signed") or "signed", ts
     )
-    docx_path = Vault.collision_safe_name(
-        out_dir, docx_name.replace(".docx", "_signed.docx")
-    )
+    docx_path = Vault.collision_safe_name(out_dir, docx_name.replace(".docx", "_signed.docx"))
     engine = DocxEngine(_TEMPLATES_DIR)
     engine.fill(template_id, data, docx_path)
 
@@ -1769,9 +1728,7 @@ def render_signed_pdf(
         _postprocess_general_book_footer(docx_path)
 
     DocxEngine.stamp_ref_number(docx_path, book.ref_number, STAMP_STYLE_HEADER)
-    DocxEngine.stamp_aztec_code(
-        docx_path, book.ref_number, corner=aztec_corner_for(template_id)
-    )
+    DocxEngine.stamp_aztec_code(docx_path, book.ref_number, corner=aztec_corner_for(template_id))
 
     pdf_path: Path | None = None
     try:
@@ -1779,9 +1736,7 @@ def render_signed_pdf(
     except Exception:
         log.error("Signed PDF conversion crashed for %s", docx_path, exc_info=True)
     if pdf_path is None:
-        log.warning(
-            "Signed PDF unavailable for %s — conversion returned no file", docx_path
-        )
+        log.warning("Signed PDF unavailable for %s — conversion returned no file", docx_path)
 
     # Re-merge the book's combined-PDF attachments (spec §6): the generated
     # PDF carried them, so the signed artifact must too.
@@ -1792,9 +1747,7 @@ def render_signed_pdf(
         merge_sources: list[Path] = []
         for item in merged_items:
             rel_path = item.get("path")
-            src_path = (
-                book_service.resolve_attachment_path(rel_path) if rel_path else None
-            )
+            src_path = book_service.resolve_attachment_path(rel_path) if rel_path else None
             if src_path is None:
                 log.warning(
                     "merged attachment %s missing for book %s — skipped in signed artifact",
@@ -1815,3 +1768,20 @@ def render_signed_pdf(
             return str(p)
 
     return _rel(pdf_path) if pdf_path is not None else _rel(docx_path)
+
+
+def download_filename_for(row: Document, ext: str) -> str:
+    """Filename for a document download, per export-naming rules (spec 2026-07-01)."""
+    from app.core.export_naming import export_filename
+
+    meta = load_fields_meta().get(row.template_id) or {}
+    arabic_name = meta.get("name_ar", "")
+    is_sick = row.leave is not None and row.leave.leave_type == "Sick Leave"
+    return export_filename(
+        employee_id=row.employee_id,
+        ref_number=row.ref_number,
+        template_id=row.template_id,
+        arabic_name=arabic_name,
+        is_sick_leave=is_sick,
+        ext=ext,
+    )

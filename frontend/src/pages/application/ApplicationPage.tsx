@@ -34,7 +34,7 @@ import { ChevronLeft, ChevronRight, Eye, FileText, Mail, Pencil, QrCode, RotateC
 import { toast } from 'sonner'
 
 import { api } from '@/lib/api'
-import type { DocumentGenerateRequest, TemplateMeta } from '@/lib/api'
+import type { DocumentGenerateRequest, StagedAttachmentRead, TemplateMeta } from '@/lib/api'
 import type { ExtractionResponse } from '@/lib/extraction'
 import type { TemplateDetailResponse, TemplateField } from '@/components/application/types'
 import { buildZodSchema } from '@/lib/applicationFormSchema'
@@ -43,10 +43,13 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { TemplateForm } from '@/components/application/TemplateForm'
 import { AttachmentsBlock } from '@/components/application/AttachmentsBlock'
 import {
+  attachmentsWithSeed,
   emptyAttachmentsState,
+  filterStateToSlots,
   missingRequired,
   parseAttachmentsState,
   toGenerateSpecs,
+  visibleAttachmentSlots,
 } from '@/components/application/attachmentsState'
 import type { AttachmentsState } from '@/components/application/attachmentsState'
 import { ApiError } from '@/lib/api'
@@ -105,6 +108,18 @@ export function ApplicationPage(): React.JSX.Element {
     const s = location.state as { injectedExtraction?: ExtractionResponse } | null
     return s?.injectedExtraction
   })
+  // Intake scan auto-carry — the IntakePanel stages the scan and passes a token
+  // in router state so ApplicationPage can seed the medical_certificate slot once
+  // the form schema loads (Task 4).
+  const [pendingAttachment, setPendingAttachment] = useState<
+    { slotKey: string; staged: StagedAttachmentRead } | undefined
+  >(() => {
+    const s = location.state as {
+      injectedAttachment?: { slotKey: string; staged: StagedAttachmentRead }
+    } | null
+    return s?.injectedAttachment
+  })
+
   // Revise mode — the BookDetailDrawer's "Revise & regenerate" navigates here
   // with `{ reviseBookId }` in router state. Captured once on mount; we prefill
   // the originating form and thread `revise_of_book_id` into the committed save
@@ -114,7 +129,7 @@ export function ApplicationPage(): React.JSX.Element {
     return s?.reviseBookId ?? null
   })
   useEffect(() => {
-    if (pendingInjection || reviseBookId !== null) {
+    if (pendingInjection || reviseBookId !== null || pendingAttachment) {
       navigate(location.pathname + location.search, { replace: true, state: {} })
     }
     // Run once on mount only.
@@ -229,17 +244,6 @@ export function ApplicationPage(): React.JSX.Element {
     attachmentsDirtyRef.current = true
     setAttachmentsState(next)
   }, [])
-  // Save-book gating: every required slot must be filled before commit.
-  // Preview stays available regardless (it renders the form only).
-  const missingSlotKeys = missingRequired(attachmentSlots, attachmentsState)
-  const firstMissingSlot =
-    attachmentSlots.find((s) => s.key === missingSlotKeys[0]) ?? null
-  const firstMissingSlotLabel = firstMissingSlot
-    ? isAr
-      ? firstMissingSlot.label_ar || firstMissingSlot.label_en
-      : firstMissingSlot.label_en
-    : ''
-
   // Admin-category templates (e.g. General Book) have no employee binding —
   // the backend allows employee_id=null for them, so we hide the picker entirely
   // and don't gate Generate on a selection. See document_service.generate_document.
@@ -252,6 +256,23 @@ export function ApplicationPage(): React.JSX.Element {
     resolver: zodSchema ? zodResolver(zodSchema) : undefined,
     defaultValues: {},
   })
+
+  const leaveType = form.watch('leave_type') as string | undefined
+  const visibleSlots = useMemo(
+    () => visibleAttachmentSlots(attachmentSlots, leaveType),
+    [attachmentSlots, leaveType],
+  )
+
+  // Save-book gating: every required slot must be filled before commit.
+  // Preview stays available regardless (it renders the form only).
+  const missingSlotKeys = missingRequired(visibleSlots, attachmentsState)
+  const firstMissingSlot =
+    visibleSlots.find((s) => s.key === missingSlotKeys[0]) ?? null
+  const firstMissingSlotLabel = firstMissingSlot
+    ? isAr
+      ? firstMissingSlot.label_ar || firstMissingSlot.label_en
+      : firstMissingSlot.label_en
+    : ''
 
   // Revise mode — fetch the originating book and prefill the form ONCE from its
   // latest version's stored field snapshot. The detail payload omits the raw
@@ -365,7 +386,7 @@ export function ApplicationPage(): React.JSX.Element {
     // attachment-free). An empty list is sent as undefined so a revise with
     // untouched attachments reuses the book's existing merged set (backend
     // treats None as "keep").
-    const attachmentSpecs = toGenerateSpecs(attachmentsState)
+    const attachmentSpecs = toGenerateSpecs(filterStateToSlots(attachmentsState, visibleSlots))
 
     return {
       // Admin-category forms generate unattached — see document_service.
@@ -465,6 +486,7 @@ export function ApplicationPage(): React.JSX.Element {
   // (not the derived ``schema`` object — that's recomputed every render and
   // would loop) keeps the effect stable.
   const schemaReady = !!schemaQuery.data
+
   const reviseAppliedRef = useRef(false)
   useEffect(() => {
     if (!selectedTemplate || !schemaReady) return
@@ -480,18 +502,24 @@ export function ApplicationPage(): React.JSX.Element {
       return
     }
     const draft = loadDraft(selectedTemplate)
+    let base: AttachmentsState | null = null
     if (draft) {
       // The draft payload carries the attachments state under a reserved
       // `__attachments` key (spec §6: a refresh keeps staged tokens). Split
       // it out before resetting RHF so the form never sees the blob.
       const { __attachments, ...values } = draft
       form.reset(values)
-      const restored = parseAttachmentsState(__attachments)
-      if (restored) {
-        attachmentsDirtyRef.current = false
-        setAttachmentsState(restored)
-      }
+      base = parseAttachmentsState(__attachments)
+      if (base) attachmentsDirtyRef.current = false
     }
+    // Seed the intake-staged scan on top of the restored draft (or onto an
+    // empty state). attachmentsWithSeed is a pure function so draft content
+    // is never dropped even when a pendingAttachment is present.
+    const slots = schemaQuery.data?.attachment_slots ?? []
+    if (base || pendingAttachment) {
+      setAttachmentsState(attachmentsWithSeed(base, slots, pendingAttachment))
+    }
+    if (pendingAttachment) setPendingAttachment(undefined)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedTemplate, schemaReady, reviseFields])
 
@@ -801,7 +829,7 @@ export function ApplicationPage(): React.JSX.Element {
                           free-form extras, on EVERY form (spec 2026-06-11 §6).
                           Required slots gate Save book (not Preview). */}
                       <AttachmentsBlock
-                        slots={attachmentSlots}
+                        slots={visibleSlots}
                         state={attachmentsState}
                         onChange={handleAttachmentsChange}
                       />

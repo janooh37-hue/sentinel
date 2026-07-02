@@ -72,6 +72,69 @@ export function missingRequired(
     .map((slot) => slot.key)
 }
 
+/** The medical-certificate slot rides the shared "Leave Application Form"
+ * template but is only meaningful for Sick Leave. */
+export const SICK_ONLY_SLOT_KEY = 'medical_certificate'
+
+/** Slots to render for the current leave type: the sick-only slot is dropped
+ * unless leaveType is exactly "Sick Leave". */
+export function visibleAttachmentSlots(
+  slots: AttachmentSlotRead[],
+  leaveType: string | undefined,
+): AttachmentSlotRead[] {
+  if (leaveType === 'Sick Leave') return slots
+  return slots.filter((s) => s.key !== SICK_ONLY_SLOT_KEY)
+}
+
+/** Strip slot values whose slot is not in `slots` (e.g. a hidden
+ * medical_certificate) so they never ride the generate payload. */
+export function filterStateToSlots(
+  state: AttachmentsState,
+  slots: AttachmentSlotRead[],
+): AttachmentsState {
+  const allowed = new Set(slots.map((s) => s.key))
+  const kept: AttachmentsState['slots'] = {}
+  for (const [k, v] of Object.entries(state.slots)) {
+    if (allowed.has(k)) kept[k] = v
+  }
+  return { ...state, slots: kept }
+}
+
+/** Compose the attachments state shown when a form (re)opens: the restored
+ * draft (or an empty state) with an intake-staged scan seeded on top. The
+ * seed only applies when its slot exists in `slots`, so a scan can never be
+ * dropped by a restored draft and never lands on a form without the slot. */
+export function attachmentsWithSeed(
+  base: AttachmentsState | null,
+  slots: AttachmentSlotRead[],
+  pending: { slotKey: string; staged: { token: string; filename: string; size: number } } | undefined,
+): AttachmentsState {
+  const start = base ?? emptyAttachmentsState()
+  if (!pending) return start
+  if (!slots.some((s) => s.key === pending.slotKey)) return start
+  return seedStagedSlot(start, pending.slotKey, pending.staged)
+}
+
+/** Pre-fill one slot with a staged upload (used to auto-carry an intake scan). */
+export function seedStagedSlot(
+  state: AttachmentsState,
+  slotKey: string,
+  staged: { token: string; filename: string; size: number },
+): AttachmentsState {
+  return {
+    ...state,
+    slots: {
+      ...state.slots,
+      [slotKey]: {
+        kind: 'staged',
+        token: staged.token,
+        filename: staged.filename,
+        size: staged.size,
+      },
+    },
+  }
+}
+
 // ---------------------------------------------------------------------------
 // localStorage draft round-trip (formDrafts carries the state under a reserved
 // `__attachments` key so a refresh keeps staged tokens — spec §6).
