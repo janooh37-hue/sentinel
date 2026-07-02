@@ -52,9 +52,7 @@ def validate_status_end_date(status: str, end_date: date | None) -> None:
     a partial PATCH against the current DB row.
     """
     if status != EMPLOYEE_STATUS_ACTIVE and end_date is None:
-        raise ValueError(
-            f"end_date is required when status is {status!r}"
-        )
+        raise ValueError(f"end_date is required when status is {status!r}")
 
 
 class EmployeeCreate(BaseModel):
@@ -148,6 +146,9 @@ class EmployeeRead(ORMBase):
     # Cache-bust token (the photo VaultFile.id as a string) so the avatar <img>
     # refetches after a replace. None when the employee has no photo.
     photo_version: str | None = None
+    passport_no_source: str | None = None
+    # True when the employee has at least one passport-kind vault scan on file.
+    has_passport_scan: bool = False
 
 
 class EmployeeListItem(ORMBase):
