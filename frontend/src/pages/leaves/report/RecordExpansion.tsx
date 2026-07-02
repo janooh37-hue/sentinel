@@ -14,7 +14,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 
-import { api, ApiError } from '@/lib/api'
+import { api, apiErrorMessage } from '@/lib/api'
 import type { LeaveListItem, LeaveStatus } from '@/lib/api'
 import { Button } from '@/components/ui/button'
 
@@ -117,7 +117,7 @@ export function RecordExpansion({
       else toast.success(t('common.savedToast'))
       onMutated()
     },
-    onError: (err) => toast.error(err instanceof ApiError ? err.message : String(err)),
+    onError: (err) => toast.error(apiErrorMessage(err)),
   })
 
   const deleteMutation = useMutation({
@@ -128,7 +128,7 @@ export function RecordExpansion({
       toast.success(t('leaves.toast.deleted'))
       onMutated()
     },
-    onError: (err) => toast.error(err instanceof ApiError ? err.message : String(err)),
+    onError: (err) => toast.error(apiErrorMessage(err)),
   })
 
   const awaitingCert =

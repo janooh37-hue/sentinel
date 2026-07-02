@@ -18,7 +18,7 @@ import { useTranslation } from 'react-i18next'
 import { CalendarDays, ChevronRight, X } from 'lucide-react'
 import { toast } from 'sonner'
 
-import { api, ApiError } from '@/lib/api'
+import { api, apiErrorMessage } from '@/lib/api'
 import type { LeaveListItem, LeaveStatus } from '@/lib/api'
 import { splitBilingual } from '@/lib/bilingualValue'
 import { cn } from '@/lib/utils'
@@ -156,7 +156,7 @@ export function RegisterTable({
       void qc.invalidateQueries({ queryKey: ['leave-balance', row.employee_id] })
       toast.success(status === 'Approved' ? t('leaves.toast.approved') : t('leaves.toast.rejected'))
     },
-    onError: (err) => toast.error(err instanceof ApiError ? err.message : String(err)),
+    onError: (err) => toast.error(apiErrorMessage(err)),
   })
 
   function cycleSort(key: SortSpec['key']): void {

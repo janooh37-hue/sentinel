@@ -22,7 +22,7 @@ import { Link, useNavigate } from 'react-router-dom'
 import { ArrowRight, CalendarClock, ClipboardCheck, Inbox, Paperclip, ScanLine, ShieldCheck, Stamp } from 'lucide-react'
 import { toast } from 'sonner'
 
-import { api, ApiError } from '@/lib/api'
+import { api, apiErrorMessage } from '@/lib/api'
 import { useCapabilities } from '@/lib/useCapabilities'
 import { useIdentity } from '@/lib/useIdentity'
 import { useAwaitingReturnCount } from '@/pages/leaves/useAwaitingReturnCount'
@@ -122,7 +122,7 @@ export function NavBellPopover(): React.JSX.Element {
       void qc.invalidateQueries({ queryKey: ['ledger'] })
     },
     onError: (err) =>
-      toast.error(err instanceof ApiError ? err.message : String(err)),
+      toast.error(apiErrorMessage(err)),
   })
 
   // Outside-click / Escape — mirrors AccountMenu.

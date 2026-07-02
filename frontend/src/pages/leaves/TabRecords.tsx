@@ -18,7 +18,7 @@ import { useTranslation } from 'react-i18next'
 import { CalendarDays, X } from 'lucide-react'
 import { toast } from 'sonner'
 
-import { api, ApiError } from '@/lib/api'
+import { api, apiErrorMessage } from '@/lib/api'
 import type { LeaveListItem, LeaveRead, LeaveStatus } from '@/lib/api'
 import { splitBilingual } from '@/lib/bilingualValue'
 import { cn } from '@/lib/utils'
@@ -340,7 +340,7 @@ function LeaveDetailDrawer({
       else toast.success(t('common.savedToast'))
       onMutated()
     },
-    onError: (err) => toast.error(err instanceof ApiError ? err.message : String(err)),
+    onError: (err) => toast.error(apiErrorMessage(err)),
   })
 
   const deleteMutation = useMutation({
@@ -350,7 +350,7 @@ function LeaveDetailDrawer({
       toast.success(t('leaves.toast.deleted'))
       onClose()
     },
-    onError: (err) => toast.error(err instanceof ApiError ? err.message : String(err)),
+    onError: (err) => toast.error(apiErrorMessage(err)),
   })
 
   // Lifecycle-driven actions (derived from the loaded leave detail).

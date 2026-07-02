@@ -24,7 +24,7 @@ import {
   EyeOff,
 } from 'lucide-react'
 
-import { api, ApiError } from '@/lib/api'
+import { api, apiErrorMessage } from '@/lib/api'
 import type { EmailAccountUpsert } from '@/lib/api'
 import { useIdentity } from '@/lib/useIdentity'
 import { useAuth } from '@/lib/authContext'
@@ -112,7 +112,7 @@ export function EmailSection(): React.JSX.Element {
       void qc.invalidateQueries({ queryKey: ['email-account'] })
     },
     onError: (err) =>
-      toast.error(err instanceof ApiError ? err.message : String(err)),
+      toast.error(apiErrorMessage(err)),
   })
 
   const testMutation = useMutation({
@@ -122,7 +122,7 @@ export function EmailSection(): React.JSX.Element {
         t('settings.email.testOk', { defaultValue: 'Connection successful' }),
       ),
     onError: (err) =>
-      toast.error(err instanceof ApiError ? err.message : String(err)),
+      toast.error(apiErrorMessage(err)),
   })
 
   const syncMutation = useMutation({
@@ -139,7 +139,7 @@ export function EmailSection(): React.JSX.Element {
       void qc.invalidateQueries({ queryKey: ['ledger'] })
     },
     onError: (err) =>
-      toast.error(err instanceof ApiError ? err.message : String(err)),
+      toast.error(apiErrorMessage(err)),
   })
 
   const deleteMutation = useMutation({
@@ -150,7 +150,7 @@ export function EmailSection(): React.JSX.Element {
       void qc.invalidateQueries({ queryKey: ['email-account'] })
     },
     onError: (err) =>
-      toast.error(err instanceof ApiError ? err.message : String(err)),
+      toast.error(apiErrorMessage(err)),
   })
 
   // Identity is the signed-in *user's* `employee_id` (not the email account's
@@ -173,7 +173,7 @@ export function EmailSection(): React.JSX.Element {
       setLinkPickerId(null)
     },
     onError: (err) =>
-      toast.error(err instanceof ApiError ? err.message : String(err)),
+      toast.error(apiErrorMessage(err)),
   })
 
   const update = <K extends keyof EmailAccountUpsert>(

@@ -15,7 +15,7 @@ import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import { DocumentTile } from '@/components/ui/document-tile'
 import { FileUploadZone } from '@/components/ui/file-upload-zone'
 import { DocumentViewerDialog, type DocViewerItem } from '@/components/ui/document-viewer-dialog'
-import { api, ApiError } from '@/lib/api'
+import { api, apiErrorMessage } from '@/lib/api'
 import type { VaultEntry } from '@/lib/api'
 import { fileKindFromName } from '@/lib/fileTypes'
 
@@ -62,7 +62,7 @@ export function IdentityDocCard({
       onChanged()
       toast.success(t('vault.toast.uploaded'))
     },
-    onError: (e) => toast.error(e instanceof ApiError ? e.message : String(e)),
+    onError: (e) => toast.error(apiErrorMessage(e)),
   })
 
   const remove = useMutation({
@@ -71,7 +71,7 @@ export function IdentityDocCard({
       onChanged()
       toast.success(t('vault.toast.deleted'))
     },
-    onError: (e) => toast.error(e instanceof ApiError ? e.message : String(e)),
+    onError: (e) => toast.error(apiErrorMessage(e)),
   })
 
   const onPick = (e: React.ChangeEvent<HTMLInputElement>): void => {

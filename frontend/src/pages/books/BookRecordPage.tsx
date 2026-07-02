@@ -25,7 +25,7 @@ import {
   X,
 } from 'lucide-react'
 
-import { api, ApiError, type BookApprovalStepRead, type BookDecideAction, type BookVersionRead } from '@/lib/api'
+import { api, ApiError, type BookApprovalStepRead, type BookDecideAction, type BookVersionRead, apiErrorMessage } from '@/lib/api'
 import { useAuth } from '@/lib/authContext'
 import { useCapabilities } from '@/lib/useCapabilities'
 import {
@@ -339,13 +339,13 @@ export function BookRecordPage(): React.JSX.Element {
     }) => api.createBookAnnotation(bookId, current!.id, m),
     onSuccess: () =>
       void qc.invalidateQueries({ queryKey: ['books', 'annotations', bookId, current?.id] }),
-    onError: (err) => toast.error(err instanceof ApiError ? err.message : String(err)),
+    onError: (err) => toast.error(apiErrorMessage(err)),
   })
   const deleteMark = useMutation({
     mutationFn: (annId: number) => api.deleteBookAnnotation(bookId, current!.id, annId),
     onSuccess: () =>
       void qc.invalidateQueries({ queryKey: ['books', 'annotations', bookId, current?.id] }),
-    onError: (err) => toast.error(err instanceof ApiError ? err.message : String(err)),
+    onError: (err) => toast.error(apiErrorMessage(err)),
   })
 
   function invalidateAll(): void {
@@ -364,7 +364,7 @@ export function BookRecordPage(): React.JSX.Element {
       setReason('')
       navigate('/books')
     },
-    onError: (err) => toast.error(err instanceof ApiError ? err.message : String(err)),
+    onError: (err) => toast.error(apiErrorMessage(err)),
   })
 
   // Approval == signing: embeds the signed-in manager's signature and marks the
@@ -383,7 +383,7 @@ export function BookRecordPage(): React.JSX.Element {
       if (err instanceof ApiError && err.code === 'NO_SIGNATURE') {
         toast.error(t('books.approval.noSignatureHint'))
       } else {
-        toast.error(err instanceof ApiError ? err.message : String(err))
+        toast.error(apiErrorMessage(err))
       }
     },
   })

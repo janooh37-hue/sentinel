@@ -18,7 +18,7 @@ import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { BadgeCheck, Check, Clock, Inbox, X } from 'lucide-react'
 
-import { api, ApiError, type PermissionRequestRead } from '@/lib/api'
+import { api, type PermissionRequestRead, apiErrorMessage } from '@/lib/api'
 import { EmptyState } from '@/components/ui/empty-state'
 import { Skeleton } from '@/components/ui/skeleton'
 
@@ -269,7 +269,7 @@ export function PermissionRequestsTab(): React.JSX.Element {
       invalidate()
     },
     onError: (e) => {
-      toast.error(e instanceof ApiError ? e.message : String(e))
+      toast.error(apiErrorMessage(e))
     },
     onSettled: () => setDecidingId(null),
   })

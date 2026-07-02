@@ -24,13 +24,7 @@ import { formatDistanceToNow, parseISO } from 'date-fns'
 import { ar as arLocale } from 'date-fns/locale'
 import { Check, Download, FileText, Paperclip, RotateCcw, Send, X } from 'lucide-react'
 
-import {
-  api,
-  ApiError,
-  type BookApprovalStepRead,
-  type BookDecideAction,
-  type BookVersionRead,
-} from '@/lib/api'
+import { api, ApiError, type BookApprovalStepRead, type BookDecideAction, type BookVersionRead, apiErrorMessage } from '@/lib/api'
 import { useCapabilities } from '@/lib/useCapabilities'
 import { useAuth } from '@/lib/authContext'
 import { cn } from '@/lib/utils'
@@ -283,7 +277,7 @@ export function BookDetailDrawer({ bookId, onClose, onSubmitForApproval }: Props
       setNoteFor(null)
       onClose()
     },
-    onError: (err) => toast.error(err instanceof ApiError ? err.message : String(err)),
+    onError: (err) => toast.error(apiErrorMessage(err)),
   })
 
   // Approval == signing: embeds the signed-in manager's signature and marks the
@@ -302,7 +296,7 @@ export function BookDetailDrawer({ bookId, onClose, onSubmitForApproval }: Props
       if (err instanceof ApiError && err.code === 'NO_SIGNATURE') {
         toast.error(t('books.approval.noSignatureHint'))
       } else {
-        toast.error(err instanceof ApiError ? err.message : String(err))
+        toast.error(apiErrorMessage(err))
       }
     },
   })

@@ -15,7 +15,7 @@ import { useTranslation } from 'react-i18next'
 import { UserPlus } from 'lucide-react'
 import { toast } from 'sonner'
 
-import { api, ApiError } from '@/lib/api'
+import { api, apiErrorMessage } from '@/lib/api'
 import { Button } from '@/components/ui/button'
 import { pickEmployeeName } from '@/lib/employeeName'
 
@@ -52,7 +52,7 @@ export function EmployeeSuggestionBanner({
       )
     },
     onError: (err) =>
-      toast.error(err instanceof ApiError ? err.message : String(err)),
+      toast.error(apiErrorMessage(err)),
   })
 
   // Silently hide while we don't know yet, or when the G-number isn't real.

@@ -14,7 +14,7 @@ import { useNavigate } from 'react-router-dom'
 import { toast } from 'sonner'
 
 import { WidgetCard, type BreakdownRow } from '@/components/ui/widget-card'
-import { ApiError, api, type DashboardSummary } from '@/lib/api'
+import { api, type DashboardSummary, apiErrorMessage } from '@/lib/api'
 import { parseUtcMs } from '@/lib/time'
 
 interface Props {
@@ -59,7 +59,7 @@ export function EmailSyncStatusWidget({ summary }: Props): React.JSX.Element {
       void qc.invalidateQueries({ queryKey: ['email-account'] })
       void qc.invalidateQueries({ queryKey: ['ledger'] })
     },
-    onError: (err) => toast.error(err instanceof ApiError ? err.message : String(err)),
+    onError: (err) => toast.error(apiErrorMessage(err)),
   })
 
   const total = emailSync?.incoming_today ?? 0

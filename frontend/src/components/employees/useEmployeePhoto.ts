@@ -9,7 +9,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 
-import { api, ApiError } from '@/lib/api'
+import { api, apiErrorMessage } from '@/lib/api'
 
 export function useEmployeePhoto(employeeId: string) {
   const qc = useQueryClient()
@@ -23,7 +23,7 @@ export function useEmployeePhoto(employeeId: string) {
       void invalidate()
       toast.success(t('employees.toast.photoSaved'))
     },
-    onError: (e) => toast.error(e instanceof ApiError ? e.message : String(e)),
+    onError: (e) => toast.error(apiErrorMessage(e)),
   })
 
   const remove = useMutation({
@@ -32,7 +32,7 @@ export function useEmployeePhoto(employeeId: string) {
       void invalidate()
       toast.success(t('employees.toast.photoRemoved'))
     },
-    onError: (e) => toast.error(e instanceof ApiError ? e.message : String(e)),
+    onError: (e) => toast.error(apiErrorMessage(e)),
   })
 
   return { upload, remove }

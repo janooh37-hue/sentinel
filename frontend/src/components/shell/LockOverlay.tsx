@@ -12,7 +12,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Eye, EyeOff, Loader2, Lock, ShieldCheck } from 'lucide-react'
 
-import { api, ApiError } from '@/lib/api'
+import { api, apiErrorMessage } from '@/lib/api'
 import { useAuth } from '@/lib/authContext'
 import { useIdentity } from '@/lib/useIdentity'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
@@ -46,7 +46,7 @@ export function LockOverlay({ onUnlocked }: LockOverlayProps): React.JSX.Element
       await api.verifyAuthPassword(password)
       onUnlocked()
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : String(err))
+      setError(apiErrorMessage(err))
       setSubmitting(false)
     }
   }

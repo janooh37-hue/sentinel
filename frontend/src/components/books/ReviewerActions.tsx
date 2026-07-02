@@ -13,7 +13,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { Check, FileText } from 'lucide-react'
-import { api, ApiError } from '@/lib/api'
+import { api, apiErrorMessage } from '@/lib/api'
 import { cn } from '@/lib/utils'
 
 interface Props {
@@ -39,7 +39,7 @@ export function ReviewerActions({ bookId, onDone }: Props): React.JSX.Element {
       setNote('')
       onDone?.()
     },
-    onError: (e) => toast.error(e instanceof ApiError ? e.message : String(e)),
+    onError: (e) => toast.error(apiErrorMessage(e)),
   })
 
   const busy = mut.isPending
