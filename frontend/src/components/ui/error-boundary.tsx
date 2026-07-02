@@ -24,9 +24,10 @@ interface State {
 }
 
 /* ── Illustration ─────────────────────────────────────────────────────────
-   An astronaut adrift in a layered hollow, reaching after the GSSG globe as
-   it — signal-rings and all — slips out of reach. Blob rings and star field
-   are precomputed; ids are `eb-` prefixed to avoid colliding with app SVG. */
+   A cable pulled apart over a layered hollow — plug and socket breathing
+   away from each other around a red spark, while the GSSG globe slips out
+   of reach. Blob rings and star field are precomputed; ids are `eb-`
+   prefixed to avoid colliding with app SVG. */
 
 const HALO =
   'M 210.6 0.0 C 210.6 28.0 164.2 55.5 145.5 84.0 C 126.8 112.5 122.8 156.7 98.6 170.7 C 74.3 184.7 33.6 166.7 0.0 168.0 C -33.6 169.3 -79.1 192.7 -103.0 178.5 C -127.0 164.3 -127.1 112.6 -143.6 82.9 C -160.0 53.1 -201.0 28.0 -201.6 0.0 C -202.2 -28.0 -164.4 -56.3 -147.4 -85.1 C -130.4 -113.9 -124.3 -158.8 -99.7 -172.7 C -75.1 -186.5 -33.6 -167.4 -0.0 -168.0 C 33.6 -168.6 77.7 -190.5 101.9 -176.5 C 126.2 -162.5 127.4 -113.4 145.5 -84.0 C 163.6 -54.6 210.6 -28.0 210.6 0.0 Z'
@@ -57,91 +58,49 @@ const STARS = `
   <circle cx="-28.7" cy="28.6" r="1.6" fill="#dfeaf9" opacity="0.49" class="eb-tw"/>
 `
 
-const ASTRONAUT = `
-  <g class="eb-astro">
-    <g transform="translate(-56 44) rotate(-11) scale(0.9)" filter="url(#eb-lift)">
-      <g>
-        <rect x="-34" y="-40" width="68" height="86" rx="20" fill="url(#eb-pack)"/>
-        <rect x="-34" y="-40" width="68" height="86" rx="20" fill="none" stroke="#7f8a9e" stroke-width="1" opacity="0.5"/>
-        <rect x="-18" y="-34" width="14" height="24" rx="4" fill="#788298"/>
-        <rect x="4" y="-34" width="14" height="24" rx="4" fill="#788298"/>
-        <rect x="-24" y="18" width="48" height="8" rx="4" fill="#6f7a8f"/>
+const CABLE = `
+  <g transform="translate(0 -8) scale(1.02)" stroke="#16233c" stroke-width="5" stroke-linecap="round" stroke-linejoin="round">
+    <g class="eb-conn-male">
+      <path d="M-168 52 Q -150 6 -96 3" fill="none" stroke="#16233c" stroke-width="21"/>
+      <path d="M-168 52 Q -150 6 -96 3" fill="none" stroke="url(#eb-conn)" stroke-width="14"/>
+      <path d="M-166 46 Q -150 10 -100 6" fill="none" stroke="#4f77aa" stroke-width="3" stroke-linecap="round" opacity="0.5"/>
+      <rect x="-98" y="-25" width="46" height="50" rx="14" fill="url(#eb-steel)"/>
+      <rect x="-93" y="-22" width="36" height="8" rx="4" fill="#ffffff" opacity="0.6" stroke="none"/>
+      <g stroke="#8792a6" stroke-width="2.4" opacity="0.7">
+        <path d="M-86 -14 L -86 14"/><path d="M-78 -14 L -78 14"/><path d="M-70 -14 L -70 14"/>
       </g>
-      <g>
-        <path d="M-30 -18 q-16 6 -24 24 q-6 14 -4 30" fill="none" stroke="url(#eb-limb)" stroke-width="22" stroke-linecap="round"/>
-        <g stroke="#b6bfce" stroke-width="1.4" opacity="0.7" fill="none"><path d="M-52 6 q7 3 12 -2"/><path d="M-54 14 q7 3 13 -2"/></g>
-        <circle cx="-58" cy="60" r="13" fill="url(#eb-limb)"/>
-        <circle cx="-58" cy="60" r="13" fill="none" stroke="#aeb6c4" stroke-width="1.4"/>
-        <ellipse cx="-63" cy="55" rx="5" ry="7" fill="#ffffff" opacity="0.45"/>
-        <path d="M-48 58 q7 -1 8 5" fill="none" stroke="#aeb6c4" stroke-width="3" stroke-linecap="round"/>
-        <circle cx="-58" cy="47" r="13.5" fill="none" stroke="#c4ccd9" stroke-width="3"/>
+      <rect x="-54" y="-18" width="14" height="36" rx="5" fill="url(#eb-brass)"/>
+      <rect x="-42" y="-15" width="20" height="30" rx="6" fill="url(#eb-steel)"/>
+      <rect x="-24" y="-12" width="24" height="7" rx="3.5" fill="url(#eb-brass)"/>
+      <rect x="-24" y="5" width="24" height="7" rx="3.5" fill="url(#eb-brass)"/>
+    </g>
+    <g class="eb-conn-female">
+      <path d="M168 52 Q 150 6 96 3" fill="none" stroke="#16233c" stroke-width="21"/>
+      <path d="M168 52 Q 150 6 96 3" fill="none" stroke="url(#eb-conn)" stroke-width="14"/>
+      <path d="M166 46 Q 150 10 100 6" fill="none" stroke="#4f77aa" stroke-width="3" stroke-linecap="round" opacity="0.5"/>
+      <rect x="52" y="-27" width="46" height="54" rx="15" fill="url(#eb-steel)"/>
+      <rect x="57" y="-24" width="36" height="8" rx="4" fill="#ffffff" opacity="0.6" stroke="none"/>
+      <g stroke="#8792a6" stroke-width="2.4" opacity="0.7">
+        <path d="M66 -15 L 66 15"/><path d="M74 -15 L 74 15"/><path d="M82 -15 L 82 15"/>
       </g>
-      <g>
-        <path d="M-16 42 q-10 30 -8 58 q1 14 6 24" fill="none" stroke="url(#eb-limb)" stroke-width="27" stroke-linecap="round"/>
-        <g stroke="#b6bfce" stroke-width="1.5" opacity="0.65" fill="none"><path d="M-27 92 q10 4 20 -1"/><path d="M-26 102 q10 4 20 -1"/></g>
-        <path d="M-24 120 q-4 20 8 24 q18 5 24 -8 l-2 -16 q-14 6 -30 0z" fill="url(#eb-limb)"/>
-        <path d="M-16 141 q10 6 22 0 l0 5 q-11 5 -22 -1z" fill="#586274"/>
-        <circle cx="-18" cy="120" r="14" fill="none" stroke="#c4ccd9" stroke-width="3"/>
-      </g>
-      <ellipse cx="0" cy="-30" rx="30" ry="9" fill="#0a1f3a" opacity="0.14"/>
-      <path d="M-36 -30 Q -40 -36 -28 -38 L 28 -38 Q 40 -36 36 -30 L 32 40 Q 27 54 0 54 Q -27 54 -32 40 Z" fill="url(#eb-suit)"/>
-      <path d="M20 -36 Q 34 -34 30 -30 L 27 42 Q 22 51 8 53 Q 26 46 22 -32 Z" fill="#0a1f3a" opacity="0.09"/>
-      <path d="M-24 -34 Q 0 -40 24 -34 Q 6 -30 -24 -32 Z" fill="#ffffff" opacity="0.55"/>
-      <path d="M0 -30 L 0 52" stroke="#cbd2dd" stroke-width="1.4" opacity="0.6"/>
-      <g stroke="#c4ccd9" stroke-width="1.6" fill="none" opacity="0.7"><path d="M-30 24 Q 0 34 30 24"/><path d="M-31 32 Q 0 42 31 32"/><path d="M-30 40 Q 0 49 30 40"/></g>
-      <g>
-        <rect x="-22" y="-20" width="44" height="30" rx="7" fill="#132a46"/>
-        <rect x="-22" y="-20" width="44" height="30" rx="7" fill="none" stroke="#0a1f3a" stroke-width="1"/>
-        <rect x="-17" y="-15" width="24" height="12" rx="2.5" fill="#0c1c30"/>
-        <path d="M-15 -9 h6 l2 -4 3 8 2 -4 h4" fill="none" stroke="#40608c" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" opacity="0.8"/>
-        <circle cx="13" cy="-13" r="2.4" fill="#33415a"/>
-        <circle cx="13" cy="-5" r="2.4" fill="#33415a"/>
-        <rect x="-17" y="4" width="10" height="3" rx="1.5" fill="#2c4a6e"/>
-        <rect x="-4" y="4" width="10" height="3" rx="1.5" fill="#2c4a6e"/>
-      </g>
-      <path d="M-30 -6 q-10 8 -6 22 q3 8 12 8" fill="none" stroke="#c4ccd9" stroke-width="5" stroke-linecap="round" opacity="0.9"/>
-      <g>
-        <path d="M18 44 q16 20 14 42 q-2 16 -14 24" fill="none" stroke="url(#eb-limb)" stroke-width="28" stroke-linecap="round"/>
-        <g stroke="#b6bfce" stroke-width="1.5" opacity="0.65" fill="none"><path d="M34 84 q4 11 -3 20"/><path d="M42 88 q4 11 -3 20"/></g>
-        <path d="M12 106 q-14 10 -10 24 q5 16 22 12 q14 -4 12 -18 l-6 -16 q-10 4 -30 -2z" fill="url(#eb-limb)"/>
-        <path d="M6 128 q6 12 24 8 l2 5 q-16 6 -27 -6z" fill="#586274"/>
-        <circle cx="26" cy="112" r="15" fill="none" stroke="#c4ccd9" stroke-width="3"/>
-        <ellipse cx="4" cy="118" rx="6" ry="9" fill="#ffffff" opacity="0.4"/>
-      </g>
-      <g>
-        <circle cx="32" cy="-24" r="15" fill="url(#eb-limb)"/>
-        <path d="M32 -24 q18 -18 44 -40 q10 -8 20 -10" fill="none" stroke="url(#eb-limb)" stroke-width="21" stroke-linecap="round"/>
-        <g stroke="#b6bfce" stroke-width="1.4" opacity="0.7" fill="none"><path d="M58 -50 q6 6 13 3"/><path d="M64 -57 q6 6 13 3"/></g>
-        <circle cx="98" cy="-76" r="13" fill="url(#eb-limb)"/>
-        <circle cx="98" cy="-76" r="13" fill="none" stroke="#aeb6c4" stroke-width="1.4"/>
-        <ellipse cx="93" cy="-81" rx="5" ry="7" fill="#ffffff" opacity="0.5"/>
-        <path d="M108 -80 q8 -3 12 -1" fill="none" stroke="url(#eb-limb)" stroke-width="6" stroke-linecap="round"/>
-        <path d="M109 -73 q8 -1 12 2" fill="none" stroke="url(#eb-limb)" stroke-width="5.5" stroke-linecap="round"/>
-        <circle cx="86" cy="-64" r="13.5" fill="none" stroke="#c4ccd9" stroke-width="3"/>
-      </g>
-      <rect x="-24" y="-46" width="48" height="16" rx="7" fill="url(#eb-metal)"/>
-      <rect x="-24" y="-42" width="48" height="4" fill="#9aa3b2" opacity="0.5"/>
-      <g fill="#8b94a4"><circle cx="-16" cy="-38" r="1.5"/><circle cx="-6" cy="-38" r="1.5"/><circle cx="4" cy="-38" r="1.5"/><circle cx="14" cy="-38" r="1.5"/></g>
-      <circle cx="0" cy="-78" r="41" fill="url(#eb-helmet)"/>
-      <circle cx="0" cy="-78" r="41" fill="none" stroke="#b3bccb" stroke-width="2"/>
-      <ellipse cx="-14" cy="-96" rx="16" ry="10" fill="#ffffff" opacity="0.75"/>
-      <ellipse cx="0" cy="-74" rx="30" ry="31" fill="#1c2c44"/>
-      <ellipse cx="0" cy="-74" rx="26" ry="27" fill="url(#eb-visor)"/>
-      <path d="M-19 -90 q15 -11 34 -1 q-7 9 -19 10 q-11 1 -15 -9z" fill="#7ea8d8" opacity="0.45"/>
-      <circle cx="10" cy="-66" r="6.5" fill="#2166a1" opacity="0.6"/>
-      <path d="M8 -70 q4 -1 6 2 q-2 3 -6 1z" fill="#dfeaf6" opacity="0.5"/>
-      <circle cx="-9" cy="-80" r="1.6" fill="#dce8fb"/>
-      <circle cx="-3" cy="-62" r="1.1" fill="#dce8fb" opacity="0.8"/>
-      <rect x="33" y="-86" width="11" height="17" rx="4.5" fill="url(#eb-metal)" transform="rotate(10 38 -77)"/>
-      <circle cx="39" cy="-81" r="2.6" fill="#eef3f9"/>
-      <line x1="-31" y1="-105" x2="-37" y2="-120" stroke="#aeb6c4" stroke-width="2.2"/>
-      <circle cx="-37" cy="-121" r="2.6" fill="#8b94a4"/>
+      <rect x="46" y="-20" width="12" height="40" rx="5" fill="url(#eb-brass)"/>
+      <rect x="28" y="-20" width="20" height="40" rx="7" fill="url(#eb-steel)"/>
+      <rect x="30" y="-16" width="6" height="32" rx="3" fill="#ffffff" opacity="0.5" stroke="none"/>
+      <ellipse cx="37" cy="-8.5" rx="5" ry="5.5" fill="#0a1524" stroke="none"/>
+      <ellipse cx="37" cy="8.5" rx="5" ry="5.5" fill="#0a1524" stroke="none"/>
+    </g>
+    <g class="eb-spark">
+      <path d="M14 -20 L 3 -2 L 12 -1 L 2 20 L 24 -3 L 14 -4 Z" fill="var(--accent)" stroke="none"/>
+      <path d="M-2 -14 l-7 -5" stroke="var(--accent)" stroke-width="3.5" stroke-linecap="round"/>
+      <path d="M-2 14 l-7 5" stroke="var(--accent)" stroke-width="3.5" stroke-linecap="round"/>
+      <path d="M30 -15 l7 -5" stroke="var(--accent)" stroke-width="3.5" stroke-linecap="round"/>
+      <path d="M30 15 l7 5" stroke="var(--accent)" stroke-width="3.5" stroke-linecap="round"/>
     </g>
   </g>
 `
 
 const GLOBE = `
-  <g transform="translate(100 -118)">
+  <g transform="translate(152 -128)">
     <g class="eb-globe">
       <g fill="none" stroke="var(--accent)" stroke-linecap="round">
         <circle cx="0" cy="0" r="39" stroke-width="3.4" stroke-dasharray="26 20" opacity="0.85"/>
@@ -163,12 +122,9 @@ const GLOBE = `
 
 const SCENE_INNER = `
   <defs>
-    <linearGradient id="eb-suit" x1="0.25" y1="0" x2="0.7" y2="1"><stop offset="0%" stop-color="#ffffff"/><stop offset="52%" stop-color="#eaeef4"/><stop offset="100%" stop-color="#c2cad8"/></linearGradient>
-    <linearGradient id="eb-limb" x1="0.1" y1="0" x2="0.95" y2="1"><stop offset="0%" stop-color="#f8fafc"/><stop offset="55%" stop-color="#e0e5ee"/><stop offset="100%" stop-color="#bcc4d3"/></linearGradient>
-    <radialGradient id="eb-helmet" cx="34%" cy="26%" r="82%"><stop offset="0%" stop-color="#ffffff"/><stop offset="55%" stop-color="#edf0f5"/><stop offset="100%" stop-color="#c6cdd9"/></radialGradient>
-    <radialGradient id="eb-visor" cx="40%" cy="30%" r="88%"><stop offset="0%" stop-color="#2b4f7b"/><stop offset="42%" stop-color="#132c4b"/><stop offset="100%" stop-color="#050f1d"/></radialGradient>
-    <linearGradient id="eb-metal" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#f2f4f7"/><stop offset="50%" stop-color="#d3d8e0"/><stop offset="100%" stop-color="#aab2c0"/></linearGradient>
-    <linearGradient id="eb-pack" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#cdd3df"/><stop offset="100%" stop-color="#8f98ab"/></linearGradient>
+    <linearGradient id="eb-conn" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#2a4e79"/><stop offset="100%" stop-color="#0d2845"/></linearGradient>
+    <linearGradient id="eb-steel" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#fbfcfd"/><stop offset="48%" stop-color="#dfe4ea"/><stop offset="100%" stop-color="#b3bcc9"/></linearGradient>
+    <linearGradient id="eb-brass" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#f4dca0"/><stop offset="55%" stop-color="#d9ad5b"/><stop offset="100%" stop-color="#a97d2f"/></linearGradient>
     <radialGradient id="eb-globe" cx="36%" cy="30%" r="80%"><stop offset="0%" stop-color="#4a90cc"/><stop offset="45%" stop-color="#2166a1"/><stop offset="100%" stop-color="#123a63"/></radialGradient>
     <filter id="eb-blend" x="-30%" y="-30%" width="160%" height="160%"><feGaussianBlur stdDeviation="9"/></filter>
     <filter id="eb-lift" x="-45%" y="-45%" width="190%" height="190%"><feDropShadow dx="0" dy="9" stdDeviation="11" flood-color="#0a1f3a" flood-opacity="0.22"/></filter>
@@ -181,20 +137,25 @@ const SCENE_INNER = `
     <path d="${RING[3]}" fill="${RING_FILL[3]}"/>
   </g>
   <g>${STARS}</g>
-  ${ASTRONAUT}
+  ${CABLE}
   ${GLOBE}
 `
 
 const SCENE_CSS = `
-  .eb-scene .eb-astro { transform-box: fill-box; transform-origin: center; animation: eb-float 12s ease-in-out infinite; }
   .eb-scene .eb-globe { transform-box: fill-box; transform-origin: center; animation: eb-adrift 15s ease-in-out infinite; }
+  .eb-scene .eb-conn-male, .eb-scene .eb-conn-female, .eb-scene .eb-spark { transform-box: fill-box; transform-origin: center; }
+  .eb-scene .eb-conn-male { animation: eb-pull-l 4.5s ease-in-out infinite; }
+  .eb-scene .eb-conn-female { animation: eb-pull-r 4.5s ease-in-out infinite; }
+  .eb-scene .eb-spark { animation: eb-spark-pulse 4.5s ease-in-out infinite; }
   .eb-scene .eb-tw { animation: eb-twk 5s ease-in-out infinite; }
   .eb-scene .eb-tw.b { animation-delay: 2s; }
-  @keyframes eb-float { 0%, 100% { transform: translateY(0) rotate(0deg); } 50% { transform: translateY(-7px) rotate(0.6deg); } }
   @keyframes eb-adrift { 0%, 100% { transform: translate(0, 0) rotate(0deg); } 50% { transform: translate(10px, -9px) rotate(4deg); } }
+  @keyframes eb-pull-l { 0%, 100% { transform: translateX(-9px); } 50% { transform: translateX(-19px); } }
+  @keyframes eb-pull-r { 0%, 100% { transform: translateX(9px); } 50% { transform: translateX(19px); } }
+  @keyframes eb-spark-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.35; } }
   @keyframes eb-twk { 0%, 100% { opacity: 0.25; } 50% { opacity: 0.9; } }
   @media (prefers-reduced-motion: reduce) {
-    .eb-scene .eb-astro, .eb-scene .eb-globe, .eb-scene .eb-tw { animation: none; }
+    .eb-scene .eb-globe, .eb-scene .eb-tw, .eb-scene .eb-conn-male, .eb-scene .eb-conn-female, .eb-scene .eb-spark { animation: none; }
   }
 `
 
