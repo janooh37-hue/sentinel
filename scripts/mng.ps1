@@ -242,9 +242,36 @@ function Invoke-Build {
     Write-Host '  Build complete.' -ForegroundColor Green
 }
 
+function Invoke-Migrate {
+    # Apply any pending Alembic migrations so a deploy that ships a new migration
+    # can't leave the live DB behind the code (a mismatch that manifests as
+    # "no such column" 500s once the new code queries the not-yet-added column).
+    # Additive migrations are safe to run while the old code is still serving.
+    Write-Host '  Applying DB migrations (alembic upgrade head) ...' -ForegroundColor Cyan
+    $venvPy = Join-Path $Root 'venv\Scripts\python.exe'
+    if (-not (Test-Path $venvPy)) { throw "venv python not found at $venvPy" }
+    Push-Location $Root
+    try {
+        # alembic logs to stderr; under $ErrorActionPreference='Stop' PS 5.1 would
+        # promote those lines to a terminating error (same gotcha as Invoke-Build).
+        $prevEAP = $ErrorActionPreference
+        $ErrorActionPreference = 'Continue'
+        try {
+            & $venvPy -m alembic upgrade head 2>&1 | ForEach-Object { Write-Host "    $_" }
+        } finally {
+            $ErrorActionPreference = $prevEAP
+        }
+        if ($LASTEXITCODE -ne 0) { throw "alembic upgrade head failed (exit $LASTEXITCODE) - DB not migrated; aborting before restart" }
+    } finally {
+        Pop-Location
+    }
+    Write-Host '  Migrations applied.' -ForegroundColor Green
+}
+
 function Invoke-Deploy {
     Assert-Admin 'deploy'
     Invoke-Build
+    Invoke-Migrate
     Write-Host "  Restarting $Service to load backend changes ..." -ForegroundColor Cyan
     Restart-Service -Name $Service -Force
     Wait-Healthy
@@ -270,6 +297,7 @@ function Invoke-Update {
     }
     Write-Host ("  Updated {0} -> {1}. Deploying ..." -f $before.Substring(0, 7), $after.Substring(0, 7)) -ForegroundColor Cyan
     Invoke-Build
+    Invoke-Migrate
     Restart-Service -Name $Service -Force
     Wait-Healthy
     Show-Status
