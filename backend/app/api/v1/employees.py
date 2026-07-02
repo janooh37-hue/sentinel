@@ -11,6 +11,7 @@ router lives at ``/violations`` for the two ID-scoped violation routes
 
 from __future__ import annotations
 
+import logging
 from datetime import UTC, date, datetime
 from pathlib import Path
 from typing import Annotated
@@ -127,7 +128,9 @@ def get_employee(
     _user: Annotated[User, Depends(require_capability("employees.view"))],
 ) -> EmployeeRead:
     row = employee_service.get_employee(db, employee_id)
-    return EmployeeRead.model_validate(row).model_copy(update=_photo_fields(db, row.id))
+    return EmployeeRead.model_validate(row).model_copy(
+        update={**_photo_fields(db, row.id), **_passport_scan_field(row.id)}
+    )
 
 
 @router.patch("/{employee_id}", response_model=EmployeeRead)
@@ -138,7 +141,9 @@ def update_employee(
     _user: Annotated[User, Depends(require_capability("employees.edit"))],
 ) -> EmployeeRead:
     row = employee_service.update_employee(db, employee_id, payload)
-    return EmployeeRead.model_validate(row).model_copy(update=_photo_fields(db, row.id))
+    return EmployeeRead.model_validate(row).model_copy(
+        update={**_photo_fields(db, row.id), **_passport_scan_field(row.id)}
+    )
 
 
 # --- Employee detail (aggregate for the Employee Detail page) ----------------
@@ -258,7 +263,18 @@ async def upload_to_vault(
 ) -> VaultEntry:
     employee_service.get_employee(db, employee_id)
     data = await upload.read()
-    return vault_service.save_upload(employee_id, kind, upload.filename or "upload", data)
+    entry = vault_service.save_upload(employee_id, kind, upload.filename or "upload", data)
+    if kind == "passport":
+        # Best-effort: fill passport_no from a validated MRZ. Never fail the
+        # upload if OCR is unavailable or the scan is unreadable.
+        try:
+            result = passport_ocr_service.extract_passport_for_employee(db, employee_id)
+            emp = db.get(Employee, employee_id)
+            if result is not None and emp is not None:
+                passport_ocr_service.apply_passport_extraction(db, emp, result)
+        except Exception:
+            log.warning("passport auto-extract failed for %s", employee_id, exc_info=True)
+    return entry
 
 
 @router.delete(
