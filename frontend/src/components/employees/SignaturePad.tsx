@@ -18,7 +18,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import { SignatureDrawPanel } from '@/components/signature/SignatureDrawPanel'
-import { api, ApiError } from '@/lib/api'
+import { api, apiErrorMessage } from '@/lib/api'
 
 export function SignaturePad({
   employeeId,
@@ -52,7 +52,7 @@ export function SignaturePad({
       void qc.invalidateQueries({ queryKey: ['employee-signature', employeeId] })
       onSaved?.()
     } catch (err) {
-      toast.error(err instanceof ApiError ? err.message : String(err))
+      toast.error(apiErrorMessage(err))
     } finally {
       setBusy(false)
     }
@@ -64,7 +64,7 @@ export function SignaturePad({
       toast.success(t('empSig.removed'))
       void qc.invalidateQueries({ queryKey: ['employee-signature', employeeId] })
     } catch (err) {
-      toast.error(err instanceof ApiError ? err.message : String(err))
+      toast.error(apiErrorMessage(err))
     }
   }
 

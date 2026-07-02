@@ -67,21 +67,19 @@ class Settings(BaseSettings):
     # All GSSG_WHATSAPP_* env vars. Disabled by default so the "Send" button is
     # hidden until an operator provisions the Infobip key + base URL + sender.
     whatsapp_enabled: bool = False
-    whatsapp_token: str = ""               # Infobip API key (secret)
-    whatsapp_api_base: str = ""            # Infobip base URL, e.g. https://xxxxx.api.infobip.com
-    whatsapp_sender: str = ""              # registered WhatsApp sender number (intl format)
-    whatsapp_country_code: str = "971"     # default CC for normalizing contact
-    # Legacy (Meta) — unused by the Infobip client; kept so old env/config is ignored cleanly.
-    whatsapp_phone_number_id: str = ""
+    whatsapp_token: str = ""  # Infobip API key (secret)
+    whatsapp_api_base: str = ""  # Infobip base URL, e.g. https://xxxxx.api.infobip.com
+    whatsapp_sender: str = ""  # registered WhatsApp sender number (intl format)
+    whatsapp_country_code: str = "971"  # default CC for normalizing contact
 
     # --- SMS via on-site Android SIM gateway (SMS Gate, local mode) -----------
     # All GSSG_SMS_* env vars. Disabled by default so the "Send SMS" button is
     # hidden until an operator provisions the gateway URL + credentials.
     sms_enabled: bool = False
-    sms_gateway_url: str = ""        # e.g. http://192.168.1.50:8080 (scheme optional)
-    sms_username: str = ""           # SMS Gate local-server Basic auth user
-    sms_password: str = ""           # SMS Gate local-server Basic auth password
-    sms_country_code: str = "971"    # default CC for normalizing contact
+    sms_gateway_url: str = ""  # e.g. http://192.168.1.50:8080 (scheme optional)
+    sms_username: str = ""  # SMS Gate local-server Basic auth user
+    sms_password: str = ""  # SMS Gate local-server Basic auth password
+    sms_country_code: str = "971"  # default CC for normalizing contact
 
     @property
     def db_path(self) -> Path:

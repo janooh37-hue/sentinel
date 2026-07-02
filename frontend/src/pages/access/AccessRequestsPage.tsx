@@ -40,7 +40,7 @@ import {
   X,
 } from 'lucide-react'
 
-import { api, ApiError, type AdminUserRead, type AuditEntryRead } from '@/lib/api'
+import { api, ApiError, type AdminUserRead, type AuditEntryRead, apiErrorMessage } from '@/lib/api'
 import { useAuth } from '@/lib/authContext'
 import { PermissionRequestsTab } from '@/components/access/PermissionRequestsTab'
 import { UserPermissionsSheet } from '@/components/access/UserPermissionsSheet'
@@ -810,7 +810,7 @@ export function AccessRequestsPage(): React.JSX.Element {
     void qc.invalidateQueries({ queryKey: ['auth-audit'] })
   }
   function onError(e: unknown): void {
-    toast.error(e instanceof ApiError ? e.message : String(e))
+    toast.error(apiErrorMessage(e))
   }
 
   const approveMut = useMutation({

@@ -17,7 +17,7 @@ import { formatDistanceToNow, parseISO, type Locale } from 'date-fns'
 import { ar as arLocale } from 'date-fns/locale'
 import { Check, ChevronRight, Inbox, X } from 'lucide-react'
 
-import { api, ApiError, type BookRead } from '@/lib/api'
+import { api, ApiError, type BookRead, apiErrorMessage } from '@/lib/api'
 import { useCapabilities } from '@/lib/useCapabilities'
 import { BookDetailDrawer } from '@/components/books/BookDetailDrawer'
 import { EmptyState } from '@/components/ui/empty-state'
@@ -169,7 +169,7 @@ export function BooksAwaitingWidget(): React.JSX.Element | null {
       invalidateBooks()
       toast.success(t('books.approval.rejected'))
     },
-    onError: (err) => toast.error(err instanceof ApiError ? err.message : String(err)),
+    onError: (err) => toast.error(apiErrorMessage(err)),
     onSettled: () => setDecidingId(null),
   })
 
@@ -185,7 +185,7 @@ export function BooksAwaitingWidget(): React.JSX.Element | null {
       if (err instanceof ApiError && err.code === 'NO_SIGNATURE') {
         toast.error(t('books.approval.noSignatureHint'))
       } else {
-        toast.error(err instanceof ApiError ? err.message : String(err))
+        toast.error(apiErrorMessage(err))
       }
     },
     onSettled: () => setDecidingId(null),

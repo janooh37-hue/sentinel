@@ -698,6 +698,13 @@ export class ApiError extends Error {
   }
 }
 
+/** Human-readable message for any thrown value — the ApiError message when it is
+ * one, else the stringified error. Replaces the `x instanceof ApiError ?
+ * x.message : String(x)` idiom that was copy-pasted across the app. */
+export function apiErrorMessage(err: unknown): string {
+  return err instanceof ApiError ? err.message : String(err)
+}
+
 const BASE = '/api/v1'
 
 async function unwrap<T>(res: Response): Promise<T> {

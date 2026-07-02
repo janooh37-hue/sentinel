@@ -9,7 +9,6 @@ Both are wired into ``main.py`` under ``/api/v1``.
 
 from __future__ import annotations
 
-import base64
 from datetime import date, datetime
 from typing import Annotated, Literal
 
@@ -27,6 +26,7 @@ from fastapi import (
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 
+from app.api._responses import maybe_base64
 from app.api.deps import get_current_user, require_capability
 from app.core import form_policy
 from app.db.models import Book, BookVersion, User
@@ -59,9 +59,7 @@ def _signed_source_of(v: BookVersion) -> Literal["in_app", "scan"] | None:
     if not v.signed_pdf_path:
         return None
     return (
-        "scan"
-        if v.signed_pdf_path.replace("\\", "/").startswith("book_attachments/")
-        else "in_app"
+        "scan" if v.signed_pdf_path.replace("\\", "/").startswith("book_attachments/") else "in_app"
     )
 
 
@@ -281,9 +279,9 @@ def get_version_fields(
     revise/edit write-path: the caller fetches these fields in order to submit
     a revised generation, which is a managed write operation.
     """
-    row = book_service.get_book(db, book_id)              # 404s if book missing
+    row = book_service.get_book(db, book_id)  # 404s if book missing
     version = db.get(BookVersion, version_id)
-    if version is None or version.book_id != row.id:      # existence + ownership
+    if version is None or version.book_id != row.id:  # existence + ownership
         raise HTTPException(status_code=404, detail="version not found")
     return {"fields": version.fields or {}}
 
@@ -562,12 +560,8 @@ def get_book_attachment(
     if abs_path is None:
         raise HTTPException(status_code=404, detail="attachment file missing")
     name = paths[index].rsplit("/", 1)[-1]
-    if encoding == "base64":
-        return Response(
-            content=base64.b64encode(abs_path.read_bytes()),
-            media_type="text/plain",
-            headers={"X-Content-Type-Options": "nosniff"},
-        )
+    if (b64 := maybe_base64(abs_path.read_bytes(), encoding)) is not None:
+        return b64
     return FileResponse(abs_path, filename=name, media_type="application/octet-stream")
 
 
@@ -594,18 +588,10 @@ def get_imported_document(
     if abs_path is None:
         raise HTTPException(status_code=404, detail="imported document not available")
     if format == "pdf":
-        if encoding == "base64":
-            return Response(
-                content=base64.b64encode(abs_path.read_bytes()),
-                media_type="text/plain",
-                headers={"X-Content-Type-Options": "nosniff"},
-            )
-        return FileResponse(
-            abs_path, filename=abs_path.name, media_type="application/pdf"
-        )
-    return FileResponse(
-        abs_path, filename=abs_path.name, media_type="application/octet-stream"
-    )
+        if (b64 := maybe_base64(abs_path.read_bytes(), encoding)) is not None:
+            return b64
+        return FileResponse(abs_path, filename=abs_path.name, media_type="application/pdf")
+    return FileResponse(abs_path, filename=abs_path.name, media_type="application/octet-stream")
 
 
 __all__ = ["categories_router", "router"]

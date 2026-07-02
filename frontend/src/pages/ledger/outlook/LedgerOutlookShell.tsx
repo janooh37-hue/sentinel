@@ -332,11 +332,19 @@ export function LedgerOutlookShell({ onNavigate }: LedgerOutlookShellProps = {})
     (page: 'employees' | 'application', id?: string) => onNavigate?.(page, id),
     [onNavigate],
   )
-  const handleContextEmail = useCallback(() => {
-    // Phase-7 follow-on: pre-seed employee as a 👤 reference once
-    // LedgerEmailCompose exposes an `initialRef` prop.
-    openCompose({ mode: 'new' })
-  }, [openCompose])
+  const handleContextEmail = useCallback(
+    (employeeId: string) => {
+      // Pre-seed the employee as a 👤 reference on a fresh compose via the
+      // existing `prefill.references` channel (employee refs are id-in-all-slots).
+      openCompose({
+        mode: 'new',
+        prefill: {
+          references: [{ kind: 'employee', id: employeeId, label: employeeId, token: employeeId }],
+        },
+      })
+    },
+    [openCompose],
+  )
 
   // Rules dialog — opened from FolderRail ⚙️ (Task 6, gated settings.edit).
   const handleOpenRules = useCallback(() => {

@@ -14,7 +14,6 @@ Endpoints:
 
 from __future__ import annotations
 
-import base64
 import io
 import mimetypes
 import re
@@ -30,6 +29,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.api._responses import maybe_base64
 from app.api.deps import require_capability
 from app.api.errors import AppError
 from app.config import get_settings
@@ -831,12 +831,8 @@ def download_attachment_by_index(
         raise HTTPException(status_code=404, detail="attachment file missing")
     name = paths[index].rsplit("/", 1)[-1]
 
-    if encoding == "base64":
-        return Response(
-            content=base64.b64encode(abs_path.read_bytes()),
-            media_type="text/plain",
-            headers={"X-Content-Type-Options": "nosniff"},
-        )
+    if (b64 := maybe_base64(abs_path.read_bytes(), encoding)) is not None:
+        return b64
 
     guessed = mimetypes.guess_type(name)[0] or "application/octet-stream"
     if guessed.startswith("image/"):

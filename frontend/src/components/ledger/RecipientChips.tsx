@@ -16,7 +16,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 
-import { api, ApiError } from '@/lib/api'
+import { api, apiErrorMessage } from '@/lib/api'
 import type { LedgerAddress, LedgerEntryRead } from '@/lib/api'
 
 const CONTACTS_KEY = ['ledger-contacts'] as const
@@ -58,7 +58,7 @@ export function RecipientChips({
         next.delete(body.address.toLowerCase())
         return next
       })
-      toast.error(err instanceof ApiError ? err.message : String(err))
+      toast.error(apiErrorMessage(err))
     },
   })
 

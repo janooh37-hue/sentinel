@@ -27,7 +27,7 @@ import type { EmployeeFormOutput } from '@/components/employees/schema'
 import { EmptyState } from '@/components/ui/empty-state'
 import { Input } from '@/components/ui/input'
 import { SkeletonRow } from '@/components/ui/skeleton'
-import { ApiError, api } from '@/lib/api'
+import { ApiError, api, apiErrorMessage } from '@/lib/api'
 import type { EmployeeCreate, EmployeeListItem, EmployeeStatus } from '@/lib/api'
 import type { ExtractionResponse } from '@/lib/extraction'
 import { pickEmployeeName } from '@/lib/employeeName'
@@ -157,7 +157,7 @@ export function EmployeesPage(): React.JSX.Element {
     },
     onError: (err) => {
       setCreateError(humanError(err))
-      toast.error(err instanceof ApiError ? err.message : String(err))
+      toast.error(apiErrorMessage(err))
     },
   })
 
@@ -191,7 +191,7 @@ export function EmployeesPage(): React.JSX.Element {
               {t('employees.title')}
             </h2>
             <div className="mt-1 text-[0.86em] text-muted-foreground">
-              {t('employees.pageMeta', { total, active: activeCount })}
+              {t('employees.pageMeta', { count: total, active: activeCount })}
             </div>
           </div>
           <button

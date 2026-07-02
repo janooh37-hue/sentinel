@@ -11,8 +11,6 @@ router lives at ``/violations`` for the two ID-scoped violation routes
 
 from __future__ import annotations
 
-import base64
-import logging
 from datetime import UTC, date, datetime
 from pathlib import Path
 from typing import Annotated
@@ -23,6 +21,7 @@ from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.api._responses import maybe_base64
 from app.api.deps import require_capability
 from app.api.errors import NotFoundError, ValidationFailedError
 from app.config import get_settings
@@ -128,9 +127,7 @@ def get_employee(
     _user: Annotated[User, Depends(require_capability("employees.view"))],
 ) -> EmployeeRead:
     row = employee_service.get_employee(db, employee_id)
-    return EmployeeRead.model_validate(row).model_copy(
-        update={**_photo_fields(db, row.id), **_passport_scan_field(row.id)}
-    )
+    return EmployeeRead.model_validate(row).model_copy(update=_photo_fields(db, row.id))
 
 
 @router.patch("/{employee_id}", response_model=EmployeeRead)
@@ -141,9 +138,7 @@ def update_employee(
     _user: Annotated[User, Depends(require_capability("employees.edit"))],
 ) -> EmployeeRead:
     row = employee_service.update_employee(db, employee_id, payload)
-    return EmployeeRead.model_validate(row).model_copy(
-        update={**_photo_fields(db, row.id), **_passport_scan_field(row.id)}
-    )
+    return EmployeeRead.model_validate(row).model_copy(update=_photo_fields(db, row.id))
 
 
 # --- Employee detail (aggregate for the Employee Detail page) ----------------
@@ -263,18 +258,7 @@ async def upload_to_vault(
 ) -> VaultEntry:
     employee_service.get_employee(db, employee_id)
     data = await upload.read()
-    entry = vault_service.save_upload(employee_id, kind, upload.filename or "upload", data)
-    if kind == "passport":
-        # Best-effort: fill passport_no from a validated MRZ. Never fail the
-        # upload if OCR is unavailable or the scan is unreadable.
-        try:
-            result = passport_ocr_service.extract_passport_for_employee(db, employee_id)
-            emp = db.get(Employee, employee_id)
-            if result is not None and emp is not None:
-                passport_ocr_service.apply_passport_extraction(db, emp, result)
-        except Exception:
-            log.warning("passport auto-extract failed for %s", employee_id, exc_info=True)
-    return entry
+    return vault_service.save_upload(employee_id, kind, upload.filename or "upload", data)
 
 
 @router.delete(
@@ -323,15 +307,10 @@ def vault_download(
 ) -> FileResponse | Response:
     employee_service.get_employee(db, employee_id)
     path = vault_service.resolve_file(employee_id, kind, filename)
-    if encoding == "base64":
-        # Base64 text/plain so Internet Download Manager / the browser's PDF
-        # handler never intercept the bytes — pdf.js decodes them. Mirrors
-        # ledger.py's attachment route.
-        return Response(
-            content=base64.b64encode(path.read_bytes()),
-            media_type="text/plain",
-            headers={"X-Content-Type-Options": "nosniff"},
-        )
+    # Base64 text/plain so Internet Download Manager / the browser's PDF handler
+    # never intercept the bytes — pdf.js decodes them.
+    if (b64 := maybe_base64(path.read_bytes(), encoding)) is not None:
+        return b64
     return FileResponse(str(path), filename=path.name)
 
 
@@ -392,15 +371,10 @@ def get_employee_signature(
         )
     updated = datetime.fromtimestamp(path.stat().st_mtime, tz=UTC).isoformat()
     data = path.read_bytes()
-    if encoding == "base64":
-        return Response(
-            content=base64.b64encode(data),
-            media_type="text/plain",
-            headers={
-                "X-Content-Type-Options": "nosniff",
-                "X-Signature-Updated": updated,
-            },
-        )
+    if (
+        b64 := maybe_base64(data, encoding, extra_headers={"X-Signature-Updated": updated})
+    ) is not None:
+        return b64
     return Response(
         content=data,
         media_type="image/png",

@@ -24,7 +24,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 
-import { api, ApiError } from '@/lib/api'
+import { api, apiErrorMessage } from '@/lib/api'
 import type { EditorTemplateListItem, EditorTemplateRead } from '@/lib/api'
 import { Button } from '@/components/ui/button'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
@@ -121,7 +121,7 @@ function SaveTemplateDialog({ open, onOpenChange, getContent }: SaveTemplateDial
       onOpenChange(false)
     },
     onError: (err) => {
-      const msg = err instanceof ApiError ? err.message : String(err)
+      const msg = apiErrorMessage(err)
       setError(msg)
     },
   })
@@ -218,7 +218,7 @@ function LoadTemplateDialog({ open, onOpenChange, onLoad }: LoadTemplateDialogPr
       setRenameValue('')
     },
     onError: (err) => {
-      toast.error(err instanceof ApiError ? err.message : String(err))
+      toast.error(apiErrorMessage(err))
     },
   })
 
@@ -228,7 +228,7 @@ function LoadTemplateDialog({ open, onOpenChange, onLoad }: LoadTemplateDialogPr
       onLoad(tpl.html, mode)
       onOpenChange(false)
     } catch (err) {
-      toast.error(err instanceof ApiError ? err.message : String(err))
+      toast.error(apiErrorMessage(err))
     }
   }
 

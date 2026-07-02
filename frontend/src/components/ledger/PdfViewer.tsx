@@ -12,14 +12,9 @@ import { AlertCircle, Loader2 } from 'lucide-react'
 import * as pdfjsLib from 'pdfjs-dist'
 import pdfWorkerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url'
 
-pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorkerUrl
+import { base64ToBytes } from '@/lib/pdf'
 
-function base64ToBytes(b64: string): Uint8Array {
-  const bin = atob(b64)
-  const out = new Uint8Array(bin.length)
-  for (let i = 0; i < bin.length; i += 1) out[i] = bin.charCodeAt(i)
-  return out
-}
+pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorkerUrl
 
 export default function PdfViewer({
   base64Url,

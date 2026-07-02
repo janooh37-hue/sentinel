@@ -11,7 +11,7 @@ import { useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 
-import { api, ApiError } from '@/lib/api'
+import { api, apiErrorMessage } from '@/lib/api'
 import type { ReturnedFormOut } from '@/lib/api'
 
 export interface OtherMatch {
@@ -60,7 +60,7 @@ export function useAddScan(currentBookId: number | null): {
       }
     } catch (err) {
       toast.dismiss(reading)
-      toast.error(err instanceof ApiError ? err.message : String(err))
+      toast.error(apiErrorMessage(err))
     } finally {
       setBusy(false)
     }
@@ -71,7 +71,7 @@ export function useAddScan(currentBookId: number | null): {
     try {
       await attach(otherMatch.bookId, otherMatch.file, otherMatch.ref)
     } catch (err) {
-      toast.error(err instanceof ApiError ? err.message : String(err))
+      toast.error(apiErrorMessage(err))
     } finally {
       setOtherMatch(null)
     }
@@ -91,7 +91,7 @@ export function useAddScan(currentBookId: number | null): {
       await qc.invalidateQueries({ queryKey: ['books'] })
       toast.success(t('books.pane.signedCopyFiled', { ref }))
     } catch (err) {
-      toast.error(err instanceof ApiError ? err.message : String(err))
+      toast.error(apiErrorMessage(err))
     } finally {
       setBusy(false)
     }
@@ -105,7 +105,7 @@ export function useAddScan(currentBookId: number | null): {
     try {
       await attach(currentBookId, file, ref)
     } catch (err) {
-      toast.error(err instanceof ApiError ? err.message : String(err))
+      toast.error(apiErrorMessage(err))
     } finally {
       setBusy(false)
     }

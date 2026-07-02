@@ -17,7 +17,7 @@ import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { Loader2, FileSignature } from 'lucide-react'
 
-import { api, ApiError } from '@/lib/api'
+import { api, apiErrorMessage } from '@/lib/api'
 import { RichEditor } from '@/components/ui/rich-editor'
 
 interface SignatureFormValues {
@@ -51,7 +51,7 @@ export function SignatureSection(): React.JSX.Element {
       void qc.invalidateQueries({ queryKey: ['email-signature'] })
     },
     onError: (err) =>
-      toast.error(err instanceof ApiError ? err.message : String(err)),
+      toast.error(apiErrorMessage(err)),
   })
 
   function onSubmit(values: SignatureFormValues): void {
