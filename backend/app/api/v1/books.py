@@ -165,10 +165,16 @@ def list_awaiting(
     Declared before ``/{book_id}`` so the literal ``awaiting`` segment isn't
     swallowed by the int path param."""
     rows = book_service.list_awaiting(db, user_id=user.id)
+    # Batch-resolve submitter names once instead of 2 db.get per row (N+1).
+    name_by_id = book_service.resolve_names_by_ids(
+        db, {r.submitted_by_user_id for r in rows if r.submitted_by_user_id is not None}
+    )
     out: list[BookRead] = []
     for r in rows:
         item = BookRead.model_validate(r)
-        item.submitted_by_name = book_service.submitter_name(db, r)
+        item.submitted_by_name = (
+            name_by_id.get(r.submitted_by_user_id) if r.submitted_by_user_id is not None else None
+        )
         item.your_step_kind = book_service.your_step_kind(r, user.id)
         out.append(_enrich_path_fields(item, r))
     return out
