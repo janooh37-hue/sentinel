@@ -1,5 +1,6 @@
 """Services catalog: companions are hidden from the gallery list but remain
 internally accessible (they still auto-generate with their primary)."""
+
 from __future__ import annotations
 
 from app.core.constants import COMPANION_TEMPLATE_IDS, TEMPLATE_FILES
@@ -33,6 +34,19 @@ def test_arabic_names_have_no_form_prefix():
 def test_acknowledgment_arabic_name_is_material_receipt():
     names = {m.id: m.name_ar for m in template_service.list_templates().items}
     assert names["Acknowledgment Form"] == "استلام المواد"
+
+
+def test_per_employee_forms_are_personnel_category():
+    """Leave Permit and Administrative Leave forms are per-employee (their DOCX
+    templates require {{ employee_id }} / {{ employee_name_ar }}, and
+    document_service gates the admin_leaves_this_month count on an employee).
+    They must be category 'personnel' so ApplicationPage shows the employee
+    picker and threads employee_id through — an 'admin' category silently drops
+    the picker and blanks every employee token. Regression guard.
+    """
+    cats = {m.id: m.category for m in template_service.list_templates().items}
+    assert cats["Leave Permit Form"] == "personnel"
+    assert cats["Administrative Leave Form"] == "personnel"
 
 
 def test_admin_types_labels_have_no_form_prefix():

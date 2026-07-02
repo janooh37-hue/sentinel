@@ -634,7 +634,7 @@
     ]
   },
   "Leave Permit Form": {
-    "category": "admin",
+    "category": "personnel",
     "name_en": "Leave Permit Form",
     "name_ar": "تصريح خروج",
     "form_number": "301-004",
@@ -670,7 +670,7 @@
     ]
   },
   "Administrative Leave Form": {
-    "category": "admin",
+    "category": "personnel",
     "name_en": "Administrative Leave Form",
     "name_ar": "طلب إجازة إدارية",
     "form_number": "301-005",
