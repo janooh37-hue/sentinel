@@ -65,7 +65,7 @@ describe('attachmentsWithSeed', () => {
   })
   it('seeds onto an empty base when there is no draft', () => {
     const out = attachmentsWithSeed(null, slots, { slotKey: SICK_ONLY_SLOT_KEY, staged: { token: 'm', filename: 'c', size: 1 } })
-    expect(out.slots[SICK_ONLY_SLOT_KEY]?.token).toBe('m')
+    expect(out.slots[SICK_ONLY_SLOT_KEY]).toEqual({ kind: 'staged', token: 'm', filename: 'c', size: 1 })
   })
   it('does not seed when the slot is absent', () => {
     const out = attachmentsWithSeed(null, [slot('other')], { slotKey: SICK_ONLY_SLOT_KEY, staged: { token: 'm', filename: 'c', size: 1 } })
