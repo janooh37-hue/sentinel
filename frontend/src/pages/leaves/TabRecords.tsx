@@ -11,14 +11,13 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { useSearchParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { CalendarDays, X } from 'lucide-react'
-import { toast } from 'sonner'
 
-import { api, apiErrorMessage } from '@/lib/api'
+import { api } from '@/lib/api'
 import type { LeaveListItem, LeaveRead, LeaveStatus } from '@/lib/api'
 import { splitBilingual } from '@/lib/bilingualValue'
 import { cn } from '@/lib/utils'
@@ -28,6 +27,7 @@ import { FilterSheet } from '@/components/ui/filter-sheet'
 import { Input } from '@/components/ui/input'
 import { SkeletonRow } from '@/components/ui/skeleton'
 import { actionsFor, canonStatus, displayState, lifecycleGroup } from './lifecycle'
+import { useLeaveDecisionActions } from './useLeaveDecisionActions'
 import { NationalServiceDialog } from './NationalServiceDialog'
 import { NsControls } from './NsControls'
 import { ReturnFormDialog } from './ReturnFormDialog'
@@ -306,7 +306,6 @@ function LeaveDetailDrawer({
   onMutated: () => void
 }): React.JSX.Element {
   const { t, i18n } = useTranslation()
-  const qc = useQueryClient()
   const [notes, setNotes] = useState('')
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [returnOpen, setReturnOpen] = useState(false)
@@ -328,29 +327,11 @@ function LeaveDetailDrawer({
 
   const leave: LeaveRead | undefined = detailQuery.data
 
-  const updateMutation = useMutation({
-    mutationFn: ({ status, n }: { status: LeaveStatus; n: string }) =>
-      api.updateLeave(leaveId, { status, notes: n || undefined }),
-    onSuccess: (_data, { status }) => {
-      void qc.invalidateQueries({ queryKey: ['leave', leaveId] })
-      void qc.invalidateQueries({ queryKey: ['leaves-list'] })
-      if (status === 'Approved') toast.success(t('leaves.toast.approved'))
-      else if (status === 'Rejected') toast.success(t('leaves.toast.rejected'))
-      else if (status === 'Cancelled') toast.success(t('leaves.toast.cancelled'))
-      else toast.success(t('common.savedToast'))
-      onMutated()
-    },
-    onError: (err) => toast.error(apiErrorMessage(err)),
-  })
-
-  const deleteMutation = useMutation({
-    mutationFn: () => api.deleteLeave(leaveId),
-    onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: ['leaves-list'] })
-      toast.success(t('leaves.toast.deleted'))
-      onClose()
-    },
-    onError: (err) => toast.error(apiErrorMessage(err)),
+  const { updateMutation, deleteMutation } = useLeaveDecisionActions({
+    leaveId,
+    employeeId: leave?.employee_id ?? '',
+    onMutated,
+    onDeleted: onClose,
   })
 
   // Lifecycle-driven actions (derived from the loaded leave detail).

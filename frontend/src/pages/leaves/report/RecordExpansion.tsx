@@ -10,18 +10,18 @@
  * except delete.
  */
 import { useEffect, useId, useRef, useState } from 'react'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
-import { toast } from 'sonner'
 
-import { api, apiErrorMessage } from '@/lib/api'
-import type { LeaveListItem, LeaveStatus } from '@/lib/api'
+import { api } from '@/lib/api'
+import type { LeaveListItem } from '@/lib/api'
 import { Button } from '@/components/ui/button'
 
 import { SendSmsButton } from '@/components/sms/SendSmsButton'
 import { SendWhatsAppButton } from '@/components/whatsapp/SendWhatsAppButton'
 
 import { actionsFor, canonStatus, displayState, lifecycleGroup } from '../lifecycle'
+import { useLeaveDecisionActions } from '../useLeaveDecisionActions'
 import { NsControls } from '../NsControls'
 import { ReturnFormDialog } from '../ReturnFormDialog'
 import { StatusBadge } from '../StatusBadge'
@@ -52,7 +52,6 @@ export function RecordExpansion({
   onRequestClose,
 }: RecordExpansionProps): React.JSX.Element {
   const { t, i18n } = useTranslation()
-  const qc = useQueryClient()
   const notesId = useId()
   const [notes, setNotes] = useState('')
   const [confirmDelete, setConfirmDelete] = useState(false)
@@ -105,30 +104,10 @@ export function RecordExpansion({
   const hasRequestActions =
     acts.includes('approve') || acts.includes('reject') || acts.includes('cancel')
 
-  const updateMutation = useMutation({
-    mutationFn: ({ status, n }: { status: LeaveStatus; n: string }) =>
-      api.updateLeave(row.id, { status, notes: n || undefined }),
-    onSuccess: (_data, { status }) => {
-      void qc.invalidateQueries({ queryKey: ['leaves-list'] })
-      void qc.invalidateQueries({ queryKey: ['leave-balance', row.employee_id] })
-      if (status === 'Approved') toast.success(t('leaves.toast.approved'))
-      else if (status === 'Rejected') toast.success(t('leaves.toast.rejected'))
-      else if (status === 'Cancelled') toast.success(t('leaves.toast.cancelled'))
-      else toast.success(t('common.savedToast'))
-      onMutated()
-    },
-    onError: (err) => toast.error(apiErrorMessage(err)),
-  })
-
-  const deleteMutation = useMutation({
-    mutationFn: () => api.deleteLeave(row.id),
-    onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: ['leaves-list'] })
-      void qc.invalidateQueries({ queryKey: ['leave-balance', row.employee_id] })
-      toast.success(t('leaves.toast.deleted'))
-      onMutated()
-    },
-    onError: (err) => toast.error(apiErrorMessage(err)),
+  const { updateMutation, deleteMutation } = useLeaveDecisionActions({
+    leaveId: row.id,
+    employeeId: row.employee_id,
+    onMutated,
   })
 
   const awaitingCert =
