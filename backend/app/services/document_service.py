@@ -28,7 +28,7 @@ import shutil
 import uuid
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
-from datetime import UTC, date, datetime, timedelta
+from datetime import date, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -358,6 +358,33 @@ def _purge_superseded_drafts(
     for doc in db.execute(stmt).scalars().all():
         _unlink_document_files(doc, data_dir)
         db.delete(doc)
+
+
+def _find_duplicate_leave(db: Session, leave_row: Leave) -> Leave | None:
+    """Return an existing non-deleted Leave with the same natural key
+    (employee, type, exact start/end) as ``leave_row``, or ``None``.
+
+    No time window: a leave re-generated any time later must reuse the existing
+    row rather than spawn a duplicate. The retired WF-03 guard only looked back
+    2 minutes, so real ~5-minute-apart retries slipped through (audit 2026-07-02).
+    ``leave_row`` is the freshly built, not-yet-persisted row from
+    ``_make_leave_row`` (its ``id`` is still ``None``), so we match purely on fields.
+    """
+    return (
+        db.execute(
+            select(Leave)
+            .where(
+                Leave.employee_id == leave_row.employee_id,
+                Leave.leave_type == leave_row.leave_type,
+                Leave.start_date == leave_row.start_date,
+                Leave.end_date == leave_row.end_date,
+                Leave.deleted_at.is_(None),
+            )
+            .order_by(Leave.id.desc())
+        )
+        .scalars()
+        .first()
+    )
 
 
 def _make_leave_row(
@@ -1470,30 +1497,9 @@ def generate_document(
         leave_row = _make_leave_row(employee_id, template_id, fields, docx_path, ts)
         # Idempotency guard (WF-03): a client retry / double-submit / runaway
         # loop must not spam exact-duplicate Leave rows (the documented
-        # 2026-03-26 incident inserted 300 identical sick rows). Skip the insert
-        # when a non-deleted row with the same (employee, type, start, end) was
-        # created within the last 2 minutes — conservative enough not to block a
-        # legitimately distinct leave (which differs in dates or is filed later).
-        # Leave.created_at defaults to naive-UTC (models._utcnow); compute the
-        # cutoff on the same clock so the window is correct on machines whose
-        # local time != UTC (this dev box is UTC+4).
-        _dup_cutoff = datetime.now(UTC).replace(tzinfo=None) - timedelta(minutes=2)
-        existing_leave = (
-            db.execute(
-                select(Leave)
-                .where(
-                    Leave.employee_id == employee_id,
-                    Leave.leave_type == leave_row.leave_type,
-                    Leave.start_date == leave_row.start_date,
-                    Leave.end_date == leave_row.end_date,
-                    Leave.deleted_at.is_(None),
-                    Leave.created_at >= _dup_cutoff,
-                )
-                .order_by(Leave.id.desc())
-            )
-            .scalars()
-            .first()
-        )
+        # 2026-03-26 incident inserted 300 identical sick rows). Reuse any
+        # non-deleted row with the same natural key instead of inserting again.
+        existing_leave = _find_duplicate_leave(db, leave_row)
         if existing_leave is not None:
             log.info(
                 "leave-row dedup: reusing leave %d for employee %s (%s %s→%s)",
