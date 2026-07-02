@@ -21,6 +21,7 @@ Approved (old facts) so an unmigrated DB can't 500.
 
 from __future__ import annotations
 
+import re
 from datetime import date
 from typing import Literal
 
@@ -38,9 +39,22 @@ _RECORD_TYPES = frozenset(
 ENDING_SOON_DAYS = 3  # heads-up window before a returnable leave's end date
 
 
+_ARABIC = re.compile(r"[؀-ۿ]")
+
+
 def _english_part(value: str) -> str:
-    """Collapse v3 bilingual labels ('Pending - انتظار') to the English half."""
-    return value.partition(" - ")[0].strip()
+    """Collapse bilingual labels to the English half.
+
+    Handles both the ``' - '`` delimiter form (``'Pending - انتظار'``) and the
+    dash-less form where an Arabic run simply follows the English half
+    (``'Duty Resumption مباشرة عمل'``) — the latter otherwise leaks the Arabic
+    into ``classify_group`` and misclassifies e.g. a Duty Resumption as a request.
+    """
+    head = value.partition(" - ")[0]
+    match = _ARABIC.search(head)
+    if match:
+        head = head[: match.start()]
+    return head.strip()
 
 
 def classify_group(leave_type: str) -> LifecycleGroup:
