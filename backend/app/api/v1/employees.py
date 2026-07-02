@@ -12,6 +12,7 @@ router lives at ``/violations`` for the two ID-scoped violation routes
 from __future__ import annotations
 
 import base64
+import logging
 from datetime import UTC, date, datetime
 from pathlib import Path
 from typing import Annotated
@@ -27,7 +28,7 @@ from app.api.errors import NotFoundError, ValidationFailedError
 from app.config import get_settings
 from app.core import signature as signature_core
 from app.core.vault_manager import Vault
-from app.db.models import User, VaultFile
+from app.db.models import Employee, User, VaultFile
 from app.db.session import get_db
 from app.schemas import employee_detail as detail_schemas
 from app.schemas.employee import (
@@ -50,6 +51,8 @@ from app.services import (
     violation_service,
 )
 from app.services.employee_service import LIST_DEFAULT_LIMIT, LIST_MAX_LIMIT
+
+log = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/employees", tags=["employees"])
 violations_router = APIRouter(prefix="/violations", tags=["violations"])
@@ -260,7 +263,18 @@ async def upload_to_vault(
 ) -> VaultEntry:
     employee_service.get_employee(db, employee_id)
     data = await upload.read()
-    return vault_service.save_upload(employee_id, kind, upload.filename or "upload", data)
+    entry = vault_service.save_upload(employee_id, kind, upload.filename or "upload", data)
+    if kind == "passport":
+        # Best-effort: fill passport_no from a validated MRZ. Never fail the
+        # upload if OCR is unavailable or the scan is unreadable.
+        try:
+            result = passport_ocr_service.extract_passport_for_employee(db, employee_id)
+            emp = db.get(Employee, employee_id)
+            if result is not None and emp is not None:
+                passport_ocr_service.apply_passport_extraction(db, emp, result)
+        except Exception:
+            log.warning("passport auto-extract failed for %s", employee_id, exc_info=True)
+    return entry
 
 
 @router.delete(
