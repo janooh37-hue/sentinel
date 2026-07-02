@@ -36,13 +36,11 @@ def send(
     user: Annotated[User, Depends(require_capability("employees.notify"))],
 ) -> SmsSendResponse:
     try:
-        row = sms_service.send_for_event(
-            db, payload.event_type, payload.record_id, sent_by=user.id
-        )
+        row = sms_service.send_for_event(db, payload.event_type, payload.record_id, sent_by=user.id)
     except sms_service.SmsDisabledError as e:
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e)) from e
     except sms_service.RecordNotFoundError as e:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e)) from e
     return SmsSendResponse(status=row.status, message_id=row.provider_msg_id, error=row.error)
 
 

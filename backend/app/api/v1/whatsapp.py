@@ -40,9 +40,9 @@ def send(
             db, payload.event_type, payload.record_id, sent_by=user.id
         )
     except whatsapp_service.WhatsAppDisabledError as e:
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e)) from e
     except whatsapp_service.RecordNotFoundError as e:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e)) from e
     return WhatsAppSendResponse(status=row.status, message_id=row.provider_msg_id, error=row.error)
 
 
