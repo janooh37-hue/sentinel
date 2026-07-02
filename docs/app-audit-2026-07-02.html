@@ -1,0 +1,506 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>GSSG Manager — Agentic App Audit · 2026-07-02</title>
+<style>
+  :root{
+    --bg:#0e1117; --panel:#161b22; --panel2:#1c2330; --line:#2b3444;
+    --ink:#e6edf3; --mut:#9aa7b6; --dim:#6b7787;
+    --accent:#4c8dff; --accent2:#7c5cff;
+    --hi:#ff5c6c; --med:#ffb020; --low:#3fb950; --info:#39a0ff;
+    --live:#7c5cff; --code:#2f81f7; --db:#d29922;
+    --card:#141a23;
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{margin:0;background:linear-gradient(180deg,#0b0e14,#0e1117 240px);color:var(--ink);
+    font:15px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;}
+  a{color:var(--accent)}
+  .wrap{max-width:1080px;margin:0 auto;padding:0 20px 100px}
+  header.hero{padding:52px 0 26px;border-bottom:1px solid var(--line);margin-bottom:8px}
+  .kicker{letter-spacing:.16em;text-transform:uppercase;color:var(--accent);font-size:12px;font-weight:700}
+  h1{font-size:34px;line-height:1.15;margin:.35em 0 .25em;font-weight:800;letter-spacing:-.02em}
+  .sub{color:var(--mut);max-width:780px;font-size:15.5px}
+  .meta{display:flex;flex-wrap:wrap;gap:10px;margin-top:18px;color:var(--dim);font-size:13px}
+  .meta span{background:var(--panel);border:1px solid var(--line);border-radius:999px;padding:4px 12px}
+  .stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin:26px 0 10px}
+  .stat{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px 16px}
+  .stat b{font-size:26px;font-weight:800;display:block;letter-spacing:-.01em}
+  .stat small{color:var(--mut);font-size:12.5px}
+  .stat.hi b{color:var(--hi)} .stat.med b{color:var(--med)} .stat.low b{color:var(--low)}
+  h2.section{font-size:21px;margin:44px 0 6px;padding-top:12px;font-weight:800;letter-spacing:-.01em}
+  h2.section .em{font-size:20px;margin-right:8px}
+  .section-desc{color:var(--mut);margin:0 0 16px;font-size:14px}
+  .toolbar{position:sticky;top:0;z-index:20;background:rgba(14,17,23,.86);backdrop-filter:blur(9px);
+    border:1px solid var(--line);border-radius:12px;padding:10px 12px;margin:24px 0 8px;
+    display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+  .toolbar b{font-size:12px;color:var(--dim);text-transform:uppercase;letter-spacing:.1em;margin-right:2px}
+  .chip{cursor:pointer;user-select:none;border:1px solid var(--line);background:var(--panel);
+    color:var(--mut);border-radius:999px;padding:5px 12px;font-size:12.5px;font-weight:600;transition:.15s}
+  .chip:hover{border-color:var(--accent)}
+  .chip.on{background:var(--accent);border-color:var(--accent);color:#fff}
+  .chip.on.sev-hi{background:var(--hi);border-color:var(--hi)}
+  .chip.on.sev-med{background:var(--med);border-color:var(--med);color:#1a1200}
+  .chip.on.sev-low{background:var(--low);border-color:var(--low);color:#04210f}
+  .card{background:var(--card);border:1px solid var(--line);border-left-width:4px;border-radius:12px;
+    padding:16px 18px;margin:12px 0;transition:.15s}
+  .card.hi{border-left-color:var(--hi)} .card.med{border-left-color:var(--med)}
+  .card.low{border-left-color:var(--low)}
+  .card h3{margin:0 0 6px;font-size:16.5px;font-weight:700;display:flex;gap:9px;align-items:flex-start}
+  .card h3 .id{color:var(--dim);font-weight:700;font-variant-numeric:tabular-nums;flex:none}
+  .badges{display:flex;flex-wrap:wrap;gap:6px;margin:2px 0 10px}
+  .b{font-size:11px;font-weight:700;padding:2px 9px;border-radius:6px;letter-spacing:.02em;border:1px solid transparent}
+  .b.sev-hi{background:rgba(255,92,108,.14);color:#ff97a2;border-color:rgba(255,92,108,.35)}
+  .b.sev-med{background:rgba(255,176,32,.14);color:#ffce7a;border-color:rgba(255,176,32,.32)}
+  .b.sev-low{background:rgba(63,185,80,.14);color:#82e29a;border-color:rgba(63,185,80,.32)}
+  .b.src-live{background:rgba(124,92,255,.15);color:#c3b2ff;border-color:rgba(124,92,255,.35)}
+  .b.src-code{background:rgba(47,129,247,.15);color:#a5cbff;border-color:rgba(47,129,247,.35)}
+  .b.src-db{background:rgba(210,153,34,.15);color:#f0cd7a;border-color:rgba(210,153,34,.35)}
+  .b.cat{background:var(--panel2);color:var(--mut);border-color:var(--line)}
+  .row{margin:9px 0}
+  .row .lab{display:inline-block;min-width:78px;color:var(--dim);font-size:12px;text-transform:uppercase;
+    letter-spacing:.08em;font-weight:700;vertical-align:top}
+  .row .val{display:inline}
+  .plan .lab{color:var(--low)}
+  code,.mono{font-family:"SF Mono",ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:12.5px}
+  code{background:var(--panel2);border:1px solid var(--line);border-radius:5px;padding:1px 6px;color:#d7e2f0}
+  .files{color:var(--dim);font-size:12.5px;margin-top:8px}
+  .files code{background:transparent;border:0;padding:0;color:#9db4d0}
+  ul.tight{margin:4px 0 0;padding-left:20px} ul.tight li{margin:3px 0}
+  .empty{display:none;color:var(--mut);text-align:center;padding:40px;border:1px dashed var(--line);border-radius:12px}
+  footer{margin-top:50px;padding-top:20px;border-top:1px solid var(--line);color:var(--dim);font-size:12.5px}
+  .callout{background:linear-gradient(180deg,rgba(76,141,255,.08),rgba(124,92,255,.05));
+    border:1px solid var(--line);border-radius:14px;padding:18px 20px;margin:22px 0}
+  .callout h4{margin:0 0 8px;font-size:15px}
+  .tag-legend{color:var(--dim);font-size:12px;margin-top:6px}
+  .count-note{color:var(--dim);font-size:12.5px;margin:2px 0 0}
+  details.q{margin:10px 0;border:1px solid var(--line);border-radius:10px;background:var(--panel);padding:2px 14px}
+  details.q summary{cursor:pointer;padding:10px 0;font-weight:600}
+  table.mini{border-collapse:collapse;width:100%;margin-top:8px;font-size:13px}
+  table.mini th,table.mini td{border:1px solid var(--line);padding:6px 10px;text-align:left}
+  table.mini th{background:var(--panel2);color:var(--mut);font-weight:600}
+  .pri{display:flex;gap:10px;align-items:baseline;margin:6px 0}
+  .pri .n{flex:none;width:26px;height:26px;border-radius:50%;background:var(--accent);color:#fff;
+    display:grid;place-items:center;font-weight:800;font-size:13px}
+</style>
+</head>
+<body>
+<div class="wrap">
+<header class="hero">
+  <div class="kicker">Agentic QA Audit · GSSG Manager v4.0.0a0</div>
+  <h1>Every page, every button — what's broken, dead, slow, or worth simplifying</h1>
+  <p class="sub">A driven browse of the live app at <code>https://gssg.lan</code> using Playwright (signed in as an admin),
+  cross-checked against the SQLite database and a full static review of the React frontend and FastAPI backend.
+  Each finding below carries an evidence trail and a concrete plan &amp; solution.</p>
+  <div class="meta">
+    <span>📅 2026-07-02</span>
+    <span>🖥️ 14 routes browsed live</span>
+    <span>🗄️ DB cross-checked (data/gssg.db)</span>
+    <span>🔬 Frontend + Backend static review</span>
+    <span>🔒 No destructive mutations; temp audit account removed after</span>
+  </div>
+  <div class="stats">
+    <div class="stat hi"><b id="c-hi">0</b><small>High severity</small></div>
+    <div class="stat med"><b id="c-med">0</b><small>Medium severity</small></div>
+    <div class="stat low"><b id="c-low">0</b><small>Low / polish</small></div>
+    <div class="stat"><b id="c-total">0</b><small>Total findings</small></div>
+  </div>
+</header>
+
+<div class="callout">
+  <h4>⭐ The headline: the leave register is majority-corrupt, and one whole page is dead</h4>
+  <div class="pri"><span class="n">1</span><div><b>398 of 724 active leave records are duplicates</b> (55%). A dedup guard exists but only suppresses duplicates created within a 2-minute window; 29 duplicate groups span longer than that and slipped through. This silently doubles employees' leave balances and inflates every figure on the Leaves report and Dashboard.</div></div>
+  <div class="pri"><span class="n">2</span><div><b>The Document Expiry page and the Dashboard "Expiring Soon" widget can never show anything</b> — <code>uae_id_expiry</code> and <code>passport_expiry</code> are NULL for all 300 employees. The feature looks live but has no data source feeding it.</div></div>
+  <div class="pri"><span class="n">3</span><div><b>Leave status/type are stored two incompatible ways</b> — 714/724 rows use bilingual <code>"Approved - موافق"</code> strings while newer code writes canonical <code>"Approved"</code>. This is the root cause of a mislabelled status pill on the employee page and forces <code>canonStatus()</code> shims everywhere.</div></div>
+</div>
+
+<div class="toolbar" id="toolbar">
+  <b>Severity</b>
+  <span class="chip on sev-hi" data-f="sev" data-v="hi">High</span>
+  <span class="chip on sev-med" data-f="sev" data-v="med">Medium</span>
+  <span class="chip on sev-low" data-f="sev" data-v="low">Low</span>
+  <span style="width:14px"></span>
+  <b>Source</b>
+  <span class="chip on" data-f="src" data-v="live">🟣 Live browse</span>
+  <span class="chip on" data-f="src" data-v="db">🟡 Database</span>
+  <span class="chip on" data-f="src" data-v="code">🔵 Code review</span>
+  <span style="flex:1"></span>
+  <span class="chip" id="resetBtn" style="border-color:var(--accent)">Reset</span>
+</div>
+<p class="count-note"><span id="shown">0</span> shown · use the chips to filter. Every card lists <em>Evidence</em>, <em>Impact</em>, and a <em>Plan</em>.</p>
+
+<!-- ============================ DATA INTEGRITY ============================ -->
+<h2 class="section"><span class="em">🧮</span>Data integrity &amp; correctness</h2>
+<p class="section-desc">Bugs the browser surfaced that pure code review would miss — the code paths look correct, but the live data proves otherwise.</p>
+
+<div class="card hi" data-sev="hi" data-src="db">
+  <h3><span class="id">D1</span> Duplicate leave records — 398 of 724 active rows (dedup guard too narrow)</h3>
+  <div class="badges"><span class="b sev-hi">High</span><span class="b src-db">Database</span><span class="b src-live">Live</span><span class="b cat">correctness</span></div>
+  <div class="row"><span class="lab">What</span><span class="val">Generating a leave form inserts a <code>Leave</code> row. Re-generating the same leave (double-submit, separate session, retry) inserts another. Employee G4481 has two identical "Sick Leave · Jul 1–3 · Approved" rows (IDs 751 &amp; 752) — both visible on the Dashboard's "On leave today" and "Returning in 7 days" lists, and the employee page shows "6d taken" for a single 3-day leave.</span></div>
+  <div class="row"><span class="lab">Evidence</span><span class="val">65 duplicate (employee, type, start, end) groups; <b>398 excess rows</b>. The 2026-03-26 incident left employee G4604 with <b>300 identical rows</b>. There <em>is</em> a WF-03 dedup guard, but it only matches rows created <code>&gt;= now-2min</code>; IDs 751/752 were created 5.7 min apart and slipped through. <b>29 duplicate groups span &gt;2 min</b> — structurally invisible to the guard.</span></div>
+  <div class="row"><span class="lab">Impact</span><span class="val">Leave balances double-count; the Leaves annual report (1210 sick days, 2900 total) and every Dashboard figure are inflated; approvals show phantom entries.</span></div>
+  <div class="row plan"><span class="lab">Plan</span><span class="val"><ul class="tight">
+    <li>Widen the guard: dedup on <code>(employee, type, overlapping date range)</code> regardless of creation time — a truly new leave differs in dates.</li>
+    <li>Add a DB uniqueness backstop: partial unique index on <code>(employee_id, leave_type, start_date, end_date) WHERE deleted_at IS NULL</code>.</li>
+    <li>One-time cleanup migration to soft-delete the 398 duplicates (keep lowest id per group), re-pointing any <code>Document.leave_id</code> references first.</li>
+  </ul></span></div>
+  <div class="files"><code>document_service.py:1469-1512</code> (guard) · <code>leave_service.py:250-283</code> · verified in <code>data/gssg.db</code></div>
+</div>
+
+<div class="card hi" data-sev="hi" data-src="db">
+  <h3><span class="id">D2</span> Document Expiry page &amp; "Expiring Soon" widget are functionally dead</h3>
+  <div class="badges"><span class="b sev-hi">High</span><span class="b src-db">Database</span><span class="b src-live">Live</span><span class="b cat">dead feature</span></div>
+  <div class="row"><span class="lab">What</span><span class="val">The <code>/expiry</code> page and the Dashboard widget filter on Emirates-ID / passport expiry dates that are never populated.</span></div>
+  <div class="row"><span class="lab">Evidence</span><span class="val"><code>uae_id_expiry</code>, <code>passport_expiry</code>, <code>passport_no</code> are NULL/empty for <b>all 300 employees</b> (only <code>uae_id_no</code> is filled, 299/300). Live: the page shows "No expiring documents match your filters" and "0" for every window; the widget always renders empty.</span></div>
+  <div class="row"><span class="lab">Impact</span><span class="val">A whole navigable feature and a dashboard slot that can never do anything — reads as "nothing expiring" when really "no data". A misplaced sense of safety for a compliance-critical field.</span></div>
+  <div class="row plan"><span class="lab">Plan</span><span class="val"><ul class="tight">
+    <li>Decide the data source: have the OCR/intake pipeline extract ID &amp; passport expiry into these columns (they're already extracted onto scans), or add them to the employee edit form + roster import.</li>
+    <li>Until a source exists, hide the Expiry route and widget behind a "has any expiry data" guard so the app doesn't advertise a dead surface.</li>
+    <li>Also fix the over-fetch (see P3) once data lands.</li>
+  </ul></span></div>
+  <div class="files"><code>expiry.py:20</code> · <code>ExpiringSoonWidget.tsx:85-91</code> · columns in <code>employees</code> table</div>
+</div>
+
+<div class="card hi" data-sev="hi" data-src="db">
+  <h3><span class="id">D3</span> Leave status &amp; type stored in two incompatible formats</h3>
+  <div class="badges"><span class="b sev-hi">High</span><span class="b src-db">Database</span><span class="b src-code">Code</span><span class="b cat">old data / correctness</span></div>
+  <div class="row"><span class="lab">What</span><span class="val">Older rows store bilingual concatenations — <code>leave_type = "Sick Leave - الإجازة المرضية"</code>, <code>status = "Generated - تم الإنشاء"</code> — while newer code writes canonical <code>"Sick Leave"</code> / <code>"Approved"</code>. Both coexist.</span></div>
+  <div class="row"><span class="lab">Evidence</span><span class="val">623/724 <code>leave_type</code> and 714/724 <code>status</code> values carry the <code>" - "</code> bilingual suffix. Distinct statuses include both <code>"Approved"</code> and <code>"Approved - موافق"</code>. Visible on the employee Leaves tab (mixed formats in one list).</span></div>
+  <div class="row"><span class="lab">Impact</span><span class="val">Every consumer must funnel through <code>canonStatus()</code>; where one forgets (the employee LeavesTab, see C3) the status pill falls back to a neutral colour and text renders untranslated. Analytics grouping is fragile.</span></div>
+  <div class="row plan"><span class="lab">Plan</span><span class="val"><ul class="tight">
+    <li>Normalize at rest: migration to rewrite <code>leave_type</code>/<code>status</code> to canonical codes; render the bilingual label at the UI layer from a lookup, not from stored text.</li>
+    <li>Enforce canonical values on write (enum/validation in <code>leave_lifecycle</code>).</li>
+  </ul></span></div>
+  <div class="files"><code>leave_lifecycle.py</code> (canonical_status) · <code>LeavesTab.tsx:15-20</code> · <code>leaves</code> table</div>
+</div>
+
+<div class="card med" data-sev="med" data-src="db">
+  <h3><span class="id">D4</span> 370 of 378 Book-register records are stranded drafts</h3>
+  <div class="badges"><span class="b sev-med">Medium</span><span class="b src-db">Database</span><span class="b src-live">Live</span><span class="b cat">data hygiene</span></div>
+  <div class="row"><span class="lab">What</span><span class="val">The Records register shows 378 entries, 370 of them in the "Drafts" bucket (<code>approval_state = 'none'</code>). Only 6 approved, 1 returned, 1 awaiting-copy.</span></div>
+  <div class="row"><span class="lab">Impact</span><span class="val">The register — meant as a ref-number log of real correspondence — is 98% noise. The "Drafts (370)" segment and the Dashboard <code>book_draft_count</code> make the backlog look like pending work when it's mostly abandoned auto-created drafts.</span></div>
+  <div class="row plan"><span class="lab">Plan</span><span class="val"><ul class="tight">
+    <li>Clarify lifecycle: is a document-generated book meant to stay a "draft" forever? If drafts are transient, auto-expire or archive them after N days.</li>
+    <li>Add a bulk archive/delete for drafts, and exclude abandoned drafts from the Dashboard count (or label it "unfinished drafts").</li>
+  </ul></span></div>
+  <div class="files"><code>books</code> table (<code>approval_state</code>) · Records page StatusSpine</div>
+</div>
+
+<!-- ============================ DEAD / INCOMPLETE UI ============================ -->
+<h2 class="section"><span class="em">🚧</span>Dead-ends, stubs &amp; not-useful UI</h2>
+<p class="section-desc">Buttons and surfaces that do nothing, do the wrong thing, or shouldn't be here anymore.</p>
+
+<div class="card med" data-sev="med" data-src="code">
+  <h3><span class="id">U1</span> "Email this person" opens a blank compose (Phase-7 stub)</h3>
+  <div class="badges"><span class="b sev-med">Medium</span><span class="b src-code">Code</span><span class="b cat">dead-end UI</span></div>
+  <div class="row"><span class="lab">What</span><span class="val"><code>ContextPersonCard</code> passes <code>emp.id</code> to <code>onEmail(employeeId)</code>, but the handler ignores it and opens an empty "new email" — identical to the generic compose button. The employee is never referenced.</span></div>
+  <div class="row plan"><span class="lab">Plan</span><span class="val">Wire the employee ref into compose prefill (add the missing <code>initialRef</code> prop), or hide/disable the action until it lands so it isn't a silent no-op.</span></div>
+  <div class="files"><code>LedgerOutlookShell.tsx:335-339</code> · <code>ContextPersonCard.tsx:206</code></div>
+</div>
+
+<div class="card med" data-sev="med" data-src="live">
+  <h3><span class="id">U2</span> "Migrate from v3" is a one-time tool still exposed on the live server</h3>
+  <div class="badges"><span class="b sev-med">Medium</span><span class="b src-live">Live</span><span class="b cat">risk / clutter</span></div>
+  <div class="row"><span class="lab">What</span><span class="val">Settings → System shows a "Migrate from v3" button. Migration to v4 is long done (300 employees, live data). Re-running it against a populated DB is at best a no-op and at worst destructive.</span></div>
+  <div class="row plan"><span class="lab">Plan</span><span class="val">Gate the button behind an "empty DB / not yet migrated" check, or remove it. Same for surfacing raw server file paths (<code>C:\Users\Admin\sentinel\...</code>) in the System panel — keep for diagnostics but consider that it's now cosmetic.</span></div>
+  <div class="files"><code>SettingsPage</code> System section · <code>migration_service.py</code></div>
+</div>
+
+<div class="card low" data-sev="low" data-src="live">
+  <h3><span class="id">U3</span> Employee-detail Leaves tab has no per-row actions (can't fix a bad leave there)</h3>
+  <div class="badges"><span class="b sev-low">Low</span><span class="b src-live">Live</span><span class="b cat">inconsistency</span></div>
+  <div class="row"><span class="lab">What</span><span class="val">On desktop, the employee's Leaves tab renders rows as static text — no delete/cancel. The mobile Leave drawer <em>does</em> have Cancel / Notify SMS / Delete. So the two duplicate leaves on G4481 can't be removed from the place you'd naturally look.</span></div>
+  <div class="row plan"><span class="lab">Plan</span><span class="val">Reuse the shared leave-action controls (see C1) on the employee Leaves tab so every leave surface offers the same actions.</span></div>
+  <div class="files"><code>employees/tabs/LeavesTab.tsx</code> vs <code>leaves/TabRecords.tsx</code> drawer</div>
+</div>
+
+<div class="card low" data-sev="low" data-src="code">
+  <h3><span class="id">U4</span> Unknown form-field types vanish silently</h3>
+  <div class="badges"><span class="b sev-low">Low</span><span class="b src-code">Code</span><span class="b cat">not-useful UI</span></div>
+  <div class="row"><span class="lab">What</span><span class="val"><code>TemplateForm</code> drops any field whose type it doesn't recognise, logging only a <code>console.warn</code>. A misconfigured template field disappears with no operator-visible signal.</span></div>
+  <div class="row plan"><span class="lab">Plan</span><span class="val">Render an inline "unsupported field" placeholder so the gap is visible, and surface it to whoever maintains templates.</span></div>
+  <div class="files"><code>TemplateForm.tsx:240</code></div>
+</div>
+
+<div class="card low" data-sev="low" data-src="code">
+  <h3><span class="id">U5</span> Unlinked 840-line login mockup route ships in the app</h3>
+  <div class="badges"><span class="b sev-low">Low</span><span class="b src-code">Code</span><span class="b cat">dead-end</span></div>
+  <div class="row"><span class="lab">What</span><span class="val"><code>/mockups/login</code> is routed but reachable only by typing the URL; nothing links to it. It's the sole consumer of <code>mountain-accent.tsx</code>.</span></div>
+  <div class="row plan"><span class="lab">Plan</span><span class="val">Confirm it's a throwaway and delete it (plus <code>mountain-accent</code>), or gate behind a dev-only flag so it's out of the production bundle.</span></div>
+  <div class="files"><code>App.tsx:155</code> · <code>MockupsLoginPage.tsx</code></div>
+</div>
+
+<!-- ============================ PERFORMANCE ============================ -->
+<h2 class="section"><span class="em">⚡</span>Performance &amp; efficiency</h2>
+<p class="section-desc">Wasted fetches, full-table scans, N+1 query fans, and unvirtualized DOM — all confirmed against real request volumes.</p>
+
+<div class="card hi" data-sev="hi" data-src="code">
+  <h3><span class="id">P1</span> Push notifier re-scans the whole leaves &amp; books tables every 60 s</h3>
+  <div class="badges"><span class="b sev-hi">High</span><span class="b src-code">Code</span><span class="b cat">performance</span></div>
+  <div class="row"><span class="lab">What</span><span class="val">The scheduler tick runs, per active user, <code>_leaves_needing_action</code> (pages all leaves 500 at a time, evaluates <code>needs_action</code> in Python) and <code>submitter_name</code> (a <code>db.get(User)</code> per book). A "compute once per tick" helper exists but the notify path doesn't use it.</span></div>
+  <div class="row"><span class="lab">Impact</span><span class="val">Org-wide full scans plus per-book point queries every minute, multiplied by active users — the single biggest steady-state load.</span></div>
+  <div class="row plan"><span class="lab">Plan</span><span class="val"><ul class="tight">
+    <li>Compute the org-wide "needs action" leave set once per tick (the precompute path already exists — route <code>actionable_items</code>/<code>_notify_user</code> through it).</li>
+    <li>Express <code>needs_action</code> as a SQL <code>WHERE</code> so the scan disappears.</li>
+    <li>Batch-resolve submitter names with one <code>IN</code> query (see P4).</li>
+  </ul></span></div>
+  <div class="files"><code>notification_service.py:140-165,96-108</code> · <code>scheduler_service.py:241-259</code> · <code>book_service.py:751</code></div>
+</div>
+
+<div class="card med" data-sev="med" data-src="code">
+  <h3><span class="id">P2</span> Leaves list is fetched twice on every viewport (one fetch always hidden)</h3>
+  <div class="badges"><span class="b sev-med">Medium</span><span class="b src-code">Code</span><span class="b src-live">Live</span><span class="b cat">performance</span></div>
+  <div class="row"><span class="lab">What</span><span class="val">The mobile card list (<code>limit:200</code>) and the desktop report (full paginated fetch to <code>total</code>) both mount and both fetch; panes are only CSS-hidden. Live: on mobile the header reads "200 / 724" while the desktop report also fetches all 724 in the background.</span></div>
+  <div class="row plan"><span class="lab">Plan</span><span class="val">Gate each <code>useQuery</code>'s <code>enabled</code> on a <code>matchMedia</code> breakpoint, or lazy-mount the hidden pane so only the visible one fetches.</span></div>
+  <div class="files"><code>TabRecords.tsx:662-666,696-698</code> · <code>useLeaveReport.ts:51-54</code></div>
+</div>
+
+<div class="card med" data-sev="med" data-src="code">
+  <h3><span class="id">P3</span> Full employee table loaded into memory per request (expiry, OCR match)</h3>
+  <div class="badges"><span class="b sev-med">Medium</span><span class="b src-code">Code</span><span class="b cat">performance</span></div>
+  <div class="row"><span class="lab">What</span><span class="val"><code>list(db.execute(select(Employee)).scalars())</code> loads the entire roster on every expiry render and every OCR match; the dashboard expiry widget then fetches 90-day data only to <code>.slice(0,5)</code>.</span></div>
+  <div class="row plan"><span class="lab">Plan</span><span class="val">Push the expiry filter into SQL; for OCR matching select only name/G-number columns (or cache the roster). Add a lightweight count/summary endpoint + server-side <code>limit</code> for the widget.</span></div>
+  <div class="files"><code>expiry.py:20</code> · <code>extractions.py:57</code> · <code>intake.py:83</code> · <code>ExpiringSoonWidget.tsx:85-91</code></div>
+</div>
+
+<div class="card med" data-sev="med" data-src="code">
+  <h3><span class="id">P4</span> N+1 user lookups across awaiting-books, scan-inbox &amp; book detail</h3>
+  <div class="badges"><span class="b sev-med">Medium</span><span class="b src-code">Code</span><span class="b cat">performance</span></div>
+  <div class="row"><span class="lab">What</span><span class="val">Several list/detail serializers do a <code>db.get(User)</code> / <code>db.get(Employee)</code> / <code>db.get(LedgerEntry)</code> per row or per version — e.g. <code>submitter_name</code>, <code>resolve_user_name_by_id</code>, scan-inbox <code>_to_item</code> (up to 2N queries).</span></div>
+  <div class="row plan"><span class="lab">Plan</span><span class="val">Collect the id set and resolve in one <code>select(...).where(X.id.in_(ids))</code>, mapping by id — apply to submitter names, book version/step authors, and scan-inbox references.</span></div>
+  <div class="files"><code>book_service.py:751,868,911,765</code> · <code>scan_inbox.py:28-38</code> · <code>books.py:211-234</code></div>
+</div>
+
+<div class="card med" data-sev="med" data-src="code">
+  <h3><span class="id">P5</span> Synchronous OCR/PDF on the request path (no job offload)</h3>
+  <div class="badges"><span class="b sev-med">Medium</span><span class="b src-code">Code</span><span class="b cat">performance</span></div>
+  <div class="row"><span class="lab">What</span><span class="val">Tesseract OCR + PDF text extraction run inline in the extraction/intake handlers behind only a size-2 semaphore, holding a threadpool worker for the whole OCR duration — even though the app already has a BackgroundTasks + <code>/jobs/{id}</code> polling pattern (used by doc generation).</span></div>
+  <div class="row plan"><span class="lab">Plan</span><span class="val">Route OCR through the existing background-job + status-poll pattern; return a job id immediately and poll for the extracted fields.</span></div>
+  <div class="files"><code>extractions.py:49-58</code> · <code>intake.py:70-84</code></div>
+</div>
+
+<div class="card med" data-sev="med" data-src="code">
+  <h3><span class="id">P6</span> Composer re-renders on every keystroke; large lists unvirtualized</h3>
+  <div class="badges"><span class="b sev-med">Medium</span><span class="b src-code">Code</span><span class="b src-live">Live</span><span class="b cat">performance</span></div>
+  <div class="row"><span class="lab">What</span><span class="val"><code>watch('to')</code>/<code>watch('cc')</code> in the ledger composer's render re-renders the whole editor (incl. RichEditor) on each To/Cc keystroke. Separately, the desktop Leaves register renders all ~724 rows and the Records list maps up to 500 complex rows with no windowing; <code>PdfViewer</code> eagerly renders every page at 2×DPR.</span></div>
+  <div class="row"><span class="lab">Evidence</span><span class="val">Live: the Leaves report table produced a DOM of ~13k accessibility nodes in one snapshot. <code>@tanstack/react-virtual</code> is already a dependency and used elsewhere.</span></div>
+  <div class="row plan"><span class="lab">Plan</span><span class="val">Use scoped <code>useWatch({control,name:['to','cc']})</code>; virtualize the Records list rows and the Leaves register; render PDF pages lazily via IntersectionObserver.</span></div>
+  <div class="files"><code>LedgerEmailCompose.tsx:945</code> · <code>RecordsList.tsx:47</code> · <code>PdfViewer.tsx:61-79</code> · Leaves register table</div>
+</div>
+
+<div class="card low" data-sev="low" data-src="code">
+  <h3><span class="id">P7</span> Capability checks re-query the DB on every gate; per-row <code>Intl</code> churn</h3>
+  <div class="badges"><span class="b sev-low">Low</span><span class="b src-code">Code</span><span class="b cat">performance</span></div>
+  <div class="row"><span class="lab">What</span><span class="val"><code>has_capability</code> runs two queries each call, and handlers gate more than once per request. On the frontend, Access Requests builds a fresh <code>Intl.RelativeTimeFormat</code> per row and re-filters the three user arrays every render.</span></div>
+  <div class="row plan"><span class="lab">Plan</span><span class="val">Memoize <code>effective_caps(user)</code> per request (cache on <code>request.state</code>); module-level <code>Map</code> of formatters by locale; wrap the pending/active/suspended arrays in one <code>useMemo</code>.</span></div>
+  <div class="files"><code>perm_service.py:55-84</code> · <code>AccessRequestsPage.tsx:87-102,804-806</code></div>
+</div>
+
+<div class="card low" data-sev="low" data-src="code">
+  <h3><span class="id">P8</span> Unbounded in-memory job registry; uncapped extraction upload</h3>
+  <div class="badges"><span class="b sev-low">Low</span><span class="b src-code">Code</span><span class="b cat">performance / robustness</span></div>
+  <div class="row"><span class="lab">What</span><span class="val">The <code>_jobs</code> dict grows one entry per <code>/documents/generate</code> and is never pruned (slow memory leak on a long-uptime service; state lost on restart). The extraction endpoint reads the whole upload with no size cap, unlike intake.</span></div>
+  <div class="row plan"><span class="lab">Plan</span><span class="val">TTL-sweep or LRU-bound the job registry; cap the extraction read at <code>MAX_UPLOAD_BYTES+1</code> and 422 on overflow, mirroring <code>intake.py:63-69</code>.</span></div>
+  <div class="files"><code>job_registry.py:23,55-60</code> · <code>extractions.py:48</code></div>
+</div>
+
+<!-- ============================ CODE CLEANUP ============================ -->
+<h2 class="section"><span class="em">🧹</span>Dead code &amp; duplication (simplify / delete)</h2>
+<p class="section-desc">Safe deletions and de-duplications that shrink the surface area. These don't change behaviour — they make the next change cheaper.</p>
+
+<div class="card med" data-sev="med" data-src="code">
+  <h3><span class="id">C1</span> Two full leave-detail surfaces duplicate all action logic (and have drifted)</h3>
+  <div class="badges"><span class="b sev-med">Medium</span><span class="b src-code">Code</span><span class="b cat">duplication</span></div>
+  <div class="row"><span class="lab">What</span><span class="val">The mobile <code>LeaveDetailDrawer</code> and desktop <code>RecordExpansion</code> hand-roll the same mutations, notes state, Approve/Reject/Cancel buttons, two-step delete, Return-form dialog, NS controls, and Approved-gated SMS. They've already diverged — the drawer invalidates only <code>['leaves-list']</code>; the expansion also invalidates <code>['leave-balance']</code>.</span></div>
+  <div class="row plan"><span class="lab">Plan</span><span class="val">Extract a <code>useLeaveDecisionActions(leave)</code> hook (mutations + derived acts + invalidations) plus a shared action-button/delete sub-component; keep only layout differences. This also unblocks U3.</span></div>
+  <div class="files"><code>TabRecords.tsx:299-578</code> · <code>report/RecordExpansion.tsx:48-320</code></div>
+</div>
+
+<div class="card med" data-sev="med" data-src="code">
+  <h3><span class="id">C2</span> Six unreachable files in <code>pages/ledger/</code></h3>
+  <div class="badges"><span class="b sev-med">Medium</span><span class="b src-code">Code</span><span class="b cat">dead code</span></div>
+  <div class="row"><span class="lab">What</span><span class="val"><code>LedgerEntryDrawer</code>, <code>LedgerEntryForm</code>, <code>CounterpartyPicker</code>, <code>LedgerTimeline</code>, <code>LedgerRow</code>, <code>LedgerFilterBar</code> are imported only by each other; <code>LedgerPage</code> renders only <code>LedgerOutlookShell</code>. A stale docstring claims the reading pane "still leans on them" — verified false.</span></div>
+  <div class="row plan"><span class="lab">Plan</span><span class="val">Delete the six files and correct the <code>LedgerPage.tsx</code> docstring. Keep <code>ledgerFilters.ts</code> (used by QuickFilterChips).</span></div>
+  <div class="files"><code>LedgerPage.tsx:9,34</code> · six files under <code>pages/ledger/</code></div>
+</div>
+
+<div class="card med" data-sev="med" data-src="code">
+  <h3><span class="id">C3</span> Employee LeavesTab bypasses <code>canonStatus()</code> → wrong pill + untranslated text</h3>
+  <div class="badges"><span class="b sev-med">Medium</span><span class="b src-code">Code</span><span class="b cat">old code / i18n</span></div>
+  <div class="row"><span class="lab">What</span><span class="val"><code>STATUS_CLS[l.status]</code> is keyed on canonical values, but stored statuses are the bilingual legacy strings from D3 — so it falls through to the neutral pill, and <code>leave_type</code>/<code>status</code> render raw without <code>t()</code>/<code>splitBilingual</code>.</span></div>
+  <div class="row plan"><span class="lab">Plan</span><span class="val">Route status through <code>canonStatus()</code> and translate like the other leave surfaces. (Fully resolved once D3 normalizes the data.)</span></div>
+  <div class="files"><code>employees/tabs/LeavesTab.tsx:15-20,64,72-78</code></div>
+</div>
+
+<div class="card med" data-sev="med" data-src="code">
+  <h3><span class="id">C4</span> One error-message idiom copy-pasted 58× across 34 files</h3>
+  <div class="badges"><span class="b sev-med">Medium</span><span class="b src-code">Code</span><span class="b cat">duplication</span></div>
+  <div class="row"><span class="lab">What</span><span class="val"><code>err instanceof ApiError ? err.message : String(err)</code> is inlined 58 times; there's no shared helper (<code>lib/utils.ts</code> only exports <code>cn</code>).</span></div>
+  <div class="row plan"><span class="lab">Plan</span><span class="val">Add <code>apiErrorMessage(err)</code> (or <code>toastApiError</code>) next to <code>ApiError</code> in <code>lib/api.ts</code> and replace the inline closures. Highest payoff-per-effort cleanup.</span></div>
+  <div class="files">34 files · e.g. <code>EmailSection.tsx:115-176</code>, <code>ViolationsTab.tsx:101-120</code></div>
+</div>
+
+<div class="card med" data-sev="med" data-src="code">
+  <h3><span class="id">C5</span> PDF-render logic triplicated (front) &amp; base64 download block duplicated 9× (back)</h3>
+  <div class="badges"><span class="b sev-med">Medium</span><span class="b src-code">Code</span><span class="b cat">duplication</span></div>
+  <div class="row"><span class="lab">What</span><span class="val">Front: three components each set <code>workerSrc</code>, decode base64, <code>getDocument</code>, render to DPR-scaled canvases; <code>base64ToBytes</code> defined 3×. Back: the identical <code>encoding=="base64"</code> → <code>Response(..., text/plain, nosniff)</code> IDM workaround is pasted into ~9 endpoints across six routers.</span></div>
+  <div class="row plan"><span class="lab">Plan</span><span class="val">Front: extract <code>lib/pdf.ts</code> (<code>renderPdfToCanvases</code> + base64 helpers). Back: extract <code>app/api/_responses.py::maybe_base64(...)</code> called from every download route.</span></div>
+  <div class="files"><code>PdfViewer / DocPdfCanvas / RecordPaperViewer</code> · <code>documents.py:428, ledger.py:834, books.py:565…</code></div>
+</div>
+
+<div class="card med" data-sev="med" data-src="code">
+  <h3><span class="id">C6</span> Book approval logic duplicated between page &amp; drawer</h3>
+  <div class="badges"><span class="b sev-med">Medium</span><span class="b src-code">Code</span><span class="b cat">duplication</span></div>
+  <div class="row"><span class="lab">What</span><span class="val"><code>BookRecordPage</code> and <code>BookDetailDrawer</code> both re-derive current steps / assignee / my-review, the seen-on-open effect, decide + sign mutations (incl. NO_SIGNATURE branch), revise handler, and the same 3-key invalidation. Comments literally say "Mirror BookDetailDrawer's derivation."</span></div>
+  <div class="row plan"><span class="lab">Plan</span><span class="val">Extract <code>useBookApprovalActions(book)</code> consumed by both.</span></div>
+  <div class="files"><code>BookRecordPage.tsx:297-368</code> · <code>BookDetailDrawer.tsx:242-328</code></div>
+</div>
+
+<div class="card low" data-sev="low" data-src="code">
+  <h3><span class="id">C7</span> Grab-bag of smaller duplications &amp; dead exports</h3>
+  <div class="badges"><span class="b sev-low">Low</span><span class="b src-code">Code</span><span class="b cat">duplication / dead code</span></div>
+  <div class="row"><span class="lab">What</span><span class="val">Collected low-risk cleanups verified during review.</span></div>
+  <div class="row"><span class="lab">Items</span><span class="val"><ul class="tight">
+    <li>Three searchable-combobox fields reimplemented, one with a "fragile" <code>setTimeout(…,200)</code> blur — extract one <code>&lt;SearchableCombobox&gt;</code>. <code>ManagerPickerField / RecipientPickerField / MultiRecipientPickerField</code></li>
+    <li><code>sms.py</code> and <code>whatsapp.py</code> routers near-identical; WhatsApp is slated for retirement — factor a shared channel router, retire WhatsApp once SMS is proven.</li>
+    <li>Draft-ownership 403 guard pasted 3× (<code>ledger.py:515-572</code>); document-access gate pasted 2× (<code>documents.py:304-370</code>) — extract helpers.</li>
+    <li>Duplicate <code>slugify</code> that "must stay in lockstep" (<code>formEmoji.ts:48</code> / <code>quickActions.ts:49</code>) — export one.</li>
+    <li>Near-duplicate Submitter vs Recipient CRUD dialogs; <code>OUTLINE_PILL</code>/<code>PRIMARY_PILL</code> class strings pasted across 5 files — use existing <code>button-variants.ts</code>.</li>
+    <li>Dead files: <code>KpiStrip.tsx</code>, <code>LeaveHistory.tsx</code> (zero importers). Dead stores/exports: <code>pushRecentRecipient</code>/<code>getRecentRecipients</code>, <code>mailboxQuerySource</code>.</li>
+    <li>Dead config <code>whatsapp_phone_number_id</code> (never read); deprecated request field <code>hand_sign</code> (accepted, never used).</li>
+  </ul></span></div>
+  <div class="files">See per-item paths above · full list in the review transcripts</div>
+</div>
+
+<!-- ============================ POLISH ============================ -->
+<h2 class="section"><span class="em">✨</span>UI polish &amp; correctness nits</h2>
+<p class="section-desc">Small, cheap fixes the live browse turned up — individually minor, collectively the difference between "rough" and "finished".</p>
+
+<div class="card low" data-sev="low" data-src="live">
+  <h3><span class="id">N1</span> Employee photo &amp; signature endpoints 404 as console errors</h3>
+  <div class="badges"><span class="b sev-low">Low</span><span class="b src-live">Live</span><span class="b cat">noise / efficiency</span></div>
+  <div class="row"><span class="lab">What</span><span class="val">Avatars request <code>/employees/{id}/photo</code> which 404s for the ~299 employees with no photo (4 red console errors just on the Ledger page); <code>/signatures/preview</code> 404s the same way when a user has no signature.</span></div>
+  <div class="row plan"><span class="lab">Plan</span><span class="val">Gate the request on <code>photo_url</code>/<code>has_signature</code> from the already-loaded record, use <code>&lt;img onError&gt;</code> fallback to initials, or return 204/default so the console stays clean and needless requests stop.</span></div>
+  <div class="files">avatar components · <code>employees.py</code> photo route · <code>signatures.py</code></div>
+</div>
+
+<div class="card low" data-sev="low" data-src="live">
+  <h3><span class="id">N2</span> Nested interactive elements on the Intake page</h3>
+  <div class="badges"><span class="b sev-low">Low</span><span class="b src-live">Live</span><span class="b cat">a11y / HTML validity</span></div>
+  <div class="row"><span class="lab">What</span><span class="val">The scan drop-zone is a <code>&lt;button "Scan"&gt;</code> that <em>contains</em> a <code>&lt;button "Choose File"&gt;</code> — nested buttons are invalid HTML and confuse screen readers / keyboard nav.</span></div>
+  <div class="row plan"><span class="lab">Plan</span><span class="val">Make the outer drop-zone a <code>&lt;div role="button"&gt;</code> (or a label wrapping a hidden file input), not a nested <code>&lt;button&gt;</code>.</span></div>
+  <div class="files"><code>IntakePage</code> drop zone</div>
+</div>
+
+<div class="card low" data-sev="low" data-src="live">
+  <h3><span class="id">N3</span> Copy &amp; label glitches</h3>
+  <div class="badges"><span class="b sev-low">Low</span><span class="b src-live">Live</span><span class="b cat">polish</span></div>
+  <div class="row"><span class="lab">Items</span><span class="val"><ul class="tight">
+    <li>Search result count reads "<b>1 employees</b>" — no singular pluralization.</li>
+    <li>Mobile leave drawer heading renders "<b>#703ID</b>" — the "#703" and "ID" label run together.</li>
+    <li>Services gallery header says "<b>16 templates</b>" but 18 tiles show (2 are nav tiles) — count excludes them without explanation.</li>
+    <li>Employee roster shows "<b>On leave</b>" while the detail hero shows "<b>Active</b>" for the same person — presence vs employment status use the same visual language.</li>
+    <li>Services form shows two "Preview" controls (a disabled tab + an active button) — collapse to one clear affordance.</li>
+  </ul></span></div>
+  <div class="row plan"><span class="lab">Plan</span><span class="val">Pluralize via i18n count rules; add a separator/spacing in the drawer title; label the tile count or include nav tiles; distinguish presence vs employment status (e.g. sub-label); keep a single Preview control.</span></div>
+</div>
+
+<div class="card low" data-sev="low" data-src="live">
+  <h3><span class="id">N4</span> Deprecated PWA meta tag &amp; stale login account cache</h3>
+  <div class="badges"><span class="b sev-low">Low</span><span class="b src-live">Live</span><span class="b cat">polish</span></div>
+  <div class="row"><span class="lab">What</span><span class="val">Console warns that <code>&lt;meta name="apple-mobile-web-app-capable"&gt;</code> is deprecated (add <code>mobile-web-app-capable</code>). Separately, the login account-picker still offers "Claude Debug", a user that no longer exists in the DB — the <code>localStorage</code> known-accounts list isn't pruned when an account is removed.</span></div>
+  <div class="row plan"><span class="lab">Plan</span><span class="val">Add the modern <code>mobile-web-app-capable</code> meta alongside the Apple one; drop known-account entries whose login returns "unknown account" (or reconcile against <code>/auth/me</code> on load).</span></div>
+  <div class="files"><code>index.html</code> meta · login account-picker localStorage</div>
+</div>
+
+<div class="card low" data-sev="low" data-src="code">
+  <h3><span class="id">N5</span> Backend hygiene nits</h3>
+  <div class="badges"><span class="b sev-low">Low</span><span class="b src-code">Code</span><span class="b cat">bad practice</span></div>
+  <div class="row"><span class="lab">Items</span><span class="val"><ul class="tight">
+    <li>Request-scoped DB session handed to a BackgroundTask (double-close, ordering-dependent) — open a fresh <code>SessionLocal()</code> in <code>_run_generation</code>. <code>documents.py:240</code></li>
+    <li><code>raise HTTPException(...)</code> without <code>from e</code> in <code>sms.py</code>/<code>whatsapp.py</code> — inconsistent with the rest of the codebase.</li>
+    <li>Mid-function imports in <code>intake.py:117,124</code> and <code>ledger.py:627</code> — hoist to module level.</li>
+    <li><code>AuditLog</code> is written from three services but read in exactly one place ("Phase 23" half-wiring) — either surface an audit view or stop writing rows nothing consumes.</li>
+  </ul></span></div>
+</div>
+
+<details class="q">
+  <summary>Method, scope &amp; what was verified <em>not</em> to be a problem</summary>
+  <p><b>How this was produced.</b> The app was driven live at <code>https://gssg.lan</code> with Playwright, signed in as an administrator, across 14 routes (Dashboard, Employees + detail, Services/Application + form, Records/Books, Leaves report + mobile drawer, Ledger, Settings, Expiry, Duty Locations, Intake, Scan Inbox, Access Requests), plus mobile viewport (nav drawer, bottom tabs, leave drawer) and the Arabic/RTL toggle (verified <code>dir=rtl</code>, <code>lang=ar</code>, translated titles). Findings were cross-checked directly against <code>data/gssg.db</code>, and a full static review of the frontend (~64k LOC, React 19 + Vite + TanStack Query) and backend (FastAPI + SQLAlchemy) was run in parallel.</p>
+  <p><b>Safety.</b> No destructive mutations were performed on the live data. A temporary admin account was created to log in through the real UI and was deleted afterward (the 7 real users are intact); a temporary audit session was minted and revoked.</p>
+  <p><b>Explicitly checked and clean:</b> no bare <code>except:</code> (all <code>except Exception</code> with logging); no mutable default args; models are well-indexed for common filters; every v1 endpoint maps to a real frontend client call (no dead endpoints); Arabic/RTL rendering works; login lockout/attempts logic present. The main risk areas are the <b>data layer</b> (D1–D4) and <b>steady-state notifier load</b> (P1), not security or crashes.</p>
+</details>
+
+<h2 class="section"><span class="em">🎯</span>Suggested order of attack</h2>
+<div class="callout">
+  <div class="pri"><span class="n">1</span><div><b>Stop the bleeding (D1):</b> widen the leave dedup guard + add the unique index, then run the cleanup migration. Highest correctness impact, and every downstream figure depends on it.</div></div>
+  <div class="pri"><span class="n">2</span><div><b>Normalize leave data (D3) &amp; fix the status pill (C3):</b> one migration + one enum, retires a class of i18n bugs.</div></div>
+  <div class="pri"><span class="n">3</span><div><b>Decide Expiry's fate (D2):</b> feed it from OCR or hide it — don't ship a dead compliance surface.</div></div>
+  <div class="pri"><span class="n">4</span><div><b>Cut steady-state load (P1–P4):</b> precompute the notifier tick + batch the N+1 user lookups — the biggest always-on cost.</div></div>
+  <div class="pri"><span class="n">5</span><div><b>Cheap wins:</b> C4 (one error helper kills 58 duplicates), C2 (delete 6 dead files), and the N1–N4 polish pass.</div></div>
+</div>
+
+<div class="empty" id="empty">No findings match the current filters.</div>
+
+<footer>
+  GSSG Manager agentic audit · generated 2026-07-02 · live Playwright browse + DB cross-check + static review.
+  Findings are advisory; validate each against current <code>main</code> before acting. Line numbers reflect the working tree at audit time.
+</footer>
+</div>
+
+<script>
+(function(){
+  var cards = Array.prototype.slice.call(document.querySelectorAll('.card'));
+  var active = {sev:{hi:true,med:true,low:true}, src:{live:true,db:true,code:true}};
+  var chips = Array.prototype.slice.call(document.querySelectorAll('.chip[data-f]'));
+
+  function apply(){
+    var shown=0;
+    cards.forEach(function(c){
+      var sev=c.getAttribute('data-sev'), src=c.getAttribute('data-src');
+      var vis = active.sev[sev] && active.src[src];
+      c.style.display = vis?'':'none';
+      if(vis) shown++;
+    });
+    document.getElementById('shown').textContent = shown;
+    document.getElementById('empty').style.display = shown? 'none':'block';
+    // hide empty section headers
+    document.querySelectorAll('h2.section').forEach(function(h){
+      var n=h.nextElementSibling, any=false, cur=h.nextElementSibling;
+      while(cur && !(cur.tagName==='H2')){
+        if(cur.classList && cur.classList.contains('card') && cur.style.display!=='none'){any=true;break;}
+        cur=cur.nextElementSibling;
+      }
+      h.style.opacity = any?'1':'.35';
+    });
+  }
+  chips.forEach(function(ch){
+    ch.addEventListener('click', function(){
+      var f=ch.getAttribute('data-f'), v=ch.getAttribute('data-v');
+      active[f][v] = !active[f][v];
+      ch.classList.toggle('on', active[f][v]);
+      apply();
+    });
+  });
+  document.getElementById('resetBtn').addEventListener('click', function(){
+    ['hi','med','low'].forEach(function(v){active.sev[v]=true;});
+    ['live','db','code'].forEach(function(v){active.src[v]=true;});
+    chips.forEach(function(ch){ch.classList.add('on');});
+    apply();
+  });
+
+  // counts
+  var hi=cards.filter(function(c){return c.getAttribute('data-sev')==='hi';}).length;
+  var med=cards.filter(function(c){return c.getAttribute('data-sev')==='med';}).length;
+  var low=cards.filter(function(c){return c.getAttribute('data-sev')==='low';}).length;
+  document.getElementById('c-hi').textContent=hi;
+  document.getElementById('c-med').textContent=med;
+  document.getElementById('c-low').textContent=low;
+  document.getElementById('c-total').textContent=cards.length;
+  apply();
+})();
+</script>
+</body>
+</html>
