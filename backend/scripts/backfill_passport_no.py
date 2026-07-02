@@ -23,8 +23,16 @@ from app.services import passport_ocr_service as svc
 
 
 def run_backfill(db: Session, *, apply: bool) -> dict[str, list[str]]:
-    report: dict[str, list[str]] = {"filled": [], "needs_review": [], "no_scan": []}
+    report: dict[str, list[str]] = {
+        "filled": [],
+        "needs_review": [],
+        "no_scan": [],
+        "already_filled": [],
+    }
     for emp in db.query(Employee).order_by(Employee.id).all():
+        if emp.passport_no:
+            report["already_filled"].append(emp.id)
+            continue
         result = svc.extract_passport_for_employee(db, emp.id)
         if result is None:
             report["no_scan"].append(emp.id)
@@ -34,7 +42,7 @@ def run_backfill(db: Session, *, apply: bool) -> dict[str, list[str]]:
             and result.number
             and result.confidence >= svc.MRZ_AUTOWRITE_CONFIDENCE
         ):
-            if apply and not emp.passport_no:
+            if apply:
                 svc.apply_passport_extraction(db, emp, result)
             report["filled"].append(emp.id)
         else:
@@ -60,6 +68,7 @@ def main() -> int:
 
     mode = "APPLIED" if args.apply else "DRY-RUN"
     print(f"\n=== Passport backfill ({mode}) ===")
+    print(f"  already filled (skipped): {len(report['already_filled'])}")
     print(f"  filled (auto-written MRZ): {len(report['filled'])}")
     print(f"  needs review (scan, no confident number): {len(report['needs_review'])}")
     print(f"  no scan on file: {len(report['no_scan'])}")
