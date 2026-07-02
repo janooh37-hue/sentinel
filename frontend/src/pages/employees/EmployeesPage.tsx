@@ -191,7 +191,7 @@ export function EmployeesPage(): React.JSX.Element {
               {t('employees.title')}
             </h2>
             <div className="mt-1 text-[0.86em] text-muted-foreground">
-              {t('employees.pageMeta', { total, active: activeCount })}
+              {t('employees.pageMeta', { count: total, active: activeCount })}
             </div>
           </div>
           <button

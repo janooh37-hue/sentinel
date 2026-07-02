@@ -185,7 +185,8 @@
     "title": "Employees",
     "eyebrow": "Operations",
     "newEmployee": "New employee",
-    "pageMeta": "{{total}} employees · {{active}} active",
+    "pageMeta_one": "{{count}} employee · {{active}} active",
+    "pageMeta_other": "{{count}} employees · {{active}} active",
     "chips": {
       "all": "All",
       "active": "Active",
