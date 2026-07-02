@@ -33,6 +33,10 @@ export function ProfileTab({ employee }: Props): React.JSX.Element {
     void qc.invalidateQueries({ queryKey: ['vault', employee.id] })
   }
 
+  const invalidateEmployee = (): void => {
+    void qc.invalidateQueries({ queryKey: ['employee-detail', employee.id] })
+  }
+
   const fields: { k: string; v: string | null | undefined }[] = [
     { k: 'employee.profile.idEn', v: employee.id },
     { k: 'employee.profile.nameEn', v: employee.name_en },
@@ -99,6 +103,7 @@ export function ProfileTab({ employee }: Props): React.JSX.Element {
                 source={employee.passport_no_source ?? null}
                 hasScan={employee.has_passport_scan}
                 canEdit={canEdit}
+                onSaved={invalidateEmployee}
               />
             </>
           )

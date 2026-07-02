@@ -283,6 +283,7 @@
       "label": "Passport No.",
       "readFromScan": "Read from scan",
       "suggested": "Suggested",
+      "notFound": "No passport number found in the scan.",
       "badge": {
         "verified": "Verified",
         "review": "Needs review",

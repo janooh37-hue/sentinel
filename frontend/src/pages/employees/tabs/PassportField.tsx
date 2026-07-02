@@ -34,6 +34,7 @@ export interface PassportFieldProps {
   source: string | null
   hasScan: boolean
   canEdit?: boolean
+  onSaved?: () => void
 }
 
 type BadgeKind = 'verified' | 'review' | 'missing'
@@ -55,6 +56,7 @@ export function PassportField({
   source,
   hasScan,
   canEdit = false,
+  onSaved,
 }: PassportFieldProps): React.JSX.Element {
   const { t } = useTranslation()
   const [value, setValue] = useState(passportNo ?? '')
@@ -81,6 +83,7 @@ export function PassportField({
       await api.updateEmployee(employeeId, { passport_no: trimmed || null })
       setValue(trimmed)
       toast.success(t('common.savedToast'))
+      onSaved?.()
     } catch (e) {
       toast.error(e instanceof ApiError ? e.message : String(e))
     }
@@ -142,27 +145,44 @@ export function PassportField({
           aria-label={t('employees.passport.suggested')}
           className="mt-3 flex flex-wrap items-center gap-2 rounded-lg border border-dashed border-border bg-muted/40 px-3 py-2 text-sm"
         >
-          <span className="text-muted-foreground">{t('employees.passport.suggested')}:</span>
-          <span className="font-mono font-semibold">{suggestion.number}</span>
-          <div className="ms-auto flex gap-2">
-            <button
-              type="button"
-              className="rounded bg-primary px-2.5 py-1 text-xs font-medium text-primary-foreground"
-              onClick={() => {
-                void save(suggestion.number ?? '')
-                setSuggestion(null)
-              }}
-            >
-              {t('common.confirm')}
-            </button>
-            <button
-              type="button"
-              className="rounded border border-input px-2.5 py-1 text-xs font-medium hover:bg-muted"
-              onClick={() => setSuggestion(null)}
-            >
-              {t('common.cancel')}
-            </button>
-          </div>
+          {suggestion.number ? (
+            <>
+              <span className="text-muted-foreground">{t('employees.passport.suggested')}:</span>
+              <span className="font-mono font-semibold">{suggestion.number}</span>
+              <div className="ms-auto flex gap-2">
+                <button
+                  type="button"
+                  className="rounded bg-primary px-2.5 py-1 text-xs font-medium text-primary-foreground"
+                  onClick={() => {
+                    void save(suggestion.number!)
+                    setSuggestion(null)
+                  }}
+                >
+                  {t('common.confirm')}
+                </button>
+                <button
+                  type="button"
+                  className="rounded border border-input px-2.5 py-1 text-xs font-medium hover:bg-muted"
+                  onClick={() => setSuggestion(null)}
+                >
+                  {t('common.cancel')}
+                </button>
+              </div>
+            </>
+          ) : (
+            <>
+              <span className="text-muted-foreground">{t('employees.passport.notFound')}</span>
+              <div className="ms-auto">
+                <button
+                  type="button"
+                  className="rounded border border-input px-2.5 py-1 text-xs font-medium hover:bg-muted"
+                  onClick={() => setSuggestion(null)}
+                >
+                  {t('common.cancel')}
+                </button>
+              </div>
+            </>
+          )}
         </div>
       )}
     </div>

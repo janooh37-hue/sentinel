@@ -10,9 +10,10 @@
  * `useTranslation` works out of the box via the global test/setup.ts i18n init.
  */
 
-import { render, screen } from '@testing-library/react'
+import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 import { vi, test, expect } from 'vitest'
 import { PassportField } from './PassportField'
+import { api } from '@/lib/api'
 
 vi.mock('@/lib/api', () => ({
   api: {
@@ -63,4 +64,22 @@ test('shows Verified when value present', () => {
     />,
   )
   expect(screen.getByText(/verified/i)).toBeInTheDocument()
+})
+
+test('when OCR returns null number: shows not-found message and hides Confirm', async () => {
+  vi.mocked(api.extractPassport).mockResolvedValueOnce({ number: null, method: 'none' } as never)
+  render(
+    <PassportField
+      employeeId="G1"
+      passportNo={null}
+      source={null}
+      hasScan={true}
+      canEdit={true}
+    />,
+  )
+  fireEvent.click(screen.getByText(/read from scan/i))
+  await waitFor(() =>
+    expect(screen.getByText(/no passport number found in the scan/i)).toBeInTheDocument(),
+  )
+  expect(screen.queryByText(/confirm/i)).not.toBeInTheDocument()
 })
