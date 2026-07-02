@@ -81,13 +81,13 @@ class Employee(Base):
     contact: Mapped[str | None] = mapped_column(String(64), nullable=True)
     # Preferred WhatsApp-notification language ('ar' | 'en'). Default Arabic;
     # operators flip the few non-Arabic speakers to 'en' in the employee form.
-    msg_language: Mapped[str] = mapped_column(
-        String(2), default="ar", server_default="ar"
-    )
+    msg_language: Mapped[str] = mapped_column(String(2), default="ar", server_default="ar")
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow, onupdate=_utcnow)
 
-    leaves: Mapped[list[Leave]] = relationship(back_populates="employee", cascade="all, delete-orphan")
+    leaves: Mapped[list[Leave]] = relationship(
+        back_populates="employee", cascade="all, delete-orphan"
+    )
     violations: Mapped[list[Violation]] = relationship(
         back_populates="employee", cascade="all, delete-orphan"
     )
@@ -140,9 +140,7 @@ class Book(Base):
     subject: Mapped[str | None] = mapped_column(String(512), nullable=True)
     direction: Mapped[str | None] = mapped_column(String(16), nullable=True)
     stamp_style: Mapped[str | None] = mapped_column(String(64), nullable=True)
-    employee_id: Mapped[str | None] = mapped_column(
-        ForeignKey("employees.id"), nullable=True
-    )
+    employee_id: Mapped[str | None] = mapped_column(ForeignKey("employees.id"), nullable=True)
     employee_name_snapshot: Mapped[str | None] = mapped_column(String(256), nullable=True)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
     doc_path: Mapped[str | None] = mapped_column(Text, nullable=True)
@@ -204,7 +202,9 @@ class BookApprovalStep(Base):
     )
     step_order: Mapped[int] = mapped_column(Integer, nullable=False)
     stage_label: Mapped[str] = mapped_column(String(64), nullable=False)
-    assignee_user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="RESTRICT"), nullable=False)
+    assignee_user_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", ondelete="RESTRICT"), nullable=False
+    )
     # pending | approved | rejected | returned
     state: Mapped[str] = mapped_column(
         String(16), nullable=False, default="pending", server_default="pending"
@@ -239,9 +239,7 @@ class BookVersion(Base):
     __tablename__ = "book_versions"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    book_id: Mapped[int] = mapped_column(
-        ForeignKey("books.id", ondelete="CASCADE"), nullable=False
-    )
+    book_id: Mapped[int] = mapped_column(ForeignKey("books.id", ondelete="CASCADE"), nullable=False)
     version_no: Mapped[int] = mapped_column(Integer, nullable=False)
     document_id: Mapped[int | None] = mapped_column(
         ForeignKey("documents.id", ondelete="SET NULL"), nullable=True
@@ -340,7 +338,21 @@ class Leave(Base):
     employee: Mapped[Employee] = relationship(back_populates="leaves")
     documents: Mapped[list[Document]] = relationship(back_populates="leave")
 
-    __table_args__ = (Index("ix_leaves_employee_start", "employee_id", "start_date"),)
+    __table_args__ = (
+        Index("ix_leaves_employee_start", "employee_id", "start_date"),
+        # Backstop for the app-level dedup guard: no two live rows may share the
+        # natural key. Partial (deleted_at IS NULL) so a soft-deleted duplicate
+        # doesn't block re-creating the leave later. See migration 0045.
+        Index(
+            "ux_leaves_natural_key",
+            "employee_id",
+            "leave_type",
+            "start_date",
+            "end_date",
+            unique=True,
+            sqlite_where=text("deleted_at IS NULL"),
+        ),
+    )
 
 
 class Violation(Base):
@@ -387,9 +399,7 @@ class WhatsAppMessage(Base):
     sent_by: Mapped[int | None] = mapped_column(Integer, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
 
-    __table_args__ = (
-        Index("ix_whatsapp_messages_event", "event_type", "event_ref"),
-    )
+    __table_args__ = (Index("ix_whatsapp_messages_event", "event_type", "event_ref"),)
 
 
 class SmsMessage(Base):
@@ -415,9 +425,7 @@ class SmsMessage(Base):
     sent_by: Mapped[int | None] = mapped_column(Integer, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
 
-    __table_args__ = (
-        Index("ix_sms_messages_event", "event_type", "event_ref"),
-    )
+    __table_args__ = (Index("ix_sms_messages_event", "event_type", "event_ref"),)
 
 
 class Manager(Base):
@@ -439,9 +447,7 @@ class Submitter(Base):
     __tablename__ = "submitters"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    employee_id: Mapped[str | None] = mapped_column(
-        ForeignKey("employees.id"), nullable=True
-    )
+    employee_id: Mapped[str | None] = mapped_column(ForeignKey("employees.id"), nullable=True)
     name: Mapped[str] = mapped_column(String(256))
     stored_sig_path: Mapped[str | None] = mapped_column(Text, nullable=True)
 
@@ -476,9 +482,7 @@ class AppSetting(Base):
     # well-known key ``settings.dashboard_layout``; all other settings continue
     # to use ``value``. Stored as a native JSON column so the read path can
     # return a typed dict without a string decode.
-    dashboard_layout: Mapped[dict[str, object] | None] = mapped_column(
-        JSON, nullable=True
-    )
+    dashboard_layout: Mapped[dict[str, object] | None] = mapped_column(JSON, nullable=True)
 
 
 class VaultFile(Base):
@@ -565,9 +569,7 @@ class LedgerEntry(Base):
     attachment_paths: Mapped[list[str]] = mapped_column(
         JSON, nullable=False, default=list, server_default="[]"
     )
-    tags: Mapped[list[str]] = mapped_column(
-        JSON, nullable=False, default=list, server_default="[]"
-    )
+    tags: Mapped[list[str]] = mapped_column(JSON, nullable=False, default=list, server_default="[]")
     inline_images: Mapped[dict[str, str]] = mapped_column(
         JSON, nullable=False, default=dict, server_default="{}"
     )
@@ -616,9 +618,7 @@ class LedgerEntry(Base):
     source_kind: Mapped[str | None] = mapped_column(String(32), nullable=True)
     category_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
-    related_book: Mapped[Book | None] = relationship(
-        "Book", foreign_keys=[related_book_id]
-    )
+    related_book: Mapped[Book | None] = relationship("Book", foreign_keys=[related_book_id])
     related_employee: Mapped[Employee | None] = relationship(
         "Employee", foreign_keys=[related_employee_id]
     )
@@ -732,9 +732,7 @@ class AddressBookContact(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
 
     __table_args__ = (
-        UniqueConstraint(
-            "owner_user_id", "address", name="uq_address_book_owner_address"
-        ),
+        UniqueConstraint("owner_user_id", "address", name="uq_address_book_owner_address"),
         Index("ix_address_book_contacts_owner_user_id", "owner_user_id"),
     )
 
@@ -762,9 +760,7 @@ class RecipientList(Base):
     )
 
     __table_args__ = (
-        UniqueConstraint(
-            "owner_user_id", "name", name="uq_recipient_lists_owner_name"
-        ),
+        UniqueConstraint("owner_user_id", "name", name="uq_recipient_lists_owner_name"),
         Index("ix_recipient_lists_owner_user_id", "owner_user_id"),
     )
 
@@ -785,14 +781,10 @@ class CorrespondenceCategory(Base):
     name_en: Mapped[str] = mapped_column(String(128), nullable=False, default="")
     name_ar: Mapped[str] = mapped_column(String(128), nullable=False, default="")
     sort: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
-    system: Mapped[bool] = mapped_column(
-        Boolean, nullable=False, default=False, server_default="0"
-    )
+    system: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default="0")
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
 
-    __table_args__ = (
-        UniqueConstraint("key", name="uq_correspondence_categories_key"),
-    )
+    __table_args__ = (UniqueConstraint("key", name="uq_correspondence_categories_key"),)
 
 
 class CorrespondenceRule(Base):
@@ -816,9 +808,7 @@ class CorrespondenceRule(Base):
     category_id: Mapped[int] = mapped_column(
         ForeignKey("correspondence_categories.id", ondelete="CASCADE"), nullable=False
     )
-    enabled: Mapped[bool] = mapped_column(
-        Boolean, nullable=False, default=True, server_default="1"
-    )
+    enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True, server_default="1")
     sort: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
 
@@ -849,9 +839,7 @@ class User(Base):
     signature_path: Mapped[str | None] = mapped_column(Text, nullable=True)
     # Single-holder flag (migration 0034): the manager preselected as assignee
     # when an in_app form is submitted. Swapped via the default-manager endpoint.
-    is_default_manager: Mapped[bool] = mapped_column(
-        Boolean, default=False, server_default="0"
-    )
+    is_default_manager: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0")
     # operator | manager | admin — stored (admin-assigned), authoritative for auth.
     role: Mapped[str] = mapped_column(
         String(16), nullable=False, default="operator", server_default="operator"
@@ -866,9 +854,7 @@ class User(Base):
     locked_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     last_login_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
-    updated_at: Mapped[datetime | None] = mapped_column(
-        DateTime, default=_utcnow, onupdate=_utcnow
-    )
+    updated_at: Mapped[datetime | None] = mapped_column(DateTime, default=_utcnow, onupdate=_utcnow)
 
     sessions: Mapped[list[AuthSession]] = relationship(
         back_populates="user", cascade="all, delete-orphan"
@@ -888,9 +874,7 @@ class AuthSession(Base):
     __tablename__ = "auth_sessions"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    user_id: Mapped[int] = mapped_column(
-        ForeignKey("users.id", ondelete="CASCADE"), nullable=False
-    )
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
     token_hash: Mapped[str] = mapped_column(String(64), nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
     expires_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
@@ -939,9 +923,7 @@ class UserPermission(Base):
     effect: Mapped[str] = mapped_column(String(8), nullable=False)
     expires_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
-    __table_args__ = (
-        CheckConstraint("effect IN ('grant', 'deny')", name="ck_user_perm_effect"),
-    )
+    __table_args__ = (CheckConstraint("effect IN ('grant', 'deny')", name="ck_user_perm_effect"),)
 
 
 class AuditLog(Base):
@@ -1021,9 +1003,7 @@ class ScanInbox(Base):
     proposed_employee_id: Mapped[str | None] = mapped_column(
         String(16), ForeignKey("employees.id"), nullable=True
     )
-    proposed_book_id: Mapped[int | None] = mapped_column(
-        ForeignKey("books.id"), nullable=True
-    )
+    proposed_book_id: Mapped[int | None] = mapped_column(ForeignKey("books.id"), nullable=True)
     proposed_ref: Mapped[str | None] = mapped_column(String(32), nullable=True)
     match_score: Mapped[float | None] = mapped_column(nullable=True)
     confidence_tier: Mapped[str | None] = mapped_column(String(8), nullable=True)
@@ -1053,9 +1033,7 @@ class PushSubscription(Base):
     __tablename__ = "push_subscriptions"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    user_id: Mapped[int] = mapped_column(
-        ForeignKey("users.id", ondelete="CASCADE"), nullable=False
-    )
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
     endpoint: Mapped[str] = mapped_column(Text, nullable=False)
     p256dh: Mapped[str] = mapped_column(String(128), nullable=False)
     auth: Mapped[str] = mapped_column(String(64), nullable=False)
@@ -1069,9 +1047,7 @@ class PushSubscription(Base):
     last_used_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
     __table_args__ = (
-        UniqueConstraint(
-            "user_id", "endpoint", name="uq_push_subscriptions_user_endpoint"
-        ),
+        UniqueConstraint("user_id", "endpoint", name="uq_push_subscriptions_user_endpoint"),
         Index("ix_push_subscriptions_user_id", "user_id"),
     )
 
@@ -1088,9 +1064,7 @@ class PushSent(Base):
     __tablename__ = "push_sent"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    user_id: Mapped[int] = mapped_column(
-        ForeignKey("users.id", ondelete="CASCADE"), nullable=False
-    )
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
     kind: Mapped[str] = mapped_column(String(16), nullable=False)
     ref: Mapped[str] = mapped_column(String(64), nullable=False)
     created_at: Mapped[datetime] = mapped_column(
@@ -1113,9 +1087,7 @@ class PermissionRequest(Base):
     __tablename__ = "permission_requests"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    user_id: Mapped[int] = mapped_column(
-        ForeignKey("users.id", ondelete="CASCADE"), nullable=False
-    )
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
     capability: Mapped[str] = mapped_column(String(64), nullable=False)
     status: Mapped[str] = mapped_column(
         String(16), nullable=False, default="pending", server_default="pending"
