@@ -11,7 +11,6 @@ router lives at ``/violations`` for the two ID-scoped violation routes
 
 from __future__ import annotations
 
-import base64
 from datetime import UTC, date, datetime
 from pathlib import Path
 from typing import Annotated
@@ -21,6 +20,7 @@ from fastapi.responses import FileResponse, Response
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.api._responses import maybe_base64
 from app.api.deps import require_capability
 from app.api.errors import NotFoundError, ValidationFailedError
 from app.config import get_settings
@@ -85,16 +85,12 @@ def list_employees(
     # One query for the set of employees with a vault photo — avoids N+1.
     photo_ids = set(
         db.execute(
-            select(VaultFile.employee_id)
-            .where(VaultFile.kind == "photo")
-            .distinct()
+            select(VaultFile.employee_id).where(VaultFile.kind == "photo").distinct()
         ).scalars()
     )
     return EmployeeListResponse(
         items=[
-            EmployeeListItem.model_validate(r).model_copy(
-                update={"has_photo": r.id in photo_ids}
-            )
+            EmployeeListItem.model_validate(r).model_copy(update={"has_photo": r.id in photo_ids})
             for r in rows
         ],
         total=total,
@@ -110,9 +106,7 @@ def create_employee(
     _user: Annotated[User, Depends(require_capability("employees.edit"))],
 ) -> EmployeeRead:
     row = employee_service.create_employee(db, payload)
-    return EmployeeRead.model_validate(row).model_copy(
-        update=_photo_fields(db, row.id)
-    )
+    return EmployeeRead.model_validate(row).model_copy(update=_photo_fields(db, row.id))
 
 
 @router.get("/{employee_id}", response_model=EmployeeRead)
@@ -122,9 +116,7 @@ def get_employee(
     _user: Annotated[User, Depends(require_capability("employees.view"))],
 ) -> EmployeeRead:
     row = employee_service.get_employee(db, employee_id)
-    return EmployeeRead.model_validate(row).model_copy(
-        update=_photo_fields(db, row.id)
-    )
+    return EmployeeRead.model_validate(row).model_copy(update=_photo_fields(db, row.id))
 
 
 @router.patch("/{employee_id}", response_model=EmployeeRead)
@@ -135,17 +127,13 @@ def update_employee(
     _user: Annotated[User, Depends(require_capability("employees.edit"))],
 ) -> EmployeeRead:
     row = employee_service.update_employee(db, employee_id, payload)
-    return EmployeeRead.model_validate(row).model_copy(
-        update=_photo_fields(db, row.id)
-    )
+    return EmployeeRead.model_validate(row).model_copy(update=_photo_fields(db, row.id))
 
 
 # --- Employee detail (aggregate for the Employee Detail page) ----------------
 
 
-@router.get(
-    "/{employee_id}/detail", response_model=detail_schemas.EmployeeDetailRead
-)
+@router.get("/{employee_id}/detail", response_model=detail_schemas.EmployeeDetailRead)
 def get_employee_detail(
     employee_id: str,
     db: Annotated[Session, Depends(get_db)],
@@ -217,14 +205,10 @@ def update_violation(
     db: Annotated[Session, Depends(get_db)],
     _user: Annotated[User, Depends(require_capability("violations.manage"))],
 ) -> ViolationRead:
-    return ViolationRead.model_validate(
-        violation_service.update(db, violation_id, payload)
-    )
+    return ViolationRead.model_validate(violation_service.update(db, violation_id, payload))
 
 
-@violations_router.delete(
-    "/{violation_id}", status_code=status.HTTP_204_NO_CONTENT
-)
+@violations_router.delete("/{violation_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_violation(
     violation_id: int,
     db: Annotated[Session, Depends(get_db)],
@@ -263,9 +247,7 @@ async def upload_to_vault(
 ) -> VaultEntry:
     employee_service.get_employee(db, employee_id)
     data = await upload.read()
-    return vault_service.save_upload(
-        employee_id, kind, upload.filename or "upload", data
-    )
+    return vault_service.save_upload(employee_id, kind, upload.filename or "upload", data)
 
 
 @router.delete(
@@ -314,15 +296,10 @@ def vault_download(
 ) -> FileResponse | Response:
     employee_service.get_employee(db, employee_id)
     path = vault_service.resolve_file(employee_id, kind, filename)
-    if encoding == "base64":
-        # Base64 text/plain so Internet Download Manager / the browser's PDF
-        # handler never intercept the bytes — pdf.js decodes them. Mirrors
-        # ledger.py's attachment route.
-        return Response(
-            content=base64.b64encode(path.read_bytes()),
-            media_type="text/plain",
-            headers={"X-Content-Type-Options": "nosniff"},
-        )
+    # Base64 text/plain so Internet Download Manager / the browser's PDF handler
+    # never intercept the bytes — pdf.js decodes them.
+    if (b64 := maybe_base64(path.read_bytes(), encoding)) is not None:
+        return b64
     return FileResponse(str(path), filename=path.name)
 
 
@@ -337,9 +314,7 @@ def _signature_path_for(employee_id: str) -> Path:
     separators — never dereference a path that escapes the vault root.
     """
     vault_root = get_settings().vault_dir.resolve()
-    path = signature_core.vault_path(
-        Vault(get_settings().vault_dir), employee_id
-    ).resolve()
+    path = signature_core.vault_path(Vault(get_settings().vault_dir), employee_id).resolve()
     if vault_root not in path.parents:
         raise HTTPException(status_code=400, detail="invalid signature path")
     return path
@@ -359,13 +334,9 @@ async def upload_signature(
     data = await upload.read()
     try:
         data = signature_core.normalize_to_png(data)
-        path = signature_core.save(
-            data, employee_id, Vault(get_settings().vault_dir)
-        )
+        path = signature_core.save(data, employee_id, Vault(get_settings().vault_dir))
     except signature_core.SignatureError as exc:
-        raise ValidationFailedError(
-            "SIGNATURE_INVALID", str(exc), employee_id=employee_id
-        ) from exc
+        raise ValidationFailedError("SIGNATURE_INVALID", str(exc), employee_id=employee_id) from exc
     return {"path": str(path), "filename": path.name}
 
 
@@ -389,15 +360,10 @@ def get_employee_signature(
         )
     updated = datetime.fromtimestamp(path.stat().st_mtime, tz=UTC).isoformat()
     data = path.read_bytes()
-    if encoding == "base64":
-        return Response(
-            content=base64.b64encode(data),
-            media_type="text/plain",
-            headers={
-                "X-Content-Type-Options": "nosniff",
-                "X-Signature-Updated": updated,
-            },
-        )
+    if (
+        b64 := maybe_base64(data, encoding, extra_headers={"X-Signature-Updated": updated})
+    ) is not None:
+        return b64
     return Response(
         content=data,
         media_type="image/png",
@@ -405,9 +371,7 @@ def get_employee_signature(
     )
 
 
-@router.delete(
-    "/{employee_id}/signature", status_code=status.HTTP_204_NO_CONTENT
-)
+@router.delete("/{employee_id}/signature", status_code=status.HTTP_204_NO_CONTENT)
 def delete_employee_signature(
     employee_id: str,
     db: Annotated[Session, Depends(get_db)],
@@ -432,9 +396,7 @@ async def upload_employee_photo(
     """Replace the employee's avatar photo (one per employee)."""
     employee_service.get_employee(db, employee_id)
     data = await upload.read()
-    row = photo_service.save_photo(
-        db, employee_id, upload.filename or "photo.png", data
-    )
+    row = photo_service.save_photo(db, employee_id, upload.filename or "photo.png", data)
     return {
         "filename": row.filename,
         "size_bytes": row.size_bytes,
@@ -442,9 +404,7 @@ async def upload_employee_photo(
     }
 
 
-@router.delete(
-    "/{employee_id}/photo", status_code=status.HTTP_204_NO_CONTENT
-)
+@router.delete("/{employee_id}/photo", status_code=status.HTTP_204_NO_CONTENT)
 def delete_employee_photo(
     employee_id: str,
     db: Annotated[Session, Depends(get_db)],

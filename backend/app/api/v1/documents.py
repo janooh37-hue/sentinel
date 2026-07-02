@@ -16,7 +16,6 @@ background tasks synchronously after response delivery, so tests can poll
 
 from __future__ import annotations
 
-import base64
 import logging
 from datetime import datetime
 from typing import Annotated, Any, Literal
@@ -34,6 +33,7 @@ from fastapi.responses import FileResponse, Response
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
+from app.api._responses import maybe_base64
 from app.api.deps import get_current_user, require_capability
 from app.api.errors import AppError, NotFoundError
 from app.config import get_settings
@@ -425,12 +425,8 @@ def download_document(
 
     # base64 branch — opaque text/plain body that PDF handlers / download
     # accelerators won't claim. The frontend canvas decodes + renders.
-    if encoding == "base64":
-        return Response(
-            content=base64.b64encode(file_path.read_bytes()),
-            media_type="text/plain",
-            headers={"X-Content-Type-Options": "nosniff"},
-        )
+    if (b64 := maybe_base64(file_path.read_bytes(), encoding)) is not None:
+        return b64
 
     filename = document_service.download_filename_for(row, ext)
     # PDFs are served inline so the preview iframe can render them; the

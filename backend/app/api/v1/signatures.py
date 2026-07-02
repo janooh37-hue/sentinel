@@ -23,6 +23,7 @@ from fastapi import APIRouter, Depends, Query
 from fastapi.responses import Response
 from pydantic import BaseModel
 
+from app.api._responses import maybe_base64
 from app.api.deps import get_current_user
 from app.api.errors import NotFoundError
 from app.config import get_settings
@@ -71,12 +72,8 @@ def get_my_signature(
         )
 
     data = path.read_bytes()
-    if encoding == "base64":
-        return Response(
-            content=base64.b64encode(data),
-            media_type="text/plain",
-            headers={"X-Content-Type-Options": "nosniff"},
-        )
+    if (b64 := maybe_base64(data, encoding)) is not None:
+        return b64
     return Response(content=data, media_type="image/png")
 
 
