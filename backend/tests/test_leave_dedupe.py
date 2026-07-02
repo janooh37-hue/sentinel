@@ -2,9 +2,20 @@
 
 from datetime import date
 
-from app.services.leave_dedupe import apply_dedupe, plan_dedupe
+import pytest
+from sqlalchemy import text
 
 from app.db.models import Document, Employee, Leave
+from app.services.leave_dedupe import apply_dedupe, plan_dedupe
+
+
+@pytest.fixture(autouse=True)
+def _allow_historical_dupes(db_session):
+    """These tests reproduce the pre-2026-07-02 duplicated state, which predates
+    the ``ux_leaves_natural_key`` backstop (migration 0045). Drop that index so
+    we can seed the exact duplicates the cleanup is designed to remove."""
+    db_session.execute(text("DROP INDEX IF EXISTS ux_leaves_natural_key"))
+    db_session.commit()
 
 
 def _emp(db, eid="G3082"):
