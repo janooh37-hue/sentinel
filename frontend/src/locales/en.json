@@ -1521,6 +1521,8 @@
       "nameAr": "Name (AR)",
       "position": "Position",
       "department": "Department",
+      "dutyUnit": "Duty unit",
+      "dutyPost": "Duty post",
       "doj": "Date of joining",
       "status": "Status"
     },

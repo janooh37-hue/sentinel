@@ -43,6 +43,8 @@ export function ProfileTab({ employee }: Props): React.JSX.Element {
     { k: 'employee.profile.nameAr', v: employee.name_ar },
     { k: 'employee.profile.position', v: pickPosition(employee, i18n.language) },
     { k: 'employee.profile.department', v: employee.department },
+    { k: 'employee.profile.dutyUnit', v: employee.duty_unit },
+    { k: 'employee.profile.dutyPost', v: employee.duty_post },
     { k: 'employee.profile.doj', v: employee.doj },
     { k: 'employee.profile.status', v: t(`employees.status.${employee.status}`, employee.status) },
   ]
