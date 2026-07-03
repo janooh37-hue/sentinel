@@ -39,9 +39,10 @@ interface Props {
   onEdit: () => void
   onAddLeave: () => void
   onGenerate: () => void
+  onChangeStatus?: () => void
 }
 
-export function EmployeeHero({ employee, onEdit, onAddLeave, onGenerate }: Props): React.JSX.Element {
+export function EmployeeHero({ employee, onEdit, onAddLeave, onGenerate, onChangeStatus }: Props): React.JSX.Element {
   const { i18n, t } = useTranslation()
   const name = pickEmployeeName(employee, i18n.language)
   const positionLabel = pickPosition(employee, i18n.language)
@@ -124,10 +125,23 @@ export function EmployeeHero({ employee, onEdit, onAddLeave, onGenerate }: Props
                 </>
               )}
               <span>·</span>
-              <span className="inline-flex items-center gap-1.5 rounded-full bg-white/15 px-3 py-0.5 text-[0.86em] font-semibold">
-                <span className={`h-1.5 w-1.5 rounded-full ${STATUS_DOT_CLS[employee.status] ?? 'bg-muted'}`} aria-hidden />
-                {t(`employees.status.${employee.status}`, employee.status)}
-              </span>
+              {canEdit && onChangeStatus ? (
+                <button
+                  type="button"
+                  onClick={onChangeStatus}
+                  aria-label={t('employees.statusDialog.title')}
+                  className="inline-flex items-center gap-1.5 rounded-full bg-white/15 px-3 py-0.5 text-[0.86em] font-semibold transition-colors hover:bg-white/25"
+                >
+                  <span className={`h-1.5 w-1.5 rounded-full ${STATUS_DOT_CLS[employee.status] ?? 'bg-muted'}`} aria-hidden />
+                  {t(`employees.status.${employee.status}`, employee.status)}
+                  <Pencil className="h-3 w-3 opacity-70" aria-hidden />
+                </button>
+              ) : (
+                <span className="inline-flex items-center gap-1.5 rounded-full bg-white/15 px-3 py-0.5 text-[0.86em] font-semibold">
+                  <span className={`h-1.5 w-1.5 rounded-full ${STATUS_DOT_CLS[employee.status] ?? 'bg-muted'}`} aria-hidden />
+                  {t(`employees.status.${employee.status}`, employee.status)}
+                </span>
+              )}
               {employee.doj && (
                 <>
                   <span>·</span>

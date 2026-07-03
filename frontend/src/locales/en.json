@@ -247,6 +247,9 @@
       "Resigned": "Resigned",
       "Terminated": "Terminated"
     },
+    "statusDialog": {
+      "title": "Change status"
+    },
     "validation": {
       "endDateRequired": "End date is required when status is not Active",
       "idRequired": "Employee ID is required",

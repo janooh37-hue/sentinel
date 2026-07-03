@@ -260,6 +260,9 @@
       "Resigned": "مستقيل",
       "Terminated": "مفصول"
     },
+    "statusDialog": {
+      "title": "تغيير الحالة"
+    },
     "validation": {
       "endDateRequired": "تاريخ نهاية الخدمة مطلوب عند تغيير الحالة عن نشط",
       "idRequired": "رقم الموظف مطلوب",

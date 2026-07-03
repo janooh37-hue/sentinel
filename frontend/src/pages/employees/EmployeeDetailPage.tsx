@@ -20,6 +20,7 @@ import { pickEmployeeName } from '@/lib/employeeName'
 
 import { EmployeeDetailTabs, type Tab } from './EmployeeDetailTabs'
 import { EmployeeHero } from './EmployeeHero'
+import { StatusDialog } from './StatusDialog'
 import { EmployeeQuickStats } from './EmployeeQuickStats'
 import { ActivityTab } from './tabs/ActivityTab'
 import { DocumentsTab } from './tabs/DocumentsTab'
@@ -34,6 +35,7 @@ export function EmployeeDetailPage(): React.JSX.Element {
   const { i18n, t } = useTranslation()
   const [tab, setTab] = useState<Tab>('documents')
   const [editing, setEditing] = useState(false)
+  const [statusOpen, setStatusOpen] = useState(false)
   const qc = useQueryClient()
 
   // Consume injected extraction from the intake flow (Task 5). Clear history
@@ -131,7 +133,11 @@ export function EmployeeDetailPage(): React.JSX.Element {
           navigate(`/application?form=leave_application&employee_id=${encodeURIComponent(data.employee.id)}`)
         }
         onGenerate={() => navigate(`/application?employee_id=${encodeURIComponent(data.employee.id)}`)}
+        onChangeStatus={() => setStatusOpen(true)}
       />
+      {statusOpen && (
+        <StatusDialog open employee={data.employee} onOpenChange={setStatusOpen} />
+      )}
       <EmployeeQuickStats stats={data.stats} onTabClick={(next) => setTab(next)} />
       <EmployeeDetailTabs
         active={tab}
