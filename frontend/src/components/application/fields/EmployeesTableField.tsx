@@ -1,10 +1,10 @@
 /**
  * EmployeesTableField — multi-employee picker for the Passport Release list.
  *
- * Type a G-number + Add → resolves the employee via GET /employees/{id} and
- * appends a row auto-filled with ID, Name (Arabic, for the doc), Nationality,
- * Passport No. ＋ adds more; hard cap 15 (the template has 15 data rows). ID +
- * Name are read-only (identity); Nationality + Passport No are editable
+ * Search + pick an employee → resolves via GET /employees/{id} and appends a
+ * row auto-filled with ID, Name (Arabic, for the doc), Nationality, Passport
+ * No. ＋ adds more; hard cap 15 (the template has 15 data rows). ID + Name
+ * are read-only (identity); Nationality + Passport No are editable
  * (correctable when the record is blank). Output shape feeds the backend
  * item(i, field) render: [{ employee_id, name, nationality, passport_no }].
  */
@@ -14,9 +14,9 @@ import { useFieldArray, useFormContext } from 'react-hook-form'
 import { useTranslation } from 'react-i18next'
 
 import { api, ApiError } from '@/lib/api'
-import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { EmployeePicker } from '@/pages/application/EmployeePicker'
 import type { FieldProps } from '../types'
 
 interface Row {
@@ -47,31 +47,28 @@ export function EmployeesTableField({
   const { fields, append, remove } = useFieldArray({ control, name })
   const error = (errors[name] as { message?: string } | undefined)?.message
 
-  const [g, setG] = useState('')
   const [busy, setBusy] = useState(false)
   const [lookupErr, setLookupErr] = useState<string | null>(null)
   const atCap = fields.length >= MAX_ROWS
 
-  async function add(): Promise<void> {
-    const id = g.trim()
-    if (!id || busy || atCap) return
+  async function add(id: string | null): Promise<void> {
+    const gid = (id ?? '').trim()
+    if (!gid || busy || atCap) return
     const existing = (getValues(name) as Row[] | undefined) ?? []
-    if (existing.some((r) => (r.employee_id ?? '').toUpperCase() === id.toUpperCase())) {
+    if (existing.some((r) => (r.employee_id ?? '').toUpperCase() === gid.toUpperCase())) {
       setLookupErr(t('application.employeesTable.duplicate', { defaultValue: 'Already added.' }))
-      setG('') // already in the list — clear so the next entry starts fresh
       return
     }
     setBusy(true)
     setLookupErr(null)
     try {
-      const emp = await api.getEmployee(id)
+      const emp = await api.getEmployee(gid)
       append({
         employee_id: emp.id,
         name: emp.name_ar || emp.name_en || '',
         nationality: emp.nationality ?? '',
         passport_no: emp.passport_no ?? '',
       } satisfies Row)
-      setG('')
     } catch (e) {
       setLookupErr(
         e instanceof ApiError && e.code === 'EMPLOYEE_NOT_FOUND'
@@ -92,38 +89,18 @@ export function EmployeesTableField({
         {required && <span className="ms-0.5 text-destructive">*</span>}
       </Label>
 
-      {/* Add-by-G-number row */}
-      <div className="flex flex-wrap items-end gap-2">
-        <div className="flex flex-col gap-1">
-          <Label htmlFor={`${name}__g`} className="text-xs text-muted-foreground">
-            {t('application.employeesTable.gNumber', { defaultValue: 'G-number' })}
-          </Label>
-          <Input
-            id={`${name}__g`}
-            value={g}
-            onChange={(e) => setG(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') {
-                e.preventDefault()
-                void add()
-              }
-            }}
-            placeholder="G1234"
-            className="h-9 w-40"
-            disabled={atCap}
-          />
-        </div>
-        <Button
-          type="button"
-          size="sm"
-          variant="secondary"
-          onClick={() => void add()}
-          disabled={busy || atCap}
-        >
-          {fields.length === 0
-            ? t('application.employeesTable.add', { defaultValue: 'Add' })
-            : t('application.employeesTable.addAnother', { defaultValue: '+ Add another' })}
-        </Button>
+      {/* Add-by-search row — same combobox as the rest of the app */}
+      <div className="flex flex-col gap-1">
+        {!atCap ? (
+          <EmployeePicker selectedId={null} onSelect={(id) => void add(id)} />
+        ) : (
+          <p className="text-xs text-muted-foreground">
+            {t('application.employeesTable.capReached', {
+              defaultValue: 'Maximum of {{n}} employees reached.',
+              n: MAX_ROWS,
+            })}
+          </p>
+        )}
         <span className="text-xs text-muted-foreground">
           {t('application.employeesTable.cap', {
             defaultValue: '{{n}}/15',

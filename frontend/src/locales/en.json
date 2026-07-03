@@ -1725,15 +1725,13 @@
       "pickerNoPapers": "No papers on this record yet."
     },
     "employeesTable": {
-      "gNumber": "G-number",
-      "add": "Add",
-      "addAnother": "+ Add another",
       "cap": "{{n}}/15",
+      "capReached": "Maximum of {{n}} employees reached.",
       "id": "ID",
       "name": "Name",
       "nationality": "Nationality",
       "passport": "Passport No",
-      "notFound": "No employee with that G-number.",
+      "notFound": "Employee not found.",
       "duplicate": "Already added.",
       "lookupError": "Lookup failed. Try again.",
       "max": "Up to 15 employees."
