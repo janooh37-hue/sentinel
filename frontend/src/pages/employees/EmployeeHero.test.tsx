@@ -7,7 +7,7 @@ import { vi, test, expect } from 'vitest'
 
 let allowed = true
 vi.mock('@/lib/useCapabilities', () => ({
-  useCapabilities: () => ({ has: (_c: string) => allowed }),
+  useCapabilities: () => ({ has: () => allowed }),
 }))
 vi.mock('@/components/employees/useEmployeePhoto', () => ({
   useEmployeePhoto: () => ({ upload: { mutate: vi.fn(), isPending: false } }),
