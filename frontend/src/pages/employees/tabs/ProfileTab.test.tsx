@@ -20,6 +20,7 @@ vi.mock('@/components/employees/SignaturePad', () => ({ SignaturePad: () => null
 // ProfileTab imports './PassportField' — mock the same specifier (test lives in the same dir).
 vi.mock('./PassportField', () => ({ PassportField: () => null }))
 vi.mock('@/components/employees/IdentityDocCard', () => ({ IdentityDocCard: () => null }))
+vi.mock('../TransferEmployeeDialog', () => ({ TransferEmployeeDialog: () => null }))
 
 import { ProfileTab } from './ProfileTab'
 import type { EmployeeRead } from '@/lib/api'
@@ -37,4 +38,10 @@ test('renders duty unit and post values', () => {
   expect(screen.getByText('السرية الأولى')).toBeInTheDocument()
   expect(screen.getByText('employee.profile.dutyPost')).toBeInTheDocument()
   expect(screen.getByText('البوابة الرئيسية')).toBeInTheDocument()
+})
+
+test('shows Transfer button for editors', () => {
+  const employee = { id: 'G100', name_en: 'John', status: 'Active' } as unknown as EmployeeRead
+  render(<ProfileTab employee={employee} />)
+  expect(screen.getByText('employee.profile.transfer')).toBeInTheDocument()
 })

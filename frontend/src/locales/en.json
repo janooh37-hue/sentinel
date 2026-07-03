@@ -1523,6 +1523,7 @@
       "department": "Department",
       "dutyUnit": "Duty unit",
       "dutyPost": "Duty post",
+      "transfer": "Transfer duty location",
       "doj": "Date of joining",
       "status": "Status"
     },
@@ -2164,6 +2165,7 @@
       "reason": "Reason (optional)",
       "reasonPlaceholder": "Re-distribution / operational need…",
       "generate": "Generate General Book letter →",
+      "issueLetter": "Issue transfer letter (General Book)",
       "success": "Transfer letter {{ref}} generated.",
       "viewRecord": "View record",
       "movedNoBook_one": "Moved 1 employee",

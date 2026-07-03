@@ -3,8 +3,10 @@
  * → signature pad. Photo upload lives on the hero (top), not here.
  */
 
+import { useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
+import { ArrowLeftRight } from 'lucide-react'
 
 import { IdentityDocCard } from '@/components/employees/IdentityDocCard'
 import { SignaturePad } from '@/components/employees/SignaturePad'
@@ -13,6 +15,8 @@ import { api } from '@/lib/api'
 import type { EmployeeRead } from '@/lib/api'
 import { pickPosition } from '@/lib/employeePosition'
 import { useCapabilities } from '@/lib/useCapabilities'
+import { Button } from '@/components/ui/button'
+import { TransferEmployeeDialog } from '../TransferEmployeeDialog'
 
 interface Props {
   employee: EmployeeRead
@@ -23,6 +27,8 @@ export function ProfileTab({ employee }: Props): React.JSX.Element {
   const { has } = useCapabilities()
   const qc = useQueryClient()
   const canEdit = has('employees.edit')
+
+  const [transferOpen, setTransferOpen] = useState(false)
 
   const { data: tree, isError: vaultError } = useQuery({
     queryKey: ['vault', employee.id],
@@ -68,6 +74,17 @@ export function ProfileTab({ employee }: Props): React.JSX.Element {
             </div>
           ))}
         </div>
+        {canEdit && (
+          <div className="mt-3 flex justify-end">
+            <Button type="button" variant="secondary" size="sm" onClick={() => setTransferOpen(true)}>
+              <ArrowLeftRight className="h-3.5 w-3.5" aria-hidden />
+              {t('employee.profile.transfer')}
+            </Button>
+          </div>
+        )}
+        {transferOpen && (
+          <TransferEmployeeDialog open employee={employee} onOpenChange={setTransferOpen} />
+        )}
       </div>
 
       {/* Identity documents */}
