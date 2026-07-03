@@ -60,6 +60,7 @@ export function EmployeeDetailPage(): React.JSX.Element {
     },
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ['employee-detail', id] })
+      void qc.invalidateQueries({ queryKey: ['employees'] })
       setInitialExtraction(undefined)
       setEditing(false)
       toast.success(t('employees.toast.updated'))
@@ -133,7 +134,7 @@ export function EmployeeDetailPage(): React.JSX.Element {
           navigate(`/application?form=leave_application&employee_id=${encodeURIComponent(data.employee.id)}`)
         }
         onGenerate={() => navigate(`/application?employee_id=${encodeURIComponent(data.employee.id)}`)}
-        onChangeStatus={() => setStatusOpen(true)}
+        onChangeStatus={editing || initialExtraction ? undefined : () => setStatusOpen(true)}
       />
       {statusOpen && (
         <StatusDialog open employee={data.employee} onOpenChange={setStatusOpen} />
