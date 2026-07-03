@@ -348,6 +348,20 @@
         "label_en": "Clearance Items",
         "label_ar": "بنود إخلاء الطرف",
         "required": false
+      },
+      {
+        "key": "manager_id",
+        "type": "manager_picker",
+        "label_en": "Line Manager",
+        "label_ar": "المدير المباشر",
+        "required": false
+      },
+      {
+        "key": "submitter_id",
+        "type": "submitter_picker",
+        "label_en": "Submitter",
+        "label_ar": "مقدم الطلب",
+        "required": false
       }
     ]
   },
