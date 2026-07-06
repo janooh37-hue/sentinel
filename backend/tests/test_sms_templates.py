@@ -184,6 +184,7 @@ def test_salary_transfer_en():
         in text
     )
     assert "The transfer will take effect with the August 2026 salary." in text
+    assert not any("؀" <= c <= "ۿ" for c in text)
 
 
 def test_salary_deduction_ar():
@@ -197,6 +198,7 @@ def test_salary_deduction_en():
     rec = SimpleNamespace(fields={"amount": "500"}, today=date(2026, 7, 5))
     text = st.render_text(nf.EVENT_SALARY_DEDUCTION, "en", rec, _emp())
     assert "An amount of AED 500 will be deducted from the monthly salary." in text
+    assert not any("؀" <= c <= "ۿ" for c in text)
 
 
 def test_employee_clearance_ar():
@@ -212,6 +214,7 @@ def test_employee_clearance_en():
     text = st.render_text(nf.EVENT_EMPLOYEE_CLEARANCE, "en", rec, _emp())
     assert "Your employee clearance has been completed, effective 05/07/2026 (Sunday)." in text
     assert "We wish you all the best." in text
+    assert not any("؀" <= c <= "ۿ" for c in text)
 
 
 def test_hr_request_single_ar():
@@ -240,6 +243,7 @@ def test_hr_request_plural_ar():
     text = st.render_text(nf.EVENT_HR_REQUEST, "ar", rec, _emp())
     assert "تم تقديم طلبك للحصول على المستندات التالية: شهادة راتب، شهادة خبرة." in text
     assert "سيتم إبلاغك عند صدورها." in text
+    assert not _has_ascii_letter(text)
 
 
 def test_passport_release_ar():
