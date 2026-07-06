@@ -31,6 +31,7 @@ vi.mock('./tabs/ProfileTab', () => ({ ProfileTab: () => null }))
 vi.mock('./tabs/LeavesTab', () => ({ LeavesTab: () => null }))
 vi.mock('./tabs/ViolationsTab', () => ({ ViolationsTab: () => null }))
 vi.mock('./tabs/ActivityTab', () => ({ ActivityTab: () => null }))
+vi.mock('./tabs/MessagesTab', () => ({ MessagesTab: () => null }))
 vi.mock('@/components/employees/EmployeeForm', () => ({
   EmployeeForm: ({ mode }: any) => <div data-testid="employee-form" data-mode={mode} />,
 }))
@@ -46,6 +47,7 @@ const detail = {
   recent_leaves: [],
   recent_violations: [],
   recent_activity: [],
+  recent_sms: [],
 }
 
 test('clicking Edit renders EmployeeForm in edit mode', async () => {
