@@ -8,6 +8,7 @@ from typing import Literal
 from pydantic import BaseModel, Field
 
 from app.schemas._base import ORMBase
+from app.schemas.sms import SmsMessageRead
 
 # Direction must be one of these two values.
 BookDirection = Literal["incoming", "outgoing"]

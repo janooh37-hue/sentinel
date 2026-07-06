@@ -110,6 +110,27 @@ def test_sms_message_read_validates_from_orm(db_session):
     assert read.body is None
 
 
+def test_bookread_builds_with_sms_field():
+    """BookRead.model_validate must succeed — regression for missing SmsMessageRead import."""
+    from app.schemas.book import BookRead
+
+    m = BookRead.model_validate(
+        {
+            "id": 1,
+            "ref_number": "R-1",
+            "category_id": "c",
+            "subject": None,
+            "direction": None,
+            "stamp_style": None,
+            "created_at": "2026-07-06T00:00:00",
+            "deleted_at": None,
+            "priority": "Normal",
+            "approval_state": "none",
+        }
+    )
+    assert m.sms == []
+
+
 def test_sms_for_book_empty_when_no_versions(db_session):
     """A book with no versions (no template) returns an empty list."""
     if db_session.get(BookCategory, "HR") is None:
