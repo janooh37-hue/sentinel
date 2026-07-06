@@ -88,6 +88,7 @@ export function ScanMatchDialog({
             <div className="mb-2 text-sm font-semibold text-foreground">{t('scanInbox.match.title')}</div>
             <input
               autoFocus
+              dir="auto"
               type="text"
               value={raw}
               onChange={(e) => setRaw(e.target.value)}
@@ -145,7 +146,7 @@ export function ScanMatchDialog({
                 ))}
               </div>
             )}
-            {q.length > 0 && empRows.length === 0 && bookRows.length === 0 && (
+            {q.length > 0 && empRows.length === 0 && bookRows.length === 0 && !employees.isLoading && !books.isLoading && (
               <p className="px-3 py-4 text-center text-xs text-faint">{t('scanInbox.match.noResults')}</p>
             )}
           </div>

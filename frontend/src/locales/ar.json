@@ -2343,12 +2343,11 @@
     "ocrRead": "ما تمت قراءته",
     "openFullDoc": "فتح المستند كاملاً",
     "bestGuesses": "أفضل التطابقات",
-    "filedTo": "تم الحفظ في {{dest}}",
     "openInFile": "فتح في الملف",
     "reMatch": "خطأ؟ إعادة المطابقة",
     "fileTo": "احفظ لدى {{dest}}",
     "ocrField": {
-      "name_en": "الاسم",
+      "name_en": "الاسم (إنجليزي)",
       "name_ar": "الاسم (عربي)",
       "uae_id_no": "الهوية الإماراتية",
       "passport_no": "رقم الجواز",
@@ -2372,7 +2371,6 @@
       "searchPlaceholder": "ابحث عن موظفين أو سجلات…",
       "employees": "الموظفون",
       "records": "السجلات",
-      "fileHere": "احفظ هنا",
       "noResults": "لا نتائج",
       "cancel": "إلغاء"
     },

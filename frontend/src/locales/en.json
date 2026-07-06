@@ -2200,7 +2200,6 @@
     "ocrRead": "What we read",
     "openFullDoc": "Open full document",
     "bestGuesses": "Best guesses",
-    "filedTo": "Filed to {{dest}}",
     "openInFile": "Open in file",
     "reMatch": "Wrong? Re-match",
     "fileTo": "File to {{dest}}",
@@ -2229,7 +2228,6 @@
       "searchPlaceholder": "Search employees or records…",
       "employees": "Employees",
       "records": "Records",
-      "fileHere": "File here",
       "noResults": "No results",
       "cancel": "Cancel"
     },

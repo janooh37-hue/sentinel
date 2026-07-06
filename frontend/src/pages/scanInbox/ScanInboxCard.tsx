@@ -71,7 +71,10 @@ export function ScanInboxCard({ item }: { item: ScanInboxItem }): React.JSX.Elem
 
   const headline = (() => {
     if (item.state === 'error') return t('scanInbox.errorRead')
-    if (item.state === 'auto_filed') return t('scanInbox.filedTo', { dest: destLabel })
+    if (item.state === 'auto_filed')
+      return item.proposed_route === 'book_attach'
+        ? t('scanInbox.autoFiledBook', { ref: item.proposed_ref })
+        : t('scanInbox.autoFiledEmployee', { name: empName })
     if (item.proposed_route === 'book_attach' && item.proposed_ref)
       return t('scanInbox.confirmBook', { ref: item.proposed_ref })
     if (item.proposed_route === 'employee_doc' && empName)
@@ -158,6 +161,7 @@ export function ScanInboxCard({ item }: { item: ScanInboxItem }): React.JSX.Elem
               <button
                 key={c.employee_id}
                 type="button"
+                dir="auto"
                 disabled={chipRoute.isPending}
                 onClick={() => chipRoute.mutate(c.employee_id)}
                 className="rounded-full border border-primary/40 bg-primary-soft px-3 py-1 text-[0.8em] font-medium text-primary hover:bg-primary/10"
