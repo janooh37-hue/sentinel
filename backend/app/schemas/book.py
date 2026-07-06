@@ -198,6 +198,8 @@ class BookRead(ORMBase):
     approval_steps: list[BookApprovalStepRead] = Field(default_factory=list)
     attachment_paths: list[str] = Field(default_factory=list)
     versions: list[BookVersionRead] = Field(default_factory=list)
+    # SMS notifications sent for this book (auto-send + resends).
+    sms: list[SmsMessageRead] = Field(default_factory=list)
 
 
 class BookListResponse(BaseModel):

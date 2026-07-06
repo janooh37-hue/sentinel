@@ -12,6 +12,19 @@ from app.schemas._base import ORMBase
 EventType = Literal["leave_approved", "duty_resumption", "violation"]
 
 
+class SmsMessageRead(ORMBase):
+    """One SMS send attempt — used on both the employee-detail and book-detail surfaces."""
+
+    id: int
+    event_type: str
+    body: str | None
+    phone: str
+    status: str
+    error: str | None
+    language: str
+    created_at: datetime
+
+
 class SmsSendRequest(BaseModel):
     event_type: EventType
     record_id: int

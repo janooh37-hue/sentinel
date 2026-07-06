@@ -18,6 +18,7 @@ from pydantic import BaseModel
 
 from app.schemas._base import ORMBase
 from app.schemas.employee import EmployeeRead
+from app.schemas.sms import SmsMessageRead  # re-exported; keep sx.SmsMessageRead working
 
 
 class EmployeeStatsRead(BaseModel):
@@ -68,17 +69,6 @@ class ActivityItemRead(BaseModel):
     kind: Literal["document", "leave", "violation", "ledger"]
     summary: str
     ref_id: int
-
-
-class SmsMessageRead(ORMBase):
-    id: int
-    event_type: str
-    body: str | None
-    phone: str
-    status: str
-    error: str | None
-    language: str
-    created_at: datetime
 
 
 class EmployeeDetailRead(BaseModel):
