@@ -43,7 +43,7 @@ def test_get_scan_document_serves_inline(db_session, tmp_path, monkeypatch):
     user = _user(db_session, "owner@x.ae")
     f = tmp_path / "scan.pdf"
     f.write_bytes(b"%PDF-1.4 hello")
-    monkeypatch.setattr(svc, "_abs", lambda rel: f)
+    monkeypatch.setattr(svc, "abs_file_path", lambda item: f)
     row = ScanInbox(
         source="email",
         file_path="/s/x.pdf",
@@ -85,7 +85,7 @@ def test_get_scan_document_missing_file_404(db_session, tmp_path, monkeypatch):
     from app.services import scan_inbox_service as svc
 
     user = _user(db_session, "owner3@x.ae")
-    monkeypatch.setattr(svc, "_abs", lambda rel: tmp_path / "does-not-exist.pdf")
+    monkeypatch.setattr(svc, "abs_file_path", lambda item: tmp_path / "does-not-exist.pdf")
     row = ScanInbox(
         source="email",
         file_path="/s/x.pdf",
@@ -108,7 +108,7 @@ def test_get_scan_document_unsafe_type_forces_download(db_session, tmp_path, mon
     user = _user(db_session, "owner4@x.ae")
     f = tmp_path / "evil.html"
     f.write_bytes(b"<script>alert(1)</script>")
-    monkeypatch.setattr(svc, "_abs", lambda rel: f)
+    monkeypatch.setattr(svc, "abs_file_path", lambda item: f)
     row = ScanInbox(
         source="email",
         file_path="/s/evil.html",

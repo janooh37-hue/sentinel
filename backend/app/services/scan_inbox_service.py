@@ -377,8 +377,14 @@ def get_item(db: Session, item_id: int, *, user: User | None) -> ScanInbox:
 
 
 def abs_file_path(item: ScanInbox) -> Path:
-    """Absolute on-disk path of the scanned file."""
-    return _abs(item.file_path)
+    """Absolute on-disk path of the scanned file (guarded to stay under data_dir)."""
+    root = get_settings().data_dir.resolve()
+    path = _abs(item.file_path)
+    if not path.is_relative_to(root):
+        raise NotFoundError(
+            "SCAN_FILE_OUTSIDE_ROOT", f"scan file for {item.id} is outside the data root"
+        )
+    return path
 
 
 def _resolve(item: ScanInbox, user: User | None, resolution: str) -> None:

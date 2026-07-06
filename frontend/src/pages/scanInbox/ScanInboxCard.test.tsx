@@ -58,4 +58,17 @@ describe('ScanInboxCard', () => {
     const link = screen.getByText('scanInbox.openInFile').closest('a')
     expect(link).toHaveAttribute('href', '/employees/G5')
   })
+
+  it('re-match: undo is called then ScanMatchDialog opens', async () => {
+    const undo = vi.spyOn(apiMod.api, 'undoScanItem').mockResolvedValue({} as never)
+    vi.spyOn(apiMod.api, 'listEmployees').mockResolvedValue({ items: [], total: 0 } as never)
+    vi.spyOn(apiMod.api, 'listBooks').mockResolvedValue({ items: [], total: 0 } as never)
+    renderCard(base({
+      state: 'auto_filed', proposed_route: 'employee_doc',
+      proposed_employee_id: 'G5', proposed_employee_name_en: 'Sara Omar',
+    }))
+    fireEvent.click(screen.getByText('scanInbox.reMatch'))
+    await waitFor(() => expect(undo).toHaveBeenCalledWith(1))
+    await screen.findByPlaceholderText('scanInbox.match.searchPlaceholder')
+  })
 })
