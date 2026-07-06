@@ -555,6 +555,7 @@ export type BookRead = components['schemas']['BookRead'] & {
   doc_manager_name?: string | null
   doc_manager_has_signature?: boolean
   imported_doc?: ImportedDocRead | null
+  sms?: SmsMessageRead[]
 }
 
 // Annotation overlay (Slice 3). Hand-typed mirror of schemas.book.BookAnnotationRead

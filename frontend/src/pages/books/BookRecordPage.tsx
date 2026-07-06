@@ -14,6 +14,7 @@ import { useTranslation } from 'react-i18next'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import {
+  AlertTriangle,
   ArrowLeft,
   Check,
   CornerUpLeft,
@@ -25,7 +26,7 @@ import {
   X,
 } from 'lucide-react'
 
-import { api, type BookApprovalStepRead, type BookVersionRead, apiErrorMessage } from '@/lib/api'
+import { api, type BookApprovalStepRead, type BookVersionRead, type SmsMessageRead, apiErrorMessage } from '@/lib/api'
 import { useAuth } from '@/lib/authContext'
 import { useCapabilities } from '@/lib/useCapabilities'
 import {
@@ -738,6 +739,11 @@ export function BookRecordPage(): React.JSX.Element {
           </ol>
           {/* Reviewer rows — advisory chain, below the approver timeline */}
           <ReviewerList reviewers={reviewerSteps(currentSteps)} />
+
+          {/* Notification block — SMS sent for this record */}
+          {book?.sms && book.sms.length > 0 && (
+            <NotificationBlock messages={book.sms} />
+          )}
         </aside>
       </div>
 
@@ -752,6 +758,47 @@ function DeskLoading(): React.JSX.Element {
   return (
     <div className="flex h-full min-h-[400px] items-center justify-center text-muted-foreground">
       <Loader2 className="h-6 w-6 animate-spin" />
+    </div>
+  )
+}
+
+function NotificationBlock({ messages }: { messages: SmsMessageRead[] }): React.JSX.Element {
+  const { t, i18n } = useTranslation()
+  const fmt = useMemo(
+    () => new Intl.DateTimeFormat(i18n.language, { dateStyle: 'medium', timeStyle: 'short' }),
+    [i18n.language],
+  )
+  return (
+    <div className="mt-6">
+      <h2 className="mb-3 text-[0.66em] font-bold uppercase tracking-[0.12em] text-muted-foreground">
+        {t('books.record.notification')}
+      </h2>
+      <div className="flex flex-col gap-2">
+        {messages.map((m) => {
+          const ok = m.status === 'sent'
+          return (
+            <div key={m.id} className="rounded-lg border border-hairline bg-surface p-2.5 text-[0.78em]">
+              <div className="mb-1 flex flex-wrap items-center gap-1.5">
+                <span className={`inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 font-semibold ${ok ? 'bg-success-soft text-success' : 'bg-destructive/10 text-destructive'}`}>
+                  {ok ? <Check className="h-3 w-3" /> : <AlertTriangle className="h-3 w-3" />}
+                  {ok ? t('employee.messages.sent') : t('employee.messages.failed')}
+                </span>
+                <span className="ms-auto font-mono text-muted-foreground">
+                  {fmt.format(new Date(m.created_at))}
+                </span>
+              </div>
+              {m.body && (
+                <div className="whitespace-pre-wrap text-foreground" dir="auto">
+                  {m.body}
+                </div>
+              )}
+              {!ok && m.error && (
+                <div className="mt-1 text-destructive" dir="ltr">{m.error}</div>
+              )}
+            </div>
+          )
+        })}
+      </div>
     </div>
   )
 }

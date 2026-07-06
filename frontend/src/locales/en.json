@@ -739,6 +739,7 @@
       "importedNoPreview": "This imported record's file isn't a PDF, so it can't be previewed here.",
       "downloadImported": "Download original ({{format}})",
       "progress": "Progress",
+      "notification": "Notification",
       "stationSubmitted": "Submitted",
       "stationRevised": "Revised",
       "stationReturned": "Returned",
