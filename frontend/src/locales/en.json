@@ -2195,14 +2195,28 @@
     "autoFiledBook": "Filed to {{ref}}",
     "autoFiledEmployee": "Filed to {{name}}'s documents",
     "errorRead": "Couldn't read this document — route it manually.",
+    "showDetails": "Show details",
+    "hideDetails": "Hide details",
+    "ocrRead": "What we read",
+    "openFullDoc": "Open full document",
+    "bestGuesses": "Best guesses",
+    "filedTo": "Filed to {{dest}}",
+    "openInFile": "Open in file",
+    "reMatch": "Wrong? Re-match",
+    "fileTo": "File to {{dest}}",
+    "ocrField": {
+      "name_en": "Name",
+      "name_ar": "Name (Arabic)",
+      "uae_id_no": "Emirates ID",
+      "passport_no": "Passport #",
+      "expiry": "Expiry",
+      "iban": "IBAN"
+    },
     "actions": {
       "confirm": "Confirm",
-      "pickEmployee": "Pick employee",
-      "pickRecord": "Pick a different record",
       "dismiss": "Dismiss",
       "undo": "Undo",
-      "openEmail": "Open email",
-      "notForm": "Not a GSSG form"
+      "match": "Match…"
     },
     "toast": {
       "filed": "Filed",

@@ -2338,14 +2338,28 @@
     "autoFiledBook": "حُفظ في {{ref}}",
     "autoFiledEmployee": "حُفظ في مستندات {{name}}",
     "errorRead": "تعذّرت قراءة هذا المستند — وجّهه يدويًا.",
+    "showDetails": "عرض التفاصيل",
+    "hideDetails": "إخفاء التفاصيل",
+    "ocrRead": "ما تمت قراءته",
+    "openFullDoc": "فتح المستند كاملاً",
+    "bestGuesses": "أفضل التطابقات",
+    "filedTo": "تم الحفظ في {{dest}}",
+    "openInFile": "فتح في الملف",
+    "reMatch": "خطأ؟ إعادة المطابقة",
+    "fileTo": "احفظ لدى {{dest}}",
+    "ocrField": {
+      "name_en": "الاسم",
+      "name_ar": "الاسم (عربي)",
+      "uae_id_no": "الهوية الإماراتية",
+      "passport_no": "رقم الجواز",
+      "expiry": "الانتهاء",
+      "iban": "الآيبان"
+    },
     "actions": {
       "confirm": "تأكيد",
-      "pickEmployee": "اختر موظفًا",
-      "pickRecord": "اختر سجلًا آخر",
       "dismiss": "تجاهل",
       "undo": "تراجع",
-      "openEmail": "فتح البريد",
-      "notForm": "ليس نموذج GSSG"
+      "match": "طابق…"
     },
     "toast": {
       "filed": "تم الحفظ",
