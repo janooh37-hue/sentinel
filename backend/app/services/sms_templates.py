@@ -215,7 +215,7 @@ def _resignation(rec, emp: Employee, lang: str) -> str:
 def _warning(rec, emp: Employee, lang: str) -> str:
     name = nf.employee_name(emp, lang)
     ds, wd = nf.fmt_date(rec.today), nf.weekday(rec.today, lang)
-    vtype = nf.type_label((rec.fields or {}).get("violation_type", ""), lang)
+    vtype = nf.type_labels((rec.fields or {}).get("violation_type", ""), lang)
     if lang == "ar":
         return (
             f"عزيزي {name}،\n"

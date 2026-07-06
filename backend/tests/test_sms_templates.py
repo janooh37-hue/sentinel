@@ -301,3 +301,27 @@ def test_warning_en():
     assert "Violation: Late Attendance." in text
     assert "Please contact the administration office for any clarification." in text
     assert not any("؀" <= c <= "ۿ" for c in text)
+
+
+def test_warning_multi_violation_ar_no_leak():
+    rec = SimpleNamespace(
+        fields={"violation_type": "Late - التأخر، Sleeping - النوم"},
+        today=date(2026, 7, 5),
+    )
+    text = st.render_text(nf.EVENT_WARNING, "ar", rec, _emp())
+    assert "التأخر" in text
+    assert "النوم" in text
+    assert "Late" not in text
+    assert "Sleeping" not in text
+    assert not _has_ascii_letter(text.replace("05/07/2026", ""))
+
+
+def test_warning_multi_violation_en():
+    rec = SimpleNamespace(
+        fields={"violation_type": "Late - التأخر، Sleeping - النوم"},
+        today=date(2026, 7, 5),
+    )
+    text = st.render_text(nf.EVENT_WARNING, "en", rec, _emp())
+    assert "Late" in text
+    assert "Sleeping" in text
+    assert not any("؀" <= c <= "ۿ" for c in text)
