@@ -247,6 +247,9 @@
       "Resigned": "Resigned",
       "Terminated": "Terminated"
     },
+    "statusDialog": {
+      "title": "Change status"
+    },
     "validation": {
       "endDateRequired": "End date is required when status is not Active",
       "idRequired": "Employee ID is required",
@@ -1518,6 +1521,9 @@
       "nameAr": "Name (AR)",
       "position": "Position",
       "department": "Department",
+      "dutyUnit": "Duty unit",
+      "dutyPost": "Duty post",
+      "transfer": "Transfer duty location",
       "doj": "Date of joining",
       "status": "Status"
     },
@@ -2157,6 +2163,7 @@
       "reason": "Reason (optional)",
       "reasonPlaceholder": "Re-distribution / operational need…",
       "generate": "Generate General Book letter →",
+      "issueLetter": "Issue transfer letter (General Book)",
       "success": "Transfer letter {{ref}} generated.",
       "viewRecord": "View record",
       "movedNoBook_one": "Moved 1 employee",

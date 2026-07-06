@@ -260,6 +260,9 @@
       "Resigned": "مستقيل",
       "Terminated": "مفصول"
     },
+    "statusDialog": {
+      "title": "تغيير الحالة"
+    },
     "validation": {
       "endDateRequired": "تاريخ نهاية الخدمة مطلوب عند تغيير الحالة عن نشط",
       "idRequired": "رقم الموظف مطلوب",
@@ -1601,6 +1604,9 @@
       "nameAr": "الاسم (عربي)",
       "position": "المسمى الوظيفي",
       "department": "القسم",
+      "dutyUnit": "الوحدة",
+      "dutyPost": "النقطة",
+      "transfer": "نقل مكان العمل",
       "doj": "تاريخ الالتحاق",
       "status": "الحالة"
     },
@@ -2300,6 +2306,7 @@
       "reason": "السبب (اختياري)",
       "reasonPlaceholder": "إعادة توزيع / احتياج تشغيلي…",
       "generate": "إنشاء كتاب النقل ←",
+      "issueLetter": "إصدار كتاب نقل في الكتب العامة",
       "success": "تم إنشاء كتاب النقل {{ref}}.",
       "viewRecord": "عرض السجل",
       "movedNoBook_one": "تم نقل موظف واحد",
