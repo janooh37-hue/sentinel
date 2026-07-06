@@ -11,7 +11,13 @@ from sqlalchemy.orm import Session
 from app.api.deps import require_capability
 from app.db.models import Employee, LedgerEntry, ScanInbox, User
 from app.db.session import get_db
-from app.schemas.scan_inbox import RouteRequest, ScanInboxCount, ScanInboxItem, ScanInboxList
+from app.schemas.scan_inbox import (
+    EmployeeCandidate,  # noqa: F401 — imported for type clarity; Pydantic coerces stored dicts
+    RouteRequest,
+    ScanInboxCount,
+    ScanInboxItem,
+    ScanInboxList,
+)
 from app.services import scan_inbox_service
 
 router = APIRouter(prefix="/scan-inbox", tags=["scan-inbox"])
@@ -71,6 +77,8 @@ def _to_item(
         email_sender=sender,
         email_subject=subject,
         error_detail=row.error_detail,
+        fields=row.fields or {},
+        candidates=row.candidates or [],
     )
 
 

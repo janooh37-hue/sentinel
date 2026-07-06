@@ -7,6 +7,13 @@ from datetime import datetime
 from pydantic import BaseModel
 
 
+class EmployeeCandidate(BaseModel):
+    employee_id: str
+    name_en: str
+    name_ar: str | None = None
+    score: float
+
+
 class ScanInboxItem(BaseModel):
     id: int
     created_at: datetime
@@ -27,6 +34,8 @@ class ScanInboxItem(BaseModel):
     email_sender: str | None = None
     email_subject: str | None = None
     error_detail: str | None = None
+    fields: dict[str, str] = {}
+    candidates: list[EmployeeCandidate] = []
 
 
 class ScanInboxList(BaseModel):
@@ -45,4 +54,4 @@ class RouteRequest(BaseModel):
     book_id: int | None = None
 
 
-__all__ = ["RouteRequest", "ScanInboxCount", "ScanInboxItem", "ScanInboxList"]
+__all__ = ["EmployeeCandidate", "RouteRequest", "ScanInboxCount", "ScanInboxItem", "ScanInboxList"]

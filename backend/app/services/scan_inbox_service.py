@@ -26,7 +26,9 @@ from app.services import book_service, scan_triage_service, vault_service
 
 log = logging.getLogger(__name__)
 
-SCANNABLE_EXTS = frozenset({".pdf", ".png", ".jpg", ".jpeg", ".tif", ".tiff", ".webp", ".bmp", ".heic"})
+SCANNABLE_EXTS = frozenset(
+    {".pdf", ".png", ".jpg", ".jpeg", ".tif", ".tiff", ".webp", ".bmp", ".heic"}
+)
 MAX_OCR_ATTEMPTS = 3
 _MODEL_VERSION = "tesseract-v1"
 
@@ -45,6 +47,7 @@ def _abs(rel_path: str) -> Path:
 
 
 # ─────────────────────────── enqueue (trigger faucet) ───────────────────────────
+
 
 def enqueue_email_attachment(
     db: Session,
@@ -84,6 +87,7 @@ def enqueue_email_attachment(
 
 
 # ─────────────────────────────── drain (OCR + route) ───────────────────────────
+
 
 def drain_pending(db: Session, *, limit: int = 20) -> int:
     """OCR + route a batch of ``pending_ocr`` rows. Returns the number processed."""
@@ -133,10 +137,14 @@ def _process_one(db: Session, item: ScanInbox) -> None:
 
     employees = list(db.execute(select(Employee)).scalars())
     decision = scan_triage_service.route(
-        ocr_text=text, qr_refs=qr_refs, db=db, employees=employees  # type: ignore[arg-type]
+        ocr_text=text,
+        qr_refs=qr_refs,
+        db=db,
+        employees=employees,  # type: ignore[arg-type]
     )
     item.document_type = decision.document_type
     item.fields = decision.fields or {}
+    item.candidates = decision.candidates or []
     item.raw_text = text
     item.confidence = decision.confidence
     item.qr_refs = qr_refs
@@ -166,6 +174,7 @@ def _process_one(db: Session, item: ScanInbox) -> None:
 
 
 # ─────────────────────────────── file actions ──────────────────────────────────
+
 
 def _apply_file(
     db: Session, item: ScanInbox, *, user: User | None, require_undoable: bool = False
@@ -207,8 +216,11 @@ def _apply_file(
     elif item.proposed_route == "employee_doc" and item.proposed_employee_id is not None:
         kind = _VAULT_KIND.get(item.document_type or "", "other")
         vf = vault_service.import_bytes(
-            db, employee_id=item.proposed_employee_id, kind=kind,
-            filename=item.filename, data=raw,
+            db,
+            employee_id=item.proposed_employee_id,
+            kind=kind,
+            filename=item.filename,
+            data=raw,
         )
         item.undo_token = f"vault:{vf.id}"
         _capture_expiry(db, item)
@@ -256,7 +268,12 @@ def confirm(db: Session, item_id: int, *, user: User | None) -> ScanInbox:
 
 
 def route_item(
-    db: Session, item_id: int, *, user: User | None, employee_id: str | None = None, book_id: int | None = None
+    db: Session,
+    item_id: int,
+    *,
+    user: User | None,
+    employee_id: str | None = None,
+    book_id: int | None = None,
 ) -> ScanInbox:
     """Operator overrides the destination, then files."""
     item = _get(db, item_id)
@@ -315,22 +332,25 @@ def undo(db: Session, item_id: int, *, user: User | None) -> ScanInbox:
 
 # ──────────────────────────────── queries ──────────────────────────────────────
 
-def list_items(db: Session, *, owner_user_id: int | None, state: str | None = None) -> list[ScanInbox]:
+
+def list_items(
+    db: Session, *, owner_user_id: int | None, state: str | None = None
+) -> list[ScanInbox]:
     stmt = select(ScanInbox).order_by(ScanInbox.created_at.desc())
     if owner_user_id is not None:
         stmt = stmt.where(ScanInbox.owner_user_id == owner_user_id)
     if state is not None:
         stmt = stmt.where(ScanInbox.state == state)
     else:
-        stmt = stmt.where(ScanInbox.state.in_(["awaiting_confirmation", "unrouted", "auto_filed", "error"]))
+        stmt = stmt.where(
+            ScanInbox.state.in_(["awaiting_confirmation", "unrouted", "auto_filed", "error"])
+        )
     return list(db.execute(stmt).scalars())
 
 
 def counts(db: Session, *, owner_user_id: int | None) -> dict[str, int]:
     out: dict[str, int] = {"awaiting_confirmation": 0, "unrouted": 0}
-    stmt = select(ScanInbox.state).where(
-        ScanInbox.state.in_(["awaiting_confirmation", "unrouted"])
-    )
+    stmt = select(ScanInbox.state).where(ScanInbox.state.in_(["awaiting_confirmation", "unrouted"]))
     if owner_user_id is not None:
         stmt = stmt.where(ScanInbox.owner_user_id == owner_user_id)
     for (st,) in db.execute(stmt).all():
@@ -340,6 +360,7 @@ def counts(db: Session, *, owner_user_id: int | None) -> dict[str, int]:
 
 
 # ──────────────────────────────── helpers ──────────────────────────────────────
+
 
 def _get(db: Session, item_id: int) -> ScanInbox:
     item = db.get(ScanInbox, item_id)
