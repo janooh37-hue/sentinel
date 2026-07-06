@@ -7,6 +7,11 @@ record. Delivery goes through an **Android phone on the LAN running SMS Gate**
 (local mode), which sends the SMS from its own SIM — no carrier sender
 registration and no trade license required.
 
+The same button and channel also cover HR service-form events triggered from
+the book/form record page: Salary Transfer, Salary Deduction, Employee
+Clearance, HR Request, Passport Release, Warning, and Resignation. All reuse
+the same `GSSG_SMS_*` configuration — no extra setup required.
+
 ## 1. Prepare the Android phone
 
 1. Install **SMS Gate** (sms-gate.app) on the company Android phone.
