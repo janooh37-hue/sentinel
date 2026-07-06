@@ -36,6 +36,7 @@ class TriageDecision:
     document_type: str = "unknown"
     fields: dict[str, str] = field(default_factory=dict)
     confidence: float = 0.0
+    candidates: list[dict] = field(default_factory=list)
 
 
 def _book_attach(book: Book, tier: Literal["auto", "confirm"]) -> TriageDecision:
@@ -77,8 +78,11 @@ def route(
     pr = result.pipeline
     if pr is None:
         return TriageDecision(
-            tier="manual", proposed_route="unknown",
-            document_type="unknown", fields={}, confidence=0.0,
+            tier="manual",
+            proposed_route="unknown",
+            document_type="unknown",
+            fields={},
+            confidence=0.0,
         )
     fields = {f.key: f.value for f in pr.extraction.fields}
     doctype = pr.extraction.doc_type.value
@@ -88,16 +92,24 @@ def route(
 
     if doctype == "unknown" or emp_id is None:
         return TriageDecision(
-            tier="manual", proposed_route="unknown",
-            document_type=doctype, fields=fields, confidence=conf,
+            tier="manual",
+            proposed_route="unknown",
+            document_type=doctype,
+            fields=fields,
+            confidence=conf,
+            candidates=pr.candidates,
         )
 
     if doctype == "sick_leave":
         # Filing a sick-leave means a leave record gets created → always confirm.
         return TriageDecision(
-            tier="confirm", proposed_route="leave",
-            proposed_employee_id=emp_id, match_score=score,
-            document_type=doctype, fields=fields, confidence=conf,
+            tier="confirm",
+            proposed_route="leave",
+            proposed_employee_id=emp_id,
+            match_score=score,
+            document_type=doctype,
+            fields=fields,
+            confidence=conf,
         )
 
     if doctype in _EMPLOYEE_DOCTYPES:
@@ -105,13 +117,20 @@ def route(
         return TriageDecision(
             tier="auto" if exact else "confirm",
             proposed_route="employee_doc",
-            proposed_employee_id=emp_id, match_score=score,
-            document_type=doctype, fields=fields, confidence=conf,
+            proposed_employee_id=emp_id,
+            match_score=score,
+            document_type=doctype,
+            fields=fields,
+            confidence=conf,
         )
 
     return TriageDecision(
-        tier="manual", proposed_route="unknown",
-        document_type=doctype, fields=fields, confidence=conf,
+        tier="manual",
+        proposed_route="unknown",
+        document_type=doctype,
+        fields=fields,
+        confidence=conf,
+        candidates=pr.candidates,
     )
 
 
