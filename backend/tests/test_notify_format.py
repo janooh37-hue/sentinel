@@ -170,6 +170,19 @@ def test_book_event_constants():
     )
 
 
+def test_template_events_map():
+    assert nf.TEMPLATE_EVENTS == {
+        "Salary Transfer Request": nf.EVENT_SALARY_TRANSFER,
+        "Salary Deduction Form": nf.EVENT_SALARY_DEDUCTION,
+        "Employee Clearance Form": nf.EVENT_EMPLOYEE_CLEARANCE,
+        "HR Request Form": nf.EVENT_HR_REQUEST,
+        "Passport Release Form": nf.EVENT_PASSPORT_RELEASE,
+        "Warning Form": nf.EVENT_WARNING,
+        "Resignation Letter": nf.EVENT_RESIGNATION,
+    }
+    assert set(nf.TEMPLATE_EVENTS.values()) == nf.BOOK_EVENTS
+
+
 # --- type_labels (multi-violation localization) ---
 
 
