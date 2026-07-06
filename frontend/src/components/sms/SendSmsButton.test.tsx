@@ -39,4 +39,11 @@ describe('SendSmsButton', () => {
     const { container } = render(<SendSmsButton eventType="violation" recordId={1} />)
     await waitFor(() => expect(container).toBeEmptyDOMElement())
   })
+
+  it('renders the send button for a book service record event type', async () => {
+    vi.spyOn(api, 'getSmsStatus').mockResolvedValue({ enabled: true, last: null })
+    render(<SendSmsButton eventType="salary_transfer" recordId={42} />)
+    const btn = await screen.findByRole('button')
+    expect(btn).toBeInTheDocument()
+  })
 })

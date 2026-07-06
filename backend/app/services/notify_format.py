@@ -16,11 +16,80 @@ from app.db.models import Employee
 EVENT_LEAVE_APPROVED = "leave_approved"
 EVENT_DUTY_RESUMPTION = "duty_resumption"
 EVENT_VIOLATION = "violation"
+EVENT_SALARY_TRANSFER = "salary_transfer"
+EVENT_SALARY_DEDUCTION = "salary_deduction"
+EVENT_EMPLOYEE_CLEARANCE = "employee_clearance"
+EVENT_HR_REQUEST = "hr_request"
+EVENT_PASSPORT_RELEASE = "passport_release"
+EVENT_WARNING = "warning"
+EVENT_RESIGNATION = "resignation"
+
+BOOK_EVENTS: frozenset[str] = frozenset(
+    {
+        EVENT_SALARY_TRANSFER,
+        EVENT_SALARY_DEDUCTION,
+        EVENT_EMPLOYEE_CLEARANCE,
+        EVENT_HR_REQUEST,
+        EVENT_PASSPORT_RELEASE,
+        EVENT_WARNING,
+        EVENT_RESIGNATION,
+    }
+)
 
 # Monday-first to match datetime.weekday() and ARABIC_WEEKDAYS' ordering.
 ENGLISH_WEEKDAYS: tuple[str, ...] = (
-    "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday",
+    "Monday",
+    "Tuesday",
+    "Wednesday",
+    "Thursday",
+    "Friday",
+    "Saturday",
+    "Sunday",
 )
+
+HR_OFFICE_AR = "مكتب الموارد البشرية"
+ADMIN_OFFICE_AR = "مكتب الإدارة"
+
+# Gregorian month names, January at index 0 (UAE-standard Arabic transliterations).
+AR_MONTHS: tuple[str, ...] = (
+    "يناير",
+    "فبراير",
+    "مارس",
+    "أبريل",
+    "مايو",
+    "يونيو",
+    "يوليو",
+    "أغسطس",
+    "سبتمبر",
+    "أكتوبر",
+    "نوفمبر",
+    "ديسمبر",
+)
+EN_MONTHS: tuple[str, ...] = (
+    "January",
+    "February",
+    "March",
+    "April",
+    "May",
+    "June",
+    "July",
+    "August",
+    "September",
+    "October",
+    "November",
+    "December",
+)
+
+
+def salary_transfer_month(today: date, lang: str) -> str:
+    """Month a salary transfer takes effect: on/before the 15th -> next month;
+    after the 15th -> the month after. Returns month name + year only (no
+    leading «شهر» — the template already supplies it)."""
+    bump = 1 if today.day <= 15 else 2
+    m = today.month - 1 + bump  # 0-indexed target month, may exceed 11
+    year = today.year + m // 12
+    table = AR_MONTHS if lang == "ar" else EN_MONTHS
+    return f"{table[m % 12]} {year}"
 
 
 def english_part(value: str) -> str:
@@ -115,6 +184,17 @@ def type_label(value: str, lang: str) -> str:
     return entry[0] if entry else english_part(v)
 
 
+def type_labels(value: str, lang: str) -> str:
+    """Localize a possibly-multi violation-type string. Splits on the join
+    separator, localizes each item via type_label, and rejoins with the
+    language-appropriate separator. A single (unjoined) value round-trips
+    identically to type_label."""
+    parts = [p.strip() for p in (value or "").split("،")]
+    localized = [type_label(p, lang) for p in parts if p]
+    sep = "، " if lang == "ar" else ", "
+    return sep.join(localized)
+
+
 def employee_name(emp: Employee, lang: str) -> str:
     if lang == "ar":
         return emp.name_ar or emp.name_en
@@ -138,8 +218,37 @@ def action_text(action_taken: str | None, deduction_days: int, lang: str) -> str
             return _ACTION_AR_EN.get(a, a)
         return a
     if deduction_days:
-        return (
-            f"خصم {deduction_days} يوم" if lang == "ar"
-            else f"{deduction_days} day(s) deduction"
-        )
+        return f"خصم {deduction_days} يوم" if lang == "ar" else f"{deduction_days} day(s) deduction"
     return "—"
+
+
+# HR Request form "Requested Documents" options -> (English, Arabic) label.
+# These options have no Arabic label elsewhere in the app; this is their source.
+_HR_DOC_LABELS: dict[str, tuple[str, str]] = {
+    "insurance_card": ("Insurance Card", "بطاقة التأمين"),
+    "id_card": ("ID Card", "بطاقة الهوية"),
+    "employment_certificate": ("Employment Certificate", "خطاب عمل"),
+    "salary_certificate": ("Salary Certificate", "شهادة راتب"),
+    "salary_transfer_letter": ("Salary Transfer Letter", "خطاب تحويل راتب"),
+    "salary_pay_slip": ("Salary Pay Slip", "قسيمة الراتب"),
+    "experience_certificate": ("Experience Certificate", "شهادة خبرة"),
+}
+
+
+def _doc_keys(selections) -> list[str]:
+    """Normalize the stored doc_selections shape (dict/list/str) to a key list."""
+    if isinstance(selections, dict):
+        return [k for k, v in selections.items() if v]
+    if isinstance(selections, list):
+        return [s for s in selections if isinstance(s, str)]
+    if isinstance(selections, str) and selections:
+        return [selections]
+    return []
+
+
+def hr_request_docs(selections, lang: str) -> tuple[str, int]:
+    """Localized, joined label(s) for the requested documents, plus the count."""
+    idx = 1 if lang == "ar" else 0
+    labels = [_HR_DOC_LABELS[k][idx] for k in _doc_keys(selections) if k in _HR_DOC_LABELS]
+    sep = "، " if lang == "ar" else ", "
+    return sep.join(labels), len(labels)

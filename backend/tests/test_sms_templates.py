@@ -1,8 +1,10 @@
 from datetime import date
+from types import SimpleNamespace
 
 import pytest
 
 from app.db.models import Employee, Leave, Violation
+from app.services import notify_format as nf
 from app.services import sms_templates as st
 
 
@@ -14,8 +16,14 @@ def _emp(**kw):
 
 def test_leave_approved_english_full_text():
     emp = _emp(msg_language="en")
-    leave = Leave(id=7, employee_id="G1", leave_type="Annual Leave - إجازة سنوية",
-                  start_date=date(2026, 7, 5), end_date=date(2026, 7, 9), days=5)
+    leave = Leave(
+        id=7,
+        employee_id="G1",
+        leave_type="Annual Leave - إجازة سنوية",
+        start_date=date(2026, 7, 5),
+        end_date=date(2026, 7, 9),
+        days=5,
+    )
     text = st.render_text("leave_approved", "en", leave, emp)
     assert text == (
         "Dear John Smith,\n"
@@ -31,8 +39,14 @@ def test_leave_approved_english_full_text():
 
 def test_annual_leave_adds_idcard_and_signoff_both_languages():
     emp = _emp()
-    leave = Leave(id=9, employee_id="G1", leave_type="Annual Leave",
-                  start_date=date(2026, 7, 5), end_date=date(2026, 7, 9), days=5)
+    leave = Leave(
+        id=9,
+        employee_id="G1",
+        leave_type="Annual Leave",
+        start_date=date(2026, 7, 5),
+        end_date=date(2026, 7, 9),
+        days=5,
+    )
     ar = st.render_text("leave_approved", "ar", leave, emp)
     assert "يرجى إحضار بطاقة العمل إلى المكتب لتجنب أي مخالفة." in ar
     assert "إجازة سعيدة." in ar
@@ -43,8 +57,14 @@ def test_annual_leave_adds_idcard_and_signoff_both_languages():
 
 def test_non_annual_leave_has_no_idcard_lines():
     emp = _emp(msg_language="en")
-    leave = Leave(id=10, employee_id="G1", leave_type="Sick Leave - الإجازة المرضية",
-                  start_date=date(2026, 7, 5), end_date=date(2026, 7, 9), days=5)
+    leave = Leave(
+        id=10,
+        employee_id="G1",
+        leave_type="Sick Leave - الإجازة المرضية",
+        start_date=date(2026, 7, 5),
+        end_date=date(2026, 7, 9),
+        days=5,
+    )
     en = st.render_text("leave_approved", "en", leave, emp)
     assert "work ID" not in en
     assert "Have a nice vacation." not in en
@@ -52,8 +72,14 @@ def test_non_annual_leave_has_no_idcard_lines():
 
 def test_leave_approved_english_no_doubled_leave_word():
     emp = _emp(msg_language="en")
-    leave = Leave(id=8, employee_id="G1", leave_type="Annual Leave",  # english-only
-                  start_date=date(2026, 7, 5), end_date=date(2026, 7, 9), days=5)
+    leave = Leave(
+        id=8,
+        employee_id="G1",
+        leave_type="Annual Leave",  # english-only
+        start_date=date(2026, 7, 5),
+        end_date=date(2026, 7, 9),
+        days=5,
+    )
     text = st.render_text("leave_approved", "en", leave, emp)
     assert "Your Annual Leave has been approved." in text
     assert "Leave leave" not in text
@@ -61,8 +87,14 @@ def test_leave_approved_english_no_doubled_leave_word():
 
 def test_leave_approved_arabic_no_english_leak_when_english_only_stored():
     emp = _emp()
-    leave = Leave(id=8, employee_id="G1", leave_type="Annual Leave",  # english-only
-                  start_date=date(2026, 7, 5), end_date=date(2026, 7, 9), days=5)
+    leave = Leave(
+        id=8,
+        employee_id="G1",
+        leave_type="Annual Leave",  # english-only
+        start_date=date(2026, 7, 5),
+        end_date=date(2026, 7, 9),
+        days=5,
+    )
     text = st.render_text("leave_approved", "ar", leave, emp)
     assert "(الإجازة السنوية)" in text
     assert "Annual" not in text
@@ -70,8 +102,14 @@ def test_leave_approved_arabic_no_english_leak_when_english_only_stored():
 
 def test_leave_approved_arabic_has_signature_and_weekday():
     emp = _emp()
-    leave = Leave(id=7, employee_id="G1", leave_type="Annual Leave - إجازة سنوية",
-                  start_date=date(2026, 7, 5), end_date=date(2026, 7, 9), days=5)
+    leave = Leave(
+        id=7,
+        employee_id="G1",
+        leave_type="Annual Leave - إجازة سنوية",
+        start_date=date(2026, 7, 5),
+        end_date=date(2026, 7, 9),
+        days=5,
+    )
     text = st.render_text("leave_approved", "ar", leave, emp)
     assert text.startswith("عزيزي جون سميث،")
     assert "(الأحد)" in text
@@ -81,9 +119,14 @@ def test_leave_approved_arabic_has_signature_and_weekday():
 
 def test_duty_resumption_uses_return_date():
     emp = _emp(msg_language="en")
-    leave = Leave(id=7, employee_id="G1", leave_type="Annual - سنوية",
-                  start_date=date(2026, 7, 5), end_date=date(2026, 7, 9),
-                  return_date=date(2026, 7, 10))
+    leave = Leave(
+        id=7,
+        employee_id="G1",
+        leave_type="Annual - سنوية",
+        start_date=date(2026, 7, 5),
+        end_date=date(2026, 7, 9),
+        return_date=date(2026, 7, 10),
+    )
     text = st.render_text("duty_resumption", "en", leave, emp)
     assert text == (
         "Dear John Smith,\n"
@@ -95,9 +138,14 @@ def test_duty_resumption_uses_return_date():
 
 def test_violation_falls_back_to_deduction():
     emp = _emp(msg_language="en")
-    v = Violation(id=3, employee_id="G1",
-                  violation_type="Sleeping on Duty - النوم أثناء الخدمة",
-                  date=date(2026, 7, 1), action_taken=None, deduction_days=2)
+    v = Violation(
+        id=3,
+        employee_id="G1",
+        violation_type="Sleeping on Duty - النوم أثناء الخدمة",
+        date=date(2026, 7, 1),
+        action_taken=None,
+        deduction_days=2,
+    )
     text = st.render_text("violation", "en", v, emp)
     assert text == (
         "Dear John Smith,\n"
@@ -111,3 +159,187 @@ def test_violation_falls_back_to_deduction():
 def test_unknown_event_raises():
     with pytest.raises(KeyError):
         st.render_text("nope", "ar", None, _emp())
+
+
+def _has_ascii_letter(s: str) -> bool:
+    return any("a" <= c.lower() <= "z" for c in s)
+
+
+def test_salary_transfer_ar():
+    rec = SimpleNamespace(fields={"bank_name": "بنك أبوظبي الأول"}, today=date(2026, 7, 5))
+    text = st.render_text(nf.EVENT_SALARY_TRANSFER, "ar", rec, _emp())
+    assert "تم اعتماد طلب تحويل راتبك إلى حسابك لدى بنك أبوظبي الأول." in text
+    assert "سيتم التحويل مع راتب شهر أغسطس 2026." in text
+    assert "مكتب الموارد البشرية" in text
+    assert text.strip().endswith("إدارة مركز الإصلاح والتأهيل بالوثبة")
+    assert "شهر شهر" not in text
+    assert not _has_ascii_letter(text.replace("2026", ""))
+
+
+def test_salary_transfer_en():
+    rec = SimpleNamespace(fields={"bank_name": "First Abu Dhabi Bank"}, today=date(2026, 7, 5))
+    text = st.render_text(nf.EVENT_SALARY_TRANSFER, "en", rec, _emp())
+    assert (
+        "Your salary transfer request to your account at First Abu Dhabi Bank has been approved."
+        in text
+    )
+    assert "The transfer will take effect with the August 2026 salary." in text
+    assert not any("؀" <= c <= "ۿ" for c in text)
+
+
+def test_salary_deduction_ar():
+    rec = SimpleNamespace(fields={"amount": "500"}, today=date(2026, 7, 5))
+    text = st.render_text(nf.EVENT_SALARY_DEDUCTION, "ar", rec, _emp())
+    assert "سيتم خصم مبلغ 500 درهم من المرتب الشهري." in text
+    assert not _has_ascii_letter(text.replace("500", ""))
+
+
+def test_salary_deduction_en():
+    rec = SimpleNamespace(fields={"amount": "500"}, today=date(2026, 7, 5))
+    text = st.render_text(nf.EVENT_SALARY_DEDUCTION, "en", rec, _emp())
+    assert "An amount of AED 500 will be deducted from the monthly salary." in text
+    assert not any("؀" <= c <= "ۿ" for c in text)
+
+
+def test_employee_clearance_ar():
+    rec = SimpleNamespace(fields={}, today=date(2026, 7, 5))  # 05/07/2026 is a Sunday
+    text = st.render_text(nf.EVENT_EMPLOYEE_CLEARANCE, "ar", rec, _emp())
+    assert "تم إنجاز إخلاء طرفك اعتباراً من 05/07/2026 (الأحد)." in text
+    assert "نتمنى لك التوفيق." in text
+    assert not _has_ascii_letter(text.replace("05/07/2026", ""))
+
+
+def test_employee_clearance_en():
+    rec = SimpleNamespace(fields={}, today=date(2026, 7, 5))
+    text = st.render_text(nf.EVENT_EMPLOYEE_CLEARANCE, "en", rec, _emp())
+    assert "Your employee clearance has been completed, effective 05/07/2026 (Sunday)." in text
+    assert "We wish you all the best." in text
+    assert not any("؀" <= c <= "ۿ" for c in text)
+
+
+def test_hr_request_single_ar():
+    rec = SimpleNamespace(
+        fields={"doc_selections": {"salary_certificate": True}}, today=date(2026, 7, 5)
+    )
+    text = st.render_text(nf.EVENT_HR_REQUEST, "ar", rec, _emp())
+    assert "تم تقديم طلبك للحصول على شهادة راتب." in text
+    assert "سيتم إبلاغك عند صدور المستند." in text
+    assert not _has_ascii_letter(text)
+
+
+def test_hr_request_single_en():
+    rec = SimpleNamespace(fields={"doc_selections": "salary_certificate"}, today=date(2026, 7, 5))
+    text = st.render_text(nf.EVENT_HR_REQUEST, "en", rec, _emp())
+    assert "Your request for Salary Certificate has been submitted." in text
+    assert "You will be notified once the document is issued." in text
+    assert not any("؀" <= c <= "ۿ" for c in text)
+
+
+def test_hr_request_plural_ar():
+    rec = SimpleNamespace(
+        fields={"doc_selections": {"salary_certificate": True, "experience_certificate": True}},
+        today=date(2026, 7, 5),
+    )
+    text = st.render_text(nf.EVENT_HR_REQUEST, "ar", rec, _emp())
+    assert "تم تقديم طلبك للحصول على المستندات التالية: شهادة راتب، شهادة خبرة." in text
+    assert "سيتم إبلاغك عند صدورها." in text
+    assert not _has_ascii_letter(text)
+
+
+def test_passport_release_ar():
+    rec = SimpleNamespace(fields={}, today=date(2026, 7, 5))
+    text = st.render_text(nf.EVENT_PASSPORT_RELEASE, "ar", rec, _emp())
+    assert "تم تقديم طلب استلام جواز سفرك." in text
+    assert "سيتم إبلاغك عند جاهزيته للاستلام." in text
+    assert not _has_ascii_letter(text)
+
+
+def test_passport_release_en():
+    rec = SimpleNamespace(fields={}, today=date(2026, 7, 5))
+    text = st.render_text(nf.EVENT_PASSPORT_RELEASE, "en", rec, _emp())
+    assert "Your passport release request has been submitted." in text
+    assert "You will be notified when it is ready for collection." in text
+    assert not any("؀" <= c <= "ۿ" for c in text)
+
+
+def test_resignation_ar():
+    rec = SimpleNamespace(fields={}, today=date(2026, 7, 5))
+    text = st.render_text(nf.EVENT_RESIGNATION, "ar", rec, _emp())
+    assert "تم استلام خطاب استقالتك بتاريخ 05/07/2026 (الأحد)." in text
+    assert "سيتم إبلاغك بالإجراءات التالية." in text
+    assert not _has_ascii_letter(text.replace("05/07/2026", ""))
+
+
+def test_resignation_en():
+    rec = SimpleNamespace(fields={}, today=date(2026, 7, 5))
+    text = st.render_text(nf.EVENT_RESIGNATION, "en", rec, _emp())
+    assert "Your resignation letter has been received on 05/07/2026 (Sunday)." in text
+    assert "You will be informed of the next steps." in text
+    assert not any("؀" <= c <= "ۿ" for c in text)
+
+
+def test_warning_ar_routes_to_admin_office():
+    rec = SimpleNamespace(
+        fields={"violation_type": "Late Attendance - التأخر عن الدوام"},
+        today=date(2026, 7, 5),
+    )
+    text = st.render_text(nf.EVENT_WARNING, "ar", rec, _emp())
+    assert "تم إصدار إنذار بحقك بتاريخ 05/07/2026 (الأحد)." in text
+    assert "المخالفة: التأخر عن الدوام." in text
+    assert "يرجى مراجعة مكتب الإدارة لأي استفسار." in text
+    assert "مكتب الموارد البشرية" not in text  # warnings route to admin, not HR
+    assert not _has_ascii_letter(text.replace("05/07/2026", ""))
+
+
+def test_warning_en():
+    rec = SimpleNamespace(
+        fields={"violation_type": "Late Attendance - التأخر عن الدوام"},
+        today=date(2026, 7, 5),
+    )
+    text = st.render_text(nf.EVENT_WARNING, "en", rec, _emp())
+    assert "A warning has been issued against you on 05/07/2026 (Sunday)." in text
+    assert "Violation: Late Attendance." in text
+    assert "Please contact the administration office for any clarification." in text
+    assert not any("؀" <= c <= "ۿ" for c in text)
+
+
+def test_warning_multi_violation_ar_no_leak():
+    rec = SimpleNamespace(
+        fields={"violation_type": "Late - التأخر، Sleeping - النوم"},
+        today=date(2026, 7, 5),
+    )
+    text = st.render_text(nf.EVENT_WARNING, "ar", rec, _emp())
+    assert "التأخر" in text
+    assert "النوم" in text
+    assert "Late" not in text
+    assert "Sleeping" not in text
+    assert not _has_ascii_letter(text.replace("05/07/2026", ""))
+
+
+def test_warning_multi_violation_en():
+    rec = SimpleNamespace(
+        fields={"violation_type": "Late - التأخر، Sleeping - النوم"},
+        today=date(2026, 7, 5),
+    )
+    text = st.render_text(nf.EVENT_WARNING, "en", rec, _emp())
+    assert "Late" in text
+    assert "Sleeping" in text
+    assert not any("؀" <= c <= "ۿ" for c in text)
+
+
+def test_violation_multi_type_ar_no_leak():
+    emp = _emp()
+    v = Violation(
+        id=4,
+        employee_id="G1",
+        violation_type="Late - التأخر، Sleeping - النوم",
+        date=date(2026, 7, 1),
+        action_taken=None,
+        deduction_days=2,
+    )
+    text = st.render_text("violation", "ar", v, emp)
+    assert "التأخر" in text
+    assert "النوم" in text
+    assert "Late" not in text
+    assert "Sleeping" not in text
+    assert not _has_ascii_letter(text.replace("01/07/2026", ""))
