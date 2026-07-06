@@ -1644,7 +1644,6 @@
         "hr": "HR"
       },
       "items": {
-        "documents": "Documents",
         "armed_license": "Armed License",
         "cicpa_card": "CICPA Card",
         "id_card": "ID Card",
@@ -1664,6 +1663,7 @@
         "traffic_fine": "Traffic Fine",
         "mobile": "Mobile",
         "sim_card": "SIM Card",
+        "laptop_desktop": "Laptop/Desktop",
         "pc_backup": "PC Backup",
         "email": "Email",
         "dms": "DMS",
