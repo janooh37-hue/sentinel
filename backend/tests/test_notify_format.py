@@ -124,3 +124,28 @@ def test_salary_month_has_no_leading_shahr():
 def test_office_constants():
     assert nf.HR_OFFICE_AR == "مكتب الموارد البشرية"
     assert nf.ADMIN_OFFICE_AR == "مكتب الإدارة"
+
+
+def test_hr_docs_single_arabic():
+    assert nf.hr_request_docs({"salary_certificate": True}, "ar") == ("شهادة راتب", 1)
+
+
+def test_hr_docs_single_english():
+    assert nf.hr_request_docs("salary_certificate", "en") == ("Salary Certificate", 1)
+
+
+def test_hr_docs_employment_certificate_label():
+    # Confirmed label: خطاب عمل (NOT شهادة عمل / شهادة راتب).
+    assert nf.hr_request_docs(["employment_certificate"], "ar") == ("خطاب عمل", 1)
+
+
+def test_hr_docs_multiple_joined_arabic():
+    label, count = nf.hr_request_docs(
+        {"salary_certificate": True, "experience_certificate": True}, "ar"
+    )
+    assert label == "شهادة راتب، شهادة خبرة"
+    assert count == 2
+
+
+def test_hr_docs_unknown_key_skipped():
+    assert nf.hr_request_docs(["salary_certificate", "bogus"], "en") == ("Salary Certificate", 1)

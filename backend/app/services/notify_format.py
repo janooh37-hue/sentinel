@@ -190,3 +190,35 @@ def action_text(action_taken: str | None, deduction_days: int, lang: str) -> str
     if deduction_days:
         return f"خصم {deduction_days} يوم" if lang == "ar" else f"{deduction_days} day(s) deduction"
     return "—"
+
+
+# HR Request form "Requested Documents" options -> (English, Arabic) label.
+# These options have no Arabic label elsewhere in the app; this is their source.
+_HR_DOC_LABELS: dict[str, tuple[str, str]] = {
+    "insurance_card": ("Insurance Card", "بطاقة التأمين"),
+    "id_card": ("ID Card", "بطاقة الهوية"),
+    "employment_certificate": ("Employment Certificate", "خطاب عمل"),
+    "salary_certificate": ("Salary Certificate", "شهادة راتب"),
+    "salary_transfer_letter": ("Salary Transfer Letter", "خطاب تحويل راتب"),
+    "salary_pay_slip": ("Salary Pay Slip", "قسيمة الراتب"),
+    "experience_certificate": ("Experience Certificate", "شهادة خبرة"),
+}
+
+
+def _doc_keys(selections) -> list[str]:
+    """Normalize the stored doc_selections shape (dict/list/str) to a key list."""
+    if isinstance(selections, dict):
+        return [k for k, v in selections.items() if v]
+    if isinstance(selections, list):
+        return [s for s in selections if isinstance(s, str)]
+    if isinstance(selections, str) and selections:
+        return [selections]
+    return []
+
+
+def hr_request_docs(selections, lang: str) -> tuple[str, int]:
+    """Localized, joined label(s) for the requested documents, plus the count."""
+    idx = 1 if lang == "ar" else 0
+    labels = [_HR_DOC_LABELS[k][idx] for k in _doc_keys(selections) if k in _HR_DOC_LABELS]
+    sep = "، " if lang == "ar" else ", "
+    return sep.join(labels), len(labels)
