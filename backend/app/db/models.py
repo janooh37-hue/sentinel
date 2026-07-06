@@ -425,6 +425,8 @@ class SmsMessage(Base):
     error: Mapped[str | None] = mapped_column(Text, nullable=True)
     sent_by: Mapped[int | None] = mapped_column(Integer, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
+    # Full rendered SMS text (added 0047). Nullable: historical rows predate it.
+    body: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     __table_args__ = (Index("ix_sms_messages_event", "event_type", "event_ref"),)
 
