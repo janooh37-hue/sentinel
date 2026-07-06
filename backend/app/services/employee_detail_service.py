@@ -36,9 +36,7 @@ DEFAULT_LEAVE_ALLOWANCE_DAYS = 30
 _APPROVED_STATUS = "Approved"
 
 
-def get_employee_detail(
-    db: Session, employee_id: str
-) -> sx.EmployeeDetailRead | None:
+def get_employee_detail(db: Session, employee_id: str) -> sx.EmployeeDetailRead | None:
     emp = db.get(models.Employee, employee_id)
     if emp is None:
         return None
@@ -70,9 +68,7 @@ def get_employee_detail(
 
     violation_count = int(
         db.execute(
-            select(func.count(models.Violation.id)).where(
-                models.Violation.employee_id == emp.id
-            )
+            select(func.count(models.Violation.id)).where(models.Violation.employee_id == emp.id)
         ).scalar_one()
     )
 
@@ -157,9 +153,17 @@ def get_employee_detail(
         )
     ]
 
-    activity = _build_activity(
-        recent_docs, recent_leaves, recent_violations, recent_ledger
-    )
+    activity = _build_activity(recent_docs, recent_leaves, recent_violations, recent_ledger)
+
+    recent_sms = [
+        sx.SmsMessageRead.model_validate(m)
+        for m in db.scalars(
+            select(models.SmsMessage)
+            .where(models.SmsMessage.employee_id == emp.id)
+            .order_by(models.SmsMessage.id.desc())
+            .limit(50)
+        )
+    ]
 
     _ver = photo_service.get_photo_version(db, emp.id)
     return sx.EmployeeDetailRead(
@@ -172,6 +176,7 @@ def get_employee_detail(
         recent_violations=recent_violations,
         recent_ledger=recent_ledger,
         recent_activity=activity,
+        recent_sms=recent_sms,
     )
 
 
