@@ -1,0 +1,388 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>SMS Service Templates — Draft v2 for Review</title>
+<style>
+  :root {
+    --bg:#0f1115; --card:#181b22; --line:#2a2f3a; --ink:#e7e9ee;
+    --mut:#9aa3b2; --ar:#ffd27d; --en:#8fd0ff; --ok:#7ee0a6; --warn:#ffb4a2;
+  }
+  * { box-sizing:border-box; }
+  body {
+    margin:0; background:var(--bg); color:var(--ink);
+    font-family:"Segoe UI",system-ui,-apple-system,sans-serif; line-height:1.55;
+    padding:32px clamp(16px,4vw,64px);
+  }
+  h1 { font-size:24px; margin:0 0 4px; }
+  h2 { font-size:15px; letter-spacing:.06em; text-transform:uppercase; color:var(--mut); margin:40px 0 12px; }
+  .sub { color:var(--mut); margin:0 0 8px; max-width:74ch; }
+  .legend { display:flex; gap:20px; flex-wrap:wrap; color:var(--mut); font-size:13px; margin:14px 0 8px; }
+  .legend b { color:var(--ink); }
+  .svc { background:var(--card); border:1px solid var(--line); border-radius:14px; margin:16px 0; overflow:hidden; }
+  .svc-head {
+    display:flex; justify-content:space-between; align-items:baseline; gap:16px;
+    padding:14px 18px; border-bottom:1px solid var(--line); flex-wrap:wrap;
+  }
+  .svc-head .en-name { font-size:17px; font-weight:600; }
+  .svc-head .ar-name { font-size:17px; color:var(--ar); direction:rtl; }
+  .svc-head .key { font-size:12px; color:var(--mut); font-family:ui-monospace,Consolas,monospace; }
+  .verb { font-size:12px; color:var(--ok); }
+  .cols { display:grid; grid-template-columns:1fr 1fr; gap:0; }
+  @media (max-width:760px){ .cols{ grid-template-columns:1fr; } }
+  .col { padding:18px; }
+  .col + .col { border-left:1px solid var(--line); }
+  @media (max-width:760px){ .col + .col{ border-left:0; border-top:1px solid var(--line);} }
+  .tag { font-size:11px; letter-spacing:.08em; text-transform:uppercase; color:var(--mut); margin-bottom:10px; }
+  .tag.ar { color:var(--ar); }
+  .tag.en { color:var(--en); }
+  .msg { white-space:pre-wrap; background:#0c0e13; border:1px solid var(--line); border-radius:10px; padding:14px 16px; font-size:15px; }
+  .msg.ar { direction:rtl; text-align:right; font-family:"Segoe UI","Tahoma","Arial",sans-serif; }
+  .msg.tpl { color:var(--mut); font-size:13.5px; margin-top:10px; }
+  .tok { color:var(--ok); }
+  .sig { color:var(--mut); }
+  .fullrow { padding:0 18px 16px; }
+  .note { color:var(--warn); font-size:13px; margin-top:6px; }
+  .plural { color:var(--mut); font-size:12.5px; margin-top:8px; direction:rtl; text-align:right; }
+  .excluded { background:var(--card); border:1px dashed var(--line); border-radius:12px; padding:16px 18px; }
+  .excluded li { margin:4px 0; }
+  .excluded .ar { color:var(--ar); direction:rtl; unicode-bidi:isolate; }
+  code { font-family:ui-monospace,Consolas,monospace; color:var(--ok); background:#0c0e13; padding:1px 5px; border-radius:5px; }
+  .filled { color:var(--mut); font-size:12px; margin:8px 0 2px; }
+  table.terms { border-collapse:collapse; width:100%; max-width:720px; font-size:14px; }
+  table.terms td, table.terms th { border:1px solid var(--line); padding:7px 12px; text-align:left; }
+  table.terms th { color:var(--mut); font-weight:600; font-size:12px; letter-spacing:.05em; text-transform:uppercase; }
+  table.terms .ar { direction:rtl; text-align:right; color:var(--ar); }
+</style>
+</head>
+<body>
+
+  <h1>SMS Service Templates — Draft v2</h1>
+  <p class="sub">
+    <b>7 services.</b> Each leads with a <b>service-specific action verb</b> (not the flat “تمت معالجة / has
+    been processed”) and carries the <b>real detail the form holds</b> — bank name, amount, requested document,
+    salary month, violation. Three are <b>completions</b> (Salary Transfer, Salary Deduction, Clearance), three
+    are <b>acknowledgements</b> that the request was logged (HR Request, Passport, Resignation), and one is a
+    <b>disciplinary notice</b> (Warning). Arabic-default; Arabic labels taken verbatim from the app catalog
+    where they exist. Sent manually by an admin via the “Notify by SMS” button.
+  </p>
+  <p class="sub" style="color:var(--ok)">
+    ✓ <b>Confirmed:</b> no second SMS — HR Request / Passport / Resignation say “سيتم إبلاغك … / you will be
+    notified”, and that later notice is delivered by phone or in person, so the wording holds. These
+    acknowledgements exist to reassure the employee that <b>his request was received</b>.
+  </p>
+
+  <div class="legend">
+    <span><b>Left</b> = Arabic (default, most critical)</span>
+    <span><b>Right</b> = English (only when employee language = EN)</span>
+    <span><span class="tok">{{token}}</span> = filled at send time</span>
+  </div>
+
+  <p class="filled">Each card: <b>rendered sample</b> on top, raw <b>token template</b> below. Sample data —
+    name <b>محمد أحمد / Mohammed Ahmed</b>, bank <b>بنك أبوظبي الأول / First Abu Dhabi Bank</b>,
+    amount <b>500 درهم / AED 500</b>, requested doc <b>شهادة راتب / Salary Certificate</b>,
+    violation <b>التأخر عن الدوام / Late Attendance</b>, date <b>05/07/2026 (الأحد / Sunday)</b>.</p>
+
+  <!-- ============ 1. SALARY TRANSFER ============ -->
+  <div class="svc">
+    <div class="svc-head">
+      <span class="en-name">Salary Transfer Request</span>
+      <span class="ar-name">طلب تحويل راتب</span>
+      <span class="verb">verb: تم اعتماد · approved</span>
+      <span class="key">key: Salary Transfer Request</span>
+    </div>
+    <div class="cols">
+      <div class="col">
+        <div class="tag ar">العربية</div>
+        <div class="msg ar">عزيزي محمد أحمد،
+تم اعتماد طلب تحويل راتبك إلى حسابك لدى بنك أبوظبي الأول.
+سيتم التحويل مع راتب شهر أغسطس 2026.
+لأي استفسار يرجى مراجعة مكتب الموارد البشرية.
+<span class="sig">إدارة مركز الإصلاح والتأهيل بالوثبة</span></div>
+        <div class="msg ar tpl">عزيزي <span class="tok">{الاسم}</span>،
+تم اعتماد طلب تحويل راتبك إلى حسابك لدى <span class="tok">{اسم البنك}</span>.
+سيتم التحويل مع راتب شهر <span class="tok">{شهر الصرف}</span>.
+لأي استفسار يرجى مراجعة مكتب الموارد البشرية.
+إدارة مركز الإصلاح والتأهيل بالوثبة</div>
+      </div>
+      <div class="col">
+        <div class="tag en">English</div>
+        <div class="msg en">Dear Mohammed Ahmed,
+Your salary transfer request to your account at First Abu Dhabi Bank has been approved.
+The transfer will take effect with the August 2026 salary.
+For any clarification, please contact the HR office.
+<span class="sig">Al Wathba Rehabilitation Centre</span></div>
+        <div class="msg en tpl">Dear <span class="tok">{name}</span>,
+Your salary transfer request to your account at <span class="tok">{bank name}</span> has been approved.
+The transfer will take effect with the <span class="tok">{salary month}</span> salary.
+For any clarification, please contact the HR office.
+Al Wathba Rehabilitation Centre</div>
+      </div>
+    </div>
+    <div class="fullrow">
+      <div class="note"><b>{salary month} rule (definite):</b> finalized on or before the <b>15th</b> →
+        <b>next</b> month’s salary; after the 15th → the <b>month after</b>. Sample finalized 05/07/2026
+        (before 15th) → <b>August 2026</b>. Stated definitely (“سيتم / will”), no hedging.
+        <br><b>Token contract:</b> the template already contains the word «شهر», so <code>{شهر الصرف}</code> must be filled with
+        the month name + year <i>only</i> (e.g. «أغسطس 2026»), never «شهر أغسطس 2026» — otherwise the output doubles to «شهر شهر».</div>
+    </div>
+  </div>
+
+  <!-- ============ 2. SALARY DEDUCTION ============ -->
+  <div class="svc">
+    <div class="svc-head">
+      <span class="en-name">Salary Deduction Form</span>
+      <span class="ar-name">خصم راتب</span>
+      <span class="verb">verb: سيتم خصم · will be deducted</span>
+      <span class="key">key: Salary Deduction Form</span>
+    </div>
+    <div class="cols">
+      <div class="col">
+        <div class="tag ar">العربية</div>
+        <div class="msg ar">عزيزي محمد أحمد،
+سيتم خصم مبلغ 500 درهم من المرتب الشهري.
+لأي استفسار يرجى مراجعة مكتب الموارد البشرية.
+<span class="sig">إدارة مركز الإصلاح والتأهيل بالوثبة</span></div>
+        <div class="msg ar tpl">عزيزي <span class="tok">{الاسم}</span>،
+سيتم خصم مبلغ <span class="tok">{المبلغ}</span> درهم من المرتب الشهري.
+لأي استفسار يرجى مراجعة مكتب الموارد البشرية.
+إدارة مركز الإصلاح والتأهيل بالوثبة</div>
+      </div>
+      <div class="col">
+        <div class="tag en">English</div>
+        <div class="msg en">Dear Mohammed Ahmed,
+An amount of AED 500 will be deducted from the monthly salary.
+For any clarification, please contact the HR office.
+<span class="sig">Al Wathba Rehabilitation Centre</span></div>
+        <div class="msg en tpl">Dear <span class="tok">{name}</span>,
+An amount of AED <span class="tok">{amount}</span> will be deducted from the monthly salary.
+For any clarification, please contact the HR office.
+Al Wathba Rehabilitation Centre</div>
+      </div>
+    </div>
+    <div class="fullrow"><div class="note">
+      ✓ <b>Verb locked:</b> future tense «سيتم خصم … / will be deducted» — the SMS is sent <b>before payroll</b>,
+      so it correctly states the deduction is upcoming (not already taken). Phrased «من المرتب الشهري / from the
+      monthly salary».<br>
+      Optional: append the reason («سبب الخصم / Reason for Deduction») if you want it in the SMS.</div></div>
+  </div>
+
+  <!-- ============ 3. HR REQUEST ============ -->
+  <div class="svc">
+    <div class="svc-head">
+      <span class="en-name">HR Request</span>
+      <span class="ar-name">طلب موارد بشرية</span>
+      <span class="verb">verb: تم تقديم طلب · request submitted</span>
+      <span class="key">key: HR Request Form</span>
+    </div>
+    <div class="cols">
+      <div class="col">
+        <div class="tag ar">العربية</div>
+        <div class="msg ar">عزيزي محمد أحمد،
+تم تقديم طلبك للحصول على شهادة راتب.
+سيتم إبلاغك عند صدور المستند.
+<span class="sig">إدارة مركز الإصلاح والتأهيل بالوثبة</span></div>
+        <div class="msg ar tpl">عزيزي <span class="tok">{الاسم}</span>،
+تم تقديم طلبك للحصول على <span class="tok">{المستند}</span>.
+سيتم إبلاغك عند صدور المستند.
+إدارة مركز الإصلاح والتأهيل بالوثبة</div>
+        <div class="plural">صيغة الجمع (عند طلب أكثر من مستند): «تم تقديم طلبك للحصول على المستندات التالية: شهادة راتب، شهادة خبرة. سيتم إبلاغك عند صدورها.»</div>
+      </div>
+      <div class="col">
+        <div class="tag en">English</div>
+        <div class="msg en">Dear Mohammed Ahmed,
+Your request for a Salary Certificate has been submitted.
+You will be notified once the document is issued.
+<span class="sig">Al Wathba Rehabilitation Centre</span></div>
+        <div class="msg en tpl">Dear <span class="tok">{name}</span>,
+Your request for <span class="tok">{document}</span> has been submitted.
+You will be notified once the document is issued.
+Al Wathba Rehabilitation Centre</div>
+      </div>
+    </div>
+    <div class="fullrow"><div class="note">The <code>{المستند / document}</code> value comes from the form’s “Requested Documents” selection. Those options have no Arabic map in the app yet — proposed labels are in the table below; please confirm them.<br>
+      <b>Register:</b> singular <code>سيتم إبلاغك</code> — confirmed, matches «عزيزي {الاسم}» and «طلبك».</div></div>
+  </div>
+
+  <!-- ============ 4. EMPLOYEE CLEARANCE ============ -->
+  <div class="svc">
+    <div class="svc-head">
+      <span class="en-name">Employee Clearance</span>
+      <span class="ar-name">إخلاء طرف</span>
+      <span class="verb">verb: تم إنجاز · completed</span>
+      <span class="key">key: Employee Clearance Form</span>
+    </div>
+    <div class="cols">
+      <div class="col">
+        <div class="tag ar">العربية</div>
+        <div class="msg ar">عزيزي محمد أحمد،
+تم إنجاز إخلاء طرفك اعتباراً من 05/07/2026 (الأحد).
+نتمنى لك التوفيق.
+<span class="sig">إدارة مركز الإصلاح والتأهيل بالوثبة</span></div>
+        <div class="msg ar tpl">عزيزي <span class="tok">{الاسم}</span>،
+تم إنجاز إخلاء طرفك اعتباراً من <span class="tok">{التاريخ}</span> (<span class="tok">{اليوم}</span>).
+نتمنى لك التوفيق.
+إدارة مركز الإصلاح والتأهيل بالوثبة</div>
+      </div>
+      <div class="col">
+        <div class="tag en">English</div>
+        <div class="msg en">Dear Mohammed Ahmed,
+Your employee clearance has been completed, effective 05/07/2026 (Sunday).
+We wish you all the best.
+<span class="sig">Al Wathba Rehabilitation Centre</span></div>
+        <div class="msg en tpl">Dear <span class="tok">{name}</span>,
+Your employee clearance has been completed, effective <span class="tok">{date}</span> (<span class="tok">{weekday}</span>).
+We wish you all the best.
+Al Wathba Rehabilitation Centre</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ 5. PASSPORT RELEASE ============ -->
+  <div class="svc">
+    <div class="svc-head">
+      <span class="en-name">Passport Request / Release</span>
+      <span class="ar-name">طلب جواز السفر</span>
+      <span class="verb">verb: تم تقديم طلب · request submitted</span>
+      <span class="key">key: Passport Release Form</span>
+    </div>
+    <div class="cols">
+      <div class="col">
+        <div class="tag ar">العربية</div>
+        <div class="msg ar">عزيزي محمد أحمد،
+تم تقديم طلب استلام جواز سفرك.
+سيتم إبلاغك عند جاهزيته للاستلام.
+<span class="sig">إدارة مركز الإصلاح والتأهيل بالوثبة</span></div>
+        <div class="msg ar tpl">عزيزي <span class="tok">{الاسم}</span>،
+تم تقديم طلب استلام جواز سفرك.
+سيتم إبلاغك عند جاهزيته للاستلام.
+إدارة مركز الإصلاح والتأهيل بالوثبة</div>
+      </div>
+      <div class="col">
+        <div class="tag en">English</div>
+        <div class="msg en">Dear Mohammed Ahmed,
+Your passport release request has been submitted.
+You will be notified when it is ready for collection.
+<span class="sig">Al Wathba Rehabilitation Centre</span></div>
+        <div class="msg en tpl">Dear <span class="tok">{name}</span>,
+Your passport release request has been submitted.
+You will be notified when it is ready for collection.
+Al Wathba Rehabilitation Centre</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ 6. WARNING ============ -->
+  <div class="svc">
+    <div class="svc-head">
+      <span class="en-name">Warning</span>
+      <span class="ar-name">إنذار</span>
+      <span class="verb">verb: تم إصدار إنذار · warning issued · routes to مكتب الإدارة</span>
+      <span class="key">key: Warning Form</span>
+    </div>
+    <div class="cols">
+      <div class="col">
+        <div class="tag ar">العربية</div>
+        <div class="msg ar">عزيزي محمد أحمد،
+تم إصدار إنذار بحقك بتاريخ 05/07/2026 (الأحد).
+المخالفة: التأخر عن الدوام.
+يرجى مراجعة مكتب الإدارة لأي استفسار.
+<span class="sig">إدارة مركز الإصلاح والتأهيل بالوثبة</span></div>
+        <div class="msg ar tpl">عزيزي <span class="tok">{الاسم}</span>،
+تم إصدار إنذار بحقك بتاريخ <span class="tok">{التاريخ}</span> (<span class="tok">{اليوم}</span>).
+المخالفة: <span class="tok">{نوع المخالفة}</span>.
+يرجى مراجعة مكتب الإدارة لأي استفسار.
+إدارة مركز الإصلاح والتأهيل بالوثبة</div>
+      </div>
+      <div class="col">
+        <div class="tag en">English</div>
+        <div class="msg en">Dear Mohammed Ahmed,
+A warning has been issued against you on 05/07/2026 (Sunday).
+Violation: Late Attendance.
+Please contact the administration office for any clarification.
+<span class="sig">Al Wathba Rehabilitation Centre</span></div>
+        <div class="msg en tpl">Dear <span class="tok">{name}</span>,
+A warning has been issued against you on <span class="tok">{date}</span> (<span class="tok">{weekday}</span>).
+Violation: <span class="tok">{violation type}</span>.
+Please contact the administration office for any clarification.
+Al Wathba Rehabilitation Centre</div>
+      </div>
+    </div>
+    <div class="fullrow"><div class="note">Disciplinary — so it follows the existing <b>violation</b> template
+      (date + type + “راجع مكتب الإدارة”), and the <code>{نوع المخالفة}</code> value reuses the same
+      <code>type_label()</code> localizer as violations, so the warning’s violation name is already bilingual.</div></div>
+  </div>
+
+  <!-- ============ 7. RESIGNATION ============ -->
+  <div class="svc">
+    <div class="svc-head">
+      <span class="en-name">Resignation</span>
+      <span class="ar-name">خطاب استقالة</span>
+      <span class="verb">verb: تم استلام · received (acknowledgement)</span>
+      <span class="key">key: Resignation Letter</span>
+    </div>
+    <div class="cols">
+      <div class="col">
+        <div class="tag ar">العربية</div>
+        <div class="msg ar">عزيزي محمد أحمد،
+تم استلام خطاب استقالتك بتاريخ 05/07/2026 (الأحد).
+سيتم إبلاغك بالإجراءات التالية.
+<span class="sig">إدارة مركز الإصلاح والتأهيل بالوثبة</span></div>
+        <div class="msg ar tpl">عزيزي <span class="tok">{الاسم}</span>،
+تم استلام خطاب استقالتك بتاريخ <span class="tok">{التاريخ}</span> (<span class="tok">{اليوم}</span>).
+سيتم إبلاغك بالإجراءات التالية.
+إدارة مركز الإصلاح والتأهيل بالوثبة</div>
+      </div>
+      <div class="col">
+        <div class="tag en">English</div>
+        <div class="msg en">Dear Mohammed Ahmed,
+Your resignation letter has been received on 05/07/2026 (Sunday).
+You will be informed of the next steps.
+<span class="sig">Al Wathba Rehabilitation Centre</span></div>
+        <div class="msg en tpl">Dear <span class="tok">{name}</span>,
+Your resignation letter has been received on <span class="tok">{date}</span> (<span class="tok">{weekday}</span>).
+You will be informed of the next steps.
+Al Wathba Rehabilitation Centre</div>
+      </div>
+    </div>
+    <div class="fullrow"><div class="note">Neutral receipt confirmation — no reason quoted (the form’s
+      «سبب الاستقالة» is sensitive). “سيتم إبلاغك بالإجراءات اللاحقة” is delivered by phone/in person (no second SMS).</div></div>
+  </div>
+
+  <!-- ============ NEW TERMS: HR REQUEST DOC LABELS ============ -->
+  <h2>Arabic labels for HR-request documents — ✓ confirmed</h2>
+  <p class="sub">The “Requested Documents” options on the HR Request form. They have no Arabic label in the app
+    today, so the SMS supplies these (to be added as a small map when wired).</p>
+  <table class="terms">
+    <tr><th>Option key</th><th>English</th><th>Arabic (proposed)</th></tr>
+    <tr><td><code>insurance_card</code></td><td>Insurance Card</td><td class="ar">بطاقة التأمين</td></tr>
+    <tr><td><code>id_card</code></td><td>ID Card</td><td class="ar">بطاقة الهوية</td></tr>
+    <tr><td><code>employment_certificate</code></td><td>Employment Certificate</td><td class="ar">خطاب عمل</td></tr>
+    <tr><td><code>salary_certificate</code></td><td>Salary Certificate</td><td class="ar">شهادة راتب</td></tr>
+    <tr><td><code>salary_transfer_letter</code></td><td>Salary Transfer Letter</td><td class="ar">خطاب تحويل راتب</td></tr>
+    <tr><td><code>salary_pay_slip</code></td><td>Salary Pay Slip</td><td class="ar">قسيمة الراتب</td></tr>
+    <tr><td><code>experience_certificate</code></td><td>Experience Certificate</td><td class="ar">شهادة خبرة</td></tr>
+  </table>
+
+  <!-- ============ NOT INCLUDED ============ -->
+  <h2>Not included yet — say if you want any added</h2>
+  <div class="excluded">
+    <ul>
+      <li><b>Acknowledgment / Material Request</b> · <span class="ar">استلام المواد / طلب مواد</span> — item-receipt forms; usually internal.</li>
+      <li><b>Leave Permit</b> · <span class="ar">تصريح خروج</span> &nbsp;·&nbsp; <b>Administrative Leave</b> · <span class="ar">طلب إجازة إدارية</span> — leave-adjacent; could reuse the existing leave-approved message.</li>
+    </ul>
+  </div>
+
+  <h2>Notes on wiring (after copy is approved)</h2>
+  <p class="sub">
+    Reuses existing helpers (<code>employee_name</code>, <code>fmt_date</code>, <code>weekday</code>,
+    <code>_SIGNATURE_AR/EN</code>). New pieces to add: form-field tokens (<code>bank_name</code>,
+    <code>amount</code>, <code>doc_selections</code>), a small <b>Arabic document-label map</b> (table above),
+    the <b>salary-month rule</b> (≤15th → next month, else month-after) as a dated helper in
+    <code>notify_format.py</code>, and <code>مكتب الموارد البشرية</code> pinned as a named constant beside the
+    signature so the HR-office phrase can’t drift. No changes to how names/dates are formatted.
+  </p>
+
+</body>
+</html>
