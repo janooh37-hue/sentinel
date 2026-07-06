@@ -22,6 +22,7 @@ import { ExtractionReviewPanel } from '@/components/extraction/ExtractionReviewP
 import { CapabilityGate } from '@/components/shell/CapabilityGate'
 import type { ExtractionResponse } from '@/lib/extraction'
 import type { TemplateDetailResponse, TemplateField } from './types'
+import { findViolationOthersField } from './templateFieldHelpers'
 import { TextField } from './fields/TextField'
 import { TextareaField } from './fields/TextareaField'
 import { DateField } from './fields/DateField'
@@ -94,6 +95,17 @@ function renderField(
     label_en: field.label_en,
     label_ar: field.label_ar,
     required: field.required,
+  }
+
+  // Don't render the Violation Form's `explanation` textarea standalone — the
+  // violation grid hosts it inside the "Others" reveal.
+  const othersField = findViolationOthersField(fields)
+  if (
+    othersField &&
+    field.id === othersField.id &&
+    field.type !== 'violation_checkboxes'
+  ) {
+    return null
   }
 
   // Manager embedding is policy-enforced server-side (form_policy, spec
@@ -232,7 +244,13 @@ function renderField(
       return <EmployeesTableField key={field.id} {...common} />
 
     case 'violation_checkboxes':
-      return <ViolationCheckboxesField key={field.id} {...common} />
+      return (
+        <ViolationCheckboxesField
+          key={field.id}
+          {...common}
+          othersName={findViolationOthersField(fields)?.id}
+        />
+      )
 
     case 'violation_combo':
       return <ViolationComboField key={field.id} {...common} />

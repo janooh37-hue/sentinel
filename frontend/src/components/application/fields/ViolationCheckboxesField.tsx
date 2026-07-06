@@ -13,7 +13,7 @@
  * indices match the printed Violation Form (GSSG-NAT 300-004).
  */
 
-import { Controller, useFormContext } from 'react-hook-form'
+import { Controller, useFormContext, useWatch } from 'react-hook-form'
 import { useTranslation } from 'react-i18next'
 
 import { Label } from '@/components/ui/label'
@@ -25,20 +25,43 @@ interface SelectedViolation {
   name: string
 }
 
+/** Sentinel row for the free-text "Others" selection. Never queried by the
+ *  printed template (`vio()` only looks at rows 7–28), so it prints nothing in
+ *  the violation table; it only satisfies the min-1 rule and shows as "Others"
+ *  in the Violation record. The typed detail lands in the companion field. */
+const OTHERS_ROW = 0
+const OTHERS_NAME = 'Others'
+
+interface ViolationCheckboxesProps extends FieldProps {
+  /** Key of the companion free-text field (the Violation Form's `explanation`)
+   *  that the "Others" checkbox reveals and feeds. When omitted, no Others UI
+   *  is rendered. Supplied by TemplateForm, which absorbs that field so it does
+   *  not also render standalone. */
+  othersName?: string
+}
+
 export function ViolationCheckboxesField({
   name,
   label_en,
   label_ar,
   required,
-}: FieldProps): React.JSX.Element {
-  const { i18n } = useTranslation()
+  othersName,
+}: ViolationCheckboxesProps): React.JSX.Element {
+  const { i18n, t } = useTranslation()
   const isAr = i18n.language.startsWith('ar')
   const label = isAr ? label_ar : label_en
 
   const {
     control,
+    setValue,
     formState: { errors },
   } = useFormContext()
+
+  // Companion free-text value (empty string when no Others field is wired).
+  const othersText = useWatch({
+    control,
+    name: othersName ?? '__violation_others_unused__',
+  }) as string | undefined
 
   const error = (errors[name] as { message?: string } | undefined)?.message
 
@@ -62,6 +85,24 @@ export function ViolationCheckboxesField({
             } else {
               field.onChange(
                 [...value, { row, name: vname }].sort((a, b) => a.row - b.row),
+              )
+            }
+          }
+
+          // "Others" is open when its sentinel is selected, or (legacy/revise)
+          // when the companion field already carries text. Ticking off removes
+          // the sentinel AND clears that text so nothing lingers in the cell.
+          const othersOpen =
+            selectedRows.has(OTHERS_ROW) || Boolean(othersText && othersText.length > 0)
+          const toggleOthers = () => {
+            if (othersOpen) {
+              field.onChange(value.filter((v) => v.row !== OTHERS_ROW))
+              if (othersName) setValue(othersName, '', { shouldDirty: true })
+            } else {
+              field.onChange(
+                [...value, { row: OTHERS_ROW, name: OTHERS_NAME }].sort(
+                  (a, b) => a.row - b.row,
+                ),
               )
             }
           }
@@ -95,15 +136,55 @@ export function ViolationCheckboxesField({
                             // Violation record depends on it; only the visible
                             // label below is localized.
                             onChange={() => toggle(v.row, v.en)}
-                            className="mt-0.5 h-4 w-4 rounded border-input accent-primary"
+                            className="mt-0.5 h-4 w-4 shrink-0 rounded border-input accent-primary"
                           />
-                          <span dir="auto">{isAr ? v.ar : v.en}</span>
+                          <span dir="auto" className="leading-snug">
+                            {isAr ? v.ar : v.en}
+                          </span>
                         </label>
                       )
                     })}
                   </div>
                 </div>
               ))}
+
+              {othersName && (
+                <div className="flex flex-col gap-1.5 border-t border-hairline pt-3">
+                  <label
+                    htmlFor={`${name}-others`}
+                    className="flex items-start gap-2 text-xs text-foreground cursor-pointer select-none"
+                  >
+                    <input
+                      id={`${name}-others`}
+                      type="checkbox"
+                      checked={othersOpen}
+                      onChange={toggleOthers}
+                      className="mt-0.5 h-4 w-4 shrink-0 rounded border-input accent-primary"
+                    />
+                    <span dir="auto" className="leading-snug">
+                      {t('application.violationOthers.label')}
+                    </span>
+                  </label>
+                  {othersOpen && (
+                    <Controller
+                      control={control}
+                      name={othersName}
+                      defaultValue=""
+                      render={({ field: exp }) => (
+                        <textarea
+                          value={(exp.value as string) ?? ''}
+                          onChange={exp.onChange}
+                          onBlur={exp.onBlur}
+                          rows={2}
+                          dir="auto"
+                          placeholder={t('application.violationOthers.placeholder')}
+                          className="w-full rounded-md border border-input bg-surface px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 focus-visible:ring-offset-background"
+                        />
+                      )}
+                    />
+                  )}
+                </div>
+              )}
             </div>
           )
         }}

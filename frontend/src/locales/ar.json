@@ -1653,6 +1653,10 @@
       "selected": "أنواع المخالفات المحددة",
       "remove": "إزالة {{type}}"
     },
+    "violationOthers": {
+      "label": "أخرى",
+      "placeholder": "صف المخالفة…"
+    },
     "formCard": {
       "fallbackTitle": "نموذج",
       "description": "يتم تعبئته تلقائيًا من بيانات الموظف. الحقول الإلزامية مميزة بعلامة *.",

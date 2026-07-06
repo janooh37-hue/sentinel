@@ -1574,6 +1574,10 @@
       "selected": "Selected violation types",
       "remove": "Remove {{type}}"
     },
+    "violationOthers": {
+      "label": "Others",
+      "placeholder": "Describe the violation…"
+    },
     "formCard": {
       "fallbackTitle": "Form",
       "description": "Auto-fills from the employee record. Required fields are marked with an asterisk.",
