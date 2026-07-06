@@ -272,3 +272,28 @@ def test_resignation_en():
     assert "Your resignation letter has been received on 05/07/2026 (Sunday)." in text
     assert "You will be informed of the next steps." in text
     assert not any("؀" <= c <= "ۿ" for c in text)
+
+
+def test_warning_ar_routes_to_admin_office():
+    rec = SimpleNamespace(
+        fields={"violation_type": "Late Attendance - التأخر عن الدوام"},
+        today=date(2026, 7, 5),
+    )
+    text = st.render_text(nf.EVENT_WARNING, "ar", rec, _emp())
+    assert "تم إصدار إنذار بحقك بتاريخ 05/07/2026 (الأحد)." in text
+    assert "المخالفة: التأخر عن الدوام." in text
+    assert "يرجى مراجعة مكتب الإدارة لأي استفسار." in text
+    assert "مكتب الموارد البشرية" not in text  # warnings route to admin, not HR
+    assert not _has_ascii_letter(text.replace("05/07/2026", ""))
+
+
+def test_warning_en():
+    rec = SimpleNamespace(
+        fields={"violation_type": "Late Attendance - التأخر عن الدوام"},
+        today=date(2026, 7, 5),
+    )
+    text = st.render_text(nf.EVENT_WARNING, "en", rec, _emp())
+    assert "A warning has been issued against you on 05/07/2026 (Sunday)." in text
+    assert "Violation: Late Attendance." in text
+    assert "Please contact the administration office for any clarification." in text
+    assert not any("؀" <= c <= "ۿ" for c in text)

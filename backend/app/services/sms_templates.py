@@ -212,6 +212,27 @@ def _resignation(rec, emp: Employee, lang: str) -> str:
     )
 
 
+def _warning(rec, emp: Employee, lang: str) -> str:
+    name = nf.employee_name(emp, lang)
+    ds, wd = nf.fmt_date(rec.today), nf.weekday(rec.today, lang)
+    vtype = nf.type_label((rec.fields or {}).get("violation_type", ""), lang)
+    if lang == "ar":
+        return (
+            f"عزيزي {name}،\n"
+            f"تم إصدار إنذار بحقك بتاريخ {ds} ({wd}).\n"
+            f"المخالفة: {vtype}.\n"
+            f"يرجى مراجعة {nf.ADMIN_OFFICE_AR} لأي استفسار.\n"
+            f"{_SIGNATURE_AR}"
+        )
+    return (
+        f"Dear {name},\n"
+        f"A warning has been issued against you on {ds} ({wd}).\n"
+        f"Violation: {vtype}.\n"
+        f"Please contact the administration office for any clarification.\n"
+        f"{_SIGNATURE_EN}"
+    )
+
+
 _BUILDERS = {
     nf.EVENT_LEAVE_APPROVED: _leave_approved,
     nf.EVENT_DUTY_RESUMPTION: _duty_resumption,
@@ -222,6 +243,7 @@ _BUILDERS = {
     nf.EVENT_HR_REQUEST: _hr_request,
     nf.EVENT_PASSPORT_RELEASE: _passport_release,
     nf.EVENT_RESIGNATION: _resignation,
+    nf.EVENT_WARNING: _warning,
 }
 
 
