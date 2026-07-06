@@ -14,6 +14,9 @@ from app.services import notify_format as nf
 _SIGNATURE_EN = "Al Wathba Rehabilitation Centre"
 _SIGNATURE_AR = "إدارة مركز الإصلاح والتأهيل بالوثبة"
 
+_HR_OFFICE_LINE_AR = f"لأي استفسار يرجى مراجعة {nf.HR_OFFICE_AR}."
+_HR_OFFICE_LINE_EN = "For any clarification, please contact the HR office."
+
 
 def _leave_approved(leave, emp: Employee, lang: str) -> str:
     name = nf.employee_name(emp, lang)
@@ -25,9 +28,9 @@ def _leave_approved(leave, emp: Employee, lang: str) -> str:
     is_annual = nf.type_label(leave.leave_type, "en") == "Annual Leave"
     if lang == "ar":
         annual = (
-            "يرجى إحضار بطاقة العمل إلى المكتب لتجنب أي مخالفة.\n"
-            "إجازة سعيدة.\n"
-            if is_annual else ""
+            "يرجى إحضار بطاقة العمل إلى المكتب لتجنب أي مخالفة.\nإجازة سعيدة.\n"
+            if is_annual
+            else ""
         )
         return (
             f"عزيزي {name}،\n"
@@ -39,9 +42,9 @@ def _leave_approved(leave, emp: Employee, lang: str) -> str:
             f"{_SIGNATURE_AR}"
         )
     annual = (
-        "Please bring your work ID to the office to avoid any violation.\n"
-        "Have a nice vacation.\n"
-        if is_annual else ""
+        "Please bring your work ID to the office to avoid any violation.\nHave a nice vacation.\n"
+        if is_annual
+        else ""
     )
     return (
         f"Dear {name},\n"
@@ -95,10 +98,70 @@ def _violation(v, emp: Employee, lang: str) -> str:
     )
 
 
+def _salary_transfer(rec, emp: Employee, lang: str) -> str:
+    name = nf.employee_name(emp, lang)
+    bank = (rec.fields or {}).get("bank_name", "")
+    month = nf.salary_transfer_month(rec.today, lang)
+    if lang == "ar":
+        return (
+            f"عزيزي {name}،\n"
+            f"تم اعتماد طلب تحويل راتبك إلى حسابك لدى {bank}.\n"
+            f"سيتم التحويل مع راتب شهر {month}.\n"
+            f"{_HR_OFFICE_LINE_AR}\n"
+            f"{_SIGNATURE_AR}"
+        )
+    return (
+        f"Dear {name},\n"
+        f"Your salary transfer request to your account at {bank} has been approved.\n"
+        f"The transfer will take effect with the {month} salary.\n"
+        f"{_HR_OFFICE_LINE_EN}\n"
+        f"{_SIGNATURE_EN}"
+    )
+
+
+def _salary_deduction(rec, emp: Employee, lang: str) -> str:
+    name = nf.employee_name(emp, lang)
+    amount = (rec.fields or {}).get("amount", "")
+    if lang == "ar":
+        return (
+            f"عزيزي {name}،\n"
+            f"سيتم خصم مبلغ {amount} درهم من المرتب الشهري.\n"
+            f"{_HR_OFFICE_LINE_AR}\n"
+            f"{_SIGNATURE_AR}"
+        )
+    return (
+        f"Dear {name},\n"
+        f"An amount of AED {amount} will be deducted from the monthly salary.\n"
+        f"{_HR_OFFICE_LINE_EN}\n"
+        f"{_SIGNATURE_EN}"
+    )
+
+
+def _employee_clearance(rec, emp: Employee, lang: str) -> str:
+    name = nf.employee_name(emp, lang)
+    ds, wd = nf.fmt_date(rec.today), nf.weekday(rec.today, lang)
+    if lang == "ar":
+        return (
+            f"عزيزي {name}،\n"
+            f"تم إنجاز إخلاء طرفك اعتباراً من {ds} ({wd}).\n"
+            f"نتمنى لك التوفيق.\n"
+            f"{_SIGNATURE_AR}"
+        )
+    return (
+        f"Dear {name},\n"
+        f"Your employee clearance has been completed, effective {ds} ({wd}).\n"
+        f"We wish you all the best.\n"
+        f"{_SIGNATURE_EN}"
+    )
+
+
 _BUILDERS = {
     nf.EVENT_LEAVE_APPROVED: _leave_approved,
     nf.EVENT_DUTY_RESUMPTION: _duty_resumption,
     nf.EVENT_VIOLATION: _violation,
+    nf.EVENT_SALARY_TRANSFER: _salary_transfer,
+    nf.EVENT_SALARY_DEDUCTION: _salary_deduction,
+    nf.EVENT_EMPLOYEE_CLEARANCE: _employee_clearance,
 }
 
 
