@@ -212,3 +212,63 @@ def test_employee_clearance_en():
     text = st.render_text(nf.EVENT_EMPLOYEE_CLEARANCE, "en", rec, _emp())
     assert "Your employee clearance has been completed, effective 05/07/2026 (Sunday)." in text
     assert "We wish you all the best." in text
+
+
+def test_hr_request_single_ar():
+    rec = SimpleNamespace(
+        fields={"doc_selections": {"salary_certificate": True}}, today=date(2026, 7, 5)
+    )
+    text = st.render_text(nf.EVENT_HR_REQUEST, "ar", rec, _emp())
+    assert "تم تقديم طلبك للحصول على شهادة راتب." in text
+    assert "سيتم إبلاغك عند صدور المستند." in text
+    assert not _has_ascii_letter(text)
+
+
+def test_hr_request_single_en():
+    rec = SimpleNamespace(fields={"doc_selections": "salary_certificate"}, today=date(2026, 7, 5))
+    text = st.render_text(nf.EVENT_HR_REQUEST, "en", rec, _emp())
+    assert "Your request for Salary Certificate has been submitted." in text
+    assert "You will be notified once the document is issued." in text
+    assert not any("؀" <= c <= "ۿ" for c in text)
+
+
+def test_hr_request_plural_ar():
+    rec = SimpleNamespace(
+        fields={"doc_selections": {"salary_certificate": True, "experience_certificate": True}},
+        today=date(2026, 7, 5),
+    )
+    text = st.render_text(nf.EVENT_HR_REQUEST, "ar", rec, _emp())
+    assert "تم تقديم طلبك للحصول على المستندات التالية: شهادة راتب، شهادة خبرة." in text
+    assert "سيتم إبلاغك عند صدورها." in text
+
+
+def test_passport_release_ar():
+    rec = SimpleNamespace(fields={}, today=date(2026, 7, 5))
+    text = st.render_text(nf.EVENT_PASSPORT_RELEASE, "ar", rec, _emp())
+    assert "تم تقديم طلب استلام جواز سفرك." in text
+    assert "سيتم إبلاغك عند جاهزيته للاستلام." in text
+    assert not _has_ascii_letter(text)
+
+
+def test_passport_release_en():
+    rec = SimpleNamespace(fields={}, today=date(2026, 7, 5))
+    text = st.render_text(nf.EVENT_PASSPORT_RELEASE, "en", rec, _emp())
+    assert "Your passport release request has been submitted." in text
+    assert "You will be notified when it is ready for collection." in text
+    assert not any("؀" <= c <= "ۿ" for c in text)
+
+
+def test_resignation_ar():
+    rec = SimpleNamespace(fields={}, today=date(2026, 7, 5))
+    text = st.render_text(nf.EVENT_RESIGNATION, "ar", rec, _emp())
+    assert "تم استلام خطاب استقالتك بتاريخ 05/07/2026 (الأحد)." in text
+    assert "سيتم إبلاغك بالإجراءات التالية." in text
+    assert not _has_ascii_letter(text.replace("05/07/2026", ""))
+
+
+def test_resignation_en():
+    rec = SimpleNamespace(fields={}, today=date(2026, 7, 5))
+    text = st.render_text(nf.EVENT_RESIGNATION, "en", rec, _emp())
+    assert "Your resignation letter has been received on 05/07/2026 (Sunday)." in text
+    assert "You will be informed of the next steps." in text
+    assert not any("؀" <= c <= "ۿ" for c in text)

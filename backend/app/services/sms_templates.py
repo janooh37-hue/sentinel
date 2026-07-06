@@ -155,6 +155,63 @@ def _employee_clearance(rec, emp: Employee, lang: str) -> str:
     )
 
 
+def _hr_request(rec, emp: Employee, lang: str) -> str:
+    name = nf.employee_name(emp, lang)
+    docs, count = nf.hr_request_docs((rec.fields or {}).get("doc_selections"), lang)
+    if lang == "ar":
+        if count > 1:
+            body = f"تم تقديم طلبك للحصول على المستندات التالية: {docs}.\nسيتم إبلاغك عند صدورها.\n"
+        else:
+            body = f"تم تقديم طلبك للحصول على {docs}.\nسيتم إبلاغك عند صدور المستند.\n"
+        return f"عزيزي {name}،\n{body}{_SIGNATURE_AR}"
+    if count > 1:
+        body = (
+            f"Your request for the following documents has been submitted: {docs}.\n"
+            f"You will be notified once the documents are issued.\n"
+        )
+    else:
+        body = (
+            f"Your request for {docs} has been submitted.\n"
+            f"You will be notified once the document is issued.\n"
+        )
+    return f"Dear {name},\n{body}{_SIGNATURE_EN}"
+
+
+def _passport_release(rec, emp: Employee, lang: str) -> str:
+    name = nf.employee_name(emp, lang)
+    if lang == "ar":
+        return (
+            f"عزيزي {name}،\n"
+            f"تم تقديم طلب استلام جواز سفرك.\n"
+            f"سيتم إبلاغك عند جاهزيته للاستلام.\n"
+            f"{_SIGNATURE_AR}"
+        )
+    return (
+        f"Dear {name},\n"
+        f"Your passport release request has been submitted.\n"
+        f"You will be notified when it is ready for collection.\n"
+        f"{_SIGNATURE_EN}"
+    )
+
+
+def _resignation(rec, emp: Employee, lang: str) -> str:
+    name = nf.employee_name(emp, lang)
+    ds, wd = nf.fmt_date(rec.today), nf.weekday(rec.today, lang)
+    if lang == "ar":
+        return (
+            f"عزيزي {name}،\n"
+            f"تم استلام خطاب استقالتك بتاريخ {ds} ({wd}).\n"
+            f"سيتم إبلاغك بالإجراءات التالية.\n"
+            f"{_SIGNATURE_AR}"
+        )
+    return (
+        f"Dear {name},\n"
+        f"Your resignation letter has been received on {ds} ({wd}).\n"
+        f"You will be informed of the next steps.\n"
+        f"{_SIGNATURE_EN}"
+    )
+
+
 _BUILDERS = {
     nf.EVENT_LEAVE_APPROVED: _leave_approved,
     nf.EVENT_DUTY_RESUMPTION: _duty_resumption,
@@ -162,6 +219,9 @@ _BUILDERS = {
     nf.EVENT_SALARY_TRANSFER: _salary_transfer,
     nf.EVENT_SALARY_DEDUCTION: _salary_deduction,
     nf.EVENT_EMPLOYEE_CLEARANCE: _employee_clearance,
+    nf.EVENT_HR_REQUEST: _hr_request,
+    nf.EVENT_PASSPORT_RELEASE: _passport_release,
+    nf.EVENT_RESIGNATION: _resignation,
 }
 
 
