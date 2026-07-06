@@ -16,6 +16,25 @@ from app.db.models import Employee
 EVENT_LEAVE_APPROVED = "leave_approved"
 EVENT_DUTY_RESUMPTION = "duty_resumption"
 EVENT_VIOLATION = "violation"
+EVENT_SALARY_TRANSFER = "salary_transfer"
+EVENT_SALARY_DEDUCTION = "salary_deduction"
+EVENT_EMPLOYEE_CLEARANCE = "employee_clearance"
+EVENT_HR_REQUEST = "hr_request"
+EVENT_PASSPORT_RELEASE = "passport_release"
+EVENT_WARNING = "warning"
+EVENT_RESIGNATION = "resignation"
+
+BOOK_EVENTS: frozenset[str] = frozenset(
+    {
+        EVENT_SALARY_TRANSFER,
+        EVENT_SALARY_DEDUCTION,
+        EVENT_EMPLOYEE_CLEARANCE,
+        EVENT_HR_REQUEST,
+        EVENT_PASSPORT_RELEASE,
+        EVENT_WARNING,
+        EVENT_RESIGNATION,
+    }
+)
 
 # Monday-first to match datetime.weekday() and ARABIC_WEEKDAYS' ordering.
 ENGLISH_WEEKDAYS: tuple[str, ...] = (

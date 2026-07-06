@@ -149,3 +149,19 @@ def test_hr_docs_multiple_joined_arabic():
 
 def test_hr_docs_unknown_key_skipped():
     assert nf.hr_request_docs(["salary_certificate", "bogus"], "en") == ("Salary Certificate", 1)
+
+
+def test_book_event_constants():
+    assert nf.EVENT_SALARY_TRANSFER == "salary_transfer"
+    assert nf.EVENT_WARNING == "warning"
+    assert frozenset(
+        {
+            "salary_transfer",
+            "salary_deduction",
+            "employee_clearance",
+            "hr_request",
+            "passport_release",
+            "warning",
+            "resignation",
+        }
+    ) == nf.BOOK_EVENTS
