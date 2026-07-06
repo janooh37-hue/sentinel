@@ -3,7 +3,8 @@ from datetime import date
 import pytest
 
 from app.db.models import Employee, Leave
-from app.services import sms_client, sms_service as ss
+from app.services import sms_client
+from app.services import sms_service as ss
 
 
 @pytest.fixture(autouse=True)
@@ -13,18 +14,31 @@ def _enable(monkeypatch):
     monkeypatch.setenv("GSSG_SMS_USERNAME", "user")
     monkeypatch.setenv("GSSG_SMS_PASSWORD", "pass")
     from app.config import get_settings
+
     get_settings.cache_clear()
     yield
     get_settings.cache_clear()
 
 
 def _leave(db, **kw):
-    db.add(Employee(id="G1", name_en="John", name_ar="جون",
-                    contact=kw.pop("contact", "0501234567"),
-                    msg_language=kw.pop("lang", "ar")))
-    row = Leave(id=7, employee_id="G1", leave_type="Annual - سنوية",
-                start_date=date(2026, 7, 5), end_date=date(2026, 7, 9), days=5,
-                status="Approved")
+    db.add(
+        Employee(
+            id="G1",
+            name_en="John",
+            name_ar="جون",
+            contact=kw.pop("contact", "0501234567"),
+            msg_language=kw.pop("lang", "ar"),
+        )
+    )
+    row = Leave(
+        id=7,
+        employee_id="G1",
+        leave_type="Annual - سنوية",
+        start_date=date(2026, 7, 5),
+        end_date=date(2026, 7, 9),
+        days=5,
+        status="Approved",
+    )
     db.add(row)
     db.commit()
     return row
@@ -33,7 +47,8 @@ def _leave(db, **kw):
 def test_send_success_logs_sent(db_session, monkeypatch):
     _leave(db_session)
     monkeypatch.setattr(
-        sms_client, "send",
+        sms_client,
+        "send",
         lambda *a, **k: sms_client.SendResult(ok=True, message_id="sms-1"),
     )
     row = ss.send_for_event(db_session, "leave_approved", 7, sent_by=99)
@@ -78,7 +93,8 @@ def test_missing_phone_logs_failed_without_calling_client(db_session, monkeypatc
 def test_api_failure_logs_failed_with_error(db_session, monkeypatch):
     _leave(db_session)
     monkeypatch.setattr(
-        sms_client, "send",
+        sms_client,
+        "send",
         lambda *a, **k: sms_client.SendResult(ok=False, error="HTTP 401: Unauthorized"),
     )
     row = ss.send_for_event(db_session, "leave_approved", 7, sent_by=1)
@@ -89,7 +105,8 @@ def test_api_failure_logs_failed_with_error(db_session, monkeypatch):
 def test_resend_writes_new_row(db_session, monkeypatch):
     _leave(db_session)
     monkeypatch.setattr(
-        sms_client, "send",
+        sms_client,
+        "send",
         lambda *a, **k: sms_client.SendResult(ok=True, message_id="sms-x"),
     )
     r1 = ss.send_for_event(db_session, "leave_approved", 7, sent_by=1)
@@ -101,6 +118,7 @@ def test_resend_writes_new_row(db_session, monkeypatch):
 def test_disabled_raises(db_session, monkeypatch):
     monkeypatch.setenv("GSSG_SMS_ENABLED", "0")
     from app.config import get_settings
+
     get_settings.cache_clear()
     _leave(db_session)
     with pytest.raises(ss.SmsDisabledError):
@@ -110,3 +128,48 @@ def test_disabled_raises(db_session, monkeypatch):
 def test_unknown_record_raises(db_session):
     with pytest.raises(ss.RecordNotFoundError):
         ss.send_for_event(db_session, "leave_approved", 9999, sent_by=1)
+
+
+def test_load_book_event_returns_latest_version_fields(db_session):
+    from app.db.models import Book, BookCategory, BookVersion
+
+    db_session.add(BookCategory(id="HR", prefix="HR"))
+    db_session.add(Employee(id="E1", name_en="Mohammed Ahmed", name_ar="محمد أحمد"))
+    db_session.flush()
+    book = Book(category_id="HR", ref_number="HR-0001", employee_id="E1")
+    db_session.add(book)
+    db_session.flush()
+    db_session.add(
+        BookVersion(
+            book_id=book.id,
+            version_no=1,
+            template_id="Salary Transfer Request",
+            fields={"bank_name": "OLD"},
+        )
+    )
+    db_session.add(
+        BookVersion(
+            book_id=book.id,
+            version_no=2,
+            template_id="Salary Transfer Request",
+            fields={"bank_name": "بنك أبوظبي الأول"},
+        )
+    )
+    db_session.commit()
+
+    ev = ss._load_book_event(db_session, book.id)
+    assert ev is not None
+    assert ev.employee.id == "E1"
+    assert ev.fields["bank_name"] == "بنك أبوظبي الأول"
+    assert ev.today == date.today()
+
+
+def test_load_book_event_missing_book_returns_none(db_session):
+    assert ss._load_book_event(db_session, 999999) is None
+
+
+def test_all_book_events_have_a_loader():
+    from app.services import notify_format as nf
+
+    for ev in nf.BOOK_EVENTS:
+        assert ss._LOADERS.get(ev) is ss._load_book_event
