@@ -49,18 +49,6 @@ import { cn } from '@/lib/utils'
 
 import { sealDescriptor, signedSourceOf, type SealTone } from './bookStateLabel'
 import { useAddScan } from './useAddScan'
-import { SendSmsButton } from '@/components/sms/SendSmsButton'
-import type { SmsEventType } from '@/lib/api'
-
-const TEMPLATE_SMS_EVENTS: Record<string, SmsEventType> = {
-  'Salary Transfer Request': 'salary_transfer',
-  'Salary Deduction Form': 'salary_deduction',
-  'Employee Clearance Form': 'employee_clearance',
-  'HR Request Form': 'hr_request',
-  'Passport Release Form': 'passport_release',
-  'Warning Form': 'warning',
-  'Resignation Letter': 'resignation',
-}
 
 const DocPdfCanvas = lazy(() => import('@/pages/application/DocPdfCanvas'))
 
@@ -456,12 +444,6 @@ export function BookRecordPage(): React.JSX.Element {
           )}
         </div>
         <div className="ms-auto flex flex-wrap items-center justify-end gap-2">
-          {book?.employee_id && current?.template_id && TEMPLATE_SMS_EVENTS[current.template_id] && (
-            <SendSmsButton
-              eventType={TEMPLATE_SMS_EVENTS[current.template_id]}
-              recordId={book.id}
-            />
-          )}
           <HeaderBtn
             icon={<Printer className="h-3.5 w-3.5" />}
             label={t('books.record.print')}
