@@ -29,10 +29,12 @@ from app.db.models import (
     BookVersion,
     Employee,
     Manager,
+    SmsMessage,
     User,
 )
 from app.db.repos.refs_repo import allocate_ref_with_retry
 from app.schemas.book import ApproverOptionRead, BookApprovalStepRead, BookCreate, BookUpdate
+from app.services import notify_format as nf
 from app.services import perm_service
 
 log = logging.getLogger(__name__)
@@ -1310,6 +1312,32 @@ def detach_attachment(db: Session, book_id: int, rel_path: str) -> Book:
     return book
 
 
+# ---------------------------------------------------------------------------
+# SMS helpers
+# ---------------------------------------------------------------------------
+
+
+def sms_for_book(db: Session, book: Book) -> list[SmsMessage]:
+    """Return SMS rows sent for this book, newest first.
+
+    Uses the current version's ``template_id`` to look up the SMS event via
+    ``notify_format.TEMPLATE_EVENTS``. Returns ``[]`` when the template is
+    unmapped or the book has no versions.
+    """
+    current = book.versions[-1] if book.versions else None
+    if current is None or current.template_id is None:
+        return []
+    event = nf.TEMPLATE_EVENTS.get(current.template_id)
+    if event is None:
+        return []
+    stmt = (
+        select(SmsMessage)
+        .where(SmsMessage.event_ref == f"{event}:{book.id}")
+        .order_by(SmsMessage.id.desc())
+    )
+    return list(db.execute(stmt).scalars().all())
+
+
 __all__ = [
     "LIST_DEFAULT_LIMIT",
     "LIST_MAX_LIMIT",
@@ -1338,6 +1366,7 @@ __all__ = [
     "resolve_doc_manager_user",
     "resolve_user_name_by_id",
     "sign_book",
+    "sms_for_book",
     "submit_for_approval",
     "submitter_g_number",
     "update_book",

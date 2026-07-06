@@ -791,6 +791,7 @@
       "importedNoPreview": "ملف هذا السجل المستورد ليس بصيغة PDF، لذا لا يمكن معاينته هنا.",
       "downloadImported": "تنزيل الأصل ({{format}})",
       "progress": "التقدّم",
+      "notification": "إشعار",
       "stationSubmitted": "تم التقديم",
       "stationRevised": "تم التعديل",
       "stationReturned": "أُعيد",
