@@ -325,3 +325,21 @@ def test_warning_multi_violation_en():
     assert "Late" in text
     assert "Sleeping" in text
     assert not any("؀" <= c <= "ۿ" for c in text)
+
+
+def test_violation_multi_type_ar_no_leak():
+    emp = _emp()
+    v = Violation(
+        id=4,
+        employee_id="G1",
+        violation_type="Late - التأخر، Sleeping - النوم",
+        date=date(2026, 7, 1),
+        action_taken=None,
+        deduction_days=2,
+    )
+    text = st.render_text("violation", "ar", v, emp)
+    assert "التأخر" in text
+    assert "النوم" in text
+    assert "Late" not in text
+    assert "Sleeping" not in text
+    assert not _has_ascii_letter(text.replace("01/07/2026", ""))

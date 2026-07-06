@@ -78,7 +78,7 @@ def _duty_resumption(leave, emp: Employee, lang: str) -> str:
 
 def _violation(v, emp: Employee, lang: str) -> str:
     name = nf.employee_name(emp, lang)
-    typ = nf.type_label(v.violation_type, lang)
+    typ = nf.type_labels(v.violation_type, lang)
     ds, wd = nf.fmt_date(v.date), nf.weekday(v.date, lang)
     action = nf.action_text(v.action_taken, v.deduction_days, lang)
     if lang == "ar":
