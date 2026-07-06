@@ -48,6 +48,7 @@ _DEFAULTS: dict[str, object] = {
     "settings.sig_admin_path": None,
     "settings.legacy_signature_path": None,
     "settings.sentry_opt_in": False,
+    "settings.sms_autosend_enabled": True,
     "settings.signature_size_mm": 45,
     "settings.signature_boldness": 1,
 }
@@ -176,7 +177,9 @@ def get_settings(db: Session) -> AppSettingsRead:
         "stamp_style": _get(db, "settings.stamp_style", _DEFAULTS["settings.stamp_style"]),
         "default_manager_id": _get(db, "settings.default_manager_id", None),
         "manager_hand_sign_default": _get(
-            db, "settings.manager_hand_sign_default", _DEFAULTS["settings.manager_hand_sign_default"]
+            db,
+            "settings.manager_hand_sign_default",
+            _DEFAULTS["settings.manager_hand_sign_default"],
         ),
         "theme": _get(db, "settings.theme", _DEFAULTS["settings.theme"]),
         "language": _get(db, "settings.language", _DEFAULTS["settings.language"]),
@@ -186,6 +189,7 @@ def get_settings(db: Session) -> AppSettingsRead:
         "legacy_signature_path": _get(db, "settings.legacy_signature_path", None),
         "admin_gate_enabled": is_admin_gate_enabled(),
         "sentry_opt_in": sentry_opt_in,
+        "sms_autosend_enabled": bool(_get(db, "settings.sms_autosend_enabled", True)),
         "email_signature": _get(db, "settings.email_signature", "") or "",
         "signature_size_mm": _get(
             db, "settings.signature_size_mm", _DEFAULTS["settings.signature_size_mm"]
@@ -217,6 +221,7 @@ def update_settings(db: Session, payload: AppSettingsUpdate) -> AppSettingsRead:
         "sig_admin_path": "settings.sig_admin_path",
         "legacy_signature_path": "settings.legacy_signature_path",
         "sentry_opt_in": "settings.sentry_opt_in",
+        "sms_autosend_enabled": "settings.sms_autosend_enabled",
         "email_signature": "settings.email_signature",
     }
     # Use model_fields_set to distinguish "explicitly set to null" from "not provided"
