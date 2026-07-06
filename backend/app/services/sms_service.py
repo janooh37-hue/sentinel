@@ -152,6 +152,30 @@ def send_for_event(db: Session, event_type: str, record_id: int, sent_by: int | 
     )
 
 
+def auto_send_for_book(
+    db: Session, book_id: int, *, sent_by: int | None = None
+) -> SmsMessage | None:
+    """Best-effort automatic SMS for a freshly-generated service form.
+
+    No-ops (returns None) unless SMS is enabled, auto-send is enabled, the
+    book's latest version maps to an SMS event, and the book has an employee.
+    """
+    from app.services import settings_service
+
+    cfg = get_settings()
+    if not cfg.sms_enabled:
+        return None
+    if not settings_service.get_settings(db).sms_autosend_enabled:
+        return None
+    book = db.get(Book, book_id)
+    if book is None or not book.versions or book.employee_id is None:
+        return None
+    event = nf.TEMPLATE_EVENTS.get(book.versions[-1].template_id or "")
+    if event is None:
+        return None
+    return send_for_event(db, event, book_id, sent_by=sent_by)
+
+
 def last_status(db: Session, event_type: str, record_id: int) -> SmsMessage | None:
     return db.scalar(
         select(SmsMessage)
