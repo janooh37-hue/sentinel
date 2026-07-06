@@ -1,16 +1,20 @@
 # SMS Notifications Setup (on-site Android SIM gateway)
 
 Employee SMS notifications for leave approvals, duty resumptions, and
-violations. Messages are text-only, bilingual (Arabic default, English per
-employee), sent manually by an admin via the "Notify by SMS" button on each
-record. Delivery goes through an **Android phone on the LAN running SMS Gate**
-(local mode), which sends the SMS from its own SIM — no carrier sender
-registration and no trade license required.
+violations are text-only, bilingual (Arabic default, English per employee), and
+sent manually by an admin via the **Notify by SMS** button on each record.
+Delivery goes through an **Android phone on the LAN running SMS Gate** (local
+mode), which sends the SMS from its own SIM — no carrier sender registration
+and no trade license required.
 
-The same button and channel also cover HR service-form events triggered from
-the book/form record page: Salary Transfer, Salary Deduction, Employee
-Clearance, HR Request, Passport Release, Warning, and Resignation. All reuse
-the same `GSSG_SMS_*` configuration — no extra setup required.
+The seven HR service forms — Salary Transfer, Salary Deduction, Employee
+Clearance, HR Request, Passport Release, Warning, and Resignation — now
+**auto-send an SMS to the employee when the form is generated** (real
+generation only, not drafts). This is gated by a **Settings toggle
+"Auto-send SMS on form generation"** (default on). All auto-sends reuse the
+same `GSSG_SMS_*` channel — no extra setup required. The message text,
+recipient number, and sent/failed status for each auto-send appear on the
+employee profile's **Messages** tab.
 
 ## 1. Prepare the Android phone
 
@@ -62,6 +66,9 @@ After editing `.env`, run `mng restart`.
 
 - **Button not showing:** `GSSG_SMS_ENABLED=true` and service restarted; the
   user has the `employees.notify` capability.
+- **Service-form SMS not auto-sending:** check that the **Auto-send SMS on
+  form generation** toggle is on in Settings and that `GSSG_SMS_ENABLED=true`
+  with service restarted.
 - **"No valid phone number":** the employee's contact field is empty/unparseable.
 - **Connection errors:** the phone is off Wi-Fi / asleep / IP changed, or
   battery optimization killed SMS Gate. Verify with the curl check above.
