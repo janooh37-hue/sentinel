@@ -63,13 +63,16 @@ export interface MigrationResult {
 
 // Phase 08 — Settings + System
 // Hand-augmented with signature appearance fields (Task 6) ahead of gen:api.
+// Task 10: sms_autosend_enabled added ahead of next gen:api run.
 export type AppSettingsRead = components['schemas']['AppSettingsRead'] & {
   signature_size_mm: number
   signature_boldness: number
+  sms_autosend_enabled: boolean
 }
 export type AppSettingsUpdate = components['schemas']['AppSettingsUpdate'] & {
   signature_size_mm?: number
   signature_boldness?: number
+  sms_autosend_enabled?: boolean
 }
 export type SystemInfo = components['schemas']['SystemInfo']
 export type UpdateCheckResult = components['schemas']['UpdateCheckResult']
@@ -114,7 +117,21 @@ export type EmployeeUpdate = components['schemas']['EmployeeUpdate'] & {
   msg_language?: 'ar' | 'en' | null
 }
 export type EmployeeStatus = EmployeeRead['status']
-export type EmployeeDetailRead = components['schemas']['EmployeeDetailRead']
+
+// Hand-mirrored until `gen:api` folds the SMS history field into the schema.
+export interface SmsMessageRead {
+  id: number
+  event_type: string
+  body: string | null
+  phone: string
+  status: 'sent' | 'failed'
+  error: string | null
+  language: string
+  created_at: string
+}
+export type EmployeeDetailRead = components['schemas']['EmployeeDetailRead'] & {
+  recent_sms: SmsMessageRead[]
+}
 export type EmployeeStatsRead = components['schemas']['EmployeeStatsRead']
 export type RecentDocumentRead = components['schemas']['RecentDocumentRead']
 export type RecentLeaveRead = components['schemas']['RecentLeaveRead']

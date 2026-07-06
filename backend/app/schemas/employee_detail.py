@@ -70,6 +70,17 @@ class ActivityItemRead(BaseModel):
     ref_id: int
 
 
+class SmsMessageRead(ORMBase):
+    id: int
+    event_type: str
+    body: str | None
+    phone: str
+    status: str
+    error: str | None
+    language: str
+    created_at: datetime
+
+
 class EmployeeDetailRead(BaseModel):
     employee: EmployeeRead
     stats: EmployeeStatsRead
@@ -78,3 +89,4 @@ class EmployeeDetailRead(BaseModel):
     recent_violations: list[RecentViolationRead]
     recent_ledger: list[RecentLedgerRead]
     recent_activity: list[ActivityItemRead]
+    recent_sms: list[SmsMessageRead]

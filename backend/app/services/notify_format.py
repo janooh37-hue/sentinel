@@ -36,6 +36,17 @@ BOOK_EVENTS: frozenset[str] = frozenset(
     }
 )
 
+# Book template_id -> SMS event. Keys match core.constants.TEMPLATE_FILES.
+TEMPLATE_EVENTS: dict[str, str] = {
+    "Salary Transfer Request": EVENT_SALARY_TRANSFER,
+    "Salary Deduction Form": EVENT_SALARY_DEDUCTION,
+    "Employee Clearance Form": EVENT_EMPLOYEE_CLEARANCE,
+    "HR Request Form": EVENT_HR_REQUEST,
+    "Passport Release Form": EVENT_PASSPORT_RELEASE,
+    "Warning Form": EVENT_WARNING,
+    "Resignation Letter": EVENT_RESIGNATION,
+}
+
 # Monday-first to match datetime.weekday() and ARABIC_WEEKDAYS' ordering.
 ENGLISH_WEEKDAYS: tuple[str, ...] = (
     "Monday",

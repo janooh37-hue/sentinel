@@ -40,7 +40,7 @@ from app.config import get_settings
 from app.db.models import Document, User
 from app.db.session import SessionLocal, get_db
 from app.schemas._base import ORMBase
-from app.services import book_service, document_service, perm_service, staging_service
+from app.services import book_service, document_service, perm_service, sms_service, staging_service
 from app.services.job_registry import (
     JobDocumentItem as RegistryDocItem,
 )
@@ -53,6 +53,12 @@ from app.services.job_registry import (
 )
 
 log = logging.getLogger(__name__)
+
+
+def _should_autosend(*, commit: bool, revise_of_book_id: int | None, book_id: int | None) -> bool:
+    """Return True only for a committed, non-revision generation that produced a book."""
+    return bool(commit) and revise_of_book_id is None and book_id is not None
+
 
 documents_router = APIRouter(prefix="/documents", tags=["documents"])
 jobs_router = APIRouter(prefix="/jobs", tags=["jobs"])
@@ -188,6 +194,17 @@ def _run_generation(
             revise_of_book_id=request.revise_of_book_id,
             attachments=request.attachments,
         )
+        # Best-effort automatic employee SMS for generated service forms.
+        # Must never break generation — the document is already committed.
+        if _should_autosend(
+            commit=request.commit,
+            revise_of_book_id=request.revise_of_book_id,
+            book_id=result.book_id,
+        ):
+            try:
+                sms_service.auto_send_for_book(db, result.book_id, sent_by=None)
+            except Exception:
+                log.exception("auto SMS failed for book %s", result.book_id)
         registry_docs = [
             RegistryDocItem(
                 document_id=doc.document_id,

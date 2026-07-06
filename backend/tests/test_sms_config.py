@@ -5,6 +5,7 @@ def test_sms_settings_load_from_env(monkeypatch):
     monkeypatch.setenv("GSSG_SMS_PASSWORD", "pass")
     monkeypatch.setenv("GSSG_SMS_COUNTRY_CODE", "971")
     from app.config import get_settings
+
     get_settings.cache_clear()
     cfg = get_settings()
     assert cfg.sms_enabled is True
@@ -16,12 +17,10 @@ def test_sms_settings_load_from_env(monkeypatch):
 
 
 def test_sms_disabled_by_default(monkeypatch):
-    for k in ("GSSG_SMS_ENABLED", "GSSG_SMS_GATEWAY_URL",
-              "GSSG_SMS_USERNAME", "GSSG_SMS_PASSWORD"):
+    for k in ("GSSG_SMS_ENABLED", "GSSG_SMS_GATEWAY_URL", "GSSG_SMS_USERNAME", "GSSG_SMS_PASSWORD"):
         monkeypatch.delenv(k, raising=False)
-    from app.config import get_settings
-    get_settings.cache_clear()
-    cfg = get_settings()
+    from app.config import Settings
+
+    cfg = Settings(_env_file=None)  # ignore the live .env; assert true defaults
     assert cfg.sms_enabled is False
     assert cfg.sms_country_code == "971"
-    get_settings.cache_clear()

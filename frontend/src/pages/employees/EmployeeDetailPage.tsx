@@ -25,6 +25,7 @@ import { EmployeeQuickStats } from './EmployeeQuickStats'
 import { ActivityTab } from './tabs/ActivityTab'
 import { DocumentsTab } from './tabs/DocumentsTab'
 import { LeavesTab } from './tabs/LeavesTab'
+import { MessagesTab } from './tabs/MessagesTab'
 import { ProfileTab } from './tabs/ProfileTab'
 import { ViolationsTab } from './tabs/ViolationsTab'
 
@@ -147,6 +148,7 @@ export function EmployeeDetailPage(): React.JSX.Element {
           leaves: `${data.stats.leaves_taken_days}d`,
           violations: data.stats.violations,
           activity: data.stats.ledger_count,
+          messages: data.recent_sms.length,
         }}
         onChange={setTab}
       />
@@ -155,6 +157,7 @@ export function EmployeeDetailPage(): React.JSX.Element {
       {tab === 'leaves' && <LeavesTab employeeId={data.employee.id} leaves={data.recent_leaves} />}
       {tab === 'violations' && <ViolationsTab employeeId={data.employee.id} violations={data.recent_violations} totalCount={data.stats.violations} />}
       {tab === 'activity' && <ActivityTab activity={data.recent_activity} />}
+      {tab === 'messages' && <MessagesTab messages={data.recent_sms} />}
     </div>
   )
 }

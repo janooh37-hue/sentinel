@@ -173,3 +173,87 @@ def test_all_book_events_have_a_loader():
 
     for ev in nf.BOOK_EVENTS:
         assert ss._LOADERS.get(ev) is ss._load_book_event
+
+
+def test_send_persists_body(db_session, monkeypatch):
+    _leave(db_session)  # existing helper: creates employee G1 + leave id 7
+    monkeypatch.setattr(
+        sms_client, "send", lambda *a, **k: sms_client.SendResult(ok=True, message_id="m1")
+    )
+    row = ss.send_for_event(db_session, "leave_approved", 7, sent_by=1)
+    assert row.body and row.body.startswith("عزيزي")  # ar default employee
+
+
+def test_failed_send_still_persists_body(db_session, monkeypatch):
+    _leave(db_session, contact="n/a")  # unparseable phone -> failed, client not called
+    row = ss.send_for_event(db_session, "leave_approved", 7, sent_by=1)
+    assert row.status == "failed"
+    assert row.body and row.body.startswith("عزيزي")
+
+
+def _book(db, template_id, *, employee_id="E1"):
+    from app.db.models import Book, BookCategory, BookVersion, Employee
+
+    if db.get(Employee, employee_id) is None:
+        db.add(
+            Employee(
+                id=employee_id,
+                name_en="Mohammed Ahmed",
+                name_ar="محمد أحمد",
+                contact="0501234567",
+                msg_language="ar",
+            )
+        )
+    if db.get(BookCategory, "HR") is None:
+        db.add(BookCategory(id="HR", prefix="HR"))
+    db.flush()
+    b = Book(category_id="HR", ref_number="HR-0001", employee_id=employee_id)
+    db.add(b)
+    db.flush()
+    db.add(
+        BookVersion(
+            book_id=b.id,
+            version_no=1,
+            template_id=template_id,
+            fields={"bank_name": "بنك أبوظبي الأول"},
+        )
+    )
+    db.commit()
+    return b
+
+
+def test_auto_send_fires_for_mapped_template(db_session, monkeypatch):
+    b = _book(db_session, "Salary Transfer Request")
+    monkeypatch.setattr(
+        sms_client, "send", lambda *a, **k: sms_client.SendResult(ok=True, message_id="m1")
+    )
+    row = ss.auto_send_for_book(db_session, b.id)
+    assert row is not None and row.status == "sent" and row.sent_by is None
+
+
+def test_auto_send_skips_unmapped_template(db_session):
+    b = _book(db_session, "General Book")
+    assert ss.auto_send_for_book(db_session, b.id) is None
+
+
+def test_auto_send_skips_when_setting_off(db_session, monkeypatch):
+    from app.schemas.settings import AppSettingsUpdate
+    from app.services import settings_service
+
+    settings_service.update_settings(db_session, AppSettingsUpdate(sms_autosend_enabled=False))
+    b = _book(db_session, "Salary Transfer Request")
+    assert ss.auto_send_for_book(db_session, b.id) is None
+
+
+def test_auto_send_skips_book_without_employee(db_session, monkeypatch):
+    from app.db.models import Book, BookCategory, BookVersion
+
+    if db_session.get(BookCategory, "HR") is None:
+        db_session.add(BookCategory(id="HR", prefix="HR"))
+        db_session.flush()
+    b = Book(category_id="HR", ref_number="HR-0002", employee_id=None)
+    db_session.add(b)
+    db_session.flush()
+    db_session.add(BookVersion(book_id=b.id, version_no=1, template_id="Warning Form", fields={}))
+    db_session.commit()
+    assert ss.auto_send_for_book(db_session, b.id) is None

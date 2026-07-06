@@ -81,6 +81,7 @@ def _log_row(
     provider_msg_id=None,
     error=None,
     sent_by=None,
+    body=None,
 ):
     row = SmsMessage(
         employee_id=employee_id,
@@ -92,6 +93,7 @@ def _log_row(
         provider_msg_id=provider_msg_id,
         error=error,
         sent_by=sent_by,
+        body=body,
     )
     db.add(row)
     db.commit()
@@ -131,6 +133,7 @@ def send_for_event(db: Session, event_type: str, record_id: int, sent_by: int | 
             status="failed",
             error="No valid phone number for this employee",
             sent_by=sent_by,
+            body=text,
         )
 
     result = sms_client.send(phone, text)
@@ -145,7 +148,32 @@ def send_for_event(db: Session, event_type: str, record_id: int, sent_by: int | 
         provider_msg_id=result.message_id,
         error=result.error,
         sent_by=sent_by,
+        body=text,
     )
+
+
+def auto_send_for_book(
+    db: Session, book_id: int, *, sent_by: int | None = None
+) -> SmsMessage | None:
+    """Best-effort automatic SMS for a freshly-generated service form.
+
+    No-ops (returns None) unless SMS is enabled, auto-send is enabled, the
+    book's latest version maps to an SMS event, and the book has an employee.
+    """
+    from app.services import settings_service
+
+    cfg = get_settings()
+    if not cfg.sms_enabled:
+        return None
+    if not settings_service.get_settings(db).sms_autosend_enabled:
+        return None
+    book = db.get(Book, book_id)
+    if book is None or not book.versions or book.employee_id is None:
+        return None
+    event = nf.TEMPLATE_EVENTS.get(book.versions[-1].template_id or "")
+    if event is None:
+        return None
+    return send_for_event(db, event, book_id, sent_by=sent_by)
 
 
 def last_status(db: Session, event_type: str, record_id: int) -> SmsMessage | None:

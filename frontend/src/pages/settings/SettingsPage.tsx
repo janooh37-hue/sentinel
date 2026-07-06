@@ -216,6 +216,20 @@ function AppearanceSection({
           {t('settings.appearance.sentryHint')}
         </p>
       </div>
+      <div className="mt-3 border-t border-hairline/60 pt-3">
+        <label className="flex cursor-pointer items-center gap-2.5 text-[0.86em] text-foreground">
+          <input
+            type="checkbox"
+            checked={settings.sms_autosend_enabled}
+            onChange={(e) => onUpdate({ sms_autosend_enabled: e.target.checked })}
+            className="h-4 w-4 accent-primary"
+          />
+          <span>{t('settings.smsAutosend.label')}</span>
+        </label>
+        <p className="ms-6 mt-1 text-[0.78em] text-muted-foreground">
+          {t('settings.smsAutosend.hint')}
+        </p>
+      </div>
     </SectionCard>
   )
 }
