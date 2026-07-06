@@ -27,6 +27,7 @@ from app.services import photo_service
 # views via dedicated endpoints; this aggregate is for the at-a-glance hero.
 RECENT_LIMIT = 10
 ACTIVITY_LIMIT = 20
+SMS_RECENT_LIMIT = 50
 
 # Stand-in until the leave policy service lands. v3 used a flat 30-day annual
 # allowance for the on-screen counter; keep parity here.
@@ -161,7 +162,7 @@ def get_employee_detail(db: Session, employee_id: str) -> sx.EmployeeDetailRead 
             select(models.SmsMessage)
             .where(models.SmsMessage.employee_id == emp.id)
             .order_by(models.SmsMessage.id.desc())
-            .limit(50)
+            .limit(SMS_RECENT_LIMIT)
         )
     ]
 
