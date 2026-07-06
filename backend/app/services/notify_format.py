@@ -184,6 +184,17 @@ def type_label(value: str, lang: str) -> str:
     return entry[0] if entry else english_part(v)
 
 
+def type_labels(value: str, lang: str) -> str:
+    """Localize a possibly-multi violation-type string. Splits on the join
+    separator, localizes each item via type_label, and rejoins with the
+    language-appropriate separator. A single (unjoined) value round-trips
+    identically to type_label."""
+    parts = [p.strip() for p in (value or "").split("،")]
+    localized = [type_label(p, lang) for p in parts if p]
+    sep = "، " if lang == "ar" else ", "
+    return sep.join(localized)
+
+
 def employee_name(emp: Employee, lang: str) -> str:
     if lang == "ar":
         return emp.name_ar or emp.name_en

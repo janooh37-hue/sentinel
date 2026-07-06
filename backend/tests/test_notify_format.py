@@ -154,14 +154,48 @@ def test_hr_docs_unknown_key_skipped():
 def test_book_event_constants():
     assert nf.EVENT_SALARY_TRANSFER == "salary_transfer"
     assert nf.EVENT_WARNING == "warning"
-    assert frozenset(
-        {
-            "salary_transfer",
-            "salary_deduction",
-            "employee_clearance",
-            "hr_request",
-            "passport_release",
-            "warning",
-            "resignation",
-        }
-    ) == nf.BOOK_EVENTS
+    assert (
+        frozenset(
+            {
+                "salary_transfer",
+                "salary_deduction",
+                "employee_clearance",
+                "hr_request",
+                "passport_release",
+                "warning",
+                "resignation",
+            }
+        )
+        == nf.BOOK_EVENTS
+    )
+
+
+# --- type_labels (multi-violation localization) ---
+
+
+def test_type_labels_single_roundtrips_ar():
+    value = "Late - التأخر"
+    assert nf.type_labels(value, "ar") == nf.type_label(value, "ar")
+
+
+def test_type_labels_single_roundtrips_en():
+    value = "Late - التأخر"
+    assert nf.type_labels(value, "en") == nf.type_label(value, "en")
+
+
+def test_type_labels_multi_ar_both_arabic_halves():
+    value = "Late - التأخر، Sleeping - النوم"
+    result = nf.type_labels(value, "ar")
+    assert "التأخر" in result
+    assert "النوم" in result
+    assert "Late" not in result
+    assert "Sleeping" not in result
+
+
+def test_type_labels_multi_en_both_english_halves():
+    value = "Late - التأخر، Sleeping - النوم"
+    result = nf.type_labels(value, "en")
+    assert "Late" in result
+    assert "Sleeping" in result
+    assert "التأخر" not in result
+    assert "النوم" not in result

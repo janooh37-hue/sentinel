@@ -1570,7 +1570,10 @@ export async function getWhatsAppStatus(
 }
 
 // --- Employee SMS notifications (on-site SIM gateway) ----------------------
-export type SmsEventType = 'leave_approved' | 'duty_resumption' | 'violation'
+export type SmsEventType =
+  | 'leave_approved' | 'duty_resumption' | 'violation'
+  | 'salary_transfer' | 'salary_deduction' | 'employee_clearance'
+  | 'hr_request' | 'passport_release' | 'warning' | 'resignation'
 
 export interface SmsSendResponse {
   status: 'sent' | 'failed'
