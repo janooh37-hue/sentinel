@@ -32,7 +32,7 @@ export function MessagesTab({ messages }: { messages: SmsMessageRead[] }): React
               <span className="ms-auto font-mono text-muted-foreground">{fmt.format(new Date(m.created_at))}</span>
             </div>
             {m.body && <div className="whitespace-pre-wrap text-[0.9em] text-foreground" dir="auto">{m.body}</div>}
-            {!ok && m.error && <div className="mt-1 text-[0.8em] text-destructive">{m.error}</div>}
+            {!ok && m.error && <div className="mt-1 text-[0.8em] text-destructive" dir="ltr">{m.error}</div>}
           </div>
         )
       })}
