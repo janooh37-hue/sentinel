@@ -21,6 +21,20 @@ from app.schemas.scan_inbox import (
 )
 from app.services import scan_inbox_service
 
+# Types safe to render inline in the browser; anything else is forced to
+# download so a stored .html/.svg can't execute in the app origin (XSS).
+_INLINE_SAFE_TYPES = frozenset(
+    {
+        "application/pdf",
+        "image/png",
+        "image/jpeg",
+        "image/gif",
+        "image/webp",
+        "image/bmp",
+        "image/tiff",
+    }
+)
+
 router = APIRouter(prefix="/scan-inbox", tags=["scan-inbox"])
 
 
@@ -122,12 +136,21 @@ def get_scan_document(
     abs_path = scan_inbox_service.abs_file_path(item)
     if not abs_path.exists():
         raise HTTPException(status_code=404, detail="scan file missing")
-    media_type = mimetypes.guess_type(item.filename)[0] or "application/octet-stream"
+    guessed = mimetypes.guess_type(item.filename)[0] or "application/octet-stream"
+    if guessed in _INLINE_SAFE_TYPES:
+        return FileResponse(
+            abs_path,
+            filename=item.filename,
+            media_type=guessed,
+            content_disposition_type="inline",
+            headers={"X-Content-Type-Options": "nosniff"},
+        )
     return FileResponse(
         abs_path,
         filename=item.filename,
-        media_type=media_type,
-        content_disposition_type="inline",
+        media_type="application/octet-stream",
+        content_disposition_type="attachment",
+        headers={"X-Content-Type-Options": "nosniff"},
     )
 
 

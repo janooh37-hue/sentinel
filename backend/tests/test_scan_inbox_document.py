@@ -99,3 +99,27 @@ def test_get_scan_document_missing_file_404(db_session, tmp_path, monkeypatch):
     with pytest.raises(HTTPException) as ei:
         api_mod.get_scan_document(item_id=row.id, db=db_session, user=user)
     assert ei.value.status_code == 404
+
+
+def test_get_scan_document_unsafe_type_forces_download(db_session, tmp_path, monkeypatch):
+    from app.api.v1 import scan_inbox as api_mod
+    from app.services import scan_inbox_service as svc
+
+    user = _user(db_session, "owner4@x.ae")
+    f = tmp_path / "evil.html"
+    f.write_bytes(b"<script>alert(1)</script>")
+    monkeypatch.setattr(svc, "_abs", lambda rel: f)
+    row = ScanInbox(
+        source="email",
+        file_path="/s/evil.html",
+        filename="evil.html",
+        state="unrouted",
+        owner_user_id=user.id,
+    )
+    db_session.add(row)
+    db_session.flush()
+
+    resp = api_mod.get_scan_document(item_id=row.id, db=db_session, user=user)
+    assert resp.media_type == "application/octet-stream"
+    assert resp.headers["content-disposition"].startswith("attachment")
+    assert resp.headers["x-content-type-options"] == "nosniff"
