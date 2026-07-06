@@ -12,7 +12,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 
-import { api, ApiError, type EmployeeListItem } from '@/lib/api'
+import { api, type EmployeeListItem, apiErrorMessage } from '@/lib/api'
 import { unitOptions, postsForUnit } from '@/lib/dutyUnits'
 import {
   DialogRoot,
@@ -60,7 +60,7 @@ export function AssignPopover({
       toast.success(t('dutyLocations.assign.saved'))
       onOpenChange(false)
     },
-    onError: (err) => toast.error(err instanceof ApiError ? err.message : String(err)),
+    onError: (err) => toast.error(apiErrorMessage(err)),
   })
 
   return (

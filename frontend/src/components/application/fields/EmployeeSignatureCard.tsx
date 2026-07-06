@@ -31,7 +31,7 @@ import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { SignatureDrawPanel } from '@/components/signature/SignatureDrawPanel'
-import { api, ApiError, type SubmitterRead } from '@/lib/api'
+import { api, type SubmitterRead, apiErrorMessage } from '@/lib/api'
 
 export interface EmployeeSignatureCardProps {
   /** RHF field carrying a drawn/uploaded PNG data URL (`employee_sig_path`). */
@@ -131,7 +131,7 @@ export function EmployeeSignatureCard({
           queryKey: ['employee-signature', employeeId],
         })
       } catch (err) {
-        toast.error(err instanceof ApiError ? err.message : String(err))
+        toast.error(apiErrorMessage(err))
       }
     }
   }

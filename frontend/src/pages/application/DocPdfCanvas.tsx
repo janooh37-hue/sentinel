@@ -22,6 +22,8 @@ import { AlertCircle, Download, Loader2 } from 'lucide-react'
 import * as pdfjsLib from 'pdfjs-dist'
 import pdfWorkerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url'
 
+import { base64ToBytes, toBase64Url } from '@/lib/pdf'
+
 pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorkerUrl
 
 export interface PageBox {
@@ -32,17 +34,6 @@ export interface PageBox {
   height: number
 }
 
-function base64ToBytes(b64: string): Uint8Array {
-  const bin = atob(b64)
-  const out = new Uint8Array(bin.length)
-  for (let i = 0; i < bin.length; i += 1) out[i] = bin.charCodeAt(i)
-  return out
-}
-
-/** Append `encoding=base64` to a `/documents/.../download?format=pdf` URL. */
-function toBase64Url(url: string): string {
-  return url.includes('?') ? `${url}&encoding=base64` : `${url}?encoding=base64`
-}
 
 export default function DocPdfCanvas({
   pdfUrl,

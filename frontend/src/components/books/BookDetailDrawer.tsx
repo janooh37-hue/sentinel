@@ -16,26 +16,20 @@
 
 import { useEffect, useState } from 'react'
 import * as Dialog from '@radix-ui/react-dialog'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
-import { toast } from 'sonner'
 import { formatDistanceToNow, parseISO } from 'date-fns'
 import { ar as arLocale } from 'date-fns/locale'
 import { Check, Download, FileText, Paperclip, RotateCcw, Send, X } from 'lucide-react'
 
-import {
-  api,
-  ApiError,
-  type BookApprovalStepRead,
-  type BookDecideAction,
-  type BookVersionRead,
-} from '@/lib/api'
+import { api, type BookApprovalStepRead, type BookDecideAction, type BookVersionRead } from '@/lib/api'
 import { useCapabilities } from '@/lib/useCapabilities'
 import { useAuth } from '@/lib/authContext'
 import { cn } from '@/lib/utils'
 
 import { footerActionFor } from './book-detail-drawer-utils'
+import { useBookApprovalActions } from './useBookApprovalActions'
 import {
   approverStep,
   changesRequestedCount,
@@ -265,46 +259,14 @@ export function BookDetailDrawer({ bookId, onClose, onSubmitForApproval }: Props
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [book?.id, myStep?.id, myStep?.seen_at])
 
-  const decideMutation = useMutation({
-    mutationFn: ({ act, note }: { act: BookDecideAction; note?: string }) =>
-      api.decideBook(book!.id, act, note),
-    onSuccess: (_data, { act }) => {
-      void qc.invalidateQueries({ queryKey: ['books'] })
-      void qc.invalidateQueries({ queryKey: ['books', 'awaiting'] })
-      void qc.invalidateQueries({ queryKey: ['dashboard'] })
-      const key =
-        act === 'reject'
-          ? 'books.approval.rejected'
-          : act === 'return'
-            ? 'books.approval.returned'
-            : 'books.approval.noteAdded'
-      toast.success(t(key))
+  const { decideMutation, signMutation } = useBookApprovalActions({
+    bookId: book?.id,
+    onDecided: () => {
       setNoteText('')
       setNoteFor(null)
       onClose()
     },
-    onError: (err) => toast.error(err instanceof ApiError ? err.message : String(err)),
-  })
-
-  // Approval == signing: embeds the signed-in manager's signature and marks the
-  // book approved. A NO_SIGNATURE error means the user must add a signing
-  // signature in Settings first.
-  const signMutation = useMutation({
-    mutationFn: () => api.signBook(book!.id),
-    onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: ['books'] })
-      void qc.invalidateQueries({ queryKey: ['books', 'awaiting'] })
-      void qc.invalidateQueries({ queryKey: ['dashboard'] })
-      toast.success(t('books.approval.signed'))
-      onClose()
-    },
-    onError: (err) => {
-      if (err instanceof ApiError && err.code === 'NO_SIGNATURE') {
-        toast.error(t('books.approval.noSignatureHint'))
-      } else {
-        toast.error(err instanceof ApiError ? err.message : String(err))
-      }
-    },
+    onSigned: onClose,
   })
 
   function handleDecide(act: BookDecideAction): void {

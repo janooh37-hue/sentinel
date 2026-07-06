@@ -9,7 +9,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 
-import { api, ApiError } from '@/lib/api'
+import { api, apiErrorMessage } from '@/lib/api'
 import { Button } from '@/components/ui/button'
 
 import { addDays } from './report/fmt'
@@ -69,7 +69,7 @@ export function NsControls({
       toast.success(t('leaves.toast.datesChanged'))
       onMutated()
     },
-    onError: (err) => toast.error(err instanceof ApiError ? err.message : String(err)),
+    onError: (err) => toast.error(apiErrorMessage(err)),
   })
 
   const certUploadMutation = useMutation({
@@ -81,7 +81,7 @@ export function NsControls({
       toast.success(t('leaves.toast.certificateUploaded'))
       onMutated()
     },
-    onError: (err) => toast.error(err instanceof ApiError ? err.message : String(err)),
+    onError: (err) => toast.error(apiErrorMessage(err)),
   })
 
   const certInputRef = useRef<HTMLInputElement>(null)

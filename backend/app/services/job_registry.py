@@ -23,6 +23,22 @@ JobStatus = Literal["queued", "running", "done", "failed"]
 _jobs: dict[str, _Job] = {}
 _lock = threading.Lock()
 
+# Cap the in-process registry so a long-uptime service doesn't leak memory one
+# entry per /documents/generate forever. Oldest *terminal* (done/failed) jobs
+# are evicted first; in-flight (queued/running) jobs are never dropped.
+_MAX_JOBS = 500
+
+
+def _prune_locked() -> None:
+    """Evict oldest terminal jobs when over the cap. Caller must hold ``_lock``."""
+    if len(_jobs) <= _MAX_JOBS:
+        return
+    for job_id in list(_jobs):  # dict preserves insertion order → oldest first
+        if len(_jobs) <= _MAX_JOBS:
+            break
+        if _jobs[job_id].status in ("done", "failed"):
+            del _jobs[job_id]
+
 
 @dataclass
 class JobDocumentItem:
@@ -57,6 +73,7 @@ def submit_job() -> str:
     job_id = str(uuid.uuid4())
     with _lock:
         _jobs[job_id] = _Job(job_id=job_id)
+        _prune_locked()
     return job_id
 
 

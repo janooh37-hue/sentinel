@@ -18,7 +18,7 @@ import { ArrowDownLeft, ArrowUpRight, BookOpen, Plus, Send, Trash2 } from 'lucid
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 
-import { api, ApiError } from '@/lib/api'
+import { api, apiErrorMessage } from '@/lib/api'
 import type { BookRead } from '@/lib/api'
 import { addToBasket } from '@/lib/emailBasket'
 import { buildRecordBasketItem } from './recordsBasket'
@@ -319,7 +319,7 @@ export function BooksPage(): React.JSX.Element {
       if (removed > 0) toast.success(t('books.bulk.deleted', { count: removed }))
       if (failed > 0) toast.error(t('books.bulk.deleteError', { count: failed }))
     },
-    onError: (err) => toast.error(err instanceof ApiError ? err.message : String(err)),
+    onError: (err) => toast.error(apiErrorMessage(err)),
   })
 
   const handleAddToEmail = useCallback(async () => {
@@ -382,7 +382,7 @@ export function BooksPage(): React.JSX.Element {
       setNewBookOpen(false)
       toast.success(t('books.toast.created'))
     },
-    onError: (err) => toast.error(err instanceof ApiError ? err.message : String(err)),
+    onError: (err) => toast.error(apiErrorMessage(err)),
   })
 
   return (

@@ -58,9 +58,7 @@ def list_book_categories(db: Session) -> list[BookCategory]:
     cast to INTEGER so numeric ids order naturally. Non-numeric codes cast to 0
     in SQLite and fall first, then tie-break on the raw id for stability.
     """
-    stmt = select(BookCategory).order_by(
-        func.cast(BookCategory.id, Integer), BookCategory.id
-    )
+    stmt = select(BookCategory).order_by(func.cast(BookCategory.id, Integer), BookCategory.id)
     return list(db.execute(stmt).scalars().all())
 
 
@@ -437,22 +435,32 @@ def submit_for_approval(
             continue
         u = db.get(User, uid)
         if u is None or u.status != "active":
-            raise ValidationFailedError("REVIEWER_NOT_ELIGIBLE", f"Reviewer {uid} is not an active user")
+            raise ValidationFailedError(
+                "REVIEWER_NOT_ELIGIBLE", f"Reviewer {uid} is not an active user"
+            )
         seen.add(uid)
         reviewers.append(uid)
 
     version.approval_steps.clear()
     version.approval_steps.append(
         BookApprovalStep(
-            book_id=book.id, step_order=0, stage_label="Approve",
-            assignee_user_id=approver_id, kind="approver", state="pending",
+            book_id=book.id,
+            step_order=0,
+            stage_label="Approve",
+            assignee_user_id=approver_id,
+            kind="approver",
+            state="pending",
         )
     )
     for i, rev_id in enumerate(reviewers, start=1):
         version.approval_steps.append(
             BookApprovalStep(
-                book_id=book.id, step_order=i, stage_label="Review",
-                assignee_user_id=rev_id, kind="reviewer", state="pending",
+                book_id=book.id,
+                step_order=i,
+                stage_label="Review",
+                assignee_user_id=rev_id,
+                kind="reviewer",
+                state="pending",
             )
         )
     book.priority = priority
@@ -577,9 +585,11 @@ def is_document_signed_locked(db: Session, document_id: int) -> tuple[bool, str 
     and carries a ``signed_pdf_path``. Callers use this to deny DOCX download and
     serve the signed artifact instead. Returns ``(False, None)`` otherwise.
     """
-    version = db.execute(
-        select(BookVersion).where(BookVersion.document_id == document_id)
-    ).scalars().first()
+    version = (
+        db.execute(select(BookVersion).where(BookVersion.document_id == document_id))
+        .scalars()
+        .first()
+    )
     if version is not None and version.status == "approved" and version.signed_pdf_path:
         return True, version.signed_pdf_path
     return False, None
@@ -612,7 +622,11 @@ def _validate_geometry(kind: str, geometry: dict[str, float]) -> None:
     keys = _GEOMETRY_KEYS[kind]
     for key in keys:
         val = geometry.get(key)
-        if not isinstance(val, (int, float)) or isinstance(val, bool) or not (0.0 <= float(val) <= 1.0):
+        if (
+            not isinstance(val, (int, float))
+            or isinstance(val, bool)
+            or not (0.0 <= float(val) <= 1.0)
+        ):
             raise ValidationFailedError(
                 "BAD_GEOMETRY", f"geometry.{key} must be a number in [0, 1]"
             )
@@ -744,6 +758,27 @@ def _resolve_user_name(db: Session, user: User) -> str:
     return user.email
 
 
+def resolve_names_by_ids(db: Session, user_ids: set[int]) -> dict[int, str]:
+    """Batch version of :func:`_resolve_user_name` for a set of user ids — one
+    query for the users and one for their linked employees, instead of two
+    ``db.get`` per user. Same name precedence. Use when resolving submitter /
+    reviewer names across a list (avoids the N+1 the audit flagged)."""
+    if not user_ids:
+        return {}
+    users = db.execute(select(User).where(User.id.in_(user_ids))).scalars().all()
+    emp_ids = {u.employee_id for u in users if u.employee_id}
+    emps: dict[str, Employee] = {}
+    if emp_ids:
+        emps = {
+            e.id: e for e in db.execute(select(Employee).where(Employee.id.in_(emp_ids))).scalars()
+        }
+    out: dict[int, str] = {}
+    for u in users:
+        emp = emps.get(u.employee_id) if u.employee_id else None
+        out[u.id] = emp.name_en if emp is not None else (u.display_name or u.email)
+    return out
+
+
 def submitter_name(db: Session, book: Book) -> str | None:
     """Resolve the display name of the user who submitted ``book`` for approval."""
     if book.submitted_by_user_id is None:
@@ -777,9 +812,9 @@ def list_approver_candidates(db: Session) -> list[ApproverOptionRead]:
     Lives in book_service because it returns a book-domain schema type and is the
     natural companion to submit_for_approval; name-resolution mirrors auth_service.admin_read.
     """
-    users = db.execute(
-        select(User).where(User.status == "active").order_by(User.id)
-    ).scalars().all()
+    users = (
+        db.execute(select(User).where(User.status == "active").order_by(User.id)).scalars().all()
+    )
 
     out: list[ApproverOptionRead] = []
     for user in users:
@@ -857,7 +892,9 @@ def add_reviewers(db: Session, book_id: int, *, user_ids: Sequence[int]) -> Book
     approver and existing reviewers; requires the book to be pending."""
     book = _get_book_with_versions(db, book_id)
     if book.approval_state != "pending":
-        raise ValidationFailedError("NOT_PENDING", "Reviewers can only be added to a pending record")
+        raise ValidationFailedError(
+            "NOT_PENDING", "Reviewers can only be added to a pending record"
+        )
     version = _current_version(book)
     assert version is not None
     existing = {s.assignee_user_id for s in version.approval_steps}
@@ -867,11 +904,17 @@ def add_reviewers(db: Session, book_id: int, *, user_ids: Sequence[int]) -> Book
             continue
         u = db.get(User, uid)
         if u is None or u.status != "active":
-            raise ValidationFailedError("REVIEWER_NOT_ELIGIBLE", f"Reviewer {uid} is not an active user")
+            raise ValidationFailedError(
+                "REVIEWER_NOT_ELIGIBLE", f"Reviewer {uid} is not an active user"
+            )
         version.approval_steps.append(
             BookApprovalStep(
-                book_id=book.id, step_order=next_order, stage_label="Review",
-                assignee_user_id=uid, kind="reviewer", state="pending",
+                book_id=book.id,
+                step_order=next_order,
+                stage_label="Review",
+                assignee_user_id=uid,
+                kind="reviewer",
+                state="pending",
             )
         )
         existing.add(uid)
@@ -896,8 +939,12 @@ def remove_reviewer(db: Session, book_id: int, *, user_id: int) -> Book:
 
 def list_reviewer_candidates(db: Session) -> list[ApproverOptionRead]:
     """Active accounts pickable as reviewers (any active user; no signature needed)."""
-    users = db.execute(select(User).where(User.status == "active").order_by(User.id)).scalars().all()
-    return [ApproverOptionRead(id=u.id, name=_resolve_user_name(db, u), is_default=False) for u in users]
+    users = (
+        db.execute(select(User).where(User.status == "active").order_by(User.id)).scalars().all()
+    )
+    return [
+        ApproverOptionRead(id=u.id, name=_resolve_user_name(db, u), is_default=False) for u in users
+    ]
 
 
 def resolve_doc_manager_user(db: Session, book: Book) -> tuple[int | None, str | None, bool]:
@@ -931,9 +978,7 @@ def _safe_filename(raw: str) -> str:
     candidate = Path(candidate).name
     cleaned = _UNSAFE_CHARS.sub("_", candidate).strip(". ")
     if not cleaned:
-        raise ValidationFailedError(
-            "BOOK_BAD_FILENAME", "Filename is empty or invalid", raw=raw
-        )
+        raise ValidationFailedError("BOOK_BAD_FILENAME", "Filename is empty or invalid", raw=raw)
     return cleaned
 
 

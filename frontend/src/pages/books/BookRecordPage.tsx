@@ -25,7 +25,7 @@ import {
   X,
 } from 'lucide-react'
 
-import { api, ApiError, type BookApprovalStepRead, type BookDecideAction, type BookVersionRead } from '@/lib/api'
+import { api, type BookApprovalStepRead, type BookVersionRead, apiErrorMessage } from '@/lib/api'
 import { useAuth } from '@/lib/authContext'
 import { useCapabilities } from '@/lib/useCapabilities'
 import {
@@ -43,6 +43,7 @@ import { ReviewerList } from '@/components/books/ReviewerList'
 import { ReviewerActions } from '@/components/books/ReviewerActions'
 import { SubmitForApprovalDialog } from '@/components/books/SubmitForApprovalDialog'
 import { BookAnnotationLayer } from '@/components/books/BookAnnotationLayer'
+import { useBookApprovalActions } from '@/components/books/useBookApprovalActions'
 import { hasCommentBearingMark } from '@/components/books/annotation-utils'
 import { cn } from '@/lib/utils'
 
@@ -339,53 +340,27 @@ export function BookRecordPage(): React.JSX.Element {
     }) => api.createBookAnnotation(bookId, current!.id, m),
     onSuccess: () =>
       void qc.invalidateQueries({ queryKey: ['books', 'annotations', bookId, current?.id] }),
-    onError: (err) => toast.error(err instanceof ApiError ? err.message : String(err)),
+    onError: (err) => toast.error(apiErrorMessage(err)),
   })
   const deleteMark = useMutation({
     mutationFn: (annId: number) => api.deleteBookAnnotation(bookId, current!.id, annId),
     onSuccess: () =>
       void qc.invalidateQueries({ queryKey: ['books', 'annotations', bookId, current?.id] }),
-    onError: (err) => toast.error(err instanceof ApiError ? err.message : String(err)),
+    onError: (err) => toast.error(apiErrorMessage(err)),
   })
 
-  function invalidateAll(): void {
-    void qc.invalidateQueries({ queryKey: ['books'] })
-    void qc.invalidateQueries({ queryKey: ['books', 'awaiting'] })
-    void qc.invalidateQueries({ queryKey: ['dashboard'] })
-  }
-
-  const decideMutation = useMutation({
-    mutationFn: ({ act, note }: { act: BookDecideAction; note: string }) =>
-      api.decideBook(book!.id, act, note),
-    onSuccess: (_data, { act }) => {
-      invalidateAll()
-      toast.success(t(act === 'reject' ? 'books.approval.rejected' : 'books.approval.returned'))
+  const { decideMutation, signMutation } = useBookApprovalActions({
+    bookId: book?.id,
+    onDecided: () => {
       setDecision(null)
       setReason('')
       navigate('/books')
     },
-    onError: (err) => toast.error(err instanceof ApiError ? err.message : String(err)),
-  })
-
-  // Approval == signing: embeds the signed-in manager's signature and marks the
-  // book approved. NO_SIGNATURE → must add a signing signature in Settings.
-  const signMutation = useMutation({
-    mutationFn: () => api.signBook(book!.id),
-    onSuccess: () => {
-      // Stay on the record (do NOT navigate away): the refetch flips the state
-      // to approved and the desk reloads the signed PDF, so the signer sees
-      // their signature land on the document — the confirmation managers expect
-      // from "Sign & approve". Reject/return still navigate back to the list.
-      invalidateAll()
-      toast.success(t('books.approval.signed'))
-    },
-    onError: (err) => {
-      if (err instanceof ApiError && err.code === 'NO_SIGNATURE') {
-        toast.error(t('books.approval.noSignatureHint'))
-      } else {
-        toast.error(err instanceof ApiError ? err.message : String(err))
-      }
-    },
+    // Stay on the record after signing (do NOT navigate away): the refetch flips
+    // the state to approved and the desk reloads the signed PDF, so the signer
+    // sees their signature land on the document — the confirmation managers
+    // expect from "Sign & approve". Reject/return still navigate back (onDecided).
+    onSigned: () => {},
   })
 
   function handleRevise(): void {

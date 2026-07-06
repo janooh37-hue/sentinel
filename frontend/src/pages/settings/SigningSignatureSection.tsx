@@ -20,7 +20,7 @@ import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { Loader2, FileSignature } from 'lucide-react'
 
-import { api, ApiError } from '@/lib/api'
+import { api, apiErrorMessage } from '@/lib/api'
 import type { AppSettingsRead, AppSettingsUpdate } from '@/lib/api'
 import { useAuth } from '@/lib/authContext'
 import { RangeSlider } from '@/components/ui/range-slider'
@@ -277,7 +277,7 @@ export function SigningSignatureSection({
       toast.success(t('settings.signingSignature.saved'))
       setEditing(false)
     } catch (err) {
-      toast.error(err instanceof ApiError ? err.message : String(err))
+      toast.error(apiErrorMessage(err))
     } finally {
       setBusy(false)
     }
@@ -291,7 +291,7 @@ export function SigningSignatureSection({
       toast.success(t('settings.signingSignature.removed'))
       setEditing(true)
     } catch (err) {
-      toast.error(err instanceof ApiError ? err.message : String(err))
+      toast.error(apiErrorMessage(err))
     } finally {
       setBusy(false)
     }

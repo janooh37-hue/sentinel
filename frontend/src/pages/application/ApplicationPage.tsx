@@ -33,7 +33,7 @@ import { useLocation, useNavigate, useSearchParams } from 'react-router-dom'
 import { ChevronLeft, ChevronRight, Eye, FileText, Mail, Pencil, QrCode, RotateCcw, Search, ArrowRight, ArrowLeft } from 'lucide-react'
 import { toast } from 'sonner'
 
-import { api } from '@/lib/api'
+import { api, apiErrorMessage } from '@/lib/api'
 import type { DocumentGenerateRequest, StagedAttachmentRead, TemplateMeta } from '@/lib/api'
 import type { ExtractionResponse } from '@/lib/extraction'
 import type { TemplateDetailResponse, TemplateField } from '@/components/application/types'
@@ -332,7 +332,7 @@ export function ApplicationPage(): React.JSX.Element {
     },
     onError: (err) => {
       setSubmitError(err instanceof ApiError ? `${err.code}: ${err.message}` : String(err))
-      toast.error(err instanceof ApiError ? err.message : String(err))
+      toast.error(apiErrorMessage(err))
     },
   })
 

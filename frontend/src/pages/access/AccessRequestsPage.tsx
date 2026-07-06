@@ -40,7 +40,7 @@ import {
   X,
 } from 'lucide-react'
 
-import { api, ApiError, type AdminUserRead, type AuditEntryRead } from '@/lib/api'
+import { api, ApiError, type AdminUserRead, type AuditEntryRead, apiErrorMessage } from '@/lib/api'
 import { useAuth } from '@/lib/authContext'
 import { PermissionRequestsTab } from '@/components/access/PermissionRequestsTab'
 import { UserPermissionsSheet } from '@/components/access/UserPermissionsSheet'
@@ -84,13 +84,25 @@ function parseTs(iso: string): number {
   return new Date(hasTz ? iso : `${iso}Z`).getTime()
 }
 
+// Cache RelativeTimeFormat instances by locale — constructing one is not free
+// and relativeTime() runs once per user row on every render.
+const _rtfByLocale = new Map<string, Intl.RelativeTimeFormat>()
+function rtfFor(locale: string): Intl.RelativeTimeFormat {
+  let rtf = _rtfByLocale.get(locale)
+  if (!rtf) {
+    rtf = new Intl.RelativeTimeFormat(locale, { numeric: 'auto' })
+    _rtfByLocale.set(locale, rtf)
+  }
+  return rtf
+}
+
 function relativeTime(iso: string | null, locale: string): string {
   if (!iso) return ''
   const then = parseTs(iso)
   if (Number.isNaN(then)) return ''
   const diffMs = then - Date.now()
   const abs = Math.abs(diffMs)
-  const rtf = new Intl.RelativeTimeFormat(locale, { numeric: 'auto' })
+  const rtf = rtfFor(locale)
   const min = 60_000
   const hr = 60 * min
   const day = 24 * hr
@@ -801,16 +813,21 @@ export function AccessRequestsPage(): React.JSX.Element {
   })
 
   const users = useMemo(() => usersQuery.data ?? [], [usersQuery.data])
-  const pending = users.filter((u) => u.status === 'pending')
-  const active = users.filter((u) => u.status === 'active')
-  const suspended = users.filter((u) => u.status === 'locked' || u.status === 'disabled')
+  const { pending, active, suspended } = useMemo(
+    () => ({
+      pending: users.filter((u) => u.status === 'pending'),
+      active: users.filter((u) => u.status === 'active'),
+      suspended: users.filter((u) => u.status === 'locked' || u.status === 'disabled'),
+    }),
+    [users],
+  )
 
   function invalidate(): void {
     void qc.invalidateQueries({ queryKey: ['auth-users'] })
     void qc.invalidateQueries({ queryKey: ['auth-audit'] })
   }
   function onError(e: unknown): void {
-    toast.error(e instanceof ApiError ? e.message : String(e))
+    toast.error(apiErrorMessage(e))
   }
 
   const approveMut = useMutation({

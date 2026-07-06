@@ -15,7 +15,7 @@ import { useTranslation } from 'react-i18next'
 import { useNavigate } from 'react-router-dom'
 import { toast } from 'sonner'
 
-import { api, ApiError, type EmployeeListItem } from '@/lib/api'
+import { api, type EmployeeListItem, apiErrorMessage } from '@/lib/api'
 import { unitOptions, postsForUnit } from '@/lib/dutyUnits'
 import { buildTransferRequest } from './transferRequest'
 import { loadTransferDefaults, saveTransferDefaults } from './transferDefaults'
@@ -103,7 +103,7 @@ export function TransferDialog({
       onTransferred()
       onOpenChange(false)
     },
-    onError: (err) => toast.error(err instanceof ApiError ? err.message : String(err)),
+    onError: (err) => toast.error(apiErrorMessage(err)),
   })
 
   const canSubmit = toUnit.trim().length > 0 && employees.length > 0 && !mutation.isPending

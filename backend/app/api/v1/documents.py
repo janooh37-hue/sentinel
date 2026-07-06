@@ -16,7 +16,6 @@ background tasks synchronously after response delivery, so tests can poll
 
 from __future__ import annotations
 
-import base64
 import logging
 from datetime import datetime
 from typing import Annotated, Any, Literal
@@ -34,11 +33,12 @@ from fastapi.responses import FileResponse, Response
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
+from app.api._responses import maybe_base64
 from app.api.deps import get_current_user, require_capability
 from app.api.errors import AppError, NotFoundError
 from app.config import get_settings
 from app.db.models import Document, User
-from app.db.session import get_db
+from app.db.session import SessionLocal, get_db
 from app.schemas._base import ORMBase
 from app.services import book_service, document_service, perm_service, staging_service
 from app.services.job_registry import (
@@ -164,11 +164,16 @@ class DocumentRead(ORMBase):
 def _run_generation(
     job_id: str,
     request: DocumentGenerateRequest,
-    db: Session,
     current_user: User | None = None,
 ) -> None:
-    """Execute the generation pipeline; called by BackgroundTasks."""
+    """Execute the generation pipeline; called by BackgroundTasks.
+
+    Opens its own DB session: the request-scoped session from ``get_db`` is
+    closed once the HTTP response is sent, so the background task must not reuse
+    it.
+    """
     set_running(job_id)
+    db = SessionLocal()
     try:
         result = document_service.generate_document(
             db,
@@ -229,15 +234,13 @@ def _run_generation(
 def generate_document(
     payload: DocumentGenerateRequest,
     background_tasks: BackgroundTasks,
-    db: Annotated[Session, Depends(get_db)],
     user: Annotated[User, Depends(require_capability("documents.generate"))],
 ) -> DocumentGenerateResponse:
     job_id = submit_job()
-    # Pass db directly — BackgroundTasks runs in the same thread pool so the
-    # session stays alive.  The background task closes it when done.
-    # `user` is threaded so the service can stamp the submitter's G-number
-    # into the General Book footer (template token: {{ submitter_g }}).
-    background_tasks.add_task(_run_generation, job_id, payload, db, user)
+    # The task opens its own session (the request session is closed once this
+    # response returns). `user` is threaded so the service can stamp the
+    # submitter's G-number into the General Book footer ({{ submitter_g }}).
+    background_tasks.add_task(_run_generation, job_id, payload, user)
     return DocumentGenerateResponse(job_id=job_id)
 
 
@@ -425,12 +428,8 @@ def download_document(
 
     # base64 branch — opaque text/plain body that PDF handlers / download
     # accelerators won't claim. The frontend canvas decodes + renders.
-    if encoding == "base64":
-        return Response(
-            content=base64.b64encode(file_path.read_bytes()),
-            media_type="text/plain",
-            headers={"X-Content-Type-Options": "nosniff"},
-        )
+    if (b64 := maybe_base64(file_path.read_bytes(), encoding)) is not None:
+        return b64
 
     filename = document_service.download_filename_for(row, ext)
     # PDFs are served inline so the preview iframe can render them; the

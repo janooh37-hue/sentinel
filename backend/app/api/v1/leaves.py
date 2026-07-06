@@ -12,7 +12,6 @@ The balance endpoint lives on the employees router:
 
 from __future__ import annotations
 
-import base64
 import mimetypes
 from datetime import date
 from typing import Annotated
@@ -21,6 +20,7 @@ from fastapi import APIRouter, Depends, File, Query, UploadFile, status
 from fastapi.responses import Response
 from sqlalchemy.orm import Session
 
+from app.api._responses import maybe_base64
 from app.api.deps import require_capability
 from app.db.models import Leave, User
 from app.db.session import get_db
@@ -171,13 +171,9 @@ def download_leave_certificate(
 ) -> Response:
     path = leave_service.get_certificate_file(db, leave_id)
     raw = path.read_bytes()
-    if encoding == "base64":
-        # IDM-safe: text/plain + base64 (same trick as document download).
-        return Response(
-            content=base64.b64encode(raw),
-            media_type="text/plain",
-            headers={"X-Content-Type-Options": "nosniff"},
-        )
+    # IDM-safe: text/plain + base64 (same trick as document download).
+    if (b64 := maybe_base64(raw, encoding)) is not None:
+        return b64
     media = mimetypes.guess_type(path.name)[0] or "application/octet-stream"
     return Response(
         content=raw,

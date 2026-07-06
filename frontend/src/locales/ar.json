@@ -194,7 +194,12 @@
     "title": "الموظفون",
     "eyebrow": "العمليات",
     "newEmployee": "موظف جديد",
-    "pageMeta": "{{total}} موظفًا · {{active}} نشط",
+    "pageMeta_zero": "لا موظفين · {{active}} نشط",
+    "pageMeta_one": "موظف واحد · {{active}} نشط",
+    "pageMeta_two": "موظفان · {{active}} نشط",
+    "pageMeta_few": "{{count}} موظفين · {{active}} نشط",
+    "pageMeta_many": "{{count}} موظفًا · {{active}} نشط",
+    "pageMeta_other": "{{count}} موظف · {{active}} نشط",
     "chips": {
       "all": "الكل",
       "active": "نشط",
@@ -254,6 +259,9 @@
       "Active": "نشط",
       "Resigned": "مستقيل",
       "Terminated": "مفصول"
+    },
+    "statusDialog": {
+      "title": "تغيير الحالة"
     },
     "validation": {
       "endDateRequired": "تاريخ نهاية الخدمة مطلوب عند تغيير الحالة عن نشط",
@@ -503,7 +511,7 @@
       "totalsEmployees_two": "موظفان",
       "totalsEmployees_few": "{{count}} موظفين",
       "totalsEmployees_many": "{{count}} موظفًا",
-      "totalsEmployees_other": "{{count}} موظفًا",
+      "totalsEmployees_other": "{{count}} موظف",
       "emptyFiltered": "لا توجد سجلات مطابقة لهذا النطاق.",
       "clearFilters": "مسح عوامل التصفية",
       "profileCurrent": "الإجازة الحالية",
@@ -884,7 +892,7 @@
     "pageMeta_two": "إدخالان · هذا الشهر",
     "pageMeta_few": "{{count}} إدخالات · هذا الشهر",
     "pageMeta_many": "{{count}} إدخالاً · هذا الشهر",
-    "pageMeta_other": "{{count}} إدخالاً · هذا الشهر",
+    "pageMeta_other": "{{count}} إدخال · هذا الشهر",
     "newEntry": "إدخال جديد",
     "compose": "إنشاء بريد",
     "composeQuoteHeader": "في {{when}}، كتب {{from}}:",
@@ -1596,6 +1604,9 @@
       "nameAr": "الاسم (عربي)",
       "position": "المسمى الوظيفي",
       "department": "القسم",
+      "dutyUnit": "الوحدة",
+      "dutyPost": "النقطة",
+      "transfer": "نقل مكان العمل",
       "doj": "تاريخ الالتحاق",
       "status": "الحالة"
     },
@@ -2299,6 +2310,7 @@
       "reason": "السبب (اختياري)",
       "reasonPlaceholder": "إعادة توزيع / احتياج تشغيلي…",
       "generate": "إنشاء كتاب النقل ←",
+      "issueLetter": "إصدار كتاب نقل في الكتب العامة",
       "success": "تم إنشاء كتاب النقل {{ref}}.",
       "viewRecord": "عرض السجل",
       "movedNoBook_one": "تم نقل موظف واحد",

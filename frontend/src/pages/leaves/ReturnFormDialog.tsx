@@ -10,7 +10,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 
-import { api, ApiError, type LeaveListItem, type LeaveRead } from '@/lib/api'
+import { api, type LeaveListItem, type LeaveRead, apiErrorMessage } from '@/lib/api'
 import {
   DialogRoot,
   DialogContent,
@@ -70,7 +70,7 @@ export function ReturnFormDialog({
       onFiled()
       onOpenChange(false)
     },
-    onError: (err) => toast.error(err instanceof ApiError ? err.message : String(err)),
+    onError: (err) => toast.error(apiErrorMessage(err)),
   })
 
   const resumptionInvalid = !!resumption && resumption < leave.start_date.slice(0, 10)

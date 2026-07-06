@@ -10,7 +10,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 
-import { api, ApiError } from '@/lib/api'
+import { api, apiErrorMessage } from '@/lib/api'
 import { todayIso } from '@/lib/leaveDateMath'
 import { addDays } from './report/fmt'
 import { LeaveEmployeePicker } from './LeaveEmployeePicker'
@@ -86,7 +86,7 @@ export function NationalServiceDialog({
       onCreated(row.id)
     },
     onError: (err) =>
-      toast.error(err instanceof ApiError ? err.message : String(err)),
+      toast.error(apiErrorMessage(err)),
   })
 
   const canSubmit =

@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Annotated
 
 from fastapi import APIRouter, Depends
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.deps import require_capability
@@ -16,23 +17,37 @@ from app.services import scan_inbox_service
 router = APIRouter(prefix="/scan-inbox", tags=["scan-inbox"])
 
 
-def _to_item(db: Session, row: ScanInbox) -> ScanInboxItem:
+def _to_item(
+    db: Session,
+    row: ScanInbox,
+    *,
+    entries: dict[int, LedgerEntry] | None = None,
+    employees: dict[str, Employee] | None = None,
+) -> ScanInboxItem:
     """Map a ScanInbox ORM row to the response schema.
 
-    LedgerEntry columns used:
-    - ``counterparty`` (String, not nullable) — the sender name/address
-    - ``subject``      (String, not nullable) — the email subject line
-    Both are fetched with getattr(..., None) fallbacks for safety.
+    ``entries``/``employees`` are optional id→row maps: when the caller has
+    batch-fetched them (the list endpoint), we read from the maps instead of
+    issuing a ``db.get`` per row (avoids the N+1). Single-row callers omit them
+    and fall back to a direct lookup.
     """
     sender = subject = None
     if row.ledger_entry_id is not None:
-        entry = db.get(LedgerEntry, row.ledger_entry_id)
+        entry = (
+            entries.get(row.ledger_entry_id)
+            if entries is not None
+            else db.get(LedgerEntry, row.ledger_entry_id)
+        )
         if entry is not None:
             sender = getattr(entry, "counterparty", None)
             subject = getattr(entry, "subject", None)
     name_en = name_ar = None
     if row.proposed_employee_id is not None:
-        emp = db.get(Employee, row.proposed_employee_id)
+        emp = (
+            employees.get(row.proposed_employee_id)
+            if employees is not None
+            else db.get(Employee, row.proposed_employee_id)
+        )
         if emp is not None:
             name_en = emp.name_en
             name_ar = getattr(emp, "name_ar", None)
@@ -66,7 +81,24 @@ def list_scan_inbox(
     state: str | None = None,
 ) -> ScanInboxList:
     rows = scan_inbox_service.list_items(db, owner_user_id=user.id, state=state)
-    items = [_to_item(db, r) for r in rows]
+    # Batch-resolve referenced ledger entries + employees in one query each,
+    # instead of a db.get per row (the N+1 the audit flagged).
+    entry_ids = {r.ledger_entry_id for r in rows if r.ledger_entry_id is not None}
+    emp_ids = {r.proposed_employee_id for r in rows if r.proposed_employee_id is not None}
+    entries = (
+        {
+            e.id: e
+            for e in db.execute(select(LedgerEntry).where(LedgerEntry.id.in_(entry_ids))).scalars()
+        }
+        if entry_ids
+        else {}
+    )
+    employees = (
+        {e.id: e for e in db.execute(select(Employee).where(Employee.id.in_(emp_ids))).scalars()}
+        if emp_ids
+        else {}
+    )
+    items = [_to_item(db, r, entries=entries, employees=employees) for r in rows]
     return ScanInboxList(items=items, total=len(items))
 
 

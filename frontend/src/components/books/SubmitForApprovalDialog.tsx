@@ -25,7 +25,7 @@ import { useNavigate } from 'react-router-dom'
 import { toast } from 'sonner'
 import { CheckCircle2, X } from 'lucide-react'
 
-import { api, ApiError, type ApproverOptionRead } from '@/lib/api'
+import { api, ApiError, type ApproverOptionRead, apiErrorMessage } from '@/lib/api'
 import { useCapabilities } from '@/lib/useCapabilities'
 import { cn } from '@/lib/utils'
 
@@ -137,7 +137,7 @@ export function SubmitForApprovalDialog({ bookId, onClose }: Props): React.JSX.E
       if (err instanceof ApiError && err.code === 'APPROVER_REQUIRED') {
         toast.error(t('books.approval.managerNotLinked'))
       } else {
-        toast.error(err instanceof ApiError ? err.message : String(err))
+        toast.error(apiErrorMessage(err))
       }
     },
   })

@@ -11,7 +11,7 @@ import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 
 import { ViolationsTable } from '@/components/employees/ViolationsTable'
-import { ApiError, api } from '@/lib/api'
+import { api, apiErrorMessage } from '@/lib/api'
 import type { RecentViolationRead, ViolationCreate, ViolationUpdate } from '@/lib/api'
 import { useCapabilities } from '@/lib/useCapabilities'
 
@@ -98,7 +98,7 @@ function ViolationsManage({ employeeId }: { employeeId: string }): React.JSX.Ele
       void invalidate()
       toast.success(t('violations.toast.created', { defaultValue: 'Violation added' }))
     },
-    onError: (err) => toast.error(err instanceof ApiError ? err.message : String(err)),
+    onError: (err) => toast.error(apiErrorMessage(err)),
   })
 
   const updateMut = useMutation({
@@ -108,7 +108,7 @@ function ViolationsManage({ employeeId }: { employeeId: string }): React.JSX.Ele
       void invalidate()
       toast.success(t('violations.toast.updated', { defaultValue: 'Violation updated' }))
     },
-    onError: (err) => toast.error(err instanceof ApiError ? err.message : String(err)),
+    onError: (err) => toast.error(apiErrorMessage(err)),
   })
 
   const deleteMut = useMutation({
@@ -117,7 +117,7 @@ function ViolationsManage({ employeeId }: { employeeId: string }): React.JSX.Ele
       void invalidate()
       toast.success(t('violations.toast.deleted', { defaultValue: 'Violation deleted' }))
     },
-    onError: (err) => toast.error(err instanceof ApiError ? err.message : String(err)),
+    onError: (err) => toast.error(apiErrorMessage(err)),
   })
 
   return (

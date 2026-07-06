@@ -57,31 +57,50 @@ def effective_caps(db: Session, user: User) -> set[str]:
 
     Admins always get the full set (lockout protection). Everyone else gets
     ``role_defaults plus grants minus denies``.
-    """
-    if user.role == ADMIN_ROLE:
-        return set(ALL_CAPABILITIES)
 
-    caps = role_default_caps(db, user.role)
-    overrides = (
-        db.execute(
-            select(UserPermission).where(UserPermission.user_id == user.id)
+    Memoized on the ``User`` instance (request-scoped — one instance per request
+    via ``get_current_user``) so the repeated ``has_capability`` checks a single
+    request makes don't re-run the two permission queries each time.
+    """
+    cached: frozenset[str] | None = getattr(user, "_effective_caps_cache", None)
+    if cached is not None:
+        return set(cached)
+
+    if user.role == ADMIN_ROLE:
+        caps = set(ALL_CAPABILITIES)
+    else:
+        caps = role_default_caps(db, user.role)
+        overrides = (
+            db.execute(select(UserPermission).where(UserPermission.user_id == user.id))
+            .scalars()
+            .all()
         )
-        .scalars()
-        .all()
-    )
-    now = datetime.now(UTC).replace(tzinfo=None)
-    for ov in overrides:
-        if ov.effect == "grant":
-            if ov.expires_at is not None and ov.expires_at <= now:
-                continue  # expired temporary grant
-            caps.add(ov.capability)
-        elif ov.effect == "deny":
-            caps.discard(ov.capability)
+        now = datetime.now(UTC).replace(tzinfo=None)
+        for ov in overrides:
+            if ov.effect == "grant":
+                if ov.expires_at is not None and ov.expires_at <= now:
+                    continue  # expired temporary grant
+                caps.add(ov.capability)
+            elif ov.effect == "deny":
+                caps.discard(ov.capability)
+
+    user._effective_caps_cache = frozenset(caps)
     return caps
 
 
 def has_capability(db: Session, user: User, capability: str) -> bool:
     return capability in effective_caps(db, user)
+
+
+def _invalidate_caps_cache(db: Session, user_id: int) -> None:
+    """Drop the memoized caps for a user after their permissions change.
+
+    Uses the session identity map: ``db.get`` returns the *same* User instance
+    the caller may still hold (no query on a hit), so a re-check in the same
+    request/session sees the change instead of a stale cached set."""
+    target = db.get(User, user_id)
+    if target is not None:
+        target._effective_caps_cache = None
 
 
 # ─── Override management (admin matrix) ───────────────────────────────────────
@@ -90,11 +109,7 @@ def has_capability(db: Session, user: User, capability: str) -> bool:
 def get_user_overrides(db: Session, user_id: int) -> dict[str, str]:
     """Return ``{capability: effect}`` for the user's stored overrides."""
     rows = (
-        db.execute(
-            select(UserPermission).where(UserPermission.user_id == user_id)
-        )
-        .scalars()
-        .all()
+        db.execute(select(UserPermission).where(UserPermission.user_id == user_id)).scalars().all()
     )
     return {r.capability: r.effect for r in rows}
 
@@ -145,11 +160,16 @@ def set_user_override(
         if existing is not None:
             db.delete(existing)
     elif existing is None:
-        db.add(UserPermission(user_id=user_id, capability=capability, effect=effect, expires_at=expires_at))
+        db.add(
+            UserPermission(
+                user_id=user_id, capability=capability, effect=effect, expires_at=expires_at
+            )
+        )
     else:
         existing.effect = effect
         existing.expires_at = expires_at
     db.commit()
+    _invalidate_caps_cache(db, user_id)
 
 
 # ─── Expiry sweep ─────────────────────────────────────────────────────────────
@@ -181,10 +201,7 @@ def seed_role_defaults(db: Session) -> None:
     Only adds missing (role, capability) rows; never deletes, so an operator's
     later edits to presets survive a re-run.
     """
-    existing = {
-        (r.role, r.capability)
-        for r in db.execute(select(RolePermission)).scalars().all()
-    }
+    existing = {(r.role, r.capability) for r in db.execute(select(RolePermission)).scalars().all()}
     for role, caps in ROLE_DEFAULTS.items():
         for cap in caps:
             if (role, cap) not in existing:

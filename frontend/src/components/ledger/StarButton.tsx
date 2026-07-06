@@ -11,7 +11,7 @@ import { Star } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 
-import { api, ApiError } from '@/lib/api'
+import { api, apiErrorMessage } from '@/lib/api'
 import type { LedgerEntryRead, LedgerListItem } from '@/lib/api'
 import { cn } from '@/lib/utils'
 
@@ -67,7 +67,7 @@ export function StarButton({ entryId, starred, className }: StarButtonProps): Re
         qc.setQueryData<LedgerEntryRead>(['ledger-entry', entryId], ctx.prev)
       }
       void qc.invalidateQueries({ queryKey: ['ledger'] })
-      toast.error(err instanceof ApiError ? err.message : String(err))
+      toast.error(apiErrorMessage(err))
     },
     onSettled: () => {
       void qc.invalidateQueries({ queryKey: ['ledger-entry', entryId] })

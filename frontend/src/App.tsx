@@ -51,9 +51,6 @@ const DashboardPage = lazy(() =>
 const EmployeeDetailPage = lazy(() =>
   import('@/pages/employees/EmployeeDetailPage').then((m) => ({ default: m.EmployeeDetailPage })),
 )
-const MockupsLoginPage = lazy(() =>
-  import('@/pages/mockups/MockupsLoginPage').then((m) => ({ default: m.MockupsLoginPage })),
-)
 const AccessRequestsPage = lazy(() =>
   import('@/pages/access/AccessRequestsPage').then((m) => ({ default: m.AccessRequestsPage })),
 )
@@ -141,26 +138,6 @@ function Shell(): React.JSX.Element {
     navigator.serviceWorker.addEventListener('message', onMessage)
     return () => navigator.serviceWorker.removeEventListener('message', onMessage)
   }, [navigate])
-
-  // Chrome-less surfaces — full-bleed previews live under /mockups/* and
-  // shouldn't render the TopNav, LockOverlay, or the auth gate.
-  const isChromeless = location.pathname.startsWith('/mockups')
-
-  if (isChromeless) {
-    return (
-      <>
-        <div className="h-screen overflow-hidden bg-background">
-          <Suspense fallback={<PageSuspenseFallback />}>
-            <Routes>
-              <Route path="/mockups/login" element={<MockupsLoginPage />} />
-              <Route path="*" element={<Navigate to="/" replace />} />
-            </Routes>
-          </Suspense>
-        </div>
-        <Toaster position="bottom-right" richColors closeButton />
-      </>
-    )
-  }
 
   // Auth gate: resolve the session before showing the app chrome.
   if (status === 'loading') {

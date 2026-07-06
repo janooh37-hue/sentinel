@@ -12,7 +12,7 @@ import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { FolderInput, Loader2 } from 'lucide-react'
 
-import { api, ApiError } from '@/lib/api'
+import { api, apiErrorMessage } from '@/lib/api'
 import type { VaultKind } from '@/lib/api'
 import { Button } from '@/components/ui/button'
 import {
@@ -77,7 +77,7 @@ export function SendToVaultDialog({
       onClose()
     },
     onError: (err) =>
-      toast.error(err instanceof ApiError ? err.message : String(err)),
+      toast.error(apiErrorMessage(err)),
   })
 
   if (!open) return null

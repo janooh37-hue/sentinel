@@ -20,6 +20,7 @@ import { pickEmployeeName } from '@/lib/employeeName'
 
 import { EmployeeDetailTabs, type Tab } from './EmployeeDetailTabs'
 import { EmployeeHero } from './EmployeeHero'
+import { StatusDialog } from './StatusDialog'
 import { EmployeeQuickStats } from './EmployeeQuickStats'
 import { ActivityTab } from './tabs/ActivityTab'
 import { DocumentsTab } from './tabs/DocumentsTab'
@@ -33,6 +34,8 @@ export function EmployeeDetailPage(): React.JSX.Element {
   const location = useLocation()
   const { i18n, t } = useTranslation()
   const [tab, setTab] = useState<Tab>('documents')
+  const [editing, setEditing] = useState(false)
+  const [statusOpen, setStatusOpen] = useState(false)
   const qc = useQueryClient()
 
   // Consume injected extraction from the intake flow (Task 5). Clear history
@@ -57,7 +60,9 @@ export function EmployeeDetailPage(): React.JSX.Element {
     },
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ['employee-detail', id] })
+      void qc.invalidateQueries({ queryKey: ['employees'] })
       setInitialExtraction(undefined)
+      setEditing(false)
       toast.success(t('employees.toast.updated'))
     },
     onError: (err) => {
@@ -97,12 +102,15 @@ export function EmployeeDetailPage(): React.JSX.Element {
       </div>
 
       {/* Inline edit form — shown when navigated from the intake scanner with an
-          injected extraction so the operator can review + apply OCR data. */}
-      {initialExtraction && (
+          injected extraction so the operator can review + apply OCR data, or when
+          the hero Edit button is clicked. */}
+      {(editing || initialExtraction) && (
         <div className="mb-6 rounded-2xl border border-hairline bg-surface p-6">
-          <p className="mb-4 text-[0.82em] font-medium text-muted-foreground">
-            {t('employees.intake.reviewAndApply', { defaultValue: 'Review the scanned data and apply to this employee record.' })}
-          </p>
+          {initialExtraction && (
+            <p className="mb-4 text-[0.82em] font-medium text-muted-foreground">
+              {t('employees.intake.reviewAndApply', { defaultValue: 'Review the scanned data and apply to this employee record.' })}
+            </p>
+          )}
           <EmployeeForm
             mode="edit"
             initial={data.employee}
@@ -110,7 +118,10 @@ export function EmployeeDetailPage(): React.JSX.Element {
             onSubmit={async (values) => {
               await editMutation.mutateAsync(values)
             }}
-            onCancel={() => setInitialExtraction(undefined)}
+            onCancel={() => {
+              setEditing(false)
+              setInitialExtraction(undefined)
+            }}
             submitting={editMutation.isPending}
           />
         </div>
@@ -118,12 +129,16 @@ export function EmployeeDetailPage(): React.JSX.Element {
 
       <EmployeeHero
         employee={data.employee}
-        onEdit={() => setTab('profile')}
+        onEdit={() => setEditing(true)}
         onAddLeave={() =>
           navigate(`/application?form=leave_application&employee_id=${encodeURIComponent(data.employee.id)}`)
         }
         onGenerate={() => navigate(`/application?employee_id=${encodeURIComponent(data.employee.id)}`)}
+        onChangeStatus={editing || initialExtraction ? undefined : () => setStatusOpen(true)}
       />
+      {statusOpen && (
+        <StatusDialog open employee={data.employee} onOpenChange={setStatusOpen} />
+      )}
       <EmployeeQuickStats stats={data.stats} onTabClick={(next) => setTab(next)} />
       <EmployeeDetailTabs
         active={tab}

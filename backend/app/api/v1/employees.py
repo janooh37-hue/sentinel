@@ -11,7 +11,6 @@ router lives at ``/violations`` for the two ID-scoped violation routes
 
 from __future__ import annotations
 
-import base64
 import logging
 from datetime import UTC, date, datetime
 from pathlib import Path
@@ -23,6 +22,7 @@ from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.api._responses import maybe_base64
 from app.api.deps import require_capability
 from app.api.errors import NotFoundError, ValidationFailedError
 from app.config import get_settings
@@ -323,15 +323,10 @@ def vault_download(
 ) -> FileResponse | Response:
     employee_service.get_employee(db, employee_id)
     path = vault_service.resolve_file(employee_id, kind, filename)
-    if encoding == "base64":
-        # Base64 text/plain so Internet Download Manager / the browser's PDF
-        # handler never intercept the bytes — pdf.js decodes them. Mirrors
-        # ledger.py's attachment route.
-        return Response(
-            content=base64.b64encode(path.read_bytes()),
-            media_type="text/plain",
-            headers={"X-Content-Type-Options": "nosniff"},
-        )
+    # Base64 text/plain so Internet Download Manager / the browser's PDF handler
+    # never intercept the bytes — pdf.js decodes them.
+    if (b64 := maybe_base64(path.read_bytes(), encoding)) is not None:
+        return b64
     return FileResponse(str(path), filename=path.name)
 
 
@@ -392,15 +387,10 @@ def get_employee_signature(
         )
     updated = datetime.fromtimestamp(path.stat().st_mtime, tz=UTC).isoformat()
     data = path.read_bytes()
-    if encoding == "base64":
-        return Response(
-            content=base64.b64encode(data),
-            media_type="text/plain",
-            headers={
-                "X-Content-Type-Options": "nosniff",
-                "X-Signature-Updated": updated,
-            },
-        )
+    if (
+        b64 := maybe_base64(data, encoding, extra_headers={"X-Signature-Updated": updated})
+    ) is not None:
+        return b64
     return Response(
         content=data,
         media_type="image/png",
