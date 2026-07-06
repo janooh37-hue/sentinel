@@ -114,7 +114,21 @@ export type EmployeeUpdate = components['schemas']['EmployeeUpdate'] & {
   msg_language?: 'ar' | 'en' | null
 }
 export type EmployeeStatus = EmployeeRead['status']
-export type EmployeeDetailRead = components['schemas']['EmployeeDetailRead']
+
+// Hand-mirrored until `gen:api` folds the SMS history field into the schema.
+export interface SmsMessageRead {
+  id: number
+  event_type: string
+  body: string | null
+  phone: string
+  status: 'sent' | 'failed'
+  error: string | null
+  language: string
+  created_at: string
+}
+export type EmployeeDetailRead = components['schemas']['EmployeeDetailRead'] & {
+  recent_sms: SmsMessageRead[]
+}
 export type EmployeeStatsRead = components['schemas']['EmployeeStatsRead']
 export type RecentDocumentRead = components['schemas']['RecentDocumentRead']
 export type RecentLeaveRead = components['schemas']['RecentLeaveRead']

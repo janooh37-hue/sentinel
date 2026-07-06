@@ -5,13 +5,14 @@
 
 import { useTranslation } from 'react-i18next'
 
-export type Tab = 'documents' | 'profile' | 'leaves' | 'violations' | 'activity'
+export type Tab = 'documents' | 'profile' | 'leaves' | 'violations' | 'activity' | 'messages'
 
 interface Counts {
   documents: number
   leaves: string
   violations: number
   activity: number
+  messages: number
 }
 
 interface Props {
@@ -20,7 +21,7 @@ interface Props {
   onChange: (next: Tab) => void
 }
 
-const ORDER: Tab[] = ['documents', 'profile', 'leaves', 'violations', 'activity']
+const ORDER: Tab[] = ['documents', 'profile', 'leaves', 'violations', 'activity', 'messages']
 
 export function EmployeeDetailTabs({ active, counts, onChange }: Props): React.JSX.Element {
   const { t } = useTranslation()

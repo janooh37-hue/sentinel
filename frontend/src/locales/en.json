@@ -1485,6 +1485,7 @@
       "leaves": "Leaves",
       "violations": "Violations",
       "activity": "Activity",
+      "messages": "Messages",
       "showingRecent": "Showing {{shown}} of {{total}}"
     },
     "stats": {
@@ -1514,6 +1515,11 @@
     },
     "activity": {
       "empty": "No recent activity."
+    },
+    "messages": {
+      "empty": "No messages sent yet.",
+      "sent": "Sent",
+      "failed": "Failed"
     },
     "profile": {
       "idEn": "Employee ID",
