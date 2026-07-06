@@ -19,8 +19,58 @@ EVENT_VIOLATION = "violation"
 
 # Monday-first to match datetime.weekday() and ARABIC_WEEKDAYS' ordering.
 ENGLISH_WEEKDAYS: tuple[str, ...] = (
-    "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday",
+    "Monday",
+    "Tuesday",
+    "Wednesday",
+    "Thursday",
+    "Friday",
+    "Saturday",
+    "Sunday",
 )
+
+HR_OFFICE_AR = "مكتب الموارد البشرية"
+ADMIN_OFFICE_AR = "مكتب الإدارة"
+
+# Gregorian month names, January at index 0 (UAE-standard Arabic transliterations).
+AR_MONTHS: tuple[str, ...] = (
+    "يناير",
+    "فبراير",
+    "مارس",
+    "أبريل",
+    "مايو",
+    "يونيو",
+    "يوليو",
+    "أغسطس",
+    "سبتمبر",
+    "أكتوبر",
+    "نوفمبر",
+    "ديسمبر",
+)
+EN_MONTHS: tuple[str, ...] = (
+    "January",
+    "February",
+    "March",
+    "April",
+    "May",
+    "June",
+    "July",
+    "August",
+    "September",
+    "October",
+    "November",
+    "December",
+)
+
+
+def salary_transfer_month(today: date, lang: str) -> str:
+    """Month a salary transfer takes effect: on/before the 15th -> next month;
+    after the 15th -> the month after. Returns month name + year only (no
+    leading «شهر» — the template already supplies it)."""
+    bump = 1 if today.day <= 15 else 2
+    m = today.month - 1 + bump  # 0-indexed target month, may exceed 11
+    year = today.year + m // 12
+    table = AR_MONTHS if lang == "ar" else EN_MONTHS
+    return f"{table[m % 12]} {year}"
 
 
 def english_part(value: str) -> str:
@@ -138,8 +188,5 @@ def action_text(action_taken: str | None, deduction_days: int, lang: str) -> str
             return _ACTION_AR_EN.get(a, a)
         return a
     if deduction_days:
-        return (
-            f"خصم {deduction_days} يوم" if lang == "ar"
-            else f"{deduction_days} day(s) deduction"
-        )
+        return f"خصم {deduction_days} يوم" if lang == "ar" else f"{deduction_days} day(s) deduction"
     return "—"

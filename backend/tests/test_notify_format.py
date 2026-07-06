@@ -88,3 +88,39 @@ def test_action_text_fallback_to_deduction():
     assert nf.action_text(None, 2, "ar") == "خصم 2 يوم"
     assert nf.action_text("Warning", 0, "en") == "Warning"
     assert nf.action_text(None, 0, "en") == "—"
+
+
+def test_salary_month_on_or_before_15_is_next_month():
+    # 5 July 2026 (<=15) -> next month = August 2026
+    assert nf.salary_transfer_month(date(2026, 7, 5), "ar") == "أغسطس 2026"
+    assert nf.salary_transfer_month(date(2026, 7, 5), "en") == "August 2026"
+
+
+def test_salary_month_boundary_15_is_next_month():
+    assert nf.salary_transfer_month(date(2026, 7, 15), "en") == "August 2026"
+
+
+def test_salary_month_after_15_is_month_after():
+    # 20 July 2026 (>15) -> month after = September 2026
+    assert nf.salary_transfer_month(date(2026, 7, 20), "ar") == "سبتمبر 2026"
+    assert nf.salary_transfer_month(date(2026, 7, 20), "en") == "September 2026"
+
+
+def test_salary_month_year_rollover_before_15():
+    # 5 Dec 2026 (<=15) -> January 2027
+    assert nf.salary_transfer_month(date(2026, 12, 5), "en") == "January 2027"
+
+
+def test_salary_month_year_rollover_after_15():
+    # 20 Dec 2026 (>15) -> February 2027
+    assert nf.salary_transfer_month(date(2026, 12, 20), "en") == "February 2027"
+
+
+def test_salary_month_has_no_leading_shahr():
+    # Guard the doubled-«شهر» contract: helper must not prefix «شهر».
+    assert not nf.salary_transfer_month(date(2026, 7, 5), "ar").startswith("شهر")
+
+
+def test_office_constants():
+    assert nf.HR_OFFICE_AR == "مكتب الموارد البشرية"
+    assert nf.ADMIN_OFFICE_AR == "مكتب الإدارة"
