@@ -81,6 +81,7 @@ def _log_row(
     provider_msg_id=None,
     error=None,
     sent_by=None,
+    body=None,
 ):
     row = SmsMessage(
         employee_id=employee_id,
@@ -92,6 +93,7 @@ def _log_row(
         provider_msg_id=provider_msg_id,
         error=error,
         sent_by=sent_by,
+        body=body,
     )
     db.add(row)
     db.commit()
@@ -131,6 +133,7 @@ def send_for_event(db: Session, event_type: str, record_id: int, sent_by: int | 
             status="failed",
             error="No valid phone number for this employee",
             sent_by=sent_by,
+            body=text,
         )
 
     result = sms_client.send(phone, text)
@@ -145,6 +148,7 @@ def send_for_event(db: Session, event_type: str, record_id: int, sent_by: int | 
         provider_msg_id=result.message_id,
         error=result.error,
         sent_by=sent_by,
+        body=text,
     )
 
 

@@ -173,3 +173,19 @@ def test_all_book_events_have_a_loader():
 
     for ev in nf.BOOK_EVENTS:
         assert ss._LOADERS.get(ev) is ss._load_book_event
+
+
+def test_send_persists_body(db_session, monkeypatch):
+    _leave(db_session)  # existing helper: creates employee G1 + leave id 7
+    monkeypatch.setattr(
+        sms_client, "send", lambda *a, **k: sms_client.SendResult(ok=True, message_id="m1")
+    )
+    row = ss.send_for_event(db_session, "leave_approved", 7, sent_by=1)
+    assert row.body and row.body.startswith("عزيزي")  # ar default employee
+
+
+def test_failed_send_still_persists_body(db_session, monkeypatch):
+    _leave(db_session, contact="n/a")  # unparseable phone -> failed, client not called
+    row = ss.send_for_event(db_session, "leave_approved", 7, sent_by=1)
+    assert row.status == "failed"
+    assert row.body and row.body.startswith("عزيزي")
