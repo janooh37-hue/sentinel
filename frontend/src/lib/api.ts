@@ -448,6 +448,13 @@ export interface ExternalOut {
 
 export type IntakeResponse = ReturnedFormOut | ExternalOut
 
+export interface EmployeeCandidate {
+  employee_id: string
+  name_en: string
+  name_ar: string | null
+  score: number
+}
+
 // Scan Inbox — hand-mirrored from backend/app/schemas/scan_inbox.py.
 // Consumed by Tasks 11–13 (ScanInbox page, hooks, components).
 export interface ScanInboxItem {
@@ -470,6 +477,8 @@ export interface ScanInboxItem {
   email_sender: string | null
   email_subject: string | null
   error_detail: string | null
+  fields: Record<string, string>
+  candidates: EmployeeCandidate[]
 }
 
 export interface ScanInboxListResponse {
@@ -1151,6 +1160,8 @@ export const api = {
   /** List scan-inbox items, optionally filtered by `state`. */
   listScanInbox: (params: { state?: string } = {}) =>
     request<ScanInboxListResponse>('GET', `/scan-inbox${qs({ ...params })}`),
+  /** Inline document URL for a scan item (served by backend). */
+  scanDocumentUrl: (id: number) => `${BASE}/scan-inbox/${id}/document`,
   /** Pending-action counts for the scan inbox badge. */
   getScanInboxCount: () => request<ScanInboxCount>('GET', '/scan-inbox/count'),
   /** Confirm an auto-classified item (moves it to `filed`). */
