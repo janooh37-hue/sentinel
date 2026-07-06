@@ -2353,6 +2353,15 @@
       "undone": "تم التراجع",
       "error": "فشل الإجراء"
     },
+    "match": {
+      "title": "طابق هذا المستند",
+      "searchPlaceholder": "ابحث عن موظفين أو سجلات…",
+      "employees": "الموظفون",
+      "records": "السجلات",
+      "fileHere": "احفظ هنا",
+      "noResults": "لا نتائج",
+      "cancel": "إلغاء"
+    },
     "bellTitle": "صندوق المسح",
     "bellCount_zero": "لا مستندات للفرز",
     "bellCount_one": "مستند واحد للفرز",

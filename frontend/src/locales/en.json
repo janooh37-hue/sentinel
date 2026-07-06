@@ -2210,6 +2210,15 @@
       "undone": "Undone",
       "error": "Action failed"
     },
+    "match": {
+      "title": "Match this document",
+      "searchPlaceholder": "Search employees or records…",
+      "employees": "Employees",
+      "records": "Records",
+      "fileHere": "File here",
+      "noResults": "No results",
+      "cancel": "Cancel"
+    },
     "bellTitle": "Scan inbox",
     "bellCount_one": "{{count}} document to triage",
     "bellCount_other": "{{count}} documents to triage"
