@@ -12,7 +12,6 @@ from app.api.deps import require_capability
 from app.db.models import Employee, LedgerEntry, ScanInbox, User
 from app.db.session import get_db
 from app.schemas.scan_inbox import (
-    EmployeeCandidate,  # noqa: F401 — imported for type clarity; Pydantic coerces stored dicts
     RouteRequest,
     ScanInboxCount,
     ScanInboxItem,
