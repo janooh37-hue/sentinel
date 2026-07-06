@@ -178,7 +178,7 @@ export function ClearanceTableField({
                                   name={`${name}-${k}`}
                                   checked={mark === true}
                                   onChange={() => setMark(k, true)}
-                                  className="h-3.5 w-3.5 accent-primary"
+                                  className="h-3.5 w-3.5 shrink-0 accent-primary"
                                 />
                                 {t('application.clearance.yes', { defaultValue: 'Cleared' })}
                               </label>
@@ -188,7 +188,7 @@ export function ClearanceTableField({
                                   name={`${name}-${k}`}
                                   checked={mark === false}
                                   onChange={() => setMark(k, false)}
-                                  className="h-3.5 w-3.5 accent-primary"
+                                  className="h-3.5 w-3.5 shrink-0 accent-primary"
                                 />
                                 {t('application.clearance.no', { defaultValue: 'Not' })}
                               </label>
