@@ -1,6 +1,6 @@
 /**
  * Inner tabs for the Employee Detail page.
- * Documents · Profile · Leaves · Violations · Activity.
+ * Documents · Profile · Leaves · Violations · Activity · Messages.
  */
 
 import { useTranslation } from 'react-i18next'
