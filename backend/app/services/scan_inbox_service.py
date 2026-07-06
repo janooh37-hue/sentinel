@@ -369,6 +369,18 @@ def _get(db: Session, item_id: int) -> ScanInbox:
     return item
 
 
+def get_item(db: Session, item_id: int, *, user: User | None) -> ScanInbox:
+    """Owner-checked fetch for read endpoints (raises NotFoundError on foreign item)."""
+    item = _get(db, item_id)
+    _check_owner(item, user)
+    return item
+
+
+def abs_file_path(item: ScanInbox) -> Path:
+    """Absolute on-disk path of the scanned file."""
+    return _abs(item.file_path)
+
+
 def _resolve(item: ScanInbox, user: User | None, resolution: str) -> None:
     item.resolution = resolution
     item.resolved_at = _utcnow()
@@ -378,11 +390,13 @@ def _resolve(item: ScanInbox, user: User | None, resolution: str) -> None:
 __all__ = [
     "MAX_OCR_ATTEMPTS",
     "SCANNABLE_EXTS",
+    "abs_file_path",
     "confirm",
     "counts",
     "dismiss",
     "drain_pending",
     "enqueue_email_attachment",
+    "get_item",
     "list_items",
     "route_item",
     "undo",

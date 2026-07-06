@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+import mimetypes
 from typing import Annotated
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
+from fastapi.responses import FileResponse
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -107,6 +109,26 @@ def list_scan_inbox(
     )
     items = [_to_item(db, r, entries=entries, employees=employees) for r in rows]
     return ScanInboxList(items=items, total=len(items))
+
+
+@router.get("/{item_id}/document")
+def get_scan_document(
+    item_id: int,
+    db: Annotated[Session, Depends(get_db)],
+    user: Annotated[User, Depends(require_capability("documents.scan"))],
+) -> FileResponse:
+    """Stream the scanned file inline so the triage card can preview it."""
+    item = scan_inbox_service.get_item(db, item_id, user=user)
+    abs_path = scan_inbox_service.abs_file_path(item)
+    if not abs_path.exists():
+        raise HTTPException(status_code=404, detail="scan file missing")
+    media_type = mimetypes.guess_type(item.filename)[0] or "application/octet-stream"
+    return FileResponse(
+        abs_path,
+        filename=item.filename,
+        media_type=media_type,
+        content_disposition_type="inline",
+    )
 
 
 @router.get("/count", response_model=ScanInboxCount)
