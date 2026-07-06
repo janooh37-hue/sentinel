@@ -1,8 +1,11 @@
 /**
  * ClearanceTableField — fixed clearance grid for the Employee Clearance Form.
  *
- * Rows are hard-coded from the v3 template layout (table 2 rows 1-22 + table 3
- * rows 1-13). For each row the user picks Cleared / Not Cleared / Skip and
+ * Rows are hard-coded from the template layout: table 2 rows 2-22 (row 1 is the
+ * "Documents" column header — no clearance cell) and table 3 rows 1-14
+ * ("Laptop/Desktop" is 3_1). Each `${table}_${row}` key maps 1:1 to a
+ * `clearance(t, r)` token in the DOCX, so this list MUST stay in lockstep with
+ * the template. For each row the user picks Cleared / Not Cleared / Skip and
  * optionally writes a remark.
  *
  * Emits `{ clearance_marks: {"<tbl>_<row>": bool}, clearance_remarks: {"<tbl>_<row>": str} }`
@@ -28,8 +31,7 @@ interface Row {
 }
 
 const ROWS: ReadonlyArray<Row> = [
-  // Table 2 — Operations + Supply Chain
-  { table: 2, row: 1, department: 'Operations', item: 'Documents' },
+  // Table 2 — Operations + Supply Chain (row 1 "Documents" is a header, no cell)
   { table: 2, row: 2, department: 'Operations', item: 'Armed License' },
   { table: 2, row: 3, department: 'Operations', item: 'CICPA Card' },
   { table: 2, row: 4, department: 'Operations', item: 'ID Card' },
@@ -51,20 +53,21 @@ const ROWS: ReadonlyArray<Row> = [
   { table: 2, row: 20, department: 'Supply Chain', item: 'Mobile' },
   { table: 2, row: 21, department: 'Supply Chain', item: 'SIM Card' },
   { table: 2, row: 22, department: 'Supply Chain', item: 'Others' },
-  // Table 3 — IT / Finance / HR
-  { table: 3, row: 1, department: 'IT', item: 'PC Backup' },
-  { table: 3, row: 2, department: 'IT', item: 'Email' },
-  { table: 3, row: 3, department: 'IT', item: 'DMS' },
-  { table: 3, row: 4, department: 'IT', item: 'Bio-Metric Access' },
-  { table: 3, row: 5, department: 'IT', item: 'ERP' },
-  { table: 3, row: 6, department: 'IT', item: 'Share Folder' },
-  { table: 3, row: 7, department: 'IT', item: 'Others' },
-  { table: 3, row: 8, department: 'Finance', item: 'Payment / Deduction' },
-  { table: 3, row: 9, department: 'Finance', item: 'Others' },
-  { table: 3, row: 10, department: 'HR', item: 'Passport' },
-  { table: 3, row: 11, department: 'HR', item: 'Medical Insurance Card' },
-  { table: 3, row: 12, department: 'HR', item: 'ID Card' },
-  { table: 3, row: 13, department: 'HR', item: 'Others' },
+  // Table 3 — IT / Finance / HR ("Laptop/Desktop" is now a real item, 3_1)
+  { table: 3, row: 1, department: 'IT', item: 'Laptop/Desktop' },
+  { table: 3, row: 2, department: 'IT', item: 'PC Backup' },
+  { table: 3, row: 3, department: 'IT', item: 'Email' },
+  { table: 3, row: 4, department: 'IT', item: 'DMS' },
+  { table: 3, row: 5, department: 'IT', item: 'Bio-Metric Access' },
+  { table: 3, row: 6, department: 'IT', item: 'ERP' },
+  { table: 3, row: 7, department: 'IT', item: 'Share Folder' },
+  { table: 3, row: 8, department: 'IT', item: 'Others' },
+  { table: 3, row: 9, department: 'Finance', item: 'Payment / Deduction' },
+  { table: 3, row: 10, department: 'Finance', item: 'Others' },
+  { table: 3, row: 11, department: 'HR', item: 'Passport' },
+  { table: 3, row: 12, department: 'HR', item: 'Medical Insurance Card' },
+  { table: 3, row: 13, department: 'HR', item: 'ID Card' },
+  { table: 3, row: 14, department: 'HR', item: 'Others' },
 ]
 
 const key = (r: Row): string => `${r.table}_${r.row}`
@@ -178,7 +181,7 @@ export function ClearanceTableField({
                                   name={`${name}-${k}`}
                                   checked={mark === true}
                                   onChange={() => setMark(k, true)}
-                                  className="h-3.5 w-3.5 accent-primary"
+                                  className="h-3.5 w-3.5 shrink-0 accent-primary"
                                 />
                                 {t('application.clearance.yes', { defaultValue: 'Cleared' })}
                               </label>
@@ -188,7 +191,7 @@ export function ClearanceTableField({
                                   name={`${name}-${k}`}
                                   checked={mark === false}
                                   onChange={() => setMark(k, false)}
-                                  className="h-3.5 w-3.5 accent-primary"
+                                  className="h-3.5 w-3.5 shrink-0 accent-primary"
                                 />
                                 {t('application.clearance.no', { defaultValue: 'Not' })}
                               </label>
