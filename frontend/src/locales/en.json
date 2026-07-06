@@ -1198,6 +1198,10 @@
       "fontMd": "Medium",
       "fontLg": "Large"
     },
+    "smsAutosend": {
+      "label": "Auto-send SMS on form generation",
+      "hint": "When on, generating a service form texts the employee automatically."
+    },
     "defaults": {
       "title": "Defaults",
       "description": "Defaults applied when generating documents.",
