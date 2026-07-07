@@ -123,3 +123,29 @@ def test_get_scan_document_unsafe_type_forces_download(db_session, tmp_path, mon
     assert resp.media_type == "application/octet-stream"
     assert resp.headers["content-disposition"].startswith("attachment")
     assert resp.headers["x-content-type-options"] == "nosniff"
+
+
+def test_get_scan_document_base64_returns_text_plain(db_session, tmp_path, monkeypatch):
+    import base64
+
+    from app.api.v1 import scan_inbox as api_mod
+    from app.services import scan_inbox_service as svc
+
+    user = _user(db_session, "b64@x.ae")
+    f = tmp_path / "scan.pdf"
+    f.write_bytes(b"%PDF-1.4 hello")
+    monkeypatch.setattr(svc, "abs_file_path", lambda item: f)
+    row = ScanInbox(
+        source="email",
+        file_path="/s/x.pdf",
+        filename="scan.pdf",
+        state="unrouted",
+        owner_user_id=user.id,
+    )
+    db_session.add(row)
+    db_session.flush()
+
+    resp = api_mod.get_scan_document(item_id=row.id, db=db_session, user=user, encoding="base64")
+    assert resp.media_type == "text/plain"
+    assert resp.headers["x-content-type-options"] == "nosniff"
+    assert base64.b64decode(resp.body) == b"%PDF-1.4 hello"

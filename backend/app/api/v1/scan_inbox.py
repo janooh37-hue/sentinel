@@ -5,11 +5,12 @@ from __future__ import annotations
 import mimetypes
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from fastapi.responses import FileResponse
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.api._responses import maybe_base64
 from app.api.deps import require_capability
 from app.db.models import Employee, LedgerEntry, ScanInbox, User
 from app.db.session import get_db
@@ -130,12 +131,21 @@ def get_scan_document(
     item_id: int,
     db: Annotated[Session, Depends(get_db)],
     user: Annotated[User, Depends(require_capability("documents.scan"))],
-) -> FileResponse:
-    """Stream the scanned file inline so the triage card can preview it."""
+    encoding: Annotated[str | None, Query(pattern="^base64$")] = None,
+) -> Response:
+    """Stream the scanned file inline so the triage card can preview it.
+
+    ``encoding=base64`` returns the bytes base64-encoded as ``text/plain`` so
+    the in-app pdf.js canvas can fetch them without the packaged Edge WebView2
+    PDF handler (or Internet Download Manager) intercepting the response —
+    same trick as ``GET /books/{id}/attachments/{index}``.
+    """
     item = scan_inbox_service.get_item(db, item_id, user=user)
     abs_path = scan_inbox_service.abs_file_path(item)
     if not abs_path.exists():
         raise HTTPException(status_code=404, detail="scan file missing")
+    if (b64 := maybe_base64(abs_path.read_bytes(), encoding)) is not None:
+        return b64
     guessed = mimetypes.guess_type(item.filename)[0] or "application/octet-stream"
     if guessed in _INLINE_SAFE_TYPES:
         return FileResponse(
