@@ -28,8 +28,11 @@ export default function ScanPdfCanvas({
 }): React.JSX.Element {
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
   const [loading, setLoading] = useState(true)
+  const onErrorRef = useRef(onError)
+  useEffect(() => { onErrorRef.current = onError }, [onError])
 
   useEffect(() => {
+    setLoading(true)
     let cancelled = false
     void (async () => {
       try {
@@ -42,7 +45,7 @@ export default function ScanPdfCanvas({
         const canvas = canvasRef.current
         if (cancelled || !canvas) return
         const dpr = window.devicePixelRatio || 1
-        const cssWidth = canvas.parentElement?.clientWidth ?? 240
+        const cssWidth = canvas.parentElement?.clientWidth || 240
         const base = page.getViewport({ scale: 1 })
         const scale = cssWidth / base.width
         const viewport = page.getViewport({ scale })
@@ -61,16 +64,16 @@ export default function ScanPdfCanvas({
         if (!cancelled) setLoading(false)
       } catch (err) {
         console.error('ScanPdfCanvas render failed:', err)
-        if (!cancelled) onError?.()
+        if (!cancelled) onErrorRef.current?.()
       }
     })()
     return () => {
       cancelled = true
     }
-  }, [pdfUrl, onError])
+  }, [pdfUrl])
 
   return (
-    <div className="flex h-full w-full items-start justify-center">
+    <div className="relative flex h-full w-full items-start justify-center">
       {loading && (
         <div className="absolute inset-0 flex items-center justify-center text-muted-foreground">
           <Loader2 className="h-5 w-5 animate-spin" />
