@@ -19,7 +19,7 @@ import type { ScanInboxItem } from '@/lib/api'
 import { pickEmployeeName } from '@/lib/employeeName'
 import { Button } from '@/components/ui/button'
 import { ScanMatchDialog } from './ScanMatchDialog'
-import { isPdf } from './scanPreview'
+import { isPdf } from './scanFileType'
 
 export function ScanInboxCard({ item }: { item: ScanInboxItem }): React.JSX.Element {
   const { t, i18n } = useTranslation()

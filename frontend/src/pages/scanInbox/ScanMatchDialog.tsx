@@ -16,7 +16,7 @@ import { toast } from 'sonner'
 import { api, ApiError } from '@/lib/api'
 import type { ScanInboxItem } from '@/lib/api'
 import { pickEmployeeName } from '@/lib/employeeName'
-import { isPdf } from './scanPreview'
+import { isPdf } from './scanFileType'
 
 export function ScanMatchDialog({
   item,
