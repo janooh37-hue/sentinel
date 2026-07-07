@@ -9,6 +9,8 @@ vi.mock('react-i18next', () => ({
   useTranslation: () => ({ t: (k: string) => k, i18n: { language: 'en' } }),
 }))
 
+vi.mock('./ScanPdfCanvas', () => ({ default: () => <div data-testid="pdf-canvas" /> }))
+
 const item = { id: 7, filename: 'scan.pdf', state: 'unrouted' } as unknown as ScanInboxItem
 
 function renderDialog() {
@@ -29,6 +31,11 @@ describe('ScanMatchDialog', () => {
       items: [{ id: 'G1', name_en: 'Ahmed Ali', name_ar: null }],
       total: 1,
     } as never)
+  })
+
+  it('shows the scan preview inside the dialog', () => {
+    renderDialog()
+    expect(screen.getByRole('button', { name: 'scanInbox.openZoom' })).toBeInTheDocument()
   })
 
   it('searches employees and routes the item on pick', async () => {

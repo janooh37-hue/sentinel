@@ -16,7 +16,7 @@ import { toast } from 'sonner'
 import { api, ApiError } from '@/lib/api'
 import type { ScanInboxItem } from '@/lib/api'
 import { pickEmployeeName } from '@/lib/employeeName'
-import { isPdf } from './scanFileType'
+import { ScanPreview } from './ScanPreview'
 
 export function ScanMatchDialog({
   item,
@@ -59,7 +59,6 @@ export function ScanMatchDialog({
     onError: (e) => toast.error(e instanceof ApiError ? e.message : t('scanInbox.toast.error')),
   })
 
-  const url = api.scanDocumentUrl(item.id)
   const bookRows = books.data?.items ?? []
   const empRows = employees.data?.items ?? []
 
@@ -72,14 +71,12 @@ export function ScanMatchDialog({
         if (e.target === e.currentTarget) onClose()
       }}
     >
-      <div className="flex max-h-[85vh] w-full max-w-[820px] overflow-hidden rounded-xl border border-border bg-surface shadow-xl">
-        {/* Scan preview */}
-        <div className="hidden w-[45%] flex-none border-e border-hairline bg-surface-raised md:block">
-          {isPdf(item.filename) ? (
-            <object data={url} type="application/pdf" className="h-full w-full" aria-label={item.filename} />
-          ) : (
-            <img src={url} alt={item.filename} className="h-full w-full object-contain" />
-          )}
+      <div className="flex max-h-[85vh] w-full max-w-[820px] flex-col overflow-hidden rounded-xl border border-border bg-surface shadow-xl md:flex-row">
+        {/* Scan preview: strip above search on mobile, side pane on md+ */}
+        <div className="flex-none border-b border-hairline bg-surface-raised p-3 md:w-[45%] md:border-b-0 md:border-e">
+          <div className="mx-auto max-w-[220px] md:max-w-none">
+            <ScanPreview itemId={item.id} filename={item.filename} variant="dialog" />
+          </div>
         </div>
 
         {/* Search */}
