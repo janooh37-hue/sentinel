@@ -38,6 +38,22 @@ describe('ScanMatchDialog', () => {
     expect(screen.getByRole('button', { name: 'scanInbox.openZoom' })).toBeInTheDocument()
   })
 
+  it('opens the zoom viewer above the match dialog (z-order)', () => {
+    // Image fixture so the viewer renders <img>, not the lazy pdf.js PdfViewer.
+    const imgItem = { id: 7, filename: 'scan.jpg', state: 'unrouted' } as unknown as ScanInboxItem
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    render(
+      <QueryClientProvider client={qc}>
+        <ScanMatchDialog item={imgItem} onClose={vi.fn()} />
+      </QueryClientProvider>,
+    )
+    fireEvent.click(screen.getByRole('button', { name: 'scanInbox.openZoom' }))
+    // Both dialogs coexist; the full-screen lightbox must sit above the
+    // z-[80] match dialog (regression guard for the z-index inversion).
+    expect(screen.getAllByRole('dialog')).toHaveLength(2)
+    expect(screen.getByRole('dialog', { name: 'viewer.title' }).className).toContain('z-[90]')
+  })
+
   it('searches employees and routes the item on pick', async () => {
     const route = vi.spyOn(apiMod.api, 'routeScanItem').mockResolvedValue({} as never)
     renderDialog()

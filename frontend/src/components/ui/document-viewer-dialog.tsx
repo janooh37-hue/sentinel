@@ -104,7 +104,7 @@ export function DocumentViewerDialog({
 
   return createPortal(
     <div
-      className="fixed inset-0 z-[60] flex flex-col bg-black/80 p-4"
+      className="fixed inset-0 z-[90] flex flex-col bg-black/80 p-4"
       role="dialog"
       aria-modal="true"
       aria-label={t('viewer.title', { defaultValue: 'Preview' })}
