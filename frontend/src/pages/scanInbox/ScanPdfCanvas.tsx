@@ -32,7 +32,6 @@ export default function ScanPdfCanvas({
   useEffect(() => { onErrorRef.current = onError }, [onError])
 
   useEffect(() => {
-    setLoading(true)
     let cancelled = false
     void (async () => {
       try {
