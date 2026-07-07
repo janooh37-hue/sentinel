@@ -2210,6 +2210,11 @@
     "hideDetails": "Hide details",
     "ocrRead": "What we read",
     "openFullDoc": "Open full document",
+    "openZoom": "Open document — zoom & rotate",
+    "confidence": {
+      "auto": "High confidence",
+      "confirm": "Please verify"
+    },
     "bestGuesses": "Best guesses",
     "openInFile": "Open in file",
     "reMatch": "Wrong? Re-match",
