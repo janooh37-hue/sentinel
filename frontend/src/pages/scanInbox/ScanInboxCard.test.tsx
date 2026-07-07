@@ -71,4 +71,20 @@ describe('ScanInboxCard', () => {
     await waitFor(() => expect(undo).toHaveBeenCalledWith(1))
     await screen.findByPlaceholderText('scanInbox.match.searchPlaceholder')
   })
+
+  it('auto-expands an awaiting_confirmation item (preview visible without a click)', () => {
+    renderCard(base({
+      state: 'awaiting_confirmation', filename: 'scan.jpg',
+      proposed_route: 'employee_doc', proposed_employee_id: 'G5',
+      proposed_employee_name_en: 'Sara Omar', confidence_tier: 'confirm',
+    }))
+    expect(screen.getByRole('button', { name: 'scanInbox.openZoom' })).toBeInTheDocument()
+  })
+
+  it('keeps an unrouted item collapsed until the chevron is clicked', () => {
+    renderCard(base({ state: 'unrouted', filename: 'scan.jpg' }))
+    expect(screen.queryByRole('button', { name: 'scanInbox.openZoom' })).toBeNull()
+    fireEvent.click(screen.getByLabelText('scanInbox.showDetails'))
+    expect(screen.getByRole('button', { name: 'scanInbox.openZoom' })).toBeInTheDocument()
+  })
 })

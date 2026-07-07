@@ -17,14 +17,15 @@ import { ChevronDown, ChevronUp, ExternalLink } from 'lucide-react'
 import { api, ApiError } from '@/lib/api'
 import type { ScanInboxItem } from '@/lib/api'
 import { pickEmployeeName } from '@/lib/employeeName'
+import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { ScanMatchDialog } from './ScanMatchDialog'
-import { isPdf } from './scanFileType'
+import { ScanPreview } from './ScanPreview'
 
 export function ScanInboxCard({ item }: { item: ScanInboxItem }): React.JSX.Element {
   const { t, i18n } = useTranslation()
   const qc = useQueryClient()
-  const [expanded, setExpanded] = useState(false)
+  const [expanded, setExpanded] = useState(item.state === 'awaiting_confirmation')
   const [matchOpen, setMatchOpen] = useState(false)
 
   const empName =
@@ -104,6 +105,16 @@ export function ScanInboxCard({ item }: { item: ScanInboxItem }): React.JSX.Elem
             </div>
           )}
           <p className="mt-2 text-[0.95em] text-foreground" dir="auto">{headline}</p>
+          {(item.confidence_tier === 'auto' || item.confidence_tier === 'confirm') && (
+            <span className={cn(
+              'mt-1.5 inline-block rounded-full px-2 py-0.5 text-[0.7em] font-medium',
+              item.confidence_tier === 'auto'
+                ? 'bg-primary-soft text-primary'
+                : 'bg-surface-tinted text-muted-foreground',
+            )}>
+              {t(`scanInbox.confidence.${item.confidence_tier}`)}
+            </span>
+          )}
         </div>
         <button
           type="button"
@@ -116,14 +127,8 @@ export function ScanInboxCard({ item }: { item: ScanInboxItem }): React.JSX.Elem
       </div>
 
       {expanded && (
-        <div className="mt-3 grid gap-3 rounded-lg border border-hairline bg-surface-raised p-3 sm:grid-cols-[minmax(0,180px)_1fr]">
-          <div className="h-[180px] overflow-hidden rounded-md border border-border bg-surface">
-            {isPdf(item.filename) ? (
-              <object data={url} type="application/pdf" className="h-full w-full" aria-label={item.filename} />
-            ) : (
-              <img src={url} alt={item.filename} className="h-full w-full object-contain" />
-            )}
-          </div>
+        <div className="mt-3 grid gap-3 rounded-lg border border-hairline bg-surface-raised p-3 sm:grid-cols-[minmax(0,240px)_1fr]">
+          <ScanPreview itemId={item.id} filename={item.filename} variant="card" />
           <div className="min-w-0 text-[0.82em]">
             {item.state !== 'error' && fieldEntries.length > 0 && (
               <>
