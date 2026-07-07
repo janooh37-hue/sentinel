@@ -140,6 +140,34 @@ _SUBMITTER_SIGN_FORMS: frozenset[str] = frozenset(
     {"Leave Application Form", "Duty Resumption Form"}
 )
 
+# Forms where the picked submitter ALWAYS signs the employee cell — no
+# employee-signature opt-in checkbox exists in their schema, so the submitter's
+# signature auto-embeds (mirrors the manager auto-embed on ``auto``-path forms).
+# The Employee Clearance Form is submitted on the leaving employee's behalf and
+# carries only manager + submitter pickers (no signature field), so the
+# submitter's signature is the only one available for the employee slot.
+_SUBMITTER_AUTO_SIGN_FORMS: frozenset[str] = frozenset({"Employee Clearance Form"})
+
+
+def _submitter_signs_employee_cell(
+    template_id: str,
+    submitter_id: int | None,
+    embed_signature: dict[str, bool],
+) -> bool:
+    """Whether a picked submitter's signature replaces the employee cell.
+
+    Auto-sign forms (``_SUBMITTER_AUTO_SIGN_FORMS``) embed whenever a submitter
+    is picked — they carry no employee-signature checkbox. Regular
+    submitter-sign forms (``_SUBMITTER_SIGN_FORMS``) still require the
+    ``embed_signature.employee`` opt-in. Everything else never swaps.
+    """
+    if submitter_id is None:
+        return False
+    if template_id in _SUBMITTER_AUTO_SIGN_FORMS:
+        return True
+    return template_id in _SUBMITTER_SIGN_FORMS and bool(embed_signature.get("employee"))
+
+
 _TEMPLATES_DIR = Path(__file__).resolve().parents[2] / "templates"
 _FIELDS_JSON = _TEMPLATES_DIR / "_fields.json"
 
@@ -1109,17 +1137,14 @@ def generate_document(
         if resolved:
             data["recipient_name"] = resolved
 
-    # Leave-related forms (_SUBMITTER_SIGN_FORMS): when a submitter is picked,
-    # their signature replaces the applicant's in the employee-signature cell.
-    # The embed checkbox still gates it. The Leave Application Form's companion
+    # Submitter-sign forms: when a submitter is picked, their signature replaces
+    # the applicant's in the employee-signature cell. Leave forms gate on the
+    # embed checkbox; the Clearance Form (no such checkbox) auto-embeds. See
+    # _submitter_signs_employee_cell. The Leave Application Form's companion
     # Leave Undertaking re-uses the shared `data` untouched below, so it keeps
     # the applicant's own signature.
     primary_data = data
-    if (
-        template_id in _SUBMITTER_SIGN_FORMS
-        and submitter_id is not None
-        and embed_signature.get("employee")
-    ):
+    if _submitter_signs_employee_cell(template_id, submitter_id, embed_signature):
         primary_data = {
             **data,
             "employee_sig_path": _submitter_sign_path(db, submitter_id),
