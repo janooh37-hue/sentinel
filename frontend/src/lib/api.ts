@@ -118,17 +118,9 @@ export type EmployeeUpdate = components['schemas']['EmployeeUpdate'] & {
 }
 export type EmployeeStatus = EmployeeRead['status']
 
-// Hand-mirrored until `gen:api` folds the SMS history field into the schema.
-export interface SmsMessageRead {
-  id: number
-  event_type: string
-  body: string | null
-  phone: string
-  status: 'sent' | 'failed'
-  error: string | null
-  language: string
-  created_at: string
-}
+// The SMS history schema now lands in the generated types (gen:api), so alias to
+// it instead of hand-mirroring. (Backend serialises `status` as a plain string.)
+export type SmsMessageRead = components['schemas']['SmsMessageRead']
 export type EmployeeDetailRead = components['schemas']['EmployeeDetailRead'] & {
   recent_sms: SmsMessageRead[]
 }
