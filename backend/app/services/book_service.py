@@ -1292,6 +1292,57 @@ def add_attachment(
     return book
 
 
+def replace_attachment(db: Session, book_id: int, index: int, filename: str, data: bytes) -> Book:
+    """Swap the file at ``attachment_paths[index]`` for ``data`` (undo a wrong
+    upload) while keeping the index stable. Validates like ``add_attachment``;
+    unlinks the previous file. Raises ``NotFoundError`` on an out-of-range index."""
+    book = get_book(db, book_id)
+    paths = list(book.attachment_paths or [])
+    if index < 0 or index >= len(paths):
+        raise NotFoundError("ATTACHMENT_NOT_FOUND", "attachment not found", index=index)
+    if len(data) == 0:
+        raise ValidationFailedError("BOOK_EMPTY_FILE", "Uploaded file is empty")
+    if len(data) > MAX_ATTACHMENT_BYTES:
+        raise ValidationFailedError(
+            "BOOK_FILE_TOO_LARGE",
+            f"File exceeds {MAX_ATTACHMENT_BYTES} bytes",
+            max_bytes=MAX_ATTACHMENT_BYTES,
+            size=len(data),
+        )
+    safe_name = _safe_filename(filename)
+    ext = Path(safe_name).suffix.lower()
+    if ext not in ALLOWED_DOC_EXTS:
+        raise ValidationFailedError(
+            "BOOK_BAD_EXTENSION",
+            f"File type {ext!r} is not allowed",
+            allowed=sorted(ALLOWED_DOC_EXTS),
+        )
+    target_dir = _book_attachment_dir(book_id)
+    target_dir.mkdir(parents=True, exist_ok=True)
+    dest = _unique_attachment_dest(target_dir, safe_name)
+    data_dir = get_settings().data_dir.resolve()
+    dest_resolved = dest.resolve()
+    if data_dir not in dest_resolved.parents:
+        raise AppError(
+            "BOOK_PATH_ESCAPE",
+            "Resolved attachment path escaped the data directory",
+            http_status=500,
+        )
+    dest.write_bytes(data)
+    old_rel = paths[index]
+    paths[index] = dest_resolved.relative_to(data_dir).as_posix()
+    book.attachment_paths = paths  # reassign so the JSON column dirties
+    old_abs = resolve_attachment_path(old_rel)
+    if old_abs is not None:
+        try:
+            old_abs.unlink()
+        except OSError:
+            log.warning("replace_attachment: could not unlink %s", old_abs)
+    db.commit()
+    db.refresh(book)
+    return book
+
+
 def detach_attachment(db: Session, book_id: int, rel_path: str) -> Book:
     """Remove a plain attachment (the inverse of the append branch of
     ``add_attachment``): drop ``rel_path`` from ``Book.attachment_paths`` and
@@ -1362,6 +1413,7 @@ __all__ = [
     "mark_seen",
     "record_review",
     "remove_reviewer",
+    "replace_attachment",
     "resolve_attachment_path",
     "resolve_doc_manager_user",
     "resolve_user_name_by_id",

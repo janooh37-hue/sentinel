@@ -593,6 +593,22 @@ def delete_book_attachment(
     return item
 
 
+@router.put("/{book_id}/attachments/{index}", response_model=BookRead)
+async def replace_book_attachment(
+    book_id: int,
+    index: int,
+    db: Annotated[Session, Depends(get_db)],
+    _user: Annotated[User, Depends(require_capability("books.manage"))],
+    upload: Annotated[UploadFile, File(alias="file")],
+) -> BookRead:
+    """Replace one plain attachment's bytes, keeping its index (fix a wrong upload)."""
+    data = await upload.read()
+    row = book_service.replace_attachment(db, book_id, index, upload.filename or "scan", data)
+    item = BookRead.model_validate(row)
+    item.versions = _build_versions(db, row)
+    return item
+
+
 @router.get("/{book_id}/imported-document")
 def get_imported_document(
     book_id: int,

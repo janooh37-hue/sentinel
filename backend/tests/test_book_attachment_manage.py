@@ -98,3 +98,30 @@ def test_delete_attachment_requires_manage(api_db, tmp_path) -> None:
     _book_with_attachments(api_db, tmp_path)
     c = _client(api_db, _user(api_db, role="operator"))
     assert c.request("DELETE", "/api/v1/books/1/attachments/0").status_code == 403
+
+
+def test_replace_attachment_swaps_bytes_keeps_index(api_db, tmp_path) -> None:
+    _book_with_attachments(api_db, tmp_path)
+    c = _client(api_db, _user(api_db))
+    resp = c.put(
+        "/api/v1/books/1/attachments/0",
+        files={"file": ("new.pdf", b"%PDF-NEW", "application/pdf")},
+    )
+    assert resp.status_code == 200, resp.text
+    paths = resp.json()["attachment_paths"]
+    assert len(paths) == 2
+    assert paths[0].endswith("new.pdf")
+    assert paths[1] == "book_attachments/1/b.pdf"
+    # new file served at index 0; old a.pdf removed
+    assert c.get("/api/v1/books/1/attachments/0").content == b"%PDF-NEW"
+    assert not (tmp_path / "book_attachments" / "1" / "a.pdf").exists()
+
+
+def test_replace_attachment_out_of_range_404(api_db, tmp_path) -> None:
+    _book_with_attachments(api_db, tmp_path)
+    c = _client(api_db, _user(api_db))
+    resp = c.put(
+        "/api/v1/books/1/attachments/9",
+        files={"file": ("new.pdf", b"%PDF-NEW", "application/pdf")},
+    )
+    assert resp.status_code == 404
