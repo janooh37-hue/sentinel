@@ -173,8 +173,14 @@ def best_printed_number(pages: list[Image.Image]) -> tuple[str, str] | None:
     """
     best: tuple[bool, str, str] | None = None  # (has_mrz_context, number, snippet)
     for page in pages:
-        with OCR_GATE:
-            text = extract_text(page).text
+        try:
+            with OCR_GATE:
+                text = extract_text(page).text
+        except OcrUnavailableError:
+            raise
+        except Exception:
+            log.debug("printed pass failed", exc_info=True)
+            continue
         hit = extract_printed_passport_no(text)
         if hit is None:
             continue

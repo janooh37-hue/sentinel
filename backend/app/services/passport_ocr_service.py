@@ -118,7 +118,10 @@ def extract_passport_for_employee(db: Session, g_number: str) -> PassportExtract
 
     # Step 3 — printed fallback: per page when we have rasters, else the cheap
     # concatenated text. Review-only; never auto-written.
-    printed = best_printed_number(pages) if pages else None
+    try:
+        printed = best_printed_number(pages) if pages else None
+    except OcrUnavailableError:
+        return PassportExtractResult(None, 0.0, "none", None, filename)
     if printed is None:
         printed = extract_printed_passport_no(text)
     if printed is not None:

@@ -101,6 +101,26 @@ def test_best_mrz_reraises_ocr_unavailable(monkeypatch):
         ps.best_mrz(["p"])
 
 
+def test_best_printed_number_reraises_ocr_unavailable(monkeypatch):
+    def boom(_page):
+        raise OcrUnavailableError("no tesseract")
+
+    monkeypatch.setattr(ps, "extract_text", boom)
+    with pytest.raises(OcrUnavailableError):
+        ps.best_printed_number(["p"])
+
+
+def test_best_printed_number_skips_page_on_generic_error(monkeypatch):
+    def flaky(page):
+        if page == "bad":
+            raise ValueError("tesseract choked")
+        return type("R", (), {"text": "Passport No: A7654321"})
+
+    monkeypatch.setattr(ps, "extract_text", flaky)
+    got = ps.best_printed_number(["bad", "good"])
+    assert got is not None and got[0] == "A7654321"
+
+
 def test_best_printed_prefers_mrz_context_page(monkeypatch):
     texts = {
         "cover": "Reference Passport No: X0000000 cover sheet",

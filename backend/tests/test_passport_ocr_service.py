@@ -179,6 +179,25 @@ def test_escalation_falls_back_to_printed(db_session, emp, monkeypatch, tmp_path
     assert res.method == "printed" and res.number == "A7654321" and res.confidence < 0.9
 
 
+def test_controller_degrades_when_printed_fallback_ocr_unavailable(
+    db_session, emp, monkeypatch, tmp_path
+):
+    from app.core.extraction.ocr import OcrUnavailableError
+
+    _fake_tree_with_passport(monkeypatch, tmp_path)
+    monkeypatch.setattr(svc, "ocr_bytes_to_text", lambda raw: "no mrz")
+    monkeypatch.setattr(svc, "extract_passport", lambda t: None)
+    monkeypatch.setattr(svc, "pages_from_bytes", lambda raw: ["p1"])
+    monkeypatch.setattr(svc, "best_mrz", lambda pages: None)
+
+    def boom(pages):
+        raise OcrUnavailableError("ara pack missing")
+
+    monkeypatch.setattr(svc, "best_printed_number", boom)
+    res = svc.extract_passport_for_employee(db_session, "G7001")
+    assert res.method == "none" and res.number is None
+
+
 def test_escalation_not_reached_when_cheap_pass_valid(db_session, emp, monkeypatch, tmp_path):
     _fake_tree_with_passport(monkeypatch, tmp_path)
     monkeypatch.setattr(svc, "ocr_bytes_to_text", lambda raw: "IGNORED")
