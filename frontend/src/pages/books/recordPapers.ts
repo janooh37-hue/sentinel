@@ -18,6 +18,9 @@ export interface Paper {
   downloadUrl: string
   filename: string
   isPdf: boolean
+  /** index into `attachment_paths` — set only on `kind: 'scan'`, so the viewer
+   * can wire delete/replace to the attachment endpoints. */
+  attachmentIndex?: number
 }
 
 interface VersionLike {
@@ -48,7 +51,11 @@ export function papersOf(book: BookLike): Paper[] {
 
   const docId = currentBookDocId(book)
   if (docId !== undefined) {
-    const url = `/api/v1/documents/${docId}/download?format=pdf`
+    // Always request the pre-signature original: once a signed copy is filed the
+    // plain download URL swaps to serving the signed artifact, which would hide
+    // the original form. `original=true` keeps this paper showing the real form
+    // in every state; the signed copy gets its own paper below.
+    const url = `/api/v1/documents/${docId}/download?format=pdf&original=true`
     papers.push({
       kind: 'generated',
       url,
@@ -96,6 +103,7 @@ export function papersOf(book: BookLike): Paper[] {
       downloadUrl: url,
       filename,
       isPdf: !IMAGE_EXT.test(filename),
+      attachmentIndex: index,
     })
   })
 
