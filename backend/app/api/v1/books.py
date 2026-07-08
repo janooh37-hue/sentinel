@@ -573,6 +573,26 @@ def get_book_attachment(
     return FileResponse(abs_path, filename=name, media_type="application/octet-stream")
 
 
+@router.delete("/{book_id}/attachments/{index}", response_model=BookRead)
+def delete_book_attachment(
+    book_id: int,
+    index: int,
+    db: Annotated[Session, Depends(get_db)],
+    _user: Annotated[User, Depends(require_capability("books.manage"))],
+) -> BookRead:
+    """Delete one plain attachment by its ``attachment_paths`` index (undo a
+    wrongly-uploaded scan). Does not touch a signed copy — see
+    ``DELETE /{book_id}/signed-copy``."""
+    book = book_service.get_book(db, book_id)
+    paths = book.attachment_paths or []
+    if index < 0 or index >= len(paths):
+        raise HTTPException(status_code=404, detail="attachment not found")
+    row = book_service.detach_attachment(db, book_id, paths[index])
+    item = BookRead.model_validate(row)
+    item.versions = _build_versions(db, row)
+    return item
+
+
 @router.get("/{book_id}/imported-document")
 def get_imported_document(
     book_id: int,

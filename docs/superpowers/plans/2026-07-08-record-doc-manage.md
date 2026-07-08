@@ -500,8 +500,10 @@ git commit -m "feat(records): PUT replace the signed copy without un-approving"
 - Test: `backend/tests/test_signed_copy_manage.py` (extend)
 
 **Interfaces:**
-- Consumes: `_current_version`, `_approver_steps`, `_recompute_approval_state`, `resolve_attachment_path`, `correspondence_service.log_event`.
-- Produces: `book_service.unfile_signed_copy(db, book_id) -> Book`; `DELETE /api/v1/books/{book_id}/signed-copy` → `BookRead`; cap `books.manage`. Reverts `signing_path=="scan"` → `awaiting_scan`; else reopens flip-approved steps (`decided_at == signed_at`) → `pending`/`none`. Logs a compensating `book_unsigned` correspondence event.
+- Consumes: `_current_version`, `_approver_steps`, `_recompute_approval_state`, `resolve_attachment_path`, `correspondence_service.log_event`, `app.core.form_policy.signing_path_of`.
+- Produces: `book_service.unfile_signed_copy(db, book_id) -> Book`; `DELETE /api/v1/books/{book_id}/signed-copy` → `BookRead`; cap `books.manage`. Reverts scan-path → `awaiting_scan`; else reopens flip-approved steps (`decided_at == signed_at`) → `pending`/`none`. Logs a compensating `book_unsigned` correspondence event.
+
+**IMPORTANT:** `signing_path` is **not** a `Book` column — it is derived from the current version's template via `form_policy.signing_path_of(version.template_id)` (see `books.py:_enrich_path_fields`). Use that, not `book.signing_path`.
 
 - [ ] **Step 1: Write the failing tests**
 
@@ -563,7 +565,9 @@ def unfile_signed_copy(db: Session, book_id: int) -> Book:
     version.signed_pdf_path = None
     version.signed_by_user_id = None
     version.signed_at = None
-    if book.signing_path == "scan":
+    from app.core import form_policy
+
+    if form_policy.signing_path_of(version.template_id) == "scan":
         version.status = "awaiting_scan"
         book.approval_state = "awaiting_scan"
     else:
