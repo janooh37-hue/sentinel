@@ -32,16 +32,23 @@ export function useIsRefreshing(minVisibleMs = 450): boolean {
   const fetching = useIsFetching() > 0
   const [on, setOn] = useState(false)
   const offAt = useRef(0)
+  const onRef = useRef(false)
   useEffect(() => {
     let t: ReturnType<typeof setTimeout> | undefined
     if (fetching) {
       offAt.current = performance.now() + minVisibleMs
-      setOn(true)
-    } else if (on) {
+      if (!onRef.current) {
+        onRef.current = true
+        setTimeout(() => setOn(true), 0)
+      }
+    } else if (onRef.current) {
       const wait = Math.max(0, offAt.current - performance.now())
-      t = setTimeout(() => setOn(false), wait)
+      t = setTimeout(() => {
+        onRef.current = false
+        setOn(false)
+      }, wait)
     }
     return () => t && clearTimeout(t)
-  }, [fetching, on, minVisibleMs])
+  }, [fetching, minVisibleMs])
   return on
 }
