@@ -735,6 +735,7 @@
       "back": "Back to records",
       "print": "Print",
       "downloadSigned": "Download signed PDF",
+      "viewOriginal": "Original form",
       "noDocument": "No document on this record.",
       "importedNoPreview": "This imported record's file isn't a PDF, so it can't be previewed here.",
       "downloadImported": "Download original ({{format}})",

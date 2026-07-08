@@ -18,10 +18,13 @@ import {
   ArrowLeft,
   Check,
   CornerUpLeft,
+  FileText,
   Loader2,
   PenLine,
   Printer,
+  RefreshCw,
   Send,
+  Trash2,
   Upload,
   X,
 } from 'lucide-react'
@@ -48,8 +51,12 @@ import { useBookApprovalActions } from '@/components/books/useBookApprovalAction
 import { hasCommentBearingMark } from '@/components/books/annotation-utils'
 import { cn } from '@/lib/utils'
 
+import { ConfirmDialog } from '@/components/ui/confirm-dialog'
+
 import { sealDescriptor, signedSourceOf, type SealTone } from './bookStateLabel'
 import { useAddScan } from './useAddScan'
+import { useManagePaper } from './useManagePaper'
+import type { Paper } from './recordPapers'
 
 const DocPdfCanvas = lazy(() => import('@/pages/application/DocPdfCanvas'))
 
@@ -250,6 +257,8 @@ export function BookRecordPage(): React.JSX.Element {
   const canGenerate = has('documents.generate')
 
   const fileSignedRef = useRef<HTMLInputElement | null>(null)
+  const replaceSignedRef = useRef<HTMLInputElement | null>(null)
+  const [unfileOpen, setUnfileOpen] = useState(false)
 
   const [submitOpen, setSubmitOpen] = useState(false)
   // Inline reason panel for return/reject (backend requires a non-empty reason).
@@ -261,6 +270,16 @@ export function BookRecordPage(): React.JSX.Element {
     queryFn: () => api.getBook(bookId),
     enabled: Number.isFinite(bookId),
   })
+
+  const manage = useManagePaper(book?.id ?? null)
+  // Synthetic "signed" paper so the shared manage hook can route replace/unfile.
+  const signedPaper: Paper = {
+    kind: 'signed',
+    url: '',
+    downloadUrl: '',
+    filename: '',
+    isPdf: true,
+  }
 
   const versions = book?.versions ?? []
   const current = versions.length ? versions[versions.length - 1] : undefined
@@ -549,8 +568,61 @@ export function BookRecordPage(): React.JSX.Element {
               {t('books.record.downloadSigned')}
             </a>
           )}
+          {/* The main canvas shows the signed copy once approved; offer the
+              original generated form separately (served via original=true). */}
+          {state === 'approved' && current?.signed_pdf_url && current?.document_id != null && (
+            <a
+              href={`/api/v1/documents/${current.document_id}/download?format=pdf&original=true`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-hairline bg-surface px-3 text-[0.78em] font-semibold text-muted-foreground transition-colors hover:border-primary hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              <FileText className="h-3.5 w-3.5" />
+              {t('books.record.viewOriginal')}
+            </a>
+          )}
+          {/* Fix a wrongly-filed signed copy: replace bytes (keep approval) or
+              remove it (revert the record). books.manage only. */}
+          {state === 'approved' && current?.signed_pdf_url && canManage && (
+            <>
+              <HeaderBtn
+                icon={<RefreshCw className="h-3.5 w-3.5" />}
+                label={t('books.pane.replacePaper')}
+                onClick={() => replaceSignedRef.current?.click()}
+              />
+              <HeaderBtn
+                icon={<Trash2 className="h-3.5 w-3.5" />}
+                label={t('books.pane.unfileSignedConfirm')}
+                tone="red"
+                onClick={() => setUnfileOpen(true)}
+              />
+            </>
+          )}
         </div>
       </header>
+
+      <ConfirmDialog
+        open={unfileOpen}
+        onOpenChange={setUnfileOpen}
+        title={t('books.pane.unfileSignedTitle')}
+        description={t('books.pane.unfileSignedBody')}
+        confirmLabel={t('books.pane.unfileSignedConfirm')}
+        onConfirm={() => {
+          setUnfileOpen(false)
+          void manage.deletePaper(signedPaper)
+        }}
+      />
+      <input
+        ref={replaceSignedRef}
+        type="file"
+        accept="application/pdf,image/*"
+        className="hidden"
+        onChange={(e) => {
+          const f = e.target.files?.[0]
+          if (f) void manage.replacePaper(signedPaper, f)
+          e.target.value = ''
+        }}
+      />
 
       {/* override banner: approver sees that reviewers requested changes */}
       {action === 'decide' && changesRequestedCount(currentSteps) > 0 && (

@@ -787,6 +787,7 @@
       "back": "العودة إلى السجلات",
       "print": "طباعة",
       "downloadSigned": "تنزيل PDF الموقّع",
+      "viewOriginal": "النموذج الأصلي",
       "noDocument": "لا يوجد مستند في هذا السجل.",
       "importedNoPreview": "ملف هذا السجل المستورد ليس بصيغة PDF، لذا لا يمكن معاينته هنا.",
       "downloadImported": "تنزيل الأصل ({{format}})",
