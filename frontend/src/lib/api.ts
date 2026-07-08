@@ -21,6 +21,9 @@ import type { ExtractedFieldOut } from './extraction'
 // '@/lib/api' rather than reaching into api.types directly.
 export type PassportSuggestion = components['schemas']['PassportSuggestion']
 
+// Employee lookup completeness summary (Task 3).
+export type CompletenessSummaryOut = components['schemas']['CompletenessSummaryOut']
+
 // Phase B — Expiry Dashboard + Alerts
 export interface ExpiryItem {
   employee_id: string
@@ -784,6 +787,8 @@ export const api = {
   getEmployee: (id: string) => request<EmployeeRead>('GET', `/employees/${encodeURIComponent(id)}`),
   getEmployeeDetail: (id: string) =>
     request<EmployeeDetailRead>('GET', `/employees/${encodeURIComponent(id)}/detail`),
+  getEmployeesCompleteness: () =>
+    request<CompletenessSummaryOut>('GET', '/employees/completeness'),
   createEmployee: (payload: EmployeeCreate) =>
     request<EmployeeRead>('POST', '/employees', payload),
   updateEmployee: (id: string, payload: EmployeeUpdate) =>
