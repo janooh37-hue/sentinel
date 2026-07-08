@@ -204,6 +204,6 @@ Edited:
 
 ## 10. Open decisions (defaults chosen; confirm during planning)
 
-1. **Milestone B adoption order** — proposed: Records/Books list → Dashboard KPIs → Leaves → the rest. (Default: this order.)
+1. **Milestone B adoption** — **decided: Records/Books list, Dashboard KPIs, and Leaves all in the first wave** (Leaves included up front so its two-detail-surface case — desktop RecordExpansion + mobile TabRecords — is handled from the start), then remaining lists follow.
 2. **Aurora glow** style was offered as an alternative to the calm settle — **rejected** in favor of calm + top progress bar (per approval).
 3. **SSE-driven invalidation** — deferred to a later phase.
