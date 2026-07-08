@@ -18,9 +18,12 @@ from datetime import date, datetime
 from sqlalchemy import and_, func, select
 from sqlalchemy.orm import Session
 
+from app.core.employee_completeness import completeness as _completeness
+from app.core.employee_completeness import missing_fields as _missing_fields
 from app.db import models
 from app.schemas import employee_detail as sx
 from app.schemas.employee import EmployeeRead
+from app.schemas.employee_completeness import CompletenessRead
 from app.services import photo_service
 
 # Cap each recent-* array. The Employee Detail page paginates the per-tab
@@ -167,6 +170,7 @@ def get_employee_detail(db: Session, employee_id: str) -> sx.EmployeeDetailRead 
     ]
 
     _ver = photo_service.get_photo_version(db, emp.id)
+    _filled, _tracked = _completeness(emp)
     return sx.EmployeeDetailRead(
         employee=EmployeeRead.model_validate(emp).model_copy(
             update={"has_photo": _ver is not None, "photo_version": _ver}
@@ -178,6 +182,8 @@ def get_employee_detail(db: Session, employee_id: str) -> sx.EmployeeDetailRead 
         recent_ledger=recent_ledger,
         recent_activity=activity,
         recent_sms=recent_sms,
+        missing_fields=_missing_fields(emp),
+        completeness=CompletenessRead(filled=_filled, tracked=_tracked),
     )
 
 

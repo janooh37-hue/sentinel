@@ -21,6 +21,9 @@ import type { ExtractedFieldOut } from './extraction'
 // '@/lib/api' rather than reaching into api.types directly.
 export type PassportSuggestion = components['schemas']['PassportSuggestion']
 
+// Employee lookup completeness summary (Task 3).
+export type CompletenessSummaryOut = components['schemas']['CompletenessSummaryOut']
+
 // Phase B — Expiry Dashboard + Alerts
 export interface ExpiryItem {
   employee_id: string
@@ -118,12 +121,9 @@ export type EmployeeUpdate = components['schemas']['EmployeeUpdate'] & {
 }
 export type EmployeeStatus = EmployeeRead['status']
 
-// The SMS history schema now lands in the generated types (gen:api), so alias to
-// it instead of hand-mirroring. (Backend serialises `status` as a plain string.)
+// gen:api now folds the SMS history field into the schema — use the generated type.
 export type SmsMessageRead = components['schemas']['SmsMessageRead']
-export type EmployeeDetailRead = components['schemas']['EmployeeDetailRead'] & {
-  recent_sms: SmsMessageRead[]
-}
+export type EmployeeDetailRead = components['schemas']['EmployeeDetailRead']
 export type EmployeeStatsRead = components['schemas']['EmployeeStatsRead']
 export type RecentDocumentRead = components['schemas']['RecentDocumentRead']
 export type RecentLeaveRead = components['schemas']['RecentLeaveRead']
@@ -547,7 +547,6 @@ export type BookRead = components['schemas']['BookRead'] & {
   doc_manager_name?: string | null
   doc_manager_has_signature?: boolean
   imported_doc?: ImportedDocRead | null
-  sms?: SmsMessageRead[]
 }
 
 // Annotation overlay (Slice 3). Hand-typed mirror of schemas.book.BookAnnotationRead
@@ -788,6 +787,8 @@ export const api = {
   getEmployee: (id: string) => request<EmployeeRead>('GET', `/employees/${encodeURIComponent(id)}`),
   getEmployeeDetail: (id: string) =>
     request<EmployeeDetailRead>('GET', `/employees/${encodeURIComponent(id)}/detail`),
+  getEmployeesCompleteness: () =>
+    request<CompletenessSummaryOut>('GET', '/employees/completeness'),
   createEmployee: (payload: EmployeeCreate) =>
     request<EmployeeRead>('POST', '/employees', payload),
   updateEmployee: (id: string, payload: EmployeeUpdate) =>

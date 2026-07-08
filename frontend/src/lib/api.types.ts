@@ -528,6 +528,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/employees/completeness": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Employees Completeness
+         * @description Aggregate profile gaps over Active employees (lookup-page hero card).
+         */
+        get: operations["employees_completeness_api_v1_employees_completeness_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/employees/{employee_id}": {
         parameters: {
             query?: never;
@@ -3453,6 +3473,24 @@ export interface components {
             /** Default Roles */
             default_roles: string[];
         };
+        /** CompletenessRead */
+        CompletenessRead: {
+            /** Filled */
+            filled: number;
+            /** Tracked */
+            tracked: number;
+        };
+        /** CompletenessSummaryOut */
+        CompletenessSummaryOut: {
+            /** Incomplete */
+            incomplete: number;
+            /** Tracked */
+            tracked: number;
+            /** Top Missing */
+            top_missing: components["schemas"]["MissingFieldCount"][];
+            /** First Incomplete Id */
+            first_incomplete_id: string | null;
+        };
         /** CorrespondenceCategoryCreate */
         CorrespondenceCategoryCreate: {
             /** Key */
@@ -4321,6 +4359,9 @@ export interface components {
             recent_activity: components["schemas"]["ActivityItemRead"][];
             /** Recent Sms */
             recent_sms: components["schemas"]["SmsMessageRead"][];
+            /** Missing Fields */
+            missing_fields: string[];
+            completeness: components["schemas"]["CompletenessRead"];
         };
         /**
          * EmployeeListItem
@@ -5245,6 +5286,13 @@ export interface components {
             v3_data_dir_detected: string | null;
             /** Last Migration */
             last_migration: string | null;
+        };
+        /** MissingFieldCount */
+        MissingFieldCount: {
+            /** Field */
+            field: string;
+            /** Count */
+            count: number;
         };
         /** NotificationCounts */
         NotificationCounts: {
@@ -7210,6 +7258,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["EmployeeRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    employees_completeness_api_v1_employees_completeness_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CompletenessSummaryOut"];
                 };
             };
             /** @description Validation Error */

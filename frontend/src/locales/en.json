@@ -293,6 +293,30 @@
         "review": "Needs review",
         "missing": "Missing"
       }
+    },
+    "lookup": {
+      "eyebrow": "Operations · Employees",
+      "title": "Who are you looking for?",
+      "subtitle": "Active, on leave, or separated — every file appears in search",
+      "placeholder": "Type a name or employee ID…",
+      "searchBtn": "Search",
+      "results": "Results",
+      "resultCount": "{{count}} results",
+      "allStatusesShown": "All statuses appear in results",
+      "noResults": "No matches — try part of the name or the employee ID",
+      "createNew": "+ Create a new employee file",
+      "newEmployee": "New employee — create file",
+      "recentTitle": "Recently opened files",
+      "expiryTitle": "Documents expiring soon",
+      "expiryViewAll": "View all expiring documents",
+      "gapsTitle": "Files with missing data",
+      "gapsSummary": "Most missing: {{fields}}. Completing them readies forms and letters instantly.",
+      "gapsCta": "Start completing files",
+      "expiryNone": "No documents expiring within 90 days",
+      "gapsNone": "No files with missing data",
+      "miniPlaceholder": "New search — type a name or employee ID…",
+      "fileTitle": "Employee file",
+      "daysLeft": "{{count}} days"
     }
   },
   "violations": {
@@ -1539,21 +1563,54 @@
       "failed": "Failed"
     },
     "profile": {
-      "idEn": "Employee ID",
-      "nameEn": "Name (EN)",
-      "nameAr": "Name (AR)",
-      "position": "Position",
-      "department": "Department",
-      "dutyUnit": "Duty unit",
-      "dutyPost": "Duty post",
-      "transfer": "Transfer duty location",
-      "doj": "Date of joining",
-      "status": "Status"
+      "transfer": "Transfer duty location"
     },
     "identity": {
       "title": "Identity documents",
       "addScan": "Add scan",
       "noScan": "No scan attached"
+    },
+    "card": {
+      "label": "Employee card · GSSG",
+      "createDoc": "Create document",
+      "addLeave": "Add leave",
+      "edit": "Edit"
+    },
+    "gaps": {
+      "title": "{{count}} missing — completeness {{filled}}/{{tracked}}",
+      "hint": "Completing them lets forms and letters generate without the paper file.",
+      "add": "+ Add",
+      "addNow": "+ Add now",
+      "fixAll": "Complete the data now",
+      "notSet": "Not recorded",
+      "notSetF": "Not recorded",
+      "sectionMissing": "{{count}} missing",
+      "sectionComplete": "Complete"
+    },
+    "field": {
+      "name_en": "Name (English)",
+      "name_ar": "Name (Arabic)",
+      "dob": "Date of birth",
+      "nationality": "Nationality",
+      "contact": "Contact number",
+      "msg_language": "Notification language",
+      "passport_no": "Passport number",
+      "passport_expiry": "Passport Expiry",
+      "uae_id_no": "UAE ID No.",
+      "uae_id_expiry": "Emirates ID Expiry",
+      "iban": "IBAN",
+      "position": "Position",
+      "department": "Department",
+      "duty_unit": "Unit",
+      "duty_post": "Post",
+      "doj": "Date of joining",
+      "doj_company": "Joining (company)"
+    },
+    "section": {
+      "personal": "Personal data",
+      "identity": "Identity documents",
+      "work": "Employment data",
+      "finance": "Financial data"
     }
   },
   "application": {

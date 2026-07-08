@@ -12,7 +12,7 @@ import { RequireCapability } from '@/components/shell/RequireCapability'
 import { TopNav } from '@/components/shell/TopNav'
 import { ErrorBoundary } from '@/components/ui/error-boundary'
 import { ShortcutsHelpDialog } from '@/components/ui/shortcuts-help'
-import { EmployeesPage } from '@/pages/employees/EmployeesPage'
+import { EmployeeLookupPage } from '@/pages/employees/EmployeeLookupPage'
 import { LoginPage } from '@/pages/auth/LoginPage'
 import { MigrationGate } from '@/pages/system/MigrationWizard'
 import { KeyboardShortcutsProvider } from '@/lib/keyboardShortcuts'
@@ -190,7 +190,7 @@ function Shell(): React.JSX.Element {
             <main id="main-content" tabIndex={-1} key={location.pathname} className="anim-fade-up flex flex-1 overflow-hidden pb-[calc(3.5rem+env(safe-area-inset-bottom))] md:pb-0">
             <Routes>
               <Route path="/" element={<DashboardRoute />} />
-              <Route path="/employees" element={<EmployeesPage />} />
+              <Route path="/employees" element={<EmployeeLookupPage />} />
               <Route path="/employees/:id" element={<EmployeeDetailPage />} />
               <Route path="/application" element={<ApplicationPage />} />
               <Route path="/books" element={<BooksPage />} />
