@@ -651,6 +651,10 @@ body {
   to   { transform: translateX(360%); }
 }
 
+/* ─── Refresh ring indicator (RefreshRing — refresh experience) ──────────── */
+.ptr-ring-spin svg { animation: ptrRingSpin 900ms linear infinite; }
+@keyframes ptrRingSpin { to { transform: rotate(360deg); } }
+
 /* --- Print: an A4 sheet of the document only -------------------------------
    The record screen (BookRecordPage) prints to be physically signed. Two
    things otherwise break the output: window.print() dumps the whole app
