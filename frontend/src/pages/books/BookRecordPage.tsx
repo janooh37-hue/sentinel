@@ -592,7 +592,7 @@ export function BookRecordPage(): React.JSX.Element {
               />
               <HeaderBtn
                 icon={<Trash2 className="h-3.5 w-3.5" />}
-                label={t('books.pane.unfileSignedConfirm')}
+                label={t('books.pane.unfileSignedBtn')}
                 tone="red"
                 onClick={() => setUnfileOpen(true)}
               />
