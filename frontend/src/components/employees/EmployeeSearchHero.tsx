@@ -78,7 +78,9 @@ export function EmployeeSearchHero({
       </div>
 
       {/* ── Main content column ─────────────────────────────────────────── */}
-      <div className="relative z-[2] mx-auto max-w-[720px] px-8 pb-2 pt-[46px] text-center">
+      {/* z-[30]: must out-stack the sibling info-cards wrapper (z-[2]) or the
+          results dropdown paints beneath the cards' backdrop-blur. */}
+      <div className="relative z-[30] mx-auto max-w-[720px] px-8 pb-2 pt-[46px] text-center">
         {/* Eyebrow */}
         <div className="text-[11px] font-semibold uppercase tracking-[.22em] opacity-65">
           {t('employees.lookup.eyebrow')}
