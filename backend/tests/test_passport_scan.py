@@ -33,8 +33,6 @@ def test_ocr_mrz_pass_raises_when_tesseract_missing(monkeypatch):
         ps.ocr_mrz_pass(_FakeImg("x"))
 
 
-
-
 def _mrz_extraction(number: str, *, valid: bool) -> Extraction:
     conf = 0.95 if valid else 0.55
     return Extraction(
@@ -109,6 +107,10 @@ def test_best_printed_prefers_mrz_context_page(monkeypatch):
         "bio": "Passport No: A7654321\nP<UAEDOE<<JOHN<<<<<<<<<<<<<<<<<<<<<<<<",
     }
     monkeypatch.setattr(ps, "extract_text", lambda page: type("R", (), {"text": texts[page]}))
-    got = ps.best_printed_number(["cover", "bio"])
-    # The bio page (has MRZ-like content) must win over the cover's X0000000.
-    assert got is not None and got[0] == "A7654321"
+    # Guard: the cover fixture must itself yield a number, else the preference
+    # assertions below would be vacuously satisfied.
+    cover_only = ps.best_printed_number(["cover"])
+    assert cover_only is not None and cover_only[0] == "X0000000"
+    # The MRZ-context (bio) page must win over the cover's number, in either order.
+    assert ps.best_printed_number(["cover", "bio"])[0] == "A7654321"
+    assert ps.best_printed_number(["bio", "cover"])[0] == "A7654321"
