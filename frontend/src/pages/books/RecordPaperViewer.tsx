@@ -14,7 +14,7 @@
  * Lazy-loaded by the page (default export) so pdf.js ships in its own chunk.
  */
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { Download, Loader2, Maximize2, Minus, Plus, X } from 'lucide-react'
+import { Download, Loader2, Maximize2, Minus, Plus, RefreshCw, Trash2, X } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import * as pdfjsLib from 'pdfjs-dist'
 import pdfWorkerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url'
@@ -110,6 +110,8 @@ export function RecordPaperViewer({
   onClose,
   addScanSlot,
   emptySlot,
+  onDeletePaper,
+  onReplacePaper,
 }: {
   papers: Paper[]
   paperIndex: number
@@ -123,6 +125,10 @@ export function RecordPaperViewer({
   addScanSlot?: React.ReactNode
   /** parent-provided empty state when papers.length === 0 */
   emptySlot?: React.ReactNode
+  /** request delete of a scan/signed paper (parent shows confirm + calls the API) */
+  onDeletePaper?: (paper: Paper) => void
+  /** request replace of a scan/signed paper (parent opens a file picker) */
+  onReplacePaper?: (paper: Paper) => void
 }): React.JSX.Element {
   const { t } = useTranslation()
   const [zoom, setZoom] = useState(1)
@@ -273,6 +279,24 @@ export function RecordPaperViewer({
             <Download className="h-3 w-3" aria-hidden />
             {t('common.download')}
           </a>
+          {onReplacePaper && (paper.kind === 'scan' || paper.kind === 'signed') && (
+            <ToolbarBtn
+              isOverlay={isOverlay}
+              label={t('books.pane.replacePaper')}
+              onClick={() => onReplacePaper(paper)}
+            >
+              <RefreshCw className="h-3 w-3" aria-hidden />
+            </ToolbarBtn>
+          )}
+          {onDeletePaper && (paper.kind === 'scan' || paper.kind === 'signed') && (
+            <ToolbarBtn
+              isOverlay={isOverlay}
+              label={t('books.pane.deletePaper')}
+              onClick={() => onDeletePaper(paper)}
+            >
+              <Trash2 className="h-3 w-3" aria-hidden />
+            </ToolbarBtn>
+          )}
           {!isOverlay && onOpenFull && (
             <ToolbarBtn isOverlay={false} label={t('books.pane.fullPreview')} onClick={onOpenFull}>
               <Maximize2 className="h-3 w-3" aria-hidden />

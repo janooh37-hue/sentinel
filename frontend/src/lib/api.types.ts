@@ -1006,6 +1006,11 @@ export interface paths {
          *     and intercepts the request, returning an empty 204 to the JS ``fetch``)
          *     would otherwise hijack the bytes and the canvas would never render. The
          *     ledger team uses the same trick — see ``/ledger/.../attachments/by-index``.
+         *
+         *     ``original=true`` returns the pre-signature generated PDF (``pdf_path``) even
+         *     when the version is signed-locked. The default download swaps in the signed
+         *     artifact once a version is signed, which otherwise makes the original form
+         *     unreachable; this lets the UI show the original alongside the signed copy.
          */
         get: operations["download_document_api_v1_documents__document_id__download_get"];
         put?: never;
@@ -1540,9 +1545,43 @@ export interface paths {
          *     ``GET /documents/{id}/download`` (see that route's docstring).
          */
         get: operations["get_book_attachment_api_v1_books__book_id__attachments__index__get"];
-        put?: never;
+        /**
+         * Replace Book Attachment
+         * @description Replace one plain attachment's bytes, keeping its index (fix a wrong upload).
+         */
+        put: operations["replace_book_attachment_api_v1_books__book_id__attachments__index__put"];
         post?: never;
-        delete?: never;
+        /**
+         * Delete Book Attachment
+         * @description Delete one plain attachment by its ``attachment_paths`` index (undo a
+         *     wrongly-uploaded scan). Does not touch a signed copy — see
+         *     ``DELETE /{book_id}/signed-copy``.
+         */
+        delete: operations["delete_book_attachment_api_v1_books__book_id__attachments__index__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/books/{book_id}/signed-copy": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Replace Signed Copy
+         * @description Replace the signed copy's bytes, keeping the record approved.
+         */
+        put: operations["replace_signed_copy_api_v1_books__book_id__signed_copy_put"];
+        post?: never;
+        /**
+         * Unfile Signed Copy
+         * @description Undo a filed signed copy and revert the record's approval state.
+         */
+        delete: operations["unfile_signed_copy_api_v1_books__book_id__signed_copy_delete"];
         options?: never;
         head?: never;
         patch?: never;
@@ -3069,6 +3108,22 @@ export interface components {
              * Format: binary
              */
             file: string;
+        };
+        /** Body_replace_book_attachment_api_v1_books__book_id__attachments__index__put */
+        Body_replace_book_attachment_api_v1_books__book_id__attachments__index__put: {
+            /**
+             * Upload
+             * Format: binary
+             */
+            upload: string;
+        };
+        /** Body_replace_signed_copy_api_v1_books__book_id__signed_copy_put */
+        Body_replace_signed_copy_api_v1_books__book_id__signed_copy_put: {
+            /**
+             * Upload
+             * Format: binary
+             */
+            upload: string;
         };
         /** Body_send_email_api_v1_email_send_post */
         Body_send_email_api_v1_email_send_post: {
@@ -8427,6 +8482,7 @@ export interface operations {
         parameters: {
             query?: {
                 format?: "docx" | "pdf";
+                original?: boolean;
                 encoding?: string | null;
             };
             header?: never;
@@ -9580,6 +9636,148 @@ export interface operations {
                 };
                 content: {
                     "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    replace_book_attachment_api_v1_books__book_id__attachments__index__put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                book_id: number;
+                index: number;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_replace_book_attachment_api_v1_books__book_id__attachments__index__put"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BookRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_book_attachment_api_v1_books__book_id__attachments__index__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                book_id: number;
+                index: number;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BookRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    replace_signed_copy_api_v1_books__book_id__signed_copy_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                book_id: number;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_replace_signed_copy_api_v1_books__book_id__signed_copy_put"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BookRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    unfile_signed_copy_api_v1_books__book_id__signed_copy_delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                book_id: number;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BookRead"];
                 };
             };
             /** @description Validation Error */

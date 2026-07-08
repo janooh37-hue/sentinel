@@ -730,3 +730,53 @@ Deploy the pulled code (`scripts\mng.ps1 update` on the server pulls + builds + 
 **Placeholder scan:** No TBD/TODO; every code step shows complete code; every test shows real assertions. ✓
 
 **Type consistency:** `MrzCandidate` fields (`number`, `confidence`, `valid`, `page_index`, `rotation`) are identical across `passport_scan.py`, `best_mrz`, and the controller tests. `best_mrz -> MrzCandidate | None`, `best_printed_number -> tuple[str, str] | None`, `pages_from_bytes -> list[Image.Image]` used consistently. Controller re-exports `MrzCandidate` (imported) so tests reference `svc.MrzCandidate`. ✓
+
+---
+
+## Decision gate — when to escalate to Approach B (OpenCV MRZ preprocessing)
+
+Approach A ships regardless (it is correct and adds no risk). But it is the
+*final* answer for the backfill only if it reliably auto-fills the large
+majority of scans **without a human review queue**. After the read-only sample
+report (`backend/scripts/passport_sample_report.py`, run off-hours), escalate to
+**Approach B** if ANY of the following holds — not only the literal-zero case:
+
+- **Zero / near-zero auto-write** — `auto-writable (valid MRZ >= 0.9)` is ~0.
+- **Weak yield** — auto-write covers only a small fraction of scanned
+  employees, so most still need manual entry (the problem isn't actually solved).
+- **Unreliable / review-heavy** — a large share of results are structural-MRZ
+  (0.55) or printed (0.5), i.e. review-only. That is a **quality** risk (a wrong
+  number can slip through manual review) *and* a **time** cost (each one must be
+  verified by a person). Trading an empty field for an unreliable number that
+  still needs checking is not a win.
+- **Impractically slow** — per-scan time (observed up to ~214s on 8-page,
+  no-MRZ scans) makes even the recoverable subset too costly to run or re-run.
+
+Rule of thumb: proceed with A's `--apply` output only if it auto-writes a large
+majority **correctly and with a negligible review queue**. Otherwise → Approach B.
+(Empirically, on the live data — 300 employees, 299 missing, 208 scanned — the
+first 10 sampled scans produced 0 auto-writable, so Approach B is the expected path.)
+
+## Approach B requirements — must avoid A's failure modes
+
+Approach B is a separate brainstorm → design → plan → implement cycle. It MUST
+be designed to avoid exactly the problems in the gate above:
+
+1. **Reliable & correct (quality first).** Only ever write a number the MRZ
+   check digits validate. Clean the MRZ strip — **localize the MRZ band, deskew,
+   binarize (adaptive/Otsu)** — *before* OCR so the TD3 checksum actually passes;
+   and/or use the per-field + composite check digits to **correct a single OCR
+   misread and RE-VALIDATE**. Never write a guessed or low-confidence number. A
+   wrong passport number is worse than an empty field.
+2. **Minimal-to-no manual review.** Success is measured as *auto-filled
+   correctly*, not *a candidate surfaced for review*. Maximize the
+   checksum-valid (auto-write) fraction so humans rarely need to verify anything.
+3. **Fast enough to run.** OCR only the localized MRZ band (instead of full-page
+   × 4 rotations × up to 8 pages), collapsing the ~3.5-min worst case. Keep the
+   escalation, short-circuit, and `MAX_PAGES` guardrails.
+4. **Still fully offline; write-safety unchanged.** No external/cloud OCR; keep
+   "auto-write only a *validated* number into an empty field."
+
+If B still cannot reach a reliable auto-write majority on this data, that is
+itself a finding to surface (the scans may simply lack a readable MRZ) — never a
+reason to lower the write-safety bar.

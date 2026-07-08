@@ -7,6 +7,7 @@ for listing BookCategory rows.  Ref-number allocation is atomic via SQLite's
 
 from __future__ import annotations
 
+import json
 import logging
 import re
 from collections.abc import Sequence
@@ -22,6 +23,7 @@ from app.api.errors import AppError, NotFoundError, ValidationFailedError
 from app.config import get_settings
 from app.core.constants import ALLOWED_DOC_EXTS, STAMP_STYLES
 from app.db.models import (
+    AuditLog,
     Book,
     BookAnnotation,
     BookApprovalStep,
@@ -1292,6 +1294,161 @@ def add_attachment(
     return book
 
 
+def replace_attachment(db: Session, book_id: int, index: int, filename: str, data: bytes) -> Book:
+    """Swap the file at ``attachment_paths[index]`` for ``data`` (undo a wrong
+    upload) while keeping the index stable. Validates like ``add_attachment``;
+    unlinks the previous file. Raises ``NotFoundError`` on an out-of-range index."""
+    book = get_book(db, book_id)
+    paths = list(book.attachment_paths or [])
+    if index < 0 or index >= len(paths):
+        raise NotFoundError("ATTACHMENT_NOT_FOUND", "attachment not found", index=index)
+    if len(data) == 0:
+        raise ValidationFailedError("BOOK_EMPTY_FILE", "Uploaded file is empty")
+    if len(data) > MAX_ATTACHMENT_BYTES:
+        raise ValidationFailedError(
+            "BOOK_FILE_TOO_LARGE",
+            f"File exceeds {MAX_ATTACHMENT_BYTES} bytes",
+            max_bytes=MAX_ATTACHMENT_BYTES,
+            size=len(data),
+        )
+    safe_name = _safe_filename(filename)
+    ext = Path(safe_name).suffix.lower()
+    if ext not in ALLOWED_DOC_EXTS:
+        raise ValidationFailedError(
+            "BOOK_BAD_EXTENSION",
+            f"File type {ext!r} is not allowed",
+            allowed=sorted(ALLOWED_DOC_EXTS),
+        )
+    target_dir = _book_attachment_dir(book_id)
+    target_dir.mkdir(parents=True, exist_ok=True)
+    dest = _unique_attachment_dest(target_dir, safe_name)
+    data_dir = get_settings().data_dir.resolve()
+    dest_resolved = dest.resolve()
+    if data_dir not in dest_resolved.parents:
+        raise AppError(
+            "BOOK_PATH_ESCAPE",
+            "Resolved attachment path escaped the data directory",
+            http_status=500,
+        )
+    dest.write_bytes(data)
+    old_rel = paths[index]
+    paths[index] = dest_resolved.relative_to(data_dir).as_posix()
+    book.attachment_paths = paths  # reassign so the JSON column dirties
+    old_abs = resolve_attachment_path(old_rel)
+    if old_abs is not None:
+        try:
+            old_abs.unlink()
+        except OSError:
+            log.warning("replace_attachment: could not unlink %s", old_abs)
+    db.commit()
+    db.refresh(book)
+    return book
+
+
+def replace_signed_copy(
+    db: Session, book_id: int, filename: str, data: bytes, *, user: User | None = None
+) -> Book:
+    """Swap the signed artifact's bytes without changing approval state — the
+    "I filed the wrong signed scan" fix. Image scans are converted to PDF, as in
+    the scan-back flip. Raises when the current version carries no signed copy."""
+    book = get_book(db, book_id)
+    version = _current_version(book)
+    if version is None or not version.signed_pdf_path:
+        raise ValidationFailedError("NO_SIGNED_COPY", "This record has no signed copy to replace")
+    if len(data) == 0:
+        raise ValidationFailedError("BOOK_EMPTY_FILE", "Uploaded file is empty")
+    if len(data) > MAX_ATTACHMENT_BYTES:
+        raise ValidationFailedError(
+            "BOOK_FILE_TOO_LARGE",
+            f"File exceeds {MAX_ATTACHMENT_BYTES} bytes",
+            max_bytes=MAX_ATTACHMENT_BYTES,
+            size=len(data),
+        )
+    ext = Path(_safe_filename(filename)).suffix.lower()
+    if ext not in ALLOWED_DOC_EXTS:
+        raise ValidationFailedError(
+            "BOOK_BAD_EXTENSION",
+            f"File type {ext!r} is not allowed",
+            allowed=sorted(ALLOWED_DOC_EXTS),
+        )
+    if ext != ".pdf":
+        data = _image_to_pdf_bytes(data, ext)
+    target_dir = _book_attachment_dir(book_id)
+    target_dir.mkdir(parents=True, exist_ok=True)
+    dest = _unique_attachment_dest(target_dir, f"signed-v{version.version_no}.pdf")
+    data_dir = get_settings().data_dir.resolve()
+    dest_resolved = dest.resolve()
+    if data_dir not in dest_resolved.parents:
+        raise AppError(
+            "BOOK_PATH_ESCAPE",
+            "Resolved attachment path escaped the data directory",
+            http_status=500,
+        )
+    dest.write_bytes(data)
+    old_abs = resolve_attachment_path(version.signed_pdf_path)
+    version.signed_pdf_path = dest_resolved.relative_to(data_dir).as_posix()
+    if user is not None:
+        version.signed_by_user_id = user.id
+    version.signed_at = datetime.now(UTC).replace(tzinfo=None)
+    if old_abs is not None:
+        try:
+            old_abs.unlink()
+        except OSError:
+            log.warning("replace_signed_copy: could not unlink %s", old_abs)
+    db.commit()
+    db.refresh(book)
+    return book
+
+
+def unfile_signed_copy(db: Session, book_id: int, *, user: User | None = None) -> Book:
+    """Undo a filed signed copy: delete the artifact and revert the record to its
+    pre-signed state. A scan-path form returns to ``awaiting_scan``; otherwise the
+    approver steps the scan auto-approved (``decided_at == signed_at``) are reopened
+    and the state recomputed, leaving earlier human approvals intact. Writes an
+    ``unfile_signed_copy`` AuditLog row (the original scan-back sign entry is left
+    in place — an audit trail of what happened)."""
+    from app.core import form_policy
+
+    book = get_book(db, book_id)
+    version = _current_version(book)
+    if version is None or not version.signed_pdf_path:
+        raise ValidationFailedError("NO_SIGNED_COPY", "This record has no signed copy to unfile")
+    flip_at = version.signed_at
+    old_abs = resolve_attachment_path(version.signed_pdf_path)
+    version.signed_pdf_path = None
+    version.signed_by_user_id = None
+    version.signed_at = None
+    if form_policy.signing_path_of(version.template_id) == "scan":
+        # scan-path forms carry no approver steps (the scan IS the signature).
+        version.status = "awaiting_scan"
+        book.approval_state = "awaiting_scan"
+    else:
+        # Reopen only the steps the scan flip auto-approved; human approvals
+        # (decided earlier) are preserved. Then recompute the derived state.
+        for step in _approver_steps(version):
+            if step.state == "approved" and step.decided_at == flip_at:
+                step.state = "pending"
+                step.decided_at = None
+        _recompute_approval_state(book)
+    if old_abs is not None:
+        try:
+            old_abs.unlink()
+        except OSError:
+            log.warning("unfile_signed_copy: could not unlink %s", old_abs)
+    db.add(
+        AuditLog(
+            actor=(user.employee_id if user is not None else None),
+            action="unfile_signed_copy",
+            entity_type="book",
+            entity_id=str(book.id),
+            payload=json.dumps({"ref_number": book.ref_number, "reverted_to": book.approval_state}),
+        )
+    )
+    db.commit()
+    db.refresh(book)
+    return book
+
+
 def detach_attachment(db: Session, book_id: int, rel_path: str) -> Book:
     """Remove a plain attachment (the inverse of the append branch of
     ``add_attachment``): drop ``rel_path`` from ``Book.attachment_paths`` and
@@ -1362,6 +1519,8 @@ __all__ = [
     "mark_seen",
     "record_review",
     "remove_reviewer",
+    "replace_attachment",
+    "replace_signed_copy",
     "resolve_attachment_path",
     "resolve_doc_manager_user",
     "resolve_user_name_by_id",
@@ -1369,5 +1528,6 @@ __all__ = [
     "sms_for_book",
     "submit_for_approval",
     "submitter_g_number",
+    "unfile_signed_copy",
     "update_book",
 ]

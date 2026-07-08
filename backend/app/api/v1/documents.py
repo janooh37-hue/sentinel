@@ -348,6 +348,7 @@ def download_document(
     db: Annotated[Session, Depends(get_db)],
     user: Annotated[User, Depends(get_current_user)],
     format: Literal["docx", "pdf"] = Query("pdf"),
+    original: Annotated[bool, Query()] = False,
     encoding: Annotated[str | None, Query(pattern="^base64$")] = None,
 ) -> Response:
     """Stream a generated document (PDF or DOCX).
@@ -359,6 +360,11 @@ def download_document(
     and intercepts the request, returning an empty 204 to the JS ``fetch``)
     would otherwise hijack the bytes and the canvas would never render. The
     ledger team uses the same trick — see ``/ledger/.../attachments/by-index``.
+
+    ``original=true`` returns the pre-signature generated PDF (``pdf_path``) even
+    when the version is signed-locked. The default download swaps in the signed
+    artifact once a version is signed, which otherwise makes the original form
+    unreachable; this lets the UI show the original alongside the signed copy.
     """
     row: Document | None = db.get(Document, document_id)
     if row is None:
@@ -371,6 +377,43 @@ def download_document(
     settings = get_settings()
 
     _DOCX_MEDIA_TYPE = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+
+    # ``original=true`` short-circuit: serve the pre-signature generated PDF
+    # regardless of signed-lock. books.view is sufficient — an original form is
+    # viewable by anyone who can view the record.
+    if original:
+        if not perm_service.has_capability(db, user, "books.view"):
+            raise AppError(
+                "FORBIDDEN",
+                "You don't have permission to download this document",
+                http_status=status.HTTP_403_FORBIDDEN,
+            )
+        if not row.pdf_path:
+            raise NotFoundError(
+                "PDF_NOT_AVAILABLE",
+                f"No PDF rendition exists for document {document_id}",
+                id=document_id,
+            )
+        orig_path = settings.data_dir / row.pdf_path
+        _dd = settings.data_dir.resolve()
+        try:
+            _op = orig_path.resolve()
+        except OSError:
+            _op = orig_path
+        if (_dd not in _op.parents and _op != _dd) or not orig_path.is_file():
+            raise NotFoundError(
+                "FILE_NOT_FOUND",
+                f"File not found on disk for document {document_id}",
+                id=document_id,
+            )
+        if (b64 := maybe_base64(orig_path.read_bytes(), encoding)) is not None:
+            return b64
+        return FileResponse(
+            path=str(orig_path),
+            media_type="application/pdf",
+            filename=document_service.download_filename_for(row, ".pdf"),
+            content_disposition_type="inline",
+        )
 
     # Once a version is SIGNED, the editable DOCX is locked: deny it, and serve
     # the signed artifact for any other format. The signed artifact may be a

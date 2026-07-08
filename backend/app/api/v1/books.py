@@ -573,6 +573,72 @@ def get_book_attachment(
     return FileResponse(abs_path, filename=name, media_type="application/octet-stream")
 
 
+@router.delete("/{book_id}/attachments/{index}", response_model=BookRead)
+def delete_book_attachment(
+    book_id: int,
+    index: int,
+    db: Annotated[Session, Depends(get_db)],
+    _user: Annotated[User, Depends(require_capability("books.manage"))],
+) -> BookRead:
+    """Delete one plain attachment by its ``attachment_paths`` index (undo a
+    wrongly-uploaded scan). Does not touch a signed copy — see
+    ``DELETE /{book_id}/signed-copy``."""
+    book = book_service.get_book(db, book_id)
+    paths = book.attachment_paths or []
+    if index < 0 or index >= len(paths):
+        raise HTTPException(status_code=404, detail="attachment not found")
+    row = book_service.detach_attachment(db, book_id, paths[index])
+    item = BookRead.model_validate(row)
+    item.versions = _build_versions(db, row)
+    return item
+
+
+@router.put("/{book_id}/attachments/{index}", response_model=BookRead)
+async def replace_book_attachment(
+    book_id: int,
+    index: int,
+    db: Annotated[Session, Depends(get_db)],
+    _user: Annotated[User, Depends(require_capability("books.manage"))],
+    upload: Annotated[UploadFile, File(alias="file")],
+) -> BookRead:
+    """Replace one plain attachment's bytes, keeping its index (fix a wrong upload)."""
+    data = await upload.read()
+    row = book_service.replace_attachment(db, book_id, index, upload.filename or "scan", data)
+    item = BookRead.model_validate(row)
+    item.versions = _build_versions(db, row)
+    return item
+
+
+@router.put("/{book_id}/signed-copy", response_model=BookRead)
+async def replace_signed_copy(
+    book_id: int,
+    db: Annotated[Session, Depends(get_db)],
+    user: Annotated[User, Depends(require_capability("books.manage"))],
+    upload: Annotated[UploadFile, File(alias="file")],
+) -> BookRead:
+    """Replace the signed copy's bytes, keeping the record approved."""
+    data = await upload.read()
+    row = book_service.replace_signed_copy(
+        db, book_id, upload.filename or "signed", data, user=user
+    )
+    item = BookRead.model_validate(row)
+    item.versions = _build_versions(db, row)
+    return item
+
+
+@router.delete("/{book_id}/signed-copy", response_model=BookRead)
+def unfile_signed_copy(
+    book_id: int,
+    db: Annotated[Session, Depends(get_db)],
+    user: Annotated[User, Depends(require_capability("books.manage"))],
+) -> BookRead:
+    """Undo a filed signed copy and revert the record's approval state."""
+    row = book_service.unfile_signed_copy(db, book_id, user=user)
+    item = BookRead.model_validate(row)
+    item.versions = _build_versions(db, row)
+    return item
+
+
 @router.get("/{book_id}/imported-document")
 def get_imported_document(
     book_id: int,

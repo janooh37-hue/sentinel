@@ -14,19 +14,22 @@
  * Props: `{ bookId; onClose; onSubmitForApproval }`
  */
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import * as Dialog from '@radix-ui/react-dialog'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { formatDistanceToNow, parseISO } from 'date-fns'
 import { ar as arLocale } from 'date-fns/locale'
-import { Check, Download, FileText, Paperclip, RotateCcw, Send, X } from 'lucide-react'
+import { Check, Download, FileText, Paperclip, RefreshCw, RotateCcw, Send, Trash2, X } from 'lucide-react'
 
 import { api, type BookApprovalStepRead, type BookDecideAction, type BookVersionRead } from '@/lib/api'
 import { useCapabilities } from '@/lib/useCapabilities'
 import { useAuth } from '@/lib/authContext'
 import { cn } from '@/lib/utils'
+import { ConfirmDialog } from '@/components/ui/confirm-dialog'
+import { useManagePaper } from '@/pages/books/useManagePaper'
+import type { Paper } from '@/pages/books/recordPapers'
 
 import { footerActionFor } from './book-detail-drawer-utils'
 import { useBookApprovalActions } from './useBookApprovalActions'
@@ -218,11 +221,25 @@ export function BookDetailDrawer({ bookId, onClose, onSubmitForApproval }: Props
   // free note; `return`/`reject` require a non-empty reason (backend enforces
   // it → REASON_REQUIRED), so the confirm is gated on a trimmed value.
   const [noteFor, setNoteFor] = useState<BookDecideAction | null>(null)
+  // Manage executed copies (plain attachments) — delete / replace by index.
+  const attReplaceRef = useRef<HTMLInputElement | null>(null)
+  const [deleteIdx, setDeleteIdx] = useState<number | null>(null)
+  const [replaceIdx, setReplaceIdx] = useState<number | null>(null)
 
   const { data: book, isPending } = useQuery({
     queryKey: ['books', 'detail', bookId],
     queryFn: () => api.getBook(bookId!),
     enabled: bookId !== null,
+  })
+
+  const manage = useManagePaper(book?.id ?? null)
+  const scanPaperAt = (index: number): Paper => ({
+    kind: 'scan',
+    url: '',
+    downloadUrl: '',
+    filename: '',
+    isPdf: true,
+    attachmentIndex: index,
   })
 
   const versions = book?.versions ?? []
@@ -432,22 +449,75 @@ export function BookDetailDrawer({ bookId, onClose, onSubmitForApproval }: Props
                       {book.attachment_paths.map((rel, i) => {
                         const filename = rel.split('/').pop() ?? rel
                         return (
-                          <li key={`${rel}-${i}`}>
+                          <li key={`${rel}-${i}`} className="flex items-center gap-1.5">
                             <a
                               href={`/api/v1/books/${book.id}/attachments/${i}`}
                               target="_blank"
                               rel="noopener noreferrer"
-                              className="flex items-center gap-2 rounded-lg border border-hairline bg-surface-tinted px-3 py-2 text-[0.82em] text-foreground transition-colors hover:bg-accent/10 hover:text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                              className="flex min-w-0 flex-1 items-center gap-2 rounded-lg border border-hairline bg-surface-tinted px-3 py-2 text-[0.82em] text-foreground transition-colors hover:bg-accent/10 hover:text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                             >
                               <Paperclip className="h-3.5 w-3.5 shrink-0 text-muted-foreground" strokeWidth={1.8} aria-hidden />
                               <span className="min-w-0 flex-1 truncate" dir="auto">{filename}</span>
                             </a>
+                            {canManage && (
+                              <>
+                                <button
+                                  type="button"
+                                  title={t('books.pane.replacePaper')}
+                                  aria-label={t('books.pane.replacePaper')}
+                                  onClick={() => {
+                                    setReplaceIdx(i)
+                                    attReplaceRef.current?.click()
+                                  }}
+                                  className="grid h-8 w-8 shrink-0 place-items-center rounded-lg border border-hairline text-muted-foreground transition-colors hover:border-primary hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                                >
+                                  <RefreshCw className="h-3.5 w-3.5" aria-hidden />
+                                </button>
+                                <button
+                                  type="button"
+                                  title={t('books.pane.deletePaper')}
+                                  aria-label={t('books.pane.deletePaper')}
+                                  onClick={() => setDeleteIdx(i)}
+                                  className="grid h-8 w-8 shrink-0 place-items-center rounded-lg border border-hairline text-muted-foreground transition-colors hover:border-accent hover:text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                                >
+                                  <Trash2 className="h-3.5 w-3.5" aria-hidden />
+                                </button>
+                              </>
+                            )}
                           </li>
                         )
                       })}
                     </ul>
                   </div>
                 )}
+
+                <ConfirmDialog
+                  open={deleteIdx !== null}
+                  onOpenChange={(open) => {
+                    if (!open) setDeleteIdx(null)
+                  }}
+                  title={t('books.pane.deletePaperTitle')}
+                  description={t('books.pane.deletePaperBody')}
+                  confirmLabel={t('common.delete')}
+                  onConfirm={() => {
+                    const idx = deleteIdx
+                    setDeleteIdx(null)
+                    if (idx !== null) void manage.deletePaper(scanPaperAt(idx))
+                  }}
+                />
+                <input
+                  ref={attReplaceRef}
+                  type="file"
+                  accept="application/pdf,image/*"
+                  className="hidden"
+                  onChange={(e) => {
+                    const f = e.target.files?.[0]
+                    const idx = replaceIdx
+                    setReplaceIdx(null)
+                    if (f && idx !== null) void manage.replacePaper(scanPaperAt(idx), f)
+                    e.target.value = ''
+                  }}
+                />
 
                 {/* note / reason input (decide flow) */}
                 {action === 'decide' && noteFor && (
