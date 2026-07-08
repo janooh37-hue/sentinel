@@ -310,7 +310,8 @@ def test_best_printed_prefers_mrz_context_page(monkeypatch):
     }
     monkeypatch.setattr(ps, "extract_text", lambda page: type("R", (), {"text": texts[page]}))
     got = ps.best_printed_number(["cover", "bio"])
-    assert got == ("A7654321", pytest.approx(got[1])) or got[0] == "A7654321"
+    # The bio page (has MRZ-like content) must win over the cover's X0000000.
+    assert got is not None and got[0] == "A7654321"
 ```
 
 - [ ] **Step 2: Run tests to verify they fail**
