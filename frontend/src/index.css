@@ -654,6 +654,9 @@ body {
 /* ─── Refresh ring indicator (RefreshRing — refresh experience) ──────────── */
 .ptr-ring-spin svg { animation: ptrRingSpin 900ms linear infinite; }
 @keyframes ptrRingSpin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) {
+  .ptr-ring-spin svg { animation: none; }
+}
 
 /* --- Print: an A4 sheet of the document only -------------------------------
    The record screen (BookRecordPage) prints to be physically signed. Two
