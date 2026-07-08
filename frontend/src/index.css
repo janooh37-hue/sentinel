@@ -641,6 +641,16 @@ body {
   }
 }
 
+/* ─── Top progress bar sweep (TopProgressBar — refresh experience) ───────── */
+.ptr-sweep {
+  background: linear-gradient(90deg, transparent, var(--primary) 85%, transparent);
+  animation: ptrSweep 900ms cubic-bezier(0.45, 0, 0.55, 1) infinite;
+}
+@keyframes ptrSweep {
+  from { transform: translateX(-140%); }
+  to   { transform: translateX(360%); }
+}
+
 /* --- Print: an A4 sheet of the document only -------------------------------
    The record screen (BookRecordPage) prints to be physically signed. Two
    things otherwise break the output: window.print() dumps the whole app
