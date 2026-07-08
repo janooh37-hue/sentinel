@@ -1551,16 +1551,7 @@
       "failed": "Failed"
     },
     "profile": {
-      "idEn": "Employee ID",
-      "nameEn": "Name (EN)",
-      "nameAr": "Name (AR)",
-      "position": "Position",
-      "department": "Department",
-      "dutyUnit": "Duty unit",
-      "dutyPost": "Duty post",
-      "transfer": "Transfer duty location",
-      "doj": "Date of joining",
-      "status": "Status"
+      "transfer": "Transfer duty location"
     },
     "identity": {
       "title": "Identity documents",

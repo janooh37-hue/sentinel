@@ -234,7 +234,13 @@ export function EmployeeDetailPage(): React.JSX.Element {
               }}
               onChange={setTab}
             />
-            {tab === 'profile' && <ProfileTab employee={data.employee} />}
+            {tab === 'profile' && (
+              <ProfileTab
+                employee={data.employee}
+                missing={data.missing_fields}
+                onFix={() => setEditing(true)}
+              />
+            )}
             {tab === 'documents' && (
               <DocumentsTab
                 docs={data.recent_documents}
