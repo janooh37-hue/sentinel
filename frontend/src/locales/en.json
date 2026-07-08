@@ -312,6 +312,8 @@
       "gapsTitle": "Files with missing data",
       "gapsSummary": "Most missing: {{fields}}. Completing them readies forms and letters instantly.",
       "gapsCta": "Start completing files",
+      "expiryNone": "No documents expiring within 90 days",
+      "gapsNone": "No files with missing data",
       "miniPlaceholder": "New search — type a name or employee ID…",
       "fileTitle": "Employee file",
       "daysLeft": "{{count}} days"
