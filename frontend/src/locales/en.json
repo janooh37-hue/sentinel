@@ -2538,6 +2538,13 @@
     "confirmResend": "Already sent. Send again?",
     "failed": "Send failed"
   },
+  "refresh": {
+    "action": "Refresh",
+    "hotkey": "Alt+R",
+    "updatedAgo": "Updated {{n}} ago",
+    "newItems": "{{n}} new",
+    "listUpdated": "List updated, {{n}} new"
+  },
   "perms": {
     "locked": "You need permission for {{label}}. Click to request access.",
     "request": {

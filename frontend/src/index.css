@@ -658,6 +658,10 @@ body {
   .ptr-ring-spin svg { animation: none; }
 }
 
+/* ─── Ghost refresh button spin (RefreshButton — refresh experience) ─────── */
+.ptr-rot { animation: ptrRot 500ms cubic-bezier(0.16, 1, 0.3, 1); }
+@keyframes ptrRot { to { transform: rotate(360deg); } }
+
 /* --- Print: an A4 sheet of the document only -------------------------------
    The record screen (BookRecordPage) prints to be physically signed. Two
    things otherwise break the output: window.print() dumps the whole app
