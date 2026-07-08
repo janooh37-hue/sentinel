@@ -11,7 +11,7 @@
  */
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useLocation, useNavigate, useParams } from 'react-router-dom'
 import { toast } from 'sonner'
@@ -43,6 +43,9 @@ export function EmployeeDetailPage(): React.JSX.Element {
   const [tab, setTab] = useState<Tab>('profile')
   const [editing, setEditing] = useState(false)
   const [statusOpen, setStatusOpen] = useState(false)
+  // Gaps-card → ProfileTab handoff: which field to open an inline editor for.
+  const [fixField, setFixField] = useState<string | null>(null)
+  const handleFixHandled = useCallback(() => setFixField(null), [])
   const qc = useQueryClient()
   const keydownListenerRef = useRef<((e: KeyboardEvent) => void) | null>(null)
 
@@ -218,7 +221,17 @@ export function EmployeeDetailPage(): React.JSX.Element {
             <EmployeeGapsCard
               missing={data.missing_fields}
               completeness={data.completeness}
-              onFix={() => setEditing(true)}
+              onFix={(field) => {
+                if (field) {
+                  // Per-field: switch to the profile tab and open that row's
+                  // inline editor in place.
+                  setTab('profile')
+                  setFixField(field)
+                } else {
+                  // «أكمل البيانات الآن» — bulk path keeps the full edit form.
+                  setEditing(true)
+                }
+              }}
             />
           </div>
 
@@ -240,7 +253,8 @@ export function EmployeeDetailPage(): React.JSX.Element {
               <ProfileTab
                 employee={data.employee}
                 missing={data.missing_fields}
-                onFix={() => setEditing(true)}
+                requestedFixField={fixField}
+                onFixHandled={handleFixHandled}
               />
             )}
             {tab === 'documents' && (

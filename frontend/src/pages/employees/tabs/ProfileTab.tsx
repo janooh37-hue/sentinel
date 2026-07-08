@@ -4,17 +4,18 @@
  * → Signature pad. Photo upload lives on the hero (top), not here.
  */
 
-import { useState } from 'react'
-import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { useEffect, useRef, useState } from 'react'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { ArrowLeftRight } from 'lucide-react'
 import { differenceInDays, parseISO } from 'date-fns'
+import { toast } from 'sonner'
 
 import { IdentityDocCard } from '@/components/employees/IdentityDocCard'
 import { SignaturePad } from '@/components/employees/SignaturePad'
 import { PassportField } from './PassportField'
-import { api } from '@/lib/api'
-import type { EmployeeRead } from '@/lib/api'
+import { api, apiErrorMessage } from '@/lib/api'
+import type { EmployeeRead, EmployeeUpdate } from '@/lib/api'
 import { pickPosition } from '@/lib/employeePosition'
 import { useCapabilities } from '@/lib/useCapabilities'
 import { cn } from '@/lib/utils'
@@ -38,6 +39,9 @@ const MONO_FIELDS = new Set([
 
 // Feminine field labels (use notSetF instead of notSet).
 const FEMININE_FIELDS = new Set(['nationality'])
+
+// Fields edited with a date input in the inline gap editor.
+const DATE_FIELDS = new Set(['dob', 'uae_id_expiry', 'passport_expiry', 'doj'])
 
 // Tracked fields per section — these are the fields that may appear in `missing`.
 const PERSONAL_TRACKED = ['name_ar', 'name_en', 'nationality', 'dob', 'contact']
@@ -120,12 +124,89 @@ function getFieldValue(
 
 // ── Sub-components (module level — avoids react-hooks/static-components) ────
 
+interface InlineFieldEditorProps {
+  employeeId: string
+  field: string
+  onDone: () => void
+}
+
+/** In-place editor for a single missing field — type-aware input (date fields
+ *  get a date picker), single-field PATCH, Escape/cancel to close. */
+function InlineFieldEditor({ employeeId, field, onDone }: InlineFieldEditorProps): React.JSX.Element {
+  const { t } = useTranslation()
+  const qc = useQueryClient()
+  const [value, setValue] = useState('')
+  const inputRef = useRef<HTMLInputElement>(null)
+  const isDate = DATE_FIELDS.has(field)
+  const isMono = MONO_FIELDS.has(field)
+
+  useEffect(() => {
+    inputRef.current?.focus()
+  }, [])
+
+  const save = useMutation({
+    mutationFn: () =>
+      api.updateEmployee(employeeId, { [field]: value.trim() } as EmployeeUpdate),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['employee-detail', employeeId] })
+      void qc.invalidateQueries({ queryKey: ['employees'] })
+      toast.success(t('employees.toast.updated'))
+      onDone()
+    },
+    onError: (err) => {
+      toast.error(apiErrorMessage(err))
+    },
+  })
+
+  const canSave = value.trim().length > 0 && !save.isPending
+
+  return (
+    <form
+      className="flex flex-wrap items-center gap-2"
+      onSubmit={(e) => {
+        e.preventDefault()
+        if (canSave) save.mutate()
+      }}
+    >
+      <input
+        ref={inputRef}
+        type={isDate ? 'date' : 'text'}
+        value={value}
+        onChange={(e) => setValue(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === 'Escape') onDone()
+        }}
+        dir={isDate || isMono ? 'ltr' : undefined}
+        className="h-8 min-w-0 flex-1 basis-36 rounded-md border border-amber-300 bg-surface px-2 text-start text-[0.9em] text-foreground outline-none focus:ring-2 focus:ring-amber-400"
+        aria-label={t(`employee.field.${field}`)}
+      />
+      <button
+        type="submit"
+        disabled={!canSave}
+        className="rounded-md bg-primary px-2.5 py-1 text-[0.78em] font-semibold text-primary-foreground transition-colors hover:bg-primary-hover disabled:opacity-50"
+      >
+        {t('common.save')}
+      </button>
+      <button
+        type="button"
+        onClick={onDone}
+        className="rounded-md px-2 py-1 text-[0.78em] font-medium text-muted-foreground transition-colors hover:text-foreground"
+      >
+        {t('common.cancel')}
+      </button>
+    </form>
+  )
+}
+
 interface FieldRowProps {
   field: string
   employee: EmployeeRead
   missingSet: Set<string>
   uaeExpiryDays: number | null
-  onFix: (field: string) => void
+  canEdit: boolean
+  fixingField: string | null
+  onStartFix: (field: string) => void
+  onDoneFix: () => void
 }
 
 function FieldRow({
@@ -133,16 +214,21 @@ function FieldRow({
   employee,
   missingSet,
   uaeExpiryDays,
-  onFix,
+  canEdit,
+  fixingField,
+  onStartFix,
+  onDoneFix,
 }: FieldRowProps): React.JSX.Element {
   const { t, i18n } = useTranslation()
   const isMiss = missingSet.has(field)
   const isMono = MONO_FIELDS.has(field)
   const isFeminine = FEMININE_FIELDS.has(field)
+  const isFixing = isMiss && fixingField === field
   const val = getFieldValue(field, employee, uaeExpiryDays, t, i18n.language)
 
   return (
     <div
+      data-field-row={field}
       className={cn(
         'grid grid-cols-[120px_1fr] items-baseline gap-3 border-b border-hairline pb-3 pt-3 sm:grid-cols-[140px_1fr]',
         isMiss && 'rounded-md bg-gradient-to-l from-transparent to-amber-50/60 rtl:bg-gradient-to-r',
@@ -154,22 +240,26 @@ function FieldRow({
       <div
         className={cn(
           'min-w-0 break-words text-[0.95em] text-foreground',
-          isMono && 'font-mono text-[0.88em] text-start',
+          isMono && !isFixing && 'font-mono text-[0.88em] text-start',
         )}
-        dir={isMono ? 'ltr' : undefined}
+        dir={isMono && !isFixing ? 'ltr' : undefined}
       >
-        {isMiss ? (
+        {isFixing ? (
+          <InlineFieldEditor employeeId={employee.id} field={field} onDone={onDoneFix} />
+        ) : isMiss ? (
           <span className="flex items-center gap-2.5">
             <span className="text-[0.88em] font-semibold text-amber-600">
               {isFeminine ? t('employee.gaps.notSetF') : t('employee.gaps.notSet')}
             </span>
-            <button
-              type="button"
-              className="rounded-md bg-amber-500/10 px-2 py-0.5 text-[0.75em] font-semibold text-amber-700 transition-colors hover:bg-amber-500/20"
-              onClick={() => onFix(field)}
-            >
-              {t('employee.gaps.addNow')}
-            </button>
+            {canEdit && (
+              <button
+                type="button"
+                className="rounded-md bg-amber-500/10 px-2 py-0.5 text-[0.75em] font-semibold text-amber-700 transition-colors hover:bg-amber-500/20"
+                onClick={() => onStartFix(field)}
+              >
+                {t('employee.gaps.addNow')}
+              </button>
+            )}
           </span>
         ) : (
           val ?? <span className="text-faint">—</span>
@@ -186,7 +276,10 @@ interface SectionCardProps {
   employee: EmployeeRead
   missingSet: Set<string>
   uaeExpiryDays: number | null
-  onFix: (field: string) => void
+  canEdit: boolean
+  fixingField: string | null
+  onStartFix: (field: string) => void
+  onDoneFix: () => void
   footer?: React.ReactNode
 }
 
@@ -197,7 +290,10 @@ function SectionCard({
   employee,
   missingSet,
   uaeExpiryDays,
-  onFix,
+  canEdit,
+  fixingField,
+  onStartFix,
+  onDoneFix,
   footer,
 }: SectionCardProps): React.JSX.Element {
   const { t } = useTranslation()
@@ -226,7 +322,10 @@ function SectionCard({
           employee={employee}
           missingSet={missingSet}
           uaeExpiryDays={uaeExpiryDays}
-          onFix={onFix}
+          canEdit={canEdit}
+          fixingField={fixingField}
+          onStartFix={onStartFix}
+          onDoneFix={onDoneFix}
         />
       ))}
       {footer}
@@ -239,16 +338,47 @@ function SectionCard({
 interface Props {
   employee: EmployeeRead
   missing: string[]
-  onFix: (field: string) => void
+  /** Field the sidebar gaps card asked us to open an inline editor for. */
+  requestedFixField?: string | null
+  /** Called once the requested field's editor has been opened. */
+  onFixHandled?: () => void
 }
 
-export function ProfileTab({ employee, missing, onFix }: Props): React.JSX.Element {
+export function ProfileTab({
+  employee,
+  missing,
+  requestedFixField,
+  onFixHandled,
+}: Props): React.JSX.Element {
   const { t } = useTranslation()
   const { has } = useCapabilities()
   const qc = useQueryClient()
   const canEdit = has('employees.edit')
 
   const [transferOpen, setTransferOpen] = useState(false)
+  const [fixingField, setFixingField] = useState<string | null>(null)
+
+  // Sidebar gaps-card handoff: open the inline editor for the requested field.
+  // Render-time state adjustment (not an effect) per React's derived-state
+  // guidance — reacts to each null→field transition of requestedFixField.
+  const requested = requestedFixField ?? null
+  const [lastRequested, setLastRequested] = useState<string | null>(null)
+  if (requested !== lastRequested) {
+    setLastRequested(requested)
+    if (requested) setFixingField(requested)
+  }
+
+  // External-system half of the handoff: scroll the row into view, then tell
+  // the parent the request was consumed.
+  useEffect(() => {
+    if (!requestedFixField) return
+    document
+      .querySelector(`[data-field-row="${requestedFixField}"]`)
+      ?.scrollIntoView?.({ behavior: 'smooth', block: 'center' })
+    onFixHandled?.()
+  }, [requestedFixField, onFixHandled])
+
+  const handleDoneFix = (): void => setFixingField(null)
 
   const { data: tree, isError: vaultError } = useQuery({
     queryKey: ['vault', employee.id],
@@ -295,7 +425,10 @@ export function ProfileTab({ employee, missing, onFix }: Props): React.JSX.Eleme
           employee={employee}
           missingSet={missingSet}
           uaeExpiryDays={uaeExpiryDays}
-          onFix={onFix}
+          canEdit={canEdit}
+          fixingField={fixingField}
+          onStartFix={setFixingField}
+          onDoneFix={handleDoneFix}
         />
 
         {/* Identity data */}
@@ -306,7 +439,10 @@ export function ProfileTab({ employee, missing, onFix }: Props): React.JSX.Eleme
           employee={employee}
           missingSet={missingSet}
           uaeExpiryDays={uaeExpiryDays}
-          onFix={onFix}
+          canEdit={canEdit}
+          fixingField={fixingField}
+          onStartFix={setFixingField}
+          onDoneFix={handleDoneFix}
         />
 
         {/* Work */}
@@ -317,7 +453,10 @@ export function ProfileTab({ employee, missing, onFix }: Props): React.JSX.Eleme
           employee={employee}
           missingSet={missingSet}
           uaeExpiryDays={uaeExpiryDays}
-          onFix={onFix}
+          canEdit={canEdit}
+          fixingField={fixingField}
+          onStartFix={setFixingField}
+          onDoneFix={handleDoneFix}
           footer={transferFooter}
         />
 
@@ -329,7 +468,10 @@ export function ProfileTab({ employee, missing, onFix }: Props): React.JSX.Eleme
           employee={employee}
           missingSet={missingSet}
           uaeExpiryDays={uaeExpiryDays}
-          onFix={onFix}
+          canEdit={canEdit}
+          fixingField={fixingField}
+          onStartFix={setFixingField}
+          onDoneFix={handleDoneFix}
         />
       </div>
 
