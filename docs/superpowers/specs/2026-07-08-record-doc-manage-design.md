@@ -165,11 +165,14 @@ after.
 ### 5. Audit / Correspondence Log
 
 Unfiling or deleting does **not** retract the original Correspondence Log entry
-(it records what genuinely happened). On **unfile of a signed copy**, log a
-compensating event (e.g. `trigger="book_unsigned"`, direction consistent with the
-original) so the history shows the reversal. Deleting a plain attachment does not
-write a compensating event (symmetry with intake attach is not required; note in
-plan if desired).
+(it records what genuinely happened). On **unfile of a signed copy**, write a
+compensating **`AuditLog`** row (`action="unfile_signed_copy"`, `entity_type="book"`,
+payload with `ref_number` + `reverted_to`). Implementation note: the Correspondence
+Log (`correspondence_service.log_event`) is rule-gated and its rule triggers are
+pattern-restricted to a fixed set, so an arbitrary `book_unsigned` correspondence
+event would be a silent no-op — `AuditLog` (the same mechanism `document_service`
+uses for `auto_sign_embed`) is the reliable audit trail. Deleting a plain
+attachment does not write a compensating event.
 
 ### 6. API types sync
 

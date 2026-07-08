@@ -176,3 +176,65 @@ def test_replace_signed_copy_route(api_db, tmp_path) -> None:
     )
     assert resp.status_code == 200, resp.text
     assert resp.json()["approval_state"] == "approved"
+
+
+# ---------------------------------------------------------------------------
+# Task 5 — unfile signed copy (delete + revert approval)
+# ---------------------------------------------------------------------------
+
+
+def test_unfile_signed_scanpath_reverts_to_awaiting_scan(api_db, tmp_path) -> None:
+    book = _signed_scanback_book(api_db, tmp_path)  # template Violation Form -> scan path
+    signed_file = tmp_path / "book_attachments" / "1" / "signed-v1.pdf"
+    assert signed_file.exists()
+    book_service.unfile_signed_copy(api_db, book.id)
+    api_db.refresh(book)
+    v = book.versions[-1]
+    assert book.approval_state == "awaiting_scan"
+    assert v.status == "awaiting_scan"
+    assert v.signed_pdf_path is None
+    assert v.signed_at is None
+    assert v.signed_by_user_id is None
+    assert not signed_file.exists()
+
+
+def test_unfile_signed_assigned_reopens_only_flip_step(api_db, tmp_path) -> None:
+    book = _assigned_signed_book(api_db, tmp_path)  # in_app, two approver steps
+    book_service.unfile_signed_copy(api_db, book.id)
+    api_db.refresh(book)
+    v = book.versions[-1]
+    steps = sorted(v.approval_steps, key=lambda s: s.step_order)
+    assert steps[0].state == "approved"  # human approval preserved
+    assert steps[0].decided_at is not None
+    assert steps[1].state == "pending"  # flip approval reopened
+    assert steps[1].decided_at is None
+    assert book.approval_state == "pending"
+    assert v.signed_pdf_path is None
+
+
+def test_unfile_logs_compensating_audit_event(api_db, tmp_path) -> None:
+    from app.db.models import AuditLog
+
+    book = _signed_scanback_book(api_db, tmp_path)
+    user = _user(api_db, email="mgr5@x.ae")
+    book_service.unfile_signed_copy(api_db, book.id, user=user)
+    rows = (
+        api_db.query(AuditLog)
+        .filter(AuditLog.entity_type == "book", AuditLog.entity_id == str(book.id))
+        .all()
+    )
+    assert any(r.action == "unfile_signed_copy" for r in rows)
+
+
+def test_unfile_signed_copy_route(api_db, tmp_path) -> None:
+    _signed_scanback_book(api_db, tmp_path)
+    c = _client(api_db, _user(api_db, email="mgr4@x.ae"))
+    resp = c.request("DELETE", "/api/v1/books/1/signed-copy")
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["approval_state"] == "awaiting_scan"
+
+
+def test_unfile_requires_manage(api_db, tmp_path) -> None:
+    _signed_scanback_book(api_db, tmp_path)
+    c = _client(api_db, _user(api_db, role="operator", email="op2@x.ae"))
+    assert c.request("DELETE", "/api/v1/books/1/signed-copy").status_code == 403

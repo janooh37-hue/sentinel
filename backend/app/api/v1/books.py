@@ -626,6 +626,19 @@ async def replace_signed_copy(
     return item
 
 
+@router.delete("/{book_id}/signed-copy", response_model=BookRead)
+def unfile_signed_copy(
+    book_id: int,
+    db: Annotated[Session, Depends(get_db)],
+    user: Annotated[User, Depends(require_capability("books.manage"))],
+) -> BookRead:
+    """Undo a filed signed copy and revert the record's approval state."""
+    row = book_service.unfile_signed_copy(db, book_id, user=user)
+    item = BookRead.model_validate(row)
+    item.versions = _build_versions(db, row)
+    return item
+
+
 @router.get("/{book_id}/imported-document")
 def get_imported_document(
     book_id: int,

@@ -7,6 +7,7 @@ for listing BookCategory rows.  Ref-number allocation is atomic via SQLite's
 
 from __future__ import annotations
 
+import json
 import logging
 import re
 from collections.abc import Sequence
@@ -22,6 +23,7 @@ from app.api.errors import AppError, NotFoundError, ValidationFailedError
 from app.config import get_settings
 from app.core.constants import ALLOWED_DOC_EXTS, STAMP_STYLES
 from app.db.models import (
+    AuditLog,
     Book,
     BookAnnotation,
     BookApprovalStep,
@@ -1398,6 +1400,55 @@ def replace_signed_copy(
     return book
 
 
+def unfile_signed_copy(db: Session, book_id: int, *, user: User | None = None) -> Book:
+    """Undo a filed signed copy: delete the artifact and revert the record to its
+    pre-signed state. A scan-path form returns to ``awaiting_scan``; otherwise the
+    approver steps the scan auto-approved (``decided_at == signed_at``) are reopened
+    and the state recomputed, leaving earlier human approvals intact. Writes an
+    ``unfile_signed_copy`` AuditLog row (the original scan-back sign entry is left
+    in place — an audit trail of what happened)."""
+    from app.core import form_policy
+
+    book = get_book(db, book_id)
+    version = _current_version(book)
+    if version is None or not version.signed_pdf_path:
+        raise ValidationFailedError("NO_SIGNED_COPY", "This record has no signed copy to unfile")
+    flip_at = version.signed_at
+    old_abs = resolve_attachment_path(version.signed_pdf_path)
+    version.signed_pdf_path = None
+    version.signed_by_user_id = None
+    version.signed_at = None
+    if form_policy.signing_path_of(version.template_id) == "scan":
+        # scan-path forms carry no approver steps (the scan IS the signature).
+        version.status = "awaiting_scan"
+        book.approval_state = "awaiting_scan"
+    else:
+        # Reopen only the steps the scan flip auto-approved; human approvals
+        # (decided earlier) are preserved. Then recompute the derived state.
+        for step in _approver_steps(version):
+            if step.state == "approved" and step.decided_at == flip_at:
+                step.state = "pending"
+                step.decided_at = None
+        _recompute_approval_state(book)
+    if old_abs is not None:
+        try:
+            old_abs.unlink()
+        except OSError:
+            log.warning("unfile_signed_copy: could not unlink %s", old_abs)
+    db.add(
+        AuditLog(
+            actor=(user.employee_id if user is not None else None),
+            action="unfile_signed_copy",
+            entity_type="book",
+            entity_id=str(book.id),
+            payload=json.dumps({"ref_number": book.ref_number, "reverted_to": book.approval_state}),
+        )
+    )
+    db.commit()
+    db.refresh(book)
+    return book
+
+
 def detach_attachment(db: Session, book_id: int, rel_path: str) -> Book:
     """Remove a plain attachment (the inverse of the append branch of
     ``add_attachment``): drop ``rel_path`` from ``Book.attachment_paths`` and
@@ -1477,5 +1528,6 @@ __all__ = [
     "sms_for_book",
     "submit_for_approval",
     "submitter_g_number",
+    "unfile_signed_copy",
     "update_book",
 ]
