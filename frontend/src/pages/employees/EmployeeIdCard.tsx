@@ -9,7 +9,7 @@
  * Gate: edit & camera are hidden when the operator lacks `employees.edit`.
  */
 
-import { Camera, FileText, Pencil, Plane } from 'lucide-react'
+import { Camera, Pencil } from 'lucide-react'
 import { useRef } from 'react'
 import { useTranslation } from 'react-i18next'
 
@@ -121,7 +121,9 @@ export function EmployeeIdCard({
 
         {/* Name + ID (status moved to facts grid) */}
         <div className="min-w-0 flex-1">
-          <div className="truncate text-[1.05em] font-bold leading-snug">{name}</div>
+          {/* Long compound names are the norm — wrap to two lines, never ellipsize
+              the primary name (QA fix). */}
+          <div className="line-clamp-2 text-[1.05em] font-bold leading-snug">{name}</div>
           {altName && <div className="truncate text-[0.82em] opacity-70">{altName}</div>}
           <div className="mt-0.5 font-mono text-[0.8em] opacity-75">{employee.id}</div>
         </div>
@@ -130,14 +132,14 @@ export function EmployeeIdCard({
       {/* ── Facts grid (2-column): position / status / department / duty_unit ─── */}
       {(positionLabel ?? employee.status ?? employee.department ?? employee.duty_unit) && (
         <div className="mt-4 grid grid-cols-2 gap-x-4 gap-y-2.5 border-t border-white/14 pt-3 text-[0.78em]">
-          {positionLabel && (
-            <div>
-              <div className="mb-0.5 text-[0.78em] uppercase tracking-wide opacity-55">
-                {t('employee.field.position')}
-              </div>
-              <div className="truncate font-medium leading-snug">{positionLabel}</div>
+          <div>
+            <div className="mb-0.5 text-[0.78em] uppercase tracking-wide opacity-55">
+              {t('employee.field.position')}
             </div>
-          )}
+            <div className="truncate font-medium leading-snug">
+              {positionLabel || <span className="opacity-40">—</span>}
+            </div>
+          </div>
           {/* Status cell */}
           <div>
             <div className="mb-0.5 text-[0.78em] uppercase tracking-wide opacity-55">
@@ -169,54 +171,49 @@ export function EmployeeIdCard({
               )}
             </div>
           </div>
-          {employee.department && (
-            <div>
-              <div className="mb-0.5 text-[0.78em] uppercase tracking-wide opacity-55">
-                {t('employee.field.department')}
-              </div>
-              <div className="truncate font-medium leading-snug">{employee.department}</div>
+          <div>
+            <div className="mb-0.5 text-[0.78em] uppercase tracking-wide opacity-55">
+              {t('employee.field.department')}
             </div>
-          )}
-          {employee.duty_unit && (
-            <div>
-              <div className="mb-0.5 text-[0.78em] uppercase tracking-wide opacity-55">
-                {t('employee.field.duty_unit')}
-              </div>
-              <div className="truncate font-medium leading-snug">{employee.duty_unit}</div>
+            <div className="truncate font-medium leading-snug">
+              {employee.department || <span className="opacity-40">—</span>}
             </div>
-          )}
+          </div>
+          <div>
+            <div className="mb-0.5 text-[0.78em] uppercase tracking-wide opacity-55">
+              {t('employee.field.duty_unit')}
+            </div>
+            <div className="truncate font-medium leading-snug">
+              {employee.duty_unit || <span className="opacity-40">—</span>}
+            </div>
+          </div>
         </div>
       )}
 
-      {/* ── Action buttons ────────────────────────────────────────────────────── */}
-      <div className="mt-4 flex flex-wrap gap-2">
-        {/* createDoc — primary white */}
+      {/* ── Action buttons — prototype .id-actions: compact single-line pills,
+             no icons (they force mid-word wraps in the 350px sidebar). ───────── */}
+      <div className="mt-4 flex gap-2">
         <button
           type="button"
           onClick={onGenerate}
-          className="flex flex-1 items-center justify-center gap-1.5 rounded-full bg-white px-3 py-2 text-[0.8em] font-semibold shadow-sm transition-colors hover:bg-white/90"
+          className="flex flex-1 items-center justify-center whitespace-nowrap rounded-full bg-white px-2 py-2 text-[0.75em] font-semibold shadow-sm transition-colors hover:bg-white/90"
           style={{ color: 'var(--primary)' }}
         >
-          <FileText className="h-3.5 w-3.5" aria-hidden />
           {t('employee.card.createDoc')}
         </button>
-        {/* addLeave — ghost */}
         <button
           type="button"
           onClick={onAddLeave}
-          className="flex flex-1 items-center justify-center gap-1.5 rounded-full border border-white/25 bg-white/15 px-3 py-2 text-[0.8em] font-medium transition-colors hover:bg-white/25"
+          className="flex flex-1 items-center justify-center whitespace-nowrap rounded-full border border-white/25 bg-white/15 px-2 py-2 text-[0.75em] font-medium transition-colors hover:bg-white/25"
         >
-          <Plane className="h-3.5 w-3.5" aria-hidden />
           {t('employee.card.addLeave')}
         </button>
-        {/* edit — ghost, gated */}
         {canEdit && (
           <button
             type="button"
             onClick={onEdit}
-            className="flex flex-1 items-center justify-center gap-1.5 rounded-full border border-white/25 bg-white/15 px-3 py-2 text-[0.8em] font-medium transition-colors hover:bg-white/25"
+            className="flex flex-1 items-center justify-center whitespace-nowrap rounded-full border border-white/25 bg-white/15 px-2 py-2 text-[0.75em] font-medium transition-colors hover:bg-white/25"
           >
-            <Pencil className="h-3.5 w-3.5" aria-hidden />
             {t('employee.card.edit')}
           </button>
         )}
