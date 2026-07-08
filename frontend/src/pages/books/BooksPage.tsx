@@ -35,6 +35,8 @@ import { useShortcutAction } from '@/lib/useKeyboardShortcuts'
 import { useIsMobile } from '@/lib/useIsMobile'
 import { useCapabilities } from '@/lib/useCapabilities'
 import { cn } from '@/lib/utils'
+import { PullToRefresh } from '@/components/refresh/PullToRefresh'
+import { RefreshButton } from '@/components/refresh/RefreshButton'
 import { DEFAULT_BOOKS_FILTERS, normalizeFilters } from './booksFiltersUtils'
 import { sealDescriptor, signedSourceOf } from './bookStateLabel'
 import { StatusSpine, type SpineState } from './StatusSpine'
@@ -397,14 +399,17 @@ export function BooksPage(): React.JSX.Element {
                 {listQuery.isPending ? t('books.subtitle') : t('books.pageMeta', { total })}
               </div>
             </div>
-            <button
-              type="button"
-              onClick={() => setNewBookOpen(true)}
-              className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-primary px-4 py-2 text-[0.85em] font-semibold text-primary-foreground transition-colors hover:bg-primary-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
-            >
-              <Plus className="h-3.5 w-3.5" strokeWidth={2.5} />
-              {t('books.newEntry')}
-            </button>
+            <div className="flex shrink-0 items-center gap-2">
+              <RefreshButton />
+              <button
+                type="button"
+                onClick={() => setNewBookOpen(true)}
+                className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-primary px-4 py-2 text-[0.85em] font-semibold text-primary-foreground transition-colors hover:bg-primary-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
+              >
+                <Plus className="h-3.5 w-3.5" strokeWidth={2.5} />
+                {t('books.newEntry')}
+              </button>
+            </div>
           </header>
           <StatusSpine counts={spineCounts} active={spineState} onChange={setSpineState} />
           <div className="grid min-h-0 flex-1 grid-cols-[15rem_minmax(0,1fr)_clamp(360px,36%,480px)] gap-3">
@@ -500,14 +505,17 @@ export function BooksPage(): React.JSX.Element {
                     : t('books.pageMeta', { total })}
                 </div>
               </div>
-              <button
-                type="button"
-                onClick={() => setNewBookOpen(true)}
-                className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-primary px-4 py-2 text-[0.85em] font-semibold text-primary-foreground transition-colors hover:bg-primary-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
-              >
-                <Plus className="h-3.5 w-3.5" strokeWidth={2.5} />
-                {t('books.newEntry')}
-              </button>
+              <div className="flex shrink-0 items-center gap-2">
+                <RefreshButton />
+                <button
+                  type="button"
+                  onClick={() => setNewBookOpen(true)}
+                  className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-primary px-4 py-2 text-[0.85em] font-semibold text-primary-foreground transition-colors hover:bg-primary-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
+                >
+                  <Plus className="h-3.5 w-3.5" strokeWidth={2.5} />
+                  {t('books.newEntry')}
+                </button>
+              </div>
             </div>
           </header>
 
@@ -521,7 +529,9 @@ export function BooksPage(): React.JSX.Element {
           </div>
 
           {/* Card list */}
-          <div className="flex-1 overflow-auto px-6 pb-6">
+          <div className="flex-1 min-h-0">
+          <PullToRefresh>
+          <div className="px-6 pb-6">
             {listQuery.isPending ? (
               <div className="flex flex-col overflow-hidden rounded-2xl border border-hairline bg-surface">
                 {Array.from({ length: 6 }).map((_, i) => (
@@ -562,6 +572,8 @@ export function BooksPage(): React.JSX.Element {
                 ))}
               </div>
             )}
+          </div>
+          </PullToRefresh>
           </div>
         </>
       )}

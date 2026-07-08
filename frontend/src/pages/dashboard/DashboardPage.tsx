@@ -70,6 +70,8 @@ import {
 import { QUICK_ACTION_META } from '@/lib/quickActions'
 import { useIdentity } from '@/lib/useIdentity'
 import { cn } from '@/lib/utils'
+import { PullToRefresh } from '@/components/refresh/PullToRefresh'
+import { RefreshButton } from '@/components/refresh/RefreshButton'
 
 export type DashboardPage =
   | 'employees'
@@ -491,7 +493,9 @@ export function DashboardPage({ onNavigate }: DashboardPageProps): React.JSX.Ele
   }
 
   return (
-    <div className="flex flex-1 flex-col overflow-auto bg-background">
+    <div className="flex flex-1 flex-col overflow-hidden bg-background">
+      <div className="flex-1 min-h-0">
+      <PullToRefresh>
       <div className="mx-auto w-full max-w-[1180px] px-4 pb-12 pt-6 md:px-7">
         {/* ============ HERO ============ */}
         <DashboardHero
@@ -514,15 +518,18 @@ export function DashboardPage({ onNavigate }: DashboardPageProps): React.JSX.Ele
           <h3 className="text-lg font-semibold tracking-tight text-foreground">
             {t('dashboard.myWidgets')}
           </h3>
-          <button
-            type="button"
-            onClick={() => setWidgetDialogOpen(true)}
-            aria-label={t('dashboard.editMyWidgets')}
-            className="inline-flex items-center gap-1.5 text-[0.85em] font-medium text-primary transition-colors hover:underline focus-visible:rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-          >
-            {t('dashboard.editMyWidgets')}
-            <Pencil className="h-3.5 w-3.5" strokeWidth={1.8} aria-hidden />
-          </button>
+          <div className="flex items-center gap-2">
+            <RefreshButton />
+            <button
+              type="button"
+              onClick={() => setWidgetDialogOpen(true)}
+              aria-label={t('dashboard.editMyWidgets')}
+              className="inline-flex items-center gap-1.5 text-[0.85em] font-medium text-primary transition-colors hover:underline focus-visible:rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+            >
+              {t('dashboard.editMyWidgets')}
+              <Pencil className="h-3.5 w-3.5" strokeWidth={1.8} aria-hidden />
+            </button>
+          </div>
         </div>
 
         {/* ============ TOP ZONE (2 big cards) ============ */}
@@ -618,6 +625,8 @@ export function DashboardPage({ onNavigate }: DashboardPageProps): React.JSX.Ele
             {zones.under_quick_actions.map((w, i) => widgetCell(w.id as WidgetId, 'under_quick_actions', i))}
           </div>
         )}
+      </div>
+      </PullToRefresh>
       </div>
 
       {/* ============ EDIT DIALOGS ============ */}
