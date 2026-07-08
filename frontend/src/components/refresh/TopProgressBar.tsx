@@ -17,7 +17,7 @@ export function TopProgressBar() {
     >
       <div className="absolute inset-0 bg-[color:var(--hairline)] opacity-50" />
       {refreshing && (
-        <div className="ptr-sweep absolute inset-y-0 w-[32%] rtl:[transform:scaleX(-1)] motion-reduce:!animate-none motion-reduce:!translate-x-0 motion-reduce:w-[110%]" />
+        <div className="ptr-sweep absolute inset-y-0 w-[32%] rtl:[transform:scaleX(-1)] motion-reduce:!animate-none motion-reduce:w-[110%]" />
       )}
     </div>
   )

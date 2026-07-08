@@ -15,6 +15,11 @@ export async function refreshAll(
   if (remaining > 0) await new Promise((r) => setTimeout(r, remaining))
 }
 
+// NOTE (Milestone A): scaffolding only — nothing calls `setEditing` yet, so
+// `isAnyEditing()` is always false and the heartbeat's "pause while editing"
+// guard is currently inert. Editable forms hold drafts in react-hook-form
+// (independent of the query cache), so a background refetch can't clobber them.
+// Wire `setEditing` into dirty controlled-form surfaces in Milestone B.
 const dirty = new Map<string, boolean>()
 export const editingRegistry = {
   setEditing(id: string, isDirty: boolean): void {
