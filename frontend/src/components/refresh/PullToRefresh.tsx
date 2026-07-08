@@ -22,6 +22,8 @@ export function PullToRefresh({ children }: { children: React.ReactNode }) {
   const scrollerRef = useRef<HTMLDivElement>(null)
   const [stage, setStage] = useState<PtrStage>('idle')
   const [offset, setOffset] = useState(0)
+  const rafRef = useRef<number>(0)
+  const offsetRef = useRef(0)
   const st = useRef({
     dragging: false,
     startY: 0,
@@ -40,9 +42,15 @@ export function PullToRefresh({ children }: { children: React.ReactNode }) {
     [],
   )
 
+  const applyOffset = useCallback((x: number) => {
+    offsetRef.current = x
+    setOffset(x)
+  }, [])
+
   const settle = useCallback(
     (to: number, then?: () => void) => {
-      let x = offset
+      cancelAnimationFrame(rafRef.current)
+      let x = offsetRef.current
       let v = 0
       let last = performance.now()
       const tick = () => {
@@ -51,13 +59,13 @@ export function PullToRefresh({ children }: { children: React.ReactNode }) {
         last = now
         x = step.x
         v = step.v
-        setOffset(x)
+        applyOffset(x)
         if (step.done) then?.()
-        else requestAnimationFrame(tick)
+        else rafRef.current = requestAnimationFrame(tick)
       }
-      requestAnimationFrame(tick)
+      rafRef.current = requestAnimationFrame(tick)
     },
-    [offset],
+    [applyOffset],
   )
 
   const startRefresh = useCallback(() => {
@@ -90,9 +98,11 @@ export function PullToRefresh({ children }: { children: React.ReactNode }) {
       } else st.current.atTop = false
     }
     const onDown = (e: TouchEvent) => {
-      if (st.current.stage === 'refreshing' || st.current.stage === 'done') return
       if (e.touches.length > 1) return
       if (sc.scrollTop > 1) return
+      if (st.current.stage === 'refreshing' || st.current.stage === 'done') return
+      cancelAnimationFrame(rafRef.current)
+      st.current.stage = 'idle'
       st.current.dragging = true
       st.current.axis = null
       st.current.startY = e.touches[0].clientY
@@ -120,12 +130,12 @@ export function PullToRefresh({ children }: { children: React.ReactNode }) {
       if (sc.scrollTop > 1 || !rested()) return
       const raw = dy - PTR_CONST.DEAD
       if (raw <= 0) {
-        setOffset(0)
+        applyOffset(0)
         return
       }
       if (e.cancelable) e.preventDefault()
       const off = rubberBand(raw, Math.min(window.innerHeight, PTR_CONST.H_MAX))
-      setOffset(Math.min(off, PTR_CONST.CLAMP))
+      applyOffset(Math.min(off, PTR_CONST.CLAMP))
       if (off >= PTR_CONST.ARM && s.stage !== 'armed') {
         if (!s.holdTimer)
           s.holdTimer = setTimeout(() => {
@@ -134,7 +144,7 @@ export function PullToRefresh({ children }: { children: React.ReactNode }) {
             buzz(10)
             s.holdTimer = undefined
           }, PTR_CONST.HOLD_MS)
-        if ((s.stage as PtrStage) !== 'armed') setStage((s.stage = 'pulling'))
+        setStage((s.stage = 'pulling'))
       } else if (off < PTR_CONST.DISARM && s.stage === 'armed') {
         setStage((s.stage = 'pulling'))
         buzz(5)
@@ -166,12 +176,13 @@ export function PullToRefresh({ children }: { children: React.ReactNode }) {
     sc.addEventListener('touchmove', onMove, { passive: false })
     window.addEventListener('touchend', onUp)
     return () => {
+      cancelAnimationFrame(rafRef.current)
       sc.removeEventListener('scroll', onScroll)
       sc.removeEventListener('touchstart', onDown)
       sc.removeEventListener('touchmove', onMove)
       window.removeEventListener('touchend', onUp)
     }
-  }, [enabled, rested, settle, startRefresh])
+  }, [enabled, rested, settle, startRefresh, applyOffset])
 
   const progress = offset / PTR_CONST.ARM
 
