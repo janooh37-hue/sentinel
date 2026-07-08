@@ -125,9 +125,11 @@ export function EmployeeDetailPage(): React.JSX.Element {
   const name = pickEmployeeName(data.employee, i18n.language)
 
   return (
-    <>
+    // Single column root: the app shell lays route children out horizontally,
+    // so a fragment would place the band beside the content instead of above it.
+    <div className="flex flex-1 flex-col overflow-auto bg-background">
       {/* ── Compact navy band ─────────────────────────────────────────────────── */}
-      <div className="relative overflow-hidden text-white" style={{ background: 'var(--hero-grad)' }}>
+      <div className="relative shrink-0 overflow-hidden text-white" style={{ background: 'var(--hero-grad)' }}>
         <div className="mx-auto flex max-w-[1180px] items-center gap-6 px-8 py-5">
           <div className="shrink-0">
             <div className="text-[0.65em] font-semibold uppercase tracking-[0.22em] opacity-65">
@@ -267,6 +269,6 @@ export function EmployeeDetailPage(): React.JSX.Element {
       {statusOpen && (
         <StatusDialog open employee={data.employee} onOpenChange={setStatusOpen} />
       )}
-    </>
+    </div>
   )
 }

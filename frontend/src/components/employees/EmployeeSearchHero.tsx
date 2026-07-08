@@ -145,7 +145,9 @@ export function EmployeeSearchHero({
                 </div>
               )}
 
-              {/* Result rows */}
+              {/* Result rows — capped height so long result sets scroll inside
+                  the dropdown instead of stretching past the viewport. */}
+              <div className="max-h-[min(55vh,480px)] overflow-y-auto">
               {items.length > 0
                 ? items.map((row, idx) => {
                     // Status pill — mirrors EmployeeMobileCard logic
@@ -243,6 +245,7 @@ export function EmployeeSearchHero({
                       </button>
                     </div>
                   )}
+              </div>
 
               {/* Footer */}
               {items.length > 0 && (
