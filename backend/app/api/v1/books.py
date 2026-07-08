@@ -609,6 +609,23 @@ async def replace_book_attachment(
     return item
 
 
+@router.put("/{book_id}/signed-copy", response_model=BookRead)
+async def replace_signed_copy(
+    book_id: int,
+    db: Annotated[Session, Depends(get_db)],
+    user: Annotated[User, Depends(require_capability("books.manage"))],
+    upload: Annotated[UploadFile, File(alias="file")],
+) -> BookRead:
+    """Replace the signed copy's bytes, keeping the record approved."""
+    data = await upload.read()
+    row = book_service.replace_signed_copy(
+        db, book_id, upload.filename or "signed", data, user=user
+    )
+    item = BookRead.model_validate(row)
+    item.versions = _build_versions(db, row)
+    return item
+
+
 @router.get("/{book_id}/imported-document")
 def get_imported_document(
     book_id: int,

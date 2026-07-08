@@ -1343,6 +1343,61 @@ def replace_attachment(db: Session, book_id: int, index: int, filename: str, dat
     return book
 
 
+def replace_signed_copy(
+    db: Session, book_id: int, filename: str, data: bytes, *, user: User | None = None
+) -> Book:
+    """Swap the signed artifact's bytes without changing approval state — the
+    "I filed the wrong signed scan" fix. Image scans are converted to PDF, as in
+    the scan-back flip. Raises when the current version carries no signed copy."""
+    book = get_book(db, book_id)
+    version = _current_version(book)
+    if version is None or not version.signed_pdf_path:
+        raise ValidationFailedError("NO_SIGNED_COPY", "This record has no signed copy to replace")
+    if len(data) == 0:
+        raise ValidationFailedError("BOOK_EMPTY_FILE", "Uploaded file is empty")
+    if len(data) > MAX_ATTACHMENT_BYTES:
+        raise ValidationFailedError(
+            "BOOK_FILE_TOO_LARGE",
+            f"File exceeds {MAX_ATTACHMENT_BYTES} bytes",
+            max_bytes=MAX_ATTACHMENT_BYTES,
+            size=len(data),
+        )
+    ext = Path(_safe_filename(filename)).suffix.lower()
+    if ext not in ALLOWED_DOC_EXTS:
+        raise ValidationFailedError(
+            "BOOK_BAD_EXTENSION",
+            f"File type {ext!r} is not allowed",
+            allowed=sorted(ALLOWED_DOC_EXTS),
+        )
+    if ext != ".pdf":
+        data = _image_to_pdf_bytes(data, ext)
+    target_dir = _book_attachment_dir(book_id)
+    target_dir.mkdir(parents=True, exist_ok=True)
+    dest = _unique_attachment_dest(target_dir, f"signed-v{version.version_no}.pdf")
+    data_dir = get_settings().data_dir.resolve()
+    dest_resolved = dest.resolve()
+    if data_dir not in dest_resolved.parents:
+        raise AppError(
+            "BOOK_PATH_ESCAPE",
+            "Resolved attachment path escaped the data directory",
+            http_status=500,
+        )
+    dest.write_bytes(data)
+    old_abs = resolve_attachment_path(version.signed_pdf_path)
+    version.signed_pdf_path = dest_resolved.relative_to(data_dir).as_posix()
+    if user is not None:
+        version.signed_by_user_id = user.id
+    version.signed_at = datetime.now(UTC).replace(tzinfo=None)
+    if old_abs is not None:
+        try:
+            old_abs.unlink()
+        except OSError:
+            log.warning("replace_signed_copy: could not unlink %s", old_abs)
+    db.commit()
+    db.refresh(book)
+    return book
+
+
 def detach_attachment(db: Session, book_id: int, rel_path: str) -> Book:
     """Remove a plain attachment (the inverse of the append branch of
     ``add_attachment``): drop ``rel_path`` from ``Book.attachment_paths`` and
@@ -1414,6 +1469,7 @@ __all__ = [
     "record_review",
     "remove_reviewer",
     "replace_attachment",
+    "replace_signed_copy",
     "resolve_attachment_path",
     "resolve_doc_manager_user",
     "resolve_user_name_by_id",
