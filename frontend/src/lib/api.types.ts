@@ -528,6 +528,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/employees/completeness": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Employees Completeness
+         * @description Aggregate profile gaps over Active employees (lookup-page hero card).
+         */
+        get: operations["employees_completeness_api_v1_employees_completeness_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/employees/{employee_id}": {
         parameters: {
             query?: never;
@@ -2453,6 +2473,31 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/scan-inbox/{item_id}/document": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Scan Document
+         * @description Stream the scanned file inline so the triage card can preview it.
+         *
+         *     ``encoding=base64`` returns the bytes base64-encoded as ``text/plain`` so
+         *     the in-app pdf.js canvas can fetch them without the packaged Edge WebView2
+         *     PDF handler (or Internet Download Manager) intercepting the response —
+         *     same trick as ``GET /books/{id}/attachments/{index}``.
+         */
+        get: operations["get_scan_document_api_v1_scan_inbox__item_id__document_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/scan-inbox/count": {
         parameters: {
             query?: never;
@@ -2870,6 +2915,8 @@ export interface components {
             admin_gate_enabled: boolean;
             /** Sentry Opt In */
             sentry_opt_in: boolean;
+            /** Sms Autosend Enabled */
+            sms_autosend_enabled: boolean;
             /** Email Signature */
             email_signature: string;
             /** Signature Size Mm */
@@ -2903,6 +2950,8 @@ export interface components {
             legacy_signature_path?: string | null;
             /** Sentry Opt In */
             sentry_opt_in?: boolean | null;
+            /** Sms Autosend Enabled */
+            sms_autosend_enabled?: boolean | null;
             /** Email Signature */
             email_signature?: string | null;
             /** Signature Size Mm */
@@ -3280,6 +3329,8 @@ export interface components {
             attachment_paths?: string[];
             /** Versions */
             versions?: components["schemas"]["BookVersionRead"][];
+            /** Sms */
+            sms?: components["schemas"]["SmsMessageRead"][];
         };
         /** BookSubmitRequest */
         BookSubmitRequest: {
@@ -3366,6 +3417,24 @@ export interface components {
             description: string;
             /** Default Roles */
             default_roles: string[];
+        };
+        /** CompletenessRead */
+        CompletenessRead: {
+            /** Filled */
+            filled: number;
+            /** Tracked */
+            tracked: number;
+        };
+        /** CompletenessSummaryOut */
+        CompletenessSummaryOut: {
+            /** Incomplete */
+            incomplete: number;
+            /** Tracked */
+            tracked: number;
+            /** Top Missing */
+            top_missing: components["schemas"]["MissingFieldCount"][];
+            /** First Incomplete Id */
+            first_incomplete_id: string | null;
         };
         /** CorrespondenceCategoryCreate */
         CorrespondenceCategoryCreate: {
@@ -4151,6 +4220,17 @@ export interface components {
             /** Interval Minutes */
             interval_minutes: number;
         };
+        /** EmployeeCandidate */
+        EmployeeCandidate: {
+            /** Employee Id */
+            employee_id: string;
+            /** Name En */
+            name_en: string;
+            /** Name Ar */
+            name_ar?: string | null;
+            /** Score */
+            score: number;
+        };
         /** EmployeeCreate */
         EmployeeCreate: {
             /** Id */
@@ -4222,6 +4302,11 @@ export interface components {
             recent_ledger: components["schemas"]["RecentLedgerRead"][];
             /** Recent Activity */
             recent_activity: components["schemas"]["ActivityItemRead"][];
+            /** Recent Sms */
+            recent_sms: components["schemas"]["SmsMessageRead"][];
+            /** Missing Fields */
+            missing_fields: string[];
+            completeness: components["schemas"]["CompletenessRead"];
         };
         /**
          * EmployeeListItem
@@ -5147,6 +5232,13 @@ export interface components {
             /** Last Migration */
             last_migration: string | null;
         };
+        /** MissingFieldCount */
+        MissingFieldCount: {
+            /** Field */
+            field: string;
+            /** Count */
+            count: number;
+        };
         /** NotificationCounts */
         NotificationCounts: {
             /** Approvals */
@@ -5494,6 +5586,18 @@ export interface components {
             email_subject?: string | null;
             /** Error Detail */
             error_detail?: string | null;
+            /**
+             * Fields
+             * @default {}
+             */
+            fields: {
+                [key: string]: string;
+            };
+            /**
+             * Candidates
+             * @default []
+             */
+            candidates: components["schemas"]["EmployeeCandidate"][];
         };
         /** ScanInboxList */
         ScanInboxList: {
@@ -5603,6 +5707,31 @@ export interface components {
             size_mm: number;
             /** Boldness */
             boldness: number;
+        };
+        /**
+         * SmsMessageRead
+         * @description One SMS send attempt — used on both the employee-detail and book-detail surfaces.
+         */
+        SmsMessageRead: {
+            /** Id */
+            id: number;
+            /** Event Type */
+            event_type: string;
+            /** Body */
+            body: string | null;
+            /** Phone */
+            phone: string;
+            /** Status */
+            status: string;
+            /** Error */
+            error: string | null;
+            /** Language */
+            language: string;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
         };
         /** SmsSendRequest */
         SmsSendRequest: {
@@ -7074,6 +7203,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["EmployeeRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    employees_completeness_api_v1_employees_completeness_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CompletenessSummaryOut"];
                 };
             };
             /** @description Validation Error */
@@ -11637,6 +11797,41 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ScanInboxList"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_scan_document_api_v1_scan_inbox__item_id__document_get: {
+        parameters: {
+            query?: {
+                encoding?: string | null;
+            };
+            header?: never;
+            path: {
+                item_id: number;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
                 };
             };
             /** @description Validation Error */

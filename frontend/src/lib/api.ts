@@ -118,20 +118,9 @@ export type EmployeeUpdate = components['schemas']['EmployeeUpdate'] & {
 }
 export type EmployeeStatus = EmployeeRead['status']
 
-// Hand-mirrored until `gen:api` folds the SMS history field into the schema.
-export interface SmsMessageRead {
-  id: number
-  event_type: string
-  body: string | null
-  phone: string
-  status: 'sent' | 'failed'
-  error: string | null
-  language: string
-  created_at: string
-}
-export type EmployeeDetailRead = components['schemas']['EmployeeDetailRead'] & {
-  recent_sms: SmsMessageRead[]
-}
+// gen:api now folds the SMS history field into the schema — use the generated type.
+export type SmsMessageRead = components['schemas']['SmsMessageRead']
+export type EmployeeDetailRead = components['schemas']['EmployeeDetailRead']
 export type EmployeeStatsRead = components['schemas']['EmployeeStatsRead']
 export type RecentDocumentRead = components['schemas']['RecentDocumentRead']
 export type RecentLeaveRead = components['schemas']['RecentLeaveRead']
@@ -555,7 +544,6 @@ export type BookRead = components['schemas']['BookRead'] & {
   doc_manager_name?: string | null
   doc_manager_has_signature?: boolean
   imported_doc?: ImportedDocRead | null
-  sms?: SmsMessageRead[]
 }
 
 // Annotation overlay (Slice 3). Hand-typed mirror of schemas.book.BookAnnotationRead

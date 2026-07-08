@@ -12,6 +12,7 @@ router lives at ``/violations`` for the two ID-scoped violation routes
 from __future__ import annotations
 
 import logging
+from collections import Counter
 from datetime import UTC, date, datetime
 from pathlib import Path
 from typing import Annotated
@@ -27,6 +28,7 @@ from app.api.deps import require_capability
 from app.api.errors import NotFoundError, ValidationFailedError
 from app.config import get_settings
 from app.core import signature as signature_core
+from app.core.employee_completeness import TRACKED_FIELDS, missing_fields
 from app.core.vault_manager import Vault
 from app.db.models import Employee, User, VaultFile
 from app.db.session import get_db
@@ -38,6 +40,7 @@ from app.schemas.employee import (
     EmployeeRead,
     EmployeeUpdate,
 )
+from app.schemas.employee_completeness import CompletenessSummaryOut, MissingFieldCount
 from app.schemas.leave import LeaveBalanceRead, LeaveRead
 from app.schemas.vault_file import VaultEntry, VaultTree
 from app.schemas.violation import ViolationCreate, ViolationRead, ViolationUpdate
@@ -119,6 +122,33 @@ def create_employee(
 ) -> EmployeeRead:
     row = employee_service.create_employee(db, payload)
     return EmployeeRead.model_validate(row).model_copy(update=_photo_fields(db, row.id))
+
+
+@router.get("/completeness", response_model=CompletenessSummaryOut)
+def employees_completeness(
+    db: Annotated[Session, Depends(get_db)],
+    _user: Annotated[User, Depends(require_capability("employees.view"))],
+) -> CompletenessSummaryOut:
+    """Aggregate profile gaps over Active employees (lookup-page hero card)."""
+    rows = db.query(Employee).filter(Employee.status == "Active").all()
+    counter: Counter[str] = Counter()
+    worst: tuple[int, str] | None = None
+    incomplete = 0
+    for emp in rows:
+        gaps = missing_fields(emp)
+        if not gaps:
+            continue
+        incomplete += 1
+        counter.update(gaps)
+        key = (-len(gaps), emp.id)
+        if worst is None or key < (-worst[0], worst[1]):
+            worst = (len(gaps), emp.id)
+    return CompletenessSummaryOut(
+        incomplete=incomplete,
+        tracked=len(TRACKED_FIELDS),
+        top_missing=[MissingFieldCount(field=f, count=c) for f, c in counter.most_common(3)],
+        first_incomplete_id=worst[1] if worst else None,
+    )
 
 
 @router.get("/{employee_id}", response_model=EmployeeRead)
