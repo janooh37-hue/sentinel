@@ -145,7 +145,7 @@ function FieldRow({
     <div
       className={cn(
         'grid grid-cols-[120px_1fr] items-baseline gap-3 border-b border-hairline pb-3 pt-3 sm:grid-cols-[140px_1fr]',
-        isMiss && 'rounded-md bg-gradient-to-l from-transparent to-amber-50/60',
+        isMiss && 'rounded-md bg-gradient-to-l from-transparent to-amber-50/60 rtl:bg-gradient-to-r',
       )}
     >
       <div className="shrink-0 text-[0.78em] font-semibold uppercase tracking-wider text-muted-foreground">
@@ -154,8 +154,9 @@ function FieldRow({
       <div
         className={cn(
           'min-w-0 break-words text-[0.95em] text-foreground',
-          isMono && 'font-mono text-[0.88em]',
+          isMono && 'font-mono text-[0.88em] text-start',
         )}
+        dir={isMono ? 'ltr' : undefined}
       >
         {isMiss ? (
           <span className="flex items-center gap-2.5">

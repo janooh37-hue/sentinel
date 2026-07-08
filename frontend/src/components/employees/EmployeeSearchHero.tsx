@@ -53,7 +53,7 @@ export function EmployeeSearchHero({
   const debounced = useDebouncedValue(q, 250)
 
   // Fetch roster — enabled only when there is a non-empty debounced query.
-  const { data } = useQuery({
+  const { data, isPending } = useQuery({
     queryKey: ['employee-search', debounced],
     queryFn: () => api.listEmployees({ q: debounced, limit: 30 }),
     enabled: debounced.trim().length > 0,
@@ -62,6 +62,7 @@ export function EmployeeSearchHero({
 
   const items = data?.items ?? []
   const showDropdown = debounced.trim().length > 0
+  const showNoResults = !isPending && items.length === 0
 
   return (
     <section
@@ -134,7 +135,7 @@ export function EmployeeSearchHero({
           {showDropdown && (
             <div
               role="listbox"
-              className="absolute inset-inline-0 top-[calc(100%+8px)] z-[30] overflow-hidden rounded-2xl border border-border bg-surface text-foreground shadow-[0_24px_60px_-24px_rgba(13,40,69,.55)]"
+              className="absolute start-0 end-0 top-[calc(100%+8px)] z-[30] overflow-hidden rounded-2xl border border-border bg-surface text-foreground shadow-[0_24px_60px_-24px_rgba(13,40,69,.55)]"
             >
               {/* Header row */}
               {items.length > 0 && (
@@ -229,7 +230,7 @@ export function EmployeeSearchHero({
                     )
                   })
                 : /* No results */
-                  debounced.trim().length > 0 && (
+                  showNoResults && (
                     <div className="px-[18px] py-[22px] text-center text-[13px] text-muted-foreground">
                       {t('employees.lookup.noResults')}
                       <br />

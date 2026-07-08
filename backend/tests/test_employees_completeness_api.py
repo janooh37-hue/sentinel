@@ -100,8 +100,8 @@ def test_completeness_summary_counts_active_only(
     res = client.get("/api/v1/employees/completeness")
     assert res.status_code == 200
     body = res.json()
-    assert body["incomplete"] >= 1
+    assert body["incomplete"] == 1
+    assert body["first_incomplete_id"] == "G9002"
     fields = [m["field"] for m in body["top_missing"]]
     assert "nationality" in fields
     assert len(body["top_missing"]) <= 3
-    assert body["first_incomplete_id"] is not None
