@@ -15,6 +15,8 @@ import { useSearchParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 
 import { cn } from '@/lib/utils'
+import { PullToRefresh } from '@/components/refresh/PullToRefresh'
+import { RefreshButton } from '@/components/refresh/RefreshButton'
 import { TabRecords } from './TabRecords'
 import { TabBalance } from './TabBalance'
 
@@ -44,14 +46,19 @@ export function LeavesPage(): React.JSX.Element {
       {/* Page header — TAMM eyebrow + big title.
           Mobile: tighter padding, subtitle hidden to give the list room. */}
       <header className="px-4 pb-2 pt-3 md:px-6 md:pb-3 md:pt-5">
-        <div className="text-[0.75em] font-medium uppercase tracking-[0.18em] text-muted-foreground">
-          {t('leaves.eyebrow', { defaultValue: t('employees.eyebrow') })}
-        </div>
-        <h1 className="mt-1 text-xl font-bold tracking-tight text-foreground md:text-[1.7em]">
-          {t('leaves.title')}
-        </h1>
-        <div className="mt-1 hidden text-[0.86em] text-muted-foreground md:block">
-          {t('leaves.subtitle')}
+        <div className="flex items-start justify-between gap-2">
+          <div className="min-w-0">
+            <div className="text-[0.75em] font-medium uppercase tracking-[0.18em] text-muted-foreground">
+              {t('leaves.eyebrow', { defaultValue: t('employees.eyebrow') })}
+            </div>
+            <h1 className="mt-1 text-xl font-bold tracking-tight text-foreground md:text-[1.7em]">
+              {t('leaves.title')}
+            </h1>
+            <div className="mt-1 hidden text-[0.86em] text-muted-foreground md:block">
+              {t('leaves.subtitle')}
+            </div>
+          </div>
+          <RefreshButton />
         </div>
       </header>
 
@@ -80,16 +87,18 @@ export function LeavesPage(): React.JSX.Element {
       </div>
 
       {/* Tab content */}
-      <div className="flex flex-1 flex-col overflow-hidden">
-        {tab === 'records' ? (
-          <div className="flex flex-1 flex-col overflow-hidden">
-            <TabRecords />
-          </div>
-        ) : (
-          <div className="flex-1 overflow-auto">
-            <TabBalance />
-          </div>
-        )}
+      <div className="flex-1 min-h-0">
+        <PullToRefresh>
+          {tab === 'records' ? (
+            <div className="h-full overflow-hidden">
+              <TabRecords />
+            </div>
+          ) : (
+            <div className="h-full">
+              <TabBalance />
+            </div>
+          )}
+        </PullToRefresh>
       </div>
     </div>
   )

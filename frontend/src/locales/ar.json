@@ -2685,6 +2685,13 @@
     "confirmResend": "تم الإرسال بالفعل. إرسال مرة أخرى؟",
     "failed": "فشل الإرسال"
   },
+  "refresh": {
+    "action": "تحديث",
+    "hotkey": "Alt+R",
+    "updatedAgo": "آخر تحديث قبل {{n}}",
+    "newItems": "{{n}} جديد",
+    "listUpdated": "تم تحديث القائمة، {{n}} جديد"
+  },
   "perms": {
     "locked": "تحتاج إلى إذن لـ {{label}}. انقر لطلب الوصول.",
     "request": {

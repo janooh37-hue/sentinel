@@ -22,6 +22,9 @@ import { useIsMobile } from '@/lib/useIsMobile'
 import { useLockState } from '@/lib/useLockState'
 import { type Page, PAGE_PATHS, buildPagePath } from '@/lib/pageNav'
 import { useNotificationStream } from '@/hooks/useNotificationStream'
+import { TopProgressBar } from './components/refresh/TopProgressBar'
+import { useRefreshHeartbeat } from './hooks/useRefreshHeartbeat'
+import { useRefreshHotkeys } from './hooks/useRefreshHotkeys'
 import '@/lib/i18n'
 
 // Code-split the HugeRTE-using pages (Application, Ledger) and the larger
@@ -73,11 +76,9 @@ const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
       retry: 1,
-      refetchOnWindowFocus: false,
-      // Most list/detail pages don't change every few seconds — bumping the
-      // stale window keeps tab switches snappy without losing data freshness.
-      // Per-query overrides still apply (e.g. job-status polling uses 0).
-      staleTime: 60_000,
+      refetchOnWindowFocus: true,   // return-to-app => silently fresh
+      refetchOnReconnect: 'always', // after a gap, age unknown => refetch
+      staleTime: 15_000,            // gate focus-refetch storms
       gcTime: 5 * 60_000,
     },
   },
@@ -89,6 +90,12 @@ function PageSuspenseFallback(): React.JSX.Element {
       <div className="h-6 w-6 animate-spin rounded-full border-2 border-muted border-t-foreground" />
     </div>
   )
+}
+
+function RefreshShellHost() {
+  useRefreshHeartbeat()
+  useRefreshHotkeys()
+  return null
 }
 
 /**
@@ -159,6 +166,7 @@ function Shell(): React.JSX.Element {
   return (
     <>
       <div className="flex h-screen flex-col bg-background">
+        <TopProgressBar />
         <a
           href="#main-content"
           className="sr-only focus:not-sr-only focus:absolute focus:inset-inline-start-4 focus:top-4 focus:z-[100] focus:rounded-md focus:bg-primary focus:px-4 focus:py-2 focus:text-sm focus:font-medium focus:text-primary-foreground focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2"
@@ -253,6 +261,7 @@ function App(): React.JSX.Element {
   return (
     <ErrorBoundary>
       <QueryClientProvider client={queryClient}>
+        <RefreshShellHost />
         <AuthProvider>
           <BrowserRouter>
             <KeyboardShortcutsProvider>
