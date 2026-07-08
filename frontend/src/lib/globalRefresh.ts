@@ -26,20 +26,20 @@ export const editingRegistry = {
   },
 }
 
-/** True while any query is fetching, latched for at least 450ms so the top bar
- *  is always perceptible even on instant LAN fetches. */
+/** True while any query is fetching, latched for at least minVisibleMs so the top
+ *  bar is always perceptible even on instant LAN fetches. */
 export function useIsRefreshing(minVisibleMs = 450): boolean {
   const fetching = useIsFetching() > 0
   const [on, setOn] = useState(false)
-  const offAt = useRef(0)
   const onRef = useRef(false)
+  const offAt = useRef(0)
   useEffect(() => {
     let t: ReturnType<typeof setTimeout> | undefined
     if (fetching) {
       offAt.current = performance.now() + minVisibleMs
       if (!onRef.current) {
         onRef.current = true
-        setTimeout(() => setOn(true), 0)
+        setOn(true)
       }
     } else if (onRef.current) {
       const wait = Math.max(0, offAt.current - performance.now())
@@ -48,7 +48,9 @@ export function useIsRefreshing(minVisibleMs = 450): boolean {
         setOn(false)
       }, wait)
     }
-    return () => t && clearTimeout(t)
+    return () => {
+      if (t) clearTimeout(t)
+    }
   }, [fetching, minVisibleMs])
   return on
 }
