@@ -1,0 +1,687 @@
+<!DOCTYPE html>
+<html lang="en" dir="ltr">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+<title>Pull-to-Refresh — GSSG Manager mockup</title>
+<style>
+  :root{
+    --bg:#0b1220;
+    --panel:#0f172a;
+    --panel-2:#111c31;
+    --ink:#e6edf7;
+    --ink-dim:#8ea0bd;
+    --line:#1e2b45;
+    --accent:#3b82f6;
+    --accent-2:#22c55e;
+    --danger:#ef4444;
+    --radius:18px;
+    --font: -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,"Noto Sans Arabic",sans-serif;
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{margin:0;height:100%}
+  body{
+    font-family:var(--font);
+    background:
+      radial-gradient(1200px 700px at 15% -10%, #16233d 0%, transparent 55%),
+      radial-gradient(1000px 600px at 100% 0%, #10203a 0%, transparent 50%),
+      var(--bg);
+    color:var(--ink);
+    display:flex;flex-direction:column;align-items:center;
+    padding:22px 14px 60px;gap:20px;
+  }
+  h1{font-size:19px;margin:0;font-weight:650;letter-spacing:.2px}
+  .sub{color:var(--ink-dim);font-size:13px;margin-top:4px;max-width:640px;text-align:center;line-height:1.5}
+  .wrap{display:flex;gap:26px;flex-wrap:wrap;justify-content:center;align-items:flex-start;width:100%;max-width:1040px}
+
+  /* ---------- device ---------- */
+  .device{
+    width:340px;flex:0 0 auto;
+    border-radius:44px;padding:12px;
+    background:linear-gradient(#0a1120,#0c1526);
+    box-shadow:0 0 0 2px #223350, 0 26px 60px -12px rgba(0,0,0,.7), inset 0 0 0 2px #1b2740;
+    position:relative;
+  }
+  .device::before{content:"";position:absolute;top:20px;left:50%;transform:translateX(-50%);
+    width:120px;height:26px;background:#05080f;border-radius:0 0 16px 16px;z-index:40}
+  .screen{
+    position:relative;height:640px;border-radius:34px;overflow:hidden;
+    background:var(--panel);isolation:isolate;
+    touch-action:none;
+  }
+
+  /* fixed top bar of the app */
+  .topbar{
+    position:absolute;top:0;left:0;right:0;height:70px;z-index:30;
+    background:linear-gradient(var(--panel),rgba(15,23,42,.86));
+    backdrop-filter:blur(6px);
+    display:flex;align-items:flex-end;justify-content:space-between;
+    padding:0 16px 12px;border-bottom:1px solid var(--line);
+  }
+  .topbar .title{font-size:16px;font-weight:650}
+  .topbar .who{font-size:11px;color:var(--ink-dim)}
+  .topbar .avatar{width:30px;height:30px;border-radius:50%;background:linear-gradient(135deg,#3b82f6,#22c55e);display:grid;place-items:center;font-size:12px;font-weight:700;color:#05080f}
+
+  /* refresh band (revealed behind content) */
+  .band{
+    position:absolute;top:70px;left:0;right:0;height:170px;z-index:10;
+    display:flex;align-items:flex-end;justify-content:center;padding-bottom:14px;
+    background:
+      linear-gradient(#0a1220,#0c1528);
+    box-shadow:inset 0 -1px 0 rgba(255,255,255,.05);
+  }
+  .band .stage-label{position:absolute;bottom:-2px;font-size:10px;color:var(--ink-dim);opacity:0;transition:opacity .2s;letter-spacing:.3px}
+
+  /* the sheet that moves with the finger */
+  .sheet{
+    position:absolute;top:70px;left:0;right:0;bottom:0;z-index:20;
+    background:var(--panel);
+    overflow-y:auto;overflow-x:hidden;
+    will-change:transform;
+    -webkit-overflow-scrolling:touch;
+    box-shadow:0 -12px 24px -18px rgba(0,0,0,.9);
+  }
+  .list{padding:8px 12px 90px}
+  .card{
+    background:var(--panel-2);border:1px solid var(--line);border-radius:14px;
+    padding:12px 14px;margin:8px 0;display:flex;gap:12px;align-items:center;
+  }
+  .card .dot{width:38px;height:38px;border-radius:11px;flex:0 0 auto;
+    background:linear-gradient(135deg,#1e3a63,#12233d);display:grid;place-items:center;font-size:15px}
+  .card .c-main{flex:1;min-width:0}
+  .card .c-t{font-size:13.5px;font-weight:600}
+  .card .c-s{font-size:11.5px;color:var(--ink-dim);margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .card .pill{font-size:10px;padding:3px 8px;border-radius:999px;background:#13203a;color:#9db6e6;border:1px solid #24406e;flex:0 0 auto}
+  .pill.ok{background:#0f2a1c;color:#7fe0a6;border-color:#1f5c3a}
+  .pill.warn{background:#2a230f;color:#e6cf7f;border-color:#5c4a1f}
+
+  .toast{position:absolute;left:50%;bottom:74px;transform:translateX(-50%) translateY(20px);
+    z-index:35;background:#0d1a30;border:1px solid #24406e;color:#cfe0ff;
+    padding:9px 14px;border-radius:12px;font-size:12px;opacity:0;transition:all .28s cubic-bezier(.22,1,.36,1);pointer-events:none;box-shadow:0 10px 30px -12px #000}
+  .toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+
+  /* bottom tab bar */
+  .tabbar{position:absolute;bottom:0;left:0;right:0;height:56px;z-index:36;
+    background:rgba(10,17,32,.94);backdrop-filter:blur(8px);border-top:1px solid var(--line);
+    display:flex;align-items:center;justify-content:space-around;padding:0 6px}
+  .tabbar .tab{display:flex;flex-direction:column;align-items:center;gap:2px;font-size:9px;color:var(--ink-dim)}
+  .tabbar .tab.active{color:var(--accent)}
+  .tabbar .tab .ic{font-size:17px}
+
+  /* indicator SVG */
+  .indicator{width:34px;height:34px;position:relative;display:grid;place-items:center}
+  .indicator svg{position:absolute;inset:0;overflow:visible}
+  .ring-track{stroke:#22314f;stroke-width:2;fill:none}
+  .ring-prog{stroke:var(--accent);stroke-width:2;fill:none;stroke-linecap:round;
+    transition:stroke .18s}
+  .ring-prog.armed{stroke:var(--accent)}
+  .ring-prog.done{stroke:var(--accent-2)}
+  .check{stroke:var(--accent-2);stroke-width:2.4;fill:none;stroke-linecap:round;stroke-linejoin:round}
+
+  /* Direction B: ruled line */
+  .ruled{width:120px;height:6px;position:relative;display:grid;place-items:center}
+  .ruled .base{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);height:1px;background:#3a4c72;width:0}
+  .ruled .shim{position:absolute;top:50%;left:0;transform:translateY(-50%);height:2px;width:26px;
+    background:linear-gradient(90deg,transparent,var(--accent),transparent);opacity:0;border-radius:2px}
+
+  /* Direction C: crest */
+  .crest{width:40px;height:40px;display:grid;place-items:center;position:relative}
+  .crest .glyph{font-size:22px;font-weight:800;color:#cfe0ff;filter:blur(8px);opacity:0;transform:scale(.7)}
+  .crest .cring{position:absolute;inset:0}
+
+  /* ---------- controls ---------- */
+  .controls{flex:1 1 320px;max-width:440px;display:flex;flex-direction:column;gap:14px}
+  .cbox{background:linear-gradient(var(--panel),#0d1728);border:1px solid var(--line);border-radius:var(--radius);padding:16px}
+  .cbox h3{margin:0 0 4px;font-size:13px;letter-spacing:.4px;text-transform:uppercase;color:var(--ink-dim);font-weight:650}
+  .cbox p.hint{margin:0 0 12px;font-size:12px;color:var(--ink-dim);line-height:1.5}
+  .segs{display:flex;gap:6px;flex-wrap:wrap}
+  .seg{flex:1;min-width:70px;text-align:center;padding:9px 8px;border-radius:11px;border:1px solid var(--line);
+    background:#0c1626;color:var(--ink-dim);font-size:12.5px;cursor:pointer;transition:all .15s;font-weight:600}
+  .seg:hover{border-color:#2c4370}
+  .seg.on{background:linear-gradient(135deg,#173157,#122443);color:#dce8ff;border-color:var(--accent)}
+  .row{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:7px 0;font-size:13px}
+  .row + .row{border-top:1px solid #14203a}
+  .switch{position:relative;width:44px;height:26px;border-radius:999px;background:#22314f;cursor:pointer;transition:background .2s;flex:0 0 auto}
+  .switch.on{background:var(--accent)}
+  .switch .knob{position:absolute;top:3px;left:3px;width:20px;height:20px;border-radius:50%;background:#fff;transition:left .2s}
+  .switch.on .knob{left:21px}
+  .btn{width:100%;padding:11px;border-radius:12px;border:1px solid var(--accent);background:linear-gradient(135deg,#1c3c6b,#15294a);color:#eaf2ff;font-size:13.5px;font-weight:650;cursor:pointer}
+  .btn:active{transform:translateY(1px)}
+  .btn.ghost{border-color:var(--line);background:#0c1626;color:var(--ink-dim)}
+
+  /* gate/telemetry */
+  .telem{font-variant-numeric:tabular-nums}
+  .gate{display:flex;align-items:center;gap:9px;font-size:12.5px;padding:5px 0;color:var(--ink-dim)}
+  .gate .led{width:10px;height:10px;border-radius:50%;background:#22314f;flex:0 0 auto;transition:all .15s;box-shadow:0 0 0 0 transparent}
+  .gate.pass{color:#bfe6cd}
+  .gate.pass .led{background:var(--accent-2);box-shadow:0 0 10px 1px rgba(34,197,94,.55)}
+  .gate.block{color:#e6b7b7}
+  .gate.block .led{background:var(--danger)}
+  .meter{height:8px;border-radius:6px;background:#0c1626;border:1px solid var(--line);overflow:hidden;margin:6px 0 2px;position:relative}
+  .meter .fill{position:absolute;top:0;bottom:0;left:0;width:0;background:linear-gradient(90deg,#1e5fb0,var(--accent))}
+  .meter .thr{position:absolute;top:-2px;bottom:-2px;width:2px;background:var(--accent-2);opacity:.9}
+  .kv{display:flex;justify-content:space-between;font-size:12px;color:var(--ink-dim);padding:3px 0}
+  .kv b{color:var(--ink);font-weight:600}
+  .state-badge{display:inline-block;padding:3px 10px;border-radius:999px;font-size:11px;font-weight:700;letter-spacing:.4px;text-transform:uppercase;background:#13203a;color:#9db6e6;border:1px solid #24406e}
+
+  /* desktop treatment card */
+  .desk{width:100%;max-width:1040px}
+  .desktopbar{display:flex;align-items:center;justify-content:space-between;background:var(--panel-2);border:1px solid var(--line);border-radius:12px;padding:10px 14px}
+  .desktopbar .left{display:flex;align-items:center;gap:10px}
+  .refbtn{display:flex;align-items:center;gap:7px;padding:7px 12px;border-radius:10px;border:1px solid var(--line);background:#0c1626;color:var(--ink);font-size:12.5px;cursor:pointer;font-weight:600}
+  .refbtn:hover{border-color:var(--accent)}
+  .refbtn svg{transition:transform .2s}
+  .refbtn.spinning svg{animation:spin .9s linear infinite}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  .legend{display:flex;gap:16px;flex-wrap:wrap;font-size:12px;color:var(--ink-dim);margin-top:10px}
+  .legend b{color:var(--ink)}
+  a.src{color:#7fb0ff;font-size:12px}
+  [dir="rtl"] .card .c-s{direction:rtl}
+  .footnote{max-width:1040px;font-size:12px;color:var(--ink-dim);line-height:1.6;border-top:1px solid var(--line);padding-top:16px;width:100%}
+  code{background:#0c1626;border:1px solid var(--line);padding:1px 5px;border-radius:5px;font-size:11.5px;color:#bcd4ff}
+</style>
+</head>
+<body>
+  <div>
+    <h1 id="hTitle">Pull-to-Refresh — interactive mockup</h1>
+    <div class="sub" id="hSub">Drag the list downward from the very top to feel the gesture. It is deliberately hard to trigger by accident — pull deep and hold. Try a quick flick (won't fire), scroll down then pull (won't fire until you rest at top), and switch the visual style / language on the right.</div>
+  </div>
+
+  <div class="wrap">
+    <!-- PHONE -->
+    <div class="device">
+      <div class="screen" id="screen">
+        <div class="topbar">
+          <div>
+            <div class="title" id="tbTitle">Records</div>
+            <div class="who" id="tbWho">Signed in · G3082</div>
+          </div>
+          <div class="avatar">GS</div>
+        </div>
+
+        <div class="band" id="band">
+          <div class="indicator" id="indicator"></div>
+          <div class="stage-label" id="stageLabel"></div>
+        </div>
+
+        <div class="sheet" id="sheet">
+          <div class="list" id="list"></div>
+        </div>
+
+        <div class="toast" id="toast">Updated · just now</div>
+
+        <div class="tabbar">
+          <div class="tab active"><div class="ic">🏠</div><span id="t1">Home</span></div>
+          <div class="tab"><div class="ic">📄</div><span id="t2">Records</span></div>
+          <div class="tab"><div class="ic">🌴</div><span id="t3">Leaves</span></div>
+          <div class="tab"><div class="ic">⚙️</div><span id="t4">Settings</span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- CONTROLS -->
+    <div class="controls">
+      <div class="cbox">
+        <h3>Visual style</h3>
+        <p class="hint">Three directions for the indicator. All are text-free (no “pull to refresh” label — that's the #1 tell of a cheap gesture and doubles the Arabic surface).</p>
+        <div class="segs" id="styleSegs">
+          <div class="seg on" data-style="ring">A · Ring <span style="opacity:.6">(rec)</span></div>
+          <div class="seg" data-style="ruled">B · Ruled line</div>
+          <div class="seg" data-style="crest">C · Crest</div>
+        </div>
+      </div>
+
+      <div class="cbox">
+        <h3>Live telemetry</h3>
+        <div class="row" style="border:0;padding-top:0">
+          <span>State</span><span class="state-badge" id="stateBadge">idle</span>
+        </div>
+        <div class="meter">
+          <div class="fill" id="meterFill"></div>
+          <div class="thr" id="meterThr"></div>
+        </div>
+        <div class="kv"><span>Visual offset</span><b class="telem"><span id="kvOffset">0</span> px</b></div>
+        <div class="kv"><span>Arm threshold</span><b class="telem">112 px</b></div>
+        <h3 style="margin-top:14px">Anti-accident gates</h3>
+        <div class="gate" id="gateRest"><span class="led"></span><span>Rested at top ≥ 250 ms</span></div>
+        <div class="gate" id="gateDead"><span class="led"></span><span>Past 24 px dead-zone</span></div>
+        <div class="gate" id="gateThr"><span class="led"></span><span>Reached 112 px threshold</span></div>
+        <div class="gate" id="gateHold"><span class="led"></span><span>Held 120 ms → armed</span></div>
+      </div>
+
+      <div class="cbox">
+        <h3>Options</h3>
+        <div class="row"><span>Language / direction</span>
+          <div class="segs" style="flex:0 0 auto">
+            <div class="seg on" id="langEn" style="min-width:52px">EN</div>
+            <div class="seg" id="langAr" style="min-width:52px">عربي</div>
+          </div>
+        </div>
+        <div class="row"><span>Haptic tick on arm <span style="color:var(--ink-dim)">(Android)</span></span><div class="switch on" id="swHaptic"><div class="knob"></div></div></div>
+        <div class="row"><span>Reduced motion</span><div class="switch" id="swReduced"><div class="knob"></div></div></div>
+        <div style="margin-top:12px;display:flex;gap:8px">
+          <button class="btn" id="btnDemo">▶ Play the gesture</button>
+          <button class="btn ghost" id="btnReset" style="flex:0 0 auto;width:auto;padding:11px 14px">Reset</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- DESKTOP TREATMENT -->
+  <div class="desk">
+    <div class="cbox">
+      <h3 id="dTitle">Desktop / installed webapp — no pull gesture</h3>
+      <p class="hint" id="dHint">A trackpad has inertia, so the “deliberate pull” contract can't be honored on desktop. Instead the desktop-installed app gets a small refresh button in each page toolbar that runs the <em>same</em> React-Query refresh and shows the <em>same</em> ring spinner inline — shared vocabulary, different trigger. Touchscreen laptops still get the pull.</p>
+      <div class="desktopbar">
+        <div class="left">
+          <strong style="font-size:14px" id="dPage">Records</strong>
+          <span style="color:var(--ink-dim);font-size:12px" id="dCount">128 items</span>
+        </div>
+        <button class="refbtn" id="refbtn">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3v6h-6"/></svg>
+          <span id="dRefLabel">Refresh</span>
+        </button>
+      </div>
+      <div class="legend">
+        <span><b>Trigger:</b> button click or <code>Ctrl/⌘ + R</code></span>
+        <span><b>Feedback:</b> icon spins ≥ 500 ms, then a subtle “Updated” toast</span>
+        <span><b>Feel:</b> matches the phone spinner exactly</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="footnote">
+    <b>How this maps to the real app:</b> the sheet you're dragging is the per-page scroll container (the app shell keeps <code>&lt;main&gt;</code> at <code>overflow-hidden</code> and each page scrolls internally), so this becomes a reusable <code>&lt;PullToRefresh&gt;</code> wrapper pages opt into. Refresh = <code>queryClient.invalidateQueries({ type: 'active' })</code> for the current route, with a 500&nbsp;ms minimum spinner and 8&nbsp;s ceiling. Physics shown here are the real proposed numbers: dead-zone 24&nbsp;px, rubber-band <code>c=0.42</code>, arm at 112&nbsp;px visual (~170&nbsp;px of finger travel), 120&nbsp;ms hold-to-arm, spring settle (stiffness 260 / damping 26). <span id="rtlNote"></span>
+  </div>
+
+<script>
+(function(){
+  "use strict";
+  // ---------- config (the real proposed numbers) ----------
+  const DEAD = 24;            // px raw dead zone
+  const C = 0.42;             // rubber-band coefficient
+  const ARM = 112;            // visual px to arm
+  const DISARM = 96;          // hysteresis
+  const CLAMP = 160;          // render clamp
+  const REST = 56;            // refreshing rest height
+  const HOLD = 120;           // ms hold-to-arm
+  const REST_AT_TOP = 250;    // ms
+  const MIN_SPIN = 700;       // ms min refreshing (mockup uses fake fetch ~900)
+  const RING_C = 2 * Math.PI * 13;
+
+  const el = (id)=>document.getElementById(id);
+  const screen = el('screen'), sheet = el('sheet'), band = el('band');
+  const indicator = el('indicator'), stageLabel = el('stageLabel');
+  const stateBadge = el('stateBadge'), meterFill = el('meterFill'), meterThr = el('meterThr');
+  const kvOffset = el('kvOffset'), toast = el('toast');
+
+  let H = Math.min(640, 640);
+  let style = 'ring';
+  let lang = 'en';
+  let haptic = true, reduced = false;
+
+  // ---------- state ----------
+  let state = 'idle';         // idle|pulling|armed|refreshing|done
+  let dragging = false;
+  let startY = 0, startX = 0, axis = null, claimed = false;
+  let rawTravel = 0, offset = 0;
+  let restedAt = 0, atTop = true, holdTimer = null, armedReady = false;
+  let springRAF = null;
+
+  // ---------- rubber band ----------
+  function band_(x){ // x = raw travel past dead zone
+    if(x<=0) return 0;
+    return (C*x*H)/(H + C*x);
+  }
+
+  function setState(s){
+    state = s;
+    stateBadge.textContent = s;
+    stateBadge.style.background = s==='armed'?'#12233d':s==='refreshing'?'#0f2a1c':s==='done'?'#0f2a1c':'#13203a';
+    stateBadge.style.color = s==='armed'?'#bcd4ff':s==='refreshing'||s==='done'?'#7fe0a6':'#9db6e6';
+  }
+
+  function render(){
+    const shown = Math.min(offset, CLAMP);
+    sheet.style.transform = `translateY(${shown}px)`;
+    kvOffset.textContent = Math.round(offset);
+    const p = Math.min(offset/ARM, 1);
+    meterFill.style.width = (p*100)+'%';
+    // gates
+    gate('gateRest', restedGate());
+    gate('gateDead', rawTravel>0 || offset>0);
+    gate('gateThr', offset>=ARM);
+    gate('gateHold', state==='armed'||state==='refreshing'||state==='done');
+    drawIndicator();
+  }
+  function restedGate(){ return atTop && (perfNow()-restedAt)>=REST_AT_TOP; }
+  function gate(id,pass){ const g=el(id); g.classList.toggle('pass',!!pass); }
+
+  function perfNow(){ return performance.now(); }
+
+  // ---------- indicator rendering ----------
+  function drawIndicator(){
+    const p = Math.min(offset/ARM, 1);
+    if(style==='ring') drawRing(p);
+    else if(style==='ruled') drawRuled(p);
+    else drawCrest(p);
+    // stage label (very subtle, only in reduced-motion or as debug)
+  }
+
+  function ensure(html){ if(indicator.dataset.style!==style){ indicator.innerHTML=html; indicator.dataset.style=style; } }
+
+  function drawRing(p){
+    ensure(`<svg viewBox="0 0 34 34"><circle class="ring-track" cx="17" cy="17" r="13"></circle><circle class="ring-prog" id="rp" cx="17" cy="17" r="13" transform="rotate(-90 17 17)"></circle><path class="check" id="ck" d="M11 17.5l3.6 3.6L23 12.7" style="display:none"></path></svg>`);
+    const rp = el('rp'); const ck = el('ck'); if(!rp) return;
+    const grp = indicator.querySelector('.indicator, .indicator') ;
+    // opacity+scale ramp completes by 40px
+    const app = Math.min(offset/40,1);
+    indicator.style.opacity = state==='idle'&&offset===0?0:app;
+    indicator.style.transform = `scale(${0.6+0.4*app})`;
+    rp.classList.remove('armed','done');
+    if(state==='refreshing'){
+      ck.style.display='none';
+      rp.style.strokeDasharray = `${RING_C*0.72} ${RING_C}`;
+      rp.style.strokeDashoffset = 0;
+      indicator.style.transform = `scale(1)`; indicator.style.opacity=1;
+      spinRing();
+      return;
+    }
+    if(state==='done'){
+      stopSpin(); rp.style.opacity=0; ck.style.display='';
+      indicator.style.opacity=1; indicator.style.transform='scale(1)';
+      return;
+    }
+    stopSpin(); rp.style.opacity=1; ck.style.display='none';
+    // pulling: arc draws 0..270deg (0.75)
+    const arc = state==='armed' ? 1 : p*0.75;
+    rp.style.strokeDasharray = `${RING_C*arc} ${RING_C}`;
+    rp.style.strokeDashoffset = 0;
+    rp.style.stroke = state==='armed' ? 'var(--accent)' : (p<1?'#4b73b8':'var(--accent)');
+    rp.style.opacity = state==='armed'?1:(0.55+0.45*p);
+    indicator.style.transform = `scale(${(0.6+0.4*app) * (state==='armed'?1.0:1)})`;
+  }
+  let spinDeg=0, spinRAF=null, spinLast=0;
+  function spinRing(){
+    if(spinRAF) return;
+    spinLast = perfNow();
+    const step=(t)=>{
+      const dt=t-spinLast; spinLast=t;
+      spinDeg=(spinDeg + dt*(reduced?0:360/900))%360;
+      const svg=indicator.querySelector('svg');
+      if(svg) svg.style.transform=`rotate(${spinDeg}deg)`;
+      if(reduced){ // pulse instead
+        const rp=el('rp'); if(rp) rp.style.opacity = 0.4+0.6*Math.abs(Math.sin(t/500));
+      }
+      spinRAF=requestAnimationFrame(step);
+    };
+    spinRAF=requestAnimationFrame(step);
+  }
+  function stopSpin(){ if(spinRAF){cancelAnimationFrame(spinRAF);spinRAF=null;} const svg=indicator.querySelector('svg'); if(svg) svg.style.transform=''; }
+
+  function drawRuled(p){
+    ensure(`<div class="ruled"><div class="base" id="rb"></div><div class="shim" id="rs"></div></div>`);
+    const rb=el('rb'), rs=el('rs'); if(!rb) return;
+    const app=Math.min(offset/40,1);
+    indicator.style.opacity = state==='idle'&&offset===0?0:1;
+    indicator.style.transform='scale(1)';
+    if(state==='refreshing'){
+      rb.style.width='120px'; rb.style.height='2px'; rb.style.background='var(--accent)';
+      rs.style.opacity=1; shimmer(rs); return;
+    }
+    if(state==='done'){ stopShim(); rb.style.background='var(--accent-2)'; rb.style.width='40px'; rs.style.opacity=0; return; }
+    stopShim();
+    const w = 64*p;
+    rb.style.width = (state==='armed'?120:w)+'px';
+    rb.style.height = state==='armed'?'2px':'1px';
+    rb.style.background = state==='armed'?'var(--accent)':'#3a4c72';
+    rs.style.opacity=0;
+  }
+  let shimRAF=null,shimX=0;
+  function shimmer(rs){ if(shimRAF)return; shimX=0; const rtl=lang==='ar';
+    const step=()=>{ shimX=(shimX+ (reduced?0.6:2.4))%140; const x=rtl?(120-shimX):shimX-20; rs.style.left=x+'px'; shimRAF=requestAnimationFrame(step);}; shimRAF=requestAnimationFrame(step);}
+  function stopShim(){ if(shimRAF){cancelAnimationFrame(shimRAF);shimRAF=null;} }
+
+  function drawCrest(p){
+    ensure(`<div class="crest"><div class="glyph" id="cg">G</div><svg class="cring" id="cr" viewBox="0 0 40 40" style="display:none"><circle cx="20" cy="20" r="17" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linecap="round"></circle></svg></div>`);
+    const cg=el('cg'), cr=el('cr'); if(!cg) return;
+    indicator.style.opacity=state==='idle'&&offset===0?0:1; indicator.style.transform='scale(1)';
+    const app=Math.min(offset/ARM,1);
+    if(reduced){ cg.style.filter='none'; } else { cg.style.filter=`blur(${8*(1-app)}px)`; }
+    cg.style.opacity=app; cg.style.transform=`scale(${0.7+0.3*app})`;
+    if(state==='refreshing'){ cg.style.filter='none';cg.style.opacity=1;cg.style.transform='scale(1)'; cr.style.display=''; spinRing2(cr); return; }
+    if(state==='done'){ stopSpin2(); cr.style.display='none'; cg.style.color='var(--accent-2)'; return; }
+    stopSpin2(); cg.style.color='#cfe0ff';
+    cr.style.display = state==='armed'?'':'none';
+  }
+  let s2RAF=null,s2=0,s2Last=0;
+  function spinRing2(cr){ if(s2RAF)return; s2Last=perfNow(); const step=(t)=>{const dt=t-s2Last;s2Last=t;s2=(s2+dt*(reduced?0:360/900))%360;cr.style.transform=`rotate(${s2}deg)`;s2RAF=requestAnimationFrame(step);};s2RAF=requestAnimationFrame(step);}
+  function stopSpin2(){ if(s2RAF){cancelAnimationFrame(s2RAF);s2RAF=null;} }
+
+  // ---------- spring (release to refresh / interruption) ----------
+  function springTo(target, onDone){
+    cancelSpring();
+    let x=offset, v=0; const k=260, d=26, m=1; let last=perfNow();
+    const step=(t)=>{
+      let dt=Math.min((t-last)/1000, 0.032); last=t;
+      const Fs=-k*(x-target); const Fd=-d*v; const a=(Fs+Fd)/m;
+      v+=a*dt; x+=v*dt;
+      offset=x; render();
+      if(Math.abs(x-target)<0.4 && Math.abs(v)<0.6){ offset=target; render(); springRAF=null; onDone&&onDone(); return; }
+      springRAF=requestAnimationFrame(step);
+    };
+    springRAF=requestAnimationFrame(step);
+  }
+  function easeTo(target, ms, onDone){ // no-overshoot cancel
+    cancelSpring(); const from=offset, start=perfNow();
+    const bez=(t)=>{ // approx cubic-bezier(0.33,1,0.68,1)
+      return 1-Math.pow(1-t,3);
+    };
+    const step=(t)=>{ let p=Math.min((t-start)/ms,1); offset=from+(target-from)*bez(p); render();
+      if(p>=1){offset=target;render();springRAF=null;onDone&&onDone();return;} springRAF=requestAnimationFrame(step); };
+    springRAF=requestAnimationFrame(step);
+  }
+  function cancelSpring(){ if(springRAF){cancelAnimationFrame(springRAF);springRAF=null;} }
+
+  function buzz(ms){ if(haptic && navigator.vibrate){ try{navigator.vibrate(ms);}catch(e){} } }
+
+  // ---------- gesture ----------
+  function onDown(e){
+    if(state==='refreshing'||state==='done') return;
+    if(e.touches && e.touches.length>1){ cancel(); return; }
+    const y=py(e);
+    // preconditions
+    if(sheet.scrollTop>1){ return; }
+    dragging=true; claimed=false; axis=null; armedReady=false;
+    startY=y; startX=px(e); rawTravel=0;
+  }
+  function onMove(e){
+    if(!dragging) return;
+    if(e.touches && e.touches.length>1){ cancel(); return; }
+    const y=py(e), x=px(e);
+    const dy=y-startY, dx=x-startX;
+    if(axis===null){
+      if(Math.abs(dx)>12 || Math.abs(dy)>12){
+        // direction lock: vertical cone dy>2|dx|
+        if(dy>0 && dy>2*Math.abs(dx)) axis='v'; else { axis='x'; dragging=false; return; }
+      } else return;
+    }
+    if(axis!=='v') return;
+    if(sheet.scrollTop>1){ cancel(); return; }
+    if(!restedGate()){ return; } // rest-at-top gate: ignore until rested
+    // dead zone
+    const raw = dy - DEAD;
+    if(raw<=0){ rawTravel=0; offset=0; if(claimed){} render(); return; }
+    claimed=true;
+    if(e.cancelable) e.preventDefault();
+    rawTravel=raw; offset=band_(raw);
+    // arm logic with hold
+    if(offset>=ARM && state!=='armed'){
+      if(!holdTimer){ holdTimer=setTimeout(()=>{ if(offset>=ARM){ setState('armed'); buzz(10); } holdTimer=null; }, HOLD); }
+      if(state!=='armed') setState('pulling');
+    } else if(offset<DISARM && state==='armed'){
+      setState('pulling'); buzz(5); if(holdTimer){clearTimeout(holdTimer);holdTimer=null;}
+    } else if(offset<ARM){
+      if(holdTimer){clearTimeout(holdTimer);holdTimer=null;}
+      if(state!=='armed') setState('pulling');
+    }
+    render();
+  }
+  function onUp(){
+    if(!dragging) return;
+    dragging=false; if(holdTimer){clearTimeout(holdTimer);holdTimer=null;}
+    if(state==='armed'){ startRefresh(); }
+    else if(offset>0){ setState('idle'); easeTo(0,280,()=>{ resetGates(); }); }
+    else { setState('idle'); }
+  }
+  function cancel(){ dragging=false; if(holdTimer){clearTimeout(holdTimer);holdTimer=null;} if(offset>0){ setState('idle'); easeTo(0,240); } }
+
+  function startRefresh(){
+    setState('refreshing'); buzz(0);
+    springTo(REST, ()=>{});
+    const t0=perfNow();
+    fakeFetch().then(()=>{
+      const wait=Math.max(0, MIN_SPIN-(perfNow()-t0));
+      setTimeout(finishRefresh, wait);
+    });
+  }
+  function finishRefresh(){
+    setState('done'); buzz(12); showToast();
+    // prepend a fresh item to prove refresh happened
+    prepend();
+    setTimeout(()=>{
+      easeTo(0, 300, ()=>{ setState('idle'); resetGates(); });
+    }, 420);
+  }
+  function fakeFetch(){ return new Promise(r=>setTimeout(r, 900)); }
+
+  function showToast(){ toast.classList.add('show'); setTimeout(()=>toast.classList.remove('show'),1600); }
+  function resetGates(){ ['gateRest','gateDead','gateThr','gateHold'].forEach(id=>el(id).classList.remove('pass')); markRested(); render(); }
+
+  function px(e){ return e.touches?e.touches[0].clientX:e.clientX; }
+  function py(e){ return e.touches?e.touches[0].clientY:e.clientY; }
+
+  // rested-at-top tracking
+  function markRested(){ atTop=sheet.scrollTop<=1; if(atTop) restedAt=perfNow(); }
+  sheet.addEventListener('scroll', ()=>{ if(sheet.scrollTop<=1){ if(!atTop){atTop=true;restedAt=perfNow();} } else { atTop=false; } render(); });
+
+  // pointer + touch
+  screen.addEventListener('touchstart', onDown, {passive:true});
+  screen.addEventListener('touchmove', onMove, {passive:false});
+  window.addEventListener('touchend', onUp);
+  screen.addEventListener('mousedown', onDown);
+  window.addEventListener('mousemove', (e)=>{ if(dragging) onMove(e); });
+  window.addEventListener('mouseup', onUp);
+
+  // ---------- list content ----------
+  const DATA_EN=[
+    ['Clearance — Ahmed S.','Awaiting manager signature','warn'],
+    ['Annual Leave — 12 days','Approved · returns 2026-07-20','ok'],
+    ['Salary Certificate','Generated · PDF ready','ok'],
+    ['Warning Notice — G4602','Pending HR review','warn'],
+    ['Employment Letter','Signed & locked','ok'],
+    ['Passport renewal','Expiry in 34 days','warn'],
+    ['Duty transfer — Site B','Approved','ok'],
+    ['Overtime request','Awaiting approval','warn'],
+  ];
+  const DATA_AR=[
+    ['إخلاء طرف — أحمد س.','بانتظار توقيع المدير','warn'],
+    ['إجازة سنوية — 12 يوم','معتمدة · العودة 2026-07-20','ok'],
+    ['شهادة راتب','تم إنشاؤها · جاهزة PDF','ok'],
+    ['إشعار إنذار — G4602','قيد مراجعة الموارد البشرية','warn'],
+    ['خطاب تعريف بالعمل','موقّع ومقفل','ok'],
+    ['تجديد جواز السفر','تنتهي خلال 34 يوماً','warn'],
+    ['نقل مهام — الموقع ب','معتمد','ok'],
+    ['طلب عمل إضافي','بانتظار الموافقة','warn'],
+  ];
+  let freshCount=0;
+  function renderList(){
+    const data = lang==='ar'?DATA_AR:DATA_EN;
+    const listEl=el('list'); listEl.innerHTML='';
+    data.concat(data).forEach((d,i)=>{
+      const c=document.createElement('div'); c.className='card';
+      c.innerHTML=`<div class="dot">📄</div><div class="c-main"><div class="c-t">${d[0]}</div><div class="c-s">${d[1]}</div></div><div class="pill ${d[2]}">${d[2]==='ok'?(lang==='ar'?'تم':'Done'):(lang==='ar'?'معلّق':'Pending')}</div>`;
+      listEl.appendChild(c);
+    });
+  }
+  function prepend(){
+    freshCount++;
+    const listEl=el('list');
+    const c=document.createElement('div'); c.className='card'; c.style.borderColor='var(--accent)';
+    const t=lang==='ar'?`سجل جديد #${freshCount}`:`New record #${freshCount}`;
+    const s=lang==='ar'?'وصل الآن بعد التحديث':'Just arrived after refresh';
+    c.innerHTML=`<div class="dot" style="background:linear-gradient(135deg,#173157,#0f2a1c)">✨</div><div class="c-main"><div class="c-t">${t}</div><div class="c-s">${s}</div></div><div class="pill ok">${lang==='ar'?'جديد':'New'}</div>`;
+    listEl.insertBefore(c, listEl.firstChild);
+  }
+
+  // ---------- i18n of the mockup chrome ----------
+  const I18N={
+    en:{title:'Pull-to-Refresh — interactive mockup',
+        sub:'Drag the list downward from the very top to feel the gesture. It is deliberately hard to trigger by accident — pull deep and hold. Try a quick flick (won\'t fire), scroll down then pull (won\'t fire until you rest at top), and switch the visual style / language on the right.',
+        tbTitle:'Records',tbWho:'Signed in · G3082',t1:'Home',t2:'Records',t3:'Leaves',t4:'Settings',
+        dTitle:'Desktop / installed webapp — no pull gesture',dPage:'Records',dCount:'128 items',dRefLabel:'Refresh',
+        rtlNote:''},
+    ar:{title:'السحب للتحديث — نموذج تفاعلي',
+        sub:'اسحب القائمة للأسفل من الأعلى تماماً لتشعر بالإيماءة. من الصعب تشغيلها بالخطأ عمداً — اسحب بعمق مع الثبات. جرّب نقرة سريعة (لن تعمل)، أو مرّر للأسفل ثم اسحب (لن تعمل حتى تستقر في الأعلى)، وبدّل النمط البصري / اللغة على اليمين.',
+        tbTitle:'السجلات',tbWho:'مسجّل الدخول · G3082',t1:'الرئيسية',t2:'السجلات',t3:'الإجازات',t4:'الإعدادات',
+        dTitle:'سطح المكتب / التطبيق المثبّت — بلا إيماءة سحب',dPage:'السجلات',dCount:'128 عنصراً',dRefLabel:'تحديث',
+        rtlNote:'في العربية (RTL) الحلقة متماثلة فلا شيء يُعكس؛ الدوّار يبقى باتجاه عقارب الساعة.'}
+  };
+  function applyLang(){
+    const t=I18N[lang];
+    document.documentElement.lang=lang; document.documentElement.dir=lang==='ar'?'rtl':'ltr';
+    el('hTitle').textContent=t.title; el('hSub').textContent=t.sub;
+    el('tbTitle').textContent=t.tbTitle; el('tbWho').textContent=t.tbWho;
+    el('t1').textContent=t.t1; el('t2').textContent=t.t2; el('t3').textContent=t.t3; el('t4').textContent=t.t4;
+    el('dTitle').textContent=t.dTitle; el('dPage').textContent=t.dPage; el('dCount').textContent=t.dCount; el('dRefLabel').textContent=t.dRefLabel;
+    el('rtlNote').textContent=t.rtlNote;
+    renderList();
+  }
+
+  // ---------- controls ----------
+  el('styleSegs').addEventListener('click',(e)=>{ const s=e.target.closest('.seg'); if(!s)return;
+    document.querySelectorAll('#styleSegs .seg').forEach(x=>x.classList.remove('on')); s.classList.add('on');
+    style=s.dataset.style; indicator.dataset.style=''; indicator.innerHTML=''; render(); });
+  el('langEn').addEventListener('click',()=>{lang='en';el('langEn').classList.add('on');el('langAr').classList.remove('on');applyLang();});
+  el('langAr').addEventListener('click',()=>{lang='ar';el('langAr').classList.add('on');el('langEn').classList.remove('on');applyLang();});
+  el('swHaptic').addEventListener('click',function(){haptic=!haptic;this.classList.toggle('on',haptic);});
+  el('swReduced').addEventListener('click',function(){reduced=!reduced;this.classList.toggle('on',reduced);});
+  el('btnReset').addEventListener('click',()=>{ cancelSpring();stopSpin();stopShim();stopSpin2(); offset=0;setState('idle');sheet.scrollTop=0;markRested();resetGates();render(); });
+  el('btnDemo').addEventListener('click',playDemo);
+
+  // desktop refresh button
+  el('refbtn').addEventListener('click',function(){ if(this.classList.contains('spinning'))return; this.classList.add('spinning'); setTimeout(()=>{this.classList.remove('spinning'); toast.classList.add('show'); setTimeout(()=>toast.classList.remove('show'),1400);},900); });
+  window.addEventListener('keydown',(e)=>{ if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='r'){ /* allow real reload too, but demo the button */ } });
+
+  // ---------- auto demo ----------
+  function playDemo(){
+    cancelSpring(); stopSpin(); offset=0; setState('idle'); sheet.scrollTop=0; markRested();
+    // simulate a deliberate deep pull with hold
+    const start=perfNow(); const dur=900; const peak=150; // raw travel peak
+    restedAt=perfNow()-REST_AT_TOP-10; atTop=true;
+    const anim=(t)=>{
+      const p=Math.min((t-start)/dur,1);
+      const eased = p<0.7 ? (p/0.7) : 1; // ramp then hold
+      rawTravel = (eased)*peak - DEAD; if(rawTravel<0)rawTravel=0;
+      offset=band_(rawTravel);
+      if(offset>=ARM && state!=='armed' && p>0.55){ setState('armed'); buzz(10); }
+      else if(state!=='armed') setState('pulling');
+      render();
+      if(p<1) requestAnimationFrame(anim);
+      else startRefresh();
+    };
+    requestAnimationFrame(anim);
+  }
+
+  // ---------- init ----------
+  function boot(){
+    setState('idle'); markRested(); applyLang(); renderList();
+    indicator.dataset.style=''; render();
+    // initial rested timer
+    restedAt=perfNow();
+  }
+  boot();
+})();
+</script>
+</body>
+</html>

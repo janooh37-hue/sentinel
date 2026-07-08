@@ -1,0 +1,446 @@
+<!DOCTYPE html>
+<html lang="en" dir="ltr">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Desktop auto-refresh — GSSG Manager mockup</title>
+<style>
+  :root{
+    /* real app tokens (light) */
+    --primary:#0d2845; --primary-soft:#e8edf3; --accent:#c8102e;
+    --paper:#ffffff; --canvas:#f4f2ec; --panel:#ffffff;
+    --ink:#16202e; --ink-dim:#5d6b7d; --ink-faint:#93a0af;
+    --hairline:#e7e3da; --line:#e7e3da;
+    --ok:#1f7a46; --ok-soft:#e4f2ea; --warn:#9a6b00; --warn-soft:#f6eed9;
+    --ease:cubic-bezier(0.16,1,0.3,1);
+    --pulse-tint:var(--primary-soft);
+    --font:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Noto Sans Arabic",sans-serif;
+    --mono:"IBM Plex Mono",ui-monospace,monospace;
+  }
+  html[data-theme="dark"]{
+    --primary:#5b8fd6; --primary-soft:#16294a; --accent:#ef5b6e;
+    --paper:#0f172a; --canvas:#0b1220; --panel:#0f172a;
+    --ink:#e6edf7; --ink-dim:#8ea0bd; --ink-faint:#5d6f8c;
+    --hairline:#1e2b45; --line:#1e2b45;
+    --ok:#7fe0a6; --ok-soft:#0f2a1c; --warn:#e6cf7f; --warn-soft:#2a230f;
+    --pulse-tint:#1b3153;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%}
+  body{font-family:var(--font);color:var(--ink);background:
+    radial-gradient(1000px 600px at 12% -10%,rgba(13,40,69,.06),transparent 55%),var(--canvas);
+    padding:22px 16px 60px;display:flex;flex-direction:column;align-items:center;gap:16px;transition:background .3s}
+  h1{font-size:19px;margin:0;font-weight:650}
+  .sub{color:var(--ink-dim);font-size:13px;max-width:760px;text-align:center;line-height:1.55}
+  .stage{display:flex;gap:20px;flex-wrap:wrap;justify-content:center;align-items:flex-start;width:100%;max-width:1220px}
+
+  /* installed PWA window */
+  .win{flex:1 1 700px;min-width:580px;max-width:840px;border-radius:12px;overflow:hidden;
+    box-shadow:0 30px 70px -22px rgba(13,32,46,.45),0 0 0 1px var(--line);background:var(--panel)}
+  .titlebar{height:38px;background:var(--primary);display:flex;align-items:center;justify-content:space-between;padding:0 12px}
+  .titlebar .app{display:flex;align-items:center;gap:8px;font-size:12.5px;color:#fff;opacity:.95}
+  .titlebar .app .ico{width:18px;height:18px;border-radius:5px;background:#fff;display:grid;place-items:center;font-size:10px;font-weight:800;color:var(--primary)}
+  .titlebar .wc{display:flex;gap:8px}
+  .titlebar .wc i{width:11px;height:11px;border-radius:50%;background:rgba(255,255,255,.35);display:inline-block}
+
+  .body{display:flex;height:544px}
+  .side{width:176px;flex:0 0 auto;border-inline-end:1px solid var(--line);background:color-mix(in srgb,var(--panel) 92%,var(--canvas));padding:10px 8px}
+  .side .nav{display:flex;align-items:center;gap:10px;padding:9px 11px;border-radius:9px;font-size:13px;color:var(--ink-dim);cursor:default}
+  .side .nav.active{background:var(--primary-soft);color:var(--primary);font-weight:600}
+  .side .nav .ic{width:16px;text-align:center}
+
+  .content{flex:1;min-width:0;display:flex;flex-direction:column;position:relative}
+  /* top hairline sweep */
+  .sweep{position:absolute;top:0;inset-inline:0;height:2px;overflow:hidden;opacity:0;transition:opacity .12s linear;z-index:5;pointer-events:none}
+  .sweep .rail{position:absolute;inset:0;background:var(--hairline);opacity:.5}
+  .sweep .seg{position:absolute;top:0;bottom:0;width:32%;
+    background:linear-gradient(90deg,transparent,var(--primary) 85%,transparent);
+    transform:translateX(-140%)}
+  .sweep.on{opacity:1}
+  .sweep.on .seg{animation:sweep .9s cubic-bezier(.45,0,.55,1) infinite}
+  [dir="rtl"] .sweep .seg{background:linear-gradient(270deg,transparent,var(--primary) 85%,transparent)}
+  [dir="rtl"] .sweep.on .seg{animation:sweepRtl .9s cubic-bezier(.45,0,.55,1) infinite}
+  @keyframes sweep{from{transform:translateX(-140%)}to{transform:translateX(360%)}}
+  @keyframes sweepRtl{from{transform:translateX(360%)}to{transform:translateX(-140%)}}
+  .sweep.resolve .seg{animation:none;transform:translateX(360%);transition:transform .24s ease-in}
+
+  /* aurora (alt style) */
+  .aurora{position:absolute;top:0;inset-inline:0;height:26px;opacity:0;z-index:4;pointer-events:none;
+    background:linear-gradient(180deg,color-mix(in srgb,var(--primary) 16%,transparent),transparent);
+    transition:opacity .5s var(--ease)}
+  .aurora.on{opacity:1}
+
+  .pane{flex:1;display:flex;flex-direction:column;transition:opacity .2s ease-out,filter .2s ease-out,transform .25s var(--ease)}
+  .pane.veil{opacity:.85;filter:saturate(.92);transform:scale(.998)}
+
+  .pagehead{display:flex;align-items:center;justify-content:space-between;padding:14px 18px 8px}
+  .pagehead .h{display:flex;align-items:baseline;gap:10px}
+  .pagehead .h h2{margin:0;font-size:17px;font-weight:650}
+  .pagehead .h .count{font-size:12px;color:var(--ink-faint)}
+  .ghostbtn{width:30px;height:30px;border-radius:8px;border:1px solid transparent;background:transparent;color:var(--ink-faint);cursor:pointer;display:grid;place-items:center;transition:.15s}
+  .ghostbtn:hover{border-color:var(--line);color:var(--ink);background:color-mix(in srgb,var(--panel) 90%,var(--canvas))}
+  .ghostbtn.rot svg{animation:rot .5s var(--ease)}
+  @keyframes rot{to{transform:rotate(360deg)}}
+  .ghostbtn svg{width:15px;height:15px;display:block}
+
+  /* KPI strip (proves "everything" refreshes) */
+  .kpis{display:flex;gap:10px;padding:2px 18px 8px}
+  .kpi{flex:1;border:1px solid var(--line);border-radius:11px;padding:9px 12px;background:var(--panel);position:relative;overflow:hidden}
+  .kpi .k{font-size:10.5px;color:var(--ink-faint);text-transform:uppercase;letter-spacing:.4px}
+  .kpi .v{font-family:var(--mono);font-size:20px;font-weight:600;margin-top:2px;font-variant-numeric:tabular-nums}
+  .kpi .v .old{position:absolute;animation:valOut .12s ease-in forwards}
+  .kpi .v.change{animation:none}
+  @keyframes valOut{to{opacity:0;transform:translateY(3px)}}
+  @keyframes valIn{from{opacity:0;transform:translateY(-3px)}to{opacity:1;transform:none}}
+  .kpi.pulse::after{content:"";position:absolute;inset:0;background:var(--pulse-tint);opacity:0;pointer-events:none;animation:pulse 1350ms var(--ease) forwards}
+
+  .listwrap{flex:1;overflow:auto;padding:2px 14px 18px;position:relative}
+  .newpill{position:sticky;top:6px;z-index:6;display:flex;justify-content:center;pointer-events:none;height:0}
+  .newpill .p{pointer-events:auto;transform:translateY(-6px);opacity:0;transition:.2s var(--ease);
+    background:var(--primary);color:#fff;font-size:11.5px;font-weight:600;padding:6px 13px;border-radius:999px;cursor:pointer;box-shadow:0 8px 20px -8px rgba(13,32,46,.5);display:flex;align-items:center;gap:6px}
+  .newpill.show .p{transform:translateY(0);opacity:1}
+
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:11px;padding:11px 13px;margin:7px 0;display:flex;gap:11px;align-items:center;position:relative}
+  .card::before{content:"";position:absolute;inset-block:0;inset-inline-start:0;width:2px;background:var(--primary);opacity:0;border-radius:2px 0 0 2px}
+  .card::after{content:"";position:absolute;inset:0;background:var(--pulse-tint);opacity:0;pointer-events:none;border-radius:inherit}
+  .card.pulse::after{animation:pulse 1350ms var(--ease) forwards}
+  .card.pulse::before{animation:pulseBar 1350ms var(--ease) forwards}
+  @keyframes pulse{0%{opacity:0}11%{opacity:.7}41%{opacity:.7}100%{opacity:0}}
+  @keyframes pulseBar{0%{opacity:0}11%{opacity:1}41%{opacity:1}100%{opacity:0}}
+  .card.enter{animation:rowEnter .25s var(--ease) both}
+  @keyframes rowEnter{from{opacity:0;transform:translateY(-6px)}to{opacity:1;transform:none}}
+  .card .dot{width:34px;height:34px;border-radius:10px;flex:0 0 auto;background:var(--primary-soft);display:grid;place-items:center;font-size:14px}
+  .card .m{flex:1;min-width:0}
+  .card .t{font-size:13px;font-weight:600}
+  .card .s{font-size:11.5px;color:var(--ink-dim);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .pill{font-size:10px;padding:3px 9px;border-radius:999px;background:var(--primary-soft);color:var(--primary);border:1px solid transparent;flex:0 0 auto;position:relative}
+  .pill.ok{background:var(--ok-soft);color:var(--ok)} .pill.warn{background:var(--warn-soft);color:var(--warn)}
+  .pill.valchange{animation:valIn .18s var(--ease)}
+
+  /* reduced motion */
+  html[data-rm="1"] .sweep.on .seg{animation:none;transform:translateX(110%)}
+  html[data-rm="1"] .card.enter{animation:none}
+  html[data-rm="1"] .card.pulse::before{animation:none;opacity:1}
+  html[data-rm="1"] .kpi .v .old{animation:none;display:none}
+  html[data-rm="1"] .pane.veil{transform:none;filter:none}
+
+  .toast{position:absolute;left:50%;bottom:16px;transform:translateX(-50%) translateY(16px);background:var(--primary);color:#fff;padding:8px 14px;border-radius:10px;font-size:12px;opacity:0;transition:.28s var(--ease);pointer-events:none;z-index:9}
+  .toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+  .winrel{position:relative}
+
+  /* control panel */
+  .panel{flex:1 1 300px;max-width:352px;display:flex;flex-direction:column;gap:13px}
+  .cbox{background:var(--panel);border:1px solid var(--line);border-radius:15px;padding:15px;box-shadow:0 10px 30px -20px rgba(13,32,46,.4)}
+  .cbox h3{margin:0 0 3px;font-size:12px;letter-spacing:.4px;text-transform:uppercase;color:var(--ink-faint);font-weight:650}
+  .cbox p.hint{margin:0 0 10px;font-size:11.5px;color:var(--ink-dim);line-height:1.5}
+  .btn{width:100%;padding:9px;border-radius:9px;border:1px solid var(--line);background:var(--panel);color:var(--ink);font-size:12.5px;font-weight:600;cursor:pointer;text-align:start;display:flex;align-items:center;gap:9px}
+  .btn:hover{border-color:var(--primary)}
+  .btn .ic{width:18px;text-align:center}
+  .btn+.btn{margin-top:7px}
+  .btn.primary{background:var(--primary);color:#fff;border-color:var(--primary);justify-content:center}
+  .row{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:8px 0;font-size:13px;border-top:1px solid var(--line)}
+  .row:first-child{border-top:0}
+  .row .lbl .n{font-weight:600} .row .lbl .d{font-size:11px;color:var(--ink-dim);margin-top:1px}
+  .switch{position:relative;width:40px;height:23px;border-radius:999px;background:#c9d2dd;cursor:pointer;transition:.2s;flex:0 0 auto}
+  html[data-theme="dark"] .switch{background:#2a3a57}
+  .switch.on{background:var(--primary)} .switch .knob{position:absolute;top:3px;left:3px;width:17px;height:17px;border-radius:50%;background:#fff;transition:.2s}
+  .switch.on .knob{left:20px}
+  .segs{display:flex;gap:6px}
+  .seg{flex:1;text-align:center;padding:8px 6px;border-radius:9px;border:1px solid var(--line);background:var(--panel);color:var(--ink-dim);font-size:12px;cursor:pointer;font-weight:600}
+  .seg.on{background:var(--primary-soft);color:var(--primary);border-color:var(--primary)}
+  .kbd{font-family:var(--mono);background:var(--panel);border:1px solid var(--line);border-bottom-width:2px;border-radius:5px;padding:1px 6px;font-size:11px}
+  .note{font-size:11px;color:var(--ink-dim);line-height:1.5;background:color-mix(in srgb,var(--panel) 90%,var(--canvas));border:1px solid var(--line);border-radius:9px;padding:9px 11px;margin-top:8px}
+  .footnote{max-width:1220px;width:100%;font-size:12px;color:var(--ink-dim);line-height:1.6;border-top:1px solid var(--line);padding-top:14px}
+  code{background:color-mix(in srgb,var(--panel) 88%,var(--canvas));border:1px solid var(--line);padding:1px 5px;border-radius:5px;font-size:11px;font-family:var(--mono)}
+</style>
+</head>
+<body>
+  <div style="text-align:center">
+    <h1 id="hTitle">Desktop auto-refresh — installed webapp</h1>
+    <div class="sub" id="hSub">The app keeps itself current on its own. Motion is spent on the <em>change</em>, not the fetch: when data actually updates, a calm pulse shows exactly what &amp; where; new rows fade in; a thin top line appears only on a rare slow fetch. Use the scenario buttons to trigger updates. Button &amp; <span class="kbd">Alt+R</span> are quiet fallbacks.</div>
+  </div>
+
+  <div class="stage">
+    <div class="win winrel">
+      <div class="titlebar">
+        <div class="app"><span class="ico">GS</span><span id="winTitle">GSSG Manager</span></div>
+        <div class="wc"><i></i><i></i><i></i></div>
+      </div>
+      <div class="body">
+        <div class="side">
+          <div class="nav"><span class="ic">🏠</span><span id="nHome">Home</span></div>
+          <div class="nav active"><span class="ic">📄</span><span id="nRec">Records</span></div>
+          <div class="nav"><span class="ic">🌴</span><span id="nLeave">Leaves</span></div>
+          <div class="nav"><span class="ic">📒</span><span id="nLedger">Ledger</span></div>
+          <div class="nav"><span class="ic">⚙️</span><span id="nSet">Settings</span></div>
+        </div>
+        <div class="content">
+          <div class="sweep" id="sweep"><div class="rail"></div><div class="seg"></div></div>
+          <div class="aurora" id="aurora"></div>
+          <div class="pane" id="pane">
+            <div class="pagehead">
+              <div class="h"><h2 id="phTitle">Records</h2><span class="count" id="phCount">128 items</span></div>
+              <button class="ghostbtn" id="pageBtn" title="Refresh · Alt+R">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3v6h-6"/></svg>
+              </button>
+            </div>
+            <div class="kpis" id="kpis"></div>
+            <div class="listwrap" id="listwrap">
+              <div class="newpill" id="newpill"><div class="p" id="newpillP"></div></div>
+              <div id="list"></div>
+            </div>
+          </div>
+          <div class="toast" id="toast">Updated</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="cbox">
+        <h3>Trigger an update</h3>
+        <p class="hint">Watch how the update lands. The pulse only plays when something actually changed.</p>
+        <button class="btn" id="scNew"><span class="ic">＋</span><span>New record arrives (auto)</span></button>
+        <button class="btn" id="scChange"><span class="ic">✎</span><span>Status changes on 2 records</span></button>
+        <button class="btn" id="scNoop"><span class="ic">＝</span><span>Refresh — nothing changed</span></button>
+        <button class="btn" id="scFocus"><span class="ic">⇱</span><span>Return to app (focus refetch)</span></button>
+        <div class="row" style="border-top:1px solid var(--line);margin-top:8px"><div class="lbl"><div class="n">Auto-cycle</div><div class="d">Fire a random update every 6s (demo pace; real = 60s)</div></div><div class="switch" id="swAuto"><div class="knob"></div></div></div>
+      </div>
+
+      <div class="cbox">
+        <h3>Manual fallback</h3>
+        <p class="hint">There when you want to force it — a full-page “breath” acknowledges you asked.</p>
+        <button class="btn primary" id="scManual">↻ Manual refresh (button / Alt+R / F5)</button>
+        <div class="note">Real behavior: <span class="kbd">Alt+R</span> and (intercepted) <span class="kbd">F5</span> soft-refresh everything without a hard reload. <span class="kbd">Ctrl+Shift+R</span> stays the true reload escape hatch. Try pressing <span class="kbd">Alt+R</span> now.</div>
+      </div>
+
+      <div class="cbox">
+        <h3>Auto-refresh feel</h3>
+        <div class="segs" id="styleSegs">
+          <div class="seg on" data-s="calm">Calm settle <span style="opacity:.6">(rec)</span></div>
+          <div class="seg" data-s="aurora">Aurora glow</div>
+        </div>
+        <div class="row" style="margin-top:6px"><div class="lbl"><div class="n">Slow network</div><div class="d">Show the top hairline sweep (fetch &gt; 300ms)</div></div><div class="switch" id="swSlow"><div class="knob"></div></div></div>
+        <div class="row"><div class="lbl"><div class="n">Reduced motion</div></div><div class="switch" id="swRM"><div class="knob"></div></div></div>
+        <div class="row"><div class="lbl"><div class="n">Dark theme</div></div><div class="switch" id="swDark"><div class="knob"></div></div></div>
+        <div class="row"><div class="lbl"><div class="n">Language / dir</div></div><div class="segs" style="flex:0 0 auto;width:120px"><div class="seg on" id="langEn">EN</div><div class="seg" id="langAr">عربي</div></div></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="footnote">
+    <b>Same engine, cleaner feel.</b> React Query already gives the triggers free: <code>refetchOnWindowFocus</code>, <code>refetchOnReconnect</code>, and one 60s heartbeat calling <code>invalidateQueries()</code> — <b>refreshing everything</b>, not just the page. Structural sharing means unchanged rows keep identity and never flicker. The KPI strip up top shows “everything” refreshing (numbers crossfade) alongside the list. If scrolled down when new rows arrive, they’re held behind a <b>“N new”</b> pill instead of jumping your view. <span id="rtlNote"></span> Phase-2: drive invalidation from the existing SSE channel for near-instant freshness.
+  </div>
+
+<script>
+(function(){
+  "use strict";
+  const el=(id)=>document.getElementById(id);
+  const root=document.documentElement;
+  let lang='en', style='calm', slow=false, rm=false;
+  let autoTimer=null;
+
+  // ---------- data ----------
+  let nextId=100;
+  function seed(){
+    const en=[
+      ['Clearance — Ahmed S.','Awaiting manager signature','warn'],
+      ['Annual Leave — 12 days','Approved · returns 2026-07-20','ok'],
+      ['Salary Certificate','Generated · PDF ready','ok'],
+      ['Warning Notice — G4602','Pending HR review','warn'],
+      ['Employment Letter','Signed & locked','ok'],
+      ['Passport renewal','Expiry in 34 days','warn'],
+      ['Duty transfer — Site B','Approved','ok'],
+      ['Overtime request','Awaiting approval','warn'],
+      ['Contract amendment','Draft','ok'],
+      ['Medical leave — 3 days','Approved','ok'],
+    ];
+    return en.map((x,i)=>({id:i+1,t:x[0],s:x[1],st:x[2]}));
+  }
+  let records=seed();
+  let kpi={pending:14,approved:37,expiring:6};
+
+  // Arabic mirrors keyed by id
+  const AR={
+    1:['إخلاء طرف — أحمد س.','بانتظار توقيع المدير'],2:['إجازة سنوية — 12 يوم','معتمدة · العودة 2026-07-20'],
+    3:['شهادة راتب','تم إنشاؤها · جاهزة PDF'],4:['إشعار إنذار — G4602','قيد مراجعة الموارد البشرية'],
+    5:['خطاب تعريف بالعمل','موقّع ومقفل'],6:['تجديد جواز السفر','تنتهي خلال 34 يوماً'],
+    7:['نقل مهام — الموقع ب','معتمد'],8:['طلب عمل إضافي','بانتظار الموافقة'],
+    9:['تعديل عقد','مسودة'],10:['إجازة مرضية — 3 أيام','معتمدة']
+  };
+  function label(r){ if(lang==='ar'){const a=AR[r.id]; return {t:a?a[0]:r.t, s:a?a[1]:r.s};} return {t:r.t,s:r.s}; }
+  function stTxt(st){ if(lang==='ar') return st==='ok'?'تم':st==='warn'?'معلّق':'—'; return st==='ok'?'Done':st==='warn'?'Pending':'—'; }
+
+  // ---------- render (with diff animation) ----------
+  let mounted=new Map(); // id -> {el, st}
+  function renderKPIs(pulseChanged){
+    const L=el('kpis'); const defs=[['pending','Pending','معلّق'],['approved','Approved today','معتمدة اليوم'],['expiring','Expiring','تنتهي قريباً']];
+    L.innerHTML='';
+    defs.forEach(d=>{const c=document.createElement('div');c.className='kpi';c.dataset.k=d[0];
+      c.innerHTML=`<div class="k">${lang==='ar'?d[2]:d[1]}</div><div class="v">${kpi[d[0]]}</div>`;L.appendChild(c);});
+  }
+  function updateKPI(newVals){
+    for(const k in newVals){ const c=el('kpis').querySelector(`.kpi[data-k="${k}"]`); if(!c)continue;
+      const v=c.querySelector('.v'); const old=kpi[k]; kpi[k]=newVals[k];
+      if(old!==newVals[k]){
+        // show the NEW value, animated in — never dwell on the old number
+        v.textContent=newVals[k];
+        if(!rm){ v.style.animation='none'; void v.offsetWidth; v.style.animation='valIn .22s var(--ease)'; }
+        c.classList.remove('pulse');void c.offsetWidth;c.classList.add('pulse');
+      }
+    }
+  }
+
+  function fullRender(){
+    const L=el('list'); L.innerHTML=''; mounted.clear();
+    records.forEach(r=>{ const c=makeCard(r); L.appendChild(c); mounted.set(r.id,{el:c,st:r.st,s:label(r).s}); });
+  }
+  function makeCard(r){
+    const lb=label(r);
+    const c=document.createElement('div');c.className='card';
+    c.dataset.id=r.id;
+    c.innerHTML=`<div class="dot">📄</div><div class="m"><div class="t">${lb.t}</div><div class="s">${lb.s}</div></div><div class="pill ${r.st}">${stTxt(r.st)}</div>`;
+    return c;
+  }
+
+  // commit a new records[] with animation vs mounted map
+  function commit(newRecords, opts){
+    opts=opts||{};
+    const L=el('list');
+    const scrolledDown = el('listwrap').scrollTop>24;
+    const oldIds=new Set([...mounted.keys()]);
+    const newIds=newRecords.map(r=>r.id);
+    const added=newRecords.filter(r=>!oldIds.has(r.id));
+    // detect changed (status or subtitle) among kept
+    const changed=[];
+    newRecords.forEach(r=>{ const m=mounted.get(r.id); if(m && (m.st!==r.st || m.s!==label(r).s)) changed.push(r); });
+
+    // NEW rows while scrolled down -> hold behind pill
+    if(added.length && scrolledDown){
+      pendingAdds=newRecords; // apply on pill click
+      showPill(added.length);
+      records=records; // keep view; but update changed + kpi still
+      applyChanges(changed);
+      if(opts.kpi) updateKPI(opts.kpi);
+      return;
+    }
+    records=newRecords;
+    // rebuild list preserving nodes for kept ids
+    const frag=document.createDocumentFragment();
+    const newMounted=new Map();
+    let staggerN=0;
+    newRecords.forEach(r=>{
+      let node;
+      if(mounted.has(r.id)){ node=mounted.get(r.id).el; }
+      else { node=makeCard(r);
+        // NEW row: slide in AND carry the highlight pulse so the new thing is what glows
+        if(!rm){ node.classList.add('enter'); node.style.animationDelay=(Math.min(staggerN,5)*40)+'ms'; staggerN++; }
+        node.classList.add('pulse');
+      }
+      frag.appendChild(node);
+      newMounted.set(r.id,{el:node,st:r.st,s:label(r).s});
+    });
+    L.innerHTML=''; L.appendChild(frag); mounted=newMounted;
+    applyChanges(changed);
+    if(opts.kpi) updateKPI(opts.kpi);
+  }
+  function applyChanges(changed){
+    changed.forEach(r=>{ const m=mounted.get(r.id); if(!m)return; const node=m.el;
+      // update status pill with crossfade
+      const pill=node.querySelector('.pill');
+      if(m.st!==r.st){ pill.className='pill '+r.st; pill.textContent=stTxt(r.st);
+        if(!rm){ pill.classList.remove('valchange');void pill.offsetWidth;pill.classList.add('valchange'); } }
+      const sEl=node.querySelector('.s'); sEl.textContent=label(r).s;
+      m.st=r.st; m.s=label(r).s;
+      // tint pulse
+      node.classList.remove('pulse');void node.offsetWidth;node.classList.add('pulse');
+    });
+  }
+
+  // ---------- N new pill ----------
+  let pendingAdds=null;
+  function showPill(n){ const p=el('newpill'); const inner=el('newpillP');
+    inner.textContent=(lang==='ar'?`${n} جديد ↑`:`${n} new ↑`); p.classList.add('show'); }
+  function hidePill(){ el('newpill').classList.remove('show'); }
+  el('newpillP').addEventListener('click',()=>{
+    hidePill();
+    el('listwrap').scrollTo({top:0,behavior:rm?'auto':'smooth'});
+    setTimeout(()=>{ if(pendingAdds){ commit(pendingAdds); pendingAdds=null; } }, rm?0:320);
+  });
+  el('listwrap').addEventListener('scroll',()=>{ if(el('listwrap').scrollTop<=24 && el('newpill').classList.contains('show') && pendingAdds){ hidePill(); commit(pendingAdds); pendingAdds=null; } });
+
+  // ---------- fetch layer (sweep) ----------
+  function withFetch(done){
+    if(style==='aurora'){ el('aurora').classList.add('on'); }
+    let shown=false, shownAt=0, gate=null;
+    if(slow){ gate=setTimeout(()=>{ shown=true; shownAt=performance.now(); el('sweep').classList.add('on'); },300); }
+    const dur = slow?1100:90;
+    setTimeout(()=>{
+      const finishSweep=()=>{ el('aurora').classList.remove('on');
+        if(shown){ const sw=el('sweep'); sw.classList.add('resolve'); setTimeout(()=>{sw.classList.remove('on','resolve');},320); }
+        done(); };
+      if(gate)clearTimeout(gate);
+      if(shown){ const held=performance.now()-shownAt; const wait=Math.max(0,600-held); setTimeout(finishSweep,wait); }
+      else finishSweep();
+    },dur);
+  }
+
+  // ---------- scenarios ----------
+  function scNew(){ withFetch(()=>{
+    nextId++; const nr={id:nextId,t:`New record #${nextId-100}`,s:'Just arrived',st:'warn'};
+    AR[nextId]=[`سجل جديد #${nextId-100}`,'وصل الآن'];
+    commit([nr,...records], {kpi:{pending:kpi.pending+1}}); toast(lang==='ar'?'سجل جديد':'New record'); }); }
+  function scChange(){ withFetch(()=>{
+    const copy=records.map(r=>({...r})); let done=0;
+    for(const r of copy){ if(r.st==='warn' && done<2){ r.st='ok'; r.s=lang==='ar'?'اعتُمد للتو':'Just approved'; done++; } }
+    commit(copy, {kpi:{approved:kpi.approved+2,pending:Math.max(0,kpi.pending-2)}}); toast(lang==='ar'?'تم تحديث الحالات':'Statuses updated'); }); }
+  function scNoop(){ withFetch(()=>{ commit(records.map(r=>({...r}))); toast(lang==='ar'?'كل شيء محدّث':'Already up to date'); }); }
+  function scFocus(){ toast(lang==='ar'?'عاد للتطبيق — تحديث صامت':'Back in app — silent refetch'); scChange(); }
+  function scManual(){ // veil breath + rotate + refresh everything
+    const pane=el('pane'); pane.classList.add('veil'); el('pageBtn').classList.remove('rot');void el('pageBtn').offsetWidth;el('pageBtn').classList.add('rot');
+    withFetch(()=>{ setTimeout(()=>pane.classList.remove('veil'), rm?0:120);
+      // manual: refresh everything, maybe change a couple
+      const copy=records.map(r=>({...r})); if(copy[3])copy[3].st='ok';
+      commit(copy,{kpi:{approved:kpi.approved+1}}); toast(lang==='ar'?'تم التحديث':'Refreshed'); }); }
+
+  function toast(m){const t=el('toast');t.textContent=m;t.classList.add('show');clearTimeout(t._h);t._h=setTimeout(()=>t.classList.remove('show'),1500);}
+
+  // ---------- controls ----------
+  el('scNew').onclick=scNew; el('scChange').onclick=scChange; el('scNoop').onclick=scNoop;
+  el('scFocus').onclick=scFocus; el('scManual').onclick=scManual; el('pageBtn').onclick=scManual;
+  el('swAuto').addEventListener('click',function(){ this.classList.toggle('on');
+    if(this.classList.contains('on')){ autoTimer=setInterval(()=>{ const r=Math.random(); if(r<0.45)scNew(); else if(r<0.85)scChange(); else scNoop(); },6000); }
+    else { clearInterval(autoTimer); autoTimer=null; } });
+  el('styleSegs').addEventListener('click',(e)=>{const s=e.target.closest('.seg');if(!s)return;
+    document.querySelectorAll('#styleSegs .seg').forEach(x=>x.classList.remove('on'));s.classList.add('on');style=s.dataset.s;});
+  el('swSlow').addEventListener('click',function(){slow=!slow;this.classList.toggle('on',slow);});
+  el('swRM').addEventListener('click',function(){rm=!rm;this.classList.toggle('on',rm);root.dataset.rm=rm?'1':'0';});
+  el('swDark').addEventListener('click',function(){this.classList.toggle('on');root.dataset.theme=this.classList.contains('on')?'dark':'light';});
+  el('langEn').addEventListener('click',()=>setLang('en'));
+  el('langAr').addEventListener('click',()=>setLang('ar'));
+
+  window.addEventListener('keydown',(e)=>{
+    const typing=/^(input|textarea|select)$/i.test((e.target.tagName||''))||e.target.isContentEditable;
+    if(typing)return;
+    if(e.altKey && (e.code==='KeyR')){ e.preventDefault(); scManual(); }
+    if(e.code==='F5' && !e.ctrlKey && !e.shiftKey){ e.preventDefault(); scManual(); } // intercept hard reload
+  });
+
+  // ---------- i18n ----------
+  const I={en:{hTitle:'Desktop auto-refresh — installed webapp',
+      hSub:'',winTitle:'GSSG Manager',nHome:'Home',nRec:'Records',nLeave:'Leaves',nLedger:'Ledger',nSet:'Settings',phTitle:'Records',phCount:'128 items',rtlNote:''},
+    ar:{hTitle:'التحديث التلقائي لسطح المكتب — التطبيق المثبّت',
+      hSub:'',winTitle:'مدير GSSG',nHome:'الرئيسية',nRec:'السجلات',nLeave:'الإجازات',nLedger:'الدفتر',nSet:'الإعدادات',phTitle:'السجلات',phCount:'128 عنصراً',
+      rtlNote:'في العربية يمسح الخط العلوي من اليمين لليسار، وشريط النبض على الحافة الأولى (اليمين)؛ الإدخال عمودي فلا يُعكس.'}};
+  function setLang(l){ lang=l; el('langEn').classList.toggle('on',l==='en'); el('langAr').classList.toggle('on',l==='ar');
+    root.lang=l; root.dir=l==='ar'?'rtl':'ltr'; const t=I[l];
+    for(const k in t){ const n=el(k); if(n && k!=='hSub' && k!=='rtlNote') n.textContent=t[k]; }
+    el('rtlNote').textContent=t.rtlNote;
+    fullRender(); renderKPIs();
+  }
+
+  // ---------- boot ----------
+  fullRender(); renderKPIs();
+})();
+</script>
+</body>
+</html>
