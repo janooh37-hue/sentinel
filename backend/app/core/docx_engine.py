@@ -236,10 +236,10 @@ def _adapt_employee_clearance(data: dict[str, Any]) -> dict[str, Any]:
             out.setdefault("clearance_marks", marks)
         if remarks:
             out.setdefault("clearance_remarks", remarks)
-    # Both {{ manager_sig }} and {{ employee_sig }} repeat in every ~32mm-wide,
+    # {{ employee_sig }} / {{ manager_sig }} repeat in every ~32mm-wide,
     # ~7.4mm-tall table row here — the global signature width (default 45mm)
-    # overflows each cell and blows up the row. Cap it to fit the cell.
-    _CLEARANCE_SIG_MM = 18
+    # overflows each cell and blows up the row. Cap it to sit inside the cell.
+    _CLEARANCE_SIG_MM = 24
     global_mm = out.get("_sig_size_mm", _CLEARANCE_SIG_MM)
     out["_sig_size_mm"] = min(int(global_mm), _CLEARANCE_SIG_MM)
     return out
