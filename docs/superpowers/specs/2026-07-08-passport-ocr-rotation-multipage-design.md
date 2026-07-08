@@ -181,6 +181,11 @@ Writing a *wrong* passport number stays impossible.
 ## Out of scope
 
 - OpenCV-based preprocessing (deskew, adaptive threshold, MRZ-band localization) — deferred
-  to a follow-up phase only if phone-photo accuracy is insufficient after this work.
+  to a follow-up phase (**Approach B**). Escalate to it not only if accuracy is zero, but
+  whenever Approach A's output is **weak, unreliable, review-heavy, or too slow** — see the
+  "Decision gate" and "Approach B requirements" sections in the implementation plan. B must
+  be designed to avoid those failure modes: reliable/correct auto-writes (validated check
+  digits), a negligible manual-review queue, and MRZ-band-only OCR for speed — still fully
+  offline, write-safety unchanged.
 - Extracting/writing name, DOB, expiry (available from a valid MRZ but not the goal here).
 - Any cloud/external OCR.
