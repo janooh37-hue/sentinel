@@ -1583,23 +1583,23 @@
       "sectionComplete": "Complete"
     },
     "field": {
-      "name_en": "English name",
-      "name_ar": "Arabic name",
+      "name_en": "Name (English)",
+      "name_ar": "Name (Arabic)",
       "dob": "Date of birth",
       "nationality": "Nationality",
       "contact": "Contact number",
-      "msg_language": "Message language",
+      "msg_language": "Notification language",
       "passport_no": "Passport number",
-      "passport_expiry": "Passport expiry",
-      "uae_id_no": "Emirates ID",
-      "uae_id_expiry": "Emirates ID expiry",
+      "passport_expiry": "Passport Expiry",
+      "uae_id_no": "UAE ID No.",
+      "uae_id_expiry": "Emirates ID Expiry",
       "iban": "IBAN",
       "position": "Position",
       "department": "Department",
       "duty_unit": "Unit",
       "duty_post": "Post",
       "doj": "Date of joining",
-      "doj_company": "Company joining date"
+      "doj_company": "Joining (company)"
     },
     "section": {
       "personal": "Personal data",

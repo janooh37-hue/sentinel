@@ -1666,23 +1666,23 @@
       "sectionComplete": "مكتملة"
     },
     "field": {
-      "name_en": "الاسم إنجليزي",
-      "name_ar": "الاسم عربي",
+      "name_en": "الاسم (إنجليزي)",
+      "name_ar": "الاسم (عربي)",
       "dob": "تاريخ الميلاد",
       "nationality": "الجنسية",
       "contact": "رقم التواصل",
-      "msg_language": "لغة الرسائل",
+      "msg_language": "لغة الإشعارات",
       "passport_no": "رقم الجواز",
-      "passport_expiry": "انتهاء الجواز",
-      "uae_id_no": "الهوية الإماراتية",
-      "uae_id_expiry": "انتهاء الهوية",
+      "passport_expiry": "انتهاء صلاحية الجواز",
+      "uae_id_no": "رقم الهوية الإماراتية",
+      "uae_id_expiry": "انتهاء صلاحية الهوية الإماراتية",
       "iban": "الآيبان",
       "position": "المسمى الوظيفي",
       "department": "القسم",
       "duty_unit": "الوحدة",
       "duty_post": "النقطة",
       "doj": "تاريخ الالتحاق",
-      "doj_company": "الالتحاق بالشركة"
+      "doj_company": "تاريخ الالتحاق بالشركة"
     },
     "section": {
       "personal": "البيانات الشخصية",
