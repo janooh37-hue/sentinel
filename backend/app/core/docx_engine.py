@@ -236,6 +236,12 @@ def _adapt_employee_clearance(data: dict[str, Any]) -> dict[str, Any]:
             out.setdefault("clearance_marks", marks)
         if remarks:
             out.setdefault("clearance_remarks", remarks)
+    # Both {{ manager_sig }} and {{ employee_sig }} repeat in every ~32mm-wide,
+    # ~7.4mm-tall table row here — the global signature width (default 45mm)
+    # overflows each cell and blows up the row. Cap it to fit the cell.
+    _CLEARANCE_SIG_MM = 18
+    global_mm = out.get("_sig_size_mm", _CLEARANCE_SIG_MM)
+    out["_sig_size_mm"] = min(int(global_mm), _CLEARANCE_SIG_MM)
     return out
 
 
@@ -449,9 +455,7 @@ def _pp_general_book_cc(doc: Any, ctx: dict[str, Any]) -> None:
 
     from app.core.arabic_rtl import stamp_paragraph, stamp_run
 
-    recipients = [
-        r.strip() for r in str(ctx.get("cc", "") or "").split("\n") if r.strip()
-    ]
+    recipients = [r.strip() for r in str(ctx.get("cc", "") or "").split("\n") if r.strip()]
 
     for paragraph in doc.paragraphs:
         if "نسخة إلى" not in (paragraph.text or ""):
@@ -516,9 +520,7 @@ def _pp_general_book(doc: Any, ctx: dict[str, Any]) -> None:
 
     anchor = _find_general_book_body_anchor(doc)
     if anchor is None:
-        log.warning(
-            "General Book: no body anchor paragraph found — body not rendered"
-        )
+        log.warning("General Book: no body anchor paragraph found — body not rendered")
         return
 
     body_html = ctx.get("body_html", "") or ""
@@ -666,16 +668,12 @@ class DocxEngine:
         spec = self._REGISTRY[short]
         template = self.templates_dir / TEMPLATE_FILES[short]
         if not template.exists():
-            raise FileNotFoundError(
-                f"Template for {form_type!r} not found: {template}"
-            )
+            raise FileNotFoundError(f"Template for {form_type!r} not found: {template}")
 
         adapter: Callable[[dict[str, Any]], dict[str, Any]] = spec["adapter"]
         post_process = spec.get("post_process")
         prepared = adapter(dict(data))
-        return render(
-            template, prepared, Path(output_path), post_process=post_process
-        )
+        return render(template, prepared, Path(output_path), post_process=post_process)
 
     @staticmethod
     def stamp_ref_number(
@@ -773,9 +771,7 @@ class DocxEngine:
             else:  # top-left
                 x, y = margin, margin
 
-            ok = insert_floating_image_in_header(
-                header, png, x_emu=x, y_emu=y, size_emu=size
-            )
+            ok = insert_floating_image_in_header(header, png, x_emu=x, y_emu=y, size_emu=size)
             if ok:
                 # Only the top-left code shares the header corner with the "Ref:"
                 # text stamp; indent that paragraph clear of the (page-anchored)
