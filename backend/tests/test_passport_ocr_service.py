@@ -127,3 +127,76 @@ def test_apply_overwrite_flag_allows_replace(db_session, emp):
     assert svc.apply_passport_extraction(db_session, emp, res, allow_overwrite=True) is True
     db_session.refresh(emp)
     assert emp.passport_no == "N1234567"
+
+
+def test_escalation_returns_valid_mrz_when_cheap_pass_fails(db_session, emp, monkeypatch, tmp_path):
+    _fake_tree_with_passport(monkeypatch, tmp_path)
+    # cheap upright pass finds no MRZ...
+    monkeypatch.setattr(svc, "ocr_bytes_to_text", lambda raw: "no mrz here")
+    monkeypatch.setattr(svc, "extract_passport", lambda t: None)
+    # ...but escalation rasterises + finds a valid MRZ on page 2, rotated 180°.
+    monkeypatch.setattr(svc, "pages_from_bytes", lambda raw: ["p1", "p2"])
+    monkeypatch.setattr(
+        svc,
+        "best_mrz",
+        lambda pages: svc.MrzCandidate(
+            number="N1234567", confidence=0.95, valid=True, page_index=1, rotation=180
+        ),
+    )
+    res = svc.extract_passport_for_employee(db_session, "G7001")
+    assert res.method == "mrz" and res.number == "N1234567" and res.confidence >= 0.9
+    assert "page 2" in res.source_snippet and "180" in res.source_snippet
+
+
+def test_escalation_structural_mrz_is_review_only(db_session, emp, monkeypatch, tmp_path):
+    _fake_tree_with_passport(monkeypatch, tmp_path)
+    monkeypatch.setattr(svc, "ocr_bytes_to_text", lambda raw: "no mrz")
+    monkeypatch.setattr(svc, "extract_passport", lambda t: None)
+    monkeypatch.setattr(svc, "pages_from_bytes", lambda raw: ["p1"])
+    monkeypatch.setattr(
+        svc,
+        "best_mrz",
+        lambda pages: svc.MrzCandidate(
+            number="N7654321", confidence=0.55, valid=False, page_index=0, rotation=0
+        ),
+    )
+    res = svc.extract_passport_for_employee(db_session, "G7001")
+    assert res.method == "mrz" and res.number == "N7654321"
+    # 0.55 < MRZ_AUTOWRITE_CONFIDENCE -> apply() refuses to write it.
+    assert svc.apply_passport_extraction(db_session, emp, res) is False
+
+
+def test_escalation_falls_back_to_printed(db_session, emp, monkeypatch, tmp_path):
+    _fake_tree_with_passport(monkeypatch, tmp_path)
+    monkeypatch.setattr(svc, "ocr_bytes_to_text", lambda raw: "no mrz")
+    monkeypatch.setattr(svc, "extract_passport", lambda t: None)
+    monkeypatch.setattr(svc, "pages_from_bytes", lambda raw: ["p1"])
+    monkeypatch.setattr(svc, "best_mrz", lambda pages: None)
+    monkeypatch.setattr(
+        svc, "best_printed_number", lambda pages: ("A7654321", "Passport No: A7654321")
+    )
+    res = svc.extract_passport_for_employee(db_session, "G7001")
+    assert res.method == "printed" and res.number == "A7654321" and res.confidence < 0.9
+
+
+def test_escalation_not_reached_when_cheap_pass_valid(db_session, emp, monkeypatch, tmp_path):
+    _fake_tree_with_passport(monkeypatch, tmp_path)
+    monkeypatch.setattr(svc, "ocr_bytes_to_text", lambda raw: "IGNORED")
+    from app.core.extraction.types import DocType, ExtractedField, Extraction
+
+    monkeypatch.setattr(
+        svc,
+        "extract_passport",
+        lambda t: Extraction(
+            doc_type=DocType.PASSPORT,
+            doc_type_confidence=0.95,
+            fields=[ExtractedField("passport_no", "N1234567", 0.95)],
+        ),
+    )
+
+    def _boom(pages):
+        raise AssertionError("escalation must not run when the cheap pass is valid")
+
+    monkeypatch.setattr(svc, "best_mrz", _boom)
+    res = svc.extract_passport_for_employee(db_session, "G7001")
+    assert res.method == "mrz" and res.number == "N1234567"
