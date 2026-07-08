@@ -5,10 +5,10 @@ This file used to host v3.5.4's full X-mark fill toolkit (`fill_x_mark`,
 `set_cell_text`, `set_cell_image`, `fill_sig_and_date_on_x_mark`, etc.).
 After the move to docxtpl token rendering, only a few helpers survive:
 
-* `fill_image_centered_behind_text_in_cell` — used by the 301-004 / 301-005
+* `fill_image_behind_text_in_paragraph` — used by the 301-004 / 301-005
   leave forms so the manager-signature image anchors as a floating "behind
-  text" shape, centred in the notes box, without growing the cell row height.
-  python-docx has no public API for this; we build the OOXML by hand.
+  text" shape on the signature line above the manager name, without growing
+  the block. python-docx has no public API for this; we build the OOXML by hand.
 * `float_inline_images_in_cell` — the same behind-text technique for images
   already placed inline via a `{{ token }}` (Material Request).
 * `replace_paragraph_text` — used by the Resignation Letter post-process
@@ -124,26 +124,28 @@ def float_inline_images_in_cell(cell: Any, *, bottom_align: bool = False) -> int
     return converted
 
 
-def fill_image_centered_behind_text_in_cell(
-    cell: Any,
+def fill_image_behind_text_in_paragraph(
+    paragraph: Any,
     image_path: Path | str | None,
     *,
     width_inches: float = 1.4,
     dilate_radius_px: int = DEFAULT_SIG_BOLDNESS,
+    center_horizontal: bool = False,
 ) -> bool:
-    """Place *image_path* as a horizontally-centred, behind-text float resting
-    near the bottom of *cell* — used for the Leave Permit / Admin Leave manager
-    signature, which sits centred in the project-manager notes box.
+    """Place *image_path* as a behind-text float resting on *paragraph*'s line
+    and rising UP into the blank space above it — used for the Leave Permit /
+    Admin Leave manager signature, which sits on the signature line just above
+    the (left-aligned) manager name at the foot of the form.
 
-    The image is added inline to the cell's LAST paragraph (reusing an existing
-    blank line rather than adding one, so the box keeps its height) then floated
-    behind text, centred, and bottom-aligned so it rests on that line instead of
-    hanging off the box's bottom border. Returns True iff the image embedded.
+    The image is added inline to *paragraph* then floated behind text (zero
+    layout height, so it never grows the block or pushes content onto the
+    footer) and bottom-aligned to *paragraph*'s line. ``center_horizontal``
+    centres it in the column; otherwise it pins to the left edge to sit above a
+    left-aligned name block. Returns True iff the image embedded.
     """
     if not image_path or not Path(image_path).exists():
         return False
-    para = cell.paragraphs[-1] if cell.paragraphs else cell.add_paragraph()
-    run = para.add_run()
+    run = paragraph.add_run()
     try:
         run.add_picture(
             io.BytesIO(
@@ -157,7 +159,9 @@ def fill_image_centered_behind_text_in_cell(
     if drawing is None:
         return False
     try:
-        return _convert_inline_drawing_to_anchor(drawing, bottom_align=True, center_horizontal=True)
+        return _convert_inline_drawing_to_anchor(
+            drawing, bottom_align=True, center_horizontal=center_horizontal
+        )
     except (ValueError, AttributeError):
         return True  # image is embedded (inline); float conversion failed only
 
@@ -253,7 +257,7 @@ def replace_paragraph_text(
 
 
 __all__ = [
-    "fill_image_centered_behind_text_in_cell",
+    "fill_image_behind_text_in_paragraph",
     "float_inline_images_in_cell",
     "insert_floating_image_in_header",
     "replace_paragraph_text",

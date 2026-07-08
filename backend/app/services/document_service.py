@@ -667,7 +667,11 @@ def _build_template_data(
             data,
             manager_record,
             embed=embed_mgr,
-            prefer_arabic=(template_id == "General Book"),
+            # These forms render the manager as an Arabic signature block, so the
+            # Arabic name reads correctly beside the Arabic designation.
+            prefer_arabic=(
+                template_id in ("General Book", "Leave Permit Form", "Administrative Leave Form")
+            ),
         )
     else:
         # No manager picked — never inject a manager sig path the caller didn't
