@@ -57,10 +57,11 @@ export function EmployeeSearchHero({
     queryKey: ['employee-search', debounced],
     queryFn: () => api.listEmployees({ q: debounced, limit: 30 }),
     enabled: debounced.trim().length > 0,
+    staleTime: 30_000,
   })
 
   const items = data?.items ?? []
-  const showDropdown = q.trim().length > 0
+  const showDropdown = debounced.trim().length > 0
 
   return (
     <section
