@@ -66,6 +66,12 @@ export function EmployeeIdCard({
       className="rounded-[18px] p-[22px_24px_20px] text-white"
       style={{ background: 'var(--hero-grad)' }}
     >
+      {/* ── Card header (label + EMP FILE) ────────────────────────────────────── */}
+      <div className="mb-4 flex items-center justify-between text-[0.65em] uppercase tracking-[0.2em] opacity-60">
+        <span>{t('employee.card.label')}</span>
+        <span className="font-mono">EMP FILE</span>
+      </div>
+
       {/* ── Photo + identity row ─────────────────────────────────────────────── */}
       <div className="flex items-center gap-4">
         {/* Photo tile */}
@@ -113,41 +119,16 @@ export function EmployeeIdCard({
           )}
         </div>
 
-        {/* Name + ID + status */}
+        {/* Name + ID (status moved to facts grid) */}
         <div className="min-w-0 flex-1">
           <div className="truncate text-[1.05em] font-bold leading-snug">{name}</div>
           {altName && <div className="truncate text-[0.82em] opacity-70">{altName}</div>}
           <div className="mt-0.5 font-mono text-[0.8em] opacity-75">{employee.id}</div>
-          <div className="mt-1.5">
-            {canEdit && onChangeStatus ? (
-              <button
-                type="button"
-                onClick={onChangeStatus}
-                aria-label={t('employees.statusDialog.title')}
-                className="inline-flex items-center gap-1.5 rounded-full bg-white/15 px-2.5 py-0.5 text-[0.75em] font-semibold transition-colors hover:bg-white/25"
-              >
-                <span
-                  className={`h-1.5 w-1.5 rounded-full ${STATUS_DOT_CLS[employee.status] ?? 'bg-muted'}`}
-                  aria-hidden
-                />
-                {t(`employees.status.${employee.status}`, employee.status)}
-                <Pencil className="h-2.5 w-2.5 opacity-70" aria-hidden />
-              </button>
-            ) : (
-              <span className="inline-flex items-center gap-1.5 rounded-full bg-white/15 px-2.5 py-0.5 text-[0.75em] font-semibold">
-                <span
-                  className={`h-1.5 w-1.5 rounded-full ${STATUS_DOT_CLS[employee.status] ?? 'bg-muted'}`}
-                  aria-hidden
-                />
-                {t(`employees.status.${employee.status}`, employee.status)}
-              </span>
-            )}
-          </div>
         </div>
       </div>
 
-      {/* ── Facts grid (2-column) ─────────────────────────────────────────────── */}
-      {(positionLabel ?? employee.department ?? employee.duty_unit ?? employee.doj) && (
+      {/* ── Facts grid (2-column): position / status / department / duty_unit ─── */}
+      {(positionLabel ?? employee.status ?? employee.department ?? employee.duty_unit) && (
         <div className="mt-4 grid grid-cols-2 gap-x-4 gap-y-2.5 border-t border-white/14 pt-3 text-[0.78em]">
           {positionLabel && (
             <div>
@@ -157,6 +138,37 @@ export function EmployeeIdCard({
               <div className="truncate font-medium leading-snug">{positionLabel}</div>
             </div>
           )}
+          {/* Status cell */}
+          <div>
+            <div className="mb-0.5 text-[0.78em] uppercase tracking-wide opacity-55">
+              {t('employees.fields.status')}
+            </div>
+            <div className="mt-1">
+              {canEdit && onChangeStatus ? (
+                <button
+                  type="button"
+                  onClick={onChangeStatus}
+                  aria-label={t('employees.statusDialog.title')}
+                  className="inline-flex items-center gap-1.5 rounded-full bg-white/15 px-2.5 py-0.5 text-[0.75em] font-semibold transition-colors hover:bg-white/25"
+                >
+                  <span
+                    className={`h-1.5 w-1.5 rounded-full ${STATUS_DOT_CLS[employee.status] ?? 'bg-muted'}`}
+                    aria-hidden
+                  />
+                  {t(`employees.status.${employee.status}`, employee.status)}
+                  <Pencil className="h-2.5 w-2.5 opacity-70" aria-hidden />
+                </button>
+              ) : (
+                <span className="inline-flex items-center gap-1.5 rounded-full bg-white/15 px-2.5 py-0.5 text-[0.75em] font-semibold">
+                  <span
+                    className={`h-1.5 w-1.5 rounded-full ${STATUS_DOT_CLS[employee.status] ?? 'bg-muted'}`}
+                    aria-hidden
+                  />
+                  {t(`employees.status.${employee.status}`, employee.status)}
+                </span>
+              )}
+            </div>
+          </div>
           {employee.department && (
             <div>
               <div className="mb-0.5 text-[0.78em] uppercase tracking-wide opacity-55">
@@ -171,14 +183,6 @@ export function EmployeeIdCard({
                 {t('employee.field.duty_unit')}
               </div>
               <div className="truncate font-medium leading-snug">{employee.duty_unit}</div>
-            </div>
-          )}
-          {employee.doj && (
-            <div>
-              <div className="mb-0.5 text-[0.78em] uppercase tracking-wide opacity-55">
-                {t('employee.field.doj')}
-              </div>
-              <div className="truncate font-medium leading-snug">{employee.doj}</div>
             </div>
           )}
         </div>

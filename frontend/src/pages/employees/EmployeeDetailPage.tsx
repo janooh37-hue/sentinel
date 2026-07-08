@@ -11,7 +11,7 @@
  */
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useLocation, useNavigate, useParams } from 'react-router-dom'
 import { toast } from 'sonner'
@@ -44,6 +44,7 @@ export function EmployeeDetailPage(): React.JSX.Element {
   const [editing, setEditing] = useState(false)
   const [statusOpen, setStatusOpen] = useState(false)
   const qc = useQueryClient()
+  const keydownListenerRef = useRef<((e: KeyboardEvent) => void) | null>(null)
 
   // Consume injected extraction from the intake flow (Task 5). Clear history
   // state after consuming so a refresh doesn't re-open the panel.
@@ -58,6 +59,22 @@ export function EmployeeDetailPage(): React.JSX.Element {
     // Run once on mount only.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  // Wire Ctrl+K keyboard shortcut to navigate to employees lookup
+  useEffect(() => {
+    keydownListenerRef.current = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault()
+        navigate('/employees')
+      }
+    }
+    document.addEventListener('keydown', keydownListenerRef.current)
+    return () => {
+      if (keydownListenerRef.current) {
+        document.removeEventListener('keydown', keydownListenerRef.current)
+      }
+    }
+  }, [navigate])
 
   const editMutation = useMutation({
     mutationFn: (values: EmployeeFormOutput) => {
@@ -122,6 +139,20 @@ export function EmployeeDetailPage(): React.JSX.Element {
           </div>
           {/* Mini search — focuses then hands off to the lookup list */}
           <div className="flex h-11 flex-1 items-center gap-3 rounded-full border border-white/22 bg-white/10 px-5">
+            <svg
+              width="17"
+              height="17"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2.2"
+              strokeLinecap="round"
+              className="shrink-0 text-white opacity-60"
+              aria-hidden
+            >
+              <circle cx="11" cy="11" r="7" />
+              <path d="m20 20-3.3-3.3" />
+            </svg>
             <input
               type="search"
               placeholder={t('employees.lookup.miniPlaceholder')}
@@ -129,6 +160,9 @@ export function EmployeeDetailPage(): React.JSX.Element {
               onFocus={() => navigate('/employees')}
               className="flex-1 border-0 bg-transparent text-[0.84em] text-white outline-none placeholder:text-white/60"
             />
+            <kbd className="shrink-0 border border-white/25 rounded-md px-1.5 py-0.5 font-mono text-[0.65em] font-medium text-white/50">
+              Ctrl K
+            </kbd>
           </div>
         </div>
       </div>
