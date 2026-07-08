@@ -48,7 +48,7 @@ from docx.opc.exceptions import PackageNotFoundError
 from docx.shared import Pt, RGBColor
 
 from app.core._docx_helpers import (
-    fill_image_behind_text_on_x_mark,
+    fill_image_centered_behind_text_in_cell,
     float_inline_images_in_cell,
     replace_paragraph_text,
 )
@@ -368,43 +368,73 @@ def _pp_resignation_letter(doc: Any, ctx: dict[str, Any]) -> None:
         replace_paragraph_text(extra, "", size=11)
 
 
-def _pp_leave_permit(doc: Any, ctx: dict[str, Any]) -> None:
-    """Behind-text floating signature at t3 r0 c0 so the date label doesn't
-    bump down a row when the image is inserted."""
+def _left_align_manager_block(doc: Any, ctx: dict[str, Any]) -> None:
+    """Left-align the manager name + title body paragraphs beneath the last box.
+
+    They ship as bidi paragraphs with no explicit ``<w:jc>`` — a bidi paragraph's
+    natural start edge is the RIGHT, so they hugged the right margin (Leave Permit)
+    or split (Admin Leave, where the title had no bidi and rendered left while the
+    name stayed right). Operators want a consistent LEFT-aligned signature block,
+    so we drop ``<w:bidi/>`` (flip the start edge back to the left) and set an
+    explicit left ``<w:jc>``. Matched by rendered value so no template token churn.
+    """
+    from docx.oxml.ns import qn as _qn
+
+    wanted = {
+        str(ctx.get("manager_name", "") or "").strip(),
+        str(ctx.get("manager_title", "") or "").strip(),
+    } - {""}
+    if not wanted:
+        return
+    for paragraph in doc.paragraphs:
+        if paragraph.text.strip() not in wanted:
+            continue
+        pPr = paragraph._p.get_or_add_pPr()
+        for bidi in pPr.findall(_qn("w:bidi")):
+            pPr.remove(bidi)
+        paragraph.alignment = WD_ALIGN_PARAGRAPH.LEFT
+
+
+def _place_manager_sig_in_box(cell: Any, ctx: dict[str, Any]) -> None:
+    """Drop the manager signature centred + behind text into a notes-box cell."""
     sig_path = ctx.get("manager_sig_path")
     if not sig_path:
         return
+    size_mm = float(ctx.get("_sig_size_mm", DEFAULT_SIG_SIZE_MM))
+    boldness = int(ctx.get("_sig_boldness", DEFAULT_SIG_BOLDNESS))
+    fill_image_centered_behind_text_in_cell(
+        cell, sig_path, width_inches=size_mm / 25.4, dilate_radius_px=boldness
+    )
+
+
+def _pp_leave_permit(doc: Any, ctx: dict[str, Any]) -> None:
+    """Centre the manager signature in the project-manager notes box (last table)
+    and left-align the name/title block below it."""
     try:
-        cell = doc.tables[3].rows[0].cells[0]
-        size_mm = float(ctx.get("_sig_size_mm", DEFAULT_SIG_SIZE_MM))
-        boldness = int(ctx.get("_sig_boldness", DEFAULT_SIG_BOLDNESS))
-        fill_image_behind_text_on_x_mark(
-            cell,
-            sig_path,
-            width_inches=size_mm / 25.4,
-            dilate_radius_px=boldness,
-        )
+        _place_manager_sig_in_box(doc.tables[3].rows[0].cells[0], ctx)
     except IndexError:
-        log.warning("Leave Permit: t3 r0 c0 missing — post-process skipped")
+        log.warning("Leave Permit: notes box (t3 r0 c0) missing — signature skipped")
+    _left_align_manager_block(doc, ctx)
 
 
 def _pp_admin_leave(doc: Any, ctx: dict[str, Any]) -> None:
-    """Behind-text floating signature at t2 r3 c1 — same reason as Leave Permit."""
-    sig_path = ctx.get("manager_sig_path")
-    if not sig_path:
-        return
+    """Move the manager signature down into the project-manager notes box (last
+    table), centred, beside the name — leaving the branch-manager التوقيع cell
+    blank for a separate manual signature — and left-align the name/title block."""
+    # Clear the literal "x" placeholder in the branch-manager التوقيع value cell
+    # so it reads as a clean, empty manual-signature line.
     try:
-        cell = doc.tables[2].rows[3].cells[1]
-        size_mm = float(ctx.get("_sig_size_mm", DEFAULT_SIG_SIZE_MM))
-        boldness = int(ctx.get("_sig_boldness", DEFAULT_SIG_BOLDNESS))
-        fill_image_behind_text_on_x_mark(
-            cell,
-            sig_path,
-            width_inches=size_mm / 25.4,
-            dilate_radius_px=boldness,
-        )
+        branch_sig_cell = doc.tables[2].rows[3].cells[1]
+        for para in branch_sig_cell.paragraphs:
+            if para.text and "x" in para.text.lower():
+                replace_paragraph_text(para, "")
     except IndexError:
-        log.warning("Admin Leave: t2 r3 c1 missing — post-process skipped")
+        log.warning("Admin Leave: branch التوقيع cell (t2 r3 c1) missing")
+    try:
+        _place_manager_sig_in_box(doc.tables[3].rows[-1].cells[0], ctx)
+    except IndexError:
+        log.warning("Admin Leave: notes box (last table) missing — signature skipped")
+    _left_align_manager_block(doc, ctx)
 
 
 def _pp_material_request(doc: Any, ctx: dict[str, Any]) -> None:

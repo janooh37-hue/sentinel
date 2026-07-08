@@ -3,23 +3,21 @@
 
 This file used to host v3.5.4's full X-mark fill toolkit (`fill_x_mark`,
 `set_cell_text`, `set_cell_image`, `fill_sig_and_date_on_x_mark`, etc.).
-After the move to docxtpl token rendering, only two helpers survive:
+After the move to docxtpl token rendering, only a few helpers survive:
 
-* `fill_image_behind_text_on_x_mark` — used by the 301-004 / 301-005 admin
-  forms so the manager-signature image anchors as a floating "behind text"
-  shape and doesn't grow the cell row height. python-docx has no public
-  API for this; we build the OOXML by hand.
+* `fill_image_centered_behind_text_in_cell` — used by the 301-004 / 301-005
+  leave forms so the manager-signature image anchors as a floating "behind
+  text" shape, centred in the notes box, without growing the cell row height.
+  python-docx has no public API for this; we build the OOXML by hand.
+* `float_inline_images_in_cell` — the same behind-text technique for images
+  already placed inline via a `{{ token }}` (Material Request).
 * `replace_paragraph_text` — used by the Resignation Letter post-process
   to swap dotted-line paragraphs for the reason text when the reason is
   too long to fit in the inline X slot.
-
-`fill_image_on_x_mark` is kept private (only the behind-text helper uses
-it internally as a fallback).
 """
 
 from __future__ import annotations
 
-import contextlib
 import io
 from pathlib import Path
 from typing import Any
@@ -37,169 +35,27 @@ _WP_NS = "http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing
 _A_NS = "http://schemas.openxmlformats.org/drawingml/2006/main"
 
 
-def _find_x_index(text: str) -> int:
-    """Index of the first 'X' or 'x' in `text`, or -1 if absent."""
-    idx_upper = text.find("X")
-    idx_lower = text.find("x")
-    if idx_upper == -1:
-        return idx_lower
-    if idx_lower == -1:
-        return idx_upper
-    return min(idx_upper, idx_lower)
-
-
-def _fill_image_on_x_mark(
-    cell: Any,
-    image_path: Path | str | None,
-    *,
-    width_inches: float = 1.4,
-    dilate_radius_px: int = DEFAULT_SIG_BOLDNESS,
-) -> bool:
-    """Replace the first X mark with an inline image (fallback path).
-
-    Internal — only called by `fill_image_behind_text_on_x_mark` when the
-    anchor swap fails. Returns True iff an X was found.
-    """
-    if not image_path or not Path(image_path).exists():
-        return False
-    for para in cell.paragraphs:
-        for run in para.runs:
-            if not run.text:
-                continue
-            idx = _find_x_index(run.text)
-            if idx < 0:
-                continue
-            t = run.text
-            run.text = t[:idx] + t[idx + 1 :]
-            img_run = para.add_run()
-            with contextlib.suppress(OSError, ValueError):
-                img_run.add_picture(
-                    io.BytesIO(
-                        prepare_signature(
-                            Path(image_path).read_bytes(),
-                            dilate_radius_px=dilate_radius_px,
-                        )
-                    ),
-                    width=Inches(width_inches),
-                )
-            return True
-    with contextlib.suppress(OSError, ValueError):
-        p = cell.add_paragraph()
-        p.alignment = WD_ALIGN_PARAGRAPH.CENTER
-        run = p.add_run()
-        run.add_picture(
-            io.BytesIO(
-                prepare_signature(
-                    Path(image_path).read_bytes(),
-                    dilate_radius_px=dilate_radius_px,
-                )
-            ),
-            width=Inches(width_inches),
-        )
-    return False
-
-
-def fill_image_behind_text_on_x_mark(
-    cell: Any,
-    image_path: Path | str | None,
-    *,
-    width_inches: float = 1.4,
-    dilate_radius_px: int = DEFAULT_SIG_BOLDNESS,
-) -> bool:
-    """Insert a 'behind text' floating image at the X mark.
-
-    Used on 301-004 / 301-005 admin forms so the manager-signature image
-    doesn't grow the cell and bump the date row below it. Falls back to
-    inline placement on any XML error.
-    """
-    if not image_path or not Path(image_path).exists():
-        return False
-    try:
-        target_run = None
-        target_para = None
-        for para in cell.paragraphs:
-            for run in para.runs:
-                if run.text and _find_x_index(run.text) >= 0:
-                    target_run, target_para = run, para
-                    break
-            if target_run is not None:
-                break
-        if target_run is None or target_para is None:
-            return _fill_image_on_x_mark(
-                cell, image_path, width_inches=width_inches, dilate_radius_px=dilate_radius_px
-            )
-        idx = _find_x_index(target_run.text)
-        t = target_run.text
-        target_run.text = t[:idx] + t[idx + 1 :]
-
-        img_run = target_para.add_run()
-        img_run.add_picture(
-            io.BytesIO(
-                prepare_signature(
-                    Path(image_path).read_bytes(),
-                    dilate_radius_px=dilate_radius_px,
-                )
-            ),
-            width=Inches(width_inches),
-        )
-        drawing = img_run._element.find(qn("w:drawing"))
-        if drawing is None:
-            return True
-        inline = drawing.find(f"{{{_WP_NS}}}inline")
-        if inline is None:
-            return True
-        extent = inline.find(f"{{{_WP_NS}}}extent")
-        cx = extent.get("cx") if extent is not None else None
-        cy = extent.get("cy") if extent is not None else None
-
-        anchor_xml = (
-            f'<wp:anchor xmlns:wp="{_WP_NS}" '
-            'distT="0" distB="0" distL="0" distR="0" simplePos="0" '
-            'relativeHeight="251660000" behindDoc="1" locked="0" '
-            'layoutInCell="1" allowOverlap="1">'
-            '<wp:simplePos x="0" y="0"/>'
-            '<wp:positionH relativeFrom="column">'
-            "<wp:posOffset>0</wp:posOffset></wp:positionH>"
-            '<wp:positionV relativeFrom="paragraph">'
-            "<wp:posOffset>0</wp:posOffset></wp:positionV>"
-            f'<wp:extent cx="{cx or 1143000}" cy="{cy or 457200}"/>'
-            '<wp:effectExtent l="0" t="0" r="0" b="0"/>'
-            "<wp:wrapNone/>"
-            "</wp:anchor>"
-        )
-        anchor = parse_xml(anchor_xml)
-        ns_uri = {"wp": _WP_NS, "a": _A_NS}
-        for prefixed in ("wp:docPr", "wp:cNvGraphicFramePr", "a:graphic"):
-            prefix, local = prefixed.split(":")
-            child = inline.find(f"{{{ns_uri[prefix]}}}{local}")
-            if child is not None:
-                anchor.append(child)
-        drawing.remove(inline)
-        drawing.append(anchor)
-        return True
-    except (OSError, ValueError, AttributeError):
-        try:
-            return _fill_image_on_x_mark(
-                cell, image_path, width_inches=width_inches, dilate_radius_px=dilate_radius_px
-            )
-        except (OSError, ValueError):
-            return False
-
-
 # One line of body text, in EMU (~14pt). Used to bottom-align a floated
 # signature to its (single-line) cell so it sits on the signature line and
 # rises UP into the empty cell above, rather than hanging down past it.
 _ONE_LINE_EMU = 177800
 
 
-def _convert_inline_drawing_to_anchor(drawing: Any, *, bottom_align: bool = False) -> bool:
+def _convert_inline_drawing_to_anchor(
+    drawing: Any, *, bottom_align: bool = False, center_horizontal: bool = False
+) -> bool:
     """Turn an inline ``<w:drawing>`` image into a 'behind text' floating anchor
     so it stops contributing to its cell/row height. Returns True if converted,
     False if the drawing carried no inline element (already a float).
 
-    ``bottom_align``: lift the image up by (its height − one line) so its bottom
+    ``bottom_align``: lift the image up by (its height - one line) so its bottom
     sits on the cell's single text line and the rest overflows upward into the
     (typically empty) cell above, instead of downward across the section below.
+
+    ``center_horizontal``: horizontally centre the float within its column (the
+    table cell) via ``<wp:align>center</wp:align>`` instead of pinning its left
+    edge at column offset 0 — used for a signature that should sit centred in a
+    wide notes box rather than hugging the left border.
     """
     inline = drawing.find(f"{{{_WP_NS}}}inline")
     if inline is None:
@@ -210,14 +66,18 @@ def _convert_inline_drawing_to_anchor(drawing: Any, *, bottom_align: bool = Fals
     v_offset = 0
     if bottom_align and cy is not None:
         v_offset = min(0, _ONE_LINE_EMU - int(cy))
+    position_h = (
+        '<wp:positionH relativeFrom="column"><wp:align>center</wp:align></wp:positionH>'
+        if center_horizontal
+        else '<wp:positionH relativeFrom="column"><wp:posOffset>0</wp:posOffset></wp:positionH>'
+    )
     anchor_xml = (
         f'<wp:anchor xmlns:wp="{_WP_NS}" '
         'distT="0" distB="0" distL="0" distR="0" simplePos="0" '
         'relativeHeight="251660000" behindDoc="1" locked="0" '
         'layoutInCell="1" allowOverlap="1">'
         '<wp:simplePos x="0" y="0"/>'
-        '<wp:positionH relativeFrom="column">'
-        "<wp:posOffset>0</wp:posOffset></wp:positionH>"
+        f"{position_h}"
         '<wp:positionV relativeFrom="paragraph">'
         f"<wp:posOffset>{v_offset}</wp:posOffset></wp:positionV>"
         f'<wp:extent cx="{cx or 1143000}" cy="{cy or 457200}"/>'
@@ -262,6 +122,44 @@ def float_inline_images_in_cell(cell: Any, *, bottom_align: bool = False) -> int
             except (ValueError, AttributeError):
                 continue
     return converted
+
+
+def fill_image_centered_behind_text_in_cell(
+    cell: Any,
+    image_path: Path | str | None,
+    *,
+    width_inches: float = 1.4,
+    dilate_radius_px: int = DEFAULT_SIG_BOLDNESS,
+) -> bool:
+    """Place *image_path* as a horizontally-centred, behind-text float resting
+    near the bottom of *cell* — used for the Leave Permit / Admin Leave manager
+    signature, which sits centred in the project-manager notes box.
+
+    The image is added inline to the cell's LAST paragraph (reusing an existing
+    blank line rather than adding one, so the box keeps its height) then floated
+    behind text, centred, and bottom-aligned so it rests on that line instead of
+    hanging off the box's bottom border. Returns True iff the image embedded.
+    """
+    if not image_path or not Path(image_path).exists():
+        return False
+    para = cell.paragraphs[-1] if cell.paragraphs else cell.add_paragraph()
+    run = para.add_run()
+    try:
+        run.add_picture(
+            io.BytesIO(
+                prepare_signature(Path(image_path).read_bytes(), dilate_radius_px=dilate_radius_px)
+            ),
+            width=Inches(width_inches),
+        )
+    except (OSError, ValueError):
+        return False
+    drawing = run._element.find(qn("w:drawing"))
+    if drawing is None:
+        return False
+    try:
+        return _convert_inline_drawing_to_anchor(drawing, bottom_align=True, center_horizontal=True)
+    except (ValueError, AttributeError):
+        return True  # image is embedded (inline); float conversion failed only
 
 
 def insert_floating_image_in_header(
@@ -354,7 +252,12 @@ def replace_paragraph_text(
     run.font.bold = bold
 
 
-__all__ = ["fill_image_behind_text_on_x_mark", "insert_floating_image_in_header", "replace_paragraph_text"]
+__all__ = [
+    "fill_image_centered_behind_text_in_cell",
+    "float_inline_images_in_cell",
+    "insert_floating_image_in_header",
+    "replace_paragraph_text",
+]
 
 
 # Ensure the OxmlElement re-export from the old module isn't accidentally
