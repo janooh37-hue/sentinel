@@ -30,9 +30,10 @@ import { canFileSignedCopy, canSendForApproval } from '@/components/books/book-d
 
 import { signedSourceOf } from './bookStateLabel'
 import { formKindOf, subjectEmployeePart } from './formKind'
-import { papersOf } from './recordPapers'
+import { papersOf, type Paper } from './recordPapers'
 import { StateSeal } from './StateSeal'
 import { useAddScan } from './useAddScan'
+import { useManagePaper } from './useManagePaper'
 
 const RecordPaperViewer = lazy(() => import('./RecordPaperViewer'))
 
@@ -59,7 +60,11 @@ export function RecordPane({
   const canScanCap = has('documents.scan')
   const canScan = canScanCap && canManage
   const fileRef = useRef<HTMLInputElement | null>(null)
+  const replaceRef = useRef<HTMLInputElement | null>(null)
   const addScan = useAddScan(book?.id ?? null)
+  const manage = useManagePaper(book?.id ?? null)
+  const [deleteTarget, setDeleteTarget] = useState<Paper | null>(null)
+  const [replaceTarget, setReplaceTarget] = useState<Paper | null>(null)
 
   const papers = useMemo(() => (book ? papersOf(book) : []), [book])
 
@@ -168,6 +173,15 @@ export function RecordPane({
           baseWidth={400}
           onOpenFull={() => setFullOpen(true)}
           addScanSlot={addScanSlot}
+          onDeletePaper={canManage ? setDeleteTarget : undefined}
+          onReplacePaper={
+            canManage
+              ? (p) => {
+                  setReplaceTarget(p)
+                  replaceRef.current?.click()
+                }
+              : undefined
+          }
           emptySlot={
             <div className="flex max-w-[24ch] flex-col items-center gap-1.5 text-center text-[0.78em] text-faint">
               <FileText className="h-7 w-7" aria-hidden />
@@ -251,6 +265,51 @@ export function RecordPane({
         }}
       />
 
+      {/* Delete a scan / unfile a signed copy (books.manage). A signed copy warns
+          that it reverts the record's approval. */}
+      <ConfirmDialog
+        open={deleteTarget !== null}
+        onOpenChange={(open) => {
+          if (!open) setDeleteTarget(null)
+        }}
+        title={
+          deleteTarget?.kind === 'signed'
+            ? t('books.pane.unfileSignedTitle')
+            : t('books.pane.deletePaperTitle')
+        }
+        description={
+          deleteTarget?.kind === 'signed'
+            ? t('books.pane.unfileSignedBody')
+            : t('books.pane.deletePaperBody')
+        }
+        confirmLabel={
+          deleteTarget?.kind === 'signed'
+            ? t('books.pane.unfileSignedConfirm')
+            : t('common.delete')
+        }
+        onConfirm={() => {
+          const p = deleteTarget
+          setDeleteTarget(null)
+          if (p) void manage.deletePaper(p)
+        }}
+      />
+
+      {/* Replace a scan / signed copy: the target paper is captured, then this
+          hidden input is clicked from the viewer's Replace button. */}
+      <input
+        ref={replaceRef}
+        type="file"
+        accept="application/pdf,image/*"
+        className="hidden"
+        onChange={(e) => {
+          const f = e.target.files?.[0]
+          const p = replaceTarget
+          setReplaceTarget(null)
+          if (f && p) void manage.replacePaper(p, f)
+          e.target.value = ''
+        }}
+      />
+
       <AlertDialog open={draftScan !== null} onOpenChange={(o) => { if (!o) setDraftScan(null) }}>
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -307,6 +366,15 @@ export function RecordPane({
                   baseWidth={620}
                   isOverlay
                   onClose={() => setFullOpen(false)}
+                  onDeletePaper={canManage ? setDeleteTarget : undefined}
+                  onReplacePaper={
+                    canManage
+                      ? (p) => {
+                          setReplaceTarget(p)
+                          replaceRef.current?.click()
+                        }
+                      : undefined
+                  }
                 />
               </Suspense>
             </div>,

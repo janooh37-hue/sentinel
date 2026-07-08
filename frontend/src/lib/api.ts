@@ -755,9 +755,9 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
   return unwrap<T>(await fetch(`${BASE}${path}`, init))
 }
 
-async function multipart<T>(path: string, form: FormData): Promise<T> {
+async function multipart<T>(path: string, form: FormData, method = 'POST'): Promise<T> {
   return unwrap<T>(
-    await fetch(`${BASE}${path}`, { method: 'POST', body: form, credentials: 'same-origin' }),
+    await fetch(`${BASE}${path}`, { method, body: form, credentials: 'same-origin' }),
   )
 }
 
@@ -1165,6 +1165,28 @@ export const api = {
     form.append('as_signed', asSigned ? 'true' : 'false')
     return multipart<BookRead>(`/books/${bookId}/attachments`, form)
   },
+  /** DELETE /books/{id}/attachments/{index} — remove a plain attachment (undo a
+   * wrongly-uploaded scan). books.manage. */
+  deleteBookAttachment: (bookId: number, index: number) =>
+    request<BookRead>('DELETE', `/books/${bookId}/attachments/${index}`),
+  /** PUT /books/{id}/attachments/{index} — replace a plain attachment's bytes,
+   * keeping its index. books.manage. */
+  replaceBookAttachment: (bookId: number, index: number, file: File) => {
+    const form = new FormData()
+    form.append('file', file)
+    return multipart<BookRead>(`/books/${bookId}/attachments/${index}`, form, 'PUT')
+  },
+  /** PUT /books/{id}/signed-copy — replace the signed copy's bytes, keeping the
+   * record approved. books.manage. */
+  replaceSignedCopy: (bookId: number, file: File) => {
+    const form = new FormData()
+    form.append('file', file)
+    return multipart<BookRead>(`/books/${bookId}/signed-copy`, form, 'PUT')
+  },
+  /** DELETE /books/{id}/signed-copy — unfile the signed copy and revert the
+   * record's approval state. books.manage. */
+  unfileSignedCopy: (bookId: number) =>
+    request<BookRead>('DELETE', `/books/${bookId}/signed-copy`),
 
   // --- scan inbox ---
   /** List scan-inbox items, optionally filtered by `state`. */
