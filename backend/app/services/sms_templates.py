@@ -138,22 +138,26 @@ def _duty_resumption(leave, emp: Employee, lang: str) -> str:
 
 def _violation(v, emp: Employee, lang: str) -> str:
     name = nf.employee_name(emp, lang)
-    typ = nf.type_labels(v.violation_type, lang)
     ds, wd = nf.fmt_date(v.date), nf.weekday(v.date, lang)
-    action = nf.action_text(v.action_taken, v.deduction_days, lang)
+    # The Violation Form stores the real content as free-text `description`
+    # (violation_type is usually "Others" and the action isn't decided yet), so
+    # show the description and ask the employee to come sign the record.
+    details = (getattr(v, "description", "") or "").strip()
     if lang == "ar":
+        detail_line = f"التفاصيل: {details}.\n" if details else ""
         return (
             f"عزيزي {name}،\n"
-            f"تم تسجيل {typ} بتاريخ {ds} ({wd}).\n"
-            f"الإجراء: {action}.\n"
-            f"يرجى مراجعة {nf.ADMIN_OFFICE_AR} لأي استفسار.\n"
+            f"تم تسجيل مخالفة بحقك بتاريخ {ds} ({wd}).\n"
+            f"{detail_line}"
+            f"يرجى الحضور إلى {nf.ADMIN_OFFICE_AR} للتوقيع على محضر المخالفة.\n"
             f"{_SIGNATURE_AR}"
         )
+    detail_line = f"Details: {details}.\n" if details else ""
     return (
         f"Dear {name},\n"
-        f"A {typ} has been recorded on {ds} ({wd}).\n"
-        f"Action: {action}.\n"
-        f"Please contact the administration office for any clarification.\n"
+        f"A violation has been recorded against you on {ds} ({wd}).\n"
+        f"{detail_line}"
+        f"Please come to the administration office to sign the violation record.\n"
         f"{_SIGNATURE_EN}"
     )
 
@@ -281,14 +285,14 @@ def _warning(rec, emp: Employee, lang: str) -> str:
             f"عزيزي {name}،\n"
             f"تم إصدار إنذار بحقك بتاريخ {ds} ({wd}).\n"
             f"المخالفة: {vtype}.\n"
-            f"يرجى مراجعة {nf.ADMIN_OFFICE_AR} لأي استفسار.\n"
+            f"يرجى الحضور إلى {nf.ADMIN_OFFICE_AR} للتوقيع على الإنذار.\n"
             f"{_SIGNATURE_AR}"
         )
     return (
         f"Dear {name},\n"
         f"A warning has been issued against you on {ds} ({wd}).\n"
         f"Violation: {vtype}.\n"
-        f"Please contact the administration office for any clarification.\n"
+        f"Please come to the administration office to sign the warning.\n"
         f"{_SIGNATURE_EN}"
     )
 

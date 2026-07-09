@@ -136,24 +136,33 @@ def test_duty_resumption_uses_return_date():
     )
 
 
-def test_violation_falls_back_to_deduction():
+def test_violation_shows_description_and_sign_request():
     emp = _emp(msg_language="en")
     v = Violation(
         id=3,
         employee_id="G1",
-        violation_type="Sleeping on Duty - النوم أثناء الخدمة",
+        violation_type="Others",
         date=date(2026, 7, 1),
         action_taken=None,
-        deduction_days=2,
+        deduction_days=0,
+        description="Left post without permission",
     )
     text = st.render_text("violation", "en", v, emp)
     assert text == (
         "Dear John Smith,\n"
-        "A Sleeping on Duty has been recorded on 01/07/2026 (Wednesday).\n"
-        "Action: 2 day(s) deduction.\n"
-        "Please contact the administration office for any clarification.\n"
+        "A violation has been recorded against you on 01/07/2026 (Wednesday).\n"
+        "Details: Left post without permission.\n"
+        "Please come to the administration office to sign the violation record.\n"
         "Al Wathba Rehabilitation Centre"
     )
+
+
+def test_violation_omits_details_line_when_no_description():
+    emp = _emp(msg_language="en")
+    v = Violation(id=5, employee_id="G1", violation_type="Others", date=date(2026, 7, 1))
+    text = st.render_text("violation", "en", v, emp)
+    assert "Details:" not in text
+    assert "sign the violation record" in text
 
 
 def test_unknown_event_raises():
@@ -286,7 +295,7 @@ def test_warning_ar_routes_to_admin_office():
     text = st.render_text(nf.EVENT_WARNING, "ar", rec, _emp())
     assert "تم إصدار إنذار بحقك بتاريخ 05/07/2026 (الأحد)." in text
     assert "المخالفة: التأخر عن الدوام." in text
-    assert "يرجى مراجعة مكتب الإدارة لأي استفسار." in text
+    assert "يرجى الحضور إلى مكتب الإدارة للتوقيع على الإنذار." in text
     assert "مكتب الموارد البشرية" not in text  # warnings route to admin, not HR
     assert not _has_ascii_letter(text.replace("05/07/2026", ""))
 
@@ -299,7 +308,7 @@ def test_warning_en():
     text = st.render_text(nf.EVENT_WARNING, "en", rec, _emp())
     assert "A warning has been issued against you on 05/07/2026 (Sunday)." in text
     assert "Violation: Late Attendance." in text
-    assert "Please contact the administration office for any clarification." in text
+    assert "Please come to the administration office to sign the warning." in text
     assert not any("؀" <= c <= "ۿ" for c in text)
 
 
@@ -327,19 +336,19 @@ def test_warning_multi_violation_en():
     assert not any("؀" <= c <= "ۿ" for c in text)
 
 
-def test_violation_multi_type_ar_no_leak():
+def test_violation_ar_shows_description_and_sign_request():
     emp = _emp()
     v = Violation(
         id=4,
         employee_id="G1",
-        violation_type="Late - التأخر، Sleeping - النوم",
+        violation_type="Others",
         date=date(2026, 7, 1),
         action_taken=None,
-        deduction_days=2,
+        deduction_days=0,
+        description="ترك موقع العمل دون إذن",
     )
     text = st.render_text("violation", "ar", v, emp)
-    assert "التأخر" in text
-    assert "النوم" in text
-    assert "Late" not in text
-    assert "Sleeping" not in text
+    assert "تم تسجيل مخالفة بحقك بتاريخ 01/07/2026" in text
+    assert "التفاصيل: ترك موقع العمل دون إذن." in text
+    assert "يرجى الحضور إلى مكتب الإدارة للتوقيع على محضر المخالفة." in text
     assert not _has_ascii_letter(text.replace("01/07/2026", ""))
