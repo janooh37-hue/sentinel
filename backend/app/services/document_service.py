@@ -235,6 +235,39 @@ class GenerationResult:
 # ---------------------------------------------------------------------------
 
 
+def companion_pdf_paths(db: Session, primary: Document) -> list[Path]:
+    """Absolute PDF paths of the companions filed under ``primary``'s submission.
+
+    Annual-leave / resignation forms auto-generate a companion (Leave Undertaking,
+    Resignation Declaration) as a separate Document sharing the primary's
+    ``submission_id``. Its pages are appended onto the primary's served PDF so the
+    record shows one merged document, not a second paper. Returns ``[]`` when
+    ``primary`` is itself a companion, has no companions, or a companion lacks a
+    PDF on disk.
+    """
+    if primary.role == "companion":
+        return []
+    rows = (
+        db.execute(
+            select(Document)
+            .where(Document.submission_id == primary.submission_id)
+            .where(Document.role == "companion")
+            .order_by(Document.id)
+        )
+        .scalars()
+        .all()
+    )
+    data_dir = get_settings().data_dir
+    out: list[Path] = []
+    for doc in rows:
+        if not doc.pdf_path:
+            continue
+        p = data_dir / doc.pdf_path
+        if p.is_file():
+            out.append(p)
+    return out
+
+
 @functools.cache
 def load_fields_meta() -> dict[str, Any]:
     """Return parsed _fields.json (category, fields, …) keyed by template_id."""

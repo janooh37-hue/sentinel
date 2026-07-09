@@ -3384,8 +3384,6 @@ export interface components {
             attachment_paths?: string[];
             /** Versions */
             versions?: components["schemas"]["BookVersionRead"][];
-            /** Companion Docs */
-            companion_docs?: components["schemas"]["CompanionDocRead"][];
             /** Sms */
             sms?: components["schemas"]["SmsMessageRead"][];
         };
@@ -3474,22 +3472,6 @@ export interface components {
             description: string;
             /** Default Roles */
             default_roles: string[];
-        };
-        /**
-         * CompanionDocRead
-         * @description An auto-generated companion document filed under the same record.
-         *
-         *     Annual-leave and resignation forms emit a companion (Leave Undertaking /
-         *     Resignation Declaration) that shares the primary's ``submission_id`` but is
-         *     not itself a book version. Surfaced so the record film-strip can show it as a
-         *     paper alongside the primary form; the client fetches bytes via the normal
-         *     ``/documents/{document_id}/download`` route.
-         */
-        CompanionDocRead: {
-            /** Document Id */
-            document_id: number;
-            /** Filename */
-            filename: string;
         };
         /** CompletenessRead */
         CompletenessRead: {

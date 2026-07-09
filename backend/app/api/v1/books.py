@@ -43,7 +43,6 @@ from app.schemas.book import (
     BookSubmitRequest,
     BookUpdate,
     BookVersionRead,
-    CompanionDocRead,
     ReviewersAddRequest,
     ReviewRequest,
 )
@@ -119,14 +118,6 @@ def list_books(
         item = BookRead.model_validate(r)
         item.subject = book_service.derive_subject(r)
         items.append(_enrich_path_fields(item, r))
-    # Companion papers (annual-leave Undertaking, etc.) — batched to avoid N+1.
-    # The desktop record pane reads its book off this list payload, so companions
-    # must be enriched here, not only on GET /books/{id}.
-    comp_map = book_service.companion_docs_for_books(db, rows)
-    for item in items:
-        comps = comp_map.get(item.id)
-        if comps:
-            item.companion_docs = [CompanionDocRead(**d) for d in comps]
     return BookListResponse(
         items=items,
         total=total,
@@ -277,7 +268,6 @@ def get_book(
         current.template_id if current is not None else None
     )
     item.imported_doc = book_service.imported_document_of(row)
-    item.companion_docs = [CompanionDocRead(**d) for d in book_service.companion_docs_of(db, row)]
     item.sms = [SmsMessageRead.model_validate(m) for m in book_service.sms_for_book(db, row)]
     return item
 

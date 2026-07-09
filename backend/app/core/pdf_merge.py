@@ -1,4 +1,5 @@
 """Merge attachment files (PDF or image) onto the end of a base PDF (spec §6)."""
+
 from __future__ import annotations
 
 from collections.abc import Sequence
@@ -7,6 +8,32 @@ from pathlib import Path
 import fitz  # PyMuPDF
 
 _IMAGE_EXTS = {".png", ".jpg", ".jpeg"}
+
+
+def merge_pdfs_to_bytes(base_pdf: Path, sources: Sequence[Path]) -> bytes:
+    """Return ``base_pdf`` with each source appended, as PDF bytes.
+
+    Like :func:`merge_attachments_into_pdf` but non-destructive — ``base_pdf`` on
+    disk is never modified. Used to serve a primary document's PDF with its
+    companion pages (Leave Undertaking, etc.) appended, without mutating the
+    stored original. Missing sources are skipped (serve-time must not 500).
+    """
+    out = fitz.open(base_pdf)
+    try:
+        for src in sources:
+            if not src.is_file():
+                continue
+            if src.suffix.lower() in _IMAGE_EXTS:
+                with fitz.open(src) as img:
+                    pdf_bytes = img.convert_to_pdf()
+                with fitz.open("pdf", pdf_bytes) as img_pdf:
+                    out.insert_pdf(img_pdf)
+            else:
+                with fitz.open(src) as src_doc:
+                    out.insert_pdf(src_doc)
+        return bytes(out.tobytes())
+    finally:
+        out.close()
 
 
 def merge_attachments_into_pdf(base_pdf: Path, sources: Sequence[Path]) -> None:

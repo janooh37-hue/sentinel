@@ -19,6 +19,7 @@ from __future__ import annotations
 import logging
 from datetime import datetime
 from typing import Annotated, Any, Literal
+from urllib.parse import quote
 
 from fastapi import (
     APIRouter,
@@ -37,6 +38,7 @@ from app.api._responses import maybe_base64
 from app.api.deps import get_current_user, require_capability
 from app.api.errors import AppError, NotFoundError
 from app.config import get_settings
+from app.core.pdf_merge import merge_pdfs_to_bytes
 from app.db.models import Document, User
 from app.db.session import SessionLocal, get_db
 from app.schemas._base import ORMBase
@@ -342,6 +344,22 @@ def get_document(
     return DocumentRead.model_validate(row)
 
 
+def _inline_pdf_response(content: bytes, filename: str) -> Response:
+    """Serve PDF bytes inline with an RFC 5987 Content-Disposition.
+
+    A raw ``Response`` header must be latin-1 encodable, so a bilingual filename
+    (Arabic employee name) needs an ASCII fallback plus a percent-encoded
+    ``filename*`` — the same shape ``FileResponse`` builds for us automatically.
+    """
+    ascii_name = filename.encode("ascii", "ignore").decode().strip() or "document.pdf"
+    disposition = f"inline; filename=\"{ascii_name}\"; filename*=UTF-8''{quote(filename)}"
+    return Response(
+        content=content,
+        media_type="application/pdf",
+        headers={"Content-Disposition": disposition},
+    )
+
+
 @documents_router.get("/{document_id}/download")
 def download_document(
     document_id: int,
@@ -406,6 +424,15 @@ def download_document(
                 f"File not found on disk for document {document_id}",
                 id=document_id,
             )
+        # Annual-leave / resignation forms file a companion (Leave Undertaking,
+        # etc.) as a separate doc sharing this submission. Append its pages so the
+        # record serves ONE merged PDF, not separate papers. Non-destructive.
+        comp_paths = document_service.companion_pdf_paths(db, row)
+        if comp_paths:
+            merged = merge_pdfs_to_bytes(orig_path, comp_paths)
+            if (b64 := maybe_base64(merged, encoding)) is not None:
+                return b64
+            return _inline_pdf_response(merged, document_service.download_filename_for(row, ".pdf"))
         if (b64 := maybe_base64(orig_path.read_bytes(), encoding)) is not None:
             return b64
         return FileResponse(
@@ -432,6 +459,9 @@ def download_document(
             http_status=status.HTTP_403_FORBIDDEN,
         )
 
+    # Only the pre-signature generated PDF gets companion pages appended (not the
+    # signed scan-back, not DOCX). Set when we serve row.pdf_path below.
+    merge_companions = False
     if locked and signed_rel is not None:
         if format == "docx":
             raise AppError(
@@ -450,6 +480,7 @@ def download_document(
         file_path = settings.data_dir / row.pdf_path
         media_type = "application/pdf"
         ext = ".pdf"
+        merge_companions = True
     elif format == "pdf":
         # PDF explicitly requested but conversion never produced one (e.g. a
         # DRAFT preview on a host without Word). Return a clean signal instead
@@ -484,6 +515,24 @@ def download_document(
             "FILE_NOT_FOUND",
             f"File not found on disk for document {document_id}",
             id=document_id,
+        )
+
+    # Merge companion pages onto the generated PDF (annual-leave Undertaking,
+    # etc.) so the record — and every consumer of this URL (preview, email,
+    # print) — sees one document, not separate papers. Non-destructive.
+    comp_paths = document_service.companion_pdf_paths(db, row) if merge_companions else []
+    if comp_paths:
+        merged = merge_pdfs_to_bytes(file_path, comp_paths)
+        if (b64 := maybe_base64(merged, encoding)) is not None:
+            return b64
+        return Response(
+            content=merged,
+            media_type="application/pdf",
+            headers={
+                "Content-Disposition": (
+                    f'inline; filename="{document_service.download_filename_for(row, ".pdf")}"'
+                )
+            },
         )
 
     # base64 branch — opaque text/plain body that PDF handlers / download
