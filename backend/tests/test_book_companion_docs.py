@@ -113,6 +113,20 @@ def test_book_detail_exposes_companion_docs(api_db) -> None:
     assert ids == [companion.id]
 
 
+def test_book_list_exposes_companion_docs(api_db) -> None:
+    """The records list (GET /books) — which feeds the desktop record pane — must
+    also carry companion_docs, not just the detail endpoint."""
+    book, _primary, companion = _book_with_companion(api_db)
+    c = _client(api_db, _user(api_db))
+
+    resp = c.get("/api/v1/books?limit=500")
+
+    assert resp.status_code == 200
+    item = next(b for b in resp.json()["items"] if b["id"] == book.id)
+    ids = [d["document_id"] for d in item["companion_docs"]]
+    assert ids == [companion.id]
+
+
 def test_book_detail_no_companion_when_none(api_db) -> None:
     """A book with only a primary document reports an empty companion list."""
     api_db.add(BookCategory(id="HR", prefix="HR"))

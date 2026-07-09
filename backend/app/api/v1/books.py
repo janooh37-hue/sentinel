@@ -119,6 +119,14 @@ def list_books(
         item = BookRead.model_validate(r)
         item.subject = book_service.derive_subject(r)
         items.append(_enrich_path_fields(item, r))
+    # Companion papers (annual-leave Undertaking, etc.) — batched to avoid N+1.
+    # The desktop record pane reads its book off this list payload, so companions
+    # must be enriched here, not only on GET /books/{id}.
+    comp_map = book_service.companion_docs_for_books(db, rows)
+    for item in items:
+        comps = comp_map.get(item.id)
+        if comps:
+            item.companion_docs = [CompanionDocRead(**d) for d in comps]
     return BookListResponse(
         items=items,
         total=total,

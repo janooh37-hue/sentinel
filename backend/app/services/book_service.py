@@ -1078,6 +1078,12 @@ def imported_document_of(book: Book) -> dict[str, Any] | None:
     }
 
 
+def _companion_payload(doc: Document) -> dict[str, Any]:
+    src = doc.pdf_path or doc.docx_path
+    filename = PurePath(src).name if src else f"{doc.ref_number}-companion.pdf"
+    return {"document_id": doc.id, "filename": filename}
+
+
 def companion_docs_of(db: Session, book: Book) -> list[dict[str, Any]]:
     """List companion documents filed under this book's current version.
 
@@ -1103,11 +1109,50 @@ def companion_docs_of(db: Session, book: Book) -> list[dict[str, Any]]:
         .scalars()
         .all()
     )
-    out: list[dict[str, Any]] = []
-    for doc in rows:
-        src = doc.pdf_path or doc.docx_path
-        filename = PurePath(src).name if src else f"{doc.ref_number}-companion.pdf"
-        out.append({"document_id": doc.id, "filename": filename})
+    return [_companion_payload(doc) for doc in rows]
+
+
+def companion_docs_for_books(db: Session, books: Sequence[Book]) -> dict[int, list[dict[str, Any]]]:
+    """Batched ``companion_docs_of`` for a list of books — one query per stage,
+    no N+1. Returns ``{book_id: [companion payloads]}`` (books with none omitted).
+
+    Used by the records list (GET /books), which feeds the desktop record pane:
+    the pane reads its book straight off the list payload, so companions must be
+    enriched there too, not only on the detail endpoint.
+    """
+    # current-version document_id → book_id
+    doc_to_book: dict[int, int] = {}
+    for b in books:
+        current = b.versions[-1] if b.versions else None
+        if current is not None and current.document_id is not None:
+            doc_to_book[current.document_id] = b.id
+    if not doc_to_book:
+        return {}
+    # primary document_id → submission_id → book_id
+    sub_to_book: dict[str, int] = {}
+    for did, sub in db.execute(
+        select(Document.id, Document.submission_id).where(Document.id.in_(doc_to_book))
+    ).all():
+        bid = doc_to_book.get(did)
+        if bid is not None:
+            sub_to_book[sub] = bid
+    if not sub_to_book:
+        return {}
+    comp_rows = (
+        db.execute(
+            select(Document)
+            .where(Document.submission_id.in_(list(sub_to_book)))
+            .where(Document.role == "companion")
+            .order_by(Document.id)
+        )
+        .scalars()
+        .all()
+    )
+    out: dict[int, list[dict[str, Any]]] = {}
+    for doc in comp_rows:
+        bid = sub_to_book.get(doc.submission_id)
+        if bid is not None:
+            out.setdefault(bid, []).append(_companion_payload(doc))
     return out
 
 
