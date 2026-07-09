@@ -183,11 +183,13 @@ export function RecordPaperViewer({
   const kindLabel = (p: Paper): string =>
     p.kind === 'generated'
       ? t('books.pane.generated')
-      : p.kind === 'signed'
-        ? t('books.pane.signedCopy')
-        : p.kind === 'imported'
-          ? t('books.pane.imported')
-          : t('books.pane.scan')
+      : p.kind === 'companion'
+        ? t('books.pane.companion')
+        : p.kind === 'signed'
+          ? t('books.pane.signedCopy')
+          : p.kind === 'imported'
+            ? t('books.pane.imported')
+            : t('books.pane.scan')
 
   return (
     <div className={cn('flex min-h-0 flex-1 flex-col', isOverlay && 'h-full')}>

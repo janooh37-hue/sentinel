@@ -139,6 +139,20 @@ class BookAnnotationRead(ORMBase):
     created_at: datetime
 
 
+class CompanionDocRead(BaseModel):
+    """An auto-generated companion document filed under the same record.
+
+    Annual-leave and resignation forms emit a companion (Leave Undertaking /
+    Resignation Declaration) that shares the primary's ``submission_id`` but is
+    not itself a book version. Surfaced so the record film-strip can show it as a
+    paper alongside the primary form; the client fetches bytes via the normal
+    ``/documents/{document_id}/download`` route.
+    """
+
+    document_id: int
+    filename: str
+
+
 class ImportedDocRead(BaseModel):
     """The local vault file backing a v3-imported record.
 
@@ -199,6 +213,9 @@ class BookRead(ORMBase):
     approval_steps: list[BookApprovalStepRead] = Field(default_factory=list)
     attachment_paths: list[str] = Field(default_factory=list)
     versions: list[BookVersionRead] = Field(default_factory=list)
+    # Auto-generated companion documents (Leave Undertaking / Resignation
+    # Declaration) sharing the primary's submission_id — rendered as extra papers.
+    companion_docs: list[CompanionDocRead] = Field(default_factory=list)
     # SMS notifications sent for this book (auto-send + resends).
     sms: list[SmsMessageRead] = Field(default_factory=list)
 

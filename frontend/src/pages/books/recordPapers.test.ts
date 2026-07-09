@@ -46,4 +46,20 @@ describe('papersOf', () => {
     expect(papers.map((p) => p.kind)).toEqual(['generated'])
     expect(papers[0].url).toContain('original=true')
   })
+
+  it('adds a companion paper for each companion document', () => {
+    const bookWithCompanion = {
+      id: 3,
+      ref_number: 'HR-3',
+      versions: [{ version_no: 1, document_id: 7, status: 'approved' }],
+      attachment_paths: [],
+      companion_docs: [{ document_id: 42, filename: 'undertaking.pdf' }],
+    }
+    const papers = papersOf(bookWithCompanion as never)
+    const companion = papers.find((p) => p.kind === 'companion')!
+    expect(companion).toBeDefined()
+    expect(companion.url).toBe('/api/v1/documents/42/download?format=pdf')
+    expect(companion.isPdf).toBe(true)
+    expect(companion.filename).toBe('undertaking.pdf')
+  })
 })

@@ -43,6 +43,7 @@ from app.schemas.book import (
     BookSubmitRequest,
     BookUpdate,
     BookVersionRead,
+    CompanionDocRead,
     ReviewersAddRequest,
     ReviewRequest,
 )
@@ -268,6 +269,7 @@ def get_book(
         current.template_id if current is not None else None
     )
     item.imported_doc = book_service.imported_document_of(row)
+    item.companion_docs = [CompanionDocRead(**d) for d in book_service.companion_docs_of(db, row)]
     item.sms = [SmsMessageRead.model_validate(m) for m in book_service.sms_for_book(db, row)]
     return item
 

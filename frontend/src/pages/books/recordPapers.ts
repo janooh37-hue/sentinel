@@ -8,7 +8,7 @@
  */
 import { currentBookDocId } from '@/lib/bookDocument'
 
-export type PaperKind = 'generated' | 'signed' | 'scan' | 'imported'
+export type PaperKind = 'generated' | 'companion' | 'signed' | 'scan' | 'imported'
 
 export interface Paper {
   kind: PaperKind
@@ -36,12 +36,18 @@ interface ImportedDocLike {
   filename: string
 }
 
+interface CompanionDocLike {
+  document_id: number
+  filename: string
+}
+
 interface BookLike {
   id: number
   ref_number: string
   attachment_paths?: string[] | null
   versions?: VersionLike[] | null
   imported_doc?: ImportedDocLike | null
+  companion_docs?: CompanionDocLike[] | null
 }
 
 const IMAGE_EXT = /\.(png|jpe?g|gif|webp|bmp)$/i
@@ -64,6 +70,21 @@ export function papersOf(book: BookLike): Paper[] {
       isPdf: true,
     })
   }
+
+  // Companion documents (annual-leave Undertaking, resignation Declaration) are
+  // generated alongside the primary form but filed as separate Document rows, so
+  // they get their own papers right after the original form.
+  const companions = book.companion_docs ?? []
+  companions.forEach((comp) => {
+    const url = `/api/v1/documents/${comp.document_id}/download?format=pdf`
+    papers.push({
+      kind: 'companion',
+      url,
+      downloadUrl: url,
+      filename: comp.filename,
+      isPdf: true,
+    })
+  })
 
   // v3-imported record: the file lives in the employee vault (no generated
   // document). Show it as a paper only when a PDF rendition is viewable; the
@@ -120,5 +141,6 @@ export function paperCountOf(book: BookLike): number {
   const generated = currentBookDocId(book) !== undefined ? 1 : 0
   const signed = current?.status === 'approved' && current.signed_pdf_url ? 1 : 0
   const imported = book.imported_doc?.pdf_url ? 1 : 0
-  return generated + signed + imported + (book.attachment_paths?.length ?? 0)
+  const companions = book.companion_docs?.length ?? 0
+  return generated + companions + signed + imported + (book.attachment_paths?.length ?? 0)
 }

@@ -29,6 +29,7 @@ from app.db.models import (
     BookApprovalStep,
     BookCategory,
     BookVersion,
+    Document,
     Employee,
     Manager,
     SmsMessage,
@@ -1075,6 +1076,39 @@ def imported_document_of(book: Book) -> dict[str, Any] | None:
         "filename": filename,
         "format": fmt,
     }
+
+
+def companion_docs_of(db: Session, book: Book) -> list[dict[str, Any]]:
+    """List companion documents filed under this book's current version.
+
+    Annual-leave and resignation forms auto-generate a companion document
+    (Leave Undertaking / Resignation Declaration) that shares the primary's
+    ``submission_id`` but has no book version of its own, so the film-strip
+    (built from ``book.versions``) never showed it. Resolve companions by the
+    current version's ``submission_id`` so the client can render them as papers.
+    """
+    current = book.versions[-1] if book.versions else None
+    if current is None or current.document_id is None:
+        return []
+    primary = db.get(Document, current.document_id)
+    if primary is None:
+        return []
+    rows = (
+        db.execute(
+            select(Document)
+            .where(Document.submission_id == primary.submission_id)
+            .where(Document.role == "companion")
+            .order_by(Document.id)
+        )
+        .scalars()
+        .all()
+    )
+    out: list[dict[str, Any]] = []
+    for doc in rows:
+        src = doc.pdf_path or doc.docx_path
+        filename = PurePath(src).name if src else f"{doc.ref_number}-companion.pdf"
+        out.append({"document_id": doc.id, "filename": filename})
+    return out
 
 
 def resolve_imported_file(book: Book, *, prefer: str) -> Path | None:
