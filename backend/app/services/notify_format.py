@@ -13,7 +13,10 @@ from datetime import date
 from app.core.constants import ARABIC_WEEKDAYS
 from app.db.models import Employee
 
+EVENT_LEAVE_REQUESTED = "leave_requested"
 EVENT_LEAVE_APPROVED = "leave_approved"
+EVENT_LEAVE_REJECTED = "leave_rejected"
+EVENT_LEAVE_CANCELLED = "leave_cancelled"
 EVENT_DUTY_RESUMPTION = "duty_resumption"
 EVENT_VIOLATION = "violation"
 EVENT_SALARY_TRANSFER = "salary_transfer"

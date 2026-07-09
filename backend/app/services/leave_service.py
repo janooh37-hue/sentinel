@@ -7,6 +7,7 @@ Phase 06 expands this module with full management operations.
 from __future__ import annotations
 
 import json
+import logging
 import re
 import time
 from datetime import date, datetime
@@ -27,6 +28,8 @@ from app.schemas.leave import LeaveBalanceRead, LeaveCreate, LeaveStatus, LeaveU
 # Simple TTL cache for balance results
 # key → (value, expires_at_monotonic)
 # ---------------------------------------------------------------------------
+
+log = logging.getLogger(__name__)
 
 _balance_cache: dict[tuple[str, date], tuple[LeaveBalanceRead, float]] = {}
 _CACHE_TTL = 60.0  # seconds
@@ -65,18 +68,13 @@ class _DbLeaveHistory:
     def __init__(self, db: Session) -> None:
         self._db = db
 
-    def get_employee_leaves_in_year(
-        self, g_number: str, year: int, leave_type: str
-    ) -> float:
-        stmt = (
-            select(func.coalesce(func.sum(Leave.days), 0))
-            .where(
-                Leave.employee_id == g_number,
-                Leave.leave_type == leave_type,
-                func.strftime("%Y", Leave.start_date) == str(year),
-                Leave.deleted_at.is_(None),
-                Leave.status.notin_(("Rejected", "Cancelled")),
-            )
+    def get_employee_leaves_in_year(self, g_number: str, year: int, leave_type: str) -> float:
+        stmt = select(func.coalesce(func.sum(Leave.days), 0)).where(
+            Leave.employee_id == g_number,
+            Leave.leave_type == leave_type,
+            func.strftime("%Y", Leave.start_date) == str(year),
+            Leave.deleted_at.is_(None),
+            Leave.status.notin_(("Rejected", "Cancelled")),
         )
         result = self._db.execute(stmt).scalar()
         return float(result or 0)
@@ -88,16 +86,13 @@ class _DbLeaveHistory:
         end: datetime,
         leave_type: str,
     ) -> float:
-        stmt = (
-            select(func.coalesce(func.sum(Leave.days), 0))
-            .where(
-                Leave.employee_id == g_number,
-                Leave.leave_type == leave_type,
-                Leave.start_date >= start.date(),
-                Leave.start_date <= end.date(),
-                Leave.deleted_at.is_(None),
-                Leave.status.notin_(("Rejected", "Cancelled")),
-            )
+        stmt = select(func.coalesce(func.sum(Leave.days), 0)).where(
+            Leave.employee_id == g_number,
+            Leave.leave_type == leave_type,
+            Leave.start_date >= start.date(),
+            Leave.start_date <= end.date(),
+            Leave.deleted_at.is_(None),
+            Leave.status.notin_(("Rejected", "Cancelled")),
         )
         result = self._db.execute(stmt).scalar()
         return float(result or 0)
@@ -196,10 +191,13 @@ def get_leave(db: Session, leave_id: int, *, include_deleted: bool = False) -> L
     return row
 
 
-def update_leave(db: Session, leave_id: int, payload: LeaveUpdate, *, actor: str | None = None) -> Leave:
+def update_leave(
+    db: Session, leave_id: int, payload: LeaveUpdate, *, actor: str | None = None
+) -> Leave:
     """Apply a PATCH payload with per-kind lifecycle enforcement."""
     row = get_leave(db, leave_id)
 
+    status_changed = False
     if payload.status is not None:
         old_status = row.status
         new_status: LeaveStatus = payload.status
@@ -212,6 +210,7 @@ def update_leave(db: Session, leave_id: int, payload: LeaveUpdate, *, actor: str
                 requested_status=new_status,
             )
         row.status = new_status
+        status_changed = True
         _audit(db, "leave.status_changed", leave_id, actor, {"from": old_status, "to": new_status})
 
     if payload.start_date is not None or payload.end_date is not None:
@@ -233,7 +232,10 @@ def update_leave(db: Session, leave_id: int, payload: LeaveUpdate, *, actor: str
         row.end_date = new_end
         row.days = (new_end - new_start).days + 1
         _audit(
-            db, "leave.dates_changed", leave_id, actor,
+            db,
+            "leave.dates_changed",
+            leave_id,
+            actor,
             {"from": old, "to": {"start": str(new_start), "end": str(new_end), "days": row.days}},
         )
 
@@ -244,6 +246,15 @@ def update_leave(db: Session, leave_id: int, payload: LeaveUpdate, *, actor: str
     db.commit()
     db.refresh(row)
     _cache_invalidate_employee(row.employee_id)
+    # Notify the employee of the new step (approved / rejected / cancelled).
+    # Best-effort — a gateway hiccup must never fail the status change.
+    if status_changed:
+        try:
+            from app.services import sms_service
+
+            sms_service.auto_send_leave_status(db, leave_id)
+        except Exception:
+            log.exception("auto leave-status SMS failed for leave %s", leave_id)
     return row
 
 
@@ -263,7 +274,9 @@ def create_leave(db: Session, payload: LeaveCreate, *, actor: str | None = None)
             id=payload.employee_id,
         )
     if payload.end_date < payload.start_date:
-        raise ValidationFailedError("LEAVE_DATES_INVALID", "end_date must be on or after start_date")
+        raise ValidationFailedError(
+            "LEAVE_DATES_INVALID", "end_date must be on or after start_date"
+        )
 
     row = Leave(
         employee_id=payload.employee_id,
@@ -290,8 +303,7 @@ _UNSAFE_CHARS = re.compile(
     # Path separators / control chars PLUS unicode bidi-control, zero-width
     # and BOM codepoints that pass ``isalnum`` but enable display-name
     # spoofing (e.g. U+202E RIGHT-TO-LEFT OVERRIDE in a filename).
-    "[\\/:*?\"<>|\x00-\x1f"
-    "\u200b-\u200f\u202a-\u202e\u2066-\u2069\ufeff]"
+    '[\\/:*?"<>|\x00-\x1f\u200b-\u200f\u202a-\u202e\u2066-\u2069\ufeff]'
 )
 
 
@@ -371,13 +383,8 @@ def file_return(
 
     row = get_leave(db, leave_id)
     has_cert = bool(row.certificate_path)
-    if not leave_lifecycle.can_file_return(
-        row.leave_type, row.status, has_certificate=has_cert
-    ):
-        if (
-            leave_lifecycle.classify_group(row.leave_type) == "national_service"
-            and not has_cert
-        ):
+    if not leave_lifecycle.can_file_return(row.leave_type, row.status, has_certificate=has_cert):
+        if leave_lifecycle.classify_group(row.leave_type) == "national_service" and not has_cert:
             raise ValidationFailedError(
                 "LEAVE_RETURN_NEEDS_CERTIFICATE",
                 "Upload the completion certificate before filing the return form",
@@ -417,21 +424,20 @@ def file_return(
     row.return_date = resumption_date
     last_doc = (
         db.execute(
-            select(Document)
-            .where(Document.leave_id == leave_id)
-            .order_by(Document.id.desc())
+            select(Document).where(Document.leave_id == leave_id).order_by(Document.id.desc())
         )
         .scalars()
         .first()
     )
-    row.return_doc_path = (
-        (last_doc.pdf_path or last_doc.docx_path) if last_doc else None
-    )
+    row.return_doc_path = (last_doc.pdf_path or last_doc.docx_path) if last_doc else None
     row.status = "Completed"
     row.updated_at = _utcnow()
     _audit(db, "leave.status_changed", leave_id, actor, {"from": old, "to": "Completed"})
     _audit(
-        db, "leave.return_filed", leave_id, actor,
+        db,
+        "leave.return_filed",
+        leave_id,
+        actor,
         {"resumption_date": str(resumption_date)},
     )
     db.commit()
@@ -485,18 +491,14 @@ def compute_balance(
 
     history = _DbLeaveHistory(db)
     as_of_dt = datetime(as_of.year, as_of.month, as_of.day)
-    doj_dt = (
-        datetime(emp.doj.year, emp.doj.month, emp.doj.day) if emp.doj is not None else None
-    )
+    doj_dt = datetime(emp.doj.year, emp.doj.month, emp.doj.day) if emp.doj is not None else None
     result = LeaveBalance(history).compute(employee_id, doj_dt, as_of=as_of_dt)
 
     # Available annual days = accrual + carry-over, capped (mirrors the
     # ``total_available`` clamp inside LeaveBalance._annual). Equivalent to
     # annual_remaining + annual_taken pre-clamp; computed here so the API
     # exposes the progress-meter denominator without recomputing the cap.
-    annual_total = round(
-        min(result.annual_accrued + result.carry_over, TOTAL_AVAILABLE_CAP), 1
-    )
+    annual_total = round(min(result.annual_accrued + result.carry_over, TOTAL_AVAILABLE_CAP), 1)
 
     balance_read = LeaveBalanceRead(
         employee_id=employee_id,
@@ -523,6 +525,7 @@ def compute_balance(
 
 def _utcnow() -> datetime:
     from datetime import UTC
+
     return datetime.now(UTC).replace(tzinfo=None)
 
 

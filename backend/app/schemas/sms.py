@@ -9,7 +9,14 @@ from pydantic import BaseModel
 
 from app.schemas._base import ORMBase
 
-EventType = Literal["leave_approved", "duty_resumption", "violation"]
+EventType = Literal[
+    "leave_requested",
+    "leave_approved",
+    "leave_rejected",
+    "leave_cancelled",
+    "duty_resumption",
+    "violation",
+]
 
 
 class SmsMessageRead(ORMBase):

@@ -5794,7 +5794,7 @@ export interface components {
              * Event Type
              * @enum {string}
              */
-            event_type: "leave_approved" | "duty_resumption" | "violation";
+            event_type: "leave_requested" | "leave_approved" | "leave_rejected" | "leave_cancelled" | "duty_resumption" | "violation";
             /** Record Id */
             record_id: number;
         };

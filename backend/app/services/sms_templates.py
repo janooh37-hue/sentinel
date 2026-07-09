@@ -57,6 +57,73 @@ def _leave_approved(leave, emp: Employee, lang: str) -> str:
     )
 
 
+def _leave_requested(leave, emp: Employee, lang: str) -> str:
+    name = nf.employee_name(emp, lang)
+    typ = nf.type_label(leave.leave_type, lang)
+    s, sw = nf.fmt_date(leave.start_date), nf.weekday(leave.start_date, lang)
+    e, ew = nf.fmt_date(leave.end_date), nf.weekday(leave.end_date, lang)
+    days = str(leave.days)
+    if lang == "ar":
+        return (
+            f"عزيزي {name}،\n"
+            f"تم تقديم طلبك ({typ}) وهو قيد المراجعة.\n"
+            f"تاريخ البداية: {s} ({sw})\n"
+            f"تاريخ النهاية: {e} ({ew})\n"
+            f"المدة: {days} يوم.\n"
+            f"سيتم إبلاغك عند اتخاذ القرار.\n"
+            f"{_SIGNATURE_AR}"
+        )
+    return (
+        f"Dear {name},\n"
+        f"Your {typ} request has been submitted and is under review.\n"
+        f"Start: {s} ({sw})\n"
+        f"End: {e} ({ew})\n"
+        f"Duration: {days} day(s).\n"
+        f"You will be notified once a decision is made.\n"
+        f"{_SIGNATURE_EN}"
+    )
+
+
+def _leave_rejected(leave, emp: Employee, lang: str) -> str:
+    name = nf.employee_name(emp, lang)
+    typ = nf.type_label(leave.leave_type, lang)
+    s = nf.fmt_date(leave.start_date)
+    e = nf.fmt_date(leave.end_date)
+    if lang == "ar":
+        return (
+            f"عزيزي {name}،\n"
+            f"نأسف لإبلاغك برفض طلب إجازتك ({typ}) من {s} إلى {e}.\n"
+            f"{_HR_OFFICE_LINE_AR}\n"
+            f"{_SIGNATURE_AR}"
+        )
+    return (
+        f"Dear {name},\n"
+        f"Your {typ} request from {s} to {e} has been rejected.\n"
+        f"{_HR_OFFICE_LINE_EN}\n"
+        f"{_SIGNATURE_EN}"
+    )
+
+
+def _leave_cancelled(leave, emp: Employee, lang: str) -> str:
+    name = nf.employee_name(emp, lang)
+    typ = nf.type_label(leave.leave_type, lang)
+    s = nf.fmt_date(leave.start_date)
+    e = nf.fmt_date(leave.end_date)
+    if lang == "ar":
+        return (
+            f"عزيزي {name}،\n"
+            f"تم إلغاء طلب إجازتك ({typ}) من {s} إلى {e}.\n"
+            f"{_HR_OFFICE_LINE_AR}\n"
+            f"{_SIGNATURE_AR}"
+        )
+    return (
+        f"Dear {name},\n"
+        f"Your {typ} from {s} to {e} has been cancelled.\n"
+        f"{_HR_OFFICE_LINE_EN}\n"
+        f"{_SIGNATURE_EN}"
+    )
+
+
 def _duty_resumption(leave, emp: Employee, lang: str) -> str:
     name = nf.employee_name(emp, lang)
     d = leave.return_date or leave.end_date
@@ -234,7 +301,10 @@ def _warning(rec, emp: Employee, lang: str) -> str:
 
 
 _BUILDERS = {
+    nf.EVENT_LEAVE_REQUESTED: _leave_requested,
     nf.EVENT_LEAVE_APPROVED: _leave_approved,
+    nf.EVENT_LEAVE_REJECTED: _leave_rejected,
+    nf.EVENT_LEAVE_CANCELLED: _leave_cancelled,
     nf.EVENT_DUTY_RESUMPTION: _duty_resumption,
     nf.EVENT_VIOLATION: _violation,
     nf.EVENT_SALARY_TRANSFER: _salary_transfer,

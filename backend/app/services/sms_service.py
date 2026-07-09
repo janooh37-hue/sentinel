@@ -16,8 +16,9 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.config import get_settings
+from app.core import leave_lifecycle
 from app.core.phone import normalize_phone
-from app.db.models import Book, Employee, Leave, SmsMessage, Violation
+from app.db.models import Book, Document, Employee, Leave, SmsMessage, Violation
 from app.services import notify_format as nf
 from app.services import sms_client, sms_templates
 
@@ -62,10 +63,23 @@ def _load_book_event(db: Session, book_id: int) -> BookEvent | None:
 
 
 _LOADERS = {
+    nf.EVENT_LEAVE_REQUESTED: _load_leave,
     nf.EVENT_LEAVE_APPROVED: _load_leave,
+    nf.EVENT_LEAVE_REJECTED: _load_leave,
+    nf.EVENT_LEAVE_CANCELLED: _load_leave,
     nf.EVENT_DUTY_RESUMPTION: _load_leave,
     nf.EVENT_VIOLATION: _load_violation,
     **{ev: _load_book_event for ev in nf.BOOK_EVENTS},
+}
+
+# Leave canonical status → the SMS event that notifies the employee of that step.
+# 'Completed' is intentionally absent: the return-to-duty SMS is duty_resumption,
+# sent from the leave-return flow, not here.
+_LEAVE_STATUS_EVENTS = {
+    "Pending": nf.EVENT_LEAVE_REQUESTED,
+    "Approved": nf.EVENT_LEAVE_APPROVED,
+    "Rejected": nf.EVENT_LEAVE_REJECTED,
+    "Cancelled": nf.EVENT_LEAVE_CANCELLED,
 }
 
 
@@ -152,6 +166,36 @@ def send_for_event(db: Session, event_type: str, record_id: int, sent_by: int | 
     )
 
 
+def _send_leave_status(db: Session, leave_id: int, *, sent_by: int | None) -> SmsMessage | None:
+    """Send the SMS matching a leave's current canonical status. No flag checks."""
+    leave = db.get(Leave, leave_id)
+    if leave is None or leave.employee_id is None:
+        return None
+    event = _LEAVE_STATUS_EVENTS.get(leave_lifecycle.canonical_status(leave.status))
+    if event is None:
+        return None
+    return send_for_event(db, event, leave_id, sent_by=sent_by)
+
+
+def _autosend_enabled(db: Session) -> bool:
+    from app.services import settings_service
+
+    return bool(get_settings().sms_enabled) and bool(
+        settings_service.get_settings(db).sms_autosend_enabled
+    )
+
+
+def auto_send_leave_status(
+    db: Session, leave_id: int, *, sent_by: int | None = None
+) -> SmsMessage | None:
+    """Best-effort SMS for a leave's current status (request/approved/rejected/
+    cancelled). No-ops unless SMS + auto-send are enabled and the status maps to
+    an event. Called on generation and on every status change."""
+    if not _autosend_enabled(db):
+        return None
+    return _send_leave_status(db, leave_id, sent_by=sent_by)
+
+
 def auto_send_for_book(
     db: Session, book_id: int, *, sent_by: int | None = None
 ) -> SmsMessage | None:
@@ -159,18 +203,28 @@ def auto_send_for_book(
 
     No-ops (returns None) unless SMS is enabled, auto-send is enabled, the
     book's latest version maps to an SMS event, and the book has an employee.
-    """
-    from app.services import settings_service
 
-    cfg = get_settings()
-    if not cfg.sms_enabled:
-        return None
-    if not settings_service.get_settings(db).sms_autosend_enabled:
+    Leave/violation forms carry their record on the generated Document (a book id
+    is the wrong key for their loaders): route those by the document's leave_id /
+    violation_id, and for leave pick the event from its status (a freshly
+    generated leave is a *request*).
+    """
+    if not _autosend_enabled(db):
         return None
     book = db.get(Book, book_id)
     if book is None or not book.versions or book.employee_id is None:
         return None
-    event = nf.TEMPLATE_EVENTS.get(book.versions[-1].template_id or "")
+    version = book.versions[-1]
+    tpl = version.template_id or ""
+    doc = db.get(Document, version.document_id) if version.document_id else None
+    if doc is not None:
+        if tpl == "Leave Application Form" and doc.leave_id is not None:
+            return _send_leave_status(db, doc.leave_id, sent_by=sent_by)
+        if tpl == "Duty Resumption Form" and doc.leave_id is not None:
+            return send_for_event(db, nf.EVENT_DUTY_RESUMPTION, doc.leave_id, sent_by=sent_by)
+        if tpl == "Violation Form" and doc.violation_id is not None:
+            return send_for_event(db, nf.EVENT_VIOLATION, doc.violation_id, sent_by=sent_by)
+    event = nf.TEMPLATE_EVENTS.get(tpl)
     if event is None:
         return None
     return send_for_event(db, event, book_id, sent_by=sent_by)
