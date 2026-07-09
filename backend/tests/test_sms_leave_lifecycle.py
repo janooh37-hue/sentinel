@@ -109,8 +109,9 @@ def test_new_template_wording_locked():
     )
     req_en = tpl.render_text("leave_requested", "en", leave, emp)
     req_ar = tpl.render_text("leave_requested", "ar", leave, emp)
-    assert "under review" in req_en and "طلبك" in req_ar and "قيد المراجعة" in req_ar
-    assert "طلب إجازتك" not in req_ar  # no doubled 'إجازة'
+    assert "has been received" in req_en and "processed" in req_en
+    assert "تم استلام طلب إجازتك" in req_ar and "قيد المعالجة" in req_ar
+    assert "سيتم إشعارك بالموافقة" in req_ar
 
     assert "rejected" in tpl.render_text("leave_rejected", "en", leave, emp)
     assert "رفض" in tpl.render_text("leave_rejected", "ar", leave, emp)

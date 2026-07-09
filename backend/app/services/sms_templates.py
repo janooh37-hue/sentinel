@@ -60,26 +60,19 @@ def _leave_approved(leave, emp: Employee, lang: str) -> str:
 def _leave_requested(leave, emp: Employee, lang: str) -> str:
     name = nf.employee_name(emp, lang)
     typ = nf.type_label(leave.leave_type, lang)
-    s, sw = nf.fmt_date(leave.start_date), nf.weekday(leave.start_date, lang)
-    e, ew = nf.fmt_date(leave.end_date), nf.weekday(leave.end_date, lang)
-    days = str(leave.days)
+    s = nf.fmt_date(leave.start_date)
+    e = nf.fmt_date(leave.end_date)
     if lang == "ar":
         return (
             f"عزيزي {name}،\n"
-            f"تم تقديم طلبك ({typ}) وهو قيد المراجعة.\n"
-            f"تاريخ البداية: {s} ({sw})\n"
-            f"تاريخ النهاية: {e} ({ew})\n"
-            f"المدة: {days} يوم.\n"
-            f"سيتم إبلاغك عند اتخاذ القرار.\n"
+            f"تم استلام طلب إجازتك ({typ}) من {s} إلى {e}.\n"
+            f"طلبك قيد المعالجة وسيتم إشعارك بالموافقة.\n"
             f"{_SIGNATURE_AR}"
         )
     return (
         f"Dear {name},\n"
-        f"Your {typ} request has been submitted and is under review.\n"
-        f"Start: {s} ({sw})\n"
-        f"End: {e} ({ew})\n"
-        f"Duration: {days} day(s).\n"
-        f"You will be notified once a decision is made.\n"
+        f"Your {typ} request from {s} to {e} has been received.\n"
+        f"Your request is being processed; you will be notified upon approval.\n"
         f"{_SIGNATURE_EN}"
     )
 
