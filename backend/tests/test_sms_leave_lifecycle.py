@@ -113,11 +113,13 @@ def test_new_template_wording_locked():
     assert "تم استلام طلب إجازتك" in req_ar and "قيد المعالجة" in req_ar
     assert "سيتم إشعارك بالموافقة" in req_ar
 
-    assert "rejected" in tpl.render_text("leave_rejected", "en", leave, emp)
-    assert "رفض" in tpl.render_text("leave_rejected", "ar", leave, emp)
+    assert "not approved" in tpl.render_text("leave_rejected", "en", leave, emp)
+    rej_ar = tpl.render_text("leave_rejected", "ar", leave, emp)
+    assert "عدم الموافقة" in rej_ar and "مكتب الإدارة" in rej_ar
 
     assert "cancelled" in tpl.render_text("leave_cancelled", "en", leave, emp)
-    assert "إلغاء طلب إجازتك" in tpl.render_text("leave_cancelled", "ar", leave, emp)
+    can_ar = tpl.render_text("leave_cancelled", "ar", leave, emp)
+    assert "تم إلغاء إجازتك" in can_ar and "مكتب الإدارة" in can_ar
 
 
 def _book_with_doc(db, *, template_id, leave_id=None, violation_id=None):

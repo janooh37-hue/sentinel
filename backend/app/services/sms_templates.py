@@ -85,14 +85,14 @@ def _leave_rejected(leave, emp: Employee, lang: str) -> str:
     if lang == "ar":
         return (
             f"عزيزي {name}،\n"
-            f"نأسف لإبلاغك برفض طلب إجازتك ({typ}) من {s} إلى {e}.\n"
-            f"{_HR_OFFICE_LINE_AR}\n"
+            f"نأسف لإبلاغك بعدم الموافقة على طلب إجازتك ({typ}) من {s} إلى {e}.\n"
+            f"يرجى مراجعة {nf.ADMIN_OFFICE_AR} لمزيد من التفاصيل.\n"
             f"{_SIGNATURE_AR}"
         )
     return (
         f"Dear {name},\n"
-        f"Your {typ} request from {s} to {e} has been rejected.\n"
-        f"{_HR_OFFICE_LINE_EN}\n"
+        f"We regret to inform you that your {typ} request from {s} to {e} was not approved.\n"
+        f"Please contact the administration office for more details.\n"
         f"{_SIGNATURE_EN}"
     )
 
@@ -105,14 +105,14 @@ def _leave_cancelled(leave, emp: Employee, lang: str) -> str:
     if lang == "ar":
         return (
             f"عزيزي {name}،\n"
-            f"تم إلغاء طلب إجازتك ({typ}) من {s} إلى {e}.\n"
-            f"{_HR_OFFICE_LINE_AR}\n"
+            f"تم إلغاء إجازتك ({typ}) من {s} إلى {e}.\n"
+            f"لأي استفسار يرجى مراجعة {nf.ADMIN_OFFICE_AR}.\n"
             f"{_SIGNATURE_AR}"
         )
     return (
         f"Dear {name},\n"
         f"Your {typ} from {s} to {e} has been cancelled.\n"
-        f"{_HR_OFFICE_LINE_EN}\n"
+        f"For any clarification, please contact the administration office.\n"
         f"{_SIGNATURE_EN}"
     )
 
