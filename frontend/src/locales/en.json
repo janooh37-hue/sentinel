@@ -1559,7 +1559,6 @@
     },
     "messages": {
       "empty": "No messages sent yet.",
-      "sent": "Sent",
       "failed": "Failed",
       "delivered": "Delivered",
       "pending": "Sent · awaiting confirmation",

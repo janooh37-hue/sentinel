@@ -78,6 +78,7 @@ export function MessagesTab({ messages, onRecheck }: Props): React.JSX.Element {
               {tone === 'pending' && canRecheck && (
                 <button
                   type="button"
+                  aria-label={`${t('employee.messages.recheck')} ${m.phone}`}
                   disabled={isRecheckingThis}
                   onClick={() => { void handleRecheck(m.id) }}
                   className="ms-1 rounded px-1.5 py-0.5 text-[0.85em] font-medium text-muted-foreground hover:bg-surface-tinted disabled:opacity-50"

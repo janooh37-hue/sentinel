@@ -1,6 +1,11 @@
 import { render, screen } from '@testing-library/react'
 import { describe, it, expect, vi } from 'vitest'
-vi.mock('react-i18next', () => ({ useTranslation: () => ({ t: (k: string) => k, i18n: { language: 'en' } }) }))
+const BADGE_LABELS: Record<string, string> = {
+  'employee.messages.delivered': 'Delivered',
+  'employee.messages.failed': 'Failed',
+  'employee.messages.pending': 'Sent · awaiting confirmation',
+}
+vi.mock('react-i18next', () => ({ useTranslation: () => ({ t: (k: string) => BADGE_LABELS[k] ?? k, i18n: { language: 'en' } }) }))
 vi.mock('@/lib/useCapabilities', () => ({ useCapabilities: () => ({ has: () => false }) }))
 import { MessagesTab } from './MessagesTab'
 
@@ -24,7 +29,7 @@ describe('MessagesTab', () => {
     render(<MessagesTab messages={[{ id: 1, event_type: 'leave_requested', body: 'x',
       phone: '+971', status: 'sent', delivery_state: 'Delivered', error: null,
       language: 'en', created_at: new Date().toISOString() } as any]} />)
-    expect(screen.getByText('employee.messages.delivered')).toBeInTheDocument()
+    expect(screen.getByText('Delivered')).toBeInTheDocument()
   })
 
   it('shows a Failed badge when status=sent but delivery_state=Failed', () => {
@@ -32,7 +37,7 @@ describe('MessagesTab', () => {
       phone: '+971', status: 'sent', delivery_state: 'Failed',
       error: 'RESULT_ERROR_GENERIC_FAILURE', language: 'en',
       created_at: new Date().toISOString() } as any]} />)
-    expect(screen.getByText(/employee.messages.failed/)).toBeInTheDocument()
+    expect(screen.getByText('Failed')).toBeInTheDocument()
     expect(screen.getByText(/GENERIC_FAILURE/)).toBeInTheDocument()
   })
 
@@ -40,6 +45,6 @@ describe('MessagesTab', () => {
     render(<MessagesTab messages={[{ id: 3, event_type: 'leave_requested', body: 'x',
       phone: '+971', status: 'sent', delivery_state: null, error: null,
       language: 'en', created_at: new Date().toISOString() } as any]} />)
-    expect(screen.getByText('employee.messages.pending')).toBeInTheDocument()
+    expect(screen.getByText(/awaiting confirmation/i)).toBeInTheDocument()
   })
 })
