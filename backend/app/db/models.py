@@ -427,6 +427,11 @@ class SmsMessage(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
     # Full rendered SMS text (added 0047). Nullable: historical rows predate it.
     body: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Gateway delivery outcome (added 0049). NULL until first polled.
+    # Recipient state: Delivered | Failed | Pending | Processed | Sent.
+    # Distinct from ``status`` (send-time accept/fail) — see the delivery poller.
+    delivery_state: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    delivery_checked_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
     __table_args__ = (Index("ix_sms_messages_event", "event_type", "event_ref"),)
 

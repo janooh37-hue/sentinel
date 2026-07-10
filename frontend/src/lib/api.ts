@@ -1619,6 +1619,7 @@ export interface SmsStatus {
   event_ref: string
   language: string
   status: string
+  delivery_state?: string | null
   error: string | null
   created_at: string
 }
@@ -1638,4 +1639,8 @@ export async function getSmsStatus(
     'GET',
     `/sms/status?event_type=${eventType}&record_id=${recordId}`,
   )
+}
+
+export function refreshSmsDelivery(smsId: number): Promise<SmsMessageRead> {
+  return request<SmsMessageRead>('POST', `/sms/${smsId}/refresh-delivery`)
 }

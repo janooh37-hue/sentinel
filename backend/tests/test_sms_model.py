@@ -37,3 +37,26 @@ def test_sms_message_row_roundtrip(db_session):
     assert row.status == "sent"
     assert row.provider_msg_id == "sms-1"
     assert row.created_at is not None
+
+
+def test_sms_message_has_delivery_columns(db_session):
+    db_session.add(Employee(id="G0001", name_en="Test", name_ar="اختبار"))
+    row = SmsMessage(
+        employee_id="G0001",
+        event_type="leave_requested",
+        event_ref="leave_requested:1",
+        language="ar",
+        phone="+971501234567",
+        status="sent",
+        provider_msg_id="sms-9",
+    )
+    # Defaults: nullable, unset until first polled.
+    assert row.delivery_state is None
+    assert row.delivery_checked_at is None
+    db_session.add(row)
+    db_session.commit()
+    db_session.refresh(row)
+    row.delivery_state = "Failed"
+    db_session.commit()
+    db_session.refresh(row)
+    assert row.delivery_state == "Failed"

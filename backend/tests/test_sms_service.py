@@ -257,3 +257,210 @@ def test_auto_send_skips_book_without_employee(db_session, monkeypatch):
     db_session.add(BookVersion(book_id=b.id, version_no=1, template_id="Warning Form", fields={}))
     db_session.commit()
     assert ss.auto_send_for_book(db_session, b.id) is None
+
+
+def test_poll_updates_state_and_error_for_failed(db_session, monkeypatch):
+    from app.db.models import Employee, SmsMessage
+    from app.services import sms_client, sms_service
+
+    db_session.add(Employee(id="G0001", name_en="Test", name_ar="اختبار"))
+    db_session.flush()
+
+    row = SmsMessage(
+        employee_id="G0001",
+        event_type="leave_requested",
+        event_ref="leave_requested:1",
+        language="ar",
+        phone="+971501234567",
+        status="sent",
+        provider_msg_id="sms-fail",
+    )
+    db_session.add(row)
+    db_session.commit()
+
+    def fake_get_delivery(mid):
+        assert mid == "sms-fail"
+        return sms_client.DeliveryResult(
+            ok=True, state="Failed", error="RESULT_ERROR_GENERIC_FAILURE"
+        )
+
+    monkeypatch.setattr(sms_client, "get_delivery", fake_get_delivery)
+    n = sms_service.poll_pending_deliveries(db_session)
+    db_session.refresh(row)
+    assert n == 1
+    assert row.delivery_state == "Failed"
+    assert "GENERIC_FAILURE" in row.error
+    assert row.delivery_checked_at is not None
+
+
+def test_poll_skips_terminal_and_missing_id_and_old_rows(db_session, monkeypatch):
+    from datetime import UTC, datetime, timedelta
+
+    from app.db.models import Employee, SmsMessage
+    from app.services import sms_client, sms_service
+
+    db_session.add(Employee(id="G0001", name_en="Test", name_ar="اختبار"))
+    db_session.flush()
+
+    def mk(**kw):
+        r = SmsMessage(
+            employee_id="G0001",
+            event_type="leave_requested",
+            event_ref="leave_requested:1",
+            language="ar",
+            phone="+971501234567",
+            status="sent",
+        )
+        for k, v in kw.items():
+            setattr(r, k, v)
+        db_session.add(r)
+        return r
+
+    old = datetime.now(UTC).replace(tzinfo=None) - timedelta(hours=48)
+    mk(provider_msg_id="terminal", delivery_state="Delivered")  # already terminal
+    mk(provider_msg_id=None)  # never accepted, no id
+    mk(provider_msg_id="stale", created_at=old)  # outside 24h window
+    db_session.commit()
+
+    called = []
+    monkeypatch.setattr(
+        sms_client,
+        "get_delivery",
+        lambda mid: called.append(mid) or sms_client.DeliveryResult(ok=True, state="Delivered"),
+    )
+    sms_service.poll_pending_deliveries(db_session)
+    assert called == []  # none of the three rows are eligible
+
+
+def test_poll_leaves_row_for_retry_when_gateway_unreachable(db_session, monkeypatch):
+    from app.db.models import Employee, SmsMessage
+    from app.services import sms_client, sms_service
+
+    db_session.add(Employee(id="G0001", name_en="Test", name_ar="اختبار"))
+    db_session.flush()
+
+    row = SmsMessage(
+        employee_id="G0001",
+        event_type="leave_requested",
+        event_ref="leave_requested:1",
+        language="ar",
+        phone="+971501234567",
+        status="sent",
+        provider_msg_id="sms-x",
+    )
+    db_session.add(row)
+    db_session.commit()
+
+    monkeypatch.setattr(
+        sms_client,
+        "get_delivery",
+        lambda mid: sms_client.DeliveryResult(ok=False, error="network error"),
+    )
+    n = sms_service.poll_pending_deliveries(db_session)
+    db_session.refresh(row)
+    assert n == 0
+    assert row.delivery_state is None  # not overwritten
+    assert row.delivery_checked_at is not None  # but we recorded the attempt
+
+
+def test_refresh_delivery_updates_single_row(db_session, monkeypatch):
+    from app.db.models import SmsMessage
+    from app.services import sms_client, sms_service
+
+    db_session.add(Employee(id="G0001", name_en="Test", name_ar="اختبار"))
+    db_session.flush()
+
+    row = SmsMessage(
+        employee_id="G0001",
+        event_type="leave_requested",
+        event_ref="leave_requested:1",
+        language="ar",
+        phone="+971501234567",
+        status="sent",
+        provider_msg_id="sms-r",
+    )
+    db_session.add(row)
+    db_session.commit()
+
+    monkeypatch.setattr(
+        sms_client,
+        "get_delivery",
+        lambda mid: sms_client.DeliveryResult(ok=True, state="Delivered"),
+    )
+    out = sms_service.refresh_delivery(db_session, row.id)
+    assert out is not None and out.delivery_state == "Delivered"
+    assert out.delivery_checked_at is not None
+
+
+def test_refresh_delivery_missing_row_returns_none(db_session):
+    from app.services import sms_service
+
+    assert sms_service.refresh_delivery(db_session, 999999) is None
+
+
+def test_poll_disabled_noops_and_never_calls_get_delivery(db_session, monkeypatch):
+    """poll_pending_deliveries returns 0 and never calls get_delivery when SMS is disabled."""
+    from app.config import get_settings
+    from app.db.models import Employee, SmsMessage
+    from app.services import sms_client, sms_service
+
+    # seed an eligible row so the query would normally return it
+    db_session.add(Employee(id="G0001", name_en="Test", name_ar="اختبار"))
+    db_session.flush()
+    db_session.add(
+        SmsMessage(
+            employee_id="G0001",
+            event_type="leave_requested",
+            event_ref="leave_requested:1",
+            language="ar",
+            phone="+971501234567",
+            status="sent",
+            provider_msg_id="sms-disabled-test",
+        )
+    )
+    db_session.commit()
+
+    # override the autouse _enable fixture — disable SMS
+    monkeypatch.setenv("GSSG_SMS_ENABLED", "0")
+    get_settings.cache_clear()
+
+    called = []
+    monkeypatch.setattr(sms_client, "get_delivery", lambda mid: called.append(mid))
+
+    result = sms_service.poll_pending_deliveries(db_session)
+    assert result == 0
+    assert called == []  # get_delivery must never be called
+
+
+def test_poll_clears_stale_error_on_recovery(db_session, monkeypatch):
+    """Fix 1: delivery recovery (ok=True, error=None) clears a stale row.error."""
+    from app.db.models import Employee, SmsMessage
+    from app.services import sms_client, sms_service
+
+    db_session.add(Employee(id="G0001", name_en="Test", name_ar="اختبار"))
+    db_session.flush()
+
+    row = SmsMessage(
+        employee_id="G0001",
+        event_type="leave_requested",
+        event_ref="leave_requested:1",
+        language="ar",
+        phone="+971501234567",
+        status="sent",
+        provider_msg_id="sms-stale-err",
+        delivery_state="Pending",  # non-terminal
+        error="old transient",  # stale error to be cleared
+    )
+    db_session.add(row)
+    db_session.commit()
+
+    monkeypatch.setattr(
+        sms_client,
+        "get_delivery",
+        lambda mid: sms_client.DeliveryResult(ok=True, state="Delivered", error=None),
+    )
+    n = sms_service.poll_pending_deliveries(db_session)
+    db_session.refresh(row)
+    assert n == 1
+    assert row.delivery_state == "Delivered"
+    assert row.error is None  # stale error cleared

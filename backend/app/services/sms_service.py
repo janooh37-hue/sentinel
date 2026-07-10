@@ -10,9 +10,9 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from datetime import date
+from datetime import UTC, date, datetime, timedelta
 
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
 from app.config import get_settings
@@ -81,6 +81,65 @@ _LEAVE_STATUS_EVENTS = {
     "Rejected": nf.EVENT_LEAVE_REJECTED,
     "Cancelled": nf.EVENT_LEAVE_CANCELLED,
 }
+
+_TERMINAL_DELIVERY_STATES = {"Delivered", "Failed"}
+_DELIVERY_POLL_WINDOW_HOURS = 24
+
+
+def poll_pending_deliveries(db: Session, *, now: datetime | None = None) -> int:
+    """Poll the gateway for the delivery outcome of recent, not-yet-terminal SMS.
+
+    Bounded on purpose: only rows that were accepted by the gateway
+    (``provider_msg_id`` present), have not reached a terminal ``delivery_state``,
+    and were created within the last 24h. Returns how many rows reached a
+    terminal state this pass. No-ops (returns 0) when SMS is disabled.
+    """
+    if not get_settings().sms_enabled:
+        return 0
+    now = now or datetime.now(UTC).replace(tzinfo=None)
+    cutoff = now - timedelta(hours=_DELIVERY_POLL_WINDOW_HOURS)
+    rows = list(
+        db.scalars(
+            select(SmsMessage).where(
+                SmsMessage.provider_msg_id.is_not(None),
+                SmsMessage.created_at >= cutoff,
+                or_(
+                    SmsMessage.delivery_state.is_(None),
+                    SmsMessage.delivery_state.not_in(_TERMINAL_DELIVERY_STATES),
+                ),
+            )
+        )
+    )
+    finalized = 0
+    for row in rows:
+        assert row.provider_msg_id is not None  # query filters provider_msg_id IS NOT NULL
+        result = sms_client.get_delivery(row.provider_msg_id)
+        row.delivery_checked_at = now
+        if not result.ok:
+            continue  # gateway unreachable — retry next tick, leave state as-is
+        row.delivery_state = result.state
+        row.error = result.error
+        if result.state in _TERMINAL_DELIVERY_STATES:
+            finalized += 1
+    db.commit()
+    return finalized
+
+
+def refresh_delivery(db: Session, sms_id: int) -> SmsMessage | None:
+    """On-demand delivery re-check for one message (the manual 're-check now')."""
+    row = db.get(SmsMessage, sms_id)
+    if row is None:
+        return None
+    if not row.provider_msg_id:
+        return row  # nothing to poll (never accepted by the gateway)
+    result = sms_client.get_delivery(row.provider_msg_id)
+    row.delivery_checked_at = datetime.now(UTC).replace(tzinfo=None)
+    if result.ok:
+        row.delivery_state = result.state
+        row.error = result.error
+    db.commit()
+    db.refresh(row)
+    return row
 
 
 def _log_row(

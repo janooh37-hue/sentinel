@@ -17,6 +17,7 @@ import {
   AlertTriangle,
   ArrowLeft,
   Check,
+  Clock,
   CornerUpLeft,
   FileText,
   Loader2,
@@ -53,6 +54,7 @@ import { cn } from '@/lib/utils'
 
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 
+import { smsDeliveryTone } from '@/lib/smsDelivery'
 import { sealDescriptor, signedSourceOf, type SealTone } from './bookStateLabel'
 import { useAddScan } from './useAddScan'
 import { useManagePaper } from './useManagePaper'
@@ -847,13 +849,30 @@ function NotificationBlock({ messages }: { messages: SmsMessageRead[] }): React.
       </h2>
       <div className="flex flex-col gap-2">
         {messages.map((m) => {
-          const ok = m.status === 'sent'
+          const tone = smsDeliveryTone(m)
+          const badge = {
+            delivered: {
+              cls: 'bg-success-soft text-success',
+              icon: <Check className="h-3 w-3" />,
+              label: t('employee.messages.delivered'),
+            },
+            failed: {
+              cls: 'bg-destructive/10 text-destructive',
+              icon: <AlertTriangle className="h-3 w-3" />,
+              label: t('employee.messages.failed'),
+            },
+            pending: {
+              cls: 'bg-warning/10 text-warning',
+              icon: <Clock className="h-3 w-3" />,
+              label: t('employee.messages.pending'),
+            },
+          }[tone]
           return (
             <div key={m.id} className="rounded-lg border border-hairline bg-surface p-2.5 text-[0.78em]">
               <div className="mb-1 flex flex-wrap items-center gap-1.5">
-                <span className={`inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 font-semibold ${ok ? 'bg-success-soft text-success' : 'bg-destructive/10 text-destructive'}`}>
-                  {ok ? <Check className="h-3 w-3" /> : <AlertTriangle className="h-3 w-3" />}
-                  {ok ? t('employee.messages.sent') : t('employee.messages.failed')}
+                <span className={`inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 font-semibold ${badge.cls}`}>
+                  {badge.icon}
+                  {badge.label}
                 </span>
                 <span className="ms-auto font-mono text-muted-foreground">
                   {fmt.format(new Date(m.created_at))}
@@ -864,7 +883,7 @@ function NotificationBlock({ messages }: { messages: SmsMessageRead[] }): React.
                   {m.body}
                 </div>
               )}
-              {!ok && m.error && (
+              {tone === 'failed' && m.error && (
                 <div className="mt-1 text-destructive" dir="ltr">{m.error}</div>
               )}
             </div>

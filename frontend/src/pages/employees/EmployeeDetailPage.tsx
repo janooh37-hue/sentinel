@@ -275,7 +275,14 @@ export function EmployeeDetailPage(): React.JSX.Element {
               />
             )}
             {tab === 'activity' && <ActivityTab activity={data.recent_activity} />}
-            {tab === 'messages' && <MessagesTab messages={data.recent_sms} />}
+            {tab === 'messages' && (
+              <MessagesTab
+                messages={data.recent_sms}
+                onRecheck={async () => {
+                  await qc.invalidateQueries({ queryKey: ['employee-detail', id] })
+                }}
+              />
+            )}
           </div>
         </div>
       </div>

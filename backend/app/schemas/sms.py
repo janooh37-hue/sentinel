@@ -30,6 +30,8 @@ class SmsMessageRead(ORMBase):
     error: str | None
     language: str
     created_at: datetime
+    delivery_state: str | None = None
+    delivery_checked_at: datetime | None = None
 
 
 class SmsSendRequest(BaseModel):
@@ -48,6 +50,7 @@ class SmsStatusItem(ORMBase):
     event_ref: str
     language: str
     status: str
+    delivery_state: str | None = None
     error: str | None
     created_at: datetime
 

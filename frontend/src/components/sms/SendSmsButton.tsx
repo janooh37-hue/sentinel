@@ -30,10 +30,11 @@ export function SendSmsButton({ eventType, recordId }: Props) {
 
   if (!caps.has('employees.notify') || !enabled) return null
 
-  const alreadySent = last?.status === 'sent'
+  const delivered = last?.status === 'sent' && last?.delivery_state !== 'Failed'
+  const gatewayAccepted = last?.status === 'sent'
 
   async function onClick() {
-    if (alreadySent && !window.confirm(t('sms.confirmResend'))) return
+    if (gatewayAccepted && !window.confirm(t('sms.confirmResend'))) return
     setBusy(true); setError(null)
     try {
       const res = await sendSms(eventType, recordId)
@@ -41,6 +42,7 @@ export function SendSmsButton({ eventType, recordId }: Props) {
         setLast({
           ...(last as SmsStatus),
           status: 'sent',
+          delivery_state: null,
           error: null,
           created_at: new Date().toISOString(),
           event_type: eventType,
@@ -62,10 +64,10 @@ export function SendSmsButton({ eventType, recordId }: Props) {
       <button type="button" onClick={onClick} disabled={busy}
               title={t('sms.sendTitle')}>
         {busy ? t('sms.sending')
-          : alreadySent ? t('sms.resend')
+          : gatewayAccepted ? t('sms.resend')
           : t('sms.send')}
       </button>
-      {alreadySent && !error && <span aria-label="sent">&#10003;</span>}
+      {delivered && !error && <span aria-label="sent">&#10003;</span>}
       {error && <span role="alert" title={error}>&#9888; {t('sms.failed')}</span>}
     </span>
   )

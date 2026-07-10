@@ -2750,6 +2750,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/sms/{sms_id}/refresh-delivery": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Refresh Delivery */
+        post: operations["refresh_delivery_api_v1_sms__sms_id__refresh_delivery_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/push/vapid-public-key": {
         parameters: {
             query?: never;
@@ -5787,6 +5804,10 @@ export interface components {
              * Format: date-time
              */
             created_at: string;
+            /** Delivery State */
+            delivery_state?: string | null;
+            /** Delivery Checked At */
+            delivery_checked_at?: string | null;
         };
         /** SmsSendRequest */
         SmsSendRequest: {
@@ -5820,6 +5841,8 @@ export interface components {
             language: string;
             /** Status */
             status: string;
+            /** Delivery State */
+            delivery_state?: string | null;
             /** Error */
             error: string | null;
             /**
@@ -12399,6 +12422,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SmsStatusResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    refresh_delivery_api_v1_sms__sms_id__refresh_delivery_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                sms_id: number;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SmsMessageRead"];
                 };
             };
             /** @description Validation Error */

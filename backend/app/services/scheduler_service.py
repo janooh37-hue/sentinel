@@ -27,7 +27,14 @@ from sqlalchemy import select
 
 from app.db.models import User
 from app.db.session import SessionLocal
-from app.services import email_service, notification_service, perm_service, push_service, scan_inbox_service
+from app.services import (
+    email_service,
+    notification_service,
+    perm_service,
+    push_service,
+    scan_inbox_service,
+    sms_service,
+)
 
 log = logging.getLogger(__name__)
 
@@ -38,6 +45,8 @@ _PUSH_NOTIFIER_JOB_ID = "push-notifier"
 _PUSH_NOTIFIER_INTERVAL_MINUTES = 1
 _GRANT_SWEEP_JOB_ID = "grant-sweep"
 _GRANT_SWEEP_INTERVAL_MINUTES = 1
+_SMS_DELIVERY_POLL_JOB_ID = "sms-delivery-poll"
+_SMS_DELIVERY_POLL_INTERVAL_MINUTES = 5
 
 _scheduler: BackgroundScheduler | None = None
 _lock = Lock()
@@ -97,6 +106,16 @@ def _run_grant_sweep() -> None:
                 log.info("scheduler: revoked %d expired permission grant(s)", n)
         except Exception:
             log.exception("scheduler: grant sweep failed")
+
+
+def _run_sms_delivery_poll() -> None:
+    with SessionLocal() as session:
+        try:
+            n = sms_service.poll_pending_deliveries(session)
+            if n:
+                log.info("scheduler: %d SMS reached a terminal delivery state", n)
+        except Exception:
+            log.exception("scheduler: SMS delivery poll failed")
 
 
 # The notification title is always the app name, in both languages, because the
@@ -247,16 +266,12 @@ def _run_push_notifier() -> None:
     subscribing device's language (Arabic on Arabic phones).
     """
     with SessionLocal() as session:
-        users = list(
-            session.scalars(select(User).where(User.status == "active"))
-        )
+        users = list(session.scalars(select(User).where(User.status == "active")))
         for user in users:
             try:
                 _notify_user(session, user)
             except Exception:
-                log.exception(
-                    "scheduler: push notifier failed for user %s", user.id
-                )
+                log.exception("scheduler: push notifier failed for user %s", user.id)
 
 
 def _disabled_in_environment() -> bool:
@@ -305,17 +320,23 @@ def start() -> None:
                 id=_PUSH_NOTIFIER_JOB_ID,
                 replace_existing=True,
             )
-            log.info(
-                "scheduler: push notifier every %d min", _PUSH_NOTIFIER_INTERVAL_MINUTES
-            )
+            log.info("scheduler: push notifier every %d min", _PUSH_NOTIFIER_INTERVAL_MINUTES)
             _scheduler.add_job(
                 _run_grant_sweep,
                 trigger=IntervalTrigger(minutes=_GRANT_SWEEP_INTERVAL_MINUTES),
                 id=_GRANT_SWEEP_JOB_ID,
                 replace_existing=True,
             )
+            log.info("scheduler: grant sweep every %d min", _GRANT_SWEEP_INTERVAL_MINUTES)
+            _scheduler.add_job(
+                _run_sms_delivery_poll,
+                trigger=IntervalTrigger(minutes=_SMS_DELIVERY_POLL_INTERVAL_MINUTES),
+                id=_SMS_DELIVERY_POLL_JOB_ID,
+                replace_existing=True,
+            )
             log.info(
-                "scheduler: grant sweep every %d min", _GRANT_SWEEP_INTERVAL_MINUTES
+                "scheduler: SMS delivery poll every %d min",
+                _SMS_DELIVERY_POLL_INTERVAL_MINUTES,
             )
 
 
@@ -375,6 +396,7 @@ def reschedule_email_sync() -> None:
 
 __all__ = [
     "_run_push_notifier",
+    "_run_sms_delivery_poll",
     "reschedule_email_sync",
     "run_drain_once",
     "shutdown",

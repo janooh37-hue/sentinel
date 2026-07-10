@@ -16,9 +16,10 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import require_capability
 from app.config import get_settings
-from app.db.models import User
+from app.db.models import SmsMessage, User
 from app.db.session import get_db
 from app.schemas.sms import (
+    SmsMessageRead,
     SmsSendRequest,
     SmsSendResponse,
     SmsStatusItem,
@@ -56,6 +57,18 @@ def get_status(
         enabled=get_settings().sms_enabled,
         last=SmsStatusItem.model_validate(row) if row else None,
     )
+
+
+@router.post("/{sms_id}/refresh-delivery", response_model=SmsMessageRead)
+def refresh_delivery(
+    sms_id: int,
+    db: Annotated[Session, Depends(get_db)],
+    _user: Annotated[User, Depends(require_capability("books.manage"))],
+) -> SmsMessage:
+    row = sms_service.refresh_delivery(db, sms_id)
+    if row is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="SMS not found")
+    return row
 
 
 __all__ = ["router"]

@@ -46,4 +46,26 @@ describe('SendSmsButton', () => {
     const btn = await screen.findByRole('button')
     expect(btn).toBeInTheDocument()
   })
+
+  it('offers resend when the last send was accepted but failed delivery', async () => {
+    vi.spyOn(api, 'getSmsStatus').mockResolvedValue({
+      enabled: true,
+      last: {
+        status: 'sent',
+        delivery_state: 'Failed',
+        event_type: 'leave_approved',
+        event_ref: 'leave_approved:1',
+        language: 'ar',
+        error: null,
+        created_at: new Date().toISOString(),
+      },
+    })
+    render(<SendSmsButton eventType="leave_approved" recordId={1} />)
+    const btn = await screen.findByRole('button')
+    // Should show "resend" (i.e., sms.resend key which the mock returns as-is)
+    expect(btn.textContent).toMatch(/resend/i)
+    // Should NOT show the done checkmark
+    const checkmark = screen.queryByLabelText('sent')
+    expect(checkmark).not.toBeInTheDocument()
+  })
 })
