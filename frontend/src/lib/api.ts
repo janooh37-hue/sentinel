@@ -1619,6 +1619,7 @@ export interface SmsStatus {
   event_ref: string
   language: string
   status: string
+  delivery_state?: string | null
   error: string | null
   created_at: string
 }

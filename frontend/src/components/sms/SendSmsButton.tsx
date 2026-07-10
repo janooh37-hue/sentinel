@@ -30,6 +30,7 @@ export function SendSmsButton({ eventType, recordId }: Props) {
 
   if (!caps.has('employees.notify') || !enabled) return null
 
+  const delivered = last?.status === 'sent' && last?.delivery_state !== 'Failed'
   const alreadySent = last?.status === 'sent'
 
   async function onClick() {
@@ -41,6 +42,7 @@ export function SendSmsButton({ eventType, recordId }: Props) {
         setLast({
           ...(last as SmsStatus),
           status: 'sent',
+          delivery_state: null,
           error: null,
           created_at: new Date().toISOString(),
           event_type: eventType,
@@ -65,7 +67,7 @@ export function SendSmsButton({ eventType, recordId }: Props) {
           : alreadySent ? t('sms.resend')
           : t('sms.send')}
       </button>
-      {alreadySent && !error && <span aria-label="sent">&#10003;</span>}
+      {delivered && !error && <span aria-label="sent">&#10003;</span>}
       {error && <span role="alert" title={error}>&#9888; {t('sms.failed')}</span>}
     </span>
   )
