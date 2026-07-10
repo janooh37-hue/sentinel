@@ -396,3 +396,71 @@ def test_refresh_delivery_missing_row_returns_none(db_session):
     from app.services import sms_service
 
     assert sms_service.refresh_delivery(db_session, 999999) is None
+
+
+def test_poll_disabled_noops_and_never_calls_get_delivery(db_session, monkeypatch):
+    """poll_pending_deliveries returns 0 and never calls get_delivery when SMS is disabled."""
+    from app.config import get_settings
+    from app.db.models import Employee, SmsMessage
+    from app.services import sms_client, sms_service
+
+    # seed an eligible row so the query would normally return it
+    db_session.add(Employee(id="G0001", name_en="Test", name_ar="اختبار"))
+    db_session.flush()
+    db_session.add(
+        SmsMessage(
+            employee_id="G0001",
+            event_type="leave_requested",
+            event_ref="leave_requested:1",
+            language="ar",
+            phone="+971501234567",
+            status="sent",
+            provider_msg_id="sms-disabled-test",
+        )
+    )
+    db_session.commit()
+
+    # override the autouse _enable fixture — disable SMS
+    monkeypatch.setenv("GSSG_SMS_ENABLED", "0")
+    get_settings.cache_clear()
+
+    called = []
+    monkeypatch.setattr(sms_client, "get_delivery", lambda mid: called.append(mid))
+
+    result = sms_service.poll_pending_deliveries(db_session)
+    assert result == 0
+    assert called == []  # get_delivery must never be called
+
+
+def test_poll_clears_stale_error_on_recovery(db_session, monkeypatch):
+    """Fix 1: delivery recovery (ok=True, error=None) clears a stale row.error."""
+    from app.db.models import Employee, SmsMessage
+    from app.services import sms_client, sms_service
+
+    db_session.add(Employee(id="G0001", name_en="Test", name_ar="اختبار"))
+    db_session.flush()
+
+    row = SmsMessage(
+        employee_id="G0001",
+        event_type="leave_requested",
+        event_ref="leave_requested:1",
+        language="ar",
+        phone="+971501234567",
+        status="sent",
+        provider_msg_id="sms-stale-err",
+        delivery_state="Pending",  # non-terminal
+        error="old transient",  # stale error to be cleared
+    )
+    db_session.add(row)
+    db_session.commit()
+
+    monkeypatch.setattr(
+        sms_client,
+        "get_delivery",
+        lambda mid: sms_client.DeliveryResult(ok=True, state="Delivered", error=None),
+    )
+    n = sms_service.poll_pending_deliveries(db_session)
+    db_session.refresh(row)
+    assert n == 1
+    assert row.delivery_state == "Delivered"
+    assert row.error is None  # stale error cleared

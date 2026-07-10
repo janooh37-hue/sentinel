@@ -112,13 +112,13 @@ def poll_pending_deliveries(db: Session, *, now: datetime | None = None) -> int:
     )
     finalized = 0
     for row in rows:
-        result = sms_client.get_delivery(row.provider_msg_id or "")
+        assert row.provider_msg_id is not None  # query filters provider_msg_id IS NOT NULL
+        result = sms_client.get_delivery(row.provider_msg_id)
         row.delivery_checked_at = now
         if not result.ok:
             continue  # gateway unreachable — retry next tick, leave state as-is
         row.delivery_state = result.state
-        if result.error:
-            row.error = result.error
+        row.error = result.error
         if result.state in _TERMINAL_DELIVERY_STATES:
             finalized += 1
     db.commit()
@@ -136,8 +136,7 @@ def refresh_delivery(db: Session, sms_id: int) -> SmsMessage | None:
     row.delivery_checked_at = datetime.now(UTC).replace(tzinfo=None)
     if result.ok:
         row.delivery_state = result.state
-        if result.error:
-            row.error = result.error
+        row.error = result.error
     db.commit()
     db.refresh(row)
     return row
