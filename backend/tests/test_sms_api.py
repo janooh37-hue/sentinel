@@ -5,9 +5,11 @@ Fixtures follow the exact pattern used by test_whatsapp_api.py:
   - api_db  : creates an isolated SQLite DB, patches session_mod, seeds role defaults
   - _user() : creates a User row with the given role
   - _client(): builds a TestClient with DB + auth overrides
+  - _seed_sms(): helper to insert a minimal Employee + SmsMessage row
 
-client_with_notify  → _client(api_db, _user(api_db, role="manager"))
-client_without_notify → _client(api_db, _user(api_db, role="operator", email="op@x.ae"))
+Gates:
+  - /sms/send requires employees.notify capability (manager only)
+  - /sms/{id}/refresh-delivery requires books.manage capability (manager only)
 """
 
 from __future__ import annotations
@@ -189,15 +191,17 @@ def test_refresh_delivery_endpoint_returns_updated_row(api_db, monkeypatch):
         "get_delivery",
         lambda mid: _sms_client.DeliveryResult(ok=True, state="Delivered"),
     )
+    # manager role HAS books.manage
     c = _client(api_db, _user(api_db))
     resp = c.post(f"/api/v1/sms/{row.id}/refresh-delivery")
     assert resp.status_code == 200
     body = resp.json()
     assert body["delivery_state"] == "Delivered"
-    assert "delivery_checked_at" in body
+    assert body["delivery_checked_at"] is not None
 
 
 def test_refresh_delivery_endpoint_404_for_missing(api_db):
+    # manager role HAS books.manage
     c = _client(api_db, _user(api_db))
     resp = c.post("/api/v1/sms/999999/refresh-delivery")
     assert resp.status_code == 404
