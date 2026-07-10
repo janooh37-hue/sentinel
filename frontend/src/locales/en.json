@@ -1560,7 +1560,11 @@
     "messages": {
       "empty": "No messages sent yet.",
       "sent": "Sent",
-      "failed": "Failed"
+      "failed": "Failed",
+      "delivered": "Delivered",
+      "pending": "Sent · awaiting confirmation",
+      "recheck": "Re-check",
+      "rechecking": "Checking…"
     },
     "profile": {
       "transfer": "Transfer duty location"

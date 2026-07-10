@@ -1639,3 +1639,7 @@ export async function getSmsStatus(
     `/sms/status?event_type=${eventType}&record_id=${recordId}`,
   )
 }
+
+export function refreshSmsDelivery(smsId: number): Promise<SmsMessageRead> {
+  return request<SmsMessageRead>('POST', `/sms/${smsId}/refresh-delivery`)
+}
