@@ -361,3 +361,38 @@ def test_poll_leaves_row_for_retry_when_gateway_unreachable(db_session, monkeypa
     assert n == 0
     assert row.delivery_state is None  # not overwritten
     assert row.delivery_checked_at is not None  # but we recorded the attempt
+
+
+def test_refresh_delivery_updates_single_row(db_session, monkeypatch):
+    from app.db.models import SmsMessage
+    from app.services import sms_client, sms_service
+
+    db_session.add(Employee(id="G0001", name_en="Test", name_ar="اختبار"))
+    db_session.flush()
+
+    row = SmsMessage(
+        employee_id="G0001",
+        event_type="leave_requested",
+        event_ref="leave_requested:1",
+        language="ar",
+        phone="+971501234567",
+        status="sent",
+        provider_msg_id="sms-r",
+    )
+    db_session.add(row)
+    db_session.commit()
+
+    monkeypatch.setattr(
+        sms_client,
+        "get_delivery",
+        lambda mid: sms_client.DeliveryResult(ok=True, state="Delivered"),
+    )
+    out = sms_service.refresh_delivery(db_session, row.id)
+    assert out is not None and out.delivery_state == "Delivered"
+    assert out.delivery_checked_at is not None
+
+
+def test_refresh_delivery_missing_row_returns_none(db_session):
+    from app.services import sms_service
+
+    assert sms_service.refresh_delivery(db_session, 999999) is None

@@ -125,6 +125,24 @@ def poll_pending_deliveries(db: Session, *, now: datetime | None = None) -> int:
     return finalized
 
 
+def refresh_delivery(db: Session, sms_id: int) -> SmsMessage | None:
+    """On-demand delivery re-check for one message (the manual 're-check now')."""
+    row = db.get(SmsMessage, sms_id)
+    if row is None:
+        return None
+    if not row.provider_msg_id:
+        return row  # nothing to poll (never accepted by the gateway)
+    result = sms_client.get_delivery(row.provider_msg_id)
+    row.delivery_checked_at = datetime.now(UTC).replace(tzinfo=None)
+    if result.ok:
+        row.delivery_state = result.state
+        if result.error:
+            row.error = result.error
+    db.commit()
+    db.refresh(row)
+    return row
+
+
 def _log_row(
     db,
     *,
