@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
+from typing import Any
 
 import httpx
 
@@ -34,19 +35,36 @@ class SendResult:
     error: str | None = None
 
 
-def _post(url: str, auth: tuple[str, str], headers: dict, payload: dict) -> httpx.Response:
+@dataclass(frozen=True)
+class DeliveryResult:
+    ok: bool
+    state: str | None = None
+    error: str | None = None
+
+
+def _base_url() -> str:
+    """Gateway base, tolerant of a scheme-less base or a trailing slash."""
+    base = get_settings().sms_gateway_url.strip().rstrip("/")
+    if base and "://" not in base:
+        base = "http://" + base
+    return base
+
+
+def _post(
+    url: str, auth: tuple[str, str], headers: dict[str, str], payload: dict[str, Any]
+) -> httpx.Response:
     with httpx.Client(transport=_transport, timeout=_TIMEOUT) as client:
         return client.post(url, auth=auth, headers=headers, json=payload)
 
 
+def _get(url: str, auth: tuple[str, str], headers: dict[str, str]) -> httpx.Response:
+    with httpx.Client(transport=_transport, timeout=_TIMEOUT) as client:
+        return client.get(url, auth=auth, headers=headers)
+
+
 def send(phone: str, text: str) -> SendResult:
     cfg = get_settings()
-    # SMS Gate local server is plain HTTP; tolerate a base saved without a
-    # scheme or with a trailing slash.
-    base = cfg.sms_gateway_url.strip().rstrip("/")
-    if base and "://" not in base:
-        base = "http://" + base
-    url = f"{base}/message"
+    url = f"{_base_url()}/message"
     auth = (cfg.sms_username, cfg.sms_password)
     headers = {"Content-Type": "application/json", "Accept": "application/json"}
     payload = {"textMessage": {"text": text}, "phoneNumbers": [phone]}
@@ -67,3 +85,33 @@ def send(phone: str, text: str) -> SendResult:
             return SendResult(ok=True, message_id=data.get("id"))
         return SendResult(ok=False, error=f"HTTP {resp.status_code}: {resp.text}")
     return SendResult(ok=False, error=last_err or "network error")
+
+
+def get_delivery(message_id: str) -> DeliveryResult:
+    """Read the gateway's delivery outcome for one message. We always send to a
+    single recipient, so ``recipients[0]`` is the authoritative outcome."""
+    cfg = get_settings()
+    url = f"{_base_url()}/message/{message_id}"
+    auth = (cfg.sms_username, cfg.sms_password)
+    headers = {"Accept": "application/json"}
+
+    last_err: str | None = None
+    for attempt in range(2):  # initial + one retry on transport error
+        try:
+            resp = _get(url, auth, headers)
+        except httpx.HTTPError as e:
+            last_err = str(e) or e.__class__.__name__
+            log.warning("sms: delivery transport error (attempt %d): %s", attempt + 1, last_err)
+            continue
+        if resp.status_code // 100 == 2:
+            try:
+                data = resp.json()
+            except ValueError:
+                data = {}
+            recips = data.get("recipients") or []
+            if recips:
+                r0 = recips[0]
+                return DeliveryResult(ok=True, state=r0.get("state"), error=r0.get("error"))
+            return DeliveryResult(ok=True, state=data.get("state"))
+        return DeliveryResult(ok=False, error=f"HTTP {resp.status_code}: {resp.text}")
+    return DeliveryResult(ok=False, error=last_err or "network error")

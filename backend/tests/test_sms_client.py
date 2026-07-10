@@ -11,6 +11,7 @@ def _settings(monkeypatch, base="http://192.168.1.50:8080"):
     monkeypatch.setenv("GSSG_SMS_USERNAME", "user")
     monkeypatch.setenv("GSSG_SMS_PASSWORD", "pass")
     from app.config import get_settings
+
     get_settings.cache_clear()
     return get_settings()
 
@@ -78,3 +79,81 @@ def test_send_retries_once_then_fails(monkeypatch):
     assert res.ok is False
     assert calls["n"] == 2  # initial + one retry
     assert "boom" in res.error or "connect" in res.error.lower()
+
+
+def test_get_delivery_reads_recipient_state(monkeypatch):
+    _settings(monkeypatch)
+    captured = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        captured["url"] = str(request.url)
+        captured["method"] = request.method
+        return httpx.Response(
+            200,
+            json={
+                "id": "sms-9",
+                "state": "Delivered",
+                "recipients": [{"phoneNumber": "+971501234567", "state": "Delivered"}],
+            },
+        )
+
+    monkeypatch.setattr(sc, "_transport", httpx.MockTransport(handler))
+    res = sc.get_delivery("sms-9")
+    assert res.ok is True
+    assert res.state == "Delivered"
+    assert res.error is None
+    assert captured["method"] == "GET"
+    assert captured["url"] == "http://192.168.1.50:8080/message/sms-9"
+
+
+def test_get_delivery_surfaces_recipient_error_on_failure(monkeypatch):
+    _settings(monkeypatch)
+
+    def handler(request):
+        return httpx.Response(
+            200,
+            json={
+                "id": "sms-9",
+                "state": "Failed",
+                "recipients": [
+                    {
+                        "phoneNumber": "+971501234567",
+                        "state": "Failed",
+                        "error": "Send result: RESULT_ERROR_GENERIC_FAILURE (Generic failure cause)",
+                    }
+                ],
+            },
+        )
+
+    monkeypatch.setattr(sc, "_transport", httpx.MockTransport(handler))
+    res = sc.get_delivery("sms-9")
+    assert res.ok is True
+    assert res.state == "Failed"
+    assert "RESULT_ERROR_GENERIC_FAILURE" in res.error
+
+
+def test_get_delivery_http_error_maps_to_not_ok(monkeypatch):
+    _settings(monkeypatch)
+
+    def handler(request):
+        return httpx.Response(404, text="not found")
+
+    monkeypatch.setattr(sc, "_transport", httpx.MockTransport(handler))
+    res = sc.get_delivery("missing")
+    assert res.ok is False
+    assert res.state is None
+    assert "404" in res.error
+
+
+def test_get_delivery_retries_once_then_fails(monkeypatch):
+    _settings(monkeypatch)
+    calls = {"n": 0}
+
+    def handler(request):
+        calls["n"] += 1
+        raise httpx.ConnectError("boom")
+
+    monkeypatch.setattr(sc, "_transport", httpx.MockTransport(handler))
+    res = sc.get_delivery("sms-9")
+    assert res.ok is False
+    assert calls["n"] == 2  # initial + one retry
