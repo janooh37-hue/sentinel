@@ -41,7 +41,3 @@ class ManagerRead(ORMBase):
     user_name: str | None = None
     has_signature: bool = False
     # `sig_path` (a filesystem path) is intentionally NOT exposed.
-
-
-class ManagerLinkUpdate(BaseModel):
-    user_id: int | None = None

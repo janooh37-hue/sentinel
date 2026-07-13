@@ -53,11 +53,6 @@ def update_manager(db: Session, manager_id: int, data: ManagerUpdate) -> Manager
     return mgr
 
 
-def set_manager_user(db: Session, manager_id: int, user_id: int | None) -> Manager:
-    """Back-compat shim for the link-only PATCH path."""
-    return update_manager(db, manager_id, ManagerUpdate(user_id=user_id))
-
-
 def manager_signature_path(manager_id: int) -> Path:
     """Canonical signature file for a manager, with containment guard."""
     root = get_settings().data_dir.resolve()
