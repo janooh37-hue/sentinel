@@ -18,6 +18,11 @@ A single unified `outbound_messages` table replaces the split
 badge (e.g. "Delivered · WhatsApp" / "Sent · SMS"). Legacy rows are backfilled into it
 so history is preserved as if the unified system existed from the start.
 
+**Phased.** Phase 1 is the OpenWA router + unified log + per-record auto-routing.
+**Phase 2** (Broadcast & Digests) rides on that router: permission-gated **broadcast
+messaging** to selectable audiences, and a **designation-routed annual-leave digest** to
+duty-unit supervisors. Phase 2 is fully designed here but implemented after Phase 1.
+
 ## Decisions (from brainstorming)
 
 1. **OpenWA replaces Infobip entirely** — OpenWA is the sole WhatsApp channel. The
@@ -43,7 +48,8 @@ so history is preserved as if the unified system existed from the start.
 
 - No admin per-send channel override menu (auto-routing only).
 - No per-employee channel preference.
-- No new notification *content* — WhatsApp reuses the existing bilingual SMS copy.
+- Phase 1 adds no new per-record notification *content* — WhatsApp reuses the existing
+  bilingual SMS copy. (Phase 2 introduces new content: broadcasts + the leave digest.)
 - Not deleting the legacy tables (kept intact underneath the backfill).
 
 ## Architecture
@@ -166,9 +172,100 @@ Three layers so WhatsApp stays up and SMS rarely fires:
 2. Exact retry cadence inside the 5-min window (e.g. 30s backoff) — a constant.
 3. Backfill status-field mapping from each legacy table to the unified schema.
 4. Whether to keep `sms_service.py` as a thin shim during transition or fold it wholesale.
+5. (Phase 2) Broadcast throttle rate + per-broadcast/day cap values — ban-safe constants.
+6. (Phase 2) Digest schedule specifics: day/time of the monthly auto-run; whether it
+   runs at month-start for that month's currently-approved annual leaves.
+
+## Phase 2 — Broadcast & Digests
+
+Phase 2 rides entirely on the Phase 1 router (`notify_dispatch`) and the unified
+`outbound_messages` log: every message it sends is one more call through
+WhatsApp-first / SMS-fallback, so it inherits delivery status, read receipts, and
+fallback for free. Phase 1 must ship first (everything here depends on it).
+
+### 2a. Duty-unit supervisor routing (designation-based)
+
+Supervisors are **not pinned people** — they are resolved from a **designation**
+(`duty_post` value) *within a duty unit* at send time, so moving staff around the roster
+never breaks routing. This uses existing fields only (`Employee.duty_unit`,
+`Employee.duty_post`, `contact`, `msg_language`); no role change, no per-person flag.
+
+- **New table `duty_supervisors`:** rows of `(duty_unit, recipient_duty_post)`. A unit may
+  have several rows (several recipients). Managed on the **existing Duty Locations page**
+  (admin adds/removes designations per unit).
+- **Resolution at send:** recipients for unit *U* = active employees where
+  `duty_unit == U` AND `duty_post` ∈ the unit's configured designations AND `contact`
+  normalizes to a valid mobile. Send to all matches.
+- **Seed mapping (verified against live data 2026-07-13):**
+
+  | Duty unit | `recipient_duty_post` |
+  |---|---|
+  | السرية الأولى … الخامسة | `مسؤول سرية` (exactly one per company) |
+  | الدوام الرسمي (official duty) | `مدير فرع الخدمات العامة` (G4488) + `مدير مشروع` (G3007) |
+  | دعم 1/2/3, منتهي الخدمات | (none — excluded) |
+
+  Note: `position_ar = مشرف` is **not** used for routing — it covers only 2 of 5
+  companies and includes a terminated employee; `duty_post = مسؤول سرية` is the reliable
+  one-per-company signal.
+
+### 2b. Annual-leave digest to supervisors
+
+- **Content:** per duty unit, the list of that unit's employees on **annual leave
+  overlapping the current month** (name + dates), rendered bilingually (recipient's
+  `msg_language`), sent to the unit's resolved supervisor(s) via the router.
+- **Triggers:** on-demand (send for one unit or all) **+** monthly auto (1st of month) on
+  the existing scheduler.
+- **Skips (each logged, never silent):** units with no configured supervisor, no
+  qualifying leaves, or a supervisor with no valid mobile.
+- **Extensibility:** built on a small digest-template layer (bilingual list rendering) so
+  future digests ("returning to duty this week", "pending approvals") drop in without
+  reworking routing.
+
+### 2c. Broadcast messaging
+
+- **Compose:** bilingual (Arabic + English boxes); each recipient gets their
+  `msg_language`, falling back to the other box if one is empty. Optional **reusable
+  template library** (saved bilingual canned messages).
+- **Audience selectors (v1):** by **duty unit**, by **department**, by **role /
+  employment status**, **everyone**, and **manual pick** (add/remove individuals).
+  Terminated (منتهي الخدمات) excluded by default.
+- **Send-safety (mandatory for OpenWA ban-avoidance):** a confirmation gate showing
+  recipient count + channel split ("183 WhatsApp · 34 SMS · 5 no phone"); a **test-send
+  to self**; **throttled pacing** (spaced sends) with a **per-broadcast/day cap**.
+- **Logging:** a **new `broadcasts` parent row** + one `outbound_messages` child per
+  recipient (channel-stamped, each with its own fallback + delivery status). Powers a live
+  **delivery dashboard**: delivered / read / SMS-fallback / failed.
+- **Permission:** new capability **`messages.broadcast`** (admin-grantable; single
+  capability — any grantee may broadcast to any audience).
+
+### Phase 2 components (delta on Phase 1)
+
+| Component | Action | Purpose |
+|---|---|---|
+| `db/models.py` + migration | **new** `duty_supervisors` | `(duty_unit, recipient_duty_post)` rows; seeded with the verified mapping. |
+| `db/models.py` + migration | **new** `broadcasts` | Broadcast parent (author, audience descriptor, AR/EN body, counts, created_at). Children are `outbound_messages` rows tagged with `broadcast_id`. |
+| `outbound_messages` | **add** `broadcast_id` (nullable FK-omitted) | Ties per-recipient rows to their broadcast; NULL for per-record sends. |
+| `core/permissions.py` | **add** `messages.broadcast` | Grantable capability; default off (admin/opt-in). |
+| `services/duty_supervisor_service.py` | **new** | Resolve a unit's supervisor recipients (designation → current holders). |
+| `services/digest_service.py` | **new** | Build + send the annual-leave digest per unit; the extensible digest layer. |
+| `services/broadcast_service.py` | **new** | Audience resolution, throttled fan-out through `notify_dispatch`, broadcast logging. |
+| `services/scheduler_service.py` | **extend** | Monthly digest run; broadcast pacing worker. |
+| `api/v1/` (new routers) | **new** | Broadcast compose/send + dashboard; digest send/preview; duty-supervisor mapping CRUD. Gated `messages.broadcast` / `settings.edit`. |
+| Duty Locations page | **extend** | Per-unit supervisor-designation editor. |
+| Broadcast UI + digest UI | **new** | Compose + audience + preview + dashboard; digest trigger + preview. |
+| locales `{en,ar}.json` | **extend** | All new copy, full AR/EN parity; run `i18n-rtl-reviewer` + `notification-template-reviewer`. |
+
+### Phase 2 deferred (explicit non-goals for v1)
+
+- Scheduled broadcasts (send-at-time) — later; adds scheduler machinery.
+- Two-way inbound (employees replying) — out of scope; large subsystem.
+- Smart audiences ("contracts expiring", "missing documents") — start with the selectors above.
+- Real-time supervisor alert on each new annual leave — optional future toggle, not v1.
+- Dept-scoped broadcast permission — v1 uses a single capability.
 
 ## Rollout
 
+- **Phased:** Phase 1 (OpenWA router) first — everything depends on it; then 2a→2b→2c.
 - `openwa_enabled=false` by default → dormant until the office provisions the QR-linked
   number (mirrors how SMS/WhatsApp shipped dormant).
 - Ship behind config; enable after Docker + QR login verified on the office box.
