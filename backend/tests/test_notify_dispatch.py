@@ -10,7 +10,7 @@ from datetime import UTC, date, datetime, timedelta
 import pytest
 
 from app.config import get_settings
-from app.db.models import Employee, Leave
+from app.db.models import Employee, Leave, OutboundMessage
 from app.services import notify_dispatch, openwa_client, sms_client
 
 
@@ -119,3 +119,90 @@ def test_openwa_disabled_sends_sms_without_fellback(db_session, leave, monkeypat
     )
     row = notify_dispatch.send_for_event(db_session, "leave_approved", leave.id, sent_by=None)
     assert row.channel == "sms" and row.fell_back is False
+
+
+def test_send_time_not_registered_falls_back_to_sms(db_session, leave, monkeypatch):
+    """send() returning not_registered=True triggers SMS fallback (distinct from is_registered=False)."""
+    monkeypatch.setattr(openwa_client, "is_registered", lambda p: True)
+    monkeypatch.setattr(
+        openwa_client,
+        "send",
+        lambda p, t: openwa_client.SendResult(ok=False, not_registered=True),
+    )
+    monkeypatch.setattr(
+        sms_client, "send", lambda p, t: sms_client.SendResult(ok=True, message_id="s")
+    )
+    row = notify_dispatch.send_for_event(db_session, "leave_approved", leave.id, sent_by=None)
+    assert (
+        row.channel == "sms" and row.fell_back is True and row.fallback_reason == "not_on_whatsapp"
+    )
+
+
+def test_within_window_transient_reschedules_not_fallback(db_session, leave, monkeypatch):
+    """A queued row that is still within the retry window is rescheduled, not finalized."""
+    monkeypatch.setattr(openwa_client, "is_registered", lambda p: True)
+    monkeypatch.setattr(
+        openwa_client, "send", lambda p, t: openwa_client.SendResult(ok=False, error="503")
+    )
+    row = notify_dispatch.send_for_event(db_session, "leave_approved", leave.id, sent_by=None)
+    assert row.status == "queued" and row.channel == "whatsapp"
+
+    # Make the row due for retry NOW but keep created_at fresh (within the 5-min window)
+    row.next_retry_at = datetime.now(UTC).replace(tzinfo=None) - timedelta(seconds=1)
+    db_session.commit()
+
+    n = notify_dispatch.retry_queued(db_session)
+    db_session.refresh(row)
+
+    assert n == 0
+    assert row.status == "queued"
+    assert row.channel == "whatsapp"
+    assert row.next_retry_at > datetime.now(UTC).replace(tzinfo=None)
+
+
+def test_poll_deliveries_routes_to_correct_client(db_session, emp, monkeypatch):
+    """poll_deliveries calls sms_client for SMS rows and openwa_client for WhatsApp rows."""
+    now = datetime.now(UTC).replace(tzinfo=None)
+
+    sms_row = OutboundMessage(
+        employee_id=emp.id,
+        event_type="leave_approved",
+        event_ref="leave_approved:99",
+        language="ar",
+        phone="500000000",
+        channel="sms",
+        status="sent",
+        provider_msg_id="s1",
+        created_at=now,
+    )
+    wa_row = OutboundMessage(
+        employee_id=emp.id,
+        event_type="leave_approved",
+        event_ref="leave_approved:98",
+        language="ar",
+        phone="500000000",
+        channel="whatsapp",
+        status="sent",
+        provider_msg_id="w1",
+        created_at=now,
+    )
+    db_session.add_all([sms_row, wa_row])
+    db_session.commit()
+
+    monkeypatch.setattr(
+        sms_client,
+        "get_delivery",
+        lambda mid: sms_client.DeliveryResult(ok=True, state="Delivered"),
+    )
+    monkeypatch.setattr(
+        openwa_client,
+        "get_ack",
+        lambda mid: openwa_client.DeliveryResult(ok=True, state="read"),
+    )
+
+    notify_dispatch.poll_deliveries(db_session)
+    db_session.refresh(sms_row)
+    db_session.refresh(wa_row)
+
+    assert sms_row.delivery_state == "Delivered"
+    assert wa_row.delivery_state == "read"
