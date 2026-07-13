@@ -18,10 +18,11 @@ from __future__ import annotations
 import logging
 import os
 import sys
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from threading import Lock
 
 from apscheduler.schedulers.background import BackgroundScheduler
+from apscheduler.triggers.cron import CronTrigger
 from apscheduler.triggers.interval import IntervalTrigger
 from sqlalchemy import select
 
@@ -29,6 +30,7 @@ from app.config import get_settings
 from app.db.models import User
 from app.db.session import SessionLocal
 from app.services import (
+    digest_service,
     email_service,
     notification_service,
     notify_dispatch,
@@ -53,6 +55,7 @@ _NOTIFY_DELIVERY_POLL_JOB_ID = "notify-delivery-poll"
 _NOTIFY_DELIVERY_POLL_INTERVAL_MINUTES = 5
 _OPENWA_HEALTH_JOB_ID = "openwa-health"
 _OPENWA_HEALTH_INTERVAL_MINUTES = 5
+_DIGEST_JOB_ID = "monthly_leave_digest"
 
 _scheduler: BackgroundScheduler | None = None
 _lock = Lock()
@@ -142,6 +145,23 @@ def _run_openwa_health() -> None:
         notify_dispatch.record_health(ok)
     except Exception:
         log.exception("scheduler: openwa health check failed")
+
+
+def _run_monthly_digest() -> None:
+    """Send the annual-leave digest to every mapped unit's supervisors."""
+    cfg = get_settings()
+    if not (cfg.openwa_enabled or cfg.sms_enabled):
+        return
+    try:
+        with SessionLocal() as session:
+            result = digest_service.send_all_digests(session, month=date.today(), sent_by=None)
+        log.info(
+            "scheduler: monthly leave digest sent=%d skips=%d",
+            result.sent,
+            len(result.skips),
+        )
+    except Exception:
+        log.exception("scheduler: monthly leave digest failed")
 
 
 # The notification title is always the app name, in both languages, because the
@@ -378,6 +398,13 @@ def start() -> None:
                 replace_existing=True,
             )
             log.info("scheduler: openwa health every %d min", _OPENWA_HEALTH_INTERVAL_MINUTES)
+            _scheduler.add_job(
+                _run_monthly_digest,
+                trigger=CronTrigger(day=1, hour=8, minute=0, timezone="Asia/Dubai"),
+                id=_DIGEST_JOB_ID,
+                replace_existing=True,
+            )
+            log.info("scheduler: monthly leave digest on the 1st at 08:00 Asia/Dubai")
 
 
 def shutdown() -> None:
@@ -435,6 +462,7 @@ def reschedule_email_sync() -> None:
 
 
 __all__ = [
+    "_run_monthly_digest",
     "_run_notify_delivery_poll",
     "_run_notify_retry",
     "_run_openwa_health",
