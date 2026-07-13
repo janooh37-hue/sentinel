@@ -2564,7 +2564,7 @@
     "sending": "Sending…",
     "sendTitle": "Send notification (WhatsApp, SMS fallback)",
     "confirmResend": "Send this notification again?",
-    "failed": "Failed",
+    "failed": "Send failed",
     "channel": { "whatsapp": "WhatsApp", "sms": "SMS" }
   },
   "refresh": {

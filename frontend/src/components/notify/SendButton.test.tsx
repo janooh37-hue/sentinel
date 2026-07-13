@@ -3,7 +3,7 @@ import { describe, it, expect, vi } from 'vitest'
 import { SendButton } from './SendButton'
 
 vi.mock('../../lib/api', () => ({
-  getNotifyStatus: vi.fn().mockResolvedValue({ enabled: true, last: { channel: 'whatsapp', status: 'sent', delivery_state: 'delivered' } }),
+  getNotifyStatus: vi.fn().mockResolvedValue({ enabled: true, last: { channel: 'whatsapp', status: 'sent', delivery_state: 'Delivered' } }),
   sendNotify: vi.fn().mockResolvedValue({ status: 'sent', channel: 'whatsapp' }),
 }))
 vi.mock('../../lib/useCapabilities', () => ({ useCapabilities: () => ({ has: () => true }) }))

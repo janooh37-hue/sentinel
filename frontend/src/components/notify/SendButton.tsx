@@ -7,6 +7,7 @@ import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { sendNotify, getNotifyStatus, type NotifyStatus } from '../../lib/api'
 import { useCapabilities } from '../../lib/useCapabilities'
+import { Button } from '@/components/ui/button'
 
 interface Props {
   eventType: string
@@ -38,7 +39,7 @@ export function SendButton({ eventType, recordId }: Props) {
 
   if (!caps.has('employees.notify') || !enabled) return null
 
-  const accepted = last?.status === 'sent'
+  const accepted = last?.status === 'sent' || last?.status === 'queued'
   const terminalFail =
     last?.delivery_state === 'Failed' || last?.delivery_state === 'failed'
   const delivered = accepted && !terminalFail
@@ -60,7 +61,7 @@ export function SendButton({ eventType, recordId }: Props) {
           created_at: new Date().toISOString(),
           event_type: eventType,
           event_ref: `${eventType}:${recordId}`,
-          fell_back: false,
+          fell_back: res.fell_back,
           fallback_reason: null,
           language: last?.language ?? 'ar',
           id: last?.id ?? 0,
@@ -77,11 +78,11 @@ export function SendButton({ eventType, recordId }: Props) {
 
   return (
     <span className="inline-flex items-center gap-1">
-      <button type="button" onClick={onClick} disabled={busy} title={t('notify.sendTitle')}>
+      <Button size="xs" variant="ghost" onClick={onClick} disabled={busy} title={t('notify.sendTitle')}>
         {busy ? t('notify.sending') : accepted ? t('notify.resend') : t('notify.send')}
-      </button>
+      </Button>
       {delivered && !error && (
-        <span aria-label={`sent ${last?.channel ?? ''}`}>&#10003; {channelLabel}</span>
+        <span aria-label={channelLabel}>&#10003; {channelLabel}</span>
       )}
       {error && (
         <span role="alert" title={error}>
