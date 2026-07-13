@@ -1,14 +1,24 @@
-/** Messages tab — SMS notifications sent to this employee (sent / failed / delivered). */
+/** Messages tab — outbound notifications sent to this employee (WhatsApp + SMS; sent / failed / delivered). */
 import { useState, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Check, AlertTriangle, Clock } from 'lucide-react'
-import type { SmsMessageRead } from '@/lib/api'
 import { refreshNotifyDelivery } from '@/lib/api'
 import { smsDeliveryTone } from '@/lib/smsDelivery'
 import { useCapabilities } from '@/lib/useCapabilities'
 
+/** Minimal shape required by this tab — satisfied by both SmsMessageRead and NotifyMessageRead. */
+export interface MessageItem {
+  id: number
+  phone: string
+  status: string
+  body?: string | null
+  error?: string | null
+  delivery_state?: string | null
+  created_at: string
+}
+
 interface Props {
-  messages: SmsMessageRead[]
+  messages: MessageItem[]
   /** Called after a re-check resolves — parent should invalidate its query. */
   onRecheck?: (smsId: number) => Promise<void>
 }

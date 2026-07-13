@@ -46,7 +46,7 @@ from app.schemas.book import (
     ReviewersAddRequest,
     ReviewRequest,
 )
-from app.schemas.sms import SmsMessageRead as SmsMessageRead
+from app.schemas.notify import NotifyMessageRead as NotifyMessageRead
 from app.services import book_service
 from app.services.book_service import LIST_DEFAULT_LIMIT, LIST_MAX_LIMIT
 
@@ -268,7 +268,9 @@ def get_book(
         current.template_id if current is not None else None
     )
     item.imported_doc = book_service.imported_document_of(row)
-    item.sms = [SmsMessageRead.model_validate(m) for m in book_service.sms_for_book(db, row)]
+    item.sms = [
+        NotifyMessageRead.model_validate(m) for m in book_service.messages_for_book(db, row)
+    ]
     return item
 
 

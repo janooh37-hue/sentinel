@@ -42,3 +42,5 @@ class NotifyStatusResponse(BaseModel):
 class NotifyMessageRead(NotifyStatusItem):
     provider_msg_id: str | None
     delivery_checked_at: datetime | None
+    phone: str
+    body: str | None = None

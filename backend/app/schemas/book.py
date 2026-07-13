@@ -8,7 +8,7 @@ from typing import Literal
 from pydantic import BaseModel, Field
 
 from app.schemas._base import ORMBase
-from app.schemas.sms import SmsMessageRead
+from app.schemas.notify import NotifyMessageRead
 
 # Direction must be one of these two values.
 BookDirection = Literal["incoming", "outgoing"]
@@ -199,8 +199,8 @@ class BookRead(ORMBase):
     approval_steps: list[BookApprovalStepRead] = Field(default_factory=list)
     attachment_paths: list[str] = Field(default_factory=list)
     versions: list[BookVersionRead] = Field(default_factory=list)
-    # SMS notifications sent for this book (auto-send + resends).
-    sms: list[SmsMessageRead] = Field(default_factory=list)
+    # Outbound notifications sent for this book (WhatsApp + SMS, auto-send + resends).
+    sms: list[NotifyMessageRead] = Field(default_factory=list)
 
 
 class BookListResponse(BaseModel):

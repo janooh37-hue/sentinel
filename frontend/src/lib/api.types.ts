@@ -3397,7 +3397,7 @@ export interface components {
             /** Versions */
             versions?: components["schemas"]["BookVersionRead"][];
             /** Sms */
-            sms?: components["schemas"]["SmsMessageRead"][];
+            sms?: components["schemas"]["NotifyMessageRead"][];
         };
         /** BookSubmitRequest */
         BookSubmitRequest: {
@@ -5380,6 +5380,10 @@ export interface components {
             provider_msg_id: string | null;
             /** Delivery Checked At */
             delivery_checked_at: string | null;
+            /** Phone */
+            phone: string;
+            /** Body */
+            body?: string | null;
         };
         /** NotifySendRequest */
         NotifySendRequest: {

@@ -1,6 +1,6 @@
 import { render, screen } from '@testing-library/react'
 import { describe, it, expect, vi } from 'vitest'
-import type { SmsMessageRead } from '@/lib/api'
+import type { MessageItem } from './MessagesTab'
 const BADGE_LABELS: Record<string, string> = {
   'employee.messages.delivered': 'Delivered',
   'employee.messages.failed': 'Failed',
@@ -10,23 +10,28 @@ vi.mock('react-i18next', () => ({ useTranslation: () => ({ t: (k: string) => BAD
 vi.mock('@/lib/useCapabilities', () => ({ useCapabilities: () => ({ has: () => false }) }))
 import { MessagesTab } from './MessagesTab'
 
-function msg(overrides: Partial<SmsMessageRead>): SmsMessageRead {
+function msg(overrides: Partial<MessageItem>): MessageItem {
   return {
     id: 1,
-    event_type: 'leave_requested',
-    body: 'x',
     phone: '+971500000000',
     status: 'sent',
+    body: 'x',
     error: null,
-    language: 'en',
     created_at: new Date().toISOString(),
     delivery_state: null,
-    delivery_checked_at: null,
     ...overrides,
   }
 }
 
-const base = { id: 1, event_type: 'warning', phone: '+971500000000', language: 'ar', created_at: '2026-07-06T10:00:00Z' }
+const base: MessageItem = {
+  id: 1,
+  phone: '+971500000000',
+  status: 'sent',
+  body: null,
+  error: null,
+  created_at: '2026-07-06T10:00:00Z',
+  delivery_state: null,
+}
 
 describe('MessagesTab', () => {
   it('renders a sent message with its body', () => {

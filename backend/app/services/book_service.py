@@ -31,7 +31,7 @@ from app.db.models import (
     BookVersion,
     Employee,
     Manager,
-    SmsMessage,
+    OutboundMessage,
     User,
 )
 from app.db.repos.refs_repo import allocate_ref_with_retry
@@ -1474,10 +1474,11 @@ def detach_attachment(db: Session, book_id: int, rel_path: str) -> Book:
 # ---------------------------------------------------------------------------
 
 
-def sms_for_book(db: Session, book: Book) -> list[SmsMessage]:
-    """Return SMS rows sent for this book, newest first.
+def messages_for_book(db: Session, book: Book) -> list[OutboundMessage]:
+    """Return outbound-message rows sent for this book, newest first.
 
-    Uses the current version's ``template_id`` to look up the SMS event via
+    Queries the unified ``outbound_messages`` log (covers WhatsApp + SMS).
+    Uses the current version's ``template_id`` to look up the event via
     ``notify_format.TEMPLATE_EVENTS``. Returns ``[]`` when the template is
     unmapped or the book has no versions.
     """
@@ -1488,11 +1489,15 @@ def sms_for_book(db: Session, book: Book) -> list[SmsMessage]:
     if event is None:
         return []
     stmt = (
-        select(SmsMessage)
-        .where(SmsMessage.event_ref == f"{event}:{book.id}")
-        .order_by(SmsMessage.id.desc())
+        select(OutboundMessage)
+        .where(OutboundMessage.event_ref == f"{event}:{book.id}")
+        .order_by(OutboundMessage.id.desc())
     )
     return list(db.execute(stmt).scalars().all())
+
+
+# Keep the old name as an alias for backward compatibility with legacy callers.
+sms_for_book = messages_for_book
 
 
 __all__ = [
@@ -1517,6 +1522,7 @@ __all__ = [
     "list_books",
     "list_reviewer_candidates",
     "mark_seen",
+    "messages_for_book",
     "record_review",
     "remove_reviewer",
     "replace_attachment",

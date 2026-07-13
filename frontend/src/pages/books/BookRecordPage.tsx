@@ -30,7 +30,7 @@ import {
   X,
 } from 'lucide-react'
 
-import { api, type BookApprovalStepRead, type BookVersionRead, type SmsMessageRead, apiErrorMessage } from '@/lib/api'
+import { api, type BookApprovalStepRead, type BookVersionRead, type NotifyMessageRead, apiErrorMessage } from '@/lib/api'
 import { useAuth } from '@/lib/authContext'
 import { useCapabilities } from '@/lib/useCapabilities'
 import {
@@ -836,7 +836,7 @@ function DeskLoading(): React.JSX.Element {
   )
 }
 
-function NotificationBlock({ messages }: { messages: SmsMessageRead[] }): React.JSX.Element {
+function NotificationBlock({ messages }: { messages: NotifyMessageRead[] }): React.JSX.Element {
   const { t, i18n } = useTranslation()
   const fmt = useMemo(
     () => new Intl.DateTimeFormat(i18n.language, { dateStyle: 'medium', timeStyle: 'short' }),
