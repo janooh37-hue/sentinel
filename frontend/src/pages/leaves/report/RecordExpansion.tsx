@@ -17,7 +17,7 @@ import { api } from '@/lib/api'
 import type { LeaveListItem } from '@/lib/api'
 import { Button } from '@/components/ui/button'
 
-import { SendSmsButton } from '@/components/sms/SendSmsButton'
+import { SendButton } from '@/components/notify/SendButton'
 import { SendWhatsAppButton } from '@/components/whatsapp/SendWhatsAppButton'
 
 import { actionsFor, canonStatus, displayState, lifecycleGroup } from '../lifecycle'
@@ -230,7 +230,7 @@ export function RecordExpansion({
           {canonStatus(row.status) === 'Approved' && (
             <div className="flex flex-wrap items-center gap-2">
               <SendWhatsAppButton eventType="leave_approved" recordId={row.id} />
-              <SendSmsButton eventType="leave_approved" recordId={row.id} />
+              <SendButton eventType="leave_approved" recordId={row.id} />
             </div>
           )}
 

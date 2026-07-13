@@ -2558,6 +2558,15 @@
     "confirmResend": "Already sent. Send again?",
     "failed": "Send failed"
   },
+  "notify": {
+    "send": "Send",
+    "resend": "Resend",
+    "sending": "Sending…",
+    "sendTitle": "Send notification (WhatsApp, SMS fallback)",
+    "confirmResend": "Send this notification again?",
+    "failed": "Failed",
+    "channel": { "whatsapp": "WhatsApp", "sms": "SMS" }
+  },
   "refresh": {
     "action": "Refresh",
     "hotkey": "Alt+R",

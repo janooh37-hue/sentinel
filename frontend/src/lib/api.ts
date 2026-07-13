@@ -1673,3 +1673,50 @@ export async function getSmsStatus(
 export function refreshSmsDelivery(smsId: number): Promise<SmsMessageRead> {
   return request<SmsMessageRead>('POST', `/sms/${smsId}/refresh-delivery`)
 }
+
+// --- Unified Notify (WhatsApp → SMS fallback) --------------------------------
+export interface NotifyStatus {
+  id: number
+  event_type: string
+  event_ref: string
+  language: string
+  channel: 'whatsapp' | 'sms' | null
+  status: 'queued' | 'sent' | 'failed'
+  delivery_state: string | null
+  fell_back: boolean
+  fallback_reason: string | null
+  error: string | null
+  created_at: string
+}
+
+export interface NotifySendResponse {
+  status: string
+  channel: string | null
+  fell_back: boolean
+  message_id: string | null
+  error: string | null
+}
+
+export function sendNotify(
+  eventType: string,
+  recordId: number,
+): Promise<NotifySendResponse> {
+  return request<NotifySendResponse>('POST', '/notify/send', {
+    event_type: eventType,
+    record_id: recordId,
+  })
+}
+
+export function getNotifyStatus(
+  eventType: string,
+  recordId: number,
+): Promise<{ enabled: boolean; last: NotifyStatus | null }> {
+  return request<{ enabled: boolean; last: NotifyStatus | null }>(
+    'GET',
+    `/notify/status?event_type=${encodeURIComponent(eventType)}&record_id=${recordId}`,
+  )
+}
+
+export function refreshNotifyDelivery(notifyId: number): Promise<NotifyStatus> {
+  return request<NotifyStatus>('POST', `/notify/${notifyId}/refresh-delivery`)
+}
