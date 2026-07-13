@@ -145,8 +145,26 @@ def test_manager_signature_roundtrip(admin_client):
     assert up.status_code == 201, up.text
     assert admin_client.get("/api/v1/managers").json()  # sanity
 
+    # raw-PNG GET (no ?encoding=base64)
+    raw = admin_client.get(f"/api/v1/managers/{mid}/signature")
+    assert raw.status_code == 200
+    assert raw.headers["content-type"].startswith("image/png")
+    assert raw.headers.get("X-Signature-Updated")
+
     got = admin_client.get(f"/api/v1/managers/{mid}/signature?encoding=base64")
     assert got.status_code == 200 and got.text.strip()
+    assert got.headers.get("X-Signature-Updated")
 
     assert admin_client.delete(f"/api/v1/managers/{mid}/signature").status_code == 204
     assert admin_client.get(f"/api/v1/managers/{mid}/signature").status_code == 404
+
+
+def test_manager_signature_rejects_bad_image(api_db):
+    c = _client(api_db, _user(api_db, role="admin", email="badsig@x.ae"))
+    mid = c.post("/api/v1/managers", json={"name_en": "Bad Sig Boss"}).json()["id"]
+
+    resp = c.post(
+        f"/api/v1/managers/{mid}/signature",
+        files={"file": ("x.png", b"not a real image", "image/png")},
+    )
+    assert resp.status_code == 422
