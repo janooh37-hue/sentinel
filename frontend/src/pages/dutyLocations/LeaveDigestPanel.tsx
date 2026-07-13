@@ -59,7 +59,7 @@ export function LeaveDigestPanel({ unit }: Props): React.JSX.Element {
   function reasonLabel(skip: DigestSkipOut): string {
     if (skip.reason === 'no_supervisor') return t('leaveDigest.noSupervisor')
     if (skip.reason === 'no_leaves') return t('leaveDigest.noLeaves')
-    return skip.reason
+    return t('leaveDigest.unknownReason')
   }
 
   const sample =
@@ -104,7 +104,7 @@ export function LeaveDigestPanel({ unit }: Props): React.JSX.Element {
       {/* Preview result */}
       {preview && (
         <div className="mt-3 space-y-2">
-          <p className="text-[0.84em] font-medium text-foreground">
+          <p className="text-[0.84em] font-medium text-foreground" dir="auto">
             {t('leaveDigest.count', { count: preview.count })}
           </p>
           {sample && (
@@ -121,14 +121,14 @@ export function LeaveDigestPanel({ unit }: Props): React.JSX.Element {
       {/* Send result */}
       {sendResult && (
         <div className="mt-3 space-y-1">
-          <p className="text-[0.84em] font-medium text-foreground">
+          <p className="text-[0.84em] font-medium text-foreground" dir="auto">
             {t('leaveDigest.sent', { count: sendResult.sent })}
           </p>
           {sendResult.skips.length > 0 && (
             <ul className="space-y-0.5">
-              {sendResult.skips.map((skip, i) => (
+              {sendResult.skips.map((skip) => (
                 <li
-                  key={i}
+                  key={skip.duty_unit}
                   className="text-[0.78em] text-muted-foreground"
                   dir="auto"
                 >

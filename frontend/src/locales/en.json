@@ -2608,6 +2608,7 @@
     "skipped": "Skipped: {{reason}}",
     "noSupervisor": "no supervisor configured",
     "noLeaves": "no annual leave this month",
+    "unknownReason": "unknown reason",
     "previewError": "Could not load the preview. Please try again.",
     "sendError": "Could not send the digest. Please try again."
   }
