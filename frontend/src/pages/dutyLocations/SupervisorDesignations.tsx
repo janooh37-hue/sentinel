@@ -16,7 +16,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 
-import { api, apiErrorMessage, type DutySupervisorRead } from '@/lib/api'
+import { api, type DutySupervisorRead } from '@/lib/api'
 
 interface Props {
   /** Active duty unit (Arabic name). */
@@ -54,8 +54,8 @@ export function SupervisorDesignations({ unit, posts }: Props): React.JSX.Elemen
       setAddError(null)
       invalidate()
     },
-    onError: (e: unknown) => {
-      setAddError(apiErrorMessage(e))
+    onError: () => {
+      setAddError(t('dutySupervisors.addError'))
       toast.error(t('dutySupervisors.addError'))
     },
   })
@@ -63,7 +63,7 @@ export function SupervisorDesignations({ unit, posts }: Props): React.JSX.Elemen
   const removeMut = useMutation({
     mutationFn: (id: number) => api.deleteDutySupervisor(id),
     onSuccess: invalidate,
-    onError: (e: unknown) => toast.error(apiErrorMessage(e)),
+    onError: () => toast.error(t('dutySupervisors.removeError')),
   })
 
   function handleAdd(): void {

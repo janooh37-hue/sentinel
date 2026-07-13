@@ -84,9 +84,16 @@ describe('SupervisorDesignations', () => {
         expect.objectContaining({ duty_unit: 'السرية الأولى', recipient_duty_post: 'جندي' }),
       ),
     )
+
+    // After success the component clears the input (setDesignation(''))
+    await waitFor(() => expect(input).toHaveValue(''))
   })
 
   it('calls deleteDutySupervisor when Remove is clicked', async () => {
+    // First render shows the row; after deletion the refetch returns empty list
+    vi.mocked(api.listDutySupervisors)
+      .mockResolvedValueOnce([DESIGNATION_ROW])
+      .mockResolvedValue([])
     vi.mocked(api.deleteDutySupervisor).mockResolvedValue(undefined)
 
     renderSection()
@@ -95,6 +102,11 @@ describe('SupervisorDesignations', () => {
 
     await waitFor(() =>
       expect(api.deleteDutySupervisor).toHaveBeenCalledWith(1),
+    )
+
+    // After invalidation/refetch the empty-state text must appear
+    await waitFor(() =>
+      expect(screen.getByText('dutySupervisors.empty')).toBeInTheDocument(),
     )
   })
 })

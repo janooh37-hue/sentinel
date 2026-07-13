@@ -2595,6 +2595,7 @@
     "add": "Add",
     "remove": "Remove",
     "empty": "No supervisor designations for this unit yet.",
-    "addError": "Could not add the designation. Please try again."
+    "addError": "Could not add the designation. Please try again.",
+    "removeError": "Could not remove the designation. Please try again."
   }
 }
