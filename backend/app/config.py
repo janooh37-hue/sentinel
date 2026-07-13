@@ -81,6 +81,15 @@ class Settings(BaseSettings):
     sms_password: str = ""  # SMS Gate local-server Basic auth password
     sms_country_code: str = "971"  # default CC for normalizing contact
 
+    # --- WhatsApp via self-hosted OpenWA gateway ------------------------------
+    # All GSSG_OPENWA_* env vars. Disabled by default; the router falls back to
+    # SMS entirely while this is off. Points at the Docker gateway on localhost.
+    openwa_enabled: bool = False
+    openwa_api_base: str = ""  # e.g. http://localhost:2785 (scheme optional)
+    openwa_api_key: str = ""  # X-API-Key for the gateway (secret)
+    openwa_session: str = "default"  # OpenWA sessionId holding the logged-in number
+    openwa_country_code: str = "971"  # default CC for normalizing contact
+
     @property
     def db_path(self) -> Path:
         return self.data_dir / "gssg.db"
