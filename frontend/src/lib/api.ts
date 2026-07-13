@@ -594,6 +594,8 @@ export type ManagerRead = components['schemas']['ManagerRead'] & {
 }
 export type ManagerCreate = components['schemas']['ManagerCreate']
 export type ManagerUpdate = components['schemas']['ManagerUpdate']
+export type DutySupervisorRead = components['schemas']['DutySupervisorRead']
+export type DutySupervisorCreate = components['schemas']['DutySupervisorCreate']
 export type SubmitterRead = components['schemas']['SubmitterRead']
 export type TemplateMeta = components['schemas']['TemplateMeta']
 export type TemplateListResponse = components['schemas']['TemplateListResponse']
@@ -1048,6 +1050,12 @@ export const api = {
     return { dataUrl: `data:image/png;base64,${b64}`, updatedAt: res.headers.get('X-Signature-Updated') }
   },
   deleteManagerSignature: (id: number) => request<void>('DELETE', `/managers/${id}/signature`),
+
+  // --- duty supervisors (Phase 2a OpenWA) ---
+  listDutySupervisors: () => request<DutySupervisorRead[]>('GET', '/duty-supervisors/'),
+  addDutySupervisor: (body: DutySupervisorCreate) =>
+    request<DutySupervisorRead>('POST', '/duty-supervisors/', body),
+  deleteDutySupervisor: (id: number) => request<void>('DELETE', `/duty-supervisors/${id}`),
 
   // --- submitters (Phase 04) ---
   listSubmitters: () => request<SubmitterRead[]>('GET', '/submitters'),

@@ -2587,5 +2587,14 @@
     "noAccessPage": "You don't have access to this page",
     "requestAccess": "Request access",
     "caps": {}
+  },
+  "dutySupervisors": {
+    "title": "Notify supervisors",
+    "subtitle": "Designations that receive alerts for this unit",
+    "designation": "Designation",
+    "add": "Add",
+    "remove": "Remove",
+    "empty": "No supervisor designations for this unit yet.",
+    "addError": "Could not add the designation. Please try again."
   }
 }

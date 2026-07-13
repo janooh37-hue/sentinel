@@ -22,12 +22,14 @@ import {
   UNASSIGNED,
   SEED_UNITS,
   groupByUnit,
+  postsForUnit,
 } from '@/lib/dutyUnits'
 import { Skeleton } from '@/components/ui/skeleton'
 import { UnitRail, type UnitRailItem } from './UnitRail'
 import { RosterTable } from './RosterTable'
 import { AssignPopover } from './AssignPopover'
 import { TransferDialog } from './TransferDialog'
+import { SupervisorDesignations } from './SupervisorDesignations'
 
 export function DutyLocationsPage(): React.JSX.Element {
   const { t } = useTranslation()
@@ -214,6 +216,14 @@ export function DutyLocationsPage(): React.JSX.Element {
                     onAssign={setAssignTarget}
                   />
                 </div>
+
+                {/* Supervisor designation editor — only for real units, not Unassigned */}
+                {resolvedActiveKey && resolvedActiveKey !== UNASSIGNED && (
+                  <SupervisorDesignations
+                    unit={resolvedActiveKey}
+                    posts={postsForUnit(employees, resolvedActiveKey)}
+                  />
+                )}
               </section>
             </div>
           </div>
