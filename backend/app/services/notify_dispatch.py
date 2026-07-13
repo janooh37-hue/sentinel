@@ -26,6 +26,8 @@ from app.services import openwa_client, sms_client, sms_templates
 
 log = logging.getLogger(__name__)
 
+_last_health: bool | None = None
+
 RETRY_WINDOW_MINUTES = 5
 RETRY_BACKOFF_SECONDS = 30
 _TERMINAL_DELIVERY = {"Delivered", "Failed", "delivered", "read", "failed"}
@@ -413,3 +415,11 @@ def last_status(db: Session, event_type: str, record_id: int) -> OutboundMessage
         .order_by(OutboundMessage.id.desc())
         .limit(1)
     )
+
+
+def record_health(ok: bool) -> None:
+    """Record the OpenWA session health. Logs a warning on a True→False transition."""
+    global _last_health
+    if _last_health is True and not ok:
+        log.warning("openwa: WhatsApp session went DOWN — messages will fall back to SMS")
+    _last_health = ok

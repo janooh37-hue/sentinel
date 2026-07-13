@@ -25,15 +25,17 @@ from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.interval import IntervalTrigger
 from sqlalchemy import select
 
+from app.config import get_settings
 from app.db.models import User
 from app.db.session import SessionLocal
 from app.services import (
     email_service,
     notification_service,
+    notify_dispatch,
+    openwa_client,
     perm_service,
     push_service,
     scan_inbox_service,
-    sms_service,
 )
 
 log = logging.getLogger(__name__)
@@ -45,8 +47,12 @@ _PUSH_NOTIFIER_JOB_ID = "push-notifier"
 _PUSH_NOTIFIER_INTERVAL_MINUTES = 1
 _GRANT_SWEEP_JOB_ID = "grant-sweep"
 _GRANT_SWEEP_INTERVAL_MINUTES = 1
-_SMS_DELIVERY_POLL_JOB_ID = "sms-delivery-poll"
-_SMS_DELIVERY_POLL_INTERVAL_MINUTES = 5
+_NOTIFY_RETRY_JOB_ID = "notify-retry"
+_NOTIFY_RETRY_INTERVAL_MINUTES = 1
+_NOTIFY_DELIVERY_POLL_JOB_ID = "notify-delivery-poll"
+_NOTIFY_DELIVERY_POLL_INTERVAL_MINUTES = 5
+_OPENWA_HEALTH_JOB_ID = "openwa-health"
+_OPENWA_HEALTH_INTERVAL_MINUTES = 5
 
 _scheduler: BackgroundScheduler | None = None
 _lock = Lock()
@@ -108,14 +114,34 @@ def _run_grant_sweep() -> None:
             log.exception("scheduler: grant sweep failed")
 
 
-def _run_sms_delivery_poll() -> None:
+def _run_notify_retry() -> None:
     with SessionLocal() as session:
         try:
-            n = sms_service.poll_pending_deliveries(session)
+            n = notify_dispatch.retry_queued(session)
             if n:
-                log.info("scheduler: %d SMS reached a terminal delivery state", n)
+                log.info("scheduler: %d queued WhatsApp message(s) finalized", n)
         except Exception:
-            log.exception("scheduler: SMS delivery poll failed")
+            log.exception("scheduler: notify retry failed")
+
+
+def _run_notify_delivery_poll() -> None:
+    with SessionLocal() as session:
+        try:
+            n = notify_dispatch.poll_deliveries(session)
+            if n:
+                log.info("scheduler: %d message(s) reached a terminal delivery state", n)
+        except Exception:
+            log.exception("scheduler: delivery poll failed")
+
+
+def _run_openwa_health() -> None:
+    if not get_settings().openwa_enabled:
+        return
+    try:
+        ok = openwa_client.health()
+        notify_dispatch.record_health(ok)
+    except Exception:
+        log.exception("scheduler: openwa health check failed")
 
 
 # The notification title is always the app name, in both languages, because the
@@ -329,15 +355,29 @@ def start() -> None:
             )
             log.info("scheduler: grant sweep every %d min", _GRANT_SWEEP_INTERVAL_MINUTES)
             _scheduler.add_job(
-                _run_sms_delivery_poll,
-                trigger=IntervalTrigger(minutes=_SMS_DELIVERY_POLL_INTERVAL_MINUTES),
-                id=_SMS_DELIVERY_POLL_JOB_ID,
+                _run_notify_retry,
+                trigger=IntervalTrigger(minutes=_NOTIFY_RETRY_INTERVAL_MINUTES),
+                id=_NOTIFY_RETRY_JOB_ID,
+                replace_existing=True,
+            )
+            log.info("scheduler: notify retry every %d min", _NOTIFY_RETRY_INTERVAL_MINUTES)
+            _scheduler.add_job(
+                _run_notify_delivery_poll,
+                trigger=IntervalTrigger(minutes=_NOTIFY_DELIVERY_POLL_INTERVAL_MINUTES),
+                id=_NOTIFY_DELIVERY_POLL_JOB_ID,
                 replace_existing=True,
             )
             log.info(
-                "scheduler: SMS delivery poll every %d min",
-                _SMS_DELIVERY_POLL_INTERVAL_MINUTES,
+                "scheduler: delivery poll every %d min",
+                _NOTIFY_DELIVERY_POLL_INTERVAL_MINUTES,
             )
+            _scheduler.add_job(
+                _run_openwa_health,
+                trigger=IntervalTrigger(minutes=_OPENWA_HEALTH_INTERVAL_MINUTES),
+                id=_OPENWA_HEALTH_JOB_ID,
+                replace_existing=True,
+            )
+            log.info("scheduler: openwa health every %d min", _OPENWA_HEALTH_INTERVAL_MINUTES)
 
 
 def shutdown() -> None:
@@ -395,8 +435,10 @@ def reschedule_email_sync() -> None:
 
 
 __all__ = [
+    "_run_notify_delivery_poll",
+    "_run_notify_retry",
+    "_run_openwa_health",
     "_run_push_notifier",
-    "_run_sms_delivery_poll",
     "reschedule_email_sync",
     "run_drain_once",
     "shutdown",
