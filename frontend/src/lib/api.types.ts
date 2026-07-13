@@ -2703,6 +2703,57 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/notify/send": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Send */
+        post: operations["send_api_v1_notify_send_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/notify/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Status */
+        get: operations["get_status_api_v1_notify_status_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/notify/{msg_id}/refresh-delivery": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Refresh Delivery */
+        post: operations["refresh_delivery_api_v1_notify__msg_id__refresh_delivery_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/whatsapp/send": {
         parameters: {
             query?: never;
@@ -5382,6 +5433,94 @@ export interface components {
             scans: number;
             /** Emails */
             emails: number;
+        };
+        /** NotifyMessageRead */
+        NotifyMessageRead: {
+            /** Id */
+            id: number;
+            /** Event Type */
+            event_type: string;
+            /** Event Ref */
+            event_ref: string;
+            /** Language */
+            language: string;
+            /** Channel */
+            channel: string | null;
+            /** Status */
+            status: string;
+            /** Delivery State */
+            delivery_state: string | null;
+            /** Fell Back */
+            fell_back: boolean;
+            /** Fallback Reason */
+            fallback_reason: string | null;
+            /** Error */
+            error: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Provider Msg Id */
+            provider_msg_id: string | null;
+            /** Delivery Checked At */
+            delivery_checked_at: string | null;
+        };
+        /** NotifySendRequest */
+        NotifySendRequest: {
+            /** Event Type */
+            event_type: string;
+            /** Record Id */
+            record_id: number;
+        };
+        /** NotifySendResponse */
+        NotifySendResponse: {
+            /** Status */
+            status: string;
+            /** Channel */
+            channel: string | null;
+            /** Fell Back */
+            fell_back: boolean;
+            /** Fallback Reason */
+            fallback_reason?: string | null;
+            /** Message Id */
+            message_id?: string | null;
+            /** Error */
+            error?: string | null;
+        };
+        /** NotifyStatusItem */
+        NotifyStatusItem: {
+            /** Id */
+            id: number;
+            /** Event Type */
+            event_type: string;
+            /** Event Ref */
+            event_ref: string;
+            /** Language */
+            language: string;
+            /** Channel */
+            channel: string | null;
+            /** Status */
+            status: string;
+            /** Delivery State */
+            delivery_state: string | null;
+            /** Fell Back */
+            fell_back: boolean;
+            /** Fallback Reason */
+            fallback_reason: string | null;
+            /** Error */
+            error: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+        };
+        /** NotifyStatusResponse */
+        NotifyStatusResponse: {
+            /** Enabled */
+            enabled: boolean;
+            last: components["schemas"]["NotifyStatusItem"] | null;
         };
         /** PassportSuggestion */
         PassportSuggestion: {
@@ -12485,6 +12624,108 @@ export interface operations {
                 };
                 content: {
                     "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    send_api_v1_notify_send_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NotifySendRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NotifySendResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_status_api_v1_notify_status_get: {
+        parameters: {
+            query: {
+                event_type: string;
+                record_id: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NotifyStatusResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    refresh_delivery_api_v1_notify__msg_id__refresh_delivery_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                msg_id: number;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NotifyMessageRead"];
                 };
             };
             /** @description Validation Error */
