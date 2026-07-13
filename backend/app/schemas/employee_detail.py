@@ -19,9 +19,7 @@ from pydantic import BaseModel
 from app.schemas._base import ORMBase
 from app.schemas.employee import EmployeeRead
 from app.schemas.employee_completeness import CompletenessRead
-from app.schemas.sms import (
-    SmsMessageRead as SmsMessageRead,
-)  # re-exported; keep sx.SmsMessageRead working
+from app.schemas.notify import NotifyMessageRead as NotifyMessageRead
 
 
 class EmployeeStatsRead(BaseModel):
@@ -82,6 +80,6 @@ class EmployeeDetailRead(BaseModel):
     recent_violations: list[RecentViolationRead]
     recent_ledger: list[RecentLedgerRead]
     recent_activity: list[ActivityItemRead]
-    recent_sms: list[SmsMessageRead]
+    recent_sms: list[NotifyMessageRead]
     missing_fields: list[str]
     completeness: CompletenessRead

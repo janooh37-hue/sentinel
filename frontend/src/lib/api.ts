@@ -121,8 +121,6 @@ export type EmployeeUpdate = components['schemas']['EmployeeUpdate'] & {
 }
 export type EmployeeStatus = EmployeeRead['status']
 
-// gen:api now folds the SMS history field into the schema — use the generated type.
-export type SmsMessageRead = components['schemas']['SmsMessageRead']
 // Unified outbound log read type (covers WhatsApp + SMS); used for the book/employee Messages surface.
 export type NotifyMessageRead = components['schemas']['NotifyMessageRead']
 export type EmployeeDetailRead = components['schemas']['EmployeeDetailRead']

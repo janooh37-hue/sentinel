@@ -4370,7 +4370,7 @@ export interface components {
             /** Recent Activity */
             recent_activity: components["schemas"]["ActivityItemRead"][];
             /** Recent Sms */
-            recent_sms: components["schemas"]["SmsMessageRead"][];
+            recent_sms: components["schemas"]["NotifyMessageRead"][];
             /** Missing Fields */
             missing_fields: string[];
             completeness: components["schemas"]["CompletenessRead"];
@@ -5898,35 +5898,6 @@ export interface components {
             size_mm: number;
             /** Boldness */
             boldness: number;
-        };
-        /**
-         * SmsMessageRead
-         * @description One SMS send attempt — used on both the employee-detail and book-detail surfaces.
-         */
-        SmsMessageRead: {
-            /** Id */
-            id: number;
-            /** Event Type */
-            event_type: string;
-            /** Body */
-            body: string | null;
-            /** Phone */
-            phone: string;
-            /** Status */
-            status: string;
-            /** Error */
-            error: string | null;
-            /** Language */
-            language: string;
-            /**
-             * Created At
-             * Format: date-time
-             */
-            created_at: string;
-            /** Delivery State */
-            delivery_state?: string | null;
-            /** Delivery Checked At */
-            delivery_checked_at?: string | null;
         };
         /**
          * StagedAttachmentRead

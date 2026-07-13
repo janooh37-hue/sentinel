@@ -1,4 +1,4 @@
-from app.db.models import Employee, SmsMessage
+from app.db.models import Employee, OutboundMessage
 from app.services import employee_detail_service as eds
 
 
@@ -7,7 +7,7 @@ def test_detail_includes_recent_sms(db_session):
     db_session.add(emp)
     db_session.flush()
     db_session.add(
-        SmsMessage(
+        OutboundMessage(
             employee_id="E9",
             event_type="warning",
             event_ref="warning:1",
@@ -22,4 +22,5 @@ def test_detail_includes_recent_sms(db_session):
     assert detail is not None
     assert len(detail.recent_sms) == 1
     assert detail.recent_sms[0].status == "sent"
+    assert detail.recent_sms[0].body is not None
     assert detail.recent_sms[0].body.startswith("عزيزي")

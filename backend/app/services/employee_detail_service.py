@@ -160,11 +160,11 @@ def get_employee_detail(db: Session, employee_id: str) -> sx.EmployeeDetailRead 
     activity = _build_activity(recent_docs, recent_leaves, recent_violations, recent_ledger)
 
     recent_sms = [
-        sx.SmsMessageRead.model_validate(m)
+        sx.NotifyMessageRead.model_validate(m)
         for m in db.scalars(
-            select(models.SmsMessage)
-            .where(models.SmsMessage.employee_id == emp.id)
-            .order_by(models.SmsMessage.id.desc())
+            select(models.OutboundMessage)
+            .where(models.OutboundMessage.employee_id == emp.id)
+            .order_by(models.OutboundMessage.id.desc())
             .limit(SMS_RECENT_LIMIT)
         )
     ]
