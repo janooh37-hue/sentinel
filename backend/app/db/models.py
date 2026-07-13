@@ -436,6 +436,45 @@ class SmsMessage(Base):
     __table_args__ = (Index("ix_sms_messages_event", "event_type", "event_ref"),)
 
 
+class OutboundMessage(Base):
+    """One row per outbound notification attempt across all channels.
+
+    Unifies the retired sms_messages / whatsapp_messages logs. ``channel`` is the
+    channel actually used; NULL when the attempt failed before routing (no phone).
+    ``status`` is queued|sent|failed. ``delivery_state`` is the channel's own
+    delivery outcome (WhatsApp: sent|delivered|read|failed; SMS: Pending|Delivered|
+    Failed). ``fell_back``/``fallback_reason`` record a WhatsApp→SMS downgrade.
+    ``attempts``/``next_retry_at`` drive the bounded WhatsApp retry queue.
+    """
+
+    __tablename__ = "outbound_messages"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    employee_id: Mapped[str] = mapped_column(String(16), ForeignKey("employees.id"))
+    event_type: Mapped[str] = mapped_column(String(32))
+    event_ref: Mapped[str] = mapped_column(String(64))
+    language: Mapped[str] = mapped_column(String(2))
+    phone: Mapped[str] = mapped_column(String(32))
+    channel: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    status: Mapped[str] = mapped_column(String(16))
+    delivery_state: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    delivery_checked_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    fell_back: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0")
+    fallback_reason: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    attempts: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    next_retry_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    provider_msg_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    body: Mapped[str | None] = mapped_column(Text, nullable=True)
+    sent_by: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
+
+    __table_args__ = (
+        Index("ix_outbound_messages_event", "event_type", "event_ref"),
+        Index("ix_outbound_messages_retry", "status", "next_retry_at"),
+    )
+
+
 class Manager(Base):
     __tablename__ = "managers"
 
