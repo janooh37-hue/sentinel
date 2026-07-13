@@ -1098,6 +1098,41 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/duty-supervisors/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Mappings */
+        get: operations["list_mappings_api_v1_duty_supervisors__get"];
+        put?: never;
+        /** Create Mapping */
+        post: operations["create_mapping_api_v1_duty_supervisors__post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/duty-supervisors/{mapping_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete Mapping */
+        delete: operations["delete_mapping_api_v1_duty_supervisors__mapping_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/submitters": {
         parameters: {
             query?: never;
@@ -4038,6 +4073,27 @@ export interface components {
              * @default true
              */
             use_signature: boolean;
+        };
+        /** DutySupervisorCreate */
+        DutySupervisorCreate: {
+            /** Duty Unit */
+            duty_unit: string;
+            /** Recipient Duty Post */
+            recipient_duty_post: string;
+        };
+        /** DutySupervisorRead */
+        DutySupervisorRead: {
+            /** Id */
+            id: number;
+            /** Duty Unit */
+            duty_unit: string;
+            /** Recipient Duty Post */
+            recipient_duty_post: string;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
         };
         /** DutyTransferRequest */
         DutyTransferRequest: {
@@ -8744,6 +8800,103 @@ export interface operations {
             header?: never;
             path: {
                 manager_id: number;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_mappings_api_v1_duty_supervisors__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DutySupervisorRead"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_mapping_api_v1_duty_supervisors__post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DutySupervisorCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DutySupervisorRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_mapping_api_v1_duty_supervisors__mapping_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                mapping_id: number;
             };
             cookie?: {
                 gssg_session?: string | null;

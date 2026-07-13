@@ -20,6 +20,7 @@ from app.api.v1 import correspondence as correspondence_v1
 from app.api.v1 import dashboard as dashboard_v1
 from app.api.v1 import documents as documents_v1
 from app.api.v1 import duty as duty_v1
+from app.api.v1 import duty_supervisors as duty_supervisors_v1
 from app.api.v1 import editor_templates as editor_templates_v1
 from app.api.v1 import email as email_v1
 from app.api.v1 import employees as employees_v1
@@ -170,6 +171,7 @@ def create_app() -> FastAPI:
     app.include_router(documents_v1.documents_router, prefix="/api/v1", dependencies=auth_gate)
     app.include_router(documents_v1.jobs_router, prefix="/api/v1", dependencies=auth_gate)
     app.include_router(managers_v1.router, prefix="/api/v1", dependencies=auth_gate)
+    app.include_router(duty_supervisors_v1.router, prefix="/api/v1", dependencies=auth_gate)
     app.include_router(submitters_v1.router, prefix="/api/v1", dependencies=auth_gate)
     app.include_router(recipients_v1.router, prefix="/api/v1", dependencies=auth_gate)
     app.include_router(books_v1.router, prefix="/api/v1", dependencies=auth_gate)
