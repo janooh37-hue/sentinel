@@ -592,6 +592,8 @@ export type ManagerRead = components['schemas']['ManagerRead'] & {
   user_id?: number | null
   user_name?: string | null
 }
+export type ManagerCreate = components['schemas']['ManagerCreate']
+export type ManagerUpdate = components['schemas']['ManagerUpdate']
 export type SubmitterRead = components['schemas']['SubmitterRead']
 export type TemplateMeta = components['schemas']['TemplateMeta']
 export type TemplateListResponse = components['schemas']['TemplateListResponse']
@@ -1017,8 +1019,35 @@ export const api = {
 
   // --- managers (Phase 04) ---
   listManagers: () => request<ManagerRead[]>('GET', '/managers'),
+  createManager: (body: ManagerCreate) =>
+    request<ManagerRead>('POST', '/managers', body),
+  updateManager: (id: number, body: ManagerUpdate) =>
+    request<ManagerRead>('PATCH', `/managers/${id}`, body),
   linkManagerAccount: (id: number, userId: number | null) =>
     request<ManagerRead>('PATCH', `/managers/${id}`, { user_id: userId }),
+
+  uploadManagerSignature: (id: number, png: Blob) => {
+    const form = new FormData()
+    form.append('file', png, 'signature.png')
+    return multipart<{ path: string; filename: string }>(`/managers/${id}/signature`, form)
+  },
+  getManagerSignature: async (
+    id: number,
+  ): Promise<{ dataUrl: string; updatedAt: string | null } | null> => {
+    const res = await fetch(`${BASE}/managers/${id}/signature?encoding=base64`, {
+      method: 'GET',
+      cache: 'no-store',
+      credentials: 'same-origin',
+    })
+    if (res.status === 404) return null
+    if (!res.ok) {
+      throw new ApiError(res.status, `HTTP_${res.status}`, res.statusText || 'Failed to load signature')
+    }
+    const b64 = (await res.text()).trim()
+    if (!b64) return null
+    return { dataUrl: `data:image/png;base64,${b64}`, updatedAt: res.headers.get('X-Signature-Updated') }
+  },
+  deleteManagerSignature: (id: number) => request<void>('DELETE', `/managers/${id}/signature`),
 
   // --- submitters (Phase 04) ---
   listSubmitters: () => request<SubmitterRead[]>('GET', '/submitters'),

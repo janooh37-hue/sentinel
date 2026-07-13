@@ -1048,7 +1048,11 @@ export interface paths {
         /** List Managers */
         get: operations["list_managers_api_v1_managers_get"];
         put?: never;
-        post?: never;
+        /**
+         * Create Manager
+         * @description Create a new manager row. Requires ``settings.edit`` (admin-only).
+         */
+        post: operations["create_manager_api_v1_managers_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1069,12 +1073,29 @@ export interface paths {
         options?: never;
         head?: never;
         /**
-         * Link Manager Account
-         * @description Link or unlink a login account to a manager row.
-         *
-         *     Requires ``settings.edit`` — admin-only by default.
+         * Update Manager
+         * @description Update any manager field (name, title, active, user link). settings.edit.
          */
-        patch: operations["link_manager_account_api_v1_managers__manager_id__patch"];
+        patch: operations["update_manager_api_v1_managers__manager_id__patch"];
+        trace?: never;
+    };
+    "/api/v1/managers/{manager_id}/signature": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Manager Signature */
+        get: operations["get_manager_signature_api_v1_managers__manager_id__signature_get"];
+        put?: never;
+        /** Upload Manager Signature */
+        post: operations["upload_manager_signature_api_v1_managers__manager_id__signature_post"];
+        /** Delete Manager Signature */
+        delete: operations["delete_manager_signature_api_v1_managers__manager_id__signature_delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/api/v1/submitters": {
@@ -3191,6 +3212,14 @@ export interface components {
              */
             upload: string;
         };
+        /** Body_upload_manager_signature_api_v1_managers__manager_id__signature_post */
+        Body_upload_manager_signature_api_v1_managers__manager_id__signature_post: {
+            /**
+             * Upload
+             * Format: binary
+             */
+            upload: string;
+        };
         /** Body_upload_my_signature_api_v1_auth_me_signature_post */
         Body_upload_my_signature_api_v1_auth_me_signature_post: {
             /**
@@ -5239,8 +5268,19 @@ export interface components {
             /** Password */
             password: string;
         };
-        /** ManagerLinkUpdate */
-        ManagerLinkUpdate: {
+        /** ManagerCreate */
+        ManagerCreate: {
+            /** Name En */
+            name_en?: string | null;
+            /** Name Ar */
+            name_ar?: string | null;
+            /** Title */
+            title?: string | null;
+            /**
+             * Active
+             * @default true
+             */
+            active: boolean;
             /** User Id */
             user_id?: number | null;
         };
@@ -5260,6 +5300,27 @@ export interface components {
             user_id?: number | null;
             /** User Name */
             user_name?: string | null;
+            /**
+             * Has Signature
+             * @default false
+             */
+            has_signature: boolean;
+        };
+        /**
+         * ManagerUpdate
+         * @description Partial update. All fields optional. `sig_path` is NOT client-settable.
+         */
+        ManagerUpdate: {
+            /** Name En */
+            name_en?: string | null;
+            /** Name Ar */
+            name_ar?: string | null;
+            /** Title */
+            title?: string | null;
+            /** Active */
+            active?: boolean | null;
+            /** User Id */
+            user_id?: number | null;
         };
         /** MarkAllReadResponse */
         MarkAllReadResponse: {
@@ -8602,7 +8663,42 @@ export interface operations {
             };
         };
     };
-    link_manager_account_api_v1_managers__manager_id__patch: {
+    create_manager_api_v1_managers_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ManagerCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ManagerRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_manager_api_v1_managers__manager_id__patch: {
         parameters: {
             query?: never;
             header?: never;
@@ -8615,7 +8711,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["ManagerLinkUpdate"];
+                "application/json": components["schemas"]["ManagerUpdate"];
             };
         };
         responses: {
@@ -8627,6 +8723,111 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["ManagerRead"];
                 };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_manager_signature_api_v1_managers__manager_id__signature_get: {
+        parameters: {
+            query?: {
+                encoding?: string | null;
+            };
+            header?: never;
+            path: {
+                manager_id: number;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    upload_manager_signature_api_v1_managers__manager_id__signature_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                manager_id: number;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_upload_manager_signature_api_v1_managers__manager_id__signature_post"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: string;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_manager_signature_api_v1_managers__manager_id__signature_delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                manager_id: number;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Validation Error */
             422: {
