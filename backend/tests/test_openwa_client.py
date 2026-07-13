@@ -53,6 +53,27 @@ def test_send_transport_error_retries_then_fails():
     assert not r.ok and calls["n"] == 2
 
 
+def test_send_not_registered_from_body_text_non_422():
+    def handler(req):
+        return httpx.Response(400, json={"message": "not registered"})
+
+    _mock(handler)
+    r = openwa_client.send("971500000000", "hi")
+    assert not r.ok and r.not_registered
+
+
+def test_get_ack_retries_on_transport_error():
+    calls = {"n": 0}
+
+    def handler(req):
+        calls["n"] += 1
+        raise httpx.ConnectError("boom")
+
+    _mock(handler)
+    r = openwa_client.get_ack("m1")
+    assert not r.ok and calls["n"] == 2
+
+
 def test_is_registered_true():
     def handler(req):
         return httpx.Response(200, json={"numberExists": True})
