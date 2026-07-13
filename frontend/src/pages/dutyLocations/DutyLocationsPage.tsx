@@ -30,6 +30,7 @@ import { RosterTable } from './RosterTable'
 import { AssignPopover } from './AssignPopover'
 import { TransferDialog } from './TransferDialog'
 import { SupervisorDesignations } from './SupervisorDesignations'
+import { LeaveDigestPanel } from './LeaveDigestPanel'
 
 export function DutyLocationsPage(): React.JSX.Element {
   const { t } = useTranslation()
@@ -223,6 +224,11 @@ export function DutyLocationsPage(): React.JSX.Element {
                     unit={resolvedActiveKey}
                     posts={postsForUnit(employees, resolvedActiveKey)}
                   />
+                )}
+
+                {/* Leave digest preview + send — only for real units, not Unassigned */}
+                {resolvedActiveKey && resolvedActiveKey !== UNASSIGNED && (
+                  <LeaveDigestPanel unit={resolvedActiveKey} />
                 )}
               </section>
             </div>

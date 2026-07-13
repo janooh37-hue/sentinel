@@ -2597,5 +2597,18 @@
     "empty": "No supervisor designations for this unit yet.",
     "addError": "Could not add the designation. Please try again.",
     "removeError": "Could not remove the designation. Please try again."
+  },
+  "leaveDigest": {
+    "title": "Annual-leave digest",
+    "subtitle": "Send this unit's supervisors a list of who's on annual leave this month",
+    "preview": "Preview",
+    "sendNow": "Send now",
+    "count": "{{count}} on annual leave this month",
+    "sent": "Sent to {{count}} supervisor(s)",
+    "skipped": "Skipped: {{reason}}",
+    "noSupervisor": "no supervisor configured",
+    "noLeaves": "no annual leave this month",
+    "previewError": "Could not load the preview. Please try again.",
+    "sendError": "Could not send the digest. Please try again."
   }
 }

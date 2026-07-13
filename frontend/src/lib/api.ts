@@ -596,6 +596,12 @@ export type ManagerCreate = components['schemas']['ManagerCreate']
 export type ManagerUpdate = components['schemas']['ManagerUpdate']
 export type DutySupervisorRead = components['schemas']['DutySupervisorRead']
 export type DutySupervisorCreate = components['schemas']['DutySupervisorCreate']
+
+// Phase 2a — OpenWA digest API (Task 10/11)
+export type DigestPreview = components['schemas']['DigestPreview']
+export type DigestSendResult = components['schemas']['DigestSendResult']
+export type DigestSendRequest = components['schemas']['DigestSendRequest']
+export type DigestSkipOut = components['schemas']['DigestSkipOut']
 export type SubmitterRead = components['schemas']['SubmitterRead']
 export type TemplateMeta = components['schemas']['TemplateMeta']
 export type TemplateListResponse = components['schemas']['TemplateListResponse']
@@ -1056,6 +1062,12 @@ export const api = {
   addDutySupervisor: (body: DutySupervisorCreate) =>
     request<DutySupervisorRead>('POST', '/duty-supervisors/', body),
   deleteDutySupervisor: (id: number) => request<void>('DELETE', `/duty-supervisors/${id}`),
+
+  // --- leave digests (Phase 2a OpenWA — Task 10/11) ---
+  previewLeaveDigest: (dutyUnit: string) =>
+    request<DigestPreview>('GET', `/digests/leave/preview?duty_unit=${encodeURIComponent(dutyUnit)}`),
+  sendLeaveDigest: (dutyUnit: string | null) =>
+    request<DigestSendResult>('POST', '/digests/leave/send', { duty_unit: dutyUnit }),
 
   // --- submitters (Phase 04) ---
   listSubmitters: () => request<SubmitterRead[]>('GET', '/submitters'),
