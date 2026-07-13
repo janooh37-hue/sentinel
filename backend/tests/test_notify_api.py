@@ -104,7 +104,14 @@ def test_send_requires_capability(api_db: Session) -> None:
     _seed_leave(api_db)
     c = _client(api_db, _user(api_db, role="operator", email="op@x.ae"))
     r = c.post("/api/v1/notify/send", json={"event_type": "leave_approved", "record_id": 7})
-    assert r.status_code in (401, 403)
+    assert r.status_code == 403
+
+
+def test_refresh_delivery_requires_capability(api_db: Session) -> None:
+    """operator role does NOT have books.manage → must get 403."""
+    c = _client(api_db, _user(api_db, role="operator", email="op2@x.ae"))
+    r = c.post("/api/v1/notify/1/refresh-delivery")
+    assert r.status_code == 403
 
 
 # ---------------------------------------------------------------------------
