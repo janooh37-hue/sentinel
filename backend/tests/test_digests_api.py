@@ -137,7 +137,7 @@ def test_preview_reports_count(admin_client: TestClient, db_session: Session) ->
     assert "السرية الأولى" in body["sample_ar"]
 
 
-def test_send_all_returns_result(
+def test_send_unit_returns_result(
     admin_client: TestClient, db_session: Session, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     # Enable a channel + stub the transport so no real send happens.
@@ -162,6 +162,111 @@ def test_send_all_returns_result(
     )
     assert r.status_code == 200, r.text
     assert r.json()["sent"] == 1
+
+
+def test_send_all_returns_result(
+    admin_client: TestClient, db_session: Session, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """POST with duty_unit=None exercises send_all_digests across ALL mapped units."""
+    from app.services import notify_dispatch
+
+    monkeypatch.setattr(
+        notify_dispatch,
+        "get_settings",
+        lambda: __import__("types").SimpleNamespace(
+            openwa_enabled=False, sms_enabled=True, sms_country_code="971"
+        ),
+    )
+    monkeypatch.setattr(
+        notify_dispatch.sms_client,
+        "send",
+        lambda p, b: __import__("types").SimpleNamespace(ok=True, message_id="m", error=None),
+    )
+    # Seed unit 1 — same structure as _seed() but inline for two units.
+    dsv.add_mapping(db_session, "السرية الأولى", "مسؤول سرية")
+    db_session.add(
+        Employee(
+            id="SUP1",
+            name_ar="س1",
+            name_en="Sup1",
+            status="Active",
+            duty_unit="السرية الأولى",
+            duty_post="مسؤول سرية",
+            contact="0501112222",
+            msg_language="ar",
+        )
+    )
+    db_session.add(
+        Employee(
+            id="EMP1",
+            name_ar="ع1",
+            name_en="Emp1",
+            status="Active",
+            duty_unit="السرية الأولى",
+            duty_post="جندي",
+            contact="0503334444",
+            msg_language="ar",
+        )
+    )
+    # Seed unit 2 — distinct duty unit, own supervisor + leave.
+    dsv.add_mapping(db_session, "السرية الثانية", "مسؤول سرية")
+    db_session.add(
+        Employee(
+            id="SUP2",
+            name_ar="س2",
+            name_en="Sup2",
+            status="Active",
+            duty_unit="السرية الثانية",
+            duty_post="مسؤول سرية",
+            contact="0507778888",
+            msg_language="ar",
+        )
+    )
+    db_session.add(
+        Employee(
+            id="EMP2",
+            name_ar="ع2",
+            name_en="Emp2",
+            status="Active",
+            duty_unit="السرية الثانية",
+            duty_post="جندي",
+            contact="0509990000",
+            msg_language="ar",
+        )
+    )
+    today = date.today()
+    db_session.add(
+        Leave(
+            id=10,
+            employee_id="EMP1",
+            leave_type="annual leave",
+            start_date=today.replace(day=1),
+            end_date=today.replace(day=1),
+            status="Approved",
+            days=1,
+        )
+    )
+    db_session.add(
+        Leave(
+            id=11,
+            employee_id="EMP2",
+            leave_type="annual leave",
+            start_date=today.replace(day=1),
+            end_date=today.replace(day=1),
+            status="Approved",
+            days=1,
+        )
+    )
+    db_session.commit()
+
+    r = admin_client.post(
+        "/api/v1/digests/leave/send",
+        json={"duty_unit": None},
+    )
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["sent"] == 2, body
+    assert body["skips"] == []
 
 
 def test_send_requires_settings_edit(client: TestClient) -> None:

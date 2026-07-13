@@ -41,13 +41,13 @@ def preview_leave_digest(
 def send_leave_digest(
     payload: DigestSendRequest,
     db: Annotated[Session, Depends(get_db)],
-    _user: Annotated[User, Depends(require_capability("settings.edit"))],
+    user: Annotated[User, Depends(require_capability("settings.edit"))],
 ) -> DigestSendResult:
     month = date.today()
     if payload.duty_unit:
-        res = ds.send_unit_digest(db, payload.duty_unit, month=month, sent_by=_user.id)
+        res = ds.send_unit_digest(db, payload.duty_unit, month=month, sent_by=user.id)
     else:
-        res = ds.send_all_digests(db, month=month, sent_by=_user.id)
+        res = ds.send_all_digests(db, month=month, sent_by=user.id)
     return DigestSendResult(
         sent=res.sent,
         skips=[DigestSkipOut(duty_unit=s.duty_unit, reason=s.reason) for s in res.skips],
