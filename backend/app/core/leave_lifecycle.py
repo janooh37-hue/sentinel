@@ -110,6 +110,11 @@ def accepts_certificate(leave_type: str) -> bool:
     return classify_group(leave_type) == "national_service"
 
 
+def is_annual(leave_type: str) -> bool:
+    """True for Annual Leave (the digest's scope). Robust to bilingual labels."""
+    return _english_part(leave_type).lower() in _ANNUAL
+
+
 def is_returnable(leave_type: str) -> bool:
     """Kinds that require a Duty Resumption (return) form to close out.
 
@@ -195,6 +200,7 @@ __all__ = [
     "canonical_status",
     "classify_group",
     "ending_soon",
+    "is_annual",
     "is_returnable",
     "needs_action",
 ]

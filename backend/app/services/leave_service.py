@@ -547,6 +547,37 @@ def _audit(
     db.commit()
 
 
+def list_annual_overlapping(
+    db: Session,
+    *,
+    month_start: date,
+    month_end: date,
+    duty_unit: str | None = None,
+) -> list[Leave]:
+    """Approved, non-deleted annual leaves overlapping [month_start, month_end].
+
+    Overlap = start_date <= month_end AND end_date >= month_start. Annual-type
+    and canonical-Approved filtering happen in Python (both are stored as
+    inconsistent bilingual free-text, so an ORM equality filter is unsafe)."""
+    stmt = select(Leave).where(
+        Leave.deleted_at.is_(None),
+        Leave.start_date <= month_end,
+        Leave.end_date >= month_start,
+    )
+    if duty_unit is not None:
+        stmt = stmt.join(Employee, Employee.id == Leave.employee_id).where(
+            Employee.duty_unit == duty_unit
+        )
+    stmt = stmt.order_by(Leave.employee_id, Leave.start_date)
+    rows = list(db.scalars(stmt))
+    return [
+        lv
+        for lv in rows
+        if leave_lifecycle.is_annual(lv.leave_type)
+        and leave_lifecycle.canonical_status(lv.status) == "Approved"
+    ]
+
+
 __all__ = [
     "add_certificate",
     "compute_balance",
@@ -554,6 +585,7 @@ __all__ = [
     "file_return",
     "get_certificate_file",
     "get_leave",
+    "list_annual_overlapping",
     "list_for_employee",
     "list_leaves",
     "soft_delete_leave",
