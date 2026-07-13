@@ -279,6 +279,9 @@ def test_poll_ok_false_leaves_delivery_state_unchanged(db_session, emp, monkeypa
     n = notify_dispatch.poll_deliveries(db_session)
     db_session.refresh(row)
 
+    # n counts rows that reached a TERMINAL delivery state this poll cycle; n==0
+    # means no terminal transition occurred, not that the row was skipped —
+    # the row WAS processed (evidenced by delivery_checked_at being set below).
     assert n == 0
     assert row.delivery_state is None
     # delivery_checked_at is still updated (the poll ran) even on ok=False

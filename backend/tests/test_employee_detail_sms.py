@@ -13,6 +13,7 @@ def test_detail_includes_recent_sms(db_session):
             event_ref="warning:1",
             language="ar",
             phone="+971500000000",
+            channel="sms",
             status="sent",
             body="عزيزي...",
         )

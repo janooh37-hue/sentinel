@@ -31,6 +31,7 @@ output/
 # Env / secrets
 .env
 .env.local
+deploy/openwa/.env
 
 # Off-DB secret keys — NEVER commit these
 data/.vapid_key

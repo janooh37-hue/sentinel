@@ -6,7 +6,7 @@ import { refreshNotifyDelivery } from '@/lib/api'
 import { smsDeliveryTone } from '@/lib/smsDelivery'
 import { useCapabilities } from '@/lib/useCapabilities'
 
-/** Minimal shape required by this tab — satisfied by both SmsMessageRead and NotifyMessageRead. */
+/** Minimal shape required by this tab — satisfied by NotifyMessageRead. */
 export interface MessageItem {
   id: number
   phone: string

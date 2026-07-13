@@ -5,10 +5,16 @@ Revises: 0050_outbound_messages
 Create Date: 2026-07-13
 
 Copies every legacy row into the unified log, channel-stamped, so the single
-badge shows full history. Legacy tables are left intact. Downgrade deletes only
-the backfilled rows (attempts=0 AND created from legacy — identified by a marker
-is unavailable on SQLite; downgrade instead truncates outbound_messages, which is
-safe because 0050 created it empty in this chain).
+badge shows full history. Legacy tables are left intact.
+
+Downgrade deletes all rows from outbound_messages. SQLite provides no reliable
+per-row marker that would let the downgrade delete only the backfilled rows while
+preserving later ones, so the simplest safe operation is a full table truncation.
+This is safe within the 0050→0051 migration pair because 0050 created the table
+empty — a downgrade immediately after upgrade loses nothing that was not just
+inserted. However, rolling back 0051 on a live database that has since accumulated
+new outbound_messages rows will delete those rows too; treat this migration as
+effectively one-way in production.
 """
 
 from __future__ import annotations
