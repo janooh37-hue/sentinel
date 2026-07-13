@@ -37,13 +37,18 @@ def render_leave_digest(
 ) -> str:
     """One bilingual message: heading (unit + month) then a line per person."""
     if lang == "ar":
+        # "الإجازات السنوية" (plural) is intentional — it introduces a collective list,
+        # matching the digest UI panel title "ملخص الإجازات السنوية".
         heading = f"الإجازات السنوية لوحدة «{unit}» لشهر {_month_name(month, 'ar')}:"
     else:
         heading = f'Annual leave for unit "{unit}" — {_month_name(month, "en")}:'
     lines = [heading]
     for emp, lv in employees_leaves:
         name = nf.employee_name(emp, lang)
-        span = f"{nf.fmt_date(lv.start_date)} → {nf.fmt_date(lv.end_date)}"
+        if lang == "ar":
+            span = f"من {nf.fmt_date(lv.start_date)} إلى {nf.fmt_date(lv.end_date)}"
+        else:
+            span = f"{nf.fmt_date(lv.start_date)} → {nf.fmt_date(lv.end_date)}"
         lines.append(f"• {name} — {span}")
     return "\n".join(lines)
 

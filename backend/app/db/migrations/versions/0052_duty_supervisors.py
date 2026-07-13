@@ -1,7 +1,7 @@
 """create duty_supervisors + seed verified designation mapping
 
 Revision ID: 0052
-Revises: 0051
+Revises: 0051_backfill_outbound_messages
 """
 
 from __future__ import annotations
