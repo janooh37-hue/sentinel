@@ -475,6 +475,26 @@ class OutboundMessage(Base):
     )
 
 
+class DutySupervisor(Base):
+    """Maps a (free-text) duty_unit to a recipient designation (duty_post).
+
+    Supervisors are resolved at send time from these designations, never
+    pinned to a specific person — moving staff around the roster never breaks
+    routing. A unit may have several rows (several recipient designations).
+    """
+
+    __tablename__ = "duty_supervisors"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    duty_unit: Mapped[str] = mapped_column(String(128))
+    recipient_duty_post: Mapped[str] = mapped_column(String(128))
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
+
+    __table_args__ = (
+        Index("ux_duty_supervisors_unit_post", "duty_unit", "recipient_duty_post", unique=True),
+    )
+
+
 class Manager(Base):
     __tablename__ = "managers"
 
