@@ -1133,6 +1133,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/digests/leave/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Preview Leave Digest */
+        get: operations["preview_leave_digest_api_v1_digests_leave_preview_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/digests/leave/send": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Send Leave Digest */
+        post: operations["send_leave_digest_api_v1_digests_leave_send_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/submitters": {
         parameters: {
             query?: never;
@@ -3966,6 +4000,38 @@ export interface components {
         DefaultManagerRequest: {
             /** Enabled */
             enabled: boolean;
+        };
+        /** DigestPreview */
+        DigestPreview: {
+            /** Duty Unit */
+            duty_unit: string;
+            /** Month */
+            month: string;
+            /** Count */
+            count: number;
+            /** Sample Ar */
+            sample_ar: string;
+            /** Sample En */
+            sample_en: string;
+        };
+        /** DigestSendRequest */
+        DigestSendRequest: {
+            /** Duty Unit */
+            duty_unit?: string | null;
+        };
+        /** DigestSendResult */
+        DigestSendResult: {
+            /** Sent */
+            sent: number;
+            /** Skips */
+            skips: components["schemas"]["DigestSkipOut"][];
+        };
+        /** DigestSkipOut */
+        DigestSkipOut: {
+            /** Duty Unit */
+            duty_unit: string;
+            /** Reason */
+            reason: string;
         };
         /** DocumentGenerateRequest */
         DocumentGenerateRequest: {
@@ -8910,6 +8976,74 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    preview_leave_digest_api_v1_digests_leave_preview_get: {
+        parameters: {
+            query: {
+                duty_unit: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DigestPreview"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    send_leave_digest_api_v1_digests_leave_send_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DigestSendRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DigestSendResult"];
+                };
             };
             /** @description Validation Error */
             422: {
