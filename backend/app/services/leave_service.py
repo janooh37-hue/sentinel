@@ -250,9 +250,9 @@ def update_leave(
     # Best-effort — a gateway hiccup must never fail the status change.
     if status_changed:
         try:
-            from app.services import sms_service
+            from app.services import notify_dispatch
 
-            sms_service.auto_send_leave_status(db, leave_id)
+            notify_dispatch.auto_send_leave_status(db, leave_id)
         except Exception:
             log.exception("auto leave-status SMS failed for leave %s", leave_id)
     return row

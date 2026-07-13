@@ -42,7 +42,13 @@ from app.core.pdf_merge import merge_pdfs_to_bytes
 from app.db.models import Document, User
 from app.db.session import SessionLocal, get_db
 from app.schemas._base import ORMBase
-from app.services import book_service, document_service, perm_service, sms_service, staging_service
+from app.services import (
+    book_service,
+    document_service,
+    notify_dispatch,
+    perm_service,
+    staging_service,
+)
 from app.services.job_registry import (
     JobDocumentItem as RegistryDocItem,
 )
@@ -204,7 +210,7 @@ def _run_generation(
             book_id=result.book_id,
         ):
             try:
-                sms_service.auto_send_for_book(db, result.book_id, sent_by=None)
+                notify_dispatch.auto_send_for_book(db, result.book_id, sent_by=None)  # type: ignore[arg-type]
             except Exception:
                 log.exception("auto SMS failed for book %s", result.book_id)
         registry_docs = [

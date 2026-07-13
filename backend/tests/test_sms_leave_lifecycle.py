@@ -8,7 +8,7 @@ import pytest
 
 from app.db.models import Employee, Leave
 from app.schemas.leave import LeaveUpdate
-from app.services import leave_service, sms_client
+from app.services import leave_service, notify_dispatch, sms_client
 from app.services import sms_service as ss
 
 
@@ -192,8 +192,8 @@ def test_generate_violation_form_sends_violation_sms(db_session, _sent):
 def test_update_leave_status_change_triggers_sms(db_session, _sent):
     _leave(db_session, status="Pending", leave_type="Annual Leave")
     leave_service.update_leave(db_session, 7, LeaveUpdate(status="Rejected"))
-    # a leave_rejected SMS was logged for this leave
-    last = ss.last_status(db_session, "leave_rejected", 7)
+    # a leave_rejected notification was logged for this leave in outbound_messages
+    last = notify_dispatch.last_status(db_session, "leave_rejected", 7)
     assert last is not None
     assert last.status == "sent"
     assert len(_sent) == 1
