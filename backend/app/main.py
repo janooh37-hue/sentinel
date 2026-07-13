@@ -38,11 +38,9 @@ from app.api.v1 import recipients as recipients_v1
 from app.api.v1 import scan_inbox as scan_inbox_v1
 from app.api.v1 import settings as settings_v1
 from app.api.v1 import signatures as signatures_v1
-from app.api.v1 import sms as sms_v1
 from app.api.v1 import submitters as submitters_v1
 from app.api.v1 import system as system_v1
 from app.api.v1 import templates as templates_v1
-from app.api.v1 import whatsapp as whatsapp_v1
 from app.config import get_settings
 from app.logging import configure_logging
 from app.services import scheduler_service
@@ -190,8 +188,6 @@ def create_app() -> FastAPI:
     app.include_router(scan_inbox_v1.router, prefix="/api/v1", dependencies=auth_gate)
     app.include_router(notifications_v1.router, prefix="/api/v1", dependencies=auth_gate)
     app.include_router(notify_v1.router, prefix="/api/v1", dependencies=auth_gate)
-    app.include_router(whatsapp_v1.router, prefix="/api/v1", dependencies=auth_gate)
-    app.include_router(sms_v1.router, prefix="/api/v1", dependencies=auth_gate)
     app.include_router(push_v1.router, prefix="/api/v1", dependencies=auth_gate)
     app.include_router(permissions_v1.router, prefix="/api/v1", dependencies=auth_gate)
 

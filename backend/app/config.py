@@ -63,15 +63,6 @@ class Settings(BaseSettings):
     # Set via env: GSSG_SECURE_COOKIES=1
     secure_cookies: bool = False
 
-    # --- WhatsApp via Infobip (employee notifications) -----------------------
-    # All GSSG_WHATSAPP_* env vars. Disabled by default so the "Send" button is
-    # hidden until an operator provisions the Infobip key + base URL + sender.
-    whatsapp_enabled: bool = False
-    whatsapp_token: str = ""  # Infobip API key (secret)
-    whatsapp_api_base: str = ""  # Infobip base URL, e.g. https://xxxxx.api.infobip.com
-    whatsapp_sender: str = ""  # registered WhatsApp sender number (intl format)
-    whatsapp_country_code: str = "971"  # default CC for normalizing contact
-
     # --- SMS via on-site Android SIM gateway (SMS Gate, local mode) -----------
     # All GSSG_SMS_* env vars. Disabled by default so the "Send SMS" button is
     # hidden until an operator provisions the gateway URL + credentials.

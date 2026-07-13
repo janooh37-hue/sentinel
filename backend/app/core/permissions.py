@@ -31,29 +31,106 @@ class Capability(NamedTuple):
 # field lists, managers list, system/info — the read-only chrome).
 
 CAPABILITIES: Final[tuple[Capability, ...]] = (
-    Capability("app.access", "app", "Access the app", "Sign in and see the dashboard, document fields, and read-only chrome."),
-    Capability("employees.view", "employees", "View employees", "See the employee directory and individual employee records."),
-    Capability("employees.edit", "employees", "Create / edit employees + vault", "Add and edit employees and manage their document vault."),
-    Capability("employees.notify", "employees", "Notify employees via WhatsApp", "Send WhatsApp confirmations to employees for leaves, duty resumptions, and violations."),
+    Capability(
+        "app.access",
+        "app",
+        "Access the app",
+        "Sign in and see the dashboard, document fields, and read-only chrome.",
+    ),
+    Capability(
+        "employees.view",
+        "employees",
+        "View employees",
+        "See the employee directory and individual employee records.",
+    ),
+    Capability(
+        "employees.edit",
+        "employees",
+        "Create / edit employees + vault",
+        "Add and edit employees and manage their document vault.",
+    ),
+    Capability(
+        "employees.notify",
+        "employees",
+        "Notify employees",
+        "Send WhatsApp (with SMS fallback) confirmations to employees for leaves, duty resumptions, and violations.",
+    ),
     Capability("leaves.view", "leaves", "View leaves", "See leave records and their status."),
-    Capability("leaves.edit", "leaves", "Edit / delete leaves", "Create, edit, and delete leave records."),
+    Capability(
+        "leaves.edit", "leaves", "Edit / delete leaves", "Create, edit, and delete leave records."
+    ),
     Capability("violations.view", "violations", "View violations", "See recorded violations."),
-    Capability("violations.manage", "violations", "Create / edit / delete violations", "Record, edit, and remove violations."),
-    Capability("documents.generate", "documents", "Generate documents", "Create official documents from templates."),
-    Capability("documents.scan", "documents", "Scan documents with OCR", "Upload scans and run OCR to import documents."),
+    Capability(
+        "violations.manage",
+        "violations",
+        "Create / edit / delete violations",
+        "Record, edit, and remove violations.",
+    ),
+    Capability(
+        "documents.generate",
+        "documents",
+        "Generate documents",
+        "Create official documents from templates.",
+    ),
+    Capability(
+        "documents.scan",
+        "documents",
+        "Scan documents with OCR",
+        "Upload scans and run OCR to import documents.",
+    ),
     Capability("books.view", "books", "View books", "Browse the records/books register."),
-    Capability("books.manage", "books", "Create / edit / delete books", "Create records, edit them, submit for approval, and delete."),
-    Capability("books.approve", "books", "Approve / reject books", "Approve, sign, or reject documents in the approval queue."),
+    Capability(
+        "books.manage",
+        "books",
+        "Create / edit / delete books",
+        "Create records, edit them, submit for approval, and delete.",
+    ),
+    Capability(
+        "books.approve",
+        "books",
+        "Approve / reject books",
+        "Approve, sign, or reject documents in the approval queue.",
+    ),
     Capability("ledger.view", "ledger", "View ledger", "Read correspondence ledger entries."),
-    Capability("ledger.edit", "ledger", "Edit ledger entries + drafts", "Create and edit ledger entries and email drafts."),
-    Capability("ledger.send", "ledger", "Send email from the ledger", "Send email messages from the ledger as yourself."),
+    Capability(
+        "ledger.edit",
+        "ledger",
+        "Edit ledger entries + drafts",
+        "Create and edit ledger entries and email drafts.",
+    ),
+    Capability(
+        "ledger.send",
+        "ledger",
+        "Send email from the ledger",
+        "Send email messages from the ledger as yourself.",
+    ),
     Capability("email.manage", "email", "Manage your mailbox", "Link and sync your own mailbox."),
     Capability("settings.view", "settings", "View settings", "See application settings."),
     Capability("settings.edit", "settings", "Change settings", "Change application settings."),
-    Capability("submitters.manage", "submitters", "Manage submitters", "Manage the list of document submitters."),
-    Capability("editor_templates.manage", "editor_templates", "Manage editor templates", "Create and edit document editor templates."),
-    Capability("users.manage", "users", "Manage users + permissions", "Manage user accounts and their permissions (admin-only)."),
-    Capability("system.admin", "system", "Admin key + v3 migration", "Use the admin key and run system/migration tools (admin-only)."),
+    Capability(
+        "submitters.manage",
+        "submitters",
+        "Manage submitters",
+        "Manage the list of document submitters.",
+    ),
+    Capability(
+        "editor_templates.manage",
+        "editor_templates",
+        "Manage editor templates",
+        "Create and edit document editor templates.",
+    ),
+    Capability(
+        "users.manage",
+        "users",
+        "Manage users + permissions",
+        "Manage user accounts and their permissions (admin-only).",
+    ),
+    Capability(
+        "system.admin",
+        "system",
+        "Admin key + v3 migration",
+        "Use the admin key and run system/migration tools (admin-only).",
+    ),
 )
 
 CAPABILITY_IDS: Final[frozenset[str]] = frozenset(c.id for c in CAPABILITIES)
@@ -78,8 +155,8 @@ _OPERATOR_CAPS: Final[frozenset[str]] = frozenset(
         "books.view",
         "ledger.view",
         "ledger.edit",
-        "ledger.send",      # Phase 3: send as yourself
-        "email.manage",     # Phase 3: link/sync your OWN mailbox
+        "ledger.send",  # Phase 3: send as yourself
+        "email.manage",  # Phase 3: link/sync your OWN mailbox
         "settings.view",
     }
 )
