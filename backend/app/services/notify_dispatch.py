@@ -192,6 +192,21 @@ def _resolve(db: Session, event_type: str, record_id: int) -> tuple[Employee, st
     return employee, lang, phone, text
 
 
+def _route(db: Session, *, base: dict[str, object], cfg: object) -> OutboundMessage:
+    """Phone-check + channel decision shared by send_for_event and send_direct."""
+    if not base.get("phone"):
+        return _log_row(
+            db,
+            **base,
+            channel=None,
+            status="failed",
+            error="No valid phone number for this employee",
+        )
+    if getattr(cfg, "openwa_enabled", False):
+        return _try_whatsapp(db, base=base)
+    return _send_sms(db, base=base, fell_back=False, reason=None)
+
+
 def send_for_event(
     db: Session, event_type: str, record_id: int, *, sent_by: int | None
 ) -> OutboundMessage:
@@ -208,17 +223,38 @@ def send_for_event(
         body=text,
         sent_by=sent_by,
     )
-    if phone is None:
-        return _log_row(
-            db,
-            **base,
-            channel=None,
-            status="failed",
-            error="No valid phone number for this employee",
-        )
-    if cfg.openwa_enabled:
-        return _try_whatsapp(db, base=base)
-    return _send_sms(db, base=base, fell_back=False, reason=None)
+    return _route(db, base=base, cfg=cfg)
+
+
+def send_direct(
+    db: Session,
+    *,
+    employee: Employee,
+    body: str,
+    language: str,
+    event_type: str,
+    event_ref: str,
+    sent_by: int | None,
+) -> OutboundMessage:
+    """Send arbitrary bilingual text to one employee through the router.
+
+    Used by broadcasts/digests where the recipient is not the subject of an HR
+    record and the text is pre-rendered. Same WhatsApp-first / SMS policy.
+    """
+    cfg = get_settings()
+    if not _any_channel_enabled(cfg):
+        raise NotifyDisabledError("No notification channel is enabled")
+    phone = normalize_phone(employee.contact, default_cc=cfg.sms_country_code)
+    base: dict[str, object] = dict(
+        employee_id=employee.id,
+        event_type=event_type,
+        event_ref=event_ref,
+        language=language,
+        phone=phone or "",
+        body=body,
+        sent_by=sent_by,
+    )
+    return _route(db, base=base, cfg=cfg)
 
 
 def _send_leave_status(
