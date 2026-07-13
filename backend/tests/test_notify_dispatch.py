@@ -206,3 +206,86 @@ def test_poll_deliveries_routes_to_correct_client(db_session, emp, monkeypatch):
 
     assert sms_row.delivery_state == "Delivered"
     assert wa_row.delivery_state == "read"
+
+
+# ── poll_deliveries edge-case tests ──────────────────────────────────────────
+
+
+def _make_outbound(db_session, emp, *, channel="sms", **kwargs) -> OutboundMessage:
+    """Create and persist a minimal OutboundMessage row for poll tests."""
+    defaults: dict[str, object] = dict(
+        employee_id=emp.id,
+        event_type="leave_approved",
+        event_ref="leave_approved:1",
+        language="ar",
+        phone="500000000",
+        channel=channel,
+        status="sent",
+        created_at=datetime.now(UTC).replace(tzinfo=None),
+    )
+    defaults.update(kwargs)
+    row = OutboundMessage(**defaults)
+    db_session.add(row)
+    db_session.commit()
+    return row
+
+
+def test_poll_skips_terminal_delivery_state(db_session, emp, monkeypatch):
+    """A row already in a terminal delivery_state is excluded by the query — client never called."""
+    called = []
+    monkeypatch.setattr(sms_client, "get_delivery", lambda mid: (called.append(mid), None)[1])
+
+    _make_outbound(db_session, emp, provider_msg_id="t1", delivery_state="Delivered")
+    n = notify_dispatch.poll_deliveries(db_session)
+
+    assert n == 0
+    assert called == []
+
+
+def test_poll_skips_row_older_than_24h(db_session, emp, monkeypatch):
+    """A row created more than 24 h ago is excluded from the poll window."""
+    called = []
+    monkeypatch.setattr(sms_client, "get_delivery", lambda mid: (called.append(mid), None)[1])
+
+    old_time = datetime.now(UTC).replace(tzinfo=None) - timedelta(hours=25)
+    _make_outbound(db_session, emp, provider_msg_id="t2", created_at=old_time)
+    n = notify_dispatch.poll_deliveries(db_session)
+
+    assert n == 0
+    assert called == []
+
+
+def test_poll_skips_row_without_provider_msg_id(db_session, emp, monkeypatch):
+    """A row with no provider_msg_id (never accepted by the gateway) is excluded."""
+    called = []
+    monkeypatch.setattr(sms_client, "get_delivery", lambda mid: (called.append(mid), None)[1])
+
+    _make_outbound(db_session, emp, provider_msg_id=None)
+    n = notify_dispatch.poll_deliveries(db_session)
+
+    assert n == 0
+    assert called == []
+
+
+def test_poll_ok_false_leaves_delivery_state_unchanged(db_session, emp, monkeypatch):
+    """When the client lookup returns ok=False, delivery_state stays None and the row is not finalized."""
+    monkeypatch.setattr(
+        sms_client,
+        "get_delivery",
+        lambda mid: sms_client.DeliveryResult(ok=False, error="gateway timeout"),
+    )
+
+    row = _make_outbound(db_session, emp, provider_msg_id="t3")
+    n = notify_dispatch.poll_deliveries(db_session)
+    db_session.refresh(row)
+
+    assert n == 0
+    assert row.delivery_state is None
+    # delivery_checked_at is still updated (the poll ran) even on ok=False
+    assert row.delivery_checked_at is not None
+
+
+def test_refresh_delivery_returns_none_for_nonexistent_id(db_session):
+    """refresh_delivery returns None when the message id does not exist."""
+    result = notify_dispatch.refresh_delivery(db_session, msg_id=999999)
+    assert result is None

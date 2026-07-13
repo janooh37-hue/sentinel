@@ -3,7 +3,7 @@ import { useState, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Check, AlertTriangle, Clock } from 'lucide-react'
 import type { SmsMessageRead } from '@/lib/api'
-import { refreshSmsDelivery } from '@/lib/api'
+import { refreshNotifyDelivery } from '@/lib/api'
 import { smsDeliveryTone } from '@/lib/smsDelivery'
 import { useCapabilities } from '@/lib/useCapabilities'
 
@@ -35,7 +35,7 @@ export function MessagesTab({ messages, onRecheck }: Props): React.JSX.Element {
   async function handleRecheck(smsId: number) {
     setRecheckingId(smsId)
     try {
-      await refreshSmsDelivery(smsId)
+      await refreshNotifyDelivery(smsId)
       await onRecheck?.(smsId)
     } catch {
       // Silently ignore — badge stays pending.

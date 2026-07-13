@@ -18,7 +18,6 @@ import type { LeaveListItem } from '@/lib/api'
 import { Button } from '@/components/ui/button'
 
 import { SendButton } from '@/components/notify/SendButton'
-import { SendWhatsAppButton } from '@/components/whatsapp/SendWhatsAppButton'
 
 import { actionsFor, canonStatus, displayState, lifecycleGroup } from '../lifecycle'
 import { useLeaveDecisionActions } from '../useLeaveDecisionActions'
@@ -229,7 +228,6 @@ export function RecordExpansion({
               record. Mirrors the mobile drawer (TabRecords). */}
           {canonStatus(row.status) === 'Approved' && (
             <div className="flex flex-wrap items-center gap-2">
-              <SendWhatsAppButton eventType="leave_approved" recordId={row.id} />
               <SendButton eventType="leave_approved" recordId={row.id} />
             </div>
           )}

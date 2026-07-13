@@ -35,7 +35,6 @@ import { StatusBadge } from './StatusBadge'
 import { LeaveEmployeePicker } from './LeaveEmployeePicker'
 import { leaveEmployeeName } from './leaveEmployeeName'
 import { LeavesReport } from './report/LeavesReport'
-import { SendWhatsAppButton } from '@/components/whatsapp/SendWhatsAppButton'
 import { SendButton } from '@/components/notify/SendButton'
 
 // ─── types ──────────────────────────────────────────────────────────────────
@@ -475,16 +474,6 @@ function LeaveDetailDrawer({
               </div>
             )}
 
-            {/* WhatsApp notifications. canonStatus() normalises the stored
-                bilingual/legacy status ("Approved - موافق", "Generated …") to
-                the canonical "Approved" — a raw === miss would hide the button
-                on every real record. */}
-            {canonStatus(leave.status) === 'Approved' && (
-              <SendWhatsAppButton eventType="leave_approved" recordId={leave.id} />
-            )}
-            {(!!leave.return_date || !!leave.return_doc_path) && (
-              <SendWhatsAppButton eventType="duty_resumption" recordId={leave.id} />
-            )}
             {/* Notify (WhatsApp → SMS fallback) */}
             {canonStatus(leave.status) === 'Approved' && (
               <SendButton eventType="leave_approved" recordId={leave.id} />

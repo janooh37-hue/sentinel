@@ -1573,17 +1573,6 @@ export const api = {
   getNotificationCounts: () =>
     request<NotificationCounts>('GET', '/notifications/counts'),
 
-  // --- Employee WhatsApp notifications ---
-  sendWhatsApp: (eventType: WhatsAppEventType, recordId: number): Promise<WhatsAppSendResponse> =>
-    request<WhatsAppSendResponse>('POST', '/whatsapp/send', { event_type: eventType, record_id: recordId }),
-  getWhatsAppStatus: async (eventType: WhatsAppEventType, recordId: number): Promise<{ enabled: boolean; last: WhatsAppStatus | null }> => {
-    const res = await request<{ enabled: boolean; last: WhatsAppStatus | null }>(
-      'GET',
-      `/whatsapp/status?event_type=${eventType}&record_id=${recordId}`,
-    )
-    return res
-  },
-
   // --- web push (Phase 5 LAN) ---
   getVapidPublicKey: () => request<{ public_key: string }>('GET', '/push/vapid-public-key'),
   subscribePush: (sub: {
@@ -1593,85 +1582,6 @@ export const api = {
   }) => request<void>('POST', '/push/subscribe', sub),
   unsubscribePush: (endpoint: string) =>
     request<void>('DELETE', '/push/subscribe', { endpoint }),
-}
-
-// --- Employee WhatsApp notifications --------------------------------------
-export type WhatsAppEventType = 'leave_approved' | 'duty_resumption' | 'violation'
-
-export interface WhatsAppSendResponse {
-  status: 'sent' | 'failed'
-  message_id: string | null
-  error: string | null
-}
-
-export interface WhatsAppStatus {
-  event_type: string
-  event_ref: string
-  language: string
-  status: string
-  error: string | null
-  created_at: string
-}
-
-export function sendWhatsApp(
-  eventType: WhatsAppEventType,
-  recordId: number,
-): Promise<WhatsAppSendResponse> {
-  return request<WhatsAppSendResponse>('POST', '/whatsapp/send', { event_type: eventType, record_id: recordId })
-}
-
-export async function getWhatsAppStatus(
-  eventType: WhatsAppEventType,
-  recordId: number,
-): Promise<{ enabled: boolean; last: WhatsAppStatus | null }> {
-  const res = await request<{ enabled: boolean; last: WhatsAppStatus | null }>(
-    'GET',
-    `/whatsapp/status?event_type=${eventType}&record_id=${recordId}`,
-  )
-  return res
-}
-
-// --- Employee SMS notifications (on-site SIM gateway) ----------------------
-export type SmsEventType =
-  | 'leave_approved' | 'duty_resumption' | 'violation'
-  | 'salary_transfer' | 'salary_deduction' | 'employee_clearance'
-  | 'hr_request' | 'passport_release' | 'warning' | 'resignation'
-
-export interface SmsSendResponse {
-  status: 'sent' | 'failed'
-  message_id: string | null
-  error: string | null
-}
-
-export interface SmsStatus {
-  event_type: string
-  event_ref: string
-  language: string
-  status: string
-  delivery_state?: string | null
-  error: string | null
-  created_at: string
-}
-
-export function sendSms(
-  eventType: SmsEventType,
-  recordId: number,
-): Promise<SmsSendResponse> {
-  return request<SmsSendResponse>('POST', '/sms/send', { event_type: eventType, record_id: recordId })
-}
-
-export async function getSmsStatus(
-  eventType: SmsEventType,
-  recordId: number,
-): Promise<{ enabled: boolean; last: SmsStatus | null }> {
-  return request<{ enabled: boolean; last: SmsStatus | null }>(
-    'GET',
-    `/sms/status?event_type=${eventType}&record_id=${recordId}`,
-  )
-}
-
-export function refreshSmsDelivery(smsId: number): Promise<SmsMessageRead> {
-  return request<SmsMessageRead>('POST', `/sms/${smsId}/refresh-delivery`)
 }
 
 // --- Unified Notify (WhatsApp → SMS fallback) --------------------------------
