@@ -46,7 +46,7 @@ export function ManagersSection(): React.JSX.Element {
     mutationFn: ({ id, userId }: { id: number; userId: number | null }) =>
       api.linkManagerAccount(id, userId),
     onSuccess: () => { invalidate(); toast.success(t('settings.managers.linkedToast')) },
-    onError: (e: Error) => toast.error(e.message),
+    onError: (e: unknown) => toast.error(apiErrorMessage(e)),
   })
 
   const createMut = useMutation({
@@ -87,6 +87,8 @@ export function ManagersSection(): React.JSX.Element {
   const openEdit = (m: ManagerRead) => {
     setEditId(m.id)
     setForm({ name_en: m.name_en ?? '', name_ar: m.name_ar ?? '', title: m.title ?? '' })
+    setAddOpen(false)
+    setPendingSig(null)
   }
 
   const nameValid = form.name_en.trim() !== '' || form.name_ar.trim() !== ''
@@ -130,7 +132,7 @@ export function ManagersSection(): React.JSX.Element {
                 <span className="block truncate text-[0.9em] font-medium text-foreground" dir="auto">
                   {m.name_en ?? m.name_ar}
                 </span>
-                <span className="text-[0.76em] text-muted-foreground">
+                <span className="text-[0.76em] text-muted-foreground" dir="auto">
                   {m.title ? m.title + ' · ' : ''}
                   {m.has_signature ? t('settings.managers.hasSignature') : t('settings.managers.noSignature')}
                 </span>
@@ -183,7 +185,7 @@ export function ManagersSection(): React.JSX.Element {
             </div>
           </div>
         ) : (
-          <OutlineButton onClick={() => { setForm(EMPTY); setPendingSig(null); setAddOpen(true) }}>
+          <OutlineButton onClick={() => { setForm(EMPTY); setPendingSig(null); setEditId(null); setAddOpen(true) }}>
             {t('settings.managers.add')}
           </OutlineButton>
         )}
