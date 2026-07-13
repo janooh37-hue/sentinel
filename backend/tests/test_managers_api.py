@@ -5,7 +5,8 @@ from __future__ import annotations
 import pytest
 from pydantic import ValidationError
 
-from app.schemas.manager import ManagerCreate
+from app.schemas.manager import ManagerCreate, ManagerUpdate
+from app.services import manager_service
 
 
 def test_manager_create_requires_a_name():
@@ -19,13 +20,7 @@ def test_manager_create_accepts_arabic_only_name():
     assert m.active is True
 
 
-from app.schemas.manager import ManagerUpdate
-from app.services import manager_service
-
-
 def test_create_then_update_and_soft_delete(db_session):
-    from app.schemas.manager import ManagerCreate
-
     mgr = manager_service.create_manager(
         db_session, ManagerCreate(name_en="Ada Lovelace", title="Director")
     )
