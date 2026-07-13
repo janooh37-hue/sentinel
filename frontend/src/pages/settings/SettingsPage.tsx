@@ -33,6 +33,7 @@ import { useAuth } from '@/lib/authContext'
 import { copyToClipboard } from '@/lib/clipboard'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import { EmailSection } from './EmailSection'
+import { ManagersSection } from './ManagersSection'
 import { SigningSignatureSection } from './SigningSignatureSection'
 import { MigrationWizard, MIGRATION_SKIPPED_KEY } from '@/pages/system/MigrationWizard'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -48,7 +49,7 @@ import {
 // Shared building blocks — TAMM vocabulary
 // ---------------------------------------------------------------------------
 
-function SectionCard({
+export function SectionCard({
   title,
   description,
   children,
@@ -91,7 +92,7 @@ function KeyValueRow({
 }
 
 /** Outline pill button (secondary action). */
-function OutlineButton({
+export function OutlineButton({
   onClick,
   disabled,
   children,
@@ -115,7 +116,7 @@ function OutlineButton({
 }
 
 /** Primary navy pill (primary action). */
-function PrimaryButton({
+export function PrimaryButton({
   onClick,
   disabled,
   children,
@@ -413,83 +414,6 @@ function SubmittersSection(): React.JSX.Element {
         onConfirm={() => { if (deleteId !== null) deleteMut.mutate(deleteId) }}
         destructive
       />
-    </SectionCard>
-  )
-}
-
-// ---------------------------------------------------------------------------
-// Managers — settings.edit-gated account-link list
-// ---------------------------------------------------------------------------
-
-function ManagersSection(): React.JSX.Element {
-  const { t } = useTranslation()
-  const qc = useQueryClient()
-
-  const { data: managers } = useQuery({
-    queryKey: ['managers'],
-    queryFn: () => api.listManagers(),
-  })
-
-  const { data: users } = useQuery({
-    queryKey: ['auth', 'users'],
-    queryFn: () => api.listAuthUsers(),
-  })
-
-  const linkMut = useMutation({
-    mutationFn: ({ id, userId }: { id: number; userId: number | null }) =>
-      api.linkManagerAccount(id, userId),
-    onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: ['managers'] })
-      toast.success(t('settings.managers.linkedToast'))
-    },
-    onError: (e: Error) => toast.error(e.message),
-  })
-
-  const active = (users ?? []).filter((u) => u.status === 'active')
-
-  return (
-    <SectionCard
-      title={t('settings.managers.title')}
-      description={t('settings.managers.description')}
-    >
-      <div className="space-y-2.5">
-        {managers && managers.length === 0 && (
-          <p className="py-2 text-[0.86em] text-muted-foreground">
-            {t('settings.managers.empty')}
-          </p>
-        )}
-        {managers?.map((m) => (
-          <div
-            key={m.id}
-            className="flex items-center justify-between gap-3 rounded-lg border border-hairline bg-surface-raised px-4 py-2.5"
-          >
-            <span
-              className="min-w-0 text-[0.9em] font-medium text-foreground"
-              dir="auto"
-            >
-              {m.name_en ?? m.name_ar}
-            </span>
-            <select
-              aria-label={t('settings.managers.noAccount')}
-              className="rounded-lg border border-border bg-surface px-3 py-1.5 text-[0.84em]"
-              value={m.user_id != null ? String(m.user_id) : ''}
-              onChange={(e) =>
-                linkMut.mutate({
-                  id: m.id,
-                  userId: e.target.value ? Number(e.target.value) : null,
-                })
-              }
-            >
-              <option value="">{t('settings.managers.noAccount')}</option>
-              {active.map((u) => (
-                <option key={u.id} value={u.id}>
-                  {u.name_en ?? u.display_name ?? u.email}
-                </option>
-              ))}
-            </select>
-          </div>
-        ))}
-      </div>
     </SectionCard>
   )
 }
