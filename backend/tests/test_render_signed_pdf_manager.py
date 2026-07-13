@@ -11,7 +11,6 @@ from __future__ import annotations
 
 import zipfile
 
-import pytest
 from PIL import Image
 
 from app.config import Settings

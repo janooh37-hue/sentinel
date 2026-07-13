@@ -31,7 +31,6 @@ Run:  python backend/scripts/update_employees_2026_07.py --apply
 from __future__ import annotations
 
 import argparse
-import shutil
 import sqlite3
 import sys
 from datetime import date, datetime

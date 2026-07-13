@@ -1,8 +1,9 @@
 # backend/tests/test_require_capability_envelope.py
 """Task 5: verify that the 403 from require_capability carries details["capability"]."""
 import pytest
-from app.api.errors import AppError
+
 from app.api.deps import require_capability
+from app.api.errors import AppError
 from tests.conftest import make_user
 
 

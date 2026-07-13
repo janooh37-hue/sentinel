@@ -15,9 +15,8 @@ from __future__ import annotations
 
 import json
 import logging
-from datetime import UTC, datetime
-
 from collections.abc import Iterable
+from datetime import UTC, datetime
 
 from pywebpush import WebPushException, webpush
 from sqlalchemy import delete, select

@@ -1,5 +1,6 @@
 from app.core.permissions import (
-    CAPABILITY_IDS, ROLE_DEFAULTS, default_caps_for_role,
+    CAPABILITY_IDS,
+    default_caps_for_role,
 )
 from app.core.roles import ADMIN_ROLE, MANAGER_ROLE, OPERATOR_ROLE
 

@@ -8,10 +8,6 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 
-from alembic import op
-import sqlalchemy as sa
-
-
 revision: str = '0048_merge_sms_scaninbox'
 down_revision: str | Sequence[str] | None = ('0047_scan_inbox_candidates', '0047_sms_message_body')
 branch_labels: str | Sequence[str] | None = None

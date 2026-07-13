@@ -15,9 +15,9 @@ the main test thread (setup/assertions) and the ASGI worker thread (handlers).
 from __future__ import annotations
 
 import pytest
+from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, sessionmaker
-from fastapi.testclient import TestClient
 
 from app.api.deps import get_current_user
 from app.db import session as session_mod
@@ -25,7 +25,6 @@ from app.db.models import Base, User
 from app.db.session import attach_sqlite_pragmas, get_db
 from app.main import create_app
 from app.services import perm_service
-
 
 # ─── fixtures ─────────────────────────────────────────────────────────────────
 

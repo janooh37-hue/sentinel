@@ -7,12 +7,12 @@ Two scenarios:
 """
 from __future__ import annotations
 
-from datetime import datetime, timezone, timedelta
+from datetime import UTC, datetime
 
 import pytest
+from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, sessionmaker
-from fastapi.testclient import TestClient
 
 from app.api.deps import get_current_user
 from app.db import session as session_mod
@@ -20,7 +20,6 @@ from app.db.models import Base, User, UserPermission
 from app.db.session import attach_sqlite_pragmas, get_db
 from app.main import create_app
 from app.services import perm_service
-
 
 # ─── fixtures ─────────────────────────────────────────────────────────────────
 
@@ -72,7 +71,7 @@ def test_put_permission_with_expires_at_stores_expiry(api_db):
     admin = _make_user(api_db, role="admin", email="admin@x.ae")
     op = _make_user(api_db, role="operator", email="op@x.ae")
 
-    future_dt = datetime(2030, 12, 31, 23, 59, 59, tzinfo=timezone.utc)
+    future_dt = datetime(2030, 12, 31, 23, 59, 59, tzinfo=UTC)
     c = _client(api_db, admin)
     r = c.put(
         f"/api/v1/auth/users/{op.id}/permissions",

@@ -1,7 +1,10 @@
 from __future__ import annotations
+
 from datetime import UTC, datetime, time, timedelta
+
 from sqlalchemy import select
 from sqlalchemy.orm import Session
+
 from app.api.errors import AppError
 from app.core.permissions import CAPABILITY_IDS
 from app.db.models import PermissionRequest, User

@@ -1627,6 +1627,6 @@ export function getNotifyStatus(
   )
 }
 
-export function refreshNotifyDelivery(notifyId: number): Promise<NotifyStatus> {
-  return request<NotifyStatus>('POST', `/notify/${notifyId}/refresh-delivery`)
+export function refreshNotifyDelivery(notifyId: number): Promise<NotifyMessageRead> {
+  return request<NotifyMessageRead>('POST', `/notify/${notifyId}/refresh-delivery`)
 }

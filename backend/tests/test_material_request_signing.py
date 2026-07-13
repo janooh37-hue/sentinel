@@ -11,10 +11,8 @@ signing path:
 """
 from __future__ import annotations
 
-import io
 from pathlib import Path
 
-import pytest
 from docx import Document
 from PIL import Image
 

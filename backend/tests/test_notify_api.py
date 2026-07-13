@@ -33,7 +33,7 @@ from app.services import perm_service
 def api_db(monkeypatch, tmp_path) -> Session:
     # Enable both channels so NotifyDisabledError is not raised in happy-path tests.
     monkeypatch.setenv("GSSG_OPENWA_ENABLED", "1")
-    monkeypatch.setenv("GSSG_OPENWA_BASE_URL", "http://localhost:3000")
+    monkeypatch.setenv("GSSG_OPENWA_API_BASE", "http://localhost:3000")
     monkeypatch.setenv("GSSG_SMS_ENABLED", "1")
     monkeypatch.setenv("GSSG_SMS_GATEWAY_URL", "http://192.168.1.50:8080")
     monkeypatch.setenv("GSSG_SMS_USERNAME", "user")

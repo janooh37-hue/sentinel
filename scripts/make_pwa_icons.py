@@ -16,6 +16,7 @@ The BG colour (#0f172a) matches the manifest's background_color / theme_color.
 Re-run whenever the source icon changes; output files are committed to the repo.
 """
 from pathlib import Path
+
 from PIL import Image
 
 ROOT = Path(__file__).resolve().parents[1]

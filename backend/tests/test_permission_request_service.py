@@ -1,7 +1,9 @@
 # backend/tests/test_permission_request_service.py
 import pytest
+
 from app.api.errors import AppError
-from app.services import permission_request_service as prs, perm_service, admin_notify
+from app.services import admin_notify, perm_service
+from app.services import permission_request_service as prs
 from tests.conftest import make_user
 
 

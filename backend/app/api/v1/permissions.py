@@ -21,8 +21,7 @@ from app.schemas.permission_request import (
     DecideIn,
     PermissionRequestRead,
 )
-from app.services import permission_request_service
-from app.services import book_service
+from app.services import book_service, permission_request_service
 
 router = APIRouter(prefix="/permissions", tags=["permissions"])
 
