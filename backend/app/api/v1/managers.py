@@ -1,49 +1,57 @@
 """Managers endpoint — used by picker widgets in the frontend.
 
 Routes:
-  GET  /managers           — list all managers (enriched with linked user name)
-  PATCH /managers/{id}     — link / unlink a login account (settings.edit)
+  GET   /managers       — list active managers (enriched with linked user name)
+  POST  /managers       — create a manager row (settings.edit)
+  PATCH /managers/{id}  — update any manager field incl. user link (settings.edit)
 """
 
 from __future__ import annotations
 
 from typing import Annotated
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, status
 from sqlalchemy.orm import Session
 
 from app.api.deps import require_capability
-from app.db.models import User
+from app.db.models import Manager, User
 from app.db.session import get_db
-from app.schemas.manager import ManagerLinkUpdate, ManagerRead
+from app.schemas.manager import ManagerCreate, ManagerRead, ManagerUpdate
 from app.services import manager_service
 
 router = APIRouter(prefix="/managers", tags=["managers"])
 
 
+def _read(db: Session, row: Manager) -> ManagerRead:
+    item = ManagerRead.model_validate(row)
+    item.user_name = manager_service.manager_user_name(db, row)
+    item.has_signature = manager_service.has_signature(row)
+    return item
+
+
 @router.get("", response_model=list[ManagerRead])
 def list_managers(db: Annotated[Session, Depends(get_db)]) -> list[ManagerRead]:
-    rows = manager_service.list_managers(db)
-    out: list[ManagerRead] = []
-    for r in rows:
-        item = ManagerRead.model_validate(r)
-        item.user_name = manager_service.manager_user_name(db, r)
-        out.append(item)
-    return out
+    return [_read(db, r) for r in manager_service.list_managers(db)]
 
 
-@router.patch("/{manager_id}", response_model=ManagerRead)
-def link_manager_account(
-    manager_id: int,
-    payload: ManagerLinkUpdate,
+@router.post("", response_model=ManagerRead, status_code=status.HTTP_201_CREATED)
+def create_manager(
+    payload: ManagerCreate,
     db: Annotated[Session, Depends(get_db)],
     _user: Annotated[User, Depends(require_capability("settings.edit"))],
 ) -> ManagerRead:
-    """Link or unlink a login account to a manager row.
+    """Create a new manager row. Requires ``settings.edit`` (admin-only)."""
+    row = manager_service.create_manager(db, payload)
+    return _read(db, row)
 
-    Requires ``settings.edit`` — admin-only by default.
-    """
-    row = manager_service.set_manager_user(db, manager_id, payload.user_id)
-    item = ManagerRead.model_validate(row)
-    item.user_name = manager_service.manager_user_name(db, row)
-    return item
+
+@router.patch("/{manager_id}", response_model=ManagerRead)
+def update_manager(
+    manager_id: int,
+    payload: ManagerUpdate,
+    db: Annotated[Session, Depends(get_db)],
+    _user: Annotated[User, Depends(require_capability("settings.edit"))],
+) -> ManagerRead:
+    """Update any manager field (name, title, active, user link). settings.edit."""
+    row = manager_service.update_manager(db, manager_id, payload)
+    return _read(db, row)
