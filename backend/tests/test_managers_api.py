@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import base64
+
 import pytest
 from fastapi.testclient import TestClient
 from pydantic import ValidationError
@@ -117,3 +119,34 @@ def test_create_manager_requires_capability(api_db):
     c = _client(api_db, _user(api_db, role="manager", email="mgr@x.ae"))
     resp = c.post("/api/v1/managers", json={"name_en": "X"})
     assert resp.status_code == 403
+
+
+# ---------------------------------------------------------------------------
+# Signature routes (Task 4)
+# ---------------------------------------------------------------------------
+
+_PNG_1x1 = base64.b64decode(
+    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=="
+)
+
+
+@pytest.fixture()
+def admin_client(api_db) -> TestClient:
+    return _client(api_db, _user(api_db, role="admin", email="admin_sig@x.ae"))
+
+
+def test_manager_signature_roundtrip(admin_client):
+    mid = admin_client.post("/api/v1/managers", json={"name_en": "Sig Boss"}).json()["id"]
+
+    up = admin_client.post(
+        f"/api/v1/managers/{mid}/signature",
+        files={"file": ("sig.png", _PNG_1x1, "image/png")},
+    )
+    assert up.status_code == 201, up.text
+    assert admin_client.get("/api/v1/managers").json()  # sanity
+
+    got = admin_client.get(f"/api/v1/managers/{mid}/signature?encoding=base64")
+    assert got.status_code == 200 and got.text.strip()
+
+    assert admin_client.delete(f"/api/v1/managers/{mid}/signature").status_code == 204
+    assert admin_client.get(f"/api/v1/managers/{mid}/signature").status_code == 404
