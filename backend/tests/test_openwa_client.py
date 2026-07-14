@@ -75,6 +75,28 @@ def test_send_not_registered_from_body_text_non_422():
     assert not r.ok and r.not_registered
 
 
+def test_send_file_posts_sendfile_with_file_object():
+    import base64
+    import json
+
+    def handler(req):
+        assert req.url.path == "/api/sendFile"
+        body = json.loads(req.content)
+        assert body["session"] == "default"
+        assert body["chatId"] == "123@g.us"
+        assert body["file"] == {
+            "mimetype": "application/pdf",
+            "filename": "book.pdf",
+            "data": base64.b64encode(b"PDFDATA").decode("ascii"),
+        }
+        assert body["caption"] == "cap"
+        return httpx.Response(201, json={"id": "true_123@g.us_AA"})
+
+    _mock(handler)
+    r = openwa_client.send_file("123@g.us", data=b"PDFDATA", filename="book.pdf", caption="cap")
+    assert r.ok and r.message_id == "true_123@g.us_AA"
+
+
 def test_get_ack_retries_on_transport_error():
     calls = {"n": 0}
 

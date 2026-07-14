@@ -136,14 +136,20 @@ def list_groups() -> list[Group]:
     return out
 
 
-def send_file(chat_id: str, *, data: bytes, filename: str, caption: str) -> SendResult:
-    """Send a file to a WhatsApp chat id as a base64-encoded attachment."""
+def send_file(
+    chat_id: str, *, data: bytes, filename: str, caption: str, mimetype: str = "application/pdf"
+) -> SendResult:
+    """Send a file to a WhatsApp chat id as a base64 attachment (WAHA sendFile)."""
     cfg = get_settings()
-    url = f"{_base()}/api/sessions/{cfg.openwa_session}/messages/send-file"
+    url = f"{_base()}/api/sendFile"
     payload = {
+        "session": cfg.openwa_session,
         "chatId": chat_id,
-        "file": base64.b64encode(data).decode("ascii"),
-        "filename": filename,
+        "file": {
+            "mimetype": mimetype,
+            "filename": filename,
+            "data": base64.b64encode(data).decode("ascii"),
+        },
         "caption": caption,
     }
     last_err: str | None = None
@@ -155,8 +161,7 @@ def send_file(chat_id: str, *, data: bytes, filename: str, caption: str) -> Send
             last_err = str(e) or e.__class__.__name__
             continue
         if resp.status_code // 100 == 2:
-            d = resp.json() if resp.content else {}
-            return SendResult(ok=True, message_id=d.get("id") or (d.get("key") or {}).get("id"))
+            return SendResult(ok=True, message_id=_msg_id(resp.json() if resp.content else {}))
         return SendResult(ok=False, error=f"HTTP {resp.status_code}: {resp.text}")
     return SendResult(ok=False, error=last_err or "network error")
 
