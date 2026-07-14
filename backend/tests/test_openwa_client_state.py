@@ -43,12 +43,15 @@ def test_state_connected(monkeypatch):
     assert wa.session_state() == "connected"
 
 
-def test_fetch_qr_returns_string(monkeypatch):
+def test_fetch_qr_returns_data_url_from_png(monkeypatch):
+    import base64
+
     _cfg(monkeypatch)
+    png = b"\x89PNG\r\n\x1a\nDEADBEEF"
     wa._transport = httpx.MockTransport(
-        lambda r: httpx.Response(200, json={"qr": "data:image/png;base64,AAAA"})
+        lambda r: httpx.Response(200, content=png, headers={"content-type": "image/png"})
     )
-    assert wa.fetch_qr() == "data:image/png;base64,AAAA"
+    assert wa.fetch_qr() == "data:image/png;base64," + base64.b64encode(png).decode("ascii")
 
 
 def test_fetch_qr_none_on_error(monkeypatch):

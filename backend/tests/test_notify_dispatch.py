@@ -197,7 +197,7 @@ def test_poll_deliveries_routes_to_correct_client(db_session, emp, monkeypatch):
     monkeypatch.setattr(
         openwa_client,
         "get_ack",
-        lambda mid: openwa_client.DeliveryResult(ok=True, state="read"),
+        lambda mid, chat_id: openwa_client.DeliveryResult(ok=True, state="read"),
     )
 
     notify_dispatch.poll_deliveries(db_session)

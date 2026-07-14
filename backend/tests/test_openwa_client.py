@@ -21,15 +21,28 @@ def _mock(handler):
     openwa_client._transport = httpx.MockTransport(handler)
 
 
-def test_send_ok_returns_message_id():
+def test_send_ok_posts_sendtext_with_session_body():
     def handler(req):
         assert req.headers["X-API-Key"] == "k"
-        assert "/sessions/default/messages/send-text" in req.url.path
-        return httpx.Response(200, json={"id": "wamid.123"})
+        assert req.url.path == "/api/sendText"
+        import json
+
+        body = json.loads(req.content)
+        assert body == {"session": "default", "chatId": "971500000000@c.us", "text": "hi"}
+        return httpx.Response(201, json={"id": "true_971500000000@c.us_3EB0"})
 
     _mock(handler)
     r = openwa_client.send("971500000000", "hi")
-    assert r.ok and r.message_id == "wamid.123"
+    assert r.ok and r.message_id == "true_971500000000@c.us_3EB0"
+
+
+def test_send_extracts_serialized_id_object():
+    def handler(req):
+        return httpx.Response(201, json={"id": {"_serialized": "true_x@c.us_9F"}})
+
+    _mock(handler)
+    r = openwa_client.send("971500000000", "hi")
+    assert r.ok and r.message_id == "true_x@c.us_9F"
 
 
 def test_send_not_registered_maps_flag():
@@ -62,6 +75,28 @@ def test_send_not_registered_from_body_text_non_422():
     assert not r.ok and r.not_registered
 
 
+def test_send_file_posts_sendfile_with_file_object():
+    import base64
+    import json
+
+    def handler(req):
+        assert req.url.path == "/api/sendFile"
+        body = json.loads(req.content)
+        assert body["session"] == "default"
+        assert body["chatId"] == "123@g.us"
+        assert body["file"] == {
+            "mimetype": "application/pdf",
+            "filename": "book.pdf",
+            "data": base64.b64encode(b"PDFDATA").decode("ascii"),
+        }
+        assert body["caption"] == "cap"
+        return httpx.Response(201, json={"id": "true_123@g.us_AA"})
+
+    _mock(handler)
+    r = openwa_client.send_file("123@g.us", data=b"PDFDATA", filename="book.pdf", caption="cap")
+    assert r.ok and r.message_id == "true_123@g.us_AA"
+
+
 def test_get_ack_retries_on_transport_error():
     calls = {"n": 0}
 
@@ -70,13 +105,26 @@ def test_get_ack_retries_on_transport_error():
         raise httpx.ConnectError("boom")
 
     _mock(handler)
-    r = openwa_client.get_ack("m1")
+    r = openwa_client.get_ack("m1", "971500000000@c.us")
     assert not r.ok and calls["n"] == 2
+
+
+def test_get_ack_maps_ack_int_to_state():
+    def handler(req):
+        assert req.url.path == "/api/default/chats/971500000000@c.us/messages/m1"
+        return httpx.Response(200, json={"ack": 3})
+
+    _mock(handler)
+    r = openwa_client.get_ack("m1", "971500000000@c.us")
+    assert r.ok and r.state == "read"
 
 
 def test_is_registered_true():
     def handler(req):
-        return httpx.Response(200, json={"numberExists": True})
+        assert req.url.path == "/api/contacts/check-exists"
+        assert req.url.params["phone"] == "971500000000"
+        assert req.url.params["session"] == "default"
+        return httpx.Response(200, json={"numberExists": True, "chatId": "971500000000@c.us"})
 
     _mock(handler)
     assert openwa_client.is_registered("971500000000") is True
@@ -88,6 +136,36 @@ def test_is_registered_unknown_on_error():
 
     _mock(handler)
     assert openwa_client.is_registered("971500000000") is None
+
+
+def test_list_groups_parses_waha_shape():
+    def handler(req):
+        assert req.url.path == "/api/default/groups"
+        return httpx.Response(
+            200,
+            json=[
+                {"id": {"_serialized": "123@g.us"}, "name": "Ops"},
+                {"id": "456@g.us", "name": "HR"},
+            ],
+        )
+
+    _mock(handler)
+    groups = openwa_client.list_groups()
+    assert [(g.id, g.name) for g in groups] == [("123@g.us", "Ops"), ("456@g.us", "HR")]
+
+
+def test_fetch_qr_returns_data_url_from_png():
+    import base64
+
+    png = b"\x89PNG\r\n\x1a\nDEADBEEF"
+
+    def handler(req):
+        assert req.url.path == "/api/default/auth/qr"
+        return httpx.Response(200, content=png, headers={"content-type": "image/png"})
+
+    _mock(handler)
+    out = openwa_client.fetch_qr()
+    assert out == "data:image/png;base64," + base64.b64encode(png).decode("ascii")
 
 
 def test_health_true_when_connected():

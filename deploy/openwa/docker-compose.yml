@@ -1,17 +1,16 @@
 services:
-  openwa:
-    # Pin to a verified published tag/digest before going to production.
-    # Check https://hub.docker.com/r/rmyndharis/openwa/tags and replace "latest"
-    # with the exact tag or digest (e.g. rmyndharis/openwa@sha256:...).
-    image: rmyndharis/openwa:latest
+  waha:
+    # Pin to a digest before production: docker.io/devlikeapro/waha@sha256:...
+    image: docker.io/devlikeapro/waha:latest
     restart: unless-stopped
     ports:
-      - "127.0.0.1:2785:2785"
+      - "127.0.0.1:2785:3000"
     environment:
-      API_KEY: "${OPENWA_API_KEY}"
-      ENGINE_TYPE: "whatsapp-web.js"
+      WAHA_API_KEY: "${OPENWA_API_KEY}"
+      WHATSAPP_START_SESSION: "gssg"
+      WHATSAPP_RESTART_ALL_SESSIONS: "True"
     volumes:
-      - openwa_session:/app/session
+      - waha_sessions:/app/.sessions
 
 volumes:
-  openwa_session:
+  waha_sessions:
