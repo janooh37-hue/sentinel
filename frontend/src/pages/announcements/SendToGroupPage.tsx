@@ -17,6 +17,7 @@ import { AlertTriangle, MessageCircle } from 'lucide-react'
 
 import { api, type AnnouncementOut, type GroupSendOut } from '@/lib/api'
 import { useCapabilities } from '@/lib/useCapabilities'
+import { GatewayConnectDialog } from './GatewayConnectDialog'
 
 type AttachMode = 'none' | 'book' | 'upload'
 
@@ -27,6 +28,9 @@ export function SendToGroupPage(): React.JSX.Element {
   const { t } = useTranslation()
   const { has } = useCapabilities()
   const isAdmin = has('settings.edit')
+
+  // QR connect dialog (admin only)
+  const [qrOpen, setQrOpen] = useState(false)
 
   // Gateway status query (staleTime 30s — avoids hammering on every mount)
   const { data: gatewayData, isLoading: gatewayLoading } = useQuery({
@@ -178,10 +182,7 @@ export function SendToGroupPage(): React.JSX.Element {
                 <button
                   type="button"
                   className="inline-flex items-center gap-1.5 rounded-md bg-amber-600 px-3 py-1.5 text-[0.82em] font-semibold text-white hover:bg-amber-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400"
-                  onClick={() => {
-                    // TODO(task4): open QR reconnect dialog
-                    console.debug('[SendToGroupPage] reconnect clicked — wired in Task 4')
-                  }}
+                  onClick={() => setQrOpen(true)}
                 >
                   <MessageCircle className="h-3.5 w-3.5" aria-hidden />
                   {t('sendToGroup.reconnect')}
@@ -321,6 +322,9 @@ export function SendToGroupPage(): React.JSX.Element {
           <p className="text-[0.8em] text-muted-foreground">{t('sendToGroup.needContent')}</p>
         )}
       </form>
+
+      {/* QR connect dialog (admin only) */}
+      <GatewayConnectDialog open={qrOpen} onOpenChange={setQrOpen} />
 
       {/* Result panel */}
       {result && (

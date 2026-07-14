@@ -2642,6 +2642,17 @@
     "noGroupsForNumber": "This number isn't in any groups",
     "reconnect": "Reconnect",
     "askAdmin": "Ask your administrator to reconnect WhatsApp",
-    "groupsLoadError": "Couldn't load your groups. Please try again."
+    "groupsLoadError": "Couldn't load your groups. Please try again.",
+    "qr": {
+      "dialogTitle": "Connect WhatsApp",
+      "dialogHint": "Scan the QR code with the office phone to link WhatsApp to the gateway.",
+      "step1": "Open WhatsApp on the office phone",
+      "step2": "Settings → Linked devices → Link a device",
+      "step3": "Scan this code",
+      "waiting": "Waiting for scan…",
+      "connected": "WhatsApp connected!",
+      "qrError": "Could not load the QR code. Please try again.",
+      "refreshing": "Refreshing…"
+    }
   }
 }
