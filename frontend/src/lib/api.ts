@@ -603,6 +603,7 @@ export type GroupSendOut = components['schemas']['GroupSendOut']
 export type AnnouncementOut = components['schemas']['AnnouncementOut']
 export type GatewayStatusOut = components['schemas']['GatewayStatusOut']
 export type GatewayQrOut = components['schemas']['GatewayQrOut']
+export type GatewayUnlinkOut = components['schemas']['GatewayUnlinkOut']
 
 // Phase 2a — OpenWA digest API (Task 10/11)
 export type DigestPreview = components['schemas']['DigestPreview']
@@ -1073,6 +1074,7 @@ export const api = {
   // --- announcements (Phase 2c OpenWA — Task 6/7) ---
   gatewayStatus: () => request<GatewayStatusOut>('GET', '/announcements/status'),
   gatewayQr: () => request<GatewayQrOut>('GET', '/announcements/qr'),
+  unlinkGateway: () => request<GatewayUnlinkOut>('POST', '/announcements/unlink'),
   listGroups: () => request<GroupOut[]>('GET', '/announcements/groups'),
   sendAnnouncement: (form: FormData) => multipart<AnnouncementOut>('/announcements/send', form),
 

@@ -5,6 +5,7 @@
  *   QueryClientProvider + i18n stub + vi.mock('../../lib/api') + sonner mock.
  */
 import { render, screen } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { vi, describe, it, expect, beforeEach } from 'vitest'
 
@@ -15,14 +16,16 @@ vi.mock('react-i18next', () => ({
   }, i18n: { language: 'ar' } }),
 }))
 vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }))
+const mockHas = vi.fn((cap: string) => cap === 'messages.broadcast')
 vi.mock('../../lib/useCapabilities', () => ({
-  useCapabilities: () => ({ has: (cap: string) => cap === 'messages.broadcast' }),
+  useCapabilities: () => ({ has: mockHas }),
 }))
 vi.mock('../../lib/api', () => ({
   api: {
     gatewayStatus: vi.fn().mockResolvedValue({ state: 'connected' }),
     listGroups: vi.fn().mockResolvedValue([{ id: '1@g.us', name: 'Alpha' }]),
     sendAnnouncement: vi.fn(),
+    unlinkGateway: vi.fn().mockResolvedValue({ ok: true }),
   },
 }))
 
@@ -41,6 +44,8 @@ function renderPage(): void {
 beforeEach(() => {
   vi.mocked(api.gatewayStatus).mockResolvedValue({ state: 'connected' })
   vi.mocked(api.listGroups).mockResolvedValue([{ id: '1@g.us', name: 'Alpha' }])
+  // Reset capabilities: non-admin by default (only messages.broadcast)
+  mockHas.mockImplementation((cap: string) => cap === 'messages.broadcast')
 })
 
 describe('SendToGroupPage', () => {
@@ -104,5 +109,19 @@ describe('SendToGroupPage', () => {
     expect(await screen.findByText('sendToGroup.groupsLoadError')).toBeInTheDocument()
     expect(screen.queryByText('sendToGroup.gatewayDisconnected')).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'sendToGroup.reconnect' })).not.toBeInTheDocument()
+  })
+
+  it('admin sees an unlink action when connected', async () => {
+    // Arrange: gatewayStatus → connected, listGroups → [], useCapabilities grants settings.edit.
+    mockHas.mockImplementation((cap: string) =>
+      cap === 'messages.broadcast' || cap === 'settings.edit',
+    )
+    vi.mocked(api.gatewayStatus).mockResolvedValue({ state: 'connected' })
+    vi.mocked(api.listGroups).mockResolvedValue([])
+    renderPage()
+    expect(await screen.findByText('sendToGroup.connectedTitle')).toBeInTheDocument()
+    const unlink = screen.getByRole('button', { name: /sendToGroup\.unlink/i })
+    await userEvent.click(unlink)
+    expect(await screen.findByText('sendToGroup.unlinkTitle')).toBeInTheDocument()
   })
 })

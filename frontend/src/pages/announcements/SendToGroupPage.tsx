@@ -10,15 +10,16 @@
  */
 
 import { useRef, useState, useCallback } from 'react'
-import { useQuery, useMutation } from '@tanstack/react-query'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
-import { AlertTriangle, MessageCircle } from 'lucide-react'
+import { AlertTriangle, MessageCircle, QrCode, Unlink } from 'lucide-react'
 
 import { api, type AnnouncementOut, type GroupSendOut } from '@/lib/api'
 import { useCapabilities } from '@/lib/useCapabilities'
 import { useGatewayStatus, type GatewayState } from '@/lib/useGatewayStatus'
 import { GatewayConnectDialog } from './GatewayConnectDialog'
+import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 
 type AttachMode = 'none' | 'book' | 'upload'
 
@@ -29,6 +30,24 @@ export function SendToGroupPage(): React.JSX.Element {
 
   // QR connect dialog (admin only)
   const [qrOpen, setQrOpen] = useState(false)
+
+  // Unlink confirm dialog + mutation (admin only)
+  const qc = useQueryClient()
+  const [unlinkOpen, setUnlinkOpen] = useState(false)
+  const unlinkMut = useMutation({
+    mutationFn: api.unlinkGateway,
+    onSuccess: (res) => {
+      if (res.ok) {
+        toast.success(t('sendToGroup.unlinked'))
+        void qc.invalidateQueries({ queryKey: ['gateway-status'] })
+        void qc.invalidateQueries({ queryKey: ['announce-groups'] })
+        setQrOpen(true) // switch-numbers flow: unlink → scan new QR
+      } else {
+        toast.error(t('sendToGroup.unlinkFailed'))
+      }
+    },
+    onError: () => toast.error(t('sendToGroup.unlinkFailed')),
+  })
 
   // Gateway status query — shared hook (staleTime 30s, capability-gated)
   const { data: gatewayData, isLoading: gatewayLoading } = useGatewayStatus()
@@ -144,6 +163,34 @@ export function SendToGroupPage(): React.JSX.Element {
         <h1 className="text-[1.3em] font-bold text-foreground">{t('sendToGroup.title')}</h1>
         <p className="mt-0.5 text-[0.88em] text-muted-foreground">{t('sendToGroup.subtitle')}</p>
       </div>
+
+      {/* ── Connected status row (admin only) ── */}
+      {isConnected && isAdmin && (
+        <div className="mb-6 flex flex-wrap items-center gap-3 rounded-lg border border-border bg-surface/60 px-4 py-3">
+          <span className="inline-flex items-center gap-2 text-[0.85em] font-semibold text-green-700 dark:text-green-400">
+            <span className="h-2 w-2 rounded-full bg-green-500" aria-hidden />
+            {t('sendToGroup.connectedTitle')}
+          </span>
+          <div className="ms-auto flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setQrOpen(true)}
+              className="inline-flex items-center gap-1.5 rounded-md border border-border px-3 py-1.5 text-[0.82em] font-medium text-foreground hover:bg-surface-tinted"
+            >
+              <QrCode className="h-3.5 w-3.5" aria-hidden />
+              {t('sendToGroup.rescanQr')}
+            </button>
+            <button
+              type="button"
+              onClick={() => setUnlinkOpen(true)}
+              className="inline-flex items-center gap-1.5 rounded-md border border-accent/40 px-3 py-1.5 text-[0.82em] font-medium text-accent hover:bg-accent/10"
+            >
+              <Unlink className="h-3.5 w-3.5" aria-hidden />
+              {t('sendToGroup.unlink')}
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* ── Blocked banner ── */}
       {showBanner && (
@@ -319,6 +366,17 @@ export function SendToGroupPage(): React.JSX.Element {
 
       {/* QR connect dialog (admin only) */}
       <GatewayConnectDialog open={qrOpen} onOpenChange={setQrOpen} />
+
+      {/* Unlink confirm dialog (admin only) */}
+      <ConfirmDialog
+        open={unlinkOpen}
+        onOpenChange={setUnlinkOpen}
+        title={t('sendToGroup.unlinkTitle')}
+        description={t('sendToGroup.unlinkDesc')}
+        confirmLabel={t('sendToGroup.unlinkConfirm')}
+        onConfirm={() => unlinkMut.mutate()}
+        destructive
+      />
 
       {/* Result panel */}
       {result && (
