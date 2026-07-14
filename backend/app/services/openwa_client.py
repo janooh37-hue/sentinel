@@ -134,9 +134,16 @@ def list_groups() -> list[Group]:
     if resp.status_code // 100 != 2:
         return []
     data = resp.json() if resp.content else []
-    rows = data.get("groups", data) if isinstance(data, dict) else data
+    if isinstance(data, dict):
+        # WAHA: {"groups": [...]} OR a dict keyed by group id ({"<id>@g.us": {...}}, NOWEB engine).
+        inner = data.get("groups")
+        rows = inner if isinstance(inner, list) else list(data.values())
+    else:
+        rows = data
     out: list[Group] = []
     for r in rows if isinstance(rows, list) else []:
+        if not isinstance(r, dict):
+            continue
         raw_id = r.get("id") or r.get("chatId") or r.get("_serialized")
         gid = raw_id.get("_serialized") if isinstance(raw_id, dict) else raw_id
         name = r.get("name") or r.get("subject") or gid

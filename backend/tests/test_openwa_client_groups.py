@@ -106,3 +106,29 @@ def test_send_file_posts_base64(monkeypatch):
     assert seen["json"]["file"]["mimetype"] == "application/pdf"
     assert seen["json"]["chatId"] == "1@g.us"
     assert seen["json"]["caption"] == "see this"
+
+
+def test_list_groups_parses_waha_dict_keyed(monkeypatch):
+    # WAHA NOWEB returns groups as a dict keyed by group id (not an array); name is `subject`.
+    def handler(req):
+        return httpx.Response(
+            200,
+            json={
+                "120363405495104404@g.us": {"id": "120363405495104404@g.us", "subject": "مرضيات"},
+                "120363364341009448@g.us": {"id": "120363364341009448@g.us", "subject": "الغيابات"},
+            },
+        )
+
+    _mock(handler)
+    monkeypatch.setattr(
+        wa,
+        "get_settings",
+        lambda: __import__("types").SimpleNamespace(
+            openwa_api_base="http://x", openwa_api_key="k", openwa_session="s"
+        ),
+    )
+    groups = wa.list_groups()
+    assert {(g.id, g.name) for g in groups} == {
+        ("120363405495104404@g.us", "مرضيات"),
+        ("120363364341009448@g.us", "الغيابات"),
+    }
