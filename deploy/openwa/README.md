@@ -53,17 +53,27 @@ from the LAN directly); the backend calls it over loopback.
 
 ## Boot persistence (Scheduled Task)
 
-To restart WAHA automatically after the office box reboots, create a Windows
-Scheduled Task that runs at logon:
+The WSL distro does **not** auto-start on boot, so `--restart unless-stopped`
+alone is not enough — a Scheduled Task must kick the distro + container after a
+reboot. Install it once from an **elevated** PowerShell:
 
-```
-Action: wsl.exe -d podman-uosserver -- podman start waha
-Trigger: At log on (of .\Admin)
-Run as: .\Admin
+```powershell
+powershell -ExecutionPolicy Bypass -File deploy\openwa\install-autostart-task.ps1
 ```
 
-The container's `--restart unless-stopped` policy also restarts it inside the
-distro if the process crashes.
+This registers the `WAHA-WhatsApp-Gateway` task (runs as the admin account,
+whether logged on or not, at **boot and logon**, self-restarting). The task runs
+`waha-autostart.ps1`, which starts the existing `waha` container or recreates it
+via `run-waha.ps1` if it is missing. The WhatsApp session persists in the
+`waha_sessions` volume, so it reconnects to `WORKING` automatically without a
+re-scan. The container's `--restart unless-stopped` policy handles in-distro
+crashes.
+
+Verify / trigger manually:
+```powershell
+Start-ScheduledTask -TaskName WAHA-WhatsApp-Gateway   # run it now
+Get-ScheduledTask   -TaskName WAHA-WhatsApp-Gateway   # check state
+```
 
 ---
 

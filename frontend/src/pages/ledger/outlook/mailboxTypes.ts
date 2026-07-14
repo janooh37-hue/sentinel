@@ -12,12 +12,16 @@
 export type PersonalFolder = 'inbox' | 'drafts' | 'sent' | 'starred' | 'trash'
 
 /**
- * The shell's active selection: either one of the personal folders, or a
- * Correspondence-Log category (`categoryId: null` = all log entries).
+ * The shell's active selection: one of the personal folders, the per-user
+ * Follow-ups view (Phase 2, D3b — the current user's flagged entries,
+ * server-sorted by due date), or a per-user Smart folder (Phase 3 — a saved
+ * subject filter, addressed by its folder id).
+ * (The Correspondence-Log `{kind:'log'}` variant was removed 2026-06-25.)
  */
 export type MailboxView =
   | { kind: 'folder'; folder: PersonalFolder }
-  | { kind: 'log'; categoryId: number | null }
+  | { kind: 'followups' }
+  | { kind: 'smart'; folderId: number }
 
 /** Static metadata for a personal folder: emoji + the `ledger.outlook.*` i18n key. */
 export interface PersonalFolderDef {

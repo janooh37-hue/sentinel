@@ -1,17 +1,15 @@
 /**
  * ReadingPaneSlot — the right pane of the Ledger Outlook shell.
  *
- * Phase 4 scope: empty state only (`selectedKind` absent/null).
- * Phase 5 (Task 7): branches on `selectedKind`:
- *   null → empty state (✉️ + heading + description + RotatingTip, unchanged)
- *   'mail' → ReadingPane (email message view, Task 5)
- *   'log'  → LogRecordView (read-only record card, Task 6)
+ * Branches on `selectedKind`:
+ *   null → empty state (✉️ + heading + description + RotatingTip)
+ *   'mail' → ReadingPane (email message view)
  *
  * The `selectedId` prop carries the id of the selected row; it is forwarded
- * to the appropriate child component as `entryId` (mail) or `recordId` (log).
+ * to ReadingPane as `entryId`.
  *
- * Reply/forward/nav callbacks are accepted as optional pass-throughs for the
- * shell to wire in Task 8; they are ignored for 'log' rows (no compose UI).
+ * (The Correspondence-Log `'log'` → LogRecordView branch was removed
+ * 2026-06-25.)
  *
  * Prototype reference: `.read-empty` / `.empty-inner` / `.tipcard`
  *   (docs/prototypes/ledger-outlook-redesign.html lines 200–215).
@@ -22,7 +20,6 @@ import { useTranslation } from 'react-i18next'
 import type { LedgerEntryRead } from '@/lib/api'
 import { RotatingTip } from './RotatingTip'
 import { ReadingPane } from './ReadingPane'
-import { LogRecordView } from './LogRecordView'
 
 /** Coarse page targets the shell's `onNavigate` seam understands. */
 type NavPage = 'employees' | 'books'
@@ -32,12 +29,11 @@ interface ReadingPaneSlotProps {
    *  nothing is selected. */
   selectedId: number | null
   /**
-   * The kind of the selected row (Phase 5, Task 7):
-   *   null  → show the empty state (the Phase-4 default when absent)
+   * The kind of the selected row:
+   *   null  → show the empty state (the default when absent)
    *   'mail' → render ReadingPane
-   *   'log'  → render LogRecordView
    */
-  selectedKind?: 'mail' | 'log' | null
+  selectedKind?: 'mail' | null
   /** Reply/forward callbacks — passed through to ReadingPane (mail only). */
   onReply?: (entry: LedgerEntryRead) => void
   onReplyAll?: (entry: LedgerEntryRead) => void
@@ -77,12 +73,8 @@ export function ReadingPaneSlot({
     )
   }
 
-  if (selectedId != null && selectedKind === 'log') {
-    return <LogRecordView recordId={selectedId} />
-  }
-
   // Empty state — shown when selectedId is null, selectedKind is null/absent,
-  // or the combination is indeterminate. Unchanged from Phase 4.
+  // or the combination is indeterminate.
   return (
     <div
       className="flex-1 min-w-0 bg-[--surface] flex flex-col overflow-hidden"

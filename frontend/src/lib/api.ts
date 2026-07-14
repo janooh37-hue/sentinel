@@ -347,6 +347,10 @@ export type LedgerEntryRead = components['schemas']['LedgerEntryRead'] & {
   /** Email-detail redesign — per-attachment name + size; populated by
    * GET /{id} only. Falls back to `attachment_paths` when absent. */
   attachments?: LedgerAttachmentMeta[]
+  /** Phase 2 (D3) — per-user follow-up flag for the current caller. Hand-typed
+   * until the backend regenerates openapi.json. */
+  flagged?: boolean
+  followup_due?: string | null
 }
 
 // Phase 17 — Ledger read state (drives the NavBell numeric badge).
@@ -395,10 +399,48 @@ export interface DraftWrite {
 }
 export type LedgerEntryCreate = components['schemas']['LedgerEntryCreate']
 export type LedgerEntryUpdate = components['schemas']['LedgerEntryUpdate']
-export type LedgerListItem = components['schemas']['LedgerListItem']
+export type LedgerListItem = components['schemas']['LedgerListItem'] & {
+  /** Phase 2 (D3) — per-user follow-up flag for the current caller. `flagged`
+   * is the current user's flag; `followup_due` is its optional due date (ISO
+   * `YYYY-MM-DD`). Hand-typed until the backend regenerates openapi.json. */
+  flagged?: boolean
+  followup_due?: string | null
+}
 export type LedgerListResponse = components['schemas']['LedgerListResponse']
 export type LedgerDirection = LedgerEntryCreate['direction']
 export type LedgerChannel = LedgerEntryCreate['channel']
+
+// --- Ledger smart folders (Phase 3) — hand-typed against the frozen contract.
+// A smart folder is a per-user saved subject filter.
+/** An active smart folder owned by the current user. `count` = matching mail. */
+export interface SmartFolder {
+  id: number
+  name_en: string
+  name_ar: string
+  count: number
+}
+/** A confirm-first suggestion: a ≥5 cluster of mail sharing a normalised subject. */
+export interface SmartFolderSuggestion {
+  /** The normalised subject — the dismissal/rule key. */
+  cluster_key: string
+  /** The app's guessed folder name (the operator edits it before confirming). */
+  name_suggestion: string
+  count: number
+  correspondent_count: number
+  sample_subjects: string[]
+}
+/** Create body — `rule_kind` is `'subject'` in v1; `rule_value` is the cluster key. */
+export interface SmartFolderCreate {
+  name_en: string
+  name_ar: string
+  rule_kind: 'subject'
+  rule_value: string
+}
+/** Rename body — either field optional (PATCH). */
+export interface SmartFolderUpdate {
+  name_en?: string
+  name_ar?: string
+}
 
 // --- Ledger→Outlook Phase 1–4: automated Correspondence Log + address book ---
 export type CorrespondenceLogItem = components['schemas']['CorrespondenceLogItem']
@@ -1295,6 +1337,16 @@ export const api = {
     include_drafts?: boolean
     /** Phase 6 — 'all' (admin only) widens to the whole-office inbox; default own. */
     scope?: 'mine' | 'all'
+    /** Phase 2 (D1) — quick filters. `unread` keeps only unread entries;
+     * `has_attachments` keeps entries with ≥1 attachment; `flagged` keeps the
+     * current user's flagged entries (server-sorted by due when true);
+     * `employee_id` restricts to a linked employee's G-number. */
+    unread?: boolean
+    has_attachments?: boolean
+    flagged?: boolean
+    employee_id?: string
+    /** Phase 3 — a smart folder's saved subject filter (per-user). */
+    smart_folder_id?: number
     limit?: number
     offset?: number
   } = {}) => request<LedgerListResponse>('GET', `/ledger${qs({ ...params })}`),
@@ -1316,6 +1368,41 @@ export const api = {
   // Phase 15
   toggleLedgerStar: (id: number) =>
     request<LedgerEntryRead>('POST', `/ledger/entries/${id}/star`),
+  /** Mark an entry unread (clears `read_at`) — the inverse of mark-read, used by
+   * the bulk selection bar's Read/Unread toggle (Phase 2, D4). */
+  markLedgerEntryUnread: (id: number) =>
+    request<LedgerEntryRead>('POST', `/ledger/entries/${id}/mark-unread`),
+  // --- Phase 2 (D3): per-user follow-up flags ---
+  /** Set / update the current user's follow-up flag on an entry. `due` is an
+   * optional ISO `YYYY-MM-DD`; omit/null for an undated flag. */
+  flagLedgerEntry: (id: number, due?: string | null) =>
+    request<LedgerEntryRead>('POST', `/ledger/${id}/flag`, { due: due ?? null }),
+  /** Clear the current user's follow-up flag on an entry. */
+  unflagLedgerEntry: (id: number) =>
+    request<LedgerEntryRead>('DELETE', `/ledger/${id}/flag`),
+  /** Current user's flagged-entry count (drives the Follow-ups badge + bell). */
+  getLedgerFlagCount: () =>
+    request<UnreadCountResponse>('GET', '/ledger/flag-count'),
+  // --- Phase 3 (2026-06-25): per-user smart folders ---
+  /** The current user's active smart folders (each with its matching count). */
+  listSmartFolders: () =>
+    request<SmartFolder[]>('GET', '/ledger/smart-folders'),
+  /** Confirm-first folder suggestions — ≥5-mail subject clusters not yet a
+   * folder and not dismissed by this user. */
+  getSmartFolderSuggestions: () =>
+    request<SmartFolderSuggestion[]>('GET', '/ledger/smart-folders/suggestions'),
+  /** Create a confirmed smart folder from a cluster (editable EN+AR name). */
+  createSmartFolder: (body: SmartFolderCreate) =>
+    request<SmartFolder>('POST', '/ledger/smart-folders', body),
+  /** Dismiss a suggestion cluster (per-user; it won't reappear). */
+  dismissSmartFolderSuggestion: (clusterKey: string) =>
+    request<void>('POST', '/ledger/smart-folders/dismiss', { cluster_key: clusterKey }),
+  /** Rename a smart folder. */
+  updateSmartFolder: (id: number, body: SmartFolderUpdate) =>
+    request<SmartFolder>('PATCH', `/ledger/smart-folders/${id}`, body),
+  /** Soft-delete a smart folder. */
+  deleteSmartFolder: (id: number) =>
+    request<void>('DELETE', `/ledger/smart-folders/${id}`),
   ledgerAttachmentsZipUrl: (id: number) =>
     `${BASE}/ledger/entries/${id}/attachments.zip`,
   /** URL for a single attachment, addressed by its `attachment_paths` index

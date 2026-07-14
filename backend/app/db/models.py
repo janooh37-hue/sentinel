@@ -1207,6 +1207,95 @@ class PermissionRequest(Base):
     )
 
 
+class LedgerFlag(Base):
+    """Per-user follow-up flag on a ledger entry (migration 0054).
+
+    Flags are PER-USER (one row per ``(user_id, entry_id)``) so each person
+    flags independently in the private inbox — not a column on
+    ``LedgerEntry`` (which would be shared). ``followup_due`` is the optional
+    follow-up date; ``flagged_at`` is when the flag was (re)set. Upserted by
+    ``ledger_service.set_flag``; deleted by ``clear_flag``.
+    """
+
+    __tablename__ = "ledger_flags"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    user_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    )
+    entry_id: Mapped[int] = mapped_column(
+        ForeignKey("ledger_entries.id", ondelete="CASCADE"), nullable=False
+    )
+    flagged_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=_utcnow)
+    followup_due: Mapped[date | None] = mapped_column(Date, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, default=_utcnow, server_default=func.current_timestamp()
+    )
+
+    __table_args__ = (
+        UniqueConstraint("user_id", "entry_id", name="uq_ledger_flags_user_entry"),
+        Index("ix_ledger_flags_user_id", "user_id"),
+        Index("ix_ledger_flags_entry_id", "entry_id"),
+    )
+
+
+class SmartFolder(Base):
+    """A per-user saved subject filter for the Ledger (migration 0055).
+
+    A smart folder is NOT a container — it has no membership. Selecting it
+    filters the ledger list by ``LOWER(subject) LIKE '%'||rule_value||'%'``.
+    ``rule_value`` is the normalised subject (see ``core.subject``);
+    ``rule_kind`` is ``'subject'`` in v1. Per-user (``owner_user_id``) so each
+    person curates their own folders in the private inbox. Soft-deleted via
+    ``deleted_at``.
+    """
+
+    __tablename__ = "smart_folders"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    owner_user_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    )
+    name_en: Mapped[str] = mapped_column(String(128), nullable=False)
+    name_ar: Mapped[str] = mapped_column(String(128), nullable=False)
+    rule_kind: Mapped[str] = mapped_column(String(32), nullable=False)
+    rule_value: Mapped[str] = mapped_column(String(255), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, default=_utcnow, server_default=func.current_timestamp()
+    )
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+    __table_args__ = (Index("ix_smart_folders_owner_user_id", "owner_user_id"),)
+
+
+class SmartFolderDismissal(Base):
+    """A per-user dismissal of a smart-folder suggestion (migration 0055).
+
+    Records that ``owner_user_id`` dismissed the cluster keyed by
+    ``cluster_key`` (a normalised subject) so the suggestion engine never
+    re-offers it to that user. Per-user so one person's dismissal doesn't hide a
+    suggestion from another.
+    """
+
+    __tablename__ = "smart_folder_dismissals"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    owner_user_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    )
+    cluster_key: Mapped[str] = mapped_column(String(255), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, default=_utcnow, server_default=func.current_timestamp()
+    )
+
+    __table_args__ = (
+        UniqueConstraint(
+            "owner_user_id", "cluster_key", name="uq_smart_folder_dismissals_owner_cluster"
+        ),
+        Index("ix_smart_folder_dismissals_owner_user_id", "owner_user_id"),
+    )
+
+
 __all__ = [
     "REF_SEQUENCE_ID",
     "AppSetting",
@@ -1225,11 +1314,14 @@ __all__ = [
     "GeneralBookRecipient",
     "Leave",
     "LedgerEntry",
+    "LedgerFlag",
     "Manager",
     "PermissionRequest",
     "PushSubscription",
     "RolePermission",
     "ScanInbox",
+    "SmartFolder",
+    "SmartFolderDismissal",
     "Submitter",
     "User",
     "UserPermission",

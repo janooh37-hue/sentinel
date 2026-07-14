@@ -85,7 +85,10 @@
         "leave": "A leave request needs action",
         "scan": "A scan was attached to a record",
         "email": "New email in your inbox"
-      }
+      },
+      "followUpsTitle": "Follow-ups",
+      "followUps_one": "{{count}} email flagged for follow-up",
+      "followUps_other": "{{count}} emails flagged for follow-up"
     }
   },
   "shortcuts": {
@@ -877,7 +880,12 @@
     "loggedBy": "Logged by",
     "filter": {
       "all": "All",
-      "directions": "Directions"
+      "directions": "Directions",
+      "label": "Quick filters",
+      "unread": "Unread",
+      "attachment": "Attachment",
+      "flagged": "Flagged",
+      "thisEmployee": "This employee"
     },
     "month": {
       "in": "{{n}} in",
@@ -885,10 +893,13 @@
       "int": "{{n}} internal"
     },
     "thread": {
-      "label": "Thread",
+      "label": "Threads",
       "current": "Viewing",
       "count": "{{count}} messages in this thread",
-      "empty": "No earlier messages in this thread"
+      "empty": "No earlier messages in this thread",
+      "toggle": "Group conversations into threads",
+      "count_one": "{{count}} message in thread",
+      "count_other": "{{count}} messages in thread"
     },
     "smartLink": {
       "employee": "Open employee",
@@ -1196,7 +1207,79 @@
       "updated": "Ledger entry updated",
       "deleted": "Ledger entry removed"
     },
-    "emptyUnfiltered": "No correspondence logged yet"
+    "emptyUnfiltered": "No correspondence logged yet",
+    "body": {
+      "zoomHint": "Drag to pan · pinch to zoom",
+      "zoomIn": "Zoom in",
+      "zoomOut": "Zoom out",
+      "fit": "Fit"
+    },
+    "flag": {
+      "set": "Flag for follow-up",
+      "clear": "Clear follow-up flag",
+      "title": "Flag for follow-up",
+      "presets": {
+        "today": "Today",
+        "tomorrow": "Tomorrow",
+        "nextWeek": "Next week",
+        "none": "No date"
+      }
+    },
+    "bulk": {
+      "label": "Bulk actions",
+      "selected_one": "{{count}} selected",
+      "selected_other": "{{count}} selected",
+      "read": "Read",
+      "unread": "Unread",
+      "star": "Star",
+      "flag": "Flag",
+      "trash": "Trash",
+      "clear": "Clear selection",
+      "selectRow": "Select message",
+      "selectThread": "Select thread"
+    },
+    "followups": {
+      "title": "Follow-ups",
+      "empty": "No follow-ups flagged yet."
+    },
+    "smart": {
+      "section": "Smart folders",
+      "suggestedPill_one": "{{count}} suggested",
+      "suggestedPill_other": "{{count}} suggested",
+      "reviewTitle": "Review folder suggestions",
+      "folderEmpty": "No mail matches this folder yet — new matching email files here automatically.",
+      "bannerTitle_one": "{{count}} email looks related",
+      "bannerTitle_other": "{{count}} emails look related",
+      "bannerSub": "All about {{name}} · same subject",
+      "review": "Review",
+      "reviewN": "Review ({{count}})",
+      "dismiss": "Dismiss",
+      "reviewHeading_one": "{{count}} folder suggestion",
+      "reviewHeading_other": "{{count}} folder suggestions",
+      "reviewEmpty": "No suggestions right now.",
+      "rowMeta_one": "{{emails}} emails · {{correspondents}} correspondent",
+      "rowMeta_other": "{{emails}} emails · {{correspondents}} correspondents",
+      "chipSameSubject": "same subject",
+      "noSubject": "(no subject)",
+      "createDots": "Create…",
+      "createTitle": "Create a smart folder",
+      "createBody_one": "The app grouped {{count}} email about {{cluster}}. Name it and confirm — new matching mail files here automatically.",
+      "createBody_other": "The app grouped {{count}} emails about {{cluster}}. Name it and confirm — new matching mail files here automatically.",
+      "nameEn": "Folder name (English)",
+      "nameAr": "Folder name (Arabic)",
+      "willMatch_one": "{{count}} email will match",
+      "willMatch_other": "{{count}} emails will match",
+      "createConfirm": "Create folder",
+      "created": "Smart folder created",
+      "rowActions": "Actions for {{name}}",
+      "rename": "Rename",
+      "renameTitle": "Rename smart folder",
+      "renamed": "Folder renamed",
+      "delete": "Delete",
+      "deleteTitle": "Delete this smart folder?",
+      "deleteBody": "“{{name}}” will be removed. The emails stay in the Ledger.",
+      "deleted": "Smart folder deleted"
+    }
   },
   "settings": {
     "title": "Settings",
@@ -1265,10 +1348,10 @@
     },
     "managers": {
       "title": "Managers",
-      "description": "Signatories printed on documents. Add, edit, or deactivate them.",
-      "empty": "No managers yet.",
+      "description": "Link each manager to a login account so approval routing works automatically.",
+      "empty": "No managers configured.",
       "noAccount": "No linked account",
-      "linkedToast": "Account link updated.",
+      "linkedToast": "Manager account linked",
       "add": "Add manager",
       "addAction": "Create",
       "edit": "Edit",
@@ -1842,10 +1925,13 @@
       "name": "Name",
       "nationality": "Nationality",
       "passport": "Passport No",
-      "notFound": "Employee not found.",
+      "notFound": "No employee with that G-number.",
       "duplicate": "Already added.",
       "lookupError": "Lookup failed. Try again.",
-      "max": "Up to 15 employees."
+      "max": "Up to 15 employees.",
+      "gNumber": "G-number",
+      "add": "Add",
+      "addAnother": "+ Add another"
     }
   },
   "dashboard": {
@@ -2566,7 +2652,10 @@
     "sendTitle": "Send notification (WhatsApp, SMS fallback)",
     "confirmResend": "Send this notification again?",
     "failed": "Send failed",
-    "channel": { "whatsapp": "WhatsApp", "sms": "SMS" }
+    "channel": {
+      "whatsapp": "WhatsApp",
+      "sms": "SMS"
+    }
   },
   "refresh": {
     "action": "Refresh",

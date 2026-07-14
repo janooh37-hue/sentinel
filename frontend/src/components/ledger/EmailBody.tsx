@@ -10,17 +10,28 @@
  * means React never re-commits this node and wipes the chips when an unrelated
  * re-render fires (e.g. the mark-read refetch). useLayoutEffect runs before
  * paint, so the body and its chips appear together with no empty-content flash.
+ *
+ * On MOBILE the body is wrapped in a fit-to-width pan/zoom surface
+ * (`EmailBodyZoom`) so wide content (which can't be reflowed) is readable rather
+ * than clipped. The actual body node — `BodyContent` — is shared by both paths;
+ * only its wrapper differs ('desktop' lets the desktop pane scroll wide content,
+ * 'zoom' fits the transform layer).
  */
 
-import { useLayoutEffect, useRef } from 'react'
+import { lazy, Suspense, useLayoutEffect, useRef } from 'react'
 
 import { decorateSmartLinks } from '@/lib/smartLinks'
 import { rewriteCidReferences } from '@/lib/cidRewrite'
 import { inferSourceDir } from '@/lib/bodyDirection'
+import { useIsMobile } from '@/lib/useIsMobile'
+
+const EmailBodyZoom = lazy(() =>
+  import('./EmailBodyZoom').then((m) => ({ default: m.EmailBodyZoom })),
+)
 
 export type SmartLinkKind = 'employee' | 'book'
 
-interface EmailBodyProps {
+export interface EmailBodyProps {
   /** Raw email HTML (`entry.notes_html`). */
   html: string
   /** Inline cid → data-url map (`entry.inline_images`). */
@@ -33,13 +44,22 @@ interface EmailBodyProps {
   onSmartLinkClick?: (kind: SmartLinkKind, value: string) => void
 }
 
-export function EmailBody({
+/**
+ * The rendered body node, shared by the desktop pane and the mobile zoom layer.
+ *
+ * - `variant='desktop'` (default): `overflow-x-auto` so a rare over-wide body
+ *   gets a horizontal scrollbar instead of being clipped.
+ * - `variant='zoom'`: no own overflow/width clamps — the EmailBodyZoom transform
+ *   layer sizes it and provides the pan/zoom, so intrinsic table widths survive.
+ */
+export function BodyContent({
   html,
   inlineImages,
   entryId,
   attachmentPaths,
   onSmartLinkClick,
-}: EmailBodyProps): React.JSX.Element {
+  variant = 'desktop',
+}: EmailBodyProps & { variant?: 'desktop' | 'zoom' }): React.JSX.Element {
   const bodyRef = useRef<HTMLDivElement | null>(null)
 
   // Phase 15 — rewrite `cid:` inline-image references before rendering. Must
@@ -72,24 +92,47 @@ export function EmailBody({
     else if (kind === 'book') onSmartLinkClick?.('book', value)
   }
 
+  // The zoom layer needs intrinsic widths to survive so it can fit-to-width;
+  // the desktop layer keeps the original max-width clamps + a scroll safety net.
+  const widthClamp =
+    variant === 'zoom'
+      ? ''
+      : `w-full overflow-x-auto
+        [&_*]:max-w-full
+        [&_[style*='width']]:!max-w-full
+        [&_[style*='min-width']]:!min-w-0
+        [&_table]:!max-w-full [&_img]:!max-w-full`
+
   return (
     <div
       ref={bodyRef}
       onClick={handleBodyClick}
       dir={srcDir}
       style={{ textAlign: srcDir === 'rtl' ? 'right' : 'left' }}
-      className="email-body w-full overflow-hidden rounded-2xl bg-surface px-6 py-6 text-sm text-foreground
+      className={`email-body rounded-2xl bg-surface px-6 py-6 text-sm text-foreground
         break-words
-        [&_*]:max-w-full
-        [&_[style*='width']]:!max-w-full
-        [&_[style*='min-width']]:!min-w-0
-        [&_table]:!max-w-full [&_table:not([dir])]:[direction:ltr] [&_table]:!mx-auto [&_table]:!text-[13px]
-        [&_img]:!h-auto [&_img]:!max-w-full
+        ${widthClamp}
+        [&_table:not([dir])]:[direction:ltr] [&_table]:!mx-auto [&_table]:!text-[13px]
+        [&_img]:!h-auto
         [&_a]:text-primary [&_a]:underline
         [&_pre]:whitespace-pre-wrap [&_pre]:font-sans
         [&_p]:my-2 [&_p]:leading-relaxed
         [&_td_p]:!my-0 [&_td_p]:!leading-tight [&_th_p]:!my-0 [&_th_p]:!leading-tight
-        [&_blockquote]:my-2 [&_blockquote]:border-s-4 [&_blockquote]:border-border [&_blockquote]:ps-3 [&_blockquote]:text-muted-foreground"
+        [&_blockquote]:my-2 [&_blockquote]:border-s-4 [&_blockquote]:border-border [&_blockquote]:ps-3 [&_blockquote]:text-muted-foreground`}
     />
   )
+}
+
+export function EmailBody(props: EmailBodyProps): React.JSX.Element {
+  const isMobile = useIsMobile()
+
+  if (isMobile) {
+    return (
+      <Suspense fallback={<BodyContent {...props} variant="zoom" />}>
+        <EmailBodyZoom {...props} />
+      </Suspense>
+    )
+  }
+
+  return <BodyContent {...props} variant="desktop" />
 }

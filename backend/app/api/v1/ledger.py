@@ -89,6 +89,11 @@ def list_entries(
     has_attachment: bool | None = None,
     include_deleted: bool = False,
     include_drafts: bool = False,
+    unread: bool | None = None,
+    has_attachments: bool | None = None,
+    flagged: bool | None = None,
+    employee_id: str | None = None,
+    smart_folder_id: int | None = None,
     scope: str = Query("mine", description="mine (default) | all (admin only)"),
     limit: int = Query(LIST_DEFAULT_LIMIT, ge=1, le=LIST_MAX_LIMIT),
     offset: int = Query(0, ge=0),
@@ -108,16 +113,25 @@ def list_entries(
         has_attachment=has_attachment,
         include_deleted=include_deleted,
         include_drafts=include_drafts,
+        unread=unread,
+        has_attachments=has_attachments,
+        flagged=flagged,
+        employee_id=employee_id,
+        smart_folder_id=smart_folder_id,
+        flag_user_id=current_user.id,
         owner_user_id=resolve_mail_scope(current_user, scope),
         limit=limit,
         offset=offset,
     )
+    flag_map = ledger_service.flags_for(db, current_user.id, [r.id for r in rows])
     return LedgerListResponse(
         items=[
             LedgerListItem.model_validate(r).model_copy(
                 update={
                     "attachment_count": len(r.attachment_paths or []),
                     "snippet": _html_to_preview(r.notes_html),
+                    "flagged": flag_map.get(r.id, (False, None))[0],
+                    "followup_due": flag_map.get(r.id, (False, None))[1],
                 }
             )
             for r in rows
@@ -460,7 +474,22 @@ def mark_read(
 ) -> LedgerEntryRead:
     """Set ``read_at=utcnow()`` if currently NULL. Idempotent."""
     row = ledger_service.mark_entry_read(db, entry_id, owner_user_id=resolve_mail_scope(current_user, scope))
-    return LedgerEntryRead.model_validate(row)
+    return _flagged_read(db, row, current_user.id)
+
+
+@router.post("/entries/{entry_id}/mark-unread", response_model=LedgerEntryRead)
+def mark_unread(
+    entry_id: int,
+    db: Annotated[Session, Depends(get_db)],
+    current_user: Annotated[User, Depends(require_capability("ledger.view"))],
+    scope: str = Query("mine", description="mine (default) | all (admin only)"),
+) -> LedgerEntryRead:
+    """Clear ``read_at`` (mark unread) if currently set. Idempotent — powers the
+    bulk "Mark unread" action."""
+    row = ledger_service.mark_entry_unread(
+        db, entry_id, owner_user_id=resolve_mail_scope(current_user, scope)
+    )
+    return _flagged_read(db, row, current_user.id)
 
 
 # ---------------------------------------------------------------------------
@@ -575,6 +604,65 @@ def send_draft(
 
 
 # ---------------------------------------------------------------------------
+# Follow-up flags (per-user — Phase 2 / D3)
+# ---------------------------------------------------------------------------
+
+
+class FlagRequest(BaseModel):
+    due: date | None = None
+
+
+class FlagCountResponse(BaseModel):
+    count: int
+
+
+def _flagged_read(db: Session, row: LedgerEntry, user_id: int) -> LedgerEntryRead:
+    """Project a ledger row into a read schema with the caller's flag fields."""
+    flag_map = ledger_service.flags_for(db, user_id, [row.id])
+    flagged, due = flag_map.get(row.id, (False, None))
+    return LedgerEntryRead.model_validate(row).model_copy(
+        update={"flagged": flagged, "followup_due": due}
+    )
+
+
+@router.get("/flag-count", response_model=FlagCountResponse)
+def get_flag_count(
+    db: Annotated[Session, Depends(get_db)],
+    current_user: Annotated[User, Depends(require_capability("ledger.view"))],
+) -> FlagCountResponse:
+    """The caller's own follow-up flag count — drives the bell badge."""
+    return FlagCountResponse(count=ledger_service.flag_count(db, current_user.id))
+
+
+@router.post("/{entry_id}/flag", response_model=LedgerEntryRead)
+def set_flag(
+    entry_id: int,
+    db: Annotated[Session, Depends(get_db)],
+    current_user: Annotated[User, Depends(require_capability("ledger.edit"))],
+    payload: FlagRequest | None = None,
+) -> LedgerEntryRead:
+    """Upsert the caller's follow-up flag for an entry (optional ``due`` date)."""
+    due = payload.due if payload is not None else None
+    row = ledger_service.set_flag(
+        db, entry_id=entry_id, user_id=current_user.id, due=due
+    )
+    return _flagged_read(db, row, current_user.id)
+
+
+@router.delete("/{entry_id}/flag", response_model=LedgerEntryRead)
+def clear_flag(
+    entry_id: int,
+    db: Annotated[Session, Depends(get_db)],
+    current_user: Annotated[User, Depends(require_capability("ledger.edit"))],
+) -> LedgerEntryRead:
+    """Delete the caller's follow-up flag for an entry."""
+    row = ledger_service.clear_flag(
+        db, entry_id=entry_id, user_id=current_user.id
+    )
+    return _flagged_read(db, row, current_user.id)
+
+
+# ---------------------------------------------------------------------------
 # Single entry
 # ---------------------------------------------------------------------------
 
@@ -630,6 +718,11 @@ def get_entry(
         if emp is not None:
             update["created_by_name_en"] = emp.name_en
             update["created_by_name_ar"] = emp.name_ar
+
+    flag_map = ledger_service.flags_for(db, current_user.id, [row.id])
+    flagged, due = flag_map.get(row.id, (False, None))
+    update["flagged"] = flagged
+    update["followup_due"] = due
 
     return result.model_copy(update=update)
 
