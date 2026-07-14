@@ -22,3 +22,11 @@ class AnnouncementOut(BaseModel):
     sent: int
     failed: int
     results: list[GroupSendOut]
+
+
+class GatewayStatusOut(BaseModel):
+    state: str
+
+
+class GatewayQrOut(BaseModel):
+    qr: str | None

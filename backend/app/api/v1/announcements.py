@@ -10,8 +10,14 @@ from sqlalchemy.orm import Session
 from app.api.deps import require_capability
 from app.db.models import User
 from app.db.session import get_db
-from app.schemas.announcement import AnnouncementOut, GroupOut, GroupSendOut
-from app.services import announce_service
+from app.schemas.announcement import (
+    AnnouncementOut,
+    GatewayQrOut,
+    GatewayStatusOut,
+    GroupOut,
+    GroupSendOut,
+)
+from app.services import announce_service, openwa_client
 
 router = APIRouter(prefix="/announcements", tags=["announcements"])
 
@@ -23,6 +29,22 @@ def list_groups(
 ) -> list[GroupOut]:
     """Return the WhatsApp groups the connected number belongs to."""
     return [GroupOut(id=g.id, name=g.name) for g in announce_service.groups_available(db)]
+
+
+@router.get("/status", response_model=GatewayStatusOut)
+def gateway_status(
+    _user: Annotated[User, Depends(require_capability("messages.broadcast"))],
+) -> GatewayStatusOut:
+    """Return the current OpenWA session state."""
+    return GatewayStatusOut(state=openwa_client.session_state())
+
+
+@router.get("/qr", response_model=GatewayQrOut)
+def gateway_qr(
+    _user: Annotated[User, Depends(require_capability("settings.edit"))],
+) -> GatewayQrOut:
+    """Return the current QR code for pairing the WhatsApp session (admin only)."""
+    return GatewayQrOut(qr=openwa_client.fetch_qr())
 
 
 @router.post("/send", response_model=AnnouncementOut)

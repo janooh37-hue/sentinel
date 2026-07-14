@@ -512,6 +512,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/announcements/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Gateway Status
+         * @description Return the current OpenWA session state.
+         */
+        get: operations["gateway_status_api_v1_announcements_status_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/announcements/qr": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Gateway Qr
+         * @description Return the current QR code for pairing the WhatsApp session (admin only).
+         */
+        get: operations["gateway_qr_api_v1_announcements_qr_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/announcements/send": {
         parameters: {
             query?: never;
@@ -4864,6 +4904,16 @@ export interface components {
             /** Matched Employee Name Ar */
             matched_employee_name_ar?: string | null;
         };
+        /** GatewayQrOut */
+        GatewayQrOut: {
+            /** Qr */
+            qr: string | null;
+        };
+        /** GatewayStatusOut */
+        GatewayStatusOut: {
+            /** State */
+            state: string;
+        };
         /**
          * GenerateAttachmentSpec
          * @description One attachment to merge into the generated PDF (spec 2026-06-11 §6).
@@ -7368,6 +7418,68 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["GroupOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    gateway_status_api_v1_announcements_status_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GatewayStatusOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    gateway_qr_api_v1_announcements_qr_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GatewayQrOut"];
                 };
             };
             /** @description Validation Error */
