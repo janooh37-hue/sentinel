@@ -131,6 +131,12 @@ CAPABILITIES: Final[tuple[Capability, ...]] = (
         "Admin key + v3 migration",
         "Use the admin key and run system/migration tools (admin-only).",
     ),
+    Capability(
+        "messages.broadcast",
+        "messages",
+        "Send group announcements",
+        "Post announcements (text or a document) to WhatsApp groups.",
+    ),
 )
 
 CAPABILITY_IDS: Final[frozenset[str]] = frozenset(c.id for c in CAPABILITIES)
