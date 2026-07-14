@@ -1822,6 +1822,76 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/ledger/smart-folders": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Smart Folders */
+        get: operations["list_smart_folders_api_v1_ledger_smart_folders_get"];
+        put?: never;
+        /** Create Smart Folder */
+        post: operations["create_smart_folder_api_v1_ledger_smart_folders_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/ledger/smart-folders/suggestions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Suggestions */
+        get: operations["list_suggestions_api_v1_ledger_smart_folders_suggestions_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/ledger/smart-folders/dismiss": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Dismiss Suggestion */
+        post: operations["dismiss_suggestion_api_v1_ledger_smart_folders_dismiss_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/ledger/smart-folders/{folder_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete Smart Folder */
+        delete: operations["delete_smart_folder_api_v1_ledger_smart_folders__folder_id__delete"];
+        options?: never;
+        head?: never;
+        /** Rename Smart Folder */
+        patch: operations["rename_smart_folder_api_v1_ledger_smart_folders__folder_id__patch"];
+        trace?: never;
+    };
     "/api/v1/ledger": {
         parameters: {
             query?: never;
@@ -2069,6 +2139,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/ledger/entries/{entry_id}/mark-unread": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Mark Unread
+         * @description Clear ``read_at`` (mark unread) if currently set. Idempotent — powers the
+         *     bulk "Mark unread" action.
+         */
+        post: operations["mark_unread_api_v1_ledger_entries__entry_id__mark_unread_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/ledger/drafts": {
         parameters: {
             query?: never;
@@ -2117,6 +2208,50 @@ export interface paths {
         /** Send Draft */
         post: operations["send_draft_api_v1_ledger_drafts__draft_id__send_post"];
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/ledger/flag-count": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Flag Count
+         * @description The caller's own follow-up flag count — drives the bell badge.
+         */
+        get: operations["get_flag_count_api_v1_ledger_flag_count_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/ledger/{entry_id}/flag": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Set Flag
+         * @description Upsert the caller's follow-up flag for an entry (optional ``due`` date).
+         */
+        post: operations["set_flag_api_v1_ledger__entry_id__flag_post"];
+        /**
+         * Clear Flag
+         * @description Delete the caller's follow-up flag for an entry.
+         */
+        delete: operations["clear_flag_api_v1_ledger__entry_id__flag_delete"];
         options?: never;
         head?: never;
         patch?: never;
@@ -4924,6 +5059,16 @@ export interface components {
             /** Matched Employee Name Ar */
             matched_employee_name_ar?: string | null;
         };
+        /** FlagCountResponse */
+        FlagCountResponse: {
+            /** Count */
+            count: number;
+        };
+        /** FlagRequest */
+        FlagRequest: {
+            /** Due */
+            due?: string | null;
+        };
         /** GatewayQrOut */
         GatewayQrOut: {
             /** Qr */
@@ -5409,6 +5554,13 @@ export interface components {
             in_reply_to?: string | null;
             /** Email References */
             email_references?: string | null;
+            /**
+             * Flagged
+             * @default false
+             */
+            flagged: boolean;
+            /** Followup Due */
+            followup_due?: string | null;
         };
         /**
          * LedgerEntryUpdate
@@ -5485,6 +5637,13 @@ export interface components {
              * @default
              */
             snippet: string;
+            /**
+             * Flagged
+             * @default false
+             */
+            flagged: boolean;
+            /** Followup Due */
+            followup_due?: string | null;
         };
         /** LedgerListResponse */
         LedgerListResponse: {
@@ -6178,6 +6337,72 @@ export interface components {
             size_mm: number;
             /** Boldness */
             boldness: number;
+        };
+        /**
+         * SmartFolderCreate
+         * @description Payload to create a folder (confirmed). Owner comes from the session.
+         */
+        SmartFolderCreate: {
+            /** Name En */
+            name_en: string;
+            /** Name Ar */
+            name_ar: string;
+            /**
+             * Rule Kind
+             * @default subject
+             * @constant
+             */
+            rule_kind: "subject";
+            /** Rule Value */
+            rule_value: string;
+        };
+        /**
+         * SmartFolderDismiss
+         * @description Payload to dismiss a suggestion cluster (per-user).
+         */
+        SmartFolderDismiss: {
+            /** Cluster Key */
+            cluster_key: string;
+        };
+        /**
+         * SmartFolderRead
+         * @description An active smart folder with its live matching-entry count.
+         */
+        SmartFolderRead: {
+            /** Id */
+            id: number;
+            /** Name En */
+            name_en: string;
+            /** Name Ar */
+            name_ar: string;
+            /** Count */
+            count: number;
+        };
+        /**
+         * SmartFolderSuggestion
+         * @description A suggested subject cluster the caller could turn into a folder.
+         */
+        SmartFolderSuggestion: {
+            /** Cluster Key */
+            cluster_key: string;
+            /** Name Suggestion */
+            name_suggestion: string;
+            /** Count */
+            count: number;
+            /** Correspondent Count */
+            correspondent_count: number;
+            /** Sample Subjects */
+            sample_subjects: string[];
+        };
+        /**
+         * SmartFolderUpdate
+         * @description Partial rename — either/both localized names.
+         */
+        SmartFolderUpdate: {
+            /** Name En */
+            name_en?: string | null;
+            /** Name Ar */
+            name_ar?: string | null;
         };
         /**
          * StagedAttachmentRead
@@ -10615,6 +10840,204 @@ export interface operations {
             };
         };
     };
+    list_smart_folders_api_v1_ledger_smart_folders_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SmartFolderRead"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_smart_folder_api_v1_ledger_smart_folders_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SmartFolderCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SmartFolderRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_suggestions_api_v1_ledger_smart_folders_suggestions_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SmartFolderSuggestion"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    dismiss_suggestion_api_v1_ledger_smart_folders_dismiss_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SmartFolderDismiss"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_smart_folder_api_v1_ledger_smart_folders__folder_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                folder_id: number;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    rename_smart_folder_api_v1_ledger_smart_folders__folder_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                folder_id: number;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SmartFolderUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SmartFolderRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     list_entries_api_v1_ledger_get: {
         parameters: {
             query?: {
@@ -10631,6 +11054,11 @@ export interface operations {
                 has_attachment?: boolean | null;
                 include_deleted?: boolean;
                 include_drafts?: boolean;
+                unread?: boolean | null;
+                has_attachments?: boolean | null;
+                flagged?: boolean | null;
+                employee_id?: string | null;
+                smart_folder_id?: number | null;
                 /** @description mine (default) | all (admin only) */
                 scope?: string;
                 limit?: number;
@@ -11208,6 +11636,42 @@ export interface operations {
             };
         };
     };
+    mark_unread_api_v1_ledger_entries__entry_id__mark_unread_post: {
+        parameters: {
+            query?: {
+                /** @description mine (default) | all (admin only) */
+                scope?: string;
+            };
+            header?: never;
+            path: {
+                entry_id: number;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LedgerEntryRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     list_drafts_api_v1_ledger_drafts_get: {
         parameters: {
             query?: {
@@ -11351,6 +11815,107 @@ export interface operations {
             header?: never;
             path: {
                 draft_id: number;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LedgerEntryRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_flag_count_api_v1_ledger_flag_count_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FlagCountResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    set_flag_api_v1_ledger__entry_id__flag_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                entry_id: number;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["FlagRequest"] | null;
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LedgerEntryRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    clear_flag_api_v1_ledger__entry_id__flag_delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                entry_id: number;
             };
             cookie?: {
                 gssg_session?: string | null;
