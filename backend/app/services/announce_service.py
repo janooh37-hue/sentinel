@@ -1,21 +1,27 @@
 """Announcement-service helpers — Phase 2c OpenWA broadcast.
 
-Currently provides :func:`resolve_book_pdf`, which resolves a book's served
-PDF bytes (mirroring the ``/documents/{id}/download`` endpoint logic: signed-lock
-swap, containment check, companion-PDF merge) so a group announcement can attach
-it without going through the HTTP layer.
+Provides:
+- :func:`resolve_book_pdf` — resolves a book's served PDF bytes (mirrors the
+  ``/documents/{id}/download`` endpoint logic) so a group announcement can
+  attach it without going through the HTTP layer.
+- :class:`Attachment`, :class:`GroupSendResult`, :class:`AnnouncementResult` —
+  data-transfer objects for the group-send flow.
+- :func:`groups_available` — list WhatsApp groups the connected number belongs to.
+- :func:`send_announcement` — fan-out text/file send to a list of groups with
+  per-group ``GroupAnnouncementSend`` logging and a ``GroupAnnouncement`` parent.
 """
 
 from __future__ import annotations
 
+from dataclasses import dataclass, field
 from pathlib import Path
 
 from sqlalchemy.orm import Session
 
 from app.config import get_settings
 from app.core.pdf_merge import merge_pdfs_to_bytes
-from app.db.models import Document
-from app.services import book_service, document_service
+from app.db.models import Document, GroupAnnouncement, GroupAnnouncementSend
+from app.services import book_service, document_service, notify_dispatch, openwa_client
 
 
 class BookPdfError(RuntimeError):
@@ -113,3 +119,164 @@ def resolve_book_pdf(db: Session, book_id: int) -> tuple[str, bytes]:
             return filename, merge_pdfs_to_bytes(file_path, comp_paths)
 
     return filename, file_path.read_bytes()
+
+
+# ---------------------------------------------------------------------------
+# Group-send DTOs
+# ---------------------------------------------------------------------------
+
+
+@dataclass
+class Attachment:
+    """Resolved file bytes to attach to a group announcement."""
+
+    filename: str
+    data: bytes
+
+
+@dataclass
+class GroupSendResult:
+    """Outcome of sending an announcement to one WhatsApp group."""
+
+    group_id: str
+    group_name: str
+    ok: bool
+    error: str | None = None
+
+
+@dataclass
+class AnnouncementResult:
+    """Aggregate outcome of a :func:`send_announcement` call."""
+
+    announcement_id: int
+    sent: int
+    failed: int
+    results: list[GroupSendResult] = field(default_factory=list)
+
+
+# ---------------------------------------------------------------------------
+# Group helpers
+# ---------------------------------------------------------------------------
+
+
+def groups_available(db: Session) -> list[openwa_client.Group]:
+    """Return the WhatsApp groups the connected number belongs to.
+
+    Returns an empty list when OpenWA is disabled or the request fails.
+    The ``db`` parameter is accepted for API consistency but unused here.
+    """
+    if not get_settings().openwa_enabled:
+        return []
+    return openwa_client.list_groups()
+
+
+# ---------------------------------------------------------------------------
+# Fan-out send
+# ---------------------------------------------------------------------------
+
+
+def send_announcement(
+    db: Session,
+    *,
+    groups: list[tuple[str, str]],
+    text: str,
+    attachment: Attachment | None,
+    book_id: int | None,
+    sent_by: int | None,
+) -> AnnouncementResult:
+    """Send *text* (optionally with *attachment*) to each group in *groups*.
+
+    Parameters
+    ----------
+    db:
+        Active database session.
+    groups:
+        List of ``(group_id, group_name)`` pairs to deliver to.
+    text:
+        Message body / caption.
+    attachment:
+        Optional resolved file bytes.  When present the delivery uses
+        ``openwa_client.send_file``; otherwise ``openwa_client.send_to_chat``.
+    book_id:
+        If the attachment was resolved from a book, pass its ID here so the
+        ``GroupAnnouncement`` row records ``attachment_kind = "book"``.
+    sent_by:
+        ``User.id`` of the operator who triggered the send (nullable).
+
+    Raises
+    ------
+    notify_dispatch.NotifyDisabledError
+        When ``settings.openwa_enabled`` is ``False``.
+    """
+    if not get_settings().openwa_enabled:
+        raise notify_dispatch.NotifyDisabledError("OpenWA is not enabled")
+
+    # Derive attachment_kind from what we received.
+    if attachment is not None and book_id is not None:
+        attachment_kind = "book"
+    elif attachment is not None:
+        attachment_kind = "upload"
+    else:
+        attachment_kind = "none"
+
+    # Write the parent GroupAnnouncement row.
+    parent = GroupAnnouncement(
+        body=text,
+        attachment_kind=attachment_kind,
+        attachment_name=attachment.filename if attachment is not None else None,
+        book_id=book_id,
+        sent_by=sent_by,
+    )
+    db.add(parent)
+    db.flush()  # populate parent.id without committing yet
+
+    # Fan-out: one GroupAnnouncementSend per target group.
+    results: list[GroupSendResult] = []
+    for group_id, group_name in groups:
+        try:
+            if attachment is not None:
+                send_result = openwa_client.send_file(
+                    group_id,
+                    data=attachment.data,
+                    filename=attachment.filename,
+                    caption=text,
+                )
+            else:
+                send_result = openwa_client.send_to_chat(group_id, text)
+        except Exception as exc:
+            send_result_ok = False
+            send_result_msg_id: str | None = None
+            send_result_error: str | None = str(exc)
+        else:
+            send_result_ok = send_result.ok
+            send_result_msg_id = send_result.message_id
+            send_result_error = send_result.error
+
+        child = GroupAnnouncementSend(
+            announcement_id=parent.id,
+            group_id=group_id,
+            group_name=group_name,
+            status="sent" if send_result_ok else "failed",
+            provider_msg_id=send_result_msg_id,
+            error=send_result_error,
+        )
+        db.add(child)
+        results.append(
+            GroupSendResult(
+                group_id=group_id,
+                group_name=group_name,
+                ok=send_result_ok,
+                error=send_result_error,
+            )
+        )
+
+    db.commit()
+
+    sent = sum(1 for r in results if r.ok)
+    failed = len(results) - sent
+    return AnnouncementResult(
+        announcement_id=parent.id,
+        sent=sent,
+        failed=failed,
+        results=results,
+    )
