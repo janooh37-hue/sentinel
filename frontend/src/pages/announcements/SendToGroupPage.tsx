@@ -20,6 +20,7 @@ import { useCapabilities } from '@/lib/useCapabilities'
 import { useGatewayStatus, type GatewayState } from '@/lib/useGatewayStatus'
 import { GatewayConnectDialog } from './GatewayConnectDialog'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
+import { RecordAnnouncePicker, type PickedBook } from './RecordAnnouncePicker'
 
 type AttachMode = 'none' | 'book' | 'upload'
 
@@ -65,6 +66,8 @@ export function SendToGroupPage(): React.JSX.Element {
   const [bookId, setBookId] = useState('')
   const fileRef = useRef<HTMLInputElement>(null)
   const [hasFile, setHasFile] = useState(false)
+  const [pickerOpen, setPickerOpen] = useState(false)
+  const [pickedBook, setPickedBook] = useState<PickedBook | null>(null)
 
   // Result
   const [result, setResult] = useState<AnnouncementOut | null>(null)
@@ -314,16 +317,45 @@ export function SendToGroupPage(): React.JSX.Element {
 
           {attachMode === 'book' && (
             <div className="mt-3">
-              <label className="mb-1 block text-[0.82em] text-muted-foreground">
-                {t('sendToGroup.bookIdLabel')}
-              </label>
-              <input
-                type="number"
-                value={bookId}
-                onChange={(e) => setBookId(e.target.value)}
-                min={1}
-                className="h-9 w-40 rounded-md border border-border bg-surface px-3 text-[0.85em] text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
-              />
+              {pickedBook ? (
+                <div className="flex items-center gap-3 rounded-md border border-border bg-surface/60 px-3 py-2">
+                  <div className="min-w-0">
+                    <p className="truncate text-[0.85em] font-medium text-foreground" dir="auto">
+                      {pickedBook.ref}
+                    </p>
+                    <p className="truncate text-[0.78em] text-muted-foreground" dir="auto">
+                      {pickedBook.subject}
+                    </p>
+                  </div>
+                  <div className="ms-auto flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setPickerOpen(true)}
+                      className="rounded-md border border-border px-3 py-1.5 text-[0.8em] font-medium text-foreground hover:bg-surface-tinted"
+                    >
+                      {t('sendToGroup.picker.change')}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setPickedBook(null)
+                        setBookId('')
+                      }}
+                      className="rounded-md border border-accent/40 px-3 py-1.5 text-[0.8em] font-medium text-accent hover:bg-accent/10"
+                    >
+                      {t('sendToGroup.picker.clear')}
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setPickerOpen(true)}
+                  className="rounded-md border border-border px-4 py-2 text-[0.85em] font-medium text-foreground hover:bg-surface-tinted"
+                >
+                  {t('sendToGroup.picker.choose')}
+                </button>
+              )}
             </div>
           )}
 
@@ -366,6 +398,16 @@ export function SendToGroupPage(): React.JSX.Element {
 
       {/* QR connect dialog (admin only) */}
       <GatewayConnectDialog open={qrOpen} onOpenChange={setQrOpen} />
+
+      <RecordAnnouncePicker
+        open={pickerOpen}
+        onClose={() => setPickerOpen(false)}
+        onPick={(b) => {
+          setPickedBook(b)
+          setBookId(String(b.id))
+          setPickerOpen(false)
+        }}
+      />
 
       {/* Unlink confirm dialog (admin only) */}
       <ConfirmDialog

@@ -2750,6 +2750,18 @@
       "connected": "WhatsApp connected!",
       "qrError": "Could not load the QR code. Please try again.",
       "refreshing": "Refreshing…"
+    },
+    "picker": {
+      "title": "Attach a record",
+      "close": "Close",
+      "choose": "Choose record…",
+      "change": "Change",
+      "clear": "Remove",
+      "searchPlaceholder": "Search records by ref or subject",
+      "noResults": "No records found",
+      "selectHint": "Select a record to preview",
+      "noDocument": "This record has no document to attach",
+      "confirm": "Attach"
     }
   },
   "gateway": {
