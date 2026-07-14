@@ -2660,7 +2660,8 @@
       "connected": "WhatsApp connected",
       "disconnected": "WhatsApp session down — reconnect",
       "unreachable": "WhatsApp service not running",
-      "checkedAgo": "checked {{count}}s ago",
+      "checkedAgo_zero": "checked just now",
+      "checkedAgo_one": "checked {{count}}s ago",
       "checkedAgo_other": "checked {{count}}s ago"
     }
   }
