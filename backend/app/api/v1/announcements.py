@@ -65,7 +65,7 @@ async def send_announcement(
         groups=groups,
         text=text,
         attachment=attachment,
-        book_id=book_id,
+        book_id=(book_id if file is None else None),
         sent_by=user.id,
     )
 

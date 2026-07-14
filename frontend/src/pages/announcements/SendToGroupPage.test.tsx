@@ -20,7 +20,6 @@ vi.mock('../../lib/api', () => ({
     listGroups: vi.fn().mockResolvedValue([{ id: '1@g.us', name: 'Alpha' }]),
     sendAnnouncement: vi.fn(),
   },
-  apiErrorMessage: (e: unknown) => String(e),
 }))
 
 import { api } from '../../lib/api'
