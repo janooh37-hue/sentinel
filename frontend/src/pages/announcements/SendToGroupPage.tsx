@@ -13,13 +13,29 @@ import { useRef, useState, useCallback } from 'react'
 import { useQuery, useMutation } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
+import { AlertTriangle, MessageCircle } from 'lucide-react'
 
 import { api, type AnnouncementOut, type GroupSendOut } from '@/lib/api'
+import { useCapabilities } from '@/lib/useCapabilities'
 
 type AttachMode = 'none' | 'book' | 'upload'
 
+// Gateway states reported by GET /announcements/status
+type GatewayState = 'disabled' | 'unreachable' | 'disconnected' | 'connected'
+
 export function SendToGroupPage(): React.JSX.Element {
   const { t } = useTranslation()
+  const { has } = useCapabilities()
+  const isAdmin = has('settings.edit')
+
+  // Gateway status query (staleTime 30s — avoids hammering on every mount)
+  const { data: gatewayData, isLoading: gatewayLoading } = useQuery({
+    queryKey: ['gateway-status'],
+    queryFn: api.gatewayStatus,
+    staleTime: 30_000,
+  })
+  const gatewayState = (gatewayData?.state ?? 'disconnected') as GatewayState
+  const isConnected = !gatewayLoading && gatewayState === 'connected'
 
   // Group selection
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
@@ -36,11 +52,19 @@ export function SendToGroupPage(): React.JSX.Element {
   // Result
   const [result, setResult] = useState<AnnouncementOut | null>(null)
 
-  // Load groups
-  const { data: groups, isLoading } = useQuery({
+  // Load groups — only meaningful when connected; we still fire the query so
+  // error state is available if needed.
+  const {
+    data: groups,
+    isLoading: groupsLoading,
+    isError: groupsError,
+  } = useQuery({
     queryKey: ['announce-groups'],
     queryFn: api.listGroups,
   })
+
+  // Show blocked banner when gateway isn't connected OR groups query errored
+  const showBanner = (!gatewayLoading && gatewayState !== 'connected') || groupsError
 
   // Derived: is submit enabled?
   const hasGroup = selectedIds.size > 0
@@ -48,7 +72,7 @@ export function SendToGroupPage(): React.JSX.Element {
     message.trim().length > 0 ||
     (attachMode === 'book' && bookId.trim().length > 0) ||
     (attachMode === 'upload' && hasFile)
-  const canSubmit = hasGroup && hasContent
+  const canSubmit = isConnected && hasGroup && hasContent
 
   const sendMut = useMutation({
     onMutate: () => setResult(null),
@@ -98,6 +122,20 @@ export function SendToGroupPage(): React.JSX.Element {
     sendMut.mutate()
   }
 
+  /** Derive the per-state banner message key. */
+  function bannerMessageKey(): string {
+    if (groupsError) return 'sendToGroup.gatewayDisconnected'
+    switch (gatewayState) {
+      case 'disabled':
+        return 'sendToGroup.gatewayDisabled'
+      case 'unreachable':
+        return 'sendToGroup.gatewayUnreachable'
+      case 'disconnected':
+      default:
+        return 'sendToGroup.gatewayDisconnected'
+    }
+  }
+
   return (
     <div className="mx-auto max-w-2xl px-4 py-6">
       {/* Page header */}
@@ -106,17 +144,70 @@ export function SendToGroupPage(): React.JSX.Element {
         <p className="mt-0.5 text-[0.88em] text-muted-foreground">{t('sendToGroup.subtitle')}</p>
       </div>
 
+      {/* ── Blocked banner ── */}
+      {showBanner && (
+        <div
+          role="alert"
+          className="mb-6 flex flex-col gap-3 rounded-lg border border-amber-300 bg-amber-50 px-4 py-4 text-amber-900 dark:border-amber-700 dark:bg-amber-950/40 dark:text-amber-200"
+        >
+          <div className="flex items-start gap-3">
+            <AlertTriangle
+              className="mt-0.5 h-5 w-5 shrink-0 text-amber-500"
+              aria-hidden
+            />
+            <div className="space-y-1">
+              <p className="text-[0.9em] font-semibold" dir="auto">
+                {t('sendToGroup.blockedTitle')}
+              </p>
+              <p className="text-[0.85em]" dir="auto">
+                {t(bannerMessageKey())}
+              </p>
+              <p className="text-[0.82em] text-amber-700 dark:text-amber-300" dir="auto">
+                {t('sendToGroup.blockedGroupsHint')}
+              </p>
+            </div>
+          </div>
+
+          {/* Reconnect / ask-admin area — only for disconnected state */}
+          {(gatewayState === 'disconnected' || groupsError) && (
+            <div className="ms-8">
+              {isAdmin ? (
+                <button
+                  type="button"
+                  className="inline-flex items-center gap-1.5 rounded-md bg-amber-600 px-3 py-1.5 text-[0.82em] font-semibold text-white hover:bg-amber-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400"
+                  onClick={() => {
+                    // TODO(task4): open QR reconnect dialog
+                    console.debug('[SendToGroupPage] reconnect clicked — wired in Task 4')
+                  }}
+                >
+                  <MessageCircle className="h-3.5 w-3.5" aria-hidden />
+                  {t('sendToGroup.reconnect')}
+                </button>
+              ) : (
+                <p className="text-[0.82em] text-amber-700 dark:text-amber-300" dir="auto">
+                  {t('sendToGroup.askAdmin')}
+                </p>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
       <form onSubmit={handleSubmit} className="space-y-6">
         {/* Groups section */}
         <section>
           <p className="mb-2 text-[0.9em] font-semibold text-foreground">{t('sendToGroup.groups')}</p>
-          {isLoading ? null : !groups || groups.length === 0 ? (
-            <p className="rounded-lg border border-border bg-surface/60 px-4 py-3 text-[0.85em] text-muted-foreground">
-              {t('sendToGroup.noGroups')}
+          {gatewayLoading || groupsLoading ? (
+            <p className="text-[0.85em] text-muted-foreground" dir="auto">
+              {t('sendToGroup.statusChecking')}
+            </p>
+          ) : showBanner ? null : groups && groups.length === 0 ? (
+            <p className="rounded-lg border border-border bg-surface/60 px-4 py-3 text-[0.85em] text-muted-foreground" dir="auto">
+              {t('sendToGroup.noGroupsForNumber')}
             </p>
           ) : (
             <ul className="space-y-1.5">
-              {groups.map((g) => {
+              {(groups ?? []).map((g) => {
                 const checked = selectedIds.has(g.id)
                 return (
                   <li key={g.id}>
@@ -220,10 +311,10 @@ export function SendToGroupPage(): React.JSX.Element {
         </div>
 
         {/* Validation hints */}
-        {!hasGroup && !sendMut.isPending && (
+        {!showBanner && !hasGroup && !sendMut.isPending && (
           <p className="text-[0.8em] text-muted-foreground">{t('sendToGroup.pickGroup')}</p>
         )}
-        {hasGroup && !hasContent && !sendMut.isPending && (
+        {!showBanner && hasGroup && !hasContent && !sendMut.isPending && (
           <p className="text-[0.8em] text-muted-foreground">{t('sendToGroup.needContent')}</p>
         )}
       </form>

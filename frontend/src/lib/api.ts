@@ -601,6 +601,7 @@ export type DutySupervisorCreate = components['schemas']['DutySupervisorCreate']
 export type GroupOut = components['schemas']['GroupOut']
 export type GroupSendOut = components['schemas']['GroupSendOut']
 export type AnnouncementOut = components['schemas']['AnnouncementOut']
+export type GatewayStatusOut = components['schemas']['GatewayStatusOut']
 
 // Phase 2a — OpenWA digest API (Task 10/11)
 export type DigestPreview = components['schemas']['DigestPreview']
@@ -1069,6 +1070,7 @@ export const api = {
   deleteDutySupervisor: (id: number) => request<void>('DELETE', `/duty-supervisors/${id}`),
 
   // --- announcements (Phase 2c OpenWA — Task 6/7) ---
+  gatewayStatus: () => request<GatewayStatusOut>('GET', '/announcements/status'),
   listGroups: () => request<GroupOut[]>('GET', '/announcements/groups'),
   sendAnnouncement: (form: FormData) => multipart<AnnouncementOut>('/announcements/send', form),
 

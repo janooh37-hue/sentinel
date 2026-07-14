@@ -2617,7 +2617,6 @@
     "title": "Send to Group",
     "subtitle": "Broadcast a message or attachment to one or more WhatsApp groups",
     "groups": "Groups",
-    "noGroups": "No groups available. Make sure OpenWA is connected.",
     "message": "Message",
     "messagePlaceholder": "Type your message here…",
     "attachment": "Attachment",
@@ -2633,6 +2632,15 @@
     "resultFailed": "Failed: {{count}}",
     "sendError": "Could not send the announcement. Please try again.",
     "needContent": "Type a message or add an attachment",
-    "pickGroup": "Select at least one group"
+    "pickGroup": "Select at least one group",
+    "statusChecking": "Checking gateway status…",
+    "gatewayDisabled": "WhatsApp isn't enabled — ask your administrator",
+    "gatewayUnreachable": "The gateway service isn't running on the server",
+    "gatewayDisconnected": "WhatsApp isn't connected — reconnect to send",
+    "blockedTitle": "Group messages unavailable",
+    "blockedGroupsHint": "Group messages can't be sent until WhatsApp is reconnected.",
+    "noGroupsForNumber": "This number isn't in any groups",
+    "reconnect": "Reconnect",
+    "askAdmin": "Ask your administrator to reconnect WhatsApp"
   }
 }
