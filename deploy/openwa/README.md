@@ -81,6 +81,8 @@ response shapes differ:
 | Registration check | `GET /api/sessions/{session}/contacts/check?phone=<phone>` | `{ "numberExists": true/false }` |
 | Delivery/ack lookup | `GET /api/sessions/{session}/messages/{id}` | `{ "ack": 3 }` (3 = read) |
 | Session health | `GET /api/sessions/{session}` | `{ "status": "CONNECTED" }` |
+| List groups | `GET /api/sessions/{session}/groups` | `[ { "id": "<id>@g.us", "name": "<subject>" }, ... ]` |
+| Send file   | `POST /api/sessions/{session}/messages/send-file` | `{ "chatId": "<id>", "file": "<base64>", "filename": "<name>", "caption": "<text>" }` → `{ "id": "..." }` |
 
 Record the confirmed paths and shapes in this table and adjust
 `openwa_client.py` accordingly before flipping the feature on.

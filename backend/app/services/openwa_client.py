@@ -8,6 +8,7 @@ raw exception. Paths/fields follow the pinned contract in deploy/openwa/README.m
 
 from __future__ import annotations
 
+import base64
 import logging
 from dataclasses import dataclass
 
@@ -36,6 +37,12 @@ class DeliveryResult:
     error: str | None = None
 
 
+@dataclass(frozen=True)
+class Group:
+    id: str
+    name: str
+
+
 def _base() -> str:
     base = get_settings().openwa_api_base.strip().rstrip("/")
     if base and "://" not in base:
@@ -59,12 +66,13 @@ def _client() -> httpx.Client:
     return httpx.Client(transport=_transport, timeout=_TIMEOUT)
 
 
-def send(phone: str, text: str) -> SendResult:
+def send_to_chat(chat_id: str, text: str) -> SendResult:
+    """Send free-form text to any WhatsApp chat id (person @c.us or group @g.us)."""
     cfg = get_settings()
     url = f"{_base()}/api/sessions/{cfg.openwa_session}/messages/send-text"
-    payload = {"chatId": _chat_id(phone), "text": text}
+    payload = {"chatId": chat_id, "text": text}
     last_err: str | None = None
-    for attempt in range(2):  # initial + one retry on transport error
+    for attempt in range(2):
         try:
             with _client() as c:
                 resp = c.post(url, headers=_headers(), json=payload)
@@ -86,6 +94,58 @@ def send(phone: str, text: str) -> SendResult:
         return SendResult(
             ok=False, error=f"HTTP {resp.status_code}: {body}", not_registered=not_reg
         )
+    return SendResult(ok=False, error=last_err or "network error")
+
+
+def send(phone: str, text: str) -> SendResult:
+    return send_to_chat(_chat_id(phone), text)
+
+
+def list_groups() -> list[Group]:
+    """Groups the connected number belongs to. Empty on any error (never raises)."""
+    cfg = get_settings()
+    url = f"{_base()}/api/sessions/{cfg.openwa_session}/groups"
+    try:
+        with _client() as c:
+            resp = c.get(url, headers=_headers())
+    except httpx.HTTPError as e:
+        log.warning("openwa: list_groups transport error: %s", e)
+        return []
+    if resp.status_code // 100 != 2:
+        return []
+    data = resp.json() if resp.content else []
+    rows = data.get("groups", data) if isinstance(data, dict) else data
+    out: list[Group] = []
+    for r in rows if isinstance(rows, list) else []:
+        gid = r.get("id") or r.get("chatId") or r.get("_serialized")
+        name = r.get("name") or r.get("subject") or gid
+        if gid:
+            out.append(Group(id=str(gid), name=str(name)))
+    return out
+
+
+def send_file(chat_id: str, *, data: bytes, filename: str, caption: str) -> SendResult:
+    """Send a file to a WhatsApp chat id as a base64-encoded attachment."""
+    cfg = get_settings()
+    url = f"{_base()}/api/sessions/{cfg.openwa_session}/messages/send-file"
+    payload = {
+        "chatId": chat_id,
+        "file": base64.b64encode(data).decode("ascii"),
+        "filename": filename,
+        "caption": caption,
+    }
+    last_err: str | None = None
+    for _attempt in range(2):
+        try:
+            with _client() as c:
+                resp = c.post(url, headers=_headers(), json=payload)
+        except httpx.HTTPError as e:
+            last_err = str(e) or e.__class__.__name__
+            continue
+        if resp.status_code // 100 == 2:
+            d = resp.json() if resp.content else {}
+            return SendResult(ok=True, message_id=d.get("id") or (d.get("key") or {}).get("id"))
+        return SendResult(ok=False, error=f"HTTP {resp.status_code}: {resp.text}")
     return SendResult(ok=False, error=last_err or "network error")
 
 
