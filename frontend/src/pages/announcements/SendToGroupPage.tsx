@@ -124,16 +124,19 @@ export function SendToGroupPage(): React.JSX.Element {
 
   /** Derive the per-state banner message key. */
   function bannerMessageKey(): string {
-    if (groupsError) return 'sendToGroup.gatewayDisconnected'
+    // Check genuine gateway failure states first.
     switch (gatewayState) {
       case 'disabled':
         return 'sendToGroup.gatewayDisabled'
       case 'unreachable':
         return 'sendToGroup.gatewayUnreachable'
       case 'disconnected':
-      default:
         return 'sendToGroup.gatewayDisconnected'
     }
+    // Gateway is connected (or still loading) but the groups fetch failed —
+    // that's a network/API error, not a WhatsApp connectivity issue.
+    if (groupsError) return 'sendToGroup.groupsLoadError'
+    return 'sendToGroup.gatewayDisconnected'
   }
 
   return (
@@ -168,8 +171,8 @@ export function SendToGroupPage(): React.JSX.Element {
             </div>
           </div>
 
-          {/* Reconnect / ask-admin area — only for disconnected state */}
-          {(gatewayState === 'disconnected' || groupsError) && (
+          {/* Reconnect / ask-admin area — only for disconnected state (QR won't fix a groups-fetch error) */}
+          {gatewayState === 'disconnected' && (
             <div className="ms-8">
               {isAdmin ? (
                 <button

@@ -55,12 +55,13 @@ describe('SendToGroupPage', () => {
     expect(await screen.findByText('sendToGroup.noGroupsForNumber')).toBeInTheDocument()
   })
 
-  // Case A: disconnected → blocked banner, no group list
+  // Case A: disconnected → blocked banner, no group list, Send disabled
   it('shows blocked banner when state is disconnected', async () => {
     vi.mocked(api.gatewayStatus).mockResolvedValue({ state: 'disconnected' })
     renderPage()
     expect(await screen.findByText('sendToGroup.gatewayDisconnected')).toBeInTheDocument()
     expect(screen.queryByText('Alpha')).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'sendToGroup.send' })).toBeDisabled()
   })
 
   // Case B: connected + empty groups → neutral noGroupsForNumber, NOT the blocked banner
