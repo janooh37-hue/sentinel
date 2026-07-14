@@ -1,97 +1,132 @@
-# OpenWA deploy guide
+# WAHA deploy guide
 
-OpenWA provides the WhatsApp channel for GSSG Manager notifications. The container
-runs on the `.\Admin` office box alongside the main service and exposes a local
-REST API that the backend's `openwa_client.py` calls.
+WAHA (`devlikeapro/waha`) provides the WhatsApp channel for GSSG Manager
+notifications. The container runs under rootless Podman in the
+`podman-uosserver` WSL2 distro on the `.\Admin` office box and exposes a
+local REST API that the backend's `openwa_client.py` calls.
 
 ---
 
 ## Prerequisites
 
-- **Docker Desktop** installed and running on the `.\Admin` office box.
-- The office WhatsApp number available for a QR scan (a single session is enough;
-  it stays connected as long as the container is up).
+- **WSL2 distro `podman-uosserver`** with rootless Podman installed.
+- The `docker.io/devlikeapro/waha:latest` image already pulled in that distro.
+- The office WhatsApp number available for a QR scan.
+
+---
+
+## Two .env files — matching key
+
+Two gitignored `.env` files must contain the **same** API key:
+
+| File | Variable | Used by |
+|------|----------|---------|
+| `deploy/openwa/.env` | `OPENWA_API_KEY=<key>` | `run-waha.ps1` → container |
+| repo-root `.env` | `GSSG_OPENWA_API_KEY=<key>` | Backend service (`openwa_client.py`) |
+
+Generate a strong key once (`openssl rand -hex 32`) and set it in both files.
+Also set `GSSG_OPENWA_API_BASE=http://localhost:2785` and
+`GSSG_OPENWA_SESSION=gssg` in the repo-root `.env`.
 
 ---
 
 ## Bring-up
 
-1. Create `deploy/openwa/.env` (this file is `.gitignore`d — keep it off source control):
+Run the PowerShell script from the repo root (or any directory — it uses
+`$PSScriptRoot` to locate `.env`):
 
-   ```
-   OPENWA_API_KEY=<generate a strong random string, e.g. openssl rand -hex 32>
-   ```
+```powershell
+powershell -ExecutionPolicy Bypass -File deploy\openwa\run-waha.ps1
+```
 
-2. From the repo root, start the container:
+The script reads `deploy/openwa/.env`, removes any stale `waha` container,
+and starts a fresh one. It is idempotent — safe to run again after a reboot.
 
-   ```powershell
-   docker compose -f deploy/openwa/docker-compose.yml --env-file deploy/openwa/.env up -d
-   ```
+The container binds only to `127.0.0.1:2785` (loopback only, never reachable
+from the LAN directly); the backend calls it over loopback.
 
-   The container binds only to `127.0.0.1:2785` — it is not reachable from the LAN
-   directly; the backend calls it over loopback.
+> **Note:** `docker compose` is kept as documentation/future reference but is
+> NOT the primary bring-up path here — the `podman-uosserver` distro has no
+> compose provider. Use `run-waha.ps1` instead.
+
+---
+
+## Boot persistence (Scheduled Task)
+
+To restart WAHA automatically after the office box reboots, create a Windows
+Scheduled Task that runs at logon:
+
+```
+Action: wsl.exe -d podman-uosserver -- podman start waha
+Trigger: At log on (of .\Admin)
+Run as: .\Admin
+```
+
+The container's `--restart unless-stopped` policy also restarts it inside the
+distro if the process crashes.
 
 ---
 
 ## First-time QR login
 
-1. Swagger UI is available at `http://localhost:2785/api/docs` once the container
-   is up.
+1. Confirm WAHA is up — Swagger UI:  `http://localhost:2785/api/docs`
 
-2. Start a session via the Swagger UI or:
+2. Start the `gssg` session:
 
    ```bash
    curl -X POST http://localhost:2785/api/sessions \
-     -H "x-api-key: <OPENWA_API_KEY>" \
+     -H "X-Api-Key: <OPENWA_API_KEY>" \
      -H "Content-Type: application/json" \
-     -d '{"name": "gssg"}'
+     -d '{"name": "gssg", "start": true}'
    ```
 
-3. Fetch the QR code:
+   Status flows: `STARTING` → `SCAN_QR_CODE` → `WORKING`.
+
+3. Fetch the QR code (returns a PNG image):
 
    ```bash
-   curl http://localhost:2785/api/sessions/gssg/qr \
-     -H "x-api-key: <OPENWA_API_KEY>"
+   curl http://localhost:2785/api/gssg/auth/qr \
+     -H "X-Api-Key: <OPENWA_API_KEY>" \
+     --output qr.png
    ```
 
-   This returns a base64 QR image. Scan it with the office WhatsApp number.
+   Open `qr.png` and scan it with the office WhatsApp number.
+   The in-app QR dialog (Settings → WhatsApp) can also display this code once
+   `GSSG_OPENWA_ENABLED=1` and the session is live.
 
 4. Confirm the session is connected:
 
    ```bash
    curl http://localhost:2785/api/sessions/gssg \
-     -H "x-api-key: <OPENWA_API_KEY>"
+     -H "X-Api-Key: <OPENWA_API_KEY>"
    ```
 
-   The response should show `"status": "CONNECTED"` (exact field name may differ —
-   see the **Pin-the-contract** step below).
+   Look for `"status": "WORKING"`.
 
 ---
 
-## Pin-the-contract step (do this before go-live)
+## Pin the image digest before production
 
-The client in `backend/app/services/openwa_client.py` was written against the
-**expected** OpenWA REST API shapes. Verify each endpoint against the live Swagger
-at `http://localhost:2785/api/docs` and correct the client if the real paths or
-response shapes differ:
+`docker.io/devlikeapro/waha:latest` is a floating tag. Before going to
+production, pin it to a specific digest to prevent unexpected updates:
 
-| Operation | Expected path | Expected payload/response |
-|-----------|--------------|--------------------------|
-| Send text | `POST /api/sessions/{session}/messages/send-text` | `{ "to": "<phone>", "text": "<body>" }` → `{ "id": "..." }` |
-| Registration check | `GET /api/sessions/{session}/contacts/check?phone=<phone>` | `{ "numberExists": true/false }` |
-| Delivery/ack lookup | `GET /api/sessions/{session}/messages/{id}` | `{ "ack": 3 }` (3 = read) |
-| Session health | `GET /api/sessions/{session}` | `{ "status": "CONNECTED" }` |
-| List groups | `GET /api/sessions/{session}/groups` | `[ { "id": "<id>@g.us", "name": "<subject>" }, ... ]` |
-| Send file   | `POST /api/sessions/{session}/messages/send-file` | `{ "chatId": "<id>", "file": "<base64>", "filename": "<name>", "caption": "<text>" }` → `{ "id": "..." }` |
+```powershell
+# Find the digest of the currently-pulled image
+wsl.exe -d podman-uosserver -- podman inspect docker.io/devlikeapro/waha:latest --format '{{.Digest}}'
+```
 
-Record the confirmed paths and shapes in this table and adjust
-`openwa_client.py` accordingly before flipping the feature on.
+Copy the `sha256:...` digest and replace `:latest` in `docker-compose.yml`
+and in `run-waha.ps1`:
+
+```
+docker.io/devlikeapro/waha@sha256:<digest>
+```
 
 ---
 
 ## Backend wiring
 
-Add these to the service environment (e.g. in `deploy/.env`):
+Add these to the service environment (repo-root `.env`):
 
 ```
 GSSG_OPENWA_ENABLED=0          # keep 0 until verified; flip to 1 at go-live
@@ -104,27 +139,18 @@ GSSG_OPENWA_SESSION=gssg       # must match the session name used at QR login
 
 ## Go-live checklist
 
-- [ ] Provision env vars above in the service environment
-- [ ] `docker compose -f deploy/openwa/docker-compose.yml --env-file deploy/openwa/.env up -d`
-- [ ] Complete QR login (session shows CONNECTED)
-- [ ] Pin-the-contract step done and `openwa_client.py` adjusted if needed
-- [ ] Flip `GSSG_OPENWA_ENABLED=1`
+- [ ] Fill `deploy/openwa/.env` with `OPENWA_API_KEY=<key>`
+- [ ] Fill repo-root `.env` with matching `GSSG_OPENWA_API_KEY=<key>` + `GSSG_OPENWA_API_BASE` + `GSSG_OPENWA_SESSION`
+- [ ] `powershell -ExecutionPolicy Bypass -File deploy\openwa\run-waha.ps1`
+- [ ] Create the Scheduled Task for boot persistence (see above)
+- [ ] Complete QR login — confirm session shows `"status": "WORKING"`
+- [ ] Pin image digest in `docker-compose.yml` and `run-waha.ps1`
+- [ ] Flip `GSSG_OPENWA_ENABLED=1` in repo-root `.env`
 - [ ] `scripts\mng.ps1 deploy`
 - [ ] Send a test notification and confirm it arrives via WhatsApp
 
-While `GSSG_OPENWA_ENABLED=0` the router sends via SMS only; WhatsApp is fully
-dormant. Do not flip the flag until the session is confirmed connected and the
-contract is verified.
-
----
-
-## Migration / ops note
-
-Rolling back Alembic migration `0051` on a live database will delete **all** rows
-from `outbound_messages`, including any messages accumulated after the migration
-ran. This is a known SQLite limitation documented in the 0051 migration docstring.
-Treat migration 0051 as effectively one-way in production; do not roll it back
-unless the database is otherwise being reset.
+While `GSSG_OPENWA_ENABLED=0` the router sends via SMS only; WhatsApp is
+fully dormant. Do not flip the flag until the session is confirmed `WORKING`.
 
 ---
 
@@ -134,10 +160,20 @@ If the office WhatsApp number is logged out or temporarily banned:
 
 1. Notifications automatically fall back to SMS — no manual intervention needed.
 2. To restore WhatsApp delivery, re-scan the QR (see **First-time QR login**
-   above). The session volume persists across container restarts; a re-scan is only
-   needed after a ban or explicit logout.
-3. If the container itself needs a full restart:
+   above). The session volume persists across container restarts; a re-scan is
+   only needed after a ban or explicit logout.
+3. To restart the container:
 
    ```powershell
-   docker compose -f deploy/openwa/docker-compose.yml restart openwa
+   wsl.exe -d podman-uosserver -- podman restart waha
    ```
+
+---
+
+## Migration / ops note
+
+Rolling back Alembic migration `0051` on a live database will delete **all**
+rows from `outbound_messages`, including any messages accumulated after the
+migration ran. This is a known SQLite limitation documented in the 0051
+migration docstring. Treat migration 0051 as effectively one-way in production;
+do not roll it back unless the database is otherwise being reset.
