@@ -21,15 +21,28 @@ def _mock(handler):
     openwa_client._transport = httpx.MockTransport(handler)
 
 
-def test_send_ok_returns_message_id():
+def test_send_ok_posts_sendtext_with_session_body():
     def handler(req):
         assert req.headers["X-API-Key"] == "k"
-        assert "/sessions/default/messages/send-text" in req.url.path
-        return httpx.Response(200, json={"id": "wamid.123"})
+        assert req.url.path == "/api/sendText"
+        import json
+
+        body = json.loads(req.content)
+        assert body == {"session": "default", "chatId": "971500000000@c.us", "text": "hi"}
+        return httpx.Response(201, json={"id": "true_971500000000@c.us_3EB0"})
 
     _mock(handler)
     r = openwa_client.send("971500000000", "hi")
-    assert r.ok and r.message_id == "wamid.123"
+    assert r.ok and r.message_id == "true_971500000000@c.us_3EB0"
+
+
+def test_send_extracts_serialized_id_object():
+    def handler(req):
+        return httpx.Response(201, json={"id": {"_serialized": "true_x@c.us_9F"}})
+
+    _mock(handler)
+    r = openwa_client.send("971500000000", "hi")
+    assert r.ok and r.message_id == "true_x@c.us_9F"
 
 
 def test_send_not_registered_maps_flag():

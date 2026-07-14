@@ -66,11 +66,25 @@ def _client() -> httpx.Client:
     return httpx.Client(transport=_transport, timeout=_TIMEOUT)
 
 
+def _msg_id(data: dict[str, object]) -> str | None:
+    mid = data.get("id")
+    if isinstance(mid, dict):
+        serialized = mid.get("_serialized") or mid.get("id")
+        return serialized if isinstance(serialized, str) else None
+    if isinstance(mid, str):
+        return mid
+    key = data.get("key")
+    if isinstance(key, dict):
+        kid = key.get("id")
+        return kid if isinstance(kid, str) else None
+    return None
+
+
 def send_to_chat(chat_id: str, text: str) -> SendResult:
     """Send free-form text to any WhatsApp chat id (person @c.us or group @g.us)."""
     cfg = get_settings()
-    url = f"{_base()}/api/sessions/{cfg.openwa_session}/messages/send-text"
-    payload = {"chatId": chat_id, "text": text}
+    url = f"{_base()}/api/sendText"
+    payload = {"session": cfg.openwa_session, "chatId": chat_id, "text": text}
     last_err: str | None = None
     for attempt in range(2):
         try:
@@ -82,9 +96,7 @@ def send_to_chat(chat_id: str, text: str) -> SendResult:
             continue
         if resp.status_code // 100 == 2:
             data = resp.json() if resp.content else {}
-            return SendResult(
-                ok=True, message_id=data.get("id") or (data.get("key") or {}).get("id")
-            )
+            return SendResult(ok=True, message_id=_msg_id(data))
         body = resp.text
         not_reg = (
             resp.status_code == 422
