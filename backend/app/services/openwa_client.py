@@ -184,6 +184,49 @@ def get_ack(message_id: str) -> DeliveryResult:
     return DeliveryResult(ok=False, error=last_err or "network error")
 
 
+def session_state() -> str:
+    """4-state session probe: disabled | unreachable | disconnected | connected.
+
+    Returns ``"disabled"`` immediately (no HTTP) when openwa is not enabled.
+    Never raises.
+    """
+    cfg = get_settings()
+    if not cfg.openwa_enabled:
+        return "disabled"
+    url = f"{_base()}/api/sessions/{cfg.openwa_session}"
+    try:
+        with _client() as c:
+            resp = c.get(url, headers=_headers())
+    except httpx.HTTPError as e:
+        log.warning("openwa: session_state transport error: %s", e)
+        return "unreachable"
+    if resp.status_code // 100 != 2:
+        return "unreachable"
+    data = resp.json() if resp.content else {}
+    if str(data.get("status", "")).upper() in {"CONNECTED", "READY", "WORKING"}:
+        return "connected"
+    return "disconnected"
+
+
+def fetch_qr() -> str | None:
+    """Fetch the current QR code string from the gateway, or None on any error.
+
+    Returns the base64 / data-URL string the gateway provides.  Never raises.
+    """
+    cfg = get_settings()
+    url = f"{_base()}/api/sessions/{cfg.openwa_session}/qr"
+    try:
+        with _client() as c:
+            resp = c.get(url, headers=_headers())
+    except httpx.HTTPError as e:
+        log.warning("openwa: fetch_qr transport error: %s", e)
+        return None
+    if resp.status_code // 100 != 2:
+        return None
+    data = resp.json() if resp.content else {}
+    return data.get("qr") or data.get("data") or resp.text or None
+
+
 def health() -> bool:
     cfg = get_settings()
     url = f"{_base()}/api/sessions/{cfg.openwa_session}"
