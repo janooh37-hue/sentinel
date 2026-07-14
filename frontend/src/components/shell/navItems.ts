@@ -4,7 +4,6 @@ import {
   FileText,
   LayoutDashboard,
   Mail,
-  MessageSquare,
   Users,
   type LucideIcon,
 } from 'lucide-react'
@@ -24,5 +23,4 @@ export const NAV_ITEMS: readonly NavItem[] = [
   { to: '/leaves', key: 'nav.leaves', Icon: CalendarDays },
   { to: '/application', key: 'nav.services', Icon: FileText },
   { to: '/books', key: 'nav.records', Icon: BookText },
-  { to: '/messages/broadcast', key: 'nav.sendToGroup', Icon: MessageSquare, cap: 'messages.broadcast' },
 ]

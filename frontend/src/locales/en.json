@@ -2759,7 +2759,8 @@
       "unreachable": "WhatsApp service not running",
       "checkedAgo_zero": "checked just now",
       "checkedAgo_one": "checked {{count}}s ago",
-      "checkedAgo_other": "checked {{count}}s ago"
+      "checkedAgo_other": "checked {{count}}s ago",
+      "menuLabel": "WhatsApp"
     }
   }
 }

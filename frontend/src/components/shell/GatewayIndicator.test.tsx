@@ -1,22 +1,26 @@
 import { render, screen } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import { describe, expect, it, vi } from 'vitest'
 
 import { GatewayIndicator } from './GatewayIndicator'
 
-vi.mock('@/lib/useGatewayStatus', () => ({
-  useGatewayStatus: vi.fn(),
-}))
+vi.mock('@/lib/useGatewayStatus', () => ({ useGatewayStatus: vi.fn() }))
 import { useGatewayStatus } from '@/lib/useGatewayStatus'
 
+const navigateMock = vi.fn()
+vi.mock('react-router-dom', async (orig) => {
+  const actual = await orig<typeof import('react-router-dom')>()
+  return { ...actual, useNavigate: () => navigateMock }
+})
+
 function mockState(state: string | undefined, extra: Record<string, unknown> = {}) {
-  vi.mocked(useGatewayStatus).mockReturnValue({
+  ;(useGatewayStatus as unknown as ReturnType<typeof vi.fn>).mockReturnValue({
     data: state ? { state } : undefined,
     isLoading: false,
     dataUpdatedAt: Date.now(),
     ...extra,
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } as any)
+  })
 }
 
 function renderIt() {
@@ -33,18 +37,21 @@ describe('GatewayIndicator', () => {
     const { container } = renderIt()
     expect(container.firstChild).toBeNull()
   })
+
   it('renders nothing while loading / no data', () => {
     mockState(undefined, { isLoading: true })
     const { container } = renderIt()
     expect(container.firstChild).toBeNull()
   })
-  it('shows a connected indicator linking to broadcast', () => {
+
+  it('shows a trigger with the connected dot and no open panel initially', () => {
     mockState('connected')
     renderIt()
-    const link = screen.getByRole('link', { name: /whatsapp connected/i })
-    expect(link).toHaveAttribute('href', '/messages/broadcast')
-    expect(link.querySelector('[data-state="connected"]')).not.toBeNull()
+    const trigger = screen.getByRole('button', { name: /whatsapp/i })
+    expect(trigger.querySelector('[data-state="connected"]')).not.toBeNull()
+    expect(screen.queryByRole('dialog')).toBeNull()
   })
+
   it('marks disconnected vs unreachable distinctly (no collapse)', () => {
     mockState('disconnected')
     const { rerender } = renderIt()
@@ -56,5 +63,16 @@ describe('GatewayIndicator', () => {
       </MemoryRouter>,
     )
     expect(document.querySelector('[data-state="unreachable"]')).not.toBeNull()
+  })
+
+  it('opens a panel with a Send-to-Group link that navigates to /messages/broadcast', async () => {
+    mockState('connected')
+    renderIt()
+    await userEvent.click(screen.getByRole('button', { name: /whatsapp/i }))
+    const panel = screen.getByRole('dialog')
+    expect(panel).toBeInTheDocument()
+    const link = screen.getByRole('button', { name: /nav\.sendToGroup|send to group/i })
+    await userEvent.click(link)
+    expect(navigateMock).toHaveBeenCalledWith('/messages/broadcast')
   })
 })

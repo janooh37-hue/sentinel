@@ -2945,7 +2945,8 @@
       "checkedAgo_two": "فُحِص قبل ثانيتين",
       "checkedAgo_few": "فُحِص قبل {{count}} ثوانٍ",
       "checkedAgo_many": "فُحِص قبل {{count}} ثانية",
-      "checkedAgo_other": "فُحِص قبل {{count}} ثانية"
+      "checkedAgo_other": "فُحِص قبل {{count}} ثانية",
+      "menuLabel": "واتساب"
     }
   }
 }
