@@ -2626,6 +2626,7 @@
     "attachUpload": "Upload a file",
     "bookIdLabel": "Record ID",
     "confirm": "Send to {{count}} group(s)",
+    "groupSendFailed": "failed to send",
     "send": "Send",
     "sending": "Sending…",
     "resultSent": "Sent: {{count}}",

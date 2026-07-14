@@ -51,6 +51,7 @@ export function SendToGroupPage(): React.JSX.Element {
   const canSubmit = hasGroup && hasContent
 
   const sendMut = useMutation({
+    onMutate: () => setResult(null),
     mutationFn: () => {
       const form = new FormData()
       for (const id of selectedIds) {
@@ -251,8 +252,10 @@ export function SendToGroupPage(): React.JSX.Element {
                 <span dir="auto" className="text-foreground">
                   {row.group_name}
                 </span>
-                {!row.ok && row.error && (
-                  <span className="text-muted-foreground">— {row.error}</span>
+                {!row.ok && (
+                  <span className="text-muted-foreground" title={row.error ?? undefined}>
+                    — {t('sendToGroup.groupSendFailed')}
+                  </span>
                 )}
               </li>
             ))}
