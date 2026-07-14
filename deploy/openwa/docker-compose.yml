@@ -9,6 +9,8 @@ services:
       WAHA_API_KEY: "${OPENWA_API_KEY}"
       WHATSAPP_START_SESSION: "gssg"
       WHATSAPP_RESTART_ALL_SESSIONS: "True"
+      # NOWEB (Baileys) engine — reliable QR linking; the default WEBJS (Chromium) engine failed to link.
+      WHATSAPP_DEFAULT_ENGINE: "NOWEB"
     volumes:
       - waha_sessions:/app/.sessions
 

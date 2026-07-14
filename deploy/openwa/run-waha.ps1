@@ -13,6 +13,7 @@ wsl.exe -d $distro -- podman rm -f --ignore waha 2>$null | Out-Null
 wsl.exe -d $distro -- podman run -d --name waha --restart unless-stopped `
   -p 127.0.0.1:2785:3000 `
   -e WAHA_API_KEY="$key" -e WHATSAPP_START_SESSION=gssg -e WHATSAPP_RESTART_ALL_SESSIONS=True `
+  -e WHATSAPP_DEFAULT_ENGINE=NOWEB `
   -v waha_sessions:/app/.sessions `
   docker.io/devlikeapro/waha:latest
 Write-Host "WAHA started on http://localhost:2785 (session 'gssg'). Status: GET /api/sessions/gssg"
