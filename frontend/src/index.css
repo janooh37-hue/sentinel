@@ -44,6 +44,8 @@
   --color-rail-line: var(--rail-line);
   --color-rail-success: var(--rail-success);
   --color-rail-warning: var(--rail-warning);
+  --color-smart: var(--smart);
+  --color-smart-soft: var(--smart-soft);
   --color-green-grad-a: var(--green-grad-a);
   --color-green-grad-b: var(--green-grad-b);
   --color-amber-grad-a: var(--amber-grad-a);
@@ -82,6 +84,11 @@
   --accent: #c8102e;
   --accent-hover: #a30d24;
   --accent-soft: #fbe5e8;
+  /* Smart folders (✨) — the prototype's quiet indigo accent for the rail
+     section, suggestion banner, review sheet + create dialog. AA-contrast text
+     on `--surface`; `--smart-soft` is the chip/icon-tile wash. */
+  --smart: #6b4fb0;
+  --smart-soft: #f1eef8;
   --success: #047857;
   --success-soft: #d6f0e4;
   --warning: #92400e;
@@ -157,6 +164,9 @@
   --accent: #ef4858;
   --accent-hover: #f56b78;
   --accent-soft: #3a1820;
+  /* Smart folders — brighter indigo + deep wash so it reads on near-black. */
+  --smart: #a99af0;
+  --smart-soft: #221d3a;
   --success: #34d399;
   --success-soft: #142d23;
   --warning: #fbbf24;

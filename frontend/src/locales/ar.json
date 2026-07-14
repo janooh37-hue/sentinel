@@ -94,7 +94,14 @@
         "leave": "طلب إجازة بحاجة إلى إجراء",
         "scan": "تم إرفاق نسخة ممسوحة بسجل",
         "email": "بريد جديد في صندوق الوارد"
-      }
+      },
+      "followUpsTitle": "للمتابعة",
+      "followUps_zero": "لا رسائل معلَّمة للمتابعة",
+      "followUps_one": "رسالة واحدة معلَّمة للمتابعة",
+      "followUps_two": "رسالتان معلَّمتان للمتابعة",
+      "followUps_few": "{{count}} رسائل معلَّمة للمتابعة",
+      "followUps_many": "{{count}} رسالة معلَّمة للمتابعة",
+      "followUps_other": "{{count}} رسالة معلَّمة للمتابعة"
     }
   },
   "shortcuts": {
@@ -937,7 +944,12 @@
     "loggedBy": "تم التسجيل بواسطة",
     "filter": {
       "all": "الكل",
-      "directions": "الاتجاهات"
+      "directions": "الاتجاهات",
+      "label": "تصفية سريعة",
+      "unread": "غير مقروء",
+      "attachment": "مرفق",
+      "flagged": "مُعلَّم",
+      "thisEmployee": "هذا الموظف"
     },
     "month": {
       "in": "{{n}} وارد",
@@ -945,10 +957,17 @@
       "int": "{{n}} داخلي"
     },
     "thread": {
-      "label": "المحادثة",
+      "label": "المحادثات",
       "current": "المعروض حاليًا",
       "count": "{{count}} رسائل في هذه المحادثة",
-      "empty": "لا توجد رسائل سابقة في هذه المحادثة"
+      "empty": "لا توجد رسائل سابقة في هذه المحادثة",
+      "toggle": "تجميع الرسائل في محادثات",
+      "count_zero": "لا رسائل في المحادثة",
+      "count_one": "رسالة واحدة في المحادثة",
+      "count_two": "رسالتان في المحادثة",
+      "count_few": "{{count}} رسائل في المحادثة",
+      "count_many": "{{count}} رسالة في المحادثة",
+      "count_other": "{{count}} رسالة في المحادثة"
     },
     "smartLink": {
       "employee": "فتح الموظف",
@@ -1275,7 +1294,107 @@
       "updated": "تم تحديث الإدخال",
       "deleted": "تم حذف الإدخال"
     },
-    "emptyUnfiltered": "لا توجد مراسلات مسجلة بعد"
+    "emptyUnfiltered": "لا توجد مراسلات مسجلة بعد",
+    "body": {
+      "zoomHint": "اسحب للتحريك · قرّب بإصبعين",
+      "zoomIn": "تكبير",
+      "zoomOut": "تصغير",
+      "fit": "ملاءمة"
+    },
+    "flag": {
+      "set": "تعليم للمتابعة",
+      "clear": "إزالة علامة المتابعة",
+      "title": "تعليم للمتابعة",
+      "presets": {
+        "today": "اليوم",
+        "tomorrow": "غدًا",
+        "nextWeek": "الأسبوع القادم",
+        "none": "بلا تاريخ"
+      }
+    },
+    "bulk": {
+      "label": "إجراءات جماعية",
+      "selected_zero": "لم يُحدَّد شيء",
+      "selected_one": "تم تحديد عنصر واحد",
+      "selected_two": "تم تحديد عنصرين",
+      "selected_few": "تم تحديد {{count}} عناصر",
+      "selected_many": "تم تحديد {{count}} عنصرًا",
+      "selected_other": "تم تحديد {{count}} عنصر",
+      "read": "مقروء",
+      "unread": "غير مقروء",
+      "star": "نجمة",
+      "flag": "علامة",
+      "trash": "حذف",
+      "clear": "إلغاء التحديد",
+      "selectRow": "تحديد الرسالة",
+      "selectThread": "تحديد المحادثة"
+    },
+    "followups": {
+      "title": "للمتابعة",
+      "empty": "لا توجد عناصر معلَّمة للمتابعة بعد."
+    },
+    "smart": {
+      "section": "المجلدات الذكية",
+      "suggestedPill_zero": "لا اقتراحات",
+      "suggestedPill_one": "اقتراح واحد",
+      "suggestedPill_two": "اقتراحان",
+      "suggestedPill_few": "{{count}} اقتراحات",
+      "suggestedPill_many": "{{count}} اقتراحًا",
+      "suggestedPill_other": "{{count}} اقتراح",
+      "reviewTitle": "مراجعة اقتراحات المجلدات",
+      "folderEmpty": "لا توجد رسائل مطابقة لهذا المجلد بعد — تُحفظ الرسائل المطابقة الجديدة هنا تلقائيًا.",
+      "bannerTitle_zero": "لا توجد رسائل مرتبطة",
+      "bannerTitle_one": "رسالة واحدة تبدو مرتبطة",
+      "bannerTitle_two": "رسالتان تبدوان مرتبطتين",
+      "bannerTitle_few": "{{count}} رسائل تبدو مرتبطة",
+      "bannerTitle_many": "{{count}} رسالة تبدو مرتبطة",
+      "bannerTitle_other": "{{count}} رسالة تبدو مرتبطة",
+      "bannerSub": "جميعها حول {{name}} · الموضوع نفسه",
+      "review": "مراجعة",
+      "reviewN": "مراجعة ({{count}})",
+      "dismiss": "تجاهل",
+      "reviewHeading_zero": "لا اقتراحات للمجلدات",
+      "reviewHeading_one": "اقتراح مجلد واحد",
+      "reviewHeading_two": "اقتراحا مجلدين",
+      "reviewHeading_few": "{{count}} اقتراحات مجلدات",
+      "reviewHeading_many": "{{count}} اقتراح مجلد",
+      "reviewHeading_other": "{{count}} اقتراح مجلد",
+      "reviewEmpty": "لا توجد اقتراحات حاليًا.",
+      "rowMeta_zero": "{{emails}} رسائل · لا مراسلين",
+      "rowMeta_one": "{{emails}} رسائل · مراسل واحد",
+      "rowMeta_two": "{{emails}} رسائل · مراسلان",
+      "rowMeta_few": "{{emails}} رسائل · {{correspondents}} مراسلين",
+      "rowMeta_many": "{{emails}} رسائل · {{correspondents}} مراسلًا",
+      "rowMeta_other": "{{emails}} رسائل · {{correspondents}} مراسل",
+      "chipSameSubject": "الموضوع نفسه",
+      "noSubject": "(بدون موضوع)",
+      "createDots": "إنشاء…",
+      "createTitle": "إنشاء مجلد ذكي",
+      "createBody_zero": "جمّع التطبيق رسائل حول {{cluster}}. سمِّه وأكِّد — تُحفظ الرسائل المطابقة الجديدة هنا تلقائيًا.",
+      "createBody_one": "جمّع التطبيق رسالة واحدة حول {{cluster}}. سمِّه وأكِّد — تُحفظ الرسائل المطابقة الجديدة هنا تلقائيًا.",
+      "createBody_two": "جمّع التطبيق رسالتين حول {{cluster}}. سمِّه وأكِّد — تُحفظ الرسائل المطابقة الجديدة هنا تلقائيًا.",
+      "createBody_few": "جمّع التطبيق {{count}} رسائل حول {{cluster}}. سمِّه وأكِّد — تُحفظ الرسائل المطابقة الجديدة هنا تلقائيًا.",
+      "createBody_many": "جمّع التطبيق {{count}} رسالة حول {{cluster}}. سمِّه وأكِّد — تُحفظ الرسائل المطابقة الجديدة هنا تلقائيًا.",
+      "createBody_other": "جمّع التطبيق {{count}} رسالة حول {{cluster}}. سمِّه وأكِّد — تُحفظ الرسائل المطابقة الجديدة هنا تلقائيًا.",
+      "nameEn": "اسم المجلد (بالإنجليزية)",
+      "nameAr": "اسم المجلد (بالعربية)",
+      "willMatch_zero": "لن تطابق أي رسالة",
+      "willMatch_one": "ستطابق رسالة واحدة",
+      "willMatch_two": "ستطابق رسالتان",
+      "willMatch_few": "ستطابق {{count}} رسائل",
+      "willMatch_many": "ستطابق {{count}} رسالة",
+      "willMatch_other": "ستطابق {{count}} رسالة",
+      "createConfirm": "إنشاء المجلد",
+      "created": "تم إنشاء المجلد الذكي",
+      "rowActions": "إجراءات {{name}}",
+      "rename": "إعادة تسمية",
+      "renameTitle": "إعادة تسمية المجلد الذكي",
+      "renamed": "تمت إعادة تسمية المجلد",
+      "delete": "حذف",
+      "deleteTitle": "حذف هذا المجلد الذكي؟",
+      "deleteBody": "ستتم إزالة «{{name}}». تبقى الرسائل في السجل.",
+      "deleted": "تم حذف المجلد الذكي"
+    }
   },
   "settings": {
     "title": "الإعدادات",
@@ -1343,11 +1462,11 @@
       "deletedToast": "تم حذف مقدم الطلب"
     },
     "managers": {
-      "title": "المدراء",
-      "description": "الموقّعون الذين تُطبع أسماؤهم على المستندات. أضف أو عدّل أو أوقف تفعيلهم.",
-      "empty": "لا يوجد مدراء بعد.",
+      "title": "المديرون",
+      "description": "اربط كل مدير بحساب دخول حتى يعمل توجيه الموافقات تلقائياً.",
+      "empty": "لم يُضَف أي مدير بعد.",
       "noAccount": "لا يوجد حساب مرتبط",
-      "linkedToast": "تم تحديث ربط الحساب.",
+      "linkedToast": "تم ربط حساب المدير",
       "add": "إضافة مدير",
       "addAction": "إنشاء",
       "edit": "تعديل",
@@ -1925,10 +2044,13 @@
       "name": "الاسم",
       "nationality": "الجنسية",
       "passport": "رقم الجواز",
-      "notFound": "لم يتم العثور على الموظف.",
+      "notFound": "لا يوجد موظف بهذا الرقم الوظيفي.",
       "duplicate": "مضاف مسبقاً.",
       "lookupError": "تعذّر البحث. حاول مرة أخرى.",
-      "max": "حتى 15 موظفاً."
+      "max": "حتى 15 موظفاً.",
+      "gNumber": "الرقم الوظيفي",
+      "add": "إضافة",
+      "addAnother": "+ إضافة آخر"
     }
   },
   "dashboard": {
@@ -2713,7 +2835,10 @@
     "sendTitle": "إرسال إشعار (واتساب، مع تحويل إلى الرسائل النصية)",
     "confirmResend": "هل تريد إرسال هذا الإشعار مرة أخرى؟",
     "failed": "فشل الإرسال",
-    "channel": { "whatsapp": "واتساب", "sms": "رسالة نصية" }
+    "channel": {
+      "whatsapp": "واتساب",
+      "sms": "رسالة نصية"
+    }
   },
   "refresh": {
     "action": "تحديث",

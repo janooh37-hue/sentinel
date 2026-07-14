@@ -3,25 +3,20 @@
  *
  * Matches the prototype's `.rail` (docs/prototypes/ledger-outlook-redesign.html):
  *   [collapse toggle] → [＋ New email] → [account header] → personal folders
- *   (Inbox badge · Drafts · Sent · Starred · Trash) → divider + "ORGANISATION ·
- *   SHARED · AUTO" → the Correspondence Log accordion (category sub-items + ⚙️).
+ *   (Inbox badge · Drafts · Sent · Starred · Trash) → a divider where the future
+ *   Smart-folders section will go.
  *
- * Collapse: the rail folds to a 60px icon-only strip (Outlook-style). Labels,
- * the email line, the section eyebrow, the ⚙️ Rules button and the accordion
- * sub-items hide; emoji centre and carry `title`/`aria-label` tooltips so they
- * stay identifiable. State persists in localStorage so it survives navigation.
- * Pinned LTR by the shell (`[data-ledger-chrome] dir=ltr`), so the rail never
- * mirrors in Arabic — width + logical utilities keep it on the start (left) edge.
+ * (The Correspondence-Log accordion + ⚙️ Rules stub were removed 2026-06-25 —
+ * see docs/superpowers/specs/2026-06-25-ledger-fixes-and-smart-folders-design.md
+ * §A. A single divider is kept below the personal folders so Phase 3's
+ * Smart-folders section has its slot.)
  *
- * Phase 7 Task 6: ⚙️ Rules button wired to `onOpenRules`, gated by
- * `settings.edit` capability. Non-admins see the button disabled with a tooltip
- * (every `/correspondence/*` mutate call would 403 otherwise).
- *
- * Category sourcing — IMPORTANT: `GET /correspondence/categories` is gated
- * `settings.edit` (admin-only) and 403s for a normal Ledger signer. So the
- * accordion sub-items come from `useLogCategories()`: it tries the categories
- * endpoint first (admins get real ids + names) and falls back to the five known
- * seed categories (bilingual labels in i18n) so the rail renders for EVERYONE.
+ * Collapse: the rail folds to a 60px icon-only strip (Outlook-style). Labels and
+ * the email line hide; emoji centre and carry `title`/`aria-label` tooltips so
+ * they stay identifiable. State persists in localStorage so it survives
+ * navigation. Pinned LTR by the shell (`[data-ledger-chrome] dir=ltr`), so the
+ * rail never mirrors in Arabic — width + logical utilities keep it on the start
+ * (left) edge.
  *
  * The emoji are wayfinding aids per CLAUDE.md principle #1 — keep them. Rail
  * colours use the `--rail*` semantic tokens (Task 2), never hardcoded hex.
@@ -30,57 +25,35 @@
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useQuery } from '@tanstack/react-query'
-import { ChevronDown, ChevronLeft } from 'lucide-react'
+import { ChevronLeft } from 'lucide-react'
 
 import { api } from '@/lib/api'
 import { useIdentity } from '@/lib/useIdentity'
-import { useCapabilities } from '@/lib/useCapabilities'
 import { cn } from '@/lib/utils'
 import { PERSONAL_FOLDERS, type MailboxView, type PersonalFolder } from './mailboxTypes'
+import { SmartFolders } from './SmartFolders'
 
 /** localStorage key for the rail's collapsed state (persists across navigation). */
 const RAIL_COLLAPSED_KEY = 'ledger.railCollapsed'
-
-/** The five seed categories (mirror of `correspondence_service.DEFAULT_CATEGORIES`),
- * used as the non-admin fallback when `/correspondence/categories` 403s.
- * `id: null` → the view shows all log entries (we can't resolve real ids without
- * the admin endpoint); admins get the real ids via the query below. */
-const SEED_CATEGORIES: readonly { key: string; i18nKey: string }[] = [
-  { key: 'hr_letters', i18nKey: 'hr_letters' },
-  { key: 'salary_bank', i18nKey: 'salary_bank' },
-  { key: 'leaves', i18nKey: 'leaves' },
-  { key: 'gov_nat', i18nKey: 'gov_nat' },
-  { key: 'incoming_stamped', i18nKey: 'incoming_stamped' },
-]
-
-/** A resolved accordion sub-item: a real category id (admin) or null (fallback). */
-interface LogCategory {
-  id: number | null
-  key: string
-  name_en: string | null
-  name_ar: string | null
-}
 
 interface FolderRailProps {
   activeView: MailboxView
   onSelectView: (view: MailboxView) => void
   /** Called when the ＋ New email button is clicked (Phase 6). */
   onNewEmail?: () => void
-  /** Called when the ⚙️ Rules button is clicked (Phase 7). Only reachable for
-   *  `settings.edit` users; non-admins see the button disabled. */
-  onOpenRules?: () => void
   /** Phase 6 — admin "All mail" toggle state (shell-owned). */
   allMail?: boolean
   /** Phase 6 — callback when the admin toggles All mail. */
   onToggleAllMail?: (next: boolean) => void
+  /** Phase 3 — open the "Review suggestions" sheet (shell-owned). */
+  onReviewSuggestions?: () => void
+  /** Phase 3 — pending smart-folder suggestion count (drives the ✨ pill). */
+  suggestionCount?: number
 }
 
-export function FolderRail({ activeView, onSelectView, onNewEmail, onOpenRules, allMail, onToggleAllMail }: FolderRailProps): React.JSX.Element {
+export function FolderRail({ activeView, onSelectView, onNewEmail, allMail, onToggleAllMail, onReviewSuggestions, suggestionCount = 0 }: FolderRailProps): React.JSX.Element {
   const { t, i18n } = useTranslation()
   const { identity, isAdmin } = useIdentity()
-  const { has: hasCap } = useCapabilities()
-  const canEditSettings = hasCap('settings.edit')
-  const [accordionOpen, setAccordionOpen] = useState(true)
   const [collapsed, setCollapsed] = useState<boolean>(() => {
     try {
       return localStorage.getItem(RAIL_COLLAPSED_KEY) === '1'
@@ -104,7 +77,13 @@ export function FolderRail({ activeView, onSelectView, onNewEmail, onOpenRules, 
   })
   const unreadCount = unread.data?.count ?? 0
 
-  const categories = useLogCategories()
+  // Phase 2 (D3b) — the current user's follow-up flag count drives the
+  // 🚩 Follow-ups badge (shares its key with the NavBell flag count).
+  const flagCount = useQuery({
+    queryKey: ['ledger-flag-count'],
+    queryFn: () => api.getLedgerFlagCount(),
+  })
+  const flaggedCount = flagCount.data?.count ?? 0
 
   const name =
     (i18n.language === 'ar' ? identity?.name_ar : identity?.name_en) ??
@@ -231,79 +210,27 @@ export function FolderRail({ activeView, onSelectView, onNewEmail, onOpenRules, 
         </button>
       )}
 
+      {/* 🚩 Follow-ups — the current user's flagged entries (Phase 2, D3b). */}
+      <FolderButton
+        emoji="🚩"
+        label={t('ledger.followups.title')}
+        collapsed={collapsed}
+        active={activeView.kind === 'followups'}
+        badge={flaggedCount > 0 ? flaggedCount : undefined}
+        onClick={() => onSelectView({ kind: 'followups' })}
+      />
+
+      {/* Divider before the ✨ Smart-folders section (Phase 3). */}
       <div className="mx-1 my-2.5 h-px bg-rail-line" />
-      {!collapsed && (
-        <div className="mx-2 mb-1 mt-1.5 text-[0.6em] font-semibold uppercase tracking-[0.09em] text-rail-faint">
-          {t('ledger.outlook.orgShared')}
-        </div>
-      )}
 
-      {/* Correspondence Log accordion + ⚙️ Rules stub. */}
-      <div className="flex items-stretch gap-1">
-        <button
-          type="button"
-          onClick={collapsed ? () => applyCollapsed(false) : () => setAccordionOpen((o) => !o)}
-          aria-expanded={collapsed ? undefined : accordionOpen}
-          aria-label={collapsed ? t('ledger.outlook.corrLog') : undefined}
-          title={collapsed ? t('ledger.outlook.corrLog') : undefined}
-          className={cn(
-            // min-w-0 lets this flex-1 button shrink below its label's intrinsic
-            // width so the ⚙️ Rules button beside it never gets pushed past the
-            // rail's right edge (overflow-x-hidden clipped it — worst in EN where
-            // "Correspondence Log" is wider than the Arabic label).
-            'flex min-w-0 flex-1 items-center gap-2.5 rounded-md bg-rail-2 px-2.5 py-1.5 text-[0.82em] font-semibold text-rail-text transition-colors hover:bg-rail-3',
-            collapsed && 'justify-center px-0',
-          )}
-        >
-          <span className="w-[18px] flex-none text-center text-[1em]" aria-hidden>
-            🗂️
-          </span>
-          {!collapsed && (
-            <>
-              <span className="flex-1 truncate text-start" dir="auto">
-                {t('ledger.outlook.corrLog')}
-              </span>
-              <ChevronDown
-                className={cn(
-                  'h-3 w-3 text-rail-faint transition-transform',
-                  accordionOpen ? 'rotate-0' : '-rotate-90',
-                )}
-                aria-hidden
-              />
-            </>
-          )}
-        </button>
-        {!collapsed && (
-          <button
-            type="button"
-            onClick={canEditSettings ? onOpenRules : undefined}
-            disabled={!canEditSettings}
-            title={canEditSettings ? t('ledger.outlook.rules.title') : t('ledger.outlook.rules.adminOnly')}
-            aria-label={canEditSettings ? t('ledger.outlook.rules.title') : t('ledger.outlook.rules.adminOnly')}
-            className="grid w-8 flex-none place-items-center rounded-md bg-rail-2 text-[0.82em] text-rail-faint transition-colors hover:bg-rail-3 hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
-          >
-            ⚙️
-          </button>
-        )}
-      </div>
-
-      {!collapsed && accordionOpen && (
-        <div className="ms-3 mt-1 flex flex-col gap-px border-s-2 border-rail-line ps-2">
-          {categories.map((cat) => {
-            const label =
-              (i18n.language === 'ar' ? cat.name_ar : cat.name_en) ??
-              t(`ledger.outlook.categories.${cat.key}`)
-            return (
-              <CategoryButton
-                key={cat.key}
-                label={label}
-                active={activeView.kind === 'log' && activeView.categoryId === cat.id}
-                onClick={() => onSelectView({ kind: 'log', categoryId: cat.id })}
-              />
-            )
-          })}
-        </div>
-      )}
+      {/* ✨ Smart folders — per-user saved subject filters + the suggested pill. */}
+      <SmartFolders
+        activeView={activeView}
+        onSelectView={onSelectView}
+        collapsed={collapsed}
+        onReviewSuggestions={() => onReviewSuggestions?.()}
+        suggestionCount={suggestionCount}
+      />
     </nav>
   )
 }
@@ -350,59 +277,3 @@ function FolderButton({ emoji, label, active, badge, collapsed, onClick }: Folde
   )
 }
 
-interface CategoryButtonProps {
-  label: string
-  active: boolean
-  onClick: () => void
-}
-
-function CategoryButton({ label, active, onClick }: CategoryButtonProps): React.JSX.Element {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={cn(
-        'flex w-full items-center gap-2.5 rounded-md px-2 py-1.5 text-start text-[0.78em] transition-colors',
-        active ? 'bg-rail-3 font-semibold text-white' : 'text-rail-text/80 hover:bg-rail-2 hover:text-white',
-      )}
-    >
-      <span className="w-4 flex-none text-center text-[0.9em]" aria-hidden>
-        ↳
-      </span>
-      <span className="flex-1 truncate" dir="auto">
-        {label}
-      </span>
-    </button>
-  )
-}
-
-/**
- * Resolve the Correspondence-Log accordion categories. Admins get the real
- * categories (id + names) from `/correspondence/categories`; everyone else
- * (the endpoint 403s) falls back to the five known seed categories with i18n
- * labels and `id: null`. Never throws to the rail — `retry: false` + the seed
- * fallback keep the rail rendering for every Ledger user.
- */
-function useLogCategories(): LogCategory[] {
-  const q = useQuery({
-    queryKey: ['correspondence-categories'],
-    queryFn: () => api.getCorrespondenceCategories(),
-    retry: false,
-  })
-
-  if (q.data && q.data.length > 0) {
-    return q.data.map((c) => ({
-      id: c.id,
-      key: c.key,
-      name_en: c.name_en,
-      name_ar: c.name_ar,
-    }))
-  }
-
-  return SEED_CATEGORIES.map((c) => ({
-    id: null,
-    key: c.key,
-    name_en: null,
-    name_ar: null,
-  }))
-}

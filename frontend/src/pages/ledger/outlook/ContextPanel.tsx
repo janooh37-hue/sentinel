@@ -8,9 +8,10 @@
  * correspondence is ABOUT via `resolvePeople` (`related_employee_id` first, then
  * body G-numbers), and renders:
  *   · header "People in this email · N" + a collapse toggle (⟩)
- *   · the PRIMARY employee card (`ContextPersonCard`, Task 2)
- *   · SIBLING employees as collapsed one-line cards (avatar · name; expand →
- *     role · dept · nationality · leave via a lazy detail fetch)
+ *   · one `ContextPersonCard` (Task 2) per resolved employee — every person a
+ *     full, collapsed-by-default card; no privileged first person. Each card
+ *     opens to the same detail (facts · expiry · quick actions · activity) and
+ *     lazily fetches that detail only on expand.
  *   · a "Linked records" card — Books this mail references
  *     (`related_book_id` + body book-refs) with live approval/signing chips
  *   · an "Attachments → vault" shortcut surfacing the open mail's attachments
@@ -35,16 +36,13 @@
 import { useEffect, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
-import { ChevronRight, ChevronsRight, FolderInput, Users } from 'lucide-react'
+import { ChevronsRight, FolderInput, Users } from 'lucide-react'
 
 import { api } from '@/lib/api'
 import type { BookRead } from '@/lib/api'
-import { pickEmployeeName } from '@/lib/employeeName'
-import { pickPosition } from '@/lib/employeePosition'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
 import { ContextPersonCard } from './ContextPersonCard'
-import { leaveBalanceLabel } from './contextResolve'
 import { useContextSource } from './useContextSource'
 
 /** Coarse page targets the shell's `onNavigate` seam understands. */
@@ -56,7 +54,7 @@ interface ContextPanelProps {
   /** The open row's id, or null when nothing is selected (→ idle). */
   selectedId: number | null
   /** Which kind of row is open — drives the entry-vs-log-record query. */
-  selectedKind: 'mail' | 'log' | null
+  selectedKind: 'mail' | null
   /** Coarse navigation (Open record → employees; Generate → application). */
   onNavigate?: (page: NavPage, id?: string) => void
   /** Email-as-reference seam — opens a new compose seeded with the employee. */
@@ -99,6 +97,14 @@ export function ContextPanel({
   const { entry, people, peopleCount, bookRefs, attachments, isLoading } =
     useContextSource(selectedId, selectedKind)
 
+  // The flat, order-preserving people list — every resolved G-number gets the
+  // same full (collapsed-by-default) card; no person is privileged. `people`
+  // still exposes primary/siblings for back-compat, so we rebuild the flat
+  // order here rather than widen the shared hook's return type.
+  const peopleOrdered = people.primary
+    ? [people.primary, ...people.siblings]
+    : []
+
   // The shared panel body — people resolution + cards. Reused verbatim by the
   // desktop column and the mobile Sheet so they can never drift.
   const body = (
@@ -112,21 +118,15 @@ export function ContextPanel({
         </div>
       ) : (
         <>
-          {people.primary ? (
-            <>
+          {peopleOrdered.length > 0 ? (
+            peopleOrdered.map((g) => (
               <ContextPersonCard
-                employeeId={people.primary}
+                key={g}
+                employeeId={g}
                 onNavigate={onNavigate}
                 onEmail={onEmail}
               />
-              {people.siblings.length > 0 && (
-                <div className="border-b border-border bg-surface px-3.5 py-1.5">
-                  {people.siblings.map((g) => (
-                    <SiblingCard key={g} employeeId={g} />
-                  ))}
-                </div>
-              )}
-            </>
+            ))
           ) : (
             <IdleState message={t('ledger.outlook.cxIdle')} />
           )}
@@ -223,91 +223,6 @@ function IdleState({ message }: { message: string }): React.JSX.Element {
     >
       <Users className="mx-auto mb-2.5 h-7 w-7 opacity-55" aria-hidden />
       <span dir="auto">{message}</span>
-    </div>
-  )
-}
-
-/**
- * A sibling employee one-line card. A cheap `['employee', g]` query backs the
- * avatar + name (single row); the role/dept/nationality/leave detail is fetched
- * lazily only once expanded (`['employee-detail', g]`, enabled on open).
- */
-function SiblingCard({ employeeId }: { employeeId: string }): React.JSX.Element {
-  const { t, i18n } = useTranslation()
-  const lang = i18n.language
-  const [open, setOpen] = useState(false)
-
-  const { data: emp } = useQuery({
-    queryKey: ['employee', employeeId],
-    queryFn: () => api.getEmployee(employeeId),
-  })
-  const { data: detail } = useQuery({
-    queryKey: ['employee-detail', employeeId],
-    queryFn: () => api.getEmployeeDetail(employeeId),
-    enabled: open,
-  })
-
-  const name = emp ? pickEmployeeName(emp, lang) : employeeId
-  const initials = name
-    .split(/\s+/)
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((p) => p[0]?.toUpperCase() ?? '')
-    .join('')
-
-  const detailEmp = detail?.employee
-  const detailLine = detailEmp
-    ? [
-        pickPosition(detailEmp, lang),
-        detailEmp.department,
-        detailEmp.nationality,
-        detail ? `${t('ledger.outlook.facts.leave')}: ${leaveBalanceLabel(detail.stats)}` : null,
-      ]
-        .filter(Boolean)
-        .join(' · ')
-    : null
-
-  return (
-    <div className="border-t border-hairline first:border-t-0" dir="ltr">
-      <button
-        type="button"
-        onClick={() => setOpen((v) => !v)}
-        aria-expanded={open}
-        data-testid="cx-sibling"
-        className="flex w-full items-center gap-2.5 py-2 text-start transition-colors"
-      >
-        {/* Initials behind the photo — no broken-image flash on a missing photo. */}
-        <span className="relative h-[30px] w-[30px] flex-none">
-          <span
-            aria-hidden
-            className="absolute inset-0 flex items-center justify-center rounded-lg bg-gradient-to-br from-[var(--green-grad-a)] to-[var(--green-grad-b)] text-[0.68rem] font-bold text-white"
-          >
-            {initials}
-          </span>
-          {emp?.has_photo && (
-            <img
-              src={`/api/v1/employees/${encodeURIComponent(employeeId)}/photo`}
-              onError={(e) => {
-                e.currentTarget.style.display = 'none'
-              }}
-              alt={name}
-              className="relative h-[30px] w-[30px] rounded-lg object-cover"
-            />
-          )}
-        </span>
-        <span className="min-w-0 flex-1 truncate text-xs font-semibold text-foreground" dir="auto">
-          {name}
-        </span>
-        <ChevronRight
-          className={`h-3.5 w-3.5 flex-none text-muted-foreground transition-transform ${open ? 'rotate-90' : ''}`}
-          aria-hidden
-        />
-      </button>
-      {open && detailLine && (
-        <div className="pb-2 ps-[39px] text-[0.7rem] leading-relaxed text-muted-foreground" dir="auto">
-          {detailLine}
-        </div>
-      )}
     </div>
   )
 }

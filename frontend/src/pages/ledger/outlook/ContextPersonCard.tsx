@@ -17,13 +17,13 @@
  * 1195–1221). Tokens only — no inline hex, no `text-[Npx]`.
  */
 
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
-import { AlertTriangle, FilePlus, Mail, UserRound } from 'lucide-react'
+import { AlertTriangle, ChevronRight, FilePlus, Mail, UserRound } from 'lucide-react'
 
 import { api } from '@/lib/api'
-import type { EmployeeStatus } from '@/lib/api'
+import type { EmployeeDetailRead, EmployeeStatus } from '@/lib/api'
 import { pickEmployeeName } from '@/lib/employeeName'
 import { pickPosition } from '@/lib/employeePosition'
 import { Badge } from '@/components/ui/badge'
@@ -67,12 +67,24 @@ function orDash(value?: string | null): string {
 }
 
 export function ContextPersonCard({ employeeId, onNavigate, onEmail }: Props): React.JSX.Element {
-  const { t, i18n } = useTranslation()
+  const { i18n } = useTranslation()
   const lang = i18n.language
+  // Collapsed by default — no card is privileged; the header is the toggle.
+  const [open, setOpen] = useState(false)
 
+  // Cheap single-row query drives the collapsed header (avatar · name · G·role·
+  // dept) without paying for the full detail call until the card is expanded.
+  const { data: emp } = useQuery({
+    queryKey: ['employee', employeeId],
+    queryFn: () => api.getEmployee(employeeId),
+  })
+  // Full detail (facts · expiry · activity) — fetched lazily only on open. The
+  // `['employee-detail', id]` key is shared with the panel/old sibling card so
+  // TanStack de-dupes across cards.
   const { data, isLoading, isError } = useQuery({
     queryKey: ['employee-detail', employeeId],
     queryFn: () => api.getEmployeeDetail(employeeId),
+    enabled: open,
   })
 
   const dateFmt = useMemo(
@@ -84,32 +96,106 @@ export function ContextPersonCard({ employeeId, onNavigate, onEmail }: Props): R
     [lang],
   )
 
+  // Header fields off the cheap query (fall back to the G-number before it loads).
+  const headerName = emp ? pickEmployeeName(emp, lang) : employeeId
+  const headerRole = emp ? pickPosition(emp, lang) : null
+
+  return (
+    <div className="border-b border-border bg-surface" dir="ltr">
+      {/* Clickable header — the whole row toggles the card. */}
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        aria-expanded={open}
+        data-testid="cx-person-header"
+        className="flex w-full items-center gap-3 p-3.5 text-start transition-colors hover:bg-surface-tinted"
+      >
+        {/* Initials sit behind the photo so a missing/slow image never flashes
+            a broken icon — the <img> just stays hidden on error. */}
+        <span className="relative h-12 w-12 flex-none">
+          <span
+            aria-hidden
+            className="absolute inset-0 flex items-center justify-center rounded-xl bg-gradient-to-br from-[var(--green-grad-a)] to-[var(--green-grad-b)] text-base font-bold text-white"
+          >
+            {initials(headerName)}
+          </span>
+          {emp?.has_photo && (
+            <img
+              src={`/api/v1/employees/${encodeURIComponent(employeeId)}/photo`}
+              onError={(e) => {
+                e.currentTarget.style.display = 'none'
+              }}
+              alt={headerName}
+              className="relative h-12 w-12 rounded-xl object-cover"
+            />
+          )}
+        </span>
+        <span className="min-w-0 flex-1">
+          <span className="block truncate text-sm font-bold text-foreground" dir="auto">
+            {headerName}
+          </span>
+          <span className="mt-0.5 block truncate text-xs text-muted-foreground" dir="auto">
+            <span className="font-mono">{employeeId}</span>
+            {headerRole && <> · {headerRole}</>}
+            {emp?.department && <> · {emp.department}</>}
+          </span>
+        </span>
+        <ChevronRight
+          className={`h-4 w-4 flex-none text-muted-foreground transition-transform ${open ? 'rotate-90' : ''}`}
+          aria-hidden
+        />
+      </button>
+
+      {open && <PersonDetail
+        data={data}
+        isLoading={isLoading}
+        isError={isError}
+        dateFmt={dateFmt}
+        activityFmt={activityFmt}
+        onNavigate={onNavigate}
+        onEmail={onEmail}
+      />}
+    </div>
+  )
+}
+
+interface PersonDetailProps {
+  data: EmployeeDetailRead | undefined
+  isLoading: boolean
+  isError: boolean
+  dateFmt: Intl.DateTimeFormat
+  activityFmt: Intl.DateTimeFormat
+  onNavigate?: (page: NavPage, id?: string) => void
+  onEmail?: (employeeId: string) => void
+}
+
+/** The expanded card body — only mounted once the card is open. */
+function PersonDetail({
+  data,
+  isLoading,
+  isError,
+  dateFmt,
+  activityFmt,
+  onNavigate,
+  onEmail,
+}: PersonDetailProps): React.JSX.Element {
+  const { t, i18n } = useTranslation()
+
   if (isLoading) {
     return (
-      <div className="border-b border-border bg-surface p-3.5">
-        <div className="flex items-center gap-3">
-          <Skeleton className="h-12 w-12 rounded-xl" />
-          <div className="flex-1 space-y-2">
-            <Skeleton className="h-4 w-2/3" />
-            <Skeleton className="h-3 w-1/2" />
-          </div>
-        </div>
-        <Skeleton className="mt-3 h-12 w-full" />
+      <div className="px-3.5 pb-3.5">
+        <Skeleton className="h-12 w-full" />
       </div>
     )
   }
 
   if (isError || !data) {
     return (
-      <div className="border-b border-border bg-surface p-3.5 text-sm text-muted-foreground">
-        {DASH}
-      </div>
+      <div className="px-3.5 pb-3.5 text-sm text-muted-foreground">{DASH}</div>
     )
   }
 
   const emp = data.employee
-  const name = pickEmployeeName(emp, lang)
-  const role = pickPosition(emp, lang)
   const tone = STATUS_TONE[emp.status] ?? 'active'
   const alert = expiryAlert(emp)
   const activity = data.recent_activity.slice(0, 5)
@@ -119,42 +205,12 @@ export function ContextPersonCard({ employeeId, onNavigate, onEmail }: Props): R
     : DASH
 
   return (
-    <div className="border-b border-border bg-surface p-3.5">
-      {/* Header: avatar · name · G·role·dept · status */}
-      <div className="flex items-center gap-3">
-        {/* Initials sit behind the photo so a missing/slow image never flashes
-            a broken icon — the <img> just stays hidden on error. */}
-        <div className="relative h-12 w-12 flex-none">
-          <div
-            aria-hidden
-            className="absolute inset-0 flex items-center justify-center rounded-xl bg-gradient-to-br from-[var(--green-grad-a)] to-[var(--green-grad-b)] text-base font-bold text-white"
-          >
-            {initials(name)}
-          </div>
-          {emp.has_photo && (
-            <img
-              src={`/api/v1/employees/${encodeURIComponent(emp.id)}/photo`}
-              onError={(e) => {
-                e.currentTarget.style.display = 'none'
-              }}
-              alt={name}
-              className="relative h-12 w-12 rounded-xl object-cover"
-            />
-          )}
-        </div>
-        <div className="min-w-0 flex-1">
-          <div className="truncate text-sm font-bold text-foreground" dir="auto">
-            {name}
-          </div>
-          <div className="mt-0.5 mb-1.5 truncate text-xs text-muted-foreground" dir="auto">
-            <span className="font-mono">{emp.id}</span>
-            {role && <> · {role}</>}
-            {emp.department && <> · {emp.department}</>}
-          </div>
-          <Badge data-testid="cx-status-badge" tone={tone} withDot>
-            {t(`employees.status.${emp.status}`, emp.status)}
-          </Badge>
-        </div>
+    <div className="px-3.5 pb-3.5">
+      {/* Status badge — kept under the header (the header shows name·G·role·dept). */}
+      <div className="mb-1">
+        <Badge data-testid="cx-status-badge" tone={tone} withDot>
+          {t(`employees.status.${emp.status}`, emp.status)}
+        </Badge>
       </div>
 
       {/* 2×2 facts grid — backed fields only; null → "—". The panel chrome is

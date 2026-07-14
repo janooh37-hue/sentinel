@@ -25,6 +25,8 @@ import { useTranslation } from 'react-i18next'
 import { StarButton } from '@/components/ledger/StarButton'
 import type { LedgerListItem } from '@/lib/api'
 import { cn } from '@/lib/utils'
+import { FlagPopover } from './FlagPopover'
+import { isOverdue } from './useFlagMutations'
 
 /** Direction → avatar gradient (matches the prototype's `.av.in/.out/.int`). */
 const AVATAR_GRAD: Record<string, string> = {
@@ -41,6 +43,16 @@ interface MessageListRowProps {
   onDelete?: (entry: LedgerListItem) => void
   /** Optional photo override; defaults to the related employee's photo. */
   photoUrl?: string
+  /** Multi-select (Phase 2, D4). When `checked` is defined the leading checkbox
+   * column renders; toggling it calls `onToggleSelect` (and never selects the
+   * row). The checkbox is hover-revealed when idle so it's the entry point into
+   * select mode, and always shown once `selecting` (any row selected). */
+  checked?: boolean
+  onToggleSelect?: (id: number) => void
+  /** True when the list is in multi-select mode (any row selected). */
+  selecting?: boolean
+  /** Inline-start indent (px) for thread members rendered under a head row. */
+  indent?: number
 }
 
 export function MessageListRow({
@@ -49,6 +61,10 @@ export function MessageListRow({
   onSelect,
   onDelete,
   photoUrl,
+  checked,
+  onToggleSelect,
+  selecting,
+  indent,
 }: MessageListRowProps): React.JSX.Element {
   const { i18n, t } = useTranslation()
 
@@ -56,6 +72,9 @@ export function MessageListRow({
   const unread = entry.read_at == null
   const isStarred = entry.tags.includes('starred')
   const hasAttachments = (entry.attachment_count ?? 0) > 0
+  const flagged = entry.flagged ?? false
+  const overdue = flagged && isOverdue(entry.followup_due)
+  const selectable = onToggleSelect != null && checked != null
 
   const dateFmt = useMemo(
     () => new Intl.DateTimeFormat(i18n.language, { day: '2-digit', month: 'short' }),
@@ -86,15 +105,38 @@ export function MessageListRow({
         }
       }}
       aria-current={selected}
+      style={indent ? { paddingInlineStart: indent } : undefined}
       className={cn(
-        'group grid w-full cursor-pointer grid-cols-[32px_minmax(0,1fr)_auto] items-start gap-2.5 border-b border-hairline px-3.5 py-2.5 text-start transition-colors last:border-b-0',
+        'group grid w-full cursor-pointer items-start gap-2.5 border-b border-hairline px-3.5 py-2.5 text-start transition-colors last:border-b-0',
+        selectable
+          ? 'grid-cols-[auto_32px_minmax(0,1fr)_auto]'
+          : 'grid-cols-[32px_minmax(0,1fr)_auto]',
         // selected (read) wins the background; unread keeps the blue bar.
         selected ? 'bg-info-soft hover:bg-info-soft' : 'hover:bg-surface-tinted',
+        // overdue follow-up → warning-soft tint (paired with the 🚩 glyph; never colour-only).
+        overdue && !selected && 'bg-warning-soft hover:bg-warning-soft',
         // unread = blue inline-start bar
         unread && 'border-s-[3px] border-s-info',
         'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset',
       )}
     >
+      {selectable && (
+        <input
+          type="checkbox"
+          checked={checked}
+          onClick={(e) => e.stopPropagation()}
+          onChange={() => onToggleSelect!(entry.id)}
+          aria-label={t('ledger.bulk.selectRow')}
+          className={cn(
+            'mt-1 h-4 w-4 shrink-0 cursor-pointer accent-info transition-opacity',
+            // Hover-reveal when idle (the entry point into select mode); always
+            // visible once selecting or this row is checked.
+            selecting || checked
+              ? 'opacity-100'
+              : 'opacity-0 group-hover:opacity-100 focus-visible:opacity-100',
+          )}
+        />
+      )}
       <Avatar
         photoUrl={resolvedPhotoUrl}
         name={entry.counterparty}
@@ -148,6 +190,7 @@ export function MessageListRow({
               aria-label={t('ledger.outlook.hasAttachment')}
             />
           )}
+          <FlagPopover entryId={entry.id} flagged={flagged} overdue={overdue} />
           {onDelete && (
             <button
               type="button"

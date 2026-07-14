@@ -13,9 +13,8 @@
  *                                    click just marks the row selected).
  *   - search: string               — FTS input; results bubble up to swap items.
  *
- * DATA WIRING (one list query, switched on activeView):
+ * DATA WIRING (one list query off activeView):
  *   - personal folder → api.listLedger(mailboxToLedgerParams(view))  → ['ledger', params]
- *   - log category    → api.getLedgerLog(mailboxToLogParams(view))    → ['ledger-log', categoryId]
  * The resolved items + isLoading + tab + selectedId + view feed into MessageList.
  *
  * ── RTL EXCEPTION (Ledger-only) ──────────────────────────────────────────────
@@ -42,20 +41,28 @@ import { useIsMobile } from '@/lib/useIsMobile'
 import { Sheet, SheetContent, SheetTitle, SheetTrigger } from '@/components/ui/sheet'
 import { LedgerEmailCompose } from '../LedgerEmailCompose'
 import { ContextPanel } from './ContextPanel'
-import { RulesDialog } from './RulesDialog'
 import { useContextSource } from './useContextSource'
 import { useSyncStatus } from './useSyncStatus'
 import { FolderRail } from './FolderRail'
 import { MessageList, type MessageListTab } from './MessageList'
 import { ReadingPaneSlot } from './ReadingPaneSlot'
 import { ComposeWindow } from './ComposeWindow'
+import { SuggestionBanner } from './SuggestionBanner'
+import { ReviewSuggestionsSheet } from './ReviewSuggestionsSheet'
+import { CreateSmartFolderDialog } from './CreateSmartFolderDialog'
+import type { SmartFolder, SmartFolderSuggestion } from '@/lib/api'
 import { toast } from 'sonner'
 import { useDeferredDelete, type PendingDelete } from './useDeferredDelete'
 import {
   DEFAULT_MAILBOX_VIEW,
   type MailboxView,
 } from './mailboxTypes'
-import { mailboxToLedgerParams, mailboxToLogParams } from './mailboxQuery'
+import {
+  applyQuickFilters,
+  mailboxToLedgerParams,
+  EMPTY_QUICK_FILTERS,
+  type QuickFilters,
+} from './mailboxQuery'
 
 type NavigatePage =
   | 'employees'
@@ -108,6 +115,8 @@ export function LedgerOutlookShell({ onNavigate }: LedgerOutlookShellProps = {})
 
   const [activeView, setActiveView] = useState<MailboxView>(DEFAULT_MAILBOX_VIEW)
   const [tab, setTab] = useState<MessageListTab>('all')
+  // Phase 2 (D1) — quick-filter chips (reset when the folder/view changes).
+  const [filters, setFilters] = useState<QuickFilters>(EMPTY_QUICK_FILTERS)
   const [selectedId, setSelectedId] = useState<number | null>(null)
   const [compose, setCompose] = useState<ComposeState | null>(null)
   const [search, setSearch] = useState('')
@@ -125,21 +134,47 @@ export function LedgerOutlookShell({ onNavigate }: LedgerOutlookShellProps = {})
   // Mobile: the context panel ("People in this email") is a Sheet behind a
   // per-mail "People (N)" header button — never a squeezed 4th column.
   const [peopleSheetOpen, setPeopleSheetOpen] = useState(false)
-  // Rules dialog — opened from the FolderRail ⚙️ button (Task 6).
-  const [rulesOpen, setRulesOpen] = useState(false)
+  // Phase 3 — smart-folder suggestion review sheet + create dialog state.
+  const [reviewOpen, setReviewOpen] = useState(false)
+  const [createSuggestion, setCreateSuggestion] = useState<SmartFolderSuggestion | null>(null)
 
-  const isLog = activeView.kind === 'log'
   const isDrafts = activeView.kind === 'folder' && activeView.folder === 'drafts'
   const isSearching = search.trim().length > 0
+  // Suggestions only need surfacing on a normal folder view (not inside a smart
+  // folder, not mid-search). Fetched once; drives the rail pill + list banner.
+  const smartSuggestions = useQuery({
+    queryKey: ['ledger-smart-suggestions'],
+    queryFn: () => api.getSmartFolderSuggestions(),
+  })
+  const suggestions = smartSuggestions.data ?? []
+  const topSuggestion = suggestions[0] ?? null
+  const showBanner =
+    !isSearching && activeView.kind === 'folder' && topSuggestion != null
 
-  // Personal-folder query → ['ledger', params, scope]. Disabled for log views
-  // and while an FTS search is active (the search results replace the list).
-  // `scope` is threaded so admin All-mail toggle re-fetches from a fresh key.
-  const ledgerParams = mailboxToLedgerParams(activeView)
+  // Resolve the open mail's people for the MOBILE "People (N)" button (the
+  // desktop column owns its own copy of this hook — TanStack de-dupes the
+  // underlying entry query). The button hides when no people resolve. We also
+  // read the open entry's linked employee G-number to gate the "This employee"
+  // quick filter (D1).
+  const { peopleCount, entry: openEntry } = useContextSource(
+    selectedId,
+    selectedId == null ? null : 'mail',
+  )
+  const contextEmployeeId = openEntry?.related_employee_id ?? null
+
+  // Personal-folder query → ['ledger', params, scope]. Disabled while an FTS
+  // search is active (the search results replace the list). `scope` is threaded
+  // so the admin All-mail toggle re-fetches from a fresh key. Quick filters (D1)
+  // are layered on the view's base params so the open folder re-fetches scoped.
+  const ledgerParams = applyQuickFilters(
+    mailboxToLedgerParams(activeView),
+    filters,
+    contextEmployeeId,
+  )
   const ledgerQuery = useQuery({
     queryKey: ['ledger', ledgerParams, scope],
     queryFn: () => api.listLedger({ ...ledgerParams, limit: 500, scope }),
-    enabled: !isLog && !isSearching,
+    enabled: !isSearching,
   })
 
   // Sync status — polls /email/sync/status and auto-invalidates the ledger
@@ -147,16 +182,6 @@ export function LedgerOutlookShell({ onNavigate }: LedgerOutlookShellProps = {})
   // here (the hook tracks last_synced_at per instance); the rail only gets
   // the status payload as a prop.
   const { status: syncStatus } = useSyncStatus()
-
-  // Log-category query → ['ledger-log', categoryId].
-  const logParams = mailboxToLogParams(activeView)
-  const logQuery = useQuery({
-    queryKey: ['ledger-log', isLog ? activeView.categoryId : null],
-    // The /ledger/log endpoint caps limit at 200 (422s above it) — unlike
-    // /ledger which allows 500. Match the log cap so the fetch doesn't fail.
-    queryFn: () => api.getLedgerLog({ ...logParams, limit: 200 }),
-    enabled: isLog && !isSearching,
-  })
 
   // FTS results take over the list when a search is active. The hit's `entry`
   // is a `LedgerEntryRead` plus a separate `snippet` — project it onto the
@@ -179,6 +204,8 @@ export function LedgerOutlookShell({ onNavigate }: LedgerOutlookShellProps = {})
           updated_at: e.updated_at,
           deleted_at: null,
           read_at: null,
+          flagged: e.flagged,
+          followup_due: e.followup_due,
           snippet: h.snippet,
         }
       }) ?? [])
@@ -187,20 +214,32 @@ export function LedgerOutlookShell({ onNavigate }: LedgerOutlookShellProps = {})
   const mailItems: LedgerListItem[] = isSearching
     ? searchItems
     : (ledgerQuery.data?.items ?? [])
-  const logItems = isLog ? (logQuery.data?.items ?? []) : []
 
-  const isLoading = isSearching
-    ? searchPending
-    : isLog
-      ? logQuery.isPending
-      : ledgerQuery.isPending
+  const isLoading = isSearching ? searchPending : ledgerQuery.isPending
 
   const handleSelectView = useCallback((view: MailboxView) => {
     setActiveView(view)
     setSelectedId(null)
+    // Quick filters are folder-scoped — reset them when the view changes so a
+    // chip from Inbox doesn't silently narrow the next folder. The Follow-ups
+    // view IS the flagged filter, so don't pre-set the chip there.
+    setFilters(EMPTY_QUICK_FILTERS)
     // Picking a folder/category from the mobile drawer dismisses it so the
     // list comes back full-bleed. No-op on desktop (drawer stays closed).
     setFolderDrawerOpen(false)
+  }, [])
+
+  // Phase 3 — review → create flow. Opening the create dialog closes the sheet
+  // so the modal isn't stacked under it.
+  const handleCreateFromSuggestion = useCallback((s: SmartFolderSuggestion) => {
+    setReviewOpen(false)
+    setCreateSuggestion(s)
+  }, [])
+  // On create: jump straight into the new folder so the operator sees it work.
+  const handleSmartFolderCreated = useCallback((folder: SmartFolder) => {
+    setActiveView({ kind: 'smart', folderId: folder.id })
+    setSelectedId(null)
+    setFilters(EMPTY_QUICK_FILTERS)
   }, [])
 
   const handleSearchResults = useCallback(
@@ -211,16 +250,10 @@ export function LedgerOutlookShell({ onNavigate }: LedgerOutlookShellProps = {})
     [],
   )
 
-  // Selection kind drives the slot's reading-pane-vs-record-view branch. A log
-  // view's rows are CorrespondenceLog records; everything else (folders + search
-  // hits, which project LedgerEntryRead) is an email.
-  const selectedKind: 'mail' | 'log' | null =
-    selectedId == null ? null : isLog ? 'log' : 'mail'
-
-  // Resolve the open mail's people for the MOBILE "People (N)" button (the
-  // desktop column owns its own copy of this hook — TanStack de-dupes the
-  // underlying entry query). The button hides when no people resolve.
-  const { peopleCount } = useContextSource(selectedId, selectedKind)
+  // Selection kind drives the reading pane. Every row (folders + search hits,
+  // which project LedgerEntryRead) is an email. (The open entry + peopleCount
+  // are resolved above via useContextSource, near the list query.)
+  const selectedKind: 'mail' | null = selectedId == null ? null : 'mail'
 
   // ONE compose window at a time (spec: keep the existing compose instead of
   // replacing it — replacing silently destroys an in-progress draft).
@@ -278,6 +311,19 @@ export function LedgerOutlookShell({ onNavigate }: LedgerOutlookShellProps = {})
     navigate(location.pathname, { replace: true, state: null })
   }, [location, navigate, openCompose])
 
+  // Deep-link the Follow-ups view from `location.state.ledgerView` (the bell's
+  // Follow-ups row). One-shot, then clear the state so Back/F5 don't re-trigger.
+  const consumedView = useRef(false)
+  useEffect(() => {
+    if (consumedView.current) return
+    const view = (location.state as { ledgerView?: 'followups' } | null)?.ledgerView
+    if (view !== 'followups') return
+    consumedView.current = true
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- one-shot navigation-state hydration
+    handleSelectView({ kind: 'followups' })
+    navigate(location.pathname, { replace: true, state: null })
+  }, [location, navigate, handleSelectView])
+
   // Resume a draft: the list rows are lightweight `LedgerListItem`s, so fetch the
   // full entry (subject + draft_meta to/cc + notes_html body) and open compose in
   // `draft-edit` mode — restoring the pre-Outlook click-to-edit behaviour the
@@ -332,24 +378,11 @@ export function LedgerOutlookShell({ onNavigate }: LedgerOutlookShellProps = {})
     (page: 'employees' | 'application', id?: string) => onNavigate?.(page, id),
     [onNavigate],
   )
-  const handleContextEmail = useCallback(
-    (employeeId: string) => {
-      // Pre-seed the employee as a 👤 reference on a fresh compose via the
-      // existing `prefill.references` channel (employee refs are id-in-all-slots).
-      openCompose({
-        mode: 'new',
-        prefill: {
-          references: [{ kind: 'employee', id: employeeId, label: employeeId, token: employeeId }],
-        },
-      })
-    },
-    [openCompose],
-  )
-
-  // Rules dialog — opened from FolderRail ⚙️ (Task 6, gated settings.edit).
-  const handleOpenRules = useCallback(() => {
-    setRulesOpen(true)
-  }, [])
+  const handleContextEmail = useCallback(() => {
+    // Phase-7 follow-on: pre-seed employee as a 👤 reference once
+    // LedgerEmailCompose exposes an `initialRef` prop.
+    openCompose({ mode: 'new' })
+  }, [openCompose])
 
   const handleComposeSent = useCallback(() => {
     void queryClient.invalidateQueries({ queryKey: ['ledger'] })
@@ -395,6 +428,16 @@ export function LedgerOutlookShell({ onNavigate }: LedgerOutlookShellProps = {})
     [scheduleDelete, isDrafts],
   )
 
+  // Bulk Trash (D4) — schedule each id through the same deferred-delete so every
+  // entry gets its own Undo toast, identical to the per-row Trash.
+  const handleBulkTrash = useCallback(
+    (ids: number[]) => {
+      ids.forEach((id) => scheduleDelete({ id, kind: isDrafts ? 'draft' : 'entry' }))
+      setSelectedId((cur) => (cur != null && ids.includes(cur) ? null : cur))
+    },
+    [scheduleDelete, isDrafts],
+  )
+
   // Hide optimistically-deleted rows from the list until the timer commits.
   const visibleMailItems = mailItems.filter((it) => !pendingIds.has(it.id))
 
@@ -402,7 +445,6 @@ export function LedgerOutlookShell({ onNavigate }: LedgerOutlookShellProps = {})
     <MessageList
       view={activeView}
       items={visibleMailItems}
-      logItems={logItems}
       isLoading={isLoading}
       tab={tab}
       onTabChange={setTab}
@@ -414,6 +456,19 @@ export function LedgerOutlookShell({ onNavigate }: LedgerOutlookShellProps = {})
       onSearchResults={handleSearchResults}
       syncStatus={syncStatus}
       scope={scope}
+      filters={filters}
+      onFiltersChange={setFilters}
+      employeeInContext={contextEmployeeId != null}
+      onBulkTrash={handleBulkTrash}
+      banner={
+        showBanner && topSuggestion ? (
+          <SuggestionBanner
+            suggestion={topSuggestion}
+            total={suggestions.length}
+            onReview={() => setReviewOpen(true)}
+          />
+        ) : undefined
+      }
     />
   )
 
@@ -428,6 +483,26 @@ export function LedgerOutlookShell({ onNavigate }: LedgerOutlookShellProps = {})
       onNavigate={handleNavigate}
       onOpenEntry={setSelectedId}
     />
+  )
+
+  // Phase 3 — the review sheet + create dialog portal to body, so one instance
+  // serves both desktop and mobile branches.
+  const smartOverlays = (
+    <>
+      <ReviewSuggestionsSheet
+        open={reviewOpen}
+        onOpenChange={setReviewOpen}
+        onCreate={handleCreateFromSuggestion}
+      />
+      <CreateSmartFolderDialog
+        suggestion={createSuggestion}
+        open={createSuggestion != null}
+        onOpenChange={(o) => {
+          if (!o) setCreateSuggestion(null)
+        }}
+        onCreated={handleSmartFolderCreated}
+      />
+    </>
   )
 
   // Desktop: a non-modal Outlook-style window docked bottom-right (the mailbox
@@ -448,13 +523,6 @@ export function LedgerOutlookShell({ onNavigate }: LedgerOutlookShellProps = {})
         />
       )}
     </ComposeWindow>
-  )
-
-  // Rules dialog — portals to body via shadcn Dialog; gated settings.edit in
-  // the rail (⚙️ disabled for non-admins). Defined here so it's available in
-  // both mobile branches and the desktop branch.
-  const rulesDialog = (
-    <RulesDialog open={rulesOpen} onOpenChange={setRulesOpen} />
   )
 
   // ── Mobile (< md): list is full-bleed; the folder rail lives behind a Sheet
@@ -513,7 +581,7 @@ export function LedgerOutlookShell({ onNavigate }: LedgerOutlookShellProps = {})
           </div>
           <div className="flex min-h-0 flex-1">{readingPaneSlot}</div>
           {composeOverlay}
-          {rulesDialog}
+          {smartOverlays}
         </div>
       )
     }
@@ -537,14 +605,14 @@ export function LedgerOutlookShell({ onNavigate }: LedgerOutlookShellProps = {})
               <SheetTitle className="sr-only">{t('ledger.outlook.foldersTrigger')}</SheetTitle>
               {/* The rail re-flows its own colours; pin LTR so it stays Outlook-oriented. */}
               <div dir="ltr" className="flex h-full min-h-0">
-                <FolderRail activeView={activeView} onSelectView={handleSelectView} onNewEmail={handleNewEmail} onOpenRules={handleOpenRules} allMail={allMail} onToggleAllMail={setAllMail} />
+                <FolderRail activeView={activeView} onSelectView={handleSelectView} onNewEmail={handleNewEmail} allMail={allMail} onToggleAllMail={setAllMail} onReviewSuggestions={() => setReviewOpen(true)} suggestionCount={suggestions.length} />
               </div>
             </SheetContent>
           </Sheet>
         </div>
         {messageList}
         {composeOverlay}
-        {rulesDialog}
+        {smartOverlays}
       </div>
     )
   }
@@ -560,13 +628,13 @@ export function LedgerOutlookShell({ onNavigate }: LedgerOutlookShellProps = {})
     >
       {/* Folder rail (desktop middle column is the list, right is the slot). */}
       <div className="flex min-h-0">
-        <FolderRail activeView={activeView} onSelectView={handleSelectView} onNewEmail={handleNewEmail} onOpenRules={handleOpenRules} allMail={allMail} onToggleAllMail={setAllMail} />
+        <FolderRail activeView={activeView} onSelectView={handleSelectView} onNewEmail={handleNewEmail} allMail={allMail} onToggleAllMail={setAllMail} onReviewSuggestions={() => setReviewOpen(true)} suggestionCount={suggestions.length} />
       </div>
 
       {/* Message list — the middle pane. */}
       {messageList}
 
-      {/* Reading-pane slot — empty state, reading pane, or record view. */}
+      {/* Reading-pane slot — empty state or reading pane. */}
       <div className="flex min-h-0">{readingPaneSlot}</div>
 
       {/* Context panel — 4th column. The `auto` track lets the panel own its
@@ -582,9 +650,9 @@ export function LedgerOutlookShell({ onNavigate }: LedgerOutlookShellProps = {})
 
       {/* Reply / Forward compose floats over the whole shell. */}
       {composeOverlay}
-      {/* Rules dialog — portals to body via shadcn Dialog; gated settings.edit
-          in the rail, so this only opens for admins. */}
-      {rulesDialog}
+
+      {/* Smart-folder review sheet + create dialog (portal to body). */}
+      {smartOverlays}
     </div>
   )
 }

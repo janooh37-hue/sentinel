@@ -107,6 +107,10 @@ class LedgerEntryRead(ORMBase):
     message_id: str | None = None
     in_reply_to: str | None = None
     email_references: str | None = None
+    # Per-user follow-up flag for the CURRENT caller (Phase 2 / D3). Populated
+    # by the endpoint via ``ledger_service.flags_for``; default unflagged.
+    flagged: bool = False
+    followup_due: date | None = None
 
 
 class LedgerListItem(ORMBase):
@@ -132,6 +136,10 @@ class LedgerListItem(ORMBase):
     deleted_at: datetime | None
     read_at: datetime | None = None
     snippet: str = ""
+    # Per-user follow-up flag for the CURRENT caller (Phase 2 / D3). Populated
+    # by the list endpoint via ``ledger_service.flags_for``; default unflagged.
+    flagged: bool = False
+    followup_due: date | None = None
 
 
 class LedgerListResponse(BaseModel):

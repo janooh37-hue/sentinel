@@ -19,17 +19,17 @@ from __future__ import annotations
 import hashlib
 import logging
 import re
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from pathlib import Path
 from typing import Any
 
-from sqlalchemy import ColumnElement, func, or_, select
+from sqlalchemy import ColumnElement, and_, func, literal, or_, select
 from sqlalchemy.orm import Session
 
 from app.api.errors import AppError, NotFoundError, ValidationFailedError
 from app.config import get_settings
 from app.core.constants import ALLOWED_DOC_EXTS
-from app.db.models import Book, Employee, LedgerEntry
+from app.db.models import Book, Employee, LedgerEntry, LedgerFlag
 from app.schemas.ledger import DraftWrite, LedgerEntryCreate, LedgerEntryUpdate
 
 log = logging.getLogger(__name__)
@@ -48,17 +48,13 @@ _UNSAFE_CHARS = re.compile(
     "\u200b-\u200f\u202a-\u202e\u2066-\u2069\ufeff]"
 )
 
-# Subject normaliser — strips Re:/Fwd:/رد:/توجيه: prefixes so thread lookup
-# can match conversation participants regardless of who replied last.
-_REPLY_PREFIX = re.compile(
-    r"^\s*(?:(?:re|fw|fwd|رد|توجيه|إعادة)\s*:\s*)+",
-    flags=re.IGNORECASE,
-)
-
-
+# Subject normaliser — delegates to the canonical ``core.subject`` helper (the
+# backend twin of ``frontend/src/lib/normaliseSubject.ts``) so thread lookup and
+# smart-folder clustering agree on what "the same subject" means.
 def _normalize_subject(subject: str) -> str:
-    cleaned = _REPLY_PREFIX.sub("", subject or "").strip()
-    return cleaned.casefold()
+    from app.core.subject import normalise_subject
+
+    return normalise_subject(subject)
 
 
 DRAFT_TAG = "draft"
@@ -204,10 +200,24 @@ def list_entries(
     include_deleted: bool = False,
     include_drafts: bool = False,
     owner_user_id: int | None = None,
+    unread: bool | None = None,
+    has_attachments: bool | None = None,
+    flagged: bool | None = None,
+    employee_id: str | None = None,
+    flag_user_id: int | None = None,
+    smart_folder_id: int | None = None,
     limit: int = LIST_DEFAULT_LIMIT,
     offset: int = 0,
 ) -> tuple[list[LedgerEntry], int]:
-    """Filtered + paginated list. Returns ``(rows, total_count)``."""
+    """Filtered + paginated list. Returns ``(rows, total_count)``.
+
+    ``unread`` / ``has_attachments`` / ``flagged`` / ``employee_id`` are the
+    Phase-2 quick filters (mirror ``direction``/``tag``). ``flagged`` and the
+    flagged sort are scoped to ``flag_user_id`` (the caller) — flags are
+    per-user. When ``flagged`` is set the result is ordered by ``followup_due``
+    ASC NULLS LAST, then date. ``smart_folder_id`` filters by the caller's saved
+    smart folder (a normalised-subject substring match).
+    """
     limit = max(1, min(limit, LIST_MAX_LIMIT))
     offset = max(0, offset)
 
@@ -260,6 +270,15 @@ def list_entries(
         )
         stmt = stmt.where(owner_clause)
         count_stmt = count_stmt.where(owner_clause)
+        # Correspondence-Log removal (ledger smart-folders port): the old
+        # auto-log rows carry a ``source_kind`` (and owner_user_id IS NULL).
+        # Exclude them from the personal mailbox folders (Inbox/Sent/...) so
+        # generated-doc/intake rows stop leaking in as fake emails. Synced/sent
+        # mail has source_kind IS NULL, so this is safe for the shared mailbox —
+        # do NOT broaden this to ``owner_user_id IS NULL`` (that would hide
+        # legitimate shared mail).
+        stmt = stmt.where(LedgerEntry.source_kind.is_(None))
+        count_stmt = count_stmt.where(LedgerEntry.source_kind.is_(None))
 
     if counterparty is not None:
         needle = f"%{counterparty.strip()}%"
@@ -309,15 +328,115 @@ def list_entries(
             stmt = stmt.where(text_repr == "[]")
             count_stmt = count_stmt.where(text_repr == "[]")
 
-    stmt = (
-        stmt.order_by(LedgerEntry.entry_date.desc(), LedgerEntry.created_at.desc())
-        .limit(limit)
-        .offset(offset)
-    )
+    # --- Phase-2 quick filters --------------------------------------------
+    if unread:
+        # Same definition as ``unread_email_count``: un-opened received mail.
+        unread_clause = and_(
+            LedgerEntry.channel == "email",
+            LedgerEntry.direction.in_(("incoming", "internal")),
+            LedgerEntry.read_at.is_(None),
+        )
+        stmt = stmt.where(unread_clause)
+        count_stmt = count_stmt.where(unread_clause)
+
+    if has_attachments is not None:
+        from sqlalchemy import Text, cast
+
+        attach_repr = cast(LedgerEntry.attachment_paths, Text)
+        attach_clause = attach_repr != "[]" if has_attachments else attach_repr == "[]"
+        stmt = stmt.where(attach_clause)
+        count_stmt = count_stmt.where(attach_clause)
+
+    if employee_id is not None:
+        stmt = stmt.where(LedgerEntry.related_employee_id == employee_id)
+        count_stmt = count_stmt.where(LedgerEntry.related_employee_id == employee_id)
+
+    if smart_folder_id is not None:
+        # Resolve the folder's normalised subject and filter by a substring
+        # LIKE (intentionally matches Re:/Fwd: variants of the same subject).
+        # The folder must be the caller's own active folder (owner_user_id is
+        # the resolved mail scope); otherwise match nothing — a foreign or
+        # missing folder id yields an empty list, not a leak.
+        from app.db.models import SmartFolder
+
+        owner = owner_user_id
+        rule_value: str | None = None
+        if owner is not None:
+            rule_value = db.execute(
+                select(SmartFolder.rule_value).where(
+                    SmartFolder.id == smart_folder_id,
+                    SmartFolder.owner_user_id == owner,
+                    SmartFolder.deleted_at.is_(None),
+                )
+            ).scalar_one_or_none()
+        sf_clause: ColumnElement[bool]
+        if rule_value:
+            needle = f"%{rule_value}%"
+            sf_clause = func.lower(LedgerEntry.subject).like(needle)
+        else:
+            sf_clause = literal(False)
+        stmt = stmt.where(sf_clause)
+        count_stmt = count_stmt.where(sf_clause)
+
+    if flagged:
+        # Per-user: the CALLER (flag_user_id) has a ledger_flags row. With no
+        # caller scope there's no meaningful "flagged" set, so match nothing.
+        flag_exists = (
+            select(LedgerFlag.id)
+            .where(
+                LedgerFlag.entry_id == LedgerEntry.id,
+                LedgerFlag.user_id == flag_user_id,
+            )
+            .exists()
+        ) if flag_user_id is not None else literal(False)
+        stmt = stmt.where(flag_exists)
+        count_stmt = count_stmt.where(flag_exists)
+
+    if flagged and flag_user_id is not None:
+        # Sort by the caller's followup_due ASC NULLS LAST, then date desc.
+        due_col = (
+            select(LedgerFlag.followup_due)
+            .where(
+                LedgerFlag.entry_id == LedgerEntry.id,
+                LedgerFlag.user_id == flag_user_id,
+            )
+            .scalar_subquery()
+        )
+        stmt = stmt.order_by(
+            (due_col.is_(None)).asc(),
+            due_col.asc(),
+            LedgerEntry.entry_date.desc(),
+            LedgerEntry.created_at.desc(),
+        )
+    else:
+        stmt = stmt.order_by(
+            LedgerEntry.entry_date.desc(), LedgerEntry.created_at.desc()
+        )
+
+    stmt = stmt.limit(limit).offset(offset)
 
     rows = list(db.execute(stmt).scalars().all())
     total = int(db.execute(count_stmt).scalar_one())
     return rows, total
+
+
+def flags_for(
+    db: Session, user_id: int, entry_ids: list[int]
+) -> dict[int, tuple[bool, date | None]]:
+    """Map each entry id to ``(flagged, followup_due)`` for ``user_id``.
+
+    Entries the caller hasn't flagged are absent from the map — the caller
+    fills ``(False, None)`` for those. One query for the whole page (no N+1).
+    """
+    if not entry_ids:
+        return {}
+    rows = db.execute(
+        select(LedgerFlag.entry_id, LedgerFlag.followup_due).where(
+            LedgerFlag.user_id == user_id,
+            LedgerFlag.entry_id.in_(entry_ids),
+        )
+    ).all()
+    return {int(eid): (True, due) for eid, due in rows}
 
 
 def get_entry(
@@ -575,6 +694,20 @@ def mark_entry_read(
     return row
 
 
+def mark_entry_unread(
+    db: Session, entry_id: int, owner_user_id: int | None = None
+) -> LedgerEntry:
+    """Clear ``read_at`` (mark unread) if currently set. Idempotent — a second
+    call is a no-op. Soft/hard-deleted entries raise NotFoundError (matches
+    ``mark_entry_read``). Powers the bulk "Mark unread" action."""
+    row = get_entry(db, entry_id, owner_user_id=owner_user_id)
+    if row.read_at is not None:
+        row.read_at = None
+        db.commit()
+        db.refresh(row)
+    return row
+
+
 def mark_all_emails_read(db: Session, owner_user_id: int | None = None) -> int:
     """Bulk-mark every unread received email as read. Returns rows updated.
 
@@ -617,6 +750,74 @@ def toggle_star(
     db.commit()
     db.refresh(row)
     return row
+
+
+# ---------------------------------------------------------------------------
+# Follow-up flags (per-user — Phase 2 / D3)
+# ---------------------------------------------------------------------------
+
+
+def _get_flag(db: Session, *, entry_id: int, user_id: int) -> LedgerFlag | None:
+    return db.execute(
+        select(LedgerFlag).where(
+            LedgerFlag.user_id == user_id,
+            LedgerFlag.entry_id == entry_id,
+        )
+    ).scalar_one_or_none()
+
+
+def set_flag(
+    db: Session, *, entry_id: int, user_id: int, due: date | None
+) -> LedgerEntry:
+    """Upsert the caller's flag for ``entry_id``: set ``flagged_at=now`` and
+    ``followup_due=due`` (None clears the date but keeps the flag).
+
+    Returns the (unchanged) ledger entry so the caller can re-project the
+    per-user flag fields onto a ``LedgerEntryRead``.
+    """
+    row = get_entry(db, entry_id)
+    flag = _get_flag(db, entry_id=entry_id, user_id=user_id)
+    if flag is None:
+        flag = LedgerFlag(
+            user_id=user_id,
+            entry_id=entry_id,
+            flagged_at=_utcnow(),
+            followup_due=due,
+            created_at=_utcnow(),
+        )
+        db.add(flag)
+    else:
+        flag.flagged_at = _utcnow()
+        flag.followup_due = due
+    db.commit()
+    return row
+
+
+def clear_flag(db: Session, *, entry_id: int, user_id: int) -> LedgerEntry:
+    """Delete the caller's flag row for ``entry_id`` (no-op if absent)."""
+    row = get_entry(db, entry_id)
+    flag = _get_flag(db, entry_id=entry_id, user_id=user_id)
+    if flag is not None:
+        db.delete(flag)
+        db.commit()
+    return row
+
+
+def flag_count(db: Session, user_id: int) -> int:
+    """Number of entries the caller has flagged — drives the bell badge.
+
+    Excludes flags on soft-deleted entries (a flagged-then-trashed mail
+    shouldn't keep counting).
+    """
+    stmt = (
+        select(func.count(LedgerFlag.id))
+        .join(LedgerEntry, LedgerEntry.id == LedgerFlag.entry_id)
+        .where(
+            LedgerFlag.user_id == user_id,
+            LedgerEntry.deleted_at.is_(None),
+        )
+    )
+    return int(db.execute(stmt).scalar_one())
 
 
 # ---------------------------------------------------------------------------
@@ -868,18 +1069,23 @@ __all__ = [
     "MAX_ATTACHMENT_BYTES",
     "STAR_TAG",
     "add_attachment",
+    "clear_flag",
     "create_entry",
     "delete_draft",
     "derive_inline_map",
+    "flag_count",
+    "flags_for",
     "get_entry",
     "list_counterparties",
     "list_entries",
     "list_thread",
     "mark_all_emails_read",
     "mark_entry_read",
+    "mark_entry_unread",
     "non_inline_attachments",
     "promote_draft_to_sent",
     "resolve_attachment_path",
+    "set_flag",
     "soft_delete_entry",
     "toggle_star",
     "unread_email_count",
