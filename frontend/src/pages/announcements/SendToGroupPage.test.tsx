@@ -94,4 +94,15 @@ describe('SendToGroupPage', () => {
     expect(await screen.findByText('sendToGroup.askAdmin')).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'sendToGroup.reconnect' })).not.toBeInTheDocument()
   })
+
+  // Case C: connected but groups-fetch errors → groupsLoadError banner, NOT gatewayDisconnected,
+  // and no Reconnect button (a groups-fetch error is a network/API problem, not a WhatsApp issue).
+  it('shows groupsLoadError banner (not gatewayDisconnected) when connected but groups fetch fails', async () => {
+    vi.mocked(api.gatewayStatus).mockResolvedValue({ state: 'connected' })
+    vi.mocked(api.listGroups).mockRejectedValue(new Error('boom'))
+    renderPage()
+    expect(await screen.findByText('sendToGroup.groupsLoadError')).toBeInTheDocument()
+    expect(screen.queryByText('sendToGroup.gatewayDisconnected')).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'sendToGroup.reconnect' })).not.toBeInTheDocument()
+  })
 })

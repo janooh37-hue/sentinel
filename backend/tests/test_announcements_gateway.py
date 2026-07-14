@@ -86,3 +86,34 @@ def test_qr_requires_settings_edit(client):
     # `client` = manager role (has neither messages.broadcast nor settings.edit)
     r = client.get("/api/v1/announcements/qr")
     assert r.status_code in (401, 403)
+
+
+def test_qr_forbidden_for_broadcast_only_user(api_db, monkeypatch):
+    """A user with messages.broadcast but NOT settings.edit must get 403 on /qr.
+
+    Also asserts the same user CAN reach /status (200), proving the split is
+    real: broadcast operators see gateway status but cannot hijack the QR.
+    """
+    # Build an operator-role user (no settings.edit by default).
+    user = _user(api_db, role="operator", email="broadcast_only@x.ae")
+
+    # Grant messages.broadcast explicitly via the override table.
+    from app.db.models import UserPermission as UP
+
+    api_db.add(UP(user_id=user.id, capability="messages.broadcast", effect="grant"))
+    api_db.commit()
+    # Invalidate the memoised caps so effective_caps re-reads from DB.
+    user._effective_caps_cache = None  # type: ignore[attr-defined]
+
+    bc_client = _client(api_db, user)
+
+    # QR requires settings.edit — must be 403 (not 401, since the user IS authenticated).
+    monkeypatch.setattr(openwa_client, "fetch_qr", lambda: "data:image/png;base64,AAAA")
+    r_qr = bc_client.get("/api/v1/announcements/qr")
+    assert r_qr.status_code == 403, f"expected 403, got {r_qr.status_code}: {r_qr.text}"
+
+    # /status requires messages.broadcast — must be 200.
+    monkeypatch.setattr(openwa_client, "session_state", lambda: "connected")
+    r_status = bc_client.get("/api/v1/announcements/status")
+    assert r_status.status_code == 200, f"expected 200, got {r_status.status_code}: {r_status.text}"
+    assert r_status.json() == {"state": "connected"}
