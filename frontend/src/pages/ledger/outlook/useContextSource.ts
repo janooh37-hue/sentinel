@@ -9,8 +9,11 @@
  *
  * Shared by the desktop 4th-column `ContextPanel` and the mobile Sheet (Task 4)
  * so the "People (N)" button count and the panel body can never drift. Runs the
- * SAME `['ledger-entry', id]` / `['ledger-log-record', id]` query the reading
- * pane uses (TanStack de-dupes — no double fetch).
+ * SAME `['ledger-entry', id]` query the reading pane uses (TanStack de-dupes —
+ * no double fetch).
+ *
+ * (The Correspondence-Log `'log'` record branch was removed 2026-06-25 — every
+ * selected row is now an email.)
  */
 
 import { useQuery } from '@tanstack/react-query'
@@ -31,22 +34,16 @@ export interface ContextSource {
 
 export function useContextSource(
   selectedId: number | null,
-  selectedKind: 'mail' | 'log' | null,
+  selectedKind: 'mail' | null,
 ): ContextSource {
   const entryQuery = useQuery({
     queryKey: ['ledger-entry', selectedId],
     queryFn: () => api.getLedgerEntry(selectedId!),
     enabled: selectedId != null && selectedKind === 'mail',
   })
-  const logQuery = useQuery({
-    queryKey: ['ledger-log-record', selectedId],
-    queryFn: () => api.getLedgerLogRecord(selectedId!),
-    enabled: selectedId != null && selectedKind === 'log',
-  })
 
   const entry = selectedKind === 'mail' ? entryQuery.data : undefined
-  const logRecord = selectedKind === 'log' ? logQuery.data : undefined
-  const source = entry ?? logRecord ?? null
+  const source = entry ?? null
 
   const people = source ? resolvePeople(source) : { primary: null, siblings: [] }
   const peopleCount = people.primary ? 1 + people.siblings.length : 0
@@ -54,8 +51,7 @@ export function useContextSource(
   const attachments = entry?.attachments ?? []
 
   const isLoading =
-    (selectedKind === 'mail' && entryQuery.isPending && selectedId != null) ||
-    (selectedKind === 'log' && logQuery.isPending && selectedId != null)
+    selectedKind === 'mail' && entryQuery.isPending && selectedId != null
 
   return { entry, people, peopleCount, bookRefs, attachments, isLoading }
 }

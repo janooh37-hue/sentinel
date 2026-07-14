@@ -2,31 +2,34 @@
  * contextResolve — pure (React-free) helpers for the "People in this email"
  * context panel (Phase 7, Task 1).
  *
- * The panel reads the OPEN correspondence — an email (`LedgerEntryRead`) or a
- * Correspondence-Log record (`CorrespondenceLogRecord`) — and derives the set
- * of employees it is *about*: the structurally-linked `related_employee_id`
- * (set on compose Add-reference / auto-log) comes first as the PRIMARY card,
- * then any G-numbers detected in the email body (`extractGNumbers`, shared with
- * the reading-pane suggestion detector so the two can't drift). Deduped,
- * order-preserving; first = primary, rest = siblings. No people → idle.
+ * The panel reads the OPEN email (`LedgerEntryRead`) and derives the set of
+ * employees it is *about*: the structurally-linked `related_employee_id`
+ * (set on compose Add-reference) comes first, then any G-numbers detected in
+ * the email body (`extractGNumbers`, shared with the reading-pane suggestion
+ * detector so the two can't drift). Deduped, order-preserving. The panel
+ * renders one collapsed-by-default card per entry — no person is privileged.
+ * No people → idle.
  *
  * These are pure derivations so they're unit-testable in isolation; the React
  * card (`ContextPersonCard`) consumes them.
  */
 
 import { extractGNumbers } from '@/lib/employeeDetection'
-import type {
-  CorrespondenceLogRecord,
-  EmployeeRead,
-  EmployeeStatsRead,
-  LedgerEntryRead,
-} from '@/lib/api'
+import type { EmployeeRead, EmployeeStatsRead, LedgerEntryRead } from '@/lib/api'
 
 /** The employees an open mail/record is about. */
 export interface ResolvedPeople {
-  /** First resolved G-number — the expanded primary card. `null` ⇒ idle. */
+  /**
+   * Every resolved G-number, order-preserving + deduped. The panel renders one
+   * (collapsed-by-default) card per entry — no person is privileged.
+   */
+  ordered: string[]
+  /**
+   * First resolved G-number. `null` ⇒ idle. Retained for callers that key off
+   * "is there anyone?"; the panel no longer renders this specially.
+   */
   primary: string | null
-  /** The rest — collapsed one-line sibling cards. */
+  /** The rest (everyone after `primary`). Retained for back-compat. */
   siblings: string[]
 }
 
@@ -34,20 +37,15 @@ export interface ResolvedPeople {
 const EXPIRY_WINDOW_DAYS = 90
 
 /**
- * Resolve the people an open email/record is about.
+ * Resolve the people an open email is about.
  *
- * `related_employee_id` (if present) is prepended so it's the primary card,
- * falling back to body order otherwise. Log records carry no `notes_html`
- * body, so they resolve via the link alone. Dedupe is case-insensitive +
- * order-preserving (canonical upper-case G-number).
+ * `related_employee_id` (if present) is prepended so it leads, falling back to
+ * body order otherwise. Dedupe is case-insensitive + order-preserving
+ * (canonical upper-case G-number).
  */
-export function resolvePeople(
-  entry: LedgerEntryRead | CorrespondenceLogRecord,
-): ResolvedPeople {
+export function resolvePeople(entry: LedgerEntryRead): ResolvedPeople {
   const fromLink = entry.related_employee_id ? [entry.related_employee_id] : []
-  // CorrespondenceLogRecord has no body; only LedgerEntryRead carries notes_html.
-  const notesHtml = 'notes_html' in entry ? (entry.notes_html ?? '') : ''
-  const fromBody = extractGNumbers(notesHtml)
+  const fromBody = extractGNumbers(entry.notes_html ?? '')
 
   const seen = new Set<string>()
   const ordered: string[] = []
@@ -58,8 +56,8 @@ export function resolvePeople(
     ordered.push(normalised)
   }
 
-  if (ordered.length === 0) return { primary: null, siblings: [] }
-  return { primary: ordered[0], siblings: ordered.slice(1) }
+  if (ordered.length === 0) return { ordered, primary: null, siblings: [] }
+  return { ordered, primary: ordered[0], siblings: ordered.slice(1) }
 }
 
 /**
