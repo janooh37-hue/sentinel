@@ -154,6 +154,20 @@ def test_list_groups_parses_waha_shape():
     assert [(g.id, g.name) for g in groups] == [("123@g.us", "Ops"), ("456@g.us", "HR")]
 
 
+def test_fetch_qr_returns_data_url_from_png():
+    import base64
+
+    png = b"\x89PNG\r\n\x1a\nDEADBEEF"
+
+    def handler(req):
+        assert req.url.path == "/api/default/auth/qr"
+        return httpx.Response(200, content=png, headers={"content-type": "image/png"})
+
+    _mock(handler)
+    out = openwa_client.fetch_qr()
+    assert out == "data:image/png;base64," + base64.b64encode(png).decode("ascii")
+
+
 def test_health_true_when_connected():
     def handler(req):
         return httpx.Response(200, json={"status": "CONNECTED"})

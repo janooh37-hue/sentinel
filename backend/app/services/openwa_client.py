@@ -235,22 +235,23 @@ def session_state() -> str:
 
 
 def fetch_qr() -> str | None:
-    """Fetch the current QR code string from the gateway, or None on any error.
+    """Fetch the current QR code from the gateway as a data URL, or None on any error.
 
-    Returns the base64 / data-URL string the gateway provides.  Never raises.
+    Returns a ``data:image/png;base64,...`` URL built from WAHA's binary QR
+    response. Never raises.
     """
     cfg = get_settings()
-    url = f"{_base()}/api/sessions/{cfg.openwa_session}/qr"
+    url = f"{_base()}/api/{cfg.openwa_session}/auth/qr"
     try:
         with _client() as c:
-            resp = c.get(url, headers=_headers())
+            resp = c.get(url, headers={"X-API-Key": cfg.openwa_api_key, "Accept": "image/png"})
     except httpx.HTTPError as e:
         log.warning("openwa: fetch_qr transport error: %s", e)
         return None
-    if resp.status_code // 100 != 2:
+    if resp.status_code // 100 != 2 or not resp.content:
         return None
-    data = resp.json() if resp.content else {}
-    return data.get("qr") or data.get("data") or resp.text or None
+    ctype = resp.headers.get("content-type", "image/png")
+    return f"data:{ctype};base64," + base64.b64encode(resp.content).decode("ascii")
 
 
 def health() -> bool:
