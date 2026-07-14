@@ -2654,5 +2654,13 @@
       "qrError": "Could not load the QR code. Please try again.",
       "refreshing": "Refreshing…"
     }
+  },
+  "gateway": {
+    "indicator": {
+      "connected": "WhatsApp connected",
+      "disconnected": "WhatsApp session down — reconnect",
+      "unreachable": "WhatsApp service not running",
+      "checkedAgo": "checked {{count}}s ago"
+    }
   }
 }

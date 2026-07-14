@@ -25,6 +25,7 @@ import { AaSlider } from './AaSlider'
 import { IntakeLauncher } from '@/components/intake/IntakeLauncher'
 import { LanguageToggle } from './LanguageToggle'
 import { EmailBasketTray } from './EmailBasketTray'
+import { GatewayIndicator } from './GatewayIndicator'
 import { NavBellPopover } from './NavBellPopover'
 import { NAV_ITEMS } from './navItems'
 import { ThemeToggle } from './ThemeToggle'
@@ -123,6 +124,7 @@ export function TopNav({ onLock, onOpenSettings, onSignOut }: TopNavProps): Reac
         />
         <IntakeLauncher />
         <EmailBasketTray />
+        <GatewayIndicator />
         <NavBellPopover />
         <button
           type="button"

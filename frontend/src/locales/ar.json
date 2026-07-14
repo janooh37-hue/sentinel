@@ -2801,5 +2801,13 @@
       "qrError": "تعذّر تحميل رمز QR. حاول مرة أخرى.",
       "refreshing": "جارٍ التحديث…"
     }
+  },
+  "gateway": {
+    "indicator": {
+      "connected": "واتساب متصل",
+      "disconnected": "جلسة واتساب متوقفة — أعد الاتصال",
+      "unreachable": "خدمة واتساب لا تعمل",
+      "checkedAgo": "فُحِص قبل {{count}} ثانية"
+    }
   }
 }
