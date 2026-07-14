@@ -56,17 +56,19 @@ def gateway_unlink(
 ) -> GatewayUnlinkOut:
     """Unlink the current WhatsApp session (admin only). Audit-logged; dormant behind openwa_enabled."""
     ok = openwa_client.logout()
-    db.add(
-        AuditLog(
-            actor=user.display_name or user.email,
-            action="unlink_whatsapp",
-            entity_type="gateway",
-            entity_id=None,
-            payload=json.dumps({"ok": ok}, ensure_ascii=False),
+    try:
+        db.add(
+            AuditLog(
+                actor=user.display_name or user.email,
+                action="unlink_whatsapp",
+                entity_type="gateway",
+                entity_id=None,
+                payload=json.dumps({"ok": ok}, ensure_ascii=False),
+            )
         )
-    )
-    db.commit()
-    openwa_client.reset_status_cache()
+        db.commit()
+    finally:
+        openwa_client.reset_status_cache()
     return GatewayUnlinkOut(ok=ok)
 
 

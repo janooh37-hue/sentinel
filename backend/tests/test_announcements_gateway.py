@@ -139,4 +139,4 @@ def test_unlink_admin_ok(admin_client, monkeypatch, api_db):
 def test_unlink_requires_settings_edit(client):
     # `client` = manager role (no settings.edit)
     r = client.post("/api/v1/announcements/unlink")
-    assert r.status_code in (401, 403)
+    assert r.status_code == 403
