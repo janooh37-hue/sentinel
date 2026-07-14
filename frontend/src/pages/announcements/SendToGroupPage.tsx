@@ -62,10 +62,6 @@ export function SendToGroupPage(): React.JSX.Element {
   // Message
   const [message, setMessage] = useState('')
   const messageRef = useRef<HTMLTextAreaElement>(null)
-  // Keep a ref in sync so mutationFn always reads the latest value
-  // (avoids stale-closure issues with useMutation's deferred option update).
-  const messageValueRef = useRef(message)
-  messageValueRef.current = message
 
   // Attachment
   const [attachMode, setAttachMode] = useState<AttachMode>('none')
@@ -107,9 +103,8 @@ export function SendToGroupPage(): React.JSX.Element {
       for (const id of selectedIds) {
         form.append('group_ids', id)
       }
-      const currentMessage = messageValueRef.current
-      if (currentMessage.trim()) {
-        form.append('text', currentMessage.trim())
+      if (message.trim()) {
+        form.append('text', message.trim())
       }
       if (attachMode === 'book' && bookId.trim()) {
         form.append('book_id', bookId.trim())

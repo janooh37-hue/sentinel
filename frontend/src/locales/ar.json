@@ -2893,9 +2893,8 @@
     "messagePlaceholder": "اكتب رسالتك هنا…",
     "attachment": "المرفق",
     "attachNone": "بدون مرفق",
-    "attachBook": "ربط سجل بالمعرّف",
+    "attachBook": "إرفاق سجل",
     "attachUpload": "رفع ملف",
-    "bookIdLabel": "معرّف السجل",
     "confirm": "إرسال إلى {{count}} من المجموعات",
     "groupSendFailed": "تعذّر الإرسال",
     "send": "إرسال",
@@ -2949,7 +2948,8 @@
     "mention": {
       "label": "الإشارة إلى موظف",
       "searchPlaceholder": "ابحث بالاسم أو الرقم الوظيفي",
-      "includeDesignation": "تضمين المسمى الوظيفي"
+      "includeDesignation": "تضمين المسمى الوظيفي",
+      "noResults": "لا يوجد موظفون"
     }
   },
   "gateway": {

@@ -11,7 +11,8 @@ vi.mock('react-i18next', () => ({
 vi.mock('../../lib/api', () => ({ api: { listEmployees: vi.fn() } }))
 
 import { api, type EmployeeListItem } from '../../lib/api'
-import { EmployeeMentionField, buildMention } from './EmployeeMentionField'
+import { buildMention } from './mention'
+import { EmployeeMentionField } from './EmployeeMentionField'
 
 const emp = {
   id: 'G-1234', name_en: 'Ahmed Al-Sayed', name_ar: 'أحمد السيد',

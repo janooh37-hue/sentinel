@@ -3,7 +3,7 @@
  * optionally the designation) into the announcement message. Insertion is plain
  * text the operator can edit; there is no structured backend field.
  *
- * buildMention is exported and pure so the formatting is unit-tested directly.
+ * buildMention lives in ./mention.ts so this module exports only the component.
  * Localizes name/designation to the active UI language (Arabic uses the Arabic
  * comma between name and designation).
  */
@@ -11,22 +11,8 @@ import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 
-import { api, type EmployeeListItem } from '@/lib/api'
-
-export function buildMention(
-  emp: EmployeeListItem,
-  lang: string,
-  includeDesignation: boolean,
-): string {
-  const ar = lang.startsWith('ar')
-  const name = (ar ? emp.name_ar : emp.name_en) || emp.name_en || emp.name_ar || emp.id
-  let out = `${name} (${emp.id})`
-  if (includeDesignation) {
-    const desig = (ar ? emp.position_ar : emp.position) || emp.position || emp.position_ar
-    if (desig) out += ar ? `، ${desig}` : `, ${desig}`
-  }
-  return out
-}
+import { api } from '@/lib/api'
+import { buildMention } from './mention'
 
 export function EmployeeMentionField({
   onInsert,
@@ -87,6 +73,11 @@ export function EmployeeMentionField({
               </button>
             </li>
           ))}
+          {empQuery.data && empQuery.data.items.length === 0 && (
+            <li className="px-3 py-2 text-[0.82em] text-muted-foreground" dir="auto">
+              {t('sendToGroup.mention.noResults')}
+            </li>
+          )}
         </ul>
       )}
     </div>

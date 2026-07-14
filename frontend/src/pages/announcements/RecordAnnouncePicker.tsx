@@ -123,7 +123,7 @@ export function RecordAnnouncePicker({
               </p>
             )}
           </div>
-          <div className="mt-3 flex justify-end">
+          <div className="mt-3 flex">
             <button
               type="button"
               disabled={!selected || !pdfUrl}
@@ -132,7 +132,7 @@ export function RecordAnnouncePicker({
                   onPick({ id: selected.id, ref: selected.ref_number, subject: selected.subject ?? '' })
                 }
               }}
-              className="rounded-md bg-primary px-4 py-2 text-[0.85em] font-semibold text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
+              className="ms-auto rounded-md bg-primary px-4 py-2 text-[0.85em] font-semibold text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
             >
               {t('sendToGroup.picker.confirm')}
             </button>

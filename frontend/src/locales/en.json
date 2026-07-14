@@ -2710,9 +2710,8 @@
     "messagePlaceholder": "Type your message here…",
     "attachment": "Attachment",
     "attachNone": "None",
-    "attachBook": "Link a record by ID",
+    "attachBook": "Attach a record",
     "attachUpload": "Upload a file",
-    "bookIdLabel": "Record ID",
     "confirm": "Send to {{count}} group(s)",
     "groupSendFailed": "failed to send",
     "send": "Send",
@@ -2766,7 +2765,8 @@
     "mention": {
       "label": "Mention an employee",
       "searchPlaceholder": "Search by name or G-number",
-      "includeDesignation": "Include designation"
+      "includeDesignation": "Include designation",
+      "noResults": "No employees found"
     }
   },
   "gateway": {
