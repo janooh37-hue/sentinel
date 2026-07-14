@@ -17,12 +17,10 @@ import { AlertTriangle, MessageCircle } from 'lucide-react'
 
 import { api, type AnnouncementOut, type GroupSendOut } from '@/lib/api'
 import { useCapabilities } from '@/lib/useCapabilities'
+import { useGatewayStatus, type GatewayState } from '@/lib/useGatewayStatus'
 import { GatewayConnectDialog } from './GatewayConnectDialog'
 
 type AttachMode = 'none' | 'book' | 'upload'
-
-// Gateway states reported by GET /announcements/status
-type GatewayState = 'disabled' | 'unreachable' | 'disconnected' | 'connected'
 
 export function SendToGroupPage(): React.JSX.Element {
   const { t } = useTranslation()
@@ -32,12 +30,8 @@ export function SendToGroupPage(): React.JSX.Element {
   // QR connect dialog (admin only)
   const [qrOpen, setQrOpen] = useState(false)
 
-  // Gateway status query (staleTime 30s — avoids hammering on every mount)
-  const { data: gatewayData, isLoading: gatewayLoading } = useQuery({
-    queryKey: ['gateway-status'],
-    queryFn: api.gatewayStatus,
-    staleTime: 30_000,
-  })
+  // Gateway status query — shared hook (staleTime 30s, capability-gated)
+  const { data: gatewayData, isLoading: gatewayLoading } = useGatewayStatus()
   const gatewayState = (gatewayData?.state ?? 'disconnected') as GatewayState
   const isConnected = !gatewayLoading && gatewayState === 'connected'
 

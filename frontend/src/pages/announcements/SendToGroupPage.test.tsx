@@ -16,7 +16,7 @@ vi.mock('react-i18next', () => ({
 }))
 vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }))
 vi.mock('../../lib/useCapabilities', () => ({
-  useCapabilities: () => ({ has: () => false }),
+  useCapabilities: () => ({ has: (cap: string) => cap === 'messages.broadcast' }),
 }))
 vi.mock('../../lib/api', () => ({
   api: {
