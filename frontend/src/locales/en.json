@@ -2762,6 +2762,11 @@
       "selectHint": "Select a record to preview",
       "noDocument": "This record has no document to attach",
       "confirm": "Attach"
+    },
+    "mention": {
+      "label": "Mention an employee",
+      "searchPlaceholder": "Search by name or G-number",
+      "includeDesignation": "Include designation"
     }
   },
   "gateway": {

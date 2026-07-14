@@ -21,6 +21,7 @@ import { useGatewayStatus, type GatewayState } from '@/lib/useGatewayStatus'
 import { GatewayConnectDialog } from './GatewayConnectDialog'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import { RecordAnnouncePicker, type PickedBook } from './RecordAnnouncePicker'
+import { EmployeeMentionField } from './EmployeeMentionField'
 
 type AttachMode = 'none' | 'book' | 'upload'
 
@@ -60,6 +61,11 @@ export function SendToGroupPage(): React.JSX.Element {
 
   // Message
   const [message, setMessage] = useState('')
+  const messageRef = useRef<HTMLTextAreaElement>(null)
+  // Keep a ref in sync so mutationFn always reads the latest value
+  // (avoids stale-closure issues with useMutation's deferred option update).
+  const messageValueRef = useRef(message)
+  messageValueRef.current = message
 
   // Attachment
   const [attachMode, setAttachMode] = useState<AttachMode>('none')
@@ -101,8 +107,9 @@ export function SendToGroupPage(): React.JSX.Element {
       for (const id of selectedIds) {
         form.append('group_ids', id)
       }
-      if (message.trim()) {
-        form.append('text', message.trim())
+      const currentMessage = messageValueRef.current
+      if (currentMessage.trim()) {
+        form.append('text', currentMessage.trim())
       }
       if (attachMode === 'book' && bookId.trim()) {
         form.append('book_id', bookId.trim())
@@ -131,6 +138,16 @@ export function SendToGroupPage(): React.JSX.Element {
       return next
     })
   }
+
+  const insertMention = useCallback((text: string): void => {
+    const el = messageRef.current
+    setMessage((prev) => {
+      if (!el) return prev ? `${prev} ${text}` : text
+      const start = el.selectionStart ?? prev.length
+      const end = el.selectionEnd ?? prev.length
+      return prev.slice(0, start) + text + prev.slice(end)
+    })
+  }, [])
 
   const handleFileChange = useCallback(() => {
     setHasFile((fileRef.current?.files?.length ?? 0) > 0)
@@ -283,6 +300,7 @@ export function SendToGroupPage(): React.JSX.Element {
             {t('sendToGroup.message')}
           </label>
           <textarea
+            ref={messageRef}
             value={message}
             onChange={(e) => setMessage(e.target.value)}
             placeholder={t('sendToGroup.messagePlaceholder')}
@@ -290,6 +308,7 @@ export function SendToGroupPage(): React.JSX.Element {
             rows={4}
             className="w-full rounded-md border border-border bg-surface px-3 py-2 text-[0.88em] text-foreground placeholder:text-faint focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
           />
+          <EmployeeMentionField onInsert={insertMention} />
         </section>
 
         {/* Attachment section */}

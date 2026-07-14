@@ -36,6 +36,13 @@ vi.mock('./RecordAnnouncePicker', () => ({
       </button>
     ) : null,
 }))
+vi.mock('./EmployeeMentionField', () => ({
+  EmployeeMentionField: ({ onInsert }: { onInsert: (t: string) => void }) => (
+    <button type="button" onClick={() => onInsert('Ahmed Al-Sayed (G-1234)')}>
+      stub-mention
+    </button>
+  ),
+}))
 
 import { api } from '../../lib/api'
 import { SendToGroupPage } from './SendToGroupPage'
@@ -50,6 +57,7 @@ function renderPage(): void {
 }
 
 beforeEach(() => {
+  vi.clearAllMocks()
   vi.mocked(api.gatewayStatus).mockResolvedValue({ state: 'connected' })
   vi.mocked(api.listGroups).mockResolvedValue([{ id: '1@g.us', name: 'Alpha' }])
   // Reset capabilities: non-admin by default (only messages.broadcast)
@@ -138,6 +146,21 @@ describe('SendToGroupPage', () => {
     await waitFor(() => expect(api.sendAnnouncement).toHaveBeenCalled())
     const form = vi.mocked(api.sendAnnouncement).mock.calls[0][0] as FormData
     expect(form.get('book_id')).toBe('42')
+  })
+
+  it('inserts an employee mention into the message and sends it as text', async () => {
+    vi.mocked(api.sendAnnouncement).mockResolvedValue({
+      announcement_id: 1, sent: 1, failed: 0, results: [],
+    })
+    renderPage()
+    await userEvent.click(await screen.findByRole('checkbox'))
+    await userEvent.click(screen.getByRole('button', { name: 'stub-mention' }))
+    // the mention text is now in the textarea
+    expect(screen.getByRole('textbox')).toHaveValue('Ahmed Al-Sayed (G-1234)')
+    await userEvent.click(screen.getByRole('button', { name: 'sendToGroup.send' }))
+    await waitFor(() => expect(api.sendAnnouncement).toHaveBeenCalled())
+    const form = vi.mocked(api.sendAnnouncement).mock.calls[0][0] as FormData
+    expect(form.get('text')).toBe('Ahmed Al-Sayed (G-1234)')
   })
 
   it('admin sees an unlink action when connected', async () => {

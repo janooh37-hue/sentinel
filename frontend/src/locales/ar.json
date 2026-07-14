@@ -2945,6 +2945,11 @@
       "selectHint": "اختر سجلاً للمعاينة",
       "noDocument": "لا يوجد مستند قابل للإرفاق لهذا السجل",
       "confirm": "إرفاق"
+    },
+    "mention": {
+      "label": "الإشارة إلى موظف",
+      "searchPlaceholder": "ابحث بالاسم أو الرقم الوظيفي",
+      "includeDesignation": "تضمين المسمى الوظيفي"
     }
   },
   "gateway": {
