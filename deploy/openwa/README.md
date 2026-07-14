@@ -170,6 +170,23 @@ If the office WhatsApp number is logged out or temporarily banned:
 
 ---
 
+## Pin the API contract
+
+Verify these endpoints against WAHA's `/api/docs` before go-live (some paths may
+shift between WAHA versions — treat this as a checklist, not a guarantee).
+
+| Action | Endpoint | Notes |
+|--------|----------|-------|
+| Start session | `POST /api/sessions` | `{"name": "gssg", "start": true}` → 200 |
+| Session status | `GET /api/sessions/{session}` | `{"status": "WORKING"}` when connected |
+| QR code | `GET /api/{session}/auth/qr` | Returns PNG image data-url; poll until `WORKING` |
+| Send text | `POST /api/sendText` | `{"chatId": "...", "text": "..."}` → `{"id": "..."}` |
+| Send file | `POST /api/sendFile` | Multipart with `file` field |
+| Groups list | `GET /api/{session}/groups` | Returns array of group objects |
+| Logout / unlink | `POST /api/sessions/{session}/logout` | `{}` → 2xx on success (WAHA session logout; confirm against `/api/docs`) |
+
+---
+
 ## Migration / ops note
 
 Rolling back Alembic migration `0051` on a live database will delete **all**
