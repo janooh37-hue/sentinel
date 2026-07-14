@@ -5,7 +5,9 @@ import { NAV_ITEMS } from './navItems'
 
 // Leaves stays in TopNav (desktop) and the NavDrawer (mobile), but is dropped
 // from the bottom bar to keep it at 5 evenly-spaced, touch-sized tabs.
-const BOTTOM_TAB_ITEMS = NAV_ITEMS.filter((item) => item.to !== '/leaves')
+// Capability-gated items (cap field set) are also excluded from the bottom bar
+// to prevent overflow and avoid conditional hooks; they appear in NavDrawer only.
+const BOTTOM_TAB_ITEMS = NAV_ITEMS.filter((item) => item.to !== '/leaves' && !item.cap)
 
 export function BottomTabBar(): React.JSX.Element {
   const { t } = useTranslation()

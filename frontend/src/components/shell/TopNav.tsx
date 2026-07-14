@@ -18,6 +18,7 @@ import { NavLink } from 'react-router-dom'
 import { AccountMenu } from '@/components/shell/AccountMenu'
 import { api } from '@/lib/api'
 import type { Theme } from '@/lib/api'
+import { useCapabilities } from '@/lib/useCapabilities'
 import { migrateLegacyFontScale, persistFontScale, persistTheme } from '@/lib/theme'
 
 import { AaSlider } from './AaSlider'
@@ -37,6 +38,7 @@ interface TopNavProps {
 export function TopNav({ onLock, onOpenSettings, onSignOut }: TopNavProps): React.JSX.Element {
   const { t } = useTranslation()
   const qc = useQueryClient()
+  const { has } = useCapabilities()
   const { data: settings } = useQuery({
     queryKey: ['settings'],
     queryFn: api.getSettings,
@@ -86,7 +88,7 @@ export function TopNav({ onLock, onOpenSettings, onSignOut }: TopNavProps): Reac
         </div>
       </NavLink>
       <nav className="ms-5 flex gap-1 text-[0.95em]">
-        {NAV_ITEMS.map(({ to, key }) => (
+        {NAV_ITEMS.filter((item) => !item.cap || has(item.cap)).map(({ to, key }) => (
           <NavLink
             key={to}
             to={to}

@@ -597,6 +597,11 @@ export type ManagerUpdate = components['schemas']['ManagerUpdate']
 export type DutySupervisorRead = components['schemas']['DutySupervisorRead']
 export type DutySupervisorCreate = components['schemas']['DutySupervisorCreate']
 
+// Phase 2c — OpenWA announcements (Task 6/7)
+export type GroupOut = components['schemas']['GroupOut']
+export type GroupSendOut = components['schemas']['GroupSendOut']
+export type AnnouncementOut = components['schemas']['AnnouncementOut']
+
 // Phase 2a — OpenWA digest API (Task 10/11)
 export type DigestPreview = components['schemas']['DigestPreview']
 export type DigestSendResult = components['schemas']['DigestSendResult']
@@ -1062,6 +1067,10 @@ export const api = {
   addDutySupervisor: (body: DutySupervisorCreate) =>
     request<DutySupervisorRead>('POST', '/duty-supervisors/', body),
   deleteDutySupervisor: (id: number) => request<void>('DELETE', `/duty-supervisors/${id}`),
+
+  // --- announcements (Phase 2c OpenWA — Task 6/7) ---
+  listGroups: () => request<GroupOut[]>('GET', '/announcements/groups'),
+  sendAnnouncement: (form: FormData) => multipart<AnnouncementOut>('/announcements/send', form),
 
   // --- leave digests (Phase 2a OpenWA — Task 10/11) ---
   previewLeaveDigest: (dutyUnit: string) =>

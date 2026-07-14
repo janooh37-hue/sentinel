@@ -73,6 +73,7 @@
     "records": "Records",
     "settings": "Settings",
     "menu": "Menu",
+    "sendToGroup": "Send to Group",
     "bell": {
       "awaitingReturn": "{{count}} awaiting return form",
       "awaitingReturnTitle": "Awaiting return form",
@@ -2611,5 +2612,26 @@
     "unknownReason": "unknown reason",
     "previewError": "Could not load the preview. Please try again.",
     "sendError": "Could not send the digest. Please try again."
+  },
+  "sendToGroup": {
+    "title": "Send to Group",
+    "subtitle": "Broadcast a message or attachment to one or more WhatsApp groups",
+    "groups": "Groups",
+    "noGroups": "No groups available. Make sure OpenWA is connected.",
+    "message": "Message",
+    "messagePlaceholder": "Type your message here…",
+    "attachment": "Attachment",
+    "attachNone": "None",
+    "attachBook": "Link a record by ID",
+    "attachUpload": "Upload a file",
+    "bookIdLabel": "Record ID",
+    "confirm": "Send to {{count}} group(s)",
+    "send": "Send",
+    "sending": "Sending…",
+    "resultSent": "Sent: {{count}}",
+    "resultFailed": "Failed: {{count}}",
+    "sendError": "Could not send the announcement. Please try again.",
+    "needContent": "Type a message or add an attachment",
+    "pickGroup": "Select at least one group"
   }
 }

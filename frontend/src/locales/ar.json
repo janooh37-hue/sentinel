@@ -73,6 +73,7 @@
     "records": "المستندات",
     "settings": "الإعدادات",
     "menu": "القائمة",
+    "sendToGroup": "الإرسال إلى مجموعة",
     "bell": {
       "awaitingReturn_zero": "لا موظفين بانتظار المباشرة",
       "awaitingReturn_one": "موظف واحد بانتظار المباشرة",
@@ -2758,5 +2759,26 @@
     "unknownReason": "سبب غير معروف",
     "previewError": "تعذّر تحميل المعاينة. حاول مرة أخرى.",
     "sendError": "تعذّر إرسال الملخص. حاول مرة أخرى."
+  },
+  "sendToGroup": {
+    "title": "الإرسال إلى مجموعة",
+    "subtitle": "بث رسالة أو مرفق إلى مجموعة واتساب أو أكثر",
+    "groups": "المجموعات",
+    "noGroups": "لا توجد مجموعات متاحة. تأكد من اتصال OpenWA.",
+    "message": "الرسالة",
+    "messagePlaceholder": "اكتب رسالتك هنا…",
+    "attachment": "المرفق",
+    "attachNone": "بدون مرفق",
+    "attachBook": "ربط سجل بالمعرّف",
+    "attachUpload": "رفع ملف",
+    "bookIdLabel": "معرّف السجل",
+    "confirm": "إرسال إلى {{count}} مجموعة",
+    "send": "إرسال",
+    "sending": "جارٍ الإرسال…",
+    "resultSent": "تم الإرسال: {{count}}",
+    "resultFailed": "فشل: {{count}}",
+    "sendError": "تعذّر إرسال الإعلان. حاول مرة أخرى.",
+    "needContent": "اكتب رسالة أو أضف مرفقًا",
+    "pickGroup": "اختر مجموعة واحدة على الأقل"
   }
 }

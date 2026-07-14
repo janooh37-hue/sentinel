@@ -71,6 +71,9 @@ const DutyLocationsPage = lazy(() =>
 const ScanInboxPage = lazy(() =>
   import('@/pages/scanInbox/ScanInboxPage').then((m) => ({ default: m.ScanInboxPage })),
 )
+const SendToGroupPage = lazy(() =>
+  import('@/pages/announcements/SendToGroupPage').then((m) => ({ default: m.SendToGroupPage })),
+)
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -236,6 +239,14 @@ function Shell(): React.JSX.Element {
                 element={
                   <RequireCapability cap="users.manage">
                     <AccessRequestsPage />
+                  </RequireCapability>
+                }
+              />
+              <Route
+                path="/messages/broadcast"
+                element={
+                  <RequireCapability cap="messages.broadcast">
+                    <SendToGroupPage />
                   </RequireCapability>
                 }
               />
