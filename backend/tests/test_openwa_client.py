@@ -105,8 +105,18 @@ def test_get_ack_retries_on_transport_error():
         raise httpx.ConnectError("boom")
 
     _mock(handler)
-    r = openwa_client.get_ack("m1")
+    r = openwa_client.get_ack("m1", "971500000000@c.us")
     assert not r.ok and calls["n"] == 2
+
+
+def test_get_ack_maps_ack_int_to_state():
+    def handler(req):
+        assert req.url.path == "/api/default/chats/971500000000@c.us/messages/m1"
+        return httpx.Response(200, json={"ack": 3})
+
+    _mock(handler)
+    r = openwa_client.get_ack("m1", "971500000000@c.us")
+    assert r.ok and r.state == "read"
 
 
 def test_is_registered_true():

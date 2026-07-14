@@ -409,7 +409,7 @@ def poll_deliveries(db: Session, *, now: datetime | None = None) -> int:
             res = sms_client.get_delivery(row.provider_msg_id)
             state: str | None = res.state
         else:
-            res_wa = openwa_client.get_ack(row.provider_msg_id)
+            res_wa = openwa_client.get_ack(row.provider_msg_id, openwa_client._chat_id(row.phone))
             state = res_wa.state
             res = res_wa  # type: ignore[assignment]
         row.delivery_checked_at = now
@@ -435,7 +435,7 @@ def refresh_delivery(db: Session, msg_id: int) -> OutboundMessage | None:
         if res_sms.ok:
             row.delivery_state = res_sms.state
     else:
-        res_wa = openwa_client.get_ack(row.provider_msg_id)
+        res_wa = openwa_client.get_ack(row.provider_msg_id, openwa_client._chat_id(row.phone))
         row.delivery_checked_at = _now()
         if res_wa.ok:
             row.delivery_state = res_wa.state

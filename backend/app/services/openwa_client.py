@@ -21,6 +21,8 @@ log = logging.getLogger(__name__)
 _TIMEOUT = httpx.Timeout(10.0)
 _transport: httpx.BaseTransport | None = None  # overridable in tests
 
+_ACK_STATE = {-1: "failed", 0: "sent", 1: "sent", 2: "delivered", 3: "read", 4: "read"}
+
 
 @dataclass(frozen=True)
 class SendResult:
@@ -188,9 +190,9 @@ def is_registered(phone: str) -> bool | None:
     return bool(val) if val is not None else None
 
 
-def get_ack(message_id: str) -> DeliveryResult:
+def get_ack(message_id: str, chat_id: str) -> DeliveryResult:
     cfg = get_settings()
-    url = f"{_base()}/api/sessions/{cfg.openwa_session}/messages/{message_id}"
+    url = f"{_base()}/api/{cfg.openwa_session}/chats/{chat_id}/messages/{message_id}"
     last_err: str | None = None
     for _attempt in range(2):
         try:
@@ -201,7 +203,9 @@ def get_ack(message_id: str) -> DeliveryResult:
             continue
         if resp.status_code // 100 == 2:
             data = resp.json() if resp.content else {}
-            return DeliveryResult(ok=True, state=(data.get("ack") or data.get("status")))
+            ack = data.get("ack")
+            state = None if ack is None else _ACK_STATE.get(int(ack), "sent")
+            return DeliveryResult(ok=True, state=state)
         return DeliveryResult(ok=False, error=f"HTTP {resp.status_code}: {resp.text}")
     return DeliveryResult(ok=False, error=last_err or "network error")
 
