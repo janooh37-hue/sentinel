@@ -2,18 +2,20 @@
 
 from __future__ import annotations
 
+import json
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from sqlalchemy.orm import Session
 
 from app.api.deps import require_capability
-from app.db.models import User
+from app.db.models import AuditLog, User
 from app.db.session import get_db
 from app.schemas.announcement import (
     AnnouncementOut,
     GatewayQrOut,
     GatewayStatusOut,
+    GatewayUnlinkOut,
     GroupOut,
     GroupSendOut,
 )
@@ -36,7 +38,7 @@ def gateway_status(
     _user: Annotated[User, Depends(require_capability("messages.broadcast"))],
 ) -> GatewayStatusOut:
     """Return the current OpenWA session state."""
-    return GatewayStatusOut(state=openwa_client.session_state())
+    return GatewayStatusOut(state=openwa_client.cached_session_state())
 
 
 @router.get("/qr", response_model=GatewayQrOut)
@@ -45,6 +47,27 @@ def gateway_qr(
 ) -> GatewayQrOut:
     """Return the current QR code for pairing the WhatsApp session (admin only)."""
     return GatewayQrOut(qr=openwa_client.fetch_qr())
+
+
+@router.post("/unlink", response_model=GatewayUnlinkOut)
+def gateway_unlink(
+    db: Annotated[Session, Depends(get_db)],
+    user: Annotated[User, Depends(require_capability("settings.edit"))],
+) -> GatewayUnlinkOut:
+    """Unlink the current WhatsApp session (admin only). Audit-logged; dormant behind openwa_enabled."""
+    ok = openwa_client.logout()
+    db.add(
+        AuditLog(
+            actor=user.display_name or user.email,
+            action="unlink_whatsapp",
+            entity_type="gateway",
+            entity_id=None,
+            payload=json.dumps({"ok": ok}, ensure_ascii=False),
+        )
+    )
+    db.commit()
+    openwa_client.reset_status_cache()
+    return GatewayUnlinkOut(ok=ok)
 
 
 @router.post("/send", response_model=AnnouncementOut)

@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import base64
 import logging
+import time
 from dataclasses import dataclass
 
 import httpx
@@ -237,6 +238,30 @@ def session_state() -> str:
     if str(data.get("status", "")).upper() in {"CONNECTED", "READY", "WORKING"}:
         return "connected"
     return "disconnected"
+
+
+_STATUS_TTL = 15.0
+_status_cache: tuple[float, str] | None = None
+
+
+def reset_status_cache() -> None:
+    global _status_cache
+    _status_cache = None
+
+
+def cached_session_state() -> str:
+    """session_state() memoised for _STATUS_TTL seconds (per process).
+
+    Collapses bursts of polling clients into one upstream probe per window so a
+    dead gateway can't pin workers on the probe timeout. Never raises.
+    """
+    global _status_cache
+    now = time.monotonic()
+    if _status_cache is not None and now - _status_cache[0] < _STATUS_TTL:
+        return _status_cache[1]
+    state = session_state()
+    _status_cache = (now, state)
+    return state
 
 
 def logout() -> bool:

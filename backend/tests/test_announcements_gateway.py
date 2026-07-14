@@ -117,3 +117,26 @@ def test_qr_forbidden_for_broadcast_only_user(api_db, monkeypatch):
     r_status = bc_client.get("/api/v1/announcements/status")
     assert r_status.status_code == 200, f"expected 200, got {r_status.status_code}: {r_status.text}"
     assert r_status.json() == {"state": "connected"}
+
+
+@pytest.fixture(autouse=True)
+def _reset_status_cache():
+    openwa_client.reset_status_cache()
+    yield
+    openwa_client.reset_status_cache()
+
+
+def test_unlink_admin_ok(admin_client, monkeypatch, api_db):
+    from app.db.models import AuditLog
+
+    monkeypatch.setattr(openwa_client, "logout", lambda: True)
+    r = admin_client.post("/api/v1/announcements/unlink")
+    assert r.status_code == 200 and r.json() == {"ok": True}
+    row = api_db.query(AuditLog).filter_by(action="unlink_whatsapp").one()
+    assert row.entity_type == "gateway"
+
+
+def test_unlink_requires_settings_edit(client):
+    # `client` = manager role (no settings.edit)
+    r = client.post("/api/v1/announcements/unlink")
+    assert r.status_code in (401, 403)

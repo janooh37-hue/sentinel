@@ -30,3 +30,7 @@ class GatewayStatusOut(BaseModel):
 
 class GatewayQrOut(BaseModel):
     qr: str | None
+
+
+class GatewayUnlinkOut(BaseModel):
+    ok: bool

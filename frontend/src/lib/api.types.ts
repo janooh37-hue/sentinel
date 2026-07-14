@@ -552,6 +552,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/announcements/unlink": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Gateway Unlink
+         * @description Unlink the current WhatsApp session (admin only). Audit-logged; dormant behind openwa_enabled.
+         */
+        post: operations["gateway_unlink_api_v1_announcements_unlink_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/announcements/send": {
         parameters: {
             query?: never;
@@ -4914,6 +4934,11 @@ export interface components {
             /** State */
             state: string;
         };
+        /** GatewayUnlinkOut */
+        GatewayUnlinkOut: {
+            /** Ok */
+            ok: boolean;
+        };
         /**
          * GenerateAttachmentSpec
          * @description One attachment to merge into the generated PDF (spec 2026-06-11 §6).
@@ -7480,6 +7505,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["GatewayQrOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    gateway_unlink_api_v1_announcements_unlink_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GatewayUnlinkOut"];
                 };
             };
             /** @description Validation Error */

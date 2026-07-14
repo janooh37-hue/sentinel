@@ -84,3 +84,21 @@ def test_logout_false_on_transport_error(monkeypatch):
 
 def test_probe_timeout_is_short():
     assert wa._PROBE_TIMEOUT.read == 3.0
+
+
+def test_cached_session_state_collapses_calls(monkeypatch):
+    wa.reset_status_cache()
+    calls = {"n": 0}
+
+    def counting():
+        calls["n"] += 1
+        return "connected"
+
+    monkeypatch.setattr(wa, "session_state", counting)
+    assert wa.cached_session_state() == "connected"
+    assert wa.cached_session_state() == "connected"
+    assert wa.cached_session_state() == "connected"
+    assert calls["n"] == 1  # cached within the TTL window
+    wa.reset_status_cache()
+    assert wa.cached_session_state() == "connected"
+    assert calls["n"] == 2  # re-probed after reset
