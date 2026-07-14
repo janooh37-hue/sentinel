@@ -169,10 +169,14 @@ def send_file(
 def is_registered(phone: str) -> bool | None:
     """True/False if the gateway can tell us; None when unknown (endpoint error)."""
     cfg = get_settings()
-    url = f"{_base()}/api/sessions/{cfg.openwa_session}/contacts/check"
+    url = f"{_base()}/api/contacts/check-exists"
     try:
         with _client() as c:
-            resp = c.get(url, headers=_headers(), params={"phone": phone.removeprefix("+")})
+            resp = c.get(
+                url,
+                headers=_headers(),
+                params={"phone": phone.removeprefix("+"), "session": cfg.openwa_session},
+            )
     except httpx.HTTPError as e:
         log.warning("openwa: is_registered transport error: %s", e)
         return None

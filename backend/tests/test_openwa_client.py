@@ -111,7 +111,10 @@ def test_get_ack_retries_on_transport_error():
 
 def test_is_registered_true():
     def handler(req):
-        return httpx.Response(200, json={"numberExists": True})
+        assert req.url.path == "/api/contacts/check-exists"
+        assert req.url.params["phone"] == "971500000000"
+        assert req.url.params["session"] == "default"
+        return httpx.Response(200, json={"numberExists": True, "chatId": "971500000000@c.us"})
 
     _mock(handler)
     assert openwa_client.is_registered("971500000000") is True
