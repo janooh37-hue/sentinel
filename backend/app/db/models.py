@@ -495,6 +495,37 @@ class DutySupervisor(Base):
     )
 
 
+class GroupAnnouncement(Base):
+    """One compose action: a message (± attachment) posted to N WhatsApp groups."""
+
+    __tablename__ = "group_announcements"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    body: Mapped[str | None] = mapped_column(Text, nullable=True)
+    attachment_kind: Mapped[str] = mapped_column(String(16), default="none", server_default="none")
+    attachment_name: Mapped[str | None] = mapped_column(String(256), nullable=True)
+    book_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    sent_by: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
+
+
+class GroupAnnouncementSend(Base):
+    """One row per target group for a GroupAnnouncement (WhatsApp only)."""
+
+    __tablename__ = "group_announcement_sends"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    announcement_id: Mapped[int] = mapped_column(Integer)  # FK omitted (app-side integrity)
+    group_id: Mapped[str] = mapped_column(String(64))
+    group_name: Mapped[str] = mapped_column(String(256))
+    status: Mapped[str] = mapped_column(String(16))  # 'sent' | 'failed'
+    provider_msg_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
+
+    __table_args__ = (Index("ix_group_announcement_sends_ann", "announcement_id"),)
+
+
 class Manager(Base):
     __tablename__ = "managers"
 
@@ -1076,7 +1107,7 @@ class ScanInbox(Base):
     confidence_tier: Mapped[str | None] = mapped_column(String(8), nullable=True)
     model_version: Mapped[str | None] = mapped_column(String(32), nullable=True)
     attempts: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
-    candidates: Mapped[list | None] = mapped_column(JSON, default=list)
+    candidates: Mapped[list[object] | None] = mapped_column(JSON, default=list)
     undo_token: Mapped[str | None] = mapped_column(String(256), nullable=True)
     resolved_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     resolved_by: Mapped[int | None] = mapped_column(Integer, nullable=True)
