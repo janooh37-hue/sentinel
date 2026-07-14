@@ -128,6 +128,22 @@ def test_is_registered_unknown_on_error():
     assert openwa_client.is_registered("971500000000") is None
 
 
+def test_list_groups_parses_waha_shape():
+    def handler(req):
+        assert req.url.path == "/api/default/groups"
+        return httpx.Response(
+            200,
+            json=[
+                {"id": {"_serialized": "123@g.us"}, "name": "Ops"},
+                {"id": "456@g.us", "name": "HR"},
+            ],
+        )
+
+    _mock(handler)
+    groups = openwa_client.list_groups()
+    assert [(g.id, g.name) for g in groups] == [("123@g.us", "Ops"), ("456@g.us", "HR")]
+
+
 def test_health_true_when_connected():
     def handler(req):
         return httpx.Response(200, json={"status": "CONNECTED"})

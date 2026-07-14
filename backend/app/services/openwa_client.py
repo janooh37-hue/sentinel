@@ -116,7 +116,7 @@ def send(phone: str, text: str) -> SendResult:
 def list_groups() -> list[Group]:
     """Groups the connected number belongs to. Empty on any error (never raises)."""
     cfg = get_settings()
-    url = f"{_base()}/api/sessions/{cfg.openwa_session}/groups"
+    url = f"{_base()}/api/{cfg.openwa_session}/groups"
     try:
         with _client() as c:
             resp = c.get(url, headers=_headers())
@@ -129,7 +129,8 @@ def list_groups() -> list[Group]:
     rows = data.get("groups", data) if isinstance(data, dict) else data
     out: list[Group] = []
     for r in rows if isinstance(rows, list) else []:
-        gid = r.get("id") or r.get("chatId") or r.get("_serialized")
+        raw_id = r.get("id") or r.get("chatId") or r.get("_serialized")
+        gid = raw_id.get("_serialized") if isinstance(raw_id, dict) else raw_id
         name = r.get("name") or r.get("subject") or gid
         if gid:
             out.append(Group(id=str(gid), name=str(name)))
