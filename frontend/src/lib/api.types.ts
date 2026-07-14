@@ -492,6 +492,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/announcements/groups": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Groups
+         * @description Return the WhatsApp groups the connected number belongs to.
+         */
+        get: operations["list_groups_api_v1_announcements_groups_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/announcements/send": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Send Announcement
+         * @description Fan-out a text message (with optional attachment) to the given groups.
+         */
+        post: operations["send_announcement_api_v1_announcements_send_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/settings": {
         parameters: {
             query?: never;
@@ -2997,6 +3037,17 @@ export interface components {
              */
             is_default_manager: boolean;
         };
+        /** AnnouncementOut */
+        AnnouncementOut: {
+            /** Announcement Id */
+            announcement_id: number;
+            /** Sent */
+            sent: number;
+            /** Failed */
+            failed: number;
+            /** Results */
+            results: components["schemas"]["GroupSendOut"][];
+        };
         /** AppSettingsRead */
         AppSettingsRead: {
             /** Stamp Style */
@@ -3197,6 +3248,20 @@ export interface components {
              * Format: binary
              */
             upload: string;
+        };
+        /** Body_send_announcement_api_v1_announcements_send_post */
+        Body_send_announcement_api_v1_announcements_send_post: {
+            /** Group Ids */
+            group_ids: string[];
+            /**
+             * Text
+             * @default
+             */
+            text: string;
+            /** Book Id */
+            book_id?: number | null;
+            /** File */
+            file?: string | null;
         };
         /** Body_send_email_api_v1_email_send_post */
         Body_send_email_api_v1_email_send_post: {
@@ -4823,6 +4888,24 @@ export interface components {
             book_id?: number | null;
             /** Attachment Index */
             attachment_index?: number | null;
+        };
+        /** GroupOut */
+        GroupOut: {
+            /** Id */
+            id: string;
+            /** Name */
+            name: string;
+        };
+        /** GroupSendOut */
+        GroupSendOut: {
+            /** Group Id */
+            group_id: string;
+            /** Group Name */
+            group_name: string;
+            /** Ok */
+            ok: boolean;
+            /** Error */
+            error?: string | null;
         };
         /** HTTPValidationError */
         HTTPValidationError: {
@@ -7254,6 +7337,72 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["UserPermissionRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_groups_api_v1_announcements_groups_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GroupOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    send_announcement_api_v1_announcements_send_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_send_announcement_api_v1_announcements_send_post"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AnnouncementOut"];
                 };
             };
             /** @description Validation Error */

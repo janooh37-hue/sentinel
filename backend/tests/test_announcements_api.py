@@ -1,0 +1,128 @@
+"""Announcements API tests — groups + multipart send."""
+
+from __future__ import annotations
+
+from types import SimpleNamespace
+
+import pytest
+from fastapi.testclient import TestClient
+from sqlalchemy import create_engine
+from sqlalchemy.orm import Session, sessionmaker
+
+from app.api.deps import get_current_user
+from app.db import session as session_mod
+from app.db.models import Base, User
+from app.db.session import attach_sqlite_pragmas, get_db
+from app.main import create_app
+from app.services import announce_service, perm_service
+
+# ---------------------------------------------------------------------------
+# Fixtures — mirrors test_duty_supervisors_api.py pattern
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture()
+def api_db(monkeypatch, tmp_path) -> Session:
+    db_file = tmp_path / "announcements.db"
+    eng = create_engine(
+        f"sqlite:///{db_file}",
+        future=True,
+        connect_args={"check_same_thread": False},
+    )
+    attach_sqlite_pragmas(eng, wal=False)
+    Base.metadata.create_all(eng)
+    TestSession = sessionmaker(bind=eng, autoflush=False, expire_on_commit=False, future=True)
+    monkeypatch.setattr(session_mod, "engine", eng)
+    monkeypatch.setattr(session_mod, "SessionLocal", TestSession)
+    db = TestSession()
+    perm_service.seed_role_defaults(db)
+    try:
+        yield db
+    finally:
+        db.close()
+
+
+def _user(db: Session, role: str = "admin", email: str = "a@x.ae") -> User:
+    u = User(email=email, password_hash="x", role=role, status="active")
+    db.add(u)
+    db.commit()
+    db.refresh(u)
+    return u
+
+
+def _client(db: Session, user: User) -> TestClient:
+    app = create_app()
+    app.dependency_overrides[get_db] = lambda: db
+    app.dependency_overrides[get_current_user] = lambda: user
+    return TestClient(app, raise_server_exceptions=True)
+
+
+@pytest.fixture()
+def admin_client(api_db) -> TestClient:
+    return _client(api_db, _user(api_db, role="admin", email="admin_ann@x.ae"))
+
+
+@pytest.fixture()
+def client(api_db) -> TestClient:
+    return _client(api_db, _user(api_db, role="manager", email="mgr_ann@x.ae"))
+
+
+# ---------------------------------------------------------------------------
+# API tests
+# ---------------------------------------------------------------------------
+
+
+def test_list_groups(admin_client, monkeypatch):
+    monkeypatch.setattr(
+        announce_service,
+        "groups_available",
+        lambda db: [SimpleNamespace(id="1@g.us", name="Alpha")],
+    )
+    r = admin_client.get("/api/v1/announcements/groups")
+    assert r.status_code == 200
+    assert r.json() == [{"id": "1@g.us", "name": "Alpha"}]
+
+
+def test_send_text(admin_client, monkeypatch):
+    monkeypatch.setattr(
+        announce_service,
+        "groups_available",
+        lambda db: [SimpleNamespace(id="1@g.us", name="Alpha")],
+    )
+    monkeypatch.setattr(
+        announce_service,
+        "send_announcement",
+        lambda db, *, groups, text, attachment, book_id, sent_by: SimpleNamespace(
+            announcement_id=1,
+            sent=1,
+            failed=0,
+            results=[SimpleNamespace(group_id="1@g.us", group_name="Alpha", ok=True, error=None)],
+        ),
+    )
+    r = admin_client.post(
+        "/api/v1/announcements/send",
+        data={"group_ids": ["1@g.us"], "text": "hi"},
+    )
+    assert r.status_code == 200, r.text
+    assert r.json()["sent"] == 1
+
+
+def test_send_requires_text_or_attachment(admin_client, monkeypatch):
+    monkeypatch.setattr(
+        announce_service,
+        "groups_available",
+        lambda db: [SimpleNamespace(id="1@g.us", name="Alpha")],
+    )
+    r = admin_client.post(
+        "/api/v1/announcements/send",
+        data={"group_ids": ["1@g.us"], "text": ""},
+    )
+    assert r.status_code == 422
+
+
+def test_send_requires_capability(client):
+    r = client.post(
+        "/api/v1/announcements/send",
+        data={"group_ids": ["1@g.us"], "text": "hi"},
+    )
+    assert r.status_code in (401, 403)
