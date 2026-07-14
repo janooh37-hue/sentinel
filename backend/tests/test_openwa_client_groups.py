@@ -32,7 +32,7 @@ def test_send_to_chat_posts_group_chat_id(monkeypatch):
     res = wa.send_to_chat("123-456@g.us", "hi")
     assert res.ok and res.message_id == "G1"
     assert seen["json"]["chatId"] == "123-456@g.us"  # group id passed verbatim, no @c.us
-    assert "send-text" in seen["url"]
+    assert seen["url"].endswith("/api/sendText")
 
 
 def test_send_still_wraps_phone_as_c_us(monkeypatch):
@@ -101,7 +101,8 @@ def test_send_file_posts_base64(monkeypatch):
     )
     res = wa.send_file("1@g.us", data=b"PDFBYTES", filename="a.pdf", caption="see this")
     assert res.ok and res.message_id == "f1"
-    assert base64.b64decode(seen["json"]["file"]) == b"PDFBYTES"
+    assert seen["json"]["file"]["data"] == base64.b64encode(b"PDFBYTES").decode("ascii")
+    assert seen["json"]["file"]["filename"] == "a.pdf"
+    assert seen["json"]["file"]["mimetype"] == "application/pdf"
     assert seen["json"]["chatId"] == "1@g.us"
-    assert seen["json"]["filename"] == "a.pdf"
     assert seen["json"]["caption"] == "see this"
