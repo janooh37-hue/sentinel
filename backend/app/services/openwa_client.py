@@ -19,6 +19,7 @@ from app.config import get_settings
 log = logging.getLogger(__name__)
 
 _TIMEOUT = httpx.Timeout(10.0)
+_PROBE_TIMEOUT = httpx.Timeout(3.0)  # status path only — keeps a dead gateway from pinning workers
 _transport: httpx.BaseTransport | None = None  # overridable in tests
 
 _ACK_STATE = {-1: "failed", 0: "sent", 1: "sent", 2: "delivered", 3: "read", 4: "read"}
@@ -66,6 +67,10 @@ def _chat_id(phone: str) -> str:
 
 def _client() -> httpx.Client:
     return httpx.Client(transport=_transport, timeout=_TIMEOUT)
+
+
+def _probe_client() -> httpx.Client:
+    return httpx.Client(transport=_transport, timeout=_PROBE_TIMEOUT)
 
 
 def _msg_id(data: dict[str, object]) -> str | None:
@@ -221,7 +226,7 @@ def session_state() -> str:
         return "disabled"
     url = f"{_base()}/api/sessions/{cfg.openwa_session}"
     try:
-        with _client() as c:
+        with _probe_client() as c:
             resp = c.get(url, headers=_headers())
     except httpx.HTTPError as e:
         log.warning("openwa: session_state transport error: %s", e)
@@ -232,6 +237,23 @@ def session_state() -> str:
     if str(data.get("status", "")).upper() in {"CONNECTED", "READY", "WORKING"}:
         return "connected"
     return "disconnected"
+
+
+def logout() -> bool:
+    """Unlink the current WhatsApp session on the gateway. Never raises.
+
+    WAHA session logout (POST /api/sessions/{session}/logout) — confirm the path
+    against the reconciled WAHA client / dumped OpenAPI. Returns False on any error.
+    """
+    cfg = get_settings()
+    url = f"{_base()}/api/sessions/{cfg.openwa_session}/logout"
+    try:
+        with _client() as c:
+            resp = c.post(url, headers=_headers())
+    except httpx.HTTPError as e:
+        log.warning("openwa: logout transport error: %s", e)
+        return False
+    return resp.status_code // 100 == 2
 
 
 def fetch_qr() -> str | None:

@@ -58,3 +58,29 @@ def test_fetch_qr_none_on_error(monkeypatch):
     _cfg(monkeypatch)
     wa._transport = httpx.MockTransport(lambda r: httpx.Response(500, text="x"))
     assert wa.fetch_qr() is None
+
+
+def test_logout_true_on_2xx(monkeypatch):
+    _cfg(monkeypatch)
+    wa._transport = httpx.MockTransport(lambda r: httpx.Response(200, json={"ok": True}))
+    assert wa.logout() is True
+
+
+def test_logout_false_on_error(monkeypatch):
+    _cfg(monkeypatch)
+    wa._transport = httpx.MockTransport(lambda r: httpx.Response(500, text="x"))
+    assert wa.logout() is False
+
+
+def test_logout_false_on_transport_error(monkeypatch):
+    _cfg(monkeypatch)
+
+    def boom(r):
+        raise httpx.ConnectError("down")
+
+    wa._transport = httpx.MockTransport(boom)
+    assert wa.logout() is False
+
+
+def test_probe_timeout_is_short():
+    assert wa._PROBE_TIMEOUT.read == 3.0
