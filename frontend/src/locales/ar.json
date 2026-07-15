@@ -2975,7 +2975,9 @@
       "hint": "PDF أو صورة أو مستند · يُرسل إلى كل مستلم مختار",
       "ready": "جاهز للإرسال",
       "replace": "استبدال",
-      "remove": "إزالة"
+      "remove": "إزالة",
+      "mb": "ميغابايت",
+      "kb": "كيلوبايت"
     },
     "picker": {
       "title": "إرفاق سجل",
@@ -3028,8 +3030,18 @@
       "sendAnywayBook": "إرسال على أي حال — بدون السجل",
       "continueEditing": "متابعة التحرير",
       "note": "لن يُرسل شيء حتى تؤكد.",
-      "groupsPill": "{{count}} من المجموعات",
-      "directPill": "{{count}} مباشر"
+      "groupsPill_zero": "لا مجموعات",
+      "groupsPill_one": "مجموعة واحدة",
+      "groupsPill_two": "مجموعتان",
+      "groupsPill_few": "{{count}} مجموعات",
+      "groupsPill_many": "{{count}} مجموعةً",
+      "groupsPill_other": "{{count}} مجموعة",
+      "directPill_zero": "لا مستلمين مباشرين",
+      "directPill_one": "موظف واحد (مباشر)",
+      "directPill_two": "موظفان اثنان (مباشر)",
+      "directPill_few": "{{count}} موظفين (مباشر)",
+      "directPill_many": "{{count}} موظفاً (مباشر)",
+      "directPill_other": "{{count}} موظف (مباشر)"
     }
   },
   "gateway": {

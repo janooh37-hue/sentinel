@@ -10,10 +10,10 @@ import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { FileText, Paperclip } from 'lucide-react'
 
-function fmtSize(bytes: number): string {
+function fmtSize(bytes: number, t: (key: string) => string): string {
   return bytes >= 1_048_576
-    ? `${(bytes / 1_048_576).toFixed(1)} MB`
-    : `${Math.max(1, Math.round(bytes / 1024))} KB`
+    ? `${(bytes / 1_048_576).toFixed(1)} ${t('sendToGroup.uploadZone.mb')}`
+    : `${Math.max(1, Math.round(bytes / 1024))} ${t('sendToGroup.uploadZone.kb')}`
 }
 
 export function FileDropzone({
@@ -100,7 +100,7 @@ export function FileDropzone({
               <span className="font-semibold text-green-600 dark:text-green-400">
                 ✓ {t('sendToGroup.uploadZone.ready')}
               </span>
-              {fileSize !== null && <> · {fmtSize(fileSize)}</>}
+              {fileSize !== null && <> · <bdi>{fmtSize(fileSize, t)}</bdi></>}
             </p>
           </div>
           <button

@@ -2784,7 +2784,9 @@
       "hint": "PDF, image, or document · sent to every selected recipient",
       "ready": "Ready to send",
       "replace": "Replace",
-      "remove": "Remove"
+      "remove": "Remove",
+      "mb": "MB",
+      "kb": "KB"
     },
     "picker": {
       "title": "Attach a record",
