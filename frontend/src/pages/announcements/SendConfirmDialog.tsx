@@ -56,7 +56,7 @@ export function SendConfirmDialog({
 
   return (
     <DialogRoot open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
+      <DialogContent className="max-w-[440px]">
         <DialogHeader>
           <DialogTitle>{t('sendToGroup.confirmSend.title')}</DialogTitle>
           <DialogDescription>{t('sendToGroup.confirmSend.subtitle')}</DialogDescription>

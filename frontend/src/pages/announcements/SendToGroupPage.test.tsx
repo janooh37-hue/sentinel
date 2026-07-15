@@ -4,7 +4,7 @@
  * Mirrors the harness in SupervisorDesignations.test.tsx:
  *   QueryClientProvider + i18n stub + vi.mock('../../lib/api') + sonner mock.
  */
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor, fireEvent } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { vi, describe, it, expect, beforeEach } from 'vitest'
@@ -404,6 +404,35 @@ describe('SendToGroupPage', () => {
     )
     expect(api.sendAnnouncement).not.toHaveBeenCalled()
     expect(screen.queryByText('sendToGroup.confirmSend.title')).not.toBeInTheDocument()
+  })
+
+  // ── Fix 1: stale file state cleared when leaving upload mode ──
+  it('clears stale file state when switching away from upload mode and back', async () => {
+    renderPage()
+    await screen.findByText('Alpha')
+
+    // Switch to upload mode — dropzone renders
+    await userEvent.click(screen.getByRole('radio', { name: 'sendToGroup.attachUpload' }))
+    expect(screen.getByText('sendToGroup.uploadZone.main')).toBeInTheDocument()
+
+    // Choose a file via the hidden input
+    const fileInput = document.querySelector('input[type="file"]') as HTMLInputElement
+    const file = new File(['content'], 'report.pdf', { type: 'application/pdf' })
+    Object.defineProperty(fileInput, 'files', { value: [file], configurable: true })
+    fireEvent.change(fileInput)
+
+    // File card should now show the filename
+    expect(await screen.findByText('report.pdf')).toBeInTheDocument()
+
+    // Switch to 'book' mode — file state must be cleared
+    await userEvent.click(screen.getByRole('radio', { name: 'sendToGroup.attachBook' }))
+
+    // Switch back to upload
+    await userEvent.click(screen.getByRole('radio', { name: 'sendToGroup.attachUpload' }))
+
+    // File card gone; empty dropzone rendered
+    expect(screen.queryByText('report.pdf')).not.toBeInTheDocument()
+    expect(screen.getByText('sendToGroup.uploadZone.main')).toBeInTheDocument()
   })
 
   // ── Direct recipients: result panel shows direct rows with the direct tag ──

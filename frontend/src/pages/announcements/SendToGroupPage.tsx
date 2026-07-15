@@ -575,7 +575,10 @@ export function SendToGroupPage(): React.JSX.Element {
                       name="attachMode"
                       value={mode}
                       checked={attachMode === mode}
-                      onChange={() => setAttachMode(mode)}
+                      onChange={() => {
+                        if (attachMode === 'upload' && mode !== 'upload') handleFileClear()
+                        setAttachMode(mode)
+                      }}
                       className="accent-primary"
                     />
                     {mode === 'none'
@@ -728,6 +731,7 @@ export function SendToGroupPage(): React.JSX.Element {
         onOpenChange={setConfirmOpen}
         sending={sendMut.isPending}
         onConfirm={() => {
+          if (sendMut.isPending) return
           setConfirmOpen(false)
           sendMut.mutate()
         }}
