@@ -12,7 +12,7 @@ from app.db import session as session_mod
 from app.db.models import Base, User
 from app.db.session import attach_sqlite_pragmas, get_db
 from app.main import create_app
-from app.services import openwa_client, perm_service
+from app.services import announce_service, openwa_client, perm_service
 
 # ---------------------------------------------------------------------------
 # Fixtures — mirrors test_announcements_api.py
@@ -140,3 +140,40 @@ def test_unlink_requires_settings_edit(client):
     # `client` = manager role (no settings.edit)
     r = client.post("/api/v1/announcements/unlink")
     assert r.status_code == 403
+
+
+# ---------------------------------------------------------------------------
+# Service-level mention tests
+# ---------------------------------------------------------------------------
+
+
+def _enable_openwa(monkeypatch: pytest.MonkeyPatch) -> None:
+    from types import SimpleNamespace as _SN
+
+    monkeypatch.setattr(announce_service, "get_settings", lambda: _SN(openwa_enabled=True))
+
+
+def test_send_announcement_passes_normalized_mentions(
+    db_session: Session, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    calls: list[dict[str, object]] = []
+
+    def fake_send_to_chat(
+        chat_id: str, text: str, mentions: list[str] | None = None
+    ) -> openwa_client.SendResult:
+        calls.append({"chat_id": chat_id, "text": text, "mentions": mentions})
+        return openwa_client.SendResult(ok=True, message_id="m1")
+
+    monkeypatch.setattr(announce_service.openwa_client, "send_to_chat", fake_send_to_chat)
+    _enable_openwa(monkeypatch)
+
+    announce_service.send_announcement(
+        db_session,
+        groups=[("g1@g.us", "Duty Officers")],
+        text="Hi @971509059931",
+        attachment=None,
+        book_id=None,
+        sent_by=None,
+        mentions=["+971 50 905 9931"],
+    )
+    assert calls[0]["mentions"] == ["971509059931@c.us"]

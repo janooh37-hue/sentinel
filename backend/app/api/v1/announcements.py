@@ -80,6 +80,7 @@ async def send_announcement(
     text: Annotated[str, Form()] = "",
     book_id: Annotated[int | None, Form()] = None,
     file: Annotated[UploadFile | None, File()] = None,
+    mentions: Annotated[list[str] | None, Form()] = None,
 ) -> AnnouncementOut:
     """Fan-out a text message (with optional attachment) to the given groups."""
     # Resolve attachment.
@@ -114,6 +115,7 @@ async def send_announcement(
         attachment=attachment,
         book_id=(book_id if file is None else None),
         sent_by=user.id,
+        mentions=mentions or [],
     )
 
     return AnnouncementOut(

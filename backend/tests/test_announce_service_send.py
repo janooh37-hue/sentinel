@@ -19,7 +19,7 @@ def test_send_text_to_each_group(db_session, monkeypatch):
     monkeypatch.setattr(
         a.openwa_client,
         "send_to_chat",
-        lambda cid, txt: (
+        lambda cid, txt, mentions=None: (
             calls.append((cid, txt)) or SimpleNamespace(ok=True, message_id="m", error=None)
         ),
     )
@@ -42,7 +42,7 @@ def test_send_file_when_attachment(db_session, monkeypatch):
     monkeypatch.setattr(
         a.openwa_client,
         "send_file",
-        lambda cid, *, data, filename, caption: (
+        lambda cid, *, data, filename, caption, mentions=None: (
             seen.update(cid=cid, filename=filename, caption=caption, n=len(data))
             or SimpleNamespace(ok=True, message_id="f", error=None)
         ),
@@ -64,7 +64,9 @@ def test_failed_group_recorded(db_session, monkeypatch):
     monkeypatch.setattr(
         a.openwa_client,
         "send_to_chat",
-        lambda cid, txt: SimpleNamespace(ok=False, message_id=None, error="HTTP 500"),
+        lambda cid, txt, mentions=None: SimpleNamespace(
+            ok=False, message_id=None, error="HTTP 500"
+        ),
     )
     res = a.send_announcement(
         db_session,
