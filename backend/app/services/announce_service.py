@@ -336,15 +336,21 @@ def send_direct_announcement(
         name = emp.name_en or emp.name_ar or emp.id
         lang = "ar" if (emp.msg_language or "ar") == "ar" else "en"
         if attachment is None:
-            row = notify_dispatch.send_direct(
-                db,
-                employee=emp,
-                body=text,
-                language=lang,
-                event_type="announcement_direct",
-                event_ref=f"announcement_direct:{emp.id}",
-                sent_by=sent_by,
-            )
+            try:
+                row = notify_dispatch.send_direct(
+                    db,
+                    employee=emp,
+                    body=text,
+                    language=lang,
+                    event_type="announcement_direct",
+                    event_ref=f"announcement_direct:{emp.id}",
+                    sent_by=sent_by,
+                )
+            except notify_dispatch.NotifyDisabledError:
+                raise  # config-level: no channel enabled — identical for every recipient
+            except Exception as exc:
+                results.append(DirectSendResult(emp.id, name, ok=False, error=str(exc)))
+                continue
             results.append(
                 DirectSendResult(
                     emp.id,

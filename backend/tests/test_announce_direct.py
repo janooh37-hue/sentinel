@@ -20,14 +20,21 @@ def test_direct_text_routes_through_send_direct(db_session, monkeypatch):
     calls: list[dict] = []
 
     def fake_send_direct(db, *, employee, body, language, event_type, event_ref, sent_by):
-        calls.append({"emp": employee.id, "body": body, "event": event_type})
+        calls.append({"emp": employee.id, "body": body, "event": event_type, "ref": event_ref})
         return SimpleNamespace(status="sent", fell_back=False, error=None)
 
     monkeypatch.setattr(notify_dispatch, "send_direct", fake_send_direct)
     out = announce_service.send_direct_announcement(
         db_session, employee_ids=[emp.id], text="hello", attachment=None, sent_by=1
     )
-    assert calls == [{"emp": "GD1", "body": "hello", "event": "announcement_direct"}]
+    assert calls == [
+        {
+            "emp": "GD1",
+            "body": "hello",
+            "event": "announcement_direct",
+            "ref": "announcement_direct:GD1",
+        }
+    ]
     assert out[0].ok is True and out[0].employee_id == "GD1"
 
 
@@ -55,3 +62,21 @@ def test_direct_attachment_uses_whatsapp_file_send(db_session, monkeypatch):
     assert out[0].ok is True
     assert sent[0]["filename"] == "roster.pdf"
     assert sent[0]["chat"].endswith("@c.us")
+    assert sent[0]["caption"] == "see attached"
+
+
+def test_direct_text_error_isolated_per_recipient(db_session, monkeypatch):
+    _emp(db_session, emp_id="GD3")
+    _emp(db_session, emp_id="GD4", contact="0509998877")
+
+    def flaky_send_direct(db, *, employee, body, language, event_type, event_ref, sent_by):
+        if employee.id == "GD3":
+            raise RuntimeError("transport blew up")
+        return SimpleNamespace(status="sent", fell_back=False, error=None)
+
+    monkeypatch.setattr(notify_dispatch, "send_direct", flaky_send_direct)
+    out = announce_service.send_direct_announcement(
+        db_session, employee_ids=["GD3", "GD4"], text="hello", attachment=None, sent_by=1
+    )
+    assert out[0].ok is False and "transport blew up" in (out[0].error or "")
+    assert out[1].ok is True and out[1].employee_id == "GD4"
