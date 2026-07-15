@@ -524,6 +524,7 @@
       "quickReject": "Reject",
       "expandRow": "Show record details",
       "notes": "Notes",
+      "cancelReasonHint": "A reason is required to cancel — it is sent to the employee.",
       "filed": "Filed",
       "period": "Period",
       "scopedToEmployee": "Scoped to {{name}}",

@@ -168,6 +168,11 @@ export function RecordExpansion({
                 onChange={(e) => setNotes(e.target.value)}
                 className="w-full rounded-md border border-hairline bg-surface px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               />
+              {acts.includes('cancel') && (
+                <p className="text-[0.72em] text-muted-foreground">
+                  {t('leaves.report.cancelReasonHint')}
+                </p>
+              )}
             </div>
           )}
 
@@ -200,7 +205,7 @@ export function RecordExpansion({
                   variant="secondary"
                   size="sm"
                   onClick={() => updateMutation.mutate({ status: 'Cancelled', n: notes })}
-                  disabled={updateMutation.isPending}
+                  disabled={updateMutation.isPending || !notes.trim()}
                   className="rounded-full"
                 >
                   {t('leaves.report.cancel')}

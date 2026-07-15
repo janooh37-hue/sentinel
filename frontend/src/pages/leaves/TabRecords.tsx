@@ -339,6 +339,7 @@ function LeaveDetailDrawer({
   const acts = leave ? actionsFor(leave.leave_type, leave.status, leave.end_date, today, hasCertificate) : []
   const hasRequestActions =
     acts.includes('approve') || acts.includes('reject') || acts.includes('cancel')
+  const effectiveNotes = (notes || leave?.notes || '').trim()
   const awaitingCert =
     leave != null &&
     isNs &&
@@ -420,6 +421,11 @@ function LeaveDetailDrawer({
                   onChange={(e) => setNotes(e.target.value)}
                   className="rounded-md border border-hairline bg-surface px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 />
+                {acts.includes('cancel') && (
+                  <p className="text-[0.72em] text-muted-foreground">
+                    {t('leaves.report.cancelReasonHint')}
+                  </p>
+                )}
               </div>
             )}
 
@@ -452,7 +458,7 @@ function LeaveDetailDrawer({
                     variant="secondary"
                     size="sm"
                     onClick={() => updateMutation.mutate({ status: 'Cancelled', n: notes })}
-                    disabled={updateMutation.isPending}
+                    disabled={updateMutation.isPending || !effectiveNotes}
                     className="rounded-full"
                   >
                     {t('leaves.report.cancel')}

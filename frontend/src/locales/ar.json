@@ -573,6 +573,7 @@
       "quickReject": "رفض",
       "expandRow": "عرض تفاصيل السجل",
       "notes": "ملاحظات",
+      "cancelReasonHint": "سبب الإلغاء إلزامي — يُرسل إلى الموظف.",
       "filed": "تاريخ التقديم",
       "period": "الفترة",
       "scopedToEmployee": "التقرير: {{name}}",
