@@ -2926,7 +2926,7 @@
     "groupsAvailable_one": "مجموعة واحدة متاحة",
     "groupsAvailable_two": "مجموعتان متاحتان",
     "groupsAvailable_few": "{{count}} مجموعات متاحة",
-    "groupsAvailable_many": "{{count}} مجموعة متاحة",
+    "groupsAvailable_many": "{{count}} مجموعةً متاحةً",
     "groupsAvailable_other": "{{count}} مجموعة متاحة",
     "searchGroups": "ابحث في المجموعات…",
     "selectAll": "تحديد كل المجموعات",
@@ -2937,7 +2937,7 @@
       "groups_one": "مجموعة واحدة محددة",
       "groups_two": "مجموعتان محددتان",
       "groups_few": "{{count}} مجموعات محددة",
-      "groups_many": "{{count}} مجموعة محددة",
+      "groups_many": "{{count}} مجموعةً محددةً",
       "groups_other": "{{count}} مجموعة محددة"
     },
     "preview": {
