@@ -22,6 +22,7 @@ import { FileDropzone } from './FileDropzone'
 import { GatewayConnectDialog } from './GatewayConnectDialog'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import { RecordAnnouncePicker, type PickedBook } from './RecordAnnouncePicker'
+import { SendConfirmDialog, type UnfulfilledAttachment } from './SendConfirmDialog'
 import { EmployeeMentionField } from './EmployeeMentionField'
 import { DirectEmployeesField, type DirectEmployee } from './DirectEmployeesField'
 import { PhonePreview, WebChatWindow, type PreviewAttachment } from './MessagePreview'
@@ -85,6 +86,9 @@ export function SendToGroupPage(): React.JSX.Element {
   const [pickerOpen, setPickerOpen] = useState(false)
   const [pickedBook, setPickedBook] = useState<PickedBook | null>(null)
 
+  // Confirmation dialog
+  const [confirmOpen, setConfirmOpen] = useState(false)
+
   // Result
   const [result, setResult] = useState<AnnouncementOut | null>(null)
 
@@ -111,6 +115,13 @@ export function SendToGroupPage(): React.JSX.Element {
     (attachMode === 'book' && bookId.trim().length > 0) ||
     (attachMode === 'upload' && hasFile)
   const canSubmit = isConnected && hasRecipient && hasContent
+
+  const unfulfilled: UnfulfilledAttachment =
+    attachMode === 'upload' && !hasFile
+      ? 'upload'
+      : attachMode === 'book' && !bookId.trim()
+        ? 'book'
+        : null
 
   const sendMut = useMutation({
     onMutate: () => setResult(null),
@@ -236,7 +247,7 @@ export function SendToGroupPage(): React.JSX.Element {
   function handleSubmit(e: React.FormEvent): void {
     e.preventDefault()
     if (!canSubmit) return
-    sendMut.mutate()
+    setConfirmOpen(true)
   }
 
   /** Derive the per-state banner message key. */
@@ -710,6 +721,23 @@ export function SendToGroupPage(): React.JSX.Element {
           setBookId(String(b.id))
           setPickerOpen(false)
         }}
+      />
+
+      <SendConfirmDialog
+        open={confirmOpen}
+        onOpenChange={setConfirmOpen}
+        sending={sendMut.isPending}
+        onConfirm={() => {
+          setConfirmOpen(false)
+          sendMut.mutate()
+        }}
+        text={message.trim()}
+        chatName={previewChatName}
+        mentionNames={activeMentionNames}
+        attachment={previewAttachment}
+        unfulfilled={unfulfilled}
+        groupCount={selectedIds.size}
+        directCount={directEmps.length}
       />
 
       {/* Unlink confirm dialog (admin only) */}
