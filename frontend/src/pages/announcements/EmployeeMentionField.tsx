@@ -66,10 +66,12 @@ export function EmployeeMentionField({
         </div>
       </div>
 
-      {/* Mode hint */}
-      <p className="mb-1 text-[0.78em] text-muted-foreground">
-        {t('sendToGroup.mention.modeHint')}
-      </p>
+      {/* Mode hint — tag mode only */}
+      {mode === 'tag' && (
+        <p className="mb-1 text-[0.78em] text-muted-foreground">
+          {t('sendToGroup.mention.modeHint')}
+        </p>
+      )}
 
       <input
         type="text"

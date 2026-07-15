@@ -2922,13 +2922,23 @@
     "unlinked": "تم إلغاء ربط واتساب",
     "unlinkFailed": "تعذّر إلغاء الربط — حاول مرة أخرى",
     "recipients": "المستلمون",
-    "groupsAvailable": "{{count}} مجموعة متاحة",
+    "groupsAvailable_zero": "لا مجموعات متاحة",
+    "groupsAvailable_one": "مجموعة واحدة متاحة",
+    "groupsAvailable_two": "مجموعتان متاحتان",
+    "groupsAvailable_few": "{{count}} مجموعات متاحة",
+    "groupsAvailable_many": "{{count}} مجموعة متاحة",
+    "groupsAvailable_other": "{{count}} مجموعة متاحة",
     "searchGroups": "ابحث في المجموعات…",
     "selectAll": "تحديد كل المجموعات",
     "viewNormal": "عادي",
     "viewExtended": "عرض موسّع",
     "reach": {
-      "groups": "{{count}} مجموعة محددة"
+      "groups_zero": "لا مجموعات محددة",
+      "groups_one": "مجموعة واحدة محددة",
+      "groups_two": "مجموعتان محددتان",
+      "groups_few": "{{count}} مجموعات محددة",
+      "groups_many": "{{count}} مجموعة محددة",
+      "groups_other": "{{count}} مجموعة محددة"
     },
     "preview": {
       "live": "معاينة حية — كما ستصل",
@@ -2965,7 +2975,7 @@
       "searchPlaceholder": "ابحث بالاسم أو الرقم الوظيفي",
       "includeDesignation": "تضمين المسمى الوظيفي",
       "noResults": "لا يوجد موظفون",
-      "modeTag": "@ إشارة — يصله تنبيه",
+      "modeTag": "إشارة — يصله تنبيه",
       "modePlain": "اسم فقط",
       "modeHint": "تُشير الإشارة إلى الموظف في واتساب عبر رقمه المرتبط، فيصله تنبيه شخصي.",
       "noNumber": "لا يوجد رقم مرتبط"

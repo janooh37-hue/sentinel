@@ -2739,13 +2739,15 @@
     "unlinked": "WhatsApp unlinked",
     "unlinkFailed": "Couldn't unlink — try again",
     "recipients": "Recipients",
-    "groupsAvailable": "{{count}} groups available",
+    "groupsAvailable_one": "{{count}} group available",
+    "groupsAvailable_other": "{{count}} groups available",
     "searchGroups": "Search groups…",
     "selectAll": "Select all groups",
     "viewNormal": "Normal",
     "viewExtended": "Extended view",
     "reach": {
-      "groups": "{{count}} groups selected"
+      "groups_one": "{{count}} group selected",
+      "groups_other": "{{count}} groups selected"
     },
     "preview": {
       "live": "Live preview — how it arrives",

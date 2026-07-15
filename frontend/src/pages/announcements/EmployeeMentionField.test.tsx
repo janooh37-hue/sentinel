@@ -89,6 +89,17 @@ describe('EmployeeMentionField', () => {
     expect(screen.getByText('sendToGroup.mention.noNumber')).toBeInTheDocument()
   })
 
+  it('shows modeHint in default tag mode', () => {
+    renderField(vi.fn())
+    expect(screen.getByText('sendToGroup.mention.modeHint')).toBeInTheDocument()
+  })
+
+  it('hides modeHint after switching to plain-name mode', async () => {
+    renderField(vi.fn())
+    await userEvent.click(screen.getByRole('button', { name: 'sendToGroup.mention.modePlain' }))
+    expect(screen.queryByText('sendToGroup.mention.modeHint')).not.toBeInTheDocument()
+  })
+
   it('plain mode inserts buildMention text with no target', async () => {
     mockEmployees([{ id: 'G-1', name_en: 'Omar', name_ar: null, contact: '+971509059931', position: null, position_ar: null }])
     const onInsert = vi.fn()
