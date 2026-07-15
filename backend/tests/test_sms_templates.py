@@ -367,8 +367,20 @@ def test_leave_cancelled_includes_reason_from_notes():
     )
     en = st.render_text("leave_cancelled", "en", leave, emp)
     assert "Reason: Operational requirement — coverage shortage.\n" in en
-    ar = st.render_text("leave_cancelled", "ar", leave, emp)
-    assert "سبب الإلغاء: Operational requirement — coverage shortage.\n" in ar
+
+    emp_ar = _emp()
+    leave_ar = Leave(
+        id=22,
+        employee_id="G1",
+        leave_type="Annual Leave",
+        start_date=date(2026, 7, 20),
+        end_date=date(2026, 8, 3),
+        days=15,
+        notes="متطلبات تشغيلية — نقص التغطية في الموقع",
+    )
+    ar = st.render_text("leave_cancelled", "ar", leave_ar, emp_ar)
+    assert "سبب الإلغاء: متطلبات تشغيلية — نقص التغطية في الموقع\n" in ar
+    assert not _has_ascii_letter(ar.replace("2026", "").replace("20", "").replace("03", ""))
 
 
 def test_leave_cancelled_without_notes_has_no_reason_line():
