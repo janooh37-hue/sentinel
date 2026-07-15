@@ -380,3 +380,36 @@ def render_text(event_type: str, language: str, record: Any, employee: Employee)
     builder = _BUILDERS[event_type]
     lang = "ar" if language == "ar" else "en"
     return cast(str, builder(record, employee, lang))
+
+
+def render_leave_amended(
+    leave: Any, employee: Employee, lang: str, *, old_days: int, reason: str
+) -> str:
+    """Pre-rendered 'your leave was amended' body — the old duration is gone
+    from the record after the update, so this cannot ride the _BUILDERS path."""
+    lang = "ar" if lang == "ar" else "en"
+    name = nf.employee_name(employee, lang)
+    s, sw = nf.fmt_date(leave.start_date), nf.weekday(leave.start_date, lang)
+    e, ew = nf.fmt_date(leave.end_date), nf.weekday(leave.end_date, lang)
+    days = str(leave.days)
+    if lang == "ar":
+        return (
+            f"عزيزي {name}،\n"
+            f"تم تعديل إجازتك السنوية.\n"
+            f"تاريخ البداية: {s} ({sw})\n"
+            f"تاريخ النهاية: {e} ({ew})\n"
+            f"المدة الجديدة: {days} يوم (بدلاً من {old_days}).\n"
+            f"سبب التعديل: {reason}\n"
+            f"لأي استفسار يرجى مراجعة {nf.ADMIN_OFFICE_AR}.\n"
+            f"{_SIGNATURE_AR}"
+        )
+    return (
+        f"Dear {name},\n"
+        f"Your Annual Leave has been updated.\n"
+        f"Start: {s} ({sw})\n"
+        f"End: {e} ({ew})\n"
+        f"New duration: {days} day(s) (was {old_days}).\n"
+        f"Reason: {reason}\n"
+        f"For any clarification, please contact the administration office.\n"
+        f"{_SIGNATURE_EN}"
+    )

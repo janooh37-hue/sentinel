@@ -333,6 +333,36 @@ def auto_send_for_book(
     return send_for_event(db, event, book_id, sent_by=sent_by)
 
 
+def auto_send_leave_amended(
+    db: Session, leave_id: int, *, old_days: int, reason: str, sent_by: int | None = None
+) -> OutboundMessage | None:
+    """Best-effort 'your leave was amended' notification.
+
+    Pre-rendered via sms_templates.render_leave_amended because the old
+    duration is gone from the record after the update. Same gating as the
+    other auto-sends.
+    """
+    if not _autosend_enabled(db):
+        return None
+    leave = db.get(Leave, leave_id)
+    if leave is None or leave.employee_id is None:
+        return None
+    employee = leave.employee
+    lang = "ar" if (employee.msg_language or "ar") == "ar" else "en"
+    body = sms_templates.render_leave_amended(
+        leave, employee, lang, old_days=old_days, reason=reason
+    )
+    return send_direct(
+        db,
+        employee=employee,
+        body=body,
+        language=lang,
+        event_type="leave_amended",
+        event_ref=f"leave_amended:{leave_id}",
+        sent_by=sent_by,
+    )
+
+
 def send_ending_reminders(db: Session, *, today: date | None = None) -> int:
     """One-time reminder 2 days before an Approved Annual Leave ends.
 

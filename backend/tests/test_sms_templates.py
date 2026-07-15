@@ -463,3 +463,44 @@ def test_leave_ending_reminder_arabic_locked_wording():
     )
     assert "يرجى مراجعة مكتب الإدارة لتسجيل مباشرة العمل." in ar
     assert "في حال الإجازات الرسمية تتم المباشرة عند مسؤول السرية المناوبة." in ar
+
+
+def test_render_leave_amended_full_text_en():
+    emp = _emp(msg_language="en")
+    leave = Leave(
+        id=51,
+        employee_id="G1",
+        leave_type="Annual Leave",
+        start_date=date(2026, 8, 1),
+        end_date=date(2026, 8, 20),
+        days=20,
+    )
+    text = st.render_leave_amended(
+        leave, emp, "en", old_days=25, reason="Insufficient annual-leave balance."
+    )
+    assert text == (
+        "Dear John Smith,\n"
+        "Your Annual Leave has been updated.\n"
+        "Start: 01/08/2026 (Saturday)\n"
+        "End: 20/08/2026 (Thursday)\n"
+        "New duration: 20 day(s) (was 25).\n"
+        "Reason: Insufficient annual-leave balance.\n"
+        "For any clarification, please contact the administration office.\n"
+        "Al Wathba Rehabilitation Centre"
+    )
+
+
+def test_render_leave_amended_arabic_wording():
+    emp = _emp()
+    leave = Leave(
+        id=52,
+        employee_id="G1",
+        leave_type="Annual Leave - إجازة سنوية",
+        start_date=date(2026, 8, 1),
+        end_date=date(2026, 8, 20),
+        days=20,
+    )
+    ar = st.render_leave_amended(leave, emp, "ar", old_days=25, reason="نقص الرصيد")
+    assert "تم تعديل إجازتك السنوية." in ar
+    assert "المدة الجديدة: 20 يوم (بدلاً من 25)." in ar
+    assert "سبب التعديل: نقص الرصيد" in ar

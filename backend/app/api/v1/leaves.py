@@ -4,6 +4,7 @@ Routes:
   GET    /leaves                        — paginated list with filters
   GET    /leaves/{leave_id}             — detail
   PATCH  /leaves/{leave_id}             — update status / notes
+  POST   /leaves/{leave_id}/amend       — post-approval end-date amendment (Annual)
   DELETE /leaves/{leave_id}             — soft-delete (returns 204)
 
 The balance endpoint lives on the employees router:
@@ -25,6 +26,7 @@ from app.api.deps import require_capability
 from app.db.models import Leave, User
 from app.db.session import get_db
 from app.schemas.leave import (
+    LeaveAmend,
     LeaveCreate,
     LeaveListItem,
     LeaveListResponse,
@@ -125,6 +127,21 @@ def update_leave(
     _user: Annotated[User, Depends(require_capability("leaves.edit"))],
 ) -> LeaveRead:
     row = leave_service.update_leave(db, leave_id, payload, actor=_user.email)
+    return _with_employee_name(LeaveRead.model_validate(row), row)
+
+
+@router.post("/{leave_id}/amend", response_model=LeaveRead)
+def amend_leave(
+    leave_id: int,
+    payload: LeaveAmend,
+    db: Annotated[Session, Depends(get_db)],
+    _user: Annotated[User, Depends(require_capability("leaves.edit"))],
+) -> LeaveRead:
+    """Post-approval amendment (Annual Leave): change the end date with a
+    required reason; the employee is notified with old vs new duration."""
+    row = leave_service.amend_approved_leave(
+        db, leave_id, end_date=payload.end_date, reason=payload.reason, actor=_user.email
+    )
     return _with_employee_name(LeaveRead.model_validate(row), row)
 
 
