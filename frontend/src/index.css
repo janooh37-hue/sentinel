@@ -149,6 +149,16 @@
   --tip-strong: #2a2a7a;
   --tip-dot: #c5c5e8;
   --tip-dot-active: #6a6ad0;
+
+  /* WhatsApp preview surfaces (Send-to-Group composer) */
+  --wa-chat: #e5ddd5;
+  --wa-bubble: #d9fdd3;
+  --wa-bubble-ink: #111b21;
+  --wa-header: #008069;
+  --wa-web-bar: #f0f2f5;
+  --wa-web-ink: #111b21;
+  --wa-mention: #027eb5;
+  --wa-meta: #667781;
 }
 
 [data-theme="dark"] {
@@ -210,6 +220,16 @@
   --tip-strong: #e2e2ff;
   --tip-dot: #45456e;
   --tip-dot-active: #8f8fe0;
+
+  /* WhatsApp preview surfaces (Send-to-Group composer) */
+  --wa-chat: #0b141a;
+  --wa-bubble: #005c4b;
+  --wa-bubble-ink: #e9edef;
+  --wa-header: #1f2c33;
+  --wa-web-bar: #202c33;
+  --wa-web-ink: #e9edef;
+  --wa-mention: #53bdeb;
+  --wa-meta: #8696a0;
 }
 
 /* Discrete font-scale stops. The AaSlider snaps to one of these four
