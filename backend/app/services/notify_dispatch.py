@@ -333,6 +333,42 @@ def auto_send_for_book(
     return send_for_event(db, event, book_id, sent_by=sent_by)
 
 
+def send_ending_reminders(db: Session, *, today: date | None = None) -> int:
+    """One-time reminder 2 days before an Approved Annual Leave ends.
+
+    Selection: end_date == today+2, not soft-deleted, no return recorded,
+    Annual + Approved (bilingual/legacy labels handled by leave_lifecycle).
+    Dedup rides on outbound_messages.event_ref — restart-safe, one per leave.
+    """
+    if not _autosend_enabled(db):
+        return 0
+    today = today or date.today()
+    target_end = today + timedelta(days=2)
+    rows = list(
+        db.scalars(
+            select(Leave).where(
+                Leave.end_date == target_end,
+                Leave.deleted_at.is_(None),
+                Leave.return_date.is_(None),
+            )
+        )
+    )
+    sent = 0
+    for leave in rows:
+        if not leave_lifecycle.is_annual(leave.leave_type):
+            continue
+        if leave_lifecycle.canonical_status(leave.status) != "Approved":
+            continue
+        if last_status(db, nf.EVENT_LEAVE_ENDING, leave.id) is not None:
+            continue
+        try:
+            send_for_event(db, nf.EVENT_LEAVE_ENDING, leave.id, sent_by=None)
+            sent += 1
+        except Exception:
+            log.exception("leave-ending reminder failed for leave %s", leave.id)
+    return sent
+
+
 def retry_queued(db: Session, *, now: datetime | None = None) -> int:
     """Re-attempt WhatsApp for queued rows; fall to SMS once the window expires."""
     now = now or _now()
