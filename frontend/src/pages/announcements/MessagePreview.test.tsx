@@ -29,6 +29,14 @@ describe('PhonePreview', () => {
     render(<PhonePreview {...base} text="x" />)
     expect(screen.getByTestId('preview-bubble').className).toContain('max-w-[94%]')
   })
+  it('shows placeholder when no group selected', () => {
+    render(<PhonePreview {...base} groupName={null} />)
+    expect(screen.getByText('sendToGroup.preview.noGroup')).toBeInTheDocument()
+  })
+  it('shows empty placeholder when text is blank', () => {
+    render(<PhonePreview {...base} />)
+    expect(screen.getByText('sendToGroup.preview.empty')).toBeInTheDocument()
+  })
 })
 
 describe('WebChatWindow', () => {

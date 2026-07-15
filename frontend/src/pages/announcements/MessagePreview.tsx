@@ -26,7 +26,7 @@ function Bubble({ text, mentionNames, attachment }: Omit<PreviewProps, 'groupNam
       {attachment && (
         <div
           data-testid="preview-attachment"
-          className="mb-1.5 flex items-center gap-2.5 rounded-md bg-black/5 p-2 dark:bg-white/10"
+          className="mb-1.5 flex items-center gap-2.5 rounded-md bg-[var(--wa-doc-wash)] p-2"
         >
           <span className="grid h-9 w-7 shrink-0 place-items-center rounded bg-surface text-[0.6em] font-extrabold text-accent">PDF</span>
           <span className="min-w-0">

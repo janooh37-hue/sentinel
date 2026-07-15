@@ -159,6 +159,7 @@
   --wa-web-ink: #111b21;
   --wa-mention: #027eb5;
   --wa-meta: #667781;
+  --wa-doc-wash: rgba(0, 0, 0, 0.05);
 }
 
 [data-theme="dark"] {
@@ -230,6 +231,7 @@
   --wa-web-ink: #e9edef;
   --wa-mention: #53bdeb;
   --wa-meta: #8696a0;
+  --wa-doc-wash: rgba(255, 255, 255, 0.06);
 }
 
 /* Discrete font-scale stops. The AaSlider snaps to one of these four
