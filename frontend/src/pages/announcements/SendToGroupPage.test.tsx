@@ -87,6 +87,23 @@ describe('SendToGroupPage', () => {
     expect(await screen.findByText('Alpha')).toBeInTheDocument()
   })
 
+  // The app shell's <main> is a flex container with overflow-hidden, so every
+  // page must stretch (flex-1) and own its scrolling (overflow-auto) — without
+  // this the page content-sizes (extended view can't widen) and the bottom of
+  // the form is clipped with no way to scroll to it.
+  it('page root stretches and owns scrolling inside the flex shell', async () => {
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    const { container } = render(
+      <QueryClientProvider client={qc}>
+        <SendToGroupPage />
+      </QueryClientProvider>,
+    )
+    await screen.findByText('Alpha')
+    const root = container.firstElementChild as HTMLElement
+    expect(root.className).toContain('flex-1')
+    expect(root.className).toContain('overflow-auto')
+  })
+
   it('shows the empty state when no groups exist (connected, empty list)', async () => {
     vi.mocked(api.listGroups).mockResolvedValue([])
     renderPage()

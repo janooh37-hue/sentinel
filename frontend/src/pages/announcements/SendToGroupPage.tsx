@@ -226,7 +226,11 @@ export function SendToGroupPage(): React.JSX.Element {
   }
 
   return (
-    <div className="mx-auto max-w-[1360px] px-4 py-6">
+    // The shell's <main> is a flex container with overflow-hidden: the page must
+    // stretch (flex-1) and own its scrolling (overflow-auto), like every other
+    // page root — otherwise it content-sizes and the bottom gets clipped.
+    <div className="flex flex-1 flex-col overflow-auto bg-background">
+      <div className="mx-auto w-full max-w-[1360px] px-4 py-6">
       {/* Page header */}
       <div className="mb-6">
         <h1 className="text-[1.3em] font-bold text-foreground">{t('sendToGroup.title')}</h1>
@@ -672,6 +676,7 @@ export function SendToGroupPage(): React.JSX.Element {
           </ul>
         </div>
       )}
+      </div>
     </div>
   )
 }
