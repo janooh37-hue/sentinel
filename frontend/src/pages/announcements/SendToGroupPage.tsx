@@ -22,6 +22,8 @@ import { GatewayConnectDialog } from './GatewayConnectDialog'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import { RecordAnnouncePicker, type PickedBook } from './RecordAnnouncePicker'
 import { EmployeeMentionField } from './EmployeeMentionField'
+import { PhonePreview, WebChatWindow, type PreviewAttachment } from './MessagePreview'
+import { applyMentions, type MentionTarget } from './mention'
 
 type AttachMode = 'none' | 'book' | 'upload'
 
@@ -56,18 +58,24 @@ export function SendToGroupPage(): React.JSX.Element {
   const gatewayState = (gatewayData?.state ?? 'disconnected') as GatewayState
   const isConnected = !gatewayLoading && gatewayState === 'connected'
 
-  // Group selection
-  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+  // Composer view: Normal (side phone preview) vs Extended (WA-Web surface)
+  const [view, setView] = useState<'normal' | 'extended'>('normal')
 
-  // Message
+  // Group selection + client-side search filter
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+  const [groupQuery, setGroupQuery] = useState('')
+
+  // Message + collected @mention targets
   const [message, setMessage] = useState('')
   const messageRef = useRef<HTMLTextAreaElement>(null)
+  const [mentions, setMentions] = useState<MentionTarget[]>([])
 
   // Attachment
   const [attachMode, setAttachMode] = useState<AttachMode>('none')
   const [bookId, setBookId] = useState('')
   const fileRef = useRef<HTMLInputElement>(null)
   const [hasFile, setHasFile] = useState(false)
+  const [fileName, setFileName] = useState<string | null>(null)
   const [pickerOpen, setPickerOpen] = useState(false)
   const [pickedBook, setPickedBook] = useState<PickedBook | null>(null)
 
@@ -103,8 +111,12 @@ export function SendToGroupPage(): React.JSX.Element {
       for (const id of selectedIds) {
         form.append('group_ids', id)
       }
-      if (message.trim()) {
-        form.append('text', message.trim())
+      const applied = applyMentions(message.trim(), mentions)
+      if (applied.text) {
+        form.append('text', applied.text)
+      }
+      for (const n of applied.numbers) {
+        form.append('mentions', n)
       }
       if (attachMode === 'book' && bookId.trim()) {
         form.append('book_id', bookId.trim())
@@ -134,7 +146,26 @@ export function SendToGroupPage(): React.JSX.Element {
     })
   }
 
-  const insertMention = useCallback((text: string): void => {
+  // Client-side, case-insensitive filter on group name.
+  const filteredGroups = (groups ?? []).filter((g) =>
+    g.name.toLowerCase().includes(groupQuery.trim().toLowerCase()),
+  )
+  const allFilteredSelected =
+    filteredGroups.length > 0 && filteredGroups.every((g) => selectedIds.has(g.id))
+
+  function toggleSelectAll(): void {
+    setSelectedIds((prev) => {
+      const next = new Set(prev)
+      if (allFilteredSelected) {
+        for (const g of filteredGroups) next.delete(g.id)
+      } else {
+        for (const g of filteredGroups) next.add(g.id)
+      }
+      return next
+    })
+  }
+
+  const insertMention = useCallback((text: string, mention?: MentionTarget): void => {
     const el = messageRef.current
     setMessage((prev) => {
       if (!el) return prev ? `${prev} ${text}` : text
@@ -142,10 +173,33 @@ export function SendToGroupPage(): React.JSX.Element {
       const end = el.selectionEnd ?? prev.length
       return prev.slice(0, start) + text + prev.slice(end)
     })
+    if (mention) {
+      // Dedupe by display name: "@Name" tokens are name-keyed, so two employees
+      // sharing one localized display name would collide — first insert wins.
+      setMentions((prev) =>
+        prev.some((m) => m.name === mention.name) ? prev : [...prev, mention],
+      )
+    }
   }, [])
 
+  // Mentions whose "@Name" token still appears in the message drive the preview.
+  const activeMentionNames = mentions
+    .filter((m) => message.includes(`@${m.name}`))
+    .map((m) => m.name)
+
+  const previewAttachment: PreviewAttachment | null =
+    attachMode === 'book' && pickedBook
+      ? { title: pickedBook.ref, subtitle: pickedBook.subject }
+      : attachMode === 'upload' && hasFile
+        ? { title: fileName ?? 'file' }
+        : null
+
+  const firstGroupName = (groups ?? []).find((g) => selectedIds.has(g.id))?.name ?? null
+
   const handleFileChange = useCallback(() => {
-    setHasFile((fileRef.current?.files?.length ?? 0) > 0)
+    const f = fileRef.current?.files?.[0] ?? null
+    setHasFile(f !== null)
+    setFileName(f?.name ?? null)
   }, [])
 
   function handleSubmit(e: React.FormEvent): void {
@@ -172,7 +226,7 @@ export function SendToGroupPage(): React.JSX.Element {
   }
 
   return (
-    <div className="mx-auto max-w-2xl px-4 py-6">
+    <div className="mx-auto max-w-[1360px] px-4 py-6">
       {/* Page header */}
       <div className="mb-6">
         <h1 className="text-[1.3em] font-bold text-foreground">{t('sendToGroup.title')}</h1>
@@ -253,161 +307,311 @@ export function SendToGroupPage(): React.JSX.Element {
         </div>
       )}
 
-      <form onSubmit={handleSubmit} className="space-y-6">
-        {/* Groups section */}
-        <section>
-          <p className="mb-2 text-[0.9em] font-semibold text-foreground">{t('sendToGroup.groups')}</p>
-          {gatewayLoading || groupsLoading ? (
-            <p className="text-[0.85em] text-muted-foreground" dir="auto">
-              {t('sendToGroup.statusChecking')}
-            </p>
-          ) : showBanner ? null : groups && groups.length === 0 ? (
-            <p className="rounded-lg border border-border bg-surface/60 px-4 py-3 text-[0.85em] text-muted-foreground" dir="auto">
-              {t('sendToGroup.noGroupsForNumber')}
-            </p>
-          ) : (
-            <ul className="space-y-1.5">
-              {(groups ?? []).map((g) => {
-                const checked = selectedIds.has(g.id)
-                return (
-                  <li key={g.id}>
-                    <label className="flex cursor-pointer items-center gap-3 rounded-lg border border-border bg-surface/60 px-3 py-2 hover:bg-surface-tinted">
-                      <input
-                        type="checkbox"
-                        checked={checked}
-                        onChange={() => toggleGroup(g.id)}
-                        className="h-4 w-4 accent-primary"
-                      />
-                      <span className="text-[0.88em] text-foreground" dir="auto">
-                        {g.name}
-                      </span>
-                    </label>
-                  </li>
-                )
-              })}
-            </ul>
-          )}
-        </section>
+      <form onSubmit={handleSubmit}>
+        <div
+          className={`grid items-start gap-4 transition-[grid-template-columns] duration-500 motion-reduce:transition-none max-lg:[grid-template-columns:1fr] ${
+            view === 'extended'
+              ? '[grid-template-columns:minmax(280px,340px)_1fr_0px]'
+              : '[grid-template-columns:minmax(280px,340px)_1fr_320px]'
+          }`}
+        >
+          {/* ── Column 1: Recipients rail + reach meter ── */}
+          <aside className="min-w-0 space-y-4">
+            <div className="rounded-xl border border-border bg-surface/60 p-4">
+              <div className="mb-3 flex items-center justify-between gap-2">
+                <p className="text-[0.9em] font-semibold text-foreground">
+                  {t('sendToGroup.recipients')}
+                </p>
+                {groups && groups.length > 0 && (
+                  <span className="rounded-full bg-surface-tinted px-2 py-0.5 text-[0.72em] font-medium text-muted-foreground">
+                    {t('sendToGroup.groupsAvailable', { count: groups.length })}
+                  </span>
+                )}
+              </div>
 
-        {/* Message section */}
-        <section>
-          <label className="mb-2 block text-[0.9em] font-semibold text-foreground">
-            {t('sendToGroup.message')}
-          </label>
-          <textarea
-            ref={messageRef}
-            value={message}
-            onChange={(e) => setMessage(e.target.value)}
-            placeholder={t('sendToGroup.messagePlaceholder')}
-            dir="auto"
-            rows={4}
-            className="w-full rounded-md border border-border bg-surface px-3 py-2 text-[0.88em] text-foreground placeholder:text-faint focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
-          />
-          <EmployeeMentionField onInsert={insertMention} />
-        </section>
+              {gatewayLoading || groupsLoading ? (
+                <p className="text-[0.85em] text-muted-foreground" dir="auto">
+                  {t('sendToGroup.statusChecking')}
+                </p>
+              ) : showBanner ? null : groups && groups.length === 0 ? (
+                <p
+                  className="rounded-lg border border-border bg-surface/60 px-4 py-3 text-[0.85em] text-muted-foreground"
+                  dir="auto"
+                >
+                  {t('sendToGroup.noGroupsForNumber')}
+                </p>
+              ) : (
+                <>
+                  <input
+                    type="text"
+                    value={groupQuery}
+                    onChange={(e) => setGroupQuery(e.target.value)}
+                    placeholder={t('sendToGroup.searchGroups')}
+                    aria-label={t('sendToGroup.searchGroups')}
+                    dir="auto"
+                    className="mb-2 h-9 w-full rounded-md border border-border bg-surface px-3 text-[0.85em] text-foreground placeholder:text-faint focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
+                  />
 
-        {/* Attachment section */}
-        <section>
-          <p className="mb-2 text-[0.9em] font-semibold text-foreground">{t('sendToGroup.attachment')}</p>
-          <div className="flex flex-wrap gap-4">
-            {(['none', 'book', 'upload'] as const).map((mode) => (
-              <label key={mode} className="flex cursor-pointer items-center gap-2 text-[0.88em] text-foreground">
-                <input
-                  type="radio"
-                  name="attachMode"
-                  value={mode}
-                  checked={attachMode === mode}
-                  onChange={() => setAttachMode(mode)}
-                  className="accent-primary"
-                />
-                {mode === 'none'
-                  ? t('sendToGroup.attachNone')
-                  : mode === 'book'
-                    ? t('sendToGroup.attachBook')
-                    : t('sendToGroup.attachUpload')}
-              </label>
-            ))}
-          </div>
+                  <label className="mb-2 flex cursor-pointer items-center gap-2.5 rounded-lg px-2.5 py-1.5 hover:bg-surface-tinted">
+                    <input
+                      type="checkbox"
+                      checked={allFilteredSelected}
+                      onChange={toggleSelectAll}
+                      className="h-4 w-4 accent-primary"
+                    />
+                    <span className="text-[0.8em] font-medium text-muted-foreground">
+                      {t('sendToGroup.selectAll')}
+                    </span>
+                  </label>
 
-          {attachMode === 'book' && (
-            <div className="mt-3">
-              {pickedBook ? (
-                <div className="flex items-center gap-3 rounded-md border border-border bg-surface/60 px-3 py-2">
-                  <div className="min-w-0">
-                    <p className="truncate text-[0.85em] font-medium text-foreground" dir="auto">
-                      {pickedBook.ref}
-                    </p>
-                    <p className="truncate text-[0.78em] text-muted-foreground" dir="auto">
-                      {pickedBook.subject}
-                    </p>
-                  </div>
-                  <div className="ms-auto flex gap-2">
+                  <ul className="space-y-1.5">
+                    {filteredGroups.map((g) => {
+                      const checked = selectedIds.has(g.id)
+                      return (
+                        <li key={g.id}>
+                          <label className="flex cursor-pointer items-center gap-2.5 rounded-lg border border-border bg-surface px-2.5 py-2 hover:bg-surface-tinted">
+                            <input
+                              type="checkbox"
+                              checked={checked}
+                              onChange={() => toggleGroup(g.id)}
+                              className="h-4 w-4 accent-primary"
+                            />
+                            <span
+                              className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-gradient-to-br from-[#25d366] to-[#128c4b] text-[0.72em] font-bold text-white"
+                              aria-hidden
+                            >
+                              {g.name.slice(0, 2).toUpperCase()}
+                            </span>
+                            <span className="truncate text-[0.85em] text-foreground" dir="auto">
+                              {g.name}
+                            </span>
+                          </label>
+                        </li>
+                      )
+                    })}
+                  </ul>
+                </>
+              )}
+            </div>
+
+            {/* Reach meter — selected-groups count only (API has no member counts) */}
+            <div className="rounded-xl bg-gradient-to-br from-primary to-primary-hover p-4 text-primary-foreground">
+              <div className="text-[2.2em] font-bold leading-none">{selectedIds.size}</div>
+              <div className="mt-1 text-[0.8em] opacity-90">
+                {t('sendToGroup.reach.groups', { count: selectedIds.size })}
+              </div>
+            </div>
+          </aside>
+
+          {/* ── Column 2: Composer ── */}
+          <div className="min-w-0 rounded-xl border border-border bg-surface/60 p-4">
+            {/* Header: message label + Normal/Extended view switch */}
+            <div className="mb-3 flex items-center justify-between gap-2">
+              <p className="text-[0.9em] font-semibold text-foreground">
+                {t('sendToGroup.message')}
+              </p>
+              <div className="inline-flex rounded-full border border-border bg-surface p-0.5">
+                {(['normal', 'extended'] as const).map((v) => (
+                  <button
+                    key={v}
+                    type="button"
+                    aria-pressed={view === v}
+                    onClick={() => setView(v)}
+                    className={`rounded-full px-2.5 py-1 text-[0.78em] font-semibold transition-colors motion-reduce:transition-none ${
+                      view === v
+                        ? 'bg-primary text-primary-foreground'
+                        : 'text-muted-foreground hover:text-foreground'
+                    }`}
+                  >
+                    {t(v === 'normal' ? 'sendToGroup.viewNormal' : 'sendToGroup.viewExtended')}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Collapsible WA-Web preview zone (Extended only) */}
+            <div
+              className={`overflow-hidden transition-[height,opacity] duration-500 motion-reduce:transition-none ${
+                view === 'extended' ? 'h-[min(54vh,480px)] opacity-100' : 'h-0 opacity-0'
+              }`}
+            >
+              <WebChatWindow
+                groupName={firstGroupName}
+                text={message}
+                mentionNames={activeMentionNames}
+                attachment={previewAttachment}
+              />
+            </div>
+
+            {/* Textarea — plain (Normal) or wrapped in a WA-Web composer bar (Extended) */}
+            <div
+              className={
+                view === 'extended'
+                  ? 'flex items-center gap-2.5 rounded-b-xl border border-t-0 border-border bg-[var(--wa-web-bar)] px-3 py-2'
+                  : ''
+              }
+            >
+              <span aria-hidden className={view === 'extended' ? 'text-[1.1em]' : 'hidden'}>
+                😊
+              </span>
+              <span aria-hidden className={view === 'extended' ? 'text-[1.1em]' : 'hidden'}>
+                📎
+              </span>
+              <textarea
+                ref={messageRef}
+                value={message}
+                onChange={(e) => setMessage(e.target.value)}
+                aria-label={t('sendToGroup.message')}
+                placeholder={t('sendToGroup.messagePlaceholder')}
+                dir="auto"
+                className={`w-full border border-border bg-surface px-3 py-2 text-[0.88em] text-foreground placeholder:text-faint transition-[height] duration-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30 motion-reduce:transition-none ${
+                  view === 'extended' ? 'h-[52px] rounded-lg' : 'h-[200px] rounded-md'
+                }`}
+              />
+              <span aria-hidden className={view === 'extended' ? 'text-[1.1em]' : 'hidden'}>
+                🎤
+              </span>
+            </div>
+
+            <EmployeeMentionField onInsert={insertMention} />
+
+            {/* Attachment section */}
+            <section className="mt-4">
+              <p className="mb-2 text-[0.9em] font-semibold text-foreground">
+                {t('sendToGroup.attachment')}
+              </p>
+              <div className="flex flex-wrap gap-4">
+                {(['none', 'book', 'upload'] as const).map((mode) => (
+                  <label
+                    key={mode}
+                    className="flex cursor-pointer items-center gap-2 text-[0.88em] text-foreground"
+                  >
+                    <input
+                      type="radio"
+                      name="attachMode"
+                      value={mode}
+                      checked={attachMode === mode}
+                      onChange={() => setAttachMode(mode)}
+                      className="accent-primary"
+                    />
+                    {mode === 'none'
+                      ? t('sendToGroup.attachNone')
+                      : mode === 'book'
+                        ? t('sendToGroup.attachBook')
+                        : t('sendToGroup.attachUpload')}
+                  </label>
+                ))}
+              </div>
+
+              {attachMode === 'book' && (
+                <div className="mt-3">
+                  {pickedBook ? (
+                    <div className="flex items-center gap-3 rounded-md border border-border bg-surface/60 px-3 py-2">
+                      <div className="min-w-0">
+                        <p className="truncate text-[0.85em] font-medium text-foreground" dir="auto">
+                          {pickedBook.ref}
+                        </p>
+                        <p className="truncate text-[0.78em] text-muted-foreground" dir="auto">
+                          {pickedBook.subject}
+                        </p>
+                      </div>
+                      <div className="ms-auto flex gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setPickerOpen(true)}
+                          className="rounded-md border border-border px-3 py-1.5 text-[0.8em] font-medium text-foreground hover:bg-surface-tinted"
+                        >
+                          {t('sendToGroup.picker.change')}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setPickedBook(null)
+                            setBookId('')
+                          }}
+                          className="rounded-md border border-accent/40 px-3 py-1.5 text-[0.8em] font-medium text-accent hover:bg-accent/10"
+                        >
+                          {t('sendToGroup.picker.clear')}
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
                     <button
                       type="button"
                       onClick={() => setPickerOpen(true)}
-                      className="rounded-md border border-border px-3 py-1.5 text-[0.8em] font-medium text-foreground hover:bg-surface-tinted"
+                      className="rounded-md border border-border px-4 py-2 text-[0.85em] font-medium text-foreground hover:bg-surface-tinted"
                     >
-                      {t('sendToGroup.picker.change')}
+                      {t('sendToGroup.picker.choose')}
                     </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setPickedBook(null)
-                        setBookId('')
-                      }}
-                      className="rounded-md border border-accent/40 px-3 py-1.5 text-[0.8em] font-medium text-accent hover:bg-accent/10"
-                    >
-                      {t('sendToGroup.picker.clear')}
-                    </button>
-                  </div>
+                  )}
                 </div>
-              ) : (
-                <button
-                  type="button"
-                  onClick={() => setPickerOpen(true)}
-                  className="rounded-md border border-border px-4 py-2 text-[0.85em] font-medium text-foreground hover:bg-surface-tinted"
-                >
-                  {t('sendToGroup.picker.choose')}
-                </button>
+              )}
+
+              {attachMode === 'upload' && (
+                <div className="mt-3">
+                  <input
+                    ref={fileRef}
+                    type="file"
+                    onChange={handleFileChange}
+                    className="text-[0.85em] text-foreground"
+                  />
+                </div>
+              )}
+            </section>
+
+            {/* Confirm + submit */}
+            <div className="mt-4 flex items-center gap-4">
+              <button
+                type="submit"
+                disabled={!canSubmit || sendMut.isPending}
+                className="rounded-md bg-primary px-5 py-2 text-[0.9em] font-semibold text-primary-foreground hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30 disabled:opacity-50"
+              >
+                {sendMut.isPending ? t('sendToGroup.sending') : t('sendToGroup.send')}
+              </button>
+              {selectedIds.size > 0 && (
+                <span className="text-[0.82em] text-muted-foreground">
+                  {t('sendToGroup.confirm', { count: selectedIds.size })}
+                </span>
               )}
             </div>
-          )}
 
-          {attachMode === 'upload' && (
-            <div className="mt-3">
-              <input
-                ref={fileRef}
-                type="file"
-                onChange={handleFileChange}
-                className="text-[0.85em] text-foreground"
-              />
-            </div>
-          )}
-        </section>
+            {/* Validation hints */}
+            {!showBanner && !hasGroup && !sendMut.isPending && (
+              <p className="mt-2 text-[0.8em] text-muted-foreground">{t('sendToGroup.pickGroup')}</p>
+            )}
+            {!showBanner && hasGroup && !hasContent && !sendMut.isPending && (
+              <p className="mt-2 text-[0.8em] text-muted-foreground">
+                {t('sendToGroup.needContent')}
+              </p>
+            )}
+          </div>
 
-        {/* Confirm + submit */}
-        <div className="flex items-center gap-4">
-          <button
-            type="submit"
-            disabled={!canSubmit || sendMut.isPending}
-            className="rounded-md bg-primary px-5 py-2 text-[0.9em] font-semibold text-primary-foreground hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30 disabled:opacity-50"
+          {/* ── Column 3: Live phone preview ── */}
+          <div
+            data-testid="phone-column"
+            className={`min-w-0 overflow-hidden transition-all duration-400 motion-reduce:transition-none ${
+              view === 'extended'
+                ? 'pointer-events-none translate-x-4 opacity-0 rtl:-translate-x-4 max-lg:hidden'
+                : ''
+            }`}
           >
-            {sendMut.isPending ? t('sendToGroup.sending') : t('sendToGroup.send')}
-          </button>
-          {selectedIds.size > 0 && (
-            <span className="text-[0.82em] text-muted-foreground">
-              {t('sendToGroup.confirm', { count: selectedIds.size })}
-            </span>
-          )}
+            <div className="mb-2 flex items-center gap-2">
+              <span className="inline-flex items-center gap-1 rounded-full bg-green-500/10 px-2 py-0.5 text-[0.72em] font-semibold text-green-700 dark:text-green-400">
+                <span className="h-1.5 w-1.5 rounded-full bg-green-500" aria-hidden />
+                {t('sendToGroup.preview.live')}
+              </span>
+              <span className="text-[0.72em] text-muted-foreground">
+                {t('sendToGroup.preview.firstGroup')}
+              </span>
+            </div>
+            <PhonePreview
+              groupName={firstGroupName}
+              text={message}
+              mentionNames={activeMentionNames}
+              attachment={previewAttachment}
+            />
+          </div>
         </div>
-
-        {/* Validation hints */}
-        {!showBanner && !hasGroup && !sendMut.isPending && (
-          <p className="text-[0.8em] text-muted-foreground">{t('sendToGroup.pickGroup')}</p>
-        )}
-        {!showBanner && hasGroup && !hasContent && !sendMut.isPending && (
-          <p className="text-[0.8em] text-muted-foreground">{t('sendToGroup.needContent')}</p>
-        )}
       </form>
 
       {/* QR connect dialog (admin only) */}

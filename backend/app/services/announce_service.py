@@ -187,6 +187,7 @@ def send_announcement(
     attachment: Attachment | None,
     book_id: int | None,
     sent_by: int | None,
+    mentions: list[str] | None = None,
 ) -> AnnouncementResult:
     """Send *text* (optionally with *attachment*) to each group in *groups*.
 
@@ -206,6 +207,13 @@ def send_announcement(
         ``GroupAnnouncement`` row records ``attachment_kind = "book"``.
     sent_by:
         ``User.id`` of the operator who triggered the send (nullable).
+    mentions:
+        Raw phone strings (e.g. ``"971509059931"`` or ``"+971 50 905 9931"``)
+        that the message text already references with ``@<digits>`` tokens.
+        Normalized once here via :func:`openwa_client.mention_chat_ids` to
+        ``"<digits>@c.us"`` format and forwarded to the WAHA gateway.  The
+        gateway degrades to rendering them as literal text if @-mentions are
+        unsupported by the session engine.
 
     Raises
     ------
@@ -214,6 +222,8 @@ def send_announcement(
     """
     if not get_settings().openwa_enabled:
         raise notify_dispatch.NotifyDisabledError("OpenWA is not enabled")
+
+    mention_ids = openwa_client.mention_chat_ids(mentions or [])
 
     # Derive attachment_kind from what we received.
     if attachment is not None and book_id is not None:
@@ -244,9 +254,12 @@ def send_announcement(
                     data=attachment.data,
                     filename=attachment.filename,
                     caption=text,
+                    mentions=mention_ids or None,
                 )
             else:
-                send_result = openwa_client.send_to_chat(group_id, text)
+                send_result = openwa_client.send_to_chat(
+                    group_id, text, mentions=mention_ids or None
+                )
         except Exception as exc:
             send_result_ok = False
             send_result_msg_id: str | None = None

@@ -66,6 +66,28 @@ def _chat_id(phone: str) -> str:
     return f"{phone.removeprefix('+')}@c.us"
 
 
+def mention_chat_ids(raws: list[str]) -> list[str]:
+    """Normalize raw phone strings to WhatsApp mention ids (``<digits>@c.us``).
+
+    Strips non-digits, drops an international ``00`` prefix, and maps an
+    org-local leading ``0`` (e.g. ``05x…``) to the UAE country code. Empty
+    and duplicate entries are dropped; order is preserved.
+    """
+    out: list[str] = []
+    for raw in raws:
+        digits = "".join(ch for ch in raw if ch.isdigit())
+        if digits.startswith("00"):
+            digits = digits[2:]
+        elif digits.startswith("0") and len(digits) >= 9:
+            digits = "971" + digits[1:]
+        if not digits:
+            continue
+        cid = f"{digits}@c.us"
+        if cid not in out:
+            out.append(cid)
+    return out
+
+
 def _client() -> httpx.Client:
     return httpx.Client(transport=_transport, timeout=_TIMEOUT)
 
@@ -88,11 +110,13 @@ def _msg_id(data: dict[str, object]) -> str | None:
     return None
 
 
-def send_to_chat(chat_id: str, text: str) -> SendResult:
+def send_to_chat(chat_id: str, text: str, mentions: list[str] | None = None) -> SendResult:
     """Send free-form text to any WhatsApp chat id (person @c.us or group @g.us)."""
     cfg = get_settings()
     url = f"{_base()}/api/sendText"
-    payload = {"session": cfg.openwa_session, "chatId": chat_id, "text": text}
+    payload: dict[str, object] = {"session": cfg.openwa_session, "chatId": chat_id, "text": text}
+    if mentions:
+        payload["mentions"] = mentions
     last_err: str | None = None
     for attempt in range(2):
         try:
@@ -153,12 +177,18 @@ def list_groups() -> list[Group]:
 
 
 def send_file(
-    chat_id: str, *, data: bytes, filename: str, caption: str, mimetype: str = "application/pdf"
+    chat_id: str,
+    *,
+    data: bytes,
+    filename: str,
+    caption: str,
+    mimetype: str = "application/pdf",
+    mentions: list[str] | None = None,
 ) -> SendResult:
     """Send a file to a WhatsApp chat id as a base64 attachment (WAHA sendFile)."""
     cfg = get_settings()
     url = f"{_base()}/api/sendFile"
-    payload = {
+    payload: dict[str, object] = {
         "session": cfg.openwa_session,
         "chatId": chat_id,
         "file": {
@@ -168,6 +198,8 @@ def send_file(
         },
         "caption": caption,
     }
+    if mentions:
+        payload["mentions"] = mentions
     last_err: str | None = None
     for _attempt in range(2):
         try:

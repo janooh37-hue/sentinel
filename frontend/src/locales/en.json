@@ -2705,7 +2705,6 @@
   "sendToGroup": {
     "title": "Send to Group",
     "subtitle": "Broadcast a message or attachment to one or more WhatsApp groups",
-    "groups": "Groups",
     "message": "Message",
     "messagePlaceholder": "Type your message here…",
     "attachment": "Attachment",
@@ -2739,6 +2738,24 @@
     "unlinkConfirm": "Unlink",
     "unlinked": "WhatsApp unlinked",
     "unlinkFailed": "Couldn't unlink — try again",
+    "recipients": "Recipients",
+    "groupsAvailable_one": "{{count}} group available",
+    "groupsAvailable_other": "{{count}} groups available",
+    "searchGroups": "Search groups…",
+    "selectAll": "Select all groups",
+    "viewNormal": "Normal",
+    "viewExtended": "Extended view",
+    "reach": {
+      "groups_one": "{{count}} group selected",
+      "groups_other": "{{count}} groups selected"
+    },
+    "preview": {
+      "live": "Live preview — how it arrives",
+      "firstGroup": "Shown for the first selected group. Sends identically to all selected groups.",
+      "noGroup": "Pick a group to preview",
+      "today": "Today",
+      "empty": "Your message appears here as you type…"
+    },
     "qr": {
       "dialogTitle": "Connect WhatsApp",
       "dialogHint": "Scan the QR code with the office phone to link WhatsApp to the gateway.",
@@ -2766,7 +2783,11 @@
       "label": "Mention an employee",
       "searchPlaceholder": "Search by name or G-number",
       "includeDesignation": "Include designation",
-      "noResults": "No employees found"
+      "noResults": "No employees found",
+      "modeTag": "@ Mention — notifies them",
+      "modePlain": "Plain name",
+      "modeHint": "A mention tags the employee in WhatsApp using their linked number, so they get a personal notification.",
+      "noNumber": "No linked number"
     }
   },
   "gateway": {

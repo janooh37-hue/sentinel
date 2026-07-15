@@ -174,3 +174,66 @@ def test_health_true_when_connected():
 
     _mock(handler)
     assert openwa_client.health() is True
+
+
+def test_send_to_chat_includes_mentions():
+    import json
+
+    captured: dict[str, object] = {}
+
+    def handler(req):
+        captured.update(json.loads(req.content))
+        return httpx.Response(201, json={"id": "true_123@g.us_ABC"})
+
+    _mock(handler)
+    res = openwa_client.send_to_chat("123@g.us", "Hi @971509059931", mentions=["971509059931@c.us"])
+    assert res.ok
+    assert captured["mentions"] == ["971509059931@c.us"]
+
+
+def test_send_to_chat_omits_mentions_key_when_none():
+    import json
+
+    captured: dict[str, object] = {}
+
+    def handler(req):
+        captured.update(json.loads(req.content))
+        return httpx.Response(201, json={"id": "x"})
+
+    _mock(handler)
+    openwa_client.send_to_chat("123@g.us", "plain")
+    assert "mentions" not in captured
+
+
+def test_send_file_includes_mentions():
+    import json
+
+    captured: dict[str, object] = {}
+
+    def handler(req):
+        captured.update(json.loads(req.content))
+        return httpx.Response(201, json={"id": "x"})
+
+    _mock(handler)
+    openwa_client.send_file(
+        "123@g.us",
+        data=b"pdf",
+        filename="a.pdf",
+        caption="hi",
+        mentions=["971509059931@c.us"],
+    )
+    assert captured["mentions"] == ["971509059931@c.us"]
+
+
+@pytest.mark.parametrize(
+    ("raws", "expected"),
+    [
+        (["+971 50 905 9931"], ["971509059931@c.us"]),
+        (["00971509059931"], ["971509059931@c.us"]),
+        (["0509059931"], ["971509059931@c.us"]),  # org-local leading 0 -> 971
+        (["971509059931", "971509059931"], ["971509059931@c.us"]),  # dedupe
+        (["", "  ", "abc"], []),  # nothing usable
+    ],
+)
+def test_mention_chat_ids(raws, expected):
+    assert openwa_client.mention_chat_ids(raws) == expected

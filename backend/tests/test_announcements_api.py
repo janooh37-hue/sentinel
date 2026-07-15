@@ -14,7 +14,7 @@ from app.db import session as session_mod
 from app.db.models import Base, User
 from app.db.session import attach_sqlite_pragmas, get_db
 from app.main import create_app
-from app.services import announce_service, perm_service
+from app.services import announce_service, openwa_client, perm_service
 
 # ---------------------------------------------------------------------------
 # Fixtures — mirrors test_duty_supervisors_api.py pattern
@@ -92,7 +92,7 @@ def test_send_text(admin_client, monkeypatch):
     monkeypatch.setattr(
         announce_service,
         "send_announcement",
-        lambda db, *, groups, text, attachment, book_id, sent_by: SimpleNamespace(
+        lambda db, *, groups, text, attachment, book_id, sent_by, mentions=None: SimpleNamespace(
             announcement_id=1,
             sent=1,
             failed=0,
@@ -126,3 +126,30 @@ def test_send_requires_capability(client):
         data={"group_ids": ["1@g.us"], "text": "hi"},
     )
     assert r.status_code in (401, 403)
+
+
+def test_send_route_forwards_mentions(
+    admin_client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    seen: dict[str, object] = {}
+
+    def fake_send(db: object, **kw: object) -> announce_service.AnnouncementResult:
+        seen.update(kw)
+        return announce_service.AnnouncementResult(announcement_id=1, sent=1, failed=0, results=[])
+
+    monkeypatch.setattr(announce_service, "send_announcement", fake_send)
+    monkeypatch.setattr(
+        announce_service,
+        "groups_available",
+        lambda db: [openwa_client.Group(id="g1@g.us", name="G One")],
+    )
+    resp = admin_client.post(
+        "/api/v1/announcements/send",
+        data={
+            "group_ids": ["g1@g.us"],
+            "text": "hi @971509059931",
+            "mentions": ["971509059931", "0501234567"],
+        },
+    )
+    assert resp.status_code == 200
+    assert seen["mentions"] == ["971509059931", "0501234567"]
