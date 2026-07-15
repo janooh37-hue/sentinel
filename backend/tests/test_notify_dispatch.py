@@ -292,3 +292,67 @@ def test_refresh_delivery_returns_none_for_nonexistent_id(db_session):
     """refresh_delivery returns None when the message id does not exist."""
     result = notify_dispatch.refresh_delivery(db_session, msg_id=999999)
     assert result is None
+
+
+def test_send_leave_status_swaps_sick_to_registered(db_session, monkeypatch):
+    from datetime import date as _date
+
+    from app.db.models import Employee, Leave
+    from app.services import notify_dispatch as nd
+
+    emp = Employee(
+        id="G9", name_en="Sick Tester", name_ar="مريض", msg_language="en", contact="0501234567"
+    )
+    db_session.add(emp)
+    db_session.commit()
+    leave = Leave(
+        employee_id="G9",
+        leave_type="Sick Leave - الإجازة المرضية",
+        start_date=_date(2026, 7, 13),
+        end_date=_date(2026, 7, 15),
+        days=3,
+        status="Approved",
+    )
+    db_session.add(leave)
+    db_session.commit()
+
+    captured: list[str] = []
+    monkeypatch.setattr(
+        nd,
+        "send_for_event",
+        lambda db, event, rid, *, sent_by: captured.append(event),
+    )
+    nd._send_leave_status(db_session, leave.id, sent_by=None)
+    assert captured == ["sick_leave_registered"]
+
+
+def test_send_leave_status_annual_stays_leave_approved(db_session, monkeypatch):
+    from datetime import date as _date
+
+    from app.db.models import Employee, Leave
+    from app.services import notify_dispatch as nd
+
+    emp = Employee(
+        id="G10", name_en="Annual Tester", name_ar="سنوي", msg_language="en", contact="0501234568"
+    )
+    db_session.add(emp)
+    db_session.commit()
+    leave = Leave(
+        employee_id="G10",
+        leave_type="Annual Leave",
+        start_date=_date(2026, 8, 1),
+        end_date=_date(2026, 8, 25),
+        days=25,
+        status="Approved",
+    )
+    db_session.add(leave)
+    db_session.commit()
+
+    captured: list[str] = []
+    monkeypatch.setattr(
+        nd,
+        "send_for_event",
+        lambda db, event, rid, *, sent_by: captured.append(event),
+    )
+    nd._send_leave_status(db_session, leave.id, sent_by=None)
+    assert captured == ["leave_approved"]

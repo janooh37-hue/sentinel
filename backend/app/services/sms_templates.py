@@ -8,6 +8,8 @@ template bodies so both channels read identically.
 
 from __future__ import annotations
 
+from typing import Any, cast
+
 from app.db.models import Employee
 from app.services import notify_format as nf
 
@@ -18,7 +20,7 @@ _HR_OFFICE_LINE_AR = f"لأي استفسار يرجى مراجعة {nf.HR_OFFICE
 _HR_OFFICE_LINE_EN = "For any clarification, please contact the HR office."
 
 
-def _leave_approved(leave, emp: Employee, lang: str) -> str:
+def _leave_approved(leave: Any, emp: Employee, lang: str) -> str:
     name = nf.employee_name(emp, lang)
     typ = nf.type_label(leave.leave_type, lang)
     s, sw = nf.fmt_date(leave.start_date), nf.weekday(leave.start_date, lang)
@@ -57,7 +59,7 @@ def _leave_approved(leave, emp: Employee, lang: str) -> str:
     )
 
 
-def _leave_requested(leave, emp: Employee, lang: str) -> str:
+def _leave_requested(leave: Any, emp: Employee, lang: str) -> str:
     name = nf.employee_name(emp, lang)
     typ = nf.type_label(leave.leave_type, lang)
     s = nf.fmt_date(leave.start_date)
@@ -77,7 +79,7 @@ def _leave_requested(leave, emp: Employee, lang: str) -> str:
     )
 
 
-def _leave_rejected(leave, emp: Employee, lang: str) -> str:
+def _leave_rejected(leave: Any, emp: Employee, lang: str) -> str:
     name = nf.employee_name(emp, lang)
     typ = nf.type_label(leave.leave_type, lang)
     s = nf.fmt_date(leave.start_date)
@@ -97,7 +99,7 @@ def _leave_rejected(leave, emp: Employee, lang: str) -> str:
     )
 
 
-def _leave_cancelled(leave, emp: Employee, lang: str) -> str:
+def _leave_cancelled(leave: Any, emp: Employee, lang: str) -> str:
     name = nf.employee_name(emp, lang)
     typ = nf.type_label(leave.leave_type, lang)
     s = nf.fmt_date(leave.start_date)
@@ -123,7 +125,31 @@ def _leave_cancelled(leave, emp: Employee, lang: str) -> str:
     )
 
 
-def _duty_resumption(leave, emp: Employee, lang: str) -> str:
+def _sick_leave_registered(leave: Any, emp: Employee, lang: str) -> str:
+    """Sick leave is recorded by HR (born Approved) — this replaces the generic
+    approval wording for the sick type (spec decision 3)."""
+    name = nf.employee_name(emp, lang)
+    s, sw = nf.fmt_date(leave.start_date), nf.weekday(leave.start_date, lang)
+    e, ew = nf.fmt_date(leave.end_date), nf.weekday(leave.end_date, lang)
+    days = str(leave.days)
+    if lang == "ar":
+        return (
+            f"عزيزي {name}،\n"
+            f"تم تسجيل إجازتك المرضية.\n"
+            f"المدة: {days} يوم، من {s} ({sw}) إلى {e} ({ew}).\n"
+            f"نتمنى لك الشفاء العاجل.\n"
+            f"{_SIGNATURE_AR}"
+        )
+    return (
+        f"Dear {name},\n"
+        f"Your Sick Leave has been registered.\n"
+        f"Duration: {days} day(s), from {s} ({sw}) to {e} ({ew}).\n"
+        f"We wish you a speedy recovery.\n"
+        f"{_SIGNATURE_EN}"
+    )
+
+
+def _duty_resumption(leave: Any, emp: Employee, lang: str) -> str:
     name = nf.employee_name(emp, lang)
     d = leave.return_date or leave.end_date
     ds, wd = nf.fmt_date(d), nf.weekday(d, lang)
@@ -142,7 +168,7 @@ def _duty_resumption(leave, emp: Employee, lang: str) -> str:
     )
 
 
-def _violation(v, emp: Employee, lang: str) -> str:
+def _violation(v: Any, emp: Employee, lang: str) -> str:
     name = nf.employee_name(emp, lang)
     ds, wd = nf.fmt_date(v.date), nf.weekday(v.date, lang)
     # The Violation Form stores the real content as free-text `description`
@@ -168,7 +194,7 @@ def _violation(v, emp: Employee, lang: str) -> str:
     )
 
 
-def _salary_transfer(rec, emp: Employee, lang: str) -> str:
+def _salary_transfer(rec: Any, emp: Employee, lang: str) -> str:
     name = nf.employee_name(emp, lang)
     bank = (rec.fields or {}).get("bank_name", "")
     month = nf.salary_transfer_month(rec.today, lang)
@@ -189,7 +215,7 @@ def _salary_transfer(rec, emp: Employee, lang: str) -> str:
     )
 
 
-def _salary_deduction(rec, emp: Employee, lang: str) -> str:
+def _salary_deduction(rec: Any, emp: Employee, lang: str) -> str:
     name = nf.employee_name(emp, lang)
     amount = (rec.fields or {}).get("amount", "")
     if lang == "ar":
@@ -207,7 +233,7 @@ def _salary_deduction(rec, emp: Employee, lang: str) -> str:
     )
 
 
-def _employee_clearance(rec, emp: Employee, lang: str) -> str:
+def _employee_clearance(rec: Any, emp: Employee, lang: str) -> str:
     name = nf.employee_name(emp, lang)
     ds, wd = nf.fmt_date(rec.today), nf.weekday(rec.today, lang)
     if lang == "ar":
@@ -225,7 +251,7 @@ def _employee_clearance(rec, emp: Employee, lang: str) -> str:
     )
 
 
-def _hr_request(rec, emp: Employee, lang: str) -> str:
+def _hr_request(rec: Any, emp: Employee, lang: str) -> str:
     name = nf.employee_name(emp, lang)
     docs, count = nf.hr_request_docs((rec.fields or {}).get("doc_selections"), lang)
     if lang == "ar":
@@ -247,7 +273,7 @@ def _hr_request(rec, emp: Employee, lang: str) -> str:
     return f"Dear {name},\n{body}{_SIGNATURE_EN}"
 
 
-def _passport_release(rec, emp: Employee, lang: str) -> str:
+def _passport_release(rec: Any, emp: Employee, lang: str) -> str:
     name = nf.employee_name(emp, lang)
     if lang == "ar":
         return (
@@ -264,7 +290,7 @@ def _passport_release(rec, emp: Employee, lang: str) -> str:
     )
 
 
-def _resignation(rec, emp: Employee, lang: str) -> str:
+def _resignation(rec: Any, emp: Employee, lang: str) -> str:
     name = nf.employee_name(emp, lang)
     ds, wd = nf.fmt_date(rec.today), nf.weekday(rec.today, lang)
     if lang == "ar":
@@ -282,7 +308,7 @@ def _resignation(rec, emp: Employee, lang: str) -> str:
     )
 
 
-def _warning(rec, emp: Employee, lang: str) -> str:
+def _warning(rec: Any, emp: Employee, lang: str) -> str:
     name = nf.employee_name(emp, lang)
     ds, wd = nf.fmt_date(rec.today), nf.weekday(rec.today, lang)
     vtype = nf.type_labels((rec.fields or {}).get("violation_type", ""), lang)
@@ -303,11 +329,12 @@ def _warning(rec, emp: Employee, lang: str) -> str:
     )
 
 
-_BUILDERS = {
+_BUILDERS: dict[str, Any] = {
     nf.EVENT_LEAVE_REQUESTED: _leave_requested,
     nf.EVENT_LEAVE_APPROVED: _leave_approved,
     nf.EVENT_LEAVE_REJECTED: _leave_rejected,
     nf.EVENT_LEAVE_CANCELLED: _leave_cancelled,
+    nf.EVENT_SICK_LEAVE_REGISTERED: _sick_leave_registered,
     nf.EVENT_DUTY_RESUMPTION: _duty_resumption,
     nf.EVENT_VIOLATION: _violation,
     nf.EVENT_SALARY_TRANSFER: _salary_transfer,
@@ -320,8 +347,8 @@ _BUILDERS = {
 }
 
 
-def render_text(event_type: str, language: str, record, employee: Employee) -> str:
+def render_text(event_type: str, language: str, record: Any, employee: Employee) -> str:
     """Return the full SMS body for an event. KeyError on unknown event."""
     builder = _BUILDERS[event_type]
     lang = "ar" if language == "ar" else "en"
-    return builder(record, employee, lang)
+    return cast(str, builder(record, employee, lang))

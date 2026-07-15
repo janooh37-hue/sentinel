@@ -80,6 +80,7 @@ _LOADERS: dict[str, Callable[[Session, int], object]] = {
     nf.EVENT_LEAVE_REJECTED: _load_leave,
     nf.EVENT_LEAVE_CANCELLED: _load_leave,
     nf.EVENT_DUTY_RESUMPTION: _load_leave,
+    nf.EVENT_SICK_LEAVE_REGISTERED: _load_leave,
     nf.EVENT_VIOLATION: _load_violation,
     **{ev: _load_book_event for ev in nf.BOOK_EVENTS},
 }
@@ -267,6 +268,13 @@ def _send_leave_status(
     event = _LEAVE_STATUS_EVENTS.get(leave_lifecycle.canonical_status(leave.status))
     if event is None:
         return None
+    # Sick leave is recorded, not requested — the dedicated wording replaces
+    # the generic approval message (spec 2026-07-15, decision 3).
+    if (
+        event == nf.EVENT_LEAVE_APPROVED
+        and leave_lifecycle.classify_group(leave.leave_type) == "sick"
+    ):
+        event = nf.EVENT_SICK_LEAVE_REGISTERED
     return send_for_event(db, event, leave_id, sent_by=sent_by)
 
 

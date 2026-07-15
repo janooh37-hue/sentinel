@@ -386,3 +386,40 @@ def test_leave_cancelled_without_notes_has_no_reason_line():
     assert "Reason:" not in en
     ar = st.render_text("leave_cancelled", "ar", leave, emp)
     assert "سبب الإلغاء" not in ar
+
+
+def test_sick_leave_registered_full_text_en():
+    emp = _emp(msg_language="en")
+    leave = Leave(
+        id=31,
+        employee_id="G1",
+        leave_type="Sick Leave - الإجازة المرضية",
+        start_date=date(2026, 7, 13),
+        end_date=date(2026, 7, 15),
+        days=3,
+    )
+    text = st.render_text("sick_leave_registered", "en", leave, emp)
+    assert text == (
+        "Dear John Smith,\n"
+        "Your Sick Leave has been registered.\n"
+        "Duration: 3 day(s), from 13/07/2026 (Monday) to 15/07/2026 (Wednesday).\n"
+        "We wish you a speedy recovery.\n"
+        "Al Wathba Rehabilitation Centre"
+    )
+
+
+def test_sick_leave_registered_arabic_wording():
+    emp = _emp()
+    leave = Leave(
+        id=32,
+        employee_id="G1",
+        leave_type="Sick Leave",
+        start_date=date(2026, 7, 13),
+        end_date=date(2026, 7, 15),
+        days=3,
+    )
+    ar = st.render_text("sick_leave_registered", "ar", leave, emp)
+    assert "تم تسجيل إجازتك المرضية." in ar
+    assert "المدة: 3 يوم، من 13/07/2026 (الإثنين) إلى 15/07/2026 (الأربعاء)." in ar
+    assert "نتمنى لك الشفاء العاجل." in ar
+    assert ar.endswith("إدارة مركز الإصلاح والتأهيل بالوثبة")
