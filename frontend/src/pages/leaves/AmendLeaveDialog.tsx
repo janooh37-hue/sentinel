@@ -4,7 +4,7 @@
  * reason is required and is sent to the employee with the notification.
  * Used by BOTH detail surfaces (RecordExpansion + LeaveDetailDrawer).
  */
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import type { LeaveListItem, LeaveRead } from '@/lib/api'
@@ -37,6 +37,16 @@ export function AmendLeaveDialog({ open, leave, onOpenChange, onAmended }: Props
   const { t } = useTranslation()
   const [endDate, setEndDate] = useState(leave.end_date.slice(0, 10))
   const [reason, setReason] = useState('')
+
+  // The dialog stays mounted in both surfaces — re-seed local state each time
+  // it opens so a second amend starts from the record's current values.
+  useEffect(() => {
+    if (open) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setEndDate(leave.end_date.slice(0, 10))
+      setReason('')
+    }
+  }, [open, leave.end_date])
 
   const { amendMutation } = useLeaveDecisionActions({
     leaveId: leave.id,

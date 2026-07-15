@@ -47,4 +47,37 @@ describe('AmendLeaveDialog', () => {
       }),
     )
   })
+
+  it('resets endDate and reason when dialog re-opens', () => {
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    const { rerender } = render(
+      <QueryClientProvider client={qc}>
+        <AmendLeaveDialog open leave={leave} onOpenChange={() => {}} onAmended={() => {}} />
+      </QueryClientProvider>,
+    )
+
+    // Change both fields
+    fireEvent.change(screen.getByLabelText(/end.?date|تاريخ الانتهاء/i), {
+      target: { value: '2026-09-10' },
+    })
+    fireEvent.change(screen.getByLabelText(/reason|سبب/i), { target: { value: 'extended trip' } })
+
+    // Close the dialog (open=false)
+    rerender(
+      <QueryClientProvider client={qc}>
+        <AmendLeaveDialog open={false} leave={leave} onOpenChange={() => {}} onAmended={() => {}} />
+      </QueryClientProvider>,
+    )
+
+    // Re-open the dialog
+    rerender(
+      <QueryClientProvider client={qc}>
+        <AmendLeaveDialog open leave={leave} onOpenChange={() => {}} onAmended={() => {}} />
+      </QueryClientProvider>,
+    )
+
+    // State must have been reset to the leave's current values
+    expect(screen.getByLabelText(/end.?date|تاريخ الانتهاء/i)).toHaveValue('2026-08-25')
+    expect(screen.getByLabelText(/reason|سبب/i)).toHaveValue('')
+  })
 })
