@@ -102,16 +102,22 @@ def _leave_cancelled(leave, emp: Employee, lang: str) -> str:
     typ = nf.type_label(leave.leave_type, lang)
     s = nf.fmt_date(leave.start_date)
     e = nf.fmt_date(leave.end_date)
+    # The decision panel's notes become the cancellation reason (spec 2026-07-15).
+    reason = (getattr(leave, "notes", None) or "").strip()
     if lang == "ar":
+        reason_line = f"سبب الإلغاء: {reason}\n" if reason else ""
         return (
             f"عزيزي {name}،\n"
             f"تم إلغاء إجازتك ({typ}) من {s} إلى {e}.\n"
+            f"{reason_line}"
             f"لأي استفسار يرجى مراجعة {nf.ADMIN_OFFICE_AR}.\n"
             f"{_SIGNATURE_AR}"
         )
+    reason_line = f"Reason: {reason}\n" if reason else ""
     return (
         f"Dear {name},\n"
         f"Your {typ} from {s} to {e} has been cancelled.\n"
+        f"{reason_line}"
         f"For any clarification, please contact the administration office.\n"
         f"{_SIGNATURE_EN}"
     )

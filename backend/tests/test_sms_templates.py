@@ -352,3 +352,37 @@ def test_violation_ar_shows_description_and_sign_request():
     assert "التفاصيل: ترك موقع العمل دون إذن." in text
     assert "يرجى الحضور إلى مكتب الإدارة للتوقيع على محضر المخالفة." in text
     assert not _has_ascii_letter(text.replace("01/07/2026", ""))
+
+
+def test_leave_cancelled_includes_reason_from_notes():
+    emp = _emp(msg_language="en")
+    leave = Leave(
+        id=21,
+        employee_id="G1",
+        leave_type="Annual Leave",
+        start_date=date(2026, 7, 20),
+        end_date=date(2026, 8, 3),
+        days=15,
+        notes="Operational requirement — coverage shortage.",
+    )
+    en = st.render_text("leave_cancelled", "en", leave, emp)
+    assert "Reason: Operational requirement — coverage shortage.\n" in en
+    ar = st.render_text("leave_cancelled", "ar", leave, emp)
+    assert "سبب الإلغاء: Operational requirement — coverage shortage.\n" in ar
+
+
+def test_leave_cancelled_without_notes_has_no_reason_line():
+    emp = _emp(msg_language="en")
+    leave = Leave(
+        id=22,
+        employee_id="G1",
+        leave_type="Annual Leave",
+        start_date=date(2026, 7, 20),
+        end_date=date(2026, 8, 3),
+        days=15,
+        notes="   ",
+    )
+    en = st.render_text("leave_cancelled", "en", leave, emp)
+    assert "Reason:" not in en
+    ar = st.render_text("leave_cancelled", "ar", leave, emp)
+    assert "سبب الإلغاء" not in ar
