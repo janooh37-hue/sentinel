@@ -17,7 +17,7 @@ export type DisplayState =
   | 'Recorded' | 'Requested' | 'Confirmed' | 'PreApproved'
   | 'Scheduled' | 'AwaitingCertificate' | 'AwaitingReturn' | 'Completed'
   | 'Rejected' | 'Cancelled' | 'Unknown'
-export type LeaveAction = 'approve' | 'reject' | 'cancel' | 'delay' | 'extend' | 'certificate' | 'return'
+export type LeaveAction = 'approve' | 'reject' | 'cancel' | 'delay' | 'extend' | 'certificate' | 'return' | 'amend'
 
 export const ENDING_SOON_DAYS = 3
 
@@ -99,8 +99,11 @@ export function actionsFor(
   if (group === 'request') {
     if (s === 'Pending') return ['approve', 'reject', 'cancel']
     if (s === 'Approved') {
-      return isReturnable(leaveType) && isOverdue(endDate, todayIso)
+      const acts: LeaveAction[] = isReturnable(leaveType) && isOverdue(endDate, todayIso)
         ? ['return', 'cancel'] : ['cancel']
+      // Post-approval amendment: Annual only (mirrors backend can_amend).
+      if (isReturnable(leaveType) && lifecycleGroup(leaveType) === 'request') acts.unshift('amend')
+      return acts
     }
     return []
   }

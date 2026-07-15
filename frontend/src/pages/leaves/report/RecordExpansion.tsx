@@ -22,6 +22,7 @@ import { SendButton } from '@/components/notify/SendButton'
 import { actionsFor, canonStatus, displayState, lifecycleGroup } from '../lifecycle'
 import { useLeaveDecisionActions } from '../useLeaveDecisionActions'
 import { NsControls } from '../NsControls'
+import { AmendLeaveDialog } from '../AmendLeaveDialog'
 import { ReturnFormDialog } from '../ReturnFormDialog'
 import { StatusBadge } from '../StatusBadge'
 import { BalanceMeters } from './BalanceMeters'
@@ -55,6 +56,7 @@ export function RecordExpansion({
   const [notes, setNotes] = useState('')
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [returnOpen, setReturnOpen] = useState(false)
+  const [amendOpen, setAmendOpen] = useState(false)
   const cancelDeleteRef = useRef<HTMLButtonElement>(null)
 
   // When the two-step delete swaps to confirm mode, the Delete button that
@@ -227,6 +229,15 @@ export function RecordExpansion({
             </div>
           )}
 
+          {/* Edit leave — post-approval amendment for Annual rows */}
+          {acts.includes('amend') && (
+            <div className="flex flex-wrap items-center gap-2">
+              <Button size="sm" variant="secondary" onClick={() => setAmendOpen(true)} className="rounded-full">
+                {t('leaves.amend.action')}
+              </Button>
+            </div>
+          )}
+
           {/* Notify the employee on approval. canonStatus() normalises the
               stored bilingual/legacy status ("Approved - موافق", "Generated …")
               to "Approved" — a raw === would hide the button on every real
@@ -297,6 +308,7 @@ export function RecordExpansion({
       onOpenChange={setReturnOpen}
       onFiled={onMutated}
     />
+    <AmendLeaveDialog open={amendOpen} leave={row} onOpenChange={setAmendOpen} onAmended={onMutated} />
     </>
   )
 }

@@ -564,6 +564,17 @@
       "delayReason": "Reason for delay (if any)",
       "fileButton": "File & complete",
       "filed": "Return form filed — leave completed"
+    },
+    "amend": {
+      "action": "Edit leave",
+      "title": "Edit approved leave",
+      "startDate": "Start date",
+      "endDate": "End date",
+      "newDuration": "New duration: {{days}} days (was {{oldDays}})",
+      "reason": "Reason for the change — sent to the employee",
+      "help": "Saving updates the record and notifies the employee on WhatsApp/SMS with the new dates and your reason.",
+      "save": "Save & notify employee",
+      "toast": "Leave updated — employee notified"
     }
   },
   "vault": {

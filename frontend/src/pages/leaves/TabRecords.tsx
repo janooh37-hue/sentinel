@@ -30,6 +30,7 @@ import { actionsFor, canonStatus, displayState, lifecycleGroup } from './lifecyc
 import { useLeaveDecisionActions } from './useLeaveDecisionActions'
 import { NationalServiceDialog } from './NationalServiceDialog'
 import { NsControls } from './NsControls'
+import { AmendLeaveDialog } from './AmendLeaveDialog'
 import { ReturnFormDialog } from './ReturnFormDialog'
 import { StatusBadge } from './StatusBadge'
 import { LeaveEmployeePicker } from './LeaveEmployeePicker'
@@ -308,6 +309,7 @@ function LeaveDetailDrawer({
   const [notes, setNotes] = useState('')
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [returnOpen, setReturnOpen] = useState(false)
+  const [amendOpen, setAmendOpen] = useState(false)
 
   const today = new Date().toISOString().slice(0, 10)
 
@@ -480,6 +482,20 @@ function LeaveDetailDrawer({
               </div>
             )}
 
+            {/* Edit leave — post-approval amendment for Annual rows */}
+            {acts.includes('amend') && (
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  onClick={() => setAmendOpen(true)}
+                  className="rounded-full"
+                >
+                  {t('leaves.amend.action')}
+                </Button>
+              </div>
+            )}
+
             {/* Notify (WhatsApp → SMS fallback) */}
             {canonStatus(leave.status) === 'Approved' && (
               <SendButton eventType="leave_approved" recordId={leave.id} />
@@ -548,6 +564,9 @@ function LeaveDetailDrawer({
         onOpenChange={setReturnOpen}
         onFiled={onMutated}
       />
+    )}
+    {leave && (
+      <AmendLeaveDialog open={amendOpen} leave={leave} onOpenChange={setAmendOpen} onAmended={onMutated} />
     )}
     </>
   )
