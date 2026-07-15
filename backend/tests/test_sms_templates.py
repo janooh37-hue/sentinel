@@ -423,3 +423,43 @@ def test_sick_leave_registered_arabic_wording():
     assert "المدة: 3 يوم، من 13/07/2026 (الإثنين) إلى 15/07/2026 (الأربعاء)." in ar
     assert "نتمنى لك الشفاء العاجل." in ar
     assert ar.endswith("إدارة مركز الإصلاح والتأهيل بالوثبة")
+
+
+def test_leave_ending_reminder_full_text_en():
+    emp = _emp(msg_language="en")
+    leave = Leave(
+        id=41,
+        employee_id="G1",
+        leave_type="Annual Leave",
+        start_date=date(2026, 6, 1),
+        end_date=date(2026, 6, 30),
+        days=30,
+    )
+    text = st.render_text("leave_ending", "en", leave, emp)
+    assert text == (
+        "Dear John Smith,\n"
+        "Please be informed that your Annual Leave ends on 30/06/2026 (Tuesday), "
+        "and duty resumption is due on the following day, 01/07/2026 (Wednesday).\n"
+        "Please visit the administration office to register your duty resumption.\n"
+        "On official holidays, duty resumption is registered with the on-duty company supervisor.\n"
+        "Al Wathba Rehabilitation Centre"
+    )
+
+
+def test_leave_ending_reminder_arabic_locked_wording():
+    emp = _emp()
+    leave = Leave(
+        id=42,
+        employee_id="G1",
+        leave_type="Annual Leave - إجازة سنوية",
+        start_date=date(2026, 6, 1),
+        end_date=date(2026, 6, 30),
+        days=30,
+    )
+    ar = st.render_text("leave_ending", "ar", leave, emp)
+    assert (
+        "نفيدكم علماً بأن إجازتك السنوية تنتهي بتاريخ 30/06/2026 (الثلاثاء) "
+        "على أن تتم المباشرة في اليوم التالي 01/07/2026 (الأربعاء)." in ar
+    )
+    assert "يرجى مراجعة مكتب الإدارة لتسجيل مباشرة العمل." in ar
+    assert "في حال الإجازات الرسمية تتم المباشرة عند مسؤول السرية المناوبة." in ar

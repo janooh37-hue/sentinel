@@ -79,8 +79,9 @@ _LOADERS: dict[str, Callable[[Session, int], object]] = {
     nf.EVENT_LEAVE_APPROVED: _load_leave,
     nf.EVENT_LEAVE_REJECTED: _load_leave,
     nf.EVENT_LEAVE_CANCELLED: _load_leave,
-    nf.EVENT_DUTY_RESUMPTION: _load_leave,
     nf.EVENT_SICK_LEAVE_REGISTERED: _load_leave,
+    nf.EVENT_LEAVE_ENDING: _load_leave,
+    nf.EVENT_DUTY_RESUMPTION: _load_leave,
     nf.EVENT_VIOLATION: _load_violation,
     **{ev: _load_book_event for ev in nf.BOOK_EVENTS},
 }

@@ -8,6 +8,7 @@ template bodies so both channels read identically.
 
 from __future__ import annotations
 
+from datetime import timedelta
 from typing import Any, cast
 
 from app.db.models import Employee
@@ -145,6 +146,32 @@ def _sick_leave_registered(leave: Any, emp: Employee, lang: str) -> str:
         f"Your Sick Leave has been registered.\n"
         f"Duration: {days} day(s), from {s} ({sw}) to {e} ({ew}).\n"
         f"We wish you a speedy recovery.\n"
+        f"{_SIGNATURE_EN}"
+    )
+
+
+def _leave_ending(leave: Any, emp: Employee, lang: str) -> str:
+    """Automatic reminder 2 days before an Approved Annual Leave ends.
+    Wording locked in the 2026-07-15 review — do not rephrase."""
+    name = nf.employee_name(emp, lang)
+    e, ew = nf.fmt_date(leave.end_date), nf.weekday(leave.end_date, lang)
+    resume = leave.end_date + timedelta(days=1)
+    r, rw = nf.fmt_date(resume), nf.weekday(resume, lang)
+    if lang == "ar":
+        return (
+            f"عزيزي {name}،\n"
+            f"نفيدكم علماً بأن إجازتك السنوية تنتهي بتاريخ {e} ({ew}) "
+            f"على أن تتم المباشرة في اليوم التالي {r} ({rw}).\n"
+            f"يرجى مراجعة مكتب الإدارة لتسجيل مباشرة العمل.\n"
+            f"في حال الإجازات الرسمية تتم المباشرة عند مسؤول السرية المناوبة.\n"
+            f"{_SIGNATURE_AR}"
+        )
+    return (
+        f"Dear {name},\n"
+        f"Please be informed that your Annual Leave ends on {e} ({ew}), "
+        f"and duty resumption is due on the following day, {r} ({rw}).\n"
+        f"Please visit the administration office to register your duty resumption.\n"
+        f"On official holidays, duty resumption is registered with the on-duty company supervisor.\n"
         f"{_SIGNATURE_EN}"
     )
 
@@ -335,6 +362,7 @@ _BUILDERS: dict[str, Any] = {
     nf.EVENT_LEAVE_REJECTED: _leave_rejected,
     nf.EVENT_LEAVE_CANCELLED: _leave_cancelled,
     nf.EVENT_SICK_LEAVE_REGISTERED: _sick_leave_registered,
+    nf.EVENT_LEAVE_ENDING: _leave_ending,
     nf.EVENT_DUTY_RESUMPTION: _duty_resumption,
     nf.EVENT_VIOLATION: _violation,
     nf.EVENT_SALARY_TRANSFER: _salary_transfer,
