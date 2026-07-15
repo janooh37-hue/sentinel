@@ -2811,7 +2811,8 @@
       "remove": "Remove {{name}}",
       "reach": "direct",
       "tag": "direct",
-      "hintPrivate": "Private message — sends directly to {{count}} employee(s), no group",
+      "hintPrivate_one": "Private message — sends directly to 1 employee, no group",
+      "hintPrivate_other": "Private message — sends directly to {{count}} employees, no group",
       "hintMixed": "Will send to {{groups}} group(s) + {{employees}} employee(s) (direct)",
       "fellBack": "sent by SMS (not on WhatsApp)"
     }
