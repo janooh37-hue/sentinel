@@ -231,8 +231,10 @@ def test_send_file_includes_mentions():
         (["+971 50 905 9931"], ["971509059931@c.us"]),
         (["00971509059931"], ["971509059931@c.us"]),
         (["0509059931"], ["971509059931@c.us"]),  # org-local leading 0 -> 971
+        (["589911905"], ["971589911905@c.us"]),  # bare 9-digit local (5xxxxxxxx) -> 971
+        (["50 112 2877"], ["971501122877@c.us"]),  # same, with spaces
         (["971509059931", "971509059931"], ["971509059931@c.us"]),  # dedupe
-        (["", "  ", "abc"], []),  # nothing usable
+        (["", "  ", "abc", "....."], []),  # nothing usable
     ],
 )
 def test_mention_chat_ids(raws, expected):

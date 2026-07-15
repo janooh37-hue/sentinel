@@ -69,9 +69,12 @@ def _chat_id(phone: str) -> str:
 def mention_chat_ids(raws: list[str]) -> list[str]:
     """Normalize raw phone strings to WhatsApp mention ids (``<digits>@c.us``).
 
-    Strips non-digits, drops an international ``00`` prefix, and maps an
-    org-local leading ``0`` (e.g. ``05x…``) to the UAE country code. Empty
-    and duplicate entries are dropped; order is preserved.
+    Strips non-digits, drops an international ``00`` prefix, and maps
+    org-local forms to the UAE country code: leading ``0`` (``05x…``) and the
+    bare 9-digit mobile (``5xxxxxxxx`` — how most employee contacts are
+    stored). Without the country code WhatsApp cannot resolve the mention and
+    renders the bare digits as a foreign number (+58…). Empty and duplicate
+    entries are dropped; order is preserved.
     """
     out: list[str] = []
     for raw in raws:
@@ -80,6 +83,8 @@ def mention_chat_ids(raws: list[str]) -> list[str]:
             digits = digits[2:]
         elif digits.startswith("0") and len(digits) >= 9:
             digits = "971" + digits[1:]
+        elif digits.startswith("5") and len(digits) == 9:
+            digits = "971" + digits
         if not digits:
             continue
         cid = f"{digits}@c.us"

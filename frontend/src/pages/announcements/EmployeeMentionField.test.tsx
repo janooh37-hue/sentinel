@@ -89,6 +89,14 @@ describe('EmployeeMentionField', () => {
     expect(screen.getByText('sendToGroup.mention.noNumber')).toBeInTheDocument()
   })
 
+  it('tag mode disables employees whose contact has no usable digits', async () => {
+    mockEmployees([{ id: 'G-3', name_en: 'Dots', name_ar: null, contact: '.....' }])
+    renderField(vi.fn())
+    await userEvent.type(screen.getByPlaceholderText('sendToGroup.mention.searchPlaceholder'), 'do')
+    expect(await screen.findByRole('button', { name: /Dots/ })).toBeDisabled()
+    expect(screen.getByText('sendToGroup.mention.noNumber')).toBeInTheDocument()
+  })
+
   it('shows modeHint in default tag mode', () => {
     renderField(vi.fn())
     expect(screen.getByText('sendToGroup.mention.modeHint')).toBeInTheDocument()

@@ -25,6 +25,9 @@ export function mentionDigits(raw: string): string {
   let d = raw.replace(/\D/g, '')
   if (d.startsWith('00')) d = d.slice(2)
   else if (d.startsWith('0') && d.length >= 9) d = '971' + d.slice(1)
+  // Bare 9-digit local mobile (5xxxxxxxx) — how most employee contacts are
+  // stored; without 971 WhatsApp can't resolve the mention.
+  else if (d.startsWith('5') && d.length === 9) d = '971' + d
   return d
 }
 

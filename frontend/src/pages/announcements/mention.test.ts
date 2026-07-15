@@ -8,6 +8,12 @@ describe('mentionDigits', () => {
     expect(mentionDigits('0509059931')).toBe('971509059931')
     expect(mentionDigits('abc')).toBe('')
   })
+
+  it('prefixes 971 on bare 9-digit local mobiles (how contacts are stored)', () => {
+    expect(mentionDigits('589911905')).toBe('971589911905')
+    expect(mentionDigits('50 112 2877')).toBe('971501122877')
+    expect(mentionDigits('.....')).toBe('')
+  })
 })
 
 describe('applyMentions', () => {

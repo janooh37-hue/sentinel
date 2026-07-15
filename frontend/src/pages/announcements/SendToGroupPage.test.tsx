@@ -285,6 +285,26 @@ describe('SendToGroupPage', () => {
   })
 
   // ── Real mention wiring: transformed text + mention numbers ──
+  // ── Mention chips: visible + easy delete (mockup behavior) ──
+  it('shows an inserted mention as a removable chip', async () => {
+    renderPage()
+    await screen.findByText('Alpha')
+    await userEvent.click(screen.getByRole('button', { name: 'stub-mention-tag' }))
+    expect(screen.getByTestId('mention-chip')).toHaveTextContent('@Omar')
+    await userEvent.click(screen.getByRole('button', { name: 'sendToGroup.mention.remove' }))
+    expect(screen.queryByTestId('mention-chip')).not.toBeInTheDocument()
+    expect(screen.getByRole('textbox', { name: 'sendToGroup.message' })).toHaveValue('')
+  })
+
+  it('chip disappears when the token is edited out of the message', async () => {
+    renderPage()
+    await screen.findByText('Alpha')
+    await userEvent.click(screen.getByRole('button', { name: 'stub-mention-tag' }))
+    expect(screen.getByTestId('mention-chip')).toBeInTheDocument()
+    await userEvent.clear(screen.getByRole('textbox', { name: 'sendToGroup.message' }))
+    expect(screen.queryByTestId('mention-chip')).not.toBeInTheDocument()
+  })
+
   it('sends transformed text and mention numbers', async () => {
     vi.mocked(api.sendAnnouncement).mockResolvedValue({
       announcement_id: 1, sent: 1, failed: 0, results: [],

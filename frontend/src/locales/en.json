@@ -2787,7 +2787,8 @@
       "modeTag": "@ Mention — notifies them",
       "modePlain": "Plain name",
       "modeHint": "A mention tags the employee in WhatsApp using their linked number, so they get a personal notification.",
-      "noNumber": "No linked number"
+      "noNumber": "No linked number",
+      "remove": "Remove mention for {{name}}"
     }
   },
   "gateway": {
