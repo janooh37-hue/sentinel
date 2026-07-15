@@ -174,6 +174,8 @@ export function SendToGroupPage(): React.JSX.Element {
       return prev.slice(0, start) + text + prev.slice(end)
     })
     if (mention) {
+      // Dedupe by display name: "@Name" tokens are name-keyed, so two employees
+      // sharing one localized display name would collide — first insert wins.
       setMentions((prev) =>
         prev.some((m) => m.name === mention.name) ? prev : [...prev, mention],
       )
