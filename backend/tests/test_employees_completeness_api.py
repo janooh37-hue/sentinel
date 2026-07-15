@@ -105,3 +105,11 @@ def test_completeness_summary_counts_active_only(
     fields = [m["field"] for m in body["top_missing"]]
     assert "nationality" in fields
     assert len(body["top_missing"]) <= 3
+
+
+def test_employee_list_includes_contact(
+    client: TestClient, db_employee_factory: Callable[..., Employee]
+) -> None:
+    db_employee_factory(id="G-1", contact="+971509059931")
+    items = client.get("/api/v1/employees").json()["items"]
+    assert items[0]["contact"] == "+971509059931"

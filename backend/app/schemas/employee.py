@@ -165,6 +165,8 @@ class EmployeeListItem(ORMBase):
     duty_post: str | None = None
     # True when the employee has a vault photo on file (kind='photo').
     has_photo: bool = False
+    # Raw contact number as stored on the employee (used for WhatsApp mentions).
+    contact: str | None = None
 
 
 class EmployeeListResponse(BaseModel):

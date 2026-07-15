@@ -3457,6 +3457,8 @@ export interface components {
             book_id?: number | null;
             /** File */
             file?: string | null;
+            /** Mentions */
+            mentions?: string[] | null;
         };
         /** Body_send_email_api_v1_email_send_post */
         Body_send_email_api_v1_email_send_post: {
@@ -4788,6 +4790,8 @@ export interface components {
              * @default false
              */
             has_photo: boolean;
+            /** Contact */
+            contact?: string | null;
         };
         /** EmployeeListResponse */
         EmployeeListResponse: {
