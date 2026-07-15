@@ -22,13 +22,14 @@ import { GatewayConnectDialog } from './GatewayConnectDialog'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import { RecordAnnouncePicker, type PickedBook } from './RecordAnnouncePicker'
 import { EmployeeMentionField } from './EmployeeMentionField'
+import { DirectEmployeesField, type DirectEmployee } from './DirectEmployeesField'
 import { PhonePreview, WebChatWindow, type PreviewAttachment } from './MessagePreview'
 import { applyMentions, type MentionTarget } from './mention'
 
 type AttachMode = 'none' | 'book' | 'upload'
 
 export function SendToGroupPage(): React.JSX.Element {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   const { has } = useCapabilities()
   const isAdmin = has('settings.edit')
 
@@ -65,6 +66,9 @@ export function SendToGroupPage(): React.JSX.Element {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [groupQuery, setGroupQuery] = useState('')
 
+  // Direct employee recipients (private-chat sends)
+  const [directEmps, setDirectEmps] = useState<DirectEmployee[]>([])
+
   // Message + collected @mention targets
   const [message, setMessage] = useState('')
   const messageRef = useRef<HTMLTextAreaElement>(null)
@@ -98,11 +102,13 @@ export function SendToGroupPage(): React.JSX.Element {
 
   // Derived: is submit enabled?
   const hasGroup = selectedIds.size > 0
+  const hasDirect = directEmps.length > 0
+  const hasRecipient = hasGroup || hasDirect
   const hasContent =
     message.trim().length > 0 ||
     (attachMode === 'book' && bookId.trim().length > 0) ||
     (attachMode === 'upload' && hasFile)
-  const canSubmit = isConnected && hasGroup && hasContent
+  const canSubmit = isConnected && hasRecipient && hasContent
 
   const sendMut = useMutation({
     onMutate: () => setResult(null),
@@ -110,6 +116,9 @@ export function SendToGroupPage(): React.JSX.Element {
       const form = new FormData()
       for (const id of selectedIds) {
         form.append('group_ids', id)
+      }
+      for (const e of directEmps) {
+        form.append('employee_ids', e.id)
       }
       const applied = applyMentions(message.trim(), mentions)
       if (applied.text) {
@@ -202,7 +211,11 @@ export function SendToGroupPage(): React.JSX.Element {
         ? { title: fileName ?? 'file' }
         : null
 
-  const firstGroupName = (groups ?? []).find((g) => selectedIds.has(g.id))?.name ?? null
+  const firstDirectName = directEmps.length > 0
+    ? ((i18n.language.startsWith('ar') ? directEmps[0].name_ar : directEmps[0].name_en) ?? directEmps[0].id)
+    : null
+  const previewChatName =
+    (groups ?? []).find((g) => selectedIds.has(g.id))?.name ?? firstDirectName
 
   const handleFileChange = useCallback(() => {
     const f = fileRef.current?.files?.[0] ?? null
@@ -406,11 +419,26 @@ export function SendToGroupPage(): React.JSX.Element {
               )}
             </div>
 
-            {/* Reach meter — selected-groups count only (API has no member counts) */}
+            <DirectEmployeesField
+              selected={directEmps}
+              onAdd={(e) => setDirectEmps((prev) => (prev.some((p) => p.id === e.id) ? prev : [...prev, e]))}
+              onRemove={(id) => setDirectEmps((prev) => prev.filter((p) => p.id !== id))}
+            />
+
+            {/* Reach meter — selected-groups + direct-employee counts */}
             <div className="rounded-xl bg-gradient-to-br from-primary to-primary-hover p-4 text-primary-foreground">
-              <div className="text-[2.2em] font-bold leading-none">{selectedIds.size}</div>
-              <div className="mt-1 text-[0.8em] opacity-90">
-                {t('sendToGroup.reach.groups', { count: selectedIds.size })}
+              <div className="flex items-center gap-4">
+                <div>
+                  <div className="text-[2.2em] font-bold leading-none">{selectedIds.size}</div>
+                  <div className="mt-1 text-[0.8em] opacity-90">
+                    {t('sendToGroup.reach.groups', { count: selectedIds.size })}
+                  </div>
+                </div>
+                <div className="h-8 w-px bg-white/20" aria-hidden />
+                <div>
+                  <div className="text-[2.2em] font-bold leading-none">{directEmps.length}</div>
+                  <div className="mt-1 text-[0.8em] opacity-90">{t('sendToGroup.direct.reach')}</div>
+                </div>
               </div>
             </div>
           </aside>
@@ -448,7 +476,7 @@ export function SendToGroupPage(): React.JSX.Element {
               }`}
             >
               <WebChatWindow
-                groupName={firstGroupName}
+                groupName={previewChatName}
                 text={message}
                 mentionNames={activeMentionNames}
                 attachment={previewAttachment}
@@ -611,12 +639,22 @@ export function SendToGroupPage(): React.JSX.Element {
             </div>
 
             {/* Validation hints */}
-            {!showBanner && !hasGroup && !sendMut.isPending && (
+            {!showBanner && !hasRecipient && !sendMut.isPending && (
               <p className="mt-2 text-[0.8em] text-muted-foreground">{t('sendToGroup.pickGroup')}</p>
             )}
-            {!showBanner && hasGroup && !hasContent && !sendMut.isPending && (
+            {!showBanner && hasRecipient && !hasContent && !sendMut.isPending && (
               <p className="mt-2 text-[0.8em] text-muted-foreground">
                 {t('sendToGroup.needContent')}
+              </p>
+            )}
+            {!showBanner && !hasGroup && hasDirect && (
+              <p className="mt-2 text-[0.8em] font-medium text-primary">
+                {t('sendToGroup.direct.hintPrivate', { count: directEmps.length })}
+              </p>
+            )}
+            {!showBanner && hasGroup && hasDirect && (
+              <p className="mt-2 text-[0.8em] text-muted-foreground">
+                {t('sendToGroup.direct.hintMixed', { groups: selectedIds.size, employees: directEmps.length })}
               </p>
             )}
           </div>
@@ -639,7 +677,7 @@ export function SendToGroupPage(): React.JSX.Element {
               </span>
             </div>
             <PhonePreview
-              groupName={firstGroupName}
+              groupName={previewChatName}
               text={message}
               mentionNames={activeMentionNames}
               attachment={previewAttachment}
@@ -707,6 +745,30 @@ export function SendToGroupPage(): React.JSX.Element {
               </li>
             ))}
           </ul>
+          {(result.direct_results ?? []).length > 0 && (
+            <ul className="mt-2 space-y-1 border-t border-border pt-2">
+              {(result.direct_results ?? []).map((row) => (
+                <li key={row.employee_id} className="flex items-center gap-2 text-[0.82em]">
+                  <span className={row.ok ? 'text-green-600' : 'text-destructive'} aria-hidden>
+                    {row.ok ? '✓' : '✗'}
+                  </span>
+                  <span dir="ltr" className="font-mono text-muted-foreground">{row.employee_id}</span>
+                  <span dir="auto" className="text-foreground">{row.employee_name}</span>
+                  <span className="rounded-full bg-surface-tinted px-2 py-0.5 text-[0.72em] text-muted-foreground">
+                    {t('sendToGroup.direct.tag')}
+                  </span>
+                  {row.ok && row.fell_back && (
+                    <span className="text-muted-foreground">{t('sendToGroup.direct.fellBack')}</span>
+                  )}
+                  {!row.ok && (
+                    <span className="text-muted-foreground" title={row.error ?? undefined}>
+                      — {t('sendToGroup.groupSendFailed')}
+                    </span>
+                  )}
+                </li>
+              ))}
+            </ul>
+          )}
         </div>
       )}
       </div>
