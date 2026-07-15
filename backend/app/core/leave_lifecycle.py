@@ -99,6 +99,15 @@ def allowed_transitions(leave_type: str, current_status: str) -> frozenset[str]:
     return _TRANSITIONS[group].get(canonical_status(current_status), frozenset())
 
 
+def can_amend(leave_type: str, current_status: str) -> bool:
+    """Post-approval amendment (end date / days only): Annual Leave + Approved.
+
+    Distinct from ``can_edit_dates`` (NS-while-Pending, start+end): an amend
+    keeps the start date fixed and is allowed only after approval.
+    """
+    return is_annual(leave_type) and canonical_status(current_status) == "Approved"
+
+
 def can_edit_dates(leave_type: str, current_status: str) -> bool:
     return (
         classify_group(leave_type) == "national_service"
@@ -195,6 +204,7 @@ __all__ = [
     "accepts_certificate",
     "allowed_transitions",
     "birth_status",
+    "can_amend",
     "can_edit_dates",
     "can_file_return",
     "canonical_status",
