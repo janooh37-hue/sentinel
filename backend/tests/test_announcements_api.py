@@ -218,3 +218,19 @@ def test_send_groups_and_direct_counts_combine(admin_client, monkeypatch):
     body = r.json()
     assert body["announcement_id"] == 7
     assert body["sent"] == 2 and body["failed"] == 0
+
+
+def test_direct_notify_disabled_returns_409(admin_client, monkeypatch):
+    """send_direct_announcement raising NotifyDisabledError → 409, not 500."""
+    from app.services import notify_dispatch
+
+    def raise_disabled(_db: object, **_kw: object) -> None:
+        raise notify_dispatch.NotifyDisabledError("no channel")
+
+    monkeypatch.setattr(announce_service, "send_direct_announcement", raise_disabled)
+    r = admin_client.post(
+        "/api/v1/announcements/send",
+        data={"text": "hi", "employee_ids": ["G1"]},
+    )
+    assert r.status_code == 409
+    assert "no channel" in r.json()["error"]["message"]

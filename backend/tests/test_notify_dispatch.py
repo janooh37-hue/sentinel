@@ -463,3 +463,92 @@ def test_ending_reminders_dedup_and_gating(db_session, monkeypatch):
     # Gating: autosend disabled → no query, no sends.
     monkeypatch.setattr(nd, "_autosend_enabled", lambda db: False)
     assert nd.send_ending_reminders(db_session, today=_date(2026, 6, 28)) == 0
+
+
+def test_ending_reminders_catchup_selects_within_window(db_session, monkeypatch):
+    """A leave ending today+1 (within the catch-up window) is selected."""
+    from datetime import date as _date
+
+    from app.services import notify_dispatch as nd
+
+    # today=2026-06-29 → window [29, 01-Jul]; leave ends 2026-06-30 (today+1)
+    leave = _mk_emp_leave(
+        db_session,
+        emp_id="GCU",
+        leave_type="Annual Leave",
+        status="Approved",
+        end=_date(2026, 6, 30),
+    )
+    monkeypatch.setattr(nd, "_autosend_enabled", lambda db: True)
+    sent: list[int] = []
+    monkeypatch.setattr(nd, "send_for_event", lambda db, event, rid, *, sent_by: sent.append(rid))
+    n = nd.send_ending_reminders(db_session, today=_date(2026, 6, 29))
+    assert n == 1
+    assert sent == [leave.id]
+
+
+def test_ending_reminders_retries_failed_row(db_session, monkeypatch):
+    """A leave whose last outbound row has status='failed' is re-attempted."""
+    from datetime import date as _date
+
+    from app.db.models import OutboundMessage
+    from app.services import notify_dispatch as nd
+
+    target = _date(2026, 6, 30)
+    leave = _mk_emp_leave(
+        db_session, emp_id="GFR", leave_type="Annual Leave", status="Approved", end=target
+    )
+    # A prior *failed* attempt — should NOT block the retry.
+    db_session.add(
+        OutboundMessage(
+            employee_id="GFR",
+            event_type="leave_ending",
+            event_ref=f"leave_ending:{leave.id}",
+            language="en",
+            phone="971501112233",
+            body="x",
+            channel="sms",
+            status="failed",
+        )
+    )
+    db_session.commit()
+
+    monkeypatch.setattr(nd, "_autosend_enabled", lambda db: True)
+    sent: list[int] = []
+    monkeypatch.setattr(nd, "send_for_event", lambda db, event, rid, *, sent_by: sent.append(rid))
+    n = nd.send_ending_reminders(db_session, today=_date(2026, 6, 28))
+    assert n == 1
+    assert sent == [leave.id]
+
+
+def test_ending_reminders_sent_row_still_dedups(db_session, monkeypatch):
+    """A leave whose last outbound row has status='sent' is still skipped (dedup)."""
+    from datetime import date as _date
+
+    from app.db.models import OutboundMessage
+    from app.services import notify_dispatch as nd
+
+    target = _date(2026, 6, 30)
+    leave = _mk_emp_leave(
+        db_session, emp_id="GDD", leave_type="Annual Leave", status="Approved", end=target
+    )
+    db_session.add(
+        OutboundMessage(
+            employee_id="GDD",
+            event_type="leave_ending",
+            event_ref=f"leave_ending:{leave.id}",
+            language="en",
+            phone="971501112233",
+            body="x",
+            channel="sms",
+            status="sent",
+        )
+    )
+    db_session.commit()
+
+    monkeypatch.setattr(nd, "_autosend_enabled", lambda db: True)
+    sent: list[int] = []
+    monkeypatch.setattr(nd, "send_for_event", lambda db, event, rid, *, sent_by: sent.append(rid))
+    n = nd.send_ending_reminders(db_session, today=_date(2026, 6, 28))
+    assert n == 0
+    assert sent == []

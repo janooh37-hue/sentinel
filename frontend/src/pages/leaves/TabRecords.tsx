@@ -307,6 +307,7 @@ function LeaveDetailDrawer({
 }): React.JSX.Element {
   const { t, i18n } = useTranslation()
   const [notes, setNotes] = useState('')
+  const [seededId, setSeededId] = useState<number | null>(null)
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [returnOpen, setReturnOpen] = useState(false)
   const [amendOpen, setAmendOpen] = useState(false)
@@ -328,6 +329,14 @@ function LeaveDetailDrawer({
 
   const leave: LeaveRead | undefined = detailQuery.data
 
+  // Seed notes from the loaded leave once per leave id.
+  // Uses React's "setState-during-render" pattern (guarded by seededId) so a
+  // background refetch does not clobber a value the operator is actively typing.
+  if (leave?.id != null && leave.id !== seededId) {
+    setSeededId(leave.id)
+    setNotes(leave.notes ?? '')
+  }
+
   const { updateMutation, deleteMutation } = useLeaveDecisionActions({
     leaveId,
     employeeId: leave?.employee_id ?? '',
@@ -341,7 +350,10 @@ function LeaveDetailDrawer({
   const acts = leave ? actionsFor(leave.leave_type, leave.status, leave.end_date, today, hasCertificate) : []
   const hasRequestActions =
     acts.includes('approve') || acts.includes('reject') || acts.includes('cancel')
-  const effectiveNotes = (notes || leave?.notes || '').trim()
+  // Sick-leave approvals use the sick_leave_registered event; all others use leave_approved.
+  const sendEvent = leave != null && lifecycleGroup(leave.leave_type) === 'sick'
+    ? 'sick_leave_registered'
+    : 'leave_approved'
   const awaitingCert =
     leave != null &&
     isNs &&
@@ -419,7 +431,7 @@ function LeaveDetailDrawer({
                 </label>
                 <textarea
                   rows={3}
-                  value={notes || leave.notes || ''}
+                  value={notes}
                   onChange={(e) => setNotes(e.target.value)}
                   className="rounded-md border border-hairline bg-surface px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 />
@@ -460,7 +472,7 @@ function LeaveDetailDrawer({
                     variant="secondary"
                     size="sm"
                     onClick={() => updateMutation.mutate({ status: 'Cancelled', n: notes })}
-                    disabled={updateMutation.isPending || !effectiveNotes}
+                    disabled={updateMutation.isPending || !notes.trim()}
                     className="rounded-full"
                   >
                     {t('leaves.report.cancel')}
@@ -498,7 +510,7 @@ function LeaveDetailDrawer({
 
             {/* Notify (WhatsApp → SMS fallback) */}
             {canonStatus(leave.status) === 'Approved' && (
-              <SendButton eventType="leave_approved" recordId={leave.id} />
+              <SendButton eventType={sendEvent} recordId={leave.id} />
             )}
             {(!!leave.return_date || !!leave.return_doc_path) && (
               <SendButton eventType="duty_resumption" recordId={leave.id} />

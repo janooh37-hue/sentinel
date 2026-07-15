@@ -20,7 +20,7 @@ from app.schemas.announcement import (
     GroupOut,
     GroupSendOut,
 )
-from app.services import announce_service, openwa_client
+from app.services import announce_service, notify_dispatch, openwa_client
 
 router = APIRouter(prefix="/announcements", tags=["announcements"])
 
@@ -126,17 +126,20 @@ async def send_announcement(
 
     # Direct (private) fan-out. @mentions are a group-chat concept — the plain
     # text is sent as-is to each employee.
-    direct = (
-        announce_service.send_direct_announcement(
-            db,
-            employee_ids=employee_ids,
-            text=text.strip(),
-            attachment=attachment,
-            sent_by=user.id,
+    try:
+        direct = (
+            announce_service.send_direct_announcement(
+                db,
+                employee_ids=employee_ids,
+                text=text.strip(),
+                attachment=attachment,
+                sent_by=user.id,
+            )
+            if employee_ids
+            else []
         )
-        if employee_ids
-        else []
-    )
+    except notify_dispatch.NotifyDisabledError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
 
     sent = (result.sent if result else 0) + sum(1 for d in direct if d.ok)
     failed = (result.failed if result else 0) + sum(1 for d in direct if not d.ok)

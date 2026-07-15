@@ -115,6 +115,9 @@ export function RecordExpansion({
     isNs &&
     displayState(row.leave_type, row.status, row.end_date, today, hasCertificate) === 'AwaitingCertificate'
 
+  // Sick-leave approvals use the sick_leave_registered wording; all others use leave_approved.
+  const sendEvent = lifecycleGroup(row.leave_type) === 'sick' ? 'sick_leave_registered' : 'leave_approved'
+
   return (
     <>
     <div className="border-t border-hairline bg-surface-raised px-5 py-4">
@@ -244,7 +247,7 @@ export function RecordExpansion({
               record. Mirrors the mobile drawer (TabRecords). */}
           {canonStatus(row.status) === 'Approved' && (
             <div className="flex flex-wrap items-center gap-2">
-              <SendButton eventType="leave_approved" recordId={row.id} />
+              <SendButton eventType={sendEvent} recordId={row.id} />
             </div>
           )}
 

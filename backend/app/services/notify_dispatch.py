@@ -366,9 +366,12 @@ def auto_send_leave_amended(
 def send_ending_reminders(db: Session, *, today: date | None = None) -> int:
     """One-time reminder 2 days before an Approved Annual Leave ends.
 
-    Selection: end_date == today+2, not soft-deleted, no return recorded,
-    Annual + Approved (bilingual/legacy labels handled by leave_lifecycle).
-    Dedup rides on outbound_messages.event_ref — restart-safe, one per leave.
+    Selection: end_date in [today, today+2] (catch-up window), not soft-deleted,
+    no return recorded, Annual + Approved (bilingual/legacy labels handled by
+    leave_lifecycle).  Dedup rides on outbound_messages.event_ref — restart-safe,
+    one per leave.  A missed 09:00 run (deploy/restart) is recovered on the next
+    run; dedup suppresses duplicates unless the previous attempt hard-failed
+    (status="failed"), in which case the reminder is retried.
     """
     if not _autosend_enabled(db):
         return 0
@@ -377,7 +380,8 @@ def send_ending_reminders(db: Session, *, today: date | None = None) -> int:
     rows = list(
         db.scalars(
             select(Leave).where(
-                Leave.end_date == target_end,
+                Leave.end_date >= today,
+                Leave.end_date <= target_end,
                 Leave.deleted_at.is_(None),
                 Leave.return_date.is_(None),
             )
@@ -389,7 +393,8 @@ def send_ending_reminders(db: Session, *, today: date | None = None) -> int:
             continue
         if leave_lifecycle.canonical_status(leave.status) != "Approved":
             continue
-        if last_status(db, nf.EVENT_LEAVE_ENDING, leave.id) is not None:
+        last = last_status(db, nf.EVENT_LEAVE_ENDING, leave.id)
+        if last is not None and last.status != "failed":
             continue
         try:
             send_for_event(db, nf.EVENT_LEAVE_ENDING, leave.id, sent_by=None)
