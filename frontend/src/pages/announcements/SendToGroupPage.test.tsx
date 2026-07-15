@@ -4,7 +4,7 @@
  * Mirrors the harness in SupervisorDesignations.test.tsx:
  *   QueryClientProvider + i18n stub + vi.mock('../../lib/api') + sonner mock.
  */
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor, fireEvent } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { vi, describe, it, expect, beforeEach } from 'vitest'
@@ -193,8 +193,9 @@ describe('SendToGroupPage', () => {
     await userEvent.click(screen.getByRole('button', { name: 'stub-pick-record' }))
     // chip shows the picked ref
     expect(await screen.findByText('GS-0042')).toBeInTheDocument()
-    // send
+    // send → confirm dialog → confirm
     await userEvent.click(screen.getByRole('button', { name: 'sendToGroup.send' }))
+    await userEvent.click(screen.getByRole('button', { name: 'sendToGroup.confirmSend.send' }))
     await waitFor(() => expect(api.sendAnnouncement).toHaveBeenCalled())
     const form = vi.mocked(api.sendAnnouncement).mock.calls[0][0] as FormData
     expect(form.get('book_id')).toBe('42')
@@ -212,6 +213,7 @@ describe('SendToGroupPage', () => {
       'Ahmed Al-Sayed (G-1234)',
     )
     await userEvent.click(screen.getByRole('button', { name: 'sendToGroup.send' }))
+    await userEvent.click(screen.getByRole('button', { name: 'sendToGroup.confirmSend.send' }))
     await waitFor(() => expect(api.sendAnnouncement).toHaveBeenCalled())
     const form = vi.mocked(api.sendAnnouncement).mock.calls[0][0] as FormData
     expect(form.get('text')).toBe('Ahmed Al-Sayed (G-1234)')
@@ -335,6 +337,7 @@ describe('SendToGroupPage', () => {
     await userEvent.clear(textarea)
     await userEvent.type(textarea, 'Hi @Omar')
     await userEvent.click(screen.getByRole('button', { name: 'sendToGroup.send' }))
+    await userEvent.click(screen.getByRole('button', { name: 'sendToGroup.confirmSend.send' }))
     await waitFor(() => expect(api.sendAnnouncement).toHaveBeenCalled())
     const form = vi.mocked(api.sendAnnouncement).mock.calls[0][0] as FormData
     expect(form.get('text')).toBe('Hi @971509059931')
@@ -353,6 +356,7 @@ describe('SendToGroupPage', () => {
     await userEvent.clear(textarea)
     await userEvent.type(textarea, 'Hello team')
     await userEvent.click(screen.getByRole('button', { name: 'sendToGroup.send' }))
+    await userEvent.click(screen.getByRole('button', { name: 'sendToGroup.confirmSend.send' }))
     await waitFor(() => expect(api.sendAnnouncement).toHaveBeenCalled())
     const form = vi.mocked(api.sendAnnouncement).mock.calls[0][0] as FormData
     expect(form.get('text')).toBe('Hello team')
@@ -376,10 +380,59 @@ describe('SendToGroupPage', () => {
     const sendBtn = screen.getByRole('button', { name: 'sendToGroup.send' })
     expect(sendBtn).not.toBeDisabled()
     await userEvent.click(sendBtn)
+    await userEvent.click(screen.getByRole('button', { name: 'sendToGroup.confirmSend.send' }))
     await waitFor(() => expect(api.sendAnnouncement).toHaveBeenCalled())
     const form = vi.mocked(api.sendAnnouncement).mock.calls[0][0] as FormData
     expect(form.getAll('employee_ids')).toEqual(['G-1023'])
     expect(form.getAll('group_ids')).toEqual([])
+  })
+
+  // ── Confirmation dialog: open + abort ──
+  it('send opens the confirmation instead of posting; continue editing aborts', async () => {
+    renderPage()
+    await screen.findByText('Alpha')
+    await userEvent.click(screen.getByRole('checkbox', { name: 'Alpha' }))
+    const textarea = screen.getByRole('textbox', { name: 'sendToGroup.message' })
+    await userEvent.type(textarea, 'Test message')
+    // Click Send — should open dialog, NOT call the API
+    await userEvent.click(screen.getByRole('button', { name: 'sendToGroup.send' }))
+    expect(api.sendAnnouncement).not.toHaveBeenCalled()
+    expect(screen.getByText('sendToGroup.confirmSend.title')).toBeInTheDocument()
+    // Abort via Continue editing — dialog closes, API still not called
+    await userEvent.click(
+      screen.getByRole('button', { name: 'sendToGroup.confirmSend.continueEditing' }),
+    )
+    expect(api.sendAnnouncement).not.toHaveBeenCalled()
+    expect(screen.queryByText('sendToGroup.confirmSend.title')).not.toBeInTheDocument()
+  })
+
+  // ── Fix 1: stale file state cleared when leaving upload mode ──
+  it('clears stale file state when switching away from upload mode and back', async () => {
+    renderPage()
+    await screen.findByText('Alpha')
+
+    // Switch to upload mode — dropzone renders
+    await userEvent.click(screen.getByRole('radio', { name: 'sendToGroup.attachUpload' }))
+    expect(screen.getByText('sendToGroup.uploadZone.main')).toBeInTheDocument()
+
+    // Choose a file via the hidden input
+    const fileInput = document.querySelector('input[type="file"]') as HTMLInputElement
+    const file = new File(['content'], 'report.pdf', { type: 'application/pdf' })
+    Object.defineProperty(fileInput, 'files', { value: [file], configurable: true })
+    fireEvent.change(fileInput)
+
+    // File card should now show the filename
+    expect(await screen.findByText('report.pdf')).toBeInTheDocument()
+
+    // Switch to 'book' mode — file state must be cleared
+    await userEvent.click(screen.getByRole('radio', { name: 'sendToGroup.attachBook' }))
+
+    // Switch back to upload
+    await userEvent.click(screen.getByRole('radio', { name: 'sendToGroup.attachUpload' }))
+
+    // File card gone; empty dropzone rendered
+    expect(screen.queryByText('report.pdf')).not.toBeInTheDocument()
+    expect(screen.getByText('sendToGroup.uploadZone.main')).toBeInTheDocument()
   })
 
   // ── Direct recipients: result panel shows direct rows with the direct tag ──
@@ -399,6 +452,7 @@ describe('SendToGroupPage', () => {
     await userEvent.type(textarea, 'Hello direct')
     await userEvent.click(screen.getByRole('button', { name: 'stub-add-direct' }))
     await userEvent.click(screen.getByRole('button', { name: 'sendToGroup.send' }))
+    await userEvent.click(screen.getByRole('button', { name: 'sendToGroup.confirmSend.send' }))
     await waitFor(() => expect(api.sendAnnouncement).toHaveBeenCalled())
     // Result panel: employee name and the direct tag should be rendered
     expect(await screen.findByText('Ahmed')).toBeInTheDocument()

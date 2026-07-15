@@ -2970,6 +2970,15 @@
       "qrError": "تعذّر تحميل رمز QR. حاول مرة أخرى.",
       "refreshing": "جارٍ التحديث…"
     },
+    "uploadZone": {
+      "main": "انقر لاختيار ملف — أو اسحبه وأفلته هنا",
+      "hint": "PDF أو صورة أو مستند · يُرسل إلى كل مستلم مختار",
+      "ready": "جاهز للإرسال",
+      "replace": "استبدال",
+      "remove": "إزالة",
+      "mb": "ميغابايت",
+      "kb": "كيلوبايت"
+    },
     "picker": {
       "title": "إرفاق سجل",
       "close": "إغلاق",
@@ -3010,6 +3019,29 @@
       "hintPrivate_other": "رسالة خاصة — تُرسل مباشرة إلى {{count}} موظف، بدون مجموعة",
       "hintMixed": "سيُرسل إلى {{groups}} من المجموعات و{{employees}} من الموظفين (مباشر)",
       "fellBack": "أُرسلت عبر SMS (غير مسجّل في واتساب)"
+    },
+    "confirmSend": {
+      "title": "جاهز للإرسال؟",
+      "subtitle": "هذا بالضبط ما سيستلمه المستلمون.",
+      "warnUpload": "اخترت «رفع ملف» لكن لا يوجد ملف مرفق.",
+      "warnBook": "اخترت «إرفاق سجل» لكن لم يُختر سجل.",
+      "send": "إرسال",
+      "sendAnywayFile": "إرسال على أي حال — بدون الملف",
+      "sendAnywayBook": "إرسال على أي حال — بدون السجل",
+      "continueEditing": "متابعة التحرير",
+      "note": "لن يُرسل شيء حتى تؤكد.",
+      "groupsPill_zero": "لا مجموعات",
+      "groupsPill_one": "مجموعة واحدة",
+      "groupsPill_two": "مجموعتان",
+      "groupsPill_few": "{{count}} مجموعات",
+      "groupsPill_many": "{{count}} مجموعةً",
+      "groupsPill_other": "{{count}} مجموعة",
+      "directPill_zero": "لا مستلمين مباشرين",
+      "directPill_one": "موظف واحد (مباشر)",
+      "directPill_two": "موظفان اثنان (مباشر)",
+      "directPill_few": "{{count}} موظفين (مباشر)",
+      "directPill_many": "{{count}} موظفاً (مباشر)",
+      "directPill_other": "{{count}} موظف (مباشر)"
     }
   },
   "gateway": {

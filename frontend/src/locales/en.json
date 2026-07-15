@@ -2779,6 +2779,15 @@
       "qrError": "Could not load the QR code. Please try again.",
       "refreshing": "Refreshing…"
     },
+    "uploadZone": {
+      "main": "Click to choose a file — or drag & drop it here",
+      "hint": "PDF, image, or document · sent to every selected recipient",
+      "ready": "Ready to send",
+      "replace": "Replace",
+      "remove": "Remove",
+      "mb": "MB",
+      "kb": "KB"
+    },
     "picker": {
       "title": "Attach a record",
       "close": "Close",
@@ -2815,6 +2824,21 @@
       "hintPrivate_other": "Private message — sends directly to {{count}} employees, no group",
       "hintMixed": "Will send to {{groups}} group(s) + {{employees}} employee(s) (direct)",
       "fellBack": "sent by SMS (not on WhatsApp)"
+    },
+    "confirmSend": {
+      "title": "Ready to send?",
+      "subtitle": "This is exactly what recipients will receive.",
+      "warnUpload": "You selected “Upload a file” but no file is attached.",
+      "warnBook": "You selected “Attach a record” but no record is picked.",
+      "send": "Send",
+      "sendAnywayFile": "Send anyway — without the file",
+      "sendAnywayBook": "Send anyway — without the record",
+      "continueEditing": "Continue editing",
+      "note": "Nothing is sent until you confirm.",
+      "groupsPill_one": "{{count}} group",
+      "groupsPill_other": "{{count}} groups",
+      "directPill_one": "{{count}} direct",
+      "directPill_other": "{{count}} direct"
     }
   },
   "gateway": {

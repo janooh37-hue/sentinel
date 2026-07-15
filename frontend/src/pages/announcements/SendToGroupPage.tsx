@@ -18,9 +18,11 @@ import { AlertTriangle, MessageCircle, QrCode, Unlink } from 'lucide-react'
 import { api, type AnnouncementOut, type GroupSendOut } from '@/lib/api'
 import { useCapabilities } from '@/lib/useCapabilities'
 import { useGatewayStatus, type GatewayState } from '@/lib/useGatewayStatus'
+import { FileDropzone } from './FileDropzone'
 import { GatewayConnectDialog } from './GatewayConnectDialog'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import { RecordAnnouncePicker, type PickedBook } from './RecordAnnouncePicker'
+import { SendConfirmDialog, type UnfulfilledAttachment } from './SendConfirmDialog'
 import { EmployeeMentionField } from './EmployeeMentionField'
 import { DirectEmployeesField, type DirectEmployee } from './DirectEmployeesField'
 import { PhonePreview, WebChatWindow, type PreviewAttachment } from './MessagePreview'
@@ -80,8 +82,12 @@ export function SendToGroupPage(): React.JSX.Element {
   const fileRef = useRef<HTMLInputElement>(null)
   const [hasFile, setHasFile] = useState(false)
   const [fileName, setFileName] = useState<string | null>(null)
+  const [fileSize, setFileSize] = useState<number | null>(null)
   const [pickerOpen, setPickerOpen] = useState(false)
   const [pickedBook, setPickedBook] = useState<PickedBook | null>(null)
+
+  // Confirmation dialog
+  const [confirmOpen, setConfirmOpen] = useState(false)
 
   // Result
   const [result, setResult] = useState<AnnouncementOut | null>(null)
@@ -109,6 +115,13 @@ export function SendToGroupPage(): React.JSX.Element {
     (attachMode === 'book' && bookId.trim().length > 0) ||
     (attachMode === 'upload' && hasFile)
   const canSubmit = isConnected && hasRecipient && hasContent
+
+  const unfulfilled: UnfulfilledAttachment =
+    attachMode === 'upload' && !hasFile
+      ? 'upload'
+      : attachMode === 'book' && !bookId.trim()
+        ? 'book'
+        : null
 
   const sendMut = useMutation({
     onMutate: () => setResult(null),
@@ -221,12 +234,20 @@ export function SendToGroupPage(): React.JSX.Element {
     const f = fileRef.current?.files?.[0] ?? null
     setHasFile(f !== null)
     setFileName(f?.name ?? null)
+    setFileSize(f?.size ?? null)
+  }, [])
+
+  const handleFileClear = useCallback(() => {
+    if (fileRef.current) fileRef.current.value = ''
+    setHasFile(false)
+    setFileName(null)
+    setFileSize(null)
   }, [])
 
   function handleSubmit(e: React.FormEvent): void {
     e.preventDefault()
     if (!canSubmit) return
-    sendMut.mutate()
+    setConfirmOpen(true)
   }
 
   /** Derive the per-state banner message key. */
@@ -554,7 +575,10 @@ export function SendToGroupPage(): React.JSX.Element {
                       name="attachMode"
                       value={mode}
                       checked={attachMode === mode}
-                      onChange={() => setAttachMode(mode)}
+                      onChange={() => {
+                        if (attachMode === 'upload' && mode !== 'upload') handleFileClear()
+                        setAttachMode(mode)
+                      }}
                       className="accent-primary"
                     />
                     {mode === 'none'
@@ -611,14 +635,14 @@ export function SendToGroupPage(): React.JSX.Element {
               )}
 
               {attachMode === 'upload' && (
-                <div className="mt-3">
-                  <input
-                    ref={fileRef}
-                    type="file"
-                    onChange={handleFileChange}
-                    className="text-[0.85em] text-foreground"
-                  />
-                </div>
+                <FileDropzone
+                  fileRef={fileRef}
+                  hasFile={hasFile}
+                  fileName={fileName}
+                  fileSize={fileSize}
+                  onFileChange={handleFileChange}
+                  onClear={handleFileClear}
+                />
               )}
             </section>
 
@@ -700,6 +724,24 @@ export function SendToGroupPage(): React.JSX.Element {
           setBookId(String(b.id))
           setPickerOpen(false)
         }}
+      />
+
+      <SendConfirmDialog
+        open={confirmOpen}
+        onOpenChange={setConfirmOpen}
+        sending={sendMut.isPending}
+        onConfirm={() => {
+          if (sendMut.isPending) return
+          setConfirmOpen(false)
+          sendMut.mutate()
+        }}
+        text={message.trim()}
+        chatName={previewChatName}
+        mentionNames={activeMentionNames}
+        attachment={previewAttachment}
+        unfulfilled={unfulfilled}
+        groupCount={selectedIds.size}
+        directCount={directEmps.length}
       />
 
       {/* Unlink confirm dialog (admin only) */}
