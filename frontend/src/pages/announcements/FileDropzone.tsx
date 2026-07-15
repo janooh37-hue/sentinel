@@ -61,7 +61,10 @@ export function FileDropzone({
             e.preventDefault()
             setDrag(true)
           }}
-          onDragLeave={() => setDrag(false)}
+          onDragLeave={(e) => {
+            if (!e.currentTarget.contains(e.relatedTarget as Node)) setDrag(false)
+          }}
+          onDragEnd={() => setDrag(false)}
           onDrop={(e) => {
             e.preventDefault()
             setDrag(false)
@@ -73,7 +76,7 @@ export function FileDropzone({
           className={`cursor-pointer rounded-xl border-2 border-dashed px-4 py-5 text-center transition-colors ${
             drag
               ? 'border-primary bg-primary/5'
-              : 'border-border bg-surface-tinted hover:bg-primary/5'
+              : 'border-border bg-surface-tinted hover:border-primary hover:bg-primary/5'
           }`}
         >
           <Paperclip className="mx-auto mb-1.5 h-6 w-6 text-muted-foreground" aria-hidden />

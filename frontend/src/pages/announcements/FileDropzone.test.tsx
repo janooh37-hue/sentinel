@@ -51,8 +51,8 @@ describe('FileDropzone', () => {
     render(<Harness />)
     const zone = screen.getByText(/choose a file/i).closest('div') as HTMLElement
     fireEvent.dragOver(zone)
-    expect(zone.className).toMatch(/border-primary/)
+    expect(zone.className).toMatch(/(?:^|\s)border-primary(?:\s|$)/)
     fireEvent.dragLeave(zone)
-    expect(zone.className).not.toMatch(/border-primary/)
+    expect(zone.className).not.toMatch(/(?:^|\s)border-primary(?:\s|$)/)
   })
 })
