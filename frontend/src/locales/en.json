@@ -2779,6 +2779,13 @@
       "qrError": "Could not load the QR code. Please try again.",
       "refreshing": "Refreshing…"
     },
+    "uploadZone": {
+      "main": "Click to choose a file — or drag & drop it here",
+      "hint": "PDF, image, or document · sent to every selected recipient",
+      "ready": "Ready to send",
+      "replace": "Replace",
+      "remove": "Remove"
+    },
     "picker": {
       "title": "Attach a record",
       "close": "Close",

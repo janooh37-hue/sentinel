@@ -18,6 +18,7 @@ import { AlertTriangle, MessageCircle, QrCode, Unlink } from 'lucide-react'
 import { api, type AnnouncementOut, type GroupSendOut } from '@/lib/api'
 import { useCapabilities } from '@/lib/useCapabilities'
 import { useGatewayStatus, type GatewayState } from '@/lib/useGatewayStatus'
+import { FileDropzone } from './FileDropzone'
 import { GatewayConnectDialog } from './GatewayConnectDialog'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import { RecordAnnouncePicker, type PickedBook } from './RecordAnnouncePicker'
@@ -80,6 +81,7 @@ export function SendToGroupPage(): React.JSX.Element {
   const fileRef = useRef<HTMLInputElement>(null)
   const [hasFile, setHasFile] = useState(false)
   const [fileName, setFileName] = useState<string | null>(null)
+  const [fileSize, setFileSize] = useState<number | null>(null)
   const [pickerOpen, setPickerOpen] = useState(false)
   const [pickedBook, setPickedBook] = useState<PickedBook | null>(null)
 
@@ -221,6 +223,14 @@ export function SendToGroupPage(): React.JSX.Element {
     const f = fileRef.current?.files?.[0] ?? null
     setHasFile(f !== null)
     setFileName(f?.name ?? null)
+    setFileSize(f?.size ?? null)
+  }, [])
+
+  const handleFileClear = useCallback(() => {
+    if (fileRef.current) fileRef.current.value = ''
+    setHasFile(false)
+    setFileName(null)
+    setFileSize(null)
   }, [])
 
   function handleSubmit(e: React.FormEvent): void {
@@ -611,14 +621,14 @@ export function SendToGroupPage(): React.JSX.Element {
               )}
 
               {attachMode === 'upload' && (
-                <div className="mt-3">
-                  <input
-                    ref={fileRef}
-                    type="file"
-                    onChange={handleFileChange}
-                    className="text-[0.85em] text-foreground"
-                  />
-                </div>
+                <FileDropzone
+                  fileRef={fileRef}
+                  hasFile={hasFile}
+                  fileName={fileName}
+                  fileSize={fileSize}
+                  onFileChange={handleFileChange}
+                  onClear={handleFileClear}
+                />
               )}
             </section>
 
