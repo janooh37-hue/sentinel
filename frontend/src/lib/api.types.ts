@@ -583,7 +583,7 @@ export interface paths {
         put?: never;
         /**
          * Send Announcement
-         * @description Fan-out a text message (with optional attachment) to the given groups.
+         * @description Fan-out a message to groups and/or directly to employees (private chats).
          */
         post: operations["send_announcement_api_v1_announcements_send_post"];
         delete?: never;
@@ -955,6 +955,27 @@ export interface paths {
         head?: never;
         /** Update Leave */
         patch: operations["update_leave_api_v1_leaves__leave_id__patch"];
+        trace?: never;
+    };
+    "/api/v1/leaves/{leave_id}/amend": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Amend Leave
+         * @description Post-approval amendment (Annual Leave): change the end date with a
+         *     required reason; the employee is notified with old vs new duration.
+         */
+        post: operations["amend_leave_api_v1_leaves__leave_id__amend_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/api/v1/leaves/{leave_id}/certificate": {
@@ -3235,13 +3256,15 @@ export interface components {
         /** AnnouncementOut */
         AnnouncementOut: {
             /** Announcement Id */
-            announcement_id: number;
+            announcement_id?: number | null;
             /** Sent */
             sent: number;
             /** Failed */
             failed: number;
             /** Results */
             results: components["schemas"]["GroupSendOut"][];
+            /** Direct Results */
+            direct_results?: components["schemas"]["DirectSendOut"][];
         };
         /** AppSettingsRead */
         AppSettingsRead: {
@@ -3447,7 +3470,9 @@ export interface components {
         /** Body_send_announcement_api_v1_announcements_send_post */
         Body_send_announcement_api_v1_announcements_send_post: {
             /** Group Ids */
-            group_ids: string[];
+            group_ids?: string[] | null;
+            /** Employee Ids */
+            employee_ids?: string[] | null;
             /**
              * Text
              * @default
@@ -4294,6 +4319,25 @@ export interface components {
             duty_unit: string;
             /** Reason */
             reason: string;
+        };
+        /**
+         * DirectSendOut
+         * @description Outcome of one direct (private) employee send.
+         */
+        DirectSendOut: {
+            /** Employee Id */
+            employee_id: string;
+            /** Employee Name */
+            employee_name: string;
+            /** Ok */
+            ok: boolean;
+            /**
+             * Fell Back
+             * @default false
+             */
+            fell_back: boolean;
+            /** Error */
+            error?: string | null;
         };
         /** DocumentGenerateRequest */
         DocumentGenerateRequest: {
@@ -5244,6 +5288,21 @@ export interface components {
             error_code?: string | null;
             /** Error Message */
             error_message?: string | null;
+        };
+        /**
+         * LeaveAmend
+         * @description POST /leaves/{id}/amend — post-approval end-date change (Annual only).
+         *
+         *     The reason is required: it is sent to the employee in the notification.
+         */
+        LeaveAmend: {
+            /**
+             * End Date
+             * Format: date
+             */
+            end_date: string;
+            /** Reason */
+            reason: string;
         };
         /** LeaveBalanceRead */
         LeaveBalanceRead: {
@@ -7787,7 +7846,7 @@ export interface operations {
                 gssg_session?: string | null;
             };
         };
-        requestBody: {
+        requestBody?: {
             content: {
                 "multipart/form-data": components["schemas"]["Body_send_announcement_api_v1_announcements_send_post"];
             };
@@ -8860,6 +8919,43 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["LeaveUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LeaveRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    amend_leave_api_v1_leaves__leave_id__amend_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                leave_id: number;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LeaveAmend"];
             };
         };
         responses: {

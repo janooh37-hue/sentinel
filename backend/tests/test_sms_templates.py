@@ -352,3 +352,167 @@ def test_violation_ar_shows_description_and_sign_request():
     assert "التفاصيل: ترك موقع العمل دون إذن." in text
     assert "يرجى الحضور إلى مكتب الإدارة للتوقيع على محضر المخالفة." in text
     assert not _has_ascii_letter(text.replace("01/07/2026", ""))
+
+
+def test_leave_cancelled_includes_reason_from_notes():
+    emp = _emp(msg_language="en")
+    leave = Leave(
+        id=21,
+        employee_id="G1",
+        leave_type="Annual Leave",
+        start_date=date(2026, 7, 20),
+        end_date=date(2026, 8, 3),
+        days=15,
+        notes="Operational requirement — coverage shortage.",
+    )
+    en = st.render_text("leave_cancelled", "en", leave, emp)
+    assert "Reason: Operational requirement — coverage shortage.\n" in en
+
+    emp_ar = _emp()
+    leave_ar = Leave(
+        id=22,
+        employee_id="G1",
+        leave_type="Annual Leave",
+        start_date=date(2026, 7, 20),
+        end_date=date(2026, 8, 3),
+        days=15,
+        notes="متطلبات تشغيلية — نقص التغطية في الموقع",
+    )
+    ar = st.render_text("leave_cancelled", "ar", leave_ar, emp_ar)
+    assert "سبب الإلغاء: متطلبات تشغيلية — نقص التغطية في الموقع\n" in ar
+    assert not _has_ascii_letter(ar.replace("2026", "").replace("20", "").replace("03", ""))
+
+
+def test_leave_cancelled_without_notes_has_no_reason_line():
+    emp = _emp(msg_language="en")
+    leave = Leave(
+        id=22,
+        employee_id="G1",
+        leave_type="Annual Leave",
+        start_date=date(2026, 7, 20),
+        end_date=date(2026, 8, 3),
+        days=15,
+        notes="   ",
+    )
+    en = st.render_text("leave_cancelled", "en", leave, emp)
+    assert "Reason:" not in en
+    ar = st.render_text("leave_cancelled", "ar", leave, emp)
+    assert "سبب الإلغاء" not in ar
+
+
+def test_sick_leave_registered_full_text_en():
+    emp = _emp(msg_language="en")
+    leave = Leave(
+        id=31,
+        employee_id="G1",
+        leave_type="Sick Leave - الإجازة المرضية",
+        start_date=date(2026, 7, 13),
+        end_date=date(2026, 7, 15),
+        days=3,
+    )
+    text = st.render_text("sick_leave_registered", "en", leave, emp)
+    assert text == (
+        "Dear John Smith,\n"
+        "Your Sick Leave has been registered.\n"
+        "Duration: 3 day(s), from 13/07/2026 (Monday) to 15/07/2026 (Wednesday).\n"
+        "We wish you a speedy recovery.\n"
+        "Al Wathba Rehabilitation Centre"
+    )
+
+
+def test_sick_leave_registered_arabic_wording():
+    emp = _emp()
+    leave = Leave(
+        id=32,
+        employee_id="G1",
+        leave_type="Sick Leave",
+        start_date=date(2026, 7, 13),
+        end_date=date(2026, 7, 15),
+        days=3,
+    )
+    ar = st.render_text("sick_leave_registered", "ar", leave, emp)
+    assert "تم تسجيل إجازتك المرضية." in ar
+    assert "المدة: 3 يوم، من 13/07/2026 (الإثنين) إلى 15/07/2026 (الأربعاء)." in ar
+    assert "نتمنى لك الشفاء العاجل." in ar
+    assert ar.endswith("إدارة مركز الإصلاح والتأهيل بالوثبة")
+
+
+def test_leave_ending_reminder_full_text_en():
+    emp = _emp(msg_language="en")
+    leave = Leave(
+        id=41,
+        employee_id="G1",
+        leave_type="Annual Leave",
+        start_date=date(2026, 6, 1),
+        end_date=date(2026, 6, 30),
+        days=30,
+    )
+    text = st.render_text("leave_ending", "en", leave, emp)
+    assert text == (
+        "Dear John Smith,\n"
+        "Please be informed that your Annual Leave ends on 30/06/2026 (Tuesday), "
+        "and duty resumption is due on the following day, 01/07/2026 (Wednesday).\n"
+        "Please visit the administration office to register your duty resumption.\n"
+        "On official holidays, duty resumption is registered with the on-duty company supervisor.\n"
+        "Al Wathba Rehabilitation Centre"
+    )
+
+
+def test_leave_ending_reminder_arabic_locked_wording():
+    emp = _emp()
+    leave = Leave(
+        id=42,
+        employee_id="G1",
+        leave_type="Annual Leave - إجازة سنوية",
+        start_date=date(2026, 6, 1),
+        end_date=date(2026, 6, 30),
+        days=30,
+    )
+    ar = st.render_text("leave_ending", "ar", leave, emp)
+    assert (
+        "نفيدكم علماً بأن إجازتك السنوية تنتهي بتاريخ 30/06/2026 (الثلاثاء) "
+        "على أن تتم المباشرة في اليوم التالي 01/07/2026 (الأربعاء)." in ar
+    )
+    assert "يرجى مراجعة مكتب الإدارة لتسجيل مباشرة العمل." in ar
+    assert "في حال الإجازات الرسمية تتم المباشرة عند مسؤول السرية المناوبة." in ar
+
+
+def test_render_leave_amended_full_text_en():
+    emp = _emp(msg_language="en")
+    leave = Leave(
+        id=51,
+        employee_id="G1",
+        leave_type="Annual Leave",
+        start_date=date(2026, 8, 1),
+        end_date=date(2026, 8, 20),
+        days=20,
+    )
+    text = st.render_leave_amended(
+        leave, emp, "en", old_days=25, reason="Insufficient annual-leave balance."
+    )
+    assert text == (
+        "Dear John Smith,\n"
+        "Your Annual Leave has been updated.\n"
+        "Start: 01/08/2026 (Saturday)\n"
+        "End: 20/08/2026 (Thursday)\n"
+        "New duration: 20 day(s) (was 25).\n"
+        "Reason: Insufficient annual-leave balance.\n"
+        "For any clarification, please contact the administration office.\n"
+        "Al Wathba Rehabilitation Centre"
+    )
+
+
+def test_render_leave_amended_arabic_wording():
+    emp = _emp()
+    leave = Leave(
+        id=52,
+        employee_id="G1",
+        leave_type="Annual Leave - إجازة سنوية",
+        start_date=date(2026, 8, 1),
+        end_date=date(2026, 8, 20),
+        days=20,
+    )
+    ar = st.render_leave_amended(leave, emp, "ar", old_days=25, reason="نقص الرصيد")
+    assert "تم تعديل إجازتك السنوية." in ar
+    assert "المدة الجديدة: 20 يوم (بدلاً من 25)." in ar
+    assert "سبب التعديل: نقص الرصيد" in ar

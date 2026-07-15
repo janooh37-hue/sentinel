@@ -17,6 +17,8 @@ EVENT_LEAVE_REQUESTED = "leave_requested"
 EVENT_LEAVE_APPROVED = "leave_approved"
 EVENT_LEAVE_REJECTED = "leave_rejected"
 EVENT_LEAVE_CANCELLED = "leave_cancelled"
+EVENT_SICK_LEAVE_REGISTERED = "sick_leave_registered"
+EVENT_LEAVE_ENDING = "leave_ending"
 EVENT_DUTY_RESUMPTION = "duty_resumption"
 EVENT_VIOLATION = "violation"
 EVENT_SALARY_TRANSFER = "salary_transfer"
@@ -249,7 +251,7 @@ _HR_DOC_LABELS: dict[str, tuple[str, str]] = {
 }
 
 
-def _doc_keys(selections) -> list[str]:
+def _doc_keys(selections: dict[str, object] | list[object] | str | None) -> list[str]:
     """Normalize the stored doc_selections shape (dict/list/str) to a key list."""
     if isinstance(selections, dict):
         return [k for k, v in selections.items() if v]
@@ -260,7 +262,9 @@ def _doc_keys(selections) -> list[str]:
     return []
 
 
-def hr_request_docs(selections, lang: str) -> tuple[str, int]:
+def hr_request_docs(
+    selections: dict[str, object] | list[object] | str | None, lang: str
+) -> tuple[str, int]:
     """Localized, joined label(s) for the requested documents, plus the count."""
     idx = 1 if lang == "ar" else 0
     labels = [_HR_DOC_LABELS[k][idx] for k in _doc_keys(selections) if k in _HR_DOC_LABELS]

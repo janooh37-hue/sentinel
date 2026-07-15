@@ -258,6 +258,49 @@ def update_leave(
     return row
 
 
+def amend_approved_leave(
+    db: Session, leave_id: int, *, end_date: date, reason: str, actor: str | None = None
+) -> Leave:
+    """Post-approval amendment: Annual + Approved only, end date/days only
+    (start fixed), reason required. Notifies the employee (best-effort) with
+    old vs new duration and the reason. Spec 2026-07-15."""
+    row = get_leave(db, leave_id)
+    if not leave_lifecycle.can_amend(row.leave_type, row.status):
+        raise ValidationFailedError(
+            "LEAVE_AMEND_FORBIDDEN",
+            f"A {row.leave_type!r} record in state {row.status!r} cannot be amended",
+            current_status=row.status,
+        )
+    if end_date < row.start_date:
+        raise ValidationFailedError(
+            "LEAVE_DATES_INVALID", "end_date must be on or after start_date"
+        )
+    old = {"end": str(row.end_date), "days": row.days}
+    old_days = row.days
+    row.end_date = end_date
+    row.days = (end_date - row.start_date).days + 1
+    row.notes = reason
+    row.updated_at = _utcnow()
+    _audit(
+        db,
+        "leave.amended",
+        leave_id,
+        actor,
+        {"from": old, "to": {"end": str(end_date), "days": row.days}, "reason": reason},
+    )
+    db.commit()
+    db.refresh(row)
+    _cache_invalidate_employee(row.employee_id)
+    # Best-effort — a gateway hiccup must never fail the amendment.
+    try:
+        from app.services import notify_dispatch
+
+        notify_dispatch.auto_send_leave_amended(db, leave_id, old_days=old_days, reason=reason)
+    except Exception:
+        log.exception("auto leave-amended notification failed for leave %s", leave_id)
+    return row
+
+
 def create_leave(db: Session, payload: LeaveCreate, *, actor: str | None = None) -> Leave:
     """Manual record creation. v1 is National-Service-only — every other kind
     is born from form generation (document_service)."""

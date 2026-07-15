@@ -79,6 +79,8 @@ _LOADERS: dict[str, Callable[[Session, int], object]] = {
     nf.EVENT_LEAVE_APPROVED: _load_leave,
     nf.EVENT_LEAVE_REJECTED: _load_leave,
     nf.EVENT_LEAVE_CANCELLED: _load_leave,
+    nf.EVENT_SICK_LEAVE_REGISTERED: _load_leave,
+    nf.EVENT_LEAVE_ENDING: _load_leave,
     nf.EVENT_DUTY_RESUMPTION: _load_leave,
     nf.EVENT_VIOLATION: _load_violation,
     **{ev: _load_book_event for ev in nf.BOOK_EVENTS},
@@ -267,6 +269,13 @@ def _send_leave_status(
     event = _LEAVE_STATUS_EVENTS.get(leave_lifecycle.canonical_status(leave.status))
     if event is None:
         return None
+    # Sick leave is recorded, not requested — the dedicated wording replaces
+    # the generic approval message (spec 2026-07-15, decision 3).
+    if (
+        event == nf.EVENT_LEAVE_APPROVED
+        and leave_lifecycle.classify_group(leave.leave_type) == "sick"
+    ):
+        event = nf.EVENT_SICK_LEAVE_REGISTERED
     return send_for_event(db, event, leave_id, sent_by=sent_by)
 
 
@@ -322,6 +331,77 @@ def auto_send_for_book(
     if event is None:
         return None
     return send_for_event(db, event, book_id, sent_by=sent_by)
+
+
+def auto_send_leave_amended(
+    db: Session, leave_id: int, *, old_days: int, reason: str, sent_by: int | None = None
+) -> OutboundMessage | None:
+    """Best-effort 'your leave was amended' notification.
+
+    Pre-rendered via sms_templates.render_leave_amended because the old
+    duration is gone from the record after the update. Same gating as the
+    other auto-sends.
+    """
+    if not _autosend_enabled(db):
+        return None
+    leave = db.get(Leave, leave_id)
+    if leave is None or leave.employee_id is None:
+        return None
+    employee = leave.employee
+    lang = "ar" if (employee.msg_language or "ar") == "ar" else "en"
+    body = sms_templates.render_leave_amended(
+        leave, employee, lang, old_days=old_days, reason=reason
+    )
+    return send_direct(
+        db,
+        employee=employee,
+        body=body,
+        language=lang,
+        event_type="leave_amended",
+        event_ref=f"leave_amended:{leave_id}",
+        sent_by=sent_by,
+    )
+
+
+def send_ending_reminders(db: Session, *, today: date | None = None) -> int:
+    """One-time reminder 2 days before an Approved Annual Leave ends.
+
+    Selection: end_date in [today, today+2] (catch-up window), not soft-deleted,
+    no return recorded, Annual + Approved (bilingual/legacy labels handled by
+    leave_lifecycle).  Dedup rides on outbound_messages.event_ref — restart-safe,
+    one per leave.  A missed 09:00 run (deploy/restart) is recovered on the next
+    run; dedup suppresses duplicates unless the previous attempt hard-failed
+    (status="failed"), in which case the reminder is retried.
+    """
+    if not _autosend_enabled(db):
+        return 0
+    today = today or date.today()
+    target_end = today + timedelta(days=2)
+    rows = list(
+        db.scalars(
+            select(Leave).where(
+                Leave.end_date >= today,
+                Leave.end_date <= target_end,
+                Leave.deleted_at.is_(None),
+                Leave.return_date.is_(None),
+            )
+        )
+    )
+    sent = 0
+    for leave in rows:
+        if not leave_lifecycle.is_annual(leave.leave_type):
+            continue
+        if leave_lifecycle.canonical_status(leave.status) != "Approved":
+            continue
+        last = last_status(db, nf.EVENT_LEAVE_ENDING, leave.id)
+        if last is not None and last.status != "failed":
+            continue
+        try:
+            send_for_event(db, nf.EVENT_LEAVE_ENDING, leave.id, sent_by=None)
+            sent += 1
+        except Exception:
+            log.exception("leave-ending reminder failed for leave %s", leave.id)
+    return sent
 
 
 def retry_queued(db: Session, *, now: datetime | None = None) -> int:

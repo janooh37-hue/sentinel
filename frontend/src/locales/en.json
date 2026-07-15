@@ -524,6 +524,7 @@
       "quickReject": "Reject",
       "expandRow": "Show record details",
       "notes": "Notes",
+      "cancelReasonHint": "A reason is required to cancel — it is sent to the employee.",
       "filed": "Filed",
       "period": "Period",
       "scopedToEmployee": "Scoped to {{name}}",
@@ -563,6 +564,17 @@
       "delayReason": "Reason for delay (if any)",
       "fileButton": "File & complete",
       "filed": "Return form filed — leave completed"
+    },
+    "amend": {
+      "action": "Edit leave",
+      "title": "Edit approved leave",
+      "startDate": "Start date",
+      "endDate": "End date",
+      "newDuration": "New duration: {{days}} days (was {{oldDays}})",
+      "reason": "Reason for the change — sent to the employee",
+      "help": "Saving updates the record and notifies the employee on WhatsApp/SMS with the new dates and your reason.",
+      "save": "Save & notify employee",
+      "toast": "Leave updated — employee notified"
     }
   },
   "vault": {
@@ -2719,7 +2731,7 @@
     "resultFailed": "Failed: {{count}}",
     "sendError": "Could not send the announcement. Please try again.",
     "needContent": "Type a message or add an attachment",
-    "pickGroup": "Select at least one group",
+    "pickGroup": "Select at least one group or employee.",
     "statusChecking": "Checking gateway status…",
     "gatewayDisabled": "WhatsApp isn't enabled — ask your administrator",
     "gatewayUnreachable": "The gateway service isn't running on the server",
@@ -2789,6 +2801,20 @@
       "modeHint": "A mention tags the employee in WhatsApp using their linked number, so they get a personal notification.",
       "noNumber": "No linked number",
       "remove": "Remove mention for {{name}}"
+    },
+    "direct": {
+      "title": "Employees — direct message",
+      "searchPlaceholder": "Search by G-number or name…",
+      "empty": "No employees added yet — messages go to their personal WhatsApp (SMS fallback), not to any group.",
+      "noResults": "No employee matches",
+      "noMobile": "no mobile",
+      "remove": "Remove {{name}}",
+      "reach": "direct",
+      "tag": "direct",
+      "hintPrivate_one": "Private message — sends directly to 1 employee, no group",
+      "hintPrivate_other": "Private message — sends directly to {{count}} employees, no group",
+      "hintMixed": "Will send to {{groups}} group(s) + {{employees}} employee(s) (direct)",
+      "fellBack": "sent by SMS (not on WhatsApp)"
     }
   },
   "gateway": {

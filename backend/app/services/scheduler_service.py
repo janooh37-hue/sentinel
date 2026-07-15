@@ -56,6 +56,7 @@ _NOTIFY_DELIVERY_POLL_INTERVAL_MINUTES = 5
 _OPENWA_HEALTH_JOB_ID = "openwa-health"
 _OPENWA_HEALTH_INTERVAL_MINUTES = 5
 _DIGEST_JOB_ID = "monthly_leave_digest"
+_LEAVE_ENDING_JOB_ID = "leave-ending-reminder"
 
 _scheduler: BackgroundScheduler | None = None
 _lock = Lock()
@@ -320,6 +321,17 @@ def _run_push_notifier() -> None:
                 log.exception("scheduler: push notifier failed for user %s", user.id)
 
 
+def _run_leave_ending_reminder() -> None:
+    """Daily 09:00 Asia/Dubai — remind Approved Annual Leaves ending in 2 days."""
+    with SessionLocal() as session:
+        try:
+            n = notify_dispatch.send_ending_reminders(session)
+            if n:
+                log.info("scheduler: %d leave-ending reminder(s) sent", n)
+        except Exception:
+            log.exception("scheduler: leave-ending reminder failed")
+
+
 def _disabled_in_environment() -> bool:
     """Skip startup under pytest or when explicitly disabled via env var.
 
@@ -405,6 +417,13 @@ def start() -> None:
                 replace_existing=True,
             )
             log.info("scheduler: monthly leave digest on the 1st at 08:00 Asia/Dubai")
+            _scheduler.add_job(
+                _run_leave_ending_reminder,
+                trigger=CronTrigger(hour=9, minute=0, timezone="Asia/Dubai"),
+                id=_LEAVE_ENDING_JOB_ID,
+                replace_existing=True,
+            )
+            log.info("scheduler: leave-ending reminder daily at 09:00 Asia/Dubai")
 
 
 def shutdown() -> None:
@@ -462,6 +481,7 @@ def reschedule_email_sync() -> None:
 
 
 __all__ = [
+    "_run_leave_ending_reminder",
     "_run_monthly_digest",
     "_run_notify_delivery_poll",
     "_run_notify_retry",

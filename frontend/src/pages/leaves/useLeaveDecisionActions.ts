@@ -26,6 +26,7 @@ interface Params {
 interface Decisions {
   updateMutation: UseMutationResult<unknown, Error, { status: LeaveStatus; n: string }>
   deleteMutation: UseMutationResult<unknown, Error, void>
+  amendMutation: UseMutationResult<unknown, Error, { end_date: string; reason: string }>
 }
 
 export function useLeaveDecisionActions({
@@ -67,5 +68,16 @@ export function useLeaveDecisionActions({
     onError: (err) => toast.error(apiErrorMessage(err)),
   })
 
-  return { updateMutation, deleteMutation }
+  const amendMutation = useMutation({
+    mutationFn: ({ end_date, reason }: { end_date: string; reason: string }) =>
+      api.amendLeave(leaveId, { end_date, reason }),
+    onSuccess: () => {
+      invalidate()
+      toast.success(t('leaves.amend.toast'))
+      onMutated()
+    },
+    onError: (err) => toast.error(apiErrorMessage(err)),
+  })
+
+  return { updateMutation, deleteMutation, amendMutation }
 }

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class GroupOut(BaseModel):
@@ -17,11 +17,23 @@ class GroupSendOut(BaseModel):
     error: str | None = None
 
 
+class DirectSendOut(BaseModel):
+    """Outcome of one direct (private) employee send."""
+
+    employee_id: str
+    employee_name: str
+    ok: bool
+    fell_back: bool = False
+    error: str | None = None
+
+
 class AnnouncementOut(BaseModel):
-    announcement_id: int
+    # None when the send had no group targets (direct-only private message).
+    announcement_id: int | None = None
     sent: int
     failed: int
     results: list[GroupSendOut]
+    direct_results: list[DirectSendOut] = Field(default_factory=list)
 
 
 class GatewayStatusOut(BaseModel):

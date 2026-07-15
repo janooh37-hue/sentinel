@@ -22,6 +22,7 @@ import { SendButton } from '@/components/notify/SendButton'
 import { actionsFor, canonStatus, displayState, lifecycleGroup } from '../lifecycle'
 import { useLeaveDecisionActions } from '../useLeaveDecisionActions'
 import { NsControls } from '../NsControls'
+import { AmendLeaveDialog } from '../AmendLeaveDialog'
 import { ReturnFormDialog } from '../ReturnFormDialog'
 import { StatusBadge } from '../StatusBadge'
 import { BalanceMeters } from './BalanceMeters'
@@ -55,6 +56,7 @@ export function RecordExpansion({
   const [notes, setNotes] = useState('')
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [returnOpen, setReturnOpen] = useState(false)
+  const [amendOpen, setAmendOpen] = useState(false)
   const cancelDeleteRef = useRef<HTMLButtonElement>(null)
 
   // When the two-step delete swaps to confirm mode, the Delete button that
@@ -113,6 +115,9 @@ export function RecordExpansion({
     isNs &&
     displayState(row.leave_type, row.status, row.end_date, today, hasCertificate) === 'AwaitingCertificate'
 
+  // Sick-leave approvals use the sick_leave_registered wording; all others use leave_approved.
+  const sendEvent = lifecycleGroup(row.leave_type) === 'sick' ? 'sick_leave_registered' : 'leave_approved'
+
   return (
     <>
     <div className="border-t border-hairline bg-surface-raised px-5 py-4">
@@ -168,6 +173,11 @@ export function RecordExpansion({
                 onChange={(e) => setNotes(e.target.value)}
                 className="w-full rounded-md border border-hairline bg-surface px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               />
+              {acts.includes('cancel') && (
+                <p className="text-[0.72em] text-muted-foreground">
+                  {t('leaves.report.cancelReasonHint')}
+                </p>
+              )}
             </div>
           )}
 
@@ -200,7 +210,7 @@ export function RecordExpansion({
                   variant="secondary"
                   size="sm"
                   onClick={() => updateMutation.mutate({ status: 'Cancelled', n: notes })}
-                  disabled={updateMutation.isPending}
+                  disabled={updateMutation.isPending || !notes.trim()}
                   className="rounded-full"
                 >
                   {t('leaves.report.cancel')}
@@ -222,13 +232,22 @@ export function RecordExpansion({
             </div>
           )}
 
+          {/* Edit leave — post-approval amendment for Annual rows */}
+          {acts.includes('amend') && (
+            <div className="flex flex-wrap items-center gap-2">
+              <Button size="sm" variant="secondary" onClick={() => setAmendOpen(true)} className="rounded-full">
+                {t('leaves.amend.action')}
+              </Button>
+            </div>
+          )}
+
           {/* Notify the employee on approval. canonStatus() normalises the
               stored bilingual/legacy status ("Approved - موافق", "Generated …")
               to "Approved" — a raw === would hide the button on every real
               record. Mirrors the mobile drawer (TabRecords). */}
           {canonStatus(row.status) === 'Approved' && (
             <div className="flex flex-wrap items-center gap-2">
-              <SendButton eventType="leave_approved" recordId={row.id} />
+              <SendButton eventType={sendEvent} recordId={row.id} />
             </div>
           )}
 
@@ -292,6 +311,7 @@ export function RecordExpansion({
       onOpenChange={setReturnOpen}
       onFiled={onMutated}
     />
+    <AmendLeaveDialog open={amendOpen} leave={row} onOpenChange={setAmendOpen} onAmended={onMutated} />
     </>
   )
 }

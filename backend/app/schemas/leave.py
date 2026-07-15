@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import date, datetime
 from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from app.schemas._base import ORMBase
 
@@ -37,6 +37,24 @@ class LeaveUpdate(BaseModel):
     notes: str | None = None
     start_date: date | None = None
     end_date: date | None = None
+
+
+class LeaveAmend(BaseModel):
+    """POST /leaves/{id}/amend — post-approval end-date change (Annual only).
+
+    The reason is required: it is sent to the employee in the notification.
+    """
+
+    end_date: date
+    reason: str = Field(min_length=1)
+
+    @field_validator("reason")
+    @classmethod
+    def _strip_reason(cls, v: str) -> str:
+        v = v.strip()
+        if not v:
+            raise ValueError("reason must not be empty")
+        return v
 
 
 class LeaveReturnRequest(BaseModel):

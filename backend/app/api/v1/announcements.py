@@ -13,13 +13,14 @@ from app.db.models import AuditLog, User
 from app.db.session import get_db
 from app.schemas.announcement import (
     AnnouncementOut,
+    DirectSendOut,
     GatewayQrOut,
     GatewayStatusOut,
     GatewayUnlinkOut,
     GroupOut,
     GroupSendOut,
 )
-from app.services import announce_service, openwa_client
+from app.services import announce_service, notify_dispatch, openwa_client
 
 router = APIRouter(prefix="/announcements", tags=["announcements"])
 
@@ -76,13 +77,17 @@ def gateway_unlink(
 async def send_announcement(
     db: Annotated[Session, Depends(get_db)],
     user: Annotated[User, Depends(require_capability("messages.broadcast"))],
-    group_ids: Annotated[list[str], Form()],
+    group_ids: Annotated[list[str] | None, Form()] = None,
+    employee_ids: Annotated[list[str] | None, Form()] = None,
     text: Annotated[str, Form()] = "",
     book_id: Annotated[int | None, Form()] = None,
     file: Annotated[UploadFile | None, File()] = None,
     mentions: Annotated[list[str] | None, Form()] = None,
 ) -> AnnouncementOut:
-    """Fan-out a text message (with optional attachment) to the given groups."""
+    """Fan-out a message to groups and/or directly to employees (private chats)."""
+    if not (group_ids or employee_ids):
+        raise HTTPException(status_code=422, detail="at least one group or employee required")
+
     # Resolve attachment.
     attachment: announce_service.Attachment | None = None
     if file is not None:
@@ -101,27 +106,47 @@ async def send_announcement(
     if not text.strip() and attachment is None:
         raise HTTPException(status_code=422, detail="text or attachment required")
 
-    # Resolve matching groups (keyed by id so the log gets real names).
-    available = announce_service.groups_available(db)
-    target_ids = set(group_ids)
-    groups = [(g.id, g.name) for g in available if g.id in target_ids]
-    if not groups:
-        raise HTTPException(status_code=422, detail="no matching groups found")
+    # Group fan-out (unchanged) — only when groups were requested.
+    result = None
+    if group_ids:
+        available = announce_service.groups_available(db)
+        target_ids = set(group_ids)
+        groups = [(g.id, g.name) for g in available if g.id in target_ids]
+        if not groups:
+            raise HTTPException(status_code=422, detail="no matching groups found")
+        result = announce_service.send_announcement(
+            db,
+            groups=groups,
+            text=text,
+            attachment=attachment,
+            book_id=(book_id if file is None else None),
+            sent_by=user.id,
+            mentions=mentions or [],
+        )
 
-    result = announce_service.send_announcement(
-        db,
-        groups=groups,
-        text=text,
-        attachment=attachment,
-        book_id=(book_id if file is None else None),
-        sent_by=user.id,
-        mentions=mentions or [],
-    )
+    # Direct (private) fan-out. @mentions are a group-chat concept — the plain
+    # text is sent as-is to each employee.
+    try:
+        direct = (
+            announce_service.send_direct_announcement(
+                db,
+                employee_ids=employee_ids,
+                text=text.strip(),
+                attachment=attachment,
+                sent_by=user.id,
+            )
+            if employee_ids
+            else []
+        )
+    except notify_dispatch.NotifyDisabledError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
 
+    sent = (result.sent if result else 0) + sum(1 for d in direct if d.ok)
+    failed = (result.failed if result else 0) + sum(1 for d in direct if not d.ok)
     return AnnouncementOut(
-        announcement_id=result.announcement_id,
-        sent=result.sent,
-        failed=result.failed,
+        announcement_id=result.announcement_id if result else None,
+        sent=sent,
+        failed=failed,
         results=[
             GroupSendOut(
                 group_id=r.group_id,
@@ -129,6 +154,16 @@ async def send_announcement(
                 ok=r.ok,
                 error=r.error,
             )
-            for r in result.results
+            for r in (result.results if result else [])
+        ],
+        direct_results=[
+            DirectSendOut(
+                employee_id=d.employee_id,
+                employee_name=d.employee_name,
+                ok=d.ok,
+                fell_back=d.fell_back,
+                error=d.error,
+            )
+            for d in direct
         ],
     )

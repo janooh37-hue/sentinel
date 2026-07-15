@@ -26,6 +26,7 @@ vi.mock('../../lib/api', () => ({
     listGroups: vi.fn().mockResolvedValue([{ id: '1@g.us', name: 'Alpha' }]),
     sendAnnouncement: vi.fn(),
     unlinkGateway: vi.fn().mockResolvedValue({ ok: true }),
+    listEmployees: vi.fn().mockResolvedValue({ items: [], total: 0, limit: 6, offset: 0 }),
   },
 }))
 vi.mock('./RecordAnnouncePicker', () => ({
@@ -55,6 +56,22 @@ vi.mock('./EmployeeMentionField', () => ({
     </>
   ),
 }))
+vi.mock('./DirectEmployeesField', () => ({
+  DirectEmployeesField: ({
+    onAdd,
+  }: {
+    selected: unknown[]
+    onAdd: (e: { id: string; name_en: string; name_ar: string | null; contact: string }) => void
+    onRemove: (id: string) => void
+  }) => (
+    <button
+      type="button"
+      onClick={() => onAdd({ id: 'G-1023', name_en: 'Ahmed', name_ar: null, contact: '0501234567' })}
+    >
+      stub-add-direct
+    </button>
+  ),
+}))
 // Light preview stubs — keep page tests DOM-cheap.
 vi.mock('./MessagePreview', () => ({
   PhonePreview: () => <div data-testid="phone-preview">phone</div>,
@@ -77,6 +94,7 @@ beforeEach(() => {
   vi.clearAllMocks()
   vi.mocked(api.gatewayStatus).mockResolvedValue({ state: 'connected' })
   vi.mocked(api.listGroups).mockResolvedValue([{ id: '1@g.us', name: 'Alpha' }])
+  vi.mocked(api.listEmployees).mockResolvedValue({ items: [], total: 0, limit: 6, offset: 0 })
   // Reset capabilities: non-admin by default (only messages.broadcast)
   mockHas.mockImplementation((cap: string) => cap === 'messages.broadcast')
 })
@@ -339,5 +357,51 @@ describe('SendToGroupPage', () => {
     const form = vi.mocked(api.sendAnnouncement).mock.calls[0][0] as FormData
     expect(form.get('text')).toBe('Hello team')
     expect(form.getAll('mentions')).toEqual([])
+  })
+
+  // ── Direct recipients: employees-only send ──
+  it('enables send with employees only and posts employee_ids with no group_ids', async () => {
+    vi.mocked(api.sendAnnouncement).mockResolvedValue({
+      announcement_id: null, sent: 1, failed: 0, results: [], direct_results: [],
+    })
+    renderPage()
+    // Wait for page to load (Alpha group listed means data is ready)
+    await screen.findByText('Alpha')
+    // Type a message so hasContent is satisfied
+    const textarea = screen.getByRole('textbox', { name: 'sendToGroup.message' })
+    await userEvent.type(textarea, 'Hello direct')
+    // Add a direct employee via the stub
+    await userEvent.click(screen.getByRole('button', { name: 'stub-add-direct' }))
+    // Send button should be enabled (no group required)
+    const sendBtn = screen.getByRole('button', { name: 'sendToGroup.send' })
+    expect(sendBtn).not.toBeDisabled()
+    await userEvent.click(sendBtn)
+    await waitFor(() => expect(api.sendAnnouncement).toHaveBeenCalled())
+    const form = vi.mocked(api.sendAnnouncement).mock.calls[0][0] as FormData
+    expect(form.getAll('employee_ids')).toEqual(['G-1023'])
+    expect(form.getAll('group_ids')).toEqual([])
+  })
+
+  // ── Direct recipients: result panel shows direct rows with the direct tag ──
+  it('renders direct results with the direct tag', async () => {
+    vi.mocked(api.sendAnnouncement).mockResolvedValue({
+      announcement_id: null,
+      sent: 1,
+      failed: 0,
+      results: [],
+      direct_results: [
+        { employee_id: 'G-1023', employee_name: 'Ahmed', ok: true, fell_back: false, error: null },
+      ],
+    })
+    renderPage()
+    await screen.findByText('Alpha')
+    const textarea = screen.getByRole('textbox', { name: 'sendToGroup.message' })
+    await userEvent.type(textarea, 'Hello direct')
+    await userEvent.click(screen.getByRole('button', { name: 'stub-add-direct' }))
+    await userEvent.click(screen.getByRole('button', { name: 'sendToGroup.send' }))
+    await waitFor(() => expect(api.sendAnnouncement).toHaveBeenCalled())
+    // Result panel: employee name and the direct tag should be rendered
+    expect(await screen.findByText('Ahmed')).toBeInTheDocument()
+    expect(screen.getByText('sendToGroup.direct.tag')).toBeInTheDocument()
   })
 })

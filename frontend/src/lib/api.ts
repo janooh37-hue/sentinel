@@ -150,6 +150,7 @@ export type LeaveListItem = components['schemas']['LeaveListItem'] & {
 export type LeaveListResponse = components['schemas']['LeaveListResponse']
 export type LeaveCreate = components['schemas']['LeaveCreate']
 export type LeaveUpdate = components['schemas']['LeaveUpdate']
+export type LeaveAmend = components['schemas']['LeaveAmend']
 export type LeaveBalanceRead = components['schemas']['LeaveBalanceRead']
 export type LeaveStatus = 'Pending' | 'Approved' | 'Rejected' | 'Cancelled' | 'Completed'
 
@@ -882,6 +883,8 @@ export const api = {
   getLeave: (id: number) => request<LeaveRead>('GET', `/leaves/${id}`),
   updateLeave: (id: number, body: LeaveUpdate) =>
     request<LeaveRead>('PATCH', `/leaves/${id}`, body),
+  amendLeave: (id: number, body: LeaveAmend) =>
+    request<LeaveRead>('POST', `/leaves/${id}/amend`, body),
   deleteLeave: (id: number) => request<void>('DELETE', `/leaves/${id}`),
   createLeave: (body: LeaveCreate) => request<LeaveRead>('POST', '/leaves', body),
 
