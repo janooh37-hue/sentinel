@@ -182,10 +182,18 @@ export function SendToGroupPage(): React.JSX.Element {
     }
   }, [])
 
-  // Mentions whose "@Name" token still appears in the message drive the preview.
-  const activeMentionNames = mentions
-    .filter((m) => message.includes(`@${m.name}`))
-    .map((m) => m.name)
+  // Removing a chip strips the "@Name" token from the text and forgets the target.
+  const removeMention = useCallback((target: MentionTarget): void => {
+    setMessage((prev) =>
+      prev.split(`@${target.name} `).join('').split(`@${target.name}`).join(''),
+    )
+    setMentions((prev) => prev.filter((m) => m.name !== target.name))
+  }, [])
+
+  // Mentions whose "@Name" token still appears in the message drive the chips
+  // and the preview highlighting.
+  const activeMentions = mentions.filter((m) => message.includes(`@${m.name}`))
+  const activeMentionNames = activeMentions.map((m) => m.name)
 
   const previewAttachment: PreviewAttachment | null =
     attachMode === 'book' && pickedBook
@@ -477,6 +485,29 @@ export function SendToGroupPage(): React.JSX.Element {
               </span>
             </div>
 
+            {/* Active mention chips — visible, one-tap removable */}
+            {activeMentions.length > 0 && (
+              <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                {activeMentions.map((m) => (
+                  <span
+                    key={m.name}
+                    data-testid="mention-chip"
+                    className="inline-flex items-center gap-1 rounded-full bg-[var(--wa-mention)]/10 py-0.5 pe-1 ps-2.5 text-[0.78em] font-semibold text-[var(--wa-mention)]"
+                  >
+                    <span dir="auto">@{m.name}</span>
+                    <button
+                      type="button"
+                      aria-label={t('sendToGroup.mention.remove', { name: m.name })}
+                      onClick={() => removeMention(m)}
+                      className="grid h-4 w-4 place-items-center rounded-full text-[1.1em] leading-none hover:bg-[var(--wa-mention)]/20"
+                    >
+                      ×
+                    </button>
+                  </span>
+                ))}
+              </div>
+            )}
+
             <EmployeeMentionField onInsert={insertMention} />
 
             {/* Attachment section */}
@@ -599,13 +630,12 @@ export function SendToGroupPage(): React.JSX.Element {
                 : ''
             }`}
           >
-            <div className="mb-2 flex items-center gap-2">
-              <span className="inline-flex items-center gap-1 rounded-full bg-green-500/10 px-2 py-0.5 text-[0.72em] font-semibold text-green-700 dark:text-green-400">
+            {/* Pill centered above the phone; long hint tucked below it —
+                matches the approved mockup instead of a cramped inline row. */}
+            <div className="mb-2.5 flex justify-center">
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-green-500/10 px-2.5 py-1 text-[0.72em] font-semibold text-green-700 dark:text-green-400">
                 <span className="h-1.5 w-1.5 rounded-full bg-green-500" aria-hidden />
                 {t('sendToGroup.preview.live')}
-              </span>
-              <span className="text-[0.72em] text-muted-foreground">
-                {t('sendToGroup.preview.firstGroup')}
               </span>
             </div>
             <PhonePreview
@@ -614,6 +644,9 @@ export function SendToGroupPage(): React.JSX.Element {
               mentionNames={activeMentionNames}
               attachment={previewAttachment}
             />
+            <p className="mx-auto mt-2.5 max-w-[260px] text-center text-[0.72em] leading-relaxed text-muted-foreground">
+              {t('sendToGroup.preview.firstGroup')}
+            </p>
           </div>
         </div>
       </form>

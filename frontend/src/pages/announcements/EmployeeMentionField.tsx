@@ -18,7 +18,7 @@ import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 
 import { api } from '@/lib/api'
-import { buildMention } from './mention'
+import { buildMention, mentionDigits } from './mention'
 import type { MentionTarget } from './mention'
 
 type MentionMode = 'tag' | 'plain'
@@ -99,7 +99,10 @@ export function EmployeeMentionField({
         <ul className="mt-1 space-y-1">
           {(empQuery.data?.items ?? []).map((emp) => {
             const name = (ar ? emp.name_ar : emp.name_en) || emp.name_en || emp.name_ar || emp.id
-            const noNumber = mode === 'tag' && !emp.contact
+            // A contact like "....." is truthy but has no usable digits —
+            // treat it the same as no number at all.
+            const usableNumber = emp.contact && mentionDigits(emp.contact) !== ''
+            const noNumber = mode === 'tag' && !usableNumber
 
             return (
               <li key={emp.id}>
@@ -107,7 +110,7 @@ export function EmployeeMentionField({
                   type="button"
                   disabled={noNumber}
                   onClick={() => {
-                    if (mode === 'tag' && emp.contact) {
+                    if (mode === 'tag' && usableNumber && emp.contact) {
                       onInsert(`@${name} `, { name, number: emp.contact })
                     } else if (mode === 'plain') {
                       onInsert(buildMention(emp, i18n.language, includeDesignation), undefined)
