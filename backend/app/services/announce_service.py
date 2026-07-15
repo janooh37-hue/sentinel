@@ -20,7 +20,8 @@ from sqlalchemy.orm import Session
 
 from app.config import get_settings
 from app.core.pdf_merge import merge_pdfs_to_bytes
-from app.db.models import Document, GroupAnnouncement, GroupAnnouncementSend
+from app.core.phone import normalize_phone
+from app.db.models import Document, Employee, GroupAnnouncement, GroupAnnouncementSend
 from app.services import book_service, document_service, notify_dispatch, openwa_client
 
 
@@ -156,6 +157,17 @@ class AnnouncementResult:
     sent: int
     failed: int
     results: list[GroupSendResult] = field(default_factory=list)
+
+
+@dataclass
+class DirectSendResult:
+    """Outcome of sending an announcement directly to one employee."""
+
+    employee_id: str
+    employee_name: str
+    ok: bool
+    fell_back: bool = False
+    error: str | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -297,3 +309,64 @@ def send_announcement(
         failed=failed,
         results=results,
     )
+
+
+def send_direct_announcement(
+    db: Session,
+    *,
+    employee_ids: list[str],
+    text: str,
+    attachment: Attachment | None,
+    sent_by: int | None,
+) -> list[DirectSendResult]:
+    """Deliver the announcement to individual employees as private messages.
+
+    Text-only sends go through notify_dispatch.send_direct — the standard
+    WhatsApp-first / SMS-fallback router with outbound_messages logging.
+    With an attachment the file goes to the employee's personal chat via
+    openwa_client.send_file with the text as caption (WhatsApp only — SMS
+    cannot carry a file).
+    """
+    results: list[DirectSendResult] = []
+    for emp_id in employee_ids:
+        emp: Employee | None = db.get(Employee, emp_id)
+        if emp is None:
+            results.append(DirectSendResult(emp_id, emp_id, ok=False, error="employee not found"))
+            continue
+        name = emp.name_en or emp.name_ar or emp.id
+        lang = "ar" if (emp.msg_language or "ar") == "ar" else "en"
+        if attachment is None:
+            row = notify_dispatch.send_direct(
+                db,
+                employee=emp,
+                body=text,
+                language=lang,
+                event_type="announcement_direct",
+                event_ref=f"announcement_direct:{emp.id}",
+                sent_by=sent_by,
+            )
+            results.append(
+                DirectSendResult(
+                    emp.id,
+                    name,
+                    ok=row.status in ("sent", "queued"),
+                    fell_back=bool(row.fell_back),
+                    error=row.error,
+                )
+            )
+            continue
+        phone = normalize_phone(emp.contact, default_cc=get_settings().sms_country_code)
+        if not phone:
+            results.append(DirectSendResult(emp.id, name, ok=False, error="no valid phone number"))
+            continue
+        try:
+            res = openwa_client.send_file(
+                openwa_client._chat_id(phone),
+                data=attachment.data,
+                filename=attachment.filename,
+                caption=text,
+            )
+            results.append(DirectSendResult(emp.id, name, ok=res.ok, error=res.error))
+        except Exception as exc:
+            results.append(DirectSendResult(emp.id, name, ok=False, error=str(exc)))
+    return results

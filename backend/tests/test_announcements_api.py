@@ -153,3 +153,68 @@ def test_send_route_forwards_mentions(
     )
     assert resp.status_code == 200
     assert seen["mentions"] == ["971509059931", "0501234567"]
+
+
+def test_send_requires_some_recipient(admin_client):
+    r = admin_client.post("/api/v1/announcements/send", data={"text": "hi"})
+    assert r.status_code == 422
+
+
+def test_send_direct_only(admin_client, monkeypatch):
+    monkeypatch.setattr(
+        announce_service,
+        "send_direct_announcement",
+        lambda db, *, employee_ids, text, attachment, sent_by: [
+            announce_service.DirectSendResult("G1", "John", ok=True),
+            announce_service.DirectSendResult("G2", "Ali", ok=False, error="no valid phone number"),
+        ],
+    )
+    r = admin_client.post(
+        "/api/v1/announcements/send",
+        data={"text": "hi", "employee_ids": ["G1", "G2"]},
+    )
+    assert r.status_code == 200
+    body = r.json()
+    assert body["announcement_id"] is None
+    assert body["sent"] == 1 and body["failed"] == 1
+    assert body["results"] == []
+    assert body["direct_results"][0] == {
+        "employee_id": "G1",
+        "employee_name": "John",
+        "ok": True,
+        "fell_back": False,
+        "error": None,
+    }
+
+
+def test_send_groups_and_direct_counts_combine(admin_client, monkeypatch):
+    monkeypatch.setattr(
+        announce_service,
+        "groups_available",
+        lambda db: [SimpleNamespace(id="1@g.us", name="Alpha")],
+    )
+    monkeypatch.setattr(
+        announce_service,
+        "send_announcement",
+        lambda db, *, groups, text, attachment, book_id, sent_by, mentions=None: SimpleNamespace(
+            announcement_id=7,
+            sent=1,
+            failed=0,
+            results=[SimpleNamespace(group_id="1@g.us", group_name="Alpha", ok=True, error=None)],
+        ),
+    )
+    monkeypatch.setattr(
+        announce_service,
+        "send_direct_announcement",
+        lambda db, *, employee_ids, text, attachment, sent_by: [
+            announce_service.DirectSendResult("G1", "John", ok=True),
+        ],
+    )
+    r = admin_client.post(
+        "/api/v1/announcements/send",
+        data={"text": "hi", "group_ids": ["1@g.us"], "employee_ids": ["G1"]},
+    )
+    assert r.status_code == 200
+    body = r.json()
+    assert body["announcement_id"] == 7
+    assert body["sent"] == 2 and body["failed"] == 0
