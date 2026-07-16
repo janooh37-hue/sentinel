@@ -363,6 +363,17 @@
       "deleted": "تم حذف المخالفة"
     }
   },
+  "hr": {
+    "docType": {
+      "insurance_card": "بطاقة التأمين",
+      "id_card": "بطاقة الهوية",
+      "employment_certificate": "شهادة عمل",
+      "salary_certificate": "شهادة راتب",
+      "salary_transfer_letter": "خطاب تحويل الراتب",
+      "salary_pay_slip": "قسيمة الراتب",
+      "experience_certificate": "شهادة خبرة"
+    }
+  },
   "leaves": {
     "title": "سجل الإجازات",
     "subtitle": "السجلات وأرصدة الاستحقاق لجميع الموظفين",

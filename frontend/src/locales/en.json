@@ -346,6 +346,17 @@
       "deleted": "Violation deleted"
     }
   },
+  "hr": {
+    "docType": {
+      "insurance_card": "Insurance Card",
+      "id_card": "ID Card",
+      "employment_certificate": "Employment Certificate",
+      "salary_certificate": "Salary Certificate",
+      "salary_transfer_letter": "Salary Transfer Letter",
+      "salary_pay_slip": "Salary Pay Slip",
+      "experience_certificate": "Experience Certificate"
+    }
+  },
   "leaves": {
     "title": "Leave History",
     "subtitle": "Records and accrual balances for all employees",

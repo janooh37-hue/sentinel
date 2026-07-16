@@ -62,22 +62,74 @@ def _cache_invalidate_employee(employee_id: str) -> None:
 # ---------------------------------------------------------------------------
 
 
+# Statuses whose days never consume a balance (matched on canonical/English half
+# so bilingual free-text like "Rejected - مرفوض" is excluded too).
+_NON_CONSUMING_STATUSES = frozenset({"Rejected", "Cancelled"})
+
+
+def _type_matches(row_leave_type: str, requested: str) -> bool:
+    """Does a stored (often bilingual, inconsistent) ``leave_type`` belong to the
+    balance bucket the calculator asked for?
+
+    ``leave_calc`` asks for the bare words ``"Annual"`` and ``"Sick"``; rows are
+    stored as anything from ``"Annual"`` to ``"Annual Leave - إجازة سنوية"``. We
+    classify both sides the same way the rest of the app does instead of an exact
+    string compare (the old bug: nothing matched, so taken was always 0)."""
+    requested_norm = requested.strip().lower()
+    if requested_norm in ("annual", "annual leave"):
+        return leave_lifecycle.is_annual(row_leave_type)
+    if requested_norm in ("sick", "sick leave"):
+        return leave_lifecycle.classify_group(row_leave_type) == "sick"
+    # Any other bucket: compare lifecycle groups (robust to bilingual labels).
+    return leave_lifecycle.classify_group(row_leave_type) == leave_lifecycle.classify_group(
+        requested
+    )
+
+
+def _sum_live_deduped(rows: list[Leave], leave_type: str) -> float:
+    """Total balance-consuming days for ``leave_type`` across ``rows``.
+
+    Filters out non-matching types and Rejected/Cancelled rows, then counts each
+    distinct ``(start_date, end_date)`` span once — a regenerated or double-entered
+    leave (same span) must not deduct twice. Rows arrive id-ascending, so the
+    earliest row of a duplicate span wins (mirrors ``leave_dedupe`` keep policy)."""
+    seen: set[tuple[date, date]] = set()
+    total = 0.0
+    for row in rows:
+        if not _type_matches(row.leave_type, leave_type):
+            continue
+        if leave_lifecycle.canonical_status(row.status) in _NON_CONSUMING_STATUSES:
+            continue
+        span = (row.start_date, row.end_date)
+        if span in seen:
+            continue
+        seen.add(span)
+        total += float(row.days or 0)
+    return total
+
+
 class _DbLeaveHistory:
-    """Adapts the ``leaves`` table to the :class:`~app.core.leave_calc.LeaveHistory` Protocol."""
+    """Adapts the ``leaves`` table to the :class:`~app.core.leave_calc.LeaveHistory` Protocol.
+
+    Type/status filtering, and same-span deduplication, happen in Python: both
+    ``leave_type`` and ``status`` are stored as inconsistent bilingual free-text,
+    so an ORM equality filter is unsafe (see ``list_annual_overlapping``)."""
 
     def __init__(self, db: Session) -> None:
         self._db = db
 
     def get_employee_leaves_in_year(self, g_number: str, year: int, leave_type: str) -> float:
-        stmt = select(func.coalesce(func.sum(Leave.days), 0)).where(
-            Leave.employee_id == g_number,
-            Leave.leave_type == leave_type,
-            func.strftime("%Y", Leave.start_date) == str(year),
-            Leave.deleted_at.is_(None),
-            Leave.status.notin_(("Rejected", "Cancelled")),
+        stmt = (
+            select(Leave)
+            .where(
+                Leave.employee_id == g_number,
+                func.strftime("%Y", Leave.start_date) == str(year),
+                Leave.deleted_at.is_(None),
+            )
+            .order_by(Leave.id)
         )
-        result = self._db.execute(stmt).scalar()
-        return float(result or 0)
+        rows = list(self._db.execute(stmt).scalars().all())
+        return _sum_live_deduped(rows, leave_type)
 
     def get_employee_leaves_in_period(
         self,
@@ -86,16 +138,18 @@ class _DbLeaveHistory:
         end: datetime,
         leave_type: str,
     ) -> float:
-        stmt = select(func.coalesce(func.sum(Leave.days), 0)).where(
-            Leave.employee_id == g_number,
-            Leave.leave_type == leave_type,
-            Leave.start_date >= start.date(),
-            Leave.start_date <= end.date(),
-            Leave.deleted_at.is_(None),
-            Leave.status.notin_(("Rejected", "Cancelled")),
+        stmt = (
+            select(Leave)
+            .where(
+                Leave.employee_id == g_number,
+                Leave.start_date >= start.date(),
+                Leave.start_date <= end.date(),
+                Leave.deleted_at.is_(None),
+            )
+            .order_by(Leave.id)
         )
-        result = self._db.execute(stmt).scalar()
-        return float(result or 0)
+        rows = list(self._db.execute(stmt).scalars().all())
+        return _sum_live_deduped(rows, leave_type)
 
 
 # _DbLeaveHistory satisfies the LeaveHistory Protocol — verified structurally.

@@ -12,16 +12,6 @@ import {
 } from '@/components/ui/select'
 import type { FieldProps } from '../types'
 
-// Arabic labels for each leave type, keyed by English value
-const LEAVE_TYPE_AR: Record<string, string> = {
-  Annual: 'إجازة سنوية',
-  Sick: 'إجازة مرضية',
-  Emergency: 'إجازة طارئة',
-  Unpaid: 'إجازة بدون راتب',
-  Hajj: 'إجازة حج',
-  Maternity: 'إجازة أمومة',
-}
-
 interface LeaveTypeFieldProps extends FieldProps {
   options: string[]
 }
@@ -36,6 +26,12 @@ export function LeaveTypeField({
   const { i18n, t } = useTranslation()
   const isAr = i18n.language.startsWith('ar')
   const label = isAr ? label_ar : label_en
+
+  // Localize each option through the shared leaves.type.* table (defined for
+  // every canonical kind in both locales). Falls back to the stored value if a
+  // legacy/unknown option ever arrives, so the field never renders blank.
+  const optionLabel = (opt: string): string =>
+    t(`leaves.type.${opt}`, { defaultValue: opt })
 
   const {
     control,
@@ -68,7 +64,7 @@ export function LeaveTypeField({
             <SelectContent>
               {options.map((opt) => (
                 <SelectItem key={opt} value={opt}>
-                  {isAr ? (LEAVE_TYPE_AR[opt] ?? opt) : opt}
+                  {optionLabel(opt)}
                 </SelectItem>
               ))}
             </SelectContent>
