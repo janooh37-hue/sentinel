@@ -25,7 +25,7 @@ describe('buildContentStyle page view', () => {
   it('draws a labeled page-1 guide and repeated page-end guides', () => {
     expect(css).toContain(`${GENERAL_BOOK_PAGE_VIEW.page1BodyPx}px`)
     expect(css).toContain('نهاية الصفحة')
-    expect(css).toContain('page end')
+    expect(css).toContain('page 1 end')
     // guide for page 2 = page1 + pageN
     expect(css).toContain(
       `${GENERAL_BOOK_PAGE_VIEW.page1BodyPx + GENERAL_BOOK_PAGE_VIEW.pageNBodyPx}px`,

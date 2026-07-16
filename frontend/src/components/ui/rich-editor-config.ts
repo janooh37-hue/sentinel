@@ -171,7 +171,7 @@ export function buildContentStyle(opts: {
     // Label on the first page end only (the rest are plain lines).
     // top uses calc(0.5in + page1BodyPx) because ::after positions against the
     // padding box while guides use content-box origin (after padding).
-    "body::after { content: '≈ نهاية الصفحة 1 · page end'; " +
+    "body::after { content: '≈ نهاية الصفحة 1 · page 1 end'; " +
     'position: absolute; left: 0; right: 0; top: calc(0.5in + ' + String(page1BodyPx) + 'px); ' +
     'color: ' + GUIDE_COLOR + '; ' +
     "font-size: 9pt; font-family: 'Segoe UI', Tahoma, sans-serif; " +
