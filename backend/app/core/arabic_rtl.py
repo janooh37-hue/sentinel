@@ -889,6 +889,27 @@ def _table_content_twips(state: _WalkState) -> int:
     return content_twips if content_twips > 0 else 9360
 
 
+def _table_width_twips(attrs: dict[str, str], content_twips: int) -> int:
+    """The table's own width in twips: style width (pt/px/%/cm) first, then
+    the HTML ``width`` attribute (px), capped at the section content width.
+    No width -> full content width (the pre-existing behavior)."""
+    style = _parse_inline_style(attrs.get("style", ""))
+    raw = (style.get("width") or attrs.get("width", "") or "").strip().lower()
+    if raw.endswith("%"):
+        try:
+            frac = float(raw[:-1]) / 100.0
+        except ValueError:
+            return content_twips
+        if 0 < frac < 1:
+            return int(content_twips * frac)
+        return content_twips
+    if raw:
+        tw = _parse_len_twips(raw)
+        if tw:
+            return min(tw, content_twips)
+    return content_twips
+
+
 def _col_fractions(node: Any, rows: list[tuple[Any, list[Any]]], n: int) -> list[float]:
     """Return ``n`` column fractions (sum 1.0) from ``<colgroup><col>`` widths,
     falling back to the first row's cell widths, then to an even split."""
@@ -994,14 +1015,15 @@ def _render_table(
 
     doc = state["anchor"].part.document
     content_twips = _table_content_twips(state)
+    table_twips = _table_width_twips(attrs, content_twips)
     fracs = _col_fractions(node, rows, n_cols)
-    col_twips = [max(1, int(content_twips * f)) for f in fracs]
+    col_twips = [max(1, int(table_twips * f)) for f in fracs]
 
     # add_table appends at body end; we relocate it via _state_insert_table.
     tbl = doc.add_table(rows=n_rows, cols=n_cols)
     tbl.style = "Table Grid"
     tbl.autofit = False
-    _set_table_rtl_and_width(tbl, content_twips, col_twips, rtl)
+    _set_table_rtl_and_width(tbl, table_twips, col_twips, rtl)
 
     for r_idx, (tr_el, row_cells) in enumerate(rows):
         row_attrs = dict(tr_el.attrib)
