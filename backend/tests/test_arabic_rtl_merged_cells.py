@@ -50,3 +50,37 @@ def test_span_free_tables_unchanged():
     t = _table("<table><tr><td>A</td><td>B</td></tr></table>")
     assert len(t.columns) == 2
     assert _tcPr(t, 0, 0).find(qn("w:gridSpan")) is None
+
+
+def test_rowspan_and_colspan_same_row():
+    t = _table(
+        '<table><tr><td colspan="2">H</td><td rowspan="2">R</td></tr>'
+        "<tr><td>A</td><td>B</td></tr></table>"
+    )
+    # H spans grid cols 0-1; R occupies grid col 2 rows 0-1.
+    gs = _tcPr(t, 0, 0).find(qn("w:gridSpan"))
+    assert gs is not None and gs.get(qn("w:val")) == "2"
+    # Row 0 raw tcs after the colspan merge: [H(merged), R] -> R at raw index 1.
+    vm = _tcPr(t, 0, 1).find(qn("w:vMerge"))
+    assert vm is not None and vm.get(qn("w:val")) == "restart"
+    # Row 1: [A, B, continuation] -> continuation at raw index 2.
+    vm1 = _tcPr(t, 1, 2).find(qn("w:vMerge"))
+    assert vm1 is not None and vm1.get(qn("w:val")) in (None, "continue")
+    assert t.rows[0].cells[0].text.strip() == "H"
+    assert t.rows[1].cells[0].text.strip() == "A"
+    assert t.rows[1].cells[1].text.strip() == "B"
+
+
+def test_cell_with_both_rowspan_and_colspan():
+    t = _table(
+        '<table><tr><td colspan="2" rowspan="2">S</td><td>X</td></tr>'
+        "<tr><td>Y</td></tr>"
+        "<tr><td>A</td><td>B</td><td>C</td></tr></table>"
+    )
+    tcPr = _tcPr(t, 0, 0)
+    gs = tcPr.find(qn("w:gridSpan"))
+    vm = tcPr.find(qn("w:vMerge"))
+    assert gs is not None and gs.get(qn("w:val")) == "2"
+    assert vm is not None and vm.get(qn("w:val")) == "restart"
+    assert t.rows[0].cells[0].text.strip() == "S"
+    assert t.rows[2].cells[2].text.strip() == "C"

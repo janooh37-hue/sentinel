@@ -1097,51 +1097,63 @@ def _render_table(
         ):
             trPr.append(OxmlElement("w:tblHeader"))
 
-    # Cells fill by grid placement so col/rowspans land where HTML puts them.
+    # Two-pass cell placement to keep raw-tc index == grid-col index during
+    # rowspan OOXML stamping.  Colspan merges remove raw <w:tc> elements,
+    # so any findall(w:tc)[c_idx] call made AFTER a merge in the same row will
+    # hit the wrong cell or IndexError.
+    #
+    # Pass 1 — stamp ALL rowspan (rs>1) vMerge/gridSpan OOXML while the table
+    # is still pristine from add_table (every row has exactly n_cols raw tcs,
+    # so raw index == grid index everywhere).
+    for _cell_node, r_idx, c_idx, rs, cs in placements:
+        if rs <= 1:
+            continue
+        # Origin row: vMerge=restart (+ optional gridSpan when also colspan).
+        top_tc = tbl.rows[r_idx]._tr.findall(qn("w:tc"))[c_idx]
+        top_tcPr = top_tc.find(qn("w:tcPr"))
+        if top_tcPr is None:
+            top_tcPr = OxmlElement("w:tcPr")
+            top_tc.insert(0, top_tcPr)
+        vm_top = OxmlElement("w:vMerge")
+        vm_top.set(qn("w:val"), "restart")
+        top_tcPr.append(vm_top)
+        if cs > 1:
+            gs = OxmlElement("w:gridSpan")
+            gs.set(qn("w:val"), str(cs))
+            top_tcPr.append(gs)
+        # Continuation rows: vMerge (no val = continue) + optional gridSpan.
+        for cont_r in range(r_idx + 1, r_idx + rs):
+            cont_tc = tbl.rows[cont_r]._tr.findall(qn("w:tc"))[c_idx]
+            cont_tcPr = cont_tc.find(qn("w:tcPr"))
+            if cont_tcPr is None:
+                cont_tcPr = OxmlElement("w:tcPr")
+                cont_tc.insert(0, cont_tcPr)
+            vm_cont = OxmlElement("w:vMerge")
+            cont_tcPr.append(vm_cont)
+            if cs > 1:
+                gs_c = OxmlElement("w:gridSpan")
+                gs_c.set(qn("w:val"), str(cs))
+                cont_tcPr.append(gs_c)
+
+    # Pass 2 — colspan merges and content filling.  After this pass, raw-tc
+    # counts per row no longer match grid columns, so raw-index lookups are done
+    # only for colspan cells (within the same row, before that row's merge alters
+    # anything — but since the loop processes each placement once and python-docx
+    # merge() is idempotent within a row, order within a row is safe).
     for cell_node, r_idx, c_idx, rs, cs in placements:
         tr_el, _cells = rows[r_idx]
         row_attrs = dict(tr_el.attrib)
         row_style = row_attrs.get("style", "")
 
-        # Stamp span OOXML directly so continuation _tc elements stay as
-        # separate nodes (python-docx's merge() collapses them, making
-        # row.cells[c] return the top-left _tc for all rows in the span —
-        # which breaks the vMerge continuation check in tests and in Word).
-        # colspan-only: merge() within the same row is fine (no cross-row
-        # collapse), so we still use it there for gridSpan + cell removal.
         if rs == 1 and cs > 1:
-            # Pure colspan: merge within same row, then rebind cell.
+            # Pure colspan: merge within the same row (removes raw tcs, but
+            # raw-index access is no longer needed after this for this cell).
             cell = tbl.rows[r_idx].cells[c_idx].merge(tbl.rows[r_idx].cells[c_idx + cs - 1])
-        elif rs > 1:
-            # Rowspan (with optional colspan): stamp vMerge + gridSpan manually.
-            # Top cell: vMerge=restart.
-            top_tc = tbl.rows[r_idx]._tr.findall(qn("w:tc"))[c_idx]
-            top_tcPr = top_tc.find(qn("w:tcPr"))
-            if top_tcPr is None:
-                top_tcPr = OxmlElement("w:tcPr")
-                top_tc.insert(0, top_tcPr)
-            vm_top = OxmlElement("w:vMerge")
-            vm_top.set(qn("w:val"), "restart")
-            top_tcPr.append(vm_top)
-            if cs > 1:
-                gs = OxmlElement("w:gridSpan")
-                gs.set(qn("w:val"), str(cs))
-                top_tcPr.append(gs)
-            # Continuation rows: vMerge (no val = continue) + gridSpan.
-            for cont_r in range(r_idx + 1, r_idx + rs):
-                cont_tc = tbl.rows[cont_r]._tr.findall(qn("w:tc"))[c_idx]
-                cont_tcPr = cont_tc.find(qn("w:tcPr"))
-                if cont_tcPr is None:
-                    cont_tcPr = OxmlElement("w:tcPr")
-                    cont_tc.insert(0, cont_tcPr)
-                vm_cont = OxmlElement("w:vMerge")
-                cont_tcPr.append(vm_cont)
-                if cs > 1:
-                    gs_c = OxmlElement("w:gridSpan")
-                    gs_c.set(qn("w:val"), str(cs))
-                    cont_tcPr.append(gs_c)
-            cell = tbl.rows[r_idx].cells[c_idx]
         else:
+            # Rowspan origin (rs>1, with or without cs>1) and plain cells:
+            # tbl.rows[r].cells[c] uses grid indexing — safe even after merges.
+            # For rs>1+cs>1 we do NOT call merge(); the gridSpan stamped in
+            # pass 1 already covers the horizontal span.
             cell = tbl.rows[r_idx].cells[c_idx]
 
         cell_attrs = dict(cell_node.attrib)
