@@ -873,6 +873,45 @@ def _is_cell(node: Any) -> bool:
     return t in ("td", "th")
 
 
+def _cell_span(attrs: dict[str, str], key: str) -> int:
+    try:
+        v = int(attrs.get(key, "1") or 1)
+    except (TypeError, ValueError):
+        v = 1
+    return max(1, min(v, 63))  # Word's grid maximum
+
+
+def _place_table_cells(
+    rows: list[tuple[Any, list[Any]]],
+) -> tuple[int, list[tuple[Any, int, int, int, int]]]:
+    """Grid-place every source cell accounting for col/rowspans.
+
+    Returns ``(n_grid_cols, placements)`` where each placement is
+    ``(cell_node, row, col, rowspan, colspan)``. Rowspans are clamped to the
+    table's row count. Overlaps claimed by earlier spans are skipped over,
+    matching the HTML table layout algorithm.
+    """
+    occupied: set[tuple[int, int]] = set()
+    placements: list[tuple[Any, int, int, int, int]] = []
+    n_grid_cols = 0
+    n_rows = len(rows)
+    for r, (_tr, cells) in enumerate(rows):
+        c = 0
+        for cell in cells:
+            while (r, c) in occupied:
+                c += 1
+            attrs = dict(cell.attrib)
+            cs = _cell_span(attrs, "colspan")
+            rs = min(_cell_span(attrs, "rowspan"), n_rows - r)
+            placements.append((cell, r, c, rs, cs))
+            for rr in range(r, r + rs):
+                for cc in range(c, c + cs):
+                    occupied.add((rr, cc))
+            c += cs
+            n_grid_cols = max(n_grid_cols, c)
+    return n_grid_cols, placements
+
+
 def _table_content_twips(state: _WalkState) -> int:
     """Page content width (twips) of the anchor's document section.
 
@@ -928,7 +967,13 @@ def _col_fractions(node: Any, rows: list[tuple[Any, list[Any]]], n: int) -> list
             style = _parse_inline_style(a.get("style", ""))
             raw.append(style.get("width") or a.get("width", ""))
     if len([w for w in raw if w]) != n:
-        first = rows[0][1] if rows else []
+        # Fall back to the first SPAN-FREE full row's cell widths — a row
+        # with colspans can't describe per-column widths.
+        first: list[Any] = []
+        for _tr, cells in rows:
+            if len(cells) == n and all(_cell_span(dict(c.attrib), "colspan") == 1 for c in cells):
+                first = cells
+                break
         raw = [_parse_inline_style(dict(c.attrib).get("style", "")).get("width", "") for c in first]
     nums: list[float] = []
     for w in raw:
@@ -1009,7 +1054,7 @@ def _render_table(
 
     rows = _collect_table_rows(node)
     n_rows = len(rows)
-    n_cols = max((len(cells) for _tr, cells in rows), default=0)
+    n_cols, placements = _place_table_cells(rows)
     if n_rows == 0 or n_cols == 0:
         return
 
@@ -1025,7 +1070,8 @@ def _render_table(
     tbl.autofit = False
     _set_table_rtl_and_width(tbl, table_twips, col_twips, rtl)
 
-    for r_idx, (tr_el, row_cells) in enumerate(rows):
+    # Row properties (cantSplit / trHeight / tblHeader) — Task 4's loop.
+    for r_idx, (tr_el, _row_cells) in enumerate(rows):
         row_attrs = dict(tr_el.attrib)
         row_style = row_attrs.get("style", "")
 
@@ -1050,90 +1096,128 @@ def _render_table(
             and trPr.find(qn("w:tblHeader")) is None
         ):
             trPr.append(OxmlElement("w:tblHeader"))
-        for c_idx in range(n_cols):
+
+    # Cells fill by grid placement so col/rowspans land where HTML puts them.
+    for cell_node, r_idx, c_idx, rs, cs in placements:
+        tr_el, _cells = rows[r_idx]
+        row_attrs = dict(tr_el.attrib)
+        row_style = row_attrs.get("style", "")
+
+        # Stamp span OOXML directly so continuation _tc elements stay as
+        # separate nodes (python-docx's merge() collapses them, making
+        # row.cells[c] return the top-left _tc for all rows in the span —
+        # which breaks the vMerge continuation check in tests and in Word).
+        # colspan-only: merge() within the same row is fine (no cross-row
+        # collapse), so we still use it there for gridSpan + cell removal.
+        if rs == 1 and cs > 1:
+            # Pure colspan: merge within same row, then rebind cell.
+            cell = tbl.rows[r_idx].cells[c_idx].merge(tbl.rows[r_idx].cells[c_idx + cs - 1])
+        elif rs > 1:
+            # Rowspan (with optional colspan): stamp vMerge + gridSpan manually.
+            # Top cell: vMerge=restart.
+            top_tc = tbl.rows[r_idx]._tr.findall(qn("w:tc"))[c_idx]
+            top_tcPr = top_tc.find(qn("w:tcPr"))
+            if top_tcPr is None:
+                top_tcPr = OxmlElement("w:tcPr")
+                top_tc.insert(0, top_tcPr)
+            vm_top = OxmlElement("w:vMerge")
+            vm_top.set(qn("w:val"), "restart")
+            top_tcPr.append(vm_top)
+            if cs > 1:
+                gs = OxmlElement("w:gridSpan")
+                gs.set(qn("w:val"), str(cs))
+                top_tcPr.append(gs)
+            # Continuation rows: vMerge (no val = continue) + gridSpan.
+            for cont_r in range(r_idx + 1, r_idx + rs):
+                cont_tc = tbl.rows[cont_r]._tr.findall(qn("w:tc"))[c_idx]
+                cont_tcPr = cont_tc.find(qn("w:tcPr"))
+                if cont_tcPr is None:
+                    cont_tcPr = OxmlElement("w:tcPr")
+                    cont_tc.insert(0, cont_tcPr)
+                vm_cont = OxmlElement("w:vMerge")
+                cont_tcPr.append(vm_cont)
+                if cs > 1:
+                    gs_c = OxmlElement("w:gridSpan")
+                    gs_c.set(qn("w:val"), str(cs))
+                    cont_tcPr.append(gs_c)
             cell = tbl.rows[r_idx].cells[c_idx]
-            cell_node = row_cells[c_idx] if c_idx < len(row_cells) else None
-            cell_attrs = dict(cell_node.attrib) if cell_node is not None else {}
-            cell_tag = (
-                (cell_node.tag or "").lower()
-                if cell_node is not None and isinstance(cell_node.tag, str)
-                else "td"
-            )
-            cell_style = cell_attrs.get("style", "")
+        else:
+            cell = tbl.rows[r_idx].cells[c_idx]
 
-            # Effective cascaded style (cell wins) for block/run/background.
-            eff_style = "; ".join(s for s in (table_style, row_style, cell_style) if s)
-            eff_attrs = {**attrs, **row_attrs, **cell_attrs, "style": eff_style}
+        cell_attrs = dict(cell_node.attrib)
+        cell_tag = (cell_node.tag or "").lower() if isinstance(cell_node.tag, str) else "td"
+        cell_style = cell_attrs.get("style", "")
 
-            # Block format: RTL/right default unless the table opts out.
-            cblk = _BlockFmt()
-            cblk.rtl = rtl
-            cblk.align = "right" if rtl else "left"
-            cblk = _merge_block_fmt_from_attrs(cblk, cell_tag, eff_attrs)
+        # Effective cascaded style (cell wins) for block/run/background.
+        eff_style = "; ".join(s for s in (table_style, row_style, cell_style) if s)
+        eff_attrs = {**attrs, **row_attrs, **cell_attrs, "style": eff_style}
 
-            # Run format: Calibri/12pt cell default, <th> bold, then cascade.
-            fmt = _Fmt()
-            fmt.family = "Calibri"
-            fmt.size_pt = 12.0
-            if cell_tag == "th":
-                fmt.bold = True
-            fmt = _merge_fmt_from_attrs(fmt, cell_tag, eff_attrs)
+        # Block format: RTL/right default unless the table opts out.
+        cblk = _BlockFmt()
+        cblk.rtl = rtl
+        cblk.align = "right" if rtl else "left"
+        cblk = _merge_block_fmt_from_attrs(cblk, cell_tag, eff_attrs)
 
-            # Per-cell column width under fixed layout.
-            tcPr = cell._tc.get_or_add_tcPr()
-            for existing in tcPr.findall(qn("w:tcW")):
+        # Run format: Calibri/12pt cell default, <th> bold, then cascade.
+        fmt = _Fmt()
+        fmt.family = "Calibri"
+        fmt.size_pt = 12.0
+        if cell_tag == "th":
+            fmt.bold = True
+        fmt = _merge_fmt_from_attrs(fmt, cell_tag, eff_attrs)
+
+        # Cell width under fixed layout: the sum of its spanned columns.
+        tcPr = cell._tc.get_or_add_tcPr()
+        for existing in tcPr.findall(qn("w:tcW")):
+            tcPr.remove(existing)
+        tcW = OxmlElement("w:tcW")
+        tcW.set(qn("w:type"), "dxa")
+        tcW.set(qn("w:w"), str(sum(col_twips[c_idx : c_idx + cs])))
+        tcPr.append(tcW)
+
+        para = cell.paragraphs[0]
+        for rr in para.runs:
+            rr.text = ""
+        _apply_block_fmt(para, cblk)
+
+        # first_used=False so the first block child (<p> — Word wraps every
+        # cell's text in one) REUSES this paragraph instead of leaving it
+        # empty. This was the 3-paragraphs-per-cell bug.
+        sub: _WalkState = {
+            "anchor": para,
+            "current": para,
+            "first_used": False,
+            "parent_obj": para._parent,
+        }
+        _walk_inline(cell_node, para, fmt, cblk, sub, default_family, default_size)
+        # Drop blank paragraphs the walker left behind (the speculative
+        # paragraph allocated after each block child). Keep >= 1.
+        paras = list(cell.paragraphs)
+        removable = [q for q in paras if _paragraph_is_visually_empty(q)]
+        if len(removable) == len(paras):
+            removable = removable[1:]
+        for q in removable:
+            q._p.getparent().remove(q._p)
+
+        # Hug EVERY remaining paragraph (explicit line-height still wins).
+        for q in cell.paragraphs:
+            q.paragraph_format.space_before = Pt(0)
+            q.paragraph_format.space_after = Pt(0)
+            if q.paragraph_format.line_spacing is None:
+                q.paragraph_format.line_spacing = 1.0
+
+        # Cell background shading from cascaded background / background-color.
+        style = _parse_inline_style(eff_style)
+        bg_raw = style.get("background-color") or style.get("background", "")
+        bg_hex = _hparse_color(bg_raw) if bg_raw else None
+        if bg_hex:
+            for existing in tcPr.findall(qn("w:shd")):
                 tcPr.remove(existing)
-            tcW = OxmlElement("w:tcW")
-            tcW.set(qn("w:type"), "dxa")
-            tcW.set(qn("w:w"), str(col_twips[c_idx]))
-            tcPr.append(tcW)
-
-            para = cell.paragraphs[0]
-            for rr in para.runs:
-                rr.text = ""
-            _apply_block_fmt(para, cblk)
-
-            if cell_node is not None:
-                # first_used=False so the first block child (<p> — Word wraps
-                # every cell's text in one) REUSES this paragraph instead of
-                # leaving it empty. This was the 3-paragraphs-per-cell bug.
-                sub: _WalkState = {
-                    "anchor": para,
-                    "current": para,
-                    "first_used": False,
-                    "parent_obj": para._parent,
-                }
-                _walk_inline(cell_node, para, fmt, cblk, sub, default_family, default_size)
-                # Drop blank paragraphs the walker left behind (the speculative
-                # paragraph allocated after each block child). Keep >= 1.
-                paras = list(cell.paragraphs)
-                removable = [q for q in paras if _paragraph_is_visually_empty(q)]
-                if len(removable) == len(paras):
-                    removable = removable[1:]
-                for q in removable:
-                    q._p.getparent().remove(q._p)
-
-            # Hug EVERY remaining paragraph: zero spacing so rows don't render
-            # taller than their content. An explicit line-height (set by
-            # _apply_block_fmt from cascaded CSS) still wins.
-            for q in cell.paragraphs:
-                q.paragraph_format.space_before = Pt(0)
-                q.paragraph_format.space_after = Pt(0)
-                if q.paragraph_format.line_spacing is None:
-                    q.paragraph_format.line_spacing = 1.0
-
-            # Cell background shading from cascaded background / background-color.
-            style = _parse_inline_style(eff_style)
-            bg_raw = style.get("background-color") or style.get("background", "")
-            bg_hex = _hparse_color(bg_raw) if bg_raw else None
-            if bg_hex:
-                for existing in tcPr.findall(qn("w:shd")):
-                    tcPr.remove(existing)
-                shd = OxmlElement("w:shd")
-                shd.set(qn("w:fill"), bg_hex.upper())
-                shd.set(qn("w:val"), "clear")
-                shd.set(qn("w:color"), "auto")
-                tcPr.append(shd)
+            shd = OxmlElement("w:shd")
+            shd.set(qn("w:fill"), bg_hex.upper())
+            shd.set(qn("w:val"), "clear")
+            shd.set(qn("w:color"), "auto")
+            tcPr.append(shd)
 
     # Relocate the appended table to the current walker position (in order).
     # The cursor becomes the raw <w:tbl>, so the next block lands after it.
