@@ -13,7 +13,7 @@ def _table(html):
 
 
 def _tcPr(table, r, c):
-    return table.rows[r].cells[c]._tc.find(qn("w:tcPr"))
+    return table.rows[r]._tr.findall(qn("w:tc"))[c].find(qn("w:tcPr"))
 
 
 def test_colspan_produces_gridspan():
