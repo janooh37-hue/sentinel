@@ -10,8 +10,7 @@
  *   variant="full"    — Ledger notes_html (the "general book"). Two-row
  *     Word-like ribbon ported from editor/editor.html, plus three custom
  *     buttons: Save Template, Load Template, Insert GSSG Table. Optional
- *     `pageHeightPx` draws a dashed page-boundary marker in the editor
- *     body so the operator can see how much room is left.
+ *     `pageView` draws A4 page-end guides and a visible page-break bar.
  *
  * Wired into React Hook Form via Controller — the HTML string is the
  * field value. Storage / backend conversion is unchanged.
@@ -41,6 +40,7 @@ import {
   MINIMAL_PLUGINS,
   MINIMAL_TOOLBAR,
   buildContentStyle,
+  type RichEditorPageView,
 } from './rich-editor-config'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -90,11 +90,11 @@ export interface RichEditorProps {
   /** Floor (px) for the editor body when `fillHeight` is set. Default 360. */
   minHeightPx?: number
   /**
-   * When set on the "full" variant, a dashed horizontal line is drawn in the
-   * editor body at this y-offset. Useful for previewing where content would
-   * overflow a printed page.
+   * A4 page-view canvas for the "full" variant: white page on a gray desk,
+   * page-end guides at the measured print heights, visible page-break bar.
+   * Omit for the plain full-height editor (Ledger compose).
    */
-  pageHeightPx?: number
+  pageView?: RichEditorPageView
 }
 
 // ─── Save / Load dialogs ──────────────────────────────────────────────────────
@@ -400,7 +400,7 @@ export function RichEditor({
   height,
   fillHeight = false,
   minHeightPx = 360,
-  pageHeightPx,
+  pageView,
 }: RichEditorProps): React.JSX.Element {
   const { i18n, t } = useTranslation()
   const isAr = i18n.language.startsWith('ar')
@@ -429,8 +429,8 @@ export function RichEditor({
     ? '100%'
     : (height ?? (isFull ? 520 : 240))
   const contentStyle = useMemo(
-    () => buildContentStyle({ variant, pageHeightPx, dark: isDark }),
-    [variant, pageHeightPx, isDark],
+    () => buildContentStyle({ variant, pageView, dark: isDark }),
+    [variant, pageView, isDark],
   )
 
   const setup = useCallback(

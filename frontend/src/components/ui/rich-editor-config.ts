@@ -23,15 +23,17 @@ export const FULL_PLUGINS = [
 ].join(' ')
 
 // Two independent rows, both always visible — nothing hides into a "..." overflow.
-// Row 1 = formatting + custom GSSG buttons. Row 2 = layout & tools.
+// Row 1 = formatting + custom GSSG buttons (+ pagebreak: the General Book's
+// page control, promoted from row 2 where nobody found it).
+// Row 2 = layout & tools.
 export const FULL_TOOLBAR_ROWS: string[] = [
-  'undo redo | gssg-template-save gssg-template-load gssg-table | ' +
+  'undo redo | gssg-template-save gssg-template-load gssg-table pagebreak | ' +
     'fontfamily fontsize lineheight | ' +
     'bold italic underline strikethrough | ' +
     'forecolor backcolor removeformat',
   'alignleft aligncenter alignright alignjustify | ltr rtl | ' +
     'bullist numlist outdent indent | ' +
-    'link image table charmap pagebreak | ' +
+    'link image table charmap | ' +
     'searchreplace fullscreen preview help',
 ]
 
@@ -94,42 +96,90 @@ export const GSSG_DEFAULT_TABLE_HTML = `
 <p>&nbsp;</p>
 `.trim()
 
+export interface RichEditorPageView {
+  /** CSS px width of the printable page content (A4 width − template side margins). */
+  pageWidthPx: number
+  /** Usable body height on page 1 (letterhead + subject block already deducted). */
+  page1BodyPx: number
+  /** Usable body height on pages 2+. */
+  pageNBodyPx: number
+}
+
+// Measured from GSSG-GS_300-003_General_Book.docx via
+// backend/scripts/measure_general_book_pages.py (A4 595.3x841.9pt, margins
+// L35.45/R36/T36/B36pt, px = pt * 4/3 @96dpi). Re-run the script if the
+// template layout changes in Word.
+export const GENERAL_BOOK_PAGE_VIEW: RichEditorPageView = {
+  pageWidthPx: 698, // <- script output
+  page1BodyPx: 524, // <- script output
+  pageNBodyPx: 865, // <- script output
+}
+
+const GUIDE_COLOR = '#c0392b'
+const GUIDE_PAGES = 12 // static guide lines cover any realistic book length
+
 export function buildContentStyle(opts: {
   variant: 'minimal' | 'full'
-  pageHeightPx?: number
+  pageView?: RichEditorPageView
   /** When true, render the editor body with a dark surface + light text so it
-   * doesn't stay white in the app's dark theme. */
+   * doesn't stay white in the app's dark theme. (Page view keeps white paper —
+   * it previews the printed page.) */
   dark?: boolean
 }): string {
   // The editor body lives in an iframe and doesn't inherit the app's CSS vars,
   // so dark-mode colours are baked in here as literals.
-  const bg = opts.dark ? '#1c2026' : '#fff'
-  const fg = opts.dark ? '#e6e6e6' : 'inherit'
+  const paper = opts.pageView ? '#fff' : opts.dark ? '#1c2026' : '#fff'
+  const fg = opts.pageView ? '#1a2433' : opts.dark ? '#e6e6e6' : 'inherit'
   const baseFont =
     "body { font-family: 'Noto Sans Arabic', Calibri, 'Segoe UI', Tahoma, sans-serif; " +
     'font-size: 12pt; line-height: 1.5; direction: rtl; padding: 0.5in; ' +
-    'background: ' + bg + '; color: ' + fg + '; position: relative; min-height: 100%; } ' +
-    'table { border-collapse: collapse; } ' +
+    'background: ' + paper + '; color: ' + fg + '; position: relative; min-height: 100%; } ' +
+    'table { border-collapse: collapse; line-height: 1.15; } ' +
     'table td, table th { border: 1px solid #888; padding: 4px 6px; } ' +
+    'table p { margin: 0; } ' +
     'p { margin: 0 0 0.5em 0; }'
 
-  if (opts.variant === 'minimal') {
+  if (!opts.pageView || opts.variant === 'minimal') {
     return baseFont
   }
 
-  let css = baseFont
-  if (opts.pageHeightPx && opts.pageHeightPx > 0) {
-    // Dashed line at the page boundary so the user can see how much vertical
-    // space remains before content overflows the form's printable region.
-    css +=
-      " body::after { content: 'Page boundary — حد الصفحة'; " +
-      'position: absolute; left: 0; right: 0; top: ' +
-      String(opts.pageHeightPx) +
-      'px; ' +
-      'border-top: 1.5px dashed #c0392b; color: #c0392b; ' +
-      "font-size: 10pt; font-family: 'Segoe UI', Tahoma, sans-serif; " +
-      'direction: ltr; text-align: center; padding-top: 2px; ' +
-      'pointer-events: none; opacity: 0.85; }'
-  }
-  return css
+  const { pageWidthPx, page1BodyPx, pageNBodyPx } = opts.pageView
+  // Page k (1-based) ends at page1BodyPx + (k-1) * pageNBodyPx in content
+  // coordinates. Discrete gradient layers beat a repeating gradient here —
+  // a repeating layer would also paint lines above the first page end.
+  const ends = Array.from(
+    { length: GUIDE_PAGES },
+    (_, i) => page1BodyPx + i * pageNBodyPx,
+  )
+  const guides = ends
+    .map(
+      (y) =>
+        `linear-gradient(to bottom, transparent ${y - 2}px, ${GUIDE_COLOR} ${y - 2}px ${y}px, transparent ${y}px)`,
+    )
+    .join(', ')
+
+  const desk = opts.dark ? '#262a31' : '#9aa3ad'
+  return (
+    baseFont +
+    ' html { background: ' + desk + '; } ' +
+    'body { width: ' + String(pageWidthPx) + 'px; max-width: ' + String(pageWidthPx) + 'px; ' +
+    'margin: 18px auto; box-sizing: border-box; ' +
+    'box-shadow: 0 2px 6px rgba(0,0,0,.25), 0 12px 30px rgba(0,0,0,.28); ' +
+    'background-image: ' + guides + '; ' +
+    'background-origin: content-box; background-repeat: no-repeat; background-position: 0 0; ' +
+    'min-height: ' + String(page1BodyPx + 60) + 'px; } ' +
+    // Label on the first page end only (the rest are plain lines).
+    // top uses calc(0.5in + page1BodyPx) because ::after positions against the
+    // padding box while guides use content-box origin (after padding).
+    "body::after { content: '≈ نهاية الصفحة 1 · page end'; " +
+    'position: absolute; left: 0; right: 0; top: calc(0.5in + ' + String(page1BodyPx) + 'px); ' +
+    'color: ' + GUIDE_COLOR + '; ' +
+    "font-size: 9pt; font-family: 'Segoe UI', Tahoma, sans-serif; " +
+    'direction: ltr; text-align: center; padding-top: 2px; ' +
+    'pointer-events: none; opacity: 0.85; } ' +
+    // The inserted page break: an obvious double-ruled bar, not faint dashes.
+    'img.mce-pagebreak { display: block; width: 100%; height: 12px; margin: 12px 0; ' +
+    'border: 0; border-top: 3px double #1d3a5e; border-bottom: 3px double #1d3a5e; ' +
+    'cursor: default; }'
+  )
 }

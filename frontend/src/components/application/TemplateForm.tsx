@@ -37,6 +37,7 @@ import { EmbedSignatureCheckbox } from './fields/EmbedSignatureCheckbox'
 import { SignatureField } from './fields/SignatureField'
 import { EmployeeSignatureCard } from './fields/EmployeeSignatureCard'
 import { RichEditor } from '@/components/ui/rich-editor'
+import { GENERAL_BOOK_PAGE_VIEW } from '@/components/ui/rich-editor-config'
 import { ClearanceTableField } from './fields/ClearanceTableField'
 import { ItemsTableField } from './fields/ItemsTableField'
 import { EmployeesTableField } from './fields/EmployeesTableField'
@@ -209,11 +210,9 @@ function renderField(
       )
 
     case 'arabic_rich_full':
-      // 600 px body editor for General Book — Round 2's 400 was too short for
-      // typical bodies and forced the operator to scroll inside the editor too
-      // often. The ribbon supplies the formatting power the General Book
-      // needs; we don't try to mirror A4 portrait here (that would push the
-      // action row off-screen on a laptop).
+      // 600 px body editor for General Book — the A4 page-view canvas
+      // (guides + page-break bar) previews the printed layout; the editor
+      // frame itself stays 600px and scrolls.
       return (
         <RichEditor
           key={field.id}
@@ -221,6 +220,7 @@ function renderField(
           variant="full"
           defaultValue={field.default}
           height={600}
+          pageView={GENERAL_BOOK_PAGE_VIEW}
         />
       )
 
