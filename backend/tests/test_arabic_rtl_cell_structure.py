@@ -50,5 +50,6 @@ def test_bare_text_cell_unchanged():
 
 def test_nbsp_only_cell_keeps_one_paragraph():
     # The GSSG insert-table button fills body cells with &nbsp;.
-    cell = _cell("<table><tr><td> </td></tr></table>")
+    cell = _cell("<table><tr><td>&nbsp;</td></tr></table>")
     assert len(cell.paragraphs) == 1
+    assert cell.paragraphs[0].text == "\xa0"
