@@ -43,6 +43,8 @@ from docx.oxml.ns import qn
 
 log = logging.getLogger(__name__)
 
+_HTML_WS_RE = re.compile(r"[ \t\r\n\f]+")
+
 
 class _WalkState(TypedDict, total=False):
     """State threaded through ``_walk_*`` and ``_state_new_paragraph``."""
@@ -716,6 +718,31 @@ def _state_insert_table(state: _WalkState, tbl_elem: Any) -> None:
     state["current"] = tbl_elem
 
 
+def _collapse_html_whitespace(root: Any) -> None:
+    """Collapse runs of ASCII whitespace in text/tail nodes to a single space
+    (HTML rendering semantics). NBSP (\\u00a0) is intentionally preserved —
+    the editor uses it for deliberate spacing. ``<pre>`` subtrees keep their
+    whitespace verbatim (the editor's "Preformatted" block format).
+    """
+    for el in root.iter():
+        if not isinstance(el.tag, str):
+            if el.tail:
+                el.tail = _HTML_WS_RE.sub(" ", el.tail)
+            continue
+        tag = el.tag.lower()
+        in_pre = tag == "pre" or any(
+            isinstance(a.tag, str) and a.tag.lower() == "pre" for a in el.iterancestors()
+        )
+        if not in_pre and el.text:
+            el.text = _HTML_WS_RE.sub(" ", el.text)
+        # The tail sits OUTSIDE the element: only an enclosing <pre> protects it.
+        tail_in_pre = any(
+            isinstance(a.tag, str) and a.tag.lower() == "pre" for a in el.iterancestors()
+        )
+        if not tail_in_pre and el.tail:
+            el.tail = _HTML_WS_RE.sub(" ", el.tail)
+
+
 def _emit_text_into_paragraph(
     paragraph: Any,
     text: str,
@@ -724,6 +751,9 @@ def _emit_text_into_paragraph(
     default_size: float,
 ) -> None:
     if not text:
+        return
+    if not text.strip(" ") and not paragraph.runs:
+        # Space-only text at paragraph start renders as nothing in HTML.
         return
     run = paragraph.add_run(text)
     _apply_run_fmt(run, fmt, default_family, default_size)
@@ -1131,6 +1161,7 @@ def html_to_docx(
         return
 
     root = lhtml.fragment_fromstring(html.strip(), create_parent="div")
+    _collapse_html_whitespace(root)
 
     state: _WalkState = {
         "anchor": paragraph,
