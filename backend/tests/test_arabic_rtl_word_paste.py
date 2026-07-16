@@ -68,7 +68,7 @@ def test_every_cell_is_exactly_one_clean_paragraph():
 
 def test_arabic_name_collapsed_to_single_spaced_text():
     doc = _render()
-    assert doc.tables[0].rows[1].cells[1].text == "محمد مشرف حسين محمد حسن "
+    assert doc.tables[0].rows[1].cells[1].text == "محمد مشرف حسين محمد حسن"
 
 
 def test_row_heights_and_cantsplit_stamped():

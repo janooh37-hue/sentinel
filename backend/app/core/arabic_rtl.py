@@ -1240,6 +1240,12 @@ def _render_table(
             q.paragraph_format.space_after = Pt(0)
             if q.paragraph_format.line_spacing is None:
                 q.paragraph_format.line_spacing = 1.0
+            # End-of-block whitespace never renders in HTML — strip the
+            # trailing plain spaces (NBSP survives) so centered cell text
+            # sits true.
+            if q.runs:
+                last = q.runs[-1]
+                last.text = (last.text or "").rstrip(" ")
 
         # Cell background shading from cascaded background / background-color.
         style = _parse_inline_style(eff_style)
