@@ -61,6 +61,9 @@ class BookEvent:
     employee: Employee
     fields: dict[str, object]
     today: date
+    # Book creation time in LOCAL (Asia/Dubai) wall-clock — the Leave Permit
+    # body reports this as the permit's issue time.
+    created_at: datetime
 
 
 def _load_book_event(db: Session, book_id: int) -> BookEvent | None:
@@ -71,7 +74,14 @@ def _load_book_event(db: Session, book_id: int) -> BookEvent | None:
     if employee is None:
         return None
     version = book.versions[-1]  # relationship ordered by version_no ascending
-    return BookEvent(employee=employee, fields=version.fields or {}, today=date.today())
+    # created_at is stored naive-UTC; UAE is a fixed UTC+4 (no DST) year-round.
+    issued_local = book.created_at + timedelta(hours=4)
+    return BookEvent(
+        employee=employee,
+        fields=version.fields or {},
+        today=date.today(),
+        created_at=issued_local,
+    )
 
 
 _LOADERS: dict[str, Callable[[Session, int], object]] = {
@@ -82,6 +92,8 @@ _LOADERS: dict[str, Callable[[Session, int], object]] = {
     nf.EVENT_SICK_LEAVE_REGISTERED: _load_leave,
     nf.EVENT_LEAVE_ENDING: _load_leave,
     nf.EVENT_DUTY_RESUMPTION: _load_leave,
+    # Administrative Leave rides the Leave row it creates (start/end/days).
+    nf.EVENT_ADMIN_LEAVE: _load_leave,
     nf.EVENT_VIOLATION: _load_violation,
     **{ev: _load_book_event for ev in nf.BOOK_EVENTS},
 }
@@ -276,6 +288,14 @@ def _send_leave_status(
         and leave_lifecycle.classify_group(leave.leave_type) == "sick"
     ):
         event = nf.EVENT_SICK_LEAVE_REGISTERED
+    # Administrative Leave is born Approved (issued) — its dedicated wording
+    # replaces the generic approval message (spec 2026-07-16). elif: a leave is
+    # at most one type, so this is mutually exclusive with the sick swap above.
+    elif (
+        event == nf.EVENT_LEAVE_APPROVED
+        and nf.type_label(leave.leave_type, "en") == "Administrative Leave"
+    ):
+        event = nf.EVENT_ADMIN_LEAVE
     return send_for_event(db, event, leave_id, sent_by=sent_by)
 
 
@@ -322,6 +342,10 @@ def auto_send_for_book(
     doc = db.get(Document, version.document_id) if version.document_id else None
     if doc is not None:
         if tpl == "Leave Application Form" and doc.leave_id is not None:
+            return _send_leave_status(db, doc.leave_id, sent_by=sent_by)
+        # Administrative Leave Form creates a Leave row (start/end/days) — route
+        # by it so the admin_leave wording renders from typed dates (spec 2026-07-16).
+        if tpl == "Administrative Leave Form" and doc.leave_id is not None:
             return _send_leave_status(db, doc.leave_id, sent_by=sent_by)
         if tpl == "Duty Resumption Form" and doc.leave_id is not None:
             return send_for_event(db, nf.EVENT_DUTY_RESUMPTION, doc.leave_id, sent_by=sent_by)

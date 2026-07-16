@@ -356,8 +356,58 @@ def _warning(rec: Any, emp: Employee, lang: str) -> str:
     )
 
 
+def _leave_permit(rec: Any, emp: Employee, lang: str) -> str:
+    """Same-day exit permit (تصريح خروج). Book-backed: the start is the record's
+    creation time (``created_at``, already local) and the length is the form's
+    ``duration_hours``. No end time is stated — the employee knows their own
+    duty hours and works out when it ends (spec 2026-07-16)."""
+    name = nf.employee_name(emp, lang)
+    issued = rec.created_at
+    d, wd = nf.fmt_date(issued.date()), nf.weekday(issued.date(), lang)
+    t = nf.fmt_time(issued, lang)
+    hours = str((rec.fields or {}).get("duration_hours", "") or "").strip()
+    if lang == "ar":
+        return (
+            f"عزيزي {name}،\n"
+            f"تم إصدار تصريح خروجك.\n"
+            f"اعتباراً من الساعة {t} يوم {wd} {d}، ولمدة {hours} ساعة.\n"
+            f"{_SIGNATURE_AR}"
+        )
+    return (
+        f"Dear {name},\n"
+        f"Your leave permit has been issued.\n"
+        f"Valid from {t} on {wd}, {d}, for {hours} hour(s).\n"
+        f"{_SIGNATURE_EN}"
+    )
+
+
+def _admin_leave(leave: Any, emp: Employee, lang: str) -> str:
+    """Administrative leave (إجازة إدارية). Leave-backed: period + days from the
+    Leave row. Confirms the leave was issued without referencing the manager's
+    signature step (spec 2026-07-16)."""
+    name = nf.employee_name(emp, lang)
+    s = nf.fmt_date(leave.start_date)
+    e = nf.fmt_date(leave.end_date)
+    days = str(leave.days)
+    if lang == "ar":
+        return (
+            f"عزيزي {name}،\n"
+            f"تم إصدار إجازتك الإدارية.\n"
+            f"الفترة: {s} إلى {e} ({days} يوم).\n"
+            f"{_SIGNATURE_AR}"
+        )
+    return (
+        f"Dear {name},\n"
+        f"Your administrative leave has been issued.\n"
+        f"Period: {s} to {e} ({days} day(s)).\n"
+        f"{_SIGNATURE_EN}"
+    )
+
+
 _BUILDERS: dict[str, Any] = {
     nf.EVENT_LEAVE_REQUESTED: _leave_requested,
+    nf.EVENT_LEAVE_PERMIT: _leave_permit,
+    nf.EVENT_ADMIN_LEAVE: _admin_leave,
     nf.EVENT_LEAVE_APPROVED: _leave_approved,
     nf.EVENT_LEAVE_REJECTED: _leave_rejected,
     nf.EVENT_LEAVE_CANCELLED: _leave_cancelled,

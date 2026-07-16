@@ -8,7 +8,7 @@ the two channels can never drift in how they format the same data.
 
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, datetime
 
 from app.core.constants import ARABIC_WEEKDAYS
 from app.db.models import Employee
@@ -28,6 +28,11 @@ EVENT_HR_REQUEST = "hr_request"
 EVENT_PASSPORT_RELEASE = "passport_release"
 EVENT_WARNING = "warning"
 EVENT_RESIGNATION = "resignation"
+# Admin-Affairs leave forms. Leave Permit is book-backed (its duration_hours
+# lives only on the book version); Administrative Leave rides the Leave row it
+# creates (start/end/days), so it is NOT a BOOK_EVENT — see notify_dispatch.
+EVENT_LEAVE_PERMIT = "leave_permit"
+EVENT_ADMIN_LEAVE = "admin_leave"
 
 BOOK_EVENTS: frozenset[str] = frozenset(
     {
@@ -38,10 +43,13 @@ BOOK_EVENTS: frozenset[str] = frozenset(
         EVENT_PASSPORT_RELEASE,
         EVENT_WARNING,
         EVENT_RESIGNATION,
+        EVENT_LEAVE_PERMIT,
     }
 )
 
 # Book template_id -> SMS event. Keys match core.constants.TEMPLATE_FILES.
+# "Administrative Leave Form" is intentionally absent: it routes through the
+# Leave row it creates (notify_dispatch.auto_send_for_book), not the book path.
 TEMPLATE_EVENTS: dict[str, str] = {
     "Salary Transfer Request": EVENT_SALARY_TRANSFER,
     "Salary Deduction Form": EVENT_SALARY_DEDUCTION,
@@ -50,6 +58,7 @@ TEMPLATE_EVENTS: dict[str, str] = {
     "Passport Release Form": EVENT_PASSPORT_RELEASE,
     "Warning Form": EVENT_WARNING,
     "Resignation Letter": EVENT_RESIGNATION,
+    "Leave Permit Form": EVENT_LEAVE_PERMIT,
 }
 
 # Monday-first to match datetime.weekday() and ARABIC_WEEKDAYS' ordering.
@@ -224,6 +233,19 @@ def fmt_date(d: date) -> str:
 def weekday(d: date, lang: str) -> str:
     table = ARABIC_WEEKDAYS if lang == "ar" else ENGLISH_WEEKDAYS
     return table[d.weekday()]
+
+
+# AM, PM (Arabic). Gregorian 12-hour clock is what employees read locally.
+_AR_MERIDIEM: tuple[str, str] = ("صباحاً", "مساءً")
+
+
+def fmt_time(dt: datetime, lang: str) -> str:
+    """12-hour clock label, e.g. '10:30 AM' / '2:05 مساءً'. ``dt`` is treated as
+    already local (Asia/Dubai); no timezone conversion happens here."""
+    h12 = dt.hour % 12 or 12
+    is_am = dt.hour < 12
+    meridiem = _AR_MERIDIEM[0 if is_am else 1] if lang == "ar" else ("AM" if is_am else "PM")
+    return f"{h12}:{dt.minute:02d} {meridiem}"
 
 
 def action_text(action_taken: str | None, deduction_days: int, lang: str) -> str:

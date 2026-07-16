@@ -1,4 +1,4 @@
-from datetime import date
+from datetime import date, datetime
 from types import SimpleNamespace
 
 import pytest
@@ -516,3 +516,90 @@ def test_render_leave_amended_arabic_wording():
     assert "تم تعديل إجازتك السنوية." in ar
     assert "المدة الجديدة: 20 يوم (بدلاً من 25)." in ar
     assert "سبب التعديل: نقص الرصيد" in ar
+
+
+# ── Leave Permit (تصريح خروج) — book-backed, issue time + duration hours ──────
+
+
+def _permit(**kw):
+    """BookEvent-shaped record: fields carry duration_hours; created_at is the
+    (already local, Asia/Dubai) issue timestamp."""
+    base = dict(
+        fields={"duration_hours": "3"},
+        created_at=datetime(2026, 7, 16, 10, 30),  # Thursday 10:30 AM
+        today=date(2026, 7, 16),
+    )
+    base.update(kw)
+    return SimpleNamespace(**base)
+
+
+def test_leave_permit_full_text_en():
+    text = st.render_text(nf.EVENT_LEAVE_PERMIT, "en", _permit(), _emp(msg_language="en"))
+    assert text == (
+        "Dear John Smith,\n"
+        "Your leave permit has been issued.\n"
+        "Valid from 10:30 AM on Thursday, 16/07/2026, for 3 hour(s).\n"
+        "Al Wathba Rehabilitation Centre"
+    )
+
+
+def test_leave_permit_full_text_ar():
+    text = st.render_text(nf.EVENT_LEAVE_PERMIT, "ar", _permit(), _emp())
+    assert text == (
+        "عزيزي جون سميث،\n"
+        "تم إصدار تصريح خروجك.\n"
+        "اعتباراً من الساعة 10:30 صباحاً يوم الخميس 16/07/2026، ولمدة 3 ساعة.\n"
+        "إدارة مركز الإصلاح والتأهيل بالوثبة"
+    )
+    # No English leaks (digits/time separators carry no ascii letters).
+    assert not _has_ascii_letter(text)
+
+
+def test_leave_permit_afternoon_uses_pm_marker():
+    rec = _permit(created_at=datetime(2026, 7, 16, 14, 5))  # 2:05 PM
+    en = st.render_text(nf.EVENT_LEAVE_PERMIT, "en", rec, _emp(msg_language="en"))
+    assert "Valid from 2:05 PM on" in en
+    ar = st.render_text(nf.EVENT_LEAVE_PERMIT, "ar", rec, _emp())
+    assert "الساعة 2:05 مساءً" in ar
+
+
+# ── Administrative Leave (إجازة إدارية) — Leave-backed, period + days ──────────
+
+
+def test_admin_leave_full_text_en():
+    emp = _emp(msg_language="en")
+    leave = Leave(
+        id=61,
+        employee_id="G1",
+        leave_type="Administrative Leave - إجازة إدارية",
+        start_date=date(2026, 7, 20),
+        end_date=date(2026, 7, 22),
+        days=3,
+    )
+    text = st.render_text(nf.EVENT_ADMIN_LEAVE, "en", leave, emp)
+    assert text == (
+        "Dear John Smith,\n"
+        "Your administrative leave has been issued.\n"
+        "Period: 20/07/2026 to 22/07/2026 (3 day(s)).\n"
+        "Al Wathba Rehabilitation Centre"
+    )
+
+
+def test_admin_leave_full_text_ar():
+    emp = _emp()
+    leave = Leave(
+        id=62,
+        employee_id="G1",
+        leave_type="Administrative Leave",  # english-only stored value
+        start_date=date(2026, 7, 20),
+        end_date=date(2026, 7, 22),
+        days=3,
+    )
+    text = st.render_text(nf.EVENT_ADMIN_LEAVE, "ar", leave, emp)
+    assert text == (
+        "عزيزي جون سميث،\n"
+        "تم إصدار إجازتك الإدارية.\n"
+        "الفترة: 20/07/2026 إلى 22/07/2026 (3 يوم).\n"
+        "إدارة مركز الإصلاح والتأهيل بالوثبة"
+    )
+    assert not _has_ascii_letter(text)

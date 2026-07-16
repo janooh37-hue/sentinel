@@ -164,10 +164,13 @@ def test_book_event_constants():
                 "passport_release",
                 "warning",
                 "resignation",
+                "leave_permit",
             }
         )
         == nf.BOOK_EVENTS
     )
+    # Administrative Leave is leave-backed, so it is NOT a book event.
+    assert "admin_leave" not in nf.BOOK_EVENTS
 
 
 def test_template_events_map():
@@ -179,6 +182,7 @@ def test_template_events_map():
         "Passport Release Form": nf.EVENT_PASSPORT_RELEASE,
         "Warning Form": nf.EVENT_WARNING,
         "Resignation Letter": nf.EVENT_RESIGNATION,
+        "Leave Permit Form": nf.EVENT_LEAVE_PERMIT,
     }
     assert set(nf.TEMPLATE_EVENTS.values()) == nf.BOOK_EVENTS
 

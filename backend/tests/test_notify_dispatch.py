@@ -552,3 +552,160 @@ def test_ending_reminders_sent_row_still_dedups(db_session, monkeypatch):
     n = nd.send_ending_reminders(db_session, today=_date(2026, 6, 28))
     assert n == 0
     assert sent == []
+
+
+# ── Leave Permit / Administrative Leave routing (spec 2026-07-16) ─────────────
+
+
+def test_leave_permit_form_maps_to_book_event():
+    """Leave Permit rides the book path (its hours live on the book version);
+    Administrative Leave does NOT (it rides the Leave row it creates)."""
+    from app.services import notify_format as nf
+
+    assert nf.TEMPLATE_EVENTS["Leave Permit Form"] == "leave_permit"
+    assert "leave_permit" in nf.BOOK_EVENTS
+    assert "Administrative Leave Form" not in nf.TEMPLATE_EVENTS
+    assert "admin_leave" not in nf.BOOK_EVENTS
+
+
+def test_send_leave_status_admin_leave_swaps_to_admin_leave(db_session, monkeypatch):
+    """An Administrative Leave row (born Approved) maps to the admin_leave event,
+    not the generic leave_approved."""
+    from app.services import notify_dispatch as nd
+
+    emp = Employee(
+        id="GAL",
+        name_en="Admin Tester",
+        name_ar="إداري",
+        msg_language="en",
+        contact="0501234500",
+    )
+    db_session.add(emp)
+    db_session.commit()
+    leave = Leave(
+        employee_id="GAL",
+        leave_type="Administrative Leave - إجازة إدارية",
+        start_date=date(2026, 7, 20),
+        end_date=date(2026, 7, 22),
+        days=3,
+        status="Approved",
+    )
+    db_session.add(leave)
+    db_session.commit()
+
+    captured: list[str] = []
+    monkeypatch.setattr(
+        nd, "send_for_event", lambda db, event, rid, *, sent_by: captured.append(event)
+    )
+    nd._send_leave_status(db_session, leave.id, sent_by=None)
+    assert captured == ["admin_leave"]
+
+
+def test_auto_send_for_book_leave_permit_renders_hours_and_local_time(db_session, monkeypatch):
+    """Generating a Leave Permit Form sends the permit body: issue time is the
+    book's created_at converted UTC→Asia/Dubai, plus duration_hours."""
+    from app.db.models import Book, BookCategory, BookVersion
+    from app.services import notify_dispatch as nd
+    from app.services import openwa_client
+
+    emp = Employee(
+        id="GLP",
+        name_en="Permit Tester",
+        name_ar="تصريح",
+        msg_language="en",
+        contact="0501234501",
+    )
+    db_session.add(emp)
+    if db_session.get(BookCategory, "HR") is None:
+        db_session.add(BookCategory(id="HR", prefix="HR"))
+    db_session.flush()
+    book = Book(category_id="HR", ref_number="HR-7001", employee_id="GLP")
+    db_session.add(book)
+    db_session.flush()
+    db_session.add(
+        BookVersion(
+            book_id=book.id,
+            version_no=1,
+            template_id="Leave Permit Form",
+            fields={"duration_hours": "3"},
+        )
+    )
+    db_session.commit()
+    book.created_at = datetime(2026, 7, 16, 6, 30)  # 06:30 UTC → 10:30 Asia/Dubai
+    db_session.commit()
+
+    monkeypatch.setattr(nd, "_autosend_enabled", lambda db: True)
+    monkeypatch.setattr(openwa_client, "is_registered", lambda p: True)
+    monkeypatch.setattr(
+        openwa_client, "send", lambda p, t: openwa_client.SendResult(ok=True, message_id="m")
+    )
+
+    row = nd.auto_send_for_book(db_session, book.id, sent_by=None)
+    assert row is not None
+    assert row.event_type == "leave_permit"
+    assert "Your leave permit has been issued." in (row.body or "")
+    assert "Valid from 10:30 AM on Thursday, 16/07/2026, for 3 hour(s)." in (row.body or "")
+
+
+def test_auto_send_for_book_admin_leave_routes_via_leave_row(db_session, monkeypatch):
+    """Generating an Administrative Leave Form routes by the Leave row it created
+    (doc.leave_id) and sends the admin_leave body."""
+    from app.db.models import Book, BookCategory, BookVersion, Document
+    from app.services import notify_dispatch as nd
+    from app.services import openwa_client
+
+    emp = Employee(
+        id="GAL2",
+        name_en="Admin Two",
+        name_ar="إداري ٢",
+        msg_language="ar",
+        contact="0501234502",
+    )
+    db_session.add(emp)
+    if db_session.get(BookCategory, "HR") is None:
+        db_session.add(BookCategory(id="HR", prefix="HR"))
+    db_session.flush()
+    leave = Leave(
+        employee_id="GAL2",
+        leave_type="Administrative Leave - إجازة إدارية",
+        start_date=date(2026, 7, 20),
+        end_date=date(2026, 7, 22),
+        days=3,
+        status="Approved",
+    )
+    db_session.add(leave)
+    db_session.flush()
+    doc = Document(
+        employee_id="GAL2",
+        template_id="Administrative Leave Form",
+        ref_number="HR-7002",
+        docx_path="x.docx",
+        submission_id="sub-admin-1",
+        leave_id=leave.id,
+    )
+    db_session.add(doc)
+    db_session.flush()
+    book = Book(category_id="HR", ref_number="HR-7002", employee_id="GAL2")
+    db_session.add(book)
+    db_session.flush()
+    db_session.add(
+        BookVersion(
+            book_id=book.id,
+            version_no=1,
+            template_id="Administrative Leave Form",
+            document_id=doc.id,
+        )
+    )
+    db_session.commit()
+
+    monkeypatch.setattr(nd, "_autosend_enabled", lambda db: True)
+    monkeypatch.setattr(openwa_client, "is_registered", lambda p: True)
+    monkeypatch.setattr(
+        openwa_client, "send", lambda p, t: openwa_client.SendResult(ok=True, message_id="m")
+    )
+
+    row = nd.auto_send_for_book(db_session, book.id, sent_by=None)
+    assert row is not None
+    assert row.event_type == "admin_leave"
+    assert "تم إصدار إجازتك الإدارية." in (row.body or "")
+    assert "الفترة: 20/07/2026 إلى 22/07/2026 (3 يوم)." in (row.body or "")
