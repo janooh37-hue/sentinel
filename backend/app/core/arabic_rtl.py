@@ -935,6 +935,16 @@ def _set_table_rtl_and_width(tbl: Any, content_twips: int, col_twips: list[int],
             gc.set(qn("w:w"), str(w))
 
 
+def _paragraph_is_visually_empty(p: Any) -> bool:
+    """True when the paragraph would render as blank: no visible text
+    (NBSP counts as visible — str.strip() removes it, so check explicitly),
+    no images, no breaks."""
+    text = "".join(r.text or "" for r in p.runs)
+    if text.strip() or chr(0xA0) in text:
+        return False
+    return not p._p.xpath(".//w:drawing | .//w:br | .//w:pict")
+
+
 def _render_table(
     node: Any,
     blk: _BlockFmt,
@@ -1020,22 +1030,35 @@ def _render_table(
             for rr in para.runs:
                 rr.text = ""
             _apply_block_fmt(para, cblk)
-            # Hug the text: zero the inherited paragraph spacing so rows don't
-            # render taller than their content. An explicit cascaded line-height
-            # (cblk.line_height) still wins; otherwise force single spacing.
-            para.paragraph_format.space_before = Pt(0)
-            para.paragraph_format.space_after = Pt(0)
-            if not cblk.line_height:
-                para.paragraph_format.line_spacing = 1.0
 
             if cell_node is not None:
+                # first_used=False so the first block child (<p> — Word wraps
+                # every cell's text in one) REUSES this paragraph instead of
+                # leaving it empty. This was the 3-paragraphs-per-cell bug.
                 sub: _WalkState = {
                     "anchor": para,
                     "current": para,
-                    "first_used": True,
+                    "first_used": False,
                     "parent_obj": para._parent,
                 }
                 _walk_inline(cell_node, para, fmt, cblk, sub, default_family, default_size)
+                # Drop blank paragraphs the walker left behind (the speculative
+                # paragraph allocated after each block child). Keep >= 1.
+                paras = list(cell.paragraphs)
+                removable = [q for q in paras if _paragraph_is_visually_empty(q)]
+                if len(removable) == len(paras):
+                    removable = removable[1:]
+                for q in removable:
+                    q._p.getparent().remove(q._p)
+
+            # Hug EVERY remaining paragraph: zero spacing so rows don't render
+            # taller than their content. An explicit line-height (set by
+            # _apply_block_fmt from cascaded CSS) still wins.
+            for q in cell.paragraphs:
+                q.paragraph_format.space_before = Pt(0)
+                q.paragraph_format.space_after = Pt(0)
+                if q.paragraph_format.line_spacing is None:
+                    q.paragraph_format.line_spacing = 1.0
 
             # Cell background shading from cascaded background / background-color.
             style = _parse_inline_style(eff_style)
