@@ -26,6 +26,13 @@ export function SelectField({
   const isAr = i18n.language.startsWith('ar')
   const label = isAr ? label_ar : label_en
 
+  // Options are stored as slugs (the HR Request Form's `doc_selections` — the
+  // only field routed here — uses keys like `salary_pay_slip`). Localize each
+  // through the hr.docType.* table in both locales; unknown values fall back to
+  // the raw slug so nothing renders blank.
+  const optionLabel = (opt: string): string =>
+    t(`hr.docType.${opt}`, { defaultValue: opt })
+
   const {
     control,
     formState: { errors },
@@ -53,7 +60,7 @@ export function SelectField({
             <SelectContent>
               {options.map((opt) => (
                 <SelectItem key={opt} value={opt}>
-                  {opt}
+                  {optionLabel(opt)}
                 </SelectItem>
               ))}
             </SelectContent>
