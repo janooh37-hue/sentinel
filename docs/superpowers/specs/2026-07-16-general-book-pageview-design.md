@@ -65,8 +65,12 @@ width (current behavior). RTL tables keep `jc=right`.
 python-docx `cell.merge()` over a grid-occupancy map. Column fractions come
 from `colgroup` or the first span-free row; else spanned widths split evenly.
 
-Page breaks need **no backend change** (`mce-pagebreak` → `w:br type="page"`
-already works); a regression test pins it.
+**Page-break correction (found during planning):** the editor's pagebreak
+plugin serializes breaks as the HTML comment `<!-- pagebreak -->` (its
+default separator) — the backend only detects `<div class="mce-pagebreak">`,
+and the walker renders comment text as literal content. So the button today
+inserts junk text, not a break. Fix in the walker: comment nodes are never
+rendered; comments containing `pagebreak` emit a real `w:br type="page"`.
 
 ### Part 2 — Frontend A4 page view
 
