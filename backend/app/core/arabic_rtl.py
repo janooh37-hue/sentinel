@@ -484,6 +484,24 @@ def _parse_line_height(value: str) -> float | None:
     return None
 
 
+_LEN_TWIPS_PER_UNIT = {"pt": 20.0, "px": 15.0, "cm": 567.0, "mm": 56.7, "in": 1440.0}
+
+
+def _parse_len_twips(value: str) -> int | None:
+    """Parse a CSS/HTML length to twips. Bare numbers are treated as px
+    (HTML width/height attribute convention). Returns None when unparseable
+    or non-positive."""
+    m = re.match(r"\s*([\d.]+)\s*(pt|px|cm|mm|in)?\s*$", str(value).lower())
+    if not m:
+        return None
+    try:
+        n = float(m.group(1))
+    except ValueError:
+        return None
+    tw = int(n * _LEN_TWIPS_PER_UNIT[m.group(2) or "px"])
+    return tw if tw > 0 else None
+
+
 def _apply_block_fmt(paragraph: Any, blk: _BlockFmt) -> None:
     from docx.enum.text import WD_ALIGN_PARAGRAPH
 
@@ -834,19 +852,19 @@ def _table_rtl(node: Any, attrs: dict[str, str]) -> bool:
     return direction != "ltr"
 
 
-def _collect_table_rows(node: Any) -> list[list[Any]]:
-    """Return the table's rows (``<tr>`` lxml elements grouped per row) from
-    direct children and any ``<thead>/<tbody>/<tfoot>`` section wrappers."""
-    rows: list[list[Any]] = []
+def _collect_table_rows(node: Any) -> list[tuple[Any, list[Any]]]:
+    """Return ``(tr_element, cells)`` pairs from direct children and any
+    ``<thead>/<tbody>/<tfoot>`` section wrappers, in document order."""
+    rows: list[tuple[Any, list[Any]]] = []
     for child in node:
         ctag = (child.tag or "").lower() if isinstance(child.tag, str) else ""
         if ctag == "tr":
-            rows.append([c for c in child if _is_cell(c)])
+            rows.append((child, [c for c in child if _is_cell(c)]))
         elif ctag in ("thead", "tbody", "tfoot"):
             for tr in child:
                 tr_tag = (tr.tag or "").lower() if isinstance(tr.tag, str) else ""
                 if tr_tag == "tr":
-                    rows.append([c for c in tr if _is_cell(c)])
+                    rows.append((tr, [c for c in tr if _is_cell(c)]))
     return rows
 
 
@@ -871,7 +889,7 @@ def _table_content_twips(state: _WalkState) -> int:
     return content_twips if content_twips > 0 else 9360
 
 
-def _col_fractions(node: Any, rows: list[list[Any]], n: int) -> list[float]:
+def _col_fractions(node: Any, rows: list[tuple[Any, list[Any]]], n: int) -> list[float]:
     """Return ``n`` column fractions (sum 1.0) from ``<colgroup><col>`` widths,
     falling back to the first row's cell widths, then to an even split."""
     raw: list[str] = []
@@ -889,7 +907,7 @@ def _col_fractions(node: Any, rows: list[list[Any]], n: int) -> list[float]:
             style = _parse_inline_style(a.get("style", ""))
             raw.append(style.get("width") or a.get("width", ""))
     if len([w for w in raw if w]) != n:
-        first = rows[0] if rows else []
+        first = rows[0][1] if rows else []
         raw = [_parse_inline_style(dict(c.attrib).get("style", "")).get("width", "") for c in first]
     nums: list[float] = []
     for w in raw:
@@ -970,7 +988,7 @@ def _render_table(
 
     rows = _collect_table_rows(node)
     n_rows = len(rows)
-    n_cols = max((len(r) for r in rows), default=0)
+    n_cols = max((len(cells) for _tr, cells in rows), default=0)
     if n_rows == 0 or n_cols == 0:
         return
 
@@ -985,9 +1003,31 @@ def _render_table(
     tbl.autofit = False
     _set_table_rtl_and_width(tbl, content_twips, col_twips, rtl)
 
-    for r_idx, row_cells in enumerate(rows):
-        row_attrs = dict(row_cells[0].getparent().attrib) if row_cells else {}
+    for r_idx, (tr_el, row_cells) in enumerate(rows):
+        row_attrs = dict(tr_el.attrib)
         row_style = row_attrs.get("style", "")
+
+        trPr = tbl.rows[r_idx]._tr.get_or_add_trPr()
+        # A row never splits across two pages — half-rows read terribly.
+        if trPr.find(qn("w:cantSplit")) is None:
+            trPr.append(OxmlElement("w:cantSplit"))
+        # Explicit source row height -> minimum ("atLeast") height, so
+        # Word-compact rows keep their sizing but content can still grow.
+        raw_h = _parse_inline_style(row_style).get("height") or row_attrs.get("height", "")
+        tw = _parse_len_twips(raw_h) if raw_h else None
+        if tw:
+            h_el = OxmlElement("w:trHeight")
+            h_el.set(qn("w:val"), str(tw))
+            h_el.set(qn("w:hRule"), "atLeast")
+            trPr.append(h_el)
+        # <thead> rows repeat at the top of every page the table spans.
+        parent_tag = tr_el.getparent().tag if tr_el.getparent() is not None else ""
+        if (
+            isinstance(parent_tag, str)
+            and parent_tag.lower() == "thead"
+            and trPr.find(qn("w:tblHeader")) is None
+        ):
+            trPr.append(OxmlElement("w:tblHeader"))
         for c_idx in range(n_cols):
             cell = tbl.rows[r_idx].cells[c_idx]
             cell_node = row_cells[c_idx] if c_idx < len(row_cells) else None
