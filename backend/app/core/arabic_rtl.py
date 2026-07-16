@@ -47,10 +47,10 @@ log = logging.getLogger(__name__)
 class _WalkState(TypedDict, total=False):
     """State threaded through ``_walk_*`` and ``_state_new_paragraph``."""
 
-    anchor: Any          # original paragraph passed in (required at runtime)
-    current: Any         # paragraph currently being filled (required at runtime)
-    first_used: bool     # True once the anchor paragraph has been used
-    parent_obj: Any      # parent container of ``anchor`` (cell body, etc.)
+    anchor: Any  # original paragraph passed in (required at runtime)
+    current: Any  # paragraph currently being filled (required at runtime)
+    first_used: bool  # True once the anchor paragraph has been used
+    parent_obj: Any  # parent container of ``anchor`` (cell body, etc.)
 
 
 def stamp_run(run: Any, family: str) -> None:
@@ -157,18 +157,32 @@ def _contains_arabic(text: str) -> bool:
 # Tables render as real RTL Word tables (see _render_table).
 # ---------------------------------------------------------------------------
 
-_PT_PER_PX: float = 0.75        # 1 px @ 96 dpi = 0.75 pt
-_PT_PER_EM: float = 12.0        # body default; em maps relative to this
-_TWIPS_PER_PX: float = 15.0     # 1 px @ 96 dpi = 15 twips
+_PT_PER_PX: float = 0.75  # 1 px @ 96 dpi = 0.75 pt
+_PT_PER_EM: float = 12.0  # body default; em maps relative to this
+_TWIPS_PER_PX: float = 15.0  # 1 px @ 96 dpi = 15 twips
 
 _HTML_NAMED_COLORS: dict[str, str | None] = {
-    "black": "000000", "white": "FFFFFF", "red": "FF0000",
-    "green": "008000", "blue": "0000FF", "yellow": "FFFF00",
-    "cyan": "00FFFF", "magenta": "FF00FF", "gray": "808080",
-    "grey": "808080", "silver": "C0C0C0", "maroon": "800000",
-    "olive": "808000", "purple": "800080", "teal": "008080",
-    "navy": "000080", "lime": "00FF00", "aqua": "00FFFF",
-    "fuchsia": "FF00FF", "orange": "FFA500", "pink": "FFC0CB",
+    "black": "000000",
+    "white": "FFFFFF",
+    "red": "FF0000",
+    "green": "008000",
+    "blue": "0000FF",
+    "yellow": "FFFF00",
+    "cyan": "00FFFF",
+    "magenta": "FF00FF",
+    "gray": "808080",
+    "grey": "808080",
+    "silver": "C0C0C0",
+    "maroon": "800000",
+    "olive": "808000",
+    "purple": "800080",
+    "teal": "008080",
+    "navy": "000080",
+    "lime": "00FF00",
+    "aqua": "00FFFF",
+    "fuchsia": "FF00FF",
+    "orange": "FFA500",
+    "pink": "FFC0CB",
     "transparent": None,
 }
 
@@ -247,8 +261,14 @@ class _Fmt:
     """Inline character format inherited down the HTML tree."""
 
     __slots__ = (
-        "bold", "color", "family", "highlight", "italic", "size_pt",
-        "strike", "underline",
+        "bold",
+        "color",
+        "family",
+        "highlight",
+        "italic",
+        "size_pt",
+        "strike",
+        "underline",
     )
 
     def __init__(self) -> None:
@@ -281,7 +301,7 @@ class _BlockFmt:
 
     def __init__(self) -> None:
         self.align: str | None = None
-        self.rtl: bool = True   # default RTL — this editor is for Arabic
+        self.rtl: bool = True  # default RTL — this editor is for Arabic
         self.indent_left_px: int = 0
         self.indent_right_px: int = 0
         self.line_height: float | None = None  # unit-less CSS line-height multiplier
@@ -301,11 +321,25 @@ _INLINE_TAGS_ITALIC = {"i", "em"}
 _INLINE_TAGS_UNDERLINE = {"u", "ins"}
 _INLINE_TAGS_STRIKE = {"s", "strike", "del"}
 _BLOCK_TAGS = {
-    "p", "div", "h1", "h2", "h3", "h4", "h5", "h6", "blockquote",
-    "pre", "li",
+    "p",
+    "div",
+    "h1",
+    "h2",
+    "h3",
+    "h4",
+    "h5",
+    "h6",
+    "blockquote",
+    "pre",
+    "li",
 }
 _HEADING_SIZE_PT: dict[str, float] = {
-    "h1": 24.0, "h2": 18.0, "h3": 14.0, "h4": 12.0, "h5": 10.0, "h6": 8.0,
+    "h1": 24.0,
+    "h2": 18.0,
+    "h3": 14.0,
+    "h4": 12.0,
+    "h5": 10.0,
+    "h6": 8.0,
 }
 
 
@@ -355,8 +389,7 @@ def _merge_fmt_from_attrs(fmt: _Fmt, tag: str, attrs: dict[str, str]) -> _Fmt:
     if "font-style" in style:
         out.italic = style["font-style"].lower() in ("italic", "oblique")
     if "text-decoration" in style or "text-decoration-line" in style:
-        td = (style.get("text-decoration") or
-              style.get("text-decoration-line") or "").lower()
+        td = (style.get("text-decoration") or style.get("text-decoration-line") or "").lower()
         if "underline" in td:
             out.underline = True
         if "line-through" in td:
@@ -369,9 +402,7 @@ def _merge_fmt_from_attrs(fmt: _Fmt, tag: str, attrs: dict[str, str]) -> _Fmt:
         if col:
             out.color = col
     if "background-color" in style or "background" in style:
-        bg = _hparse_color(
-            style.get("background-color") or style.get("background", "")
-        )
+        bg = _hparse_color(style.get("background-color") or style.get("background", ""))
         if bg:
             out.highlight = bg
 
@@ -531,6 +562,7 @@ def _embed_html_image(paragraph: Any, src: str, width_px: int) -> bool:
         # Try as a local filesystem path (absolute path or no-scheme URL).
         try:
             from pathlib import Path as _P
+
             p = _P(src)
             if p.exists():
                 img_bytes = p.read_bytes()
@@ -710,6 +742,17 @@ def _walk_inline(
     if node.text:
         _emit_text_into_paragraph(paragraph, node.text, fmt, default_family, default_size)
     for child in node:
+        if not isinstance(child.tag, str):
+            # Comment / processing-instruction node — never narrative text.
+            # HugeRTE's pagebreak plugin serializes breaks as the literal
+            # comment `<!-- pagebreak -->` (its default pagebreak_separator).
+            if "pagebreak" in ((child.text or "").lower()):
+                _emit_page_break(state)
+                paragraph = _state_new_paragraph(state)
+                _apply_block_fmt(paragraph, blk)
+            if child.tail:
+                _emit_text_into_paragraph(paragraph, child.tail, fmt, default_family, default_size)
+            continue
         tag = (child.tag or "").lower() if isinstance(child.tag, str) else ""
         attrs: dict[str, str] = dict(child.attrib) if hasattr(child, "attrib") else {}
         if tag == "br":
@@ -817,10 +860,7 @@ def _col_fractions(node: Any, rows: list[list[Any]], n: int) -> list[float]:
             raw.append(style.get("width") or a.get("width", ""))
     if len([w for w in raw if w]) != n:
         first = rows[0] if rows else []
-        raw = [
-            _parse_inline_style(dict(c.attrib).get("style", "")).get("width", "")
-            for c in first
-        ]
+        raw = [_parse_inline_style(dict(c.attrib).get("style", "")).get("width", "") for c in first]
     nums: list[float] = []
     for w in raw:
         m = re.match(r"\s*([\d.]+)", str(w))
@@ -883,6 +923,7 @@ def _render_table(
     table → row → cell (cell wins).
     """
     from docx.shared import Pt
+
     attrs: dict[str, str] = dict(node.attrib) if hasattr(node, "attrib") else {}
     rtl = _table_rtl(node, attrs)
     table_style = attrs.get("style", "")
@@ -964,9 +1005,7 @@ def _render_table(
                     "first_used": True,
                     "parent_obj": para._parent,
                 }
-                _walk_inline(
-                    cell_node, para, fmt, cblk, sub, default_family, default_size
-                )
+                _walk_inline(cell_node, para, fmt, cblk, sub, default_family, default_size)
 
             # Cell background shading from cascaded background / background-color.
             style = _parse_inline_style(eff_style)
@@ -1107,7 +1146,21 @@ def html_to_docx(
         _emit_text_into_paragraph(p, root.text, _Fmt(), default_family, default_size)
 
     for child in root:
-        ctag = (child.tag or "").lower() if isinstance(child.tag, str) else ""
+        if not isinstance(child.tag, str):
+            # Comment / PI at body level: pagebreak comments become real
+            # page breaks; anything else is skipped (tail still handled).
+            if "pagebreak" in ((child.text or "").lower()):
+                _emit_page_break(state)
+            if child.tail and child.tail.strip():
+                cur = state["current"]
+                if not hasattr(cur, "add_run"):
+                    p = _state_new_paragraph(state)
+                    _apply_block_fmt(p, blk)
+                else:
+                    p = cur
+                _emit_text_into_paragraph(p, child.tail, _Fmt(), default_family, default_size)
+            continue
+        ctag = child.tag.lower()
         if ctag in (_BLOCK_TAGS | {"ul", "ol", "table"}):
             _walk_block(child, blk, state, default_family, default_size)
         else:
