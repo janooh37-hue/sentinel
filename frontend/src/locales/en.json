@@ -1814,7 +1814,6 @@
     "recipientManagementTitle": "Recipient management",
     "recipientNamePlaceholder": "Recipient name",
     "recipientNameArPlaceholder": "Name (Arabic, optional)",
-    "annualCompanionHint": "Will also generate Leave Undertaking",
     "pickerLoadError": "Could not load list",
     "groups": {
       "Applicant": "Applicant",

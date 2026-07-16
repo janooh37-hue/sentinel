@@ -7,7 +7,7 @@
  * Type mapping:
  *   text / textarea      → z.string().min(1) if required, else optional
  *   date                 → z.string().regex(ISO date)
- *   select / leave_type  → z.enum(options) if required with opts, else string
+ *   select               → z.enum(options) if required with opts, else string
  *   checkbox / hand_sign → z.boolean()
  *   number               → z.number() (finite; NaN rejected)
  *   manager_picker       → z.number() if required, else .nullable().optional()
@@ -57,8 +57,7 @@ function buildShape(fields: TemplateField[], t: TFunction): Record<string, AnyZo
             )
         break
 
-      case 'select':
-      case 'leave_type': {
+      case 'select': {
         const opts = options ?? []
         if (required && opts.length > 0) {
           shape[id] = z.enum(opts as [string, ...string[]])

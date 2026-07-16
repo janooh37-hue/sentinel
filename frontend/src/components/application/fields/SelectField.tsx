@@ -26,12 +26,16 @@ export function SelectField({
   const isAr = i18n.language.startsWith('ar')
   const label = isAr ? label_ar : label_en
 
-  // Options are stored as slugs (the HR Request Form's `doc_selections` — the
-  // only field routed here — uses keys like `salary_pay_slip`). Localize each
-  // through the hr.docType.* table in both locales; unknown values fall back to
-  // the raw slug so nothing renders blank.
+  // SelectField renders every `select` field, and the two that exist store
+  // their options differently: the HR Request Form's `doc_selections` uses slugs
+  // (`salary_pay_slip` → hr.docType.*) while the Leave Application Form's
+  // `leave_type` uses full names ("Annual Leave" → leaves.type.*). The two
+  // key-sets are disjoint, so try leaves.type.* first, then hr.docType.*, then
+  // fall back to the raw stored value so nothing renders blank.
   const optionLabel = (opt: string): string =>
-    t(`hr.docType.${opt}`, { defaultValue: opt })
+    t(`leaves.type.${opt}`, {
+      defaultValue: t(`hr.docType.${opt}`, { defaultValue: opt }),
+    })
 
   const {
     control,

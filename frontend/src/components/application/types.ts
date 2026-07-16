@@ -25,7 +25,6 @@ export type FieldType =
   | _BackendFieldType
   | 'checkbox'          // not in current backend but TemplateForm handles it
   | 'number'            // not in current backend but TemplateForm handles it
-  | 'leave_type'        // not in current backend but TemplateForm handles it
   | 'select'            // not in current backend but TemplateForm handles it
   | 'recipient_picker'  // general-book recipient combobox (forms-fix)
   | 'recipient_multi_picker' // general-book CC: multi-select recipient chips

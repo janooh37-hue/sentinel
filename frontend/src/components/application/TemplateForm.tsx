@@ -29,7 +29,6 @@ import { DateField } from './fields/DateField'
 import { SelectField } from './fields/SelectField'
 import { NumberField } from './fields/NumberField'
 import { CheckboxField } from './fields/CheckboxField'
-import { LeaveTypeField } from './fields/LeaveTypeField'
 import { ManagerPickerField } from './fields/ManagerPickerField'
 import { SubmitterPickerField } from './fields/SubmitterPickerField'
 import { RecipientPickerField } from './fields/RecipientPickerField'
@@ -151,15 +150,6 @@ function renderField(
 
     case 'checkbox':
       return <CheckboxField key={field.id} {...common} />
-
-    case 'leave_type':
-      return (
-        <LeaveTypeField
-          key={field.id}
-          {...common}
-          options={field.options ?? []}
-        />
-      )
 
     case 'manager_picker':
       return <ManagerPickerField key={field.id} {...common} />
