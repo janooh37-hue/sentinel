@@ -84,3 +84,9 @@ def test_cell_with_both_rowspan_and_colspan():
     assert vm is not None and vm.get(qn("w:val")) == "restart"
     assert t.rows[0].cells[0].text.strip() == "S"
     assert t.rows[2].cells[2].text.strip() == "C"
+
+    # Shadowed tcs removed: each row carries exactly its real cells.
+    # Grid = 3 cols. Row 0: S(gridSpan2) + X -> 2 tcs. Row 1: cont(gridSpan2) + Y -> 2 tcs.
+    # Row 2: A, B, C -> 3 tcs.
+    for r, expected in ((0, 2), (1, 2), (2, 3)):
+        assert len(t.rows[r]._tr.findall(qn("w:tc"))) == expected

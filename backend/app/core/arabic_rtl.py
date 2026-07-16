@@ -1105,11 +1105,21 @@ def _render_table(
     # Pass 1 — stamp ALL rowspan (rs>1) vMerge/gridSpan OOXML while the table
     # is still pristine from add_table (every row has exactly n_cols raw tcs,
     # so raw index == grid index everywhere).
+    #
+    # For combined rowspan+colspan cells we also collect the horizontally-shadowed
+    # raw tcs (indices c_idx+1..c_idx+cs-1 in the origin and each continuation
+    # row) but do NOT remove them yet — removal during pass 1 would shift raw
+    # indices and break subsequent placements in the same pass.  They are removed
+    # in a sweep between pass 1 and pass 2.
+    shadowed_tcs: list[tuple[Any, Any]] = []  # (parent_tr, tc_element)
+
     for _cell_node, r_idx, c_idx, rs, cs in placements:
         if rs <= 1:
             continue
         # Origin row: vMerge=restart (+ optional gridSpan when also colspan).
-        top_tc = tbl.rows[r_idx]._tr.findall(qn("w:tc"))[c_idx]
+        origin_tr = tbl.rows[r_idx]._tr
+        all_tcs = origin_tr.findall(qn("w:tc"))
+        top_tc = all_tcs[c_idx]
         top_tcPr = top_tc.find(qn("w:tcPr"))
         if top_tcPr is None:
             top_tcPr = OxmlElement("w:tcPr")
@@ -1121,9 +1131,14 @@ def _render_table(
             gs = OxmlElement("w:gridSpan")
             gs.set(qn("w:val"), str(cs))
             top_tcPr.append(gs)
+            # Collect the cs-1 shadowed tcs in the origin row.
+            for shadow_c in range(c_idx + 1, c_idx + cs):
+                shadowed_tcs.append((origin_tr, all_tcs[shadow_c]))
         # Continuation rows: vMerge (no val = continue) + optional gridSpan.
         for cont_r in range(r_idx + 1, r_idx + rs):
-            cont_tc = tbl.rows[cont_r]._tr.findall(qn("w:tc"))[c_idx]
+            cont_tr = tbl.rows[cont_r]._tr
+            cont_all_tcs = cont_tr.findall(qn("w:tc"))
+            cont_tc = cont_all_tcs[c_idx]
             cont_tcPr = cont_tc.find(qn("w:tcPr"))
             if cont_tcPr is None:
                 cont_tcPr = OxmlElement("w:tcPr")
@@ -1134,6 +1149,14 @@ def _render_table(
                 gs_c = OxmlElement("w:gridSpan")
                 gs_c.set(qn("w:val"), str(cs))
                 cont_tcPr.append(gs_c)
+                # Collect the cs-1 shadowed tcs in each continuation row.
+                for shadow_c in range(c_idx + 1, c_idx + cs):
+                    shadowed_tcs.append((cont_tr, cont_all_tcs[shadow_c]))
+
+    # Remove shadowed tcs collected above now that pass 1 is complete and raw
+    # indices are no longer needed (pass 2 uses grid indexing via .cells[]).
+    for parent_tr, tc in shadowed_tcs:
+        parent_tr.remove(tc)
 
     # Pass 2 — colspan merges and content filling.  After this pass, raw-tc
     # counts per row no longer match grid columns, so raw-index lookups are done
