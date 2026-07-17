@@ -21,6 +21,7 @@ from sqlalchemy.orm import Session
 from app.api.errors import AppError
 from app.config import get_settings
 from app.core import docx_render, manager_override
+from app.core.book_text import build_search_text, docx_to_text
 from app.core.classifications import (
     classified_ref,
     get_classification,
@@ -298,7 +299,17 @@ def finish_word_session(db: Session, *, user: User, book_id: int) -> Book:
     db.add(version)
 
     # ------------------------------------------------------------------
-    # 5. Mark session finished
+    # 5. Populate search_text from the finished docx (before commit so the
+    #    FTS au trigger fires with the new value).
+    # ------------------------------------------------------------------
+    try:
+        body = docx_to_text(dest)
+    except Exception:
+        body = ""
+    book.search_text = build_search_text(subject=book.subject, ref=book.ref_number, body=body)
+
+    # ------------------------------------------------------------------
+    # 6. Mark session finished
     # ------------------------------------------------------------------
     session.state = "finished"
 

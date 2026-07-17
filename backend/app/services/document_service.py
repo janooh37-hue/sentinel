@@ -39,6 +39,7 @@ from app.api.errors import AppError, NotFoundError, ValidationFailedError
 from app.config import get_settings
 from app.core import form_policy, leave_lifecycle
 from app.core import signature as signature_core
+from app.core.book_text import build_search_text, html_to_text
 from app.core.constants import STAMP_STYLE_HEADER, TEMPLATE_FILES
 from app.core.docx_engine import DocxEngine, aztec_corner_for
 from app.core.pdf_merge import merge_attachments_into_pdf
@@ -1347,6 +1348,8 @@ def generate_document(
                 if isinstance(_entered_subject, str) and _entered_subject.strip()
                 else (f"{template_id} — {_emp_name}" if _emp_name else template_id)
             )
+            _body_raw = fields.get("body")
+            _body_text = html_to_text(_body_raw) if isinstance(_body_raw, str) else ""
             book_row = Book(
                 category_id=cat_code,
                 ref_number=raw_ref,
@@ -1358,6 +1361,7 @@ def generate_document(
                 doc_path=_rel(docx_path) or str(docx_path),
                 created_at=ts.replace(tzinfo=None),
                 deleted_at=None,
+                search_text=build_search_text(subject=_subject, ref=raw_ref, body=_body_text),
             )
             db.add(book_row)
             db.flush()
