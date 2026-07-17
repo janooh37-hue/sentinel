@@ -557,6 +557,9 @@ export interface NotificationCounts {
 // ``attachment_paths`` (Task 1 / migration 0023) is not yet in api.types.ts;
 // hand-merge it until ``npm run gen:api`` regenerates the schema.
 export type BookCreate = components['schemas']['BookCreate']
+// word-books: session types
+export type WordBookCreate = components['schemas']['WordBookCreate']
+export type WordSessionRead = components['schemas']['WordSessionRead']
 export type BookUpdate = components['schemas']['BookUpdate']
 export type BookListResponse = components['schemas']['BookListResponse']
 export type BookCategoryRead = components['schemas']['BookCategoryRead']
@@ -1197,6 +1200,21 @@ export const api = {
   getBookVersionFields: (bookId: number, versionId: number): Promise<{ fields: Record<string, unknown> }> =>
     request<{ fields: Record<string, unknown> }>('GET', `/books/${bookId}/versions/${versionId}/fields`),
   createBook: (body: BookCreate) => request<BookRead>('POST', '/books', body),
+
+  // --- word-session endpoints (feature/word-books) ---
+  /** GET /books/classifications — full government classification list. */
+  listBookClassifications: () =>
+    request<components['schemas']['ClassificationListResponse']>('GET', '/books/classifications'),
+  /** POST /books/word-sessions — create a draft book + open-in-Word session.
+   *  Returns WordSessionRead with a word_url for WebDAV/Word Direct Access. */
+  createWordBook: (body: components['schemas']['WordBookCreate']) =>
+    request<components['schemas']['WordSessionRead']>('POST', '/books/word-sessions', body),
+  /** POST /books/{id}/word-sessions/finish — commit the Word-edited draft. */
+  finishWordSession: (bookId: number) =>
+    request<BookRead>('POST', `/books/${bookId}/word-sessions/finish`),
+  /** DELETE /books/{id}/word-sessions — discard the Word draft (no commit). */
+  discardWordSession: (bookId: number) =>
+    request<BookRead>('DELETE', `/books/${bookId}/word-sessions`),
   updateBook: (id: number, body: BookUpdate) =>
     request<BookRead>('PATCH', `/books/${id}`, body),
   deleteBook: (id: number) => request<void>('DELETE', `/books/${id}`),

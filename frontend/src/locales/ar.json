@@ -950,6 +950,12 @@
       "overrideBanner_few": "طلب {{count}} مراجعين إجراء تعديلات — لا يزال بإمكانك التوقيع والاعتماد.",
       "overrideBanner_many": "طلب {{count}} مراجعًا إجراء تعديلات — لا يزال بإمكانك التوقيع والاعتماد.",
       "overrideBanner_other": "طلب {{count}} مراجعًا إجراء تعديلات — لا يزال بإمكانك التوقيع والاعتماد."
+    },
+    "word": {
+      "classification": "التبويب",
+      "noClassification": "بدون تبويب",
+      "bodyInWord": "نص الكتاب يُكتب في Word",
+      "createAndOpen": "إنشاء وفتح في Word"
     }
   },
   "ledger": {

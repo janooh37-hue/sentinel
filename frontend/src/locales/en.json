@@ -890,6 +890,12 @@
       "requestChanges": "Request changes",
       "overrideBanner_one": "{{count}} reviewer requested changes — you can still sign & approve.",
       "overrideBanner_other": "{{count}} reviewers requested changes — you can still sign & approve."
+    },
+    "word": {
+      "classification": "Classification",
+      "noClassification": "No classification",
+      "bodyInWord": "The body is written in Word",
+      "createAndOpen": "Create & open in Word"
     }
   },
   "ledger": {

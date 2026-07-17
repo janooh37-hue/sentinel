@@ -34,7 +34,7 @@ import { ChevronLeft, ChevronRight, Eye, FileText, Mail, Pencil, QrCode, RotateC
 import { toast } from 'sonner'
 
 import { api, apiErrorMessage } from '@/lib/api'
-import type { DocumentGenerateRequest, StagedAttachmentRead, TemplateMeta } from '@/lib/api'
+import type { DocumentGenerateRequest, StagedAttachmentRead, TemplateMeta, WordSessionRead } from '@/lib/api'
 import type { ExtractionResponse } from '@/lib/extraction'
 import type { TemplateDetailResponse, TemplateField } from '@/components/application/types'
 import { buildZodSchema } from '@/lib/applicationFormSchema'
@@ -160,6 +160,15 @@ export function ApplicationPage(): React.JSX.Element {
   const [previewIsCommitted, setPreviewIsCommitted] = useState(false)
   const [submitError, setSubmitError] = useState<string | null>(null)
   const [query, setQuery] = useState('')
+  // General Book Word-mode: classification code selected by the picker.
+  // null = no classification (normal rich-editor mode); non-null = Word mode.
+  const [classificationCode, setClassificationCode] = useState<string | null>(null)
+  // Task 9 placeholder: after createWordBook succeeds, the session is stored here
+  // so <WordHandoffDialog session={pendingWordSession} /> (Task 9) can mount and
+  // guide finish/discard. The variable is read below in the TODO placeholder node.
+  const [pendingWordSession, setPendingWordSession] = useState<WordSessionRead | null>(null)
+  // Suppress unused-var: Task 9 will wire this to <WordHandoffDialog>.
+  void pendingWordSession
   // Draft/Save split: tracks which mode the in-flight job is in. The toast +
   // localStorage-clear in JobStatus.onDone branch on this. Stored in a ref
   // (not state) so we don't re-render the form just to flip the flag.
@@ -336,6 +345,25 @@ export function ApplicationPage(): React.JSX.Element {
     },
   })
 
+  // Word-session mutation — General Book Word mode: creates the book + DAV session,
+  // then opens Word via word_url. Task 9 will mount <WordHandoffDialog> via
+  // `pendingWordSession`; for now we just store it and navigate.
+  const wordSessionMutation = useMutation({
+    mutationFn: (body: import('@/lib/api').WordBookCreate) => api.createWordBook(body),
+    onSuccess: (res) => {
+      void qc.invalidateQueries({ queryKey: ['books'] })
+      setPendingWordSession(res)
+      // TODO(task-9): mount <WordHandoffDialog session={pendingWordSession} /> here.
+      // For now, launch Word directly. Task 9 will intercept before this redirect
+      // and present finish/discard options.
+      window.location.href = res.word_url
+    },
+    onError: (err) => {
+      setSubmitError(err instanceof ApiError ? `${err.code}: ${err.message}` : String(err))
+      toast.error(apiErrorMessage(err))
+    },
+  })
+
   // Build the generation payload from current form values. Separated from the
   // submit handler so Preview + Save share the exact same transformation.
   const buildPayload = (
@@ -416,6 +444,24 @@ export function ApplicationPage(): React.JSX.Element {
         toast.error(t('application.noEmployeeSelected'))
         return
       }
+
+      // General Book Word mode: classification selected → create a Word session
+      // instead of the normal generate flow. Only valid for the committed path
+      // (no preview for Word books). Preview button is hidden in this mode.
+      if (isAdminCategory && classificationCode != null) {
+        const managerField = schema?.fields.find((f) => f.type === 'manager_picker')
+        const recipientField = schema?.fields.find((f) => f.type === 'recipient_picker')
+        const ccField = schema?.fields.find((f) => f.type === 'recipient_multi_picker')
+        wordSessionMutation.mutate({
+          classification_code: classificationCode,
+          recipient_id: recipientField ? ((values[recipientField.id] as number | null | undefined) ?? null) : null,
+          subject: typeof values['subject'] === 'string' ? values['subject'].trim() : '',
+          cc: Array.isArray(values[ccField?.id ?? '']) ? (values[ccField!.id] as string[]) : [],
+          manager_id: managerField ? ((values[managerField.id] as number | null | undefined) ?? null) : null,
+        })
+        return
+      }
+
       const payload = buildPayload(values, commit)
       if (!payload) return
       pendingCommitRef.current = commit
@@ -478,6 +524,8 @@ export function ApplicationPage(): React.JSX.Element {
     setPreviewIsCommitted(false)
     setLastSaved(null)
     setSubmitError(null)
+    setClassificationCode(null)
+    setPendingWordSession(null)
   }, [form])
 
   // Restore the draft once the template + schema-query are in hand. Running
@@ -587,6 +635,8 @@ export function ApplicationPage(): React.JSX.Element {
     setLastSaved(null)
     setActiveTab('fields')
     setSubmitError(null)
+    setClassificationCode(null)
+    setPendingWordSession(null)
   }, [form])
 
   // Ctrl+N — clear and pick again from the gallery.
@@ -823,6 +873,8 @@ export function ApplicationPage(): React.JSX.Element {
                         employeeId={selectedEmployee}
                         initialExtraction={pendingInjection}
                         onExtractionConsumed={() => setPendingInjection(undefined)}
+                        classificationCode={classificationCode}
+                        onClassificationChange={setClassificationCode}
                       />
 
                       {/* Attachments — named slots from the form policy plus
@@ -834,35 +886,62 @@ export function ApplicationPage(): React.JSX.Element {
                         onChange={handleAttachmentsChange}
                       />
 
-                      {/* Action row — Preview only. Save book lives on the
-                          Preview tab and is enabled once the preview job
-                          finishes successfully, so the operator literally
-                          cannot save without first seeing the rendered DOCX.
-                          Min-height 44px keeps the tap target accessible on
-                          mobile (CLAUDE.md). */}
+                      {/* Action row: Word mode → "Create & open in Word"; normal → Preview. */}
                       <div className="mt-7 flex flex-wrap items-center justify-between gap-2.5 border-t border-hairline pt-4">
-                        <p className="text-[0.78em] text-muted-foreground">
-                          {t('application.previewFirstHint')}
-                        </p>
-                        <Button
-                          type="submit"
-                          variant="commit"
-                          size="commit"
-                          disabled={
-                            (!isAdminCategory && !selectedEmployee) || generateMutation.isPending
-                          }
-                          className="min-h-11 disabled:cursor-not-allowed disabled:opacity-50"
-                        >
-                          <Eye className="h-3.5 w-3.5" strokeWidth={1.8} aria-hidden />
-                          {generateMutation.isPending && !pendingCommitRef.current
-                            ? t('common.loading')
-                            : t('application.actions.preview')}
-                          {isAr ? (
-                            <ArrowLeft className="h-3.5 w-3.5" strokeWidth={1.8} aria-hidden />
-                          ) : (
-                            <ArrowRight className="h-3.5 w-3.5" strokeWidth={1.8} aria-hidden />
-                          )}
-                        </Button>
+                        {classificationCode != null ? (
+                          // Word mode — single action: create the book and open it in Word.
+                          // Word-brand blue (#185abd) is reserved for open-in-Word actions.
+                          <>
+                            <p className="text-[0.78em] text-muted-foreground">
+                              {t('books.word.bodyInWord')}
+                            </p>
+                            <Button
+                              type="submit"
+                              size="commit"
+                              disabled={
+                                (!isAdminCategory && !selectedEmployee) ||
+                                wordSessionMutation.isPending
+                              }
+                              className="min-h-11 disabled:cursor-not-allowed disabled:opacity-50"
+                              style={{ backgroundColor: '#185abd', color: '#fff' }}
+                            >
+                              {wordSessionMutation.isPending
+                                ? t('common.loading')
+                                : t('books.word.createAndOpen')}
+                              {isAr ? (
+                                <ArrowLeft className="h-3.5 w-3.5" strokeWidth={1.8} aria-hidden />
+                              ) : (
+                                <ArrowRight className="h-3.5 w-3.5" strokeWidth={1.8} aria-hidden />
+                              )}
+                            </Button>
+                          </>
+                        ) : (
+                          // Normal mode — Preview then Save flow.
+                          <>
+                            <p className="text-[0.78em] text-muted-foreground">
+                              {t('application.previewFirstHint')}
+                            </p>
+                            <Button
+                              type="submit"
+                              variant="commit"
+                              size="commit"
+                              disabled={
+                                (!isAdminCategory && !selectedEmployee) || generateMutation.isPending
+                              }
+                              className="min-h-11 disabled:cursor-not-allowed disabled:opacity-50"
+                            >
+                              <Eye className="h-3.5 w-3.5" strokeWidth={1.8} aria-hidden />
+                              {generateMutation.isPending && !pendingCommitRef.current
+                                ? t('common.loading')
+                                : t('application.actions.preview')}
+                              {isAr ? (
+                                <ArrowLeft className="h-3.5 w-3.5" strokeWidth={1.8} aria-hidden />
+                              ) : (
+                                <ArrowRight className="h-3.5 w-3.5" strokeWidth={1.8} aria-hidden />
+                              )}
+                            </Button>
+                          </>
+                        )}
                       </div>
                     </form>
                   )}

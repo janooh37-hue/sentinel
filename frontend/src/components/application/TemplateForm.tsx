@@ -43,6 +43,7 @@ import { ItemsTableField } from './fields/ItemsTableField'
 import { EmployeesTableField } from './fields/EmployeesTableField'
 import { ViolationCheckboxesField } from './fields/ViolationCheckboxesField'
 import { ViolationComboField } from './fields/ViolationComboField'
+import { ClassificationField } from './fields/ClassificationField'
 
 export interface TemplateFormProps {
   templateId: string
@@ -57,6 +58,12 @@ export interface TemplateFormProps {
   /** Called once after the initialExtraction has been consumed, so the parent
    *  can clear the pending injection and avoid re-seeding on re-renders. */
   onExtractionConsumed?: () => void
+  /** General Book Word-mode: currently selected classification code (or null).
+   *  When non-null the arabic_rich_full body editor is hidden and an info panel
+   *  is shown instead. Passed down from ApplicationPage which owns the state. */
+  classificationCode?: string | null
+  /** Called when the user changes the classification picker. */
+  onClassificationChange?: (code: string | null) => void
 }
 
 /**
@@ -260,8 +267,11 @@ export function TemplateForm({
   employeeId,
   initialExtraction,
   onExtractionConsumed,
+  classificationCode,
+  onClassificationChange,
 }: TemplateFormProps): React.JSX.Element {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
+  const isAr = i18n.language.startsWith('ar')
 
   // --- Scan-to-fill state ---
   // Seed from initialExtraction (intake injection) on mount; the parent clears
@@ -351,10 +361,17 @@ export function TemplateForm({
     setSaveIbanToEmployee(false)
   }
 
+  // General Book Word-mode: detect the arabic_rich_full field.
+  const isGeneralBook = schema.fields.some((f) => f.type === 'arabic_rich_full')
+  // In Word mode (classification selected) hide the body editor.
+  const wordMode = isGeneralBook && classificationCode != null
+
   // Group fields by their `group` attribute.
+  // In Word mode, skip the arabic_rich_full body field — it's in Word.
   // Ungrouped fields land in a synthetic "_default" bucket, rendered first.
   const groups = new Map<string, TemplateField[]>()
   for (const field of schema.fields) {
+    if (wordMode && field.type === 'arabic_rich_full') continue
     const groupKey = field.group ?? '_default'
     const existing = groups.get(groupKey)
     if (existing) {
@@ -401,6 +418,33 @@ export function TemplateForm({
                 </CapabilityGate>
               )}
             </>
+          )}
+        </div>
+      )}
+
+      {/* General Book: classification picker + Word-mode body panel */}
+      {isGeneralBook && onClassificationChange && (
+        <div className="mb-4">
+          <ClassificationField
+            name="classification_code"
+            label_en="Classification"
+            label_ar={t('books.word.classification')}
+            value={classificationCode}
+            onChange={onClassificationChange}
+          />
+          {wordMode && (
+            // Info panel shown when the body will be written in Word, not in the
+            // rich editor. Word-brand blue (#185abd) accent is reserved for
+            // open-in-Word surfaces per the mockup.
+            <div
+              className="mt-3 flex items-center gap-2 rounded-md border px-3 py-2 text-[0.84em]"
+              style={{ borderColor: '#185abd33', backgroundColor: '#185abd0d', color: '#185abd' }}
+              role="note"
+              dir={isAr ? 'rtl' : 'ltr'}
+            >
+              <span aria-hidden style={{ fontWeight: 700 }}>W</span>
+              {t('books.word.bodyInWord')}
+            </div>
           )}
         </div>
       )}
