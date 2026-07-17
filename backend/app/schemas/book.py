@@ -158,6 +158,45 @@ class ImportedDocRead(BaseModel):
     format: str  # lowercase extension without dot, e.g. "pdf" | "docx"
 
 
+class BookEditSessionRead(BaseModel):
+    """Active Word-editing session on a Book — only present when state='active'."""
+
+    user_id: int
+    user_name: str | None = None
+    state: str
+    last_put_at: datetime | None = None
+    created_at: datetime
+
+
+class ClassificationRead(BaseModel):
+    code: str
+    tab: int
+    name_ar: str
+    name_en: str
+    unit_ar: str
+
+
+class ClassificationListResponse(BaseModel):
+    items: list[ClassificationRead]
+
+
+class WordBookCreate(BaseModel):
+    classification_code: str | None = None
+    recipient_id: int | None = None
+    subject: str
+    cc: list[str] = Field(default_factory=list)
+    manager_id: int | None = None
+
+
+class WordSessionRead(BaseModel):
+    book_id: int
+    ref_number: str
+    token: str
+    filename: str
+    word_url: str
+    dav_url: str
+
+
 class BookRead(ORMBase):
     id: int
     ref_number: str
@@ -180,6 +219,14 @@ class BookRead(ORMBase):
     deleted_at: datetime | None
     priority: str
     approval_state: str
+    # Government classification code, e.g. "5/1"; None for plain books.
+    classification_code: str | None = None
+    # Non-None when a manager discarded the draft (ref stays in register).
+    voided_at: datetime | None = None
+    # True when the book has zero committed versions and is not voided.
+    is_draft: bool = False
+    # Active Word-editing session, if any.
+    edit_session: BookEditSessionRead | None = None
     # Per-form signing path (core.form_policy) — derived from the current
     # version's template_id where versions are enriched; None for legacy
     # books / unknown templates.

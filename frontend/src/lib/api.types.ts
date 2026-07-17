@@ -1358,6 +1358,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/books/classifications": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Classifications
+         * @description Return the full government classification list (any authenticated user).
+         */
+        get: operations["list_classifications_api_v1_books_classifications_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/books/word-sessions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Create Word Session
+         * @description Create a classified (or plain) General Book with a Word-editable working docx.
+         */
+        post: operations["create_word_session_api_v1_books_word_sessions_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/books": {
         parameters: {
             query?: never;
@@ -3683,6 +3723,25 @@ export interface components {
             /** Note */
             note?: string | null;
         };
+        /**
+         * BookEditSessionRead
+         * @description Active Word-editing session on a Book — only present when state='active'.
+         */
+        BookEditSessionRead: {
+            /** User Id */
+            user_id: number;
+            /** User Name */
+            user_name?: string | null;
+            /** State */
+            state: string;
+            /** Last Put At */
+            last_put_at?: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+        };
         /** BookListResponse */
         BookListResponse: {
             /** Items */
@@ -3727,6 +3786,16 @@ export interface components {
             priority: string;
             /** Approval State */
             approval_state: string;
+            /** Classification Code */
+            classification_code?: string | null;
+            /** Voided At */
+            voided_at?: string | null;
+            /**
+             * Is Draft
+             * @default false
+             */
+            is_draft: boolean;
+            edit_session?: components["schemas"]["BookEditSessionRead"] | null;
             /** Signing Path */
             signing_path?: string | null;
             /** Submitted By User Id */
@@ -3840,6 +3909,24 @@ export interface components {
             description: string;
             /** Default Roles */
             default_roles: string[];
+        };
+        /** ClassificationListResponse */
+        ClassificationListResponse: {
+            /** Items */
+            items: components["schemas"]["ClassificationRead"][];
+        };
+        /** ClassificationRead */
+        ClassificationRead: {
+            /** Code */
+            code: string;
+            /** Tab */
+            tab: number;
+            /** Name Ar */
+            name_ar: string;
+            /** Name En */
+            name_en: string;
+            /** Unit Ar */
+            unit_ar: string;
         };
         /** CompletenessRead */
         CompletenessRead: {
@@ -6813,6 +6900,34 @@ export interface components {
             status?: string | null;
             /** Doc Path */
             doc_path?: string | null;
+        };
+        /** WordBookCreate */
+        WordBookCreate: {
+            /** Classification Code */
+            classification_code?: string | null;
+            /** Recipient Id */
+            recipient_id?: number | null;
+            /** Subject */
+            subject: string;
+            /** Cc */
+            cc?: string[];
+            /** Manager Id */
+            manager_id?: number | null;
+        };
+        /** WordSessionRead */
+        WordSessionRead: {
+            /** Book Id */
+            book_id: number;
+            /** Ref Number */
+            ref_number: string;
+            /** Token */
+            token: string;
+            /** Filename */
+            filename: string;
+            /** Word Url */
+            word_url: string;
+            /** Dav Url */
+            dav_url: string;
         };
     };
     responses: never;
@@ -9880,6 +9995,72 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_classifications_api_v1_books_classifications_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ClassificationListResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_word_session_api_v1_books_word_sessions_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WordBookCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WordSessionRead"];
+                };
             };
             /** @description Validation Error */
             422: {

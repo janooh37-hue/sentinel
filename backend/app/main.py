@@ -167,7 +167,9 @@ def create_app() -> FastAPI:
 
     # WebDAV for Word editing sessions — no prefix, no auth_gate:
     # token-in-URL auth; Word's HTTP stack sends no cookies.
-    app.include_router(dav.router)
+    # include_in_schema=False: multi-method api_route emits duplicate operation IDs
+    # in the OpenAPI spec, breaking tsc. DAV is not a REST API surface.
+    app.include_router(dav.router, include_in_schema=False)
 
     app.include_router(system_v1.router, prefix="/api/v1")
     app.include_router(auth_v1.router, prefix="/api/v1")

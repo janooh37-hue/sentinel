@@ -29,7 +29,8 @@ from sqlalchemy.orm import Session
 from app.api._responses import maybe_base64
 from app.api.deps import get_current_user, require_capability
 from app.core import form_policy
-from app.db.models import Book, BookVersion, User
+from app.core.classifications import CLASSIFICATIONS
+from app.db.models import Book, BookEditSession, BookVersion, User
 from app.db.session import get_db
 from app.schemas.book import (
     ApproverOptionRead,
@@ -38,16 +39,21 @@ from app.schemas.book import (
     BookCategoryRead,
     BookCreate,
     BookDecisionRequest,
+    BookEditSessionRead,
     BookListResponse,
     BookRead,
     BookSubmitRequest,
     BookUpdate,
     BookVersionRead,
+    ClassificationListResponse,
+    ClassificationRead,
     ReviewersAddRequest,
     ReviewRequest,
+    WordBookCreate,
+    WordSessionRead,
 )
 from app.schemas.notify import NotifyMessageRead as NotifyMessageRead
-from app.services import book_service
+from app.services import book_service, word_book_service
 from app.services.book_service import LIST_DEFAULT_LIMIT, LIST_MAX_LIMIT
 
 router = APIRouter(prefix="/books", tags=["books"])
@@ -84,7 +90,74 @@ def list_book_categories(
 
 
 # ---------------------------------------------------------------------------
-# Books
+# Books — classification list + word-session endpoints
+# ---------------------------------------------------------------------------
+
+
+@router.get("/classifications", response_model=ClassificationListResponse)
+def list_classifications(
+    _user: Annotated[User, Depends(get_current_user)],
+) -> ClassificationListResponse:
+    """Return the full government classification list (any authenticated user)."""
+    return ClassificationListResponse(
+        items=[
+            ClassificationRead(
+                code=c.code,
+                tab=c.tab,
+                name_ar=c.name_ar,
+                name_en=c.name_en,
+                unit_ar=c.unit_ar,
+            )
+            for c in CLASSIFICATIONS
+        ]
+    )
+
+
+@router.post("/word-sessions", response_model=WordSessionRead, status_code=status.HTTP_201_CREATED)
+def create_word_session(
+    payload: WordBookCreate,
+    db: Annotated[Session, Depends(get_db)],
+    user: Annotated[User, Depends(require_capability("books.manage"))],
+) -> WordSessionRead:
+    """Create a classified (or plain) General Book with a Word-editable working docx."""
+    info = word_book_service.create_word_book(
+        db,
+        user=user,
+        classification_code=payload.classification_code,
+        recipient_id=payload.recipient_id,
+        subject=payload.subject,
+        cc=payload.cc,
+        manager_id=payload.manager_id,
+    )
+    return WordSessionRead(
+        book_id=info.book_id,
+        ref_number=info.ref_number,
+        token=info.token,
+        filename=info.filename,
+        word_url=info.word_url,
+        dav_url=info.dav_url,
+    )
+
+
+def _fill_draft_fields(item: BookRead, row: Book, db: Session) -> None:
+    """Populate classification_code, voided_at, is_draft, edit_session on item."""
+
+    item.classification_code = row.classification_code
+    item.voided_at = row.voided_at
+    item.is_draft = len(row.versions) == 0 and row.voided_at is None
+    active = db.query(BookEditSession).filter_by(book_id=row.id, state="active").one_or_none()
+    if active is not None:
+        item.edit_session = BookEditSessionRead(
+            user_id=active.user_id,
+            user_name=book_service.resolve_user_name_by_id(db, active.user_id),
+            state=active.state,
+            last_put_at=active.last_put_at,
+            created_at=active.created_at,
+        )
+
+
+# ---------------------------------------------------------------------------
+# Books — list
 # ---------------------------------------------------------------------------
 
 
@@ -117,7 +190,7 @@ def list_books(
     for r in rows:
         item = BookRead.model_validate(r)
         item.subject = book_service.derive_subject(r)
-        items.append(_enrich_path_fields(item, r))
+        items.append(_enrich_path_fields(item, r, db))
     return BookListResponse(
         items=items,
         total=total,
@@ -126,7 +199,7 @@ def list_books(
     )
 
 
-def _enrich_path_fields(item: BookRead, row: Book) -> BookRead:
+def _enrich_path_fields(item: BookRead, row: Book, db: Session) -> BookRead:
     """Same enrichment as GET /books/{id}: every BookRead-returning surface needs
     signing_path (path-aware seal labels) plus the current version's
     signed_source/signed_pdf_url (scan-back seal + signed paper)."""
@@ -140,6 +213,7 @@ def _enrich_path_fields(item: BookRead, row: Book) -> BookRead:
     # v3-imported records: surface the file copied into the employee vault so
     # it's viewable/downloadable (no generated Document on these books).
     item.imported_doc = book_service.imported_document_of(row)
+    _fill_draft_fields(item, row, db)
     return item
 
 
@@ -153,7 +227,7 @@ def get_book_by_ref(
     deep-link. Declared before ``/{book_id}`` so the literal ``by-ref`` segment
     isn't swallowed by the int path param."""
     row = book_service.get_book_by_ref(db, ref)
-    return _enrich_path_fields(BookRead.model_validate(row), row)
+    return _enrich_path_fields(BookRead.model_validate(row), row, db)
 
 
 @router.get("/awaiting", response_model=list[BookRead])
@@ -177,7 +251,7 @@ def list_awaiting(
             name_by_id.get(r.submitted_by_user_id) if r.submitted_by_user_id is not None else None
         )
         item.your_step_kind = book_service.your_step_kind(r, user.id)
-        out.append(_enrich_path_fields(item, r))
+        out.append(_enrich_path_fields(item, r, db))
     return out
 
 
@@ -271,6 +345,7 @@ def get_book(
     item.sms = [
         NotifyMessageRead.model_validate(m) for m in book_service.messages_for_book(db, row)
     ]
+    _fill_draft_fields(item, row, db)
     return item
 
 
