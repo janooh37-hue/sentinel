@@ -142,3 +142,58 @@ def test_dav_empty_put_rejected(client: TestClient, api_db: Session, tmp_path):
 
     # File should remain unchanged
     assert p.read_bytes() == b"PK-original"
+
+
+# ---------------------------------------------------------------------------
+# New tests: collection OPTIONS, collection PROPFIND, RFC-complete LOCK/PROPFIND
+# ---------------------------------------------------------------------------
+
+
+def test_dav_collection_options_advertises_dav(client: TestClient):
+    """OPTIONS on the collection path (trailing slash, no filename) must return DAV headers.
+
+    This is the root-cause regression test: the old /dav/{token}/{filename} route
+    returned 404 for /dav/{token}/ because filename was empty and the converter
+    didn't match.  The new :path converter fixes that.
+    """
+    # No session needed — OPTIONS skips token validation.
+    r = client.options("/dav/any-token/")
+    assert r.status_code == 200
+    assert r.headers["dav"] == "1,2"
+    assert r.headers["ms-author-via"] == "DAV"
+
+
+def test_dav_collection_propfind(client: TestClient, api_db: Session, tmp_path):
+    """PROPFIND on the collection path returns 207 with a <D:collection/> resourcetype."""
+    p = tmp_path / "doc.docx"
+    p.write_bytes(b"PK")
+    _make_session(api_db, working_path=str(p), token="tok_col")
+
+    r = client.request("PROPFIND", "/dav/tok_col/")
+    assert r.status_code == 207
+    assert b"<D:collection/>" in r.content
+
+
+def test_dav_lock_body_is_rfc_complete(client: TestClient, api_db: Session, tmp_path):
+    """LOCK response body must be a full RFC-4918 activelock and header must carry the token."""
+    p = tmp_path / "doc.docx"
+    p.write_bytes(b"PK")
+    _make_session(api_db, working_path=str(p), token="tok_lock")
+
+    r = client.request("LOCK", "/dav/tok_lock/doc.docx", content=b"<lockinfo/>")
+    assert r.status_code == 200
+    assert b"opaquelocktoken:tok_lock" in r.content
+    assert b"<D:write/>" in r.content
+    assert b"<D:exclusive/>" in r.content
+    assert "opaquelocktoken" in r.headers["lock-token"]
+
+
+def test_dav_file_propfind_has_supportedlock(client: TestClient, api_db: Session, tmp_path):
+    """File PROPFIND must include <D:supportedlock> so Word knows it can lock."""
+    p = tmp_path / "doc.docx"
+    p.write_bytes(b"PK")
+    _make_session(api_db, working_path=str(p), token="tok_pf")
+
+    r = client.request("PROPFIND", "/dav/tok_pf/doc.docx")
+    assert r.status_code == 207
+    assert b"<D:supportedlock>" in r.content
