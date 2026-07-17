@@ -48,11 +48,17 @@ async def dav_handler(
 
     path = sess.working_path
 
+    # Guard: if working_path does not exist, return 404 before any read/write operations.
+    if not os.path.exists(path):
+        return Response(status_code=404)
+
     if method in ("GET", "HEAD"):
         return FileResponse(path, filename=filename)
 
     if method == "PUT":
         body = await request.body()
+        if not body:
+            return Response(status_code=400)
         tmp = path + ".tmp"
         with open(tmp, "wb") as fh:
             fh.write(body)

@@ -110,3 +110,35 @@ def test_dav_rejects_bad_or_closed_token(client: TestClient, api_db: Session, tm
     p.write_bytes(b"PK")
     _make_session(api_db, working_path=str(p), token="tok9", state="finished")
     assert client.put("/dav/tok9/l.docx", content=b"X").status_code == 404
+
+
+def test_dav_missing_working_file_404(client: TestClient, api_db: Session, tmp_path):
+    """Missing working_path should return 404 on GET, HEAD, and PROPFIND."""
+    nonexistent = str(tmp_path / "missing.docx")
+    _make_session(api_db, working_path=nonexistent, token="tok_missing")
+
+    # GET on missing file → 404
+    r = client.get("/dav/tok_missing/missing.docx")
+    assert r.status_code == 404
+
+    # HEAD on missing file → 404
+    r = client.head("/dav/tok_missing/missing.docx")
+    assert r.status_code == 404
+
+    # PROPFIND on missing file → 404
+    r = client.request("PROPFIND", "/dav/tok_missing/missing.docx")
+    assert r.status_code == 404
+
+
+def test_dav_empty_put_rejected(client: TestClient, api_db: Session, tmp_path):
+    """Empty PUT body should return 400 and not truncate the file."""
+    p = tmp_path / "data.docx"
+    p.write_bytes(b"PK-original")
+    _make_session(api_db, working_path=str(p), token="tok_empty")
+
+    # PUT with empty body → 400
+    r = client.put("/dav/tok_empty/data.docx", content=b"")
+    assert r.status_code == 400
+
+    # File should remain unchanged
+    assert p.read_bytes() == b"PK-original"
