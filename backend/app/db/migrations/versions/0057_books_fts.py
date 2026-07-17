@@ -64,7 +64,7 @@ UPGRADE_SQL: list[str] = [
     END;
     """,
     """
-    CREATE TRIGGER books_au AFTER UPDATE ON books BEGIN
+    CREATE TRIGGER books_au AFTER UPDATE OF search_text ON books BEGIN
       INSERT INTO books_fts(books_fts, rowid, search_text)
       VALUES ('delete', old.id, COALESCE(old.search_text, ''));
       INSERT INTO books_fts(rowid, search_text)
