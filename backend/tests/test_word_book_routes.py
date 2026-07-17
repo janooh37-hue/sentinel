@@ -123,13 +123,11 @@ def test_classifications_shape(api_db, monkeypatch, tmp_path):
     assert set(first.keys()) >= {"code", "tab", "name_ar", "name_en", "unit_ar"}
 
 
-def test_classifications_requires_auth(api_db, monkeypatch, tmp_path):
-    """Unauthenticated (anon) user gets 401. We test this by overriding to None."""
-    from app.api.deps import get_optional_user
-
+def test_classifications_requires_auth(api_db):
+    """No session cookie → get_current_user raises 401."""
     app = create_app()
     app.dependency_overrides[get_db] = lambda: api_db
-    app.dependency_overrides[get_optional_user] = lambda: None
+    # No get_current_user override — real dependency runs, no cookie → 401.
     c = TestClient(app, raise_server_exceptions=True)
     resp = c.get("/api/v1/books/classifications")
     assert resp.status_code == 401
@@ -213,3 +211,34 @@ def test_book_read_draft_fields(api_db, monkeypatch, tmp_path):
     assert detail["edit_session"] is not None
     assert detail["edit_session"]["user_id"] == user.id
     assert detail["edit_session"]["state"] == "active"
+
+
+def test_list_books_batches_edit_sessions(api_db, monkeypatch, tmp_path):
+    """GET /books returns correct is_draft + edit_session for each row via batch load.
+
+    Two word-session books created by the same user (both get active sessions).
+    List must show edit_session populated for both, is_draft True for both.
+    """
+    _seed_gs(api_db)
+    admin_user = _make_user(api_db, role="admin", email="admin_batch@test.ae")
+    c = _client(api_db, admin_user, monkeypatch, tmp_path)
+
+    ids = []
+    for subject in ("Batch book A", "Batch book B"):
+        r = c.post(
+            "/api/v1/books/word-sessions",
+            json={"classification_code": None, "subject": subject},
+        )
+        assert r.status_code == 201, r.text
+        ids.append(r.json()["book_id"])
+
+    resp = c.get("/api/v1/books")
+    assert resp.status_code == 200, resp.text
+    items = {item["id"]: item for item in resp.json()["items"]}
+
+    for book_id in ids:
+        assert book_id in items, f"book {book_id} missing from list"
+        row = items[book_id]
+        assert row["is_draft"] is True
+        assert row["edit_session"] is not None
+        assert row["edit_session"]["state"] == "active"

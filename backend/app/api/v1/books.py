@@ -139,13 +139,25 @@ def create_word_session(
     )
 
 
-def _fill_draft_fields(item: BookRead, row: Book, db: Session) -> None:
-    """Populate classification_code, voided_at, is_draft, edit_session on item."""
+def _fill_draft_fields(
+    item: BookRead,
+    row: Book,
+    db: Session,
+    by_book: dict[int, BookEditSession] | None = None,
+) -> None:
+    """Populate classification_code, voided_at, is_draft, edit_session on item.
 
+    ``by_book`` is a pre-fetched {book_id: active_session} map for batch callers
+    (list endpoints).  Pass ``None`` for single-row callers — a direct query is
+    used instead (no N+1 on a single row).
+    """
     item.classification_code = row.classification_code
     item.voided_at = row.voided_at
     item.is_draft = len(row.versions) == 0 and row.voided_at is None
-    active = db.query(BookEditSession).filter_by(book_id=row.id, state="active").one_or_none()
+    if by_book is not None:
+        active: BookEditSession | None = by_book.get(row.id)
+    else:
+        active = db.query(BookEditSession).filter_by(book_id=row.id, state="active").one_or_none()
     if active is not None:
         item.edit_session = BookEditSessionRead(
             user_id=active.user_id,
@@ -186,11 +198,23 @@ def list_books(
         limit=limit,
         offset=offset,
     )
+    # Batch-load active edit sessions — one query for all rows (avoids N+1).
+    by_book: dict[int, BookEditSession] = {}
+    if rows:
+        sessions = (
+            db.query(BookEditSession)
+            .filter(
+                BookEditSession.book_id.in_([r.id for r in rows]),
+                BookEditSession.state == "active",
+            )
+            .all()
+        )
+        by_book = {s.book_id: s for s in sessions}
     items: list[BookRead] = []
     for r in rows:
         item = BookRead.model_validate(r)
         item.subject = book_service.derive_subject(r)
-        items.append(_enrich_path_fields(item, r, db))
+        items.append(_enrich_path_fields(item, r, db, by_book=by_book))
     return BookListResponse(
         items=items,
         total=total,
@@ -199,10 +223,18 @@ def list_books(
     )
 
 
-def _enrich_path_fields(item: BookRead, row: Book, db: Session) -> BookRead:
+def _enrich_path_fields(
+    item: BookRead,
+    row: Book,
+    db: Session,
+    by_book: dict[int, BookEditSession] | None = None,
+) -> BookRead:
     """Same enrichment as GET /books/{id}: every BookRead-returning surface needs
     signing_path (path-aware seal labels) plus the current version's
-    signed_source/signed_pdf_url (scan-back seal + signed paper)."""
+    signed_source/signed_pdf_url (scan-back seal + signed paper).
+
+    ``by_book`` is forwarded to ``_fill_draft_fields`` for batch list callers.
+    """
     current = row.versions[-1] if row.versions else None
     item.signing_path = form_policy.signing_path_of(
         current.template_id if current is not None else None
@@ -213,7 +245,7 @@ def _enrich_path_fields(item: BookRead, row: Book, db: Session) -> BookRead:
     # v3-imported records: surface the file copied into the employee vault so
     # it's viewable/downloadable (no generated Document on these books).
     item.imported_doc = book_service.imported_document_of(row)
-    _fill_draft_fields(item, row, db)
+    _fill_draft_fields(item, row, db, by_book=by_book)
     return item
 
 
@@ -244,6 +276,18 @@ def list_awaiting(
     name_by_id = book_service.resolve_names_by_ids(
         db, {r.submitted_by_user_id for r in rows if r.submitted_by_user_id is not None}
     )
+    # Batch-load active edit sessions — one query for all rows (avoids N+1).
+    by_book: dict[int, BookEditSession] = {}
+    if rows:
+        sessions = (
+            db.query(BookEditSession)
+            .filter(
+                BookEditSession.book_id.in_([r.id for r in rows]),
+                BookEditSession.state == "active",
+            )
+            .all()
+        )
+        by_book = {s.book_id: s for s in sessions}
     out: list[BookRead] = []
     for r in rows:
         item = BookRead.model_validate(r)
@@ -251,7 +295,7 @@ def list_awaiting(
             name_by_id.get(r.submitted_by_user_id) if r.submitted_by_user_id is not None else None
         )
         item.your_step_kind = book_service.your_step_kind(r, user.id)
-        out.append(_enrich_path_fields(item, r, db))
+        out.append(_enrich_path_fields(item, r, db, by_book=by_book))
     return out
 
 
