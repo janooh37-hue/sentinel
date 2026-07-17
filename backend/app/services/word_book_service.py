@@ -1,4 +1,4 @@
-"""word_book_service — create a classified (or plain) Word-editing book session.
+﻿"""word_book_service — create a classified (or plain) Word-editing book session.
 
 Creates a Book row + reserved ref + a rendered working docx, then opens an
 active BookEditSession so Word can edit it over WebDAV.
@@ -245,7 +245,7 @@ def finish_word_session(db: Session, *, user: User, book_id: int) -> Book:
     template_id = _template_id_for_book(book)
     now = datetime.now(UTC).replace(tzinfo=None)
     out_dir = _output_dir_for_admin(template_id)
-    filename = _build_docx_filename(template_id, book.ref_number, now)
+    filename = _build_docx_filename(template_id, book.ref_number.replace("/", "-"), now)
     dest = out_dir / filename
     # Avoid collisions (unlikely but possible if clock has low resolution)
     suffix = 0

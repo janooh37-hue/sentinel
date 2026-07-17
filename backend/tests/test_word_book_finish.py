@@ -354,3 +354,81 @@ def test_finish_no_active_session_raises_409(db_session, tmp_path, monkeypatch):
 
     assert exc_info.value.code == "NO_ACTIVE_SESSION"
     assert exc_info.value.http_status == 409
+
+
+def test_finish_classified_book_slashed_ref_no_nested_dirs(db_session, tmp_path, monkeypatch):
+    """Classified book with a slashed ref (e.g. 1/5/GSSG/1) must not create nested dirs.
+
+    Before the fix, finish_word_session passed ref_number verbatim to
+    _build_docx_filename, whose space-strip left the '/' intact, turning the
+    filename into a nested path that shutil.move raised FileNotFoundError on.
+    """
+    from datetime import UTC, datetime
+
+    from app.db.models import BookCategory
+    from app.services import word_book_service
+
+    _dummy_pdf = tmp_path / "dummy.pdf"
+    _dummy_pdf.write_bytes(b"%PDF fake")
+    monkeypatch.setattr(word_book_service, "get_settings", lambda: _settings(tmp_path))
+    monkeypatch.setattr(
+        "app.services.word_book_service.convert_docx_to_pdf",
+        lambda p: _dummy_pdf,
+    )
+
+    # Seed the "C" classified category
+    if db_session.get(BookCategory, "C") is None:
+        db_session.add(BookCategory(id="C", prefix="C"))
+        db_session.commit()
+
+    user = _user(db_session)
+
+    # Build a classified Book with a slashed ref directly (mirrors production format)
+    slashed_ref = "1/5/GSSG/1"
+    book = Book(
+        category_id="C",
+        ref_number=slashed_ref,
+        subject="classified test book",
+        approval_state="none",
+        submitted_by_user_id=user.id,
+        classification_code="5/1",
+    )
+    db_session.add(book)
+    db_session.flush()
+
+    # Create the working file with the slug name (same as create_word_book does)
+    working_dir = tmp_path / "data" / "editing" / f"book-{book.id}"
+    working_dir.mkdir(parents=True, exist_ok=True)
+    working_path = working_dir / f"{slashed_ref.replace('/', '-')}.docx"
+    working_path.write_bytes(b"PK fake classified docx")
+
+    session = BookEditSession(
+        book_id=book.id,
+        user_id=user.id,
+        token=secrets.token_urlsafe(32),
+        working_path=str(working_path),
+        state="active",
+        last_put_at=datetime.now(UTC).replace(tzinfo=None),
+    )
+    db_session.add(session)
+    db_session.commit()
+    db_session.refresh(book)
+
+    # Must not raise FileNotFoundError (the regression)
+    result = word_book_service.finish_word_session(db_session, user=user, book_id=book.id)
+    assert result.id == book.id
+
+    v = db_session.query(BookVersion).filter_by(book_id=book.id).one()
+    doc = db_session.get(Document, v.document_id)
+    assert doc is not None
+
+    # The docx file was actually moved to output dir
+    assert Path(doc.docx_path).exists()
+
+    # No stray nested dirs: the parent of the output file is the single output dir
+    output_parent = Path(doc.docx_path).parent
+    assert output_parent.name not in ("5", "GSSG"), (
+        f"Path has nested dirs from raw slash: {doc.docx_path}"
+    )
+    # The path must not contain the raw slashed ref as directory components
+    assert "1/5/GSSG/1" not in doc.docx_path.replace("\\", "/")
