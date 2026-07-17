@@ -6,7 +6,6 @@ import { useTranslation } from 'react-i18next'
 import { useQuery } from '@tanstack/react-query'
 import type { BookRead } from '@/lib/api'
 import { api } from '@/lib/api'
-import { cn } from '@/lib/utils'
 
 interface Props {
   book: BookRead
@@ -56,12 +55,15 @@ export function BookStatusChips({ book, noClassification }: Props): React.JSX.El
 
   // Editing chip — info (active session, shown alongside draft chip)
   if (book.edit_session?.state === 'active') {
+    const holderName = book.edit_session.user_name
     chips.push(
       <span
         key="editing"
         className="inline-flex items-center rounded-full bg-info-soft px-2.5 py-0.5 text-[0.72em] font-semibold uppercase tracking-[0.06em] text-info"
       >
-        {t('books.word.editing')}
+        {holderName
+          ? t('books.word.editingBy', { name: holderName })
+          : t('books.word.editing')}
       </span>,
     )
   }
@@ -80,12 +82,4 @@ export function BookStatusChips({ book, noClassification }: Props): React.JSX.El
 
   if (chips.length === 0) return null
   return <>{chips}</>
-}
-
-/** Combine all classnames needed for a draft/voided list row */
-export function bookRowCn(book: BookRead): string {
-  return cn(
-    book.voided_at && 'line-through opacity-60',
-    book.is_draft && !book.voided_at && 'bg-warning-soft/30',
-  )
 }

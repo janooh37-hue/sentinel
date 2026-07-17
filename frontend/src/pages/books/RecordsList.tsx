@@ -108,7 +108,7 @@ export function RecordsList({
                 >
                   {kind.glyph}
                 </span>
-                <span className="w-[4.6rem] shrink-0 font-mono text-[0.7em] font-bold text-primary">
+                <span className={cn('w-[4.6rem] shrink-0 font-mono text-[0.7em] font-bold text-primary', row.voided_at && 'line-through')}>
                   {row.ref_number}
                 </span>
                 <span className="min-w-0 flex-1">
@@ -120,10 +120,10 @@ export function RecordsList({
                       {who}
                     </span>
                   )}
-                  {/* Draft / editing / voided chips — compact, no-classification to save space */}
-                  {(row.is_draft || row.edit_session?.state === 'active' || row.voided_at) && (
+                  {/* Draft / editing / voided / classification chips */}
+                  {(row.is_draft || row.edit_session?.state === 'active' || row.voided_at || row.classification_code) && (
                     <span className="mt-0.5 flex flex-wrap gap-1">
-                      <BookStatusChips book={row} noClassification />
+                      <BookStatusChips book={row} noClassification={!row.classification_code} />
                     </span>
                   )}
                 </span>

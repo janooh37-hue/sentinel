@@ -137,6 +137,30 @@ describe('BookWordActions', () => {
       expect(keys.some((k) => k.includes('books'))).toBe(true)
     })
   })
+
+  it('(e) discard: click تجاهل → confirm → calls api.discardWordSession and invalidates [books]', async () => {
+    const qc = makeQc()
+    const spy = vi.spyOn(qc, 'invalidateQueries')
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    vi.spyOn(apiMod.api, 'discardWordSession').mockResolvedValue({} as any)
+
+    render(
+      createElement(BookWordActions, { book: ACTIVE_SESSION_BOOK }),
+      { wrapper: wrapper(qc) },
+    )
+    // Open the discard confirm dialog
+    await userEvent.click(screen.getByRole('button', { name: /تجاهل/ }))
+    // Wait for dialog to open, then get all buttons with the label (trigger + dialog confirm)
+    await screen.findByRole('button', { name: /تجاهل/ })
+    const confirmBtns = screen.getAllByRole('button', { name: /تجاهل/ })
+    // The dialog confirm button is the last one (dialog is appended to body)
+    await userEvent.click(confirmBtns[confirmBtns.length - 1])
+    await waitFor(() => expect(apiMod.api.discardWordSession).toHaveBeenCalledWith(1))
+    await waitFor(() => {
+      const keys = spy.mock.calls.map((c) => JSON.stringify(c[0]?.queryKey))
+      expect(keys.some((k) => k.includes('books'))).toBe(true)
+    })
+  })
 })
 
 // ── BookStatusChips ───────────────────────────────────────────────────────────
@@ -149,9 +173,21 @@ describe('BookStatusChips', () => {
     expect(screen.getByText('مسودة — رقم محجوز')).toBeInTheDocument()
   })
 
-  it('shows "قيد التحرير" for a book with active edit_session', () => {
+  it('shows editingBy with holder name for a book with active edit_session and user_name', () => {
     render(
       createElement(BookStatusChips, { book: ACTIVE_SESSION_BOOK }),
+      { wrapper: wrapper(makeQc()) },
+    )
+    expect(screen.getByText('قيد التحرير في Word بواسطة أحمد العلي')).toBeInTheDocument()
+  })
+
+  it('shows "قيد التحرير" (no name) for a book with active edit_session and no user_name', () => {
+    const noNameSession: BookRead = {
+      ...ACTIVE_SESSION_BOOK,
+      edit_session: { ...ACTIVE_SESSION_BOOK.edit_session!, user_name: null },
+    }
+    render(
+      createElement(BookStatusChips, { book: noNameSession }),
       { wrapper: wrapper(makeQc()) },
     )
     expect(screen.getByText('قيد التحرير')).toBeInTheDocument()
