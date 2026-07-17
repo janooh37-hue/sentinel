@@ -1427,7 +1427,12 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        post?: never;
+        /**
+         * Reopen Word Session
+         * @description Re-open a finished book for Word editing — copies the latest version's docx
+         *     into a fresh working file and returns a new session token + word_url.
+         */
+        post: operations["reopen_word_session_api_v1_books__book_id__word_sessions_post"];
         /**
          * Discard Word Session
          * @description Discard the active Word editing session; void the book if it has no committed versions.
@@ -10133,6 +10138,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["BookRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    reopen_word_session_api_v1_books__book_id__word_sessions_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                book_id: number;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WordSessionRead"];
                 };
             };
             /** @description Validation Error */

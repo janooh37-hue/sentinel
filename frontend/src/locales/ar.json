@@ -974,7 +974,8 @@
       "voided": "ملغي",
       "needsPc": "التحرير في Word يتطلب جهاز كمبيوتر مثبّت عليه Word",
       "openInWord": "فتح في Word",
-      "continueWriting": "متابعة الكتابة"
+      "continueWriting": "متابعة الكتابة",
+      "editNewVersion": "تعديل في Word (ينشئ إصداراً جديداً)"
     }
   },
   "ledger": {

@@ -1215,6 +1215,9 @@ export const api = {
   /** DELETE /books/{id}/word-sessions — discard the Word draft (no commit). */
   discardWordSession: (bookId: number) =>
     request<BookRead>('DELETE', `/books/${bookId}/word-sessions`),
+  /** POST /books/{id}/word-sessions — re-open a finished book for Word editing (creates next version on finish). */
+  reopenWordSession: (bookId: number) =>
+    request<WordSessionRead>('POST', `/books/${bookId}/word-sessions`),
   updateBook: (id: number, body: BookUpdate) =>
     request<BookRead>('PATCH', `/books/${id}`, body),
   deleteBook: (id: number) => request<void>('DELETE', `/books/${id}`),

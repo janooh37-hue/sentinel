@@ -156,6 +156,29 @@ def finish_word_session(
     return _enrich_path_fields(item, row, db)
 
 
+@router.post(
+    "/{book_id}/word-sessions",
+    response_model=WordSessionRead,
+    status_code=status.HTTP_201_CREATED,
+)
+def reopen_word_session(
+    book_id: int,
+    db: Annotated[Session, Depends(get_db)],
+    user: Annotated[User, Depends(require_capability("books.manage"))],
+) -> WordSessionRead:
+    """Re-open a finished book for Word editing — copies the latest version's docx
+    into a fresh working file and returns a new session token + word_url."""
+    info = word_book_service.reopen_word_session(db, user=user, book_id=book_id)
+    return WordSessionRead(
+        book_id=info.book_id,
+        ref_number=info.ref_number,
+        token=info.token,
+        filename=info.filename,
+        word_url=info.word_url,
+        dav_url=info.dav_url,
+    )
+
+
 @router.delete(
     "/{book_id}/word-sessions",
     response_model=BookRead,

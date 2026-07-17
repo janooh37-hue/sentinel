@@ -914,7 +914,8 @@
       "voided": "Voided",
       "needsPc": "Editing in Word needs a PC with Word installed",
       "openInWord": "Open in Word",
-      "continueWriting": "Continue writing"
+      "continueWriting": "Continue writing",
+      "editNewVersion": "Edit in Word (creates a new version)"
     }
   },
   "ledger": {

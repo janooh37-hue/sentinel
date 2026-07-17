@@ -13,7 +13,7 @@ import { initReactI18next } from 'react-i18next'
 import { BookWordActions } from './BookWordActions'
 import { BookStatusChips } from './BookStatusChips'
 import * as apiMod from '@/lib/api'
-import type { BookRead } from '@/lib/api'
+import type { BookRead, WordSessionRead } from '@/lib/api'
 
 // ── i18n setup (Arabic only; catches EN leaks) ────────────────────────────────
 void i18n.use(initReactI18next).init({
@@ -30,6 +30,7 @@ void i18n.use(initReactI18next).init({
         'books.word.voided': 'ملغي',
         'books.word.needsPc': 'التحرير في Word يتطلب جهاز كمبيوتر مثبّت عليه Word',
         'books.word.openInWord': 'فتح في Word',
+        'books.word.editNewVersion': 'تعديل في Word (ينشئ إصداراً جديداً)',
         'common.cancel': 'إلغاء',
         'common.confirm': 'تأكيد',
       },
@@ -76,6 +77,41 @@ const VOIDED_BOOK: BookRead = {
   ...BASE_BOOK,
   voided_at: '2026-07-01T12:00:00Z',
   is_draft: false,
+}
+
+// Finished book: has versions, no active session
+const FINISHED_BOOK: BookRead = {
+  ...BASE_BOOK,
+  is_draft: false,
+  edit_session: null,
+  versions: [
+    {
+      id: 10,
+      version_no: 1,
+      trigger: 'initial',
+      status: 'none',
+      template_id: 'General Book',
+      document_id: 5,
+      has_fields: false,
+      created_at: '2026-07-01T00:00:00Z',
+      created_by_name: null,
+      docx_url: '/api/v1/documents/5/download?format=docx',
+      pdf_url: '/api/v1/documents/5/download?format=pdf',
+      manager_sig_embedded: false,
+      signed_pdf_url: null,
+      signed_source: null,
+      approval_steps: [],
+    },
+  ],
+}
+
+const MOCK_SESSION: WordSessionRead = {
+  book_id: 1,
+  ref_number: 'G-2026-001',
+  token: 'tok123',
+  filename: 'G-2026-001.docx',
+  word_url: 'ms-word:ofe|u|https://gssg.lan/dav/tok123/G-2026-001.docx',
+  dav_url: 'https://gssg.lan/dav/tok123/G-2026-001.docx',
 }
 
 function wrapper(qc: QueryClient) {
@@ -160,6 +196,40 @@ describe('BookWordActions', () => {
       const keys = spy.mock.calls.map((c) => JSON.stringify(c[0]?.queryKey))
       expect(keys.some((k) => k.includes('books'))).toBe(true)
     })
+  })
+
+  it('(f) finished book renders Arabic "تعديل في Word (ينشئ إصداراً جديداً)" button', () => {
+    render(
+      createElement(BookWordActions, { book: FINISHED_BOOK }),
+      { wrapper: wrapper(makeQc()) },
+    )
+    expect(screen.getByRole('button', { name: /تعديل في Word/ })).toBeInTheDocument()
+    // No Finish/Discard buttons — those are for active sessions only
+    expect(screen.queryByRole('button', { name: /إنهاء التحرير/ })).not.toBeInTheDocument()
+  })
+
+  it('(g) clicking editNewVersion calls api.reopenWordSession', async () => {
+    const locationSpy = vi.spyOn(window, 'location', 'get')
+    const mockLocation = { href: '' } as Location
+    locationSpy.mockReturnValue(mockLocation)
+    vi.spyOn(apiMod.api, 'reopenWordSession').mockResolvedValue(MOCK_SESSION)
+
+    render(
+      createElement(BookWordActions, { book: FINISHED_BOOK }),
+      { wrapper: wrapper(makeQc()) },
+    )
+    await userEvent.click(screen.getByRole('button', { name: /تعديل في Word/ }))
+    await waitFor(() => expect(apiMod.api.reopenWordSession).toHaveBeenCalledWith(1))
+  })
+
+  it('(h) on mobile, editNewVersion button is disabled with needsPc hint', () => {
+    render(
+      createElement(BookWordActions, { book: FINISHED_BOOK, isMobile: true }),
+      { wrapper: wrapper(makeQc()) },
+    )
+    const btn = screen.getByRole('button', { name: /تعديل في Word/ })
+    expect(btn).toBeDisabled()
+    expect(screen.getByText(/التحرير في Word يتطلب/)).toBeInTheDocument()
   })
 })
 

@@ -1,4 +1,4 @@
-﻿"""word_book_service — create a classified (or plain) Word-editing book session.
+"""word_book_service — create a classified (or plain) Word-editing book session.
 
 Creates a Book row + reserved ref + a rendered working docx, then opens an
 active BookEditSession so Word can edit it over WebDAV.
@@ -305,6 +305,80 @@ def finish_word_session(db: Session, *, user: User, book_id: int) -> Book:
     db.commit()
     db.refresh(book)
     return book
+
+
+def reopen_word_session(db: Session, *, user: User, book_id: int) -> WordSessionInfo:
+    """Copy the latest version's docx into a fresh working file and open an active session.
+
+    For finished books (at least one BookVersion) only.
+    Raises AppError:
+    - BOOK_NOT_FOUND (404)
+    - SESSION_ACTIVE (409) if an active session already exists.
+    - NO_SOURCE_DOCX (409) if no versions or latest version's docx is missing.
+    """
+    book = db.get(Book, book_id)
+    if book is None:
+        raise AppError("BOOK_NOT_FOUND", f"Book {book_id} not found", http_status=404)
+
+    active = db.query(BookEditSession).filter_by(book_id=book_id, state="active").one_or_none()
+    if active is not None:
+        raise AppError(
+            "SESSION_ACTIVE",
+            "An active editing session already exists for this book",
+            http_status=409,
+        )
+
+    # Find latest version by version_no
+    latest_version = (
+        db.query(BookVersion)
+        .filter_by(book_id=book_id)
+        .order_by(BookVersion.version_no.desc())
+        .first()
+    )
+    if latest_version is None or latest_version.document_id is None:
+        raise AppError(
+            "NO_SOURCE_DOCX",
+            "No finished version with a document exists for this book",
+            http_status=409,
+        )
+
+    source_doc = db.get(Document, latest_version.document_id)
+    if source_doc is None or not source_doc.docx_path or not Path(source_doc.docx_path).exists():
+        raise AppError(
+            "NO_SOURCE_DOCX", "The latest version's docx file is missing on disk", http_status=409
+        )
+
+    settings = get_settings()
+    # Reuse the same filename slug as create (ref with slashes → dashes)
+    filename = book.ref_number.replace("/", "-") + ".docx"
+    output_path = settings.data_dir / "editing" / f"book-{book_id}" / filename
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+
+    shutil.copy2(str(Path(source_doc.docx_path)), str(output_path))
+
+    token = secrets.token_urlsafe(32)
+    session = BookEditSession(
+        book_id=book_id,
+        user_id=user.id,
+        token=token,
+        working_path=str(output_path),
+        state="active",
+    )
+    db.add(session)
+    db.commit()
+
+    base_url = settings.public_base_url.rstrip("/")
+    dav_url = f"{base_url}/dav/{token}/{filename}"
+    word_url = f"ms-word:ofe|u|{dav_url}"
+
+    return WordSessionInfo(
+        book_id=book_id,
+        ref_number=book.ref_number,
+        token=token,
+        filename=filename,
+        word_url=word_url,
+        dav_url=dav_url,
+    )
 
 
 def discard_word_session(db: Session, *, user: User, book_id: int) -> Book:
