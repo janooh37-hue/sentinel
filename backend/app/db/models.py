@@ -138,7 +138,7 @@ class ClassifiedRefSequence(Base):
     __tablename__ = "classified_ref_sequence"
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    next_value: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    next_value: Mapped[int] = mapped_column(Integer, nullable=False, default=1, server_default="1")
 
     __table_args__ = (CheckConstraint("next_value >= 1", name="ck_classified_ref_min"),)
 

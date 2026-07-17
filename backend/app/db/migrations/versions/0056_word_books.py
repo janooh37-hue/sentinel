@@ -30,13 +30,14 @@ def upgrade() -> None:
     op.create_table(
         "book_edit_sessions",
         sa.Column("id", sa.Integer(), primary_key=True, autoincrement=True),
-        sa.Column("book_id", sa.Integer(), nullable=False),  # FK enforced app-side (SQLite)
+        sa.Column("book_id", sa.Integer(), nullable=False),
         sa.Column("user_id", sa.Integer(), nullable=False),
         sa.Column("token", sa.String(64), nullable=False, unique=True),
         sa.Column("working_path", sa.Text(), nullable=False),
         sa.Column("state", sa.String(16), nullable=False, server_default="active"),
         sa.Column("created_at", sa.DateTime(), nullable=False),
         sa.Column("last_put_at", sa.DateTime(), nullable=True),
+        sa.ForeignKeyConstraint(["book_id"], ["books.id"], ondelete="CASCADE"),
     )
     op.create_index(
         "uq_book_edit_sessions_active",
