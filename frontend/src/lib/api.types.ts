@@ -3868,6 +3868,8 @@ export interface components {
             versions?: components["schemas"]["BookVersionRead"][];
             /** Sms */
             sms?: components["schemas"]["NotifyMessageRead"][];
+            /** Search Snippet */
+            search_snippet?: string | null;
         };
         /** BookSubmitRequest */
         BookSubmitRequest: {

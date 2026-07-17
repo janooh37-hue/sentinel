@@ -248,6 +248,8 @@ class BookRead(ORMBase):
     versions: list[BookVersionRead] = Field(default_factory=list)
     # Outbound notifications sent for this book (WhatsApp + SMS, auto-send + resends).
     sms: list[NotifyMessageRead] = Field(default_factory=list)
+    # Set only when the row matched via FTS body search (not on ilike-only hits).
+    search_snippet: str | None = None
 
 
 class BookListResponse(BaseModel):

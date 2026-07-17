@@ -642,6 +642,9 @@
     "addError": "Could not add to basket — record not found"
   },
   "books": {
+    "search": {
+      "bodyMatch": "Match in book body"
+    },
     "title": "Book Reference",
     "subtitle": "Ref-number log across all 12 categories",
     "eyebrow": "Operations",

@@ -243,7 +243,7 @@ def list_books(
     limit: int = Query(LIST_DEFAULT_LIMIT, ge=1, le=LIST_MAX_LIMIT),
     offset: int = Query(0, ge=0),
 ) -> BookListResponse:
-    rows, total = book_service.list_books(
+    rows, total, fts_snippets = book_service.list_books(
         db,
         category_id=category_id,
         direction=direction,
@@ -271,6 +271,7 @@ def list_books(
     for r in rows:
         item = BookRead.model_validate(r)
         item.subject = book_service.derive_subject(r)
+        item.search_snippet = fts_snippets.get(r.id) or None
         items.append(_enrich_path_fields(item, r, db, by_book=by_book))
     return BookListResponse(
         items=items,

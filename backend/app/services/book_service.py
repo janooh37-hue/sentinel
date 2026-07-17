@@ -16,7 +16,7 @@ from functools import lru_cache
 from pathlib import Path, PurePath
 from typing import Any
 
-from sqlalchemy import Integer, func, or_, select
+from sqlalchemy import Integer, func, or_, select, text
 from sqlalchemy.orm import Session, selectinload
 
 from app.api.errors import AppError, NotFoundError, ValidationFailedError
@@ -89,6 +89,44 @@ def derive_subject(book: Book) -> str | None:
     return book.subject
 
 
+def _fts_query_books(db: Session, q: str) -> dict[int, str]:
+    """Run an FTS5 query on books_fts; return {book_id: snippet}.
+
+    Normalises the query with normalize_ar, splits into tokens, and appends
+    ``*`` to the last token for prefix-match typing (e.g. ``تصريح أمن*``).
+
+    Falls back to {} on any error (missing FTS table, syntax, etc.) so the
+    caller's ilike path still works.
+    """
+    from app.core.book_text import normalize_ar
+
+    norm = normalize_ar(q.strip())
+    if not norm:
+        return {}
+
+    tokens = norm.split()
+    if not tokens:
+        return {}
+    # Append prefix wildcard to last token only; escape embedded quotes.
+    escaped = [t.replace('"', '""') for t in tokens]
+    match_str = (
+        " ".join([*escaped[:-1], escaped[-1] + "*"]) if len(escaped) > 1 else escaped[0] + "*"
+    )
+
+    try:
+        rows = db.execute(
+            text(
+                "SELECT rowid, snippet(books_fts, 0, '[', ']', '…', 12) AS snip"
+                " FROM books_fts WHERE books_fts MATCH :m"
+            ),
+            {"m": match_str},
+        ).all()
+        return {int(r.rowid): (r.snip or "") for r in rows}
+    except Exception:
+        log.warning("books FTS query failed for %r; falling back to ilike-only", q, exc_info=True)
+        return {}
+
+
 def list_books(
     db: Session,
     *,
@@ -101,10 +139,22 @@ def list_books(
     limit: int = LIST_DEFAULT_LIMIT,
     offset: int = 0,
     include_deleted: bool = False,
-) -> tuple[list[Book], int]:
-    """Paginated list with optional filters.  Returns ``(rows, total)``."""
+) -> tuple[list[Book], int, dict[int, str]]:
+    """Paginated list with optional filters.
+
+    Returns ``(rows, total, snippet_map)`` where ``snippet_map`` maps book
+    id → FTS snippet string for rows that matched via body search.  Rows that
+    matched only via ilike (ref/subject) are absent from the map.
+    """
     limit = max(1, min(limit, LIST_MAX_LIMIT))
     offset = max(0, offset)
+
+    # FTS body search — run first so we know which ids matched body text.
+    fts_snippets: dict[int, str] = {}
+    fts_ids: set[int] = set()
+    if q:
+        fts_snippets = _fts_query_books(db, q)
+        fts_ids = set(fts_snippets)
 
     stmt = select(Book)
     count_stmt = select(func.count()).select_from(Book)
@@ -127,10 +177,12 @@ def list_books(
 
     if q:
         needle = f"%{q.strip()}%"
-        clause = or_(
+        ilike_clause = or_(
             Book.subject.ilike(needle),
             Book.ref_number.ilike(needle),
         )
+        # Union: ilike OR FTS body match (ternary; fts_ids empty = ilike only).
+        clause = or_(ilike_clause, Book.id.in_(fts_ids)) if fts_ids else ilike_clause
         stmt = stmt.where(clause)
         count_stmt = count_stmt.where(clause)
 
@@ -158,7 +210,7 @@ def list_books(
 
     rows = list(db.execute(stmt).scalars().all())
     total = int(db.execute(count_stmt).scalar_one())
-    return rows, total
+    return rows, total, fts_snippets
 
 
 def get_book(

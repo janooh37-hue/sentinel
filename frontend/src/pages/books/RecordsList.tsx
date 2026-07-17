@@ -9,6 +9,9 @@ import { FileText } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 
 import type { BookRead } from '@/lib/api'
+
+// search_snippet is added by Task 16 — present after api.types regen.
+type BookReadWithSnippet = BookRead & { search_snippet?: string | null }
 import { cn } from '@/lib/utils'
 
 import { BookStatusChips } from '@/components/books/BookStatusChips'
@@ -16,6 +19,24 @@ import { signedSourceOf } from './bookStateLabel'
 import { formKindOf, subjectEmployeePart } from './formKind'
 import { paperCountOf } from './recordPapers'
 import { StateSeal } from './StateSeal'
+
+/** Parse `[token]` FTS snippet markers into React nodes with <mark>. */
+function SnippetLine({ text }: { text: string }): React.JSX.Element {
+  const parts = text.split(/(\[[^\]]*\])/g)
+  return (
+    <span>
+      {parts.map((part, i) =>
+        part.startsWith('[') && part.endsWith(']') ? (
+          <mark key={i} className="rounded-sm bg-warning/30 px-0.5 not-italic">
+            {part.slice(1, -1)}
+          </mark>
+        ) : (
+          <span key={i}>{part}</span>
+        ),
+      )}
+    </span>
+  )
+}
 
 export function RecordsList({
   rows,
@@ -61,6 +82,7 @@ export function RecordsList({
           {items.map((row) => {
             const kind = formKindOf(row.subject)
             const who = subjectEmployeePart(row.subject)
+            const snippet = (row as BookReadWithSnippet).search_snippet
             const paperCount = paperCountOf(row)
             const isChecked = selected?.has(row.id) ?? false
             const selectable = onToggleSelect != null
@@ -118,6 +140,12 @@ export function RecordsList({
                   {who && (
                     <span className="block truncate text-[0.68em] text-muted-foreground" dir="auto">
                       {who}
+                    </span>
+                  )}
+                  {snippet && (
+                    <span className="mt-0.5 block truncate text-[0.65em] italic text-muted-foreground" dir="auto">
+                      <span className="me-1 not-italic font-medium text-warning">{t('books.search.bodyMatch')}</span>
+                      <SnippetLine text={snippet} />
                     </span>
                   )}
                   {/* Draft / editing / voided / classification chips */}

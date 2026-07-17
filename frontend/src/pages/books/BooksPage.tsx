@@ -11,7 +11,7 @@
  * client-side over the single unfiltered fetch.
  */
 
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { ArrowDownLeft, ArrowUpRight, BookOpen, Plus, Send, Trash2 } from 'lucide-react'
@@ -94,6 +94,24 @@ export function BooksPage(): React.JSX.Element {
     queryFn: () => api.listBooks({ limit: 500 }),
   })
   const allRows: BookRead[] = useMemo(() => listQuery.data?.items ?? [], [listQuery.data])
+
+  // ── Debounced server search (desktop, >= 2 chars) ───────────────────────────
+  // Mirror BooksFilterBar's 300 ms debounce. When active, desktopRows comes
+  // from the server query (which carries search_snippet) instead of allRows.
+  const [debouncedSearch, setDebouncedSearch] = useState('')
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const handleSearchChange = useCallback((val: string) => {
+    setSearch(val)
+    if (debounceRef.current) clearTimeout(debounceRef.current)
+    debounceRef.current = setTimeout(() => setDebouncedSearch(val), 300)
+  }, [])
+  const serverSearchActive = debouncedSearch.trim().length >= 2
+  const searchQuery = useQuery({
+    queryKey: ['books', 'search', debouncedSearch],
+    queryFn: () => api.listBooks({ q: debouncedSearch, limit: 500 }),
+    enabled: serverSearchActive,
+    staleTime: 30_000,
+  })
 
   const categoriesQuery = useQuery({
     queryKey: ['book-categories'],
@@ -289,6 +307,19 @@ export function BooksPage(): React.JSX.Element {
   )
 
   const desktopRows: BookRead[] = useMemo(() => {
+    // When a debounced server search is active (>= 2 chars), use server results
+    // (which carry search_snippet on body-hit rows) instead of client filtering.
+    if (serverSearchActive && searchQuery.data) {
+      const serverRows = searchQuery.data.items
+      return serverRows
+        .filter((row) => {
+          if (showDrafts) return row.is_draft && !row.voided_at
+          if (spineState !== 'all' && row.approval_state !== spineState) return false
+          if (railKind !== 'all' && formKindOf(row.subject).id !== railKind) return false
+          return true
+        })
+        .sort((a, b) => b.created_at.localeCompare(a.created_at))
+    }
     const q = search.trim().toLowerCase()
     const filtered = allRows.filter((row) => {
       if (showDrafts) return row.is_draft && !row.voided_at
@@ -301,12 +332,12 @@ export function BooksPage(): React.JSX.Element {
     // so unsorted input would split a day into duplicate sections (key collision).
     // `filtered` is already a copy; never mutate allRows.
     return filtered.sort((a, b) => b.created_at.localeCompare(a.created_at))
-  }, [allRows, spineState, railKind, search, showDrafts])
+  }, [allRows, spineState, railKind, search, showDrafts, serverSearchActive, searchQuery.data])
 
-  const selectedBook = useMemo(
-    () => allRows.find((r) => r.id === selectedId) ?? null,
-    [allRows, selectedId],
-  )
+  const selectedBook = useMemo(() => {
+    const pool = serverSearchActive && searchQuery.data ? searchQuery.data.items : allRows
+    return pool.find((r) => r.id === selectedId) ?? allRows.find((r) => r.id === selectedId) ?? null
+  }, [allRows, selectedId, serverSearchActive, searchQuery.data])
 
   const handleToggleSelect = useCallback((id: number) => {
     setSelectedForBasket((prev) => {
@@ -430,7 +461,7 @@ export function BooksPage(): React.JSX.Element {
               <div className="flex shrink-0 items-center gap-2 border-b border-hairline p-2.5">
                 <Input
                   value={search}
-                  onChange={(e) => setSearch(e.target.value)}
+                  onChange={(e) => handleSearchChange(e.target.value)}
                   placeholder={t('books.pane.searchPlaceholder')}
                   className="h-8 min-w-0 flex-1 rounded-full border-hairline bg-surface-raised text-[0.82em]"
                   data-testid="records-search"
