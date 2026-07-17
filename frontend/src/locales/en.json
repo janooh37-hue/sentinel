@@ -905,7 +905,8 @@
       "finished": "Version saved — {{ref}}",
       "step1": "Word is opening now — write the body only",
       "step2": "Save from inside Word (Ctrl+S)",
-      "step3": "Come back here and press «Finish editing»"
+      "step3": "Come back here and press «Finish editing»",
+      "preparedBy": "Prepared by"
     }
   },
   "ledger": {

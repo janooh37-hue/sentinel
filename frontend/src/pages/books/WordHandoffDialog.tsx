@@ -40,7 +40,7 @@ export function WordHandoffDialog({ session, open, onClose }: Props): React.JSX.
     queryKey: ['books', session?.book_id],
     queryFn: () => api.getBook(session!.book_id),
     enabled: open && session != null,
-    refetchInterval: open ? 5000 : false,
+    refetchInterval: open && session != null ? 5000 : false,
     staleTime: 0,
   })
 
@@ -75,11 +75,7 @@ export function WordHandoffDialog({ session, open, onClose }: Props): React.JSX.
     ? new Date(bookQuery.data.created_at).toLocaleDateString(isAr ? 'ar-AE' : 'en-GB')
     : null
 
-  const steps: [string, string][] = [
-    ['books.word.step1', 'يفتح Word الآن — اكتب المتن فقط'],
-    ['books.word.step2', 'احفظ من داخل Word (Ctrl+S)'],
-    ['books.word.step3', 'ارجع هنا واضغط «إنهاء التحرير»'],
-  ]
+  const steps = ['books.word.step1', 'books.word.step2', 'books.word.step3']
 
   return (
     <>
@@ -122,12 +118,15 @@ export function WordHandoffDialog({ session, open, onClose }: Props): React.JSX.
                 {createdDate && (
                   <bdi dir="ltr">{createdDate}</bdi>
                 )}
+                {bookQuery.data?.submitted_by_name && (
+                  <> · {t('books.word.preparedBy')}: {bookQuery.data.submitted_by_name}</>
+                )}
               </p>
             )}
 
             {/* Steps */}
             <ol className="mb-5 space-y-3" dir={isAr ? 'rtl' : 'ltr'}>
-              {steps.map(([key], idx) => (
+              {steps.map((key, idx) => (
                 <li key={key} className="flex items-start gap-3">
                   <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary-soft text-[0.72em] font-bold text-primary">
                     {idx + 1}

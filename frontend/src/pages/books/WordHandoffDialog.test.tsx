@@ -29,6 +29,7 @@ vi.mock('react-i18next', () => ({
         'books.word.step1': 'يفتح Word الآن — اكتب المتن فقط',
         'books.word.step2': 'احفظ من داخل Word (Ctrl+S)',
         'books.word.step3': 'ارجع هنا واضغط «إنهاء التحرير»',
+        'books.word.preparedBy': 'المُعِدّ',
         'common.confirm': 'تأكيد',
         'common.cancel': 'إلغاء',
       }
@@ -171,6 +172,7 @@ describe('WordHandoffDialog', () => {
     // Click the confirm button
     await user.click(screen.getByText('تأكيد'))
     await waitFor(() => expect(discardSpy).toHaveBeenCalledWith(42))
+    await waitFor(() => expect(onClose).toHaveBeenCalled())
   })
 
   it('Finish calls finishWordSession and toasts success', async () => {
@@ -197,5 +199,6 @@ describe('WordHandoffDialog', () => {
     await user.click(screen.getByText('إنهاء التحرير'))
     await waitFor(() => expect(finishSpy).toHaveBeenCalledWith(42))
     await waitFor(() => expect(toast.success).toHaveBeenCalled())
+    await waitFor(() => expect(onClose).toHaveBeenCalled())
   })
 })
