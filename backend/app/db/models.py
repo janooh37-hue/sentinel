@@ -132,6 +132,41 @@ class BookRefSequence(Base):
     __table_args__ = (CheckConstraint("next_value >= 1", name="ck_book_ref_seq_positive"),)
 
 
+class ClassifiedRefSequence(Base):
+    """Single-row counter for classified refs (1/{tab}/GSSG/{serial}); id always 1."""
+
+    __tablename__ = "classified_ref_sequence"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    next_value: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+
+    __table_args__ = (CheckConstraint("next_value >= 1", name="ck_classified_ref_min"),)
+
+
+class BookEditSession(Base):
+    """One Word-editing session over a book's working docx (WebDAV target)."""
+
+    __tablename__ = "book_edit_sessions"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    book_id: Mapped[int] = mapped_column(ForeignKey("books.id", ondelete="CASCADE"), nullable=False)
+    user_id: Mapped[int] = mapped_column(Integer, nullable=False)
+    token: Mapped[str] = mapped_column(String(64), unique=True, nullable=False)
+    working_path: Mapped[str] = mapped_column(Text, nullable=False)
+    state: Mapped[str] = mapped_column(String(16), default="active")  # active|finished|discarded
+    created_at: Mapped[datetime] = mapped_column(default=_utcnow)
+    last_put_at: Mapped[datetime | None] = mapped_column(nullable=True)
+
+    __table_args__ = (
+        Index(
+            "uq_book_edit_sessions_active",
+            "book_id",
+            unique=True,
+            sqlite_where=text("state = 'active'"),
+        ),
+    )
+
+
 class Book(Base):
     __tablename__ = "books"
 
@@ -154,6 +189,10 @@ class Book(Base):
     approval_state: Mapped[str] = mapped_column(
         String(16), nullable=False, default="none", server_default="none"
     )
+    # Government classification (التبويب) code, e.g. "5/1"; NULL = plain book.
+    classification_code: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    # Discarded draft: the reserved ref stays in the register, struck through.
+    voided_at: Mapped[datetime | None] = mapped_column(nullable=True)
     # FK to users.id omitted — SQLite batch ALTER cannot add a named FK constraint
     # to an existing table; referential integrity is enforced at the app layer.
     submitted_by_user_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
@@ -1220,9 +1259,7 @@ class LedgerFlag(Base):
     __tablename__ = "ledger_flags"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    user_id: Mapped[int] = mapped_column(
-        ForeignKey("users.id", ondelete="CASCADE"), nullable=False
-    )
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
     entry_id: Mapped[int] = mapped_column(
         ForeignKey("ledger_entries.id", ondelete="CASCADE"), nullable=False
     )
