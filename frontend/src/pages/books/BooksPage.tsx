@@ -510,7 +510,7 @@ export function BooksPage(): React.JSX.Element {
                               onClick={() => setShowDrafts(true)}
                               className="text-start text-[0.72em] text-muted-foreground underline hover:text-foreground"
                             >
-                              +{draftBooks.length - 3} {t('books.filters.drafts').toLowerCase()}
+                              +{draftBooks.length - 3} {t('books.filters.drafts')}
                             </button>
                           )}
                         </div>

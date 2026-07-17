@@ -666,6 +666,7 @@
       "clear": "Clear filters",
       "status": "Status",
       "statusAll": "All",
+      "categoryAll": "All",
       "drafts": "Drafts"
     },
     "direction": {
@@ -917,7 +918,8 @@
       "continueWriting": "Continue writing",
       "editNewVersion": "Edit in Word (creates a new version)",
       "writeHere": "Type here",
-      "writeInWord": "Write in Word"
+      "writeInWord": "Write in Word",
+      "writingMode": "Writing mode"
     }
   },
   "ledger": {

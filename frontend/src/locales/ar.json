@@ -722,6 +722,7 @@
       "clear": "مسح المرشحات",
       "status": "الحالة",
       "statusAll": "الكل",
+      "categoryAll": "الكل",
       "drafts": "المسودات"
     },
     "direction": {
@@ -977,7 +978,8 @@
       "continueWriting": "متابعة الكتابة",
       "editNewVersion": "تعديل في Word (ينشئ إصداراً جديداً)",
       "writeHere": "اكتب هنا",
-      "writeInWord": "اكتب في Word"
+      "writeInWord": "اكتب في Word",
+      "writingMode": "وضع الكتابة"
     }
   },
   "ledger": {

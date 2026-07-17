@@ -6,6 +6,7 @@ import { useTranslation } from 'react-i18next'
 import { useQuery } from '@tanstack/react-query'
 import type { BookRead } from '@/lib/api'
 import { api } from '@/lib/api'
+import { bidi } from '@/lib/bidi'
 
 interface Props {
   book: BookRead
@@ -62,7 +63,7 @@ export function BookStatusChips({ book, noClassification }: Props): React.JSX.El
         className="inline-flex items-center rounded-full bg-info-soft px-2.5 py-0.5 text-[0.72em] font-semibold uppercase tracking-[0.06em] text-info"
       >
         {holderName
-          ? t('books.word.editingBy', { name: holderName })
+          ? t('books.word.editingBy', { name: bidi(holderName) })
           : t('books.word.editing')}
       </span>,
     )

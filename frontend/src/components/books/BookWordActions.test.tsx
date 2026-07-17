@@ -248,7 +248,13 @@ describe('BookStatusChips', () => {
       createElement(BookStatusChips, { book: ACTIVE_SESSION_BOOK }),
       { wrapper: wrapper(makeQc()) },
     )
-    expect(screen.getByText('قيد التحرير في Word بواسطة أحمد العلي')).toBeInTheDocument()
+    // Bidi-isolate chars wrap the name; strip them before comparing visible text
+    const chip = screen.getByText((content) =>
+      content.replace(/[⁨⁩]/g, '').includes('قيد التحرير في Word بواسطة أحمد العلي'),
+    )
+    expect(chip).toBeInTheDocument()
+    // Confirm the bidi isolate is present (fix 6)
+    expect(chip.textContent).toContain('⁨')
   })
 
   it('shows "قيد التحرير" (no name) for a book with active edit_session and no user_name', () => {

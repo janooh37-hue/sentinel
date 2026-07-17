@@ -11,6 +11,7 @@ import { toast } from 'sonner'
 import { useState } from 'react'
 
 import { api, apiErrorMessage } from '@/lib/api'
+import { bidi } from '@/lib/bidi'
 import type { BookRead, WordSessionRead } from '@/lib/api'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import { WordHandoffDialog } from '@/pages/books/WordHandoffDialog'
@@ -33,7 +34,7 @@ export function BookWordActions({ book, isMobile }: Props): React.JSX.Element | 
     mutationFn: () => api.finishWordSession(book.id),
     onSuccess: () => {
       invalidate()
-      toast.success(t('books.word.finished', { ref: book.ref_number }))
+      toast.success(t('books.word.finished', { ref: bidi(book.ref_number) }))
     },
     onError: (err) => toast.error(apiErrorMessage(err)),
   })

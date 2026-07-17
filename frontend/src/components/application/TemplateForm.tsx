@@ -433,7 +433,7 @@ export function TemplateForm({
 
       {/* General Book: body-mode pill toggle (plain path only, Task 12) */}
       {showBodyModeToggle && (
-        <div className="mb-3 flex gap-1" role="group" aria-label={isAr ? 'وضع الكتابة' : 'Writing mode'}>
+        <div className="mb-3 flex gap-1" role="group" aria-label={t('books.word.writingMode')}>
           {(['editor', 'word'] as const).map((mode) => (
             <button
               key={mode}
@@ -458,7 +458,7 @@ export function TemplateForm({
         <div className="mb-4">
           <ClassificationField
             name="classification_code"
-            label_en="Classification"
+            label_en={t('books.word.classification')}
             label_ar={t('books.word.classification')}
             value={classificationCode}
             onChange={onClassificationChange}

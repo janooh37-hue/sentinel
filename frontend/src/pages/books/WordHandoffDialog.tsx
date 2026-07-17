@@ -13,6 +13,7 @@ import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 
 import { api, apiErrorMessage } from '@/lib/api'
+import { bidi } from '@/lib/bidi'
 import type { WordSessionRead } from '@/lib/api'
 import {
   DialogRoot,
@@ -50,7 +51,7 @@ export function WordHandoffDialog({ session, open, onClose }: Props): React.JSX.
     mutationFn: () => api.finishWordSession(session!.book_id),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ['books'] })
-      toast.success(t('books.word.finished', { ref: session?.ref_number }))
+      toast.success(t('books.word.finished', { ref: bidi(session?.ref_number ?? '') }))
       onClose()
     },
     onError: (err) => {
