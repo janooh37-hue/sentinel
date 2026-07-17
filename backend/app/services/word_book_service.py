@@ -6,11 +6,16 @@ active BookEditSession so Word can edit it over WebDAV.
 
 from __future__ import annotations
 
+import contextlib
 import secrets
+import shutil
+import uuid
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import UTC, datetime
+from pathlib import Path
 from typing import Any
 
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.api.errors import AppError
@@ -21,8 +26,10 @@ from app.core.classifications import (
     get_classification,
 )
 from app.core.docx_engine import _normalize_cc
-from app.db.models import Book, BookCategory, BookEditSession, Manager, User
+from app.db.models import Book, BookCategory, BookEditSession, BookVersion, Document, Manager, User
 from app.db.repos import classified_refs_repo, refs_repo
+from app.services._pdf_executor import convert_docx_to_pdf
+from app.services.document_service import _build_docx_filename, _output_dir_for_admin
 
 # General Book template filename (plain path, no classification)
 _GENERAL_BOOK_TEMPLATE = "GSSG-GS_300-003_General_Book.docx"
@@ -198,3 +205,135 @@ def _normalize_cc_for_template(cc: list[str] | str | None) -> str:
         return ""
     parts = [p.strip() for p in normalized.split(",") if p.strip()]
     return "\n".join(parts)
+
+
+# ---------------------------------------------------------------------------
+# Finish / discard a Word editing session
+# ---------------------------------------------------------------------------
+
+_CLASSIFIED_TEMPLATE_ID = "Classified Book"
+_GENERAL_TEMPLATE_ID = "General Book"
+
+
+def _template_id_for_book(book: Book) -> str:
+    return _CLASSIFIED_TEMPLATE_ID if book.classification_code else _GENERAL_TEMPLATE_ID
+
+
+def finish_word_session(db: Session, *, user: User, book_id: int) -> Book:
+    """Turn the active Word session into a BookVersion + Document + optional PDF.
+
+    Raises AppError:
+    - NO_ACTIVE_SESSION (409) if no active session exists for this book.
+    - NO_SAVES_YET (409) if Word has never PUT to the working file.
+    """
+    book = db.get(Book, book_id)
+    if book is None:
+        raise AppError("BOOK_NOT_FOUND", f"Book {book_id} not found", http_status=404)
+
+    session = db.query(BookEditSession).filter_by(book_id=book_id, state="active").one_or_none()
+    if session is None:
+        raise AppError(
+            "NO_ACTIVE_SESSION", "No active editing session for this book", http_status=409
+        )
+
+    if session.last_put_at is None:
+        raise AppError("NO_SAVES_YET", "Nothing saved from Word yet", http_status=409)
+
+    # ------------------------------------------------------------------
+    # 1. Move working docx → stable output dir
+    # ------------------------------------------------------------------
+    template_id = _template_id_for_book(book)
+    now = datetime.now(UTC).replace(tzinfo=None)
+    out_dir = _output_dir_for_admin(template_id)
+    filename = _build_docx_filename(template_id, book.ref_number, now)
+    dest = out_dir / filename
+    # Avoid collisions (unlikely but possible if clock has low resolution)
+    suffix = 0
+    while dest.exists():
+        suffix += 1
+        dest = out_dir / (Path(filename).stem + f"_{suffix}.docx")
+
+    src = Path(session.working_path)
+    shutil.move(str(src), str(dest))
+
+    # ------------------------------------------------------------------
+    # 2. PDF conversion (lenient — None is fine)
+    # ------------------------------------------------------------------
+    pdf_path: Path | None = convert_docx_to_pdf(dest)
+
+    # ------------------------------------------------------------------
+    # 3. Create Document row
+    # ------------------------------------------------------------------
+    doc = Document(
+        template_id=template_id,
+        ref_number=book.ref_number,
+        docx_path=str(dest),
+        pdf_path=str(pdf_path) if pdf_path else None,
+        submission_id=str(uuid.uuid4()),
+        role="primary",
+    )
+    db.add(doc)
+    db.flush()  # get doc.id
+
+    # ------------------------------------------------------------------
+    # 4. Create BookVersion
+    # ------------------------------------------------------------------
+    max_version_no: int = (
+        db.query(func.max(BookVersion.version_no)).filter(BookVersion.book_id == book_id).scalar()
+        or 0
+    )
+    version_no = max_version_no + 1
+    trigger = "initial" if max_version_no == 0 else "revision"
+
+    version = BookVersion(
+        book_id=book_id,
+        version_no=version_no,
+        trigger=trigger,
+        status="none",
+        template_id=template_id,
+        fields={},
+        created_by_user_id=user.id,
+        document_id=doc.id,
+    )
+    db.add(version)
+
+    # ------------------------------------------------------------------
+    # 5. Mark session finished
+    # ------------------------------------------------------------------
+    session.state = "finished"
+
+    db.commit()
+    db.refresh(book)
+    return book
+
+
+def discard_word_session(db: Session, *, user: User, book_id: int) -> Book:
+    """Discard the active Word session; void the book if it has no committed versions."""
+    book = db.get(Book, book_id)
+    if book is None:
+        raise AppError("BOOK_NOT_FOUND", f"Book {book_id} not found", http_status=404)
+
+    session = db.query(BookEditSession).filter_by(book_id=book_id, state="active").one_or_none()
+    if session is None:
+        raise AppError(
+            "NO_ACTIVE_SESSION", "No active editing session for this book", http_status=409
+        )
+
+    # Delete working file (lenient)
+
+    src = Path(session.working_path)
+    with contextlib.suppress(OSError):
+        src.unlink(missing_ok=True)
+
+    session.state = "discarded"
+
+    # Void the book only if it has no committed versions
+    has_versions = (
+        db.query(func.count(BookVersion.id)).filter(BookVersion.book_id == book_id).scalar() or 0
+    ) > 0
+    if not has_versions:
+        book.voided_at = datetime.now(UTC).replace(tzinfo=None)
+
+    db.commit()
+    db.refresh(book)
+    return book

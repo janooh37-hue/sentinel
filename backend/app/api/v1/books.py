@@ -139,6 +139,40 @@ def create_word_session(
     )
 
 
+@router.post(
+    "/{book_id}/word-sessions/finish",
+    response_model=BookRead,
+)
+def finish_word_session(
+    book_id: int,
+    db: Annotated[Session, Depends(get_db)],
+    user: Annotated[User, Depends(require_capability("books.manage"))],
+) -> BookRead:
+    """Finish the active Word editing session: move docx, create BookVersion + Document, optional PDF."""
+    row = word_book_service.finish_word_session(db, user=user, book_id=book_id)
+    item = BookRead.model_validate(row)
+    item.subject = book_service.derive_subject(row)
+    item.versions = _build_versions(db, row)
+    return _enrich_path_fields(item, row, db)
+
+
+@router.delete(
+    "/{book_id}/word-sessions",
+    response_model=BookRead,
+)
+def discard_word_session(
+    book_id: int,
+    db: Annotated[Session, Depends(get_db)],
+    user: Annotated[User, Depends(require_capability("books.manage"))],
+) -> BookRead:
+    """Discard the active Word editing session; void the book if it has no committed versions."""
+    row = word_book_service.discard_word_session(db, user=user, book_id=book_id)
+    item = BookRead.model_validate(row)
+    item.subject = book_service.derive_subject(row)
+    item.versions = _build_versions(db, row)
+    return _enrich_path_fields(item, row, db)
+
+
 def _fill_draft_fields(
     item: BookRead,
     row: Book,
