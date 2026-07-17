@@ -895,7 +895,17 @@
       "classification": "Classification",
       "noClassification": "No classification",
       "bodyInWord": "The body is written in Word",
-      "createAndOpen": "Create & open in Word"
+      "createAndOpen": "Create & open in Word",
+      "reserved": "Book created — number reserved",
+      "finish": "Finish editing",
+      "openAgain": "Open in Word again",
+      "discard": "Discard",
+      "noSavesYet": "No save from Word yet",
+      "discardConfirm": "The book will be voided; its number stays in the register. Continue?",
+      "finished": "Version saved — {{ref}}",
+      "step1": "Word is opening now — write the body only",
+      "step2": "Save from inside Word (Ctrl+S)",
+      "step3": "Come back here and press «Finish editing»"
     }
   },
   "ledger": {

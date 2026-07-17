@@ -62,6 +62,7 @@ import { useShortcutAction } from '@/lib/useKeyboardShortcuts'
 import { EmployeeHeader } from './EmployeeHeader'
 import { JobStatus } from './JobStatus'
 import { emojiForTemplate, resolveTemplateIdFromSlug } from './formEmoji'
+import { WordHandoffDialog } from '@/pages/books/WordHandoffDialog'
 
 type TabValue = 'fields' | 'preview'
 
@@ -167,8 +168,6 @@ export function ApplicationPage(): React.JSX.Element {
   // so <WordHandoffDialog session={pendingWordSession} /> (Task 9) can mount and
   // guide finish/discard. The variable is read below in the TODO placeholder node.
   const [pendingWordSession, setPendingWordSession] = useState<WordSessionRead | null>(null)
-  // Suppress unused-var: Task 9 will wire this to <WordHandoffDialog>.
-  void pendingWordSession
   // Draft/Save split: tracks which mode the in-flight job is in. The toast +
   // localStorage-clear in JobStatus.onDone branch on this. Stored in a ref
   // (not state) so we don't re-render the form just to flip the flag.
@@ -346,16 +345,14 @@ export function ApplicationPage(): React.JSX.Element {
   })
 
   // Word-session mutation — General Book Word mode: creates the book + DAV session,
-  // then opens Word via word_url. Task 9 will mount <WordHandoffDialog> via
-  // `pendingWordSession`; for now we just store it and navigate.
+  // opens Word, and shows WordHandoffDialog for finish/discard.
   const wordSessionMutation = useMutation({
     mutationFn: (body: import('@/lib/api').WordBookCreate) => api.createWordBook(body),
     onSuccess: (res) => {
       void qc.invalidateQueries({ queryKey: ['books'] })
       setPendingWordSession(res)
-      // TODO(task-9): mount <WordHandoffDialog session={pendingWordSession} /> here.
-      // For now, launch Word directly. Task 9 will intercept before this redirect
-      // and present finish/discard options.
+      // Launch Word immediately; the handoff dialog stays on screen
+      // so the user can press Finish when they return.
       window.location.href = res.word_url
     },
     onError: (err) => {
@@ -673,6 +670,12 @@ export function ApplicationPage(): React.JSX.Element {
 
   return (
     <div className="flex flex-1 flex-col overflow-auto bg-background">
+      {/* Word handoff dialog — shown after createWordBook; unmounts when session is cleared */}
+      <WordHandoffDialog
+        session={pendingWordSession}
+        open={pendingWordSession != null}
+        onClose={() => setPendingWordSession(null)}
+      />
       <div className="mx-auto w-full max-w-[1320px] flex-1 px-4 pb-10 pt-6 sm:px-8">
         {selectedTemplate === null ? (
           /* ───────────────── Services gallery ───────────────── */

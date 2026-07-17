@@ -1,0 +1,201 @@
+/**
+ * WordHandoffDialog — TDD (RED → GREEN)
+ * Assert Arabic under lng=ar (per i18n-tests-must-assert-arabic memory).
+ */
+
+import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { render, screen, waitFor } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
+import { createElement, type ReactNode } from 'react'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { toast } from 'sonner'
+
+import { WordHandoffDialog } from './WordHandoffDialog'
+import * as apiMod from '@/lib/api'
+import type { WordSessionRead, BookRead } from '@/lib/api'
+
+vi.mock('react-i18next', () => ({
+  useTranslation: () => ({
+    t: (k: string, opts?: Record<string, unknown>) => {
+      // Minimal Arabic key map for the keys we assert.
+      const ar: Record<string, string> = {
+        'books.word.reserved': 'تم إنشاء الكتاب وحجز الرقم',
+        'books.word.finish': 'إنهاء التحرير',
+        'books.word.openAgain': 'فتح Word مجدداً',
+        'books.word.discard': 'تجاهل',
+        'books.word.noSavesYet': 'لم يصل أي حفظ من Word بعد',
+        'books.word.discardConfirm': 'سيصبح الكتاب ملغياً ويبقى رقمه محفوظاً في السجل. متابعة؟',
+        'books.word.finished': opts?.ref ? `تم اعتماد الإصدار — ${String(opts.ref)}` : 'تم اعتماد الإصدار',
+        'books.word.step1': 'يفتح Word الآن — اكتب المتن فقط',
+        'books.word.step2': 'احفظ من داخل Word (Ctrl+S)',
+        'books.word.step3': 'ارجع هنا واضغط «إنهاء التحرير»',
+        'common.confirm': 'تأكيد',
+        'common.cancel': 'إلغاء',
+      }
+      return ar[k] ?? k
+    },
+    i18n: { language: 'ar' },
+  }),
+}))
+
+vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }))
+
+const FAKE_SESSION: WordSessionRead = {
+  book_id: 42,
+  ref_number: '1/5/GSSG/141',
+  token: 'tok',
+  filename: 'file.docx',
+  word_url: 'ms-word:ofe|u|https://gssg.lan/dav/file.docx',
+  dav_url: 'https://gssg.lan/dav/file.docx',
+}
+
+function bookWith(last_put_at: string | null): BookRead {
+  return {
+    id: 42,
+    ref_number: '1/5/GSSG/141',
+    category_id: '1/5',
+    subject: 'التصاريح الأمنية',
+    direction: null,
+    stamp_style: null,
+    created_at: '2026-07-17T10:00:00Z',
+    deleted_at: null,
+    priority: 'normal',
+    approval_state: 'none',
+    is_draft: true,
+    doc_manager_has_signature: false,
+    edit_session: last_put_at !== undefined ? {
+      user_id: 1,
+      user_name: 'سعيد',
+      state: 'active',
+      last_put_at,
+      created_at: '2026-07-17T10:00:00Z',
+    } : null,
+  } as BookRead
+}
+
+function makeWrapper(qc: QueryClient) {
+  return ({ children }: { children: ReactNode }) =>
+    createElement(QueryClientProvider, { client: qc }, children)
+}
+
+beforeEach(() => {
+  vi.clearAllMocks()
+})
+
+describe('WordHandoffDialog', () => {
+  it('renders the ref inside bdi[dir=ltr] and Arabic eyebrow', () => {
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    vi.spyOn(apiMod.api, 'getBook').mockResolvedValue(bookWith(null))
+
+    render(
+      createElement(WordHandoffDialog, {
+        session: FAKE_SESSION,
+        open: true,
+        onClose: vi.fn(),
+      }),
+      { wrapper: makeWrapper(qc) },
+    )
+
+    // Arabic eyebrow — appears in visible div + sr-only DialogTitle; at least one present
+    expect(screen.getAllByText('تم إنشاء الكتاب وحجز الرقم').length).toBeGreaterThan(0)
+
+    // ref inside a bdi[dir=ltr]
+    const bdi = document.querySelector('bdi[dir="ltr"]')
+    expect(bdi).toBeTruthy()
+    expect(bdi?.textContent).toBe('1/5/GSSG/141')
+  })
+
+  it('Finish button DISABLED with hint when last_put_at is null', async () => {
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    vi.spyOn(apiMod.api, 'getBook').mockResolvedValue(bookWith(null))
+
+    render(
+      createElement(WordHandoffDialog, {
+        session: FAKE_SESSION,
+        open: true,
+        onClose: vi.fn(),
+      }),
+      { wrapper: makeWrapper(qc) },
+    )
+
+    // Wait for query
+    await waitFor(() =>
+      expect(screen.getByText('لم يصل أي حفظ من Word بعد')).toBeTruthy(),
+    )
+
+    const finishBtn = screen.getByText('إنهاء التحرير').closest('button')
+    expect(finishBtn).toBeTruthy()
+    expect(finishBtn?.disabled).toBe(true)
+  })
+
+  it('Finish button ENABLED when last_put_at is set', async () => {
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    vi.spyOn(apiMod.api, 'getBook').mockResolvedValue(bookWith('2026-07-17T10:05:00Z'))
+
+    render(
+      createElement(WordHandoffDialog, {
+        session: FAKE_SESSION,
+        open: true,
+        onClose: vi.fn(),
+      }),
+      { wrapper: makeWrapper(qc) },
+    )
+
+    await waitFor(() => {
+      const btn = screen.getByText('إنهاء التحرير').closest('button')
+      expect(btn?.disabled).toBe(false)
+    })
+  })
+
+  it('Discard fires discardWordSession on confirm', async () => {
+    const user = userEvent.setup()
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    vi.spyOn(apiMod.api, 'getBook').mockResolvedValue(bookWith(null))
+    const discardSpy = vi.spyOn(apiMod.api, 'discardWordSession').mockResolvedValue({} as BookRead)
+    const onClose = vi.fn()
+
+    render(
+      createElement(WordHandoffDialog, {
+        session: FAKE_SESSION,
+        open: true,
+        onClose,
+      }),
+      { wrapper: makeWrapper(qc) },
+    )
+
+    await user.click(screen.getByText('تجاهل'))
+    // ConfirmDialog shows the confirm text in description
+    await waitFor(() =>
+      expect(screen.getByText('سيصبح الكتاب ملغياً ويبقى رقمه محفوظاً في السجل. متابعة؟')).toBeTruthy(),
+    )
+    // Click the confirm button
+    await user.click(screen.getByText('تأكيد'))
+    await waitFor(() => expect(discardSpy).toHaveBeenCalledWith(42))
+  })
+
+  it('Finish calls finishWordSession and toasts success', async () => {
+    const user = userEvent.setup()
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    vi.spyOn(apiMod.api, 'getBook').mockResolvedValue(bookWith('2026-07-17T10:05:00Z'))
+    const finishSpy = vi.spyOn(apiMod.api, 'finishWordSession').mockResolvedValue({} as BookRead)
+    const onClose = vi.fn()
+
+    render(
+      createElement(WordHandoffDialog, {
+        session: FAKE_SESSION,
+        open: true,
+        onClose,
+      }),
+      { wrapper: makeWrapper(qc) },
+    )
+
+    await waitFor(() => {
+      const btn = screen.getByText('إنهاء التحرير').closest('button')
+      expect(btn?.disabled).toBe(false)
+    })
+
+    await user.click(screen.getByText('إنهاء التحرير'))
+    await waitFor(() => expect(finishSpy).toHaveBeenCalledWith(42))
+    await waitFor(() => expect(toast.success).toHaveBeenCalled())
+  })
+})

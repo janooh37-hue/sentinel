@@ -955,7 +955,17 @@
       "classification": "التبويب",
       "noClassification": "بدون تبويب",
       "bodyInWord": "نص الكتاب يُكتب في Word",
-      "createAndOpen": "إنشاء وفتح في Word"
+      "createAndOpen": "إنشاء وفتح في Word",
+      "reserved": "تم إنشاء الكتاب وحجز الرقم",
+      "finish": "إنهاء التحرير",
+      "openAgain": "فتح Word مجدداً",
+      "discard": "تجاهل",
+      "noSavesYet": "لم يصل أي حفظ من Word بعد",
+      "discardConfirm": "سيصبح الكتاب ملغياً ويبقى رقمه محفوظاً في السجل. متابعة؟",
+      "finished": "تم اعتماد الإصدار — {{ref}}",
+      "step1": "يفتح Word الآن — اكتب المتن فقط",
+      "step2": "احفظ من داخل Word (Ctrl+S)",
+      "step3": "ارجع هنا واضغط «إنهاء التحرير»"
     }
   },
   "ledger": {
