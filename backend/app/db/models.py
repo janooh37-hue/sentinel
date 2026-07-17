@@ -209,6 +209,9 @@ class Book(Base):
     merged_attachment_paths: Mapped[list[dict[str, str | None]]] = mapped_column(
         JSON, default=list, server_default="[]"
     )
+    # Normalised search corpus (migration 0057) — populated by Task 15.
+    # FTS5 external-content table books_fts indexes this column.
+    search_text: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     category: Mapped[BookCategory] = relationship(back_populates="books")
     approval_steps: Mapped[list[BookApprovalStep]] = relationship(
