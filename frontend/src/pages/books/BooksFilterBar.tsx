@@ -21,6 +21,7 @@ export interface BooksFilters {
   fromDate: string
   toDate: string
   q: string
+  drafts?: boolean
 }
 
 interface BooksFilterBarProps {
@@ -46,10 +47,11 @@ export function BooksFilterBar({
     filters.status !== 'all' ||
     filters.fromDate !== '' ||
     filters.toDate !== '' ||
-    filters.q !== ''
+    filters.q !== '' ||
+    !!filters.drafts
 
   const clear = (): void => {
-    onChange({ categoryIds: [], direction: 'all', status: 'all', fromDate: '', toDate: '', q: '' })
+    onChange({ categoryIds: [], direction: 'all', status: 'all', fromDate: '', toDate: '', q: '', drafts: false })
   }
 
   const toggleCategory = (id: string): void => {
@@ -242,6 +244,23 @@ export function BooksFilterBar({
             )
           })}
         </div>
+
+        <div className="hidden h-5 w-px shrink-0 bg-hairline md:block" />
+
+        {/* Drafts pill */}
+        <button
+          type="button"
+          aria-pressed={!!filters.drafts}
+          onClick={() => onChange({ ...filters, drafts: !filters.drafts })}
+          className={cn(
+            'inline-flex shrink-0 items-center rounded-full px-3 py-1 text-[0.78em] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 focus-visible:ring-offset-background max-md:min-h-[36px] max-md:py-1.5',
+            filters.drafts
+              ? 'bg-warning-soft font-semibold text-warning'
+              : 'bg-surface-tinted text-muted-foreground hover:bg-border hover:text-foreground',
+          )}
+        >
+          {t('books.filters.drafts')}
+        </button>
 
         <div className="hidden h-5 w-px shrink-0 bg-hairline md:block" />
 

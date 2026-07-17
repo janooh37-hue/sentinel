@@ -7,6 +7,7 @@ export const DEFAULT_BOOKS_FILTERS: BooksFilters = {
   fromDate: '',
   toDate: '',
   q: '',
+  drafts: false,
 }
 
 /**

@@ -665,7 +665,8 @@
       "search": "Subject",
       "clear": "Clear filters",
       "status": "Status",
-      "statusAll": "All"
+      "statusAll": "All",
+      "drafts": "Drafts"
     },
     "direction": {
       "all": "All",
@@ -906,7 +907,14 @@
       "step1": "Word is opening now — write the body only",
       "step2": "Save from inside Word (Ctrl+S)",
       "step3": "Come back here and press «Finish editing»",
-      "preparedBy": "Prepared by"
+      "preparedBy": "Prepared by",
+      "draft": "Draft — number reserved",
+      "editing": "Editing",
+      "editingBy": "Editing in Word by {{name}}",
+      "voided": "Voided",
+      "needsPc": "Editing in Word needs a PC with Word installed",
+      "openInWord": "Open in Word",
+      "continueWriting": "Continue writing"
     }
   },
   "ledger": {

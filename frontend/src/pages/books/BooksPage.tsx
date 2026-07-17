@@ -30,6 +30,8 @@ import { BooksFilterBar, type BooksFilters } from './BooksFilterBar'
 import { NewBookDialog } from './NewBookDialog'
 import { SubmitForApprovalDialog } from '@/components/books/SubmitForApprovalDialog'
 import { BookPreview } from '@/components/books/BookPreview'
+import { BookStatusChips } from '@/components/books/BookStatusChips'
+import { BookWordActions } from '@/components/books/BookWordActions'
 import type { BookCreate } from '@/lib/api'
 import { useShortcutAction } from '@/lib/useKeyboardShortcuts'
 import { useIsMobile } from '@/lib/useIsMobile'
@@ -77,6 +79,7 @@ export function BooksPage(): React.JSX.Element {
   const [spineState, setSpineState] = useState<SpineState>('all')
   const [railKind, setRailKind] = useState<string>('all')
   const [search, setSearch] = useState('')
+  const [showDrafts, setShowDrafts] = useState(false)
   const [selectedId, setSelectedId] = useState<number | null>(null)
   // Multi-select for "Add to email" bulk action (book ids).
   const [selectedForBasket, setSelectedForBasket] = useState<Set<number>>(new Set())
@@ -199,6 +202,7 @@ export function BooksPage(): React.JSX.Element {
   const mobileRows: BookRead[] = useMemo(() => {
     const q = filters.q.trim().toLowerCase()
     return allRows.filter((row) => {
+      if (filters.drafts) return row.is_draft && !row.voided_at
       if (filters.categoryIds.length > 0 && !filters.categoryIds.includes(row.category_id)) return false
       if (filters.direction !== 'all' && row.direction !== filters.direction) return false
       if (filters.status !== 'all' && row.approval_state !== filters.status) return false
@@ -224,7 +228,8 @@ export function BooksPage(): React.JSX.Element {
     filters.status !== 'all' ||
     !!filters.fromDate ||
     !!filters.toDate ||
-    !!filters.q.trim()
+    !!filters.q.trim() ||
+    !!filters.drafts
 
   // Header-line counts
   const total = listQuery.data?.total ?? 0
@@ -277,9 +282,16 @@ export function BooksPage(): React.JSX.Element {
     return items
   }, [allRows])
 
+  // Draft books (is_draft && !voided_at) — shown in the group card above the list
+  const draftBooks: BookRead[] = useMemo(
+    () => allRows.filter((r) => r.is_draft && !r.voided_at),
+    [allRows],
+  )
+
   const desktopRows: BookRead[] = useMemo(() => {
     const q = search.trim().toLowerCase()
     const filtered = allRows.filter((row) => {
+      if (showDrafts) return row.is_draft && !row.voided_at
       if (spineState !== 'all' && row.approval_state !== spineState) return false
       if (railKind !== 'all' && formKindOf(row.subject).id !== railKind) return false
       if (q && !`${row.ref_number} ${row.subject ?? ''}`.toLowerCase().includes(q)) return false
@@ -289,7 +301,7 @@ export function BooksPage(): React.JSX.Element {
     // so unsorted input would split a day into duplicate sections (key collision).
     // `filtered` is already a copy; never mutate allRows.
     return filtered.sort((a, b) => b.created_at.localeCompare(a.created_at))
-  }, [allRows, spineState, railKind, search])
+  }, [allRows, spineState, railKind, search, showDrafts])
 
   const selectedBook = useMemo(
     () => allRows.find((r) => r.id === selectedId) ?? null,
@@ -415,14 +427,33 @@ export function BooksPage(): React.JSX.Element {
           <div className="grid min-h-0 flex-1 grid-cols-[15rem_minmax(0,1fr)_clamp(360px,36%,480px)] gap-3">
             <FormRail items={railItems} active={railKind} onChange={setRailKind} />
             <section className="flex min-h-0 flex-col overflow-hidden rounded-2xl border border-hairline bg-surface">
-              <div className="shrink-0 border-b border-hairline p-2.5">
+              <div className="flex shrink-0 items-center gap-2 border-b border-hairline p-2.5">
                 <Input
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
                   placeholder={t('books.pane.searchPlaceholder')}
-                  className="h-8 rounded-full border-hairline bg-surface-raised text-[0.82em]"
+                  className="h-8 min-w-0 flex-1 rounded-full border-hairline bg-surface-raised text-[0.82em]"
                   data-testid="records-search"
                 />
+                {/* Drafts filter pill — shows only when there are drafts */}
+                {draftBooks.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => setShowDrafts((v) => !v)}
+                    aria-pressed={showDrafts}
+                    className={cn(
+                      'inline-flex shrink-0 items-center gap-1.5 rounded-full border px-2.5 py-1 text-[0.75em] font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                      showDrafts
+                        ? 'border-warning/40 bg-warning-soft text-warning'
+                        : 'border-hairline bg-surface-tinted text-muted-foreground hover:bg-border hover:text-foreground',
+                    )}
+                  >
+                    {t('books.filters.drafts')}
+                    <span className="inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-warning/20 px-1 text-[0.85em] font-bold text-warning">
+                      {draftBooks.length}
+                    </span>
+                  </button>
+                )}
               </div>
               {listQuery.isPending ? (
                 <div className="flex flex-col">
@@ -441,6 +472,51 @@ export function BooksPage(): React.JSX.Element {
                 </div>
               ) : (
                 <>
+                  {/* Drafts group card — dashed border, raised bg, above the list */}
+                  {draftBooks.length > 0 && !showDrafts && (
+                    <div className="shrink-0 border-b border-hairline bg-surface-raised px-3 py-2.5">
+                      <div className="rounded-xl border border-dashed border-warning/50 bg-warning-soft/30 p-3">
+                        <div className="mb-2 flex items-center justify-between gap-2">
+                          <span className="text-[0.75em] font-bold uppercase tracking-[0.07em] text-warning">
+                            {t('books.filters.drafts')} ({draftBooks.length})
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => setShowDrafts(true)}
+                            className="text-[0.72em] text-muted-foreground underline hover:text-foreground"
+                          >
+                            {t('books.filters.drafts')}
+                          </button>
+                        </div>
+                        <div className="flex flex-col gap-1.5">
+                          {draftBooks.slice(0, 3).map((draft) => (
+                            <div
+                              key={draft.id}
+                              className="flex items-center gap-2 rounded-lg bg-surface px-2.5 py-1.5"
+                            >
+                              <span className="font-mono text-[0.72em] font-bold text-primary">
+                                {draft.ref_number}
+                              </span>
+                              <span className="min-w-0 flex-1 truncate text-[0.75em] text-foreground">
+                                {draft.subject ?? '—'}
+                              </span>
+                              <BookStatusChips book={draft} noClassification />
+                              <BookWordActions book={draft} />
+                            </div>
+                          ))}
+                          {draftBooks.length > 3 && (
+                            <button
+                              type="button"
+                              onClick={() => setShowDrafts(true)}
+                              className="text-start text-[0.72em] text-muted-foreground underline hover:text-foreground"
+                            >
+                              +{draftBooks.length - 3} {t('books.filters.drafts').toLowerCase()}
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  )}
                   {selectedForBasket.size > 0 && (
                     <div className="flex shrink-0 items-center gap-3 border-b border-hairline bg-surface-raised px-3.5 py-2">
                       <span className="text-xs text-muted-foreground">

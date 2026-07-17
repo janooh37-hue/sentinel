@@ -53,6 +53,8 @@ import { hasCommentBearingMark } from '@/components/books/annotation-utils'
 import { cn } from '@/lib/utils'
 
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
+import { BookStatusChips } from '@/components/books/BookStatusChips'
+import { BookWordActions } from '@/components/books/BookWordActions'
 
 import { smsDeliveryTone } from '@/lib/smsDelivery'
 import { sealDescriptor, signedSourceOf, type SealTone } from './bookStateLabel'
@@ -460,9 +462,13 @@ export function BookRecordPage(): React.JSX.Element {
             )}
           </div>
         </div>
-        <div className="ms-1">
+        <div className="ms-1 flex flex-wrap items-center gap-1.5">
           {book && (
             <StatePill state={state} signingPath={book.signing_path} signedSource={signedSource} />
+          )}
+          {/* Classification / draft / editing / voided chips */}
+          {book && (
+            <BookStatusChips book={book} />
           )}
         </div>
         <div className="ms-auto flex flex-wrap items-center justify-end gap-2">
@@ -471,6 +477,10 @@ export function BookRecordPage(): React.JSX.Element {
             label={t('books.record.print')}
             onClick={() => window.print()}
           />
+          {/* Word session actions (mobile, isMobile=true) */}
+          {book && (
+            <BookWordActions book={book} isMobile />
+          )}
 
           {showSendForApproval && (
             <HeaderBtn

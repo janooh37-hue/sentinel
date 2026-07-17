@@ -721,7 +721,8 @@
       "search": "الموضوع",
       "clear": "مسح المرشحات",
       "status": "الحالة",
-      "statusAll": "الكل"
+      "statusAll": "الكل",
+      "drafts": "المسودات"
     },
     "direction": {
       "all": "الكل",
@@ -966,7 +967,14 @@
       "step1": "يفتح Word الآن — اكتب المتن فقط",
       "step2": "احفظ من داخل Word (Ctrl+S)",
       "step3": "ارجع هنا واضغط «إنهاء التحرير»",
-      "preparedBy": "المُعِدّ"
+      "preparedBy": "المُعِدّ",
+      "draft": "مسودة — رقم محجوز",
+      "editing": "قيد التحرير",
+      "editingBy": "قيد التحرير في Word بواسطة {{name}}",
+      "voided": "ملغي",
+      "needsPc": "التحرير في Word يتطلب جهاز كمبيوتر مثبّت عليه Word",
+      "openInWord": "فتح في Word",
+      "continueWriting": "متابعة الكتابة"
     }
   },
   "ledger": {

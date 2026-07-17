@@ -11,6 +11,7 @@ import { useTranslation } from 'react-i18next'
 import type { BookRead } from '@/lib/api'
 import { cn } from '@/lib/utils'
 
+import { BookStatusChips } from '@/components/books/BookStatusChips'
 import { signedSourceOf } from './bookStateLabel'
 import { formKindOf, subjectEmployeePart } from './formKind'
 import { paperCountOf } from './recordPapers'
@@ -80,6 +81,9 @@ export function RecordsList({
                   row.id === selectedId ? 'bg-primary-soft' : 'hover:bg-surface-tinted',
                   row.id === highlightedId && 'bg-accent-soft',
                   isChecked && 'bg-primary-soft/60',
+                  // Draft tinted background; voided struck-through
+                  row.is_draft && !row.voided_at && row.id !== selectedId && 'bg-warning-soft/20',
+                  row.voided_at && 'opacity-60',
                 )}
               >
                 {selectable && (
@@ -108,10 +112,18 @@ export function RecordsList({
                   {row.ref_number}
                 </span>
                 <span className="min-w-0 flex-1">
-                  <span className="block truncate text-[0.78em] font-semibold">{t(kind.labelKey)}</span>
+                  <span className={cn('block truncate text-[0.78em] font-semibold', row.voided_at && 'line-through')}>
+                    {t(kind.labelKey)}
+                  </span>
                   {who && (
                     <span className="block truncate text-[0.68em] text-muted-foreground" dir="auto">
                       {who}
+                    </span>
+                  )}
+                  {/* Draft / editing / voided chips — compact, no-classification to save space */}
+                  {(row.is_draft || row.edit_session?.state === 'active' || row.voided_at) && (
+                    <span className="mt-0.5 flex flex-wrap gap-1">
+                      <BookStatusChips book={row} noClassification />
                     </span>
                   )}
                 </span>

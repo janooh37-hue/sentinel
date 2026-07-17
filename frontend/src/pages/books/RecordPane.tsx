@@ -28,6 +28,8 @@ import { cn } from '@/lib/utils'
 
 import { canFileSignedCopy, canSendForApproval } from '@/components/books/book-detail-drawer-utils'
 
+import { BookStatusChips } from '@/components/books/BookStatusChips'
+import { BookWordActions } from '@/components/books/BookWordActions'
 import { signedSourceOf } from './bookStateLabel'
 import { formKindOf, subjectEmployeePart } from './formKind'
 import { papersOf, type Paper } from './recordPapers'
@@ -158,6 +160,12 @@ export function RecordPane({
           signedSource={signedSourceOf(book)}
         />
       </div>
+      {/* Status chips row: classification / draft / editing / voided */}
+      {(book.classification_code || book.is_draft || book.edit_session?.state === 'active' || book.voided_at) && (
+        <div className="flex shrink-0 flex-wrap gap-1.5 border-b border-hairline px-3.5 py-1.5">
+          <BookStatusChips book={book} />
+        </div>
+      )}
 
       <Suspense
         fallback={
@@ -193,6 +201,8 @@ export function RecordPane({
       </Suspense>
 
       <div className="flex shrink-0 flex-wrap gap-2 border-t border-hairline px-3.5 py-2.5">
+        {/* Word session actions (Finish / Discard) — desktop, not mobile */}
+        <BookWordActions book={book} />
         {state === 'none' && (
           <PaneBtn primary onClick={() => onContinueDraft(book.id)}>{t('books.pane.continueDraft')}</PaneBtn>
         )}
