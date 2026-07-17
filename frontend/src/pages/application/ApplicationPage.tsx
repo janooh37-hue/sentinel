@@ -164,6 +164,9 @@ export function ApplicationPage(): React.JSX.Element {
   // General Book Word-mode: classification code selected by the picker.
   // null = no classification (normal rich-editor mode); non-null = Word mode.
   const [classificationCode, setClassificationCode] = useState<string | null>(null)
+  // General Book plain-path body-mode toggle (Task 12).
+  // 'editor' = HugeRTE (default); 'word' = body written in Word (no classification).
+  const [bodyMode, setBodyMode] = useState<'editor' | 'word'>('editor')
   // Task 9 placeholder: after createWordBook succeeds, the session is stored here
   // so <WordHandoffDialog session={pendingWordSession} /> (Task 9) can mount and
   // guide finish/discard. The variable is read below in the TODO placeholder node.
@@ -442,10 +445,10 @@ export function ApplicationPage(): React.JSX.Element {
         return
       }
 
-      // General Book Word mode: classification selected → create a Word session
-      // instead of the normal generate flow. Only valid for the committed path
-      // (no preview for Word books). Preview button is hidden in this mode.
-      if (isAdminCategory && classificationCode != null) {
+      // General Book Word mode: classification selected OR plain body-mode toggle
+      // set to 'word' → create a Word session (classification_code null for plain).
+      // Only valid for the committed path (no preview for Word books).
+      if (isAdminCategory && (classificationCode != null || bodyMode === 'word')) {
         const managerField = schema?.fields.find((f) => f.type === 'manager_picker')
         const recipientField = schema?.fields.find((f) => f.type === 'recipient_picker')
         const ccField = schema?.fields.find((f) => f.type === 'recipient_multi_picker')
@@ -522,6 +525,7 @@ export function ApplicationPage(): React.JSX.Element {
     setLastSaved(null)
     setSubmitError(null)
     setClassificationCode(null)
+    setBodyMode('editor')
     setPendingWordSession(null)
   }, [form])
 
@@ -633,6 +637,7 @@ export function ApplicationPage(): React.JSX.Element {
     setActiveTab('fields')
     setSubmitError(null)
     setClassificationCode(null)
+    setBodyMode('editor')
     setPendingWordSession(null)
   }, [form])
 
@@ -878,6 +883,8 @@ export function ApplicationPage(): React.JSX.Element {
                         onExtractionConsumed={() => setPendingInjection(undefined)}
                         classificationCode={classificationCode}
                         onClassificationChange={setClassificationCode}
+                        bodyMode={bodyMode}
+                        onBodyModeChange={setBodyMode}
                       />
 
                       {/* Attachments — named slots from the form policy plus
@@ -891,7 +898,7 @@ export function ApplicationPage(): React.JSX.Element {
 
                       {/* Action row: Word mode → "Create & open in Word"; normal → Preview. */}
                       <div className="mt-7 flex flex-wrap items-center justify-between gap-2.5 border-t border-hairline pt-4">
-                        {classificationCode != null ? (
+                        {classificationCode != null || bodyMode === 'word' ? (
                           // Word mode — single action: create the book and open it in Word.
                           // Word-brand blue (#185abd) is reserved for open-in-Word actions.
                           <>

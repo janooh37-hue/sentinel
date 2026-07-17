@@ -915,7 +915,9 @@
       "needsPc": "Editing in Word needs a PC with Word installed",
       "openInWord": "Open in Word",
       "continueWriting": "Continue writing",
-      "editNewVersion": "Edit in Word (creates a new version)"
+      "editNewVersion": "Edit in Word (creates a new version)",
+      "writeHere": "Type here",
+      "writeInWord": "Write in Word"
     }
   },
   "ledger": {

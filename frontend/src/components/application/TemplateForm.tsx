@@ -64,6 +64,11 @@ export interface TemplateFormProps {
   classificationCode?: string | null
   /** Called when the user changes the classification picker. */
   onClassificationChange?: (code: string | null) => void
+  /** Body-mode toggle for the plain (no classification) General Book path.
+   *  'editor' = HugeRTE (default); 'word' = body written in Word.
+   *  Only shown when isGeneralBook && classificationCode == null. */
+  bodyMode?: 'editor' | 'word'
+  onBodyModeChange?: (mode: 'editor' | 'word') => void
 }
 
 /**
@@ -269,6 +274,8 @@ export function TemplateForm({
   onExtractionConsumed,
   classificationCode,
   onClassificationChange,
+  bodyMode = 'editor',
+  onBodyModeChange,
 }: TemplateFormProps): React.JSX.Element {
   const { t, i18n } = useTranslation()
   const isAr = i18n.language.startsWith('ar')
@@ -363,8 +370,10 @@ export function TemplateForm({
 
   // General Book Word-mode: detect the arabic_rich_full field.
   const isGeneralBook = schema.fields.some((f) => f.type === 'arabic_rich_full')
-  // In Word mode (classification selected) hide the body editor.
-  const wordMode = isGeneralBook && classificationCode != null
+  // Word mode: classification selected (Task 8) OR plain toggle set to 'word' (Task 12).
+  const wordMode = isGeneralBook && (classificationCode != null || bodyMode === 'word')
+  // Toggle is only shown on plain (no classification) General Book.
+  const showBodyModeToggle = isGeneralBook && classificationCode == null && !!onBodyModeChange
 
   // Group fields by their `group` attribute.
   // In Word mode, skip the arabic_rich_full body field — it's in Word.
@@ -419,6 +428,28 @@ export function TemplateForm({
               )}
             </>
           )}
+        </div>
+      )}
+
+      {/* General Book: body-mode pill toggle (plain path only, Task 12) */}
+      {showBodyModeToggle && (
+        <div className="mb-3 flex gap-1" role="group" aria-label={isAr ? 'وضع الكتابة' : 'Writing mode'}>
+          {(['editor', 'word'] as const).map((mode) => (
+            <button
+              key={mode}
+              type="button"
+              onClick={() => onBodyModeChange!(mode)}
+              className={[
+                'rounded-full px-3.5 py-1.5 text-[0.78em] font-medium transition-colors',
+                bodyMode === mode
+                  ? 'bg-primary-soft text-primary'
+                  : 'text-muted-foreground hover:bg-surface-tinted hover:text-foreground',
+              ].join(' ')}
+              aria-pressed={bodyMode === mode}
+            >
+              {mode === 'editor' ? t('books.word.writeHere') : t('books.word.writeInWord')}
+            </button>
+          ))}
         </div>
       )}
 

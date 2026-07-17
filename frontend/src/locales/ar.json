@@ -975,7 +975,9 @@
       "needsPc": "التحرير في Word يتطلب جهاز كمبيوتر مثبّت عليه Word",
       "openInWord": "فتح في Word",
       "continueWriting": "متابعة الكتابة",
-      "editNewVersion": "تعديل في Word (ينشئ إصداراً جديداً)"
+      "editNewVersion": "تعديل في Word (ينشئ إصداراً جديداً)",
+      "writeHere": "اكتب هنا",
+      "writeInWord": "اكتب في Word"
     }
   },
   "ledger": {
