@@ -72,6 +72,11 @@ class Settings(BaseSettings):
     sms_password: str = ""  # SMS Gate local-server Basic auth password
     sms_country_code: str = "971"  # default CC for normalizing contact
 
+    # --- Word WebDAV sessions -------------------------------------------------
+    # Base URL the service is reachable at; used to build the WebDAV URL handed
+    # to Word when it opens a document for editing.
+    public_base_url: str = "https://gssg.lan"  # env: GSSG_PUBLIC_BASE_URL
+
     # --- WhatsApp via self-hosted OpenWA gateway ------------------------------
     # All GSSG_OPENWA_* env vars. Disabled by default; the router falls back to
     # SMS entirely while this is off. Points at the Docker gateway on localhost.

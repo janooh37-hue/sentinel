@@ -12,6 +12,7 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
 from app import __version__
+from app.api import dav
 from app.api.deps import get_current_user
 from app.api.errors import install_handlers
 from app.api.v1 import announcements as announcements_v1
@@ -164,6 +165,10 @@ def create_app() -> FastAPI:
     # capability dependency. Per-endpoint capability gates layer on top.
     auth_gate = [Depends(get_current_user)]
 
+    # WebDAV for Word editing sessions — no prefix, no auth_gate:
+    # token-in-URL auth; Word's HTTP stack sends no cookies.
+    app.include_router(dav.router)
+
     app.include_router(system_v1.router, prefix="/api/v1")
     app.include_router(auth_v1.router, prefix="/api/v1")
     app.include_router(announcements_v1.router, prefix="/api/v1", dependencies=auth_gate)
@@ -183,9 +188,7 @@ def create_app() -> FastAPI:
     app.include_router(books_v1.categories_router, prefix="/api/v1", dependencies=auth_gate)
     # Smart folders mount BEFORE the ledger router so the static
     # /ledger/smart-folders paths win over the /ledger/{entry_id} catch-all.
-    app.include_router(
-        smart_folders_v1.router, prefix="/api/v1", dependencies=auth_gate
-    )
+    app.include_router(smart_folders_v1.router, prefix="/api/v1", dependencies=auth_gate)
     app.include_router(ledger_v1.router, prefix="/api/v1", dependencies=auth_gate)
     app.include_router(correspondence_v1.router, prefix="/api/v1", dependencies=auth_gate)
     app.include_router(editor_templates_v1.router, prefix="/api/v1", dependencies=auth_gate)
