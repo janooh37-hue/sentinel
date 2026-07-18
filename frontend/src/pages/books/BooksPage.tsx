@@ -829,7 +829,7 @@ function BookMobileCard({
       {/* ref + approval action */}
       <div className="flex items-center justify-between gap-2">
         <span className="font-mono text-[0.85em] font-semibold text-primary">
-          {row.ref_number}
+          <bdi dir="ltr">{row.ref_number}</bdi>
         </span>
         {row.approval_state !== 'none' ? (
           <ApprovalStatePill

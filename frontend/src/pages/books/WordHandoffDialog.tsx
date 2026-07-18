@@ -190,7 +190,7 @@ export function WordHandoffDialog({ session, open, onClose }: Props): React.JSX.
                   <bdi dir="ltr">{createdDate}</bdi>
                 )}
                 {bookQuery.data?.submitted_by_name && (
-                  <> · {t('books.word.preparedBy')}: {bookQuery.data.submitted_by_name}</>
+                  <> · {t('books.word.preparedBy')}: <bdi dir="ltr">{bookQuery.data.submitted_by_name}</bdi></>
                 )}
               </p>
             )}

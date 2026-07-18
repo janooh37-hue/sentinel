@@ -131,7 +131,7 @@ export function RecordsList({
                   {kind.glyph}
                 </span>
                 <span className={cn('w-[4.6rem] shrink-0 font-mono text-[0.7em] font-bold text-primary', row.voided_at && 'line-through')}>
-                  {row.ref_number}
+                  <bdi dir="ltr">{row.ref_number}</bdi>
                 </span>
                 <span className="min-w-0 flex-1">
                   <span className={cn('block truncate text-[0.78em] font-semibold', row.voided_at && 'line-through')}>

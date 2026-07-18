@@ -24,6 +24,7 @@ import { Button } from '@/components/ui/button'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import { useCapabilities } from '@/lib/useCapabilities'
 import { useFocusTrap } from '@/lib/useFocusTrap'
+import { bidi } from '@/lib/bidi'
 import { cn } from '@/lib/utils'
 
 import { canFileSignedCopy, canSendForApproval } from '@/components/books/book-detail-drawer-utils'
@@ -142,7 +143,7 @@ export function RecordPane({
     <aside className="flex min-h-0 flex-col overflow-hidden rounded-2xl border border-hairline bg-surface">
       <div className="flex shrink-0 items-center gap-2.5 border-b border-hairline px-3.5 py-2.5">
         <span className="shrink-0 rounded-sm border-[1.5px] border-primary px-2 py-0.5 font-mono text-[0.72em] font-bold text-primary">
-          {book.ref_number}
+          <bdi dir="ltr">{book.ref_number}</bdi>
         </span>
         <span className="min-w-0 flex-1">
           <span className="block truncate text-[0.82em] font-bold">
@@ -325,7 +326,7 @@ export function RecordPane({
           <AlertDialogHeader>
             <AlertDialogTitle>{t('books.pane.signedCopyTitle')}</AlertDialogTitle>
             <AlertDialogDescription>
-              {t('books.pane.signedCopyBody', { ref: book.ref_number })}
+              {t('books.pane.signedCopyBody', { ref: bidi(book.ref_number) })}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
