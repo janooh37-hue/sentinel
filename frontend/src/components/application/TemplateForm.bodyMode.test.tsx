@@ -16,7 +16,7 @@
  */
 
 import { render, screen, fireEvent } from '@testing-library/react'
-import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest'
+import { describe, it, expect, beforeAll, afterAll, vi, beforeEach } from 'vitest'
 import i18n from 'i18next'
 import { useForm, FormProvider } from 'react-hook-form'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
@@ -34,9 +34,16 @@ vi.mock('./fields/ClassificationField', () => ({
 }))
 
 // Mock api (used indirectly via hooks inside TemplateForm).
-vi.mock('@/lib/api', () => ({ api: {} }))
+vi.mock('@/lib/api', () => ({
+  api: {
+    listWordTemplates: vi.fn().mockResolvedValue([]),
+    listManagers: vi.fn().mockResolvedValue([]),
+    listRecipients: vi.fn().mockResolvedValue([]),
+  },
+}))
 
 import { TemplateForm } from './TemplateForm'
+import { api } from '@/lib/api'
 import type { TemplateDetailResponse } from './types'
 
 const GENERAL_BOOK_SCHEMA: TemplateDetailResponse = {
@@ -69,10 +76,14 @@ function Host({
   bodyMode,
   onBodyModeChange,
   classificationCode = null,
+  templateName,
+  onTemplateNameChange,
 }: {
   bodyMode: 'editor' | 'word'
   onBodyModeChange: (m: 'editor' | 'word') => void
   classificationCode?: string | null
+  templateName?: string | null
+  onTemplateNameChange?: (v: string | null) => void
 }) {
   const form = useForm({ defaultValues: {} })
   return (
@@ -86,6 +97,8 @@ function Host({
           onClassificationChange={vi.fn()}
           bodyMode={bodyMode}
           onBodyModeChange={onBodyModeChange}
+          templateName={templateName}
+          onTemplateNameChange={onTemplateNameChange ?? vi.fn()}
         />
       </FormProvider>
     </QueryClientProvider>
@@ -144,5 +157,87 @@ describe('TemplateForm body-mode toggle (Arabic, Task 12)', () => {
       <Host bodyMode="editor" onBodyModeChange={vi.fn()} classificationCode="5/1" />,
     )
     expect(screen.getByTestId('rich-editor-body')).toBeInTheDocument()
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Task 11 — template picker in General Book word mode
+// ---------------------------------------------------------------------------
+
+const GENERAL_BOOK_WITH_RECIPIENT: TemplateDetailResponse = {
+  ...GENERAL_BOOK_SCHEMA,
+  fields: [
+    ...GENERAL_BOOK_SCHEMA.fields,
+    {
+      id: 'recipient_id',
+      type: 'recipient_picker' as const,
+      label_en: 'Recipient',
+      label_ar: 'المرسل إليه',
+      required: false,
+    },
+    {
+      id: 'manager_id',
+      type: 'manager_picker' as const,
+      label_en: 'Manager',
+      label_ar: 'المدير',
+      required: false,
+    },
+  ],
+}
+
+function HostWithRecipient({
+  bodyMode,
+  templateName,
+}: {
+  bodyMode: 'editor' | 'word'
+  templateName?: string | null
+}) {
+  const form = useForm({ defaultValues: {} })
+  return (
+    <QueryClientProvider client={makeQc()}>
+      <FormProvider {...form}>
+        <TemplateForm
+          templateId="General Book"
+          schema={GENERAL_BOOK_WITH_RECIPIENT}
+          form={form}
+          classificationCode={null}
+          onClassificationChange={vi.fn()}
+          bodyMode={bodyMode}
+          onBodyModeChange={vi.fn()}
+          templateName={templateName}
+          onTemplateNameChange={vi.fn()}
+        />
+      </FormProvider>
+    </QueryClientProvider>
+  )
+}
+
+describe('TemplateForm template picker (Arabic, Task 11)', () => {
+  beforeAll(async () => {
+    i18n.addResourceBundle('ar', 'translation', ar, true, true)
+    await i18n.changeLanguage('ar')
+  })
+  afterAll(async () => {
+    await i18n.changeLanguage('en')
+  })
+
+  beforeEach(() => {
+    vi.mocked(api.listWordTemplates).mockResolvedValue([])
+  })
+
+  it('shows the template picker in word mode with a none default', async () => {
+    vi.mocked(api.listWordTemplates).mockResolvedValue([
+      { name: 'الصيانة.docx', modified_at: '2026-07-19T00:00:00' },
+    ])
+    render(<HostWithRecipient bodyMode="word" />)
+    expect(await screen.findByText('بدون قالب')).toBeInTheDocument()
+  })
+
+  it('hides recipient/cc/manager fields when a template is selected', () => {
+    vi.mocked(api.listWordTemplates).mockResolvedValue([
+      { name: 'الصيانة.docx', modified_at: '2026-07-19T00:00:00' },
+    ])
+    render(<HostWithRecipient bodyMode="word" templateName="الصيانة.docx" />)
+    expect(screen.queryByText(/المرسل إليه|recipient/i)).not.toBeInTheDocument()
   })
 })

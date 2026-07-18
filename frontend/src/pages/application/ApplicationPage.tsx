@@ -167,6 +167,8 @@ export function ApplicationPage(): React.JSX.Element {
   // General Book plain-path body-mode toggle (Task 12).
   // 'editor' = HugeRTE (default); 'word' = body written in Word (no classification).
   const [bodyMode, setBodyMode] = useState<'editor' | 'word'>('editor')
+  // General Book Word mode: selected boilerplate template (or null for blank).
+  const [templateName, setTemplateName] = useState<string | null>(null)
   // Task 9 placeholder: after createWordBook succeeds, the session is stored here
   // so <WordHandoffDialog session={pendingWordSession} /> (Task 9) can mount and
   // guide finish/discard. The variable is read below in the TODO placeholder node.
@@ -476,6 +478,7 @@ export function ApplicationPage(): React.JSX.Element {
           subject: typeof values['subject'] === 'string' ? values['subject'].trim() : '',
           cc: Array.isArray(values[ccField?.id ?? '']) ? (values[ccField!.id] as string[]) : [],
           manager_id: managerField ? ((values[managerField.id] as number | null | undefined) ?? null) : null,
+          template_name: templateName ?? undefined,
         })
         return
       }
@@ -544,6 +547,7 @@ export function ApplicationPage(): React.JSX.Element {
     setSubmitError(null)
     setClassificationCode(null)
     setBodyMode('editor')
+    setTemplateName(null)
     setPendingWordSession(null)
   }, [form])
 
@@ -656,6 +660,7 @@ export function ApplicationPage(): React.JSX.Element {
     setSubmitError(null)
     setClassificationCode(null)
     setBodyMode('editor')
+    setTemplateName(null)
     setPendingWordSession(null)
   }, [form])
 
@@ -902,7 +907,12 @@ export function ApplicationPage(): React.JSX.Element {
                         classificationCode={classificationCode}
                         onClassificationChange={setClassificationCode}
                         bodyMode={bodyMode}
-                        onBodyModeChange={setBodyMode}
+                        onBodyModeChange={(mode) => {
+                          setBodyMode(mode)
+                          if (mode !== 'word') setTemplateName(null)
+                        }}
+                        templateName={templateName}
+                        onTemplateNameChange={setTemplateName}
                       />
 
                       {/* Attachments — named slots from the form policy plus

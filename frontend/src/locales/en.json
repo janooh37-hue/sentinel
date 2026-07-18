@@ -926,7 +926,9 @@
       "classificationRequired": "Choose a classification (التبويب) first — every book takes its number from the classified register",
       "finishedPdfTitle": "Book saved — {{ref}}",
       "pdfPending": "PDF is being prepared — download the DOCX meanwhile",
-      "close": "Close"
+      "close": "Close",
+      "templatePicker": "Template",
+      "templateNone": "No template"
     }
   },
   "ledger": {

@@ -986,7 +986,9 @@
       "classificationRequired": "اختر التبويب أولاً — رقم كل كتاب يُؤخذ من سجل التبويب",
       "finishedPdfTitle": "تم حفظ الكتاب — {{ref}}",
       "pdfPending": "جارٍ تجهيز ملف PDF — يمكنك تنزيل ملف DOCX الآن",
-      "close": "إغلاق"
+      "close": "إغلاق",
+      "templatePicker": "القالب",
+      "templateNone": "بدون قالب"
     }
   },
   "ledger": {

@@ -1218,6 +1218,9 @@ export const api = {
   /** POST /books/{id}/word-sessions — re-open a finished book for Word editing (creates next version on finish). */
   reopenWordSession: (bookId: number) =>
     request<WordSessionRead>('POST', `/books/${bookId}/word-sessions`),
+  /** GET /books/word-templates — shared General Book boilerplate library. */
+  listWordTemplates: () =>
+    request<components['schemas']['WordTemplateRead'][]>('GET', '/books/word-templates'),
   updateBook: (id: number, body: BookUpdate) =>
     request<BookRead>('PATCH', `/books/${id}`, body),
   deleteBook: (id: number) => request<void>('DELETE', `/books/${id}`),

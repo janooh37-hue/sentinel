@@ -10,6 +10,7 @@
  */
 
 import { useEffect, useState } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import type { UseFormReturn } from 'react-hook-form'
 import { FormProvider } from 'react-hook-form'
 import { useTranslation } from 'react-i18next'
@@ -69,6 +70,9 @@ export interface TemplateFormProps {
    *  'editor' = HugeRTE (default); 'word' = body written in Word. */
   bodyMode?: 'editor' | 'word'
   onBodyModeChange?: (mode: 'editor' | 'word') => void
+  /** General Book Word mode: selected template name (including .docx), or null for no template. */
+  templateName?: string | null
+  onTemplateNameChange?: (v: string | null) => void
 }
 
 /**
@@ -276,6 +280,8 @@ export function TemplateForm({
   onClassificationChange,
   bodyMode = 'editor',
   onBodyModeChange,
+  templateName,
+  onTemplateNameChange,
 }: TemplateFormProps): React.JSX.Element {
   const { t, i18n } = useTranslation()
   const isAr = i18n.language.startsWith('ar')
@@ -375,12 +381,22 @@ export function TemplateForm({
   const wordMode = isGeneralBook && bodyMode === 'word'
   const showBodyModeToggle = isGeneralBook && !!onBodyModeChange
 
+  const wordTemplatesQuery = useQuery({
+    queryKey: ['word-templates'],
+    queryFn: api.listWordTemplates,
+    enabled: !!wordMode,
+  })
+
   // Group fields by their `group` attribute.
   // In Word mode, skip the arabic_rich_full body field — it's in Word.
+  // When a template is selected, also skip recipient/CC/manager — the
+  // boilerplate already carries that content.
   // Ungrouped fields land in a synthetic "_default" bucket, rendered first.
+  const TEMPLATE_BAKED_TYPES = new Set(['recipient_picker', 'recipient_multi_picker', 'manager_picker'])
   const groups = new Map<string, TemplateField[]>()
   for (const field of schema.fields) {
     if (wordMode && field.type === 'arabic_rich_full') continue
+    if (wordMode && templateName && TEMPLATE_BAKED_TYPES.has(field.type)) continue
     const groupKey = field.group ?? '_default'
     const existing = groups.get(groupKey)
     if (existing) {
@@ -450,6 +466,28 @@ export function TemplateForm({
               {mode === 'editor' ? t('books.word.writeHere') : t('books.word.writeInWord')}
             </button>
           ))}
+        </div>
+      )}
+
+      {/* General Book: template picker — only in word mode */}
+      {wordMode && onTemplateNameChange && (
+        <div className="mb-3">
+          <label className="mb-1 block text-[0.78em] font-medium text-muted-foreground">
+            {t('books.word.templatePicker')}
+          </label>
+          <select
+            value={templateName ?? ''}
+            onChange={(e) => onTemplateNameChange(e.target.value || null)}
+            className="w-full rounded-lg border border-border bg-background px-3 py-2 text-[0.85em]"
+            aria-label={t('books.word.templateNone')}
+          >
+            <option value="">{t('books.word.templateNone')}</option>
+            {(wordTemplatesQuery.data ?? []).map((tpl) => (
+              <option key={tpl.name} value={tpl.name}>
+                {tpl.name.replace(/\.docx$/i, '')}
+              </option>
+            ))}
+          </select>
         </div>
       )}
 
