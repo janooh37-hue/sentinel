@@ -479,7 +479,7 @@ export function TemplateForm({
             value={templateName ?? ''}
             onChange={(e) => onTemplateNameChange(e.target.value || null)}
             className="w-full rounded-lg border border-border bg-background px-3 py-2 text-[0.85em]"
-            aria-label={t('books.word.templateNone')}
+            aria-label={t('books.word.templatePicker')}
           >
             <option value="">{t('books.word.templateNone')}</option>
             {(wordTemplatesQuery.data ?? []).map((tpl) => (

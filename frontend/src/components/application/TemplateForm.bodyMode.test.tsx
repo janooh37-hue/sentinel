@@ -231,6 +231,7 @@ describe('TemplateForm template picker (Arabic, Task 11)', () => {
     ])
     render(<HostWithRecipient bodyMode="word" />)
     expect(await screen.findByText('بدون قالب')).toBeInTheDocument()
+    expect(await screen.findByRole('combobox', { name: 'القالب' })).toBeInTheDocument()
   })
 
   it('hides recipient/cc/manager fields when a template is selected', () => {
