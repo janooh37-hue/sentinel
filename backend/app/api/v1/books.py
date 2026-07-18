@@ -49,11 +49,13 @@ from app.schemas.book import (
     ClassificationRead,
     ReviewersAddRequest,
     ReviewRequest,
+    SaveAsTemplateRequest,
     WordBookCreate,
     WordSessionRead,
+    WordTemplateRead,
 )
 from app.schemas.notify import NotifyMessageRead as NotifyMessageRead
-from app.services import book_service, word_book_service
+from app.services import book_service, book_template_service, word_book_service
 from app.services.book_service import LIST_DEFAULT_LIMIT, LIST_MAX_LIMIT
 
 router = APIRouter(prefix="/books", tags=["books"])
@@ -113,6 +115,17 @@ def list_classifications(
     )
 
 
+@router.get("/word-templates", response_model=list[WordTemplateRead])
+def list_word_templates(
+    _user: Annotated[User, Depends(require_capability("books.manage"))],
+) -> list[WordTemplateRead]:
+    """Shared General Book boilerplate library (Word path)."""
+    return [
+        WordTemplateRead(name=t.name, modified_at=t.modified_at)
+        for t in book_template_service.list_templates()
+    ]
+
+
 @router.post("/word-sessions", response_model=WordSessionRead, status_code=status.HTTP_201_CREATED)
 def create_word_session(
     payload: WordBookCreate,
@@ -128,6 +141,7 @@ def create_word_session(
         subject=payload.subject,
         cc=payload.cc,
         manager_id=payload.manager_id,
+        template_name=payload.template_name,
     )
     return WordSessionRead(
         book_id=info.book_id,
@@ -194,6 +208,23 @@ def discard_word_session(
     item.subject = book_service.derive_subject(row)
     item.versions = _build_versions(db, row)
     return _enrich_path_fields(item, row, db)
+
+
+@router.post(
+    "/{book_id}/save-as-template",
+    response_model=WordTemplateRead,
+    status_code=status.HTTP_201_CREATED,
+)
+def save_book_as_template(
+    book_id: int,
+    payload: SaveAsTemplateRequest,
+    db: Annotated[Session, Depends(get_db)],
+    _user: Annotated[User, Depends(require_capability("books.manage"))],
+) -> WordTemplateRead:
+    """Copy a finished General Book into the shared template library
+    (retokenized + validated; content becomes visible to all books.manage users)."""
+    info = book_template_service.save_book_as_template(db, book_id=book_id, name=payload.name)
+    return WordTemplateRead(name=info.name, modified_at=info.modified_at)
 
 
 def _fill_draft_fields(

@@ -35,7 +35,13 @@ from app.db.models import (
     User,
 )
 from app.db.repos.refs_repo import allocate_ref_with_retry
-from app.schemas.book import ApproverOptionRead, BookApprovalStepRead, BookCreate, BookUpdate
+from app.schemas.book import (
+    ApproverOptionRead,
+    BookApprovalStepRead,
+    BookCreate,
+    BookUpdate,
+    ImportedDocRead,
+)
 from app.services import notify_format as nf
 from app.services import perm_service
 
@@ -1102,7 +1108,7 @@ def _resolve_imported_paths(
     return (rel(pdf) if pdf is not None else None, rel(original), original.name)
 
 
-def imported_document_of(book: Book) -> dict[str, Any] | None:
+def imported_document_of(book: Book) -> ImportedDocRead | None:
     """Build the ``ImportedDocRead`` payload for a book, or ``None``.
 
     Only applies to imported records: a book with a stale ``doc_path`` and no
@@ -1121,12 +1127,12 @@ def imported_document_of(book: Book) -> dict[str, Any] | None:
     pdf_rel, _original_rel, filename = resolved
     fmt = filename.rsplit(".", 1)[-1].lower() if "." in filename else ""
     base = f"/api/v1/books/{book.id}/imported-document"
-    return {
-        "pdf_url": (f"{base}?format=pdf" if pdf_rel is not None else None),
-        "download_url": f"{base}?format=original",
-        "filename": filename,
-        "format": fmt,
-    }
+    return ImportedDocRead(
+        pdf_url=(f"{base}?format=pdf" if pdf_rel is not None else None),
+        download_url=f"{base}?format=original",
+        filename=filename,
+        format=fmt,
+    )
 
 
 def resolve_imported_file(book: Book, *, prefer: str) -> Path | None:

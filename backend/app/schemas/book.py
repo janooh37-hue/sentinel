@@ -186,6 +186,7 @@ class WordBookCreate(BaseModel):
     subject: str
     cc: list[str] = Field(default_factory=list)
     manager_id: int | None = None
+    template_name: str | None = None
 
 
 class WordSessionRead(BaseModel):
@@ -195,6 +196,15 @@ class WordSessionRead(BaseModel):
     filename: str
     word_url: str
     dav_url: str
+
+
+class WordTemplateRead(BaseModel):
+    name: str
+    modified_at: datetime
+
+
+class SaveAsTemplateRequest(BaseModel):
+    name: str
 
 
 class BookRead(ORMBase):

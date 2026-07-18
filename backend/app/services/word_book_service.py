@@ -65,6 +65,7 @@ def create_word_book(
     subject: str,
     cc: list[str] | str | None,
     manager_id: int | None,
+    template_name: str | None = None,
 ) -> WordSessionInfo:
     """Create a General Book with a working docx for Word.
 

@@ -93,6 +93,25 @@ def _write_minimal_docx(path: Path) -> None:
     doc.save(str(path))
 
 
+def _write_retokenizable_docx(path: Path) -> None:
+    """Full token set accepted by retokenize_general_book (superset of _write_minimal_docx)."""
+    import docx as _docx
+
+    doc = _docx.Document()
+    doc.add_paragraph("{%p if ref %}")
+    doc.add_paragraph("الرقم: {{ ref }}")
+    doc.add_paragraph("{%p endif %}")
+    doc.add_paragraph("التاريخ: {{ date }}")
+    doc.add_paragraph("السيد / {{ recipient_name }}")
+    doc.add_paragraph("الموضوع: {{ subject }}")
+    doc.add_paragraph("{{ body }}")
+    doc.add_paragraph("{{ cc }}")
+    doc.add_paragraph("{{ manager_name }}")
+    doc.add_paragraph("{{ manager_title }}")
+    doc.add_paragraph("{{ submitter_g }}")
+    doc.save(str(path))
+
+
 def _seed_gs(db: Session) -> None:
     if db.get(BookCategory, "GS") is None:
         db.add(BookCategory(id="GS", prefix="GS"))
@@ -243,3 +262,122 @@ def test_list_books_batches_edit_sessions(api_db, monkeypatch, tmp_path):
         assert row["is_draft"] is True
         assert row["edit_session"] is not None
         assert row["edit_session"]["state"] == "active"
+
+
+# ---------------------------------------------------------------------------
+# Fixtures for template routes
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture()
+def finished_word_book(api_db, monkeypatch, tmp_path):
+    """A finished General Book (BookVersion + Document on disk) via api_db."""
+    from datetime import UTC, datetime
+
+    from app.config import Settings
+    from app.db.models import BookEditSession, User
+    from app.services import book_template_service, word_book_service
+
+    _seed_gs(api_db)
+
+    settings = Settings(
+        data_dir=tmp_path / "data",
+        templates_dir=tmp_path / "templates",
+    )
+    (tmp_path / "templates").mkdir(parents=True, exist_ok=True)
+    # Use the full token set required by retokenize_general_book (needs {{ date }})
+    _write_retokenizable_docx(tmp_path / "templates" / "GSSG-GS_300-003_General_Book.docx")
+    monkeypatch.setattr(word_book_service, "get_settings", lambda: settings)
+
+    # Point template library at an isolated tmp dir
+    tpl_lib = tmp_path / "tpl_lib"
+    tpl_lib.mkdir(parents=True, exist_ok=True)
+    monkeypatch.setattr(book_template_service, "templates_dir", lambda: tpl_lib)
+
+    user = User(email="tpl_route@test.ae", password_hash="x", status="active")
+    api_db.add(user)
+    api_db.commit()
+    api_db.refresh(user)
+
+    info = word_book_service.create_word_book(
+        api_db,
+        user=user,
+        classification_code="5/1",
+        recipient_id=None,
+        subject="Template route test book",
+        cc=None,
+        manager_id=None,
+    )
+    edit_session = api_db.query(BookEditSession).filter_by(book_id=info.book_id).one()
+    edit_session.last_put_at = datetime.now(UTC).replace(tzinfo=None)
+    api_db.commit()
+    return word_book_service.finish_word_session(api_db, user=user, book_id=info.book_id)
+
+
+def _admin_client(api_db, monkeypatch, tmp_path):
+    """books.manage-capable client (admin role)."""
+    user = _make_user(api_db, role="admin", email=f"adm_{id(tmp_path)}@test.ae")
+    return _client(api_db, user, monkeypatch, tmp_path), user
+
+
+def _plain_client(api_db, monkeypatch, tmp_path):
+    """No books.manage (operator role)."""
+    user = _make_user(api_db, role="operator", email=f"op_{id(tmp_path)}@test.ae")
+    return _client(api_db, user, monkeypatch, tmp_path), user
+
+
+# ---------------------------------------------------------------------------
+# GET /books/word-templates
+# ---------------------------------------------------------------------------
+
+
+def test_list_word_templates_empty(api_db, monkeypatch, tmp_path):
+    from app.services import book_template_service
+
+    tpl_lib = tmp_path / "tpl_lib"
+    tpl_lib.mkdir(parents=True, exist_ok=True)
+    monkeypatch.setattr(book_template_service, "templates_dir", lambda: tpl_lib)
+
+    c, _ = _admin_client(api_db, monkeypatch, tmp_path)
+    r = c.get("/api/v1/books/word-templates")
+    assert r.status_code == 200
+    assert r.json() == []
+
+
+def test_list_word_templates_requires_books_manage(api_db, monkeypatch, tmp_path):
+    from app.services import book_template_service
+
+    tpl_lib = tmp_path / "tpl_lib"
+    tpl_lib.mkdir(parents=True, exist_ok=True)
+    monkeypatch.setattr(book_template_service, "templates_dir", lambda: tpl_lib)
+
+    c, _ = _plain_client(api_db, monkeypatch, tmp_path)
+    r = c.get("/api/v1/books/word-templates")
+    assert r.status_code == 403
+
+
+# ---------------------------------------------------------------------------
+# POST /books/{book_id}/save-as-template
+# ---------------------------------------------------------------------------
+
+
+def test_save_as_template_bad_name_422(api_db, monkeypatch, tmp_path, finished_word_book):
+    c, _ = _admin_client(api_db, monkeypatch, tmp_path)
+    r = c.post(
+        f"/api/v1/books/{finished_word_book.id}/save-as-template",
+        json={"name": "../evil"},
+    )
+    assert r.status_code == 422
+    assert r.json()["error"]["code"] == "TEMPLATE_BAD_NAME"
+
+
+def test_save_as_template_and_list(api_db, monkeypatch, tmp_path, finished_word_book):
+    c, _ = _admin_client(api_db, monkeypatch, tmp_path)
+    r = c.post(
+        f"/api/v1/books/{finished_word_book.id}/save-as-template",
+        json={"name": "قالب المسار"},
+    )
+    assert r.status_code == 201
+    assert r.json()["name"] == "قالب المسار.docx"
+    listed = c.get("/api/v1/books/word-templates").json()
+    assert [t["name"] for t in listed] == ["قالب المسار.docx"]
