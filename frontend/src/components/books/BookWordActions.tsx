@@ -14,6 +14,7 @@ import { api, apiErrorMessage } from '@/lib/api'
 import { bidi } from '@/lib/bidi'
 import type { BookRead, WordSessionRead } from '@/lib/api'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
+import { DialogRoot, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog'
 import { WordHandoffDialog } from '@/pages/books/WordHandoffDialog'
 import { cn } from '@/lib/utils'
 
@@ -27,6 +28,8 @@ export function BookWordActions({ book, isMobile }: Props): React.JSX.Element | 
   const qc = useQueryClient()
   const [discardOpen, setDiscardOpen] = useState(false)
   const [reopenSession, setReopenSession] = useState<WordSessionRead | null>(null)
+  const [saveTplOpen, setSaveTplOpen] = useState(false)
+  const [tplName, setTplName] = useState('')
 
   const invalidate = () => void qc.invalidateQueries({ queryKey: ['books'] })
 
@@ -58,6 +61,15 @@ export function BookWordActions({ book, isMobile }: Props): React.JSX.Element | 
     onError: (err) => toast.error(apiErrorMessage(err)),
   })
 
+  const saveTemplateMutation = useMutation({
+    mutationFn: () => api.saveBookAsTemplate(book.id, tplName.trim()),
+    onSuccess: (tpl) => {
+      setSaveTplOpen(false)
+      toast.success(t('books.word.savedAsTemplate', { name: tpl.name.replace(/\.docx$/i, '') }))
+    },
+    onError: (err) => toast.error(apiErrorMessage(err)),
+  })
+
   // Voided book — no actions
   if (book.voided_at) return null
 
@@ -71,7 +83,7 @@ export function BookWordActions({ book, isMobile }: Props): React.JSX.Element | 
 
   return (
     <>
-      {/* Re-open button — shown for FINISHED books (has versions, no active session) */}
+      {/* Re-open + Save-as-template buttons — shown for FINISHED books (has versions, no active session) */}
       {isFinished && (
         <div className="flex flex-col gap-1">
           <button
@@ -91,6 +103,14 @@ export function BookWordActions({ book, isMobile }: Props): React.JSX.Element | 
               {t('books.word.needsPc')}
             </span>
           )}
+          <button
+            type="button"
+            disabled={saveTemplateMutation.isPending}
+            onClick={() => { setTplName(book.subject ?? ''); setSaveTplOpen(true) }}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-hairline px-3 py-2 text-[0.82em] font-semibold text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
+          >
+            {t('books.word.saveAsTemplate')}
+          </button>
         </div>
       )}
 
@@ -152,6 +172,42 @@ export function BookWordActions({ book, isMobile }: Props): React.JSX.Element | 
         open={reopenSession != null}
         onClose={() => { setReopenSession(null); invalidate() }}
       />
+
+      {/* Save-as-template name dialog */}
+      <DialogRoot open={saveTplOpen} onOpenChange={setSaveTplOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{t('books.word.saveAsTemplate')}</DialogTitle>
+            <DialogDescription>{t('books.word.saveAsTemplateHint')}</DialogDescription>
+          </DialogHeader>
+          <div className="px-4 py-3 flex flex-col gap-3">
+            <input
+              type="text"
+              value={tplName}
+              onChange={(e) => setTplName(e.target.value)}
+              className="w-full rounded-lg border border-hairline bg-transparent px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              autoFocus
+            />
+            <div className="flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setSaveTplOpen(false)}
+                className="rounded-lg px-3 py-2 text-[0.82em] font-semibold text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              >
+                {t('common.cancel')}
+              </button>
+              <button
+                type="button"
+                disabled={saveTemplateMutation.isPending || !tplName.trim()}
+                onClick={() => saveTemplateMutation.mutate()}
+                className="rounded-lg bg-primary px-3 py-2 text-[0.82em] font-semibold text-primary-foreground transition-colors hover:bg-primary-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
+              >
+                {t('books.word.saveAsTemplate')}
+              </button>
+            </div>
+          </div>
+        </DialogContent>
+      </DialogRoot>
     </>
   )
 }

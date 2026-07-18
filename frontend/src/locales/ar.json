@@ -988,7 +988,10 @@
       "pdfPending": "جارٍ تجهيز ملف PDF — يمكنك تنزيل ملف DOCX الآن",
       "close": "إغلاق",
       "templatePicker": "القالب",
-      "templateNone": "بدون قالب"
+      "templateNone": "بدون قالب",
+      "saveAsTemplate": "حفظ كقالب",
+      "saveAsTemplateHint": "سيصبح محتوى الكتاب قالباً مشتركاً متاحاً لجميع مديري الكتب.",
+      "savedAsTemplate": "تم الحفظ في مكتبة القوالب: {{name}}"
     }
   },
   "ledger": {

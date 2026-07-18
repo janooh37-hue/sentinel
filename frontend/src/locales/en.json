@@ -928,7 +928,10 @@
       "pdfPending": "PDF is being prepared — download the DOCX meanwhile",
       "close": "Close",
       "templatePicker": "Template",
-      "templateNone": "No template"
+      "templateNone": "No template",
+      "saveAsTemplate": "Save as template",
+      "saveAsTemplateHint": "The book's content becomes a shared template every book manager can use.",
+      "savedAsTemplate": "Saved to the template library: {{name}}"
     }
   },
   "ledger": {

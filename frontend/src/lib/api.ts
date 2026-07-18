@@ -1221,6 +1221,11 @@ export const api = {
   /** GET /books/word-templates — shared General Book boilerplate library. */
   listWordTemplates: () =>
     request<components['schemas']['WordTemplateRead'][]>('GET', '/books/word-templates'),
+  /** POST /books/{id}/save-as-template — copy a finished book into the shared template library. */
+  saveBookAsTemplate: (bookId: number, name: string) =>
+    request<components['schemas']['WordTemplateRead']>(
+      'POST', `/books/${bookId}/save-as-template`, { name },
+    ),
   updateBook: (id: number, body: BookUpdate) =>
     request<BookRead>('PATCH', `/books/${id}`, body),
   deleteBook: (id: number) => request<void>('DELETE', `/books/${id}`),

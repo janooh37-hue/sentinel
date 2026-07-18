@@ -31,6 +31,9 @@ void i18n.use(initReactI18next).init({
         'books.word.needsPc': 'التحرير في Word يتطلب جهاز كمبيوتر مثبّت عليه Word',
         'books.word.openInWord': 'فتح في Word',
         'books.word.editNewVersion': 'تعديل في Word (ينشئ إصداراً جديداً)',
+        'books.word.saveAsTemplate': 'حفظ كقالب',
+        'books.word.saveAsTemplateHint': 'سيصبح محتوى الكتاب قالباً مشتركاً متاحاً لجميع مديري الكتب.',
+        'books.word.savedAsTemplate': 'تم الحفظ في مكتبة القوالب: {{name}}',
         'common.cancel': 'إلغاء',
         'common.confirm': 'تأكيد',
       },
@@ -103,6 +106,11 @@ const FINISHED_BOOK: BookRead = {
       approval_steps: [],
     },
   ],
+}
+
+const FINISHED_BOOK_WITH_SUBJECT: BookRead = {
+  ...FINISHED_BOOK,
+  subject: 'تقرير الإجازات السنوية',
 }
 
 const MOCK_SESSION: WordSessionRead = {
@@ -230,6 +238,34 @@ describe('BookWordActions', () => {
     const btn = screen.getByRole('button', { name: /تعديل في Word/ })
     expect(btn).toBeDisabled()
     expect(screen.getByText(/التحرير في Word يتطلب/)).toBeInTheDocument()
+  })
+
+  it('(i) saves a finished book as template with subject as default name (Arabic labels)', async () => {
+    const user = userEvent.setup()
+    vi.spyOn(apiMod.api, 'saveBookAsTemplate').mockResolvedValue({
+      name: 'تقرير الإجازات السنوية.docx',
+      modified_at: '2026-07-19T00:00:00',
+    })
+    render(
+      createElement(BookWordActions, { book: FINISHED_BOOK_WITH_SUBJECT }),
+      { wrapper: wrapper(makeQc()) },
+    )
+    await user.click(screen.getByRole('button', { name: 'حفظ كقالب' }))
+    const input = await screen.findByRole('textbox')
+    expect(input).toHaveValue(FINISHED_BOOK_WITH_SUBJECT.subject!)
+    await user.click(screen.getByRole('button', { name: /حفظ|save/i }))
+    expect(apiMod.api.saveBookAsTemplate).toHaveBeenCalledWith(
+      FINISHED_BOOK_WITH_SUBJECT.id,
+      FINISHED_BOOK_WITH_SUBJECT.subject,
+    )
+  })
+
+  it('(j) save-as-template button is enabled on mobile (no PC required)', () => {
+    render(
+      createElement(BookWordActions, { book: FINISHED_BOOK_WITH_SUBJECT, isMobile: true }),
+      { wrapper: wrapper(makeQc()) },
+    )
+    expect(screen.getByRole('button', { name: 'حفظ كقالب' })).not.toBeDisabled()
   })
 })
 
