@@ -51,6 +51,7 @@ from typing import Any
 from docx.shared import Mm
 from docxtpl import DocxTemplate, InlineImage
 from jinja2 import Environment, StrictUndefined, Undefined
+from jinja2.sandbox import SandboxedEnvironment
 
 from app.core.constants import ARABIC_WEEKDAYS
 from app.core.signature_render import (
@@ -188,6 +189,7 @@ def render(
     *,
     post_process: Callable[[Any, dict[str, Any]], None] | None = None,
     strict: bool = False,
+    sandboxed: bool = False,
 ) -> Path:
     """Render `template_path` with `data` and save to `output_path`.
 
@@ -222,7 +224,8 @@ def render(
                 tpl, context[key], width_mm=sig_w, dilate_radius_px=sig_b
             )
 
-    jinja_env = Environment(
+    env_cls = SandboxedEnvironment if sandboxed else Environment
+    jinja_env = env_cls(
         undefined=StrictUndefined if strict else _SilentUndefined,
         autoescape=False,
     )

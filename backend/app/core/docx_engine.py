@@ -731,6 +731,32 @@ class DocxEngine:
         prepared = adapter(dict(data))
         return render(template, prepared, Path(output_path), post_process=post_process)
 
+    def fill_general_book_path(
+        self,
+        template_path: Path,
+        data: Mapping[str, Any],
+        output_path: Path | str,
+        *,
+        sandboxed: bool = False,
+        strict: bool = False,
+    ) -> Path:
+        """Render an arbitrary docx through the General Book adapter +
+        post-process — for library boilerplate templates (untrusted; render
+        sandboxed). Raises FileNotFoundError if the file is gone."""
+        if not Path(template_path).exists():
+            raise FileNotFoundError(template_path)
+        spec = self._REGISTRY["General Book"]
+        adapter: Callable[[dict[str, Any]], dict[str, Any]] = spec["adapter"]
+        prepared = adapter(dict(data))
+        return render(
+            Path(template_path),
+            prepared,
+            Path(output_path),
+            post_process=spec.get("post_process"),
+            strict=strict,
+            sandboxed=sandboxed,
+        )
+
     @staticmethod
     def stamp_ref_number(
         docx_path: Path | str,
