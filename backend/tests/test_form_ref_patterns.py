@@ -31,3 +31,11 @@ def test_lowercase_ocr_read_normalised():
 
 def test_plain_date_not_matched():
     assert candidate_refs("التاريخ 18/07/2026") == []
+
+
+def test_arabic_stamped_anchor_beats_bare_fallback():
+    """Scan-back of a book with no English header stamp: the الرقم:-anchored
+    ref must rank in the stamped tier, ahead of earlier bare-shaped noise."""
+    text = "GS-0048 noise ... الرقم: 1/5/GSSG/141 التاريخ: 01-01-2026"
+    refs = candidate_refs(text)
+    assert refs[0] == "1/5/GSSG/141"

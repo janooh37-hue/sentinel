@@ -15,7 +15,9 @@ import re
 # The alternation also admits the classified General Book register shape
 # ``1/{tab}/GSSG/{serial}`` (e.g. ``1/5/GSSG/141``).
 _CLASSIFIED = r"\d{1,2}/\d{1,2}/GSSG/\d{1,6}"
-_STAMPED_RE = re.compile(rf"Ref:\s*([A-Z0-9]{{1,5}}-\d{{3,5}}|{_CLASSIFIED})", re.IGNORECASE)
+_STAMPED_RE = re.compile(
+    rf"(?:Ref:|الرقم\s*[:：]?)\s*([A-Z0-9]{{1,5}}-\d{{3,5}}|{_CLASSIFIED})", re.IGNORECASE
+)
 
 # Matches any bare ``\bGS-0048\b`` / ``\b1/5/GSSG/141\b``-shaped token — wider,
 # used as fallback.
