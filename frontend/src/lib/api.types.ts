@@ -4507,6 +4507,8 @@ export interface components {
             revise_of_book_id?: number | null;
             /** Attachments */
             attachments?: components["schemas"]["GenerateAttachmentSpec"][] | null;
+            /** Classification Code */
+            classification_code?: string | null;
         };
         /** DocumentGenerateResponse */
         DocumentGenerateResponse: {

@@ -958,7 +958,6 @@
     },
     "word": {
       "classification": "التبويب",
-      "noClassification": "بدون تبويب",
       "bodyInWord": "نص الكتاب يُكتب في Word",
       "createAndOpen": "إنشاء وفتح في Word",
       "reserved": "تم إنشاء الكتاب وحجز الرقم",
@@ -982,7 +981,12 @@
       "editNewVersion": "تعديل في Word (ينشئ إصداراً جديداً)",
       "writeHere": "اكتب هنا",
       "writeInWord": "اكتب في Word",
-      "writingMode": "وضع الكتابة"
+      "writingMode": "وضع الكتابة",
+      "chooseClassification": "اختر التبويب…",
+      "classificationRequired": "اختر التبويب أولاً — رقم كل كتاب يُؤخذ من سجل التبويب",
+      "finishedPdfTitle": "تم حفظ الكتاب — {{ref}}",
+      "pdfPending": "جارٍ تجهيز ملف PDF — يمكنك تنزيل ملف DOCX الآن",
+      "close": "إغلاق"
     }
   },
   "ledger": {

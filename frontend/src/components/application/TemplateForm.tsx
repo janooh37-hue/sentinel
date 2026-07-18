@@ -58,15 +58,15 @@ export interface TemplateFormProps {
   /** Called once after the initialExtraction has been consumed, so the parent
    *  can clear the pending injection and avoid re-seeding on re-renders. */
   onExtractionConsumed?: () => void
-  /** General Book Word-mode: currently selected classification code (or null).
-   *  When non-null the arabic_rich_full body editor is hidden and an info panel
-   *  is shown instead. Passed down from ApplicationPage which owns the state. */
+  /** General Book: currently selected classification code (or null while
+   *  unpicked). REQUIRED before submit — every book's ref comes from the
+   *  classified register. Orthogonal to the body mode; it never hides the
+   *  editor. Passed down from ApplicationPage which owns the state. */
   classificationCode?: string | null
   /** Called when the user changes the classification picker. */
   onClassificationChange?: (code: string | null) => void
-  /** Body-mode toggle for the plain (no classification) General Book path.
-   *  'editor' = HugeRTE (default); 'word' = body written in Word.
-   *  Only shown when isGeneralBook && classificationCode == null. */
+  /** Body-mode toggle for the General Book.
+   *  'editor' = HugeRTE (default); 'word' = body written in Word. */
   bodyMode?: 'editor' | 'word'
   onBodyModeChange?: (mode: 'editor' | 'word') => void
 }
@@ -370,10 +370,10 @@ export function TemplateForm({
 
   // General Book Word-mode: detect the arabic_rich_full field.
   const isGeneralBook = schema.fields.some((f) => f.type === 'arabic_rich_full')
-  // Word mode: classification selected (Task 8) OR plain toggle set to 'word' (Task 12).
-  const wordMode = isGeneralBook && (classificationCode != null || bodyMode === 'word')
-  // Toggle is only shown on plain (no classification) General Book.
-  const showBodyModeToggle = isGeneralBook && classificationCode == null && !!onBodyModeChange
+  // Word mode is purely the body-mode toggle — classification is orthogonal
+  // (required for BOTH modes; it only drives the ref, never the editor).
+  const wordMode = isGeneralBook && bodyMode === 'word'
+  const showBodyModeToggle = isGeneralBook && !!onBodyModeChange
 
   // Group fields by their `group` attribute.
   // In Word mode, skip the arabic_rich_full body field — it's in Word.
@@ -431,7 +431,7 @@ export function TemplateForm({
         </div>
       )}
 
-      {/* General Book: body-mode pill toggle (plain path only, Task 12) */}
+      {/* General Book: body-mode pill toggle (always available) */}
       {showBodyModeToggle && (
         <div className="mb-3 flex gap-1" role="group" aria-label={t('books.word.writingMode')}>
           {(['editor', 'word'] as const).map((mode) => (
@@ -460,6 +460,7 @@ export function TemplateForm({
             name="classification_code"
             label_en={t('books.word.classification')}
             label_ar={t('books.word.classification')}
+            required
             value={classificationCode}
             onChange={onClassificationChange}
           />

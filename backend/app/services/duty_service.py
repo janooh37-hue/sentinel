@@ -68,9 +68,7 @@ def _employee_display_name(emp: Employee) -> str:
     return (emp.name_ar or emp.name_en or emp.id or "").strip()
 
 
-def _build_body_html(
-    employees: list[Employee], *, to_unit: str, to_post: str | None
-) -> str:
+def _build_body_html(employees: list[Employee], *, to_unit: str, to_post: str | None) -> str:
     """Formal intro + a red-header from→to ``<table>`` + the two closing lines.
 
     The ``من`` column reads each employee's CURRENT unit/post, so callers must
@@ -89,14 +87,8 @@ def _build_body_html(
             html.escape(_location_label(emp.duty_unit, emp.duty_post)),
             html.escape(to_label),
         ]
-        rows.append(
-            "<tr>" + "".join(f'<td style="{_TD}">{c}</td>' for c in cells) + "</tr>"
-        )
-    table = (
-        '<table dir="rtl" style="border-collapse:collapse">'
-        + "".join(rows)
-        + "</table>"
-    )
+        rows.append("<tr>" + "".join(f'<td style="{_TD}">{c}</td>' for c in cells) + "</tr>")
+    table = '<table dir="rtl" style="border-collapse:collapse">' + "".join(rows) + "</table>"
 
     intro = f"<p>{html.escape(_INTRO)}</p>"
     closing = f"<p>{html.escape(_CLOSING_1)}</p><p>{html.escape(_CLOSING_2)}</p>"
@@ -120,9 +112,7 @@ def transfer(
     ``to_unit``, or any unknown employee id.
     """
     if not employee_ids:
-        raise ValidationFailedError(
-            "DUTY_NO_EMPLOYEES", "At least one employee is required"
-        )
+        raise ValidationFailedError("DUTY_NO_EMPLOYEES", "At least one employee is required")
     if not (to_unit or "").strip():
         raise ValidationFailedError("DUTY_NO_UNIT", "Destination unit is required")
     to_unit = to_unit.strip()
@@ -182,6 +172,10 @@ def transfer(
         fields=fields,
         current_user=current_user,
         commit=True,
+        # Transfer letters file under شؤون القوة (Force affairs) in the
+        # government classification index; every General Book ref now comes
+        # from the classified register.
+        classification_code="12/1",
     )
 
     return DutyTransferResult(

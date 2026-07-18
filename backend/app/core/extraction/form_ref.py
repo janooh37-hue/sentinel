@@ -12,10 +12,14 @@ import re
 # Matches the explicit ``Ref: GS-0048`` stamp written into the document header.
 # Book ref_number is ``{category_id}-{NNNN}`` where the category id is a short
 # alpha/alphanumeric code (e.g. GS, HR, 9), so the prefix is ``[A-Z0-9]{1,5}``.
-_STAMPED_RE = re.compile(r"Ref:\s*([A-Z0-9]{1,5}-\d{3,5})", re.IGNORECASE)
+# The alternation also admits the classified General Book register shape
+# ``1/{tab}/GSSG/{serial}`` (e.g. ``1/5/GSSG/141``).
+_CLASSIFIED = r"\d{1,2}/\d{1,2}/GSSG/\d{1,6}"
+_STAMPED_RE = re.compile(rf"Ref:\s*([A-Z0-9]{{1,5}}-\d{{3,5}}|{_CLASSIFIED})", re.IGNORECASE)
 
-# Matches any bare ``\bGS-0048\b``-shaped token — wider, used as fallback.
-_BARE_RE = re.compile(r"\b([A-Z0-9]{1,5}-\d{3,5})\b", re.IGNORECASE)
+# Matches any bare ``\bGS-0048\b`` / ``\b1/5/GSSG/141\b``-shaped token — wider,
+# used as fallback.
+_BARE_RE = re.compile(rf"\b([A-Z0-9]{{1,5}}-\d{{3,5}}|{_CLASSIFIED})\b", re.IGNORECASE)
 
 # Loose ``Ref:``-anchored token — admits malformed OCR reads the strict pattern
 # rejects (e.g. ``50-@315``, ``56-5``).  Input for confusion-aware fuzzy match.
@@ -23,11 +27,21 @@ _STAMPED_LOOSE_RE = re.compile(r"Ref:\s*([A-Z0-9@]{1,5}-[A-Z0-9@]{1,5})", re.IGN
 
 # OCR confusion table: letters that Tesseract renders as digit lookalikes (and
 # the @ misread of 0). Canonicalising BOTH sides lets "SC-0315" equal "50-0315".
-_CONFUSION = str.maketrans({
-    "O": "0", "Q": "0", "D": "0", "C": "0",
-    "S": "5", "G": "6", "B": "8", "I": "1", "L": "1", "Z": "2",
-    "@": "0",
-})
+_CONFUSION = str.maketrans(
+    {
+        "O": "0",
+        "Q": "0",
+        "D": "0",
+        "C": "0",
+        "S": "5",
+        "G": "6",
+        "B": "8",
+        "I": "1",
+        "L": "1",
+        "Z": "2",
+        "@": "0",
+    }
+)
 
 
 def candidate_refs(text: str) -> list[str]:

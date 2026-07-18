@@ -12,7 +12,7 @@
  *  - Toggle renders Arabic labels "اكتب هنا" and "اكتب في Word"
  *  - Default (bodyMode='editor'): rich editor is visible
  *  - After selecting "اكتب في Word": rich editor is hidden
- *  - When classificationCode is non-null: toggle is NOT rendered (Task 8 owns that path)
+ *  - Classification is orthogonal: toggle + editor render with a code picked
  */
 
 import { render, screen, fireEvent } from '@testing-library/react'
@@ -131,11 +131,18 @@ describe('TemplateForm body-mode toggle (Arabic, Task 12)', () => {
     expect(onBodyModeChange).toHaveBeenCalledWith('editor')
   })
 
-  it('toggle is NOT rendered when classificationCode is non-null (Task 8 owns that path)', () => {
+  it('toggle IS rendered when a classification is picked — classification is orthogonal to body mode', () => {
     render(
       <Host bodyMode="editor" onBodyModeChange={vi.fn()} classificationCode="5/1" />,
     )
-    expect(screen.queryByText('اكتب هنا')).not.toBeInTheDocument()
-    expect(screen.queryByText('اكتب في Word')).not.toBeInTheDocument()
+    expect(screen.getByText('اكتب هنا')).toBeInTheDocument()
+    expect(screen.getByText('اكتب في Word')).toBeInTheDocument()
+  })
+
+  it('classification picked + editor mode: rich editor stays visible', () => {
+    render(
+      <Host bodyMode="editor" onBodyModeChange={vi.fn()} classificationCode="5/1" />,
+    )
+    expect(screen.getByTestId('rich-editor-body')).toBeInTheDocument()
   })
 })

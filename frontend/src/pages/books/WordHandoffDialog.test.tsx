@@ -26,6 +26,9 @@ vi.mock('react-i18next', () => ({
         'books.word.noSavesYet': 'لم يصل أي حفظ من Word بعد',
         'books.word.discardConfirm': 'سيصبح الكتاب ملغياً ويبقى رقمه محفوظاً في السجل. متابعة؟',
         'books.word.finished': opts?.ref ? `تم اعتماد الإصدار — ${String(opts.ref)}` : 'تم اعتماد الإصدار',
+        'books.word.finishedPdfTitle': opts?.ref ? `تم حفظ الكتاب — ${String(opts.ref)}` : 'تم حفظ الكتاب',
+        'books.word.pdfPending': 'جارٍ تجهيز ملف PDF — يمكنك تنزيل ملف DOCX الآن',
+        'books.word.close': 'إغلاق',
         'books.word.step1': 'يفتح Word الآن — اكتب المتن فقط',
         'books.word.step2': 'احفظ من داخل Word (Ctrl+S)',
         'books.word.step3': 'ارجع هنا واضغط «إنهاء التحرير»',
@@ -40,6 +43,12 @@ vi.mock('react-i18next', () => ({
 }))
 
 vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }))
+
+// Mock the heavy pdf.js canvas — a sentinel div carrying the pdfUrl.
+vi.mock('@/pages/application/DocPdfCanvas', () => ({
+  default: ({ pdfUrl }: { pdfUrl: string }) =>
+    createElement('div', { 'data-testid': 'doc-pdf-canvas', 'data-pdf-url': pdfUrl }),
+}))
 
 const FAKE_SESSION: WordSessionRead = {
   book_id: 42,
@@ -175,11 +184,22 @@ describe('WordHandoffDialog', () => {
     await waitFor(() => expect(onClose).toHaveBeenCalled())
   })
 
-  it('Finish calls finishWordSession and toasts success', async () => {
+  it('Finish shows the finished version PDF (same viewer as generate preview)', async () => {
     const user = userEvent.setup()
     const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
     vi.spyOn(apiMod.api, 'getBook').mockResolvedValue(bookWith('2026-07-17T10:05:00Z'))
-    const finishSpy = vi.spyOn(apiMod.api, 'finishWordSession').mockResolvedValue({} as BookRead)
+    const finished = {
+      ...bookWith(null),
+      versions: [
+        {
+          id: 1,
+          version_no: 1,
+          pdf_url: '/api/v1/documents/9/download?format=pdf',
+          docx_url: '/api/v1/documents/9/download?format=docx',
+        },
+      ],
+    } as unknown as BookRead
+    const finishSpy = vi.spyOn(apiMod.api, 'finishWordSession').mockResolvedValue(finished)
     const onClose = vi.fn()
 
     render(
@@ -199,6 +219,54 @@ describe('WordHandoffDialog', () => {
     await user.click(screen.getByText('إنهاء التحرير'))
     await waitFor(() => expect(finishSpy).toHaveBeenCalledWith(42))
     await waitFor(() => expect(toast.success).toHaveBeenCalled())
-    await waitFor(() => expect(onClose).toHaveBeenCalled())
+    // Dialog stays open showing the PDF — onClose NOT called automatically.
+    expect(onClose).not.toHaveBeenCalled()
+    const canvas = await screen.findByTestId('doc-pdf-canvas')
+    expect(canvas.getAttribute('data-pdf-url')).toBe('/api/v1/documents/9/download?format=pdf')
+    // Arabic finished title with the ref (bidi() wraps the ref in isolate
+    // control chars, so match loosely)
+    expect(screen.getByText(/تم حفظ الكتاب/)).toBeTruthy()
+    expect(screen.getByText(/1\/5\/GSSG\/141/)).toBeTruthy()
+    // Close button hands control back
+    await user.click(screen.getByText('إغلاق'))
+    expect(onClose).toHaveBeenCalled()
+  })
+
+  it('Finish with no PDF yet shows the pending hint instead of the canvas', async () => {
+    const user = userEvent.setup()
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    vi.spyOn(apiMod.api, 'getBook').mockResolvedValue(bookWith('2026-07-17T10:05:00Z'))
+    const finished = {
+      ...bookWith(null),
+      versions: [
+        {
+          id: 1,
+          version_no: 1,
+          pdf_url: null,
+          docx_url: '/api/v1/documents/9/download?format=docx',
+        },
+      ],
+    } as unknown as BookRead
+    vi.spyOn(apiMod.api, 'finishWordSession').mockResolvedValue(finished)
+
+    render(
+      createElement(WordHandoffDialog, {
+        session: FAKE_SESSION,
+        open: true,
+        onClose: vi.fn(),
+      }),
+      { wrapper: makeWrapper(qc) },
+    )
+
+    await waitFor(() => {
+      const btn = screen.getByText('إنهاء التحرير').closest('button')
+      expect(btn?.disabled).toBe(false)
+    })
+    await user.click(screen.getByText('إنهاء التحرير'))
+
+    await waitFor(() =>
+      expect(screen.getByText(/جارٍ تجهيز ملف PDF/)).toBeTruthy(),
+    )
+    expect(screen.queryByTestId('doc-pdf-canvas')).toBeNull()
   })
 })

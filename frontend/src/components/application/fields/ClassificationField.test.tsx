@@ -63,15 +63,17 @@ describe('ClassificationField (Arabic)', () => {
     expect(screen.getByText('التبويب')).toBeInTheDocument()
   })
 
-  it('shows "بدون تبويب" as the first option', async () => {
+  it('shows the required placeholder and NO "بدون تبويب" option', async () => {
     const onChange = vi.fn()
     render(<Host onChange={onChange} />)
-    // Open the select — the option appears in the portal
+    // Unpicked → the trigger shows the choose-classification placeholder.
+    expect(screen.getByText('اختر التبويب…')).toBeInTheDocument()
+    // Open the select — the null option must be gone (classification required).
     fireEvent.click(screen.getByRole('combobox'))
     await waitFor(() => {
-      // Multiple matches: trigger placeholder + portal option — both are correct
-      expect(screen.getAllByText('بدون تبويب').length).toBeGreaterThanOrEqual(1)
+      expect(screen.getByText('5/1 — تصنيف المالية')).toBeInTheDocument()
     })
+    expect(screen.queryByText('بدون تبويب')).not.toBeInTheDocument()
   })
 
   it('shows classification options from the query', async () => {
