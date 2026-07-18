@@ -931,7 +931,8 @@
       "templateNone": "No template",
       "saveAsTemplate": "Save as template",
       "saveAsTemplateHint": "The book's content becomes a shared template every book manager can use.",
-      "savedAsTemplate": "Saved to the template library: {{name}}"
+      "savedAsTemplate": "Saved to the template library: {{name}}",
+      "saveAsTemplateName": "Template name"
     }
   },
   "ledger": {

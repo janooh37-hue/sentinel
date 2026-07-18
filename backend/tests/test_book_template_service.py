@@ -155,3 +155,54 @@ def test_save_collision_409(db_session, finished_word_book):
     with pytest.raises(AppError) as ei:
         svc.save_book_as_template(db_session, book_id=finished_word_book.id, name="مكرر")
     assert ei.value.http_status == 409
+
+
+def test_retokenize_error_maps_to_template_invalid_422(db_session, finished_word_book):
+    """A source docx that retokenize rejects must produce TEMPLATE_INVALID 422, not 500."""
+    import docx as _docx
+
+    from app.db.models import BookVersion, Document
+
+    # Overwrite the source docx with a body-only doc that has no التاريخ paragraph
+    latest = (
+        db_session.query(BookVersion)
+        .filter_by(book_id=finished_word_book.id)
+        .order_by(BookVersion.version_no.desc())
+        .first()
+    )
+    doc_row = db_session.get(Document, latest.document_id)
+    from app.config import get_settings
+
+    docx_path = Path(doc_row.docx_path)
+    if not docx_path.is_absolute():
+        docx_path = get_settings().data_dir / docx_path
+
+    # Replace with a body-only docx (no التاريخ paragraph → retokenize raises ValueError)
+    bad_doc = _docx.Document()
+    bad_doc.add_paragraph("هذه فقرة عادية بدون تاريخ")
+    bad_doc.save(str(docx_path))
+
+    with pytest.raises(AppError) as ei:
+        svc.save_book_as_template(db_session, book_id=finished_word_book.id, name="قالب خاطئ")
+    assert ei.value.code == "TEMPLATE_INVALID"
+    assert ei.value.http_status == 422
+
+
+def test_non_general_book_raises_409(db_session, finished_word_book):
+    """A finished book whose latest Document has template_id != 'General Book' must yield 409."""
+    from app.db.models import BookVersion, Document
+
+    latest = (
+        db_session.query(BookVersion)
+        .filter_by(book_id=finished_word_book.id)
+        .order_by(BookVersion.version_no.desc())
+        .first()
+    )
+    doc_row = db_session.get(Document, latest.document_id)
+    doc_row.template_id = "Leave Application Form"
+    db_session.commit()
+
+    with pytest.raises(AppError) as ei:
+        svc.save_book_as_template(db_session, book_id=finished_word_book.id, name="قالب إجازة")
+    assert ei.value.code == "NOT_A_GENERAL_BOOK"
+    assert ei.value.http_status == 409

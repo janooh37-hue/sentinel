@@ -92,6 +92,8 @@ def _source_docx_of(db: Session, book: Book) -> Path:
     doc = db.get(Document, latest.document_id)
     if doc is None or not doc.docx_path:
         raise AppError("NO_SOURCE_DOCX", "ملف الكتاب غير موجود", http_status=409)
+    if doc.template_id != "General Book":
+        raise AppError("NOT_A_GENERAL_BOOK", "حفظ كقالب متاح لكتب عامة فقط", http_status=409)
     p = Path(doc.docx_path)
     if not p.is_absolute():  # rich path stores data_dir-relative
         p = get_settings().data_dir / p
@@ -115,8 +117,8 @@ def save_book_as_template(db: Session, *, book_id: int, name: str) -> TemplateIn
     tmp = templates_dir() / f".tmp-{uuid.uuid4().hex}.docx"
     try:
         shutil.copy2(src, tmp)
-        retokenize_general_book(tmp, submitter_g=submitter_g)
         try:
+            retokenize_general_book(tmp, submitter_g=submitter_g)
             validate_book_template(tmp)
         except ValueError as exc:
             raise AppError("TEMPLATE_INVALID", str(exc), http_status=422) from exc

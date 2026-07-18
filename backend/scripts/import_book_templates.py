@@ -26,11 +26,15 @@ SOURCE = Path.home() / "Desktop" / "book template"
 
 
 def main() -> int:
-    failures = 0
+    if not SOURCE.is_dir():
+        print(f"SOURCE not found: {SOURCE}")
+        return 1
+    ok = skipped = failures = 0
     for src in sorted(SOURCE.glob("*.docx")):
         name = safe_template_name(src.stem)
         dest = templates_dir() / name
         if dest.exists():
+            skipped += 1
             print(f"SKIP  {name} (already in library)")
             continue
         tmp = dest.with_suffix(".tmp")
@@ -39,12 +43,14 @@ def main() -> int:
             retokenize_general_book(tmp, submitter_g=None)
             validate_book_template(tmp)
             tmp.rename(dest)
+            ok += 1
             print(f"OK    {name}")
         except Exception as exc:
             failures += 1
             print(f"FAIL  {name}: {exc}")
         finally:
             tmp.unlink(missing_ok=True)
+    print(f"done: {ok} OK / {skipped} SKIP / {failures} FAIL")
     return 1 if failures else 0
 
 

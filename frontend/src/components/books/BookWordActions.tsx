@@ -185,6 +185,7 @@ export function BookWordActions({ book, isMobile }: Props): React.JSX.Element | 
               type="text"
               value={tplName}
               onChange={(e) => setTplName(e.target.value)}
+              aria-label={t('books.word.saveAsTemplateName')}
               className="w-full rounded-lg border border-hairline bg-transparent px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               autoFocus
             />
