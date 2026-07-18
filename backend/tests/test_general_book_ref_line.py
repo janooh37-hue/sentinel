@@ -48,3 +48,35 @@ def test_ref_run_is_explicit_ltr(tmp_path):
     ref_runs = [r for r in ref_para.runs if "GSSG" in r.text]
     assert ref_runs, "ref value must be in its own run"
     assert all(r.font.rtl is False for r in ref_runs)
+
+
+def _header_text(docx_path) -> str:
+    from docx import Document
+
+    doc = Document(str(docx_path))
+    parts = []
+    for section in doc.sections:
+        for hdr in (section.header, section.first_page_header):
+            parts.extend(p.text for p in hdr.paragraphs)
+    return "\n".join(parts)
+
+
+def test_word_book_has_ref_line_and_no_header_stamp(db_session, admin_user):
+    """Word-path create: body الرقم line present, English Ref: stamp gone."""
+    from app.services import word_book_service
+
+    info = word_book_service.create_word_book(
+        db_session,
+        user=admin_user,
+        classification_code="5/1",
+        recipient_id=None,
+        subject="اختبار القالب",
+        cc=[],
+        manager_id=None,
+    )
+    from app.db.models import BookEditSession
+
+    session = db_session.query(BookEditSession).filter_by(book_id=info.book_id).one()
+    text = docx_to_text(Path(session.working_path))
+    assert f"الرقم: {info.ref_number}" in text
+    assert "Ref:" not in _header_text(session.working_path)

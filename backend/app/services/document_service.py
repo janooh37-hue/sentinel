@@ -1166,6 +1166,12 @@ def generate_document(
         current_user=current_user,
     )
 
+    # General Book: the classified ref renders as the Arabic body line
+    # (الرقم: …) — commit-only, so previews stay serial-free. Replaces the
+    # English header stamp for this form.
+    if commit and template_id == "General Book":
+        data["ref"] = raw_ref
+
     # Truthful embed flag: ``sig1_path`` survives _build_template_data only
     # when the policy forced the embed on AND a manager with an on-disk
     # signature actually resolved — so this records what the rendered DOCX
@@ -1210,6 +1216,7 @@ def generate_document(
     # the applicant's own signature.
     primary_data = data
     if _submitter_signs_employee_cell(template_id, submitter_id, embed_signature):
+        assert submitter_id is not None  # _submitter_signs_employee_cell requires it
         primary_data = {
             **data,
             "employee_sig_path": _submitter_sign_path(db, submitter_id),
@@ -1233,7 +1240,8 @@ def generate_document(
     # "DRAFT" string in the header (it would just be visual noise).
     # ------------------------------------------------------------------
     if commit:
-        DocxEngine.stamp_ref_number(docx_path, raw_ref, STAMP_STYLE_HEADER)
+        if template_id != "General Book":
+            DocxEngine.stamp_ref_number(docx_path, raw_ref, STAMP_STYLE_HEADER)
         DocxEngine.stamp_aztec_code(docx_path, raw_ref, corner=aztec_corner_for(template_id))
 
     # ------------------------------------------------------------------
@@ -1818,6 +1826,8 @@ def render_signed_pdf(
     )
     docx_path = Vault.collision_safe_name(out_dir, docx_name.replace(".docx", "_signed.docx"))
     engine = DocxEngine(_TEMPLATES_DIR)
+    if template_id == "General Book":
+        data["ref"] = book.ref_number
     engine.fill(template_id, data, docx_path)
 
     # Mirror generate_document: sync the General Book page-2+ footer so the
@@ -1827,7 +1837,8 @@ def render_signed_pdf(
 
         _postprocess_general_book_footer(docx_path)
 
-    DocxEngine.stamp_ref_number(docx_path, book.ref_number, STAMP_STYLE_HEADER)
+    if template_id != "General Book":
+        DocxEngine.stamp_ref_number(docx_path, book.ref_number, STAMP_STYLE_HEADER)
     DocxEngine.stamp_aztec_code(docx_path, book.ref_number, corner=aztec_corner_for(template_id))
 
     pdf_path: Path | None = None

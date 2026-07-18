@@ -26,7 +26,7 @@ from app.core.classifications import (
     classified_ref,
     get_classification,
 )
-from app.core.constants import STAMP_STYLE_HEADER, TEMPLATE_FILES
+from app.core.constants import TEMPLATE_FILES
 from app.core.docx_engine import (
     DocxEngine,
     _postprocess_general_book_footer,
@@ -171,7 +171,6 @@ def create_word_book(
     # ------------------------------------------------------------------
     DocxEngine(settings.templates_dir).fill(_TEMPLATE_ID, data, output_path)
     _postprocess_general_book_footer(output_path)
-    DocxEngine.stamp_ref_number(output_path, ref, STAMP_STYLE_HEADER)
     DocxEngine.stamp_aztec_code(output_path, ref, corner=aztec_corner_for(_TEMPLATE_ID))
 
     # ------------------------------------------------------------------

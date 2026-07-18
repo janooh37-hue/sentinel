@@ -71,3 +71,8 @@ def make_user(db: Session, *, role="operator", status="active", email="u@x.ae") 
     db.commit()
     db.refresh(u)
     return u
+
+
+@pytest.fixture()
+def admin_user(db_session: Session) -> User:
+    return make_user(db_session, role="admin", email="admin@test.ae")

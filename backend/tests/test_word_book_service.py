@@ -84,19 +84,20 @@ def test_create_classified_book_returns_session_info(db_session, tmp_path, monke
     assert session.state == "active"
     assert session.token == info.token
 
-    # Working file exists and is a valid docx carrying the ref (header stamp —
-    # the General Book template has no {{ ref }} body token)
+    # Working file exists and is a valid docx carrying the ref as the Arabic
+    # body line (الرقم: …) — no English header stamp for General Books.
     working_file = Path(session.working_path)
     assert working_file.exists()
-    doc = docx.Document(str(working_file))
-    header_text = "\n".join(p.text for p in doc.sections[0].header.paragraphs)
-    assert "1/5/GSSG/1" in header_text
+    from app.core.book_text import docx_to_text
+
+    text = docx_to_text(working_file)
+    assert f"الرقم: {info.ref_number}" in text
 
 
-def test_working_docx_gets_header_ref_stamp(db_session, tmp_path, monkeypatch):
-    """The working docx carries the SAME header ref stamp the rich-editor path
-    writes (DocxEngine.stamp_ref_number) — the General Book template has no
-    {{ ref }} token, so the stamp is what puts the number on paper."""
+def test_working_docx_gets_body_ref_line(db_session, tmp_path, monkeypatch):
+    """The working docx carries the Arabic body ref line (الرقم: …) — the
+    General Book template renders {{ ref }} as the body line; no English
+    header stamp is written for this form type."""
     from app.services import word_book_service
 
     _seed_gs(db_session)
@@ -119,7 +120,11 @@ def test_working_docx_gets_header_ref_stamp(db_session, tmp_path, monkeypatch):
     )
     doc = docx.Document(str(working_file))
     header_text = "\n".join(p.text for p in doc.sections[0].header.paragraphs)
-    assert "Ref: 1/5/GSSG/1" in header_text
+    assert "Ref:" not in header_text
+    from app.core.book_text import docx_to_text
+
+    text = docx_to_text(working_file)
+    assert f"الرقم: {info.ref_number}" in text
 
 
 def test_two_classified_creates_get_sequential_serials(db_session, tmp_path, monkeypatch):
@@ -333,6 +338,9 @@ def _write_minimal_docx(path: Path) -> None:
     import docx as _docx
 
     doc = _docx.Document()
+    doc.add_paragraph("{%p if ref %}")
+    doc.add_paragraph("الرقم: {{ ref }}")
+    doc.add_paragraph("{%p endif %}")
     doc.add_paragraph("التاريخ: {{ date }}")
     doc.add_paragraph("السيد / {{ recipient_name }}")
     doc.add_paragraph("الموضوع: {{ subject }}")
