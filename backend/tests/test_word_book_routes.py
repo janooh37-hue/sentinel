@@ -272,6 +272,7 @@ def test_list_books_batches_edit_sessions(api_db, monkeypatch, tmp_path):
 @pytest.fixture()
 def finished_word_book(api_db, monkeypatch, tmp_path):
     """A finished General Book (BookVersion + Document on disk) via api_db."""
+    # Fixture user != request user: save-as-template deliberately does not check book ownership (books.manage is the gate).
     from datetime import UTC, datetime
 
     from app.config import Settings
