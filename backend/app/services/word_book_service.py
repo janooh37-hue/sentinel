@@ -93,6 +93,11 @@ def create_word_book(
             f"Classification code {classification_code!r} is not in the registry",
             http_status=422,
         )
+    library_template: Path | None = None
+    if template_name is not None:
+        from app.services import book_template_service
+
+        library_template = book_template_service.resolve_template_path(template_name)
     template_file = TEMPLATE_FILES[_TEMPLATE_ID]
     template_path = settings.templates_dir / template_file
     if not template_path.exists():
@@ -170,7 +175,18 @@ def create_word_book(
     # header ref stamp + Aztec code — so the paper is identical no matter
     # where the body was written.
     # ------------------------------------------------------------------
-    DocxEngine(settings.templates_dir).fill(_TEMPLATE_ID, data, output_path)
+    engine = DocxEngine(settings.templates_dir)
+    if library_template is not None:
+        try:
+            engine.fill_general_book_path(library_template, data, output_path, sandboxed=True)
+        except FileNotFoundError:
+            raise AppError(
+                "TEMPLATE_MISSING",
+                f"Template {template_name!r} is not in the library",
+                http_status=409,
+            ) from None
+    else:
+        engine.fill(_TEMPLATE_ID, data, output_path)
     _postprocess_general_book_footer(output_path)
     DocxEngine.stamp_aztec_code(output_path, ref, corner=aztec_corner_for(_TEMPLATE_ID))
 

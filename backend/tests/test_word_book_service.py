@@ -327,6 +327,81 @@ def test_body_sentinel_never_survives_in_working_docx(db_session, tmp_path, monk
 # ---------------------------------------------------------------------------
 
 
+def test_create_from_template_seeds_boilerplate(db_session, admin_user, tmp_path, monkeypatch):
+    """create_word_book with template_name fills boilerplate from library template
+    while still rendering a fresh الرقم: {ref} into the working docx."""
+    from app.core.book_template_retokenize import retokenize_general_book
+    from app.core.book_text import docx_to_text
+    from app.services import book_template_service as tpl_svc
+    from app.services import word_book_service
+
+    _seed_gs(db_session)
+    (tmp_path / "templates").mkdir(parents=True)
+    _write_minimal_docx(tmp_path / "templates" / _GENERAL_BOOK)
+    monkeypatch.setattr(word_book_service, "get_settings", lambda: _settings(tmp_path))
+    monkeypatch.setattr(tpl_svc, "templates_dir", lambda: tmp_path)
+
+    # Build a tokenized library template
+    import docx as _docx
+
+    src = tmp_path / "src.docx"
+    d = _docx.Document()
+    d.add_paragraph("التاريخ: 01/01/2026")
+    d.add_paragraph("نص جاهز من القالب")
+    d.save(str(src))
+    retokenize_general_book(src)
+    src.rename(tmp_path / "قالب.docx")
+
+    from app.db.models import BookEditSession
+
+    info = word_book_service.create_word_book(
+        db_session,
+        user=admin_user,
+        classification_code="5/1",
+        recipient_id=None,
+        subject="من قالب",
+        cc=[],
+        manager_id=None,
+        template_name="قالب.docx",
+    )
+    session = db_session.query(BookEditSession).filter_by(book_id=info.book_id).one()
+    text = docx_to_text(Path(session.working_path))
+    assert "نص جاهز من القالب" in text  # boilerplate preserved
+    assert f"الرقم: {info.ref_number}" in text  # fresh ref rendered
+
+
+def test_create_from_missing_template_409(db_session, admin_user, tmp_path, monkeypatch):
+    """template_name pointing to a non-existent library file → TEMPLATE_MISSING 409."""
+    from app.api.errors import AppError
+    from app.services import book_template_service as tpl_svc
+    from app.services import word_book_service
+
+    _seed_gs(db_session)
+    (tmp_path / "templates").mkdir(parents=True)
+    _write_minimal_docx(tmp_path / "templates" / _GENERAL_BOOK)
+    monkeypatch.setattr(word_book_service, "get_settings", lambda: _settings(tmp_path))
+    monkeypatch.setattr(tpl_svc, "templates_dir", lambda: tmp_path)
+
+    with pytest.raises(AppError) as ei:
+        word_book_service.create_word_book(
+            db_session,
+            user=admin_user,
+            classification_code="5/1",
+            recipient_id=None,
+            subject="x",
+            cc=[],
+            manager_id=None,
+            template_name="غير موجود.docx",
+        )
+    assert ei.value.code == "TEMPLATE_MISSING"
+    assert ei.value.http_status == 409
+
+
+# ---------------------------------------------------------------------------
+# Utilities
+# ---------------------------------------------------------------------------
+
+
 def _settings(tmp_path):
     from app.config import Settings
 
