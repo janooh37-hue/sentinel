@@ -182,7 +182,7 @@ def create_word_book(
         except FileNotFoundError:
             raise AppError(
                 "TEMPLATE_MISSING",
-                f"Template {template_name!r} is not in the library",
+                f"القالب '{template_name}' غير موجود في المكتبة",
                 http_status=409,
             ) from None
     else:

@@ -526,7 +526,7 @@ export function BooksPage(): React.JSX.Element {
                               className="flex items-center gap-2 rounded-lg bg-surface px-2.5 py-1.5"
                             >
                               <span className="font-mono text-[0.72em] font-bold text-primary">
-                                {draft.ref_number}
+                                <bdi dir="ltr">{draft.ref_number}</bdi>
                               </span>
                               <span className="min-w-0 flex-1 truncate text-[0.75em] text-foreground">
                                 {draft.subject ?? '—'}

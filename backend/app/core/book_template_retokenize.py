@@ -120,11 +120,17 @@ def _write_ref_block(anchor: Paragraph, *, replace: bool) -> None:
 def _retokenize_labeled_line(para: Paragraph, prefix: str, token: str) -> None:
     src = _first_run_style(para)
     _clear_runs(para)
-    run = para.add_run(prefix + token)
-    if src is not None:
-        run.font.name = src.font.name
-        run.font.size = src.font.size
-        run.font.bold = src.font.bold
+
+    def styled(run: Any) -> Any:
+        if src is not None:
+            run.font.name = src.font.name
+            run.font.size = src.font.size
+            run.font.bold = src.font.bold
+        return run
+
+    styled(para.add_run(prefix))
+    token_run = styled(para.add_run(token))
+    token_run.font.rtl = False  # LTR isolate for date value in the RTL line
 
 
 def _strip_header_artifacts(doc: Any) -> None:

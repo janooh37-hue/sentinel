@@ -103,7 +103,7 @@ def _source_docx_of(db: Session, book: Book) -> Path:
 def save_book_as_template(db: Session, *, book_id: int, name: str) -> TemplateInfo:
     book = db.get(Book, book_id)
     if book is None:
-        raise AppError("BOOK_NOT_FOUND", f"Book {book_id} not found", http_status=404)
+        raise AppError("BOOK_NOT_FOUND", f"الكتاب {book_id} غير موجود", http_status=404)
     src = _source_docx_of(db, book)
 
     submitter_g: str | None = None

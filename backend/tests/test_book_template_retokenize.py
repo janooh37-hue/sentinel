@@ -110,6 +110,15 @@ def test_ref_run_marked_ltr(tmp_path):
     assert run.font.rtl is False
 
 
+def test_date_token_run_marked_ltr(tmp_path):
+    p = _finished_book(tmp_path)
+    retokenize_general_book(p)
+    doc = Document(str(p))
+    date_para = next(pp for pp in doc.paragraphs if "{{ date }}" in pp.text)
+    token_run = next(r for r in date_para.runs if "{{ date }}" in r.text)
+    assert token_run.font.rtl is False
+
+
 def test_validate_accepts_good_template(tmp_path):
     p = _finished_book(tmp_path)
     retokenize_general_book(p)
