@@ -30,8 +30,8 @@ _JINJA_DELIM = re.compile(r"\{\{|\}\}|\{%|%\}|\{#|#\}")
 _AZTEC_RELATIVE_HEIGHT = "251670000"
 _WP_NS = "http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing"
 
-_REF_LABEL = re.compile(r"^\s*الرقم\s*[:：]")
-_DATE_LABEL = re.compile(r"^\s*التاريخ\s*[:：]")
+_REF_LABEL = re.compile(r"^\s*الرقم\s*[:：]")  # noqa: RUF001 — full-width colon is a legitimate Arabic-text variant
+_DATE_LABEL = re.compile(r"^\s*التاريخ\s*[:：]")  # noqa: RUF001 — full-width colon is a legitimate Arabic-text variant
 _G_NUMBER = re.compile(r"\bG[-\s]?\d{1,6}\b")
 
 _DUMMY = {"ref": "9/9/GSSG/9999", "date": "31-12-2099", "submitter_g": "G-9999"}
@@ -210,6 +210,10 @@ def validate_book_template(docx_path: Path) -> None:
     # must survive the render.
     for line in source_text.splitlines():
         line = line.strip()
-        if len(line) >= 15 and "{{" not in line and "{%" not in line:
-            if line.replace(_ZWSP, "") not in text.replace(_ZWSP, ""):
-                raise ValueError("نص القالب تغيّر أثناء العرض التجريبي")
+        if (
+            len(line) >= 15
+            and "{{" not in line
+            and "{%" not in line
+            and line.replace(_ZWSP, "") not in text.replace(_ZWSP, "")
+        ):
+            raise ValueError("نص القالب تغيّر أثناء العرض التجريبي")
