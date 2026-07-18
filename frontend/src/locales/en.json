@@ -898,7 +898,6 @@
     },
     "word": {
       "classification": "Classification",
-      "noClassification": "No classification",
       "bodyInWord": "The body is written in Word",
       "createAndOpen": "Create & open in Word",
       "reserved": "Book created — number reserved",
@@ -922,7 +921,12 @@
       "editNewVersion": "Edit in Word (creates a new version)",
       "writeHere": "Type here",
       "writeInWord": "Write in Word",
-      "writingMode": "Writing mode"
+      "writingMode": "Writing mode",
+      "chooseClassification": "Choose a classification…",
+      "classificationRequired": "Choose a classification (التبويب) first — every book takes its number from the classified register",
+      "finishedPdfTitle": "Book saved — {{ref}}",
+      "pdfPending": "PDF is being prepared — download the DOCX meanwhile",
+      "close": "Close"
     }
   },
   "ledger": {

@@ -1,6 +1,7 @@
 """Tests for word_book_service.create_word_book (Task 5).
 
-TDD: write tests first, run to confirm RED, then implement.
+Every Word book renders on the ONE General Book template and takes its ref
+from the classified register — same rules as the rich-editor path.
 """
 
 from __future__ import annotations
@@ -12,6 +13,8 @@ import docx
 import pytest
 
 from app.db.models import Book, BookCategory, BookEditSession, Manager, User
+
+_GENERAL_BOOK = "GSSG-GS_300-003_General_Book.docx"
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -41,17 +44,13 @@ def _user(db, *, employee_id: str | None = None) -> User:
 
 def test_create_classified_book_returns_session_info(db_session, tmp_path, monkeypatch):
     """Success path: classified book returns WordSessionInfo with correct ref."""
-    from app.config import Settings
     from app.services import word_book_service
 
     _seed_gs(db_session)
-    settings = Settings(
-        data_dir=tmp_path / "data",
-        templates_dir=tmp_path / "templates",
-    )
+    settings = _settings(tmp_path)
     # Place a minimal placeholder template at the expected path
     (tmp_path / "templates").mkdir(parents=True)
-    _write_minimal_docx(tmp_path / "templates" / "GSSG-GS_301-001_Classified_Standard.docx")
+    _write_minimal_docx(tmp_path / "templates" / _GENERAL_BOOK)
     monkeypatch.setattr(word_book_service, "get_settings", lambda: settings)
 
     user = _user(db_session)
@@ -85,24 +84,52 @@ def test_create_classified_book_returns_session_info(db_session, tmp_path, monke
     assert session.state == "active"
     assert session.token == info.token
 
-    # Working file exists and is a valid docx containing the ref
+    # Working file exists and is a valid docx carrying the ref (header stamp —
+    # the General Book template has no {{ ref }} body token)
     working_file = Path(session.working_path)
     assert working_file.exists()
     doc = docx.Document(str(working_file))
-    full_text = "\n".join(p.text for p in doc.paragraphs)
-    assert "1/5/GSSG/1" in full_text
+    header_text = "\n".join(p.text for p in doc.sections[0].header.paragraphs)
+    assert "1/5/GSSG/1" in header_text
 
 
-def test_two_classified_creates_get_sequential_serials(db_session, tmp_path, monkeypatch):
-    """Two creates across different classifications → serials 1, 2."""
-    from app.config import Settings
+def test_working_docx_gets_header_ref_stamp(db_session, tmp_path, monkeypatch):
+    """The working docx carries the SAME header ref stamp the rich-editor path
+    writes (DocxEngine.stamp_ref_number) — the General Book template has no
+    {{ ref }} token, so the stamp is what puts the number on paper."""
     from app.services import word_book_service
 
     _seed_gs(db_session)
     (tmp_path / "templates").mkdir(parents=True)
-    _write_minimal_docx(tmp_path / "templates" / "GSSG-GS_301-001_Classified_Standard.docx")
-    settings = Settings(data_dir=tmp_path / "data", templates_dir=tmp_path / "templates")
-    monkeypatch.setattr(word_book_service, "get_settings", lambda: settings)
+    _write_minimal_docx(tmp_path / "templates" / _GENERAL_BOOK)
+    monkeypatch.setattr(word_book_service, "get_settings", lambda: _settings(tmp_path))
+
+    user = _user(db_session)
+    info = word_book_service.create_word_book(
+        db_session,
+        user=user,
+        classification_code="5/1",
+        recipient_id=None,
+        subject="stamp test",
+        cc=None,
+        manager_id=None,
+    )
+    working_file = Path(
+        db_session.query(BookEditSession).filter_by(book_id=info.book_id).one().working_path
+    )
+    doc = docx.Document(str(working_file))
+    header_text = "\n".join(p.text for p in doc.sections[0].header.paragraphs)
+    assert "Ref: 1/5/GSSG/1" in header_text
+
+
+def test_two_classified_creates_get_sequential_serials(db_session, tmp_path, monkeypatch):
+    """Two creates across different classifications → serials 1, 2."""
+    from app.services import word_book_service
+
+    _seed_gs(db_session)
+    (tmp_path / "templates").mkdir(parents=True)
+    _write_minimal_docx(tmp_path / "templates" / _GENERAL_BOOK)
+    monkeypatch.setattr(word_book_service, "get_settings", lambda: _settings(tmp_path))
 
     user = _user(db_session)
     info1 = word_book_service.create_word_book(
@@ -151,6 +178,30 @@ def test_unknown_classification_code_raises_422(db_session, tmp_path, monkeypatc
     assert exc_info.value.http_status == 422
 
 
+def test_missing_classification_raises_422(db_session, tmp_path, monkeypatch):
+    """classification_code=None → CLASSIFICATION_REQUIRED 422 — every book's
+    ref comes from the classified register, no legacy GS-#### path remains."""
+    from app.api.errors import AppError
+    from app.services import word_book_service
+
+    _seed_gs(db_session)
+    monkeypatch.setattr(word_book_service, "get_settings", lambda: _settings(tmp_path))
+    user = _user(db_session)
+
+    with pytest.raises(AppError) as exc_info:
+        word_book_service.create_word_book(
+            db_session,
+            user=user,
+            classification_code=None,
+            recipient_id=None,
+            subject="plain book",
+            cc=None,
+            manager_id=None,
+        )
+    assert exc_info.value.code == "CLASSIFICATION_REQUIRED"
+    assert exc_info.value.http_status == 422
+
+
 def test_missing_template_file_raises_409(db_session, tmp_path, monkeypatch):
     """Template file missing on disk → AppError TEMPLATE_MISSING 409."""
     from app.api.errors import AppError
@@ -175,46 +226,17 @@ def test_missing_template_file_raises_409(db_session, tmp_path, monkeypatch):
         )
     assert exc_info.value.code == "TEMPLATE_MISSING"
     assert exc_info.value.http_status == 409
-
-
-def test_plain_book_uses_general_book_template(db_session, tmp_path, monkeypatch):
-    """classification_code=None → uses General Book template, ref via GS allocator."""
-    from app.config import Settings
-    from app.services import word_book_service
-
-    _seed_gs(db_session)
-    (tmp_path / "templates").mkdir(parents=True)
-    gb_name = "GSSG-GS_300-003_General_Book.docx"
-    _write_minimal_docx(tmp_path / "templates" / gb_name)
-    settings = Settings(data_dir=tmp_path / "data", templates_dir=tmp_path / "templates")
-    monkeypatch.setattr(word_book_service, "get_settings", lambda: settings)
-
-    user = _user(db_session)
-    info = word_book_service.create_word_book(
-        db_session,
-        user=user,
-        classification_code=None,
-        recipient_id=None,
-        subject="plain book",
-        cc=None,
-        manager_id=None,
-    )
-    # Ref is GS-style (e.g. "GS-0001") — not classified
-    assert info.ref_number.startswith("GS-")
-    book = db_session.get(Book, info.book_id)
-    assert book.classification_code is None
+    assert exc_info.value.details == {"file": _GENERAL_BOOK}
 
 
 def test_create_with_cc_list(db_session, tmp_path, monkeypatch):
     """cc as a list is normalized into a newline-joined string in the docx."""
-    from app.config import Settings
     from app.services import word_book_service
 
     _seed_gs(db_session)
     (tmp_path / "templates").mkdir(parents=True)
-    _write_minimal_docx(tmp_path / "templates" / "GSSG-GS_301-001_Classified_Standard.docx")
-    settings = Settings(data_dir=tmp_path / "data", templates_dir=tmp_path / "templates")
-    monkeypatch.setattr(word_book_service, "get_settings", lambda: settings)
+    _write_minimal_docx(tmp_path / "templates" / _GENERAL_BOOK)
+    monkeypatch.setattr(word_book_service, "get_settings", lambda: _settings(tmp_path))
 
     user = _user(db_session)
     info = word_book_service.create_word_book(
@@ -237,7 +259,6 @@ def test_create_with_cc_list(db_session, tmp_path, monkeypatch):
 
 def test_create_with_manager(db_session, tmp_path, monkeypatch):
     """manager_id is resolved and manager_name appears in rendered docx."""
-    from app.config import Settings
     from app.services import word_book_service
 
     _seed_gs(db_session)
@@ -246,9 +267,8 @@ def test_create_with_manager(db_session, tmp_path, monkeypatch):
     db_session.commit()
 
     (tmp_path / "templates").mkdir(parents=True)
-    _write_minimal_docx(tmp_path / "templates" / "GSSG-GS_301-001_Classified_Standard.docx")
-    settings = Settings(data_dir=tmp_path / "data", templates_dir=tmp_path / "templates")
-    monkeypatch.setattr(word_book_service, "get_settings", lambda: settings)
+    _write_minimal_docx(tmp_path / "templates" / _GENERAL_BOOK)
+    monkeypatch.setattr(word_book_service, "get_settings", lambda: _settings(tmp_path))
 
     user = _user(db_session)
     info = word_book_service.create_word_book(
@@ -268,6 +288,35 @@ def test_create_with_manager(db_session, tmp_path, monkeypatch):
     assert "أحمد سعيد" in full_text
 
 
+def test_body_sentinel_never_survives_in_working_docx(db_session, tmp_path, monkeypatch):
+    """The {{ body }} anchor is cleared — the operator writes the body in Word,
+    so no sentinel text may leak into the working file."""
+    from app.services import word_book_service
+    from app.services.document_service import GENERAL_BOOK_BODY_SENTINEL
+
+    _seed_gs(db_session)
+    (tmp_path / "templates").mkdir(parents=True)
+    _write_minimal_docx(tmp_path / "templates" / _GENERAL_BOOK)
+    monkeypatch.setattr(word_book_service, "get_settings", lambda: _settings(tmp_path))
+
+    user = _user(db_session)
+    info = word_book_service.create_word_book(
+        db_session,
+        user=user,
+        classification_code="5/1",
+        recipient_id=None,
+        subject="sentinel test",
+        cc=None,
+        manager_id=None,
+    )
+    working_file = Path(
+        db_session.query(BookEditSession).filter_by(book_id=info.book_id).one().working_path
+    )
+    doc = docx.Document(str(working_file))
+    full_text = "\n".join(p.text for p in doc.paragraphs)
+    assert GENERAL_BOOK_BODY_SENTINEL not in full_text
+
+
 # ---------------------------------------------------------------------------
 # Utilities
 # ---------------------------------------------------------------------------
@@ -280,14 +329,14 @@ def _settings(tmp_path):
 
 
 def _write_minimal_docx(path: Path) -> None:
-    """Write a minimal docx with tokens matching the classified template."""
+    """Write a minimal docx with tokens matching the General Book template."""
     import docx as _docx
 
     doc = _docx.Document()
-    doc.add_paragraph("الرقم: {{ ref }}")
     doc.add_paragraph("التاريخ: {{ date }}")
     doc.add_paragraph("السيد / {{ recipient_name }}")
     doc.add_paragraph("الموضوع: {{ subject }}")
+    doc.add_paragraph("{{ body }}")
     doc.add_paragraph("{{ cc }}")
     doc.add_paragraph("{{ manager_name }}")
     doc.add_paragraph("{{ manager_title }}")

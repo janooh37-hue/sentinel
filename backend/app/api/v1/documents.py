@@ -129,6 +129,11 @@ class DocumentGenerateRequest(BaseModel):
     # Attachments validated/persisted/merged into the combined PDF on commit
     # (slots per core.form_policy; see document_service.generate_document).
     attachments: list[GenerateAttachmentSpec] | None = None
+    # General Book only: government classification (التبويب) code, e.g. "5/1".
+    # Required on commit — every General Book ref is now allocated from the
+    # classified register (1/{tab}/GSSG/{serial}); the legacy GS-#### counter
+    # is retired for this form.
+    classification_code: str | None = None
 
 
 class DocumentGenerateResponse(BaseModel):
@@ -201,6 +206,7 @@ def _run_generation(
             current_user=current_user,
             revise_of_book_id=request.revise_of_book_id,
             attachments=request.attachments,
+            classification_code=request.classification_code,
         )
         # Best-effort automatic employee SMS for generated service forms.
         # Must never break generation — the document is already committed.

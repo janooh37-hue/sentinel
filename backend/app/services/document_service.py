@@ -40,6 +40,7 @@ from app.config import get_settings
 from app.core import form_policy, leave_lifecycle
 from app.core import signature as signature_core
 from app.core.book_text import build_search_text, html_to_text
+from app.core.classifications import classified_ref, get_classification
 from app.core.constants import STAMP_STYLE_HEADER, TEMPLATE_FILES
 from app.core.docx_engine import DocxEngine, aztec_corner_for
 from app.core.pdf_merge import merge_attachments_into_pdf
@@ -58,6 +59,7 @@ from app.db.models import (
     User,
     Violation,
 )
+from app.db.repos.classified_refs_repo import allocate_classified_serial
 from app.db.repos.refs_repo import allocate_ref_with_retry
 from app.services._pdf_executor import convert_docx_to_pdf
 
@@ -933,6 +935,7 @@ def generate_document(
     revise_of_book_id: int | None = None,
     attachments: Sequence[GenerateAttachmentSpec] | None = None,
     return_for_leave_id: int | None = None,
+    classification_code: str | None = None,
 ) -> GenerationResult:
     """Orchestrate the v4 doc generation pipeline.
 
@@ -1111,9 +1114,33 @@ def generate_document(
     # counter is untouched, so concurrent previews don't burn ref numbers.
     # ------------------------------------------------------------------
     cat_code = _FORM_CATEGORY.get(template_id, "HR")
+    # General Book refs come exclusively from the classified register
+    # (1/{tab}/GSSG/{serial}) — the legacy GS-#### counter is retired for this
+    # form regardless of authoring surface (rich editor OR Word). Validate the
+    # classification up-front so a bad code fails before any file is written.
+    _classification = None
+    if template_id == "General Book":
+        if classification_code is not None:
+            _classification = get_classification(classification_code)
+            if _classification is None:
+                raise ValidationFailedError(
+                    "UNKNOWN_CLASSIFICATION",
+                    f"Classification code {classification_code!r} is not in the registry",
+                )
+        elif commit and revise_book is None:
+            raise ValidationFailedError(
+                "CLASSIFICATION_REQUIRED",
+                "General Book requires a classification (التبويب) — every book "
+                "takes its ref from the classified register",
+            )
     if commit and revise_book is not None:
         # Revise reuses the existing book's ref — no allocation.
         raw_ref = revise_book.ref_number
+    elif commit and _classification is not None:
+        # Shared classified serial — atomic with the Book/Document insert via
+        # the function's terminal db.commit().
+        serial = allocate_classified_serial(db)
+        raw_ref = classified_ref(_classification.tab, serial)
     elif commit:
         # Serialised + bounded-retry ref allocation (BEGIN IMMEDIATE inside the
         # helper) — mirrors create_book. Atomic with the Book/Document insert
@@ -1353,6 +1380,7 @@ def generate_document(
             book_row = Book(
                 category_id=cat_code,
                 ref_number=raw_ref,
+                classification_code=_classification.code if _classification else None,
                 subject=_subject,
                 direction="outgoing",
                 stamp_style=STAMP_STYLE_HEADER,

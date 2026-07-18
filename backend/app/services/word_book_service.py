@@ -20,20 +20,30 @@ from sqlalchemy.orm import Session
 
 from app.api.errors import AppError
 from app.config import get_settings
-from app.core import docx_render, manager_override
+from app.core import manager_override
 from app.core.book_text import build_search_text, docx_to_text
 from app.core.classifications import (
     classified_ref,
     get_classification,
 )
-from app.core.docx_engine import _normalize_cc
+from app.core.constants import STAMP_STYLE_HEADER, TEMPLATE_FILES
+from app.core.docx_engine import (
+    DocxEngine,
+    _postprocess_general_book_footer,
+    aztec_corner_for,
+)
 from app.db.models import Book, BookCategory, BookEditSession, BookVersion, Document, Manager, User
-from app.db.repos import classified_refs_repo, refs_repo
+from app.db.repos import classified_refs_repo
 from app.services._pdf_executor import convert_docx_to_pdf
-from app.services.document_service import _build_docx_filename, _output_dir_for_admin
+from app.services.document_service import (
+    GENERAL_BOOK_BODY_SENTINEL,
+    _build_docx_filename,
+    _output_dir_for_admin,
+)
 
-# General Book template filename (plain path, no classification)
-_GENERAL_BOOK_TEMPLATE = "GSSG-GS_300-003_General_Book.docx"
+# Every Word book renders on the ONE General Book template — the same file the
+# rich-editor path fills — so both authoring surfaces produce identical paper.
+_TEMPLATE_ID = "General Book"
 
 
 @dataclass
@@ -56,44 +66,43 @@ def create_word_book(
     cc: list[str] | str | None,
     manager_id: int | None,
 ) -> WordSessionInfo:
-    """Create a classified (or plain) General Book with a working docx for Word.
+    """Create a General Book with a working docx for Word.
 
-    Returns a WordSessionInfo with the ms-word: URL to hand to the browser.
+    Every book takes its ref from the classified register
+    (``1/{tab}/GSSG/{serial}``), so a classification is required — same rule as
+    the rich-editor path. Returns a WordSessionInfo with the ms-word: URL to
+    hand to the browser.
     """
     settings = get_settings()
 
     # ------------------------------------------------------------------
-    # 1. Resolve ref + template path
+    # 1. Resolve classification → ref; template is always the General Book
     # ------------------------------------------------------------------
-    if classification_code is not None:
-        cls = get_classification(classification_code)
-        if cls is None:
-            raise AppError(
-                "UNKNOWN_CLASSIFICATION",
-                f"Classification code {classification_code!r} is not in the registry",
-                http_status=422,
-            )
-        template_file = cls.template
-        template_path = settings.templates_dir / template_file
-        if not template_path.exists():
-            raise AppError(
-                "TEMPLATE_MISSING",
-                f"Template file {template_file!r} not found on disk",
-                http_status=409,
-                details={"file": template_file},
-            )
-        serial = classified_refs_repo.allocate_classified_serial(db)
-        ref = classified_ref(cls.tab, serial)
-    else:
-        template_path = settings.templates_dir / _GENERAL_BOOK_TEMPLATE
-        if not template_path.exists():
-            raise AppError(
-                "TEMPLATE_MISSING",
-                f"Template file {_GENERAL_BOOK_TEMPLATE!r} not found on disk",
-                http_status=409,
-                details={"file": _GENERAL_BOOK_TEMPLATE},
-            )
-        ref = refs_repo.allocate_ref_with_retry(db, "GS")
+    if classification_code is None:
+        raise AppError(
+            "CLASSIFICATION_REQUIRED",
+            "General Book requires a classification (التبويب) — every book "
+            "takes its ref from the classified register",
+            http_status=422,
+        )
+    cls = get_classification(classification_code)
+    if cls is None:
+        raise AppError(
+            "UNKNOWN_CLASSIFICATION",
+            f"Classification code {classification_code!r} is not in the registry",
+            http_status=422,
+        )
+    template_file = TEMPLATE_FILES[_TEMPLATE_ID]
+    template_path = settings.templates_dir / template_file
+    if not template_path.exists():
+        raise AppError(
+            "TEMPLATE_MISSING",
+            f"Template file {template_file!r} not found on disk",
+            http_status=409,
+            details={"file": template_file},
+        )
+    serial = classified_refs_repo.allocate_classified_serial(db)
+    ref = classified_ref(cls.tab, serial)
 
     # ------------------------------------------------------------------
     # 2. Insert Book (flush to get PK before writing the file)
@@ -121,14 +130,20 @@ def create_word_book(
     output_path = settings.data_dir / "editing" / f"book-{book.id}" / filename
 
     # ------------------------------------------------------------------
-    # 4. Build template data dict
+    # 4. Build template data dict — routed through the SAME General Book
+    # adapter as the rich-editor path (DocxEngine.fill applies
+    # _adapt_general_book: dd-mm-yyyy date, CC newline join + font fix,
+    # default manager name). ``body`` carries the sentinel with an empty
+    # body_html so the {{ body }} anchor is cleared cleanly — the operator
+    # writes the body in Word.
     # ------------------------------------------------------------------
     data: dict[str, Any] = {
         "ref": ref,
-        "date": datetime.now().strftime("%d/%m/%Y"),
         "subject": subject,
+        "body": GENERAL_BOOK_BODY_SENTINEL,
+        "body_html": "",
         "recipient_name": _resolve_recipient(db, recipient_id),
-        "cc": _normalize_cc_for_template(cc),
+        "cc": cc,
         "submitter_g": user.employee_id or "",
     }
 
@@ -149,9 +164,15 @@ def create_word_book(
             )
 
     # ------------------------------------------------------------------
-    # 5. Render working docx
+    # 5. Render working docx + the same post-render pipeline the rich-editor
+    # path runs (document_service steps 8b/9): footer2 ← footer3 sync, then
+    # header ref stamp + Aztec code — so the paper is identical no matter
+    # where the body was written.
     # ------------------------------------------------------------------
-    docx_render.render(template_path, data, output_path)
+    DocxEngine(settings.templates_dir).fill(_TEMPLATE_ID, data, output_path)
+    _postprocess_general_book_footer(output_path)
+    DocxEngine.stamp_ref_number(output_path, ref, STAMP_STYLE_HEADER)
+    DocxEngine.stamp_aztec_code(output_path, ref, corner=aztec_corner_for(_TEMPLATE_ID))
 
     # ------------------------------------------------------------------
     # 6. Insert BookEditSession + commit everything atomically
@@ -199,25 +220,9 @@ def _resolve_recipient(db: Session, recipient_id: int | None) -> str:
     return row.name if row is not None else ""
 
 
-def _normalize_cc_for_template(cc: list[str] | str | None) -> str:
-    """Normalize cc to newline-joined string matching the General Book adapter."""
-    normalized = _normalize_cc(cc)
-    if not normalized:
-        return ""
-    parts = [p.strip() for p in normalized.split(",") if p.strip()]
-    return "\n".join(parts)
-
-
 # ---------------------------------------------------------------------------
 # Finish / discard a Word editing session
 # ---------------------------------------------------------------------------
-
-_CLASSIFIED_TEMPLATE_ID = "Classified Book"
-_GENERAL_TEMPLATE_ID = "General Book"
-
-
-def _template_id_for_book(book: Book) -> str:
-    return _CLASSIFIED_TEMPLATE_ID if book.classification_code else _GENERAL_TEMPLATE_ID
 
 
 def finish_word_session(db: Session, *, user: User, book_id: int) -> Book:
@@ -243,7 +248,7 @@ def finish_word_session(db: Session, *, user: User, book_id: int) -> Book:
     # ------------------------------------------------------------------
     # 1. Move working docx → stable output dir
     # ------------------------------------------------------------------
-    template_id = _template_id_for_book(book)
+    template_id = _TEMPLATE_ID
     now = datetime.now(UTC).replace(tzinfo=None)
     out_dir = _output_dir_for_admin(template_id)
     filename = _build_docx_filename(template_id, book.ref_number.replace("/", "-"), now)

@@ -7,14 +7,18 @@
  * until at least one Word save has reached the server.
  */
 
-import { useState } from 'react'
+import { lazy, Suspense, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 
 import { api, apiErrorMessage } from '@/lib/api'
 import { bidi } from '@/lib/bidi'
-import type { WordSessionRead } from '@/lib/api'
+import type { BookRead, WordSessionRead } from '@/lib/api'
+
+// Same pdf.js canvas the generate-preview tab uses — the finished book renders
+// exactly like a rich-editor generation (lazy: pdf.js ships in its own chunk).
+const DocPdfCanvas = lazy(() => import('@/pages/application/DocPdfCanvas'))
 import {
   DialogRoot,
   DialogContent,
@@ -35,13 +39,29 @@ export function WordHandoffDialog({ session, open, onClose }: Props): React.JSX.
   const isAr = i18n.language.startsWith('ar')
   const qc = useQueryClient()
   const [discardOpen, setDiscardOpen] = useState(false)
+  // Set once Finish succeeds — flips the dialog to the rendered-PDF view so
+  // the operator sees the final book the same way the rich-editor flow shows
+  // its generated preview.
+  const [finishedBook, setFinishedBook] = useState<BookRead | null>(null)
+
+  // The dialog stays mounted between sessions (ApplicationPage/BookWordActions
+  // just swap the `session` prop) — a fresh session must not inherit the
+  // previous one's finished-PDF view. Render-phase state adjustment (the
+  // React-recommended pattern), not an effect.
+  const [prevToken, setPrevToken] = useState(session?.token)
+  if (session?.token !== prevToken) {
+    setPrevToken(session?.token)
+    setFinishedBook(null)
+  }
 
   // Poll the book while dialog is open to detect the first Word save.
+  // Stops once Finish succeeded — the finished view is static.
+  const polling = open && session != null && finishedBook == null
   const bookQuery = useQuery({
     queryKey: ['books', session?.book_id],
     queryFn: () => api.getBook(session!.book_id),
-    enabled: open && session != null,
-    refetchInterval: open && session != null ? 5000 : false,
+    enabled: polling,
+    refetchInterval: polling ? 5000 : false,
     staleTime: 0,
   })
 
@@ -49,10 +69,11 @@ export function WordHandoffDialog({ session, open, onClose }: Props): React.JSX.
 
   const finishMutation = useMutation({
     mutationFn: () => api.finishWordSession(session!.book_id),
-    onSuccess: () => {
+    onSuccess: (book) => {
       void qc.invalidateQueries({ queryKey: ['books'] })
       toast.success(t('books.word.finished', { ref: bidi(session?.ref_number ?? '') }))
-      onClose()
+      // Keep the dialog open showing the finished PDF instead of closing.
+      setFinishedBook(book)
     },
     onError: (err) => {
       toast.error(apiErrorMessage(err))
@@ -71,6 +92,55 @@ export function WordHandoffDialog({ session, open, onClose }: Props): React.JSX.
   })
 
   if (!session) return null
+
+  // ------------------------------------------------------------------
+  // Finished view — the saved version's PDF, rendered with the same
+  // pdf.js canvas the rich-editor generate preview uses.
+  // ------------------------------------------------------------------
+  if (finishedBook) {
+    const versions = finishedBook.versions ?? []
+    const latest = versions.length > 0 ? versions[versions.length - 1] : null
+    const pdfUrl = latest?.pdf_url ?? null
+    const docxUrl = latest?.docx_url ?? undefined
+    return (
+      <DialogRoot open={open} onOpenChange={(v) => { if (!v) onClose() }}>
+        <DialogContent className="max-w-3xl p-0 overflow-hidden">
+          <div className="h-2 bg-[#0d2845]" aria-hidden />
+          <div className="flex max-h-[85vh] flex-col px-6 pb-6 pt-4">
+            <DialogHeader className="mb-3">
+              <DialogTitle>
+                {t('books.word.finishedPdfTitle', { ref: bidi(session.ref_number) })}
+              </DialogTitle>
+            </DialogHeader>
+            <div className="min-h-[400px] flex-1 overflow-hidden">
+              {pdfUrl ? (
+                <Suspense fallback={<p className="text-[0.82em] text-muted-foreground">…</p>}>
+                  <DocPdfCanvas key={pdfUrl} pdfUrl={pdfUrl} docxUrl={docxUrl} />
+                </Suspense>
+              ) : (
+                // PDF conversion pending/failed — the docx is still the truth;
+                // offer it instead of dead-ending (mirrors the generate flow's
+                // "PDF unavailable" state).
+                <p className="text-[0.84em] text-muted-foreground">
+                  {t('books.word.pdfPending')}{' '}
+                  {docxUrl && (
+                    <a className="text-primary underline" href={docxUrl}>
+                      DOCX
+                    </a>
+                  )}
+                </p>
+              )}
+            </div>
+            <div className="mt-4 flex justify-end border-t border-hairline pt-4">
+              <Button type="button" variant="commit" size="commit" onClick={onClose}>
+                {t('books.word.close')}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </DialogRoot>
+    )
+  }
 
   const createdDate = bookQuery.data?.created_at
     ? new Date(bookQuery.data.created_at).toLocaleDateString(isAr ? 'ar-AE' : 'en-GB')

@@ -66,9 +66,8 @@ def _client(db: Session, user: User, monkeypatch, tmp_path: Path) -> TestClient:
         data_dir=tmp_path / "data",
         templates_dir=tmp_path / "templates",
     )
-    # Place both templates so any classification create doesn't fail on TEMPLATE_MISSING
+    # One template for every General Book — classified or not
     (tmp_path / "templates").mkdir(parents=True, exist_ok=True)
-    _write_minimal_docx(tmp_path / "templates" / "GSSG-GS_301-001_Classified_Standard.docx")
     _write_minimal_docx(tmp_path / "templates" / "GSSG-GS_300-003_General_Book.docx")
 
     monkeypatch.setattr(word_book_service, "get_settings", lambda: settings)
@@ -83,8 +82,8 @@ def _write_minimal_docx(path: Path) -> None:
     import docx as _docx
 
     doc = _docx.Document()
-    doc.add_paragraph("{{ ref }}")
     doc.add_paragraph("{{ subject }}")
+    doc.add_paragraph("{{ body }}")
     doc.add_paragraph("{{ recipient_name }}")
     doc.add_paragraph("{{ cc }}")
     doc.add_paragraph("{{ manager_name }}")
@@ -156,7 +155,9 @@ def test_post_word_session_returns_201(api_db, monkeypatch, tmp_path):
     assert body["dav_url"]
 
 
-def test_post_word_session_plain_no_classification(api_db, monkeypatch, tmp_path):
+def test_post_word_session_no_classification_rejected(api_db, monkeypatch, tmp_path):
+    """Every book's ref comes from the classified register — no classification,
+    no book (422 CLASSIFICATION_REQUIRED)."""
     _seed_gs(api_db)
     user = _make_user(api_db, role="manager")
     c = _client(api_db, user, monkeypatch, tmp_path)
@@ -164,8 +165,8 @@ def test_post_word_session_plain_no_classification(api_db, monkeypatch, tmp_path
         "/api/v1/books/word-sessions",
         json={"classification_code": None, "subject": "Plain book"},
     )
-    assert resp.status_code == 201, resp.text
-    assert resp.json()["ref_number"].startswith("GS-")
+    assert resp.status_code == 422, resp.text
+    assert resp.json()["error"]["code"] == "CLASSIFICATION_REQUIRED"
 
 
 def test_post_word_session_requires_books_manage(api_db, monkeypatch, tmp_path):
@@ -224,10 +225,10 @@ def test_list_books_batches_edit_sessions(api_db, monkeypatch, tmp_path):
     c = _client(api_db, admin_user, monkeypatch, tmp_path)
 
     ids = []
-    for subject in ("Batch book A", "Batch book B"):
+    for code, subject in (("3/1", "Batch book A"), ("5/1", "Batch book B")):
         r = c.post(
             "/api/v1/books/word-sessions",
-            json={"classification_code": None, "subject": subject},
+            json={"classification_code": code, "subject": subject},
         )
         assert r.status_code == 201, r.text
         ids.append(r.json()["book_id"])

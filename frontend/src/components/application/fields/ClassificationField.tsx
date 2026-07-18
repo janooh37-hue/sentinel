@@ -1,14 +1,16 @@
 /**
  * ClassificationField — Radix Select fed by the classifications endpoint.
  *
- * Used exclusively on the General Book form. The first option is "بدون تبويب"
- * (null / no classification). Other options show "{code} — {name_ar}" with
- * unit_ar as secondary text. Calls `onChange(code | null)` on selection.
+ * Used exclusively on the General Book form. Selection is REQUIRED — every
+ * General Book takes its ref from the classified register, so there is no
+ * "no classification" option; until the user picks, the trigger shows a
+ * placeholder. Options show "{code} — {name_ar}" with unit_ar as secondary
+ * text. Calls `onChange(code)` on selection.
  *
  * This component is NOT wired into the RHF form — it is controlled externally
  * by the TemplateForm/ApplicationPage parent so they can react to the selection
- * (e.g. hide the body editor, branch the submit path). It is still styled to
- * match the other field components.
+ * (e.g. branch the submit path). It is still styled to match the other field
+ * components.
  */
 
 import { useTranslation } from 'react-i18next'
@@ -23,8 +25,6 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { api } from '@/lib/api'
-
-const NO_CLASSIFICATION = '__none__'
 
 interface ClassificationFieldProps {
   name: string
@@ -55,10 +55,6 @@ export function ClassificationField({
 
   const classifications = data?.items ?? []
 
-  function handleChange(v: string): void {
-    onChange(v === NO_CLASSIFICATION ? null : v)
-  }
-
   return (
     <div className="flex flex-col gap-1.5">
       <Label htmlFor={name}>
@@ -66,16 +62,13 @@ export function ClassificationField({
         {required && <span className="ms-0.5 text-destructive">*</span>}
       </Label>
       <Select
-        value={value ?? NO_CLASSIFICATION}
-        onValueChange={handleChange}
+        value={value ?? undefined}
+        onValueChange={onChange}
       >
         <SelectTrigger id={name}>
-          <SelectValue placeholder={t('books.word.noClassification')} />
+          <SelectValue placeholder={t('books.word.chooseClassification')} />
         </SelectTrigger>
         <SelectContent>
-          <SelectItem value={NO_CLASSIFICATION}>
-            {t('books.word.noClassification')}
-          </SelectItem>
           {classifications.map((c) => (
             <SelectItem key={c.code} value={c.code}>
               <div className="flex flex-col">

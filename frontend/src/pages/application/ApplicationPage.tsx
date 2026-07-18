@@ -161,8 +161,8 @@ export function ApplicationPage(): React.JSX.Element {
   const [previewIsCommitted, setPreviewIsCommitted] = useState(false)
   const [submitError, setSubmitError] = useState<string | null>(null)
   const [query, setQuery] = useState('')
-  // General Book Word-mode: classification code selected by the picker.
-  // null = no classification (normal rich-editor mode); non-null = Word mode.
+  // General Book: classification code selected by the picker. Required for
+  // every ref-allocating submit (both body modes); null only while unpicked.
   const [classificationCode, setClassificationCode] = useState<string | null>(null)
   // General Book plain-path body-mode toggle (Task 12).
   // 'editor' = HugeRTE (default); 'word' = body written in Word (no classification).
@@ -259,6 +259,10 @@ export function ApplicationPage(): React.JSX.Element {
   // the backend allows employee_id=null for them, so we hide the picker entirely
   // and don't gate Generate on a selection. See document_service.generate_document.
   const isAdminCategory = selectedMeta?.category === 'admin'
+  // General Book — the only form carrying the rich Arabic body editor. Its
+  // classification picker is REQUIRED: every book (rich-editor or Word) takes
+  // its ref from the classified register (1/{tab}/GSSG/{serial}).
+  const isGeneralBookForm = !!schema?.fields.some((f) => f.type === 'arabic_rich_full')
 
   // Build Zod schema + RHF instance
   const zodSchema = schema ? buildZodSchema(schema.fields, t) : null
@@ -431,6 +435,8 @@ export function ApplicationPage(): React.JSX.Element {
       // Revise mode: only the committed save regenerates a new version under
       // the existing book's ref (the backend requires commit=True for it).
       revise_of_book_id: commit ? reviseBookId ?? undefined : undefined,
+      // General Book: the classification drives the classified-register ref.
+      classification_code: isGeneralBookForm ? classificationCode ?? undefined : undefined,
     }
   }
 
@@ -445,10 +451,22 @@ export function ApplicationPage(): React.JSX.Element {
         return
       }
 
-      // General Book Word mode: classification selected OR plain body-mode toggle
-      // set to 'word' → create a Word session (classification_code null for plain).
+      // General Book: the classification drives the ref (1/{tab}/GSSG/{serial})
+      // for BOTH body modes, so gate every ref-allocating submit on it — the
+      // Word create always allocates; the editor path allocates on commit.
+      // Preview (commit=false) stays open so drafting isn't blocked.
+      if (
+        isGeneralBookForm &&
+        classificationCode == null &&
+        (commit || bodyMode === 'word')
+      ) {
+        toast.error(t('books.word.classificationRequired'))
+        return
+      }
+
+      // General Book Word mode (body-mode toggle): create a Word session.
       // Only valid for the committed path (no preview for Word books).
-      if (isAdminCategory && (classificationCode != null || bodyMode === 'word')) {
+      if (isGeneralBookForm && bodyMode === 'word') {
         const managerField = schema?.fields.find((f) => f.type === 'manager_picker')
         const recipientField = schema?.fields.find((f) => f.type === 'recipient_picker')
         const ccField = schema?.fields.find((f) => f.type === 'recipient_multi_picker')
@@ -898,7 +916,7 @@ export function ApplicationPage(): React.JSX.Element {
 
                       {/* Action row: Word mode → "Create & open in Word"; normal → Preview. */}
                       <div className="mt-7 flex flex-wrap items-center justify-between gap-2.5 border-t border-hairline pt-4">
-                        {classificationCode != null || bodyMode === 'word' ? (
+                        {isGeneralBookForm && bodyMode === 'word' ? (
                           // Word mode — single action: create the book and open it in Word.
                           // Word-brand blue (#185abd) is reserved for open-in-Word actions.
                           <>
