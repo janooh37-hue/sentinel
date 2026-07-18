@@ -163,8 +163,10 @@ def retokenize_general_book(docx_path: Path, *, submitter_g: str | None = None) 
         for part in (
             section.header,
             section.first_page_header,
+            section.even_page_header,
             section.footer,
             section.first_page_footer,
+            section.even_page_footer,
         ):
             _neutralize_part_runs(part)
 
@@ -200,6 +202,8 @@ def validate_book_template(docx_path: Path) -> None:
         except Exception as exc:  # sandbox/strict/syntax — reason stays generic
             raise ValueError("تعذر التحقق من القالب — فشل عرض تجريبي") from exc
         text = docx_to_text(out)
+    # submitter_g is deliberately NOT asserted — it is optional-inject (books
+    # without a footer G-number are valid templates).
     if text.count(_DUMMY["ref"]) != 1 or text.count(_DUMMY["date"]) != 1:
         raise ValueError("سطر الرقم أو التاريخ لم يُستبدل بشكل صحيح")
     # Body preserved: every substantial source line (minus token lines)

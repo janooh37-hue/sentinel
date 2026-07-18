@@ -4,12 +4,12 @@ template with exactly three live tokens; all foreign Jinja is inert."""
 from pathlib import Path
 
 import pytest
+from docx import Document
+
 from app.core.book_template_retokenize import (
     retokenize_general_book,
     validate_book_template,
 )
-from docx import Document
-
 from app.core.book_text import docx_to_text
 from app.core.docx_render import render
 
@@ -75,6 +75,30 @@ def test_foreign_jinja_neutralized(tmp_path):
     assert "49" not in text  # never executed
     assert "7*7" in text  # visible text preserved
     assert "شرط" in text  # {% if %} inert, content kept literal
+
+
+def test_split_delimiter_fails_closed(tmp_path):
+    """Known ceiling: per-w:t neutralization misses a Jinja delimiter split
+    across two runs (run1 ends '{', run2 starts '{') — docxtpl's patch_xml can
+    reassemble it at render time. Save-time validation is the fail-closed
+    backstop (verified experimentally in review): the template is either
+    rejected or renders without executing. The invariant is "never executes",
+    not a specific failure mode."""
+    p = tmp_path / "book.docx"
+    doc = Document()
+    doc.add_paragraph("التاريخ: 13/07/2026")
+    split = doc.add_paragraph()
+    split.add_run("خصم {")
+    split.add_run("{ 7*7 }} بالمئة")
+    doc.save(str(p))
+    retokenize_general_book(p)
+    try:
+        validate_book_template(p)
+    except ValueError:
+        pass  # rejected at save time — fail-closed holds
+    else:
+        text = _rendered_text(p, tmp_path, ref="9/9/GSSG/999", date="31-12-2099")
+        assert "49" not in text  # survived validation, but never executed
 
 
 def test_ref_run_marked_ltr(tmp_path):
