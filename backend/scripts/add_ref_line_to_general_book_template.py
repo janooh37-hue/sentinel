@@ -3,10 +3,12 @@ line in the canonical General Book template. The modified .docx is committed
 intentionally (template-churn rule: only THIS file changes).
 
 Re-running on an already-edited template runs a REPAIR pass instead: it
-removes any forced-LTR mark (<w:rtl w:val="0"/>) from the {{ ref }} run —
-the office convention (matching the hand-typed legacy books) is natural
-bidi flow in the RTL paragraph, which reads the bumping serial LAST on the
-line; the forced mark rendered the serial right next to الرقم:.
+ensures the {{ ref }} run carries <w:rtl/> — the EXACT encoding of the
+hand-typed legacy books (verified by XML dump: their digit runs are
+RTL-marked), which makes Word order the segments right-to-left so the
+bumping serial reads LAST on the line. Both no-mark and a forced
+<w:rtl w:val="0"/> made Word lay the value as one LTR unit with the serial
+landing right next to الرقم:.
 """
 
 import copy
@@ -21,18 +23,18 @@ TEMPLATE = Path(__file__).resolve().parents[1] / "templates" / "GSSG-GS_300-003_
 
 
 def _repair_ref_run_direction(doc: Document) -> bool:
-    """Drop explicit w:rtl from the {{ ref }} run so it inherits the RTL
-    paragraph context. Returns True if anything changed."""
+    """Ensure the {{ ref }} run carries <w:rtl/> (legacy-book encoding).
+    Returns True if anything changed."""
     changed = False
     for para in doc.paragraphs:
         if "{{ ref }}" not in para.text:
             continue
         for run in para.runs:
-            if "{{ ref }}" in run.text and run.font.rtl is not None:
-                rpr = run._element.rPr
-                if rpr is not None:
-                    for el in rpr.findall(qn("w:rtl")):
-                        rpr.remove(el)
+            if "{{ ref }}" in run.text and run.font.rtl is not True:
+                rpr = run._element.get_or_add_rPr()
+                for el in rpr.findall(qn("w:rtl")):
+                    rpr.remove(el)
+                run.font.rtl = True
                 changed = True
     return changed
 
@@ -42,7 +44,7 @@ def main() -> None:
     if any("{{ ref }}" in p.text for p in doc.paragraphs):
         if _repair_ref_run_direction(doc):
             doc.save(str(TEMPLATE))
-            print("ref line present; removed forced-LTR mark (repair)")
+            print("ref line present; ref run now RTL-marked (repair)")
         else:
             print("already has ref line; nothing to do")
         return
@@ -71,9 +73,9 @@ def main() -> None:
     p_ref = clone_empty_before()
     label = p_ref.add_run("الرقم: ")
     style_like_date(label)
-    # No w:rtl on the ref run — natural bidi flow, see module docstring.
     ref_run = p_ref.add_run("{{ ref }}")
     style_like_date(ref_run)
+    ref_run.font.rtl = True  # legacy-book encoding — see module docstring
 
     p_endif = clone_empty_before()
     p_endif.add_run("{%p endif %}")

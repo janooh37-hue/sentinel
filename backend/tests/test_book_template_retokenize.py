@@ -101,16 +101,19 @@ def test_split_delimiter_fails_closed(tmp_path):
         assert "49" not in text  # survived validation, but never executed
 
 
-def test_ref_run_not_forced_ltr(tmp_path):
-    """Natural bidi flow (no <w:rtl w:val="0"/>) — matches the hand-typed
-    legacy books where the bumping serial reads LAST on the RTL line; forcing
-    LTR put the serial right next to الرقم: (operator-reported defect)."""
+def test_ref_run_marked_rtl(tmp_path):
+    """The {{ ref }} run carries <w:rtl/> — the EXACT encoding of the
+    hand-typed legacy books (verified by XML dump: their digit runs are
+    RTL-marked). Word then orders the segments right-to-left so the bumping
+    serial reads LAST. Both no-mark and a forced <w:rtl w:val="0"/> made
+    Word lay the value as one LTR unit with the serial landing right next
+    to الرقم: (operator-reported twice)."""
     p = _finished_book(tmp_path)
     retokenize_general_book(p)
     doc = Document(str(p))
     ref_para = next(pp for pp in doc.paragraphs if "{{ ref }}" in pp.text)
     run = next(r for r in ref_para.runs if "{{ ref }}" in r.text)
-    assert run.font.rtl is None
+    assert run.font.rtl is True
 
 
 def test_date_token_run_not_forced_ltr(tmp_path):
@@ -120,6 +123,17 @@ def test_date_token_run_not_forced_ltr(tmp_path):
     date_para = next(pp for pp in doc.paragraphs if "{{ date }}" in pp.text)
     token_run = next(r for r in date_para.runs if "{{ date }}" in r.text)
     assert token_run.font.rtl is None
+
+
+def test_footer_g_token_inserted_when_missing(tmp_path):
+    """Hand-made templates carry their own footers with NO G-number (the 8
+    Desktop imports). Retokenize must INSERT {{ submitter_g }} into the
+    default footer so the creating author's G renders on every book."""
+    p = _finished_book(tmp_path)  # plain Document() — footer has no G
+    retokenize_general_book(p)
+    doc = Document(str(p))
+    footer_text = "\n".join(para.text for s in doc.sections for para in s.footer.paragraphs)
+    assert "{{ submitter_g }}" in footer_text
 
 
 def test_validate_accepts_good_template(tmp_path):

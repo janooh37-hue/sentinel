@@ -107,11 +107,14 @@ def _write_ref_block(anchor: Paragraph, *, replace: bool) -> None:
 
     _clear_runs(label_para)
     styled(label_para.add_run("الرقم: "))
-    # No LTR isolate on the ref run: the office convention (matching the
-    # hand-typed legacy books) is natural bidi flow in the RTL paragraph,
-    # which reads the bumping serial LAST on the line; forcing
-    # <w:rtl w:val="0"/> rendered the serial right next to الرقم:.
-    styled(label_para.add_run("{{ ref }}"))
+    # <w:rtl/> on the ref run — the EXACT encoding of the hand-typed legacy
+    # books (verified by XML dump: their digit runs are RTL-marked). Word
+    # then orders the segments right-to-left so the bumping serial reads
+    # LAST on the line. Both no-mark and a forced <w:rtl w:val="0"/> made
+    # Word lay the value as one LTR unit with the serial landing right next
+    # to الرقم: (operator-reported twice).
+    ref_run = styled(label_para.add_run("{{ ref }}"))
+    ref_run.font.rtl = True
 
     guard_close = copy.deepcopy(label_para._p)
     label_para._p.addnext(guard_close)
@@ -153,15 +156,28 @@ def _strip_header_artifacts(doc: Any) -> None:
 
 def _retokenize_footers(doc: Any, submitter_g: str | None) -> None:
     """Both footers (footer2 is a synced copy of footer3): the baked G-number
-    becomes {{ submitter_g }} so a new author's G renders at create."""
+    becomes {{ submitter_g }} so a new author's G renders at create. Hand-made
+    templates (the Desktop imports) carry their own footers with NO G at all —
+    then the token is INSERTED into the default footer so the author's G still
+    renders on every book (9pt, matching the canonical footer's size)."""
+    replaced = False
     for section in doc.sections:
         for footer in (section.footer, section.first_page_footer, section.even_page_footer):
             for para in footer.paragraphs:
                 for run in para.runs:
                     if submitter_g and submitter_g in run.text:
                         run.text = run.text.replace(submitter_g, "{{ submitter_g }}")
+                        replaced = True
                     elif _G_NUMBER.search(run.text):
                         run.text = _G_NUMBER.sub("{{ submitter_g }}", run.text, count=1)
+                        replaced = True
+    if not replaced:
+        from docx.shared import Pt
+
+        footer = doc.sections[0].footer
+        para = footer.add_paragraph()
+        run = para.add_run("{{ submitter_g }}")
+        run.font.size = Pt(9)
 
 
 def retokenize_general_book(docx_path: Path, *, submitter_g: str | None = None) -> None:
