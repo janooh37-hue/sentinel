@@ -31,6 +31,8 @@ def main() -> int:
         return 1
     ok = skipped = failures = 0
     for src in sorted(SOURCE.glob("*.docx")):
+        if src.name.startswith("~$"):  # Word owner/lock stub, not a document
+            continue
         name = safe_template_name(src.stem)
         dest = templates_dir() / name
         if dest.exists():
