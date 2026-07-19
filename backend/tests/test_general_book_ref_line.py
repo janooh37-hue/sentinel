@@ -36,9 +36,12 @@ def test_ref_line_absent_without_ref(tmp_path):
     assert "الرقم" not in text  # preview/serial-free renders show no ref line
 
 
-def test_ref_run_is_explicit_ltr(tmp_path):
-    """The {{ ref }} value run must carry <w:rtl w:val="0"/> or Word's bidi
-    algorithm reorders 1/5/GSSG/141 inside the RTL paragraph."""
+def test_ref_run_not_forced_ltr(tmp_path):
+    """The {{ ref }} run must NOT force LTR: the office convention (matching
+    the hand-typed legacy books) is natural bidi flow in the RTL paragraph,
+    which places the bumping serial visually LAST on the line. An explicit
+    <w:rtl w:val="0"/> renders the serial right next to الرقم: (operator-
+    reported defect)."""
     from docx import Document
 
     out = tmp_path / "out.docx"
@@ -47,7 +50,7 @@ def test_ref_run_is_explicit_ltr(tmp_path):
     ref_para = next(p for p in doc.paragraphs if "1/5/GSSG/141" in p.text)
     ref_runs = [r for r in ref_para.runs if "GSSG" in r.text]
     assert ref_runs, "ref value must be in its own run"
-    assert all(r.font.rtl is False for r in ref_runs)
+    assert all(r.font.rtl is None for r in ref_runs)
 
 
 def _header_text(docx_path) -> str:

@@ -107,8 +107,11 @@ def _write_ref_block(anchor: Paragraph, *, replace: bool) -> None:
 
     _clear_runs(label_para)
     styled(label_para.add_run("الرقم: "))
-    ref_run = styled(label_para.add_run("{{ ref }}"))
-    ref_run.font.rtl = False  # LTR isolate for 1/5/GSSG/141 in the RTL line
+    # No LTR isolate on the ref run: the office convention (matching the
+    # hand-typed legacy books) is natural bidi flow in the RTL paragraph,
+    # which reads the bumping serial LAST on the line; forcing
+    # <w:rtl w:val="0"/> rendered the serial right next to الرقم:.
+    styled(label_para.add_run("{{ ref }}"))
 
     guard_close = copy.deepcopy(label_para._p)
     label_para._p.addnext(guard_close)
@@ -129,8 +132,9 @@ def _retokenize_labeled_line(para: Paragraph, prefix: str, token: str) -> None:
         return run
 
     styled(para.add_run(prefix))
-    token_run = styled(para.add_run(token))
-    token_run.font.rtl = False  # LTR isolate for date value in the RTL line
+    # Token run inherits the paragraph's RTL context (same rationale as the
+    # ref run — match the legacy books' natural bidi flow).
+    styled(para.add_run(token))
 
 
 def _strip_header_artifacts(doc: Any) -> None:

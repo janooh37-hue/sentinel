@@ -984,6 +984,7 @@
       "writingMode": "وضع الكتابة",
       "chooseClassification": "اختر التبويب…",
       "classificationRequired": "اختر التبويب أولاً — رقم كل كتاب يُؤخذ من سجل التبويب",
+      "subjectRequired": "أدخل موضوع الكتاب أولاً",
       "finishedPdfTitle": "تم حفظ الكتاب — {{ref}}",
       "pdfPending": "جارٍ تجهيز ملف PDF — يمكنك تنزيل ملف DOCX الآن",
       "close": "إغلاق",

@@ -101,22 +101,25 @@ def test_split_delimiter_fails_closed(tmp_path):
         assert "49" not in text  # survived validation, but never executed
 
 
-def test_ref_run_marked_ltr(tmp_path):
+def test_ref_run_not_forced_ltr(tmp_path):
+    """Natural bidi flow (no <w:rtl w:val="0"/>) — matches the hand-typed
+    legacy books where the bumping serial reads LAST on the RTL line; forcing
+    LTR put the serial right next to الرقم: (operator-reported defect)."""
     p = _finished_book(tmp_path)
     retokenize_general_book(p)
     doc = Document(str(p))
     ref_para = next(pp for pp in doc.paragraphs if "{{ ref }}" in pp.text)
     run = next(r for r in ref_para.runs if "{{ ref }}" in r.text)
-    assert run.font.rtl is False
+    assert run.font.rtl is None
 
 
-def test_date_token_run_marked_ltr(tmp_path):
+def test_date_token_run_not_forced_ltr(tmp_path):
     p = _finished_book(tmp_path)
     retokenize_general_book(p)
     doc = Document(str(p))
     date_para = next(pp for pp in doc.paragraphs if "{{ date }}" in pp.text)
     token_run = next(r for r in date_para.runs if "{{ date }}" in r.text)
-    assert token_run.font.rtl is False
+    assert token_run.font.rtl is None
 
 
 def test_validate_accepts_good_template(tmp_path):

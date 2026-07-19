@@ -442,8 +442,40 @@ export function ApplicationPage(): React.JSX.Element {
     }
   }
 
-  const submitWithCommit = (commit: boolean) =>
-    form.handleSubmit((values) => {
+  const submitWithCommit = (commit: boolean) => {
+    // General Book Word mode: the create needs only classification + subject —
+    // it must NOT route through form.handleSubmit, whose Zod schema belongs to
+    // the editor path (it validates fields Word mode never renders, and a
+    // failure silently swallows the submit with no feedback near the button).
+    // Every requirement is checked explicitly with a toast instead.
+    if (isGeneralBookForm && bodyMode === 'word') {
+      return (e?: React.BaseSyntheticEvent) => {
+        e?.preventDefault()
+        if (classificationCode == null) {
+          toast.error(t('books.word.classificationRequired'))
+          return
+        }
+        const values = form.getValues() as Record<string, unknown>
+        const subject = typeof values['subject'] === 'string' ? values['subject'].trim() : ''
+        if (!subject) {
+          toast.error(t('books.word.subjectRequired'))
+          return
+        }
+        const managerField = schema?.fields.find((f) => f.type === 'manager_picker')
+        const recipientField = schema?.fields.find((f) => f.type === 'recipient_picker')
+        const ccField = schema?.fields.find((f) => f.type === 'recipient_multi_picker')
+        wordSessionMutation.mutate({
+          classification_code: classificationCode,
+          recipient_id: recipientField ? ((values[recipientField.id] as number | null | undefined) ?? null) : null,
+          subject,
+          cc: Array.isArray(values[ccField?.id ?? '']) ? (values[ccField!.id] as string[]) : [],
+          manager_id: managerField ? ((values[managerField.id] as number | null | undefined) ?? null) : null,
+          template_name: templateName ?? undefined,
+        })
+      }
+    }
+
+    return form.handleSubmit((values) => {
       // Personnel-category forms still require an employee; admin-category
       // ones (General Book) submit with employee_id=null. The primary button
       // is disabled in this state, but guard + surface it in case that's ever
@@ -454,32 +486,10 @@ export function ApplicationPage(): React.JSX.Element {
       }
 
       // General Book: the classification drives the ref (1/{tab}/GSSG/{serial})
-      // for BOTH body modes, so gate every ref-allocating submit on it — the
-      // Word create always allocates; the editor path allocates on commit.
+      // — the editor path allocates on commit, so gate the committed submit.
       // Preview (commit=false) stays open so drafting isn't blocked.
-      if (
-        isGeneralBookForm &&
-        classificationCode == null &&
-        (commit || bodyMode === 'word')
-      ) {
+      if (isGeneralBookForm && classificationCode == null && commit) {
         toast.error(t('books.word.classificationRequired'))
-        return
-      }
-
-      // General Book Word mode (body-mode toggle): create a Word session.
-      // Only valid for the committed path (no preview for Word books).
-      if (isGeneralBookForm && bodyMode === 'word') {
-        const managerField = schema?.fields.find((f) => f.type === 'manager_picker')
-        const recipientField = schema?.fields.find((f) => f.type === 'recipient_picker')
-        const ccField = schema?.fields.find((f) => f.type === 'recipient_multi_picker')
-        wordSessionMutation.mutate({
-          classification_code: classificationCode,
-          recipient_id: recipientField ? ((values[recipientField.id] as number | null | undefined) ?? null) : null,
-          subject: typeof values['subject'] === 'string' ? values['subject'].trim() : '',
-          cc: Array.isArray(values[ccField?.id ?? '']) ? (values[ccField!.id] as string[]) : [],
-          manager_id: managerField ? ((values[managerField.id] as number | null | undefined) ?? null) : null,
-          template_name: templateName ?? undefined,
-        })
         return
       }
 
@@ -488,6 +498,7 @@ export function ApplicationPage(): React.JSX.Element {
       pendingCommitRef.current = commit
       generateMutation.mutate(payload)
     })
+  }
 
   const handlePreview = submitWithCommit(false)
   const handleSave = submitWithCommit(true)

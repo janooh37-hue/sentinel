@@ -924,6 +924,7 @@
       "writingMode": "Writing mode",
       "chooseClassification": "Choose a classification…",
       "classificationRequired": "Choose a classification (التبويب) first — every book takes its number from the classified register",
+      "subjectRequired": "Enter the book's subject first",
       "finishedPdfTitle": "Book saved — {{ref}}",
       "pdfPending": "PDF is being prepared — download the DOCX meanwhile",
       "close": "Close",
