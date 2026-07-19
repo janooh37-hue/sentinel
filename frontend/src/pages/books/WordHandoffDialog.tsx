@@ -199,7 +199,10 @@ export function WordHandoffDialog({ session, open, onClose }: Props): React.JSX.
                 className="w-full rounded-lg border border-hairline bg-transparent px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 autoFocus
               />
-              <div className="mt-1 flex flex-row-reverse gap-2">
+              {/* Primary LAST in DOM + justify-end: rightmost in LTR,
+                  leftmost in RTL via the parent dir — flex-row-reverse
+                  inverted the pair differently per direction. */}
+              <div className="mt-1 flex justify-end gap-2">
                 <button
                   type="button"
                   onClick={() => setSaveTplOpen(false)}

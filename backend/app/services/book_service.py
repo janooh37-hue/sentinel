@@ -621,13 +621,16 @@ def sign_book(db: Session, book_id: int, *, user_id: int) -> Book:
         raise ValidationFailedError("NOT_YOUR_STEP", "This signature is assigned to another user")
     signer = db.get(User, user_id)
     if signer is None:
-        raise ValidationFailedError("NO_SIGNATURE", "You have no signature on file")
+        raise ValidationFailedError("NO_SIGNATURE", "لا يوجد توقيع محفوظ لحسابك")
     abs_sig = _resolve_signer_signature(db, signer)
     if abs_sig is None:
+        # Arabic — this message reaches the operator's toast verbatim
+        # (apiErrorMessage shows the backend text; same convention as the
+        # template-library errors in book_template_service).
         raise ValidationFailedError(
             "NO_SIGNATURE",
-            "No signature on file — upload one in Settings, or store the employee "
-            "signature (G number) in the Submitters registry.",
+            "لا يوجد توقيع محفوظ — ارفع توقيعك من الإعدادات، أو خزّن توقيع "
+            "الموظف (برقم G) في سجل مقدمي الطلبات.",
         )
 
     version = _current_version(book)
