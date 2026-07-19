@@ -170,6 +170,29 @@ def finish_word_session(
     return _enrich_path_fields(item, row, db)
 
 
+@router.get("/{book_id}/word-sessions/preview")
+def word_session_preview(
+    book_id: int,
+    db: Annotated[Session, Depends(get_db)],
+    _user: Annotated[User, Depends(require_capability("books.manage"))],
+    encoding: Annotated[str | None, Query(pattern="^base64$")] = None,
+) -> Response:
+    """PDF preview of the active Word session's working docx (regenerates on change).
+
+    ``encoding=base64`` mirrors the documents download endpoint — the in-app
+    pdf.js canvas fetches base64 text so download accelerators can't hijack
+    the PDF byte stream.
+    """
+    pdf = word_book_service.render_session_preview(db, book_id=book_id)
+    if (b64 := maybe_base64(pdf.read_bytes(), encoding)) is not None:
+        return b64
+    return FileResponse(
+        str(pdf),
+        media_type="application/pdf",
+        headers={"Cache-Control": "no-store"},
+    )
+
+
 @router.post(
     "/{book_id}/word-sessions",
     response_model=WordSessionRead,

@@ -277,6 +277,7 @@ def finish_word_session(db: Session, *, user: User, book_id: int) -> Book:
 
     src = Path(session.working_path)
     shutil.move(str(src), str(dest))
+    _cleanup_preview_files(src.parent)
 
     # ------------------------------------------------------------------
     # 2. PDF conversion (lenient — None is fine)
@@ -413,6 +414,47 @@ def reopen_word_session(db: Session, *, user: User, book_id: int) -> WordSession
     )
 
 
+def _cleanup_preview_files(editing_dir: Path) -> None:
+    """Best-effort removal of the live-preview leftovers in a session dir."""
+    for leftover in ("preview-src.pdf", "preview-src.docx"):
+        with contextlib.suppress(OSError):
+            (editing_dir / leftover).unlink(missing_ok=True)
+
+
+def render_session_preview(db: Session, *, book_id: int) -> Path:
+    """PDF preview of the ACTIVE session's working docx.
+
+    Cached beside the working file as ``preview-src.pdf`` and regenerated only
+    when the working docx is newer — Word COM conversion costs seconds and the
+    dialog polls every 5s. Conversion runs on a COPY so Word's WebDAV PUTs
+    never collide with the converter's open handle. No ``os.replace`` step:
+    replacing a file another request is still streaming raises PermissionError
+    on Windows, so the conversion output itself is the cache.
+    """
+    session = db.query(BookEditSession).filter_by(book_id=book_id, state="active").one_or_none()
+    if session is None:
+        raise AppError(
+            "NO_ACTIVE_SESSION", "No active editing session for this book", http_status=409
+        )
+    if session.last_put_at is None:
+        raise AppError("NO_SAVES_YET", "Nothing saved from Word yet", http_status=409)
+    working = Path(session.working_path)
+    if not working.exists():
+        raise AppError("PREVIEW_UNAVAILABLE", "Working file is missing", http_status=409)
+
+    preview_pdf = working.parent / "preview-src.pdf"
+    if preview_pdf.exists() and preview_pdf.stat().st_mtime >= working.stat().st_mtime:
+        return preview_pdf
+
+    src_copy = working.parent / "preview-src.docx"
+    shutil.copy2(working, src_copy)
+    pdf = convert_docx_to_pdf(src_copy)
+    src_copy.unlink(missing_ok=True)
+    if pdf is None:
+        raise AppError("PREVIEW_UNAVAILABLE", "PDF conversion is not available", http_status=409)
+    return pdf  # == preview_pdf (conversion writes beside the source docx)
+
+
 def discard_word_session(db: Session, *, user: User, book_id: int) -> Book:
     """Discard the active Word session; void the book if it has no committed versions."""
     book = db.get(Book, book_id)
@@ -430,6 +472,7 @@ def discard_word_session(db: Session, *, user: User, book_id: int) -> Book:
     src = Path(session.working_path)
     with contextlib.suppress(OSError):
         src.unlink(missing_ok=True)
+    _cleanup_preview_files(src.parent)
 
     session.state = "discarded"
 
