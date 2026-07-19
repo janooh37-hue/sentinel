@@ -7,8 +7,10 @@ active BookEditSession so Word can edit it over WebDAV.
 from __future__ import annotations
 
 import contextlib
+import os
 import secrets
 import shutil
+import threading
 import uuid
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -421,6 +423,13 @@ def _cleanup_preview_files(editing_dir: Path) -> None:
             (editing_dir / leftover).unlink(missing_ok=True)
 
 
+# One preview conversion at a time. All requests share preview-src.docx/.pdf
+# per session dir; overlapping polls (5s cadence vs multi-second Word COM
+# conversions, or two viewers) would copy over the converter's open handle.
+# ponytail: global lock; per-session locks if several sessions preview at once.
+_preview_lock = threading.Lock()
+
+
 def render_session_preview(db: Session, *, book_id: int) -> Path:
     """PDF preview of the ACTIVE session's working docx.
 
@@ -429,7 +438,9 @@ def render_session_preview(db: Session, *, book_id: int) -> Path:
     dialog polls every 5s. Conversion runs on a COPY so Word's WebDAV PUTs
     never collide with the converter's open handle. No ``os.replace`` step:
     replacing a file another request is still streaming raises PermissionError
-    on Windows, so the conversion output itself is the cache.
+    on Windows, so the conversion output itself is the cache. The produced
+    PDF's mtime is pinned to the working file's mtime AT COPY TIME, so a PUT
+    landing mid-conversion correctly leaves the cache stale for the next poll.
     """
     session = db.query(BookEditSession).filter_by(book_id=book_id, state="active").one_or_none()
     if session is None:
@@ -443,16 +454,22 @@ def render_session_preview(db: Session, *, book_id: int) -> Path:
         raise AppError("PREVIEW_UNAVAILABLE", "Working file is missing", http_status=409)
 
     preview_pdf = working.parent / "preview-src.pdf"
-    if preview_pdf.exists() and preview_pdf.stat().st_mtime >= working.stat().st_mtime:
-        return preview_pdf
+    with _preview_lock:
+        if preview_pdf.exists() and preview_pdf.stat().st_mtime >= working.stat().st_mtime:
+            return preview_pdf
 
-    src_copy = working.parent / "preview-src.docx"
-    shutil.copy2(working, src_copy)
-    pdf = convert_docx_to_pdf(src_copy)
-    src_copy.unlink(missing_ok=True)
-    if pdf is None:
-        raise AppError("PREVIEW_UNAVAILABLE", "PDF conversion is not available", http_status=409)
-    return pdf  # == preview_pdf (conversion writes beside the source docx)
+        snapshot_mtime = working.stat().st_mtime
+        src_copy = working.parent / "preview-src.docx"
+        shutil.copy2(working, src_copy)
+        pdf = convert_docx_to_pdf(src_copy)
+        with contextlib.suppress(OSError):
+            src_copy.unlink(missing_ok=True)
+        if pdf is None:
+            raise AppError(
+                "PREVIEW_UNAVAILABLE", "PDF conversion is not available", http_status=409
+            )
+        os.utime(pdf, (snapshot_mtime, snapshot_mtime))
+        return pdf  # == preview_pdf (conversion writes beside the source docx)
 
 
 def discard_word_session(db: Session, *, user: User, book_id: int) -> Book:

@@ -449,6 +449,9 @@ def _norm_name(s: str) -> str:
     return _TATWEEL_WS.sub("", s or "")
 
 
+_CC_LABEL_NORM = "نسخةإلى"  # "نسخة إلى" normalized — CC lines can quote the manager
+
+
 def stamp_signature_above_name(
     docx_path: Path | str,
     sig_path: str,
@@ -459,29 +462,63 @@ def stamp_signature_above_name(
 ) -> bool:
     """Float *sig_path* above the closing-name line of an ALREADY-RENDERED docx.
 
-    Word-authored books have no Jinja tokens left, so the anchor is textual:
-    the LAST body paragraph whose normalized text (whitespace + tatweel
-    stripped — hand-made templates stretch names with tatweel) contains any of
-    *names*. Falls back to the last non-empty paragraph (the closing block
-    convention). No-op → False when the signature file or any anchor is
-    missing.
+    Word-authored books have no Jinja tokens left, so the anchor is textual —
+    normalized (whitespace + tatweel stripped; hand-made templates stretch
+    names with tatweel). Search order:
+
+    1. exact-equality match on a body paragraph (beats CC lines that merely
+       QUOTE the manager's name after the closing block);
+    2. containment match, skipping "نسخة إلى" lines;
+    3. table-cell paragraphs (Word-paste-into-tables letters keep everything
+       inside cells — ``doc.paragraphs`` never sees them);
+    4. last non-empty paragraph (body, then tables).
+
+    Body matches anchor on the paragraph ABOVE the name (the signature gap);
+    table matches anchor on the matched paragraph itself (the float rises up).
+    Returns False when the signature file is unusable or no anchor exists —
+    callers must treat that as a FAILURE, not a soft skip (a "signed" paper
+    without a visible signature is the defect this function exists to prevent).
     """
     if not sig_path or not Path(sig_path).is_file():
         return False
     doc = Document(str(docx_path))
     paras = list(doc.paragraphs)
+    table_paras = [
+        p for tbl in doc.tables for row in tbl.rows for c in row.cells for p in c.paragraphs
+    ]
     wanted = [_norm_name(n) for n in names if n and _norm_name(n)]
-    idx: int | None = None
-    for i in range(len(paras) - 1, -1, -1):
-        text = _norm_name(paras[i].text)
-        if text and any(w in text for w in wanted):
-            idx = i
-            break
+
+    def _find(pool: list[Any], *, exact: bool) -> int | None:
+        for i in range(len(pool) - 1, -1, -1):
+            text = _norm_name(pool[i].text)
+            if not text or text.startswith(_CC_LABEL_NORM):
+                continue
+            if exact:
+                if any(w == text for w in wanted):
+                    return i
+            elif any(w in text for w in wanted):
+                return i
+        return None
+
+    anchor = None
+    idx = _find(paras, exact=True)
     if idx is None:
-        idx = next((i for i in range(len(paras) - 1, -1, -1) if paras[i].text.strip()), None)
-        if idx is None:
-            return False
-    anchor = paras[idx - 1] if idx > 0 else paras[idx]
+        idx = _find(paras, exact=False)
+    if idx is not None:
+        anchor = paras[idx - 1] if idx > 0 else paras[idx]
+    else:
+        t_idx = _find(table_paras, exact=True)
+        if t_idx is None:
+            t_idx = _find(table_paras, exact=False)
+        if t_idx is not None:
+            anchor = table_paras[t_idx]  # float rises up from the name's own line
+    if anchor is None:
+        last = next((p for p in reversed(paras) if p.text.strip()), None) or next(
+            (p for p in reversed(table_paras) if p.text.strip()), None
+        )
+        anchor = last
+    if anchor is None:
+        return False
     placed = fill_image_behind_text_in_paragraph(
         anchor, sig_path, width_inches=size_mm / 25.4, dilate_radius_px=boldness
     )

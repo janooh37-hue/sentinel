@@ -24,7 +24,10 @@ import { subjectEmployeePart } from './formKind'
 // ---------------------------------------------------------------------------
 
 export interface RecordDetailInput {
-  book: Pick<BookRead, 'id' | 'ref_number' | 'subject' | 'employee_id' | 'created_at'>
+  book: Pick<
+    BookRead,
+    'id' | 'ref_number' | 'subject' | 'employee_id' | 'created_at' | 'classification_code'
+  >
   cur: Pick<BookVersionRead, 'document_id' | 'template_id'>
   fields: Record<string, unknown>
   emp:
@@ -45,8 +48,12 @@ export function deriveRecordItem({
 }: RecordDetailInput): EmailBasketItem | null {
   if (cur.document_id == null) return null
 
-  // Employee name: prefer the live employee record; fall back to subject parse.
-  const nameEn = emp?.name_en ?? subjectEmployeePart(book.subject) ?? ''
+  // Employee name: prefer the live employee record; fall back to subject
+  // parse — which must NOT chop a classified book's real subject.
+  const nameEn =
+    emp?.name_en ??
+    subjectEmployeePart(book.subject, { classified: !!book.classification_code }) ??
+    ''
   const nameAr = emp?.name_ar ?? null
 
   // Employee id (الرقم الوظيفي): the Book row's own employee link is the

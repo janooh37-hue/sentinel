@@ -938,6 +938,8 @@
       "protocolHint": "If Word didn't open, your browser is asking for permission — approve it once and choose to always allow.",
       "lastSavedAt": "Saved from Word ✓ {{time}}",
       "manageTemplates": "Manage templates",
+      "manageTemplatesHint": "The shared library — rename templates when needed.",
+      "noTemplates": "No templates in the library yet",
       "renameTemplate": "Rename",
       "managerWithTemplate": "Used for approval and the signature placement — the template's printed closing stays as-is."
     }

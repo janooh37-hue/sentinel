@@ -588,9 +588,14 @@ def _resolve_signer_signature(db: Session, signer: User) -> Path | None:
     if signer.signature_path:
         candidates.append(signer.signature_path)
     if signer.employee_id:
-        sub = db.execute(
-            select(Submitter).where(Submitter.employee_id == signer.employee_id)
-        ).scalar_one_or_none()
+        # .first(), not one_or_none: submitters.employee_id uniqueness is only
+        # app-side — a legacy duplicate row must not 500 the whole sign/detail
+        # path with MultipleResultsFound.
+        sub = (
+            db.execute(select(Submitter).where(Submitter.employee_id == signer.employee_id))
+            .scalars()
+            .first()
+        )
         if sub is not None and sub.stored_sig_path:
             candidates.append(sub.stored_sig_path)
     for raw in candidates:
@@ -636,8 +641,18 @@ def sign_book(db: Session, book_id: int, *, user_id: int) -> Book:
     version = _current_version(book)
     if version is None:
         raise ValidationFailedError("NO_VERSION", "Book has no version to sign")
+    # Anchor candidates for the word-authored path: a delegated approver may
+    # have typed their OWN closing name in Word, not the doc manager's.
+    signer_names: list[str] = [n for n in (signer.display_name,) if n]
+    if signer.employee_id:
+        emp = db.get(Employee, signer.employee_id)
+        if emp is not None:
+            signer_names += [n for n in (emp.name_ar, emp.name_en) if n]
     signed_rel = document_service.render_signed_pdf(
-        db, version=version, signer_signature_path=str(abs_sig)
+        db,
+        version=version,
+        signer_signature_path=str(abs_sig),
+        signer_names=signer_names,
     )
     version.signed_pdf_path = signed_rel
     version.signed_by_user_id = user_id

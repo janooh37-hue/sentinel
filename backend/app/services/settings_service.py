@@ -199,8 +199,9 @@ def get_settings(db: Session) -> AppSettingsRead:
         ),
         "dashboard_layout": _get_dashboard_layout(db),
     }
-    # Pre-0015 installs seeded font_scale=15; the schema floor is 16. Clamp on
-    # read so a fresh DB never 500s (2026-07-19 fresh-install audit).
+    # Legacy rows can hold font_scale below the schema floor of 16 (the
+    # 0015 enum→int remap / manual edits). Clamp on read so GET /settings
+    # never 500s (2026-07-19 fresh-install audit).
     try:
         if int(raw["font_scale"]) < 16:  # type: ignore[call-overload]
             raw["font_scale"] = 16

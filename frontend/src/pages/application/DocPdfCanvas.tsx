@@ -82,12 +82,19 @@ export default function DocPdfCanvas({
   useEffect(() => {
     let cancelled = false
     const container = containerRef.current
+    // Abort the in-flight fetch on unmount/remount — the live word-session
+    // preview remounts this component per Word save while the server-side
+    // conversion can still be running for seconds.
+    const controller = new AbortController()
 
     void (async () => {
       try {
         // Fetch base64 (text/plain) so neither IDM nor Chrome's built-in PDF
         // viewer can sniff the response and intercept it (returning empty 204).
-        const res = await fetch(toBase64Url(pdfUrl), { credentials: 'same-origin' })
+        const res = await fetch(toBase64Url(pdfUrl), {
+          credentials: 'same-origin',
+          signal: controller.signal,
+        })
         if (!res.ok) {
           // 404 here means the backend has no PDF on disk for this doc
           // (PDF_NOT_AVAILABLE / FILE_NOT_FOUND) — i.e. DOCX→PDF conversion
@@ -129,13 +136,16 @@ export default function DocPdfCanvas({
           measure()
         }
       } catch (err) {
-        console.error('DocPdfCanvas render failed:', err)
-        if (!cancelled) setStatus('error')
+        if (!cancelled) {
+          console.error('DocPdfCanvas render failed:', err)
+          setStatus('error')
+        }
       }
     })()
 
     return () => {
       cancelled = true
+      controller.abort()
     }
   }, [pdfUrl, measure])
 

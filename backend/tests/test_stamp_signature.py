@@ -67,3 +67,47 @@ def test_noop_without_signature_file(tmp_path: Path) -> None:
         docx, str(tmp_path / "missing.png"), ["سعيد راشد اليحيائي"], size_mm=32.0, boldness=2
     )
     assert not ok
+
+
+def test_cc_line_does_not_steal_the_anchor(tmp_path: Path) -> None:
+    """A CC line AFTER the closing block can mention the manager's name — the
+    exact-equality pass must win so the float lands above the NAME, not above
+    the CC line (review M/S1)."""
+    doc = Document()
+    doc.add_paragraph("نص الكتاب")  # 0
+    doc.add_paragraph("")  # 1 — signature gap (expected anchor)
+    doc.add_paragraph("سعيد راشد اليحيائي")  # 2
+    doc.add_paragraph("مدير مشروع")  # 3
+    doc.add_paragraph("نسخة إلى: مكتب سعيد راشد اليحيائي")  # 4 — decoy
+    p = tmp_path / "cc.docx"
+    doc.save(str(p))
+    ok = stamp_signature_above_name(
+        p, str(_make_sig(tmp_path)), ["سعيد راشد اليحيائي"], size_mm=32.0, boldness=2
+    )
+    assert ok
+    reloaded = Document(str(p))
+    with_drawing = [
+        i
+        for i, para in enumerate(reloaded.paragraphs)
+        if para._p.findall(
+            ".//{http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing}anchor"
+        )
+    ]
+    assert with_drawing == [1]  # the gap above the name — not the title (2/3) or CC (4)
+
+
+def test_stamps_inside_tables(tmp_path: Path) -> None:
+    """Word-paste-into-tables letters keep every paragraph inside table cells —
+    doc.paragraphs alone finds nothing; the stamp must search cells too."""
+    doc = Document()
+    table = doc.add_table(rows=3, cols=1)
+    table.rows[0].cells[0].paragraphs[0].add_run("نص داخل جدول")
+    table.rows[1].cells[0].paragraphs[0].add_run("سعيد راشد اليحيائي")
+    table.rows[2].cells[0].paragraphs[0].add_run("مدير مشروع")
+    p = tmp_path / "table.docx"
+    doc.save(str(p))
+    ok = stamp_signature_above_name(
+        p, str(_make_sig(tmp_path)), ["سعيد راشد اليحيائي"], size_mm=32.0, boldness=2
+    )
+    assert ok
+    assert b"<wp:anchor" in _document_xml(p)

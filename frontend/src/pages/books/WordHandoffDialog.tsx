@@ -67,6 +67,8 @@ export function WordHandoffDialog({ session, open, onClose }: Props): React.JSX.
   if (session?.token !== prevToken) {
     setPrevToken(session?.token)
     setFinishedBook(null)
+    setSaveTplOpen(false)
+    setTplName('')
   }
 
   // Poll the book while dialog is open to detect the first Word save.
@@ -312,9 +314,11 @@ export function WordHandoffDialog({ session, open, onClose }: Props): React.JSX.
                 The conversion runs inside the GET, so the canvas's own loading
                 spinner covers it. */}
             {hasSave && (
+              // overflow-hidden: the canvas scrolls itself (h-full overflow-auto)
+              // — a scrolling wrapper AROUND it wheel-traps on short viewports.
               <div
                 data-testid="word-live-preview"
-                className="mb-4 max-h-[45vh] min-h-[260px] overflow-auto rounded-lg border border-hairline"
+                className="mb-4 h-[45vh] min-h-[280px] overflow-hidden rounded-lg border border-hairline"
               >
                 <Suspense fallback={<p className="p-3 text-[0.8em] text-muted-foreground">…</p>}>
                   <DocPdfCanvas

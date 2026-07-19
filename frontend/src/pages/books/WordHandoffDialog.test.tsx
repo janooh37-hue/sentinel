@@ -29,11 +29,11 @@ vi.mock('react-i18next', () => ({
         'books.word.finishedPdfTitle': opts?.ref ? `تم حفظ الكتاب — ${String(opts.ref)}` : 'تم حفظ الكتاب',
         'books.word.pdfPending': 'جارٍ تجهيز ملف PDF — يمكنك تنزيل ملف DOCX الآن',
         'books.word.close': 'إغلاق',
-        'books.word.step1': 'اضغط «افتح في Word» ثم وافق على تأكيد المتصفح',
+        'books.word.step1': 'اضغط «فتح في Word» ثم وافق على تأكيد المتصفح',
         'books.word.step2': 'احفظ من داخل Word (Ctrl+S)',
         'books.word.step3': 'ارجع هنا واضغط «إنهاء التحرير»',
         'books.word.preparedBy': 'المُعِدّ',
-        'books.word.openInWord': 'افتح في Word',
+        'books.word.openInWord': 'فتح في Word',
         'books.word.protocolHint':
           'إذا لم يُفتح Word فالمتصفح يطلب الإذن — وافق مرة واحدة واختر السماح دائماً.',
         'books.word.lastSavedAt': opts?.time
@@ -259,7 +259,7 @@ describe('WordHandoffDialog', () => {
       { wrapper: makeWrapper(qc) },
     )
 
-    const link = screen.getByText('افتح في Word').closest('a')
+    const link = screen.getByText('فتح في Word').closest('a')
     expect(link).toBeTruthy()
     expect(link?.getAttribute('href')).toMatch(/^ms-word:/)
     // The browser-permission hint accompanies it.

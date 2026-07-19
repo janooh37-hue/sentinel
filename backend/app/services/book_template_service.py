@@ -5,6 +5,7 @@ filenames on a Windows host."""
 
 from __future__ import annotations
 
+import contextlib
 import os
 import shutil
 import unicodedata
@@ -154,7 +155,14 @@ def rename_template(old: str, new: str) -> TemplateInfo:
     except FileExistsError:
         raise AppError("TEMPLATE_EXISTS", "يوجد قالب بهذا الاسم", http_status=409) from None
     os.close(fd)
-    os.replace(src, dest)
+    try:
+        os.replace(src, dest)
+    except OSError:
+        # Don't leave the 0-byte O_EXCL placeholder behind — it would show up
+        # as a corrupt "template" and permanently 409 this name.
+        with contextlib.suppress(OSError):
+            dest.unlink(missing_ok=True)
+        raise
     return TemplateInfo(
         name=dest.name,
         modified_at=datetime.fromtimestamp(dest.stat().st_mtime, tz=UTC).replace(tzinfo=None),

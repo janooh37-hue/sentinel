@@ -363,6 +363,12 @@ def _enrich_path_fields(
     item.signing_path = form_policy.signing_path_of(
         current.template_id if current is not None else None
     )
+    # Word-authored: current version has a document but NO re-renderable
+    # fields ({} — word_book_service commits it that way). Top-level so LIST
+    # rows carry it (list responses don't build the versions payload).
+    item.is_word_book = (
+        current is not None and not current.fields and current.document_id is not None
+    )
     if current is not None and item.versions:
         item.versions[-1].signed_source = _signed_source_of(current)
         item.versions[-1].signed_pdf_url = _signed_pdf_url_of(current)
@@ -470,7 +476,9 @@ def _build_versions(db: Session, row: Book) -> list[BookVersionRead]:
                 status=v.status,
                 template_id=v.template_id,
                 document_id=v.document_id,
-                has_fields=v.fields is not None,
+                # bool(): word versions store {} — "has fields" must mean
+                # NON-EMPTY, else Word books read as re-renderable.
+                has_fields=bool(v.fields),
                 created_at=v.created_at,
                 created_by_name=created_by,
                 docx_url=docx_url,
@@ -508,6 +516,9 @@ def get_book(
     current = row.versions[-1] if row.versions else None
     item.signing_path = form_policy.signing_path_of(
         current.template_id if current is not None else None
+    )
+    item.is_word_book = (
+        current is not None and not current.fields and current.document_id is not None
     )
     item.imported_doc = book_service.imported_document_of(row)
     item.sms = [

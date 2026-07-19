@@ -254,6 +254,11 @@ class BookRead(ORMBase):
     # Whether that linked account has a signature on file — drives the submit
     # dialog's "manager has no signature, add one" warning (lenient submit).
     doc_manager_has_signature: bool = False
+    # Word-authored book: the current version's truth is its DOCX, not
+    # re-renderable fields (fields == {}). Computed in _enrich_path_fields so
+    # LIST rows carry it too — the Records pane gates the rich-editor
+    # "Continue Draft" action on it.
+    is_word_book: bool = False
     # On the /books/awaiting payload only: "approver" | "reviewer" — the caller's
     # role on this pending record (label "To approve" vs "To review").
     your_step_kind: str | None = None

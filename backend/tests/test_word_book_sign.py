@@ -86,6 +86,44 @@ def test_signed_artifact_keeps_word_body(
     signed.unlink()  # keep the shared output dir clean
 
 
+def test_sign_raises_when_authored_docx_missing(
+    db_session: Session,
+    tmp_path: Path,
+    word_version: BookVersion,
+) -> None:
+    """fields == {} with the docx gone must FAIL loudly — falling through to the
+    template re-render would reproduce the blank signed paper (review M2)."""
+    from app.api.errors import AppError
+
+    doc = db_session.get(Document, word_version.document_id)
+    assert doc is not None and doc.docx_path
+    Path(doc.docx_path).unlink()
+    with pytest.raises(AppError) as ei:
+        document_service.render_signed_pdf(
+            db_session, version=word_version, signer_signature_path=_sig(tmp_path)
+        )
+    assert ei.value.code == "SOURCE_DOCX_MISSING"
+
+
+def test_sign_raises_when_stamp_fails(
+    db_session: Session,
+    tmp_path: Path,
+    word_version: BookVersion,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A 'signed' artifact with no visible signature is the defect class this
+    branch fixes — a failed stamp must abort the signing (review M1)."""
+    import app.core.docx_engine as docx_engine_mod
+    from app.api.errors import AppError
+
+    monkeypatch.setattr(docx_engine_mod, "stamp_signature_above_name", lambda *a, **k: False)
+    with pytest.raises(AppError) as ei:
+        document_service.render_signed_pdf(
+            db_session, version=word_version, signer_signature_path=_sig(tmp_path)
+        )
+    assert ei.value.code == "SIGNATURE_STAMP_FAILED"
+
+
 def test_sign_falls_back_to_submitter_signature(db_session: Session, tmp_path: Path) -> None:
     from app.db.models import Employee, Submitter, User
     from app.services.book_service import _resolve_signer_signature

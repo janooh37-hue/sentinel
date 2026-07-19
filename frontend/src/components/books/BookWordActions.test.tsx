@@ -32,8 +32,6 @@ void i18n.use(initReactI18next).init({
         'books.word.openInWord': 'فتح في Word',
         'books.word.editNewVersion': 'تعديل في Word (ينشئ إصداراً جديداً)',
         'books.word.saveAsTemplate': 'حفظ كقالب',
-        'books.word.saveAsTemplateHint': 'سيصبح محتوى الكتاب قالباً مشتركاً متاحاً لجميع مديري الكتب.',
-        'books.word.savedAsTemplate': 'تم الحفظ في مكتبة القوالب: {{name}}',
         'common.cancel': 'إلغاء',
         'common.confirm': 'تأكيد',
       },
@@ -61,6 +59,7 @@ const BASE_BOOK: BookRead = {
   voided_at: null,
   edit_session: null,
   classification_code: null,
+  is_word_book: false,
   versions: [],
   doc_manager_has_signature: false,
 }

@@ -3943,6 +3943,11 @@ export interface components {
              * @default false
              */
             doc_manager_has_signature: boolean;
+            /**
+             * Is Word Book
+             * @default false
+             */
+            is_word_book: boolean;
             /** Your Step Kind */
             your_step_kind?: string | null;
             /** Approval Steps */

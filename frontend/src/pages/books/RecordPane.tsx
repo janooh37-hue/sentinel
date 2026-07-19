@@ -117,11 +117,12 @@ export function RecordPane({
   const kind = formKindOf(book.subject, classified)
   const who = subjectEmployeePart(book.subject, classified)
   const state = book.approval_state
-  // Word-authored book: the latest version has no re-renderable fields — its
-  // truth is the docx. The rich-editor "Continue Draft" would open an empty
-  // form, so it's hidden for these (BookWordActions carries the Word actions).
-  const latestVersion = book.versions?.[book.versions.length - 1]
-  const isWordBook = latestVersion != null && !latestVersion.has_fields
+  // Word-authored book: its truth is the docx, not re-renderable fields. The
+  // rich-editor "Continue Draft" would open an empty form, so it's hidden for
+  // these (BookWordActions carries the Word actions). is_word_book is a
+  // backend flag computed for LIST rows too — the list payload carries no
+  // versions, so any per-version check here would silently misfire.
+  const isWordBook = book.is_word_book
   // Same gate as the record page (BookRecordPage): an admin files the
   // physically-signed scan back for a request out for signature (pending) or
   // at the printer (awaiting_scan). Shared helper keeps both surfaces aligned.

@@ -1801,13 +1801,14 @@ def _sign_authored_docx(
     version: BookVersion,
     source: Path,
     signer_signature_path: str,
+    signer_names: Sequence[str] = (),
 ) -> str:
     """Signed artifact for a Word-authored book: copy docx → stamp signature →
     convert. The paper already carries ref/date/footer/Aztec from its own
     render — nothing is re-generated (re-rendering from the empty ``fields``
     blob is what blanked signed Word books, 2026-07-19)."""
+    from app.core import docx_engine
     from app.core.constants import DEFAULT_MANAGER_NAME
-    from app.core.docx_engine import stamp_signature_above_name
     from app.services import settings_service
 
     book = version.book
@@ -1817,8 +1818,9 @@ def _sign_authored_docx(
     docx_path = Vault.collision_safe_name(out_dir, docx_name.replace(".docx", "_signed.docx"))
     shutil.copy2(source, docx_path)
 
-    # Anchor candidates: the linked manager's names, then the default manager.
-    names: list[str] = []
+    # Anchor candidates: the signer (a delegated approver may have typed their
+    # own closing in Word), the linked manager, then the default manager.
+    names: list[str] = list(signer_names)
     if book.doc_manager_id is not None:
         mgr = db.get(Manager, book.doc_manager_id)
         if mgr is not None:
@@ -1826,13 +1828,30 @@ def _sign_authored_docx(
     names.append(DEFAULT_MANAGER_NAME)
 
     _appearance = settings_service.get_settings(db)
-    stamp_signature_above_name(
+    placed = docx_engine.stamp_signature_above_name(
         docx_path,
         signer_signature_path,
         names,
         size_mm=_appearance.signature_size_mm,
         boldness=_appearance.signature_boldness,
     )
+    if not placed:
+        # A "signed" paper with no visible signature is the exact defect class
+        # this path exists to fix — fail LOUDLY, like the rich path does when
+        # its render fails, and don't leave the half-made copy behind.
+        with contextlib.suppress(OSError):
+            docx_path.unlink(missing_ok=True)
+        log.error(
+            "signature stamp failed for book %s (%s) — sig=%s",
+            book.id,
+            docx_path.name,
+            signer_signature_path,
+        )
+        raise AppError(
+            "SIGNATURE_STAMP_FAILED",
+            "تعذر إدراج التوقيع في الكتاب — تحقق من ملف التوقيع ثم أعد المحاولة",
+            http_status=409,
+        )
 
     pdf_path: Path | None = None
     try:
@@ -1862,6 +1881,7 @@ def render_signed_pdf(
     *,
     version: BookVersion,
     signer_signature_path: str,
+    signer_names: Sequence[str] = (),
 ) -> str:
     """Re-render ``version``'s document with the signer's signature embedded in
     the manager slot (``sig1_path``); return the signed PDF path relative to
@@ -1875,13 +1895,25 @@ def render_signed_pdf(
 
     Word-authored versions (``fields == {}``) carry their truth in the DOCX,
     not in re-renderable fields — those are signed in place via
-    ``_sign_authored_docx`` instead.
+    ``_sign_authored_docx``; ``signer_names`` feeds its anchor search. A
+    fields-less version whose docx is GONE fails loudly: falling through to
+    the template re-render would reproduce the blank signed paper.
     """
     book = version.book
-    authored = _authored_docx_of(db, version)
-    if not version.fields and authored is not None:
+    if not version.fields:
+        authored = _authored_docx_of(db, version)
+        if authored is None:
+            raise AppError(
+                "SOURCE_DOCX_MISSING",
+                "ملف الكتاب الأصلي غير موجود على القرص — لا يمكن التوقيع",
+                http_status=409,
+            )
         return _sign_authored_docx(
-            db, version=version, source=authored, signer_signature_path=signer_signature_path
+            db,
+            version=version,
+            source=authored,
+            signer_signature_path=signer_signature_path,
+            signer_names=signer_names,
         )
     template_id = version.template_id or ""
     if template_id not in TEMPLATE_FILES:

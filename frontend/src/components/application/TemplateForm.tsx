@@ -509,7 +509,12 @@ export function TemplateForm({
               {t('books.word.managerWithTemplate')}
             </p>
           )}
-          <WordTemplateManager open={tplManagerOpen} onOpenChange={setTplManagerOpen} />
+          <WordTemplateManager
+            open={tplManagerOpen}
+            onOpenChange={setTplManagerOpen}
+            selectedTemplateName={templateName}
+            onSelectedTemplateNameChange={onTemplateNameChange}
+          />
         </div>
       )}
 
