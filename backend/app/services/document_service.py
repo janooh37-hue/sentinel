@@ -1758,6 +1758,105 @@ def purge_orphan_draft_documents(db: Session) -> int:
     return len(rows)
 
 
+def _authored_docx_of(db: Session, version: BookVersion) -> Path | None:
+    """The version's committed docx on disk, or None."""
+    if version.document_id is None:
+        return None
+    doc = db.get(Document, version.document_id)
+    if doc is None or not doc.docx_path:
+        return None
+    p = Path(doc.docx_path)
+    if not p.is_absolute():
+        p = get_settings().data_dir / p
+    return p if p.exists() else None
+
+
+def _merge_book_attachments(db: Session, book: Book, pdf_path: Path) -> None:
+    """Re-merge the book's combined-PDF attachments into *pdf_path* (spec §6):
+    the generated PDF carried them, so any signed artifact must too."""
+    merged_items = list(book.merged_attachment_paths or [])
+    if not merged_items:
+        return
+    from app.services import book_service
+
+    merge_sources: list[Path] = []
+    for item in merged_items:
+        rel_path = item.get("path")
+        src_path = book_service.resolve_attachment_path(rel_path) if rel_path else None
+        if src_path is None:
+            log.warning(
+                "merged attachment %s missing for book %s — skipped in signed artifact",
+                rel_path,
+                book.id,
+            )
+            continue
+        merge_sources.append(src_path)
+    if merge_sources:
+        merge_attachments_into_pdf(pdf_path, merge_sources)
+
+
+def _sign_authored_docx(
+    db: Session,
+    *,
+    version: BookVersion,
+    source: Path,
+    signer_signature_path: str,
+) -> str:
+    """Signed artifact for a Word-authored book: copy docx → stamp signature →
+    convert. The paper already carries ref/date/footer/Aztec from its own
+    render — nothing is re-generated (re-rendering from the empty ``fields``
+    blob is what blanked signed Word books, 2026-07-19)."""
+    from app.core.constants import DEFAULT_MANAGER_NAME
+    from app.core.docx_engine import stamp_signature_above_name
+    from app.services import settings_service
+
+    book = version.book
+    out_dir = _output_dir_for_admin("General Book")
+    ts = datetime.now()
+    docx_name = _build_docx_filename("General Book", book.ref_number.replace("/", "-"), ts)
+    docx_path = Vault.collision_safe_name(out_dir, docx_name.replace(".docx", "_signed.docx"))
+    shutil.copy2(source, docx_path)
+
+    # Anchor candidates: the linked manager's names, then the default manager.
+    names: list[str] = []
+    if book.doc_manager_id is not None:
+        mgr = db.get(Manager, book.doc_manager_id)
+        if mgr is not None:
+            names += [n for n in (mgr.name_ar, mgr.name_en) if n]
+    names.append(DEFAULT_MANAGER_NAME)
+
+    _appearance = settings_service.get_settings(db)
+    stamp_signature_above_name(
+        docx_path,
+        signer_signature_path,
+        names,
+        size_mm=_appearance.signature_size_mm,
+        boldness=_appearance.signature_boldness,
+    )
+
+    pdf_path: Path | None = None
+    try:
+        pdf_path = convert_docx_to_pdf(docx_path)
+    except Exception:
+        log.error("Signed PDF conversion crashed for %s", docx_path, exc_info=True)
+    if pdf_path is None:
+        log.warning("Signed PDF unavailable for %s — returning signed DOCX", docx_path)
+    if pdf_path is not None:
+        _merge_book_attachments(db, book, pdf_path)
+
+    settings = get_settings()
+
+    def _rel(p: Path) -> str:
+        # Output dirs can live OUTSIDE data_dir (AppData/Desktop roots) —
+        # same fallback as the re-render path below.
+        try:
+            return p.relative_to(settings.data_dir).as_posix()
+        except ValueError:
+            return str(p)
+
+    return _rel(pdf_path) if pdf_path is not None else _rel(docx_path)
+
+
 def render_signed_pdf(
     db: Session,
     *,
@@ -1773,8 +1872,17 @@ def render_signed_pdf(
     artifact. PDF conversion can fail / return None (no Word on the host), in
     which case the signed DOCX path is returned as a fallback, mirroring
     ``generate_document``.
+
+    Word-authored versions (``fields == {}``) carry their truth in the DOCX,
+    not in re-renderable fields — those are signed in place via
+    ``_sign_authored_docx`` instead.
     """
     book = version.book
+    authored = _authored_docx_of(db, version)
+    if not version.fields and authored is not None:
+        return _sign_authored_docx(
+            db, version=version, source=authored, signer_signature_path=signer_signature_path
+        )
     template_id = version.template_id or ""
     if template_id not in TEMPLATE_FILES:
         raise AppError(
@@ -1851,24 +1959,8 @@ def render_signed_pdf(
 
     # Re-merge the book's combined-PDF attachments (spec §6): the generated
     # PDF carried them, so the signed artifact must too.
-    merged_items = list(book.merged_attachment_paths or [])
-    if pdf_path is not None and merged_items:
-        from app.services import book_service
-
-        merge_sources: list[Path] = []
-        for item in merged_items:
-            rel_path = item.get("path")
-            src_path = book_service.resolve_attachment_path(rel_path) if rel_path else None
-            if src_path is None:
-                log.warning(
-                    "merged attachment %s missing for book %s — skipped in signed artifact",
-                    rel_path,
-                    book.id,
-                )
-                continue
-            merge_sources.append(src_path)
-        if merge_sources:
-            merge_attachments_into_pdf(pdf_path, merge_sources)
+    if pdf_path is not None:
+        _merge_book_attachments(db, book, pdf_path)
 
     settings = get_settings()
 
