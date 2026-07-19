@@ -43,7 +43,7 @@ def test_preview_renders_and_caches(
     active_session: tuple[Book, Path],
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    book, working = active_session
+    book, _working = active_session
     calls: list[Path] = []
 
     def fake_convert(src: Path) -> Path:
