@@ -113,9 +113,15 @@ export function RecordPane({
     )
   }
 
-  const kind = formKindOf(book.subject)
-  const who = subjectEmployeePart(book.subject)
+  const classified = { classified: !!book.classification_code }
+  const kind = formKindOf(book.subject, classified)
+  const who = subjectEmployeePart(book.subject, classified)
   const state = book.approval_state
+  // Word-authored book: the latest version has no re-renderable fields — its
+  // truth is the docx. The rich-editor "Continue Draft" would open an empty
+  // form, so it's hidden for these (BookWordActions carries the Word actions).
+  const latestVersion = book.versions?.[book.versions.length - 1]
+  const isWordBook = latestVersion != null && !latestVersion.has_fields
   // Same gate as the record page (BookRecordPage): an admin files the
   // physically-signed scan back for a request out for signature (pending) or
   // at the printer (awaiting_scan). Shared helper keeps both surfaces aligned.
@@ -204,7 +210,7 @@ export function RecordPane({
       <div className="flex shrink-0 flex-wrap gap-2 border-t border-hairline px-3.5 py-2.5">
         {/* Word session actions (Finish / Discard) — desktop, not mobile */}
         <BookWordActions book={book} />
-        {state === 'none' && (
+        {state === 'none' && !isWordBook && (
           <PaneBtn primary onClick={() => onContinueDraft(book.id)}>{t('books.pane.continueDraft')}</PaneBtn>
         )}
         {/* Send for approval (digital route): submit a draft or re-route a

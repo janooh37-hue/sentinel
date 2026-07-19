@@ -56,6 +56,7 @@ import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import { BookStatusChips } from '@/components/books/BookStatusChips'
 import { BookWordActions } from '@/components/books/BookWordActions'
 
+import { useIsMobile } from '@/lib/useIsMobile'
 import { smsDeliveryTone } from '@/lib/smsDelivery'
 import { sealDescriptor, signedSourceOf, type SealTone } from './bookStateLabel'
 import { useAddScan } from './useAddScan'
@@ -246,6 +247,7 @@ export function BookRecordPage(): React.JSX.Element {
   const navigate = useNavigate()
   const { t, i18n } = useTranslation()
   const isAr = i18n.language.startsWith('ar')
+  const isMobile = useIsMobile()
   const bookId = Number(id)
 
   const qc = useQueryClient()
@@ -477,9 +479,11 @@ export function BookRecordPage(): React.JSX.Element {
             label={t('books.record.print')}
             onClick={() => window.print()}
           />
-          {/* Word session actions (mobile, isMobile=true) */}
+          {/* Word session actions — isMobile is the REAL device check, not
+              the page identity: this full-record page opens on desktop too
+              ("Open full record"), where Edit-in-Word must stay usable. */}
           {book && (
-            <BookWordActions book={book} isMobile />
+            <BookWordActions book={book} isMobile={isMobile} />
           )}
 
           {showSendForApproval && (

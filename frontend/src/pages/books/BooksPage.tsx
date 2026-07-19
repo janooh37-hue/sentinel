@@ -45,7 +45,7 @@ import { StatusSpine, type SpineState } from './StatusSpine'
 import { FormRail, type RailItem } from './FormRail'
 import { RecordsList } from './RecordsList'
 import { RecordPane } from './RecordPane'
-import { FORM_KINDS, OTHER_KIND, formKindOf, type FormKind } from './formKind'
+import { FORM_KINDS, GENERAL_BOOK_KIND, OTHER_KIND, formKindOf, type FormKind } from './formKind'
 
 const DEFAULT_FILTERS = DEFAULT_BOOKS_FILTERS
 
@@ -273,7 +273,7 @@ export function BooksPage(): React.JSX.Element {
   const railItems = useMemo<RailItem[]>(() => {
     const byKind = new Map<string, { count: number; states: Set<string> }>()
     for (const row of allRows) {
-      const kind = formKindOf(row.subject)
+      const kind = formKindOf(row.subject, { classified: !!row.classification_code })
       let entry = byKind.get(kind.id)
       if (!entry) {
         entry = { count: 0, states: new Set() }
@@ -285,7 +285,7 @@ export function BooksPage(): React.JSX.Element {
     const items: RailItem[] = [
       { kindId: 'all', glyph: '🗂', labelKey: 'books.formKind.all', count: allRows.length, states: [] },
     ]
-    const ordered: FormKind[] = [...FORM_KINDS, OTHER_KIND]
+    const ordered: FormKind[] = [...FORM_KINDS, GENERAL_BOOK_KIND, OTHER_KIND]
     for (const kind of ordered) {
       const entry = byKind.get(kind.id)
       if (!entry) continue
@@ -315,7 +315,11 @@ export function BooksPage(): React.JSX.Element {
         .filter((row) => {
           if (showDrafts) return row.is_draft && !row.voided_at
           if (spineState !== 'all' && row.approval_state !== spineState) return false
-          if (railKind !== 'all' && formKindOf(row.subject).id !== railKind) return false
+          if (
+            railKind !== 'all' &&
+            formKindOf(row.subject, { classified: !!row.classification_code }).id !== railKind
+          )
+            return false
           return true
         })
         .sort((a, b) => b.created_at.localeCompare(a.created_at))
@@ -324,7 +328,11 @@ export function BooksPage(): React.JSX.Element {
     const filtered = allRows.filter((row) => {
       if (showDrafts) return row.is_draft && !row.voided_at
       if (spineState !== 'all' && row.approval_state !== spineState) return false
-      if (railKind !== 'all' && formKindOf(row.subject).id !== railKind) return false
+      if (
+        railKind !== 'all' &&
+        formKindOf(row.subject, { classified: !!row.classification_code }).id !== railKind
+      )
+        return false
       if (q && !`${row.ref_number} ${row.subject ?? ''}`.toLowerCase().includes(q)) return false
       return true
     })

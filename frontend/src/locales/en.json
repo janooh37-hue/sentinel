@@ -831,6 +831,7 @@
       "hr": "HR Request",
       "passport": "Passport",
       "material": "Material Request",
+      "generalBook": "General Book",
       "other": "Other records"
     },
     "spine": {
