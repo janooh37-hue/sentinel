@@ -37,7 +37,8 @@ from __future__ import annotations
 
 import contextlib
 import logging
-from collections.abc import Callable, Mapping
+import re
+from collections.abc import Callable, Mapping, Sequence
 from datetime import datetime
 from pathlib import Path
 from typing import Any, ClassVar
@@ -439,6 +440,54 @@ def _place_manager_sig_above_name(doc: Any, ctx: dict[str, Any]) -> None:
     fill_image_behind_text_in_paragraph(
         anchor, sig_path, width_inches=size_mm / 25.4, dilate_radius_px=boldness
     )
+
+
+_TATWEEL_WS = re.compile(r"[\sـ]+")  # whitespace + Arabic tatweel (U+0640)
+
+
+def _norm_name(s: str) -> str:
+    return _TATWEEL_WS.sub("", s or "")
+
+
+def stamp_signature_above_name(
+    docx_path: Path | str,
+    sig_path: str,
+    names: Sequence[str],
+    *,
+    size_mm: float = DEFAULT_SIG_SIZE_MM,
+    boldness: int = DEFAULT_SIG_BOLDNESS,
+) -> bool:
+    """Float *sig_path* above the closing-name line of an ALREADY-RENDERED docx.
+
+    Word-authored books have no Jinja tokens left, so the anchor is textual:
+    the LAST body paragraph whose normalized text (whitespace + tatweel
+    stripped — hand-made templates stretch names with tatweel) contains any of
+    *names*. Falls back to the last non-empty paragraph (the closing block
+    convention). No-op → False when the signature file or any anchor is
+    missing.
+    """
+    if not sig_path or not Path(sig_path).is_file():
+        return False
+    doc = Document(str(docx_path))
+    paras = list(doc.paragraphs)
+    wanted = [_norm_name(n) for n in names if n and _norm_name(n)]
+    idx: int | None = None
+    for i in range(len(paras) - 1, -1, -1):
+        text = _norm_name(paras[i].text)
+        if text and any(w in text for w in wanted):
+            idx = i
+            break
+    if idx is None:
+        idx = next((i for i in range(len(paras) - 1, -1, -1) if paras[i].text.strip()), None)
+        if idx is None:
+            return False
+    anchor = paras[idx - 1] if idx > 0 else paras[idx]
+    placed = fill_image_behind_text_in_paragraph(
+        anchor, sig_path, width_inches=size_mm / 25.4, dilate_radius_px=boldness
+    )
+    if placed:
+        doc.save(str(docx_path))
+    return bool(placed)
 
 
 def _pp_leave_permit(doc: Any, ctx: dict[str, Any]) -> None:
