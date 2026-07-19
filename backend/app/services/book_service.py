@@ -1043,7 +1043,10 @@ def resolve_doc_manager_user(db: Session, book: Book) -> tuple[int | None, str |
     if mgr is None or mgr.user_id is None:
         return None, None, False
     user = db.get(User, mgr.user_id)
-    has_sig = bool(user is not None and user.signature_path)
+    # Same resolution as sign-time (_resolve_signer_signature): the uploaded
+    # approval signature OR the linked employee's stored Submitter signature —
+    # else the dialog warns about a signature the signer actually has.
+    has_sig = user is not None and _resolve_signer_signature(db, user) is not None
     return mgr.user_id, resolve_user_name_by_id(db, mgr.user_id), has_sig
 
 
