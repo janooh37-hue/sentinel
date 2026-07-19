@@ -135,3 +135,27 @@ def save_book_as_template(db: Session, *, book_id: int, name: str) -> TemplateIn
         name=dest.name,
         modified_at=datetime.fromtimestamp(dest.stat().st_mtime, tz=UTC).replace(tzinfo=None),
     )
+
+
+def rename_template(old: str, new: str) -> TemplateInfo:
+    """Rename a library template. Same hard name sanitation as save; atomic
+    collision check via exclusive create semantics (NTFS case-folds)."""
+    src = templates_dir() / safe_template_name(old)
+    if not src.is_file():
+        raise AppError("TEMPLATE_NOT_FOUND", "القالب غير موجود", http_status=404)
+    dest = templates_dir() / safe_template_name(new)
+    if dest == src:
+        return TemplateInfo(
+            name=src.name,
+            modified_at=datetime.fromtimestamp(src.stat().st_mtime, tz=UTC).replace(tzinfo=None),
+        )
+    try:
+        fd = os.open(dest, os.O_CREAT | os.O_EXCL | os.O_WRONLY | getattr(os, "O_BINARY", 0))
+    except FileExistsError:
+        raise AppError("TEMPLATE_EXISTS", "يوجد قالب بهذا الاسم", http_status=409) from None
+    os.close(fd)
+    os.replace(src, dest)
+    return TemplateInfo(
+        name=dest.name,
+        modified_at=datetime.fromtimestamp(dest.stat().st_mtime, tz=UTC).replace(tzinfo=None),
+    )

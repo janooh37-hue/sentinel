@@ -47,6 +47,7 @@ from app.schemas.book import (
     BookVersionRead,
     ClassificationListResponse,
     ClassificationRead,
+    RenameTemplateRequest,
     ReviewersAddRequest,
     ReviewRequest,
     SaveAsTemplateRequest,
@@ -124,6 +125,17 @@ def list_word_templates(
         WordTemplateRead(name=t.name, modified_at=t.modified_at)
         for t in book_template_service.list_templates()
     ]
+
+
+@router.patch("/word-templates/{name}", response_model=WordTemplateRead)
+def rename_word_template(
+    name: str,
+    payload: RenameTemplateRequest,
+    _user: Annotated[User, Depends(require_capability("books.manage"))],
+) -> WordTemplateRead:
+    """Rename a template in the shared General Book library."""
+    info = book_template_service.rename_template(name, payload.new_name)
+    return WordTemplateRead(name=info.name, modified_at=info.modified_at)
 
 
 @router.post("/word-sessions", response_model=WordSessionRead, status_code=status.HTTP_201_CREATED)

@@ -207,6 +207,10 @@ class SaveAsTemplateRequest(BaseModel):
     name: str
 
 
+class RenameTemplateRequest(BaseModel):
+    new_name: str
+
+
 class BookRead(ORMBase):
     id: int
     ref_number: str
