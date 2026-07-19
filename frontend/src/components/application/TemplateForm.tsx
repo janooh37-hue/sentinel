@@ -45,6 +45,7 @@ import { EmployeesTableField } from './fields/EmployeesTableField'
 import { ViolationCheckboxesField } from './fields/ViolationCheckboxesField'
 import { ViolationComboField } from './fields/ViolationComboField'
 import { ClassificationField } from './fields/ClassificationField'
+import { WordTemplateManager } from './WordTemplateManager'
 
 export interface TemplateFormProps {
   templateId: string
@@ -283,8 +284,7 @@ export function TemplateForm({
   templateName,
   onTemplateNameChange,
 }: TemplateFormProps): React.JSX.Element {
-  const { t, i18n } = useTranslation()
-  const isAr = i18n.language.startsWith('ar')
+  const { t } = useTranslation()
 
   // --- Scan-to-fill state ---
   // Seed from initialExtraction (intake injection) on mount; the parent clears
@@ -294,6 +294,8 @@ export function TemplateForm({
   )
   // For salary-transfer: whether to also save IBAN to the employee record on apply.
   const [saveIbanToEmployee, setSaveIbanToEmployee] = useState(false)
+  // Word-mode template library manager (list + rename) dialog.
+  const [tplManagerOpen, setTplManagerOpen] = useState(false)
 
   // When a sick-leave extraction is injected, auto-set leave_type so the scan
   // panel becomes visible (isSickLeave gate requires leave_type === 'Sick Leave').
@@ -389,10 +391,13 @@ export function TemplateForm({
 
   // Group fields by their `group` attribute.
   // In Word mode, skip the arabic_rich_full body field — it's in Word.
-  // When a template is selected, also skip recipient/CC/manager — the
-  // boilerplate already carries that content.
+  // When a template is selected, also skip recipient/CC — the boilerplate
+  // already carries that content. The MANAGER picker stays: it drives the
+  // approval chain (default approver) and the signature anchor, while the
+  // template's printed closing stays as-is (2026-07-19 fix — templated books
+  // used to lose doc_manager_id and land with no default approver).
   // Ungrouped fields land in a synthetic "_default" bucket, rendered first.
-  const TEMPLATE_BAKED_TYPES = new Set(['recipient_picker', 'recipient_multi_picker', 'manager_picker'])
+  const TEMPLATE_BAKED_TYPES = new Set(['recipient_picker', 'recipient_multi_picker'])
   const groups = new Map<string, TemplateField[]>()
   for (const field of schema.fields) {
     if (wordMode && field.type === 'arabic_rich_full') continue
@@ -469,25 +474,42 @@ export function TemplateForm({
         </div>
       )}
 
-      {/* General Book: template picker — only in word mode */}
+      {/* General Book: template picker + manage button — only in word mode */}
       {wordMode && onTemplateNameChange && (
         <div className="mb-3">
           <label className="mb-1 block text-[0.78em] font-medium text-muted-foreground">
             {t('books.word.templatePicker')}
           </label>
-          <select
-            value={templateName ?? ''}
-            onChange={(e) => onTemplateNameChange(e.target.value || null)}
-            className="w-full rounded-lg border border-border bg-background px-3 py-2 text-[0.85em]"
-            aria-label={t('books.word.templatePicker')}
-          >
-            <option value="">{t('books.word.templateNone')}</option>
-            {(wordTemplatesQuery.data ?? []).map((tpl) => (
-              <option key={tpl.name} value={tpl.name}>
-                {tpl.name.replace(/\.docx$/i, '')}
-              </option>
-            ))}
-          </select>
+          <div className="flex items-center gap-1.5">
+            <select
+              value={templateName ?? ''}
+              onChange={(e) => onTemplateNameChange(e.target.value || null)}
+              className="w-full rounded-lg border border-border bg-background px-3 py-2 text-[0.85em]"
+              aria-label={t('books.word.templatePicker')}
+            >
+              <option value="">{t('books.word.templateNone')}</option>
+              {(wordTemplatesQuery.data ?? []).map((tpl) => (
+                <option key={tpl.name} value={tpl.name}>
+                  {tpl.name.replace(/\.docx$/i, '')}
+                </option>
+              ))}
+            </select>
+            <button
+              type="button"
+              onClick={() => setTplManagerOpen(true)}
+              aria-label={t('books.word.manageTemplates')}
+              title={t('books.word.manageTemplates')}
+              className="shrink-0 rounded-lg border border-border px-2.5 py-2 text-[0.85em] text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              ⚙
+            </button>
+          </div>
+          {templateName && (
+            <p className="mt-1 text-[0.72em] text-muted-foreground">
+              {t('books.word.managerWithTemplate')}
+            </p>
+          )}
+          <WordTemplateManager open={tplManagerOpen} onOpenChange={setTplManagerOpen} />
         </div>
       )}
 
@@ -502,20 +524,8 @@ export function TemplateForm({
             value={classificationCode}
             onChange={onClassificationChange}
           />
-          {wordMode && (
-            // Info panel shown when the body will be written in Word, not in the
-            // rich editor. Word-brand blue (#185abd) accent is reserved for
-            // open-in-Word surfaces per the mockup.
-            <div
-              className="mt-3 flex items-center gap-2 rounded-md border px-3 py-2 text-[0.84em]"
-              style={{ borderColor: '#185abd33', backgroundColor: '#185abd0d', color: '#185abd' }}
-              role="note"
-              dir={isAr ? 'rtl' : 'ltr'}
-            >
-              <span aria-hidden style={{ fontWeight: 700 }}>W</span>
-              {t('books.word.bodyInWord')}
-            </div>
-          )}
+          {/* The "body is written in Word" note lives on the submit row only —
+              it used to render here TOO, saying the same thing twice. */}
         </div>
       )}
 
