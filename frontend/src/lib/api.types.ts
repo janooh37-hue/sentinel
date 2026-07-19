@@ -1398,6 +1398,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/books/word-templates/{name}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Rename Word Template
+         * @description Rename a template in the shared General Book library.
+         */
+        patch: operations["rename_word_template_api_v1_books_word_templates__name__patch"];
+        trace?: never;
+    };
     "/api/v1/books/word-sessions": {
         parameters: {
             query?: never;
@@ -1432,6 +1452,30 @@ export interface paths {
          * @description Finish the active Word editing session: move docx, create BookVersion + Document, optional PDF.
          */
         post: operations["finish_word_session_api_v1_books__book_id__word_sessions_finish_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/books/{book_id}/word-sessions/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Word Session Preview
+         * @description PDF preview of the active Word session's working docx (regenerates on change).
+         *
+         *     ``encoding=base64`` mirrors the documents download endpoint — the in-app
+         *     pdf.js canvas fetches base64 text so download accelerators can't hijack
+         *     the PDF byte stream.
+         */
+        get: operations["word_session_preview_api_v1_books__book_id__word_sessions_preview_get"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -6349,6 +6393,11 @@ export interface components {
             /** Reason */
             reason?: string | null;
         };
+        /** RenameTemplateRequest */
+        RenameTemplateRequest: {
+            /** New Name */
+            new_name: string;
+        };
         /** ResetPasswordRequest */
         ResetPasswordRequest: {
             /** Password */
@@ -10176,6 +10225,43 @@ export interface operations {
             };
         };
     };
+    rename_word_template_api_v1_books_word_templates__name__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: string;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RenameTemplateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WordTemplateRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     create_word_session_api_v1_books_word_sessions_post: {
         parameters: {
             query?: never;
@@ -10231,6 +10317,41 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["BookRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    word_session_preview_api_v1_books__book_id__word_sessions_preview_get: {
+        parameters: {
+            query?: {
+                encoding?: string | null;
+            };
+            header?: never;
+            path: {
+                book_id: number;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
                 };
             };
             /** @description Validation Error */

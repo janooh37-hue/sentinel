@@ -1221,6 +1221,15 @@ export const api = {
   /** GET /books/word-templates — shared General Book boilerplate library. */
   listWordTemplates: () =>
     request<components['schemas']['WordTemplateRead'][]>('GET', '/books/word-templates'),
+  /** PATCH /books/word-templates/{name} — rename a template in the shared library. */
+  renameWordTemplate: (name: string, newName: string) =>
+    request<components['schemas']['WordTemplateRead']>(
+      'PATCH', `/books/word-templates/${encodeURIComponent(name)}`, { new_name: newName },
+    ),
+  /** Live PDF preview of an active Word session's working docx.
+   *  `ts` (last_put_at) busts the browser cache; DocPdfCanvas appends encoding=base64 itself. */
+  wordSessionPreviewUrl: (bookId: number, ts: string) =>
+    `${BASE}/books/${bookId}/word-sessions/preview?ts=${encodeURIComponent(ts)}`,
   /** POST /books/{id}/save-as-template — copy a finished book into the shared template library. */
   saveBookAsTemplate: (bookId: number, name: string) =>
     request<components['schemas']['WordTemplateRead']>(
