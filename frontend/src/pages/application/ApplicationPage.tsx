@@ -359,10 +359,11 @@ export function ApplicationPage(): React.JSX.Element {
     mutationFn: (body: import('@/lib/api').WordBookCreate) => api.createWordBook(body),
     onSuccess: (res) => {
       void qc.invalidateQueries({ queryKey: ['books'] })
+      // NO auto-launch: navigating to ms-word: outside a user gesture raises
+      // Chrome's tab-modal protocol prompt that silently swallows every click
+      // in the tab while it lingers. The handoff dialog's «Open in Word»
+      // anchor is the launch point (2026-07-19 dead-buttons audit).
       setPendingWordSession(res)
-      // Launch Word immediately; the handoff dialog stays on screen
-      // so the user can press Finish when they return.
-      window.location.href = res.word_url
     },
     onError: (err) => {
       setSubmitError(err instanceof ApiError ? `${err.code}: ${err.message}` : String(err))

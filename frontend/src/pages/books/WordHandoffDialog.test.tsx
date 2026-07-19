@@ -29,12 +29,26 @@ vi.mock('react-i18next', () => ({
         'books.word.finishedPdfTitle': opts?.ref ? `تم حفظ الكتاب — ${String(opts.ref)}` : 'تم حفظ الكتاب',
         'books.word.pdfPending': 'جارٍ تجهيز ملف PDF — يمكنك تنزيل ملف DOCX الآن',
         'books.word.close': 'إغلاق',
-        'books.word.step1': 'يفتح Word الآن — اكتب المتن فقط',
+        'books.word.step1': 'اضغط «افتح في Word» ثم وافق على تأكيد المتصفح',
         'books.word.step2': 'احفظ من داخل Word (Ctrl+S)',
         'books.word.step3': 'ارجع هنا واضغط «إنهاء التحرير»',
         'books.word.preparedBy': 'المُعِدّ',
+        'books.word.openInWord': 'افتح في Word',
+        'books.word.protocolHint':
+          'إذا لم يُفتح Word فالمتصفح يطلب الإذن — وافق مرة واحدة واختر السماح دائماً.',
+        'books.word.lastSavedAt': opts?.time
+          ? `تم الحفظ من Word ✓ ${String(opts.time)}`
+          : 'تم الحفظ من Word ✓',
+        'books.word.saveAsTemplate': 'حفظ كقالب',
+        'books.word.saveAsTemplateName': 'اسم القالب',
+        'books.word.saveAsTemplateHint':
+          'سيصبح محتوى الكتاب قالباً مشتركاً متاحاً لجميع مديري الكتب.',
+        'books.word.savedAsTemplate': opts?.name
+          ? `حُفظ في مكتبة القوالب: ${String(opts.name)}`
+          : 'حُفظ في مكتبة القوالب',
         'common.confirm': 'تأكيد',
         'common.cancel': 'إلغاء',
+        'common.save': 'حفظ',
       }
       return ar[k] ?? k
     },
@@ -230,6 +244,105 @@ describe('WordHandoffDialog', () => {
     // Close button hands control back
     await user.click(screen.getByText('إغلاق'))
     expect(onClose).toHaveBeenCalled()
+  })
+
+  it('Open in Word is a real anchor with the ms-word url (no auto-navigation)', async () => {
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    vi.spyOn(apiMod.api, 'getBook').mockResolvedValue(bookWith(null))
+
+    render(
+      createElement(WordHandoffDialog, {
+        session: FAKE_SESSION,
+        open: true,
+        onClose: vi.fn(),
+      }),
+      { wrapper: makeWrapper(qc) },
+    )
+
+    const link = screen.getByText('افتح في Word').closest('a')
+    expect(link).toBeTruthy()
+    expect(link?.getAttribute('href')).toMatch(/^ms-word:/)
+    // The browser-permission hint accompanies it.
+    expect(screen.getByText(/المتصفح يطلب الإذن/)).toBeTruthy()
+  })
+
+  it('shows a positive saved state once a Word save exists', async () => {
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    vi.spyOn(apiMod.api, 'getBook').mockResolvedValue(bookWith('2026-07-17T10:05:00Z'))
+
+    render(
+      createElement(WordHandoffDialog, {
+        session: FAKE_SESSION,
+        open: true,
+        onClose: vi.fn(),
+      }),
+      { wrapper: makeWrapper(qc) },
+    )
+
+    await waitFor(() => expect(screen.getByText(/تم الحفظ من Word ✓/)).toBeTruthy())
+    expect(screen.queryByText('لم يصل أي حفظ من Word بعد')).toBeNull()
+  })
+
+  it('shows the live preview canvas once a Word save exists', async () => {
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    vi.spyOn(apiMod.api, 'getBook').mockResolvedValue(bookWith('2026-07-17T10:05:00Z'))
+
+    render(
+      createElement(WordHandoffDialog, {
+        session: FAKE_SESSION,
+        open: true,
+        onClose: vi.fn(),
+      }),
+      { wrapper: makeWrapper(qc) },
+    )
+
+    const pane = await screen.findByTestId('word-live-preview')
+    const canvas = pane.querySelector('[data-testid="doc-pdf-canvas"]')
+    expect(canvas?.getAttribute('data-pdf-url')).toContain('/word-sessions/preview')
+  })
+
+  it('finished view offers Save as template', async () => {
+    const user = userEvent.setup()
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    vi.spyOn(apiMod.api, 'getBook').mockResolvedValue(bookWith('2026-07-17T10:05:00Z'))
+    const finished = {
+      ...bookWith(null),
+      versions: [
+        {
+          id: 1,
+          version_no: 1,
+          pdf_url: '/api/v1/documents/9/download?format=pdf',
+          docx_url: '/api/v1/documents/9/download?format=docx',
+        },
+      ],
+    } as unknown as BookRead
+    vi.spyOn(apiMod.api, 'finishWordSession').mockResolvedValue(finished)
+    const saveSpy = vi
+      .spyOn(apiMod.api, 'saveBookAsTemplate')
+      .mockResolvedValue({ name: 'قالبي.docx', modified_at: '2026-07-19T10:00:00' })
+
+    render(
+      createElement(WordHandoffDialog, {
+        session: FAKE_SESSION,
+        open: true,
+        onClose: vi.fn(),
+      }),
+      { wrapper: makeWrapper(qc) },
+    )
+
+    await waitFor(() => {
+      const btn = screen.getByText('إنهاء التحرير').closest('button')
+      expect(btn?.disabled).toBe(false)
+    })
+    await user.click(screen.getByText('إنهاء التحرير'))
+    await screen.findByTestId('doc-pdf-canvas')
+
+    await user.click(screen.getByText('حفظ كقالب'))
+    const input = await screen.findByRole('textbox')
+    await user.clear(input)
+    await user.type(input, 'قالبي')
+    await user.click(screen.getByText('حفظ'))
+    await waitFor(() => expect(saveSpy).toHaveBeenCalledWith(42, 'قالبي'))
   })
 
   it('Finish with no PDF yet shows the pending hint instead of the canvas', async () => {

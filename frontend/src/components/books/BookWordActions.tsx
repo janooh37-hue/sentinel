@@ -14,7 +14,6 @@ import { api, apiErrorMessage } from '@/lib/api'
 import { bidi } from '@/lib/bidi'
 import type { BookRead, WordSessionRead } from '@/lib/api'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
-import { DialogRoot, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog'
 import { WordHandoffDialog } from '@/pages/books/WordHandoffDialog'
 import { cn } from '@/lib/utils'
 
@@ -28,8 +27,6 @@ export function BookWordActions({ book, isMobile }: Props): React.JSX.Element | 
   const qc = useQueryClient()
   const [discardOpen, setDiscardOpen] = useState(false)
   const [reopenSession, setReopenSession] = useState<WordSessionRead | null>(null)
-  const [saveTplOpen, setSaveTplOpen] = useState(false)
-  const [tplName, setTplName] = useState('')
 
   const invalidate = () => void qc.invalidateQueries({ queryKey: ['books'] })
 
@@ -55,17 +52,10 @@ export function BookWordActions({ book, isMobile }: Props): React.JSX.Element | 
     mutationFn: () => api.reopenWordSession(book.id),
     onSuccess: (session) => {
       invalidate()
-      window.location.href = session.word_url
+      // No auto-launch: the handoff dialog's «Open in Word» anchor is the
+      // launch point — an out-of-gesture ms-word: navigation raises Chrome's
+      // click-swallowing protocol prompt (2026-07-19 dead-buttons audit).
       setReopenSession(session)
-    },
-    onError: (err) => toast.error(apiErrorMessage(err)),
-  })
-
-  const saveTemplateMutation = useMutation({
-    mutationFn: () => api.saveBookAsTemplate(book.id, tplName.trim()),
-    onSuccess: (tpl) => {
-      setSaveTplOpen(false)
-      toast.success(t('books.word.savedAsTemplate', { name: tpl.name.replace(/\.docx$/i, '') }))
     },
     onError: (err) => toast.error(apiErrorMessage(err)),
   })
@@ -83,7 +73,12 @@ export function BookWordActions({ book, isMobile }: Props): React.JSX.Element | 
 
   return (
     <>
-      {/* Re-open + Save-as-template buttons — shown for FINISHED books (has versions, no active session) */}
+      {/* Re-open button — shown for FINISHED books (has versions, no active
+          session). Save-as-template moved to the Word flow's finished dialog
+          (the General Book side, not Records). ponytail: for an OLD book the
+          save path is reopen→finish→save, which writes an identical new
+          version; if operators hit that often, add a book picker to
+          WordTemplateManager instead. */}
       {isFinished && (
         <div className="flex flex-col gap-1">
           <button
@@ -103,14 +98,6 @@ export function BookWordActions({ book, isMobile }: Props): React.JSX.Element | 
               {t('books.word.needsPc')}
             </span>
           )}
-          <button
-            type="button"
-            disabled={saveTemplateMutation.isPending}
-            onClick={() => { setTplName(book.subject ?? ''); setSaveTplOpen(true) }}
-            className="inline-flex items-center gap-1.5 rounded-lg border border-hairline px-3 py-2 text-[0.82em] font-semibold text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
-          >
-            {t('books.word.saveAsTemplate')}
-          </button>
         </div>
       )}
 
@@ -172,43 +159,6 @@ export function BookWordActions({ book, isMobile }: Props): React.JSX.Element | 
         open={reopenSession != null}
         onClose={() => { setReopenSession(null); invalidate() }}
       />
-
-      {/* Save-as-template name dialog */}
-      <DialogRoot open={saveTplOpen} onOpenChange={setSaveTplOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>{t('books.word.saveAsTemplate')}</DialogTitle>
-            <DialogDescription>{t('books.word.saveAsTemplateHint')}</DialogDescription>
-          </DialogHeader>
-          <div className="px-4 py-3 flex flex-col gap-3">
-            <input
-              type="text"
-              value={tplName}
-              onChange={(e) => setTplName(e.target.value)}
-              aria-label={t('books.word.saveAsTemplateName')}
-              className="w-full rounded-lg border border-hairline bg-transparent px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-              autoFocus
-            />
-            <div className="mt-1 flex flex-row-reverse gap-2">
-              <button
-                type="button"
-                onClick={() => setSaveTplOpen(false)}
-                className="rounded-lg px-3 py-2 text-[0.82em] font-semibold text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-              >
-                {t('common.cancel')}
-              </button>
-              <button
-                type="button"
-                disabled={saveTemplateMutation.isPending || !tplName.trim()}
-                onClick={() => saveTemplateMutation.mutate()}
-                className="rounded-lg bg-primary px-3 py-2 text-[0.82em] font-semibold text-primary-foreground transition-colors hover:bg-primary-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
-              >
-                {t('books.word.saveAsTemplate')}
-              </button>
-            </div>
-          </div>
-        </DialogContent>
-      </DialogRoot>
     </>
   )
 }

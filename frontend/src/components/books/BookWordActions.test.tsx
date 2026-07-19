@@ -240,32 +240,14 @@ describe('BookWordActions', () => {
     expect(screen.getByText(/التحرير في Word يتطلب/)).toBeInTheDocument()
   })
 
-  it('(i) saves a finished book as template with subject as default name (Arabic labels)', async () => {
-    const user = userEvent.setup()
-    vi.spyOn(apiMod.api, 'saveBookAsTemplate').mockResolvedValue({
-      name: 'تقرير الإجازات السنوية.docx',
-      modified_at: '2026-07-19T00:00:00',
-    })
+  it('(i) save-as-template is GONE from Records — it lives in the Word flow now', () => {
+    // Moved to WordHandoffDialog's finished view (the General Book side, per
+    // the 2026-07-19 template-ops relocation). Records only re-opens in Word.
     render(
       createElement(BookWordActions, { book: FINISHED_BOOK_WITH_SUBJECT }),
       { wrapper: wrapper(makeQc()) },
     )
-    await user.click(screen.getByRole('button', { name: 'حفظ كقالب' }))
-    const input = await screen.findByRole('textbox')
-    expect(input).toHaveValue(FINISHED_BOOK_WITH_SUBJECT.subject!)
-    await user.click(screen.getByRole('button', { name: /حفظ|save/i }))
-    expect(apiMod.api.saveBookAsTemplate).toHaveBeenCalledWith(
-      FINISHED_BOOK_WITH_SUBJECT.id,
-      FINISHED_BOOK_WITH_SUBJECT.subject,
-    )
-  })
-
-  it('(j) save-as-template button is enabled on mobile (no PC required)', () => {
-    render(
-      createElement(BookWordActions, { book: FINISHED_BOOK_WITH_SUBJECT, isMobile: true }),
-      { wrapper: wrapper(makeQc()) },
-    )
-    expect(screen.getByRole('button', { name: 'حفظ كقالب' })).not.toBeDisabled()
+    expect(screen.queryByRole('button', { name: 'حفظ كقالب' })).toBeNull()
   })
 })
 

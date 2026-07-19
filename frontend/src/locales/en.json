@@ -907,7 +907,7 @@
       "noSavesYet": "No save from Word yet",
       "discardConfirm": "The book will be voided; its number stays in the register. Continue?",
       "finished": "Version saved — {{ref}}",
-      "step1": "Word is opening now — write the body only",
+      "step1": "Press «Open in Word», then allow the browser's confirmation",
       "step2": "Save from inside Word (Ctrl+S)",
       "step3": "Come back here and press «Finish editing»",
       "preparedBy": "Prepared by",
@@ -933,7 +933,12 @@
       "saveAsTemplate": "Save as template",
       "saveAsTemplateHint": "The book's content becomes a shared template every book manager can use.",
       "savedAsTemplate": "Saved to the template library: {{name}}",
-      "saveAsTemplateName": "Template name"
+      "saveAsTemplateName": "Template name",
+      "protocolHint": "If Word didn't open, your browser is asking for permission — approve it once and choose to always allow.",
+      "lastSavedAt": "Saved from Word ✓ {{time}}",
+      "manageTemplates": "Manage templates",
+      "renameTemplate": "Rename",
+      "managerWithTemplate": "Used for approval and the signature placement — the template's printed closing stays as-is."
     }
   },
   "ledger": {
