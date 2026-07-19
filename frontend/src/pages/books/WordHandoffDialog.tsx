@@ -316,9 +316,11 @@ export function WordHandoffDialog({ session, open, onClose }: Props): React.JSX.
             {hasSave && (
               // overflow-hidden: the canvas scrolls itself (h-full overflow-auto)
               // — a scrolling wrapper AROUND it wheel-traps on short viewports.
+              // min-h matches the canvas's own min-h-[400px]; anything shorter
+              // clips the inner scroller and makes the tail unreachable.
               <div
                 data-testid="word-live-preview"
-                className="mb-4 h-[45vh] min-h-[280px] overflow-hidden rounded-lg border border-hairline"
+                className="mb-4 h-[45vh] min-h-[400px] overflow-hidden rounded-lg border border-hairline"
               >
                 <Suspense fallback={<p className="p-3 text-[0.8em] text-muted-foreground">…</p>}>
                   <DocPdfCanvas
