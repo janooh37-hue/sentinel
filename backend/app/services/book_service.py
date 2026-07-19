@@ -32,6 +32,7 @@ from app.db.models import (
     Employee,
     Manager,
     OutboundMessage,
+    Submitter,
     User,
 )
 from app.db.repos.refs_repo import allocate_ref_with_retry
@@ -579,6 +580,28 @@ def decide_step(
     return book
 
 
+def _resolve_signer_signature(db: Session, signer: User) -> Path | None:
+    """The signer's ONE signature: their uploaded approval signature, else the
+    stored signature of their linked employee (G number) from the Submitter
+    registry — people should not need a second signature just for approvals."""
+    candidates: list[str] = []
+    if signer.signature_path:
+        candidates.append(signer.signature_path)
+    if signer.employee_id:
+        sub = db.execute(
+            select(Submitter).where(Submitter.employee_id == signer.employee_id)
+        ).scalar_one_or_none()
+        if sub is not None and sub.stored_sig_path:
+            candidates.append(sub.stored_sig_path)
+    for raw in candidates:
+        p = Path(raw)
+        if not p.is_absolute():
+            p = get_settings().data_dir / p
+        if p.is_file():
+            return p
+    return None
+
+
 def sign_book(db: Session, book_id: int, *, user_id: int) -> Book:
     """Approve by signing: verify the caller is the pending signer, embed their
     signature into the current version's document, store the signed PDF, mark
@@ -597,13 +620,15 @@ def sign_book(db: Session, book_id: int, *, user_id: int) -> Book:
     if current.assignee_user_id != user_id:
         raise ValidationFailedError("NOT_YOUR_STEP", "This signature is assigned to another user")
     signer = db.get(User, user_id)
-    if signer is None or not signer.signature_path:
+    if signer is None:
         raise ValidationFailedError("NO_SIGNATURE", "You have no signature on file")
-    abs_sig = Path(signer.signature_path)
-    if not abs_sig.is_absolute():
-        abs_sig = get_settings().data_dir / abs_sig
-    if not abs_sig.is_file():
-        raise ValidationFailedError("SIGNATURE_MISSING", "Your signature file is missing")
+    abs_sig = _resolve_signer_signature(db, signer)
+    if abs_sig is None:
+        raise ValidationFailedError(
+            "NO_SIGNATURE",
+            "No signature on file — upload one in Settings, or store the employee "
+            "signature (G number) in the Submitters registry.",
+        )
 
     version = _current_version(book)
     if version is None:

@@ -86,6 +86,54 @@ def test_signed_artifact_keeps_word_body(
     signed.unlink()  # keep the shared output dir clean
 
 
+def test_sign_falls_back_to_submitter_signature(db_session: Session, tmp_path: Path) -> None:
+    from app.db.models import Employee, Submitter, User
+    from app.services.book_service import _resolve_signer_signature
+
+    sig = tmp_path / "emp-sig.png"
+    from PIL import Image
+
+    Image.new("RGBA", (40, 20), (0, 0, 0, 255)).save(sig)
+
+    db_session.add(Employee(id="G7001", name_en="Signer Emp"))
+    db_session.flush()
+    user = User(
+        email="signer@test.ae",
+        password_hash="x",
+        role="manager",
+        status="active",
+        employee_id="G7001",
+        signature_path=None,
+    )
+    db_session.add(user)
+    db_session.add(Submitter(employee_id="G7001", name="Signer Emp", stored_sig_path=str(sig)))
+    db_session.commit()
+
+    resolved = _resolve_signer_signature(db_session, user)
+    assert resolved is not None and resolved.name == "emp-sig.png"
+
+
+def test_sign_prefers_own_signature(db_session: Session, tmp_path: Path) -> None:
+    from app.db.models import User
+    from app.services.book_service import _resolve_signer_signature
+
+    own = tmp_path / "own.png"
+    from PIL import Image
+
+    Image.new("RGBA", (40, 20), (0, 0, 0, 255)).save(own)
+    user = User(
+        email="own@test.ae",
+        password_hash="x",
+        role="manager",
+        status="active",
+        signature_path=str(own),
+    )
+    db_session.add(user)
+    db_session.commit()
+    resolved = _resolve_signer_signature(db_session, user)
+    assert resolved is not None and resolved.name == "own.png"
+
+
 def test_rich_versions_still_rerender(
     db_session: Session,
     tmp_path: Path,
