@@ -201,3 +201,53 @@ def test_ref_font_matches_date_font_on_existing_ref_line(tmp_path):
     ref_para = next(pp for pp in doc2.paragraphs if "{{ ref }}" in pp.text)
     ref_run = next(r for r in ref_para.runs if "{{ ref }}" in r.text)
     assert ref_run.font.size == Pt(12)
+
+
+# ---------------------------------------------------------------------------
+# Table-aware validation tests (M4-4)
+# ---------------------------------------------------------------------------
+
+
+def _table_template(tmp_path: Path, n_cols: int = 2) -> Path:
+    from docx import Document
+
+    p = tmp_path / f"tbl_tpl_{n_cols}.docx"
+    doc = Document()
+    doc.add_paragraph("الرقم: 1/5/141")
+    doc.add_paragraph("التاريخ: 20-07-2026")
+    doc.add_paragraph("الموضوع: موضوع الكتاب الاختباري في النظام المحترم")
+    headers = [f"عمود {i}" for i in range(n_cols)]
+    t = doc.add_table(rows=2, cols=n_cols)
+    for i, h in enumerate(headers):
+        t.cell(0, i).text = h
+    for i in range(n_cols):
+        t.cell(1, i).text = f"بيانات {i}"
+    doc.save(str(p))
+    retokenize_general_book(p)
+    return p
+
+
+def test_validate_table_template_passes(tmp_path):
+    validate_book_template(_table_template(tmp_path, n_cols=3))  # must not raise
+
+
+def test_validate_body_preservation_excludes_table_content(tmp_path):
+    from docx import Document
+
+    p = tmp_path / "long_header.docx"
+    doc = Document()
+    doc.add_paragraph("الرقم: 1/5/141")
+    doc.add_paragraph("التاريخ: 20-07-2026")
+    doc.add_paragraph("الموضوع: كتاب مع جدول بيانات مفصّلة للاختبار")
+    t = doc.add_table(rows=2, cols=1)
+    t.cell(0, 0).text = "بيانات الموظف المفصّلة جداً"  # >=15 chars header cell
+    t.cell(1, 0).text = "قيمة بيانات مؤقتة للاختبار"
+    doc.save(str(p))
+    retokenize_general_book(p)
+    validate_book_template(p)  # must not raise despite long header cell text
+
+
+def test_validate_no_double_expand_cell_value(tmp_path):
+    # Handled internally: validate injects a dummy cell value "{{ ref }}" and asserts
+    # it renders literally. If double-expansion occurred, validate would raise.
+    validate_book_template(_table_template(tmp_path, n_cols=1))

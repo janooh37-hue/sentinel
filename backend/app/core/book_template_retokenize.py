@@ -252,15 +252,41 @@ def retokenize_general_book(docx_path: Path, *, submitter_g: str | None = None) 
     doc.save(str(docx_path))
 
 
+def _body_text_no_tables(docx_path: Path) -> str:
+    """Return body paragraph text only — table cells excluded.
+
+    doc.paragraphs already excludes table cells in python-docx, so this
+    is the right source for the body-preservation check (table cell text
+    is removed during normalize_data_table and would cause false positives).
+    """
+    return "\n".join(p.text for p in Document(str(docx_path)).paragraphs if p.text)
+
+
 def validate_book_template(docx_path: Path) -> None:
     """Fail-closed check: dummy render must succeed under sandbox+strict and
     place each dummy value exactly once. Raises ValueError (operator-safe
     message, no paths/tracebacks)."""
-    source_text = docx_to_text(docx_path)
+    # Discover column count from the normalized template text: after
+    # retokenize, data cells contain {{ row.c0 }}, {{ row.c1 }}, …
+    # detect_table_schema cannot be used here because the normalized table
+    # (with directive rows) no longer satisfies its "clean table" criteria.
+    tpl_text = docx_to_text(docx_path)
+    col_indices = [int(m) for m in re.findall(r"row\.c(\d+)", tpl_text)]
+    has_table = bool(col_indices)
+    dummy: dict[str, object] = dict(_DUMMY)
+    if has_table:
+        n = max(col_indices) + 1
+        row: dict[str, str] = {f"c{i}": f"DUMMY_CELL_{i}" for i in range(n)}
+        # SSTI probe: last cell carries a literal Jinja expression; it must
+        # appear verbatim in the output (cell values are data, not re-expanded).
+        row[f"c{n - 1}"] = "{{ ref }}"
+        dummy["table_rows"] = [row]
+
+    source_text = _body_text_no_tables(docx_path)
     with tempfile.TemporaryDirectory() as td:
         out = Path(td) / "check.docx"
         try:
-            render(docx_path, dict(_DUMMY), out, strict=True, sandboxed=True)
+            render(docx_path, dummy, out, strict=True, sandboxed=True)
         except Exception as exc:  # sandbox/strict/syntax — reason stays generic
             raise ValueError("تعذر التحقق من القالب — فشل عرض تجريبي") from exc
         text = docx_to_text(out)
@@ -269,7 +295,8 @@ def validate_book_template(docx_path: Path) -> None:
     if text.count(_DUMMY["ref"]) != 1 or text.count(_DUMMY["date"]) != 1:
         raise ValueError("سطر الرقم أو التاريخ لم يُستبدل بشكل صحيح")
     # Body preserved: every substantial source line (minus token lines)
-    # must survive the render.
+    # must survive the render. Uses paragraph-only text to exclude table cells
+    # (which are transformed/removed by normalize_data_table).
     for line in source_text.splitlines():
         line = line.strip()
         if (
@@ -279,3 +306,12 @@ def validate_book_template(docx_path: Path) -> None:
             and line.replace(_ZWSP, "") not in text.replace(_ZWSP, "")
         ):
             raise ValueError("نص القالب تغيّر أثناء العرض التجريبي")
+    # Table-specific assertions: ≥1 data row rendered + no double-expansion.
+    if has_table:
+        # When n > 1, c0 carries "DUMMY_CELL_0" (distinct from the SSTI probe
+        # in the last cell) — assert it rendered.  With n == 1, c0 IS the SSTI
+        # probe cell, so there is no separate DUMMY_CELL_0 to check.
+        if n > 1 and "DUMMY_CELL_0" not in text:
+            raise ValueError("الجدول لم يُصيَّر بشكل صحيح — لم تظهر صفوف البيانات")
+        if "{{ ref }}" not in text:
+            raise ValueError("قيمة خلية الجدول تعرّضت لإعادة تفسير غير مسموح بها")
