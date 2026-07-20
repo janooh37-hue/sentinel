@@ -4599,6 +4599,11 @@ export interface components {
             attachments?: components["schemas"]["GenerateAttachmentSpec"][] | null;
             /** Classification Code */
             classification_code?: string | null;
+            /**
+             * Notify Employee
+             * @default true
+             */
+            notify_employee: boolean;
         };
         /** DocumentGenerateResponse */
         DocumentGenerateResponse: {
