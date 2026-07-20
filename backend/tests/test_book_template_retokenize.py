@@ -19,7 +19,7 @@ def _finished_book(tmp_path: Path, *, ref_line: bool = True, spacing: str = "") 
     p = tmp_path / "book.docx"
     doc = Document()
     if ref_line:
-        doc.add_paragraph(f"الرقم:{spacing}1/{spacing}5{spacing}/GSSG/{spacing}140")
+        doc.add_paragraph(f"الرقم:{spacing}1/{spacing}5{spacing}/{spacing}140")
     doc.add_paragraph("التاريخ: 13/07/2026")
     doc.add_paragraph("السيد / مدير الإدارة المحترم")
     doc.add_paragraph("الموضوع: التصاريح الأمنية بتاريخ 01/07/2026")
@@ -37,8 +37,8 @@ def _rendered_text(tpl: Path, tmp_path: Path, **data) -> str:
 def test_ref_and_date_retokenized(tmp_path):
     p = _finished_book(tmp_path)
     retokenize_general_book(p)
-    text = _rendered_text(p, tmp_path, ref="9/9/GSSG/999", date="31-12-2099")
-    assert "الرقم: 9/9/GSSG/999" in text
+    text = _rendered_text(p, tmp_path, ref="9/9/999", date="31-12-2099")
+    assert "الرقم: 9/9/999" in text
     assert "التاريخ: 31-12-2099" in text
     assert "140" not in text  # old baked ref gone
 
@@ -46,21 +46,21 @@ def test_ref_and_date_retokenized(tmp_path):
 def test_legacy_spacing_handled(tmp_path):
     p = _finished_book(tmp_path, spacing=" ")
     retokenize_general_book(p)
-    text = _rendered_text(p, tmp_path, ref="9/9/GSSG/999", date="31-12-2099")
-    assert "الرقم: 9/9/GSSG/999" in text
+    text = _rendered_text(p, tmp_path, ref="9/9/999", date="31-12-2099")
+    assert "الرقم: 9/9/999" in text
 
 
 def test_missing_ref_line_inserted_above_date(tmp_path):
     p = _finished_book(tmp_path, ref_line=False)
     retokenize_general_book(p)
-    text = _rendered_text(p, tmp_path, ref="9/9/GSSG/999", date="31-12-2099")
-    assert text.index("الرقم: 9/9/GSSG/999") < text.index("التاريخ:")
+    text = _rendered_text(p, tmp_path, ref="9/9/999", date="31-12-2099")
+    assert text.index("الرقم: 9/9/999") < text.index("التاريخ:")
 
 
 def test_prose_date_untouched(tmp_path):
     p = _finished_book(tmp_path)
     retokenize_general_book(p)
-    text = _rendered_text(p, tmp_path, ref="9/9/GSSG/999", date="31-12-2099")
+    text = _rendered_text(p, tmp_path, ref="9/9/999", date="31-12-2099")
     assert "بتاريخ 01/07/2026" in text  # date inside الموضوع prose survives
 
 
@@ -71,7 +71,7 @@ def test_foreign_jinja_neutralized(tmp_path):
     doc.add_paragraph("خصم {{ 7*7 }} بالمئة {% if x %}شرط{% endif %}")
     doc.save(str(p))
     retokenize_general_book(p)
-    text = _rendered_text(p, tmp_path, ref="9/9/GSSG/999", date="31-12-2099")
+    text = _rendered_text(p, tmp_path, ref="9/9/999", date="31-12-2099")
     assert "49" not in text  # never executed
     assert "7*7" in text  # visible text preserved
     assert "شرط" in text  # {% if %} inert, content kept literal
@@ -97,7 +97,7 @@ def test_split_delimiter_fails_closed(tmp_path):
     except ValueError:
         pass  # rejected at save time — fail-closed holds
     else:
-        text = _rendered_text(p, tmp_path, ref="9/9/GSSG/999", date="31-12-2099")
+        text = _rendered_text(p, tmp_path, ref="9/9/999", date="31-12-2099")
         assert "49" not in text  # survived validation, but never executed
 
 

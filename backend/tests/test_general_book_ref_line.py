@@ -22,9 +22,9 @@ _BASE_DATA = {
 
 def test_ref_line_renders_above_date(tmp_path):
     out = tmp_path / "out.docx"
-    DocxEngine(TEMPLATES_DIR).fill("General Book", {**_BASE_DATA, "ref": "1/5/GSSG/141"}, out)
+    DocxEngine(TEMPLATES_DIR).fill("General Book", {**_BASE_DATA, "ref": "1/5/141"}, out)
     text = docx_to_text(out)
-    assert "الرقم: 1/5/GSSG/141" in text
+    assert "الرقم: 1/5/141" in text
     # above the date: الرقم line appears before التاريخ in document order
     assert text.index("الرقم:") < text.index("التاريخ:")
 
@@ -46,10 +46,10 @@ def test_ref_run_marked_rtl(tmp_path):
     from docx import Document
 
     out = tmp_path / "out.docx"
-    DocxEngine(TEMPLATES_DIR).fill("General Book", {**_BASE_DATA, "ref": "1/5/GSSG/141"}, out)
+    DocxEngine(TEMPLATES_DIR).fill("General Book", {**_BASE_DATA, "ref": "1/5/141"}, out)
     doc = Document(str(out))
-    ref_para = next(p for p in doc.paragraphs if "1/5/GSSG/141" in p.text)
-    ref_runs = [r for r in ref_para.runs if "GSSG" in r.text]
+    ref_para = next(p for p in doc.paragraphs if "1/5/141" in p.text)
+    ref_runs = [r for r in ref_para.runs if r.text.startswith("1/")]
     assert ref_runs, "ref value must be in its own run"
     assert all(r.font.rtl is True for r in ref_runs)
 
