@@ -18,6 +18,7 @@ import type { LeaveListItem } from '@/lib/api'
 import { Button } from '@/components/ui/button'
 
 import { SendButton } from '@/components/notify/SendButton'
+import { NotifyEmployeeToggle } from '@/components/notify/NotifyEmployeeToggle'
 
 import { actionsFor, canonStatus, displayState, lifecycleGroup } from '../lifecycle'
 import { useLeaveDecisionActions } from '../useLeaveDecisionActions'
@@ -54,6 +55,9 @@ export function RecordExpansion({
   const { t, i18n } = useTranslation()
   const notesId = useId()
   const [notes, setNotes] = useState('')
+  // Approve-only: notify the employee of the approval (On by default). Reject
+  // and Cancel always notify, so this rides only the Approve mutation.
+  const [notifyEmployee, setNotifyEmployee] = useState(true)
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [returnOpen, setReturnOpen] = useState(false)
   const [amendOpen, setAmendOpen] = useState(false)
@@ -181,13 +185,24 @@ export function RecordExpansion({
             </div>
           )}
 
+          {/* Approve-only notify opt-out */}
+          {acts.includes('approve') && (
+            <NotifyEmployeeToggle
+              checked={notifyEmployee}
+              onChange={setNotifyEmployee}
+              label={t('leaves.notify.label')}
+            />
+          )}
+
           {/* Request actions: Approve / Reject / Cancel */}
           {hasRequestActions && (
             <div className="flex flex-wrap items-center gap-2">
               {acts.includes('approve') && (
                 <Button
                   size="sm"
-                  onClick={() => updateMutation.mutate({ status: 'Approved', n: notes })}
+                  onClick={() =>
+                    updateMutation.mutate({ status: 'Approved', n: notes, notify: notifyEmployee })
+                  }
                   disabled={updateMutation.isPending}
                   className="rounded-full"
                 >

@@ -47,4 +47,30 @@ describe('useLeaveDecisionActions', () => {
     await waitFor(() => expect(onDeleted).toHaveBeenCalled())
     expect(onMutated).not.toHaveBeenCalled()
   })
+
+  it('sends notify_employee=false on an approve opt-out, and defaults it true otherwise', async () => {
+    const qc = new QueryClient()
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const spy = vi.spyOn(apiMod.api, 'updateLeave').mockResolvedValue({} as any)
+    const onMutated = vi.fn()
+    const { result } = renderHook(
+      () => useLeaveDecisionActions({ leaveId: 7, employeeId: 'G100', onMutated }),
+      { wrapper: wrapperFor(qc) },
+    )
+    result.current.updateMutation.mutate({ status: 'Approved', n: 'ok', notify: false })
+    await waitFor(() => expect(spy).toHaveBeenCalled())
+    expect(spy).toHaveBeenLastCalledWith(7, {
+      status: 'Approved',
+      notes: 'ok',
+      notify_employee: false,
+    })
+    // A decision with no `notify` (e.g. reject) keeps notifying.
+    result.current.updateMutation.mutate({ status: 'Rejected', n: '' })
+    await waitFor(() => expect(spy).toHaveBeenCalledTimes(2))
+    expect(spy).toHaveBeenLastCalledWith(7, {
+      status: 'Rejected',
+      notes: undefined,
+      notify_employee: true,
+    })
+  })
 })

@@ -24,7 +24,11 @@ interface Params {
 }
 
 interface Decisions {
-  updateMutation: UseMutationResult<unknown, Error, { status: LeaveStatus; n: string }>
+  updateMutation: UseMutationResult<
+    unknown,
+    Error,
+    { status: LeaveStatus; n: string; notify?: boolean }
+  >
   deleteMutation: UseMutationResult<unknown, Error, void>
   amendMutation: UseMutationResult<unknown, Error, { end_date: string; reason: string }>
 }
@@ -45,8 +49,10 @@ export function useLeaveDecisionActions({
   }
 
   const updateMutation = useMutation({
-    mutationFn: ({ status, n }: { status: LeaveStatus; n: string }) =>
-      api.updateLeave(leaveId, { status, notes: n || undefined }),
+    mutationFn: ({ status, n, notify }: { status: LeaveStatus; n: string; notify?: boolean }) =>
+      // notify defaults True — only the Approve action passes False to suppress
+      // that one notification; reject/cancel keep notifying.
+      api.updateLeave(leaveId, { status, notes: n || undefined, notify_employee: notify ?? true }),
     onSuccess: (_data, { status }) => {
       invalidate()
       if (status === 'Approved') toast.success(t('leaves.toast.approved'))

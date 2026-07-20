@@ -302,7 +302,9 @@ def update_leave(
     _cache_invalidate_employee(row.employee_id)
     # Notify the employee of the new step (approved / rejected / cancelled).
     # Best-effort — a gateway hiccup must never fail the status change.
-    if status_changed:
+    # notify_employee (default True) lets the approver suppress this one
+    # notification; the UI only offers the opt-out on Approve.
+    if status_changed and payload.notify_employee:
         try:
             from app.services import notify_dispatch
 

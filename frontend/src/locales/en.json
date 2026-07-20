@@ -442,6 +442,9 @@
       "softDelete": "Confirm delete",
       "confirmDelete": "Permanently remove this record?"
     },
+    "notify": {
+      "label": "Notify employee on approval"
+    },
     "fields": {
       "leave_type": "Type",
       "start_date": "Start",

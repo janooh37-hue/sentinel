@@ -459,6 +459,9 @@
       "softDelete": "تأكيد الحذف",
       "confirmDelete": "إزالة هذا السجل نهائيًا؟"
     },
+    "notify": {
+      "label": "إشعار الموظف عند القبول"
+    },
     "fields": {
       "leave_type": "النوع",
       "start_date": "من",

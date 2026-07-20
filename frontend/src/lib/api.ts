@@ -149,7 +149,12 @@ export type LeaveListItem = components['schemas']['LeaveListItem'] & {
 }
 export type LeaveListResponse = components['schemas']['LeaveListResponse']
 export type LeaveCreate = components['schemas']['LeaveCreate']
-export type LeaveUpdate = components['schemas']['LeaveUpdate']
+// notify_employee is server-defaulted (True) and openapi-typescript emits it as
+// required; make it optional for the client so status/date-only callers needn't
+// pass it — only the Approve action sets it (to suppress that one notification).
+export type LeaveUpdate = Omit<components['schemas']['LeaveUpdate'], 'notify_employee'> & {
+  notify_employee?: boolean
+}
 export type LeaveAmend = components['schemas']['LeaveAmend']
 export type LeaveBalanceRead = components['schemas']['LeaveBalanceRead']
 export type LeaveStatus = 'Pending' | 'Approved' | 'Rejected' | 'Cancelled' | 'Completed'
