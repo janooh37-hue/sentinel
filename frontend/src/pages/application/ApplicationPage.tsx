@@ -572,6 +572,8 @@ export function ApplicationPage(): React.JSX.Element {
     setPreviewJobStatus(null)
     setPreviewIsCommitted(false)
     setLastSaved(null)
+    // Per-book notify switch is not remembered — each newly-picked form starts On.
+    setNotifyEmployee(true)
     setSubmitError(null)
     setClassificationCode(null)
     setBodyMode('editor')
@@ -684,6 +686,8 @@ export function ApplicationPage(): React.JSX.Element {
     setPreviewJobStatus(null)
     setPreviewIsCommitted(false)
     setLastSaved(null)
+    // Per-book notify switch is not remembered — reset to On when clearing.
+    setNotifyEmployee(true)
     setActiveTab('fields')
     setSubmitError(null)
     setClassificationCode(null)
