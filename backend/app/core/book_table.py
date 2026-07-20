@@ -72,3 +72,90 @@ def detect_table_schema(doc: Document) -> list[str] | None:
                 return None
 
     return [_cell_text(tc) for tc in header_cells]
+
+
+def normalize_data_table(doc: Document) -> None:
+    """Convert the single clean data table to a docxtpl row-loop template.
+
+    Idempotent: running twice produces identical XML.  No-op when
+    ``detect_table_schema`` returns None (no table, two tables, or a table
+    with merged cells).
+
+    After the call the table has exactly four rows:
+      row 0 - header (unchanged, with tblHeader flag)
+      row 1 - {%tr for row in table_rows %}  (for-row)
+      row 2 - n cells: {{ row.c0 }}, {{ row.c1 }}, ... (data-row)
+      row 3 - {%tr endfor %}                           (endfor-row)
+    """
+    import copy
+
+    from lxml import etree
+
+    schema = detect_table_schema(doc)
+    if schema is None:
+        return
+
+    n = len(schema)
+    body: BaseOxmlElement = doc.element.body
+    tbl = body.findall(qn("w:tbl"))[0]
+    rows = tbl.findall(qn("w:tr"))
+    header_row = rows[0]
+
+    # --- capture run properties from first data row (or header if none / loop row) ---
+    style_source = rows[1] if len(rows) > 1 else header_row
+    # If previously normalized, first data row is the for-row — fall back to header
+    if len(rows) > 1:
+        first_data_cells = rows[1].findall(qn("w:tc"))
+        if first_data_cells:
+            first_text = _cell_text(first_data_cells[0])
+            if first_text.startswith("{%tr"):
+                style_source = header_row
+
+    style_cells = style_source.findall(qn("w:tc"))
+    rpr_copies: list[etree._Element | None] = []
+    for i in range(n):
+        tc = style_cells[i] if i < len(style_cells) else None
+        rpr = tc.find(f".//{qn('w:rPr')}") if tc is not None else None
+        rpr_copies.append(copy.deepcopy(rpr) if rpr is not None else None)
+
+    # --- remove all data rows (everything after the header) ---
+    for tr in rows[1:]:
+        tbl.remove(tr)
+
+    # --- build for-row: single cell with {%tr for row in table_rows %} ---
+    def _single_cell_row(text: str) -> etree._Element:
+        tr = etree.SubElement(tbl, qn("w:tr"))
+        tc = etree.SubElement(tr, qn("w:tc"))
+        p = etree.SubElement(tc, qn("w:p"))
+        r = etree.SubElement(p, qn("w:r"))
+        t = etree.SubElement(r, qn("w:t"))
+        t.text = text
+        return tr
+
+    _single_cell_row("{%tr for row in table_rows %}")
+
+    # --- build data-row: copy header row structure, replace cell contents ---
+    data_row = copy.deepcopy(header_row)
+    data_cells = data_row.findall(qn("w:tc"))
+    for i, tc in enumerate(data_cells):
+        # strip all paragraphs in this cell and replace with a single one
+        for p in tc.findall(qn("w:p")):
+            tc.remove(p)
+        p = etree.SubElement(tc, qn("w:p"))
+        r = etree.SubElement(p, qn("w:r"))
+        if rpr_copies[i] is not None:
+            r.insert(0, copy.deepcopy(rpr_copies[i]))
+        t = etree.SubElement(r, qn("w:t"))
+        t.text = f"{{{{ row.c{i} }}}}"
+        t.set("{http://www.w3.org/XML/1998/namespace}space", "preserve")
+    tbl.append(data_row)
+
+    _single_cell_row("{%tr endfor %}")
+
+    # --- set tblHeader on header row ---
+    trPr = header_row.find(qn("w:trPr"))
+    if trPr is None:
+        trPr = etree.Element(qn("w:trPr"))
+        header_row.insert(0, trPr)
+    if trPr.find(qn("w:tblHeader")) is None:
+        etree.SubElement(trPr, qn("w:tblHeader"))
