@@ -33,11 +33,14 @@ _RESERVED = (
     | {f"LPT{i}" for i in range(1, 10)}
 )
 
+_BASE_TEMPLATE_NAMES: frozenset[str] = frozenset({"base_text.docx", "base_table.docx"})
+
 
 @dataclass
 class TemplateInfo:
     name: str
     modified_at: datetime
+    kind: str = "custom"
 
 
 def templates_dir() -> Path:
@@ -71,6 +74,7 @@ def list_templates() -> list[TemplateInfo]:
         TemplateInfo(
             name=p.name,
             modified_at=datetime.fromtimestamp(p.stat().st_mtime, tz=UTC).replace(tzinfo=None),
+            kind="base" if p.name in _BASE_TEMPLATE_NAMES else "custom",
         )
         for p in templates_dir().iterdir()
         if p.is_file() and p.suffix.lower() == ".docx"

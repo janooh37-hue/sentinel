@@ -123,7 +123,7 @@ def list_word_templates(
 ) -> list[WordTemplateRead]:
     """Shared General Book boilerplate library (Word path)."""
     return [
-        WordTemplateRead(name=t.name, modified_at=t.modified_at)
+        WordTemplateRead(name=t.name, modified_at=t.modified_at, kind=t.kind)
         for t in book_template_service.list_templates()
     ]
 
