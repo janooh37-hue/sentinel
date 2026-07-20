@@ -13,16 +13,24 @@ import re
 # Book ref_number is ``{category_id}-{NNNN}`` where the category id is a short
 # alpha/alphanumeric code (e.g. GS, HR, 9), so the prefix is ``[A-Z0-9]{1,5}``.
 # The alternation also admits the classified General Book register shape
-# ``1/{tab}/GSSG/{serial}`` (e.g. ``1/5/GSSG/141``).
-_CLASSIFIED = r"\d{1,2}/\d{1,2}/GSSG/\d{1,6}"
+# ``1/{tab}/GSSG/{serial}`` (e.g. ``1/5/GSSG/141``) or new form ``1/{tab}/{serial}``
+# (e.g. ``1/5/141``).
+
+# Two distinct patterns for the classified General Book ref shape.
+# _CLASSIFIED_STAMPED: GSSG optional — used ONLY inside _STAMPED_RE where the
+#   Ref:/الرقم: anchor disambiguates from OCR slash-dates.
+# _CLASSIFIED_BARE: GSSG required — used in the anchor-less _BARE_RE so only
+#   legacy refs match without an anchor; new refs need the anchor.
+_CLASSIFIED_STAMPED = r"1/\d{1,2}/(?:GSSG/)?\d{1,6}(?!\d)"
+_CLASSIFIED_BARE = r"1/\d{1,2}/GSSG/\d{1,6}"
+
 _STAMPED_RE = re.compile(
-    rf"(?:Ref:|الرقم\s*[:：]?)\s*([A-Z0-9]{{1,5}}-\d{{3,5}}|{_CLASSIFIED})",  # noqa: RUF001
+    rf"(?:Ref:|الرقم\s*[:：]?)\s*([A-Z0-9]{{1,5}}-\d{{3,5}}|{_CLASSIFIED_STAMPED})",  # noqa: RUF001
     re.IGNORECASE,
 )
 
-# Matches any bare ``\bGS-0048\b`` / ``\b1/5/GSSG/141\b``-shaped token — wider,
-# used as fallback.
-_BARE_RE = re.compile(rf"\b([A-Z0-9]{{1,5}}-\d{{3,5}}|{_CLASSIFIED})\b", re.IGNORECASE)
+# Bare fallback — wider; GSSG stays required to prevent slash-date false matches.
+_BARE_RE = re.compile(rf"\b([A-Z0-9]{{1,5}}-\d{{3,5}}|{_CLASSIFIED_BARE})\b", re.IGNORECASE)
 
 # Loose ``Ref:``-anchored token — admits malformed OCR reads the strict pattern
 # rejects (e.g. ``50-@315``, ``56-5``).  Input for confusion-aware fuzzy match.
