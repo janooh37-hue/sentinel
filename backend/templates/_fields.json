@@ -50,6 +50,13 @@
         "required": false
       },
       {
+        "key": "hand_sign_manager",
+        "type": "hand_sign_checkbox",
+        "label_en": "Embed manager's saved signature",
+        "label_ar": "تضمين توقيع المدير المحفوظ",
+        "required": false
+      },
+      {
         "key": "submitter_id",
         "type": "submitter_picker",
         "label_en": "Submitter",
@@ -680,6 +687,13 @@
         "label_en": "Project Manager",
         "label_ar": "مدير المشروع",
         "required": false
+      },
+      {
+        "key": "hand_sign_manager",
+        "type": "hand_sign_checkbox",
+        "label_en": "Embed manager's saved signature",
+        "label_ar": "تضمين توقيع المدير المحفوظ",
+        "required": false
       }
     ]
   },
@@ -729,6 +743,13 @@
         "type": "manager_picker",
         "label_en": "Project Manager",
         "label_ar": "مدير المشروع",
+        "required": false
+      },
+      {
+        "key": "hand_sign_manager",
+        "type": "hand_sign_checkbox",
+        "label_en": "Embed manager's saved signature",
+        "label_ar": "تضمين توقيع المدير المحفوظ",
         "required": false
       }
     ]

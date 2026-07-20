@@ -166,6 +166,13 @@ def _adapt_leave_undertaking(data: dict[str, Any]) -> dict[str, Any]:
     return out
 
 
+def _adapt_leave_application(data: dict[str, Any]) -> dict[str, Any]:
+    """Keep both signatures inside the form's fixed-width signature cells."""
+    out = _adapt_common(data)
+    out["_sig_size_mm"] = min(int(out.get("_sig_size_mm", 32)), 32)
+    return out
+
+
 def _adapt_admin_leave(data: dict[str, Any]) -> dict[str, Any]:
     """Build the Administrative Leave Form's date-range token from the operator's
     ``start_date`` / ``end_date`` fields.
@@ -758,7 +765,7 @@ _FORM_REGISTRY: dict[str, dict[str, Any]] = {
         "adapter": _adapt_material_request,
         "post_process": _pp_material_request,
     },
-    "Leave Application Form": {"adapter": _adapt_common, "post_process": None},
+    "Leave Application Form": {"adapter": _adapt_leave_application, "post_process": None},
     "Passport Release Form": {"adapter": _adapt_common, "post_process": None},
     "Duty Resumption Form": {"adapter": _adapt_common, "post_process": None},
     "General Book": {"adapter": _adapt_general_book, "post_process": _pp_general_book},

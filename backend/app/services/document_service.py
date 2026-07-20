@@ -1007,13 +1007,18 @@ def generate_document(
             details={"template_id": template_id},
         )
 
-    # Per-form signing path (spec §3). Server-enforced manager embedding:
-    # the client value for the "manager" slot is overridden by policy.
-    signing_path = form_policy.signing_path_of(template_id)
-    embed_signature["manager"] = signing_path == "auto"
-
     fields_meta = load_fields_meta()
     form_meta = fields_meta.get(template_id, {})
+
+    # Forms with an explicit manager-signature checkbox honor the operator's
+    # choice; all other forms keep their server-enforced signing policy.
+    signing_path = form_policy.signing_path_of(template_id)
+    optional_manager_signature = any(
+        field.get("key") == "hand_sign_manager" for field in form_meta.get("fields", [])
+    )
+    if not optional_manager_signature:
+        embed_signature["manager"] = signing_path == "auto"
+
     is_personnel = form_meta.get("category", "personnel") == "personnel"
 
     employee: Employee | None = None
@@ -1173,9 +1178,7 @@ def generate_document(
         data["ref"] = raw_ref
 
     # Truthful embed flag: ``sig1_path`` survives _build_template_data only
-    # when the policy forced the embed on AND a manager with an on-disk
-    # signature actually resolved — so this records what the rendered DOCX
-    # really carries (an auto form without a resolvable manager stays False).
+    # when embedding was selected and a manager signature actually resolved.
     embed_mgr = bool(data.get("sig1_path"))
 
     # ------------------------------------------------------------------
