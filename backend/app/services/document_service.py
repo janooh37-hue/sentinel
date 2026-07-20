@@ -2005,9 +2005,27 @@ def render_signed_pdf(
     return _rel(pdf_path) if pdf_path is not None else _rel(docx_path)
 
 
-def download_filename_for(row: Document, ext: str) -> str:
+def download_filename_for(row: Document, ext: str, *, db: Session | None = None) -> str:
     """Filename for a document download, per export-naming rules (spec 2026-07-01)."""
-    from app.core.export_naming import export_filename
+    from app.core.export_naming import book_download_filename, export_filename
+
+    if row.template_id == "General Book" and db is not None:
+        book = (
+            db.execute(
+                select(Book)
+                .join(BookVersion, BookVersion.book_id == Book.id)
+                .where(BookVersion.document_id == row.id)
+            )
+            .scalars()
+            .first()
+        )
+        if book is not None:
+            return book_download_filename(
+                ref=book.ref_number,
+                subject=book.subject or "",
+                when=book.created_at,
+                ext=ext,
+            )
 
     meta = load_fields_meta().get(row.template_id) or {}
     arabic_name = meta.get("name_ar", "")
