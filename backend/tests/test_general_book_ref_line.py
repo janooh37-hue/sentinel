@@ -65,6 +65,22 @@ def _header_text(docx_path) -> str:
     return "\n".join(parts)
 
 
+def test_ref_renders_rtl_segment_order_directly_after_label(tmp_path):
+    from docx import Document
+
+    out = tmp_path / "out.docx"
+    DocxEngine(TEMPLATES_DIR).fill("General Book", {**_BASE_DATA, "ref": "1/15/141"}, out)
+    doc = Document(str(out))
+    ref_para = next(p for p in doc.paragraphs if "1/15/141" in p.text)
+    non_empty = [r for r in ref_para.runs if r.text.strip()]
+    label_idx = next(i for i, r in enumerate(non_empty) if "الرقم" in r.text)
+    value_idx = next(i for i, r in enumerate(non_empty) if "1/15/141" in r.text)
+    assert value_idx == label_idx + 1
+    value_run = non_empty[value_idx]
+    assert value_run.text == "1/15/141"  # verbatim — bidi reverses in Word, not Python
+    assert value_run.font.rtl is True
+
+
 def test_word_book_has_ref_line_and_no_header_stamp(db_session, admin_user):
     """Word-path create: body الرقم line present, English Ref: stamp gone."""
     from app.services import word_book_service
