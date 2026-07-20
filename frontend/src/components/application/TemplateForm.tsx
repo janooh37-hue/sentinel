@@ -45,6 +45,7 @@ import { EmployeesTableField } from './fields/EmployeesTableField'
 import { ViolationCheckboxesField } from './fields/ViolationCheckboxesField'
 import { ViolationComboField } from './fields/ViolationComboField'
 import { ClassificationField } from './fields/ClassificationField'
+import { TableGridField } from './TableGridField'
 import { WordTemplateManager } from './WordTemplateManager'
 
 export interface TemplateFormProps {
@@ -279,8 +280,10 @@ export function TemplateForm({
   onExtractionConsumed,
   classificationCode,
   onClassificationChange,
-  bodyMode = 'editor',
-  onBodyModeChange,
+  bodyMode = 'word',
+  // M5-1: onBodyModeChange is intentionally NOT destructured — the editor/word
+  // toggle is hidden for General Books. It stays in TemplateFormProps so callers
+  // are unchanged; re-destructure it when the toggle block is restored.
   templateName,
   onTemplateNameChange,
 }: TemplateFormProps): React.JSX.Element {
@@ -381,12 +384,19 @@ export function TemplateForm({
   // Word mode is purely the body-mode toggle — classification is orthogonal
   // (required for BOTH modes; it only drives the ref, never the editor).
   const wordMode = isGeneralBook && bodyMode === 'word'
-  const showBodyModeToggle = isGeneralBook && !!onBodyModeChange
+  // M5-1: showBodyModeToggle unused while toggle is commented out; kept for revert.
+  // const showBodyModeToggle = isGeneralBook && !!onBodyModeChange
 
   const wordTemplatesQuery = useQuery({
     queryKey: ['word-templates'],
     queryFn: api.listWordTemplates,
     enabled: !!wordMode,
+  })
+
+  const tableSchemaQuery = useQuery({
+    queryKey: ['word-template-table', templateName],
+    queryFn: () => api.getWordTemplateTable(templateName!),
+    enabled: wordMode && !!templateName,
   })
 
   // Group fields by their `group` attribute.
@@ -452,8 +462,8 @@ export function TemplateForm({
         </div>
       )}
 
-      {/* General Book: body-mode pill toggle (always available) */}
-      {showBodyModeToggle && (
+      {/* M5-1: body-mode pill toggle hidden (General Books are word-only). Restore by uncommenting. */}
+      {/* {showBodyModeToggle && (
         <div className="mb-3 flex gap-1" role="group" aria-label={t('books.word.writingMode')}>
           {(['editor', 'word'] as const).map((mode) => (
             <button
@@ -472,7 +482,7 @@ export function TemplateForm({
             </button>
           ))}
         </div>
-      )}
+      )} */}
 
       {/* General Book: template picker + manage button — only in word mode */}
       {wordMode && onTemplateNameChange && (
@@ -488,11 +498,26 @@ export function TemplateForm({
               aria-label={t('books.word.templatePicker')}
             >
               <option value="">{t('books.word.templateNone')}</option>
-              {(wordTemplatesQuery.data ?? []).map((tpl) => (
-                <option key={tpl.name} value={tpl.name}>
-                  {tpl.name.replace(/\.docx$/i, '')}
-                </option>
-              ))}
+              {(['base', 'custom'] as const).map((kind) => {
+                const group = (wordTemplatesQuery.data ?? []).filter((tpl) => tpl.kind === kind)
+                if (group.length === 0) return null
+                return (
+                  <optgroup
+                    key={kind}
+                    label={t(
+                      kind === 'base'
+                        ? 'books.word.baseTemplate.group'
+                        : 'books.word.customTemplate.group',
+                    )}
+                  >
+                    {group.map((tpl) => (
+                      <option key={tpl.name} value={tpl.name}>
+                        {tpl.name.replace(/\.docx$/i, '')}
+                      </option>
+                    ))}
+                  </optgroup>
+                )
+              })}
             </select>
             <button
               type="button"
@@ -515,6 +540,25 @@ export function TemplateForm({
             selectedTemplateName={templateName}
             onSelectedTemplateNameChange={onTemplateNameChange}
           />
+          {/* Table grid — only when template has a table */}
+          {templateName && tableSchemaQuery.isPending && (
+            <p className="mt-2 text-[0.75em] text-muted-foreground">
+              {t('books.word.tableGrid.loading')}
+            </p>
+          )}
+          {templateName && tableSchemaQuery.isError && (
+            <p className="mt-2 text-[0.75em] text-destructive">
+              {t('books.word.tableGrid.error')}
+            </p>
+          )}
+          {templateName && tableSchemaQuery.data?.has_table && (
+            <div className="mt-3">
+              <TableGridField
+                name="table_rows"
+                columns={tableSchemaQuery.data.columns}
+              />
+            </div>
+          )}
         </div>
       )}
 

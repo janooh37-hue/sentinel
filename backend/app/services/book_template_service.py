@@ -14,10 +14,12 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 
+from docx import Document as DocxDocument
 from sqlalchemy.orm import Session
 
 from app.api.errors import AppError
 from app.config import get_settings
+from app.core.book_table import normalized_table_columns
 from app.core.book_template_retokenize import (
     retokenize_general_book,
     validate_book_template,
@@ -31,11 +33,14 @@ _RESERVED = (
     | {f"LPT{i}" for i in range(1, 10)}
 )
 
+_BASE_TEMPLATE_NAMES: frozenset[str] = frozenset({"base_text.docx", "base_table.docx"})
+
 
 @dataclass
 class TemplateInfo:
     name: str
     modified_at: datetime
+    kind: str = "custom"
 
 
 def templates_dir() -> Path:
@@ -69,6 +74,7 @@ def list_templates() -> list[TemplateInfo]:
         TemplateInfo(
             name=p.name,
             modified_at=datetime.fromtimestamp(p.stat().st_mtime, tz=UTC).replace(tzinfo=None),
+            kind="base" if p.name in _BASE_TEMPLATE_NAMES else "custom",
         )
         for p in templates_dir().iterdir()
         if p.is_file() and p.suffix.lower() == ".docx"
@@ -167,3 +173,34 @@ def rename_template(old: str, new: str) -> TemplateInfo:
         name=dest.name,
         modified_at=datetime.fromtimestamp(dest.stat().st_mtime, tz=UTC).replace(tzinfo=None),
     )
+
+
+def table_schema_for(name: str) -> tuple[bool, list[str]]:
+    """Return (has_table, columns) for a library template.
+
+    Uses normalized_table_columns (not detect_table_schema) because stored
+    templates are already retokenized — their table has directive rows that
+    cause detect_table_schema to return None.
+
+    Raises AppError 404 if the template file does not exist.
+    """
+    path = resolve_template_path(name)
+    if not path.is_file():
+        raise AppError("TEMPLATE_NOT_FOUND", "القالب غير موجود", http_status=404)
+    doc = DocxDocument(str(path))
+    cols = normalized_table_columns(doc)
+    if cols is None:
+        return (False, [])
+    return (True, cols)
+
+
+def delete_template(name: str) -> None:
+    """Delete a library template by name.
+
+    Uses safe_template_name for traversal protection (same guard as rename_template).
+    Raises AppError 404 if the file does not exist.
+    """
+    path = templates_dir() / safe_template_name(name)
+    if not path.is_file():
+        raise AppError("TEMPLATE_NOT_FOUND", "القالب غير موجود", http_status=404)
+    path.unlink()

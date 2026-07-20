@@ -10,7 +10,7 @@
 import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
-import { Loader2, Pencil } from 'lucide-react'
+import { Loader2, Pencil, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
 
 import { api, apiErrorMessage } from '@/lib/api'
@@ -68,6 +68,21 @@ export function WordTemplateManager({
   const submitRename = (oldName: string): void => {
     if (renameMutation.isPending || !newName.trim()) return
     renameMutation.mutate({ oldName, name: newName.trim() })
+  }
+
+  const deleteMutation = useMutation({
+    mutationFn: (name: string) => api.deleteWordTemplate(name),
+    onSuccess: (_, name) => {
+      toast.success(t('books.word.deleted'))
+      if (selectedTemplateName === name) onSelectedTemplateNameChange?.(null)
+      void qc.invalidateQueries({ queryKey: ['word-templates'] })
+    },
+    onError: (err) => toast.error(apiErrorMessage(err)),
+  })
+
+  const handleDelete = (name: string): void => {
+    if (!window.confirm(t('books.word.deleteTemplateConfirm'))) return
+    deleteMutation.mutate(name)
   }
 
   const rows = templatesQuery.data ?? []
@@ -155,6 +170,17 @@ export function WordTemplateManager({
                       <Pencil className="h-3 w-3" aria-hidden />
                       {t('books.word.renameTemplate')}
                     </button>
+                    {tpl.kind !== 'base' && (
+                      <button
+                        type="button"
+                        disabled={deleteMutation.isPending}
+                        onClick={() => handleDelete(tpl.name)}
+                        className="inline-flex shrink-0 items-center gap-1 rounded-lg border border-hairline px-2 py-1.5 text-[0.74em] font-semibold text-destructive hover:text-destructive/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
+                      >
+                        <Trash2 className="h-3 w-3" aria-hidden />
+                        {t('books.word.deleteTemplate')}
+                      </button>
+                    )}
                   </>
                 )}
               </li>

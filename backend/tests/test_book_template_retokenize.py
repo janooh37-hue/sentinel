@@ -19,7 +19,7 @@ def _finished_book(tmp_path: Path, *, ref_line: bool = True, spacing: str = "") 
     p = tmp_path / "book.docx"
     doc = Document()
     if ref_line:
-        doc.add_paragraph(f"الرقم:{spacing}1/{spacing}5{spacing}/GSSG/{spacing}140")
+        doc.add_paragraph(f"الرقم:{spacing}1/{spacing}5{spacing}/{spacing}140")
     doc.add_paragraph("التاريخ: 13/07/2026")
     doc.add_paragraph("السيد / مدير الإدارة المحترم")
     doc.add_paragraph("الموضوع: التصاريح الأمنية بتاريخ 01/07/2026")
@@ -37,8 +37,8 @@ def _rendered_text(tpl: Path, tmp_path: Path, **data) -> str:
 def test_ref_and_date_retokenized(tmp_path):
     p = _finished_book(tmp_path)
     retokenize_general_book(p)
-    text = _rendered_text(p, tmp_path, ref="9/9/GSSG/999", date="31-12-2099")
-    assert "الرقم: 9/9/GSSG/999" in text
+    text = _rendered_text(p, tmp_path, ref="9/9/999", date="31-12-2099")
+    assert "الرقم: 9/9/999" in text
     assert "التاريخ: 31-12-2099" in text
     assert "140" not in text  # old baked ref gone
 
@@ -46,21 +46,21 @@ def test_ref_and_date_retokenized(tmp_path):
 def test_legacy_spacing_handled(tmp_path):
     p = _finished_book(tmp_path, spacing=" ")
     retokenize_general_book(p)
-    text = _rendered_text(p, tmp_path, ref="9/9/GSSG/999", date="31-12-2099")
-    assert "الرقم: 9/9/GSSG/999" in text
+    text = _rendered_text(p, tmp_path, ref="9/9/999", date="31-12-2099")
+    assert "الرقم: 9/9/999" in text
 
 
 def test_missing_ref_line_inserted_above_date(tmp_path):
     p = _finished_book(tmp_path, ref_line=False)
     retokenize_general_book(p)
-    text = _rendered_text(p, tmp_path, ref="9/9/GSSG/999", date="31-12-2099")
-    assert text.index("الرقم: 9/9/GSSG/999") < text.index("التاريخ:")
+    text = _rendered_text(p, tmp_path, ref="9/9/999", date="31-12-2099")
+    assert text.index("الرقم: 9/9/999") < text.index("التاريخ:")
 
 
 def test_prose_date_untouched(tmp_path):
     p = _finished_book(tmp_path)
     retokenize_general_book(p)
-    text = _rendered_text(p, tmp_path, ref="9/9/GSSG/999", date="31-12-2099")
+    text = _rendered_text(p, tmp_path, ref="9/9/999", date="31-12-2099")
     assert "بتاريخ 01/07/2026" in text  # date inside الموضوع prose survives
 
 
@@ -71,7 +71,7 @@ def test_foreign_jinja_neutralized(tmp_path):
     doc.add_paragraph("خصم {{ 7*7 }} بالمئة {% if x %}شرط{% endif %}")
     doc.save(str(p))
     retokenize_general_book(p)
-    text = _rendered_text(p, tmp_path, ref="9/9/GSSG/999", date="31-12-2099")
+    text = _rendered_text(p, tmp_path, ref="9/9/999", date="31-12-2099")
     assert "49" not in text  # never executed
     assert "7*7" in text  # visible text preserved
     assert "شرط" in text  # {% if %} inert, content kept literal
@@ -97,7 +97,7 @@ def test_split_delimiter_fails_closed(tmp_path):
     except ValueError:
         pass  # rejected at save time — fail-closed holds
     else:
-        text = _rendered_text(p, tmp_path, ref="9/9/GSSG/999", date="31-12-2099")
+        text = _rendered_text(p, tmp_path, ref="9/9/999", date="31-12-2099")
         assert "49" not in text  # survived validation, but never executed
 
 
@@ -146,3 +146,108 @@ def test_validate_rejects_unretokenized_doc(tmp_path):
     p = _finished_book(tmp_path)
     with pytest.raises(ValueError):
         validate_book_template(p)  # no tokens → dummy values never render
+
+
+def test_footer_g_token_on_sections0_footer(tmp_path):
+    from docx import Document
+
+    p = _finished_book(tmp_path)
+    retokenize_general_book(p)
+    footer = Document(str(p)).sections[0].footer
+    assert "{{ submitter_g }}" in "\n".join(pp.text for pp in footer.paragraphs)
+
+
+def test_footer_g_token_is_9pt(tmp_path):
+    from docx import Document
+    from docx.shared import Pt
+
+    p = _finished_book(tmp_path)
+    retokenize_general_book(p)
+    footer = Document(str(p)).sections[0].footer
+    run = next(
+        (r for para in footer.paragraphs for r in para.runs if "{{ submitter_g }}" in r.text), None
+    )
+    assert run is not None and run.font.size == Pt(9)
+
+
+def test_footer_g_reuses_trailing_empty_paragraph(tmp_path):
+    from docx import Document
+
+    p = _finished_book(tmp_path)
+    doc = Document(str(p))
+    doc.sections[0].footer.add_paragraph()
+    doc.save(str(p))
+    retokenize_general_book(p)
+    paras = Document(str(p)).sections[0].footer.paragraphs
+    assert "{{ submitter_g }}" in paras[-1].text
+
+
+def test_ref_font_matches_date_font_on_existing_ref_line(tmp_path):
+    from docx import Document
+    from docx.shared import Pt
+
+    p = tmp_path / "font_book.docx"
+    doc = Document()
+    ref_p = doc.add_paragraph()
+    rr = ref_p.add_run("الرقم: 1/5/140")
+    rr.font.size = Pt(16)
+    date_p = doc.add_paragraph()
+    rd = date_p.add_run("التاريخ: 13/07/2026")
+    rd.font.size = Pt(12)
+    doc.add_paragraph("نص الكتاب هنا")
+    doc.save(str(p))
+    retokenize_general_book(p)
+    doc2 = Document(str(p))
+    ref_para = next(pp for pp in doc2.paragraphs if "{{ ref }}" in pp.text)
+    ref_run = next(r for r in ref_para.runs if "{{ ref }}" in r.text)
+    assert ref_run.font.size == Pt(12)
+
+
+# ---------------------------------------------------------------------------
+# Table-aware validation tests (M4-4)
+# ---------------------------------------------------------------------------
+
+
+def _table_template(tmp_path: Path, n_cols: int = 2) -> Path:
+    from docx import Document
+
+    p = tmp_path / f"tbl_tpl_{n_cols}.docx"
+    doc = Document()
+    doc.add_paragraph("الرقم: 1/5/141")
+    doc.add_paragraph("التاريخ: 20-07-2026")
+    doc.add_paragraph("الموضوع: موضوع الكتاب الاختباري في النظام المحترم")
+    headers = [f"عمود {i}" for i in range(n_cols)]
+    t = doc.add_table(rows=2, cols=n_cols)
+    for i, h in enumerate(headers):
+        t.cell(0, i).text = h
+    for i in range(n_cols):
+        t.cell(1, i).text = f"بيانات {i}"
+    doc.save(str(p))
+    retokenize_general_book(p)
+    return p
+
+
+def test_validate_table_template_passes(tmp_path):
+    validate_book_template(_table_template(tmp_path, n_cols=3))  # must not raise
+
+
+def test_validate_body_preservation_excludes_table_content(tmp_path):
+    from docx import Document
+
+    p = tmp_path / "long_header.docx"
+    doc = Document()
+    doc.add_paragraph("الرقم: 1/5/141")
+    doc.add_paragraph("التاريخ: 20-07-2026")
+    doc.add_paragraph("الموضوع: كتاب مع جدول بيانات مفصّلة للاختبار")
+    t = doc.add_table(rows=2, cols=1)
+    t.cell(0, 0).text = "بيانات الموظف المفصّلة جداً"  # >=15 chars header cell
+    t.cell(1, 0).text = "قيمة بيانات مؤقتة للاختبار"
+    doc.save(str(p))
+    retokenize_general_book(p)
+    validate_book_template(p)  # must not raise despite long header cell text
+
+
+def test_validate_no_double_expand_cell_value(tmp_path):
+    # Handled internally: validate injects a dummy cell value "{{ ref }}" and asserts
+    # it renders literally. If double-expansion occurred, validate would raise.
+    validate_book_template(_table_template(tmp_path, n_cols=1))

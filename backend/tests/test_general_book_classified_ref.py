@@ -1,7 +1,7 @@
 """General Book ref unification — the rich-editor (HugeRTE) generate path
 allocates from the SAME classified register as the Word path.
 
-Every committed General Book ref is ``1/{tab}/GSSG/{serial}``; the legacy
+Every committed General Book ref is ``1/{tab}/{serial}``; the legacy
 GS-#### counter is retired for this form. Previews stay ref-free.
 """
 
@@ -42,8 +42,8 @@ def test_committed_general_book_gets_classified_ref(gen_env):
         commit=True,
         classification_code="5/1",
     )
-    assert result.ref_number == "1/5/GSSG/1"
-    book = db.query(Book).filter_by(ref_number="1/5/GSSG/1").one()
+    assert result.ref_number == "1/5/1"
+    book = db.query(Book).filter_by(ref_number="1/5/1").one()
     assert book.classification_code == "5/1"
     assert book.category_id == "GS"
 
@@ -130,5 +130,5 @@ def test_serial_is_shared_with_word_path(gen_env, tmp_path, monkeypatch):
         cc=None,
         manager_id=None,
     )
-    assert r1.ref_number == "1/3/GSSG/1"
-    assert info.ref_number == "1/5/GSSG/2"
+    assert r1.ref_number == "1/3/1"
+    assert info.ref_number == "1/5/2"

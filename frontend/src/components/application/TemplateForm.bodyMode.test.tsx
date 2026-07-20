@@ -1,5 +1,5 @@
 /**
- * Task 12 — Body-mode toggle on plain General Book form.
+ * M5-1 — Body-mode toggle HIDDEN for General Books (word-only flow).
  *
  * TDD: RED (before implementation) → GREEN (after).
  *
@@ -9,13 +9,13 @@
  * test doesn't need a real HugeRTE DOM.
  *
  * Asserts under lng=ar (per i18n-tests-must-assert-arabic memory note):
- *  - Toggle renders Arabic labels "اكتب هنا" and "اكتب في Word"
- *  - Default (bodyMode='editor'): rich editor is visible
- *  - After selecting "اكتب في Word": rich editor is hidden
- *  - Classification is orthogonal: toggle + editor render with a code picked
+ *  - Toggle group (role="group") is NOT rendered for General Books
+ *  - "اكتب هنا" pill is NOT present
+ *  - Rich editor is hidden (bodyMode always treated as 'word')
+ *  - Classification is orthogonal: toggle is still gone even with a code picked
  */
 
-import { render, screen, fireEvent } from '@testing-library/react'
+import { render, screen, waitFor } from '@testing-library/react'
 import { describe, it, expect, beforeAll, afterAll, vi, beforeEach } from 'vitest'
 import i18n from 'i18next'
 import { useForm, FormProvider } from 'react-hook-form'
@@ -39,6 +39,7 @@ vi.mock('@/lib/api', () => ({
     listWordTemplates: vi.fn().mockResolvedValue([]),
     listManagers: vi.fn().mockResolvedValue([]),
     listRecipients: vi.fn().mockResolvedValue([]),
+    getWordTemplateTable: vi.fn().mockResolvedValue({ has_table: false, columns: [] }),
   },
 }))
 
@@ -105,7 +106,7 @@ function Host({
   )
 }
 
-describe('TemplateForm body-mode toggle (Arabic, Task 12)', () => {
+describe('TemplateForm body-mode toggle (M5-1: hidden for General Books)', () => {
   beforeAll(async () => {
     i18n.addResourceBundle('ar', 'translation', ar, true, true)
     await i18n.changeLanguage('ar')
@@ -114,49 +115,32 @@ describe('TemplateForm body-mode toggle (Arabic, Task 12)', () => {
     await i18n.changeLanguage('en')
   })
 
-  it('renders Arabic toggle labels اكتب هنا and اكتب في Word', () => {
-    render(<Host bodyMode="editor" onBodyModeChange={vi.fn()} />)
-    expect(screen.getByText('اكتب هنا')).toBeInTheDocument()
-    expect(screen.getByText('اكتب في Word')).toBeInTheDocument()
+  it('does NOT render the toggle group (role="group" aria-label="وضع الكتابة")', () => {
+    render(<Host bodyMode="word" onBodyModeChange={vi.fn()} />)
+    expect(screen.queryByRole('group', { name: 'وضع الكتابة' })).not.toBeInTheDocument()
   })
 
-  it('default editor mode: rich editor IS visible', () => {
-    render(<Host bodyMode="editor" onBodyModeChange={vi.fn()} />)
-    expect(screen.getByTestId('rich-editor-body')).toBeInTheDocument()
+  it('does NOT render the "اكتب هنا" (editor) pill', () => {
+    render(<Host bodyMode="word" onBodyModeChange={vi.fn()} />)
+    expect(screen.queryByText('اكتب هنا')).not.toBeInTheDocument()
   })
 
-  it('word mode: rich editor is HIDDEN', () => {
+  it('does NOT render the "اكتب في Word" pill', () => {
+    render(<Host bodyMode="word" onBodyModeChange={vi.fn()} />)
+    expect(screen.queryByText('اكتب في Word')).not.toBeInTheDocument()
+  })
+
+  it('rich editor is hidden (word mode is the only mode)', () => {
     render(<Host bodyMode="word" onBodyModeChange={vi.fn()} />)
     expect(screen.queryByTestId('rich-editor-body')).not.toBeInTheDocument()
   })
 
-  it('clicking "اكتب في Word" calls onBodyModeChange("word")', () => {
-    const onBodyModeChange = vi.fn()
-    render(<Host bodyMode="editor" onBodyModeChange={onBodyModeChange} />)
-    fireEvent.click(screen.getByText('اكتب في Word'))
-    expect(onBodyModeChange).toHaveBeenCalledWith('word')
-  })
-
-  it('clicking "اكتب هنا" calls onBodyModeChange("editor")', () => {
-    const onBodyModeChange = vi.fn()
-    render(<Host bodyMode="word" onBodyModeChange={onBodyModeChange} />)
-    fireEvent.click(screen.getByText('اكتب هنا'))
-    expect(onBodyModeChange).toHaveBeenCalledWith('editor')
-  })
-
-  it('toggle IS rendered when a classification is picked — classification is orthogonal to body mode', () => {
+  it('toggle is also absent when a classification code is picked — classification is orthogonal to body mode', () => {
     render(
-      <Host bodyMode="editor" onBodyModeChange={vi.fn()} classificationCode="5/1" />,
+      <Host bodyMode="word" onBodyModeChange={vi.fn()} classificationCode="5/1" />,
     )
-    expect(screen.getByText('اكتب هنا')).toBeInTheDocument()
-    expect(screen.getByText('اكتب في Word')).toBeInTheDocument()
-  })
-
-  it('classification picked + editor mode: rich editor stays visible', () => {
-    render(
-      <Host bodyMode="editor" onBodyModeChange={vi.fn()} classificationCode="5/1" />,
-    )
-    expect(screen.getByTestId('rich-editor-body')).toBeInTheDocument()
+    expect(screen.queryByRole('group', { name: 'وضع الكتابة' })).not.toBeInTheDocument()
+    expect(screen.queryByText('اكتب هنا')).not.toBeInTheDocument()
   })
 })
 
@@ -227,7 +211,7 @@ describe('TemplateForm template picker (Arabic, Task 11)', () => {
 
   it('shows the template picker in word mode with a none default', async () => {
     vi.mocked(api.listWordTemplates).mockResolvedValue([
-      { name: 'الصيانة.docx', modified_at: '2026-07-19T00:00:00' },
+      { name: 'الصيانة.docx', modified_at: '2026-07-19T00:00:00', kind: 'custom' },
     ])
     render(<HostWithRecipient bodyMode="word" />)
     expect(await screen.findByText('بدون قالب')).toBeInTheDocument()
@@ -236,9 +220,105 @@ describe('TemplateForm template picker (Arabic, Task 11)', () => {
 
   it('hides recipient/cc/manager fields when a template is selected', () => {
     vi.mocked(api.listWordTemplates).mockResolvedValue([
-      { name: 'الصيانة.docx', modified_at: '2026-07-19T00:00:00' },
+      { name: 'الصيانة.docx', modified_at: '2026-07-19T00:00:00', kind: 'custom' },
     ])
     render(<HostWithRecipient bodyMode="word" templateName="الصيانة.docx" />)
     expect(screen.queryByText(/المرسل إليه|recipient/i)).not.toBeInTheDocument()
+  })
+})
+
+// ---------------------------------------------------------------------------
+// M4d-4 — TableGridField wired into TemplateForm + picker grouped by kind
+// ---------------------------------------------------------------------------
+
+// Minimal AR bundle covering keys the new code touches (avoids full ar.json OOM).
+const AR_BUNDLE_M4D: Record<string, unknown> = {
+  books: {
+    word: {
+      baseTemplate: { group: 'ابدأ من' },
+      customTemplate: { group: 'قوالبي' },
+      tableGrid: {
+        loading: 'جارٍ تحميل أعمدة الجدول…',
+        error: 'تعذّر تحميل أعمدة الجدول.',
+        empty: 'لا صفوف بعد — أضف صفاً للبدء.',
+        columnLabel: 'عمود {{n}}',
+      },
+      templatePicker: 'القالب',
+      templateNone: 'بدون قالب',
+    },
+  },
+}
+
+function HostForTableGrid({ templateName }: { templateName: string | null }) {
+  const form = useForm({ defaultValues: {} })
+  return (
+    <QueryClientProvider client={makeQc()}>
+      <FormProvider {...form}>
+        <TemplateForm
+          templateId="General Book"
+          schema={GENERAL_BOOK_SCHEMA}
+          form={form}
+          classificationCode={null}
+          onClassificationChange={vi.fn()}
+          bodyMode="word"
+          onBodyModeChange={vi.fn()}
+          templateName={templateName}
+          onTemplateNameChange={vi.fn()}
+        />
+      </FormProvider>
+    </QueryClientProvider>
+  )
+}
+
+describe('TemplateForm M4d-4 — TableGridField wiring + picker grouping', () => {
+  beforeAll(async () => {
+    i18n.addResourceBundle('ar', 'translation', AR_BUNDLE_M4D as never, true, true)
+    await i18n.changeLanguage('ar')
+  })
+  afterAll(async () => {
+    await i18n.changeLanguage('en')
+  })
+
+  beforeEach(() => {
+    vi.mocked(api.getWordTemplateTable).mockResolvedValue({ has_table: false, columns: [] })
+    vi.mocked(api.listWordTemplates).mockResolvedValue([])
+  })
+
+  it('does NOT render grid when has_table is false', async () => {
+    vi.mocked(api.getWordTemplateTable).mockResolvedValue({ has_table: false, columns: [] })
+    vi.mocked(api.listWordTemplates).mockResolvedValue([
+      { name: 'نص.docx', modified_at: '2026-07-19T00:00:00', kind: 'base' },
+    ])
+    render(<HostForTableGrid templateName="نص.docx" />)
+    // Wait for the query to settle then assert no table
+    await waitFor(() => expect(vi.mocked(api.getWordTemplateTable)).toHaveBeenCalled())
+    expect(screen.queryByRole('table')).not.toBeInTheDocument()
+  })
+
+  it('renders grid headers when has_table is true', async () => {
+    vi.mocked(api.getWordTemplateTable).mockResolvedValue({
+      has_table: true,
+      columns: ['المادة', 'العدد'],
+    })
+    vi.mocked(api.listWordTemplates).mockResolvedValue([
+      { name: 'جدول.docx', modified_at: '2026-07-19T00:00:00', kind: 'base' },
+    ])
+    render(<HostForTableGrid templateName="جدول.docx" />)
+    await waitFor(() => expect(screen.getByText('المادة')).toBeInTheDocument())
+    expect(screen.getByText('العدد')).toBeInTheDocument()
+  })
+
+  it('picker renders base and custom options as separate groups', async () => {
+    vi.mocked(api.listWordTemplates).mockResolvedValue([
+      { name: 'نص.docx', modified_at: '2026-07-19T00:00:00', kind: 'base' },
+      { name: 'صيانة.docx', modified_at: '2026-07-19T00:00:00', kind: 'custom' },
+    ])
+    const { container } = render(<HostForTableGrid templateName={null} />)
+    // Both options must appear in the picker
+    expect(await screen.findByText('نص')).toBeInTheDocument()
+    expect(await screen.findByText('صيانة')).toBeInTheDocument()
+    // Groups (optgroup labels are attributes, not text nodes — query via DOM)
+    expect(container.querySelector('optgroup[label="ابدأ من"]')).not.toBeNull()
+    expect(container.querySelector('optgroup[label="قوالبي"]')).not.toBeNull()
   })
 })

@@ -64,17 +64,17 @@ def test_create_classified_book_returns_session_info(db_session, tmp_path, monke
         manager_id=None,
     )
 
-    assert info.ref_number == "1/5/GSSG/1"
+    assert info.ref_number == "1/5/1"
     assert info.book_id is not None
     assert info.token
-    assert info.filename == "1-5-GSSG-1.docx"
+    assert info.filename == "1-5-1.docx"
     assert info.word_url.startswith("ms-word:ofe|u|")
     assert info.dav_url
 
     # Book row exists
     book = db_session.get(Book, info.book_id)
     assert book is not None
-    assert book.ref_number == "1/5/GSSG/1"
+    assert book.ref_number == "1/5/1"
     assert book.classification_code == "5/1"
     assert book.category_id == "GS"
     assert book.approval_state == "none"
@@ -155,8 +155,8 @@ def test_two_classified_creates_get_sequential_serials(db_session, tmp_path, mon
         cc=None,
         manager_id=None,
     )
-    assert info1.ref_number == "1/3/GSSG/1"
-    assert info2.ref_number == "1/5/GSSG/2"
+    assert info1.ref_number == "1/3/1"
+    assert info2.ref_number == "1/5/2"
 
 
 def test_unknown_classification_code_raises_422(db_session, tmp_path, monkeypatch):

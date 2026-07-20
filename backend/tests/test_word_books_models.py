@@ -6,7 +6,7 @@ from sqlalchemy.exc import IntegrityError
 from app.db.models import Book, BookCategory, BookEditSession
 
 
-def _book(db, ref="1/5/GSSG/900"):
+def _book(db, ref="1/5/900"):
     if db.get(BookCategory, "GS") is None:
         db.add(BookCategory(id="GS", prefix="GS"))
     b = Book(category_id="GS", ref_number=ref, subject="t", classification_code="5/1")

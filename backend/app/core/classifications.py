@@ -72,4 +72,4 @@ def get_classification(code: str) -> Classification | None:
 
 
 def classified_ref(tab: int, serial: int) -> str:
-    return f"1/{tab}/GSSG/{serial}"
+    return f"1/{tab}/{serial}"

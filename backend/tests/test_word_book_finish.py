@@ -357,7 +357,7 @@ def test_finish_no_active_session_raises_409(db_session, tmp_path, monkeypatch):
 
 
 def test_finish_classified_book_slashed_ref_no_nested_dirs(db_session, tmp_path, monkeypatch):
-    """Classified book with a slashed ref (e.g. 1/5/GSSG/1) must not create nested dirs.
+    """Classified book with a slashed ref (e.g. 1/5/1) must not create nested dirs.
 
     Before the fix, finish_word_session passed ref_number verbatim to
     _build_docx_filename, whose space-strip left the '/' intact, turning the
@@ -384,7 +384,7 @@ def test_finish_classified_book_slashed_ref_no_nested_dirs(db_session, tmp_path,
     user = _user(db_session)
 
     # Build a classified Book with a slashed ref directly (mirrors production format)
-    slashed_ref = "1/5/GSSG/1"
+    slashed_ref = "1/5/1"
     book = Book(
         category_id="C",
         ref_number=slashed_ref,
@@ -427,8 +427,6 @@ def test_finish_classified_book_slashed_ref_no_nested_dirs(db_session, tmp_path,
 
     # No stray nested dirs: the parent of the output file is the single output dir
     output_parent = Path(doc.docx_path).parent
-    assert output_parent.name not in ("5", "GSSG"), (
-        f"Path has nested dirs from raw slash: {doc.docx_path}"
-    )
+    assert output_parent.name not in ("5",), f"Path has nested dirs from raw slash: {doc.docx_path}"
     # The path must not contain the raw slashed ref as directory components
-    assert "1/5/GSSG/1" not in doc.docx_path.replace("\\", "/")
+    assert "1/5/1" not in doc.docx_path.replace("\\", "/")

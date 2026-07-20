@@ -19,6 +19,7 @@ from typing import Any
 from docx import Document
 from docx.text.paragraph import Paragraph
 
+from app.core.book_table import normalize_data_table
 from app.core.book_text import docx_to_text
 from app.core.docx_render import render
 
@@ -34,7 +35,7 @@ _REF_LABEL = re.compile(r"^\s*الرقم\s*[:：]")  # noqa: RUF001 — full-wid
 _DATE_LABEL = re.compile(r"^\s*التاريخ\s*[:：]")  # noqa: RUF001 — full-width colon is a legitimate Arabic-text variant
 _G_NUMBER = re.compile(r"\bG[-\s]?\d{1,6}\b")
 
-_DUMMY = {"ref": "9/9/GSSG/9999", "date": "31-12-2099", "submitter_g": "G-9999"}
+_DUMMY = {"ref": "9/9/9999", "date": "31-12-2099", "submitter_g": "G-9999"}
 
 # w:t namespace for walking raw XML runs
 _W_NS = "http://schemas.openxmlformats.org/wordprocessingml/2006/main"
@@ -77,13 +78,15 @@ def _first_run_style(para: Paragraph) -> Any | None:
     return para.runs[0] if para.runs else None
 
 
-def _write_ref_block(anchor: Paragraph, *, replace: bool) -> None:
+def _write_ref_block(anchor: Paragraph, *, replace: bool, style_src: Any | None = None) -> None:
     """Write {%p if ref %} / الرقم: {{ ref }} / {%p endif %} at *anchor*.
 
     replace=True: anchor IS the old الرقم paragraph (reuse it for the label
     line, keeping its formatting). replace=False: insert all three before
-    anchor (the التاريخ paragraph)."""
-    src = _first_run_style(anchor)
+    anchor (the التاريخ paragraph).
+
+    style_src overrides the run-style source; default is anchor itself."""
+    src = _first_run_style(style_src if style_src is not None else anchor)
 
     def styled(run: Any) -> Any:
         if src is not None:
@@ -99,10 +102,23 @@ def _write_ref_block(anchor: Paragraph, *, replace: bool) -> None:
         anchor._p.addprevious(new_p)
         label_para = Paragraph(new_p, anchor._parent)
 
-    guard_open = copy.deepcopy(label_para._p)
-    label_para._p.addprevious(guard_open)
-    p_if = Paragraph(guard_open, label_para._parent)
-    _clear_runs(p_if)
+    # Reuse an existing (possibly ZWSP-neutralized) guard paragraph if present,
+    # so a second retokenize call doesn't accumulate duplicate guards.
+    prev_p = label_para._p.getprevious()
+    if (
+        prev_p is not None
+        and _JINJA_DELIM.sub(
+            "", Paragraph(prev_p, label_para._parent).text.replace(_ZWSP, "")
+        ).strip()
+        == "p if ref"
+    ):
+        p_if = Paragraph(prev_p, label_para._parent)
+        _clear_runs(p_if)
+    else:
+        guard_open = copy.deepcopy(label_para._p)
+        label_para._p.addprevious(guard_open)
+        p_if = Paragraph(guard_open, label_para._parent)
+        _clear_runs(p_if)
     p_if.add_run("{%p if ref %}")
 
     _clear_runs(label_para)
@@ -116,10 +132,21 @@ def _write_ref_block(anchor: Paragraph, *, replace: bool) -> None:
     ref_run = styled(label_para.add_run("{{ ref }}"))
     ref_run.font.rtl = True
 
-    guard_close = copy.deepcopy(label_para._p)
-    label_para._p.addnext(guard_close)
-    p_endif = Paragraph(guard_close, label_para._parent)
-    _clear_runs(p_endif)
+    next_p = label_para._p.getnext()
+    if (
+        next_p is not None
+        and _JINJA_DELIM.sub(
+            "", Paragraph(next_p, label_para._parent).text.replace(_ZWSP, "")
+        ).strip()
+        == "p endif"
+    ):
+        p_endif = Paragraph(next_p, label_para._parent)
+        _clear_runs(p_endif)
+    else:
+        guard_close = copy.deepcopy(label_para._p)
+        label_para._p.addnext(guard_close)
+        p_endif = Paragraph(guard_close, label_para._parent)
+        _clear_runs(p_endif)
     p_endif.add_run("{%p endif %}")
 
 
@@ -175,7 +202,10 @@ def _retokenize_footers(doc: Any, submitter_g: str | None) -> None:
         from docx.shared import Pt
 
         footer = doc.sections[0].footer
-        para = footer.add_paragraph()
+        if footer.paragraphs and not footer.paragraphs[-1].text.strip():
+            para = footer.paragraphs[-1]
+        else:
+            para = footer.add_paragraph()
         run = para.add_run("{{ submitter_g }}")
         run.font.size = Pt(9)
 
@@ -196,13 +226,19 @@ def retokenize_general_book(docx_path: Path, *, submitter_g: str | None = None) 
         ):
             _neutralize_part_runs(part)
 
+    # 1b. Normalize a clean data table (if present) — AFTER neutralize so the
+    # injected {%tr%}/{{ row.cN }} tokens are inserted fresh and never ZWSP-broken.
+    # normalize_data_table handles all cases internally (no-op when no single
+    # clean table; strips ZWSP-broken directive rows on re-run for idempotency).
+    normalize_data_table(doc)
+
     # 2/3. Ref + date lines (first labeled body paragraph each; prose ignored).
     date_para = next((p for p in doc.paragraphs if _DATE_LABEL.match(p.text)), None)
     if date_para is None:
         raise ValueError("لا يحتوي المستند على سطر التاريخ — لا يمكن حفظه كقالب")
     ref_para = next((p for p in doc.paragraphs if _REF_LABEL.match(p.text)), None)
     if ref_para is not None:
-        _write_ref_block(ref_para, replace=True)
+        _write_ref_block(ref_para, replace=True, style_src=date_para)
     else:
         _write_ref_block(date_para, replace=False)
     _retokenize_labeled_line(date_para, "التاريخ: ", "{{ date }}")
@@ -216,15 +252,41 @@ def retokenize_general_book(docx_path: Path, *, submitter_g: str | None = None) 
     doc.save(str(docx_path))
 
 
+def _body_text_no_tables(docx_path: Path) -> str:
+    """Return body paragraph text only — table cells excluded.
+
+    doc.paragraphs already excludes table cells in python-docx, so this
+    is the right source for the body-preservation check (table cell text
+    is removed during normalize_data_table and would cause false positives).
+    """
+    return "\n".join(p.text for p in Document(str(docx_path)).paragraphs if p.text)
+
+
 def validate_book_template(docx_path: Path) -> None:
     """Fail-closed check: dummy render must succeed under sandbox+strict and
     place each dummy value exactly once. Raises ValueError (operator-safe
     message, no paths/tracebacks)."""
-    source_text = docx_to_text(docx_path)
+    # Discover column count from the normalized template text: after
+    # retokenize, data cells contain {{ row.c0 }}, {{ row.c1 }}, …
+    # detect_table_schema cannot be used here because the normalized table
+    # (with directive rows) no longer satisfies its "clean table" criteria.
+    tpl_text = docx_to_text(docx_path)
+    col_indices = [int(m) for m in re.findall(r"row\.c(\d+)", tpl_text)]
+    has_table = bool(col_indices)
+    dummy: dict[str, object] = dict(_DUMMY)
+    if has_table:
+        n = max(col_indices) + 1
+        row: dict[str, str] = {f"c{i}": f"DUMMY_CELL_{i}" for i in range(n)}
+        # SSTI probe: last cell carries a literal Jinja expression; it must
+        # appear verbatim in the output (cell values are data, not re-expanded).
+        row[f"c{n - 1}"] = "{{ ref }}"
+        dummy["table_rows"] = [row]
+
+    source_text = _body_text_no_tables(docx_path)
     with tempfile.TemporaryDirectory() as td:
         out = Path(td) / "check.docx"
         try:
-            render(docx_path, dict(_DUMMY), out, strict=True, sandboxed=True)
+            render(docx_path, dummy, out, strict=True, sandboxed=True)
         except Exception as exc:  # sandbox/strict/syntax — reason stays generic
             raise ValueError("تعذر التحقق من القالب — فشل عرض تجريبي") from exc
         text = docx_to_text(out)
@@ -233,7 +295,8 @@ def validate_book_template(docx_path: Path) -> None:
     if text.count(_DUMMY["ref"]) != 1 or text.count(_DUMMY["date"]) != 1:
         raise ValueError("سطر الرقم أو التاريخ لم يُستبدل بشكل صحيح")
     # Body preserved: every substantial source line (minus token lines)
-    # must survive the render.
+    # must survive the render. Uses paragraph-only text to exclude table cells
+    # (which are transformed/removed by normalize_data_table).
     for line in source_text.splitlines():
         line = line.strip()
         if (
@@ -243,3 +306,12 @@ def validate_book_template(docx_path: Path) -> None:
             and line.replace(_ZWSP, "") not in text.replace(_ZWSP, "")
         ):
             raise ValueError("نص القالب تغيّر أثناء العرض التجريبي")
+    # Table-specific assertions: ≥1 data row rendered + no double-expansion.
+    if has_table:
+        # When n > 1, c0 carries "DUMMY_CELL_0" (distinct from the SSTI probe
+        # in the last cell) — assert it rendered.  With n == 1, c0 IS the SSTI
+        # probe cell, so there is no separate DUMMY_CELL_0 to check.
+        if n > 1 and "DUMMY_CELL_0" not in text:
+            raise ValueError("الجدول لم يُصيَّر بشكل صحيح — لم تظهر صفوف البيانات")
+        if "{{ ref }}" not in text:
+            raise ValueError("قيمة خلية الجدول تعرّضت لإعادة تفسير غير مسموح بها")

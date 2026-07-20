@@ -17,7 +17,7 @@ BODY_LINE = "نرجو الموافقة على أعمال الصيانة العا
 @pytest.fixture
 def word_version(db_session: Session, tmp_path: Path) -> BookVersion:
     """A finished word-authored book: Document docx on disk, version.fields == {}."""
-    docx_path = tmp_path / "1-11-GSSG-9.docx"
+    docx_path = tmp_path / "1-11-9.docx"
     d = DocxFile()
     d.add_paragraph(BODY_LINE)
     d.add_paragraph("")
@@ -27,7 +27,7 @@ def word_version(db_session: Session, tmp_path: Path) -> BookVersion:
     if db_session.get(BookCategory, "GS") is None:
         db_session.add(BookCategory(id="GS", prefix="GS"))
         db_session.flush()
-    book = Book(category_id="GS", ref_number="1/11/GSSG/9", subject="اختبار التوقيع")
+    book = Book(category_id="GS", ref_number="1/11/9", subject="اختبار التوقيع")
     db_session.add(book)
     db_session.flush()
     doc = Document(

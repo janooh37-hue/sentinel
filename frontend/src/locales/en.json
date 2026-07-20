@@ -941,7 +941,24 @@
       "manageTemplatesHint": "The shared library — rename templates when needed.",
       "noTemplates": "No templates in the library yet",
       "renameTemplate": "Rename",
-      "managerWithTemplate": "Used for approval and the signature placement — the template's printed closing stays as-is."
+      "managerWithTemplate": "Used for approval and the signature placement — the template's printed closing stays as-is.",
+      "baseTemplate": {
+        "text": "General Book — text",
+        "table": "General Book — table",
+        "group": "Start from"
+      },
+      "customTemplate": {
+        "group": "My templates"
+      },
+      "tableGrid": {
+        "loading": "Loading table columns…",
+        "error": "Couldn't load table columns.",
+        "empty": "No rows yet — add a row to begin.",
+        "columnLabel": "Column {{n}}"
+      },
+      "deleteTemplate": "Delete",
+      "deleteTemplateConfirm": "Delete this template? This cannot be undone.",
+      "deleted": "Template deleted"
     }
   },
   "ledger": {

@@ -11,7 +11,7 @@ def test_registry_has_all_15_codes():
 
 
 def test_classified_ref_format():
-    assert classified_ref(5, 141) == "1/5/GSSG/141"
+    assert classified_ref(5, 141) == "1/5/141"
 
 
 def test_serial_is_shared_and_monotonic(db_session):

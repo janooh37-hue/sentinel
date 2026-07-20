@@ -19,6 +19,9 @@ vi.mock('react-i18next', () => ({
         'books.word.manageTemplates': 'إدارة القوالب',
         'books.word.renameTemplate': 'إعادة تسمية',
         'books.word.saveAsTemplateName': 'اسم القالب',
+        'books.word.deleteTemplate': 'حذف',
+        'books.word.deleteTemplateConfirm': 'هل تريد حذف هذا القالب؟',
+        'books.word.deleted': 'تم حذف القالب',
         'common.save': 'حفظ',
         'common.cancel': 'إلغاء',
       }
@@ -40,16 +43,69 @@ beforeEach(() => {
 })
 
 describe('WordTemplateManager', () => {
+  it('shows delete button for custom template and calls api on confirm', async () => {
+    const user = userEvent.setup()
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    vi.spyOn(apiMod.api, 'listWordTemplates').mockResolvedValue([
+      { name: 'الصيانة.docx', modified_at: '2026-07-19T10:00:00', kind: 'custom' },
+    ])
+    const deleteSpy = vi.spyOn(apiMod.api, 'deleteWordTemplate').mockResolvedValue(undefined)
+    vi.stubGlobal('confirm', () => true)
+
+    render(
+      createElement(WordTemplateManager, { open: true, onOpenChange: vi.fn() }),
+      { wrapper: makeWrapper(qc) },
+    )
+
+    await screen.findByText('الصيانة')
+    await user.click(screen.getByRole('button', { name: 'حذف' }))
+    await waitFor(() => expect(deleteSpy).toHaveBeenCalledWith('الصيانة.docx'))
+  })
+
+  it('does NOT call api when confirm returns false', async () => {
+    const user = userEvent.setup()
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    vi.spyOn(apiMod.api, 'listWordTemplates').mockResolvedValue([
+      { name: 'الصيانة.docx', modified_at: '2026-07-19T10:00:00', kind: 'custom' },
+    ])
+    const deleteSpy = vi.spyOn(apiMod.api, 'deleteWordTemplate').mockResolvedValue(undefined)
+    vi.stubGlobal('confirm', () => false)
+
+    render(
+      createElement(WordTemplateManager, { open: true, onOpenChange: vi.fn() }),
+      { wrapper: makeWrapper(qc) },
+    )
+
+    await screen.findByText('الصيانة')
+    await user.click(screen.getByRole('button', { name: 'حذف' }))
+    expect(deleteSpy).not.toHaveBeenCalled()
+  })
+
+  it('does NOT show delete button for base templates', async () => {
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    vi.spyOn(apiMod.api, 'listWordTemplates').mockResolvedValue([
+      { name: 'base.docx', modified_at: '2026-07-19T10:00:00', kind: 'base' },
+    ])
+
+    render(
+      createElement(WordTemplateManager, { open: true, onOpenChange: vi.fn() }),
+      { wrapper: makeWrapper(qc) },
+    )
+
+    await screen.findByText('base')
+    expect(screen.queryByRole('button', { name: 'حذف' })).toBeNull()
+  })
+
   it('lists templates without the .docx suffix and renames one', async () => {
     const user = userEvent.setup()
     const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
     vi.spyOn(apiMod.api, 'listWordTemplates').mockResolvedValue([
-      { name: 'الصيانة.docx', modified_at: '2026-07-19T10:00:00' },
-      { name: 'التكليف.docx', modified_at: '2026-07-18T09:00:00' },
+      { name: 'الصيانة.docx', modified_at: '2026-07-19T10:00:00', kind: 'custom' },
+      { name: 'التكليف.docx', modified_at: '2026-07-18T09:00:00', kind: 'custom' },
     ])
     const renameSpy = vi
       .spyOn(apiMod.api, 'renameWordTemplate')
-      .mockResolvedValue({ name: 'صيانة المباني.docx', modified_at: '2026-07-19T10:05:00' })
+      .mockResolvedValue({ name: 'صيانة المباني.docx', modified_at: '2026-07-19T10:05:00', kind: 'custom' })
 
     render(
       createElement(WordTemplateManager, { open: true, onOpenChange: vi.fn() }),

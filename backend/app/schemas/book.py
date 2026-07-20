@@ -187,6 +187,7 @@ class WordBookCreate(BaseModel):
     cc: list[str] = Field(default_factory=list)
     manager_id: int | None = None
     template_name: str | None = None
+    table_rows: list[dict[str, str]] | None = None
 
 
 class WordSessionRead(BaseModel):
@@ -198,9 +199,15 @@ class WordSessionRead(BaseModel):
     dav_url: str
 
 
+class WordTemplateTableRead(BaseModel):
+    has_table: bool
+    columns: list[str]
+
+
 class WordTemplateRead(BaseModel):
     name: str
     modified_at: datetime
+    kind: Literal["base", "custom"] = "custom"
 
 
 class SaveAsTemplateRequest(BaseModel):

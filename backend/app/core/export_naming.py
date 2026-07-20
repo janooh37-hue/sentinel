@@ -10,6 +10,7 @@ with no linked employee (admin-category forms) fall back to
 from __future__ import annotations
 
 import re
+from datetime import datetime
 
 # Path separators / control chars PLUS unicode bidi-control, zero-width and BOM
 # codepoints that pass `isalnum` but enable filename spoofing. Arabic letters
@@ -41,4 +42,20 @@ def export_filename(
         stem = f"{_sanitize(employee_id)}_{name}"
     else:
         stem = f"{_sanitize(ref_number)}_{name}"
+    return f"{stem}{ext}"
+
+
+def book_download_filename(*, ref: str, subject: str, when: datetime, ext: str) -> str:
+    """User-facing download name for a General Book (serve layer only).
+
+    Format: ``{ref-dashes} — {subject_slug} — {YYYY-MM-DD}{ext}``. ``_sanitize``
+    is the sole sanitizer (strips quotes/CRLF/bidi marks, keeps Arabic). Stem
+    capped at 80 chars. On-disk/WebDAV names are untouched — this is serve-only.
+    """
+    ref_slug = ref.replace("/", "-")
+    subject_slug = _sanitize(subject)
+    date_part = f" — {when:%Y-%m-%d}"
+    prefix = f"{ref_slug} — "
+    max_subject = max(0, 80 - len(prefix) - len(date_part))
+    stem = f"{prefix}{subject_slug[:max_subject]}{date_part}"
     return f"{stem}{ext}"

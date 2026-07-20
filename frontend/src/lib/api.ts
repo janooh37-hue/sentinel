@@ -1226,6 +1226,14 @@ export const api = {
     request<components['schemas']['WordTemplateRead']>(
       'PATCH', `/books/word-templates/${encodeURIComponent(name)}`, { new_name: newName },
     ),
+  /** GET /books/word-templates/{name}/table — inspect a template's embedded table (columns + presence). */
+  getWordTemplateTable: (name: string) =>
+    request<components['schemas']['WordTemplateTableRead']>(
+      'GET', `/books/word-templates/${encodeURIComponent(name)}/table`,
+    ),
+  /** DELETE /books/word-templates/{name} — remove a template from the shared library. */
+  deleteWordTemplate: (name: string) =>
+    request<void>('DELETE', `/books/word-templates/${encodeURIComponent(name)}`),
   /** Live PDF preview of an active Word session's working docx.
    *  `ts` (last_put_at) busts the browser cache; DocPdfCanvas appends encoding=base64 itself. */
   wordSessionPreviewUrl: (bookId: number, ts: string) =>

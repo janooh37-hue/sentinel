@@ -166,9 +166,9 @@ export function ApplicationPage(): React.JSX.Element {
   // General Book: classification code selected by the picker. Required for
   // every ref-allocating submit (both body modes); null only while unpicked.
   const [classificationCode, setClassificationCode] = useState<string | null>(null)
-  // General Book plain-path body-mode toggle (Task 12).
-  // 'editor' = HugeRTE (default); 'word' = body written in Word (no classification).
-  const [bodyMode, setBodyMode] = useState<'editor' | 'word'>('editor')
+  // General Book plain-path body-mode toggle (M5-1: editor hidden, word-only).
+  // 'word' = body written in Word; kept typed so revert is one char change.
+  const [bodyMode, setBodyMode] = useState<'editor' | 'word'>('word')
   // General Book Word mode: selected boilerplate template (or null for blank).
   const [templateName, setTemplateName] = useState<string | null>(null)
   // Task 9 placeholder: after createWordBook succeeds, the session is stored here
@@ -481,6 +481,9 @@ export function ApplicationPage(): React.JSX.Element {
         const managerField = schema?.fields.find((f) => f.type === 'manager_picker')
         const recipientField = schema?.fields.find((f) => f.type === 'recipient_picker')
         const ccField = schema?.fields.find((f) => f.type === 'recipient_multi_picker')
+        const tableRowsValue = form.getValues('table_rows') as Record<string, string>[] | undefined
+        const table_rows =
+          Array.isArray(tableRowsValue) && tableRowsValue.length > 0 ? tableRowsValue : undefined
         wordSessionMutation.mutate({
           classification_code: classificationCode,
           recipient_id: recipientField ? ((values[recipientField.id] as number | null | undefined) ?? null) : null,
@@ -488,6 +491,7 @@ export function ApplicationPage(): React.JSX.Element {
           cc: Array.isArray(values[ccField?.id ?? '']) ? (values[ccField!.id] as string[]) : [],
           manager_id: managerField ? ((values[managerField.id] as number | null | undefined) ?? null) : null,
           template_name: templateName ?? undefined,
+          table_rows,
         })
       }
     }

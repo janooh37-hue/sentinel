@@ -54,6 +54,7 @@ from app.schemas.book import (
     WordBookCreate,
     WordSessionRead,
     WordTemplateRead,
+    WordTemplateTableRead,
 )
 from app.schemas.notify import NotifyMessageRead as NotifyMessageRead
 from app.services import book_service, book_template_service, word_book_service
@@ -122,7 +123,7 @@ def list_word_templates(
 ) -> list[WordTemplateRead]:
     """Shared General Book boilerplate library (Word path)."""
     return [
-        WordTemplateRead(name=t.name, modified_at=t.modified_at)
+        WordTemplateRead(name=t.name, modified_at=t.modified_at, kind=t.kind)
         for t in book_template_service.list_templates()
     ]
 
@@ -136,6 +137,26 @@ def rename_word_template(
     """Rename a template in the shared General Book library."""
     info = book_template_service.rename_template(name, payload.new_name)
     return WordTemplateRead(name=info.name, modified_at=info.modified_at)
+
+
+@router.get("/word-templates/{name}/table", response_model=WordTemplateTableRead)
+def get_word_template_table_schema(
+    name: str,
+    _user: Annotated[User, Depends(require_capability("books.manage"))],
+) -> WordTemplateTableRead:
+    """Return table detection result for a shared General Book template."""
+    has_table, columns = book_template_service.table_schema_for(name)
+    return WordTemplateTableRead(has_table=has_table, columns=columns)
+
+
+@router.delete("/word-templates/{name}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_word_template(
+    name: str,
+    _user: Annotated[User, Depends(require_capability("books.manage"))],
+) -> Response:
+    """Delete a template from the shared General Book library."""
+    book_template_service.delete_template(name)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 @router.post("/word-sessions", response_model=WordSessionRead, status_code=status.HTTP_201_CREATED)
@@ -154,6 +175,7 @@ def create_word_session(
         cc=payload.cc,
         manager_id=payload.manager_id,
         template_name=payload.template_name,
+        table_rows=payload.table_rows,
     )
     return WordSessionRead(
         book_id=info.book_id,

@@ -11,7 +11,7 @@ from app.core.arabic_rtl import html_to_docx
 
 WORD_PASTE = """
 <p class=MsoNormal dir=RTL style='text-align:right;direction:rtl'><b><i>
-<span lang=AR-SA style='font-size:13.0pt'>الرقم:1/ 5 /GSSG/ 140</span></i></b></p>
+<span lang=AR-SA style='font-size:13.0pt'>الرقم:1/ 5 / 140</span></i></b></p>
 
 <div align=right>
 <table class=MsoNormalTable dir=rtl border=0 cellspacing=0 cellpadding=0

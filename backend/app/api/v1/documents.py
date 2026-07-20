@@ -380,7 +380,10 @@ def _inline_pdf_response(content: bytes, filename: str) -> Response:
     (Arabic employee name) needs an ASCII fallback plus a percent-encoded
     ``filename*`` — the same shape ``FileResponse`` builds for us automatically.
     """
-    ascii_name = filename.encode("ascii", "ignore").decode().strip() or "document.pdf"
+    ascii_name = (
+        filename.encode("ascii", "ignore").decode().translate({0x0D: None, 0x0A: None}).strip()
+        or "document.pdf"
+    )
     disposition = f"inline; filename=\"{ascii_name}\"; filename*=UTF-8''{quote(filename)}"
     return Response(
         content=content,
@@ -461,13 +464,15 @@ def download_document(
             merged = merge_pdfs_to_bytes(orig_path, comp_paths)
             if (b64 := maybe_base64(merged, encoding)) is not None:
                 return b64
-            return _inline_pdf_response(merged, document_service.download_filename_for(row, ".pdf"))
+            return _inline_pdf_response(
+                merged, document_service.download_filename_for(row, ".pdf", db=db)
+            )
         if (b64 := maybe_base64(orig_path.read_bytes(), encoding)) is not None:
             return b64
         return FileResponse(
             path=str(orig_path),
             media_type="application/pdf",
-            filename=document_service.download_filename_for(row, ".pdf"),
+            filename=document_service.download_filename_for(row, ".pdf", db=db),
             content_disposition_type="inline",
         )
 
@@ -554,14 +559,8 @@ def download_document(
         merged = merge_pdfs_to_bytes(file_path, comp_paths)
         if (b64 := maybe_base64(merged, encoding)) is not None:
             return b64
-        return Response(
-            content=merged,
-            media_type="application/pdf",
-            headers={
-                "Content-Disposition": (
-                    f'inline; filename="{document_service.download_filename_for(row, ".pdf")}"'
-                )
-            },
+        return _inline_pdf_response(
+            merged, document_service.download_filename_for(row, ".pdf", db=db)
         )
 
     # base64 branch — opaque text/plain body that PDF handlers / download
@@ -569,7 +568,7 @@ def download_document(
     if (b64 := maybe_base64(file_path.read_bytes(), encoding)) is not None:
         return b64
 
-    filename = document_service.download_filename_for(row, ext)
+    filename = document_service.download_filename_for(row, ext, db=db)
     # PDFs are served inline so the preview iframe can render them; the
     # frontend uses <a download> for explicit downloads which overrides
     # disposition client-side. DOCX always downloads.

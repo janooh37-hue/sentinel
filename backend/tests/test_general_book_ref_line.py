@@ -22,9 +22,9 @@ _BASE_DATA = {
 
 def test_ref_line_renders_above_date(tmp_path):
     out = tmp_path / "out.docx"
-    DocxEngine(TEMPLATES_DIR).fill("General Book", {**_BASE_DATA, "ref": "1/5/GSSG/141"}, out)
+    DocxEngine(TEMPLATES_DIR).fill("General Book", {**_BASE_DATA, "ref": "1/5/141"}, out)
     text = docx_to_text(out)
-    assert "الرقم: 1/5/GSSG/141" in text
+    assert "الرقم: 1/5/141" in text
     # above the date: الرقم line appears before التاريخ in document order
     assert text.index("الرقم:") < text.index("التاريخ:")
 
@@ -46,10 +46,10 @@ def test_ref_run_marked_rtl(tmp_path):
     from docx import Document
 
     out = tmp_path / "out.docx"
-    DocxEngine(TEMPLATES_DIR).fill("General Book", {**_BASE_DATA, "ref": "1/5/GSSG/141"}, out)
+    DocxEngine(TEMPLATES_DIR).fill("General Book", {**_BASE_DATA, "ref": "1/5/141"}, out)
     doc = Document(str(out))
-    ref_para = next(p for p in doc.paragraphs if "1/5/GSSG/141" in p.text)
-    ref_runs = [r for r in ref_para.runs if "GSSG" in r.text]
+    ref_para = next(p for p in doc.paragraphs if "1/5/141" in p.text)
+    ref_runs = [r for r in ref_para.runs if r.text.startswith("1/")]
     assert ref_runs, "ref value must be in its own run"
     assert all(r.font.rtl is True for r in ref_runs)
 
@@ -63,6 +63,22 @@ def _header_text(docx_path) -> str:
         for hdr in (section.header, section.first_page_header):
             parts.extend(p.text for p in hdr.paragraphs)
     return "\n".join(parts)
+
+
+def test_ref_renders_rtl_segment_order_directly_after_label(tmp_path):
+    from docx import Document
+
+    out = tmp_path / "out.docx"
+    DocxEngine(TEMPLATES_DIR).fill("General Book", {**_BASE_DATA, "ref": "1/15/141"}, out)
+    doc = Document(str(out))
+    ref_para = next(p for p in doc.paragraphs if "1/15/141" in p.text)
+    non_empty = [r for r in ref_para.runs if r.text.strip()]
+    label_idx = next(i for i, r in enumerate(non_empty) if "الرقم" in r.text)
+    value_idx = next(i for i, r in enumerate(non_empty) if "1/15/141" in r.text)
+    assert value_idx == label_idx + 1
+    value_run = non_empty[value_idx]
+    assert value_run.text == "1/15/141"  # verbatim — bidi reverses in Word, not Python
+    assert value_run.font.rtl is True
 
 
 def test_word_book_has_ref_line_and_no_header_stamp(db_session, admin_user):

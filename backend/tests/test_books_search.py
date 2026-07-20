@@ -4,7 +4,7 @@ TDD: RED → implement → GREEN.
 
 Covers:
 - Arabic body word (with alef variant) found via FTS; BookRead.search_snippet set.
-- Slashed ref 1/5/GSSG/141 matched via ilike; search_snippet is None.
+- Slashed ref 1/5/141 matched via ilike; search_snippet is None.
 - q absent → all rows returned unchanged.
 - FTS-error fallback: when books_fts is absent, ilike still finds subject/ref hits.
 """
@@ -113,14 +113,14 @@ def test_fts_body_match_returns_snippet(db_session):
 
 
 def test_slashed_ref_ilike_match(db_session):
-    """A slashed ref like 1/5/GSSG/141 is found via ilike (not FTS) and
+    """A slashed ref like 1/5/141 is found via ilike (not FTS) and
     search_snippet is None for that row."""
     _install_fts(db_session)
     _make_category(db_session)
 
     book = _make_book(
         db_session,
-        ref_number="1/5/GSSG/141",
+        ref_number="1/5/141",
         subject="وثيقة رسمية",
         search_text=None,  # no body — ilike only
     )
@@ -130,7 +130,7 @@ def test_slashed_ref_ilike_match(db_session):
 
     from app.services.book_service import list_books
 
-    rows, total, snippets = list_books(db_session, q="1/5/GSSG/141")
+    rows, total, snippets = list_books(db_session, q="1/5/141")
 
     assert total >= 1
     found = [r for r in rows if r.id == book.id]
