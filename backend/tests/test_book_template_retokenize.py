@@ -148,6 +148,40 @@ def test_validate_rejects_unretokenized_doc(tmp_path):
         validate_book_template(p)  # no tokens → dummy values never render
 
 
+def test_footer_g_token_on_sections0_footer(tmp_path):
+    from docx import Document
+
+    p = _finished_book(tmp_path)
+    retokenize_general_book(p)
+    footer = Document(str(p)).sections[0].footer
+    assert "{{ submitter_g }}" in "\n".join(pp.text for pp in footer.paragraphs)
+
+
+def test_footer_g_token_is_9pt(tmp_path):
+    from docx import Document
+    from docx.shared import Pt
+
+    p = _finished_book(tmp_path)
+    retokenize_general_book(p)
+    footer = Document(str(p)).sections[0].footer
+    run = next(
+        (r for para in footer.paragraphs for r in para.runs if "{{ submitter_g }}" in r.text), None
+    )
+    assert run is not None and run.font.size == Pt(9)
+
+
+def test_footer_g_reuses_trailing_empty_paragraph(tmp_path):
+    from docx import Document
+
+    p = _finished_book(tmp_path)
+    doc = Document(str(p))
+    doc.sections[0].footer.add_paragraph()
+    doc.save(str(p))
+    retokenize_general_book(p)
+    paras = Document(str(p)).sections[0].footer.paragraphs
+    assert "{{ submitter_g }}" in paras[-1].text
+
+
 def test_ref_font_matches_date_font_on_existing_ref_line(tmp_path):
     from docx import Document
     from docx.shared import Pt

@@ -177,7 +177,10 @@ def _retokenize_footers(doc: Any, submitter_g: str | None) -> None:
         from docx.shared import Pt
 
         footer = doc.sections[0].footer
-        para = footer.add_paragraph()
+        if footer.paragraphs and not footer.paragraphs[-1].text.strip():
+            para = footer.paragraphs[-1]
+        else:
+            para = footer.add_paragraph()
         run = para.add_run("{{ submitter_g }}")
         run.font.size = Pt(9)
 
