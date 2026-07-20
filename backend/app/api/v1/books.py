@@ -54,6 +54,7 @@ from app.schemas.book import (
     WordBookCreate,
     WordSessionRead,
     WordTemplateRead,
+    WordTemplateTableRead,  # noqa: F401 — used by next-task route
 )
 from app.schemas.notify import NotifyMessageRead as NotifyMessageRead
 from app.services import book_service, book_template_service, word_book_service
