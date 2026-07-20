@@ -15,7 +15,7 @@
  *  - Classification is orthogonal: toggle is still gone even with a code picked
  */
 
-import { render, screen } from '@testing-library/react'
+import { render, screen, waitFor } from '@testing-library/react'
 import { describe, it, expect, beforeAll, afterAll, vi, beforeEach } from 'vitest'
 import i18n from 'i18next'
 import { useForm, FormProvider } from 'react-hook-form'
@@ -39,6 +39,7 @@ vi.mock('@/lib/api', () => ({
     listWordTemplates: vi.fn().mockResolvedValue([]),
     listManagers: vi.fn().mockResolvedValue([]),
     listRecipients: vi.fn().mockResolvedValue([]),
+    getWordTemplateTable: vi.fn().mockResolvedValue({ has_table: false, columns: [] }),
   },
 }))
 
@@ -223,5 +224,101 @@ describe('TemplateForm template picker (Arabic, Task 11)', () => {
     ])
     render(<HostWithRecipient bodyMode="word" templateName="الصيانة.docx" />)
     expect(screen.queryByText(/المرسل إليه|recipient/i)).not.toBeInTheDocument()
+  })
+})
+
+// ---------------------------------------------------------------------------
+// M4d-4 — TableGridField wired into TemplateForm + picker grouped by kind
+// ---------------------------------------------------------------------------
+
+// Minimal AR bundle covering keys the new code touches (avoids full ar.json OOM).
+const AR_BUNDLE_M4D: Record<string, unknown> = {
+  books: {
+    word: {
+      baseTemplate: { group: 'ابدأ من' },
+      customTemplate: { group: 'قوالبي' },
+      tableGrid: {
+        loading: 'جارٍ تحميل أعمدة الجدول…',
+        error: 'تعذّر تحميل أعمدة الجدول.',
+        empty: 'لا صفوف بعد — أضف صفاً للبدء.',
+        columnLabel: 'عمود {{n}}',
+      },
+      templatePicker: 'القالب',
+      templateNone: 'بدون قالب',
+    },
+  },
+}
+
+function HostForTableGrid({ templateName }: { templateName: string | null }) {
+  const form = useForm({ defaultValues: {} })
+  return (
+    <QueryClientProvider client={makeQc()}>
+      <FormProvider {...form}>
+        <TemplateForm
+          templateId="General Book"
+          schema={GENERAL_BOOK_SCHEMA}
+          form={form}
+          classificationCode={null}
+          onClassificationChange={vi.fn()}
+          bodyMode="word"
+          onBodyModeChange={vi.fn()}
+          templateName={templateName}
+          onTemplateNameChange={vi.fn()}
+        />
+      </FormProvider>
+    </QueryClientProvider>
+  )
+}
+
+describe('TemplateForm M4d-4 — TableGridField wiring + picker grouping', () => {
+  beforeAll(async () => {
+    i18n.addResourceBundle('ar', 'translation', AR_BUNDLE_M4D as never, true, true)
+    await i18n.changeLanguage('ar')
+  })
+  afterAll(async () => {
+    await i18n.changeLanguage('en')
+  })
+
+  beforeEach(() => {
+    vi.mocked(api.getWordTemplateTable).mockResolvedValue({ has_table: false, columns: [] })
+    vi.mocked(api.listWordTemplates).mockResolvedValue([])
+  })
+
+  it('does NOT render grid when has_table is false', async () => {
+    vi.mocked(api.getWordTemplateTable).mockResolvedValue({ has_table: false, columns: [] })
+    vi.mocked(api.listWordTemplates).mockResolvedValue([
+      { name: 'نص.docx', modified_at: '2026-07-19T00:00:00', kind: 'base' },
+    ])
+    render(<HostForTableGrid templateName="نص.docx" />)
+    // Wait for the query to settle then assert no table
+    await waitFor(() => expect(vi.mocked(api.getWordTemplateTable)).toHaveBeenCalled())
+    expect(screen.queryByRole('table')).not.toBeInTheDocument()
+  })
+
+  it('renders grid headers when has_table is true', async () => {
+    vi.mocked(api.getWordTemplateTable).mockResolvedValue({
+      has_table: true,
+      columns: ['المادة', 'العدد'],
+    })
+    vi.mocked(api.listWordTemplates).mockResolvedValue([
+      { name: 'جدول.docx', modified_at: '2026-07-19T00:00:00', kind: 'base' },
+    ])
+    render(<HostForTableGrid templateName="جدول.docx" />)
+    await waitFor(() => expect(screen.getByText('المادة')).toBeInTheDocument())
+    expect(screen.getByText('العدد')).toBeInTheDocument()
+  })
+
+  it('picker renders base and custom options as separate groups', async () => {
+    vi.mocked(api.listWordTemplates).mockResolvedValue([
+      { name: 'نص.docx', modified_at: '2026-07-19T00:00:00', kind: 'base' },
+      { name: 'صيانة.docx', modified_at: '2026-07-19T00:00:00', kind: 'custom' },
+    ])
+    const { container } = render(<HostForTableGrid templateName={null} />)
+    // Both options must appear in the picker
+    expect(await screen.findByText('نص')).toBeInTheDocument()
+    expect(await screen.findByText('صيانة')).toBeInTheDocument()
+    // Groups (optgroup labels are attributes, not text nodes — query via DOM)
+    expect(container.querySelector('optgroup[label="ابدأ من"]')).not.toBeNull()
+    expect(container.querySelector('optgroup[label="قوالبي"]')).not.toBeNull()
   })
 })

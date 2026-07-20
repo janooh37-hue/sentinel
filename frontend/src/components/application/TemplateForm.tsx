@@ -45,6 +45,7 @@ import { EmployeesTableField } from './fields/EmployeesTableField'
 import { ViolationCheckboxesField } from './fields/ViolationCheckboxesField'
 import { ViolationComboField } from './fields/ViolationComboField'
 import { ClassificationField } from './fields/ClassificationField'
+import { TableGridField } from './TableGridField'
 import { WordTemplateManager } from './WordTemplateManager'
 
 export interface TemplateFormProps {
@@ -390,6 +391,12 @@ export function TemplateForm({
     enabled: !!wordMode,
   })
 
+  const tableSchemaQuery = useQuery({
+    queryKey: ['word-template-table', templateName],
+    queryFn: () => api.getWordTemplateTable(templateName!),
+    enabled: wordMode && !!templateName,
+  })
+
   // Group fields by their `group` attribute.
   // In Word mode, skip the arabic_rich_full body field — it's in Word.
   // When a template is selected, also skip recipient/CC — the boilerplate
@@ -489,11 +496,26 @@ export function TemplateForm({
               aria-label={t('books.word.templatePicker')}
             >
               <option value="">{t('books.word.templateNone')}</option>
-              {(wordTemplatesQuery.data ?? []).map((tpl) => (
-                <option key={tpl.name} value={tpl.name}>
-                  {tpl.name.replace(/\.docx$/i, '')}
-                </option>
-              ))}
+              {(['base', 'custom'] as const).map((kind) => {
+                const group = (wordTemplatesQuery.data ?? []).filter((tpl) => tpl.kind === kind)
+                if (group.length === 0) return null
+                return (
+                  <optgroup
+                    key={kind}
+                    label={t(
+                      kind === 'base'
+                        ? 'books.word.baseTemplate.group'
+                        : 'books.word.customTemplate.group',
+                    )}
+                  >
+                    {group.map((tpl) => (
+                      <option key={tpl.name} value={tpl.name}>
+                        {tpl.name.replace(/\.docx$/i, '')}
+                      </option>
+                    ))}
+                  </optgroup>
+                )
+              })}
             </select>
             <button
               type="button"
@@ -516,6 +538,25 @@ export function TemplateForm({
             selectedTemplateName={templateName}
             onSelectedTemplateNameChange={onTemplateNameChange}
           />
+          {/* Table grid — only when template has a table */}
+          {templateName && tableSchemaQuery.isPending && (
+            <p className="mt-2 text-[0.75em] text-muted-foreground">
+              {t('books.word.tableGrid.loading')}
+            </p>
+          )}
+          {templateName && tableSchemaQuery.isError && (
+            <p className="mt-2 text-[0.75em] text-destructive">
+              {t('books.word.tableGrid.error')}
+            </p>
+          )}
+          {templateName && tableSchemaQuery.data?.has_table && (
+            <div className="mt-3">
+              <TableGridField
+                name="table_rows"
+                columns={tableSchemaQuery.data.columns}
+              />
+            </div>
+          )}
         </div>
       )}
 
