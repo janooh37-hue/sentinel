@@ -1816,6 +1816,11 @@
     "saveBookHint": "Generating preview…",
     "saveReadyHint": "Looks good? Save to commit a ref and add it to Records.",
     "savedHint": "Saved. The reference number is allocated and the book is in Records.",
+    "notify": {
+      "label": "Notify employee",
+      "hintOn": "The employee will get a message when this form is saved.",
+      "hintOff": "Saved without notifying the employee."
+    },
     "selectedRecipients": "Selected recipients",
     "removeRecipient": "Remove {{name}}",
     "savedSignature": {
