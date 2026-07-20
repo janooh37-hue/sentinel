@@ -580,7 +580,9 @@ export function ApplicationPage(): React.JSX.Element {
     setNotifyEmployee(true)
     setSubmitError(null)
     setClassificationCode(null)
-    setBodyMode('editor')
+    // M5: General Book is Word-only; the editor toggle is hidden. Reset to
+    // 'word' (not 'editor') or the form flips back to HugeRTE on every re-pick.
+    setBodyMode('word')
     setTemplateName(null)
     setPendingWordSession(null)
   }, [form])
@@ -695,7 +697,8 @@ export function ApplicationPage(): React.JSX.Element {
     setActiveTab('fields')
     setSubmitError(null)
     setClassificationCode(null)
-    setBodyMode('editor')
+    // M5: General Book is Word-only — reset to 'word', not 'editor' (see above).
+    setBodyMode('word')
     setTemplateName(null)
     setPendingWordSession(null)
   }, [form])
