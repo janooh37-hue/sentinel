@@ -92,9 +92,6 @@ function findPairedHandSign(
   const m = field.id.match(/^(.+)_sig_path$/)
   if (!m) return null
   const entity = m[1]
-  // Manager embedding is server-enforced (form_policy) — never surface a
-  // manager embed toggle, even hosted inside a signature card.
-  if (entity === 'manager') return null
   return (
     fields.find(
       (f) => f.type === 'hand_sign_checkbox' && f.id === `hand_sign_${entity}`,
@@ -123,15 +120,6 @@ function renderField(
     field.id === othersField.id &&
     field.type !== 'violation_checkboxes'
   ) {
-    return null
-  }
-
-  // Manager embedding is policy-enforced server-side (form_policy, spec
-  // 2026-06-11 §3): generate_document derives embed_signature["manager"] from
-  // the form's signing path and ignores the client flag — so never render a
-  // manager hand-sign checkbox. (No template ships one in _fields.json today;
-  // this guard is future-proofing in case one is ever added.)
-  if (field.type === 'hand_sign_checkbox' && field.id === 'hand_sign_manager') {
     return null
   }
 
