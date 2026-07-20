@@ -5738,6 +5738,11 @@ export interface components {
             start_date?: string | null;
             /** End Date */
             end_date?: string | null;
+            /**
+             * Notify Employee
+             * @default true
+             */
+            notify_employee: boolean;
         };
         /** LedgerAddress */
         LedgerAddress: {

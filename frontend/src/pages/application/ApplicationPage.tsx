@@ -33,8 +33,8 @@ import { useLocation, useNavigate, useSearchParams } from 'react-router-dom'
 import { ChevronLeft, ChevronRight, Eye, FileText, Mail, Pencil, QrCode, RotateCcw, Search, ArrowRight, ArrowLeft } from 'lucide-react'
 import { toast } from 'sonner'
 
-import { cn } from '@/lib/utils'
 import { shouldShowNotifyToggle } from './notifyToggle'
+import { NotifyEmployeeToggle } from '@/components/notify/NotifyEmployeeToggle'
 import { api, apiErrorMessage } from '@/lib/api'
 import type { DocumentGenerateRequest, StagedAttachmentRead, TemplateMeta, WordSessionRead } from '@/lib/api'
 import type { ExtractionResponse } from '@/lib/extraction'
@@ -1033,38 +1033,17 @@ export function ApplicationPage(): React.JSX.Element {
                     selectedTemplate,
                     settingsQuery.data?.sms_autosend_enabled ?? false,
                   ) && (
-                    <label className="mt-4 flex items-center gap-3 rounded-md border border-hairline bg-muted/20 px-3 py-2.5">
-                      <span className="min-w-0">
-                        <span className="block text-[0.85em] font-medium text-foreground">
-                          {t('application.notify.label')}
-                        </span>
-                        <span className="mt-0.5 block text-[0.75em] text-muted-foreground">
-                          {notifyEmployee
-                            ? t('application.notify.hintOn')
-                            : t('application.notify.hintOff')}
-                        </span>
-                      </span>
-                      <button
-                        type="button"
-                        role="switch"
-                        aria-checked={notifyEmployee}
-                        aria-label={t('application.notify.label')}
-                        onClick={() => setNotifyEmployee((v) => !v)}
-                        className={cn(
-                          'relative ms-auto inline-flex h-6 w-11 shrink-0 items-center rounded-full px-0.5 transition-colors',
-                          notifyEmployee ? 'bg-primary' : 'bg-muted',
-                        )}
-                      >
-                        <span
-                          className={cn(
-                            'inline-block h-5 w-5 rounded-full bg-white shadow transition-transform',
-                            notifyEmployee
-                              ? 'translate-x-5 rtl:-translate-x-5'
-                              : 'translate-x-0',
-                          )}
-                        />
-                      </button>
-                    </label>
+                    <NotifyEmployeeToggle
+                      className="mt-4"
+                      checked={notifyEmployee}
+                      onChange={setNotifyEmployee}
+                      label={t('application.notify.label')}
+                      hint={
+                        notifyEmployee
+                          ? t('application.notify.hintOn')
+                          : t('application.notify.hintOff')
+                      }
+                    />
                   )}
 
                   {/* Save book lives here — only enabled when the preview job

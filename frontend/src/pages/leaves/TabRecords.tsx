@@ -22,6 +22,7 @@ import type { LeaveListItem, LeaveRead, LeaveStatus } from '@/lib/api'
 import { splitBilingual } from '@/lib/bilingualValue'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
+import { NotifyEmployeeToggle } from '@/components/notify/NotifyEmployeeToggle'
 import { EmptyState } from '@/components/ui/empty-state'
 import { FilterSheet } from '@/components/ui/filter-sheet'
 import { Input } from '@/components/ui/input'
@@ -307,6 +308,8 @@ function LeaveDetailDrawer({
 }): React.JSX.Element {
   const { t, i18n } = useTranslation()
   const [notes, setNotes] = useState('')
+  // Approve-only notify opt-out (On by default); reject/cancel always notify.
+  const [notifyEmployee, setNotifyEmployee] = useState(true)
   const [seededId, setSeededId] = useState<number | null>(null)
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [returnOpen, setReturnOpen] = useState(false)
@@ -443,13 +446,24 @@ function LeaveDetailDrawer({
               </div>
             )}
 
+            {/* Approve-only notify opt-out */}
+            {acts.includes('approve') && (
+              <NotifyEmployeeToggle
+                checked={notifyEmployee}
+                onChange={setNotifyEmployee}
+                label={t('leaves.notify.label')}
+              />
+            )}
+
             {/* Request action buttons: Approve / Reject / Cancel */}
             {hasRequestActions && (
               <div className="flex flex-wrap gap-2">
                 {acts.includes('approve') && (
                   <Button
                     size="sm"
-                    onClick={() => updateMutation.mutate({ status: 'Approved', n: notes })}
+                    onClick={() =>
+                      updateMutation.mutate({ status: 'Approved', n: notes, notify: notifyEmployee })
+                    }
                     disabled={updateMutation.isPending}
                     className="rounded-full"
                   >

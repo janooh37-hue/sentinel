@@ -37,6 +37,10 @@ class LeaveUpdate(BaseModel):
     notes: str | None = None
     start_date: date | None = None
     end_date: date | None = None
+    # Per-decision employee-notification opt-out (2026-07-20). Default True keeps
+    # today's behaviour. The UI only exposes it on Approve, so Reject/Cancel keep
+    # notifying; sending False on an approval suppresses that one notification.
+    notify_employee: bool = True
 
 
 class LeaveAmend(BaseModel):
