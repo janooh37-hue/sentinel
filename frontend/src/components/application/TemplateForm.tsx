@@ -279,8 +279,8 @@ export function TemplateForm({
   onExtractionConsumed,
   classificationCode,
   onClassificationChange,
-  bodyMode = 'editor',
-  onBodyModeChange,
+  bodyMode = 'word',
+  onBodyModeChange: _onBodyModeChange, // M5-1: unused while toggle is hidden; restore by uncommenting toggle block
   templateName,
   onTemplateNameChange,
 }: TemplateFormProps): React.JSX.Element {
@@ -381,7 +381,8 @@ export function TemplateForm({
   // Word mode is purely the body-mode toggle — classification is orthogonal
   // (required for BOTH modes; it only drives the ref, never the editor).
   const wordMode = isGeneralBook && bodyMode === 'word'
-  const showBodyModeToggle = isGeneralBook && !!onBodyModeChange
+  // M5-1: showBodyModeToggle unused while toggle is commented out; kept for revert.
+  // const showBodyModeToggle = isGeneralBook && !!onBodyModeChange
 
   const wordTemplatesQuery = useQuery({
     queryKey: ['word-templates'],
@@ -452,8 +453,8 @@ export function TemplateForm({
         </div>
       )}
 
-      {/* General Book: body-mode pill toggle (always available) */}
-      {showBodyModeToggle && (
+      {/* M5-1: body-mode pill toggle hidden (General Books are word-only). Restore by uncommenting. */}
+      {/* {showBodyModeToggle && (
         <div className="mb-3 flex gap-1" role="group" aria-label={t('books.word.writingMode')}>
           {(['editor', 'word'] as const).map((mode) => (
             <button
@@ -472,7 +473,7 @@ export function TemplateForm({
             </button>
           ))}
         </div>
-      )}
+      )} */}
 
       {/* General Book: template picker + manage button — only in word mode */}
       {wordMode && onTemplateNameChange && (

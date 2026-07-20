@@ -164,9 +164,9 @@ export function ApplicationPage(): React.JSX.Element {
   // General Book: classification code selected by the picker. Required for
   // every ref-allocating submit (both body modes); null only while unpicked.
   const [classificationCode, setClassificationCode] = useState<string | null>(null)
-  // General Book plain-path body-mode toggle (Task 12).
-  // 'editor' = HugeRTE (default); 'word' = body written in Word (no classification).
-  const [bodyMode, setBodyMode] = useState<'editor' | 'word'>('editor')
+  // General Book plain-path body-mode toggle (M5-1: editor hidden, word-only).
+  // 'word' = body written in Word; kept typed so revert is one char change.
+  const [bodyMode, setBodyMode] = useState<'editor' | 'word'>('word')
   // General Book Word mode: selected boilerplate template (or null for blank).
   const [templateName, setTemplateName] = useState<string | null>(null)
   // Task 9 placeholder: after createWordBook succeeds, the session is stored here

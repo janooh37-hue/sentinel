@@ -1,5 +1,5 @@
 /**
- * Task 12 — Body-mode toggle on plain General Book form.
+ * M5-1 — Body-mode toggle HIDDEN for General Books (word-only flow).
  *
  * TDD: RED (before implementation) → GREEN (after).
  *
@@ -9,13 +9,13 @@
  * test doesn't need a real HugeRTE DOM.
  *
  * Asserts under lng=ar (per i18n-tests-must-assert-arabic memory note):
- *  - Toggle renders Arabic labels "اكتب هنا" and "اكتب في Word"
- *  - Default (bodyMode='editor'): rich editor is visible
- *  - After selecting "اكتب في Word": rich editor is hidden
- *  - Classification is orthogonal: toggle + editor render with a code picked
+ *  - Toggle group (role="group") is NOT rendered for General Books
+ *  - "اكتب هنا" pill is NOT present
+ *  - Rich editor is hidden (bodyMode always treated as 'word')
+ *  - Classification is orthogonal: toggle is still gone even with a code picked
  */
 
-import { render, screen, fireEvent } from '@testing-library/react'
+import { render, screen } from '@testing-library/react'
 import { describe, it, expect, beforeAll, afterAll, vi, beforeEach } from 'vitest'
 import i18n from 'i18next'
 import { useForm, FormProvider } from 'react-hook-form'
@@ -105,7 +105,7 @@ function Host({
   )
 }
 
-describe('TemplateForm body-mode toggle (Arabic, Task 12)', () => {
+describe('TemplateForm body-mode toggle (M5-1: hidden for General Books)', () => {
   beforeAll(async () => {
     i18n.addResourceBundle('ar', 'translation', ar, true, true)
     await i18n.changeLanguage('ar')
@@ -114,49 +114,32 @@ describe('TemplateForm body-mode toggle (Arabic, Task 12)', () => {
     await i18n.changeLanguage('en')
   })
 
-  it('renders Arabic toggle labels اكتب هنا and اكتب في Word', () => {
-    render(<Host bodyMode="editor" onBodyModeChange={vi.fn()} />)
-    expect(screen.getByText('اكتب هنا')).toBeInTheDocument()
-    expect(screen.getByText('اكتب في Word')).toBeInTheDocument()
+  it('does NOT render the toggle group (role="group" aria-label="وضع الكتابة")', () => {
+    render(<Host bodyMode="word" onBodyModeChange={vi.fn()} />)
+    expect(screen.queryByRole('group', { name: 'وضع الكتابة' })).not.toBeInTheDocument()
   })
 
-  it('default editor mode: rich editor IS visible', () => {
-    render(<Host bodyMode="editor" onBodyModeChange={vi.fn()} />)
-    expect(screen.getByTestId('rich-editor-body')).toBeInTheDocument()
+  it('does NOT render the "اكتب هنا" (editor) pill', () => {
+    render(<Host bodyMode="word" onBodyModeChange={vi.fn()} />)
+    expect(screen.queryByText('اكتب هنا')).not.toBeInTheDocument()
   })
 
-  it('word mode: rich editor is HIDDEN', () => {
+  it('does NOT render the "اكتب في Word" pill', () => {
+    render(<Host bodyMode="word" onBodyModeChange={vi.fn()} />)
+    expect(screen.queryByText('اكتب في Word')).not.toBeInTheDocument()
+  })
+
+  it('rich editor is hidden (word mode is the only mode)', () => {
     render(<Host bodyMode="word" onBodyModeChange={vi.fn()} />)
     expect(screen.queryByTestId('rich-editor-body')).not.toBeInTheDocument()
   })
 
-  it('clicking "اكتب في Word" calls onBodyModeChange("word")', () => {
-    const onBodyModeChange = vi.fn()
-    render(<Host bodyMode="editor" onBodyModeChange={onBodyModeChange} />)
-    fireEvent.click(screen.getByText('اكتب في Word'))
-    expect(onBodyModeChange).toHaveBeenCalledWith('word')
-  })
-
-  it('clicking "اكتب هنا" calls onBodyModeChange("editor")', () => {
-    const onBodyModeChange = vi.fn()
-    render(<Host bodyMode="word" onBodyModeChange={onBodyModeChange} />)
-    fireEvent.click(screen.getByText('اكتب هنا'))
-    expect(onBodyModeChange).toHaveBeenCalledWith('editor')
-  })
-
-  it('toggle IS rendered when a classification is picked — classification is orthogonal to body mode', () => {
+  it('toggle is also absent when a classification code is picked — classification is orthogonal to body mode', () => {
     render(
-      <Host bodyMode="editor" onBodyModeChange={vi.fn()} classificationCode="5/1" />,
+      <Host bodyMode="word" onBodyModeChange={vi.fn()} classificationCode="5/1" />,
     )
-    expect(screen.getByText('اكتب هنا')).toBeInTheDocument()
-    expect(screen.getByText('اكتب في Word')).toBeInTheDocument()
-  })
-
-  it('classification picked + editor mode: rich editor stays visible', () => {
-    render(
-      <Host bodyMode="editor" onBodyModeChange={vi.fn()} classificationCode="5/1" />,
-    )
-    expect(screen.getByTestId('rich-editor-body')).toBeInTheDocument()
+    expect(screen.queryByRole('group', { name: 'وضع الكتابة' })).not.toBeInTheDocument()
+    expect(screen.queryByText('اكتب هنا')).not.toBeInTheDocument()
   })
 })
 
