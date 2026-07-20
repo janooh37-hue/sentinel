@@ -1408,7 +1408,11 @@ export interface paths {
         get?: never;
         put?: never;
         post?: never;
-        delete?: never;
+        /**
+         * Delete Word Template
+         * @description Delete a template from the shared General Book library.
+         */
+        delete: operations["delete_word_template_api_v1_books_word_templates__name__delete"];
         options?: never;
         head?: never;
         /**
@@ -1416,6 +1420,26 @@ export interface paths {
          * @description Rename a template in the shared General Book library.
          */
         patch: operations["rename_word_template_api_v1_books_word_templates__name__patch"];
+        trace?: never;
+    };
+    "/api/v1/books/word-templates/{name}/table": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Word Template Table Schema
+         * @description Return table detection result for a shared General Book template.
+         */
+        get: operations["get_word_template_table_schema_api_v1_books_word_templates__name__table_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/api/v1/books/word-sessions": {
@@ -7064,6 +7088,10 @@ export interface components {
             manager_id?: number | null;
             /** Template Name */
             template_name?: string | null;
+            /** Table Rows */
+            table_rows?: {
+                [key: string]: string;
+            }[] | null;
         };
         /** WordSessionRead */
         WordSessionRead: {
@@ -7089,6 +7117,19 @@ export interface components {
              * Format: date-time
              */
             modified_at: string;
+            /**
+             * Kind
+             * @default custom
+             * @enum {string}
+             */
+            kind: "base" | "custom";
+        };
+        /** WordTemplateTableRead */
+        WordTemplateTableRead: {
+            /** Has Table */
+            has_table: boolean;
+            /** Columns */
+            columns: string[];
         };
     };
     responses: never;
@@ -10230,6 +10271,37 @@ export interface operations {
             };
         };
     };
+    delete_word_template_api_v1_books_word_templates__name__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: string;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     rename_word_template_api_v1_books_word_templates__name__patch: {
         parameters: {
             query?: never;
@@ -10254,6 +10326,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["WordTemplateRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_word_template_table_schema_api_v1_books_word_templates__name__table_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: string;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WordTemplateTableRead"];
                 };
             };
             /** @description Validation Error */
