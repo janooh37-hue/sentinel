@@ -63,9 +63,19 @@ from app.services.job_registry import (
 log = logging.getLogger(__name__)
 
 
-def _should_autosend(*, commit: bool, revise_of_book_id: int | None, book_id: int | None) -> bool:
-    """Return True only for a committed, non-revision generation that produced a book."""
-    return bool(commit) and revise_of_book_id is None and book_id is not None
+def _should_autosend(
+    *,
+    commit: bool,
+    revise_of_book_id: int | None,
+    book_id: int | None,
+    notify_employee: bool = True,
+) -> bool:
+    """Autosend only for a committed, non-revision generation that produced a
+    book, and only when the operator left the per-book notify switch on.
+
+    ``notify_employee`` defaults True so existing callers that predate the
+    per-book switch keep notifying; the generate route passes the request flag."""
+    return bool(commit) and revise_of_book_id is None and book_id is not None and notify_employee
 
 
 documents_router = APIRouter(prefix="/documents", tags=["documents"])
@@ -134,6 +144,12 @@ class DocumentGenerateRequest(BaseModel):
     # classified register (1/{tab}/GSSG/{serial}); the legacy GS-#### counter
     # is retired for this form.
     classification_code: str | None = None
+    # Per-book notify opt-out (2026-07-20). The generation preview shows an
+    # On-by-default switch for the 8 forms that notify the employee on save;
+    # sending False suppresses the notification for THIS book only. Default
+    # True keeps every existing caller's behaviour unchanged. ANDed with the
+    # global `sms_autosend_enabled` setting inside notify_dispatch.
+    notify_employee: bool = True
 
 
 class DocumentGenerateResponse(BaseModel):
@@ -214,6 +230,7 @@ def _run_generation(
             commit=request.commit,
             revise_of_book_id=request.revise_of_book_id,
             book_id=result.book_id,
+            notify_employee=request.notify_employee,
         ):
             try:
                 notify_dispatch.auto_send_for_book(db, result.book_id, sent_by=None)  # type: ignore[arg-type]

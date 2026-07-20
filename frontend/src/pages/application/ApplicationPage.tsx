@@ -33,6 +33,8 @@ import { useLocation, useNavigate, useSearchParams } from 'react-router-dom'
 import { ChevronLeft, ChevronRight, Eye, FileText, Mail, Pencil, QrCode, RotateCcw, Search, ArrowRight, ArrowLeft } from 'lucide-react'
 import { toast } from 'sonner'
 
+import { cn } from '@/lib/utils'
+import { shouldShowNotifyToggle } from './notifyToggle'
 import { api, apiErrorMessage } from '@/lib/api'
 import type { DocumentGenerateRequest, StagedAttachmentRead, TemplateMeta, WordSessionRead } from '@/lib/api'
 import type { ExtractionResponse } from '@/lib/extraction'
@@ -173,6 +175,9 @@ export function ApplicationPage(): React.JSX.Element {
   // so <WordHandoffDialog session={pendingWordSession} /> (Task 9) can mount and
   // guide finish/discard. The variable is read below in the TODO placeholder node.
   const [pendingWordSession, setPendingWordSession] = useState<WordSessionRead | null>(null)
+  // Per-book notify opt-out — On by default; resets per form. Only surfaced for
+  // the 8 notifying forms when global autosend is on (see notifyToggle.ts).
+  const [notifyEmployee, setNotifyEmployee] = useState(true)
   // Draft/Save split: tracks which mode the in-flight job is in. The toast +
   // localStorage-clear in JobStatus.onDone branch on this. Stored in a ref
   // (not state) so we don't re-render the form just to flip the flag.
@@ -225,6 +230,14 @@ export function ApplicationPage(): React.JSX.Element {
     queryKey: ['employee', selectedEmployee],
     queryFn: () => api.getEmployee(selectedEmployee as string),
     enabled: !!selectedEmployee,
+    staleTime: 5 * 60 * 1000,
+  })
+
+  // Global notify setting — hides the per-book switch when notifications are
+  // off app-wide. Same query key/fn as the shell (TopNav/NavDrawer) so it's cached.
+  const settingsQuery = useQuery({
+    queryKey: ['settings'],
+    queryFn: api.getSettings,
     staleTime: 5 * 60 * 1000,
   })
 
@@ -433,6 +446,9 @@ export function ApplicationPage(): React.JSX.Element {
       embed_signature:
         Object.keys(embedSignature).length > 0 ? embedSignature : undefined,
       commit,
+      // Per-book notify opt-out — only meaningful on the committed save of a
+      // notifying form; the backend ignores it otherwise.
+      notify_employee: notifyEmployee,
       attachments:
         commit && attachmentSpecs.length > 0 ? attachmentSpecs : undefined,
       // Revise mode: only the committed save regenerates a new version under
@@ -556,6 +572,8 @@ export function ApplicationPage(): React.JSX.Element {
     setPreviewJobStatus(null)
     setPreviewIsCommitted(false)
     setLastSaved(null)
+    // Per-book notify switch is not remembered — each newly-picked form starts On.
+    setNotifyEmployee(true)
     setSubmitError(null)
     setClassificationCode(null)
     setBodyMode('editor')
@@ -668,6 +686,8 @@ export function ApplicationPage(): React.JSX.Element {
     setPreviewJobStatus(null)
     setPreviewIsCommitted(false)
     setLastSaved(null)
+    // Per-book notify switch is not remembered — reset to On when clearing.
+    setNotifyEmployee(true)
     setActiveTab('fields')
     setSubmitError(null)
     setClassificationCode(null)
@@ -1001,6 +1021,44 @@ export function ApplicationPage(): React.JSX.Element {
               {activeTab === 'preview' && activeJobId && (
                 <div className="flex min-h-[400px] flex-col">
                   <JobStatus key={activeJobId} jobId={activeJobId} onDone={handleJobDone} />
+
+                  {shouldShowNotifyToggle(
+                    selectedTemplate,
+                    settingsQuery.data?.sms_autosend_enabled ?? false,
+                  ) && (
+                    <label className="mt-4 flex items-center gap-3 rounded-md border border-hairline bg-muted/20 px-3 py-2.5">
+                      <span className="min-w-0">
+                        <span className="block text-[0.85em] font-medium text-foreground">
+                          {t('application.notify.label')}
+                        </span>
+                        <span className="mt-0.5 block text-[0.75em] text-muted-foreground">
+                          {notifyEmployee
+                            ? t('application.notify.hintOn')
+                            : t('application.notify.hintOff')}
+                        </span>
+                      </span>
+                      <button
+                        type="button"
+                        role="switch"
+                        aria-checked={notifyEmployee}
+                        aria-label={t('application.notify.label')}
+                        onClick={() => setNotifyEmployee((v) => !v)}
+                        className={cn(
+                          'relative ms-auto inline-flex h-6 w-11 shrink-0 items-center rounded-full px-0.5 transition-colors',
+                          notifyEmployee ? 'bg-primary' : 'bg-muted',
+                        )}
+                      >
+                        <span
+                          className={cn(
+                            'inline-block h-5 w-5 rounded-full bg-white shadow transition-transform',
+                            notifyEmployee
+                              ? 'translate-x-5 rtl:-translate-x-5'
+                              : 'translate-x-0',
+                          )}
+                        />
+                      </button>
+                    </label>
+                  )}
 
                   {/* Save book lives here — only enabled when the preview job
                       reports `done`. While the job is queued/running the
