@@ -68,10 +68,13 @@ def _should_autosend(
     commit: bool,
     revise_of_book_id: int | None,
     book_id: int | None,
-    notify_employee: bool,
+    notify_employee: bool = True,
 ) -> bool:
     """Autosend only for a committed, non-revision generation that produced a
-    book, and only when the operator left the per-book notify switch on."""
+    book, and only when the operator left the per-book notify switch on.
+
+    ``notify_employee`` defaults True so existing callers that predate the
+    per-book switch keep notifying; the generate route passes the request flag."""
     return bool(commit) and revise_of_book_id is None and book_id is not None and notify_employee
 
 

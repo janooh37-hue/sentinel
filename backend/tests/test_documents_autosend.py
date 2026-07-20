@@ -17,3 +17,14 @@ def test_should_autosend_false_for_revision():
 
 def test_should_autosend_false_without_book():
     assert docs_api._should_autosend(commit=True, revise_of_book_id=None, book_id=None) is False
+
+
+def test_should_autosend_false_when_notify_employee_off():
+    """The per-book notify switch, when off, suppresses autosend even for an
+    otherwise-eligible committed initial generation."""
+    assert (
+        docs_api._should_autosend(
+            commit=True, revise_of_book_id=None, book_id=5, notify_employee=False
+        )
+        is False
+    )
