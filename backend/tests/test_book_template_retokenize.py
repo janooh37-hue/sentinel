@@ -146,3 +146,24 @@ def test_validate_rejects_unretokenized_doc(tmp_path):
     p = _finished_book(tmp_path)
     with pytest.raises(ValueError):
         validate_book_template(p)  # no tokens → dummy values never render
+
+
+def test_ref_font_matches_date_font_on_existing_ref_line(tmp_path):
+    from docx import Document
+    from docx.shared import Pt
+
+    p = tmp_path / "font_book.docx"
+    doc = Document()
+    ref_p = doc.add_paragraph()
+    rr = ref_p.add_run("الرقم: 1/5/140")
+    rr.font.size = Pt(16)
+    date_p = doc.add_paragraph()
+    rd = date_p.add_run("التاريخ: 13/07/2026")
+    rd.font.size = Pt(12)
+    doc.add_paragraph("نص الكتاب هنا")
+    doc.save(str(p))
+    retokenize_general_book(p)
+    doc2 = Document(str(p))
+    ref_para = next(pp for pp in doc2.paragraphs if "{{ ref }}" in pp.text)
+    ref_run = next(r for r in ref_para.runs if "{{ ref }}" in r.text)
+    assert ref_run.font.size == Pt(12)

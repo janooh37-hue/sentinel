@@ -77,13 +77,15 @@ def _first_run_style(para: Paragraph) -> Any | None:
     return para.runs[0] if para.runs else None
 
 
-def _write_ref_block(anchor: Paragraph, *, replace: bool) -> None:
+def _write_ref_block(anchor: Paragraph, *, replace: bool, style_src: Any | None = None) -> None:
     """Write {%p if ref %} / الرقم: {{ ref }} / {%p endif %} at *anchor*.
 
     replace=True: anchor IS the old الرقم paragraph (reuse it for the label
     line, keeping its formatting). replace=False: insert all three before
-    anchor (the التاريخ paragraph)."""
-    src = _first_run_style(anchor)
+    anchor (the التاريخ paragraph).
+
+    style_src overrides the run-style source; default is anchor itself."""
+    src = _first_run_style(style_src if style_src is not None else anchor)
 
     def styled(run: Any) -> Any:
         if src is not None:
@@ -202,7 +204,7 @@ def retokenize_general_book(docx_path: Path, *, submitter_g: str | None = None) 
         raise ValueError("لا يحتوي المستند على سطر التاريخ — لا يمكن حفظه كقالب")
     ref_para = next((p for p in doc.paragraphs if _REF_LABEL.match(p.text)), None)
     if ref_para is not None:
-        _write_ref_block(ref_para, replace=True)
+        _write_ref_block(ref_para, replace=True, style_src=date_para)
     else:
         _write_ref_block(date_para, replace=False)
     _retokenize_labeled_line(date_para, "التاريخ: ", "{{ date }}")
