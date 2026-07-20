@@ -1,7 +1,8 @@
-from app.core.book_table import detect_table_schema
 from docx import Document
 from docx.oxml.ns import qn
 from lxml import etree
+
+from app.core.book_table import detect_table_schema
 
 
 def _tbl(doc, headers, data_rows):

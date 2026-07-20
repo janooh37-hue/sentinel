@@ -1,7 +1,5 @@
 from datetime import datetime
 
-import pytest
-
 from app.core.export_naming import book_download_filename
 
 
@@ -16,9 +14,7 @@ def test_book_download_filename_basic():
 
 
 def test_book_download_filename_blank_subject():
-    name = book_download_filename(
-        ref="1/3/7", subject="", when=datetime(2026, 7, 20), ext=".docx"
-    )
+    name = book_download_filename(ref="1/3/7", subject="", when=datetime(2026, 7, 20), ext=".docx")
     assert name.startswith("1-3-7")
     assert "2026-07-20" in name
     assert name.endswith(".docx")

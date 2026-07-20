@@ -106,7 +106,7 @@ def test_two_table_rows_render(db_session, tmp_path, monkeypatch):
     library_dir.mkdir(parents=True, exist_ok=True)
     monkeypatch.setattr(tpl_svc, "templates_dir", lambda: library_dir)
 
-    _build_table_template(library_dir, "جدول.docx", ["العمود1", "العمود2"])
+    _build_table_template(library_dir, "جدول.docx", ["العمود1", "العمود2"])  # noqa: RUF001
 
     user = _user(db_session)
     rows = [
