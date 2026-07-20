@@ -319,7 +319,7 @@ describe('WordHandoffDialog', () => {
     vi.spyOn(apiMod.api, 'finishWordSession').mockResolvedValue(finished)
     const saveSpy = vi
       .spyOn(apiMod.api, 'saveBookAsTemplate')
-      .mockResolvedValue({ name: 'قالبي.docx', modified_at: '2026-07-19T10:00:00' })
+      .mockResolvedValue({ name: 'قالبي.docx', modified_at: '2026-07-19T10:00:00', kind: 'custom' })
 
     render(
       createElement(WordHandoffDialog, {

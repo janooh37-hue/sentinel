@@ -44,12 +44,12 @@ describe('WordTemplateManager', () => {
     const user = userEvent.setup()
     const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
     vi.spyOn(apiMod.api, 'listWordTemplates').mockResolvedValue([
-      { name: 'الصيانة.docx', modified_at: '2026-07-19T10:00:00' },
-      { name: 'التكليف.docx', modified_at: '2026-07-18T09:00:00' },
+      { name: 'الصيانة.docx', modified_at: '2026-07-19T10:00:00', kind: 'custom' },
+      { name: 'التكليف.docx', modified_at: '2026-07-18T09:00:00', kind: 'custom' },
     ])
     const renameSpy = vi
       .spyOn(apiMod.api, 'renameWordTemplate')
-      .mockResolvedValue({ name: 'صيانة المباني.docx', modified_at: '2026-07-19T10:05:00' })
+      .mockResolvedValue({ name: 'صيانة المباني.docx', modified_at: '2026-07-19T10:05:00', kind: 'custom' })
 
     render(
       createElement(WordTemplateManager, { open: true, onOpenChange: vi.fn() }),

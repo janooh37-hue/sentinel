@@ -210,7 +210,7 @@ describe('TemplateForm template picker (Arabic, Task 11)', () => {
 
   it('shows the template picker in word mode with a none default', async () => {
     vi.mocked(api.listWordTemplates).mockResolvedValue([
-      { name: 'الصيانة.docx', modified_at: '2026-07-19T00:00:00' },
+      { name: 'الصيانة.docx', modified_at: '2026-07-19T00:00:00', kind: 'custom' },
     ])
     render(<HostWithRecipient bodyMode="word" />)
     expect(await screen.findByText('بدون قالب')).toBeInTheDocument()
@@ -219,7 +219,7 @@ describe('TemplateForm template picker (Arabic, Task 11)', () => {
 
   it('hides recipient/cc/manager fields when a template is selected', () => {
     vi.mocked(api.listWordTemplates).mockResolvedValue([
-      { name: 'الصيانة.docx', modified_at: '2026-07-19T00:00:00' },
+      { name: 'الصيانة.docx', modified_at: '2026-07-19T00:00:00', kind: 'custom' },
     ])
     render(<HostWithRecipient bodyMode="word" templateName="الصيانة.docx" />)
     expect(screen.queryByText(/المرسل إليه|recipient/i)).not.toBeInTheDocument()
