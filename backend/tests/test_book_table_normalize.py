@@ -35,11 +35,15 @@ def test_idempotent(tmp_path):
     doc, p = _mk(tmp_path, ["أ", "ب", "ج"], [["x", "y", "z"]])
     normalize_data_table(doc)
     doc.save(str(p))
-    xml1 = doc.element.body.xml
+    # Compare ROUND-TRIPPED-to-ROUND-TRIPPED: reload after the 1st normalize and
+    # again after a 2nd normalize. (Comparing an in-memory doc to a reloaded one
+    # spuriously differs only in <w:body> namespace declarations from the save
+    # round-trip — not a real idempotency difference.)
+    xml1 = Document(str(p)).element.body.xml  # after 1 normalize, round-tripped
     doc2 = Document(str(p))
     normalize_data_table(doc2)
     doc2.save(str(p))
-    xml2 = doc2.element.body.xml
+    xml2 = Document(str(p)).element.body.xml  # after 2 normalizes, round-tripped
     assert xml1 == xml2
 
 

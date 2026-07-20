@@ -153,6 +153,10 @@ def normalize_data_table(doc: Document) -> None:
 
     # --- build data-row: copy header row structure, replace cell contents ---
     data_row = copy.deepcopy(header_row)
+    # Strip any w:trPr (e.g. tblHeader from a prior normalize) so injected rows
+    # don't accumulate header properties on repeated calls (idempotency fix).
+    for _trPr in data_row.findall(qn("w:trPr")):
+        data_row.remove(_trPr)
     data_cells = data_row.findall(qn("w:tc"))
     for i, tc in enumerate(data_cells):
         # strip all paragraphs in this cell and replace with a single one
