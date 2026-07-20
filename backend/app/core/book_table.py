@@ -176,3 +176,33 @@ def normalize_data_table(doc: Document) -> None:
         header_row.insert(0, trPr)
     if trPr.find(qn("w:tblHeader")) is None:
         etree.SubElement(trPr, qn("w:tblHeader"))
+
+
+def normalized_table_columns(doc: Document) -> list[str] | None:
+    """For an ALREADY-NORMALIZED template (one that carries a
+    ``{%tr for row in table_rows %}`` loop), return the header row's cell texts.
+    Returns None if the doc has no such normalized table.
+    """
+    body: BaseOxmlElement = doc.element.body
+    tbls = body.findall(qn("w:tbl"))
+    if len(tbls) != 1:
+        return None
+
+    tbl = tbls[0]
+    rows = tbl.findall(qn("w:tr"))
+    if not rows:
+        return None
+
+    # Check if any cell text contains the normalized loop marker or row.c token.
+    is_normalized = any(
+        "{%tr" in _strip_zwsp(_cell_text(tc)) or "row.c" in _strip_zwsp(_cell_text(tc))
+        for tr in rows
+        for tc in tr.findall(qn("w:tc"))
+    )
+    if not is_normalized:
+        return None
+
+    header_cells = rows[0].findall(qn("w:tc"))
+    if not header_cells:
+        return None
+    return [_cell_text(tc) for tc in header_cells]
