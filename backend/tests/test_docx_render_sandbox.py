@@ -30,8 +30,8 @@ def test_sandbox_blocks_attribute_walk(tmp_path):
 
 def test_sandbox_renders_normal_tokens(tmp_path):
     tpl = _make_docx(tmp_path, "الرقم: {{ ref }}")
-    out = render(tpl, {"ref": "1/5/GSSG/9"}, tmp_path / "out.docx", sandboxed=True)
-    assert "الرقم: 1/5/GSSG/9" in docx_to_text(out)
+    out = render(tpl, {"ref": "1/5/9"}, tmp_path / "out.docx", sandboxed=True)
+    assert "الرقم: 1/5/9" in docx_to_text(out)
 
 
 def test_fill_general_book_path_uses_adapter(tmp_path):

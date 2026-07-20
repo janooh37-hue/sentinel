@@ -17,10 +17,10 @@ def active_session(db_session: Session, tmp_path: Path) -> tuple[Book, Path]:
     if db_session.get(BookCategory, "GS") is None:
         db_session.add(BookCategory(id="GS", prefix="GS"))
         db_session.flush()
-    book = Book(category_id="GS", ref_number="1/11/GSSG/7", subject="معاينة")
+    book = Book(category_id="GS", ref_number="1/11/7", subject="معاينة")
     db_session.add(book)
     db_session.flush()
-    working = tmp_path / "editing" / f"book-{book.id}" / "1-11-GSSG-7.docx"
+    working = tmp_path / "editing" / f"book-{book.id}" / "1-11-7.docx"
     working.parent.mkdir(parents=True)
     d = DocxFile()
     d.add_paragraph("معاينة حية")
@@ -136,10 +136,10 @@ def test_preview_route_supports_base64(
     try:
         perm_service.seed_role_defaults(db)
         db.add(BookCategory(id="GS", prefix="GS"))
-        book = Book(category_id="GS", ref_number="1/11/GSSG/8", subject="معاينة")
+        book = Book(category_id="GS", ref_number="1/11/8", subject="معاينة")
         db.add(book)
         db.flush()
-        working = tmp_path / "editing" / f"book-{book.id}" / "1-11-GSSG-8.docx"
+        working = tmp_path / "editing" / f"book-{book.id}" / "1-11-8.docx"
         working.parent.mkdir(parents=True)
         DocxFile().save(str(working))
         db.add(
@@ -215,8 +215,8 @@ def test_list_rows_carry_is_word_book(
         db.add(BookCategory(id="GS", prefix="GS"))
         db.flush()
 
-        word_book = Book(category_id="GS", ref_number="1/11/GSSG/21", subject="وورد")
-        rich_book = Book(category_id="GS", ref_number="1/11/GSSG/22", subject="محرر")
+        word_book = Book(category_id="GS", ref_number="1/11/21", subject="وورد")
+        rich_book = Book(category_id="GS", ref_number="1/11/22", subject="محرر")
         db.add_all([word_book, rich_book])
         db.flush()
         doc = Document(
@@ -261,8 +261,8 @@ def test_list_rows_carry_is_word_book(
         res = client.get("/api/v1/books")
         assert res.status_code == 200
         by_ref = {b["ref_number"]: b for b in res.json()["items"]}
-        assert by_ref["1/11/GSSG/21"]["is_word_book"] is True
-        assert by_ref["1/11/GSSG/22"]["is_word_book"] is False
+        assert by_ref["1/11/21"]["is_word_book"] is True
+        assert by_ref["1/11/22"]["is_word_book"] is False
     finally:
         db.close()
         get_settings.cache_clear()
