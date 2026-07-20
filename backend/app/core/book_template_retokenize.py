@@ -34,7 +34,7 @@ _REF_LABEL = re.compile(r"^\s*الرقم\s*[:：]")  # noqa: RUF001 — full-wid
 _DATE_LABEL = re.compile(r"^\s*التاريخ\s*[:：]")  # noqa: RUF001 — full-width colon is a legitimate Arabic-text variant
 _G_NUMBER = re.compile(r"\bG[-\s]?\d{1,6}\b")
 
-_DUMMY = {"ref": "9/9/GSSG/9999", "date": "31-12-2099", "submitter_g": "G-9999"}
+_DUMMY = {"ref": "9/9/9999", "date": "31-12-2099", "submitter_g": "G-9999"}
 
 # w:t namespace for walking raw XML runs
 _W_NS = "http://schemas.openxmlformats.org/wordprocessingml/2006/main"
