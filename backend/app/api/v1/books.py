@@ -175,6 +175,7 @@ def create_word_session(
         cc=payload.cc,
         manager_id=payload.manager_id,
         template_name=payload.template_name,
+        table_rows=payload.table_rows,
     )
     return WordSessionRead(
         book_id=info.book_id,

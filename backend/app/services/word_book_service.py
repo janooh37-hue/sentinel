@@ -68,6 +68,7 @@ def create_word_book(
     cc: list[str] | str | None,
     manager_id: int | None,
     template_name: str | None = None,
+    table_rows: list[dict[str, str]] | None = None,
 ) -> WordSessionInfo:
     """Create a General Book with a working docx for Word.
 
@@ -154,6 +155,9 @@ def create_word_book(
         "cc": cc,
         "submitter_g": user.employee_id or "",
     }
+
+    if table_rows is not None:
+        data["table_rows"] = [{k: str(v) for k, v in row.items()} for row in table_rows]
 
     # Manager name/title (same tokens as General Book: manager_name, manager_title)
     if manager_id is not None:
