@@ -19,6 +19,7 @@ from typing import Any
 from docx import Document
 from docx.text.paragraph import Paragraph
 
+from app.core.book_table import normalize_data_table
 from app.core.book_text import docx_to_text
 from app.core.docx_render import render
 
@@ -101,10 +102,23 @@ def _write_ref_block(anchor: Paragraph, *, replace: bool, style_src: Any | None 
         anchor._p.addprevious(new_p)
         label_para = Paragraph(new_p, anchor._parent)
 
-    guard_open = copy.deepcopy(label_para._p)
-    label_para._p.addprevious(guard_open)
-    p_if = Paragraph(guard_open, label_para._parent)
-    _clear_runs(p_if)
+    # Reuse an existing (possibly ZWSP-neutralized) guard paragraph if present,
+    # so a second retokenize call doesn't accumulate duplicate guards.
+    prev_p = label_para._p.getprevious()
+    if (
+        prev_p is not None
+        and _JINJA_DELIM.sub(
+            "", Paragraph(prev_p, label_para._parent).text.replace(_ZWSP, "")
+        ).strip()
+        == "p if ref"
+    ):
+        p_if = Paragraph(prev_p, label_para._parent)
+        _clear_runs(p_if)
+    else:
+        guard_open = copy.deepcopy(label_para._p)
+        label_para._p.addprevious(guard_open)
+        p_if = Paragraph(guard_open, label_para._parent)
+        _clear_runs(p_if)
     p_if.add_run("{%p if ref %}")
 
     _clear_runs(label_para)
@@ -118,10 +132,21 @@ def _write_ref_block(anchor: Paragraph, *, replace: bool, style_src: Any | None 
     ref_run = styled(label_para.add_run("{{ ref }}"))
     ref_run.font.rtl = True
 
-    guard_close = copy.deepcopy(label_para._p)
-    label_para._p.addnext(guard_close)
-    p_endif = Paragraph(guard_close, label_para._parent)
-    _clear_runs(p_endif)
+    next_p = label_para._p.getnext()
+    if (
+        next_p is not None
+        and _JINJA_DELIM.sub(
+            "", Paragraph(next_p, label_para._parent).text.replace(_ZWSP, "")
+        ).strip()
+        == "p endif"
+    ):
+        p_endif = Paragraph(next_p, label_para._parent)
+        _clear_runs(p_endif)
+    else:
+        guard_close = copy.deepcopy(label_para._p)
+        label_para._p.addnext(guard_close)
+        p_endif = Paragraph(guard_close, label_para._parent)
+        _clear_runs(p_endif)
     p_endif.add_run("{%p endif %}")
 
 
@@ -200,6 +225,12 @@ def retokenize_general_book(docx_path: Path, *, submitter_g: str | None = None) 
             section.even_page_footer,
         ):
             _neutralize_part_runs(part)
+
+    # 1b. Normalize a clean data table (if present) — AFTER neutralize so the
+    # injected {%tr%}/{{ row.cN }} tokens are inserted fresh and never ZWSP-broken.
+    # normalize_data_table handles all cases internally (no-op when no single
+    # clean table; strips ZWSP-broken directive rows on re-run for idempotency).
+    normalize_data_table(doc)
 
     # 2/3. Ref + date lines (first labeled body paragraph each; prose ignored).
     date_para = next((p for p in doc.paragraphs if _DATE_LABEL.match(p.text)), None)

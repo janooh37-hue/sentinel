@@ -74,12 +74,19 @@ def detect_table_schema(doc: Document) -> list[str] | None:
     return [_cell_text(tc) for tc in header_cells]
 
 
+_ZWSP = "​"  # zero-width space inserted by the neutralize pass
+
+
+def _strip_zwsp(text: str) -> str:
+    return text.replace(_ZWSP, "")
+
+
 def normalize_data_table(doc: Document) -> None:
     """Convert the single clean data table to a docxtpl row-loop template.
 
-    Idempotent: running twice produces identical XML.  No-op when
-    ``detect_table_schema`` returns None (no table, two tables, or a table
-    with merged cells).
+    Idempotent: running twice (even after ZWSP-neutralization of the injected
+    tokens) produces identical XML.  No-op when the body has no table, two or
+    more tables, or a table with merged cells.
 
     After the call the table has exactly four rows:
       row 0 - header (unchanged, with tblHeader flag)
@@ -91,25 +98,35 @@ def normalize_data_table(doc: Document) -> None:
 
     from lxml import etree
 
+    body: BaseOxmlElement = doc.element.body
+    tbls = body.findall(qn("w:tbl"))
+    if len(tbls) != 1:
+        return
+
+    tbl = tbls[0]
+    rows = tbl.findall(qn("w:tr"))
+    if not rows:
+        return
+
+    # If the table was previously normalized (possibly with ZWSP-broken tokens
+    # after a neutralize pass), strip the directive rows so detect_table_schema
+    # can classify the header row correctly on the second call.
+    if len(rows) > 1:
+        first_data_cells = rows[1].findall(qn("w:tc"))
+        if first_data_cells and _strip_zwsp(_cell_text(first_data_cells[0])).startswith("{%tr"):
+            for tr in rows[1:]:
+                tbl.remove(tr)
+
     schema = detect_table_schema(doc)
     if schema is None:
         return
 
     n = len(schema)
-    body: BaseOxmlElement = doc.element.body
-    tbl = body.findall(qn("w:tbl"))[0]
     rows = tbl.findall(qn("w:tr"))
     header_row = rows[0]
 
-    # --- capture run properties from first data row (or header if none / loop row) ---
-    style_source = rows[1] if len(rows) > 1 else header_row
-    # If previously normalized, first data row is the for-row — fall back to header
-    if len(rows) > 1:
-        first_data_cells = rows[1].findall(qn("w:tc"))
-        if first_data_cells:
-            first_text = _cell_text(first_data_cells[0])
-            if first_text.startswith("{%tr"):
-                style_source = header_row
+    # --- capture run properties from header row (data rows were stripped above) ---
+    style_source = header_row
 
     style_cells = style_source.findall(qn("w:tc"))
     rpr_copies: list[etree._Element | None] = []
