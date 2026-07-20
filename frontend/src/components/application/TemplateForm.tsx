@@ -281,7 +281,9 @@ export function TemplateForm({
   classificationCode,
   onClassificationChange,
   bodyMode = 'word',
-  onBodyModeChange: _onBodyModeChange, // M5-1: unused while toggle is hidden; restore by uncommenting toggle block
+  // M5-1: onBodyModeChange is intentionally NOT destructured — the editor/word
+  // toggle is hidden for General Books. It stays in TemplateFormProps so callers
+  // are unchanged; re-destructure it when the toggle block is restored.
   templateName,
   onTemplateNameChange,
 }: TemplateFormProps): React.JSX.Element {
