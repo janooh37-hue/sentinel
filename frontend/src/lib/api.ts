@@ -159,6 +159,90 @@ export type LeaveAmend = components['schemas']['LeaveAmend']
 export type LeaveBalanceRead = components['schemas']['LeaveBalanceRead']
 export type LeaveStatus = 'Pending' | 'Approved' | 'Rejected' | 'Cancelled' | 'Completed'
 
+// ─── Security Permits (greenfield 2026-07) ─────────────────────────────────────
+// Hand-declared until `npm run gen:api` folds them into the generated schema.
+export type PermitZone = 'green' | 'red' | 'both'
+export type PermitStoredStatus = 'active' | 'revoked'
+export type PermitDerivedStatus = 'active' | 'expiring' | 'expired' | 'revoked'
+
+export interface PermitPersonRead {
+  id: number
+  permit_id: number
+  name: string
+  uae_id: string | null
+  nationality: string | null
+  role: string | null
+  created_at: string
+  removed_at: string | null
+}
+
+export interface PermitPersonCreate {
+  name: string
+  uae_id?: string | null
+  nationality?: string | null
+  role?: string | null
+}
+
+export interface PermitListItem {
+  id: number
+  permit_no: string | null
+  company: string
+  zone: PermitZone
+  start_date: string
+  end_date: string
+  status: PermitStoredStatus
+  created_at: string
+  derived_status: PermitDerivedStatus
+  duration_days: number
+  days_remaining: number | null
+  people_count: number
+}
+
+export interface PermitRead extends PermitListItem {
+  purpose: string | null
+  notes: string | null
+  revoked_at: string | null
+  revoke_reason: string | null
+  updated_at: string | null
+  people: PermitPersonRead[]
+}
+
+export interface PermitListResponse {
+  items: PermitListItem[]
+  total: number
+  limit: number
+  offset: number
+}
+
+export interface PermitCreate {
+  company: string
+  zone: PermitZone
+  start_date: string
+  end_date: string
+  purpose?: string | null
+  notes?: string | null
+  people?: PermitPersonCreate[]
+}
+
+export interface PermitUpdate {
+  company?: string
+  zone?: PermitZone
+  start_date?: string
+  end_date?: string
+  purpose?: string | null
+  notes?: string | null
+}
+
+export interface PermitSummary {
+  active: number
+  expiring: number
+  expired: number
+  revoked: number
+  people_active: number
+  people_green: number
+  people_red: number
+}
+
 export interface LeaveReturnBody {
   resumption_date: string // ISO yyyy-mm-dd
   delay_reason?: string
@@ -895,6 +979,34 @@ export const api = {
     request<LeaveRead>('POST', `/leaves/${id}/amend`, body),
   deleteLeave: (id: number) => request<void>('DELETE', `/leaves/${id}`),
   createLeave: (body: LeaveCreate) => request<LeaveRead>('POST', '/leaves', body),
+
+  // --- security permits (greenfield 2026-07) ---
+  listPermits: (params: {
+    state?: string
+    zone?: PermitZone
+    company?: string
+    q?: string
+    include_deleted?: boolean
+    limit?: number
+    offset?: number
+  } = {}) => request<PermitListResponse>('GET', `/permits${qs({ ...params })}`),
+  permitsSummary: () => request<PermitSummary>('GET', '/permits/summary'),
+  getPermit: (id: number) => request<PermitRead>('GET', `/permits/${id}`),
+  createPermit: (body: PermitCreate) => request<PermitRead>('POST', '/permits', body),
+  updatePermit: (id: number, body: PermitUpdate) =>
+    request<PermitRead>('PATCH', `/permits/${id}`, body),
+  renewPermit: (id: number, body: { new_end_date: string; reason?: string }) =>
+    request<PermitRead>('POST', `/permits/${id}/renew`, body),
+  revokePermit: (id: number, body: { reason?: string }) =>
+    request<PermitRead>('POST', `/permits/${id}/revoke`, body),
+  deletePermit: (id: number) => request<void>('DELETE', `/permits/${id}`),
+  addPermitPerson: (id: number, body: PermitPersonCreate) =>
+    request<PermitRead>('POST', `/permits/${id}/people`, body),
+  removePermitPerson: (id: number, personId: number) =>
+    request<PermitRead>('DELETE', `/permits/${id}/people/${personId}`),
+  /** Absolute URL for the CSV export (used by an anchor download / print). */
+  permitsExportUrl: (params: { state?: string; zone?: PermitZone; company?: string; q?: string } = {}) =>
+    `${BASE}/permits/export${qs({ ...params })}`,
 
   uploadLeaveCertificate: (id: number, file: File) => {
     const form = new FormData()

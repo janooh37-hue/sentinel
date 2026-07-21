@@ -418,6 +418,118 @@ class Violation(Base):
     __table_args__ = (Index("ix_violations_employee_date", "employee_id", "date"),)
 
 
+class Permit(Base):
+    """A security-zone entry permit — greenfield feature (2026-07).
+
+    Authorizes a company's personnel to enter the green and/or red security
+    zone for a defined window. Unrelated to the ``permissions``/RBAC tables
+    (those are app-access capabilities); this tracks *physical* access permits.
+
+    The lifecycle status stored here is only ``active`` / ``revoked``. Whether
+    a permit is *expired* is derived from ``end_date`` vs. today at read time
+    (no nightly job needed), so the register never shows a stale "active" row
+    for a permit whose end date has passed.
+    """
+
+    __tablename__ = "permits"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    # Human-readable reference, stamped after insert as ``PMT-0001``.
+    permit_no: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    company: Mapped[str] = mapped_column(String(255))
+    # 'green' | 'red' | 'both' — validated in the Pydantic schema.
+    zone: Mapped[str] = mapped_column(String(8), default="green")
+    start_date: Mapped[date] = mapped_column(Date)
+    end_date: Mapped[date] = mapped_column(Date)
+    # 'active' | 'revoked'. Expiry is derived from end_date, never stored.
+    status: Mapped[str] = mapped_column(String(16), default="active")
+    purpose: Mapped[str | None] = mapped_column(Text, nullable=True)
+    notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    revoke_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
+    updated_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+    people: Mapped[list[PermitPerson]] = relationship(
+        back_populates="permit",
+        cascade="all, delete-orphan",
+        order_by="PermitPerson.id",
+    )
+    visits: Mapped[list[PermitVisit]] = relationship(
+        back_populates="permit",
+        cascade="all, delete-orphan",
+    )
+
+    __table_args__ = (
+        Index("ix_permits_status_end", "status", "end_date"),
+        Index("ix_permits_company", "company"),
+        Index(
+            "ux_permits_permit_no",
+            "permit_no",
+            unique=True,
+            sqlite_where=text("permit_no IS NOT NULL AND deleted_at IS NULL"),
+        ),
+    )
+
+
+class PermitPerson(Base):
+    """One person authorized on a permit — an external contractor, not a staff
+    member, so identity is free-text (name + optional UAE ID / nationality /
+    trade). Soft-removed via ``removed_at`` so amendment history is preserved
+    and the live head-count only counts rows where ``removed_at IS NULL``.
+    """
+
+    __tablename__ = "permit_people"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    permit_id: Mapped[int] = mapped_column(
+        ForeignKey("permits.id", ondelete="CASCADE")
+    )
+    name: Mapped[str] = mapped_column(String(255))
+    uae_id: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    nationality: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    role: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
+    removed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+    permit: Mapped[Permit] = relationship(back_populates="people")
+
+    __table_args__ = (Index("ix_permit_people_permit", "permit_id"),)
+
+
+class PermitVisit(Base):
+    """A single gate crossing under a permit — the forward hook for a future
+    gate / UAE-ID scanner integration. No manual-entry UI ships in v1; rows are
+    written by the ``POST /permits/{id}/visits`` endpoint so a gate system can
+    drop straight in later without a schema change.
+    """
+
+    __tablename__ = "permit_visits"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    permit_id: Mapped[int] = mapped_column(
+        ForeignKey("permits.id", ondelete="CASCADE")
+    )
+    person_id: Mapped[int | None] = mapped_column(
+        ForeignKey("permit_people.id", ondelete="SET NULL"), nullable=True
+    )
+    # 'in' | 'out'
+    direction: Mapped[str] = mapped_column(String(4), default="in")
+    occurred_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
+    uae_id: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    gate: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    # 'manual' | 'gate' — how the visit reached us.
+    source: Mapped[str] = mapped_column(String(16), default="manual")
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
+
+    permit: Mapped[Permit] = relationship(back_populates="visits")
+
+    __table_args__ = (
+        Index("ix_permit_visits_permit_occurred", "permit_id", "occurred_at"),
+    )
+
+
 class WhatsAppMessage(Base):
     """One WhatsApp send attempt (success or failure) for an employee.
 

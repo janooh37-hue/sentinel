@@ -71,6 +71,7 @@
     "leaves": "Leaves",
     "services": "Services",
     "records": "Records",
+    "permits": "Permits",
     "settings": "Settings",
     "menu": "Menu",
     "sendToGroup": "Send to Group",
@@ -355,6 +356,131 @@
       "salary_transfer_letter": "Salary Transfer Letter",
       "salary_pay_slip": "Salary Pay Slip",
       "experience_certificate": "Experience Certificate"
+    }
+  },
+  "permits": {
+    "title": "Security Permits",
+    "eyebrow": "Access control",
+    "subtitle": "Zone entry permits — who is authorized, for which zone, and until when",
+    "empty": "No permits match these filters.",
+    "loadError": "Could not load permits.",
+    "new": "New permit",
+    "export": "Export CSV",
+    "print": "Print",
+    "summary": {
+      "active": "Active",
+      "expiring": "Expiring soon",
+      "expired": "Expired",
+      "revoked": "Revoked",
+      "peopleGreen": "People · green zone",
+      "peopleRed": "People · red zone"
+    },
+    "zone": {
+      "green": "Green zone",
+      "red": "Red zone",
+      "both": "Both zones",
+      "greenShort": "Green",
+      "redShort": "Red",
+      "bothShort": "Both"
+    },
+    "status": {
+      "active": "Active",
+      "expiring": "Expiring",
+      "expired": "Expired",
+      "revoked": "Revoked"
+    },
+    "filters": {
+      "state": "Status",
+      "zone": "Zone",
+      "company": "Company…",
+      "search": "Search permit no. or company…",
+      "all": "All",
+      "valid": "Currently valid",
+      "clear": "Clear filters"
+    },
+    "columns": {
+      "permitNo": "Permit no.",
+      "company": "Company",
+      "zone": "Zone",
+      "window": "Window",
+      "duration": "Duration",
+      "people": "People",
+      "status": "Status",
+      "actions": "Actions"
+    },
+    "duration_one": "{{count}} day",
+    "duration_other": "{{count}} days",
+    "daysLeft_one": "{{count}} day left",
+    "daysLeft_other": "{{count}} days left",
+    "expiredOn": "Expired {{date}}",
+    "endsToday": "Ends today",
+    "actions": {
+      "view": "View",
+      "edit": "Edit",
+      "renew": "Renew",
+      "revoke": "Revoke",
+      "delete": "Delete",
+      "addPerson": "Add person",
+      "removePerson": "Remove"
+    },
+    "detail": {
+      "title": "Permit {{no}}",
+      "company": "Company",
+      "zone": "Zone",
+      "window": "Valid window",
+      "duration": "Duration",
+      "status": "Status",
+      "purpose": "Purpose",
+      "notes": "Notes",
+      "people": "Authorized people",
+      "peopleCount_one": "{{count}} person",
+      "peopleCount_other": "{{count}} people",
+      "noPeople": "No people added yet.",
+      "revokedReason": "Revoked: {{reason}}",
+      "createdAt": "Issued {{date}}"
+    },
+    "person": {
+      "name": "Full name",
+      "uaeId": "UAE ID (optional)",
+      "nationality": "Nationality (optional)",
+      "role": "Role / trade (optional)",
+      "add": "Add person",
+      "removed": "Removed"
+    },
+    "form": {
+      "newTitle": "Issue a permit",
+      "editTitle": "Edit permit",
+      "help": "Authorize a company's personnel to enter a security zone for a defined window.",
+      "company": "Company",
+      "zone": "Zone",
+      "startDate": "Start date",
+      "endDate": "End date",
+      "purpose": "Purpose (optional)",
+      "notes": "Notes (optional)",
+      "people": "People (optional)",
+      "peopleHelp": "You can also add people later from the permit.",
+      "addRow": "Add another person",
+      "save": "Save permit",
+      "create": "Issue permit",
+      "windowError": "End date must not be before the start date."
+    },
+    "renew": {
+      "title": "Renew permit",
+      "help": "Extend the permit to a new end date. The current end is {{end}}.",
+      "newEnd": "New end date",
+      "reason": "Reason (optional)",
+      "save": "Renew"
+    },
+    "revoke": {
+      "title": "Revoke permit",
+      "help": "This ends the permit immediately. It can no longer be edited or renewed.",
+      "reason": "Reason (optional)",
+      "confirm": "Revoke permit"
+    },
+    "delete": {
+      "title": "Delete permit",
+      "help": "This removes the permit from the register. This cannot be undone from the app.",
+      "confirm": "Delete"
     }
   },
   "leaves": {
