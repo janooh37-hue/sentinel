@@ -196,6 +196,7 @@ export interface PermitListItem {
   duration_days: number
   days_remaining: number | null
   people_count: number
+  has_document: boolean
 }
 
 export interface PermitRead extends PermitListItem {
@@ -204,6 +205,8 @@ export interface PermitRead extends PermitListItem {
   revoked_at: string | null
   revoke_reason: string | null
   updated_at: string | null
+  /** Basename of the attached permit scan, if any. */
+  document_name: string | null
   people: PermitPersonRead[]
 }
 
@@ -1007,6 +1010,27 @@ export const api = {
   /** Absolute URL for the CSV export (used by an anchor download / print). */
   permitsExportUrl: (params: { state?: string; zone?: PermitZone; company?: string; q?: string } = {}) =>
     `${BASE}/permits/export${qs({ ...params })}`,
+  /** Upload (or replace) the scanned paper permit. */
+  uploadPermitDocument: (id: number, file: File) => {
+    const form = new FormData()
+    form.append('file', file)
+    return multipart<PermitRead>(`/permits/${id}/document`, form)
+  },
+  removePermitDocument: (id: number) =>
+    request<PermitRead>('DELETE', `/permits/${id}/document`),
+  /** Fetch the permit scan IDM-safely (base64 → Blob) for inline preview. */
+  fetchPermitDocumentBlob: async (id: number): Promise<Blob> => {
+    const res = await fetch(`${BASE}/permits/${id}/document?encoding=base64`, {
+      cache: 'no-store',
+      credentials: 'same-origin',
+    })
+    if (!res.ok) {
+      throw new ApiError(res.status, `HTTP_${res.status}`, res.statusText || 'Failed to load document')
+    }
+    const b64 = (await res.text()).trim()
+    const bytes = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0))
+    return new Blob([bytes])
+  },
 
   uploadLeaveCertificate: (id: number, file: File) => {
     const form = new FormData()

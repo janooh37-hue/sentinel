@@ -21,12 +21,14 @@ Naming note: unrelated to ``/permissions`` (RBAC). Capability gates use the
 
 from __future__ import annotations
 
+import mimetypes
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Query, status
+from fastapi import APIRouter, Depends, File, Query, UploadFile, status
 from fastapi.responses import Response
 from sqlalchemy.orm import Session
 
+from app.api._responses import maybe_base64
 from app.api.deps import require_capability
 from app.db.models import User
 from app.db.session import get_db
@@ -192,6 +194,52 @@ def remove_person(
     user: Annotated[User, Depends(require_capability("permits.manage"))],
 ) -> PermitRead:
     row = permit_service.remove_person(db, permit_id, person_id, actor=user.email)
+    return permit_service.to_read(row)
+
+
+@router.post("/{permit_id}/document", response_model=PermitRead)
+async def upload_permit_document(
+    permit_id: int,
+    db: Annotated[Session, Depends(get_db)],
+    user: Annotated[User, Depends(require_capability("permits.manage"))],
+    upload: Annotated[UploadFile, File(alias="file")],
+) -> PermitRead:
+    data = await upload.read()
+    row = permit_service.attach_document(
+        db, permit_id, upload.filename or "permit", data, actor=user.email
+    )
+    return permit_service.to_read(row)
+
+
+@router.get("/{permit_id}/document")
+def download_permit_document(
+    permit_id: int,
+    db: Annotated[Session, Depends(get_db)],
+    _user: Annotated[User, Depends(require_capability("permits.view"))],
+    encoding: Annotated[str | None, Query(pattern="^base64$")] = None,
+) -> Response:
+    path = permit_service.get_document_file(db, permit_id)
+    raw = path.read_bytes()
+    if (b64 := maybe_base64(raw, encoding)) is not None:
+        return b64
+    media = mimetypes.guess_type(path.name)[0] or "application/octet-stream"
+    return Response(
+        content=raw,
+        media_type=media,
+        headers={
+            "Content-Disposition": f'attachment; filename="{path.name}"',
+            "X-Content-Type-Options": "nosniff",
+        },
+    )
+
+
+@router.delete("/{permit_id}/document", response_model=PermitRead)
+def remove_permit_document(
+    permit_id: int,
+    db: Annotated[Session, Depends(get_db)],
+    user: Annotated[User, Depends(require_capability("permits.manage"))],
+) -> PermitRead:
+    row = permit_service.remove_document(db, permit_id, actor=user.email)
     return permit_service.to_read(row)
 
 

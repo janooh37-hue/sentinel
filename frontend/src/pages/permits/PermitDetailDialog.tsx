@@ -7,10 +7,10 @@
  * inline panels (not nested modals) to keep the Radix dialog stack shallow;
  * delete uses the AlertDialog-based ConfirmDialog.
  */
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Trash2, UserPlus } from 'lucide-react'
+import { Trash2, UserPlus, FileText, Upload } from 'lucide-react'
 import { toast } from 'sonner'
 
 import { api, apiErrorMessage, type PermitRead } from '@/lib/api'
@@ -25,7 +25,8 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import { useCapabilities } from '@/lib/useCapabilities'
-import { fmtDate, statusTone, zoneTone } from './permitUtils'
+import { ZoneBadge } from './ZoneBadge'
+import { fmtDate, statusTone } from './permitUtils'
 
 const inputCls =
   'h-9 rounded-md border border-input bg-surface px-3 text-sm text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring'
@@ -58,6 +59,7 @@ export function PermitDetailDialog({ permitId, open, onOpenChange, onEdit }: Pro
   const [revokeReason, setRevokeReason] = useState('')
   const [personName, setPersonName] = useState('')
   const [personUae, setPersonUae] = useState('')
+  const fileRef = useRef<HTMLInputElement>(null)
 
   const invalidate = (): void => {
     void qc.invalidateQueries({ queryKey: ['permit', permitId] })
@@ -121,6 +123,36 @@ export function PermitDetailDialog({ permitId, open, onOpenChange, onEdit }: Pro
     onError: onErr,
   })
 
+  const uploadDoc = useMutation({
+    mutationFn: (file: File) => api.uploadPermitDocument(permitId, file),
+    onSuccess: () => {
+      invalidate()
+      toast.success(t('common.savedToast', { defaultValue: 'Saved' }))
+    },
+    onError: onErr,
+  })
+
+  const removeDoc = useMutation({
+    mutationFn: () => api.removePermitDocument(permitId),
+    onSuccess: invalidate,
+    onError: onErr,
+  })
+
+  const pickFile = (e: React.ChangeEvent<HTMLInputElement>): void => {
+    const file = e.target.files?.[0]
+    if (file) uploadDoc.mutate(file)
+    e.target.value = '' // allow re-picking the same filename
+  }
+
+  const previewDoc = async (): Promise<void> => {
+    try {
+      const blob = await api.fetchPermitDocumentBlob(permitId)
+      window.open(URL.createObjectURL(blob), '_blank', 'noopener')
+    } catch (err) {
+      onErr(err)
+    }
+  }
+
   const activePeople = permit?.people.filter((p) => p.removed_at === null) ?? []
   const isRevoked = permit?.status === 'revoked'
 
@@ -147,7 +179,7 @@ export function PermitDetailDialog({ permitId, open, onOpenChange, onEdit }: Pro
                 <Badge tone={statusTone(permit.derived_status)}>
                   {t(`permits.status.${permit.derived_status}`)}
                 </Badge>
-                <Badge tone={zoneTone(permit.zone)}>{t(`permits.zone.${permit.zone}`)}</Badge>
+                <ZoneBadge zone={permit.zone} full />
               </div>
 
               {/* Facts grid */}
@@ -178,6 +210,76 @@ export function PermitDetailDialog({ permitId, open, onOpenChange, onEdit }: Pro
                   </div>
                 )}
               </dl>
+
+              {/* Permit paper */}
+              <section className="flex flex-col gap-2">
+                <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                  {t('permits.paper.title')}
+                </h3>
+                <input
+                  ref={fileRef}
+                  type="file"
+                  accept="application/pdf,image/*"
+                  className="hidden"
+                  onChange={pickFile}
+                />
+                {permit.document_name ? (
+                  <div className="flex items-center gap-3 rounded-xl border border-border bg-surface-raised px-3 py-2.5">
+                    <span className="grid h-9 w-9 flex-none place-items-center rounded-lg bg-accent-soft text-accent">
+                      <FileText className="h-[18px] w-[18px]" aria-hidden />
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <div className="truncate text-sm font-semibold">{permit.document_name}</div>
+                      <div className="text-xs text-muted-foreground">{t('permits.paper.attached')}</div>
+                    </div>
+                    <div className="flex flex-none items-center gap-1.5">
+                      <Button type="button" variant="outline" size="sm" onClick={() => void previewDoc()}>
+                        {t('permits.paper.preview')}
+                      </Button>
+                      {canManage && !isRevoked && (
+                        <>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            disabled={uploadDoc.isPending}
+                            onClick={() => fileRef.current?.click()}
+                          >
+                            {t('permits.paper.replace')}
+                          </Button>
+                          <button
+                            type="button"
+                            aria-label={t('permits.paper.remove')}
+                            className="inline-flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground hover:bg-surface-tinted hover:text-destructive"
+                            onClick={() => removeDoc.mutate()}
+                          >
+                            <Trash2 className="h-4 w-4" aria-hidden />
+                          </button>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                ) : canManage && !isRevoked ? (
+                  <button
+                    type="button"
+                    disabled={uploadDoc.isPending}
+                    onClick={() => fileRef.current?.click()}
+                    className="flex items-center gap-3 rounded-xl border border-dashed border-border-strong bg-surface px-3 py-3 text-start hover:border-ring hover:bg-surface-tinted disabled:opacity-60"
+                  >
+                    <span className="grid h-9 w-9 flex-none place-items-center rounded-lg bg-primary-soft text-primary">
+                      <Upload className="h-[18px] w-[18px]" aria-hidden />
+                    </span>
+                    <span className="min-w-0">
+                      <span className="block text-sm font-semibold text-foreground">
+                        {uploadDoc.isPending ? t('common.loading') : t('permits.paper.upload')}
+                      </span>
+                      <span className="block text-xs text-muted-foreground">{t('permits.paper.uploadHelp')}</span>
+                    </span>
+                  </button>
+                ) : (
+                  <p className="text-xs text-muted-foreground">{t('permits.paper.none')}</p>
+                )}
+              </section>
 
               {/* People */}
               <section className="flex flex-col gap-2">

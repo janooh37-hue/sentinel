@@ -156,6 +156,39 @@ def test_export_csv_has_header_and_rows(db_session):
     assert "Acme" in lines[1]
 
 
+def test_attach_and_fetch_document(db_session, tmp_path, monkeypatch):
+    from app.config import get_settings
+
+    monkeypatch.setattr(get_settings(), "data_dir", tmp_path)
+    row = _mk(db_session)
+    updated = svc.attach_document(db_session, row.id, "issued permit.pdf", b"%PDF-1.4 fake")
+    assert updated.document_path
+    assert svc.to_read(updated).document_name == "issued permit.pdf"
+    assert svc.to_list_item(updated).has_document is True
+    # File is readable back.
+    path = svc.get_document_file(db_session, row.id)
+    assert path.read_bytes() == b"%PDF-1.4 fake"
+    # Remove clears it.
+    cleared = svc.remove_document(db_session, row.id)
+    assert cleared.document_path is None
+    with pytest.raises(NotFoundError):
+        svc.get_document_file(db_session, row.id)
+
+
+def test_attach_document_rejects_empty(db_session, tmp_path, monkeypatch):
+    from app.config import get_settings
+
+    monkeypatch.setattr(get_settings(), "data_dir", tmp_path)
+    row = _mk(db_session)
+    with pytest.raises(ValidationFailedError):
+        svc.attach_document(db_session, row.id, "x.pdf", b"")
+
+
+def test_safe_filename_strips_traversal_and_bidi():
+    assert "/" not in svc._safe_filename("../../etc/passwd")
+    assert svc._safe_filename("   ") == "permit"
+
+
 def test_mutations_write_audit_rows(db_session):
     row = _mk(db_session)
     svc.renew_permit(db_session, row.id, new_end_date=TODAY + timedelta(days=99))

@@ -447,6 +447,17 @@
       "add": "Add person",
       "removed": "Removed"
     },
+    "paper": {
+      "title": "Permit paper",
+      "attached": "Permit paper attached",
+      "none": "No permit paper attached.",
+      "upload": "Upload permit papers",
+      "uploadHelp": "PDF, JPG or PNG · scan of the issued permit",
+      "formLabel": "Permit paper (optional)",
+      "preview": "Preview",
+      "replace": "Replace",
+      "remove": "Remove"
+    },
     "form": {
       "newTitle": "Issue a permit",
       "editTitle": "Edit permit",

@@ -12,7 +12,7 @@
 import { useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useQuery } from '@tanstack/react-query'
-import { Plus, Printer, Download, ShieldCheck } from 'lucide-react'
+import { Plus, Printer, Download, ShieldCheck, Paperclip } from 'lucide-react'
 
 import { api, type PermitListItem, type PermitRead, type PermitZone } from '@/lib/api'
 import { Badge } from '@/components/ui/badge'
@@ -30,7 +30,8 @@ import { RefreshButton } from '@/components/refresh/RefreshButton'
 import { useCapabilities } from '@/lib/useCapabilities'
 import { PermitFormDialog } from './PermitFormDialog'
 import { PermitDetailDialog } from './PermitDetailDialog'
-import { fmtDate, statusTone, zoneTone } from './permitUtils'
+import { ZoneBadge } from './ZoneBadge'
+import { fmtDate, statusTone } from './permitUtils'
 
 const STATE_OPTIONS = ['', 'valid', 'active', 'expiring', 'expired', 'revoked'] as const
 const ZONE_OPTIONS: ('' | PermitZone)[] = ['', 'green', 'red', 'both']
@@ -226,14 +227,17 @@ function PermitRowView({ row, onOpen }: { row: PermitListItem; onOpen: () => voi
 
   return (
     <TableRow className="cursor-pointer" onClick={onOpen}>
-      <TableCell className="font-mono text-xs">{row.permit_no ?? `#${row.id}`}</TableCell>
+      <TableCell className="whitespace-nowrap font-mono text-xs">
+        {row.permit_no ?? `#${row.id}`}
+        {row.has_document && (
+          <Paperclip className="ms-1.5 inline h-3 w-3 align-middle text-muted-foreground" aria-label={t('permits.paper.attached')} />
+        )}
+      </TableCell>
       <TableCell className="max-w-[14rem] truncate font-medium" dir="auto">
         {row.company}
       </TableCell>
       <TableCell>
-        <Badge tone={zoneTone(row.zone)} shape="square">
-          {t(`permits.zone.${row.zone}Short`)}
-        </Badge>
+        <ZoneBadge zone={row.zone} square />
       </TableCell>
       <TableCell className="whitespace-nowrap font-mono text-xs text-muted-foreground">
         {fmtDate(row.start_date)} → {fmtDate(row.end_date)}

@@ -135,6 +135,8 @@ class PermitRead(ORMBase):
     duration_days: int = 0
     days_remaining: int | None = None
     people_count: int = 0
+    # Basename of the attached permit scan, if any (path is never exposed).
+    document_name: str | None = None
     people: list[PermitPersonRead] = Field(default_factory=list)
 
 
@@ -151,6 +153,7 @@ class PermitListItem(ORMBase):
     duration_days: int = 0
     days_remaining: int | None = None
     people_count: int = 0
+    has_document: bool = False
 
 
 class PermitListResponse(BaseModel):

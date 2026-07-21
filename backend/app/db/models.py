@@ -445,6 +445,8 @@ class Permit(Base):
     status: Mapped[str] = mapped_column(String(16), default="active")
     purpose: Mapped[str | None] = mapped_column(Text, nullable=True)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Scan of the issued paper permit (relative to the data dir). Optional.
+    document_path: Mapped[str | None] = mapped_column(Text, nullable=True)
     revoked_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     revoke_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)

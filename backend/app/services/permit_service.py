@@ -15,13 +15,16 @@ import csv
 import io
 import json
 import logging
+import re
 from datetime import UTC, date, datetime, timedelta
+from pathlib import Path
 from typing import Any
 
 from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session, selectinload
 
 from app.api.errors import NotFoundError, ValidationFailedError
+from app.config import get_settings
 from app.db.models import AuditLog, Permit, PermitPerson, PermitVisit
 from app.schemas.permit import (
     PermitCreate,
@@ -71,6 +74,10 @@ def _derived_status(row: Permit, *, today: date) -> str:
     return "active"
 
 
+def _document_name(row: Permit) -> str | None:
+    return Path(row.document_path).name if row.document_path else None
+
+
 def to_read(row: Permit, *, today: date | None = None) -> PermitRead:
     """Build the detail schema (with people) + computed fields off an ORM row."""
     today = today or date.today()
@@ -81,6 +88,7 @@ def to_read(row: Permit, *, today: date | None = None) -> PermitRead:
             "duration_days": _duration_days(row),
             "days_remaining": _days_remaining(row, today=today),
             "people_count": len(active),
+            "document_name": _document_name(row),
             "people": [PermitPersonRead.model_validate(p) for p in active],
         }
     )
@@ -94,6 +102,7 @@ def to_list_item(row: Permit, *, today: date | None = None) -> PermitListItem:
             "duration_days": _duration_days(row),
             "days_remaining": _days_remaining(row, today=today),
             "people_count": len(_active_people(row)),
+            "has_document": bool(row.document_path),
         }
     )
 
@@ -441,6 +450,76 @@ def export_csv(db: Session, **filters: Any) -> str:
             ]
         )
     return buf.getvalue()
+
+
+# ─── permit paper (issued-scan attachment) ─────────────────────────────────────
+
+MAX_DOCUMENT_BYTES = 25 * 1024 * 1024  # 25 MiB — parity with leave certificates.
+
+# Path separators / control chars PLUS unicode bidi-control / zero-width / BOM
+# codepoints that pass ``isalnum`` but enable filename display-name spoofing.
+# Escapes (not inline literals) so the class stays legible. Mirrors leave_service.
+_UNSAFE_CHARS = re.compile(
+    "[\\\\/:*?\"<>|\x00-\x1f​-‏‪-‮⁦-⁩﻿]"
+)
+
+
+def _safe_filename(filename: str) -> str:
+    name = filename.replace("\\", "/").rsplit("/", 1)[-1]
+    name = _UNSAFE_CHARS.sub("_", name).strip().strip(".")
+    return name or "permit"
+
+
+def attach_document(
+    db: Session, permit_id: int, filename: str, data: bytes, *, actor: str | None = None
+) -> Permit:
+    """Attach (or replace) the scanned paper permit. Stored under the data dir."""
+    row = get_permit(db, permit_id)
+    if len(data) == 0:
+        raise ValidationFailedError("PERMIT_DOC_EMPTY", "Uploaded file is empty.")
+    if len(data) > MAX_DOCUMENT_BYTES:
+        raise ValidationFailedError(
+            "PERMIT_DOC_TOO_LARGE",
+            f"File exceeds {MAX_DOCUMENT_BYTES // (1024 * 1024)} MiB.",
+            size=len(data),
+        )
+    data_dir = get_settings().data_dir
+    dest_dir = data_dir / "permit_documents" / str(permit_id)
+    dest_dir.mkdir(parents=True, exist_ok=True)
+    dest = dest_dir / _safe_filename(filename)
+    dest.write_bytes(data)
+    row.document_path = dest.relative_to(data_dir).as_posix()
+    row.updated_at = _utcnow()
+    db.commit()
+    db.refresh(row)
+    _audit(db, "permit.document_attached", permit_id, actor, {"filename": dest.name})
+    return get_permit(db, permit_id)
+
+
+def get_document_file(db: Session, permit_id: int) -> Path:
+    row = get_permit(db, permit_id, include_deleted=True)
+    if not row.document_path:
+        raise NotFoundError(
+            "PERMIT_DOC_NOT_FOUND", f"Permit {permit_id} has no attached document.",
+            id=permit_id,
+        )
+    path = get_settings().data_dir / row.document_path
+    if not path.exists():
+        raise NotFoundError(
+            "PERMIT_DOC_MISSING", "The attached document file is missing on disk.",
+            id=permit_id,
+        )
+    return path
+
+
+def remove_document(db: Session, permit_id: int, *, actor: str | None = None) -> Permit:
+    row = get_permit(db, permit_id)
+    if row.document_path:
+        row.document_path = None
+        row.updated_at = _utcnow()
+        db.commit()
+        _audit(db, "permit.document_removed", permit_id, actor, {})
+    return get_permit(db, permit_id)
 
 
 # ─── audit ─────────────────────────────────────────────────────────────────────

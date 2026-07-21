@@ -5,10 +5,10 @@
  * removed inline); on edit the people list is managed from the detail dialog,
  * so this form only edits the header fields.
  */
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { Trash2, Plus } from 'lucide-react'
+import { Trash2, Plus, Upload } from 'lucide-react'
 import { toast } from 'sonner'
 
 import {
@@ -61,6 +61,8 @@ export function PermitFormDialog({ open, permit, onOpenChange, onSaved }: Props)
   const [purpose, setPurpose] = useState('')
   const [notes, setNotes] = useState('')
   const [people, setPeople] = useState<PersonRow[]>([])
+  const [docFile, setDocFile] = useState<File | null>(null)
+  const fileRef = useRef<HTMLInputElement>(null)
 
   // Re-seed local state each time the dialog opens so a reopen starts clean
   // (create) or from the record's current values (edit).
@@ -74,6 +76,7 @@ export function PermitFormDialog({ open, permit, onOpenChange, onSaved }: Props)
     setPurpose(permit?.purpose ?? '')
     setNotes(permit?.notes ?? '')
     setPeople([])
+    setDocFile(null)
   }, [open, permit])
 
   const windowValid = endDate >= startDate
@@ -107,7 +110,10 @@ export function PermitFormDialog({ open, permit, onOpenChange, onSaved }: Props)
             role: p.role?.trim() || null,
           })),
       }
-      return api.createPermit(body)
+      const created = await api.createPermit(body)
+      // The scan can only attach once the permit has an id — upload it now.
+      if (docFile) return api.uploadPermitDocument(created.id, docFile)
+      return created
     },
     onSuccess: (data) => {
       void qc.invalidateQueries({ queryKey: ['permits-list'] })
@@ -198,6 +204,35 @@ export function PermitFormDialog({ open, permit, onOpenChange, onSaved }: Props)
               onChange={(e) => setPurpose(e.target.value)}
             />
           </label>
+
+          {/* Permit paper — create only (edit manages it from the detail view) */}
+          {!isEdit && (
+            <div className="flex flex-col gap-1.5">
+              <span className="text-xs text-muted-foreground">{t('permits.paper.formLabel')}</span>
+              <input
+                ref={fileRef}
+                type="file"
+                accept="application/pdf,image/*"
+                className="hidden"
+                onChange={(e) => setDocFile(e.target.files?.[0] ?? null)}
+              />
+              <button
+                type="button"
+                onClick={() => fileRef.current?.click()}
+                className="flex items-center gap-3 rounded-xl border border-dashed border-border-strong bg-surface px-3 py-3 text-start hover:border-ring hover:bg-surface-tinted"
+              >
+                <span className="grid h-9 w-9 flex-none place-items-center rounded-lg bg-primary-soft text-primary">
+                  <Upload className="h-[18px] w-[18px]" aria-hidden />
+                </span>
+                <span className="min-w-0">
+                  <span className="block truncate text-sm font-semibold text-foreground">
+                    {docFile ? docFile.name : t('permits.paper.upload')}
+                  </span>
+                  <span className="block text-xs text-muted-foreground">{t('permits.paper.uploadHelp')}</span>
+                </span>
+              </button>
+            </div>
+          )}
 
           {/* People — create only */}
           {!isEdit && (
