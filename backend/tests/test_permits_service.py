@@ -12,6 +12,7 @@ from app.schemas.permit import (
     PermitCreate,
     PermitPersonCreate,
     PermitUpdate,
+    PermitVehicleCreate,
     PermitVisitCreate,
 )
 from app.services import permit_service as svc
@@ -182,6 +183,62 @@ def test_attach_document_rejects_empty(db_session, tmp_path, monkeypatch):
     row = _mk(db_session)
     with pytest.raises(ValidationFailedError):
         svc.attach_document(db_session, row.id, "x.pdf", b"")
+
+
+def test_create_with_vehicles_counts_active(db_session):
+    row = svc.create_permit(
+        db_session,
+        PermitCreate(
+            company="X", zone="both", start_date=TODAY, end_date=TODAY + timedelta(days=10),
+            vehicles=[
+                PermitVehicleCreate(plate_no="A 12345", plate_emirate="Dubai", make_model="Toyota Hilux"),
+                PermitVehicleCreate(plate_no="B 67890"),
+            ],
+        ),
+    )
+    read = svc.to_read(row)
+    assert read.vehicle_count == 2
+    assert svc.to_list_item(row).vehicle_count == 2
+    assert {v.plate_no for v in read.vehicles} == {"A 12345", "B 67890"}
+
+
+def test_add_and_remove_vehicle(db_session):
+    row = _mk(db_session)
+    row = svc.add_vehicle(db_session, row.id, PermitVehicleCreate(plate_no="C 111"))
+    assert svc.to_read(row).vehicle_count == 1
+    vid = svc.to_read(row).vehicles[0].id
+    row = svc.remove_vehicle(db_session, row.id, vid)
+    assert svc.to_read(row).vehicle_count == 0
+    with pytest.raises(NotFoundError):
+        svc.remove_vehicle(db_session, row.id, 9999)
+
+
+def test_attach_person_and_vehicle_documents(db_session, tmp_path, monkeypatch):
+    from app.config import get_settings
+
+    monkeypatch.setattr(get_settings(), "data_dir", tmp_path)
+    row = svc.create_permit(
+        db_session,
+        PermitCreate(
+            company="X", zone="red", start_date=TODAY, end_date=TODAY + timedelta(days=10),
+            people=[PermitPersonCreate(name="Ali")],
+            vehicles=[PermitVehicleCreate(plate_no="A 1")],
+        ),
+    )
+    pid = svc.to_read(row).people[0].id
+    vid = svc.to_read(row).vehicles[0].id
+
+    row = svc.attach_person_document(db_session, row.id, pid, "uae-id.jpg", b"\xff\xd8ID")
+    assert svc.to_read(row).people[0].id_doc_name == "uae-id.jpg"
+    assert svc.get_person_document_file(db_session, row.id, pid).read_bytes() == b"\xff\xd8ID"
+
+    row = svc.attach_vehicle_document(db_session, row.id, vid, "mulkiya.pdf", b"%PDF-lic")
+    assert svc.to_read(row).vehicles[0].license_doc_name == "mulkiya.pdf"
+    assert svc.get_vehicle_document_file(db_session, row.id, vid).read_bytes() == b"%PDF-lic"
+
+    # Unknown ids raise.
+    with pytest.raises(NotFoundError):
+        svc.attach_person_document(db_session, row.id, 9999, "x.jpg", b"x")
 
 
 def test_safe_filename_strips_traversal_and_bidi():

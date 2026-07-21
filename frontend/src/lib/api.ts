@@ -174,6 +174,8 @@ export interface PermitPersonRead {
   role: string | null
   created_at: string
   removed_at: string | null
+  /** Basename of the attached UAE ID scan, if any. */
+  id_doc_name: string | null
 }
 
 export interface PermitPersonCreate {
@@ -181,6 +183,26 @@ export interface PermitPersonCreate {
   uae_id?: string | null
   nationality?: string | null
   role?: string | null
+}
+
+export interface PermitVehicleRead {
+  id: number
+  permit_id: number
+  plate_no: string
+  plate_emirate: string | null
+  make_model: string | null
+  driver_name: string | null
+  created_at: string
+  removed_at: string | null
+  /** Basename of the attached vehicle-licence scan, if any. */
+  license_doc_name: string | null
+}
+
+export interface PermitVehicleCreate {
+  plate_no: string
+  plate_emirate?: string | null
+  make_model?: string | null
+  driver_name?: string | null
 }
 
 export interface PermitListItem {
@@ -196,6 +218,7 @@ export interface PermitListItem {
   duration_days: number
   days_remaining: number | null
   people_count: number
+  vehicle_count: number
   has_document: boolean
 }
 
@@ -208,6 +231,7 @@ export interface PermitRead extends PermitListItem {
   /** Basename of the attached permit scan, if any. */
   document_name: string | null
   people: PermitPersonRead[]
+  vehicles: PermitVehicleRead[]
 }
 
 export interface PermitListResponse {
@@ -225,6 +249,7 @@ export interface PermitCreate {
   purpose?: string | null
   notes?: string | null
   people?: PermitPersonCreate[]
+  vehicles?: PermitVehicleCreate[]
 }
 
 export interface PermitUpdate {
@@ -916,6 +941,20 @@ async function multipart<T>(path: string, form: FormData, method = 'POST'): Prom
   )
 }
 
+/** IDM-safe attachment fetch (base64 → Blob) shared by the permit endpoints. */
+async function fetchPermitBlob(path: string): Promise<Blob> {
+  const res = await fetch(`${BASE}${path}?encoding=base64`, {
+    cache: 'no-store',
+    credentials: 'same-origin',
+  })
+  if (!res.ok) {
+    throw new ApiError(res.status, `HTTP_${res.status}`, res.statusText || 'Failed to load document')
+  }
+  const b64 = (await res.text()).trim()
+  const bytes = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0))
+  return new Blob([bytes])
+}
+
 export interface ListEmployeesParams {
   q?: string
   status?: EmployeeStatus
@@ -1007,6 +1046,10 @@ export const api = {
     request<PermitRead>('POST', `/permits/${id}/people`, body),
   removePermitPerson: (id: number, personId: number) =>
     request<PermitRead>('DELETE', `/permits/${id}/people/${personId}`),
+  addPermitVehicle: (id: number, body: PermitVehicleCreate) =>
+    request<PermitRead>('POST', `/permits/${id}/vehicles`, body),
+  removePermitVehicle: (id: number, vehicleId: number) =>
+    request<PermitRead>('DELETE', `/permits/${id}/vehicles/${vehicleId}`),
   /** Absolute URL for the CSV export (used by an anchor download / print). */
   permitsExportUrl: (params: { state?: string; zone?: PermitZone; company?: string; q?: string } = {}) =>
     `${BASE}/permits/export${qs({ ...params })}`,
@@ -1018,19 +1061,27 @@ export const api = {
   },
   removePermitDocument: (id: number) =>
     request<PermitRead>('DELETE', `/permits/${id}/document`),
-  /** Fetch the permit scan IDM-safely (base64 → Blob) for inline preview. */
-  fetchPermitDocumentBlob: async (id: number): Promise<Blob> => {
-    const res = await fetch(`${BASE}/permits/${id}/document?encoding=base64`, {
-      cache: 'no-store',
-      credentials: 'same-origin',
-    })
-    if (!res.ok) {
-      throw new ApiError(res.status, `HTTP_${res.status}`, res.statusText || 'Failed to load document')
-    }
-    const b64 = (await res.text()).trim()
-    const bytes = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0))
-    return new Blob([bytes])
+  /** Fetch any permit attachment IDM-safely (base64 → Blob) for inline preview. */
+  fetchPermitDocumentBlob: (id: number): Promise<Blob> =>
+    fetchPermitBlob(`/permits/${id}/document`),
+
+  // Per-person UAE ID scan.
+  uploadPersonDocument: (id: number, personId: number, file: File) => {
+    const form = new FormData()
+    form.append('file', file)
+    return multipart<PermitRead>(`/permits/${id}/people/${personId}/document`, form)
   },
+  fetchPersonDocumentBlob: (id: number, personId: number): Promise<Blob> =>
+    fetchPermitBlob(`/permits/${id}/people/${personId}/document`),
+
+  // Per-vehicle licence (mulkiya) scan.
+  uploadVehicleDocument: (id: number, vehicleId: number, file: File) => {
+    const form = new FormData()
+    form.append('file', file)
+    return multipart<PermitRead>(`/permits/${id}/vehicles/${vehicleId}/document`, form)
+  },
+  fetchVehicleDocumentBlob: (id: number, vehicleId: number): Promise<Blob> =>
+    fetchPermitBlob(`/permits/${id}/vehicles/${vehicleId}/document`),
 
   uploadLeaveCertificate: (id: number, file: File) => {
     const form = new FormData()

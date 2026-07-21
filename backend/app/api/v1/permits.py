@@ -41,6 +41,7 @@ from app.schemas.permit import (
     PermitRevoke,
     PermitSummary,
     PermitUpdate,
+    PermitVehicleCreate,
     PermitVisitCreate,
     PermitVisitRead,
 )
@@ -50,6 +51,22 @@ router = APIRouter(prefix="/permits", tags=["permits"])
 
 LIST_DEFAULT_LIMIT = 50
 LIST_MAX_LIMIT = 500
+
+
+def _file_response(path, encoding: str | None) -> Response:
+    """IDM-safe file download shared by every permit attachment endpoint."""
+    raw = path.read_bytes()
+    if (b64 := maybe_base64(raw, encoding)) is not None:
+        return b64
+    media = mimetypes.guess_type(path.name)[0] or "application/octet-stream"
+    return Response(
+        content=raw,
+        media_type=media,
+        headers={
+            "Content-Disposition": f'attachment; filename="{path.name}"',
+            "X-Content-Type-Options": "nosniff",
+        },
+    )
 
 
 @router.get("", response_model=PermitListResponse)
@@ -197,6 +214,84 @@ def remove_person(
     return permit_service.to_read(row)
 
 
+@router.post("/{permit_id}/people/{person_id}/document", response_model=PermitRead)
+async def upload_person_document(
+    permit_id: int,
+    person_id: int,
+    db: Annotated[Session, Depends(get_db)],
+    user: Annotated[User, Depends(require_capability("permits.manage"))],
+    upload: Annotated[UploadFile, File(alias="file")],
+) -> PermitRead:
+    data = await upload.read()
+    row = permit_service.attach_person_document(
+        db, permit_id, person_id, upload.filename or "uae-id", data, actor=user.email
+    )
+    return permit_service.to_read(row)
+
+
+@router.get("/{permit_id}/people/{person_id}/document")
+def download_person_document(
+    permit_id: int,
+    person_id: int,
+    db: Annotated[Session, Depends(get_db)],
+    _user: Annotated[User, Depends(require_capability("permits.view"))],
+    encoding: Annotated[str | None, Query(pattern="^base64$")] = None,
+) -> Response:
+    return _file_response(
+        permit_service.get_person_document_file(db, permit_id, person_id), encoding
+    )
+
+
+@router.post("/{permit_id}/vehicles", response_model=PermitRead, status_code=status.HTTP_201_CREATED)
+def add_vehicle(
+    permit_id: int,
+    payload: PermitVehicleCreate,
+    db: Annotated[Session, Depends(get_db)],
+    user: Annotated[User, Depends(require_capability("permits.manage"))],
+) -> PermitRead:
+    row = permit_service.add_vehicle(db, permit_id, payload, actor=user.email)
+    return permit_service.to_read(row)
+
+
+@router.delete("/{permit_id}/vehicles/{vehicle_id}", response_model=PermitRead)
+def remove_vehicle(
+    permit_id: int,
+    vehicle_id: int,
+    db: Annotated[Session, Depends(get_db)],
+    user: Annotated[User, Depends(require_capability("permits.manage"))],
+) -> PermitRead:
+    row = permit_service.remove_vehicle(db, permit_id, vehicle_id, actor=user.email)
+    return permit_service.to_read(row)
+
+
+@router.post("/{permit_id}/vehicles/{vehicle_id}/document", response_model=PermitRead)
+async def upload_vehicle_document(
+    permit_id: int,
+    vehicle_id: int,
+    db: Annotated[Session, Depends(get_db)],
+    user: Annotated[User, Depends(require_capability("permits.manage"))],
+    upload: Annotated[UploadFile, File(alias="file")],
+) -> PermitRead:
+    data = await upload.read()
+    row = permit_service.attach_vehicle_document(
+        db, permit_id, vehicle_id, upload.filename or "licence", data, actor=user.email
+    )
+    return permit_service.to_read(row)
+
+
+@router.get("/{permit_id}/vehicles/{vehicle_id}/document")
+def download_vehicle_document(
+    permit_id: int,
+    vehicle_id: int,
+    db: Annotated[Session, Depends(get_db)],
+    _user: Annotated[User, Depends(require_capability("permits.view"))],
+    encoding: Annotated[str | None, Query(pattern="^base64$")] = None,
+) -> Response:
+    return _file_response(
+        permit_service.get_vehicle_document_file(db, permit_id, vehicle_id), encoding
+    )
+
+
 @router.post("/{permit_id}/document", response_model=PermitRead)
 async def upload_permit_document(
     permit_id: int,
@@ -218,19 +313,7 @@ def download_permit_document(
     _user: Annotated[User, Depends(require_capability("permits.view"))],
     encoding: Annotated[str | None, Query(pattern="^base64$")] = None,
 ) -> Response:
-    path = permit_service.get_document_file(db, permit_id)
-    raw = path.read_bytes()
-    if (b64 := maybe_base64(raw, encoding)) is not None:
-        return b64
-    media = mimetypes.guess_type(path.name)[0] or "application/octet-stream"
-    return Response(
-        content=raw,
-        media_type=media,
-        headers={
-            "Content-Disposition": f'attachment; filename="{path.name}"',
-            "X-Content-Type-Options": "nosniff",
-        },
-    )
+    return _file_response(permit_service.get_document_file(db, permit_id), encoding)
 
 
 @router.delete("/{permit_id}/document", response_model=PermitRead)

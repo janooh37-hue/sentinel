@@ -47,6 +47,36 @@ class PermitPersonRead(ORMBase):
     role: str | None = None
     created_at: datetime
     removed_at: datetime | None = None
+    # Basename of the attached UAE ID scan, if any (path is never exposed).
+    id_doc_name: str | None = None
+
+
+class PermitVehicleCreate(BaseModel):
+    plate_no: str = Field(min_length=1, max_length=32)
+    plate_emirate: str | None = Field(default=None, max_length=32)
+    make_model: str | None = Field(default=None, max_length=128)
+    driver_name: str | None = Field(default=None, max_length=255)
+
+    @field_validator("plate_no")
+    @classmethod
+    def _strip_plate(cls, v: str) -> str:
+        v = v.strip()
+        if not v:
+            raise ValueError("plate_no must not be empty")
+        return v
+
+
+class PermitVehicleRead(ORMBase):
+    id: int
+    permit_id: int
+    plate_no: str
+    plate_emirate: str | None = None
+    make_model: str | None = None
+    driver_name: str | None = None
+    created_at: datetime
+    removed_at: datetime | None = None
+    # Basename of the attached vehicle-licence scan, if any.
+    license_doc_name: str | None = None
 
 
 class PermitCreate(BaseModel):
@@ -59,6 +89,7 @@ class PermitCreate(BaseModel):
     purpose: str | None = None
     notes: str | None = None
     people: list[PermitPersonCreate] = Field(default_factory=list)
+    vehicles: list[PermitVehicleCreate] = Field(default_factory=list)
 
     @field_validator("company")
     @classmethod
@@ -135,9 +166,11 @@ class PermitRead(ORMBase):
     duration_days: int = 0
     days_remaining: int | None = None
     people_count: int = 0
+    vehicle_count: int = 0
     # Basename of the attached permit scan, if any (path is never exposed).
     document_name: str | None = None
     people: list[PermitPersonRead] = Field(default_factory=list)
+    vehicles: list[PermitVehicleRead] = Field(default_factory=list)
 
 
 class PermitListItem(ORMBase):
@@ -153,6 +186,7 @@ class PermitListItem(ORMBase):
     duration_days: int = 0
     days_remaining: int | None = None
     people_count: int = 0
+    vehicle_count: int = 0
     has_document: bool = False
 
 

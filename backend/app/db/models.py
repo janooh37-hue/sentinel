@@ -458,6 +458,11 @@ class Permit(Base):
         cascade="all, delete-orphan",
         order_by="PermitPerson.id",
     )
+    vehicles: Mapped[list[PermitVehicle]] = relationship(
+        back_populates="permit",
+        cascade="all, delete-orphan",
+        order_by="PermitVehicle.id",
+    )
     visits: Mapped[list[PermitVisit]] = relationship(
         back_populates="permit",
         cascade="all, delete-orphan",
@@ -492,12 +497,41 @@ class PermitPerson(Base):
     uae_id: Mapped[str | None] = mapped_column(String(32), nullable=True)
     nationality: Mapped[str | None] = mapped_column(String(64), nullable=True)
     role: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    # Scan of the person's UAE ID card (relative to the data dir). Optional.
+    id_doc_path: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
     removed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
     permit: Mapped[Permit] = relationship(back_populates="people")
 
     __table_args__ = (Index("ix_permit_people_permit", "permit_id"),)
+
+
+class PermitVehicle(Base):
+    """A vehicle authorized on a permit — plate + optional make/model/driver,
+    with an optional scan of the vehicle licence (mulkiya). Soft-removed via
+    ``removed_at`` like people, so the live vehicle count and amendment history
+    stay correct.
+    """
+
+    __tablename__ = "permit_vehicles"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    permit_id: Mapped[int] = mapped_column(
+        ForeignKey("permits.id", ondelete="CASCADE")
+    )
+    plate_no: Mapped[str] = mapped_column(String(32))
+    plate_emirate: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    make_model: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    driver_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    # Scan of the vehicle licence / mulkiya (relative to the data dir). Optional.
+    license_doc_path: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
+    removed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+    permit: Mapped[Permit] = relationship(back_populates="vehicles")
+
+    __table_args__ = (Index("ix_permit_vehicles_permit", "permit_id"),)
 
 
 class PermitVisit(Base):

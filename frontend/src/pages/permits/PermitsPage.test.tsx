@@ -25,13 +25,15 @@ vi.mock('@/lib/api', async (importOriginal) => {
             id: 1, permit_no: 'PMT-0001', company: 'Acme Contracting', zone: 'red',
             start_date: '2026-07-01', end_date: '2026-07-30', status: 'active',
             created_at: '2026-07-01T00:00:00', derived_status: 'active',
-            duration_days: 30, days_remaining: 9, people_count: 4, has_document: true,
+            duration_days: 30, days_remaining: 9, people_count: 4, vehicle_count: 2,
+            has_document: true,
           },
           {
             id: 2, permit_no: 'PMT-0002', company: 'Descon Engineering', zone: 'both',
             start_date: '2026-07-21', end_date: '2026-08-21', status: 'active',
             created_at: '2026-07-21T00:00:00', derived_status: 'active',
-            duration_days: 32, days_remaining: 31, people_count: 5, has_document: false,
+            duration_days: 32, days_remaining: 31, people_count: 5, vehicle_count: 3,
+            has_document: false,
           },
         ],
         total: 2, limit: 500, offset: 0,
@@ -84,5 +86,7 @@ describe('PermitsPage', () => {
     expect(screen.getByText('Both')).toBeInTheDocument()
     // The permit with an attached scan surfaces a paperclip affordance.
     expect(screen.getByLabelText(/permit paper attached/i)).toBeInTheDocument()
+    // Vehicles column is present with its header.
+    expect(screen.getByRole('columnheader', { name: /vehicles/i })).toBeInTheDocument()
   })
 })

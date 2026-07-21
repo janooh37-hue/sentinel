@@ -10,10 +10,11 @@
 import { useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Trash2, UserPlus, FileText, Upload } from 'lucide-react'
+import { Trash2, UserPlus, FileText, Upload, Car } from 'lucide-react'
 import { toast } from 'sonner'
 
 import { api, apiErrorMessage, type PermitRead } from '@/lib/api'
+import { RowDocButton } from './RowDocButton'
 import {
   DialogRoot,
   DialogContent,
@@ -59,6 +60,8 @@ export function PermitDetailDialog({ permitId, open, onOpenChange, onEdit }: Pro
   const [revokeReason, setRevokeReason] = useState('')
   const [personName, setPersonName] = useState('')
   const [personUae, setPersonUae] = useState('')
+  const [vehiclePlate, setVehiclePlate] = useState('')
+  const [vehicleMakeModel, setVehicleMakeModel] = useState('')
   const fileRef = useRef<HTMLInputElement>(null)
 
   const invalidate = (): void => {
@@ -144,16 +147,56 @@ export function PermitDetailDialog({ permitId, open, onOpenChange, onEdit }: Pro
     e.target.value = '' // allow re-picking the same filename
   }
 
-  const previewDoc = async (): Promise<void> => {
+  const personDoc = useMutation({
+    mutationFn: ({ personId, file }: { personId: number; file: File }) =>
+      api.uploadPersonDocument(permitId, personId, file),
+    onSuccess: invalidate,
+    onError: onErr,
+  })
+
+  const addVehicle = useMutation({
+    mutationFn: () =>
+      api.addPermitVehicle(permitId, {
+        plate_no: vehiclePlate.trim(),
+        make_model: vehicleMakeModel.trim() || null,
+      }),
+    onSuccess: () => {
+      invalidate()
+      setVehiclePlate('')
+      setVehicleMakeModel('')
+    },
+    onError: onErr,
+  })
+
+  const removeVehicle = useMutation({
+    mutationFn: (vehicleId: number) => api.removePermitVehicle(permitId, vehicleId),
+    onSuccess: invalidate,
+    onError: onErr,
+  })
+
+  const vehicleDoc = useMutation({
+    mutationFn: ({ vehicleId, file }: { vehicleId: number; file: File }) =>
+      api.uploadVehicleDocument(permitId, vehicleId, file),
+    onSuccess: invalidate,
+    onError: onErr,
+  })
+
+  const openBlob = async (fetcher: () => Promise<Blob>): Promise<void> => {
     try {
-      const blob = await api.fetchPermitDocumentBlob(permitId)
+      const blob = await fetcher()
       window.open(URL.createObjectURL(blob), '_blank', 'noopener')
     } catch (err) {
       onErr(err)
     }
   }
+  const previewDoc = (): Promise<void> => openBlob(() => api.fetchPermitDocumentBlob(permitId))
+  const previewPersonDoc = (personId: number): Promise<void> =>
+    openBlob(() => api.fetchPersonDocumentBlob(permitId, personId))
+  const previewVehicleDoc = (vehicleId: number): Promise<void> =>
+    openBlob(() => api.fetchVehicleDocumentBlob(permitId, vehicleId))
 
   const activePeople = permit?.people.filter((p) => p.removed_at === null) ?? []
+  const activeVehicles = permit?.vehicles.filter((v) => v.removed_at === null) ?? []
   const isRevoked = permit?.status === 'revoked'
 
   return (
@@ -197,6 +240,10 @@ export function PermitDetailDialog({ permitId, open, onOpenChange, onEdit }: Pro
                 <Fact
                   label={t('permits.columns.people')}
                   value={t('permits.detail.peopleCount', { count: permit.people_count })}
+                />
+                <Fact
+                  label={t('permits.columns.vehicles')}
+                  value={t('permits.detail.vehicleCount', { count: permit.vehicle_count })}
                 />
                 {permit.purpose && (
                   <Fact label={t('permits.detail.purpose')} value={permit.purpose} span />
@@ -302,16 +349,26 @@ export function PermitDetailDialog({ permitId, open, onOpenChange, onEdit }: Pro
                             </div>
                           )}
                         </div>
-                        {canManage && !isRevoked && (
-                          <button
-                            type="button"
-                            aria-label={t('permits.actions.removePerson')}
-                            className="inline-flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground hover:bg-surface-tinted hover:text-destructive"
-                            onClick={() => removePerson.mutate(p.id)}
-                          >
-                            <Trash2 className="h-4 w-4" aria-hidden />
-                          </button>
-                        )}
+                        <div className="flex flex-none items-center gap-1.5">
+                          <RowDocButton
+                            docName={p.id_doc_name}
+                            label={t('permits.person.idDoc')}
+                            canManage={canManage && !isRevoked}
+                            busy={personDoc.isPending}
+                            onUpload={(file) => personDoc.mutate({ personId: p.id, file })}
+                            onPreview={() => void previewPersonDoc(p.id)}
+                          />
+                          {canManage && !isRevoked && (
+                            <button
+                              type="button"
+                              aria-label={t('permits.actions.removePerson')}
+                              className="inline-flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground hover:bg-surface-tinted hover:text-destructive"
+                              onClick={() => removePerson.mutate(p.id)}
+                            >
+                              <Trash2 className="h-4 w-4" aria-hidden />
+                            </button>
+                          )}
+                        </div>
                       </li>
                     ))}
                   </ul>
@@ -341,6 +398,86 @@ export function PermitDetailDialog({ permitId, open, onOpenChange, onEdit }: Pro
                     >
                       <UserPlus className="me-1.5 h-4 w-4" aria-hidden />
                       {t('permits.person.add')}
+                    </Button>
+                  </div>
+                )}
+              </section>
+
+              {/* Vehicles */}
+              <section className="flex flex-col gap-2">
+                <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                  {t('permits.detail.vehicles')}
+                </h3>
+                {activeVehicles.length === 0 ? (
+                  <p className="text-xs text-muted-foreground">{t('permits.detail.noVehicles')}</p>
+                ) : (
+                  <ul className="flex flex-col divide-y divide-border rounded-lg border border-border">
+                    {activeVehicles.map((v) => (
+                      <li key={v.id} className="flex items-center justify-between gap-2 px-3 py-2">
+                        <div className="min-w-0">
+                          <div className="truncate font-medium text-foreground" dir="auto">
+                            <span className="font-mono">{v.plate_no}</span>
+                            {v.plate_emirate && (
+                              <span className="ms-1.5 text-xs font-normal text-muted-foreground">
+                                {v.plate_emirate}
+                              </span>
+                            )}
+                          </div>
+                          {(v.make_model || v.driver_name) && (
+                            <div className="truncate text-xs text-muted-foreground">
+                              {[v.make_model, v.driver_name].filter(Boolean).join(' · ')}
+                            </div>
+                          )}
+                        </div>
+                        <div className="flex flex-none items-center gap-1.5">
+                          <RowDocButton
+                            docName={v.license_doc_name}
+                            label={t('permits.vehicle.licence')}
+                            canManage={canManage && !isRevoked}
+                            busy={vehicleDoc.isPending}
+                            onUpload={(file) => vehicleDoc.mutate({ vehicleId: v.id, file })}
+                            onPreview={() => void previewVehicleDoc(v.id)}
+                          />
+                          {canManage && !isRevoked && (
+                            <button
+                              type="button"
+                              aria-label={t('permits.vehicle.remove')}
+                              className="inline-flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground hover:bg-surface-tinted hover:text-destructive"
+                              onClick={() => removeVehicle.mutate(v.id)}
+                            >
+                              <Trash2 className="h-4 w-4" aria-hidden />
+                            </button>
+                          )}
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+
+                {/* Add vehicle (manage + not revoked) */}
+                {canManage && !isRevoked && (
+                  <div className="grid grid-cols-1 gap-2 sm:grid-cols-[1fr_1fr_auto]">
+                    <input
+                      className={inputCls}
+                      placeholder={t('permits.vehicle.plate')}
+                      value={vehiclePlate}
+                      onChange={(e) => setVehiclePlate(e.target.value)}
+                    />
+                    <input
+                      className={inputCls}
+                      placeholder={t('permits.vehicle.makeModel')}
+                      dir="auto"
+                      value={vehicleMakeModel}
+                      onChange={(e) => setVehicleMakeModel(e.target.value)}
+                    />
+                    <Button
+                      type="button"
+                      variant="outline"
+                      disabled={vehiclePlate.trim().length === 0 || addVehicle.isPending}
+                      onClick={() => addVehicle.mutate()}
+                    >
+                      <Car className="me-1.5 h-4 w-4" aria-hidden />
+                      {t('permits.vehicle.add')}
                     </Button>
                   </div>
                 )}

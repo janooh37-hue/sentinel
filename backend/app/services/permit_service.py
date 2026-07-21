@@ -25,7 +25,13 @@ from sqlalchemy.orm import Session, selectinload
 
 from app.api.errors import NotFoundError, ValidationFailedError
 from app.config import get_settings
-from app.db.models import AuditLog, Permit, PermitPerson, PermitVisit
+from app.db.models import (
+    AuditLog,
+    Permit,
+    PermitPerson,
+    PermitVehicle,
+    PermitVisit,
+)
 from app.schemas.permit import (
     PermitCreate,
     PermitListItem,
@@ -33,6 +39,8 @@ from app.schemas.permit import (
     PermitPersonRead,
     PermitRead,
     PermitUpdate,
+    PermitVehicleCreate,
+    PermitVehicleRead,
     PermitVisitCreate,
 )
 
@@ -52,6 +60,14 @@ def _utcnow() -> datetime:
 
 def _active_people(row: Permit) -> list[PermitPerson]:
     return [p for p in row.people if p.removed_at is None]
+
+
+def _active_vehicles(row: Permit) -> list[PermitVehicle]:
+    return [v for v in row.vehicles if v.removed_at is None]
+
+
+def _basename(path: str | None) -> str | None:
+    return Path(path).name if path else None
 
 
 def _duration_days(row: Permit) -> int:
@@ -74,22 +90,33 @@ def _derived_status(row: Permit, *, today: date) -> str:
     return "active"
 
 
-def _document_name(row: Permit) -> str | None:
-    return Path(row.document_path).name if row.document_path else None
+def _person_read(p: PermitPerson) -> PermitPersonRead:
+    return PermitPersonRead.model_validate(p).model_copy(
+        update={"id_doc_name": _basename(p.id_doc_path)}
+    )
+
+
+def _vehicle_read(v: PermitVehicle) -> PermitVehicleRead:
+    return PermitVehicleRead.model_validate(v).model_copy(
+        update={"license_doc_name": _basename(v.license_doc_path)}
+    )
 
 
 def to_read(row: Permit, *, today: date | None = None) -> PermitRead:
-    """Build the detail schema (with people) + computed fields off an ORM row."""
+    """Build the detail schema (people + vehicles) + computed fields off a row."""
     today = today or date.today()
-    active = _active_people(row)
+    people = _active_people(row)
+    vehicles = _active_vehicles(row)
     return PermitRead.model_validate(row).model_copy(
         update={
             "derived_status": _derived_status(row, today=today),
             "duration_days": _duration_days(row),
             "days_remaining": _days_remaining(row, today=today),
-            "people_count": len(active),
-            "document_name": _document_name(row),
-            "people": [PermitPersonRead.model_validate(p) for p in active],
+            "people_count": len(people),
+            "vehicle_count": len(vehicles),
+            "document_name": _basename(row.document_path),
+            "people": [_person_read(p) for p in people],
+            "vehicles": [_vehicle_read(v) for v in vehicles],
         }
     )
 
@@ -102,6 +129,7 @@ def to_list_item(row: Permit, *, today: date | None = None) -> PermitListItem:
             "duration_days": _duration_days(row),
             "days_remaining": _days_remaining(row, today=today),
             "people_count": len(_active_people(row)),
+            "vehicle_count": len(_active_vehicles(row)),
             "has_document": bool(row.document_path),
         }
     )
@@ -111,7 +139,9 @@ def to_list_item(row: Permit, *, today: date | None = None) -> PermitListItem:
 
 
 def _base_query(*, include_deleted: bool):
-    stmt = select(Permit).options(selectinload(Permit.people))
+    stmt = select(Permit).options(
+        selectinload(Permit.people), selectinload(Permit.vehicles)
+    )
     if not include_deleted:
         stmt = stmt.where(Permit.deleted_at.is_(None))
     return stmt
@@ -211,6 +241,8 @@ def create_permit(db: Session, payload: PermitCreate, *, actor: str | None = Non
     )
     for person in payload.people:
         row.people.append(_new_person(person))
+    for vehicle in payload.vehicles:
+        row.vehicles.append(_new_vehicle(vehicle))
     db.add(row)
     db.flush()  # assign row.id so we can stamp the reference
     row.permit_no = f"PMT-{row.id:04d}"
@@ -343,6 +375,58 @@ def remove_person(
     row.updated_at = _utcnow()
     db.commit()
     _audit(db, "permit.person_removed", permit_id, actor, {"person_id": person_id})
+    return get_permit(db, permit_id)
+
+
+# ─── vehicles ──────────────────────────────────────────────────────────────────
+
+
+def _new_vehicle(payload: PermitVehicleCreate) -> PermitVehicle:
+    return PermitVehicle(
+        plate_no=payload.plate_no,
+        plate_emirate=payload.plate_emirate,
+        make_model=payload.make_model,
+        driver_name=payload.driver_name,
+    )
+
+
+def add_vehicle(
+    db: Session, permit_id: int, payload: PermitVehicleCreate, *, actor: str | None = None
+) -> Permit:
+    row = get_permit(db, permit_id)
+    if row.status == "revoked":
+        raise ValidationFailedError(
+            "PERMIT_REVOKED", "Cannot add vehicles to a revoked permit.", id=permit_id
+        )
+    row.vehicles.append(_new_vehicle(payload))
+    row.updated_at = _utcnow()
+    db.commit()
+    _audit(db, "permit.vehicle_added", permit_id, actor, {"plate_no": payload.plate_no})
+    return get_permit(db, permit_id)
+
+
+def remove_vehicle(
+    db: Session, permit_id: int, vehicle_id: int, *, actor: str | None = None
+) -> Permit:
+    row = get_permit(db, permit_id)
+    vehicle = next((v for v in row.vehicles if v.id == vehicle_id), None)
+    if vehicle is None:
+        raise NotFoundError(
+            "PERMIT_VEHICLE_NOT_FOUND",
+            f"Vehicle {vehicle_id} is not on permit {permit_id}",
+            permit_id=permit_id,
+            vehicle_id=vehicle_id,
+        )
+    if vehicle.removed_at is not None:
+        raise ValidationFailedError(
+            "PERMIT_VEHICLE_REMOVED",
+            "This vehicle has already been removed from the permit.",
+            vehicle_id=vehicle_id,
+        )
+    vehicle.removed_at = _utcnow()
+    row.updated_at = _utcnow()
+    db.commit()
+    _audit(db, "permit.vehicle_removed", permit_id, actor, {"vehicle_id": vehicle_id})
     return get_permit(db, permit_id)
 
 
@@ -520,6 +604,109 @@ def remove_document(db: Session, permit_id: int, *, actor: str | None = None) ->
         db.commit()
         _audit(db, "permit.document_removed", permit_id, actor, {})
     return get_permit(db, permit_id)
+
+
+def _store_entity_file(permit_id: int, subdir: str, filename: str, data: bytes) -> str:
+    """Validate + persist an attachment under the permit's document tree.
+    Returns the data-dir-relative path to store on the owning row."""
+    if len(data) == 0:
+        raise ValidationFailedError("PERMIT_DOC_EMPTY", "Uploaded file is empty.")
+    if len(data) > MAX_DOCUMENT_BYTES:
+        raise ValidationFailedError(
+            "PERMIT_DOC_TOO_LARGE",
+            f"File exceeds {MAX_DOCUMENT_BYTES // (1024 * 1024)} MiB.",
+            size=len(data),
+        )
+    data_dir = get_settings().data_dir
+    dest_dir = data_dir / "permit_documents" / str(permit_id) / subdir
+    dest_dir.mkdir(parents=True, exist_ok=True)
+    dest = dest_dir / _safe_filename(filename)
+    dest.write_bytes(data)
+    return dest.relative_to(data_dir).as_posix()
+
+
+def _resolve_file(rel_path: str | None, *, missing_code: str, permit_id: int) -> Path:
+    if not rel_path:
+        raise NotFoundError(missing_code, "No document attached.", id=permit_id)
+    path = get_settings().data_dir / rel_path
+    if not path.exists():
+        raise NotFoundError(
+            "PERMIT_DOC_MISSING", "The attached document file is missing on disk.",
+            id=permit_id,
+        )
+    return path
+
+
+def _find_person(row: Permit, person_id: int) -> PermitPerson:
+    person = next((p for p in row.people if p.id == person_id), None)
+    if person is None or person.removed_at is not None:
+        raise NotFoundError(
+            "PERMIT_PERSON_NOT_FOUND",
+            f"Person {person_id} is not on permit {row.id}",
+            permit_id=row.id, person_id=person_id,
+        )
+    return person
+
+
+def _find_vehicle(row: Permit, vehicle_id: int) -> PermitVehicle:
+    vehicle = next((v for v in row.vehicles if v.id == vehicle_id), None)
+    if vehicle is None or vehicle.removed_at is not None:
+        raise NotFoundError(
+            "PERMIT_VEHICLE_NOT_FOUND",
+            f"Vehicle {vehicle_id} is not on permit {row.id}",
+            permit_id=row.id, vehicle_id=vehicle_id,
+        )
+    return vehicle
+
+
+def attach_person_document(
+    db: Session, permit_id: int, person_id: int, filename: str, data: bytes,
+    *, actor: str | None = None,
+) -> Permit:
+    """Attach (or replace) a scan of the person's UAE ID card."""
+    row = get_permit(db, permit_id)
+    person = _find_person(row, person_id)
+    person.id_doc_path = _store_entity_file(permit_id, f"person_{person_id}", filename, data)
+    row.updated_at = _utcnow()
+    db.commit()
+    _audit(db, "permit.person_id_attached", permit_id, actor, {"person_id": person_id})
+    return get_permit(db, permit_id)
+
+
+def get_person_document_file(db: Session, permit_id: int, person_id: int) -> Path:
+    row = get_permit(db, permit_id, include_deleted=True)
+    person = next((p for p in row.people if p.id == person_id), None)
+    if person is None:
+        raise NotFoundError(
+            "PERMIT_PERSON_NOT_FOUND", f"Person {person_id} is not on permit {permit_id}",
+            permit_id=permit_id, person_id=person_id,
+        )
+    return _resolve_file(person.id_doc_path, missing_code="PERMIT_DOC_NOT_FOUND", permit_id=permit_id)
+
+
+def attach_vehicle_document(
+    db: Session, permit_id: int, vehicle_id: int, filename: str, data: bytes,
+    *, actor: str | None = None,
+) -> Permit:
+    """Attach (or replace) a scan of the vehicle licence (mulkiya)."""
+    row = get_permit(db, permit_id)
+    vehicle = _find_vehicle(row, vehicle_id)
+    vehicle.license_doc_path = _store_entity_file(permit_id, f"vehicle_{vehicle_id}", filename, data)
+    row.updated_at = _utcnow()
+    db.commit()
+    _audit(db, "permit.vehicle_license_attached", permit_id, actor, {"vehicle_id": vehicle_id})
+    return get_permit(db, permit_id)
+
+
+def get_vehicle_document_file(db: Session, permit_id: int, vehicle_id: int) -> Path:
+    row = get_permit(db, permit_id, include_deleted=True)
+    vehicle = next((v for v in row.vehicles if v.id == vehicle_id), None)
+    if vehicle is None:
+        raise NotFoundError(
+            "PERMIT_VEHICLE_NOT_FOUND", f"Vehicle {vehicle_id} is not on permit {permit_id}",
+            permit_id=permit_id, vehicle_id=vehicle_id,
+        )
+    return _resolve_file(vehicle.license_doc_path, missing_code="PERMIT_DOC_NOT_FOUND", permit_id=permit_id)
 
 
 # ─── audit ─────────────────────────────────────────────────────────────────────

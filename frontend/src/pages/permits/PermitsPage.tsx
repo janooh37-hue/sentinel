@@ -176,6 +176,7 @@ export function PermitsPage(): React.JSX.Element {
                   <TableHead>{t('permits.columns.zone')}</TableHead>
                   <TableHead>{t('permits.columns.window')}</TableHead>
                   <TableHead className="text-end">{t('permits.columns.people')}</TableHead>
+                  <TableHead className="text-end">{t('permits.columns.vehicles')}</TableHead>
                   <TableHead>{t('permits.columns.status')}</TableHead>
                 </TableRow>
               </TableHeader>
@@ -244,6 +245,7 @@ function PermitRowView({ row, onOpen }: { row: PermitListItem; onOpen: () => voi
         {remaining && <span className="ms-2 not-italic">· {remaining}</span>}
       </TableCell>
       <TableCell className="text-end tabular-nums">{row.people_count}</TableCell>
+      <TableCell className="text-end tabular-nums">{row.vehicle_count}</TableCell>
       <TableCell>
         <Badge tone={statusTone(row.derived_status)}>{t(`permits.status.${row.derived_status}`)}</Badge>
       </TableCell>

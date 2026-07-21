@@ -8,7 +8,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { Trash2, Plus, Upload } from 'lucide-react'
+import { Trash2, Plus, Upload, Car } from 'lucide-react'
 import { toast } from 'sonner'
 
 import {
@@ -17,6 +17,7 @@ import {
   type PermitCreate,
   type PermitPersonCreate,
   type PermitRead,
+  type PermitVehicleCreate,
   type PermitZone,
 } from '@/lib/api'
 import {
@@ -45,9 +46,13 @@ interface Props {
 interface PersonRow extends PermitPersonCreate {
   key: string
 }
+interface VehicleRow extends PermitVehicleCreate {
+  key: string
+}
 
 let rowSeq = 0
 const newRow = (): PersonRow => ({ key: `r${rowSeq++}`, name: '' })
+const newVehicleRow = (): VehicleRow => ({ key: `v${rowSeq++}`, plate_no: '' })
 
 export function PermitFormDialog({ open, permit, onOpenChange, onSaved }: Props): React.JSX.Element {
   const { t } = useTranslation()
@@ -61,6 +66,7 @@ export function PermitFormDialog({ open, permit, onOpenChange, onSaved }: Props)
   const [purpose, setPurpose] = useState('')
   const [notes, setNotes] = useState('')
   const [people, setPeople] = useState<PersonRow[]>([])
+  const [vehicles, setVehicles] = useState<VehicleRow[]>([])
   const [docFile, setDocFile] = useState<File | null>(null)
   const fileRef = useRef<HTMLInputElement>(null)
 
@@ -76,6 +82,7 @@ export function PermitFormDialog({ open, permit, onOpenChange, onSaved }: Props)
     setPurpose(permit?.purpose ?? '')
     setNotes(permit?.notes ?? '')
     setPeople([])
+    setVehicles([])
     setDocFile(null)
   }, [open, permit])
 
@@ -109,6 +116,12 @@ export function PermitFormDialog({ open, permit, onOpenChange, onSaved }: Props)
             nationality: p.nationality?.trim() || null,
             role: p.role?.trim() || null,
           })),
+        vehicles: vehicles
+          .filter((v) => v.plate_no.trim().length > 0)
+          .map((v) => ({
+            plate_no: v.plate_no.trim(),
+            make_model: v.make_model?.trim() || null,
+          })),
       }
       const created = await api.createPermit(body)
       // The scan can only attach once the permit has an id — upload it now.
@@ -127,6 +140,8 @@ export function PermitFormDialog({ open, permit, onOpenChange, onSaved }: Props)
 
   const patchRow = (key: string, patch: Partial<PersonRow>): void =>
     setPeople((rows) => rows.map((r) => (r.key === key ? { ...r, ...patch } : r)))
+  const patchVehicle = (key: string, patch: Partial<VehicleRow>): void =>
+    setVehicles((rows) => rows.map((r) => (r.key === key ? { ...r, ...patch } : r)))
 
   const title = useMemo(
     () => (isEdit ? t('permits.form.editTitle') : t('permits.form.newTitle')),
@@ -279,6 +294,58 @@ export function PermitFormDialog({ open, permit, onOpenChange, onSaved }: Props)
                   </div>
                 ))
               )}
+            </div>
+          )}
+
+          {/* Vehicles — create only */}
+          {!isEdit && (
+            <div className="flex flex-col gap-2 rounded-lg border border-border p-3">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-medium text-muted-foreground">
+                  {t('permits.form.vehicles')}
+                </span>
+                <button
+                  type="button"
+                  className="inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline"
+                  onClick={() => setVehicles((r) => [...r, newVehicleRow()])}
+                >
+                  <Plus className="h-3.5 w-3.5" aria-hidden />
+                  {t('permits.form.addVehicleRow')}
+                </button>
+              </div>
+              {vehicles.length === 0 ? (
+                <p className="text-xs text-muted-foreground">{t('permits.form.vehiclesHelp')}</p>
+              ) : (
+                vehicles.map((row) => (
+                  <div key={row.key} className="grid grid-cols-1 gap-2 sm:grid-cols-[1fr_1fr_auto]">
+                    <input
+                      className={`${inputCls} font-mono`}
+                      placeholder={t('permits.vehicle.plate')}
+                      value={row.plate_no}
+                      onChange={(e) => patchVehicle(row.key, { plate_no: e.target.value })}
+                    />
+                    <input
+                      className={inputCls}
+                      placeholder={t('permits.vehicle.makeModel')}
+                      dir="auto"
+                      value={row.make_model ?? ''}
+                      onChange={(e) => patchVehicle(row.key, { make_model: e.target.value })}
+                    />
+                    <button
+                      type="button"
+                      aria-label={t('common.remove')}
+                      className="inline-flex h-9 w-9 items-center justify-center rounded-md text-muted-foreground hover:bg-surface-tinted hover:text-destructive"
+                      onClick={() => setVehicles((r) => r.filter((x) => x.key !== row.key))}
+                    >
+                      <Trash2 className="h-4 w-4" aria-hidden />
+                    </button>
+                  </div>
+                ))
+              )}
+              <p className="flex items-center gap-1.5 text-[0.7rem] text-muted-foreground">
+                <Car className="h-3.5 w-3.5" aria-hidden />
+                {t('permits.form.docsAfterHint')}
+              </p>
             </div>
           )}
         </div>
