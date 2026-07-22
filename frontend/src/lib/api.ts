@@ -1134,24 +1134,6 @@ export const api = {
     form.append('file', file)
     return multipart<PersonIdScan>('/permits/scan-emirates-id', form)
   },
-  /**
-   * Absolute URL to print the generated permit book PDF.
-   *
-   * NOTE: there is no direct /books/{id}/pdf endpoint. The real PDF URL is
-   * `/api/v1/documents/{document_id}/download?format=pdf` where document_id
-   * lives on the book's current version. Callers that have a BookVersionRead
-   * (from getBook) should use its `.pdf_url` directly.
-   *
-   * TODO(print-url): This helper takes the document_id (not bookId) until a
-   * server-side /books/{id}/pdf redirect exists. Rename when the backend ships
-   * that route. For now Tasks 10-11 must call getBook(permit.book_id) first and
-   * pass the current version's document_id here.
-   */
-  // ponytail: signature says bookId but carries documentId until backend adds
-  // GET /books/{id}/pdf; rename param when that route ships.
-  permitPrintUrl: (documentId: number): string =>
-    `${BASE}/documents/${documentId}/download?format=pdf`,
-
   uploadLeaveCertificate: (id: number, file: File) => {
     const form = new FormData()
     form.append('file', file)

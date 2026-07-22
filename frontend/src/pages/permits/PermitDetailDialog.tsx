@@ -253,7 +253,7 @@ export function PermitDetailDialog({ permitId, open, onOpenChange, onEdit }: Pro
     try {
       const book = await api.getBook(permit.book_id)
       const versions = book.versions ?? []
-      const latest = versions.length > 0 ? versions[versions.length - 1] : null
+      const latest = [...versions].sort((a, b) => b.version_no - a.version_no)[0] ?? null
       const pdfUrl = latest?.pdf_url ?? null
       if (pdfUrl) {
         window.open(pdfUrl, '_blank', 'noopener')
@@ -537,7 +537,7 @@ export function PermitDetailDialog({ permitId, open, onOpenChange, onEdit }: Pro
                           )}
                           {(v.plate_category || v.traffic_no || v.reg_expiry) && (
                             <div className="truncate text-xs text-muted-foreground font-mono">
-                              {[v.plate_category, v.traffic_no, v.reg_expiry ? t('permits.vehicle.expiry', { date: v.reg_expiry }) : null].filter(Boolean).join(' · ')}
+                              {[v.plate_category, v.traffic_no, v.reg_expiry ? t('permits.vehicle.expiry', { date: fmtDate(v.reg_expiry) }) : null].filter(Boolean).join(' · ')}
                             </div>
                           )}
                         </div>
