@@ -13,7 +13,7 @@ from html import escape
 ZONE_AR: dict[str, str] = {
     "green": "المنطقة الخضراء",
     "red": "المنطقة الحمراء",
-    "work_residence": "سكن الموظفين",
+    "work_residence": "سكن العمل",
 }
 
 
@@ -55,7 +55,7 @@ def _vehicle_table(vehicles: list[dict[str, str]]) -> str:
         "<p><b>الجدول الثاني: بيانات المركبات</b></p>"
         '<table border="1" cellspacing="0" cellpadding="4"><thead><tr>'
         "<th>اللوحة</th><th>الإمارة</th><th>الفئة</th><th>رقم المرور</th>"
-        "<th>النوع/الموديل</th><th>اللون</th><th>انتهاء الرخصة</th>"
+        "<th>الطراز / النوع</th><th>اللون</th><th>انتهاء الرخصة</th>"
         f"</tr></thead><tbody>{rows}</tbody></table>"
     )
 

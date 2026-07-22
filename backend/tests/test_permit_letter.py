@@ -20,7 +20,7 @@ V1 = [
 
 def test_zone_phrase_join():
     assert zones_phrase(["green"]) == "المنطقة الخضراء"
-    assert zones_phrase(["green", "work_residence"]) == "المنطقة الخضراء وسكن الموظفين"
+    assert zones_phrase(["green", "work_residence"]) == "المنطقة الخضراء وسكن العمل"
 
 
 def test_single_person_single_vehicle():
@@ -89,5 +89,5 @@ def test_work_residence_zone_phrase_and_person_term():
         people=P1,
         vehicles=[],
     )
-    assert "سكن الموظفين" in html  # allowed zone phrase renders
+    assert "سكن العمل" in html  # zone phrase renders (matches app-wide label)
     assert "للفرد المبيّن" in html  # person term stays الفرد, not الموظف
