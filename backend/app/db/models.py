@@ -450,6 +450,8 @@ class Permit(Base):
     document_path: Mapped[str | None] = mapped_column(Text, nullable=True)
     revoked_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     revoke_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    book_id: Mapped[int | None] = mapped_column(Integer)
+    manager_id: Mapped[int | None] = mapped_column(Integer)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
     updated_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
@@ -491,9 +493,7 @@ class PermitPerson(Base):
     __tablename__ = "permit_people"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    permit_id: Mapped[int] = mapped_column(
-        ForeignKey("permits.id", ondelete="CASCADE")
-    )
+    permit_id: Mapped[int] = mapped_column(ForeignKey("permits.id", ondelete="CASCADE"))
     name: Mapped[str] = mapped_column(String(255))
     uae_id: Mapped[str | None] = mapped_column(String(32), nullable=True)
     nationality: Mapped[str | None] = mapped_column(String(64), nullable=True)
@@ -518,9 +518,7 @@ class PermitVehicle(Base):
     __tablename__ = "permit_vehicles"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    permit_id: Mapped[int] = mapped_column(
-        ForeignKey("permits.id", ondelete="CASCADE")
-    )
+    permit_id: Mapped[int] = mapped_column(ForeignKey("permits.id", ondelete="CASCADE"))
     # Optional so a vehicle can be added from its licence scan (OCR fills it).
     plate_no: Mapped[str | None] = mapped_column(String(32), nullable=True)
     plate_emirate: Mapped[str | None] = mapped_column(String(32), nullable=True)
@@ -528,6 +526,11 @@ class PermitVehicle(Base):
     driver_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
     # Scan of the vehicle licence / mulkiya (relative to the data dir). Optional.
     license_doc_path: Mapped[str | None] = mapped_column(Text, nullable=True)
+    colour: Mapped[str | None] = mapped_column(String(32))
+    vehicle_type: Mapped[str | None] = mapped_column(String(64))
+    plate_category: Mapped[str | None] = mapped_column(String(32))
+    traffic_no: Mapped[str | None] = mapped_column(String(32))
+    reg_expiry: Mapped[date | None] = mapped_column(Date)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
     removed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
@@ -546,9 +549,7 @@ class PermitVisit(Base):
     __tablename__ = "permit_visits"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    permit_id: Mapped[int] = mapped_column(
-        ForeignKey("permits.id", ondelete="CASCADE")
-    )
+    permit_id: Mapped[int] = mapped_column(ForeignKey("permits.id", ondelete="CASCADE"))
     person_id: Mapped[int | None] = mapped_column(
         ForeignKey("permit_people.id", ondelete="SET NULL"), nullable=True
     )
@@ -563,9 +564,7 @@ class PermitVisit(Base):
 
     permit: Mapped[Permit] = relationship(back_populates="visits")
 
-    __table_args__ = (
-        Index("ix_permit_visits_permit_occurred", "permit_id", "occurred_at"),
-    )
+    __table_args__ = (Index("ix_permit_visits_permit_occurred", "permit_id", "occurred_at"),)
 
 
 class WhatsAppMessage(Base):
