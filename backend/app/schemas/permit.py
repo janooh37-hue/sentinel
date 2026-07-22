@@ -52,24 +52,23 @@ class PermitPersonRead(ORMBase):
 
 
 class PermitVehicleCreate(BaseModel):
-    plate_no: str = Field(min_length=1, max_length=32)
+    # Optional — a vehicle may be added from its licence scan (OCR fills it).
+    plate_no: str | None = Field(default=None, max_length=32)
     plate_emirate: str | None = Field(default=None, max_length=32)
     make_model: str | None = Field(default=None, max_length=128)
     driver_name: str | None = Field(default=None, max_length=255)
 
     @field_validator("plate_no")
     @classmethod
-    def _strip_plate(cls, v: str) -> str:
-        v = v.strip()
-        if not v:
-            raise ValueError("plate_no must not be empty")
-        return v
+    def _strip_plate(cls, v: str | None) -> str | None:
+        v = (v or "").strip()
+        return v or None
 
 
 class PermitVehicleRead(ORMBase):
     id: int
     permit_id: int
-    plate_no: str
+    plate_no: str | None = None
     plate_emirate: str | None = None
     make_model: str | None = None
     driver_name: str | None = None

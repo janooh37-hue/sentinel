@@ -150,14 +150,17 @@ export function PermitDetailDialog({ permitId, open, onOpenChange, onEdit }: Pro
   const personDoc = useMutation({
     mutationFn: ({ personId, file }: { personId: number; file: File }) =>
       api.uploadPersonDocument(permitId, personId, file),
-    onSuccess: invalidate,
+    onSuccess: () => {
+      invalidate()
+      toast.success(t('permits.doc.scanAttached'))
+    },
     onError: onErr,
   })
 
   const addVehicle = useMutation({
     mutationFn: () =>
       api.addPermitVehicle(permitId, {
-        plate_no: vehiclePlate.trim(),
+        plate_no: vehiclePlate.trim() || null,
         make_model: vehicleMakeModel.trim() || null,
       }),
     onSuccess: () => {
@@ -177,7 +180,10 @@ export function PermitDetailDialog({ permitId, open, onOpenChange, onEdit }: Pro
   const vehicleDoc = useMutation({
     mutationFn: ({ vehicleId, file }: { vehicleId: number; file: File }) =>
       api.uploadVehicleDocument(permitId, vehicleId, file),
-    onSuccess: invalidate,
+    onSuccess: () => {
+      invalidate()
+      toast.success(t('permits.doc.scanAttached'))
+    },
     onError: onErr,
   })
 
@@ -201,7 +207,7 @@ export function PermitDetailDialog({ permitId, open, onOpenChange, onEdit }: Pro
 
   return (
     <DialogRoot open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-xl">
+      <DialogContent className="max-w-2xl">
         <DialogHeader>
           <DialogTitle>
             {permit ? t('permits.detail.title', { no: permit.permit_no ?? permit.id }) : t('common.loading')}
@@ -416,7 +422,7 @@ export function PermitDetailDialog({ permitId, open, onOpenChange, onEdit }: Pro
                       <li key={v.id} className="flex items-center justify-between gap-2 px-3 py-2">
                         <div className="min-w-0">
                           <div className="truncate font-medium text-foreground" dir="auto">
-                            <span className="font-mono">{v.plate_no}</span>
+                            <span className="font-mono">{v.plate_no ?? t('permits.vehicle.noPlate')}</span>
                             {v.plate_emirate && (
                               <span className="ms-1.5 text-xs font-normal text-muted-foreground">
                                 {v.plate_emirate}
@@ -473,7 +479,10 @@ export function PermitDetailDialog({ permitId, open, onOpenChange, onEdit }: Pro
                     <Button
                       type="button"
                       variant="outline"
-                      disabled={vehiclePlate.trim().length === 0 || addVehicle.isPending}
+                      disabled={
+                        (vehiclePlate.trim().length === 0 && vehicleMakeModel.trim().length === 0) ||
+                        addVehicle.isPending
+                      }
                       onClick={() => addVehicle.mutate()}
                     >
                       <Car className="me-1.5 h-4 w-4" aria-hidden />

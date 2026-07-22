@@ -21,13 +21,14 @@ TODAY = date.today()
 
 
 def _mk(db, **over):
+    # A permit requires ≥1 person, so default to one unless the caller overrides.
     payload = PermitCreate(
         company=over.pop("company", "Acme Contracting"),
         zone=over.pop("zone", "green"),
         start_date=over.pop("start_date", TODAY),
         end_date=over.pop("end_date", TODAY + timedelta(days=30)),
         purpose=over.pop("purpose", None),
-        people=over.pop("people", []),
+        people=over.pop("people", [PermitPersonCreate(name="Worker")]),
     )
     return svc.create_permit(db, payload, actor="tester@x.ae")
 
@@ -39,7 +40,26 @@ def test_create_stamps_permit_no_and_defaults(db_session):
     read = svc.to_read(row)
     assert read.duration_days == 31
     assert read.derived_status == "active"
-    assert read.people_count == 0
+    assert read.people_count == 1  # the default person
+
+
+def test_create_requires_at_least_one_person(db_session):
+    with pytest.raises(ValidationFailedError):
+        svc.create_permit(
+            db_session,
+            PermitCreate(
+                company="X", zone="green",
+                start_date=TODAY, end_date=TODAY + timedelta(days=5), people=[],
+            ),
+        )
+
+
+def test_vehicle_plate_is_optional(db_session):
+    row = _mk(db_session)
+    row = svc.add_vehicle(db_session, row.id, PermitVehicleCreate(make_model="Toyota Hilux"))
+    v = svc.to_read(row).vehicles[0]
+    assert v.plate_no is None
+    assert v.make_model == "Toyota Hilux"
 
 
 def test_create_with_people_counts_active(db_session):
@@ -94,14 +114,14 @@ def test_revoke_then_blocks_edits(db_session):
 
 
 def test_add_and_remove_person(db_session):
-    row = _mk(db_session)
+    row = _mk(db_session)  # starts with 1 default person
     svc.add_person(db_session, row.id, PermitPersonCreate(name="Ali"))
     row = svc.add_person(db_session, row.id, PermitPersonCreate(name="Bilal"))
-    assert svc.to_read(row).people_count == 2
+    assert svc.to_read(row).people_count == 3
     pid = svc.to_read(row).people[0].id
     row = svc.remove_person(db_session, row.id, pid)
     read = svc.to_read(row)
-    assert read.people_count == 1  # soft-removed person no longer counted
+    assert read.people_count == 2  # soft-removed person no longer counted
 
 
 def test_remove_missing_person_404(db_session):
@@ -190,6 +210,7 @@ def test_create_with_vehicles_counts_active(db_session):
         db_session,
         PermitCreate(
             company="X", zone="both", start_date=TODAY, end_date=TODAY + timedelta(days=10),
+            people=[PermitPersonCreate(name="Driver")],
             vehicles=[
                 PermitVehicleCreate(plate_no="A 12345", plate_emirate="Dubai", make_model="Toyota Hilux"),
                 PermitVehicleCreate(plate_no="B 67890"),

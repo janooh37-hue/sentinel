@@ -520,7 +520,8 @@ class PermitVehicle(Base):
     permit_id: Mapped[int] = mapped_column(
         ForeignKey("permits.id", ondelete="CASCADE")
     )
-    plate_no: Mapped[str] = mapped_column(String(32))
+    # Optional so a vehicle can be added from its licence scan (OCR fills it).
+    plate_no: Mapped[str | None] = mapped_column(String(32), nullable=True)
     plate_emirate: Mapped[str | None] = mapped_column(String(32), nullable=True)
     make_model: Mapped[str | None] = mapped_column(String(128), nullable=True)
     driver_name: Mapped[str | None] = mapped_column(String(255), nullable=True)

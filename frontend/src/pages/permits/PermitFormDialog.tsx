@@ -81,13 +81,16 @@ export function PermitFormDialog({ open, permit, onOpenChange, onSaved }: Props)
     setEndDate(permit ? permit.end_date.slice(0, 10) : todayISO())
     setPurpose(permit?.purpose ?? '')
     setNotes(permit?.notes ?? '')
-    setPeople([])
+    // A permit must authorize at least one person, so start create with one row.
+    setPeople(isEdit ? [] : [newRow()])
     setVehicles([])
     setDocFile(null)
-  }, [open, permit])
+  }, [open, permit, isEdit])
 
   const windowValid = endDate >= startDate
-  const canSave = company.trim().length > 0 && windowValid
+  const hasPerson = people.some((p) => p.name.trim().length > 0)
+  // Edit only touches the header; create additionally needs ≥1 named person.
+  const canSave = company.trim().length > 0 && windowValid && (isEdit || hasPerson)
 
   const mutation = useMutation({
     mutationFn: async (): Promise<PermitRead> => {
@@ -150,7 +153,7 @@ export function PermitFormDialog({ open, permit, onOpenChange, onSaved }: Props)
 
   return (
     <DialogRoot open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-xl">
+      <DialogContent className="max-w-2xl">
         <DialogHeader>
           <DialogTitle>{title}</DialogTitle>
           <DialogDescription>{t('permits.form.help')}</DialogDescription>
@@ -220,41 +223,12 @@ export function PermitFormDialog({ open, permit, onOpenChange, onSaved }: Props)
             />
           </label>
 
-          {/* Permit paper — create only (edit manages it from the detail view) */}
-          {!isEdit && (
-            <div className="flex flex-col gap-1.5">
-              <span className="text-xs text-muted-foreground">{t('permits.paper.formLabel')}</span>
-              <input
-                ref={fileRef}
-                type="file"
-                accept="application/pdf,image/*"
-                className="hidden"
-                onChange={(e) => setDocFile(e.target.files?.[0] ?? null)}
-              />
-              <button
-                type="button"
-                onClick={() => fileRef.current?.click()}
-                className="flex items-center gap-3 rounded-xl border border-dashed border-border-strong bg-surface px-3 py-3 text-start hover:border-ring hover:bg-surface-tinted"
-              >
-                <span className="grid h-9 w-9 flex-none place-items-center rounded-lg bg-primary-soft text-primary">
-                  <Upload className="h-[18px] w-[18px]" aria-hidden />
-                </span>
-                <span className="min-w-0">
-                  <span className="block truncate text-sm font-semibold text-foreground">
-                    {docFile ? docFile.name : t('permits.paper.upload')}
-                  </span>
-                  <span className="block text-xs text-muted-foreground">{t('permits.paper.uploadHelp')}</span>
-                </span>
-              </button>
-            </div>
-          )}
-
-          {/* People — create only */}
+          {/* People — create only (at least one required) */}
           {!isEdit && (
             <div className="flex flex-col gap-2 rounded-lg border border-border p-3">
               <div className="flex items-center justify-between">
-                <span className="text-xs font-medium text-muted-foreground">
-                  {t('permits.form.people')}
+                <span className="text-xs font-medium text-foreground">
+                  {t('permits.form.peopleRequired')}
                 </span>
                 <button
                   type="button"
@@ -265,9 +239,10 @@ export function PermitFormDialog({ open, permit, onOpenChange, onSaved }: Props)
                   {t('permits.form.addRow')}
                 </button>
               </div>
-              {people.length === 0 ? (
-                <p className="text-xs text-muted-foreground">{t('permits.form.peopleHelp')}</p>
-              ) : (
+              {!hasPerson && (
+                <p className="text-xs text-muted-foreground">{t('permits.form.peopleRequiredHelp')}</p>
+              )}
+              {people.length === 0 ? null : (
                 people.map((row) => (
                   <div key={row.key} className="grid grid-cols-1 gap-2 sm:grid-cols-[1fr_1fr_auto]">
                     <input
@@ -346,6 +321,36 @@ export function PermitFormDialog({ open, permit, onOpenChange, onSaved }: Props)
                 <Car className="h-3.5 w-3.5" aria-hidden />
                 {t('permits.form.docsAfterHint')}
               </p>
+            </div>
+          )}
+
+          {/* Permit paper — optional, last: the issued paper isn't always in
+              hand at creation. Managed from the detail view once issued. */}
+          {!isEdit && (
+            <div className="flex flex-col gap-1.5">
+              <span className="text-xs text-muted-foreground">{t('permits.paper.formLabel')}</span>
+              <input
+                ref={fileRef}
+                type="file"
+                accept="application/pdf,image/*"
+                className="hidden"
+                onChange={(e) => setDocFile(e.target.files?.[0] ?? null)}
+              />
+              <button
+                type="button"
+                onClick={() => fileRef.current?.click()}
+                className="flex items-center gap-3 rounded-xl border border-dashed border-border-strong bg-surface px-3 py-3 text-start hover:border-ring hover:bg-surface-tinted"
+              >
+                <span className="grid h-9 w-9 flex-none place-items-center rounded-lg bg-primary-soft text-primary">
+                  <Upload className="h-[18px] w-[18px]" aria-hidden />
+                </span>
+                <span className="min-w-0">
+                  <span className="block truncate text-sm font-semibold text-foreground">
+                    {docFile ? docFile.name : t('permits.paper.upload')}
+                  </span>
+                  <span className="block text-xs text-muted-foreground">{t('permits.paper.uploadHelp')}</span>
+                </span>
+              </button>
             </div>
           )}
         </div>

@@ -188,7 +188,7 @@ export interface PermitPersonCreate {
 export interface PermitVehicleRead {
   id: number
   permit_id: number
-  plate_no: string
+  plate_no: string | null
   plate_emirate: string | null
   make_model: string | null
   driver_name: string | null
@@ -199,7 +199,7 @@ export interface PermitVehicleRead {
 }
 
 export interface PermitVehicleCreate {
-  plate_no: string
+  plate_no?: string | null
   plate_emirate?: string | null
   make_model?: string | null
   driver_name?: string | null

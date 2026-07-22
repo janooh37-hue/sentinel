@@ -230,6 +230,10 @@ def _validate_window(start: date, end: date) -> None:
 
 def create_permit(db: Session, payload: PermitCreate, *, actor: str | None = None) -> Permit:
     _validate_window(payload.start_date, payload.end_date)
+    if not payload.people:
+        raise ValidationFailedError(
+            "PERMIT_NO_PEOPLE", "A permit must authorize at least one person."
+        )
     row = Permit(
         company=payload.company,
         zone=payload.zone,
@@ -659,17 +663,78 @@ def _find_vehicle(row: Permit, vehicle_id: int) -> PermitVehicle:
     return vehicle
 
 
+def _ocr_text(data: bytes) -> str | None:
+    """Best-effort OCR of an uploaded scan to text. Reuses the shared OCR
+    pipeline; returns None if OCR is unavailable or fails (never raises), so an
+    upload always succeeds even without the OCR engine installed."""
+    try:
+        from app.core.extraction.ocr import (  # local import: OCR libs are optional
+            OCR_GATE,
+            extract_text,
+            load_image,
+            text_from_pdf,
+        )
+    except Exception:  # noqa: BLE001 — OCR stack absent → skip extraction
+        return None
+    try:
+        with OCR_GATE:
+            if data[:4] == b"%PDF":
+                return text_from_pdf(data)
+            return extract_text(load_image(data)).text
+    except Exception:  # noqa: BLE001 — unavailable/invalid image → skip
+        return None
+
+
+def _extract_uae_id(data: bytes) -> str | None:
+    text = _ocr_text(data)
+    if not text:
+        return None
+    try:
+        from app.core.extraction.emirates_id import extract_emirates_id
+
+        for field in extract_emirates_id(text).fields:
+            if field.key == "uae_id_no":
+                return field.value
+    except Exception:  # noqa: BLE001
+        return None
+    return None
+
+
+# Best-effort plate read: no dedicated mulkiya parser exists, so key off a
+# "Plate/Traffic No" label followed by an optional 1-3 letter code + digits.
+_PLATE_RE = re.compile(
+    r"(?i)(?:traffic\s+)?plate\s*(?:no\.?|number|code)?\s*[:\-]?\s*([A-Z]{0,3}\s?\d{1,6})"
+)
+
+
+def _extract_plate(data: bytes) -> str | None:
+    text = _ocr_text(data)
+    if not text:
+        return None
+    m = _PLATE_RE.search(text)
+    return m.group(1).strip() if m else None
+
+
 def attach_person_document(
     db: Session, permit_id: int, person_id: int, filename: str, data: bytes,
     *, actor: str | None = None,
 ) -> Permit:
-    """Attach (or replace) a scan of the person's UAE ID card."""
+    """Attach (or replace) a scan of the person's UAE ID card. Opportunistically
+    OCR-fills the UAE ID number when it is not already set."""
     row = get_permit(db, permit_id)
     person = _find_person(row, person_id)
     person.id_doc_path = _store_entity_file(permit_id, f"person_{person_id}", filename, data)
+    extracted = None
+    if not person.uae_id:
+        extracted = _extract_uae_id(data)
+        if extracted:
+            person.uae_id = extracted
     row.updated_at = _utcnow()
     db.commit()
-    _audit(db, "permit.person_id_attached", permit_id, actor, {"person_id": person_id})
+    _audit(
+        db, "permit.person_id_attached", permit_id, actor,
+        {"person_id": person_id, "ocr_uae_id": bool(extracted)},
+    )
     return get_permit(db, permit_id)
 
 
@@ -688,13 +753,22 @@ def attach_vehicle_document(
     db: Session, permit_id: int, vehicle_id: int, filename: str, data: bytes,
     *, actor: str | None = None,
 ) -> Permit:
-    """Attach (or replace) a scan of the vehicle licence (mulkiya)."""
+    """Attach (or replace) a scan of the vehicle licence (mulkiya).
+    Opportunistically OCR-fills the plate number when it is not already set."""
     row = get_permit(db, permit_id)
     vehicle = _find_vehicle(row, vehicle_id)
     vehicle.license_doc_path = _store_entity_file(permit_id, f"vehicle_{vehicle_id}", filename, data)
+    extracted = None
+    if not vehicle.plate_no:
+        extracted = _extract_plate(data)
+        if extracted:
+            vehicle.plate_no = extracted
     row.updated_at = _utcnow()
     db.commit()
-    _audit(db, "permit.vehicle_license_attached", permit_id, actor, {"vehicle_id": vehicle_id})
+    _audit(
+        db, "permit.vehicle_license_attached", permit_id, actor,
+        {"vehicle_id": vehicle_id, "ocr_plate": bool(extracted)},
+    )
     return get_permit(db, permit_id)
 
 

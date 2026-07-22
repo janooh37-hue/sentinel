@@ -68,6 +68,7 @@ export function RowDocButton({
           type="button"
           disabled={busy}
           onClick={() => ref.current?.click()}
+          title={t('permits.doc.ocrHint')}
           className="inline-flex items-center gap-1 rounded-md border border-dashed border-border-strong px-2 py-1 text-[0.7rem] font-medium text-muted-foreground hover:border-ring hover:text-foreground disabled:opacity-50"
         >
           <Upload className="h-3.5 w-3.5" aria-hidden />
