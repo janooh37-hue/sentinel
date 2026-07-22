@@ -985,9 +985,16 @@ def _col_fractions(node: Any, rows: list[tuple[Any, list[Any]]], n: int) -> list
     return [x / total for x in nums]
 
 
-def _set_table_rtl_and_width(tbl: Any, content_twips: int, col_twips: list[int], rtl: bool) -> None:
-    """Stamp RTL bidiVisual + jc=right (when ``rtl``), full fixed width, and
-    per-column grid widths on a freshly created ``Table``."""
+def _set_table_rtl_and_width(
+    tbl: Any, content_twips: int, col_twips: list[int], rtl: bool, autofit: bool = False
+) -> None:
+    """Stamp RTL bidiVisual + jc, table width, layout, and per-column grid widths
+    on a freshly created ``Table``.
+
+    ``autofit=False`` (default): full-width fixed layout with per-column grid
+    widths, jc=right — the pre-existing behaviour.
+    ``autofit=True``: Word "AutoFit to Contents" — columns hug their text, the
+    table shrinks to content width and is centered (jc=center)."""
     tblPr = tbl._tbl.find(qn("w:tblPr"))
     if tblPr is None:
         tblPr = OxmlElement("w:tblPr")
@@ -999,24 +1006,26 @@ def _set_table_rtl_and_width(tbl: Any, content_twips: int, col_twips: list[int],
         if jc is None:
             jc = OxmlElement("w:jc")
             tblPr.append(jc)
-        jc.set(qn("w:val"), "right")
+        jc.set(qn("w:val"), "center" if autofit else "right")
 
     for existing in tblPr.findall(qn("w:tblW")):
         tblPr.remove(existing)
     tblW = OxmlElement("w:tblW")
-    tblW.set(qn("w:type"), "dxa")
-    tblW.set(qn("w:w"), str(content_twips))
+    tblW.set(qn("w:type"), "auto" if autofit else "dxa")
+    tblW.set(qn("w:w"), "0" if autofit else str(content_twips))
     tblPr.append(tblW)
     for existing in tblPr.findall(qn("w:tblLayout")):
         tblPr.remove(existing)
     layout = OxmlElement("w:tblLayout")
-    layout.set(qn("w:type"), "fixed")
+    layout.set(qn("w:type"), "autofit" if autofit else "fixed")
     tblPr.append(layout)
 
-    grid = tbl._tbl.find(qn("w:tblGrid"))
-    if grid is not None:
-        for gc, w in zip(grid.findall(qn("w:gridCol")), col_twips, strict=False):
-            gc.set(qn("w:w"), str(w))
+    # Fixed layout needs explicit grid widths; autofit lets Word recompute them.
+    if not autofit:
+        grid = tbl._tbl.find(qn("w:tblGrid"))
+        if grid is not None:
+            for gc, w in zip(grid.findall(qn("w:gridCol")), col_twips, strict=False):
+                gc.set(qn("w:w"), str(w))
 
 
 def _paragraph_is_visually_empty(p: Any) -> bool:
@@ -1051,6 +1060,14 @@ def _render_table(
     attrs: dict[str, str] = dict(node.attrib) if hasattr(node, "attrib") else {}
     rtl = _table_rtl(node, attrs)
     table_style = attrs.get("style", "")
+    # style="width:auto" opts a table into Word "AutoFit to Contents": columns
+    # hug their text and the whole table shrinks to content width (centered),
+    # instead of the default full-width fixed layout.
+    autofit = (_parse_inline_style(table_style).get("width") or "").strip().lower() in (
+        "auto",
+        "fit-content",
+        "max-content",
+    )
 
     rows = _collect_table_rows(node)
     n_rows = len(rows)
@@ -1067,8 +1084,8 @@ def _render_table(
     # add_table appends at body end; we relocate it via _state_insert_table.
     tbl = doc.add_table(rows=n_rows, cols=n_cols)
     tbl.style = "Table Grid"
-    tbl.autofit = False
-    _set_table_rtl_and_width(tbl, table_twips, col_twips, rtl)
+    tbl.autofit = autofit
+    _set_table_rtl_and_width(tbl, table_twips, col_twips, rtl, autofit=autofit)
 
     # Row properties (cantSplit / trHeight / tblHeader) — Task 4's loop.
     for r_idx, (tr_el, _row_cells) in enumerate(rows):
@@ -1201,13 +1218,18 @@ def _render_table(
             fmt.bold = True
         fmt = _merge_fmt_from_attrs(fmt, cell_tag, eff_attrs)
 
-        # Cell width under fixed layout: the sum of its spanned columns.
+        # Cell width: fixed = sum of spanned columns; autofit = let Word size to
+        # content.
         tcPr = cell._tc.get_or_add_tcPr()
         for existing in tcPr.findall(qn("w:tcW")):
             tcPr.remove(existing)
         tcW = OxmlElement("w:tcW")
-        tcW.set(qn("w:type"), "dxa")
-        tcW.set(qn("w:w"), str(sum(col_twips[c_idx : c_idx + cs])))
+        if autofit:
+            tcW.set(qn("w:type"), "auto")
+            tcW.set(qn("w:w"), "0")
+        else:
+            tcW.set(qn("w:type"), "dxa")
+            tcW.set(qn("w:w"), str(sum(col_twips[c_idx : c_idx + cs])))
         tcPr.append(tcW)
 
         para = cell.paragraphs[0]

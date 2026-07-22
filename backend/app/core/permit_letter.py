@@ -61,20 +61,17 @@ def _fmt(d: date | str) -> str:
 
 def _people_table(people: list[dict[str, str]]) -> str:
     rows = "".join(
-        f'<tr><td style="text-align:center">{i}</td>'
-        f'<td style="text-align:right">{escape(p.get("name") or "")}</td>'
+        f"<tr><td>{i}</td><td>{escape(p.get('name') or '')}</td>"
         f"<td>{escape(p.get('uae_id') or '')}</td><td>{escape(p.get('nationality') or '')}</td></tr>"
         for i, p in enumerate(people, 1)
     )
     return (
-        '<table style="font-size:10pt">'
-        '<colgroup><col style="width:8%"><col style="width:46%">'
-        '<col style="width:28%"><col style="width:18%"></colgroup>'
+        '<table style="font-size:10pt; text-align:center; width:auto">'
         "<thead>"
         '<tr><th colspan="4" style="background-color:#e6f4f1; color:#0f766e">'
         "الجدول الأول: بيانات الأفراد</th></tr>"
         '<tr style="background-color:#eef2f6">'
-        '<th style="text-align:center">م</th><th>الاسم</th><th>رقم الهوية</th><th>الجنسية</th></tr>'
+        "<th>م</th><th>الاسم</th><th>رقم الهوية</th><th>الجنسية</th></tr>"
         f"</thead><tbody>{rows}</tbody></table>"
     )
 
@@ -84,16 +81,13 @@ def _vehicle_table(vehicles: list[dict[str, str]]) -> str:
         "<tr>"
         f"<td>{escape(v.get('plate_no') or '')}</td><td>{escape(v.get('plate_emirate') or '')}</td>"
         f"<td>{escape(v.get('plate_category') or '')}</td><td>{escape(v.get('traffic_no') or '')}</td>"
-        f'<td style="text-align:right">{escape(v.get("make_model") or "")}</td>'
+        f"<td>{escape(v.get('make_model') or '')}</td>"
         f"<td>{escape(v.get('colour') or '')}</td>"
         f"<td>{escape(_fmt(v.get('reg_expiry') or ''))}</td></tr>"
         for v in vehicles
     )
     return (
-        '<table style="font-size:9pt">'
-        '<colgroup><col style="width:13%"><col style="width:12%"><col style="width:11%">'
-        '<col style="width:15%"><col style="width:21%"><col style="width:12%">'
-        '<col style="width:16%"></colgroup>'
+        '<table style="font-size:9pt; text-align:center; width:auto">'
         "<thead>"
         '<tr><th colspan="7" style="background-color:#e6f4f1; color:#0f766e">'
         "الجدول الثاني: بيانات المركبات</th></tr>"

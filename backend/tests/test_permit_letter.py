@@ -124,12 +124,13 @@ def test_body_paragraph_is_justified():
     assert "text-align:justify" in _sample()
 
 
-def test_tables_carry_explicit_column_widths():
-    # <colgroup> widths make columns size to content instead of an even split.
+def test_tables_are_autofit_and_centered():
+    # Tables opt into Word AutoFit-to-Contents (width:auto) so columns hug their
+    # text and the table centers, instead of stretching full-width.
     html = _sample()
-    assert html.count("<colgroup>") == 2  # people + vehicles
-    assert "width:46%" in html  # the wide name column
-    assert "width:21%" in html  # the wide make/model column
+    assert html.count("width:auto") == 2  # people + vehicles
+    assert "text-align:center" in html  # cell text is centered
+    assert "text-align:right" not in html  # no per-cell right-align overrides left
 
 
 def test_section_titles_are_merged_shaded_header_rows():
@@ -149,11 +150,12 @@ def test_purpose_renders_only_when_set():
     assert "الغرض من التصريح:" not in _sample(purpose="   ")
 
 
-def test_serial_column_is_centered():
-    # م serial cells (header + data) are centered, not left-adrift in the RTL table.
+def test_table_text_is_centered_at_table_level():
+    # Alignment is set once on the <table> (cascades to every cell), not per cell.
     html = _sample()
-    assert '<th style="text-align:center">م</th>' in html
-    assert '<td style="text-align:center">1</td>' in html
+    assert "text-align:center; width:auto" in html
+    # Data cells are plain <td> — they inherit the table's center alignment.
+    assert "<td>1</td>" in html
 
 
 def test_zones_are_colour_coded_chips():
