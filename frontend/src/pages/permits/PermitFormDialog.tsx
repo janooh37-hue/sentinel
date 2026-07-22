@@ -142,7 +142,7 @@ export function PermitFormDialog({ open, permit, onOpenChange, onSaved }: Props)
     onSuccess: (data) => {
       void qc.invalidateQueries({ queryKey: ['permits-list'] })
       void qc.invalidateQueries({ queryKey: ['permits-summary'] })
-      toast.success(t('common.savedToast', { defaultValue: 'Saved' }))
+      toast.success(t('common.savedToast'))
       onSaved(data)
       onOpenChange(false)
     },

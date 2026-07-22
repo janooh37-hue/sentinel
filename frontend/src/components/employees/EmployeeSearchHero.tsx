@@ -10,22 +10,13 @@
  * overflow:hidden` layer carrying the decorative circles, so the results
  * dropdown is never clipped.
  */
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useQuery } from '@tanstack/react-query'
 import { api } from '@/lib/api'
 import { pickEmployeeName } from '@/lib/employeeName'
 import { pickPosition } from '@/lib/employeePosition'
-
-// ─── tiny debounce hook (local) ──────────────────────────────────────────────
-function useDebouncedValue<T>(value: T, ms: number): T {
-  const [debounced, setDebounced] = useState(value)
-  useEffect(() => {
-    const id = setTimeout(() => setDebounced(value), ms)
-    return () => clearTimeout(id)
-  }, [value, ms])
-  return debounced
-}
+import { useDebouncedValue } from '@/lib/useDebouncedValue'
 
 // ─── Props ────────────────────────────────────────────────────────────────────
 interface Props {

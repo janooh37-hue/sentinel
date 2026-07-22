@@ -100,7 +100,7 @@ export function PermitDetailDialog({ permitId, open, onOpenChange, onEdit }: Pro
       invalidate()
       setRenewOpen(false)
       setRenewReason('')
-      toast.success(t('common.savedToast', { defaultValue: 'Saved' }))
+      toast.success(t('common.savedToast'))
     },
     onError: onErr,
   })
@@ -111,7 +111,7 @@ export function PermitDetailDialog({ permitId, open, onOpenChange, onEdit }: Pro
       invalidate()
       setRevokeOpen(false)
       setRevokeReason('')
-      toast.success(t('common.savedToast', { defaultValue: 'Saved' }))
+      toast.success(t('common.savedToast'))
     },
     onError: onErr,
   })
@@ -121,7 +121,7 @@ export function PermitDetailDialog({ permitId, open, onOpenChange, onEdit }: Pro
     onSuccess: () => {
       invalidate()
       onOpenChange(false)
-      toast.success(t('common.savedToast', { defaultValue: 'Saved' }))
+      toast.success(t('common.savedToast'))
     },
     onError: onErr,
   })
@@ -130,7 +130,7 @@ export function PermitDetailDialog({ permitId, open, onOpenChange, onEdit }: Pro
     mutationFn: (file: File) => api.uploadPermitDocument(permitId, file),
     onSuccess: () => {
       invalidate()
-      toast.success(t('common.savedToast', { defaultValue: 'Saved' }))
+      toast.success(t('common.savedToast'))
     },
     onError: onErr,
   })
@@ -190,7 +190,10 @@ export function PermitDetailDialog({ permitId, open, onOpenChange, onEdit }: Pro
   const openBlob = async (fetcher: () => Promise<Blob>): Promise<void> => {
     try {
       const blob = await fetcher()
-      window.open(URL.createObjectURL(blob), '_blank', 'noopener')
+      const url = URL.createObjectURL(blob)
+      window.open(url, '_blank', 'noopener')
+      // Reclaim the blob once the new tab has had time to load it.
+      setTimeout(() => URL.revokeObjectURL(url), 60_000)
     } catch (err) {
       onErr(err)
     }
@@ -238,6 +241,7 @@ export function PermitDetailDialog({ permitId, open, onOpenChange, onEdit }: Pro
                   label={t('permits.detail.window')}
                   value={`${fmtDate(permit.start_date)} → ${fmtDate(permit.end_date)}`}
                   mono
+                  ltr
                 />
                 <Fact
                   label={t('permits.detail.duration')}
@@ -510,6 +514,7 @@ export function PermitDetailDialog({ permitId, open, onOpenChange, onEdit }: Pro
                         className={`${inputCls} font-mono`}
                         min={permit.end_date.slice(0, 10)}
                         value={newEnd}
+                        autoFocus
                         onChange={(e) => setNewEnd(e.target.value)}
                       />
                     </label>
@@ -547,6 +552,7 @@ export function PermitDetailDialog({ permitId, open, onOpenChange, onEdit }: Pro
                     placeholder={t('permits.revoke.reason')}
                     dir="auto"
                     value={revokeReason}
+                    autoFocus
                     onChange={(e) => setRevokeReason(e.target.value)}
                   />
                   <div className="flex justify-end gap-2">
@@ -630,16 +636,19 @@ function Fact({
   value,
   mono = false,
   span = false,
+  ltr = false,
 }: {
   label: string
   value: string
   mono?: boolean
   span?: boolean
+  /** Force LTR — for values like the date window whose `→` reverses under RTL. */
+  ltr?: boolean
 }): React.JSX.Element {
   return (
     <div className={`flex flex-col gap-0.5 ${span ? 'col-span-2' : ''}`}>
       <dt className="text-xs text-muted-foreground">{label}</dt>
-      <dd className={`text-foreground ${mono ? 'font-mono' : ''}`} dir="auto">
+      <dd className={`text-foreground ${mono ? 'font-mono' : ''}`} dir={ltr ? 'ltr' : 'auto'}>
         {value}
       </dd>
     </div>

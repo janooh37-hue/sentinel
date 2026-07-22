@@ -26,8 +26,10 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { EmptyState } from '@/components/ui/empty-state'
+import { SkeletonRow } from '@/components/ui/skeleton'
 import { RefreshButton } from '@/components/refresh/RefreshButton'
 import { useCapabilities } from '@/lib/useCapabilities'
+import { useDebouncedValue } from '@/lib/useDebouncedValue'
 import { PermitFormDialog } from './PermitFormDialog'
 import { PermitDetailDialog } from './PermitDetailDialog'
 import { ZoneBadge } from './ZoneBadge'
@@ -54,10 +56,18 @@ export function PermitsPage(): React.JSX.Element {
   const [selected, setSelected] = useState<Set<number>>(new Set())
   const [printing, setPrinting] = useState(false)
 
+  // Debounce the free-text search so a burst of keystrokes doesn't fire a
+  // 500-row refetch (and a selection reset) per character.
+  const debouncedQ = useDebouncedValue(q, 300)
   const params = useMemo(
-    () => ({ state: state || undefined, zone: (zone || undefined) as PermitZone | undefined, q: q || undefined }),
-    [state, zone, q],
+    () => ({
+      state: state || undefined,
+      zone: (zone || undefined) as PermitZone | undefined,
+      q: debouncedQ || undefined,
+    }),
+    [state, zone, debouncedQ],
   )
+  const filtersActive = Boolean(state || zone || q)
 
   const summaryQuery = useQuery({
     queryKey: ['permits-summary'],
@@ -100,6 +110,7 @@ export function PermitsPage(): React.JSX.Element {
   useEffect(() => {
     if (!printing) return
     window.print()
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setPrinting(false)
   }, [printing])
 
@@ -211,8 +222,20 @@ export function PermitsPage(): React.JSX.Element {
         {/* Table / states */}
         {listQuery.isError ? (
           <p className="py-8 text-center text-sm text-destructive">{t('permits.loadError')}</p>
-        ) : rows.length === 0 && !listQuery.isLoading ? (
-          <EmptyState icon={ShieldCheck} message={t('permits.empty')} />
+        ) : listQuery.isLoading ? (
+          <div className="overflow-hidden rounded-xl border border-border">
+            {Array.from({ length: 6 }).map((_, i) => (
+              <SkeletonRow key={i} cols={7} />
+            ))}
+          </div>
+        ) : rows.length === 0 ? (
+          <EmptyState
+            icon={ShieldCheck}
+            message={filtersActive ? t('permits.empty') : t('permits.emptyRegister')}
+            {...(!filtersActive && canManage
+              ? { actionLabel: t('permits.new'), onAction: openNew }
+              : {})}
+          />
         ) : (
           <div className="overflow-x-auto rounded-xl border border-border">
             <Table>
@@ -234,6 +257,7 @@ export function PermitsPage(): React.JSX.Element {
                   <TableHead className="text-end">{t('permits.columns.people')}</TableHead>
                   <TableHead className="text-end">{t('permits.columns.vehicles')}</TableHead>
                   <TableHead>{t('permits.columns.status')}</TableHead>
+                  <TableHead className="w-16 text-end">{t('permits.columns.actions')}</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -326,13 +350,21 @@ function PermitRowView({
         <ZoneBadge zones={row.zones} square />
       </TableCell>
       <TableCell className="whitespace-nowrap font-mono text-xs text-muted-foreground">
-        {fmtDate(row.start_date)} → {fmtDate(row.end_date)}
+        <span dir="ltr">
+          {fmtDate(row.start_date)} → {fmtDate(row.end_date)}
+        </span>
         {remaining && <span className="ms-2 not-italic">· {remaining}</span>}
       </TableCell>
       <TableCell className="text-end tabular-nums">{row.people_count}</TableCell>
       <TableCell className="text-end tabular-nums">{row.vehicle_count}</TableCell>
       <TableCell>
         <Badge tone={statusTone(row.derived_status)}>{t(`permits.status.${row.derived_status}`)}</Badge>
+      </TableCell>
+      {/* Keyboard-reachable open (the row's onClick is mouse-only). */}
+      <TableCell className="w-16 text-end" onClick={(e) => e.stopPropagation()}>
+        <Button type="button" variant="ghost" size="sm" onClick={onOpen}>
+          {t('permits.actions.view')}
+        </Button>
       </TableCell>
     </TableRow>
   )
@@ -382,7 +414,7 @@ function PermitPrintView({
               <td className="py-1 pe-2">
                 {row.zones.map((z) => t(`permits.zone.${z}Short`)).join(' + ')}
               </td>
-              <td className="py-1 pe-2 font-mono">
+              <td className="py-1 pe-2 font-mono" dir="ltr">
                 {fmtDate(row.start_date)} → {fmtDate(row.end_date)}
               </td>
               <td className="py-1 pe-2 text-end">{row.people_count}</td>

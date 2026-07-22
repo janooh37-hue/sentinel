@@ -90,6 +90,14 @@ describe('PermitsPage', () => {
     expect(screen.getByRole('columnheader', { name: /vehicles/i })).toBeInTheDocument()
   })
 
+  it('exposes a keyboard-reachable View action per row', async () => {
+    renderPage()
+    await waitFor(() => expect(screen.getByText('Acme Contracting')).toBeInTheDocument())
+    // Row click is mouse-only; the explicit View button is what keyboard/SR
+    // users reach — one per row.
+    expect(screen.getAllByRole('button', { name: /^view$/i })).toHaveLength(2)
+  })
+
   it('selecting a row switches Export/Print to the selected-count labels', async () => {
     renderPage()
     await waitFor(() => expect(screen.getByText('Acme Contracting')).toBeInTheDocument())

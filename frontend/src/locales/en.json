@@ -363,6 +363,7 @@
     "eyebrow": "Access control",
     "subtitle": "Zone entry permits — who is authorized, for which zone, and until when",
     "empty": "No permits match these filters.",
+    "emptyRegister": "No permits issued yet.",
     "loadError": "Could not load permits.",
     "new": "New permit",
     "export": "Export CSV",
