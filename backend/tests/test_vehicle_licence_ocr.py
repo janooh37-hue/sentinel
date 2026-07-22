@@ -25,6 +25,7 @@ def test_extracts_core_fields() -> None:
     assert f["make_model"] == "Toyota Camry"
     assert f["vehicle_type"] == "Sedan"
     assert f["colour"] == "White"
+    assert f["owner_name"] == "MOHAMMED AL FARSI"
     assert f["reg_expiry"] == "2027-03-14"
 
 

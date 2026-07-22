@@ -21,7 +21,7 @@ _PATTERNS: list[tuple[re.Pattern[str], str]] = [
     ),
     (
         re.compile(
-            r"(?i)(?:place\s+of\s+issue|emirate|source)\s*[:\-]?\s*([A-Za-z ]{3,20}?)(?=\n|$)"
+            r"(?i)(?:place\s+of\s+issue|source|\bemirate\b)\s*[:\-]\s*([A-Za-z ]{3,20}?)(?=\n|$)"
         ),
         "plate_emirate",
     ),
@@ -31,7 +31,7 @@ _PATTERNS: list[tuple[re.Pattern[str], str]] = [
     ),
     (re.compile(r"(?i)T\.?C\.?\s*(?:no\.?|number)?\s*[:\-]?\s*(\d{4,10})"), "traffic_no"),
     (re.compile(r"(?i)(?:model|make)\s*[:\-]?\s*([A-Za-z0-9 .\-]{2,40})"), "make_model"),
-    (re.compile(r"(?i)type\s*[:\-]?\s*([A-Za-z ]{3,20})"), "vehicle_type"),
+    (re.compile(r"(?i)\btype\b\s*[:\-]?\s*([A-Za-z ]{3,20})"), "vehicle_type"),
     (re.compile(r"(?i)colou?r\s*[:\-]?\s*([A-Za-z ]{3,20})"), "colour"),
     (re.compile(r"(?i)owner\s*[:\-]?\s*([A-Za-z][A-Za-z .'\-]{2,60})"), "owner_name"),
 ]
