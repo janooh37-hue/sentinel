@@ -12,7 +12,8 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useQuery } from '@tanstack/react-query'
-import { Plus, Printer, Download, ShieldCheck, Paperclip } from 'lucide-react'
+import { Plus, Printer, ShieldCheck, Paperclip } from 'lucide-react'
+import { toast } from 'sonner'
 
 import { api, type PermitListItem, type PermitRead, type PermitZone } from '@/lib/api'
 import { Badge } from '@/components/ui/badge'
@@ -81,8 +82,8 @@ export function PermitsPage(): React.JSX.Element {
   const rows = listQuery.data?.items ?? []
   const summary = summaryQuery.data
 
-  // Selection drives Print + CSV. When the filter changes the visible set
-  // changes, so clear the selection to avoid acting on now-hidden rows.
+  // Selection drives Print. When the filter changes the visible set changes,
+  // so clear the selection to avoid acting on now-hidden rows.
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setSelected(new Set())
@@ -99,20 +100,32 @@ export function PermitsPage(): React.JSX.Element {
   const toggleAll = (): void =>
     setSelected(allSelected ? new Set() : new Set(rows.map((r) => r.id)))
 
-  // No selection ⇒ act on everything currently filtered.
-  const printRows = selected.size ? rows.filter((r) => selected.has(r.id)) : rows
-  const exportHref = api.permitsExportUrl(
-    selected.size ? { ...params, ids: [...selected].join(',') } : params,
+  // Print fetches FULL records (people + vehicles) for the ticked rows — or the
+  // whole filtered set when nothing is ticked — in one request.
+  const printParams = useMemo(
+    () => (selected.size ? { ...params, ids: [...selected].join(',') } : params),
+    [selected, params],
   )
+  const printQuery = useQuery({
+    queryKey: ['permits-detailed', printParams],
+    queryFn: () => api.listPermitsDetailed(printParams),
+    enabled: printing,
+  })
 
-  // Print only renders the printable table (kept out of the DOM otherwise). The
-  // effect fires after the table has committed, so the browser has it to print.
+  // Once the detailed data has loaded (and the print view has committed to the
+  // DOM), hand it to the browser to print.
   useEffect(() => {
     if (!printing) return
+    if (printQuery.isError) {
+      toast.error(t('permits.loadError'))
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setPrinting(false)
+      return
+    }
+    if (!printQuery.isSuccess) return
     window.print()
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     setPrinting(false)
-  }, [printing])
+  }, [printing, printQuery.isSuccess, printQuery.isError, t])
 
   const openNew = (): void => {
     setEditing(null)
@@ -200,12 +213,6 @@ export function PermitsPage(): React.JSX.Element {
                 </button>
               </span>
             )}
-            <a href={exportHref} className="inline-flex" download>
-              <Button type="button" variant="outline" size="sm">
-                <Download className="me-1.5 h-4 w-4" aria-hidden />
-                {selected.size ? t('permits.exportSelected', { count: selected.size }) : t('permits.export')}
-              </Button>
-            </a>
             <Button type="button" variant="outline" size="sm" onClick={() => setPrinting(true)}>
               <Printer className="me-1.5 h-4 w-4" aria-hidden />
               {selected.size ? t('permits.printSelected', { count: selected.size }) : t('permits.print')}
@@ -276,9 +283,11 @@ export function PermitsPage(): React.JSX.Element {
         )}
       </div>
 
-      {/* Print-only view — mounted just for the print, hidden on screen. Renders
-          the selected rows, or the whole filtered set when nothing is ticked. */}
-      {printing && <PermitPrintView rows={printRows} scope={selected.size ? 'selected' : 'all'} />}
+      {/* Print-only view — mounted once the detailed records load, hidden on
+          screen. The selected rows, or the whole filtered set when none ticked. */}
+      {printing && printQuery.isSuccess && (
+        <PermitPrintView permits={printQuery.data} scope={selected.size ? 'selected' : 'all'} />
+      )}
 
       {/* Dialogs */}
       <PermitFormDialog
@@ -371,62 +380,164 @@ function PermitRowView({
 }
 
 /**
- * Print-only register. Hidden on screen (`hidden`), revealed by the print
- * stylesheet (`print:block`). The app's global @media print rules already hide
- * nav/aside/header and the `data-print-hide` on-screen content, so only this
- * clean table reaches the page.
+ * Detailed, multi-page print. Hidden on screen (`hidden`), revealed by the
+ * print stylesheet (`print:block`). Global @media print rules hide the app
+ * chrome + `data-print-hide` content, so only this reaches the paper.
+ *
+ * One block per permit — header facts + full people & vehicle tables — so the
+ * printout carries ALL of a permit's data, not just the register summary.
+ * Tight small font; a permit block never splits across pages.
  */
 function PermitPrintView({
-  rows,
+  permits,
   scope,
 }: {
-  rows: PermitListItem[]
+  permits: PermitRead[]
   scope: 'selected' | 'all'
 }): React.JSX.Element {
   const { t } = useTranslation()
   return (
     <div className="hidden bg-white p-0 text-black print:block">
-      <div className="mb-3 flex items-center gap-3 border-b border-black pb-2">
-        <img src="/brand/gssg-logo.png" alt="" className="h-14 w-auto" />
+      <div className="mb-2 flex items-center gap-3 border-b border-black pb-1.5">
+        <img src="/brand/gssg-logo.png" alt="" className="h-10 w-auto" />
         <div>
-          <h1 className="text-lg font-bold">{t('permits.printout.title')}</h1>
-          <p className="text-xs text-neutral-600">
+          <h1 className="text-base font-bold">{t('permits.printout.title')}</h1>
+          <p className="text-[10px] text-neutral-600">
             {t(scope === 'selected' ? 'permits.printout.subtitleSelected' : 'permits.printout.subtitleAll', {
-              count: rows.length,
+              count: permits.length,
             })}
           </p>
         </div>
       </div>
-      <table className="w-full border-collapse text-[11px]">
+      <div className="flex flex-col gap-2.5">
+        {permits.map((p) => (
+          <PermitPrintCard key={p.id} permit={p} />
+        ))}
+      </div>
+    </div>
+  )
+}
+
+function PermitPrintCard({ permit }: { permit: PermitRead }): React.JSX.Element {
+  const { t } = useTranslation()
+  const people = permit.people.filter((p) => p.removed_at === null)
+  const vehicles = permit.vehicles.filter((v) => v.removed_at === null)
+  return (
+    <section className="break-inside-avoid border border-neutral-400">
+      {/* Facts strip */}
+      <div className="flex flex-wrap items-baseline gap-x-3 gap-y-0.5 border-b border-neutral-400 bg-neutral-100 px-2 py-1 text-[10px]">
+        <span className="font-mono text-[11px] font-bold">{permit.permit_no ?? `#${permit.id}`}</span>
+        <span className="text-[11px] font-semibold" dir="auto">{permit.company}</span>
+        <span>{permit.zones.map((z) => t(`permits.zone.${z}Short`)).join(' + ')}</span>
+        <span className="font-mono" dir="ltr">
+          {fmtDate(permit.start_date)} → {fmtDate(permit.end_date)}
+        </span>
+        <span>{t('permits.duration', { count: permit.duration_days })}</span>
+        <span className="font-semibold">{t(`permits.status.${permit.derived_status}`)}</span>
+        {permit.purpose && (
+          <span className="text-neutral-600" dir="auto">
+            · {permit.purpose}
+          </span>
+        )}
+      </div>
+
+      {/* People */}
+      <table className="w-full border-collapse text-[9px]">
         <thead>
-          <tr className="border-b border-black text-start">
-            <th className="py-1 pe-2 text-start">{t('permits.columns.permitNo')}</th>
-            <th className="py-1 pe-2 text-start">{t('permits.columns.company')}</th>
-            <th className="py-1 pe-2 text-start">{t('permits.columns.zone')}</th>
-            <th className="py-1 pe-2 text-start">{t('permits.columns.window')}</th>
-            <th className="py-1 pe-2 text-end">{t('permits.columns.people')}</th>
-            <th className="py-1 pe-2 text-end">{t('permits.columns.vehicles')}</th>
-            <th className="py-1 pe-2 text-start">{t('permits.columns.status')}</th>
+          <tr className="bg-neutral-50">
+            <PrintTh className="w-6 text-center">#</PrintTh>
+            <PrintTh>{t('permits.person.name')}</PrintTh>
+            <PrintTh>{t('permits.person.uaeId')}</PrintTh>
+            <PrintTh>{t('permits.person.nationality')}</PrintTh>
+            <PrintTh>{t('permits.person.role')}</PrintTh>
           </tr>
         </thead>
         <tbody>
-          {rows.map((row) => (
-            <tr key={row.id} className="border-b border-neutral-300 align-top">
-              <td className="py-1 pe-2 font-mono">{row.permit_no ?? `#${row.id}`}</td>
-              <td className="py-1 pe-2">{row.company}</td>
-              <td className="py-1 pe-2">
-                {row.zones.map((z) => t(`permits.zone.${z}Short`)).join(' + ')}
-              </td>
-              <td className="py-1 pe-2 font-mono" dir="ltr">
-                {fmtDate(row.start_date)} → {fmtDate(row.end_date)}
-              </td>
-              <td className="py-1 pe-2 text-end">{row.people_count}</td>
-              <td className="py-1 pe-2 text-end">{row.vehicle_count}</td>
-              <td className="py-1 pe-2">{t(`permits.status.${row.derived_status}`)}</td>
+          {people.length === 0 ? (
+            <tr>
+              <PrintTd className="text-neutral-500" colSpan={5}>
+                {t('permits.detail.noPeople')}
+              </PrintTd>
             </tr>
-          ))}
+          ) : (
+            people.map((p, i) => (
+              <tr key={p.id} className="border-t border-neutral-200">
+                <PrintTd className="text-center">{i + 1}</PrintTd>
+                <PrintTd dir="auto">{p.name}</PrintTd>
+                <PrintTd className="font-mono">{p.uae_id ?? ''}</PrintTd>
+                <PrintTd dir="auto">{p.nationality ?? ''}</PrintTd>
+                <PrintTd dir="auto">{p.role ?? ''}</PrintTd>
+              </tr>
+            ))
+          )}
         </tbody>
       </table>
-    </div>
+
+      {/* Vehicles */}
+      {vehicles.length > 0 && (
+        <table className="w-full border-collapse border-t border-neutral-400 text-[9px]">
+          <thead>
+            <tr className="bg-neutral-50">
+              <PrintTh>{t('permits.vehicle.plate')}</PrintTh>
+              <PrintTh>{t('permits.vehicle.plateEmirate')}</PrintTh>
+              <PrintTh>{t('permits.vehicle.plateCategory')}</PrintTh>
+              <PrintTh>{t('permits.vehicle.trafficNo')}</PrintTh>
+              <PrintTh>{t('permits.vehicle.makeModel')}</PrintTh>
+              <PrintTh>{t('permits.vehicle.vehicleType')}</PrintTh>
+              <PrintTh>{t('permits.vehicle.colour')}</PrintTh>
+              <PrintTh>{t('permits.vehicle.regExpiry')}</PrintTh>
+              <PrintTh>{t('permits.vehicle.driver')}</PrintTh>
+            </tr>
+          </thead>
+          <tbody>
+            {vehicles.map((v) => (
+              <tr key={v.id} className="border-t border-neutral-200">
+                <PrintTd className="font-mono">{v.plate_no ?? ''}</PrintTd>
+                <PrintTd dir="auto">{v.plate_emirate ?? ''}</PrintTd>
+                <PrintTd dir="auto">{v.plate_category ?? ''}</PrintTd>
+                <PrintTd className="font-mono">{v.traffic_no ?? ''}</PrintTd>
+                <PrintTd dir="auto">{v.make_model ?? ''}</PrintTd>
+                <PrintTd dir="auto">{v.vehicle_type ?? ''}</PrintTd>
+                <PrintTd dir="auto">{v.colour ?? ''}</PrintTd>
+                <PrintTd className="font-mono">{v.reg_expiry ? fmtDate(v.reg_expiry) : ''}</PrintTd>
+                <PrintTd dir="auto">{v.driver_name ?? ''}</PrintTd>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+    </section>
+  )
+}
+
+function PrintTh({
+  children,
+  className = '',
+}: {
+  children: React.ReactNode
+  className?: string
+}): React.JSX.Element {
+  return (
+    <th className={`border-e border-neutral-200 px-1 py-0.5 text-start font-semibold ${className}`}>
+      {children}
+    </th>
+  )
+}
+
+function PrintTd({
+  children,
+  className = '',
+  colSpan,
+  dir,
+}: {
+  children: React.ReactNode
+  className?: string
+  colSpan?: number
+  dir?: 'auto' | 'ltr' | 'rtl'
+}): React.JSX.Element {
+  return (
+    <td colSpan={colSpan} dir={dir} className={`border-e border-neutral-200 px-1 py-0.5 align-top ${className}`}>
+      {children}
+    </td>
   )
 }

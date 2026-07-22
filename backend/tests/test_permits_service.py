@@ -120,15 +120,6 @@ def test_work_residence_filter_and_summary(db_session):
     assert s["people_green"] == 1
 
 
-def test_export_csv_selected_ids_only(db_session):
-    a = _mk(db_session, company="Alpha")
-    _mk(db_session, company="Beta")
-    out = svc.export_csv(db_session, ids=[a.id])
-    # Only the selected id is exported.
-    assert "Alpha" in out
-    assert "Beta" not in out
-
-
 def test_create_with_people_counts_active(db_session):
     row = _mk(
         db_session,
@@ -237,16 +228,6 @@ def test_record_visit_hook(db_session):
     )
     assert visit.direction == "in" and visit.source == "gate"
     assert len(svc.list_visits(db_session, row.id)) == 1
-
-
-def test_export_csv_has_header_and_rows(db_session):
-    _mk(db_session, company="Acme")
-    out = svc.export_csv(db_session)
-    lines = out.strip().splitlines()
-    # Branded title block leads; the machine header row follows, then data.
-    assert lines[0].startswith("GSSG")
-    header_idx = next(i for i, ln in enumerate(lines) if ln.startswith("permit_no,company,zone"))
-    assert "Acme" in lines[header_idx + 1]
 
 
 def test_attach_and_fetch_document(db_session, tmp_path, monkeypatch):

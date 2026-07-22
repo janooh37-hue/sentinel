@@ -98,12 +98,11 @@ describe('PermitsPage', () => {
     expect(screen.getAllByRole('button', { name: /^view$/i })).toHaveLength(2)
   })
 
-  it('selecting a row switches Export/Print to the selected-count labels', async () => {
+  it('selecting a row switches Print to the selected-count label', async () => {
     renderPage()
     await waitFor(() => expect(screen.getByText('Acme Contracting')).toBeInTheDocument())
     const rowCheckbox = screen.getByLabelText(/select permit PMT-0001/i)
     rowCheckbox.click()
-    expect(screen.getByRole('button', { name: /export 1 to csv/i })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /print 1/i })).toBeInTheDocument()
   })
 })

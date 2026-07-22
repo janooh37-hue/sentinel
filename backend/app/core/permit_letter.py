@@ -59,6 +59,26 @@ def _fmt(d: date | str) -> str:
     return str(d).replace("-", "/")
 
 
+def _as_date(v: date | str) -> date:
+    return v if isinstance(v, date) else date.fromisoformat(str(v)[:10])
+
+
+def _days_ar(n: int) -> str:
+    """Arabic count-noun agreement for a whole-day span (يوم/يومان/أيام/يوماً)."""
+    if n == 1:
+        return "يوم واحد"
+    if n == 2:
+        return "يومان"
+    if 3 <= n <= 10:
+        return f"{n} أيام"
+    return f"{n} يوماً"  # 11+ (accusative singular)
+
+
+def _span_days(start: date | str, end: date | str) -> int:
+    """Inclusive day count of a [start, end] window (both endpoints count)."""
+    return max(1, (_as_date(end) - _as_date(start)).days + 1)
+
+
 def _people_table(people: list[dict[str, str]]) -> str:
     rows = "".join(
         f"<tr><td>{i}</td><td>{escape(p.get('name') or '')}</td>"
@@ -136,7 +156,7 @@ def build_permit_letter_html(
     )
     validity = (
         '<p style="text-align:center"><b>صلاحية التصريح:</b> '
-        f"من {_fmt(start_date)} إلى {_fmt(end_date)}</p>"
+        f"من {_fmt(start_date)} إلى {_fmt(end_date)} — المدة {_days_ar(_span_days(start_date, end_date))}</p>"
     )
     # Optional reason-for-access line (only when the operator entered one).
     purpose_line = ""

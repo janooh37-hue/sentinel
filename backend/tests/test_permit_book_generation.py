@@ -14,7 +14,7 @@ from datetime import date
 
 import pytest
 
-from app.db.models import Book, BookCategory
+from app.db.models import Book, BookCategory, Employee, User
 from app.schemas.permit import PermitCreate, PermitVehicleCreate
 from app.services import document_service, permit_service
 
@@ -58,6 +58,31 @@ def test_create_permit_generates_1_5_book(gen_env):
     assert book is not None
     assert book.classification_code == "5/1"
     assert book.ref_number.startswith("1/5/")
+
+
+def test_submitter_g_resolved_from_actor(gen_env, monkeypatch):
+    """The issuing operator's G-number reaches the footer: regenerate resolves
+    the actor's User row and threads it as generate_document(current_user=...)."""
+    db = gen_env
+    db.add(Employee(id="G-9001", name_en="Op"))
+    db.add(
+        User(
+            email="op@x.ae", password_hash="x", role="admin", status="active", employee_id="G-9001"
+        )
+    )
+    db.commit()
+
+    captured: dict = {}
+    orig = document_service.generate_document
+
+    def _spy(*args, **kw):
+        captured["current_user"] = kw.get("current_user")
+        return orig(*args, **kw)
+
+    monkeypatch.setattr(document_service, "generate_document", _spy)
+    permit_service.create_permit(db, _payload(), actor="op@x.ae")
+    assert captured["current_user"] is not None
+    assert captured["current_user"].employee_id == "G-9001"
 
 
 def test_roster_change_reversions_same_ref(gen_env):

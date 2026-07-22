@@ -1071,6 +1071,10 @@ export const api = {
     offset?: number
   } = {}) => request<PermitListResponse>('GET', `/permits${qs({ ...params })}`),
   permitsSummary: () => request<PermitSummary>('GET', '/permits/summary'),
+  /** Full permit records (people + vehicles) for the detailed print — one request. */
+  listPermitsDetailed: (
+    params: { state?: string; zone?: PermitZone; company?: string; q?: string; ids?: string } = {},
+  ) => request<PermitRead[]>('GET', `/permits/detailed${qs({ ...params })}`),
   getPermit: (id: number) => request<PermitRead>('GET', `/permits/${id}`),
   createPermit: (body: PermitCreate) => request<PermitRead>('POST', '/permits', body),
   updatePermit: (id: number, body: PermitUpdate) =>
@@ -1088,10 +1092,6 @@ export const api = {
     request<PermitRead>('POST', `/permits/${id}/vehicles`, body),
   removePermitVehicle: (id: number, vehicleId: number) =>
     request<PermitRead>('DELETE', `/permits/${id}/vehicles/${vehicleId}`),
-  /** Absolute URL for the CSV export (used by an anchor download / print). */
-  permitsExportUrl: (
-    params: { state?: string; zone?: PermitZone; company?: string; q?: string; ids?: string } = {},
-  ) => `${BASE}/permits/export${qs({ ...params })}`,
   /** Upload (or replace) the scanned paper permit. */
   uploadPermitDocument: (id: number, file: File) => {
     const form = new FormData()

@@ -28,7 +28,11 @@ import {
   DialogDescription,
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
-import { todayISO } from './permitUtils'
+import { plusDaysISO, todayISO } from './permitUtils'
+
+/** Default validity window for a new permit (days). Long enough that a fresh
+ * permit isn't immediately flagged "expiring". */
+const DEFAULT_WINDOW_DAYS = 30
 
 const ZONES: PermitZone[] = ['green', 'red', 'work_residence']
 
@@ -62,7 +66,7 @@ export function PermitFormDialog({ open, permit, onOpenChange, onSaved }: Props)
   const [company, setCompany] = useState('')
   const [zones, setZones] = useState<PermitZone[]>(['green'])
   const [startDate, setStartDate] = useState(todayISO())
-  const [endDate, setEndDate] = useState(todayISO())
+  const [endDate, setEndDate] = useState(plusDaysISO(DEFAULT_WINDOW_DAYS))
   const [purpose, setPurpose] = useState('')
   const [notes, setNotes] = useState('')
   const [managerId, setManagerId] = useState<number | null>(null)
@@ -91,7 +95,7 @@ export function PermitFormDialog({ open, permit, onOpenChange, onSaved }: Props)
     setCompany(permit?.company ?? '')
     setZones(permit?.zones ?? ['green'])
     setStartDate(permit ? permit.start_date.slice(0, 10) : todayISO())
-    setEndDate(permit ? permit.end_date.slice(0, 10) : todayISO())
+    setEndDate(permit ? permit.end_date.slice(0, 10) : plusDaysISO(DEFAULT_WINDOW_DAYS))
     setPurpose(permit?.purpose ?? '')
     setNotes(permit?.notes ?? '')
     setManagerId(permit?.manager_id ?? null)
@@ -243,7 +247,7 @@ export function PermitFormDialog({ open, permit, onOpenChange, onSaved }: Props)
 
   return (
     <DialogRoot open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl">
+      <DialogContent className="max-w-4xl">
         <DialogHeader>
           <DialogTitle>{title}</DialogTitle>
           <DialogDescription>{t('permits.form.help')}</DialogDescription>

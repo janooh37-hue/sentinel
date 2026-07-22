@@ -366,8 +366,6 @@
     "emptyRegister": "No permits issued yet.",
     "loadError": "Could not load permits.",
     "new": "New permit",
-    "export": "Export CSV",
-    "exportSelected": "Export {{count}} to CSV",
     "print": "Print",
     "printSelected": "Print {{count}}",
     "selectAll": "Select all rows",

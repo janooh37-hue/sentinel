@@ -41,3 +41,11 @@ export function fmtDate(iso: string | null | undefined): string {
 export function todayISO(): string {
   return new Date().toISOString().slice(0, 10)
 }
+
+/** Today + `days` as YYYY-MM-DD. Used for a sensible default permit window so
+ * new permits aren't born inside the "expiring" threshold. */
+export function plusDaysISO(days: number): string {
+  const d = new Date()
+  d.setDate(d.getDate() + days)
+  return d.toISOString().slice(0, 10)
+}

@@ -3,7 +3,7 @@
 Routes (all under ``/api/v1``):
   GET    /permits                       — paginated list with filters
   GET    /permits/summary               — dashboard-tile counts
-  GET    /permits/export                — CSV of the (filtered) register
+  GET    /permits/detailed              — full records (people+vehicles) for print
   POST   /permits                       — issue a permit
   GET    /permits/{id}                  — detail (with people)
   PATCH  /permits/{id}                  — edit header fields
@@ -110,25 +110,28 @@ def permit_summary(
     return PermitSummary(**permit_service.summary(db))
 
 
-@router.get("/export")
-def export_permits(
+@router.get("/detailed", response_model=list[PermitRead])
+def list_permits_detailed(
     db: Annotated[Session, Depends(get_db)],
     _user: Annotated[User, Depends(require_capability("permits.view"))],
     state: str | None = None,
     zone: str | None = None,
     company: str | None = None,
     q: str | None = None,
-    ids: Annotated[str | None, Query(description="Comma-separated permit ids to export")] = None,
-) -> Response:
-    id_list = [int(x) for x in ids.split(",") if x.strip().isdigit()] if ids else None
-    csv_text = permit_service.export_csv(
-        db, state=state, zone=zone, company=company, q=q, ids=id_list
+    ids: Annotated[
+        str | None, Query(description="Comma-separated permit ids (order preserved)")
+    ] = None,
+) -> list[PermitRead]:
+    """Full permit records (people + vehicles) for the detailed print. One
+    request for the whole filtered set, or the selected ``ids``."""
+    rows, _ = permit_service.list_permits(
+        db, state=state, zone=zone, company=company, q=q, limit=100_000, offset=0
     )
-    return Response(
-        content=csv_text,
-        media_type="text/csv",
-        headers={"Content-Disposition": 'attachment; filename="gssg-security-permits.csv"'},
-    )
+    if ids:
+        wanted = [int(x) for x in ids.split(",") if x.strip().isdigit()]
+        order = {pid: i for i, pid in enumerate(wanted)}
+        rows = sorted((r for r in rows if r.id in order), key=lambda r: order[r.id])
+    return [permit_service.to_read(r, db=db) for r in rows]
 
 
 @router.post("", response_model=PermitRead, status_code=status.HTTP_201_CREATED)

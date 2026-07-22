@@ -383,8 +383,6 @@
     "emptyRegister": "لم يُصدر أي تصريح بعد.",
     "loadError": "تعذّر تحميل التصاريح.",
     "new": "تصريح جديد",
-    "export": "تصدير CSV",
-    "exportSelected": "تصدير {{count}} إلى CSV",
     "print": "طباعة",
     "printSelected": "طباعة {{count}}",
     "selectAll": "تحديد كل الصفوف",

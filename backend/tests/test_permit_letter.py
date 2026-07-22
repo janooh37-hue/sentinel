@@ -124,6 +124,18 @@ def test_body_paragraph_is_justified():
     assert "text-align:justify" in _sample()
 
 
+def test_validity_shows_total_days_with_arabic_grammar():
+    def span(d1, d2):
+        return build_permit_letter_html(
+            company="X", zones=["green"], start_date=d1, end_date=d2, people=P1, vehicles=[]
+        )
+
+    assert "المدة يوم واحد" in span(date(2026, 7, 1), date(2026, 7, 1))  # inclusive: 1
+    assert "المدة يومان" in span(date(2026, 7, 1), date(2026, 7, 2))  # 2
+    assert "المدة 5 أيام" in span(date(2026, 7, 1), date(2026, 7, 5))  # 3–10
+    assert "المدة 31 يوماً" in span(date(2026, 7, 1), date(2026, 7, 31))  # 11+
+
+
 def test_tables_are_autofit_and_centered():
     # Tables opt into Word AutoFit-to-Contents (width:auto) so columns hug their
     # text and the table centers, instead of stretching full-width.

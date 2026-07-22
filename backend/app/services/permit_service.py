@@ -11,8 +11,6 @@ time (never stored), so the register is correct without a nightly job.
 
 from __future__ import annotations
 
-import csv
-import io
 import json
 import logging
 import re
@@ -32,6 +30,7 @@ from app.db.models import (
     PermitPerson,
     PermitVehicle,
     PermitVisit,
+    User,
 )
 from app.schemas.permit import (
     PermitCreate,
@@ -315,6 +314,9 @@ def regenerate_permit_book(db: Session, permit: Permit, *, actor: str | None = N
     # build_permit_letter_html). The book stays identifiable by its 1/5 ref and
     # its body text (company) is in the search index.
     subject = "تصريح دخول أمني"
+    # The issuing operator's G-number goes in the footer ({{ submitter_g }}),
+    # resolved from the audit actor's User row (employee_id = G-number).
+    submitter = db.scalar(select(User).where(User.email == actor)) if actor else None
     result = document_service.generate_document(
         db,
         employee_id=None,
@@ -324,7 +326,7 @@ def regenerate_permit_book(db: Session, permit: Permit, *, actor: str | None = N
         commit=True,
         manager_id=permit.manager_id,
         revise_of_book_id=permit.book_id,  # None on first gen → fresh 1/5 ref
-        current_user=None,
+        current_user=submitter,
         force_manager_embed=permit.manager_id is not None,
     )
     if permit.book_id is None:
@@ -608,59 +610,6 @@ def summary(db: Session) -> dict[str, int]:
         "people_red": people_red,
         "people_work_residence": people_work,
     }
-
-
-CSV_COLUMNS = [
-    "permit_no",
-    "company",
-    "zones",
-    "start_date",
-    "end_date",
-    "duration_days",
-    "status",
-    "days_remaining",
-    "people",
-    "vehicles",
-    "purpose",
-]
-
-
-def export_csv(db: Session, *, ids: list[int] | None = None, **filters: Any) -> str:
-    """Flat CSV of the register — one row per permit. ``ids`` restricts to a
-    specific selection (order preserved); otherwise the filtered set is used."""
-    filters.setdefault("limit", 100_000)
-    filters.setdefault("offset", 0)
-    rows, _ = list_permits(db, **filters)
-    if ids is not None:
-        order = {pid: i for i, pid in enumerate(ids)}
-        rows = sorted((r for r in rows if r.id in order), key=lambda r: order[r.id])
-    today = date.today()
-    buf = io.StringIO()
-    writer = csv.writer(buf)
-    # Branded title block — the security office opens this register in Excel, so
-    # it leads with the organisation + generation date before the machine
-    # header row. Downstream is human review/print, not automated parsing.
-    writer.writerow(["GSSG — Security Permits Register"])
-    writer.writerow([f"Generated {today.isoformat()}"])
-    writer.writerow([])
-    writer.writerow(CSV_COLUMNS)
-    for row in rows:
-        writer.writerow(
-            [
-                row.permit_no or "",
-                row.company,
-                " + ".join(row.zones or []),
-                row.start_date.isoformat(),
-                row.end_date.isoformat(),
-                _duration_days(row),
-                _derived_status(row, today=today),
-                _days_remaining(row, today=today) if row.status != "revoked" else "",
-                len(_active_people(row)),
-                len(_active_vehicles(row)),
-                (row.purpose or "").replace("\n", " "),
-            ]
-        )
-    return buf.getvalue()
 
 
 # ─── permit paper (issued-scan attachment) ─────────────────────────────────────
