@@ -40,7 +40,10 @@ gate visits, CSV register export, permission gating.
    from the actual selected zones**.
 5. **Manager signs.** A signing-manager picker on the form; the letter shows the
    manager's name/title and embeds their stored signature image.
-6. **Work residence zone = blue** in the UI and on the letter's zone badge.
+6. **Zones are colour-coded consistently everywhere** — form chips, register
+   `ZoneBadge`, and the letter's zone badges: **green → green, red → red,
+   work_residence → blue**. (green/red already correct; work_residence changes to
+   blue, and the letter badges must match the register.)
 
 ## Data model
 
@@ -150,7 +153,9 @@ Nationality shows Arabic where a canonical EN→AR map exists (reuse
   book PDF.
 - **PermitsPage:** per-permit "Print" opens the generated book PDF (via `book_id`).
   Register CSV/bulk-print unchanged.
-- **Zone colour:** `work_residence` → blue in `ZoneBadge` / `permitUtils.zoneTone`.
+- **Zone colour (all three):** green/red/blue coded consistently in `ZoneBadge` /
+  `permitUtils.zoneTone` and matched by the letter's zone badges — `green→green`,
+  `red→red`, `work_residence→blue`.
 - **i18n:** en/ar strings for new fields, scan buttons, manager label. Bilingual
   surface — run `i18n-rtl-reviewer` + `notification-template-reviewer`.
 
