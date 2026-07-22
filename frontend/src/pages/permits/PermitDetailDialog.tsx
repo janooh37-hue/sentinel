@@ -10,7 +10,7 @@
 import { useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Trash2, UserPlus, FileText, Upload, Car } from 'lucide-react'
+import { Trash2, UserPlus, FileText, Upload, Car, ScanLine, Printer } from 'lucide-react'
 import { toast } from 'sonner'
 
 import { api, apiErrorMessage, type PermitRead } from '@/lib/api'
@@ -63,6 +63,11 @@ export function PermitDetailDialog({ permitId, open, onOpenChange, onEdit }: Pro
   const [personNationality, setPersonNationality] = useState('')
   const [vehiclePlate, setVehiclePlate] = useState('')
   const [vehicleMakeModel, setVehicleMakeModel] = useState('')
+  const [vehicleColour, setVehicleColour] = useState('')
+  const [vehicleType, setVehicleType] = useState('')
+  const [vehiclePlateCategory, setVehiclePlateCategory] = useState('')
+  const [vehicleTrafficNo, setVehicleTrafficNo] = useState('')
+  const [vehicleRegExpiry, setVehicleRegExpiry] = useState('')
   const fileRef = useRef<HTMLInputElement>(null)
 
   const invalidate = (): void => {
@@ -165,11 +170,21 @@ export function PermitDetailDialog({ permitId, open, onOpenChange, onEdit }: Pro
       api.addPermitVehicle(permitId, {
         plate_no: vehiclePlate.trim() || null,
         make_model: vehicleMakeModel.trim() || null,
+        colour: vehicleColour.trim() || null,
+        vehicle_type: vehicleType.trim() || null,
+        plate_category: vehiclePlateCategory.trim() || null,
+        traffic_no: vehicleTrafficNo.trim() || null,
+        reg_expiry: vehicleRegExpiry.trim() || null,
       }),
     onSuccess: () => {
       invalidate()
       setVehiclePlate('')
       setVehicleMakeModel('')
+      setVehicleColour('')
+      setVehicleType('')
+      setVehiclePlateCategory('')
+      setVehicleTrafficNo('')
+      setVehicleRegExpiry('')
     },
     onError: onErr,
   })
@@ -206,6 +221,49 @@ export function PermitDetailDialog({ permitId, open, onOpenChange, onEdit }: Pro
     openBlob(() => api.fetchPersonDocumentBlob(permitId, personId))
   const previewVehicleDoc = (vehicleId: number): Promise<void> =>
     openBlob(() => api.fetchVehicleDocumentBlob(permitId, vehicleId))
+
+  const handleScanId = async (file: File): Promise<void> => {
+    try {
+      const result = await api.scanEmiratesId(file)
+      if (result.name) setPersonName(result.name)
+      if (result.uae_id) setPersonUae(result.uae_id)
+      if (result.nationality) setPersonNationality(result.nationality)
+    } catch {
+      // scan failure is non-fatal; user can fill in manually
+    }
+  }
+
+  const handleScanLicence = async (file: File): Promise<void> => {
+    try {
+      const result = await api.scanVehicleLicence(file)
+      if (result.plate_no) setVehiclePlate(result.plate_no)
+      if (result.make_model) setVehicleMakeModel(result.make_model)
+      if (result.colour) setVehicleColour(result.colour)
+      if (result.vehicle_type) setVehicleType(result.vehicle_type)
+      if (result.plate_category) setVehiclePlateCategory(result.plate_category)
+      if (result.traffic_no) setVehicleTrafficNo(result.traffic_no)
+      if (result.reg_expiry) setVehicleRegExpiry(result.reg_expiry)
+    } catch {
+      // scan failure is non-fatal
+    }
+  }
+
+  const openBookPdf = async (): Promise<void> => {
+    if (!permit?.book_id) return
+    try {
+      const book = await api.getBook(permit.book_id)
+      const versions = book.versions ?? []
+      const latest = [...versions].sort((a, b) => b.version_no - a.version_no)[0] ?? null
+      const pdfUrl = latest?.pdf_url ?? null
+      if (pdfUrl) {
+        window.open(pdfUrl, '_blank', 'noopener')
+      } else {
+        toast.error(t('permits.print.noPdf'))
+      }
+    } catch (err) {
+      onErr(err)
+    }
+  }
 
   const activePeople = permit?.people.filter((p) => p.removed_at === null) ?? []
   const activeVehicles = permit?.vehicles.filter((v) => v.removed_at === null) ?? []
@@ -263,6 +321,14 @@ export function PermitDetailDialog({ permitId, open, onOpenChange, onEdit }: Pro
                 )}
                 {permit.notes && (
                   <Fact label={t('permits.detail.notes')} value={permit.notes} span />
+                )}
+                {permit.book_ref && (
+                  <Fact
+                    label={t('permits.detail.bookRef')}
+                    value={permit.book_ref}
+                    mono
+                    ltr
+                  />
                 )}
                 {isRevoked && permit.revoke_reason && (
                   <div className="col-span-2 rounded-md bg-destructive/10 px-3 py-2 text-xs text-destructive">
@@ -389,40 +455,57 @@ export function PermitDetailDialog({ permitId, open, onOpenChange, onEdit }: Pro
 
                 {/* Add person (manage + not revoked) */}
                 {canManage && !isRevoked && (
-                  <div className="grid grid-cols-1 gap-2 sm:grid-cols-[1.3fr_1fr_1fr_auto]">
-                    <input
-                      className={inputCls}
-                      placeholder={t('permits.person.name')}
-                      dir="auto"
-                      value={personName}
-                      onChange={(e) => setPersonName(e.target.value)}
-                    />
-                    <input
-                      className={inputCls}
-                      placeholder={t('permits.person.uaeId')}
-                      value={personUae}
-                      onChange={(e) => setPersonUae(e.target.value)}
-                    />
-                    <input
-                      className={inputCls}
-                      placeholder={t('permits.person.nationality')}
-                      dir="auto"
-                      value={personNationality}
-                      onChange={(e) => setPersonNationality(e.target.value)}
-                    />
-                    <Button
-                      type="button"
-                      variant="outline"
-                      disabled={
-                        personName.trim().length === 0 ||
-                        personUae.trim().length === 0 ||
-                        addPerson.isPending
-                      }
-                      onClick={() => addPerson.mutate()}
-                    >
-                      <UserPlus className="me-1.5 h-4 w-4" aria-hidden />
-                      {t('permits.person.add')}
-                    </Button>
+                  <div className="flex flex-col gap-2">
+                    <div className="grid grid-cols-1 gap-2 sm:grid-cols-[1.3fr_1fr_1fr_auto]">
+                      <input
+                        className={inputCls}
+                        placeholder={t('permits.person.name')}
+                        dir="auto"
+                        value={personName}
+                        onChange={(e) => setPersonName(e.target.value)}
+                      />
+                      <input
+                        className={inputCls}
+                        placeholder={t('permits.person.uaeId')}
+                        value={personUae}
+                        onChange={(e) => setPersonUae(e.target.value)}
+                      />
+                      <input
+                        className={inputCls}
+                        placeholder={t('permits.person.nationality')}
+                        dir="auto"
+                        value={personNationality}
+                        onChange={(e) => setPersonNationality(e.target.value)}
+                      />
+                      <Button
+                        type="button"
+                        variant="outline"
+                        disabled={
+                          personName.trim().length === 0 ||
+                          personUae.trim().length === 0 ||
+                          addPerson.isPending
+                        }
+                        onClick={() => addPerson.mutate()}
+                      >
+                        <UserPlus className="me-1.5 h-4 w-4" aria-hidden />
+                        {t('permits.person.add')}
+                      </Button>
+                    </div>
+                    <label className="inline-flex cursor-pointer items-center gap-1.5 text-xs text-muted-foreground hover:text-primary">
+                      <ScanLine className="h-3.5 w-3.5" aria-hidden />
+                      {t('permits.person.scanId')}
+                      <input
+                        type="file"
+                        accept="image/*,application/pdf"
+                        aria-label={t('permits.person.scanId')}
+                        className="sr-only"
+                        onChange={(e) => {
+                          const file = e.target.files?.[0]
+                          if (file) void handleScanId(file)
+                          e.target.value = ''
+                        }}
+                      />
+                    </label>
                   </div>
                 )}
               </section>
@@ -447,9 +530,14 @@ export function PermitDetailDialog({ permitId, open, onOpenChange, onEdit }: Pro
                               </span>
                             )}
                           </div>
-                          {(v.make_model || v.driver_name) && (
+                          {(v.make_model || v.driver_name || v.colour || v.vehicle_type) && (
                             <div className="truncate text-xs text-muted-foreground">
-                              {[v.make_model, v.driver_name].filter(Boolean).join(' · ')}
+                              {[v.make_model, v.colour, v.vehicle_type, v.driver_name].filter(Boolean).join(' · ')}
+                            </div>
+                          )}
+                          {(v.plate_category || v.traffic_no || v.reg_expiry) && (
+                            <div className="truncate text-xs text-muted-foreground font-mono">
+                              {[v.plate_category, v.traffic_no, v.reg_expiry ? t('permits.vehicle.expiry', { date: fmtDate(v.reg_expiry) }) : null].filter(Boolean).join(' · ')}
                             </div>
                           )}
                         </div>
@@ -480,32 +568,87 @@ export function PermitDetailDialog({ permitId, open, onOpenChange, onEdit }: Pro
 
                 {/* Add vehicle (manage + not revoked) */}
                 {canManage && !isRevoked && (
-                  <div className="grid grid-cols-1 gap-2 sm:grid-cols-[1fr_1fr_auto]">
-                    <input
-                      className={inputCls}
-                      placeholder={t('permits.vehicle.plate')}
-                      value={vehiclePlate}
-                      onChange={(e) => setVehiclePlate(e.target.value)}
-                    />
-                    <input
-                      className={inputCls}
-                      placeholder={t('permits.vehicle.makeModel')}
-                      dir="auto"
-                      value={vehicleMakeModel}
-                      onChange={(e) => setVehicleMakeModel(e.target.value)}
-                    />
-                    <Button
-                      type="button"
-                      variant="outline"
-                      disabled={
-                        (vehiclePlate.trim().length === 0 && vehicleMakeModel.trim().length === 0) ||
-                        addVehicle.isPending
-                      }
-                      onClick={() => addVehicle.mutate()}
-                    >
-                      <Car className="me-1.5 h-4 w-4" aria-hidden />
-                      {t('permits.vehicle.add')}
-                    </Button>
+                  <div className="flex flex-col gap-2">
+                    <div className="grid grid-cols-1 gap-2 sm:grid-cols-[1fr_1fr_auto]">
+                      <input
+                        className={inputCls}
+                        placeholder={t('permits.vehicle.plate')}
+                        value={vehiclePlate}
+                        onChange={(e) => setVehiclePlate(e.target.value)}
+                      />
+                      <input
+                        className={inputCls}
+                        placeholder={t('permits.vehicle.makeModel')}
+                        dir="auto"
+                        value={vehicleMakeModel}
+                        onChange={(e) => setVehicleMakeModel(e.target.value)}
+                      />
+                      <Button
+                        type="button"
+                        variant="outline"
+                        disabled={
+                          (vehiclePlate.trim().length === 0 && vehicleMakeModel.trim().length === 0) ||
+                          addVehicle.isPending
+                        }
+                        onClick={() => addVehicle.mutate()}
+                      >
+                        <Car className="me-1.5 h-4 w-4" aria-hidden />
+                        {t('permits.vehicle.add')}
+                      </Button>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2 sm:grid-cols-[1fr_1fr_1fr_1fr_1.3fr]">
+                      <input
+                        className={inputCls}
+                        placeholder={t('permits.vehicle.colour')}
+                        dir="auto"
+                        value={vehicleColour}
+                        onChange={(e) => setVehicleColour(e.target.value)}
+                      />
+                      <input
+                        className={inputCls}
+                        placeholder={t('permits.vehicle.vehicleType')}
+                        dir="auto"
+                        value={vehicleType}
+                        onChange={(e) => setVehicleType(e.target.value)}
+                      />
+                      <input
+                        className={inputCls}
+                        placeholder={t('permits.vehicle.plateCategory')}
+                        value={vehiclePlateCategory}
+                        onChange={(e) => setVehiclePlateCategory(e.target.value)}
+                      />
+                      <input
+                        className={`${inputCls} font-mono`}
+                        placeholder={t('permits.vehicle.trafficNo')}
+                        value={vehicleTrafficNo}
+                        onChange={(e) => setVehicleTrafficNo(e.target.value)}
+                      />
+                      <label className="flex flex-col gap-1">
+                        <span className="text-xs text-muted-foreground">{t('permits.vehicle.regExpiry')}</span>
+                        <input
+                          type="date"
+                          aria-label={t('permits.vehicle.regExpiry')}
+                          className={`${inputCls} font-mono`}
+                          value={vehicleRegExpiry}
+                          onChange={(e) => setVehicleRegExpiry(e.target.value)}
+                        />
+                      </label>
+                    </div>
+                    <label className="inline-flex cursor-pointer items-center gap-1.5 text-xs text-muted-foreground hover:text-primary">
+                      <ScanLine className="h-3.5 w-3.5" aria-hidden />
+                      {t('permits.vehicle.scanLicence')}
+                      <input
+                        type="file"
+                        accept="image/*,application/pdf"
+                        aria-label={t('permits.vehicle.scanLicence')}
+                        className="sr-only"
+                        onChange={(e) => {
+                          const file = e.target.files?.[0]
+                          if (file) void handleScanLicence(file)
+                          e.target.value = ''
+                        }}
+                      />
+                    </label>
                   </div>
                 )}
               </section>
@@ -596,6 +739,16 @@ export function PermitDetailDialog({ permitId, open, onOpenChange, onEdit }: Pro
               {t('permits.actions.delete')}
             </Button>
             <div className="flex-1" />
+            {permit.book_id && (
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => void openBookPdf()}
+              >
+                <Printer className="me-1.5 h-4 w-4" aria-hidden />
+                {t('permits.actions.printPermit')}
+              </Button>
+            )}
             {!isRevoked && (
               <>
                 <Button type="button" variant="outline" onClick={() => onEdit(permit)}>

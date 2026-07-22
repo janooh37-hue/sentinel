@@ -936,6 +936,7 @@ def generate_document(
     attachments: Sequence[GenerateAttachmentSpec] | None = None,
     return_for_leave_id: int | None = None,
     classification_code: str | None = None,
+    force_manager_embed: bool = False,
 ) -> GenerationResult:
     """Orchestrate the v4 doc generation pipeline.
 
@@ -1017,7 +1018,7 @@ def generate_document(
         field.get("key") == "hand_sign_manager" for field in form_meta.get("fields", [])
     )
     if not optional_manager_signature:
-        embed_signature["manager"] = signing_path == "auto"
+        embed_signature["manager"] = signing_path == "auto" or force_manager_embed
 
     is_personnel = form_meta.get("category", "personnel") == "personnel"
 

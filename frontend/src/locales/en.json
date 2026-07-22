@@ -438,7 +438,11 @@
       "revoke": "Revoke",
       "delete": "Delete",
       "addPerson": "Add person",
-      "removePerson": "Remove"
+      "removePerson": "Remove",
+      "printPermit": "Print permit (1/5)"
+    },
+    "print": {
+      "noPdf": "No PDF available for this permit yet."
     },
     "detail": {
       "title": "Permit {{no}}",
@@ -458,7 +462,8 @@
       "vehicleCount_other": "{{count}} vehicles",
       "noVehicles": "No vehicles added yet.",
       "revokedReason": "Revoked: {{reason}}",
-      "createdAt": "Issued {{date}}"
+      "createdAt": "Issued {{date}}",
+      "bookRef": "Permit ref (1/5)"
     },
     "person": {
       "name": "Full name",
@@ -467,7 +472,8 @@
       "role": "Role / trade (optional)",
       "add": "Add person",
       "idDoc": "UAE ID",
-      "removed": "Removed"
+      "removed": "Removed",
+      "scanId": "Scan ID"
     },
     "vehicle": {
       "plate": "Plate no.",
@@ -478,7 +484,14 @@
       "licence": "Licence",
       "remove": "Remove",
       "removed": "Removed",
-      "noPlate": "No plate"
+      "noPlate": "No plate",
+      "colour": "Colour",
+      "vehicleType": "Type",
+      "plateCategory": "Category",
+      "trafficNo": "Traffic no.",
+      "regExpiry": "Reg. expiry",
+      "expiry": "Exp. {{date}}",
+      "scanLicence": "Scan licence"
     },
     "doc": {
       "upload": "Upload {{label}}",
@@ -518,6 +531,7 @@
       "vehiclesHelp": "You can also add vehicles later from the permit.",
       "addVehicleRow": "Add another vehicle",
       "docsAfterHint": "Attach UAE IDs and vehicle licences after issuing, from the permit.",
+      "signingManager": "Signing manager (optional)",
       "save": "Save permit",
       "create": "Issue permit",
       "windowError": "End date must not be before the start date."

@@ -475,7 +475,11 @@
       "revoke": "إلغاء",
       "delete": "حذف",
       "addPerson": "إضافة شخص",
-      "removePerson": "إزالة"
+      "removePerson": "إزالة",
+      "printPermit": "طباعة التصريح (1/5)"
+    },
+    "print": {
+      "noPdf": "لا يوجد ملف PDF متاح لهذا التصريح بعد."
     },
     "detail": {
       "title": "التصريح {{no}}",
@@ -503,7 +507,8 @@
       "vehicleCount_other": "{{count}} مركبة",
       "noVehicles": "لم تُضف مركبات بعد.",
       "revokedReason": "أُلغي: {{reason}}",
-      "createdAt": "صدر في {{date}}"
+      "createdAt": "صدر في {{date}}",
+      "bookRef": "رقم التصريح (1/5)"
     },
     "person": {
       "name": "الاسم الكامل",
@@ -512,7 +517,8 @@
       "role": "الوظيفة / المهنة (اختياري)",
       "add": "إضافة شخص",
       "idDoc": "الهوية الإماراتية",
-      "removed": "أُزيل"
+      "removed": "أُزيل",
+      "scanId": "مسح الهوية"
     },
     "vehicle": {
       "plate": "رقم اللوحة",
@@ -523,7 +529,14 @@
       "licence": "الرخصة",
       "remove": "إزالة",
       "removed": "أُزيلت",
-      "noPlate": "بدون لوحة"
+      "noPlate": "بدون لوحة",
+      "colour": "اللون",
+      "vehicleType": "النوع",
+      "plateCategory": "الفئة",
+      "trafficNo": "رقم المرور",
+      "regExpiry": "انتهاء التسجيل",
+      "expiry": "ينتهي {{date}}",
+      "scanLicence": "مسح الرخصة"
     },
     "doc": {
       "upload": "رفع {{label}}",
@@ -563,6 +576,7 @@
       "vehiclesHelp": "يمكنك أيضًا إضافة المركبات لاحقًا من التصريح.",
       "addVehicleRow": "إضافة مركبة أخرى",
       "docsAfterHint": "أرفق الهويات الإماراتية ورخص المركبات بعد الإصدار، من التصريح.",
+      "signingManager": "المدير الموقّع (اختياري)",
       "save": "حفظ التصريح",
       "create": "إصدار التصريح",
       "windowError": "يجب ألا يسبق تاريخ الانتهاء تاريخ البدء."

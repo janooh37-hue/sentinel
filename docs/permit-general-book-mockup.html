@@ -1,0 +1,328 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Permit → 1/5 General Book — mockup</title>
+<style>
+  :root{
+    --bg:#f4f5f7; --card:#fff; --ink:#1f2430; --muted:#6b7280; --line:#e4e7ec;
+    --brand:#0f766e; --brand-soft:#e6f4f1; --amber:#b45309; --amber-soft:#fef3c7;
+    --green:#15803d; --green-soft:#dcfce7; --red:#b91c1c; --red-soft:#fee2e2;
+    --blue:#1d4ed8; --blue-soft:#dbeafe; --radius:12px;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font:14px/1.5 "Segoe UI",system-ui,-apple-system,Arial,sans-serif;padding:28px}
+  .wrap{max-width:1180px;margin:0 auto}
+  .lead{margin:0 0 4px;font-size:22px;font-weight:700}
+  .sub{margin:0 0 22px;color:var(--muted)}
+  .note{background:#fff;border:1px dashed var(--line);border-radius:10px;
+    padding:10px 14px;color:var(--muted);font-size:13px;margin-bottom:22px}
+  .grid{display:grid;grid-template-columns:minmax(0,1.05fr) minmax(0,1fr);gap:22px;align-items:start}
+  @media(max-width:960px){.grid{grid-template-columns:1fr}}
+  .panel{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);
+    box-shadow:0 1px 2px rgba(16,24,40,.04);overflow:hidden}
+  .panel > h2{margin:0;padding:12px 16px;font-size:13px;font-weight:600;letter-spacing:.02em;
+    text-transform:uppercase;color:var(--muted);background:#fafbfc;border-bottom:1px solid var(--line)}
+  .body{padding:16px}
+
+  /* ---------- form side ---------- */
+  .field{margin-bottom:12px}
+  label{display:block;font-size:12px;font-weight:600;color:#374151;margin-bottom:4px}
+  .in{width:100%;padding:8px 10px;border:1px solid #d0d5dd;border-radius:8px;font:inherit;background:#fff}
+  .row2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  .row3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px}
+  .chips{display:flex;gap:8px;flex-wrap:wrap}
+  .chip{display:inline-flex;align-items:center;gap:6px;padding:5px 10px;border-radius:999px;
+    border:1px solid var(--line);font-size:12px;font-weight:600;cursor:default}
+  .chip.on.green{background:var(--green-soft);border-color:#bbf7d0;color:var(--green)}
+  .chip.on.red{background:var(--red-soft);border-color:#fecaca;color:var(--red)}
+  .chip.on.blue{background:var(--blue-soft);border-color:#bfdbfe;color:var(--blue)}
+  .chip.off{color:var(--muted);background:#fff}
+  .sec{margin-top:18px;padding-top:14px;border-top:1px solid var(--line)}
+  .sec h3{margin:0 0 10px;font-size:13px;font-weight:700}
+  .subcard{border:1px solid var(--line);border-radius:10px;padding:12px;margin-bottom:10px;background:#fcfcfd}
+  .subcard.scanned{border-color:#bfe3dc;background:#f7fdfb}
+  .who{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px}
+  .who b{font-size:13px}
+  .del{color:var(--muted);font-size:12px;border:1px solid var(--line);background:#fff;border-radius:7px;
+    padding:3px 8px;cursor:pointer}
+  .scanbar{display:flex;align-items:center;gap:10px;padding:8px 10px;border:1px dashed #bfe3dc;
+    background:var(--brand-soft);border-radius:8px;margin-bottom:10px;font-size:12px}
+  .scanbar .doc{width:34px;height:44px;border-radius:4px;background:#fff;border:1px solid #cbd5e1;
+    display:flex;align-items:center;justify-content:center;font-size:9px;color:#94a3b8;text-align:center;line-height:1.1}
+  .scanbtn{border:1px solid #cbd5e1;background:#fff;border-radius:7px;padding:6px 10px;font-size:12px;
+    font-weight:600;cursor:pointer;color:#334155}
+  .ocrbadge{display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:600;
+    color:var(--brand);background:var(--brand-soft);border:1px solid #bfe3dc;border-radius:999px;padding:2px 8px}
+  .lowconf{border-color:#fcd34d !important;background:#fffbeb !important}
+  .hint{font-size:11px;color:var(--amber);margin-top:3px;display:flex;align-items:center;gap:4px}
+  .addrow{width:100%;border:1px dashed #cbd5e1;background:#fff;border-radius:9px;padding:9px;
+    color:var(--brand);font-weight:600;font-size:13px;cursor:pointer}
+  .footbar{display:flex;justify-content:flex-end;gap:10px;margin-top:16px}
+  .btn{padding:9px 16px;border-radius:9px;font-weight:600;font-size:13px;cursor:pointer;border:1px solid transparent}
+  .btn.ghost{background:#fff;border-color:#d0d5dd;color:#374151}
+  .btn.primary{background:var(--brand);color:#fff}
+  .tag{font-size:11px;color:var(--muted);font-weight:500}
+
+  /* ---------- letter side (Arabic RTL) ---------- */
+  .paperwrap{padding:16px;background:#eef0f3}
+  .paper{background:#fff;border:1px solid #e4e7ec;box-shadow:0 2px 10px rgba(16,24,40,.08);
+    padding:30px 34px;direction:rtl;font-family:"Tahoma","Segoe UI",Arial,sans-serif;color:#111}
+  .lh{display:flex;justify-content:space-between;align-items:flex-start;border-bottom:2px solid #0f766e;padding-bottom:12px}
+  .lh .org{font-weight:700;font-size:15px;line-height:1.6}
+  .lh .org small{display:block;font-weight:400;color:#555;font-size:11px;direction:ltr;text-align:right}
+  .aztec{width:52px;height:52px;background:
+    repeating-conic-gradient(#111 0 25%, #fff 0 50%) 0 0/13px 13px;border:2px solid #111}
+  .meta{display:flex;justify-content:space-between;margin:14px 0 4px;font-size:13px}
+  .meta b{font-weight:700}
+  .subject{text-align:center;font-weight:700;font-size:15px;margin:16px 0 10px;
+    text-decoration:underline;text-underline-offset:4px}
+  .para{font-size:13px;line-height:2;margin:0 0 12px}
+  .zbadges{display:flex;gap:6px;margin:6px 0 14px}
+  .zb{font-size:11px;font-weight:700;border-radius:6px;padding:2px 10px}
+  .zb.green{background:var(--green-soft);color:var(--green)}
+  .zb.red{background:var(--red-soft);color:var(--red)}
+  .zb.blue{background:var(--blue-soft);color:var(--blue)}
+  .dyn{border-bottom:1px dashed #0f766e;padding-bottom:1px}
+  .sigimg{font-family:"Segoe Script","Bradley Hand",cursive;font-size:23px;color:#14338a;
+    margin-top:10px;transform:rotate(-3deg)}
+  .cap{font-size:12px;font-weight:700;margin:14px 0 6px;color:#0f766e}
+  table.doc{width:100%;border-collapse:collapse;font-size:12px}
+  table.doc th,table.doc td{border:1px solid #cbd5e1;padding:6px 7px;text-align:center}
+  table.doc th{background:#f1f5f9;font-weight:700}
+  table.doc td.name{text-align:right}
+  .veh th,.veh td{font-size:11px;padding:5px 5px}
+  .sign{display:flex;justify-content:space-between;margin-top:34px;font-size:12px}
+  .sign .box{text-align:center;width:45%}
+  .sign .line{margin-top:38px;border-top:1px solid #333;padding-top:4px}
+  .foot{margin-top:22px;border-top:1px solid #e4e7ec;padding-top:8px;font-size:10px;color:#888;
+    text-align:center;direction:ltr}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <p class="lead">Permit → auto 1/5 General Book — mockup</p>
+  <p class="sub">Left: the permit form — scan the Emirates ID to fill a person, scan the vehicle licence to fill
+    a vehicle, plus a signing-manager picker. Right: the Arabic permit letter auto-generated on save — this is
+    the “print”, signed with the manager’s stored signature.</p>
+  <div class="note"><b>Mockup only</b> — static HTML to agree the layout &amp; fields. Not wired to anything.
+    OCR-filled fields are shown with a teal <span class="ocrbadge">OCR</span> badge; low-confidence reads are
+    amber and asked to be verified.</div>
+
+  <div class="grid">
+    <!-- ============ FORM ============ -->
+    <section class="panel">
+      <h2>New security permit</h2>
+      <div class="body">
+        <div class="row2">
+          <div class="field"><label>Company</label><input class="in" value="Al Nahda Contracting LLC"></div>
+          <div class="field"><label>Zones</label>
+            <div class="chips" style="padding-top:2px">
+              <span class="chip on green">● Green</span>
+              <span class="chip off">Red</span>
+              <span class="chip on blue">● Work residence</span>
+            </div>
+          </div>
+        </div>
+        <div class="row2">
+          <div class="field"><label>Start date</label><input class="in" type="date" value="2026-07-22"></div>
+          <div class="field"><label>End date</label><input class="in" type="date" value="2026-08-21"></div>
+        </div>
+        <div class="field"><label>Signing manager <span class="tag">· from Managers records (name + signature)</span></label>
+          <select class="in"><option>Capt. Khalid Al Mansoori — Security Manager</option></select>
+        </div>
+
+        <!-- people -->
+        <div class="sec">
+          <h3>People <span class="tag">· UAE ID required</span></h3>
+          <div class="subcard scanned">
+            <div class="who"><b>Person 1</b><button class="del">Remove</button></div>
+            <div class="scanbar">
+              <div class="doc">eid.jpg</div>
+              <div style="flex:1">
+                <div style="font-weight:700;color:#0f766e">Emirates ID scanned</div>
+                <div style="color:#5b7f79">Name, ID &amp; nationality pre-filled — verify before saving.</div>
+              </div>
+              <button class="scanbtn">Re-scan</button>
+            </div>
+            <div class="row2">
+              <div class="field"><label>Name <span class="ocrbadge">OCR</span></label><input class="in" value="Mohammed Al Farsi"></div>
+              <div class="field"><label>UAE ID <span class="ocrbadge">OCR</span></label><input class="in" value="784-1988-1234567-1"></div>
+            </div>
+            <div class="row2">
+              <div class="field"><label>Nationality <span class="ocrbadge">OCR</span></label><input class="in" value="Egypt"></div>
+              <div class="field"><label>Role</label><input class="in" value="Site engineer"></div>
+            </div>
+          </div>
+          <div class="subcard">
+            <div class="who"><b>Person 2</b><button class="del">Remove</button></div>
+            <div class="scanbar" style="background:#fff;border-style:dashed;border-color:#cbd5e1">
+              <div class="doc" style="color:#cbd5e1">no scan</div>
+              <div style="flex:1;color:#6b7280">Upload the Emirates ID to auto-fill, or type the fields manually.</div>
+              <button class="scanbtn" style="border-color:#0f766e;color:#0f766e">Scan ID</button>
+            </div>
+            <div class="row2">
+              <div class="field"><label>Name</label><input class="in" placeholder="Full name"></div>
+              <div class="field"><label>UAE ID</label><input class="in" placeholder="784-…"></div>
+            </div>
+          </div>
+          <button class="addrow">+ Add person</button>
+        </div>
+
+        <!-- vehicles -->
+        <div class="sec">
+          <h3>Vehicles</h3>
+
+          <div class="subcard scanned">
+            <div class="who"><b>Vehicle 1</b><button class="del">Remove</button></div>
+            <div class="scanbar">
+              <div class="doc">mulkiya.jpg</div>
+              <div style="flex:1">
+                <div style="font-weight:700;color:#0f766e">Licence scanned</div>
+                <div style="color:#5b7f79">Fields pre-filled below — please verify before saving.</div>
+              </div>
+              <button class="scanbtn">Re-scan</button>
+            </div>
+            <div class="row3">
+              <div class="field"><label>Plate No. <span class="ocrbadge">OCR</span></label><input class="in" value="A 45213"></div>
+              <div class="field"><label>Emirate / authority <span class="ocrbadge">OCR</span></label><input class="in" value="Dubai"></div>
+              <div class="field"><label>Plate category <span class="ocrbadge">OCR</span></label><input class="in" value="Private"></div>
+            </div>
+            <div class="row3">
+              <div class="field"><label>Traffic (T.C.) No. <span class="ocrbadge">OCR</span></label>
+                <input class="in lowconf" value="12345678">
+                <div class="hint">⚠ Low-confidence read — verify</div>
+              </div>
+              <div class="field"><label>Vehicle type <span class="ocrbadge">OCR</span></label><input class="in" value="Sedan"></div>
+              <div class="field"><label>Make / model <span class="ocrbadge">OCR</span></label><input class="in" value="Toyota Camry"></div>
+            </div>
+            <div class="row3">
+              <div class="field"><label>Colour <span class="ocrbadge">OCR</span></label><input class="in" value="White"></div>
+              <div class="field"><label>Reg. expiry <span class="ocrbadge">OCR</span></label><input class="in" type="date" value="2027-03-14"></div>
+              <div class="field"><label>Driver</label><input class="in" value="Mohammed Al Farsi"></div>
+            </div>
+          </div>
+
+          <div class="subcard">
+            <div class="who"><b>Vehicle 2</b><button class="del">Remove</button></div>
+            <div class="scanbar" style="background:#fff;border-style:dashed;border-color:#cbd5e1">
+              <div class="doc" style="color:#cbd5e1">no scan</div>
+              <div style="flex:1;color:#6b7280">Upload the vehicle licence to auto-fill, or type the fields manually.</div>
+              <button class="scanbtn" style="border-color:#0f766e;color:#0f766e">Scan licence</button>
+            </div>
+            <div class="row3">
+              <div class="field"><label>Plate No.</label><input class="in" placeholder="e.g. B 71034"></div>
+              <div class="field"><label>Emirate / authority</label><input class="in" placeholder="e.g. Abu Dhabi"></div>
+              <div class="field"><label>Plate category</label><input class="in" placeholder="Private / Commercial"></div>
+            </div>
+          </div>
+
+          <button class="addrow">+ Add vehicle</button>
+        </div>
+
+        <div class="footbar">
+          <button class="btn ghost">Cancel</button>
+          <button class="btn primary">Create permit &amp; issue 1/5 →</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ LETTER ============ -->
+    <section class="panel">
+      <h2>Auto-generated permit — 1/5/GSSG (Arabic) · the print</h2>
+      <div class="paperwrap">
+        <div class="paper">
+          <div class="lh">
+            <div class="org">مؤسسة الحرس للخدمات الأمنية<small>GULF SENTINEL SECURITY GROUP</small></div>
+            <div class="aztec" title="Aztec ref stamp"></div>
+          </div>
+
+          <div class="meta">
+            <div><b>الرقم:</b> 1/5/GSSG/0042</div>
+            <div><b>التاريخ:</b> 2026/07/22</div>
+          </div>
+
+          <div class="subject">تصريح دخول أمني</div>
+
+          <p class="para">
+            يطيب لنا أن نتقدم لسيادتكم بخالص التحية والتقدير، ويرجى من سيادتكم السماح للأفراد
+            المبيّنين بالكشف أدناه بالدخول من البوابة الرئيسية إلى
+            <span class="dyn" title="يتغيّر تلقائياً حسب المناطق المختارة">المنطقة الخضراء وسكن الموظفين</span>،
+            وبحوزتهم المركبات المنوّه عنها بالجدول الثاني، حتى يتسنّى لهم القيام بعملهم في الوقت المحدد.
+          </p>
+          <p class="para" style="margin:0 0 8px"><b>الجهة:</b> Al Nahda Contracting LLC &nbsp;·&nbsp;
+            <b>صلاحية التصريح:</b> من 2026/07/22 إلى 2026/08/21</p>
+          <div class="zbadges">
+            <span class="zb green">المنطقة الخضراء</span>
+            <span class="zb blue">سكن الموظفين</span>
+          </div>
+
+          <div class="cap">الجدول الأول: بيانات الأفراد</div>
+          <table class="doc">
+            <thead><tr><th>م</th><th>الاسم</th><th>رقم الهوية</th><th>الجنسية</th></tr></thead>
+            <tbody>
+              <tr><td>1</td><td class="name">Mohammed Al Farsi</td><td>784-1988-1234567-1</td><td>مصر</td></tr>
+              <tr><td>2</td><td class="name">Rakesh Kumar</td><td>784-1990-7654321-2</td><td>الهند</td></tr>
+            </tbody>
+          </table>
+
+          <div class="cap">الجدول الثاني: بيانات المركبات</div>
+          <table class="doc veh">
+            <thead><tr>
+              <th>اللوحة</th><th>الإمارة</th><th>الفئة</th><th>رقم المرور</th>
+              <th>النوع / الموديل</th><th>اللون</th><th>انتهاء الرخصة</th>
+            </tr></thead>
+            <tbody>
+              <tr>
+                <td>A 45213</td><td>دبي</td><td>خصوصي</td><td>12345678</td>
+                <td>Toyota Camry</td><td>أبيض</td><td>2027/03/14</td>
+              </tr>
+              <tr>
+                <td>B 71034</td><td>أبوظبي</td><td>خصوصي</td><td>87654321</td>
+                <td>Nissan Patrol</td><td>أسود</td><td>2026/11/30</td>
+              </tr>
+            </tbody>
+          </table>
+
+          <div class="sign">
+            <div class="box">
+              <div style="font-weight:700">مدير الأمن</div>
+              <div class="sigimg" title="Manager's stored signature image">خالد المنصوري</div>
+              <div class="line" style="margin-top:6px">النقيب / خالد المنصوري — التوقيع والختم</div>
+            </div>
+            <div class="box"><div>&nbsp;</div><div class="line" style="margin-top:64px">الختم الرسمي</div></div>
+          </div>
+
+          <div class="foot">GSSG Manager · 1/5/GSSG/0042 · generated 2026-07-22</div>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <!-- ============ WORDING RULES ============ -->
+  <section class="panel" style="margin-top:22px">
+    <h2>Body wording — auto-adjusts by count (الفرد/الأفراد · المركبة/المركبات · zones)</h2>
+    <div class="body" style="display:grid;gap:10px">
+      <div style="background:#f7fdfb;border:1px solid #bfe3dc;border-radius:9px;padding:10px 12px;direction:rtl;font-family:'Tahoma',sans-serif;font-size:13px;line-height:1.9">
+        <div style="font-family:'Segoe UI';direction:ltr;font-size:11px;font-weight:700;color:#0f766e;margin-bottom:2px">≥2 individuals · ≥2 vehicles</div>
+        … السماح <b>للأفراد المبيّنين</b> بالكشف أدناه بالدخول من البوابة الرئيسية إلى <u>[المناطق]</u>، <b>وبحوزتهم المركبات</b> المنوّه عنها بالجدول الثاني، حتى <b>يتسنّى لهم القيام بعملهم</b> في الوقت المحدد.
+      </div>
+      <div style="background:#f7fdfb;border:1px solid #bfe3dc;border-radius:9px;padding:10px 12px;direction:rtl;font-family:'Tahoma',sans-serif;font-size:13px;line-height:1.9">
+        <div style="font-family:'Segoe UI';direction:ltr;font-size:11px;font-weight:700;color:#0f766e;margin-bottom:2px">1 individual · 1 vehicle</div>
+        … السماح <b>للفرد المبيّن</b> بالكشف أدناه بالدخول من البوابة الرئيسية إلى <u>[المناطق]</u>، <b>وبحوزته المركبة</b> المنوّه عنها بالجدول الثاني، حتى <b>يتسنّى له القيام بعمله</b> في الوقت المحدد.
+      </div>
+      <div style="background:#fffbeb;border:1px solid #fcd34d;border-radius:9px;padding:10px 12px;direction:rtl;font-family:'Tahoma',sans-serif;font-size:13px;line-height:1.9">
+        <div style="font-family:'Segoe UI';direction:ltr;font-size:11px;font-weight:700;color:#b45309;margin-bottom:2px">1 individual · no vehicle — vehicle clause &amp; الجدول الثاني dropped</div>
+        … السماح <b>للفرد المبيّن</b> بالكشف أدناه بالدخول من البوابة الرئيسية إلى <u>[المناطق]</u>، حتى <b>يتسنّى له القيام بعمله</b> في الوقت المحدد.
+      </div>
+      <div style="background:#fffbeb;border:1px solid #fcd34d;border-radius:9px;padding:10px 12px;direction:rtl;font-family:'Tahoma',sans-serif;font-size:13px;line-height:1.9">
+        <div style="font-family:'Segoe UI';direction:ltr;font-size:11px;font-weight:700;color:#b45309;margin-bottom:2px">≥2 individuals · no vehicles — vehicle clause &amp; الجدول الثاني dropped</div>
+        … السماح <b>للأفراد المبيّنين</b> بالكشف أدناه بالدخول من البوابة الرئيسية إلى <u>[المناطق]</u>، حتى <b>يتسنّى لهم القيام بعملهم</b> في الوقت المحدد.
+      </div>
+    </div>
+  </section>
+</div>
+</body>
+</html>

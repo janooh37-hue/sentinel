@@ -193,6 +193,11 @@ export interface PermitVehicleRead {
   plate_emirate: string | null
   make_model: string | null
   driver_name: string | null
+  colour?: string | null
+  vehicle_type?: string | null
+  plate_category?: string | null
+  traffic_no?: string | null
+  reg_expiry?: string | null
   created_at: string
   removed_at: string | null
   /** Basename of the attached vehicle-licence scan, if any. */
@@ -204,6 +209,11 @@ export interface PermitVehicleCreate {
   plate_emirate?: string | null
   make_model?: string | null
   driver_name?: string | null
+  colour?: string | null
+  vehicle_type?: string | null
+  plate_category?: string | null
+  traffic_no?: string | null
+  reg_expiry?: string | null
 }
 
 export interface PermitListItem {
@@ -233,6 +243,11 @@ export interface PermitRead extends PermitListItem {
   document_name: string | null
   people: PermitPersonRead[]
   vehicles: PermitVehicleRead[]
+  manager_id?: number | null
+  /** Book id of the generated 1/5 permit book (set after first PDF generation). */
+  book_id?: number | null
+  /** Human-readable ref of the generated permit book (e.g. "1/5/GSSG/..."). */
+  book_ref?: string | null
 }
 
 export interface PermitListResponse {
@@ -249,8 +264,29 @@ export interface PermitCreate {
   end_date: string
   purpose?: string | null
   notes?: string | null
+  manager_id?: number | null
   people?: PermitPersonCreate[]
   vehicles?: PermitVehicleCreate[]
+}
+
+/** OCR result from POST /permits/scan-vehicle-licence (mulkiya scan). */
+export interface VehicleLicenceScan {
+  plate_no?: string | null
+  plate_emirate?: string | null
+  plate_category?: string | null
+  traffic_no?: string | null
+  make_model?: string | null
+  vehicle_type?: string | null
+  colour?: string | null
+  reg_expiry?: string | null
+  driver_name?: string | null
+}
+
+/** OCR result from POST /permits/scan-emirates-id. */
+export interface PersonIdScan {
+  name?: string | null
+  uae_id?: string | null
+  nationality?: string | null
 }
 
 export interface PermitUpdate {
@@ -1086,6 +1122,18 @@ export const api = {
   fetchVehicleDocumentBlob: (id: number, vehicleId: number): Promise<Blob> =>
     fetchPermitBlob(`/permits/${id}/vehicles/${vehicleId}/document`),
 
+  /** OCR-extract vehicle registration (mulkiya) fields from an image file. */
+  scanVehicleLicence: (file: File): Promise<VehicleLicenceScan> => {
+    const form = new FormData()
+    form.append('file', file)
+    return multipart<VehicleLicenceScan>('/permits/scan-vehicle-licence', form)
+  },
+  /** OCR-extract person fields from a UAE Emirates ID image. */
+  scanEmiratesId: (file: File): Promise<PersonIdScan> => {
+    const form = new FormData()
+    form.append('file', file)
+    return multipart<PersonIdScan>('/permits/scan-emirates-id', form)
+  },
   uploadLeaveCertificate: (id: number, file: File) => {
     const form = new FormData()
     form.append('file', file)
