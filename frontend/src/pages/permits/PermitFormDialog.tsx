@@ -163,14 +163,16 @@ export function PermitFormDialog({ open, permit, onOpenChange, onSaved }: Props)
       let created = await api.createPermit(body)
 
       // Attach the permit-paper scan once we have an id (mirrors existing pattern)
-      if (docFile) created = await api.uploadPermitDocument(created.id, docFile)
+      if (docFile) {
+        try { created = await api.uploadPermitDocument(created.id, docFile) } catch { /* scan attach is best-effort */ }
+      }
 
       // Attach per-person UAE ID scans by index order
       // created.people[] is in insertion order, matching submittedPeople order
       for (let i = 0; i < submittedPeople.length; i++) {
         const file = personScanFiles.current.get(submittedPeople[i].key)
         if (file && created.people[i]) {
-          created = await api.uploadPersonDocument(created.id, created.people[i].id, file)
+          try { created = await api.uploadPersonDocument(created.id, created.people[i].id, file) } catch { /* best-effort */ }
         }
       }
 
@@ -178,7 +180,7 @@ export function PermitFormDialog({ open, permit, onOpenChange, onSaved }: Props)
       for (let i = 0; i < submittedVehicles.length; i++) {
         const file = vehicleScanFiles.current.get(submittedVehicles[i].key)
         if (file && created.vehicles[i]) {
-          created = await api.uploadVehicleDocument(created.id, created.vehicles[i].id, file)
+          try { created = await api.uploadVehicleDocument(created.id, created.vehicles[i].id, file) } catch { /* best-effort */ }
         }
       }
 
@@ -497,13 +499,16 @@ export function PermitFormDialog({ open, permit, onOpenChange, onSaved }: Props)
                         value={row.traffic_no ?? ''}
                         onChange={(e) => patchVehicle(row.key, { traffic_no: e.target.value })}
                       />
-                      <input
-                        type="date"
-                        aria-label={t('permits.vehicle.regExpiry')}
-                        className={`${inputCls} font-mono`}
-                        value={row.reg_expiry ?? ''}
-                        onChange={(e) => patchVehicle(row.key, { reg_expiry: e.target.value })}
-                      />
+                      <label className="flex flex-col gap-1">
+                        <span className="text-xs text-muted-foreground">{t('permits.vehicle.regExpiry')}</span>
+                        <input
+                          type="date"
+                          aria-label={t('permits.vehicle.regExpiry')}
+                          className={`${inputCls} font-mono`}
+                          value={row.reg_expiry ?? ''}
+                          onChange={(e) => patchVehicle(row.key, { reg_expiry: e.target.value })}
+                        />
+                      </label>
                     </div>
                     {/* Scan licence — label wraps the file input (no JS click needed) */}
                     <label className="inline-flex cursor-pointer items-center gap-1.5 text-xs text-muted-foreground hover:text-primary">

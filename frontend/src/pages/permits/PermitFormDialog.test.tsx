@@ -63,5 +63,6 @@ describe('PermitFormDialog', () => {
 
     // The colour field should be pre-filled
     expect(await screen.findByDisplayValue('White')).toBeInTheDocument()
+    expect(screen.getByDisplayValue('A 1')).toBeInTheDocument()
   })
 })
