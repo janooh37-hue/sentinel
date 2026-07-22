@@ -143,7 +143,6 @@ def create_permit(
 
 @router.post("/scan-vehicle-licence", response_model=VehicleLicenceScan)
 async def scan_vehicle_licence(
-    db: Annotated[Session, Depends(get_db)],
     _user: Annotated[User, Depends(require_capability("permits.manage"))],
     upload: Annotated[UploadFile, File(alias="file")],
 ) -> VehicleLicenceScan:
@@ -152,7 +151,6 @@ async def scan_vehicle_licence(
 
 @router.post("/scan-emirates-id", response_model=PersonIdScan)
 async def scan_emirates_id(
-    db: Annotated[Session, Depends(get_db)],
     _user: Annotated[User, Depends(require_capability("permits.manage"))],
     upload: Annotated[UploadFile, File(alias="file")],
 ) -> PersonIdScan:

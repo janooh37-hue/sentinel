@@ -86,6 +86,6 @@ def test_scan_emirates_id_returns_fields(api_db, monkeypatch):
     )
     assert r.status_code == 200, r.text
     body = r.json()
-    # extraction may return None for fields if pattern doesn't match; just confirm 200 + shape
-    assert "name" in body
-    assert "uae_id" in body
+    assert body["name"] == "Ahmed Ali"
+    assert body["uae_id"] == "784-1990-1234567-1"
+    assert body["nationality"] == "UAE"
