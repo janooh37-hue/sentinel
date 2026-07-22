@@ -131,7 +131,10 @@ def test_reopen_creates_active_session_and_working_file(db_session, tmp_path, mo
     monkeypatch.setattr(word_book_service, "get_settings", lambda: _settings(tmp_path))
 
     user = _user(db_session)
-    book, doc, _v = _make_finished_book(db_session, user, tmp_path)
+    book, doc, version = _make_finished_book(db_session, user, tmp_path)
+    prior_session = db_session.query(BookEditSession).filter_by(book_id=book.id).one()
+    prior_token = prior_session.token
+    prior_docx = Path(doc.docx_path).read_bytes()
 
     info = word_book_service.reopen_word_session(db_session, user=user, book_id=book.id)
 
@@ -141,6 +144,8 @@ def test_reopen_creates_active_session_and_working_file(db_session, tmp_path, mo
     )
     assert session is not None
     assert session.token == info.token
+    assert session.token != prior_token
+    assert prior_session.state == "finished"
 
     # Working file exists and has the same content as the source
     working = Path(session.working_path)
@@ -149,6 +154,8 @@ def test_reopen_creates_active_session_and_working_file(db_session, tmp_path, mo
 
     # Source docx is still intact (it was copied, not moved)
     assert Path(doc.docx_path).exists()
+    assert Path(doc.docx_path).read_bytes() == prior_docx
+    assert db_session.query(BookVersion).filter_by(book_id=book.id).one() == version
 
 
 def test_reopen_then_finish_gives_version_2_revision(db_session, tmp_path, monkeypatch):

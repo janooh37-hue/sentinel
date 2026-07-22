@@ -14,7 +14,8 @@ Differences from ``backend/main.py`` (the desktop launcher):
   * No free-port probe — the port is fixed so firewall rules and bookmarks
     stay stable.
   * Binds ``settings.host`` (set ``GSSG_HOST=0.0.0.0`` for the LAN).
-  * uvicorn access logging is ON for diagnosability.
+  * Uvicorn access logging is OFF because DAV URLs contain bearer tokens;
+    application logs provide redacted request diagnostics instead.
 """
 
 from __future__ import annotations
@@ -52,7 +53,7 @@ def build_config() -> uvicorn.Config:
         host=settings.host,
         port=settings.port,
         log_level=settings.log_level.lower(),
-        access_log=True,
+        access_log=False,
         lifespan="on",
     )
 

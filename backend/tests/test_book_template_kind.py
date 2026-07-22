@@ -33,7 +33,7 @@ def _write_retokenizable_docx(path: Path) -> None:
 
 
 def test_list_templates_kind_base_and_custom(tmp_path, monkeypatch):
-    """base_text.docx and base_table.docx get kind='base'; others get 'custom'."""
+    """Only base_table.docx is built in; no-table uses the normal document."""
     from app.services import book_template_service
 
     # Point templates_dir() at tmp_path
@@ -47,7 +47,7 @@ def test_list_templates_kind_base_and_custom(tmp_path, monkeypatch):
     items = book_template_service.list_templates()
     by_name = {i.name: i.kind for i in items}
 
-    assert by_name["base_text.docx"] == "base"
+    assert by_name["base_text.docx"] == "custom"
     assert by_name["base_table.docx"] == "base"
     assert by_name["custom_foo.docx"] == "custom"
 
@@ -119,7 +119,7 @@ def test_list_word_templates_api_kind(tmp_path, monkeypatch):
     resp = client.get("/api/v1/books/word-templates")
     assert resp.status_code == 200, resp.text
     by_name = {item["name"]: item["kind"] for item in resp.json()}
-    assert by_name["base_text.docx"] == "base"
+    assert by_name["base_text.docx"] == "custom"
     assert by_name["custom_foo.docx"] == "custom"
 
 
@@ -139,26 +139,25 @@ def _import_build_script():
 
 
 def test_build_base_templates_creates_files(tmp_path):
-    """build_templates(output_dir) produces base_text.docx and base_table.docx."""
+    """build_templates(output_dir) produces only base_table.docx."""
     mod = _import_build_script()
     mod.build_templates(tmp_path)
-    assert (tmp_path / "base_text.docx").is_file()
+    assert not (tmp_path / "base_text.docx").exists()
     assert (tmp_path / "base_table.docx").is_file()
 
 
 def test_build_base_templates_validate(tmp_path):
-    """Both produced files pass validate_book_template."""
+    """The produced table template passes validation."""
     mod = _import_build_script()
     mod.build_templates(tmp_path)
 
     from app.core.book_template_retokenize import validate_book_template
 
-    validate_book_template(tmp_path / "base_text.docx")
     validate_book_template(tmp_path / "base_table.docx")
 
 
 def test_build_base_templates_check_flag(tmp_path):
-    """check_templates(dir) returns True when both files exist and validate."""
+    """check_templates(dir) returns True when the table template validates."""
     mod = _import_build_script()
     mod.build_templates(tmp_path)
     assert mod.check_templates(tmp_path) is True

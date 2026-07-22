@@ -76,8 +76,7 @@ def configure_logging(settings: Settings) -> None:
     file_handler.setFormatter(_JsonFormatter())
     root.addHandler(file_handler)
 
-    # Quiet noisy libs. (uvicorn.access is intentionally NOT silenced — the
-    # headless LAN server (serve.py) enables access_log for diagnosability and
-    # relies on these lines reaching the rotating file handler.)
+    # The headless server disables uvicorn.access because DAV request paths
+    # contain bearer tokens; app-level diagnostics log redacted request shape.
     for noisy in ("watchfiles",):
         logging.getLogger(noisy).setLevel(logging.WARNING)

@@ -11,9 +11,12 @@ file as writable.  Without a collection OPTIONS handler Word opens read-only.
 
 from __future__ import annotations
 
+import hashlib
+import logging
 import os
 from email.utils import formatdate
 from typing import Annotated
+from xml.etree import ElementTree
 
 from fastapi import APIRouter, Depends, Request, Response
 from fastapi.responses import FileResponse
@@ -23,6 +26,7 @@ from app.db.session import get_db
 from app.services import word_session_repo
 
 router = APIRouter()
+log = logging.getLogger(__name__)
 
 _DAV_METHODS = ["OPTIONS", "HEAD", "GET", "PUT", "LOCK", "UNLOCK", "PROPFIND"]
 
@@ -33,6 +37,16 @@ _OPTIONS_HEADERS = {
 }
 
 
+def _propfind_names(body: bytes) -> list[str]:
+    if not body:
+        return []
+    try:
+        root = ElementTree.fromstring(body)
+    except ElementTree.ParseError:
+        return []
+    return [child.tag.rsplit("}", 1)[-1] for prop in root.iter("{DAV:}prop") for child in prop]
+
+
 @router.api_route("/dav/{token}/{filename:path}", methods=_DAV_METHODS)
 async def dav_handler(
     token: str,
@@ -41,10 +55,35 @@ async def dav_handler(
     db: Annotated[Session, Depends(get_db)],
 ) -> Response:
     method = request.method.upper()
+    body = await request.body()
+    event = {
+        "dav_correlation": hashlib.sha256(token.encode()).hexdigest()[:12],
+        "dav_method": method,
+        "dav_path_shape": "collection" if filename == "" else "file",
+        "dav_depth": request.headers.get("depth"),
+        "dav_propfind_properties": _propfind_names(body) if method == "PROPFIND" else [],
+        "dav_body_length": len(body),
+        "dav_if_present": "if" in request.headers,
+        "dav_lock_token_present": "lock-token" in request.headers,
+    }
+
+    def respond(response: Response, session_id: int | None = None) -> Response:
+        log.info(
+            "webdav_request",
+            extra={
+                **event,
+                "dav_session_id": session_id,
+                "dav_status": response.status_code,
+                "dav_response_dav_present": "dav" in response.headers,
+                "dav_response_lock_token_present": "lock-token" in response.headers,
+                "dav_response_content_type_present": "content-type" in response.headers,
+            },
+        )
+        return response
 
     # OPTIONS answers both file and collection paths — no token check needed.
     if method == "OPTIONS":
-        return Response(status_code=200, headers=_OPTIONS_HEADERS)
+        return respond(Response(status_code=200, headers=_OPTIONS_HEADERS))
 
     # ------------------------------------------------------------------
     # Collection path  (/dav/{token}/ — filename is empty)
@@ -52,7 +91,7 @@ async def dav_handler(
     if filename == "":
         sess = word_session_repo.get_active_session_by_token(db, token)
         if sess is None:
-            return Response(status_code=404)
+            return respond(Response(status_code=404))
 
         if method == "PROPFIND":
             xml = (
@@ -67,36 +106,37 @@ async def dav_handler(
                 "</D:response>"
                 "</D:multistatus>"
             )
-            return Response(content=xml, media_type="application/xml", status_code=207)
+            return respond(
+                Response(content=xml, media_type="application/xml", status_code=207), sess.id
+            )
 
-        return Response(status_code=404)
+        return respond(Response(status_code=404), sess.id)
 
     # ------------------------------------------------------------------
     # File path  (/dav/{token}/{filename})
     # ------------------------------------------------------------------
     sess = word_session_repo.get_active_session_by_token(db, token)
     if sess is None:
-        return Response(status_code=404)
+        return respond(Response(status_code=404))
 
     path = sess.working_path
 
     # Guard: if working_path does not exist, return 404 before any read/write.
     if not os.path.exists(path):
-        return Response(status_code=404)
+        return respond(Response(status_code=404), sess.id)
 
     if method in ("GET", "HEAD"):
-        return FileResponse(path, filename=filename)
+        return respond(FileResponse(path, filename=filename), sess.id)
 
     if method == "PUT":
-        body = await request.body()
         if not body:
-            return Response(status_code=400)
+            return respond(Response(status_code=400), sess.id)
         tmp = path + ".tmp"
         with open(tmp, "wb") as fh:
             fh.write(body)
         os.replace(tmp, path)
         word_session_repo.record_put(db, sess.id)
-        return Response(status_code=204)
+        return respond(Response(status_code=204), sess.id)
 
     if method == "LOCK":
         # RFC 4918 §9.10: full activelock body; Lock-Token header uses angle-bracket form.
@@ -116,15 +156,18 @@ async def dav_handler(
             "</D:lockdiscovery>"
             "</D:prop>"
         )
-        return Response(
-            content=xml,
-            media_type="application/xml",
-            status_code=200,
-            headers={"Lock-Token": f"<{lock_token_uri}>"},
+        return respond(
+            Response(
+                content=xml,
+                media_type="application/xml",
+                status_code=200,
+                headers={"Lock-Token": f"<{lock_token_uri}>"},
+            ),
+            sess.id,
         )
 
     if method == "UNLOCK":
-        return Response(status_code=204)
+        return respond(Response(status_code=204), sess.id)
 
     if method == "PROPFIND":
         stat = os.stat(path)
@@ -156,6 +199,8 @@ async def dav_handler(
             "</D:response>"
             "</D:multistatus>"
         )
-        return Response(content=xml, media_type="application/xml", status_code=207)
+        return respond(
+            Response(content=xml, media_type="application/xml", status_code=207), sess.id
+        )
 
-    return Response(status_code=405)
+    return respond(Response(status_code=405), sess.id)

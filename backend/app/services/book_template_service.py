@@ -33,7 +33,7 @@ _RESERVED = (
     | {f"LPT{i}" for i in range(1, 10)}
 )
 
-_BASE_TEMPLATE_NAMES: frozenset[str] = frozenset({"base_text.docx", "base_table.docx"})
+_BASE_TEMPLATE_NAMES: frozenset[str] = frozenset({"base_table.docx"})
 
 
 @dataclass

@@ -501,11 +501,7 @@ export function TemplateForm({
                     {group.map((tpl) => (
                       <option key={tpl.name} value={tpl.name}>
                         {tpl.kind === 'base'
-                          ? t(
-                              tpl.name === 'base_table.docx'
-                                ? 'books.word.baseTemplate.table'
-                                : 'books.word.baseTemplate.text',
-                            )
+                          ? t('books.word.baseTemplate.table')
                           : tpl.name.replace(/\.docx$/i, '')}
                       </option>
                     ))}

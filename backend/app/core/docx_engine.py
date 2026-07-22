@@ -139,6 +139,7 @@ def _adapt_common(data: dict[str, Any]) -> dict[str, Any]:
     out.setdefault("location", PROJECT_LOCATION)
     out.setdefault("manager_name", "")
     out.setdefault("manager_title", DEFAULT_MANAGER_TITLE)
+    out["_sig_size_mm"] = min(int(out.get("_sig_size_mm", 32)), 32)
     return out
 
 
@@ -163,13 +164,6 @@ def _adapt_leave_undertaking(data: dict[str, Any]) -> dict[str, Any]:
     """Bottom block carries today's date only if a submitter is picked."""
     out = _adapt_common(data)
     out["submitter_date"] = out.get("today", "") if out.get("submitter_name") else ""
-    return out
-
-
-def _adapt_leave_application(data: dict[str, Any]) -> dict[str, Any]:
-    """Keep both signatures inside the form's fixed-width signature cells."""
-    out = _adapt_common(data)
-    out["_sig_size_mm"] = min(int(out.get("_sig_size_mm", 32)), 32)
     return out
 
 
@@ -666,6 +660,7 @@ def _pp_general_book(doc: Any, ctx: dict[str, Any]) -> None:
 
     # CC right-alignment fix runs first — independent of the body.
     _pp_general_book_cc(doc, ctx)
+    _format_general_book_ref_line(doc)
 
     anchor = _find_general_book_body_anchor(doc)
     if anchor is None:
@@ -680,6 +675,29 @@ def _pp_general_book(doc: Any, ctx: dict[str, Any]) -> None:
         return
 
     html_to_docx(body_html, anchor, default_family=_CALIBRI, default_size=12.0)
+
+
+def _format_general_book_ref_line(doc: Any) -> None:
+    """Keep the Arabic label RTL and the rendered reference in LTR order."""
+    from app.core.arabic_rtl import stamp_paragraph, stamp_run
+
+    for paragraph in doc.paragraphs:
+        match = re.match(r"^\s*الرقم\s*[:：]\s*(.+?)\s*$", paragraph.text or "")  # noqa: RUF001
+        if not match:
+            continue
+
+        for run in list(paragraph.runs):
+            run._element.getparent().remove(run._element)
+        stamp_paragraph(paragraph)
+        label = paragraph.add_run("الرقم: ")
+        value = paragraph.add_run(match.group(1))
+        for run in (label, value):
+            run.font.name = _CALIBRI
+            run.font.size = Pt(16)
+            run.font.italic = True
+            stamp_run(run, _CALIBRI)
+        value.font.rtl = False
+        break
 
 
 def _find_general_book_body_anchor(doc: Any) -> Any | None:
@@ -765,7 +783,7 @@ _FORM_REGISTRY: dict[str, dict[str, Any]] = {
         "adapter": _adapt_material_request,
         "post_process": _pp_material_request,
     },
-    "Leave Application Form": {"adapter": _adapt_leave_application, "post_process": None},
+    "Leave Application Form": {"adapter": _adapt_common, "post_process": None},
     "Passport Release Form": {"adapter": _adapt_common, "post_process": None},
     "Duty Resumption Form": {"adapter": _adapt_common, "post_process": None},
     "General Book": {"adapter": _adapt_general_book, "post_process": _pp_general_book},

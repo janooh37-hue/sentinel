@@ -36,13 +36,8 @@ def test_ref_line_absent_without_ref(tmp_path):
     assert "الرقم" not in text  # preview/serial-free renders show no ref line
 
 
-def test_ref_run_marked_rtl(tmp_path):
-    """The {{ ref }} run carries <w:rtl/> — the EXACT encoding of the
-    hand-typed legacy books (their digit runs are RTL-marked, verified by
-    XML dump). Word then orders the segments right-to-left so the bumping
-    serial reads LAST on the line. Both no-mark and <w:rtl w:val="0"/> made
-    Word lay the value as one LTR unit, serial next to الرقم: (operator-
-    reported twice)."""
+def test_ref_run_marked_ltr(tmp_path):
+    """The dynamic reference stays in stored order in an explicit LTR run."""
     from docx import Document
 
     out = tmp_path / "out.docx"
@@ -51,7 +46,7 @@ def test_ref_run_marked_rtl(tmp_path):
     ref_para = next(p for p in doc.paragraphs if "1/5/141" in p.text)
     ref_runs = [r for r in ref_para.runs if r.text.startswith("1/")]
     assert ref_runs, "ref value must be in its own run"
-    assert all(r.font.rtl is True for r in ref_runs)
+    assert all(r.font.rtl is False for r in ref_runs)
 
 
 def _header_text(docx_path) -> str:
@@ -65,7 +60,7 @@ def _header_text(docx_path) -> str:
     return "\n".join(parts)
 
 
-def test_ref_renders_rtl_segment_order_directly_after_label(tmp_path):
+def test_ref_renders_ltr_segment_order_directly_after_label(tmp_path):
     from docx import Document
 
     out = tmp_path / "out.docx"
@@ -77,8 +72,47 @@ def test_ref_renders_rtl_segment_order_directly_after_label(tmp_path):
     value_idx = next(i for i, r in enumerate(non_empty) if "1/15/141" in r.text)
     assert value_idx == label_idx + 1
     value_run = non_empty[value_idx]
-    assert value_run.text == "1/15/141"  # verbatim — bidi reverses in Word, not Python
-    assert value_run.font.rtl is True
+    assert value_run.text == "1/15/141"  # dynamic stored order; Word must not reverse it
+    assert value_run.font.rtl is False
+
+
+def test_ref_line_is_calibri_16pt_italic_with_rtl_label(tmp_path):
+    from docx import Document
+    from docx.oxml.ns import qn
+
+    out = tmp_path / "formatted.docx"
+    DocxEngine(TEMPLATES_DIR).fill("General Book", {**_BASE_DATA, "ref": "1/5/142"}, out)
+    doc = Document(str(out))
+    paragraph = next(p for p in doc.paragraphs if "1/5/142" in p.text)
+    runs = [r for r in paragraph.runs if r.text]
+    assert [r.text for r in runs] == ["الرقم: ", "1/5/142"]
+    assert paragraph._p.pPr.find(qn("w:bidi")) is not None
+    assert runs[0].font.rtl is True
+    assert runs[1].font.rtl is False
+    assert all(r.font.name == "Calibri" for r in runs)
+    assert all(r.font.size.pt == 16 for r in runs)
+    assert all(r.font.italic is True for r in runs)
+
+
+def test_library_template_uses_same_ref_format(tmp_path):
+    from docx import Document
+
+    template = tmp_path / "library.docx"
+    doc = Document()
+    doc.add_paragraph("الرقم: {{ ref }}")
+    doc.add_paragraph(GENERAL_BOOK_BODY_SENTINEL)
+    doc.save(template)
+
+    out = tmp_path / "out.docx"
+    DocxEngine(TEMPLATES_DIR).fill_general_book_path(
+        template, {**_BASE_DATA, "ref": "1/5/142"}, out
+    )
+    rendered = Document(out)
+    paragraph = next(p for p in rendered.paragraphs if "1/5/142" in p.text)
+    runs = [r for r in paragraph.runs if r.text]
+    assert [r.text for r in runs] == ["الرقم: ", "1/5/142"]
+    assert runs[1].font.rtl is False
+    assert all(r.font.name == "Calibri" and r.font.size.pt == 16 and r.font.italic for r in runs)
 
 
 def test_word_book_has_ref_line_and_no_header_stamp(db_session, admin_user):

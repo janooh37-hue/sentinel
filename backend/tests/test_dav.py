@@ -104,12 +104,20 @@ def test_word_dav_roundtrip(client: TestClient, api_db: Session, tmp_path):
     assert r.status_code == 204
 
 
-def test_dav_rejects_bad_or_closed_token(client: TestClient, api_db: Session, tmp_path):
+@pytest.mark.parametrize("state", ["finished", "discarded"])
+@pytest.mark.parametrize("method", ["PUT", "LOCK"])
+def test_dav_rejects_bad_or_closed_token(
+    client: TestClient, api_db: Session, tmp_path, state: str, method: str
+):
     assert client.get("/dav/nope/x.docx").status_code == 404
     p = tmp_path / "l.docx"
     p.write_bytes(b"PK")
-    _make_session(api_db, working_path=str(p), token="tok9", state="finished")
-    assert client.put("/dav/tok9/l.docx", content=b"X").status_code == 404
+    _make_session(api_db, working_path=str(p), token="tok9", state=state)
+
+    response = client.request(method, "/dav/tok9/l.docx", content=b"X")
+
+    assert response.status_code == 404
+    assert p.read_bytes() == b"PK"
 
 
 def test_dav_missing_working_file_404(client: TestClient, api_db: Session, tmp_path):
@@ -197,3 +205,37 @@ def test_dav_file_propfind_has_supportedlock(client: TestClient, api_db: Session
     r = client.request("PROPFIND", "/dav/tok_pf/doc.docx")
     assert r.status_code == 207
     assert b"<D:supportedlock>" in r.content
+
+
+def test_dav_diagnostic_event_is_structured_and_redacted(
+    client: TestClient, api_db: Session, tmp_path, caplog
+):
+    p = tmp_path / "secret-name.docx"
+    p.write_bytes(b"PK")
+    sess = _make_session(api_db, working_path=str(p), token="secret-token")
+    body = b'<D:propfind xmlns:D="DAV:"><D:prop><D:getetag/></D:prop></D:propfind>'
+
+    with caplog.at_level("INFO", logger="app.api.dav"):
+        response = client.request(
+            "PROPFIND",
+            "/dav/secret-token/secret-name.docx",
+            content=body,
+            headers={"Depth": "0", "If": "secret-if-value", "Lock-Token": "secret-lock"},
+        )
+
+    assert response.status_code == 207
+    record = next(record for record in caplog.records if record.msg == "webdav_request")
+    assert record.dav_session_id == sess.id
+    assert record.dav_method == "PROPFIND"
+    assert record.dav_path_shape == "file"
+    assert record.dav_status == 207
+    assert record.dav_depth == "0"
+    assert record.dav_propfind_properties == ["getetag"]
+    assert record.dav_body_length == len(body)
+    assert record.dav_if_present is True
+    assert record.dav_lock_token_present is True
+    assert record.dav_response_content_type_present is True
+    assert "secret-token" not in record.getMessage()
+    assert "secret-name" not in record.getMessage()
+    assert "secret-if-value" not in record.getMessage()
+    assert "secret-lock" not in record.getMessage()

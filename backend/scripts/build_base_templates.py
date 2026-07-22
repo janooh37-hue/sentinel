@@ -1,12 +1,8 @@
-"""Build the two canonical General Book base templates.
+"""Build the single canonical General Book table template.
 
-Creates ``base_text.docx`` (letterhead tokens, free body, no table) and
-``base_table.docx`` (same + one 2-column data table: الاسم / الجهة) in the
-given output directory, or in ``data_dir/book_templates`` by default.
-
-Usage:
-    venv\\Scripts\\python.exe backend/scripts/build_base_templates.py [OUTPUT_DIR]
-    venv\\Scripts\\python.exe backend/scripts/build_base_templates.py --check [OUTPUT_DIR]
+The normal no-table document already exists as the "no template" path.  This
+builder starts from that real document so the table version keeps the exact
+letterhead, logos, page setup, closing, author block, and footer.
 """
 
 from __future__ import annotations
@@ -15,101 +11,98 @@ import argparse
 import sys
 from pathlib import Path
 
-# sys.path bootstrap — mirrors other scripts in this directory.
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from docx import Document
-from docx.shared import Pt
+from docx.enum.text import WD_ALIGN_PARAGRAPH
 
 from app.core.book_template_retokenize import retokenize_general_book, validate_book_template
+from app.core.docx_engine import DocxEngine
 
-
-def _build_text(path: Path) -> None:
-    """Create base_text.docx: letterhead tokens + free body, no table."""
-    doc = Document()
-    doc.add_paragraph("الرقم: 1/2026")
-    doc.add_paragraph("التاريخ: 01-01-2026")
-    doc.add_paragraph("السيد / اسم المستلم")
-    doc.add_paragraph("الموضوع: موضوع الكتاب")
-    doc.add_paragraph("نص الكتاب العام.")
-    footer = doc.sections[0].footer
-    run = footer.paragraphs[0].add_run("G-0000")
-    run.font.size = Pt(9)
-    doc.save(str(path))
-    retokenize_general_book(path, submitter_g="G-0000")
-    validate_book_template(path)
+_BACKEND = Path(__file__).resolve().parents[1]
+_NAME = "base_table.docx"
 
 
 def _build_table(path: Path) -> None:
-    """Create base_table.docx: same header tokens + 2-column data table (الاسم / الجهة)."""
-    doc = Document()
-    doc.add_paragraph("الرقم: 1/2026")
-    doc.add_paragraph("التاريخ: 01-01-2026")
-    doc.add_paragraph("السيد / اسم المستلم")
-    doc.add_paragraph("الموضوع: موضوع الكتاب")
-    doc.add_paragraph("نص الكتاب العام.")
-    tbl = doc.add_table(rows=2, cols=2)
-    tbl.cell(0, 0).text = "الاسم"
-    tbl.cell(0, 1).text = "الجهة"
-    tbl.cell(1, 0).text = "قيمة 1"
-    tbl.cell(1, 1).text = "قيمة 2"
-    footer = doc.sections[0].footer
-    run = footer.paragraphs[0].add_run("G-0000")
-    run.font.size = Pt(9)
+    DocxEngine(_BACKEND / "templates").fill(
+        "General Book",
+        {
+            "ref": "1/1/1",
+            "date": "01-01-2026",
+            "recipient_name": "",
+            "subject": "",
+            "body": "",
+            "cc": "",
+            "submitter_g": "G-0000",
+        },
+        path,
+    )
+
+    doc = Document(str(path))
+    table = doc.add_table(rows=2, cols=3)
+    table.style = "Table Grid"
+    headers = ("الرقم الوظيفي", "المسمى الوظيفي", "الاسم")
+    for cell, label in zip(table.rows[0].cells, headers, strict=True):
+        cell.text = label
+        cell.paragraphs[0].alignment = WD_ALIGN_PARAGRAPH.CENTER
+        for run in cell.paragraphs[0].runs:
+            run.bold = True
+            run.font.rtl = True
+    for cell in table.rows[1].cells:
+        cell.text = "—"
+        cell.paragraphs[0].alignment = WD_ALIGN_PARAGRAPH.CENTER
+        for run in cell.paragraphs[0].runs:
+            run.font.rtl = True
+
+    # Put the grid before the standard closing, not after the footer text.
+    closing = next((p for p in doc.paragraphs if "للتفضل بالعلم" in p.text), None)
+    if closing is not None:
+        closing._p.addprevious(table._tbl)
     doc.save(str(path))
+
     retokenize_general_book(path, submitter_g="G-0000")
     validate_book_template(path)
 
 
 def build_templates(output_dir: Path) -> None:
-    """Build both base templates into *output_dir* (must exist or be creatable)."""
     output_dir.mkdir(parents=True, exist_ok=True)
-    _build_text(output_dir / "base_text.docx")
-    _build_table(output_dir / "base_table.docx")
+    _build_table(output_dir / _NAME)
+    (output_dir / "base_text.docx").unlink(missing_ok=True)
 
 
 def check_templates(output_dir: Path) -> bool:
-    """Return True iff both base templates exist and pass validate_book_template."""
-    for name in ("base_text.docx", "base_table.docx"):
-        p = output_dir / name
-        if not p.is_file():
-            return False
-        try:
-            validate_book_template(p)
-        except ValueError:
-            return False
+    path = output_dir / _NAME
+    if not path.is_file():
+        return False
+    try:
+        validate_book_template(path)
+    except ValueError:
+        return False
     return True
-
-
-def _default_output_dir() -> Path:
-    # Deferred import so ``--check DIR`` works without side-effects from Settings.
-    from app.config import get_settings
-
-    return get_settings().data_dir / "book_templates"
 
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument(
-        "output_dir", nargs="?", help="Output directory (default: data_dir/book_templates)"
-    )
-    parser.add_argument(
-        "--check", action="store_true", help="Assert both files exist and validate; exit 1 if not"
-    )
+    parser.add_argument("output_dir", nargs="?")
+    parser.add_argument("--check", action="store_true")
     args = parser.parse_args()
 
-    out = Path(args.output_dir) if args.output_dir else _default_output_dir()
+    if args.output_dir:
+        out = Path(args.output_dir)
+    else:
+        from app.config import get_settings
+
+        out = get_settings().data_dir / "book_templates"
 
     if args.check:
-        ok = check_templates(out)
-        if ok:
-            print(f"OK: both base templates present and valid in {out}")
+        if check_templates(out):
+            print(f"OK: {_NAME} is present and valid in {out}")
             return 0
-        print(f"FAIL: one or both base templates missing or invalid in {out}", file=sys.stderr)
+        print(f"FAIL: {_NAME} is missing or invalid in {out}", file=sys.stderr)
         return 1
 
     build_templates(out)
-    print(f"Built base_text.docx and base_table.docx in {out}")
+    print(f"Built {_NAME} in {out}")
     return 0
 
 
