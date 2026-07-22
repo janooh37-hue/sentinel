@@ -20,7 +20,7 @@ from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
-from sqlalchemy import func, or_, select, text
+from sqlalchemy import Select, func, or_, select, text
 from sqlalchemy.orm import Session, selectinload
 
 from app.api.errors import NotFoundError, ValidationFailedError
@@ -138,7 +138,7 @@ def to_list_item(row: Permit, *, today: date | None = None) -> PermitListItem:
 # ─── queries ───────────────────────────────────────────────────────────────────
 
 
-def _base_query(*, include_deleted: bool):
+def _base_query(*, include_deleted: bool) -> Select[tuple[Permit]]:
     stmt = select(Permit).options(
         selectinload(Permit.people), selectinload(Permit.vehicles)
     )
@@ -147,7 +147,9 @@ def _base_query(*, include_deleted: bool):
     return stmt
 
 
-def _apply_state_filter(stmt, *, state: str | None, today: date):
+def _apply_state_filter(
+    stmt: Select[tuple[Permit]], *, state: str | None, today: date
+) -> Select[tuple[Permit]]:
     """Filter by the *derived* lifecycle bucket, expressed in SQL so paging and
     totals stay correct."""
     if not state:
@@ -212,7 +214,7 @@ def list_permits(
 
 def get_permit(db: Session, permit_id: int, *, include_deleted: bool = False) -> Permit:
     stmt = _base_query(include_deleted=include_deleted).where(Permit.id == permit_id)
-    row = db.execute(stmt).scalars().unique().one_or_none()
+    row: Permit | None = db.execute(stmt).scalars().unique().one_or_none()
     if row is None:
         raise NotFoundError(
             "PERMIT_NOT_FOUND", f"Permit {permit_id} does not exist", id=permit_id
@@ -689,14 +691,14 @@ def _ocr_text(data: bytes) -> str | None:
             load_image,
             text_from_pdf,
         )
-    except Exception:  # noqa: BLE001 — OCR stack absent → skip extraction
+    except Exception:
         return None
     try:
         with OCR_GATE:
             if data[:4] == b"%PDF":
                 return text_from_pdf(data)
             return extract_text(load_image(data)).text
-    except Exception:  # noqa: BLE001 — unavailable/invalid image → skip
+    except Exception:
         return None
 
 
@@ -710,7 +712,7 @@ def _extract_uae_id(data: bytes) -> str | None:
         for field in extract_emirates_id(text).fields:
             if field.key == "uae_id_no":
                 return field.value
-    except Exception:  # noqa: BLE001
+    except Exception:
         return None
     return None
 

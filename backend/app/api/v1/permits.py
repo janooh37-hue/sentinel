@@ -22,6 +22,7 @@ Naming note: unrelated to ``/permissions`` (RBAC). Capability gates use the
 from __future__ import annotations
 
 import mimetypes
+from pathlib import Path
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, File, Query, UploadFile, status
@@ -53,7 +54,7 @@ LIST_DEFAULT_LIMIT = 50
 LIST_MAX_LIMIT = 500
 
 
-def _file_response(path, encoding: str | None) -> Response:
+def _file_response(path: Path, encoding: str | None) -> Response:
     """IDM-safe file download shared by every permit attachment endpoint."""
     raw = path.read_bytes()
     if (b64 := maybe_base64(raw, encoding)) is not None:
