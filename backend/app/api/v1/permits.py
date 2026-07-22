@@ -136,7 +136,7 @@ def create_permit(
     user: Annotated[User, Depends(require_capability("permits.manage"))],
 ) -> PermitRead:
     row = permit_service.create_permit(db, payload, actor=user.email)
-    return permit_service.to_read(row)
+    return permit_service.to_read(row, db=db)
 
 
 @router.get("/{permit_id}", response_model=PermitRead)
@@ -146,7 +146,7 @@ def get_permit(
     _user: Annotated[User, Depends(require_capability("permits.view"))],
 ) -> PermitRead:
     row = permit_service.get_permit(db, permit_id)
-    return permit_service.to_read(row)
+    return permit_service.to_read(row, db=db)
 
 
 @router.patch("/{permit_id}", response_model=PermitRead)
@@ -157,7 +157,7 @@ def update_permit(
     user: Annotated[User, Depends(require_capability("permits.manage"))],
 ) -> PermitRead:
     row = permit_service.update_permit(db, permit_id, payload, actor=user.email)
-    return permit_service.to_read(row)
+    return permit_service.to_read(row, db=db)
 
 
 @router.post("/{permit_id}/renew", response_model=PermitRead)
@@ -174,7 +174,7 @@ def renew_permit(
         reason=payload.reason,
         actor=user.email,
     )
-    return permit_service.to_read(row)
+    return permit_service.to_read(row, db=db)
 
 
 @router.post("/{permit_id}/revoke", response_model=PermitRead)
@@ -185,7 +185,7 @@ def revoke_permit(
     user: Annotated[User, Depends(require_capability("permits.manage"))],
 ) -> PermitRead:
     row = permit_service.revoke_permit(db, permit_id, reason=payload.reason, actor=user.email)
-    return permit_service.to_read(row)
+    return permit_service.to_read(row, db=db)
 
 
 @router.delete("/{permit_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -206,7 +206,7 @@ def add_person(
     user: Annotated[User, Depends(require_capability("permits.manage"))],
 ) -> PermitRead:
     row = permit_service.add_person(db, permit_id, payload, actor=user.email)
-    return permit_service.to_read(row)
+    return permit_service.to_read(row, db=db)
 
 
 @router.delete("/{permit_id}/people/{person_id}", response_model=PermitRead)
@@ -217,7 +217,7 @@ def remove_person(
     user: Annotated[User, Depends(require_capability("permits.manage"))],
 ) -> PermitRead:
     row = permit_service.remove_person(db, permit_id, person_id, actor=user.email)
-    return permit_service.to_read(row)
+    return permit_service.to_read(row, db=db)
 
 
 @router.post("/{permit_id}/people/{person_id}/document", response_model=PermitRead)
@@ -232,7 +232,7 @@ async def upload_person_document(
     row = permit_service.attach_person_document(
         db, permit_id, person_id, upload.filename or "uae-id", data, actor=user.email
     )
-    return permit_service.to_read(row)
+    return permit_service.to_read(row, db=db)
 
 
 @router.get("/{permit_id}/people/{person_id}/document")
@@ -258,7 +258,7 @@ def add_vehicle(
     user: Annotated[User, Depends(require_capability("permits.manage"))],
 ) -> PermitRead:
     row = permit_service.add_vehicle(db, permit_id, payload, actor=user.email)
-    return permit_service.to_read(row)
+    return permit_service.to_read(row, db=db)
 
 
 @router.delete("/{permit_id}/vehicles/{vehicle_id}", response_model=PermitRead)
@@ -269,7 +269,7 @@ def remove_vehicle(
     user: Annotated[User, Depends(require_capability("permits.manage"))],
 ) -> PermitRead:
     row = permit_service.remove_vehicle(db, permit_id, vehicle_id, actor=user.email)
-    return permit_service.to_read(row)
+    return permit_service.to_read(row, db=db)
 
 
 @router.post("/{permit_id}/vehicles/{vehicle_id}/document", response_model=PermitRead)
@@ -284,7 +284,7 @@ async def upload_vehicle_document(
     row = permit_service.attach_vehicle_document(
         db, permit_id, vehicle_id, upload.filename or "licence", data, actor=user.email
     )
-    return permit_service.to_read(row)
+    return permit_service.to_read(row, db=db)
 
 
 @router.get("/{permit_id}/vehicles/{vehicle_id}/document")
@@ -311,7 +311,7 @@ async def upload_permit_document(
     row = permit_service.attach_document(
         db, permit_id, upload.filename or "permit", data, actor=user.email
     )
-    return permit_service.to_read(row)
+    return permit_service.to_read(row, db=db)
 
 
 @router.get("/{permit_id}/document")
@@ -331,7 +331,7 @@ def remove_permit_document(
     user: Annotated[User, Depends(require_capability("permits.manage"))],
 ) -> PermitRead:
     row = permit_service.remove_document(db, permit_id, actor=user.email)
-    return permit_service.to_read(row)
+    return permit_service.to_read(row, db=db)
 
 
 @router.get("/{permit_id}/visits", response_model=list[PermitVisitRead])

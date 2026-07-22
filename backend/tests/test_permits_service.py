@@ -7,7 +7,7 @@ from datetime import date, timedelta
 import pytest
 
 from app.api.errors import NotFoundError, ValidationFailedError
-from app.db.models import AuditLog
+from app.db.models import AuditLog, BookCategory
 from app.schemas.permit import (
     PermitCreate,
     PermitPersonCreate,
@@ -15,9 +15,25 @@ from app.schemas.permit import (
     PermitVehicleCreate,
     PermitVisitCreate,
 )
+from app.services import document_service
 from app.services import permit_service as svc
 
 TODAY = date.today()
+
+
+@pytest.fixture(autouse=True)
+def _permit_docgen(db_session, tmp_path, monkeypatch):
+    """Stub document_service so create_permit (which now generates a book) works
+    in the test env without Word COM or a real data dir."""
+    from app.config import Settings
+
+    monkeypatch.setattr(
+        document_service, "get_settings", lambda: Settings(data_dir=tmp_path / "data")
+    )
+    monkeypatch.setattr(document_service, "convert_docx_to_pdf", lambda p: None)
+    if db_session.get(BookCategory, "GS") is None:
+        db_session.add(BookCategory(id="GS", prefix="GS"))
+        db_session.commit()
 
 
 def _person(name, uae_id="784-1000-1000000-1", **kw):

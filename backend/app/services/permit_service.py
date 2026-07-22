@@ -27,6 +27,7 @@ from app.api.errors import NotFoundError, ValidationFailedError
 from app.config import get_settings
 from app.db.models import (
     AuditLog,
+    Book,
     Permit,
     PermitPerson,
     PermitVehicle,
@@ -42,6 +43,8 @@ from app.schemas.permit import (
     PermitVehicleCreate,
     PermitVehicleRead,
     PermitVisitCreate,
+    PersonIdScan,
+    VehicleLicenceScan,
 )
 
 log = logging.getLogger(__name__)
@@ -102,11 +105,15 @@ def _vehicle_read(v: PermitVehicle) -> PermitVehicleRead:
     )
 
 
-def to_read(row: Permit, *, today: date | None = None) -> PermitRead:
+def to_read(row: Permit, *, today: date | None = None, db: Session | None = None) -> PermitRead:
     """Build the detail schema (people + vehicles) + computed fields off a row."""
     today = today or date.today()
     people = _active_people(row)
     vehicles = _active_vehicles(row)
+    book_ref: str | None = None
+    if db is not None and row.book_id is not None:
+        b = db.get(Book, row.book_id)
+        book_ref = b.ref_number if b is not None else None
     return PermitRead.model_validate(row).model_copy(
         update={
             "derived_status": _derived_status(row, today=today),
@@ -115,6 +122,9 @@ def to_read(row: Permit, *, today: date | None = None) -> PermitRead:
             "people_count": len(people),
             "vehicle_count": len(vehicles),
             "document_name": _basename(row.document_path),
+            "manager_id": row.manager_id,
+            "book_id": row.book_id,
+            "book_ref": book_ref,
             "people": [_person_read(p) for p in people],
             "vehicles": [_vehicle_read(v) for v in vehicles],
         }
@@ -243,6 +253,7 @@ def create_permit(db: Session, payload: PermitCreate, *, actor: str | None = Non
         purpose=payload.purpose,
         notes=payload.notes,
         status="active",
+        manager_id=payload.manager_id,
     )
     for person in payload.people:
         row.people.append(_new_person(person))
@@ -254,7 +265,67 @@ def create_permit(db: Session, payload: PermitCreate, *, actor: str | None = Non
     db.commit()
     db.refresh(row)
     _audit(db, "permit.created", row.id, actor, {"company": row.company, "zones": list(row.zones)})
+    regenerate_permit_book(db, row, actor=actor)
     return get_permit(db, row.id)
+
+
+def _letter_dicts(row: Permit) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    people: list[dict[str, Any]] = [
+        {"name": p.name, "uae_id": p.uae_id, "nationality": p.nationality}
+        for p in _active_people(row)
+    ]
+    vehicles: list[dict[str, Any]] = [
+        {
+            "plate_no": v.plate_no,
+            "plate_emirate": v.plate_emirate,
+            "plate_category": v.plate_category,
+            "traffic_no": v.traffic_no,
+            "make_model": v.make_model,
+            "colour": v.colour,
+            "reg_expiry": v.reg_expiry,
+        }
+        for v in _active_vehicles(row)
+    ]
+    return people, vehicles
+
+
+def regenerate_permit_book(db: Session, permit: Permit, *, actor: str | None = None) -> None:
+    """Generate (or re-version) the permit's 1/5 General Book from its current
+    roster. Reuses document_service.generate_document — ref allocation, Arabic
+    letterhead, manager signature, PDF. Resilient: a PDF failure still commits
+    the Book (pdf_path NULL), same as the rest of the app.
+
+    ponytail: re-renders docx->PDF on each roster change (Word COM). Fine for
+    infrequent admin edits; switch to regenerate-on-print if throughput matters.
+    """
+    from app.core.permit_letter import build_permit_letter_html
+    from app.services import document_service
+
+    people, vehicles = _letter_dicts(permit)
+    body = build_permit_letter_html(
+        company=permit.company,
+        zones=list(permit.zones),
+        start_date=permit.start_date,
+        end_date=permit.end_date,
+        people=people,
+        vehicles=vehicles,
+    )
+    subject = f"تصريح دخول أمني — {permit.company}"
+    result = document_service.generate_document(
+        db,
+        employee_id=None,
+        template_id="General Book",
+        fields={"subject": subject, "body": body},
+        classification_code="5/1",
+        commit=True,
+        manager_id=permit.manager_id,
+        revise_of_book_id=permit.book_id,  # None on first gen → fresh 1/5 ref
+        current_user=None,
+    )
+    if permit.book_id is None:
+        permit.book_id = result.book_id
+        db.commit()
+    _audit(db, "permit.book_generated", permit.id, actor, {"book_id": permit.book_id})
 
 
 def update_permit(
@@ -274,6 +345,7 @@ def update_permit(
     row.updated_at = _utcnow()
     db.commit()
     _audit(db, "permit.updated", permit_id, actor, {"fields": sorted(data.keys())})
+    regenerate_permit_book(db, get_permit(db, permit_id), actor=actor)
     return get_permit(db, permit_id)
 
 
@@ -308,6 +380,7 @@ def renew_permit(
         actor,
         {"from": str(old_end), "to": str(new_end_date), "reason": reason},
     )
+    regenerate_permit_book(db, get_permit(db, permit_id), actor=actor)
     return get_permit(db, permit_id)
 
 
@@ -362,6 +435,7 @@ def add_person(
     row.updated_at = _utcnow()
     db.commit()
     _audit(db, "permit.person_added", permit_id, actor, {"name": payload.name})
+    regenerate_permit_book(db, get_permit(db, permit_id), actor=actor)
     return get_permit(db, permit_id)
 
 
@@ -387,6 +461,7 @@ def remove_person(
     row.updated_at = _utcnow()
     db.commit()
     _audit(db, "permit.person_removed", permit_id, actor, {"person_id": person_id})
+    regenerate_permit_book(db, get_permit(db, permit_id), actor=actor)
     return get_permit(db, permit_id)
 
 
@@ -399,6 +474,11 @@ def _new_vehicle(payload: PermitVehicleCreate) -> PermitVehicle:
         plate_emirate=payload.plate_emirate,
         make_model=payload.make_model,
         driver_name=payload.driver_name,
+        colour=payload.colour,
+        vehicle_type=payload.vehicle_type,
+        plate_category=payload.plate_category,
+        traffic_no=payload.traffic_no,
+        reg_expiry=payload.reg_expiry,
     )
 
 
@@ -414,6 +494,7 @@ def add_vehicle(
     row.updated_at = _utcnow()
     db.commit()
     _audit(db, "permit.vehicle_added", permit_id, actor, {"plate_no": payload.plate_no})
+    regenerate_permit_book(db, get_permit(db, permit_id), actor=actor)
     return get_permit(db, permit_id)
 
 
@@ -439,6 +520,7 @@ def remove_vehicle(
     row.updated_at = _utcnow()
     db.commit()
     _audit(db, "permit.vehicle_removed", permit_id, actor, {"vehicle_id": vehicle_id})
+    regenerate_permit_book(db, get_permit(db, permit_id), actor=actor)
     return get_permit(db, permit_id)
 
 
@@ -800,6 +882,39 @@ def get_person_document_file(db: Session, permit_id: int, person_id: int) -> Pat
     )
 
 
+def scan_vehicle_licence(data: bytes) -> VehicleLicenceScan:
+    """OCR a mulkiya image/PDF and return pre-fill fields."""
+    from app.core.extraction.vehicle_licence import extract_vehicle_licence
+
+    text = _ocr_text(data) or ""
+    f = extract_vehicle_licence(text)
+    owner = f.get("owner_name")
+    return VehicleLicenceScan(
+        plate_no=f.get("plate_no"),
+        plate_emirate=f.get("plate_emirate"),
+        plate_category=f.get("plate_category"),
+        traffic_no=f.get("traffic_no"),
+        make_model=f.get("make_model"),
+        vehicle_type=f.get("vehicle_type"),
+        colour=f.get("colour"),
+        reg_expiry=f.get("reg_expiry"),
+        driver_name=owner,
+    )
+
+
+def scan_emirates_id(data: bytes) -> PersonIdScan:
+    """OCR an Emirates ID image/PDF and return pre-fill fields."""
+    from app.core.extraction.emirates_id import extract_emirates_id
+
+    text = _ocr_text(data) or ""
+    fields = {fl.key: fl.value for fl in extract_emirates_id(text).fields}
+    return PersonIdScan(
+        name=fields.get("name_en") or fields.get("name_ar"),
+        uae_id=fields.get("uae_id_no"),
+        nationality=fields.get("nationality"),
+    )
+
+
 def attach_vehicle_document(
     db: Session,
     permit_id: int,
@@ -810,7 +925,9 @@ def attach_vehicle_document(
     actor: str | None = None,
 ) -> Permit:
     """Attach (or replace) a scan of the vehicle licence (mulkiya).
-    Opportunistically OCR-fills the plate number when it is not already set."""
+    Opportunistically OCR-fills the plate number and extended mulkiya fields
+    when they are not already set, then regenerates the permit book if anything
+    changed and a book has been issued."""
     row = get_permit(db, permit_id)
     vehicle = _find_vehicle(row, vehicle_id)
     vehicle.license_doc_path = _store_entity_file(
@@ -821,6 +938,20 @@ def attach_vehicle_document(
         extracted = _extract_plate(data)
         if extracted:
             vehicle.plate_no = extracted
+    changed = bool(extracted)
+    filled = scan_vehicle_licence(data)
+    for attr in (
+        "plate_emirate",
+        "plate_category",
+        "traffic_no",
+        "make_model",
+        "vehicle_type",
+        "colour",
+        "reg_expiry",
+    ):
+        if getattr(vehicle, attr) in (None, "") and getattr(filled, attr):
+            setattr(vehicle, attr, getattr(filled, attr))
+            changed = True
     row.updated_at = _utcnow()
     db.commit()
     _audit(
@@ -830,6 +961,8 @@ def attach_vehicle_document(
         actor,
         {"vehicle_id": vehicle_id, "ocr_plate": bool(extracted)},
     )
+    if changed and row.book_id:
+        regenerate_permit_book(db, get_permit(db, permit_id), actor=actor)
     return get_permit(db, permit_id)
 
 
