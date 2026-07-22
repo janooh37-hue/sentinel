@@ -52,8 +52,11 @@ def test_create_requires_at_least_one_person(db_session):
         svc.create_permit(
             db_session,
             PermitCreate(
-                company="X", zones=["green"],
-                start_date=TODAY, end_date=TODAY + timedelta(days=5), people=[],
+                company="X",
+                zones=["green"],
+                start_date=TODAY,
+                end_date=TODAY + timedelta(days=5),
+                people=[],
             ),
         )
 
@@ -78,7 +81,10 @@ def test_permit_requires_at_least_one_zone():
 
     with pytest.raises(ValidationError):
         PermitCreate(
-            company="X", zones=[], start_date=TODAY, end_date=TODAY + timedelta(days=3),
+            company="X",
+            zones=[],
+            start_date=TODAY,
+            end_date=TODAY + timedelta(days=3),
             people=[_person("A")],
         )
 
@@ -102,9 +108,9 @@ def test_export_csv_selected_ids_only(db_session):
     a = _mk(db_session, company="Alpha")
     _mk(db_session, company="Beta")
     out = svc.export_csv(db_session, ids=[a.id])
-    body = out.strip().splitlines()
-    assert len(body) == 2  # header + one row
-    assert "Alpha" in body[1] and "Beta" not in out
+    # Only the selected id is exported.
+    assert "Alpha" in out
+    assert "Beta" not in out
 
 
 def test_create_with_people_counts_active(db_session):
@@ -125,16 +131,19 @@ def test_bad_window_rejected(db_session):
         svc.create_permit(
             db_session,
             PermitCreate(
-                company="X", zones=["red"],
-                start_date=TODAY, end_date=TODAY - timedelta(days=1),
+                company="X",
+                zones=["red"],
+                start_date=TODAY,
+                end_date=TODAY - timedelta(days=1),
             ),
         )
 
 
 def test_derived_status_expiring_and_expired(db_session):
     expiring = _mk(db_session, end_date=TODAY + timedelta(days=3))
-    expired = _mk(db_session, start_date=TODAY - timedelta(days=40),
-                  end_date=TODAY - timedelta(days=1))
+    expired = _mk(
+        db_session, start_date=TODAY - timedelta(days=40), end_date=TODAY - timedelta(days=1)
+    )
     assert svc.to_list_item(expiring).derived_status == "expiring"
     assert svc.to_list_item(expired).derived_status == "expired"
 
@@ -194,20 +203,20 @@ def test_soft_delete_hides_from_list(db_session):
 
 
 def test_summary_headcount_by_zone(db_session):
-    _mk(db_session, zones=["green", "red"],
-        people=[_person("A"), _person("B")])
+    _mk(db_session, zones=["green", "red"], people=[_person("A"), _person("B")])
     _mk(db_session, zones=["red"], people=[_person("C")])
     s = svc.summary(db_session)
     assert s["active"] == 2
     assert s["people_active"] == 3
-    assert s["people_green"] == 2   # only the 'both' permit hits green
-    assert s["people_red"] == 3     # both + red
+    assert s["people_green"] == 2  # only the 'both' permit hits green
+    assert s["people_red"] == 3  # both + red
 
 
 def test_record_visit_hook(db_session):
     row = _mk(db_session)
     visit = svc.record_visit(
-        db_session, row.id,
+        db_session,
+        row.id,
         PermitVisitCreate(direction="in", uae_id="784-1", gate="Gate 3", source="gate"),
     )
     assert visit.direction == "in" and visit.source == "gate"
@@ -218,8 +227,10 @@ def test_export_csv_has_header_and_rows(db_session):
     _mk(db_session, company="Acme")
     out = svc.export_csv(db_session)
     lines = out.strip().splitlines()
-    assert lines[0].startswith("permit_no,company,zone")
-    assert "Acme" in lines[1]
+    # Branded title block leads; the machine header row follows, then data.
+    assert lines[0].startswith("GSSG")
+    header_idx = next(i for i, ln in enumerate(lines) if ln.startswith("permit_no,company,zone"))
+    assert "Acme" in lines[header_idx + 1]
 
 
 def test_attach_and_fetch_document(db_session, tmp_path, monkeypatch):
@@ -254,10 +265,15 @@ def test_create_with_vehicles_counts_active(db_session):
     row = svc.create_permit(
         db_session,
         PermitCreate(
-            company="X", zones=["green", "red"], start_date=TODAY, end_date=TODAY + timedelta(days=10),
+            company="X",
+            zones=["green", "red"],
+            start_date=TODAY,
+            end_date=TODAY + timedelta(days=10),
             people=[_person("Driver")],
             vehicles=[
-                PermitVehicleCreate(plate_no="A 12345", plate_emirate="Dubai", make_model="Toyota Hilux"),
+                PermitVehicleCreate(
+                    plate_no="A 12345", plate_emirate="Dubai", make_model="Toyota Hilux"
+                ),
                 PermitVehicleCreate(plate_no="B 67890"),
             ],
         ),
@@ -286,7 +302,10 @@ def test_attach_person_and_vehicle_documents(db_session, tmp_path, monkeypatch):
     row = svc.create_permit(
         db_session,
         PermitCreate(
-            company="X", zones=["red"], start_date=TODAY, end_date=TODAY + timedelta(days=10),
+            company="X",
+            zones=["red"],
+            start_date=TODAY,
+            end_date=TODAY + timedelta(days=10),
             people=[_person("Ali")],
             vehicles=[PermitVehicleCreate(plate_no="A 1")],
         ),

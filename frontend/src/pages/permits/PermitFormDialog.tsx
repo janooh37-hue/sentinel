@@ -8,7 +8,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { Trash2, Plus, Upload, Car } from 'lucide-react'
+import { Trash2, Plus, Upload, Car, ScanLine } from 'lucide-react'
 import { toast } from 'sonner'
 
 import {
@@ -269,7 +269,7 @@ export function PermitFormDialog({ open, permit, onOpenChange, onSaved }: Props)
               )}
               {people.length === 0 ? null : (
                 people.map((row) => (
-                  <div key={row.key} className="grid grid-cols-1 gap-2 sm:grid-cols-[1fr_1fr_auto]">
+                  <div key={row.key} className="grid grid-cols-1 gap-2 sm:grid-cols-[1.3fr_1fr_1fr_auto]">
                     <input
                       className={inputCls}
                       placeholder={t('permits.person.name')}
@@ -283,6 +283,13 @@ export function PermitFormDialog({ open, permit, onOpenChange, onSaved }: Props)
                       value={row.uae_id ?? ''}
                       onChange={(e) => patchRow(row.key, { uae_id: e.target.value })}
                     />
+                    <input
+                      className={inputCls}
+                      placeholder={t('permits.person.nationality')}
+                      dir="auto"
+                      value={row.nationality ?? ''}
+                      onChange={(e) => patchRow(row.key, { nationality: e.target.value })}
+                    />
                     <button
                       type="button"
                       aria-label={t('common.remove')}
@@ -294,6 +301,10 @@ export function PermitFormDialog({ open, permit, onOpenChange, onSaved }: Props)
                   </div>
                 ))
               )}
+              <p className="flex items-center gap-1.5 text-[0.7rem] text-muted-foreground">
+                <ScanLine className="h-3.5 w-3.5" aria-hidden />
+                {t('permits.form.peopleScanHint')}
+              </p>
             </div>
           )}
 

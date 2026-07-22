@@ -386,13 +386,16 @@ function PermitPrintView({
   const { t } = useTranslation()
   return (
     <div className="hidden bg-white p-0 text-black print:block">
-      <div className="mb-3">
-        <h1 className="text-lg font-bold">{t('permits.printout.title')}</h1>
-        <p className="text-xs text-neutral-600">
-          {t(scope === 'selected' ? 'permits.printout.subtitleSelected' : 'permits.printout.subtitleAll', {
-            count: rows.length,
-          })}
-        </p>
+      <div className="mb-3 flex items-center gap-3 border-b border-black pb-2">
+        <img src="/brand/gssg-logo.png" alt="" className="h-14 w-auto" />
+        <div>
+          <h1 className="text-lg font-bold">{t('permits.printout.title')}</h1>
+          <p className="text-xs text-neutral-600">
+            {t(scope === 'selected' ? 'permits.printout.subtitleSelected' : 'permits.printout.subtitleAll', {
+              count: rows.length,
+            })}
+          </p>
+        </div>
       </div>
       <table className="w-full border-collapse text-[11px]">
         <thead>

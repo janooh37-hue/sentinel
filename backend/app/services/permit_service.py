@@ -139,9 +139,7 @@ def to_list_item(row: Permit, *, today: date | None = None) -> PermitListItem:
 
 
 def _base_query(*, include_deleted: bool) -> Select[tuple[Permit]]:
-    stmt = select(Permit).options(
-        selectinload(Permit.people), selectinload(Permit.vehicles)
-    )
+    stmt = select(Permit).options(selectinload(Permit.people), selectinload(Permit.vehicles))
     if not include_deleted:
         stmt = stmt.where(Permit.deleted_at.is_(None))
     return stmt
@@ -200,9 +198,7 @@ def list_permits(
         stmt = stmt.where(Permit.company.ilike(f"%{company}%"))
     if q:
         like = f"%{q}%"
-        stmt = stmt.where(
-            or_(Permit.company.ilike(like), Permit.permit_no.ilike(like))
-        )
+        stmt = stmt.where(or_(Permit.company.ilike(like), Permit.permit_no.ilike(like)))
 
     count_stmt = select(func.count()).select_from(stmt.order_by(None).subquery())
     total = int(db.execute(count_stmt).scalar_one())
@@ -216,9 +212,7 @@ def get_permit(db: Session, permit_id: int, *, include_deleted: bool = False) ->
     stmt = _base_query(include_deleted=include_deleted).where(Permit.id == permit_id)
     row: Permit | None = db.execute(stmt).scalars().unique().one_or_none()
     if row is None:
-        raise NotFoundError(
-            "PERMIT_NOT_FOUND", f"Permit {permit_id} does not exist", id=permit_id
-        )
+        raise NotFoundError("PERMIT_NOT_FOUND", f"Permit {permit_id} does not exist", id=permit_id)
     return row
 
 
@@ -284,7 +278,11 @@ def update_permit(
 
 
 def renew_permit(
-    db: Session, permit_id: int, *, new_end_date: date, reason: str | None = None,
+    db: Session,
+    permit_id: int,
+    *,
+    new_end_date: date,
+    reason: str | None = None,
     actor: str | None = None,
 ) -> Permit:
     row = get_permit(db, permit_id)
@@ -304,7 +302,10 @@ def renew_permit(
     row.updated_at = _utcnow()
     db.commit()
     _audit(
-        db, "permit.renewed", permit_id, actor,
+        db,
+        "permit.renewed",
+        permit_id,
+        actor,
         {"from": str(old_end), "to": str(new_end_date), "reason": reason},
     )
     return get_permit(db, permit_id)
@@ -472,7 +473,10 @@ def record_visit(
     db.commit()
     db.refresh(visit)
     _audit(
-        db, "permit.visit_recorded", permit_id, actor,
+        db,
+        "permit.visit_recorded",
+        permit_id,
+        actor,
         {"direction": visit.direction, "source": visit.source},
     )
     return visit
@@ -520,8 +524,17 @@ def summary(db: Session) -> dict[str, int]:
 
 
 CSV_COLUMNS = [
-    "permit_no", "company", "zones", "start_date", "end_date",
-    "duration_days", "status", "days_remaining", "people", "vehicles", "purpose",
+    "permit_no",
+    "company",
+    "zones",
+    "start_date",
+    "end_date",
+    "duration_days",
+    "status",
+    "days_remaining",
+    "people",
+    "vehicles",
+    "purpose",
 ]
 
 
@@ -537,6 +550,12 @@ def export_csv(db: Session, *, ids: list[int] | None = None, **filters: Any) -> 
     today = date.today()
     buf = io.StringIO()
     writer = csv.writer(buf)
+    # Branded title block — the security office opens this register in Excel, so
+    # it leads with the organisation + generation date before the machine
+    # header row. Downstream is human review/print, not automated parsing.
+    writer.writerow(["GSSG — Security Permits Register"])
+    writer.writerow([f"Generated {today.isoformat()}"])
+    writer.writerow([])
     writer.writerow(CSV_COLUMNS)
     for row in rows:
         writer.writerow(
@@ -564,9 +583,7 @@ MAX_DOCUMENT_BYTES = 25 * 1024 * 1024  # 25 MiB — parity with leave certificat
 # Path separators / control chars PLUS unicode bidi-control / zero-width / BOM
 # codepoints that pass ``isalnum`` but enable filename display-name spoofing.
 # Escapes (not inline literals) so the class stays legible. Mirrors leave_service.
-_UNSAFE_CHARS = re.compile(
-    "[\\\\/:*?\"<>|\x00-\x1f​-‏‪-‮⁦-⁩﻿]"
-)
+_UNSAFE_CHARS = re.compile('[\\\\/:*?"<>|\x00-\x1f​-‏‪-‮⁦-⁩﻿]')
 
 
 def _safe_filename(filename: str) -> str:
@@ -605,13 +622,15 @@ def get_document_file(db: Session, permit_id: int) -> Path:
     row = get_permit(db, permit_id, include_deleted=True)
     if not row.document_path:
         raise NotFoundError(
-            "PERMIT_DOC_NOT_FOUND", f"Permit {permit_id} has no attached document.",
+            "PERMIT_DOC_NOT_FOUND",
+            f"Permit {permit_id} has no attached document.",
             id=permit_id,
         )
     path = get_settings().data_dir / row.document_path
     if not path.exists():
         raise NotFoundError(
-            "PERMIT_DOC_MISSING", "The attached document file is missing on disk.",
+            "PERMIT_DOC_MISSING",
+            "The attached document file is missing on disk.",
             id=permit_id,
         )
     return path
@@ -652,7 +671,8 @@ def _resolve_file(rel_path: str | None, *, missing_code: str, permit_id: int) ->
     path = get_settings().data_dir / rel_path
     if not path.exists():
         raise NotFoundError(
-            "PERMIT_DOC_MISSING", "The attached document file is missing on disk.",
+            "PERMIT_DOC_MISSING",
+            "The attached document file is missing on disk.",
             id=permit_id,
         )
     return path
@@ -664,7 +684,8 @@ def _find_person(row: Permit, person_id: int) -> PermitPerson:
         raise NotFoundError(
             "PERMIT_PERSON_NOT_FOUND",
             f"Person {person_id} is not on permit {row.id}",
-            permit_id=row.id, person_id=person_id,
+            permit_id=row.id,
+            person_id=person_id,
         )
     return person
 
@@ -675,7 +696,8 @@ def _find_vehicle(row: Permit, vehicle_id: int) -> PermitVehicle:
         raise NotFoundError(
             "PERMIT_VEHICLE_NOT_FOUND",
             f"Vehicle {vehicle_id} is not on permit {row.id}",
-            permit_id=row.id, vehicle_id=vehicle_id,
+            permit_id=row.id,
+            vehicle_id=vehicle_id,
         )
     return vehicle
 
@@ -733,8 +755,13 @@ def _extract_plate(data: bytes) -> str | None:
 
 
 def attach_person_document(
-    db: Session, permit_id: int, person_id: int, filename: str, data: bytes,
-    *, actor: str | None = None,
+    db: Session,
+    permit_id: int,
+    person_id: int,
+    filename: str,
+    data: bytes,
+    *,
+    actor: str | None = None,
 ) -> Permit:
     """Attach (or replace) a scan of the person's UAE ID card. Opportunistically
     OCR-fills the UAE ID number when it is not already set."""
@@ -749,7 +776,10 @@ def attach_person_document(
     row.updated_at = _utcnow()
     db.commit()
     _audit(
-        db, "permit.person_id_attached", permit_id, actor,
+        db,
+        "permit.person_id_attached",
+        permit_id,
+        actor,
         {"person_id": person_id, "ocr_uae_id": bool(extracted)},
     )
     return get_permit(db, permit_id)
@@ -760,21 +790,32 @@ def get_person_document_file(db: Session, permit_id: int, person_id: int) -> Pat
     person = next((p for p in row.people if p.id == person_id), None)
     if person is None:
         raise NotFoundError(
-            "PERMIT_PERSON_NOT_FOUND", f"Person {person_id} is not on permit {permit_id}",
-            permit_id=permit_id, person_id=person_id,
+            "PERMIT_PERSON_NOT_FOUND",
+            f"Person {person_id} is not on permit {permit_id}",
+            permit_id=permit_id,
+            person_id=person_id,
         )
-    return _resolve_file(person.id_doc_path, missing_code="PERMIT_DOC_NOT_FOUND", permit_id=permit_id)
+    return _resolve_file(
+        person.id_doc_path, missing_code="PERMIT_DOC_NOT_FOUND", permit_id=permit_id
+    )
 
 
 def attach_vehicle_document(
-    db: Session, permit_id: int, vehicle_id: int, filename: str, data: bytes,
-    *, actor: str | None = None,
+    db: Session,
+    permit_id: int,
+    vehicle_id: int,
+    filename: str,
+    data: bytes,
+    *,
+    actor: str | None = None,
 ) -> Permit:
     """Attach (or replace) a scan of the vehicle licence (mulkiya).
     Opportunistically OCR-fills the plate number when it is not already set."""
     row = get_permit(db, permit_id)
     vehicle = _find_vehicle(row, vehicle_id)
-    vehicle.license_doc_path = _store_entity_file(permit_id, f"vehicle_{vehicle_id}", filename, data)
+    vehicle.license_doc_path = _store_entity_file(
+        permit_id, f"vehicle_{vehicle_id}", filename, data
+    )
     extracted = None
     if not vehicle.plate_no:
         extracted = _extract_plate(data)
@@ -783,7 +824,10 @@ def attach_vehicle_document(
     row.updated_at = _utcnow()
     db.commit()
     _audit(
-        db, "permit.vehicle_license_attached", permit_id, actor,
+        db,
+        "permit.vehicle_license_attached",
+        permit_id,
+        actor,
         {"vehicle_id": vehicle_id, "ocr_plate": bool(extracted)},
     )
     return get_permit(db, permit_id)
@@ -794,10 +838,14 @@ def get_vehicle_document_file(db: Session, permit_id: int, vehicle_id: int) -> P
     vehicle = next((v for v in row.vehicles if v.id == vehicle_id), None)
     if vehicle is None:
         raise NotFoundError(
-            "PERMIT_VEHICLE_NOT_FOUND", f"Vehicle {vehicle_id} is not on permit {permit_id}",
-            permit_id=permit_id, vehicle_id=vehicle_id,
+            "PERMIT_VEHICLE_NOT_FOUND",
+            f"Vehicle {vehicle_id} is not on permit {permit_id}",
+            permit_id=permit_id,
+            vehicle_id=vehicle_id,
         )
-    return _resolve_file(vehicle.license_doc_path, missing_code="PERMIT_DOC_NOT_FOUND", permit_id=permit_id)
+    return _resolve_file(
+        vehicle.license_doc_path, missing_code="PERMIT_DOC_NOT_FOUND", permit_id=permit_id
+    )
 
 
 # ─── audit ─────────────────────────────────────────────────────────────────────

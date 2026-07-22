@@ -60,6 +60,7 @@ export function PermitDetailDialog({ permitId, open, onOpenChange, onEdit }: Pro
   const [revokeReason, setRevokeReason] = useState('')
   const [personName, setPersonName] = useState('')
   const [personUae, setPersonUae] = useState('')
+  const [personNationality, setPersonNationality] = useState('')
   const [vehiclePlate, setVehiclePlate] = useState('')
   const [vehicleMakeModel, setVehicleMakeModel] = useState('')
   const fileRef = useRef<HTMLInputElement>(null)
@@ -79,11 +80,13 @@ export function PermitDetailDialog({ permitId, open, onOpenChange, onEdit }: Pro
       api.addPermitPerson(permitId, {
         name: personName.trim(),
         uae_id: personUae.trim(),
+        nationality: personNationality.trim() || null,
       }),
     onSuccess: () => {
       invalidate()
       setPersonName('')
       setPersonUae('')
+      setPersonNationality('')
     },
     onError: onErr,
   })
@@ -353,9 +356,9 @@ export function PermitDetailDialog({ permitId, open, onOpenChange, onEdit }: Pro
                           <div className="truncate font-medium text-foreground" dir="auto">
                             {p.name}
                           </div>
-                          {(p.uae_id || p.role) && (
+                          {(p.uae_id || p.nationality || p.role) && (
                             <div className="truncate text-xs text-muted-foreground">
-                              {[p.uae_id, p.role].filter(Boolean).join(' · ')}
+                              {[p.uae_id, p.nationality, p.role].filter(Boolean).join(' · ')}
                             </div>
                           )}
                         </div>
@@ -386,7 +389,7 @@ export function PermitDetailDialog({ permitId, open, onOpenChange, onEdit }: Pro
 
                 {/* Add person (manage + not revoked) */}
                 {canManage && !isRevoked && (
-                  <div className="grid grid-cols-1 gap-2 sm:grid-cols-[1fr_1fr_auto]">
+                  <div className="grid grid-cols-1 gap-2 sm:grid-cols-[1.3fr_1fr_1fr_auto]">
                     <input
                       className={inputCls}
                       placeholder={t('permits.person.name')}
@@ -399,6 +402,13 @@ export function PermitDetailDialog({ permitId, open, onOpenChange, onEdit }: Pro
                       placeholder={t('permits.person.uaeId')}
                       value={personUae}
                       onChange={(e) => setPersonUae(e.target.value)}
+                    />
+                    <input
+                      className={inputCls}
+                      placeholder={t('permits.person.nationality')}
+                      dir="auto"
+                      value={personNationality}
+                      onChange={(e) => setPersonNationality(e.target.value)}
                     />
                     <Button
                       type="button"

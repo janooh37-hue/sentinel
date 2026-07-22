@@ -118,16 +118,14 @@ def export_permits(
     q: str | None = None,
     ids: Annotated[str | None, Query(description="Comma-separated permit ids to export")] = None,
 ) -> Response:
-    id_list = (
-        [int(x) for x in ids.split(",") if x.strip().isdigit()] if ids else None
-    )
+    id_list = [int(x) for x in ids.split(",") if x.strip().isdigit()] if ids else None
     csv_text = permit_service.export_csv(
         db, state=state, zone=zone, company=company, q=q, ids=id_list
     )
     return Response(
         content=csv_text,
         media_type="text/csv",
-        headers={"Content-Disposition": 'attachment; filename="permits.csv"'},
+        headers={"Content-Disposition": 'attachment; filename="gssg-security-permits.csv"'},
     )
 
 
@@ -170,7 +168,10 @@ def renew_permit(
     user: Annotated[User, Depends(require_capability("permits.manage"))],
 ) -> PermitRead:
     row = permit_service.renew_permit(
-        db, permit_id, new_end_date=payload.new_end_date, reason=payload.reason,
+        db,
+        permit_id,
+        new_end_date=payload.new_end_date,
+        reason=payload.reason,
         actor=user.email,
     )
     return permit_service.to_read(row)
@@ -247,7 +248,9 @@ def download_person_document(
     )
 
 
-@router.post("/{permit_id}/vehicles", response_model=PermitRead, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/{permit_id}/vehicles", response_model=PermitRead, status_code=status.HTTP_201_CREATED
+)
 def add_vehicle(
     permit_id: int,
     payload: PermitVehicleCreate,

@@ -36,6 +36,8 @@
   --color-warning-soft: var(--warning-soft);
   --color-info: var(--info);
   --color-info-soft: var(--info-soft);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
   --color-rail: var(--rail);
   --color-rail-2: var(--rail-2);
   --color-rail-3: var(--rail-3);
@@ -96,6 +98,8 @@
   --warning-soft: #fbedd8;
   --info: #1d4ed8;
   --info-soft: #e0e8f8;
+  --destructive: #dc2626;
+  --destructive-foreground: #ffffff;
   --text: #1c1f24;
   --text-muted: #5a6068;
   --text-faint: #8b9098;
@@ -185,6 +189,8 @@
   --warning-soft: #3a2a10;
   --info: #60a5fa;
   --info-soft: #1c2940;
+  --destructive: #f87171;
+  --destructive-foreground: #1c1f24;
   --text: #e6e9f2;
   --text-muted: #8a93a7;
   --text-faint: #5f6678;
