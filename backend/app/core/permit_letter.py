@@ -48,7 +48,7 @@ def _vehicle_table(vehicles: list[dict[str, str]]) -> str:
         f"<td>{escape(v.get('plate_no') or '')}</td><td>{escape(v.get('plate_emirate') or '')}</td>"
         f"<td>{escape(v.get('plate_category') or '')}</td><td>{escape(v.get('traffic_no') or '')}</td>"
         f"<td>{escape(v.get('make_model') or '')}</td><td>{escape(v.get('colour') or '')}</td>"
-        f"<td>{_fmt(v.get('reg_expiry') or '')}</td></tr>"
+        f"<td>{escape(_fmt(v.get('reg_expiry') or ''))}</td></tr>"
         for v in vehicles
     )
     return (

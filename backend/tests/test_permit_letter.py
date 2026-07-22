@@ -76,3 +76,18 @@ def test_uses_individual_not_employee_term():
         vehicles=[],
     )
     assert "الموظف" not in html  # generic template: individuals, not employees
+    assert "الجدول الثاني" not in html  # no vehicle table when 0 vehicles
+    assert "للفرد المبيّن" in html
+
+
+def test_work_residence_zone_phrase_and_person_term():
+    html = build_permit_letter_html(
+        company="X",
+        zones=["work_residence"],
+        start_date=date(2026, 7, 1),
+        end_date=date(2026, 7, 2),
+        people=P1,
+        vehicles=[],
+    )
+    assert "سكن الموظفين" in html  # allowed zone phrase renders
+    assert "للفرد المبيّن" in html  # person term stays الفرد, not الموظف
