@@ -514,6 +514,23 @@ def _apply_block_fmt(paragraph: Any, blk: _BlockFmt) -> None:
         }[blk.align]
     if blk.rtl:
         stamp_paragraph(paragraph)
+    else:
+        # LTR block: strip any inherited <w:bidi> (e.g. when reusing an RTL
+        # anchor paragraph) so "left" alignment lands on the physical left —
+        # a bidi paragraph renders jc=left toward the right. Also clear any
+        # inherited left-indent (e.g. a List Paragraph style on the reused
+        # anchor) so it starts flush at the margin; an explicit margin-left
+        # below still overrides this.
+        pPr = paragraph._p.get_or_add_pPr()
+        bidi = pPr.find(qn("w:bidi"))
+        if bidi is not None:
+            pPr.remove(bidi)
+        ind = pPr.find(qn("w:ind"))
+        if ind is None:
+            ind = OxmlElement("w:ind")
+            pPr.append(ind)
+        ind.set(qn("w:left"), "0")
+        ind.set(qn("w:start"), "0")
     if blk.line_height and blk.line_height > 0:
         paragraph.paragraph_format.line_spacing = blk.line_height
     if blk.indent_left_px or blk.indent_right_px:
@@ -986,7 +1003,12 @@ def _col_fractions(node: Any, rows: list[tuple[Any, list[Any]]], n: int) -> list
 
 
 def _set_table_rtl_and_width(
-    tbl: Any, content_twips: int, col_twips: list[int], rtl: bool, autofit: bool = False
+    tbl: Any,
+    content_twips: int,
+    col_twips: list[int],
+    rtl: bool,
+    autofit: bool = False,
+    borderless: bool = False,
 ) -> None:
     """Stamp RTL bidiVisual + jc, table width, layout, and per-column grid widths
     on a freshly created ``Table``.
@@ -994,11 +1016,22 @@ def _set_table_rtl_and_width(
     ``autofit=False`` (default): full-width fixed layout with per-column grid
     widths, jc=right — the pre-existing behaviour.
     ``autofit=True``: Word "AutoFit to Contents" — columns hug their text, the
-    table shrinks to content width and is centered (jc=center)."""
+    table shrinks to content width and is centered (jc=center).
+    ``borderless=True``: stamp all-``nil`` ``<w:tblBorders>`` so no gridlines
+    render (invisible layout scaffolding)."""
     tblPr = tbl._tbl.find(qn("w:tblPr"))
     if tblPr is None:
         tblPr = OxmlElement("w:tblPr")
         tbl._tbl.insert(0, tblPr)
+    if borderless:
+        for existing in tblPr.findall(qn("w:tblBorders")):
+            tblPr.remove(existing)
+        tb = OxmlElement("w:tblBorders")
+        for edge in ("top", "left", "bottom", "right", "insideH", "insideV"):
+            e = OxmlElement(f"w:{edge}")
+            e.set(qn("w:val"), "nil")
+            tb.append(e)
+        tblPr.append(tb)
     if rtl:
         if tblPr.find(qn("w:bidiVisual")) is None:
             tblPr.append(OxmlElement("w:bidiVisual"))
@@ -1063,11 +1096,15 @@ def _render_table(
     # style="width:auto" opts a table into Word "AutoFit to Contents": columns
     # hug their text and the whole table shrinks to content width (centered),
     # instead of the default full-width fixed layout.
-    autofit = (_parse_inline_style(table_style).get("width") or "").strip().lower() in (
+    _tstyle = _parse_inline_style(table_style)
+    autofit = (_tstyle.get("width") or "").strip().lower() in (
         "auto",
         "fit-content",
         "max-content",
     )
+    # style="border:none" (or 0/hidden) renders the table WITHOUT gridlines —
+    # for invisible layout scaffolding like a right-label / centered-value line.
+    borderless = (_tstyle.get("border") or "").strip().lower() in ("none", "0", "0px", "hidden")
 
     rows = _collect_table_rows(node)
     n_rows = len(rows)
@@ -1083,9 +1120,12 @@ def _render_table(
 
     # add_table appends at body end; we relocate it via _state_insert_table.
     tbl = doc.add_table(rows=n_rows, cols=n_cols)
-    tbl.style = "Table Grid"
+    if not borderless:
+        tbl.style = "Table Grid"
     tbl.autofit = autofit
-    _set_table_rtl_and_width(tbl, table_twips, col_twips, rtl, autofit=autofit)
+    _set_table_rtl_and_width(
+        tbl, table_twips, col_twips, rtl, autofit=autofit, borderless=borderless
+    )
 
     # Row properties (cantSplit / trHeight / tblHeader) — Task 4's loop.
     for r_idx, (tr_el, _row_cells) in enumerate(rows):

@@ -53,6 +53,15 @@ def _zone_chips(zones: list[str]) -> str:
     return (_NBSP * 2).join(chips)
 
 
+def _info_row(label: str, value_html: str) -> str:
+    """One row of the info block: bold label right-aligned, value centered.
+    (Rendered inside a borderless 2-column table by build_permit_letter_html.)"""
+    return (
+        f'<tr><td style="text-align:right"><b>{label}</b></td>'
+        f'<td style="text-align:center">{value_html}</td></tr>'
+    )
+
+
 def _fmt(d: date | str) -> str:
     if isinstance(d, date):
         return d.strftime("%Y/%m/%d")
@@ -145,29 +154,37 @@ def build_permit_letter_html(
     zone_ar = zones_phrase(zones)
     company_e = escape(company)
 
-    # Company under the subject, then a justified narrative, then the centered
-    # validity + colour-coded zone key.
-    header = f'<p style="text-align:center; font-size:12pt"><b>الجهة: {company_e}</b></p>'
+    # Company sits directly under the subject, aligned to the LEFT. Then a
+    # justified narrative, then the info block (bold label pinned right, value
+    # centered — a borderless 2-column table since one paragraph can't hold two
+    # alignments).
+    # dir="ltr" so "left" is the physical left — a bidi (RTL) paragraph renders
+    # jc=left toward the right instead.
+    header = f'<p dir="ltr" style="text-align:left; font-size:12pt"><b>الجهة: {company_e}</b></p>'
     para = (
         '<p style="text-align:justify; line-height:1.45">'
         "يطيب لنا أن نتقدم لسيادتكم بخالص التحية والتقدير، ويرجى من سيادتكم السماح "
         f"{subject_person} بالكشف أدناه بالدخول من البوابة الرئيسية إلى {zone_ar}"
         f"{vehicle_clause}، حتى {verb_tail} في الوقت المحدد.</p>"
     )
-    validity = (
-        '<p style="text-align:center"><b>صلاحية التصريح:</b> '
-        f"من {_fmt(start_date)} إلى {_fmt(end_date)} — المدة {_days_ar(_span_days(start_date, end_date))}</p>"
+
+    validity_val = (
+        f"من {_fmt(start_date)} إلى {_fmt(end_date)} — المدة "
+        f"{_days_ar(_span_days(start_date, end_date))}"
     )
-    # Optional reason-for-access line (only when the operator entered one).
-    purpose_line = ""
+    rows = _info_row("صلاحية التصريح:", validity_val)
     if purpose and purpose.strip():
-        purpose_line = (
-            f'<p style="text-align:center"><b>الغرض من التصريح:</b> {escape(purpose.strip())}</p>'
-        )
-    zones_line = f'<p style="text-align:center">المناطق المصرّح بدخولها: {_zone_chips(zones)}</p>'
+        rows += _info_row("الغرض من التصريح:", escape(purpose.strip()))
+    rows += _info_row("المناطق المصرّح بدخولها:", _zone_chips(zones))
+    info = (
+        '<table style="border:none; font-size:11pt">'
+        '<colgroup><col style="width:32%"><col style="width:68%"></colgroup>'
+        f"{rows}</table>"
+    )
 
     spacer = "<p></p>"
-    html = header + para + validity + purpose_line + zones_line + spacer + _people_table(people)
+    # Blank line between the company header and the narrative so they don't touch.
+    html = header + spacer + para + info + spacer + _people_table(people)
     if has_vehicles:
         html += spacer + _vehicle_table(vehicles)
     return html

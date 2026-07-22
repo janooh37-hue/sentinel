@@ -258,7 +258,7 @@ export function PermitDetailDialog({ permitId, open, onOpenChange, onEdit }: Pro
       if (pdfUrl) {
         window.open(pdfUrl, '_blank', 'noopener')
       } else {
-        toast.error(t('permits.print.noPdf'))
+        toast.error(t('permits.printNoPdf'))
       }
     } catch (err) {
       onErr(err)
@@ -596,7 +596,7 @@ export function PermitDetailDialog({ permitId, open, onOpenChange, onEdit }: Pro
                         {t('permits.vehicle.add')}
                       </Button>
                     </div>
-                    <div className="grid grid-cols-2 gap-2 sm:grid-cols-[1fr_1fr_1fr_1fr_1.3fr]">
+                    <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
                       <input
                         className={inputCls}
                         placeholder={t('permits.vehicle.colour')}

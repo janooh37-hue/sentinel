@@ -113,15 +113,26 @@ def _sample(**kw):
     return build_permit_letter_html(**base)
 
 
-def test_company_renders_as_header_line():
-    # Company sits under the subject as its own bold, centered header line.
+def test_company_renders_left_aligned_under_subject():
+    # Company is its own bold header line, LEFT-aligned (sits under the subject).
     html = _sample()
     assert "الجهة: Al Nahda Contracting LLC" in html
-    assert "text-align:center" in html
+    assert "text-align:left" in html
 
 
 def test_body_paragraph_is_justified():
     assert "text-align:justify" in _sample()
+
+
+def test_info_block_label_right_value_center():
+    # validity / purpose / zones render in a borderless 2-col table: bold label
+    # right-aligned, value centered.
+    html = _sample(purpose="صيانة")
+    assert "border:none" in html  # borderless scaffolding
+    assert '<td style="text-align:right"><b>صلاحية التصريح:</b></td>' in html
+    assert '<td style="text-align:right"><b>الغرض من التصريح:</b></td>' in html
+    assert '<td style="text-align:right"><b>المناطق المصرّح بدخولها:</b></td>' in html
+    assert '<td style="text-align:center">' in html  # the value cells
 
 
 def test_validity_shows_total_days_with_arabic_grammar():
@@ -141,8 +152,7 @@ def test_tables_are_autofit_and_centered():
     # text and the table centers, instead of stretching full-width.
     html = _sample()
     assert html.count("width:auto") == 2  # people + vehicles
-    assert "text-align:center" in html  # cell text is centered
-    assert "text-align:right" not in html  # no per-cell right-align overrides left
+    assert "text-align:center" in html  # data-table cell text is centered
 
 
 def test_section_titles_are_merged_shaded_header_rows():

@@ -439,9 +439,7 @@
       "removePerson": "Remove",
       "printPermit": "Print permit (1/5)"
     },
-    "print": {
-      "noPdf": "No PDF available for this permit yet."
-    },
+    "printNoPdf": "No PDF available for this permit yet.",
     "detail": {
       "title": "Permit {{no}}",
       "company": "Company",
@@ -465,9 +463,9 @@
     },
     "person": {
       "name": "Full name",
-      "uaeId": "UAE ID (required)",
-      "nationality": "Nationality (optional)",
-      "role": "Role / trade (optional)",
+      "uaeId": "UAE ID",
+      "nationality": "Nationality",
+      "role": "Role / trade",
       "add": "Add person",
       "idDoc": "UAE ID",
       "removed": "Removed",

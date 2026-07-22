@@ -313,7 +313,7 @@ def regenerate_permit_book(db: Session, permit: Permit, *, actor: str | None = N
     # Clean الموضوع line; the company renders as a header line under it (see
     # build_permit_letter_html). The book stays identifiable by its 1/5 ref and
     # its body text (company) is in the search index.
-    subject = "تصريح دخول أمني"
+    subject = "التصاريح الأمنية"
     # The issuing operator's G-number goes in the footer ({{ submitter_g }}),
     # resolved from the audit actor's User row (employee_id = G-number).
     submitter = db.scalar(select(User).where(User.email == actor)) if actor else None

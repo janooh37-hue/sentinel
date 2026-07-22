@@ -475,8 +475,10 @@ export function PermitFormDialog({ open, permit, onOpenChange, onSaved }: Props)
                         <Trash2 className="h-4 w-4" aria-hidden />
                       </button>
                     </div>
-                    {/* Row 2: new fields — colour, type, plate category, traffic no, reg expiry */}
-                    <div className="grid grid-cols-2 gap-2 sm:grid-cols-[1fr_1fr_1fr_1fr_1.3fr]">
+                    {/* Row 2: new fields — colour, type, plate category, traffic no, reg expiry.
+                        Wrap (2/3 cols) instead of forcing 5 across so nothing gets clipped
+                        by the dialog's overflow-hidden. */}
+                    <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
                       <input
                         className={inputCls}
                         placeholder={t('permits.vehicle.colour')}
