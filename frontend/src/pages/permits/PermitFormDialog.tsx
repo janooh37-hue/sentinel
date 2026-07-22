@@ -7,7 +7,7 @@
  */
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Trash2, Plus, Upload, Car, ScanLine } from 'lucide-react'
 import { toast } from 'sonner'
 
@@ -65,10 +65,23 @@ export function PermitFormDialog({ open, permit, onOpenChange, onSaved }: Props)
   const [endDate, setEndDate] = useState(todayISO())
   const [purpose, setPurpose] = useState('')
   const [notes, setNotes] = useState('')
+  const [managerId, setManagerId] = useState<number | null>(null)
   const [people, setPeople] = useState<PersonRow[]>([])
   const [vehicles, setVehicles] = useState<VehicleRow[]>([])
   const [docFile, setDocFile] = useState<File | null>(null)
   const fileRef = useRef<HTMLInputElement>(null)
+
+  // Per-row scan files: key → File (held in refs to avoid re-renders on scan)
+  const personScanFiles = useRef<Map<string, File>>(new Map())
+  const vehicleScanFiles = useRef<Map<string, File>>(new Map())
+
+  // Managers list (only needed in create mode; skip in edit)
+  const { data: managers } = useQuery({
+    queryKey: ['managers-list'],
+    queryFn: () => api.listManagers(),
+    enabled: !isEdit,
+    staleTime: 60_000,
+  })
 
   // Re-seed local state each time the dialog opens so a reopen starts clean
   // (create) or from the record's current values (edit).
@@ -81,10 +94,13 @@ export function PermitFormDialog({ open, permit, onOpenChange, onSaved }: Props)
     setEndDate(permit ? permit.end_date.slice(0, 10) : todayISO())
     setPurpose(permit?.purpose ?? '')
     setNotes(permit?.notes ?? '')
+    setManagerId(permit?.manager_id ?? null)
     // A permit must authorize at least one person, so start create with one row.
     setPeople(isEdit ? [] : [newRow()])
     setVehicles([])
     setDocFile(null)
+    personScanFiles.current.clear()
+    vehicleScanFiles.current.clear()
   }, [open, permit, isEdit])
 
   const windowValid = endDate >= startDate
@@ -112,6 +128,12 @@ export function PermitFormDialog({ open, permit, onOpenChange, onSaved }: Props)
           notes: notes.trim() || null,
         })
       }
+      // Capture row order at submit time for index-based matching
+      const submittedPeople = people.filter((p) => p.name.trim().length > 0)
+      const submittedVehicles = vehicles.filter(
+        (v) => (v.plate_no ?? '').trim().length > 0 || (v.make_model ?? '').trim().length > 0,
+      )
+
       const body: PermitCreate = {
         company: company.trim(),
         zones,
@@ -119,24 +141,47 @@ export function PermitFormDialog({ open, permit, onOpenChange, onSaved }: Props)
         end_date: endDate,
         purpose: purpose.trim() || null,
         notes: notes.trim() || null,
-        people: people
-          .filter((p) => p.name.trim().length > 0)
-          .map((p) => ({
-            name: p.name.trim(),
-            uae_id: (p.uae_id ?? '').trim(),
-            nationality: p.nationality?.trim() || null,
-            role: p.role?.trim() || null,
-          })),
-        vehicles: vehicles
-          .filter((v) => (v.plate_no ?? '').trim().length > 0 || (v.make_model ?? '').trim().length > 0)
-          .map((v) => ({
-            plate_no: (v.plate_no ?? '').trim() || null,
-            make_model: v.make_model?.trim() || null,
-          })),
+        manager_id: managerId,
+        people: submittedPeople.map((p) => ({
+          name: p.name.trim(),
+          uae_id: (p.uae_id ?? '').trim(),
+          nationality: p.nationality?.trim() || null,
+          role: p.role?.trim() || null,
+        })),
+        vehicles: submittedVehicles.map((v) => ({
+          plate_no: (v.plate_no ?? '').trim() || null,
+          plate_emirate: v.plate_emirate?.trim() || null,
+          make_model: v.make_model?.trim() || null,
+          driver_name: v.driver_name?.trim() || null,
+          colour: v.colour?.trim() || null,
+          vehicle_type: v.vehicle_type?.trim() || null,
+          plate_category: v.plate_category?.trim() || null,
+          traffic_no: v.traffic_no?.trim() || null,
+          reg_expiry: v.reg_expiry?.trim() || null,
+        })),
       }
-      const created = await api.createPermit(body)
-      // The scan can only attach once the permit has an id — upload it now.
-      if (docFile) return api.uploadPermitDocument(created.id, docFile)
+      let created = await api.createPermit(body)
+
+      // Attach the permit-paper scan once we have an id (mirrors existing pattern)
+      if (docFile) created = await api.uploadPermitDocument(created.id, docFile)
+
+      // Attach per-person UAE ID scans by index order
+      // created.people[] is in insertion order, matching submittedPeople order
+      for (let i = 0; i < submittedPeople.length; i++) {
+        const file = personScanFiles.current.get(submittedPeople[i].key)
+        if (file && created.people[i]) {
+          created = await api.uploadPersonDocument(created.id, created.people[i].id, file)
+        }
+      }
+
+      // Attach per-vehicle licence scans by index order
+      for (let i = 0; i < submittedVehicles.length; i++) {
+        const file = vehicleScanFiles.current.get(submittedVehicles[i].key)
+        if (file && created.vehicles[i]) {
+          created = await api.uploadVehicleDocument(created.id, created.vehicles[i].id, file)
+        }
+      }
+
       return created
     },
     onSuccess: (data) => {
@@ -153,6 +198,41 @@ export function PermitFormDialog({ open, permit, onOpenChange, onSaved }: Props)
     setPeople((rows) => rows.map((r) => (r.key === key ? { ...r, ...patch } : r)))
   const patchVehicle = (key: string, patch: Partial<VehicleRow>): void =>
     setVehicles((rows) => rows.map((r) => (r.key === key ? { ...r, ...patch } : r)))
+
+  const handleScanId = async (key: string, file: File): Promise<void> => {
+    try {
+      const result = await api.scanEmiratesId(file)
+      personScanFiles.current.set(key, file)
+      patchRow(key, {
+        name: result.name ?? undefined,
+        uae_id: result.uae_id ?? undefined,
+        nationality: result.nationality ?? undefined,
+      })
+    } catch {
+      // scan failure is non-fatal; user can fill in manually
+      personScanFiles.current.set(key, file)
+    }
+  }
+
+  const handleScanLicence = async (key: string, file: File): Promise<void> => {
+    try {
+      const result = await api.scanVehicleLicence(file)
+      vehicleScanFiles.current.set(key, file)
+      patchVehicle(key, {
+        plate_no: result.plate_no ?? undefined,
+        plate_emirate: result.plate_emirate ?? undefined,
+        plate_category: result.plate_category ?? undefined,
+        traffic_no: result.traffic_no ?? undefined,
+        make_model: result.make_model ?? undefined,
+        vehicle_type: result.vehicle_type ?? undefined,
+        colour: result.colour ?? undefined,
+        reg_expiry: result.reg_expiry ?? undefined,
+        driver_name: result.driver_name ?? undefined,
+      })
+    } catch {
+      vehicleScanFiles.current.set(key, file)
+    }
+  }
 
   const title = useMemo(
     () => (isEdit ? t('permits.form.editTitle') : t('permits.form.newTitle')),
@@ -248,6 +328,25 @@ export function PermitFormDialog({ open, permit, onOpenChange, onSaved }: Props)
             />
           </label>
 
+          {/* Signing manager — create only */}
+          {!isEdit && (
+            <label className="flex flex-col gap-1.5">
+              <span className="text-xs text-muted-foreground">{t('permits.form.signingManager')}</span>
+              <select
+                className={inputCls}
+                value={managerId ?? ''}
+                onChange={(e) => setManagerId(e.target.value ? Number(e.target.value) : null)}
+              >
+                <option value="">—</option>
+                {managers?.filter((m) => m.active).map((m) => (
+                  <option key={m.id} value={m.id}>
+                    {m.name_en ?? m.name_ar ?? m.title ?? String(m.id)}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
+
           {/* People — create only (at least one required) */}
           {!isEdit && (
             <div className="flex flex-col gap-2 rounded-lg border border-border p-3">
@@ -269,35 +368,52 @@ export function PermitFormDialog({ open, permit, onOpenChange, onSaved }: Props)
               )}
               {people.length === 0 ? null : (
                 people.map((row) => (
-                  <div key={row.key} className="grid grid-cols-1 gap-2 sm:grid-cols-[1.3fr_1fr_1fr_auto]">
-                    <input
-                      className={inputCls}
-                      placeholder={t('permits.person.name')}
-                      dir="auto"
-                      value={row.name}
-                      onChange={(e) => patchRow(row.key, { name: e.target.value })}
-                    />
-                    <input
-                      className={inputCls}
-                      placeholder={t('permits.person.uaeId')}
-                      value={row.uae_id ?? ''}
-                      onChange={(e) => patchRow(row.key, { uae_id: e.target.value })}
-                    />
-                    <input
-                      className={inputCls}
-                      placeholder={t('permits.person.nationality')}
-                      dir="auto"
-                      value={row.nationality ?? ''}
-                      onChange={(e) => patchRow(row.key, { nationality: e.target.value })}
-                    />
-                    <button
-                      type="button"
-                      aria-label={t('common.remove')}
-                      className="inline-flex h-9 w-9 items-center justify-center rounded-md text-muted-foreground hover:bg-surface-tinted hover:text-destructive"
-                      onClick={() => setPeople((r) => r.filter((x) => x.key !== row.key))}
-                    >
-                      <Trash2 className="h-4 w-4" aria-hidden />
-                    </button>
+                  <div key={row.key} className="flex flex-col gap-1.5">
+                    <div className="grid grid-cols-1 gap-2 sm:grid-cols-[1.3fr_1fr_1fr_auto]">
+                      <input
+                        className={inputCls}
+                        placeholder={t('permits.person.name')}
+                        dir="auto"
+                        value={row.name}
+                        onChange={(e) => patchRow(row.key, { name: e.target.value })}
+                      />
+                      <input
+                        className={inputCls}
+                        placeholder={t('permits.person.uaeId')}
+                        value={row.uae_id ?? ''}
+                        onChange={(e) => patchRow(row.key, { uae_id: e.target.value })}
+                      />
+                      <input
+                        className={inputCls}
+                        placeholder={t('permits.person.nationality')}
+                        dir="auto"
+                        value={row.nationality ?? ''}
+                        onChange={(e) => patchRow(row.key, { nationality: e.target.value })}
+                      />
+                      <button
+                        type="button"
+                        aria-label={t('common.remove')}
+                        className="inline-flex h-9 w-9 items-center justify-center rounded-md text-muted-foreground hover:bg-surface-tinted hover:text-destructive"
+                        onClick={() => setPeople((r) => r.filter((x) => x.key !== row.key))}
+                      >
+                        <Trash2 className="h-4 w-4" aria-hidden />
+                      </button>
+                    </div>
+                    {/* Scan ID — label wraps the file input (no JS click needed) */}
+                    <label className="inline-flex cursor-pointer items-center gap-1.5 text-xs text-muted-foreground hover:text-primary">
+                      <ScanLine className="h-3.5 w-3.5" aria-hidden />
+                      {t('permits.person.scanId')}
+                      <input
+                        type="file"
+                        accept="image/*,application/pdf"
+                        aria-label={t('permits.person.scanId')}
+                        className="sr-only"
+                        onChange={(e) => {
+                          const file = e.target.files?.[0]
+                          if (file) void handleScanId(row.key, file)
+                        }}
+                      />
+                    </label>
                   </div>
                 ))
               )}
@@ -328,28 +444,82 @@ export function PermitFormDialog({ open, permit, onOpenChange, onSaved }: Props)
                 <p className="text-xs text-muted-foreground">{t('permits.form.vehiclesHelp')}</p>
               ) : (
                 vehicles.map((row) => (
-                  <div key={row.key} className="grid grid-cols-1 gap-2 sm:grid-cols-[1fr_1fr_auto]">
-                    <input
-                      className={`${inputCls} font-mono`}
-                      placeholder={t('permits.vehicle.plate')}
-                      value={row.plate_no ?? ''}
-                      onChange={(e) => patchVehicle(row.key, { plate_no: e.target.value })}
-                    />
-                    <input
-                      className={inputCls}
-                      placeholder={t('permits.vehicle.makeModel')}
-                      dir="auto"
-                      value={row.make_model ?? ''}
-                      onChange={(e) => patchVehicle(row.key, { make_model: e.target.value })}
-                    />
-                    <button
-                      type="button"
-                      aria-label={t('common.remove')}
-                      className="inline-flex h-9 w-9 items-center justify-center rounded-md text-muted-foreground hover:bg-surface-tinted hover:text-destructive"
-                      onClick={() => setVehicles((r) => r.filter((x) => x.key !== row.key))}
-                    >
-                      <Trash2 className="h-4 w-4" aria-hidden />
-                    </button>
+                  <div key={row.key} className="flex flex-col gap-1.5">
+                    {/* Row 1: plate + make/model + remove */}
+                    <div className="grid grid-cols-1 gap-2 sm:grid-cols-[1fr_1fr_auto]">
+                      <input
+                        className={`${inputCls} font-mono`}
+                        placeholder={t('permits.vehicle.plate')}
+                        value={row.plate_no ?? ''}
+                        onChange={(e) => patchVehicle(row.key, { plate_no: e.target.value })}
+                      />
+                      <input
+                        className={inputCls}
+                        placeholder={t('permits.vehicle.makeModel')}
+                        dir="auto"
+                        value={row.make_model ?? ''}
+                        onChange={(e) => patchVehicle(row.key, { make_model: e.target.value })}
+                      />
+                      <button
+                        type="button"
+                        aria-label={t('common.remove')}
+                        className="inline-flex h-9 w-9 items-center justify-center rounded-md text-muted-foreground hover:bg-surface-tinted hover:text-destructive"
+                        onClick={() => setVehicles((r) => r.filter((x) => x.key !== row.key))}
+                      >
+                        <Trash2 className="h-4 w-4" aria-hidden />
+                      </button>
+                    </div>
+                    {/* Row 2: new fields — colour, type, plate category, traffic no, reg expiry */}
+                    <div className="grid grid-cols-2 gap-2 sm:grid-cols-[1fr_1fr_1fr_1fr_1.3fr]">
+                      <input
+                        className={inputCls}
+                        placeholder={t('permits.vehicle.colour')}
+                        dir="auto"
+                        value={row.colour ?? ''}
+                        onChange={(e) => patchVehicle(row.key, { colour: e.target.value })}
+                      />
+                      <input
+                        className={inputCls}
+                        placeholder={t('permits.vehicle.vehicleType')}
+                        dir="auto"
+                        value={row.vehicle_type ?? ''}
+                        onChange={(e) => patchVehicle(row.key, { vehicle_type: e.target.value })}
+                      />
+                      <input
+                        className={inputCls}
+                        placeholder={t('permits.vehicle.plateCategory')}
+                        value={row.plate_category ?? ''}
+                        onChange={(e) => patchVehicle(row.key, { plate_category: e.target.value })}
+                      />
+                      <input
+                        className={`${inputCls} font-mono`}
+                        placeholder={t('permits.vehicle.trafficNo')}
+                        value={row.traffic_no ?? ''}
+                        onChange={(e) => patchVehicle(row.key, { traffic_no: e.target.value })}
+                      />
+                      <input
+                        type="date"
+                        aria-label={t('permits.vehicle.regExpiry')}
+                        className={`${inputCls} font-mono`}
+                        value={row.reg_expiry ?? ''}
+                        onChange={(e) => patchVehicle(row.key, { reg_expiry: e.target.value })}
+                      />
+                    </div>
+                    {/* Scan licence — label wraps the file input (no JS click needed) */}
+                    <label className="inline-flex cursor-pointer items-center gap-1.5 text-xs text-muted-foreground hover:text-primary">
+                      <ScanLine className="h-3.5 w-3.5" aria-hidden />
+                      {t('permits.vehicle.scanLicence')}
+                      <input
+                        type="file"
+                        accept="image/*,application/pdf"
+                        aria-label={t('permits.vehicle.scanLicence')}
+                        className="sr-only"
+                        onChange={(e) => {
+                          const file = e.target.files?.[0]
+                          if (file) void handleScanLicence(row.key, file)
+                        }}
+                      />
+                    </label>
                   </div>
                 ))
               )}
