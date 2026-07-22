@@ -91,3 +91,82 @@ def test_work_residence_zone_phrase_and_person_term():
     )
     assert "سكن العمل" in html  # zone phrase renders (matches app-wide label)
     assert "للفرد المبيّن" in html  # person term stays الفرد, not الموظف
+
+
+# ---------------------------------------------------------------------------
+# Layout structure (the "not-crowded, colour-coded" pass — rendered by
+# arabic_rtl.html_to_docx, which honours colgroup widths, run shading, and
+# text-align:justify).
+# ---------------------------------------------------------------------------
+
+
+def _sample(**kw):
+    base = dict(
+        company="Al Nahda Contracting LLC",
+        zones=["green"],
+        start_date=date(2026, 7, 1),
+        end_date=date(2026, 8, 1),
+        people=P2,
+        vehicles=V1,
+    )
+    base.update(kw)
+    return build_permit_letter_html(**base)
+
+
+def test_company_renders_as_header_line():
+    # Company sits under the subject as its own bold, centered header line.
+    html = _sample()
+    assert "الجهة: Al Nahda Contracting LLC" in html
+    assert "text-align:center" in html
+
+
+def test_body_paragraph_is_justified():
+    assert "text-align:justify" in _sample()
+
+
+def test_tables_carry_explicit_column_widths():
+    # <colgroup> widths make columns size to content instead of an even split.
+    html = _sample()
+    assert html.count("<colgroup>") == 2  # people + vehicles
+    assert "width:46%" in html  # the wide name column
+    assert "width:21%" in html  # the wide make/model column
+
+
+def test_section_titles_are_merged_shaded_header_rows():
+    # Titles live INSIDE the table as a merged, shaded row (not a standalone
+    # paragraph), keeping the letter compact.
+    html = _sample()
+    assert 'colspan="4"' in html and "الجدول الأول: بيانات الأفراد" in html
+    assert 'colspan="7"' in html and "الجدول الثاني: بيانات المركبات" in html
+    assert "<p><b>الجدول" not in html  # no standalone caption paragraphs
+
+
+def test_purpose_renders_only_when_set():
+    with_purpose = _sample(purpose="صيانة أنظمة الإنذار")
+    assert "الغرض من التصريح:" in with_purpose and "صيانة أنظمة الإنذار" in with_purpose
+    # Absent (None / blank) → no purpose line at all.
+    assert "الغرض من التصريح:" not in _sample()
+    assert "الغرض من التصريح:" not in _sample(purpose="   ")
+
+
+def test_serial_column_is_centered():
+    # م serial cells (header + data) are centered, not left-adrift in the RTL table.
+    html = _sample()
+    assert '<th style="text-align:center">م</th>' in html
+    assert '<td style="text-align:center">1</td>' in html
+
+
+def test_zones_are_colour_coded_chips():
+    html = build_permit_letter_html(
+        company="X",
+        zones=["green", "red", "work_residence"],
+        start_date=date(2026, 7, 1),
+        end_date=date(2026, 8, 1),
+        people=P1,
+        vehicles=[],
+    )
+    # Each zone renders as a shaded, named chip in its palette colour.
+    assert "background-color:#dcfce7" in html  # green
+    assert "background-color:#fee2e2" in html  # red
+    assert "background-color:#dbeafe" in html  # work residence (blue)
+    assert "المناطق المصرّح بدخولها" in html
