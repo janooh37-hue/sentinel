@@ -246,7 +246,7 @@ export interface PermitRead extends PermitListItem {
   manager_id?: number | null
   /** Book id of the generated 1/5 permit book (set after first PDF generation). */
   book_id?: number | null
-  /** Human-readable ref of the generated permit book (e.g. "GS-0012"). */
+  /** Human-readable ref of the generated permit book (e.g. "1/5/GSSG/..."). */
   book_ref?: string | null
 }
 

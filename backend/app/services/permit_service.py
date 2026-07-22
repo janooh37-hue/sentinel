@@ -321,6 +321,7 @@ def regenerate_permit_book(db: Session, permit: Permit, *, actor: str | None = N
         manager_id=permit.manager_id,
         revise_of_book_id=permit.book_id,  # None on first gen → fresh 1/5 ref
         current_user=None,
+        force_manager_embed=permit.manager_id is not None,
     )
     if permit.book_id is None:
         permit.book_id = result.book_id
