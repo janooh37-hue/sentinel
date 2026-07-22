@@ -1,0 +1,398 @@
+/**
+ * PermitFormDialog — issue a new permit or edit an existing one's header.
+ *
+ * On create it also accepts an initial list of people (rows can be added /
+ * removed inline); on edit the people list is managed from the detail dialog,
+ * so this form only edits the header fields.
+ */
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { useTranslation } from 'react-i18next'
+import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { Trash2, Plus, Upload, Car } from 'lucide-react'
+import { toast } from 'sonner'
+
+import {
+  api,
+  apiErrorMessage,
+  type PermitCreate,
+  type PermitPersonCreate,
+  type PermitRead,
+  type PermitVehicleCreate,
+  type PermitZone,
+} from '@/lib/api'
+import {
+  DialogRoot,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from '@/components/ui/dialog'
+import { Button } from '@/components/ui/button'
+import { todayISO } from './permitUtils'
+
+const ZONES: PermitZone[] = ['green', 'red', 'work_residence']
+
+const inputCls =
+  'h-9 rounded-md border border-input bg-surface px-3 text-sm text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring'
+
+interface Props {
+  open: boolean
+  /** When set, the dialog edits this permit's header instead of creating one. */
+  permit?: PermitRead | null
+  onOpenChange: (open: boolean) => void
+  onSaved: (permit: PermitRead) => void
+}
+
+interface PersonRow extends PermitPersonCreate {
+  key: string
+}
+interface VehicleRow extends PermitVehicleCreate {
+  key: string
+}
+
+let rowSeq = 0
+const newRow = (): PersonRow => ({ key: `r${rowSeq++}`, name: '', uae_id: '' })
+const newVehicleRow = (): VehicleRow => ({ key: `v${rowSeq++}`, plate_no: '' })
+
+export function PermitFormDialog({ open, permit, onOpenChange, onSaved }: Props): React.JSX.Element {
+  const { t } = useTranslation()
+  const qc = useQueryClient()
+  const isEdit = Boolean(permit)
+
+  const [company, setCompany] = useState('')
+  const [zones, setZones] = useState<PermitZone[]>(['green'])
+  const [startDate, setStartDate] = useState(todayISO())
+  const [endDate, setEndDate] = useState(todayISO())
+  const [purpose, setPurpose] = useState('')
+  const [notes, setNotes] = useState('')
+  const [people, setPeople] = useState<PersonRow[]>([])
+  const [vehicles, setVehicles] = useState<VehicleRow[]>([])
+  const [docFile, setDocFile] = useState<File | null>(null)
+  const fileRef = useRef<HTMLInputElement>(null)
+
+  // Re-seed local state each time the dialog opens so a reopen starts clean
+  // (create) or from the record's current values (edit).
+  useEffect(() => {
+    if (!open) return
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setCompany(permit?.company ?? '')
+    setZones(permit?.zones ?? ['green'])
+    setStartDate(permit ? permit.start_date.slice(0, 10) : todayISO())
+    setEndDate(permit ? permit.end_date.slice(0, 10) : todayISO())
+    setPurpose(permit?.purpose ?? '')
+    setNotes(permit?.notes ?? '')
+    // A permit must authorize at least one person, so start create with one row.
+    setPeople(isEdit ? [] : [newRow()])
+    setVehicles([])
+    setDocFile(null)
+  }, [open, permit, isEdit])
+
+  const windowValid = endDate >= startDate
+  // Every named person must also carry a UAE ID (mandatory); create needs ≥1.
+  const namedPeople = people.filter((p) => p.name.trim().length > 0)
+  const peopleComplete = namedPeople.every((p) => (p.uae_id ?? '').trim().length > 0)
+  const hasPerson = namedPeople.some((p) => (p.uae_id ?? '').trim().length > 0)
+  const toggleZone = (z: PermitZone): void =>
+    setZones((cur) => (cur.includes(z) ? cur.filter((x) => x !== z) : [...cur, z]))
+  const canSave =
+    company.trim().length > 0 &&
+    windowValid &&
+    zones.length > 0 &&
+    (isEdit || (hasPerson && peopleComplete))
+
+  const mutation = useMutation({
+    mutationFn: async (): Promise<PermitRead> => {
+      if (isEdit && permit) {
+        return api.updatePermit(permit.id, {
+          company: company.trim(),
+          zones,
+          start_date: startDate,
+          end_date: endDate,
+          purpose: purpose.trim() || null,
+          notes: notes.trim() || null,
+        })
+      }
+      const body: PermitCreate = {
+        company: company.trim(),
+        zones,
+        start_date: startDate,
+        end_date: endDate,
+        purpose: purpose.trim() || null,
+        notes: notes.trim() || null,
+        people: people
+          .filter((p) => p.name.trim().length > 0)
+          .map((p) => ({
+            name: p.name.trim(),
+            uae_id: (p.uae_id ?? '').trim(),
+            nationality: p.nationality?.trim() || null,
+            role: p.role?.trim() || null,
+          })),
+        vehicles: vehicles
+          .filter((v) => (v.plate_no ?? '').trim().length > 0 || (v.make_model ?? '').trim().length > 0)
+          .map((v) => ({
+            plate_no: (v.plate_no ?? '').trim() || null,
+            make_model: v.make_model?.trim() || null,
+          })),
+      }
+      const created = await api.createPermit(body)
+      // The scan can only attach once the permit has an id — upload it now.
+      if (docFile) return api.uploadPermitDocument(created.id, docFile)
+      return created
+    },
+    onSuccess: (data) => {
+      void qc.invalidateQueries({ queryKey: ['permits-list'] })
+      void qc.invalidateQueries({ queryKey: ['permits-summary'] })
+      toast.success(t('common.savedToast', { defaultValue: 'Saved' }))
+      onSaved(data)
+      onOpenChange(false)
+    },
+    onError: (err) => toast.error(apiErrorMessage(err)),
+  })
+
+  const patchRow = (key: string, patch: Partial<PersonRow>): void =>
+    setPeople((rows) => rows.map((r) => (r.key === key ? { ...r, ...patch } : r)))
+  const patchVehicle = (key: string, patch: Partial<VehicleRow>): void =>
+    setVehicles((rows) => rows.map((r) => (r.key === key ? { ...r, ...patch } : r)))
+
+  const title = useMemo(
+    () => (isEdit ? t('permits.form.editTitle') : t('permits.form.newTitle')),
+    [isEdit, t],
+  )
+
+  return (
+    <DialogRoot open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-2xl">
+        <DialogHeader>
+          <DialogTitle>{title}</DialogTitle>
+          <DialogDescription>{t('permits.form.help')}</DialogDescription>
+        </DialogHeader>
+
+        <div className="flex flex-col gap-3 overflow-y-auto px-4 py-4 text-sm">
+          {/* Company */}
+          <label className="flex flex-col gap-1.5">
+            <span className="text-xs text-muted-foreground">{t('permits.form.company')}</span>
+            <input
+              className={inputCls}
+              value={company}
+              dir="auto"
+              onChange={(e) => setCompany(e.target.value)}
+              autoFocus
+            />
+          </label>
+
+          {/* Zones — checklist, at least one */}
+          <div className="flex flex-col gap-1.5">
+            <span className="text-xs text-muted-foreground">{t('permits.form.zones')}</span>
+            <div className="flex flex-wrap gap-2">
+              {ZONES.map((z) => {
+                const on = zones.includes(z)
+                const dot =
+                  z === 'green' ? 'bg-success' : z === 'red' ? 'bg-destructive' : 'bg-info'
+                return (
+                  <button
+                    key={z}
+                    type="button"
+                    aria-pressed={on}
+                    onClick={() => toggleZone(z)}
+                    className={`inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-sm font-medium transition-colors ${
+                      on
+                        ? 'border-primary bg-primary-soft text-primary'
+                        : 'border-border text-muted-foreground hover:bg-surface-tinted'
+                    }`}
+                  >
+                    <span className={`h-2.5 w-2.5 rounded-full ${dot}`} aria-hidden />
+                    {t(`permits.zone.${z}`)}
+                  </button>
+                )
+              })}
+            </div>
+            {zones.length === 0 && (
+              <p className="text-xs text-destructive">{t('permits.form.zonesRequired')}</p>
+            )}
+          </div>
+
+          {/* Dates */}
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <label className="flex flex-col gap-1.5">
+              <span className="text-xs text-muted-foreground">{t('permits.form.startDate')}</span>
+              <input
+                type="date"
+                className={`${inputCls} font-mono`}
+                value={startDate}
+                onChange={(e) => setStartDate(e.target.value)}
+              />
+            </label>
+            <label className="flex flex-col gap-1.5">
+              <span className="text-xs text-muted-foreground">{t('permits.form.endDate')}</span>
+              <input
+                type="date"
+                className={`${inputCls} font-mono`}
+                value={endDate}
+                min={startDate}
+                onChange={(e) => setEndDate(e.target.value)}
+              />
+            </label>
+          </div>
+          {!windowValid && (
+            <p className="text-xs text-destructive">{t('permits.form.windowError')}</p>
+          )}
+
+          {/* Purpose */}
+          <label className="flex flex-col gap-1.5">
+            <span className="text-xs text-muted-foreground">{t('permits.form.purpose')}</span>
+            <input
+              className={inputCls}
+              value={purpose}
+              dir="auto"
+              onChange={(e) => setPurpose(e.target.value)}
+            />
+          </label>
+
+          {/* People — create only (at least one required) */}
+          {!isEdit && (
+            <div className="flex flex-col gap-2 rounded-lg border border-border p-3">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-medium text-foreground">
+                  {t('permits.form.peopleRequired')}
+                </span>
+                <button
+                  type="button"
+                  className="inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline"
+                  onClick={() => setPeople((r) => [...r, newRow()])}
+                >
+                  <Plus className="h-3.5 w-3.5" aria-hidden />
+                  {t('permits.form.addRow')}
+                </button>
+              </div>
+              {(!hasPerson || !peopleComplete) && (
+                <p className="text-xs text-muted-foreground">{t('permits.form.peopleRequiredHelp')}</p>
+              )}
+              {people.length === 0 ? null : (
+                people.map((row) => (
+                  <div key={row.key} className="grid grid-cols-1 gap-2 sm:grid-cols-[1fr_1fr_auto]">
+                    <input
+                      className={inputCls}
+                      placeholder={t('permits.person.name')}
+                      dir="auto"
+                      value={row.name}
+                      onChange={(e) => patchRow(row.key, { name: e.target.value })}
+                    />
+                    <input
+                      className={inputCls}
+                      placeholder={t('permits.person.uaeId')}
+                      value={row.uae_id ?? ''}
+                      onChange={(e) => patchRow(row.key, { uae_id: e.target.value })}
+                    />
+                    <button
+                      type="button"
+                      aria-label={t('common.remove')}
+                      className="inline-flex h-9 w-9 items-center justify-center rounded-md text-muted-foreground hover:bg-surface-tinted hover:text-destructive"
+                      onClick={() => setPeople((r) => r.filter((x) => x.key !== row.key))}
+                    >
+                      <Trash2 className="h-4 w-4" aria-hidden />
+                    </button>
+                  </div>
+                ))
+              )}
+            </div>
+          )}
+
+          {/* Vehicles — create only */}
+          {!isEdit && (
+            <div className="flex flex-col gap-2 rounded-lg border border-border p-3">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-medium text-muted-foreground">
+                  {t('permits.form.vehicles')}
+                </span>
+                <button
+                  type="button"
+                  className="inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline"
+                  onClick={() => setVehicles((r) => [...r, newVehicleRow()])}
+                >
+                  <Plus className="h-3.5 w-3.5" aria-hidden />
+                  {t('permits.form.addVehicleRow')}
+                </button>
+              </div>
+              {vehicles.length === 0 ? (
+                <p className="text-xs text-muted-foreground">{t('permits.form.vehiclesHelp')}</p>
+              ) : (
+                vehicles.map((row) => (
+                  <div key={row.key} className="grid grid-cols-1 gap-2 sm:grid-cols-[1fr_1fr_auto]">
+                    <input
+                      className={`${inputCls} font-mono`}
+                      placeholder={t('permits.vehicle.plate')}
+                      value={row.plate_no ?? ''}
+                      onChange={(e) => patchVehicle(row.key, { plate_no: e.target.value })}
+                    />
+                    <input
+                      className={inputCls}
+                      placeholder={t('permits.vehicle.makeModel')}
+                      dir="auto"
+                      value={row.make_model ?? ''}
+                      onChange={(e) => patchVehicle(row.key, { make_model: e.target.value })}
+                    />
+                    <button
+                      type="button"
+                      aria-label={t('common.remove')}
+                      className="inline-flex h-9 w-9 items-center justify-center rounded-md text-muted-foreground hover:bg-surface-tinted hover:text-destructive"
+                      onClick={() => setVehicles((r) => r.filter((x) => x.key !== row.key))}
+                    >
+                      <Trash2 className="h-4 w-4" aria-hidden />
+                    </button>
+                  </div>
+                ))
+              )}
+              <p className="flex items-center gap-1.5 text-[0.7rem] text-muted-foreground">
+                <Car className="h-3.5 w-3.5" aria-hidden />
+                {t('permits.form.docsAfterHint')}
+              </p>
+            </div>
+          )}
+
+          {/* Permit paper — optional, last: the issued paper isn't always in
+              hand at creation. Managed from the detail view once issued. */}
+          {!isEdit && (
+            <div className="flex flex-col gap-1.5">
+              <span className="text-xs text-muted-foreground">{t('permits.paper.formLabel')}</span>
+              <input
+                ref={fileRef}
+                type="file"
+                accept="application/pdf,image/*"
+                className="hidden"
+                onChange={(e) => setDocFile(e.target.files?.[0] ?? null)}
+              />
+              <button
+                type="button"
+                onClick={() => fileRef.current?.click()}
+                className="flex items-center gap-3 rounded-xl border border-dashed border-border-strong bg-surface px-3 py-3 text-start hover:border-ring hover:bg-surface-tinted"
+              >
+                <span className="grid h-9 w-9 flex-none place-items-center rounded-lg bg-primary-soft text-primary">
+                  <Upload className="h-[18px] w-[18px]" aria-hidden />
+                </span>
+                <span className="min-w-0">
+                  <span className="block truncate text-sm font-semibold text-foreground">
+                    {docFile ? docFile.name : t('permits.paper.upload')}
+                  </span>
+                  <span className="block text-xs text-muted-foreground">{t('permits.paper.uploadHelp')}</span>
+                </span>
+              </button>
+            </div>
+          )}
+        </div>
+
+        <div className="flex justify-end gap-2 border-t border-border px-4 py-3">
+          <Button type="button" variant="ghost" onClick={() => onOpenChange(false)}>
+            {t('common.cancel')}
+          </Button>
+          <Button
+            type="button"
+            disabled={!canSave || mutation.isPending}
+            onClick={() => mutation.mutate()}
+          >
+            {isEdit ? t('permits.form.save') : t('permits.form.create')}
+          </Button>
+        </div>
+      </DialogContent>
+    </DialogRoot>
+  )
+}

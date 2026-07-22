@@ -159,6 +159,120 @@ export type LeaveAmend = components['schemas']['LeaveAmend']
 export type LeaveBalanceRead = components['schemas']['LeaveBalanceRead']
 export type LeaveStatus = 'Pending' | 'Approved' | 'Rejected' | 'Cancelled' | 'Completed'
 
+// ─── Security Permits (greenfield 2026-07) ─────────────────────────────────────
+// Hand-declared until `npm run gen:api` folds them into the generated schema.
+export type PermitZone = 'green' | 'red' | 'work_residence'
+export type PermitStoredStatus = 'active' | 'revoked'
+export type PermitDerivedStatus = 'active' | 'expiring' | 'expired' | 'revoked'
+
+export interface PermitPersonRead {
+  id: number
+  permit_id: number
+  name: string
+  uae_id: string | null
+  nationality: string | null
+  role: string | null
+  created_at: string
+  removed_at: string | null
+  /** Basename of the attached UAE ID scan, if any. */
+  id_doc_name: string | null
+}
+
+export interface PermitPersonCreate {
+  name: string
+  /** Required — every person on a permit must have a UAE ID. */
+  uae_id: string
+  nationality?: string | null
+  role?: string | null
+}
+
+export interface PermitVehicleRead {
+  id: number
+  permit_id: number
+  plate_no: string | null
+  plate_emirate: string | null
+  make_model: string | null
+  driver_name: string | null
+  created_at: string
+  removed_at: string | null
+  /** Basename of the attached vehicle-licence scan, if any. */
+  license_doc_name: string | null
+}
+
+export interface PermitVehicleCreate {
+  plate_no?: string | null
+  plate_emirate?: string | null
+  make_model?: string | null
+  driver_name?: string | null
+}
+
+export interface PermitListItem {
+  id: number
+  permit_no: string | null
+  company: string
+  zones: PermitZone[]
+  start_date: string
+  end_date: string
+  status: PermitStoredStatus
+  created_at: string
+  derived_status: PermitDerivedStatus
+  duration_days: number
+  days_remaining: number | null
+  people_count: number
+  vehicle_count: number
+  has_document: boolean
+}
+
+export interface PermitRead extends PermitListItem {
+  purpose: string | null
+  notes: string | null
+  revoked_at: string | null
+  revoke_reason: string | null
+  updated_at: string | null
+  /** Basename of the attached permit scan, if any. */
+  document_name: string | null
+  people: PermitPersonRead[]
+  vehicles: PermitVehicleRead[]
+}
+
+export interface PermitListResponse {
+  items: PermitListItem[]
+  total: number
+  limit: number
+  offset: number
+}
+
+export interface PermitCreate {
+  company: string
+  zones: PermitZone[]
+  start_date: string
+  end_date: string
+  purpose?: string | null
+  notes?: string | null
+  people?: PermitPersonCreate[]
+  vehicles?: PermitVehicleCreate[]
+}
+
+export interface PermitUpdate {
+  company?: string
+  zones?: PermitZone[]
+  start_date?: string
+  end_date?: string
+  purpose?: string | null
+  notes?: string | null
+}
+
+export interface PermitSummary {
+  active: number
+  expiring: number
+  expired: number
+  revoked: number
+  people_active: number
+  people_green: number
+  people_red: number
+  people_work_residence: number
+}
+
 export interface LeaveReturnBody {
   resumption_date: string // ISO yyyy-mm-dd
   delay_reason?: string
@@ -829,6 +943,20 @@ async function multipart<T>(path: string, form: FormData, method = 'POST'): Prom
   )
 }
 
+/** IDM-safe attachment fetch (base64 → Blob) shared by the permit endpoints. */
+async function fetchPermitBlob(path: string): Promise<Blob> {
+  const res = await fetch(`${BASE}${path}?encoding=base64`, {
+    cache: 'no-store',
+    credentials: 'same-origin',
+  })
+  if (!res.ok) {
+    throw new ApiError(res.status, `HTTP_${res.status}`, res.statusText || 'Failed to load document')
+  }
+  const b64 = (await res.text()).trim()
+  const bytes = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0))
+  return new Blob([bytes])
+}
+
 export interface ListEmployeesParams {
   q?: string
   status?: EmployeeStatus
@@ -895,6 +1023,68 @@ export const api = {
     request<LeaveRead>('POST', `/leaves/${id}/amend`, body),
   deleteLeave: (id: number) => request<void>('DELETE', `/leaves/${id}`),
   createLeave: (body: LeaveCreate) => request<LeaveRead>('POST', '/leaves', body),
+
+  // --- security permits (greenfield 2026-07) ---
+  listPermits: (params: {
+    state?: string
+    zone?: PermitZone
+    company?: string
+    q?: string
+    include_deleted?: boolean
+    limit?: number
+    offset?: number
+  } = {}) => request<PermitListResponse>('GET', `/permits${qs({ ...params })}`),
+  permitsSummary: () => request<PermitSummary>('GET', '/permits/summary'),
+  getPermit: (id: number) => request<PermitRead>('GET', `/permits/${id}`),
+  createPermit: (body: PermitCreate) => request<PermitRead>('POST', '/permits', body),
+  updatePermit: (id: number, body: PermitUpdate) =>
+    request<PermitRead>('PATCH', `/permits/${id}`, body),
+  renewPermit: (id: number, body: { new_end_date: string; reason?: string }) =>
+    request<PermitRead>('POST', `/permits/${id}/renew`, body),
+  revokePermit: (id: number, body: { reason?: string }) =>
+    request<PermitRead>('POST', `/permits/${id}/revoke`, body),
+  deletePermit: (id: number) => request<void>('DELETE', `/permits/${id}`),
+  addPermitPerson: (id: number, body: PermitPersonCreate) =>
+    request<PermitRead>('POST', `/permits/${id}/people`, body),
+  removePermitPerson: (id: number, personId: number) =>
+    request<PermitRead>('DELETE', `/permits/${id}/people/${personId}`),
+  addPermitVehicle: (id: number, body: PermitVehicleCreate) =>
+    request<PermitRead>('POST', `/permits/${id}/vehicles`, body),
+  removePermitVehicle: (id: number, vehicleId: number) =>
+    request<PermitRead>('DELETE', `/permits/${id}/vehicles/${vehicleId}`),
+  /** Absolute URL for the CSV export (used by an anchor download / print). */
+  permitsExportUrl: (
+    params: { state?: string; zone?: PermitZone; company?: string; q?: string; ids?: string } = {},
+  ) => `${BASE}/permits/export${qs({ ...params })}`,
+  /** Upload (or replace) the scanned paper permit. */
+  uploadPermitDocument: (id: number, file: File) => {
+    const form = new FormData()
+    form.append('file', file)
+    return multipart<PermitRead>(`/permits/${id}/document`, form)
+  },
+  removePermitDocument: (id: number) =>
+    request<PermitRead>('DELETE', `/permits/${id}/document`),
+  /** Fetch any permit attachment IDM-safely (base64 → Blob) for inline preview. */
+  fetchPermitDocumentBlob: (id: number): Promise<Blob> =>
+    fetchPermitBlob(`/permits/${id}/document`),
+
+  // Per-person UAE ID scan.
+  uploadPersonDocument: (id: number, personId: number, file: File) => {
+    const form = new FormData()
+    form.append('file', file)
+    return multipart<PermitRead>(`/permits/${id}/people/${personId}/document`, form)
+  },
+  fetchPersonDocumentBlob: (id: number, personId: number): Promise<Blob> =>
+    fetchPermitBlob(`/permits/${id}/people/${personId}/document`),
+
+  // Per-vehicle licence (mulkiya) scan.
+  uploadVehicleDocument: (id: number, vehicleId: number, file: File) => {
+    const form = new FormData()
+    form.append('file', file)
+    return multipart<PermitRead>(`/permits/${id}/vehicles/${vehicleId}/document`, form)
+  },
+  fetchVehicleDocumentBlob: (id: number, vehicleId: number): Promise<Blob> =>
+    fetchPermitBlob(`/permits/${id}/vehicles/${vehicleId}/document`),
 
   uploadLeaveCertificate: (id: number, file: File) => {
     const form = new FormData()

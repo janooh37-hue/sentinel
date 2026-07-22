@@ -4,6 +4,7 @@ import {
   FileText,
   LayoutDashboard,
   Mail,
+  ShieldCheck,
   Users,
   type LucideIcon,
 } from 'lucide-react'
@@ -23,4 +24,5 @@ export const NAV_ITEMS: readonly NavItem[] = [
   { to: '/leaves', key: 'nav.leaves', Icon: CalendarDays },
   { to: '/application', key: 'nav.services', Icon: FileText },
   { to: '/books', key: 'nav.records', Icon: BookText },
+  { to: '/permits', key: 'nav.permits', Icon: ShieldCheck, cap: 'permits.view' },
 ]

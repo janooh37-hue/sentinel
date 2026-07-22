@@ -42,6 +42,9 @@ const BookRecordPage = lazy(() =>
 const LeavesPage = lazy(() =>
   import('@/pages/leaves/LeavesPage').then((m) => ({ default: m.LeavesPage })),
 )
+const PermitsPage = lazy(() =>
+  import('@/pages/permits/PermitsPage').then((m) => ({ default: m.PermitsPage })),
+)
 const LedgerPage = lazy(() =>
   import('@/pages/ledger/LedgerPage').then((m) => ({ default: m.LedgerPage })),
 )
@@ -207,6 +210,14 @@ function Shell(): React.JSX.Element {
               <Route path="/books" element={<BooksPage />} />
               <Route path="/books/:id" element={<BookRecordPage />} />
               <Route path="/leaves" element={<LeavesPage />} />
+              <Route
+                path="/permits"
+                element={
+                  <RequireCapability cap="permits.view">
+                    <PermitsPage />
+                  </RequireCapability>
+                }
+              />
               <Route path="/ledger" element={<LedgerRoute />} />
               <Route path="/settings" element={<SettingsPage />} />
               <Route path="/expiry" element={<ExpiryPage />} />

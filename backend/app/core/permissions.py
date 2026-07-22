@@ -91,6 +91,18 @@ CAPABILITIES: Final[tuple[Capability, ...]] = (
         "Approve / reject books",
         "Approve, sign, or reject documents in the approval queue.",
     ),
+    Capability(
+        "permits.view",
+        "permits",
+        "View security permits",
+        "See the security-zone entry-permit register and its status.",
+    ),
+    Capability(
+        "permits.manage",
+        "permits",
+        "Manage security permits",
+        "Issue, renew, amend, and revoke security-zone entry permits.",
+    ),
     Capability("ledger.view", "ledger", "View ledger", "Read correspondence ledger entries."),
     Capability(
         "ledger.edit",
@@ -159,6 +171,7 @@ _OPERATOR_CAPS: Final[frozenset[str]] = frozenset(
         "documents.generate",
         "documents.scan",
         "books.view",
+        "permits.view",
         "ledger.view",
         "ledger.edit",
         "ledger.send",  # Phase 3: send as yourself
@@ -175,6 +188,7 @@ _MANAGER_CAPS: Final[frozenset[str]] = _OPERATOR_CAPS | frozenset(
         "violations.manage",
         "books.manage",
         "books.approve",
+        "permits.manage",
         "ledger.send",
         "submitters.manage",
         "editor_templates.manage",
