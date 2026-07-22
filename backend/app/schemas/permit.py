@@ -66,6 +66,11 @@ class PermitVehicleCreate(BaseModel):
     plate_emirate: str | None = Field(default=None, max_length=32)
     make_model: str | None = Field(default=None, max_length=128)
     driver_name: str | None = Field(default=None, max_length=255)
+    colour: str | None = Field(default=None, max_length=32)
+    vehicle_type: str | None = Field(default=None, max_length=64)
+    plate_category: str | None = Field(default=None, max_length=32)
+    traffic_no: str | None = Field(default=None, max_length=32)
+    reg_expiry: date | None = None
 
     @field_validator("plate_no")
     @classmethod
@@ -81,6 +86,11 @@ class PermitVehicleRead(ORMBase):
     plate_emirate: str | None = None
     make_model: str | None = None
     driver_name: str | None = None
+    colour: str | None = None
+    vehicle_type: str | None = None
+    plate_category: str | None = None
+    traffic_no: str | None = None
+    reg_expiry: date | None = None
     created_at: datetime
     removed_at: datetime | None = None
     # Basename of the attached vehicle-licence scan, if any.
@@ -109,6 +119,7 @@ class PermitCreate(BaseModel):
     notes: str | None = None
     people: list[PermitPersonCreate] = Field(default_factory=list)
     vehicles: list[PermitVehicleCreate] = Field(default_factory=list)
+    manager_id: int | None = None
 
     @field_validator("company")
     @classmethod
@@ -198,6 +209,9 @@ class PermitRead(ORMBase):
     vehicle_count: int = 0
     # Basename of the attached permit scan, if any (path is never exposed).
     document_name: str | None = None
+    manager_id: int | None = None
+    book_id: int | None = None
+    book_ref: str | None = None
     people: list[PermitPersonRead] = Field(default_factory=list)
     vehicles: list[PermitVehicleRead] = Field(default_factory=list)
 
@@ -237,3 +251,26 @@ class PermitSummary(BaseModel):
     people_green: int
     people_red: int
     people_work_residence: int
+
+
+class VehicleLicenceScan(BaseModel):
+    """OCR pre-fill result for a vehicle licence (mulkiya). All optional; the
+    operator confirms/edits every field before saving."""
+
+    plate_no: str | None = None
+    plate_emirate: str | None = None
+    plate_category: str | None = None
+    traffic_no: str | None = None
+    make_model: str | None = None
+    vehicle_type: str | None = None
+    colour: str | None = None
+    reg_expiry: date | None = None
+    driver_name: str | None = None
+
+
+class PersonIdScan(BaseModel):
+    """OCR pre-fill result for an Emirates ID."""
+
+    name: str | None = None
+    uae_id: str | None = None
+    nationality: str | None = None
