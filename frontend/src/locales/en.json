@@ -438,7 +438,11 @@
       "revoke": "Revoke",
       "delete": "Delete",
       "addPerson": "Add person",
-      "removePerson": "Remove"
+      "removePerson": "Remove",
+      "printPermit": "Print permit (1/5)"
+    },
+    "print": {
+      "noPdf": "No PDF available for this permit yet."
     },
     "detail": {
       "title": "Permit {{no}}",
@@ -458,7 +462,8 @@
       "vehicleCount_other": "{{count}} vehicles",
       "noVehicles": "No vehicles added yet.",
       "revokedReason": "Revoked: {{reason}}",
-      "createdAt": "Issued {{date}}"
+      "createdAt": "Issued {{date}}",
+      "bookRef": "Permit ref (1/5)"
     },
     "person": {
       "name": "Full name",
@@ -485,6 +490,7 @@
       "plateCategory": "Category",
       "trafficNo": "Traffic no.",
       "regExpiry": "Reg. expiry",
+      "expiry": "Exp. {{date}}",
       "scanLicence": "Scan licence"
     },
     "doc": {

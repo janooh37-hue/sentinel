@@ -475,7 +475,11 @@
       "revoke": "إلغاء",
       "delete": "حذف",
       "addPerson": "إضافة شخص",
-      "removePerson": "إزالة"
+      "removePerson": "إزالة",
+      "printPermit": "طباعة التصريح (1/5)"
+    },
+    "print": {
+      "noPdf": "لا يوجد PDF متاح لهذا التصريح بعد."
     },
     "detail": {
       "title": "التصريح {{no}}",
@@ -503,7 +507,8 @@
       "vehicleCount_other": "{{count}} مركبة",
       "noVehicles": "لم تُضف مركبات بعد.",
       "revokedReason": "أُلغي: {{reason}}",
-      "createdAt": "صدر في {{date}}"
+      "createdAt": "صدر في {{date}}",
+      "bookRef": "رقم التصريح (1/5)"
     },
     "person": {
       "name": "الاسم الكامل",
@@ -530,6 +535,7 @@
       "plateCategory": "الفئة",
       "trafficNo": "رقم المرور",
       "regExpiry": "انتهاء التسجيل",
+      "expiry": "ينتهي {{date}}",
       "scanLicence": "مسح الرخصة"
     },
     "doc": {
