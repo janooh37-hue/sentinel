@@ -26,8 +26,8 @@ export function zoneTone(zone: PermitZone): Tone {
       return 'active'
     case 'red':
       return 'danger'
-    case 'both':
-      return 'info'
+    case 'work_residence':
+      return 'info' // blue
   }
 }
 

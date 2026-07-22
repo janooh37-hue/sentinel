@@ -383,22 +383,37 @@
     "loadError": "تعذّر تحميل التصاريح.",
     "new": "تصريح جديد",
     "export": "تصدير CSV",
+    "exportSelected": "تصدير {{count}} إلى CSV",
     "print": "طباعة",
+    "printSelected": "طباعة {{count}}",
+    "selectAll": "تحديد كل الصفوف",
+    "selectRow": "تحديد التصريح {{no}}",
+    "selectedCount_one": "تم تحديد {{count}}",
+    "selectedCount_other": "تم تحديد {{count}}",
+    "clearSelection": "مسح",
+    "printout": {
+      "title": "تصاريح الأمن",
+      "subtitleSelected_one": "تصريح واحد محدد",
+      "subtitleSelected_other": "{{count}} تصاريح محددة",
+      "subtitleAll_one": "تصريح واحد",
+      "subtitleAll_other": "{{count}} تصاريح"
+    },
     "summary": {
       "active": "نشِط",
       "expiring": "قارب على الانتهاء",
       "expired": "منتهٍ",
       "revoked": "مُلغى",
       "peopleGreen": "أشخاص · المنطقة الخضراء",
-      "peopleRed": "أشخاص · المنطقة الحمراء"
+      "peopleRed": "أشخاص · المنطقة الحمراء",
+      "peopleWork": "أشخاص · سكن العمل"
     },
     "zone": {
       "green": "المنطقة الخضراء",
       "red": "المنطقة الحمراء",
-      "both": "كلتا المنطقتين",
+      "work_residence": "سكن العمل",
       "greenShort": "خضراء",
       "redShort": "حمراء",
-      "bothShort": "كلاهما"
+      "work_residenceShort": "سكن العمل"
     },
     "status": {
       "active": "نشِط",
@@ -463,7 +478,7 @@
     },
     "person": {
       "name": "الاسم الكامل",
-      "uaeId": "الهوية الإماراتية (اختياري)",
+      "uaeId": "الهوية الإماراتية (إلزامي)",
       "nationality": "الجنسية (اختياري)",
       "role": "الوظيفة / المهنة (اختياري)",
       "add": "إضافة شخص",
@@ -503,6 +518,8 @@
       "help": "تصريح لأفراد شركة بدخول منطقة أمنية لفترة محددة.",
       "company": "الشركة",
       "zone": "المنطقة",
+      "zones": "المناطق (اختر واحدة على الأقل)",
+      "zonesRequired": "اختر منطقة واحدة على الأقل.",
       "startDate": "تاريخ البدء",
       "endDate": "تاريخ الانتهاء",
       "purpose": "الغرض (اختياري)",
@@ -510,7 +527,7 @@
       "people": "الأشخاص (اختياري)",
       "peopleHelp": "يمكنك أيضًا إضافة الأشخاص لاحقًا من التصريح.",
       "peopleRequired": "الأشخاص (شخص واحد على الأقل)",
-      "peopleRequiredHelp": "يجب أن يصرّح التصريح لشخص واحد على الأقل.",
+      "peopleRequiredHelp": "يجب أن يصرّح التصريح لشخص واحد على الأقل، ولكل شخص هوية إماراتية.",
       "addRow": "إضافة شخص آخر",
       "vehicles": "المركبات (اختياري)",
       "vehiclesHelp": "يمكنك أيضًا إضافة المركبات لاحقًا من التصريح.",

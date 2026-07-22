@@ -20,15 +20,19 @@ from app.services import permit_service as svc
 TODAY = date.today()
 
 
+def _person(name, uae_id="784-1000-1000000-1", **kw):
+    return PermitPersonCreate(name=name, uae_id=uae_id, **kw)
+
+
 def _mk(db, **over):
-    # A permit requires ≥1 person, so default to one unless the caller overrides.
+    # A permit requires ≥1 person (with a UAE ID), so default to one.
     payload = PermitCreate(
         company=over.pop("company", "Acme Contracting"),
-        zone=over.pop("zone", "green"),
+        zones=over.pop("zones", ["green"]),
         start_date=over.pop("start_date", TODAY),
         end_date=over.pop("end_date", TODAY + timedelta(days=30)),
         purpose=over.pop("purpose", None),
-        people=over.pop("people", [PermitPersonCreate(name="Worker")]),
+        people=over.pop("people", [_person("Worker")]),
     )
     return svc.create_permit(db, payload, actor="tester@x.ae")
 
@@ -48,7 +52,7 @@ def test_create_requires_at_least_one_person(db_session):
         svc.create_permit(
             db_session,
             PermitCreate(
-                company="X", zone="green",
+                company="X", zones=["green"],
                 start_date=TODAY, end_date=TODAY + timedelta(days=5), people=[],
             ),
         )
@@ -62,12 +66,53 @@ def test_vehicle_plate_is_optional(db_session):
     assert v.make_model == "Toyota Hilux"
 
 
+def test_person_requires_uae_id():
+    from pydantic import ValidationError
+
+    with pytest.raises(ValidationError):
+        PermitPersonCreate(name="No Id")
+
+
+def test_permit_requires_at_least_one_zone():
+    from pydantic import ValidationError
+
+    with pytest.raises(ValidationError):
+        PermitCreate(
+            company="X", zones=[], start_date=TODAY, end_date=TODAY + timedelta(days=3),
+            people=[_person("A")],
+        )
+
+
+def test_zones_are_multi_and_deduped(db_session):
+    row = _mk(db_session, zones=["green", "red", "green", "work_residence"])
+    assert svc.to_read(row).zones == ["green", "red", "work_residence"]
+
+
+def test_work_residence_filter_and_summary(db_session):
+    _mk(db_session, zones=["work_residence"], people=[_person("A"), _person("B")])
+    _mk(db_session, zones=["green"], people=[_person("C")])
+    _, total = svc.list_permits(db_session, zone="work_residence")
+    assert total == 1
+    s = svc.summary(db_session)
+    assert s["people_work_residence"] == 2
+    assert s["people_green"] == 1
+
+
+def test_export_csv_selected_ids_only(db_session):
+    a = _mk(db_session, company="Alpha")
+    _mk(db_session, company="Beta")
+    out = svc.export_csv(db_session, ids=[a.id])
+    body = out.strip().splitlines()
+    assert len(body) == 2  # header + one row
+    assert "Alpha" in body[1] and "Beta" not in out
+
+
 def test_create_with_people_counts_active(db_session):
     row = _mk(
         db_session,
         people=[
             PermitPersonCreate(name="Ali", uae_id="784-1990-1", role="Welder"),
-            PermitPersonCreate(name="Bilal"),
+            _person("Bilal"),
         ],
     )
     read = svc.to_read(row)
@@ -80,7 +125,7 @@ def test_bad_window_rejected(db_session):
         svc.create_permit(
             db_session,
             PermitCreate(
-                company="X", zone="red",
+                company="X", zones=["red"],
                 start_date=TODAY, end_date=TODAY - timedelta(days=1),
             ),
         )
@@ -115,8 +160,8 @@ def test_revoke_then_blocks_edits(db_session):
 
 def test_add_and_remove_person(db_session):
     row = _mk(db_session)  # starts with 1 default person
-    svc.add_person(db_session, row.id, PermitPersonCreate(name="Ali"))
-    row = svc.add_person(db_session, row.id, PermitPersonCreate(name="Bilal"))
+    svc.add_person(db_session, row.id, _person("Ali"))
+    row = svc.add_person(db_session, row.id, _person("Bilal"))
     assert svc.to_read(row).people_count == 3
     pid = svc.to_read(row).people[0].id
     row = svc.remove_person(db_session, row.id, pid)
@@ -131,12 +176,12 @@ def test_remove_missing_person_404(db_session):
 
 
 def test_list_filters_by_state_and_zone(db_session):
-    _mk(db_session, zone="red", end_date=TODAY + timedelta(days=30))
-    _mk(db_session, zone="green", end_date=TODAY + timedelta(days=2))  # expiring
+    _mk(db_session, zones=["red"], end_date=TODAY + timedelta(days=30))
+    _mk(db_session, zones=["green"], end_date=TODAY + timedelta(days=2))  # expiring
     rows, total = svc.list_permits(db_session, state="expiring")
     assert total == 1
     rows, total = svc.list_permits(db_session, zone="red")
-    assert total == 1 and rows[0].zone == "red"
+    assert total == 1 and "red" in rows[0].zones
 
 
 def test_soft_delete_hides_from_list(db_session):
@@ -149,9 +194,9 @@ def test_soft_delete_hides_from_list(db_session):
 
 
 def test_summary_headcount_by_zone(db_session):
-    _mk(db_session, zone="both",
-        people=[PermitPersonCreate(name="A"), PermitPersonCreate(name="B")])
-    _mk(db_session, zone="red", people=[PermitPersonCreate(name="C")])
+    _mk(db_session, zones=["green", "red"],
+        people=[_person("A"), _person("B")])
+    _mk(db_session, zones=["red"], people=[_person("C")])
     s = svc.summary(db_session)
     assert s["active"] == 2
     assert s["people_active"] == 3
@@ -209,8 +254,8 @@ def test_create_with_vehicles_counts_active(db_session):
     row = svc.create_permit(
         db_session,
         PermitCreate(
-            company="X", zone="both", start_date=TODAY, end_date=TODAY + timedelta(days=10),
-            people=[PermitPersonCreate(name="Driver")],
+            company="X", zones=["green", "red"], start_date=TODAY, end_date=TODAY + timedelta(days=10),
+            people=[_person("Driver")],
             vehicles=[
                 PermitVehicleCreate(plate_no="A 12345", plate_emirate="Dubai", make_model="Toyota Hilux"),
                 PermitVehicleCreate(plate_no="B 67890"),
@@ -241,8 +286,8 @@ def test_attach_person_and_vehicle_documents(db_session, tmp_path, monkeypatch):
     row = svc.create_permit(
         db_session,
         PermitCreate(
-            company="X", zone="red", start_date=TODAY, end_date=TODAY + timedelta(days=10),
-            people=[PermitPersonCreate(name="Ali")],
+            company="X", zones=["red"], start_date=TODAY, end_date=TODAY + timedelta(days=10),
+            people=[_person("Ali")],
             vehicles=[PermitVehicleCreate(plate_no="A 1")],
         ),
     )

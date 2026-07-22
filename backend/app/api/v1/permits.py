@@ -115,9 +115,13 @@ def export_permits(
     zone: str | None = None,
     company: str | None = None,
     q: str | None = None,
+    ids: Annotated[str | None, Query(description="Comma-separated permit ids to export")] = None,
 ) -> Response:
+    id_list = (
+        [int(x) for x in ids.split(",") if x.strip().isdigit()] if ids else None
+    )
     csv_text = permit_service.export_csv(
-        db, state=state, zone=zone, company=company, q=q
+        db, state=state, zone=zone, company=company, q=q, ids=id_list
     )
     return Response(
         content=csv_text,

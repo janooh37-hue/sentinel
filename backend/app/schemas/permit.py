@@ -15,8 +15,8 @@ from pydantic import BaseModel, Field, field_validator
 
 from app.schemas._base import ORMBase
 
-# green-only, red-only, or valid in both zones.
-PermitZone = Literal["green", "red", "both"]
+# The security zones a permit can cover. A permit carries one or more.
+PermitZone = Literal["green", "red", "work_residence"]
 # Stored lifecycle. Expiry is derived, not stored (see models.Permit).
 PermitStatus = Literal["active", "revoked"]
 # What the UI shows — stored status widened with the date-derived states.
@@ -25,7 +25,8 @@ PermitDerivedStatus = Literal["active", "expiring", "expired", "revoked"]
 
 class PermitPersonCreate(BaseModel):
     name: str = Field(min_length=1, max_length=255)
-    uae_id: str | None = Field(default=None, max_length=32)
+    # UAE ID is mandatory for every person on a permit.
+    uae_id: str = Field(min_length=1, max_length=32)
     nationality: str | None = Field(default=None, max_length=64)
     role: str | None = Field(default=None, max_length=128)
 
@@ -35,6 +36,14 @@ class PermitPersonCreate(BaseModel):
         v = v.strip()
         if not v:
             raise ValueError("name must not be empty")
+        return v
+
+    @field_validator("uae_id")
+    @classmethod
+    def _strip_uae_id(cls, v: str) -> str:
+        v = v.strip()
+        if not v:
+            raise ValueError("uae_id is required")
         return v
 
 
@@ -78,11 +87,22 @@ class PermitVehicleRead(ORMBase):
     license_doc_name: str | None = None
 
 
+def _clean_zones(v: list[str]) -> list[str]:
+    """De-duplicate (order-preserving) and require at least one zone."""
+    seen: list[str] = []
+    for z in v:
+        if z not in seen:
+            seen.append(z)
+    if not seen:
+        raise ValueError("at least one zone is required")
+    return seen
+
+
 class PermitCreate(BaseModel):
     """POST /permits — issue a new permit."""
 
     company: str = Field(min_length=1, max_length=255)
-    zone: PermitZone = "green"
+    zones: list[PermitZone] = Field(min_length=1)
     start_date: date
     end_date: date
     purpose: str | None = None
@@ -98,16 +118,26 @@ class PermitCreate(BaseModel):
             raise ValueError("company must not be empty")
         return v
 
+    @field_validator("zones")
+    @classmethod
+    def _dedupe_zones(cls, v: list[str]) -> list[str]:
+        return _clean_zones(v)
+
 
 class PermitUpdate(BaseModel):
     """PATCH /permits/{id} — edit header fields (not the lifecycle status)."""
 
     company: str | None = Field(default=None, min_length=1, max_length=255)
-    zone: PermitZone | None = None
+    zones: list[PermitZone] | None = None
     start_date: date | None = None
     end_date: date | None = None
     purpose: str | None = None
     notes: str | None = None
+
+    @field_validator("zones")
+    @classmethod
+    def _dedupe_zones(cls, v: list[str] | None) -> list[str] | None:
+        return _clean_zones(v) if v is not None else None
 
 
 class PermitRenew(BaseModel):
@@ -150,7 +180,7 @@ class PermitRead(ORMBase):
     id: int
     permit_no: str | None = None
     company: str
-    zone: PermitZone
+    zones: list[PermitZone]
     start_date: date
     end_date: date
     status: PermitStatus
@@ -176,7 +206,7 @@ class PermitListItem(ORMBase):
     id: int
     permit_no: str | None = None
     company: str
-    zone: PermitZone
+    zones: list[PermitZone]
     start_date: date
     end_date: date
     status: PermitStatus
@@ -206,3 +236,4 @@ class PermitSummary(BaseModel):
     people_active: int
     people_green: int
     people_red: int
+    people_work_residence: int

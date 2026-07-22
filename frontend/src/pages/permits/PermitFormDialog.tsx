@@ -30,7 +30,7 @@ import {
 import { Button } from '@/components/ui/button'
 import { todayISO } from './permitUtils'
 
-const ZONES: PermitZone[] = ['green', 'red', 'both']
+const ZONES: PermitZone[] = ['green', 'red', 'work_residence']
 
 const inputCls =
   'h-9 rounded-md border border-input bg-surface px-3 text-sm text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring'
@@ -51,7 +51,7 @@ interface VehicleRow extends PermitVehicleCreate {
 }
 
 let rowSeq = 0
-const newRow = (): PersonRow => ({ key: `r${rowSeq++}`, name: '' })
+const newRow = (): PersonRow => ({ key: `r${rowSeq++}`, name: '', uae_id: '' })
 const newVehicleRow = (): VehicleRow => ({ key: `v${rowSeq++}`, plate_no: '' })
 
 export function PermitFormDialog({ open, permit, onOpenChange, onSaved }: Props): React.JSX.Element {
@@ -60,7 +60,7 @@ export function PermitFormDialog({ open, permit, onOpenChange, onSaved }: Props)
   const isEdit = Boolean(permit)
 
   const [company, setCompany] = useState('')
-  const [zone, setZone] = useState<PermitZone>('green')
+  const [zones, setZones] = useState<PermitZone[]>(['green'])
   const [startDate, setStartDate] = useState(todayISO())
   const [endDate, setEndDate] = useState(todayISO())
   const [purpose, setPurpose] = useState('')
@@ -76,7 +76,7 @@ export function PermitFormDialog({ open, permit, onOpenChange, onSaved }: Props)
     if (!open) return
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setCompany(permit?.company ?? '')
-    setZone(permit?.zone ?? 'green')
+    setZones(permit?.zones ?? ['green'])
     setStartDate(permit ? permit.start_date.slice(0, 10) : todayISO())
     setEndDate(permit ? permit.end_date.slice(0, 10) : todayISO())
     setPurpose(permit?.purpose ?? '')
@@ -88,16 +88,24 @@ export function PermitFormDialog({ open, permit, onOpenChange, onSaved }: Props)
   }, [open, permit, isEdit])
 
   const windowValid = endDate >= startDate
-  const hasPerson = people.some((p) => p.name.trim().length > 0)
-  // Edit only touches the header; create additionally needs ≥1 named person.
-  const canSave = company.trim().length > 0 && windowValid && (isEdit || hasPerson)
+  // Every named person must also carry a UAE ID (mandatory); create needs ≥1.
+  const namedPeople = people.filter((p) => p.name.trim().length > 0)
+  const peopleComplete = namedPeople.every((p) => (p.uae_id ?? '').trim().length > 0)
+  const hasPerson = namedPeople.some((p) => (p.uae_id ?? '').trim().length > 0)
+  const toggleZone = (z: PermitZone): void =>
+    setZones((cur) => (cur.includes(z) ? cur.filter((x) => x !== z) : [...cur, z]))
+  const canSave =
+    company.trim().length > 0 &&
+    windowValid &&
+    zones.length > 0 &&
+    (isEdit || (hasPerson && peopleComplete))
 
   const mutation = useMutation({
     mutationFn: async (): Promise<PermitRead> => {
       if (isEdit && permit) {
         return api.updatePermit(permit.id, {
           company: company.trim(),
-          zone,
+          zones,
           start_date: startDate,
           end_date: endDate,
           purpose: purpose.trim() || null,
@@ -106,7 +114,7 @@ export function PermitFormDialog({ open, permit, onOpenChange, onSaved }: Props)
       }
       const body: PermitCreate = {
         company: company.trim(),
-        zone,
+        zones,
         start_date: startDate,
         end_date: endDate,
         purpose: purpose.trim() || null,
@@ -115,14 +123,14 @@ export function PermitFormDialog({ open, permit, onOpenChange, onSaved }: Props)
           .filter((p) => p.name.trim().length > 0)
           .map((p) => ({
             name: p.name.trim(),
-            uae_id: p.uae_id?.trim() || null,
+            uae_id: (p.uae_id ?? '').trim(),
             nationality: p.nationality?.trim() || null,
             role: p.role?.trim() || null,
           })),
         vehicles: vehicles
-          .filter((v) => v.plate_no.trim().length > 0)
+          .filter((v) => (v.plate_no ?? '').trim().length > 0 || (v.make_model ?? '').trim().length > 0)
           .map((v) => ({
-            plate_no: v.plate_no.trim(),
+            plate_no: (v.plate_no ?? '').trim() || null,
             make_model: v.make_model?.trim() || null,
           })),
       }
@@ -172,22 +180,39 @@ export function PermitFormDialog({ open, permit, onOpenChange, onSaved }: Props)
             />
           </label>
 
-          {/* Zone + dates */}
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-            <label className="flex flex-col gap-1.5">
-              <span className="text-xs text-muted-foreground">{t('permits.form.zone')}</span>
-              <select
-                className={inputCls}
-                value={zone}
-                onChange={(e) => setZone(e.target.value as PermitZone)}
-              >
-                {ZONES.map((z) => (
-                  <option key={z} value={z}>
+          {/* Zones — checklist, at least one */}
+          <div className="flex flex-col gap-1.5">
+            <span className="text-xs text-muted-foreground">{t('permits.form.zones')}</span>
+            <div className="flex flex-wrap gap-2">
+              {ZONES.map((z) => {
+                const on = zones.includes(z)
+                const dot =
+                  z === 'green' ? 'bg-success' : z === 'red' ? 'bg-destructive' : 'bg-info'
+                return (
+                  <button
+                    key={z}
+                    type="button"
+                    aria-pressed={on}
+                    onClick={() => toggleZone(z)}
+                    className={`inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-sm font-medium transition-colors ${
+                      on
+                        ? 'border-primary bg-primary-soft text-primary'
+                        : 'border-border text-muted-foreground hover:bg-surface-tinted'
+                    }`}
+                  >
+                    <span className={`h-2.5 w-2.5 rounded-full ${dot}`} aria-hidden />
                     {t(`permits.zone.${z}`)}
-                  </option>
-                ))}
-              </select>
-            </label>
+                  </button>
+                )
+              })}
+            </div>
+            {zones.length === 0 && (
+              <p className="text-xs text-destructive">{t('permits.form.zonesRequired')}</p>
+            )}
+          </div>
+
+          {/* Dates */}
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <label className="flex flex-col gap-1.5">
               <span className="text-xs text-muted-foreground">{t('permits.form.startDate')}</span>
               <input
@@ -239,7 +264,7 @@ export function PermitFormDialog({ open, permit, onOpenChange, onSaved }: Props)
                   {t('permits.form.addRow')}
                 </button>
               </div>
-              {!hasPerson && (
+              {(!hasPerson || !peopleComplete) && (
                 <p className="text-xs text-muted-foreground">{t('permits.form.peopleRequiredHelp')}</p>
               )}
               {people.length === 0 ? null : (
@@ -296,7 +321,7 @@ export function PermitFormDialog({ open, permit, onOpenChange, onSaved }: Props)
                     <input
                       className={`${inputCls} font-mono`}
                       placeholder={t('permits.vehicle.plate')}
-                      value={row.plate_no}
+                      value={row.plate_no ?? ''}
                       onChange={(e) => patchVehicle(row.key, { plate_no: e.target.value })}
                     />
                     <input

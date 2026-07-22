@@ -17,19 +17,19 @@ vi.mock('@/lib/api', async (importOriginal) => {
       ...mod.api,
       permitsSummary: vi.fn().mockResolvedValue({
         active: 3, expiring: 1, expired: 0, revoked: 0,
-        people_active: 7, people_green: 5, people_red: 4,
+        people_active: 7, people_green: 5, people_red: 4, people_work_residence: 2,
       }),
       listPermits: vi.fn().mockResolvedValue({
         items: [
           {
-            id: 1, permit_no: 'PMT-0001', company: 'Acme Contracting', zone: 'red',
+            id: 1, permit_no: 'PMT-0001', company: 'Acme Contracting', zones: ['red'],
             start_date: '2026-07-01', end_date: '2026-07-30', status: 'active',
             created_at: '2026-07-01T00:00:00', derived_status: 'active',
             duration_days: 30, days_remaining: 9, people_count: 4, vehicle_count: 2,
             has_document: true,
           },
           {
-            id: 2, permit_no: 'PMT-0002', company: 'Descon Engineering', zone: 'both',
+            id: 2, permit_no: 'PMT-0002', company: 'Descon Engineering', zones: ['green', 'work_residence'],
             start_date: '2026-07-21', end_date: '2026-08-21', status: 'active',
             created_at: '2026-07-21T00:00:00', derived_status: 'active',
             duration_days: 32, days_remaining: 31, people_count: 5, vehicle_count: 3,
@@ -61,7 +61,7 @@ describe('permitUtils', () => {
   it('maps zone to a badge tone', () => {
     expect(zoneTone('green')).toBe('active')
     expect(zoneTone('red')).toBe('danger')
-    expect(zoneTone('both')).toBe('info')
+    expect(zoneTone('work_residence')).toBe('info')
   })
   it('formats a timestamp down to the date', () => {
     expect(fmtDate('2026-07-30T12:00:00')).toBe('2026-07-30')
@@ -79,14 +79,23 @@ describe('PermitsPage', () => {
     expect(screen.getByRole('button', { name: /new permit/i })).toBeInTheDocument()
   })
 
-  it('shows the "both" zone with its own label and a clip for attached papers', async () => {
+  it('renders multi-zone chips (incl. work residence) and a clip for attached papers', async () => {
     renderPage()
     await waitFor(() => expect(screen.getByText('Descon Engineering')).toBeInTheDocument())
-    // "Both" zone renders as a labelled badge (green+red dots are decorative).
-    expect(screen.getByText('Both')).toBeInTheDocument()
+    // A permit's zones render as separate chips — here Green + Work res.
+    expect(screen.getAllByText('Work res.').length).toBeGreaterThan(0)
     // The permit with an attached scan surfaces a paperclip affordance.
     expect(screen.getByLabelText(/permit paper attached/i)).toBeInTheDocument()
     // Vehicles column is present with its header.
     expect(screen.getByRole('columnheader', { name: /vehicles/i })).toBeInTheDocument()
+  })
+
+  it('selecting a row switches Export/Print to the selected-count labels', async () => {
+    renderPage()
+    await waitFor(() => expect(screen.getByText('Acme Contracting')).toBeInTheDocument())
+    const rowCheckbox = screen.getByLabelText(/select permit PMT-0001/i)
+    rowCheckbox.click()
+    expect(screen.getByRole('button', { name: /export 1 to csv/i })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /print 1/i })).toBeInTheDocument()
   })
 })

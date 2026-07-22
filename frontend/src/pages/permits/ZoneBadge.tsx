@@ -1,9 +1,9 @@
 /**
- * ZoneBadge — a permit's zone as a badge.
+ * ZoneBadge — a permit's zones as one badge per zone.
  *
- * green → success tone, red → destructive tone. "Both" is deliberately NOT a
- * single unrelated hue: it renders a neutral pill carrying one green and one
- * red dot so it reads as "green AND red zone" at a glance.
+ * green → success (green), red → destructive (red), work_residence → info
+ * (blue). A permit can carry any combination, so this renders one small chip
+ * per zone rather than a single mixed pill.
  */
 import { useTranslation } from 'react-i18next'
 
@@ -12,33 +12,23 @@ import type { PermitZone } from '@/lib/api'
 import { zoneTone } from './permitUtils'
 
 interface Props {
-  zone: PermitZone
+  zones: PermitZone[]
   /** Square corners for the dense table; pill (default) elsewhere. */
   square?: boolean
-  /** Full label ("Green zone") vs short ("Green"). */
+  /** Full label ("Work residence") vs short ("Work res."). */
   full?: boolean
 }
 
-export function ZoneBadge({ zone, square = false, full = false }: Props): React.JSX.Element {
+export function ZoneBadge({ zones, square = false, full = false }: Props): React.JSX.Element {
   const { t } = useTranslation()
   const shape = square ? 'square' : 'pill'
-  const label = t(full ? `permits.zone.${zone}` : `permits.zone.${zone}Short`)
-
-  if (zone === 'both') {
-    return (
-      <Badge tone="neutral" shape={shape} className="ps-1.5">
-        <span className="inline-flex items-center gap-0.5" aria-hidden>
-          <span className="h-[7px] w-[7px] rounded-full bg-success" />
-          <span className="h-[7px] w-[7px] rounded-full bg-destructive" />
-        </span>
-        {label}
-      </Badge>
-    )
-  }
-
   return (
-    <Badge tone={zoneTone(zone)} shape={shape}>
-      {label}
-    </Badge>
+    <span className="inline-flex flex-wrap items-center gap-1">
+      {zones.map((zone) => (
+        <Badge key={zone} tone={zoneTone(zone)} shape={shape}>
+          {t(full ? `permits.zone.${zone}` : `permits.zone.${zone}Short`)}
+        </Badge>
+      ))}
+    </span>
   )
 }

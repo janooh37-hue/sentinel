@@ -78,7 +78,7 @@ export function PermitDetailDialog({ permitId, open, onOpenChange, onEdit }: Pro
     mutationFn: () =>
       api.addPermitPerson(permitId, {
         name: personName.trim(),
-        uae_id: personUae.trim() || null,
+        uae_id: personUae.trim(),
       }),
     onSuccess: () => {
       invalidate()
@@ -228,7 +228,7 @@ export function PermitDetailDialog({ permitId, open, onOpenChange, onEdit }: Pro
                 <Badge tone={statusTone(permit.derived_status)}>
                   {t(`permits.status.${permit.derived_status}`)}
                 </Badge>
-                <ZoneBadge zone={permit.zone} full />
+                <ZoneBadge zones={permit.zones} full />
               </div>
 
               {/* Facts grid */}
@@ -399,7 +399,11 @@ export function PermitDetailDialog({ permitId, open, onOpenChange, onEdit }: Pro
                     <Button
                       type="button"
                       variant="outline"
-                      disabled={personName.trim().length === 0 || addPerson.isPending}
+                      disabled={
+                        personName.trim().length === 0 ||
+                        personUae.trim().length === 0 ||
+                        addPerson.isPending
+                      }
                       onClick={() => addPerson.mutate()}
                     >
                       <UserPlus className="me-1.5 h-4 w-4" aria-hidden />

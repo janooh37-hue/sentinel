@@ -20,7 +20,7 @@ from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
-from sqlalchemy import func, or_, select
+from sqlalchemy import func, or_, select, text
 from sqlalchemy.orm import Session, selectinload
 
 from app.api.errors import NotFoundError, ValidationFailedError
@@ -188,7 +188,12 @@ def list_permits(
     stmt = _base_query(include_deleted=include_deleted)
     stmt = _apply_state_filter(stmt, state=state, today=today)
     if zone:
-        stmt = stmt.where(Permit.zone == zone)
+        # Membership test over the JSON zones array (SQLite json_each).
+        stmt = stmt.where(
+            text(
+                "EXISTS (SELECT 1 FROM json_each(permits.zones) WHERE json_each.value = :zone)"
+            ).bindparams(zone=zone)
+        )
     if company:
         stmt = stmt.where(Permit.company.ilike(f"%{company}%"))
     if q:
@@ -236,7 +241,7 @@ def create_permit(db: Session, payload: PermitCreate, *, actor: str | None = Non
         )
     row = Permit(
         company=payload.company,
-        zone=payload.zone,
+        zones=list(payload.zones),
         start_date=payload.start_date,
         end_date=payload.end_date,
         purpose=payload.purpose,
@@ -252,7 +257,7 @@ def create_permit(db: Session, payload: PermitCreate, *, actor: str | None = Non
     row.permit_no = f"PMT-{row.id:04d}"
     db.commit()
     db.refresh(row)
-    _audit(db, "permit.created", row.id, actor, {"company": row.company, "zone": row.zone})
+    _audit(db, "permit.created", row.id, actor, {"company": row.company, "zones": list(row.zones)})
     return get_permit(db, row.id)
 
 
@@ -478,7 +483,7 @@ def summary(db: Session) -> dict[str, int]:
     today = date.today()
     rows, _ = list_permits(db, limit=100_000, offset=0)
     active = expiring = expired = revoked = 0
-    people_active = people_green = people_red = 0
+    people_active = people_green = people_red = people_work = 0
     for row in rows:
         ds = _derived_status(row, today=today)
         if ds == "active":
@@ -492,11 +497,14 @@ def summary(db: Session) -> dict[str, int]:
         # Head-count only counts people on currently-valid permits.
         if ds in ("active", "expiring"):
             n = len(_active_people(row))
+            zones = row.zones or []
             people_active += n
-            if row.zone in ("green", "both"):
+            if "green" in zones:
                 people_green += n
-            if row.zone in ("red", "both"):
+            if "red" in zones:
                 people_red += n
+            if "work_residence" in zones:
+                people_work += n
     return {
         "active": active,
         "expiring": expiring,
@@ -505,35 +513,42 @@ def summary(db: Session) -> dict[str, int]:
         "people_active": people_active,
         "people_green": people_green,
         "people_red": people_red,
+        "people_work_residence": people_work,
     }
 
 
-def export_csv(db: Session, **filters: Any) -> str:
-    """Flat CSV of the (filtered) register — one row per permit."""
+CSV_COLUMNS = [
+    "permit_no", "company", "zones", "start_date", "end_date",
+    "duration_days", "status", "days_remaining", "people", "vehicles", "purpose",
+]
+
+
+def export_csv(db: Session, *, ids: list[int] | None = None, **filters: Any) -> str:
+    """Flat CSV of the register — one row per permit. ``ids`` restricts to a
+    specific selection (order preserved); otherwise the filtered set is used."""
     filters.setdefault("limit", 100_000)
     filters.setdefault("offset", 0)
     rows, _ = list_permits(db, **filters)
+    if ids is not None:
+        order = {pid: i for i, pid in enumerate(ids)}
+        rows = sorted((r for r in rows if r.id in order), key=lambda r: order[r.id])
     today = date.today()
     buf = io.StringIO()
     writer = csv.writer(buf)
-    writer.writerow(
-        [
-            "permit_no", "company", "zone", "start_date", "end_date",
-            "duration_days", "status", "days_remaining", "people_count", "purpose",
-        ]
-    )
+    writer.writerow(CSV_COLUMNS)
     for row in rows:
         writer.writerow(
             [
                 row.permit_no or "",
                 row.company,
-                row.zone,
+                " + ".join(row.zones or []),
                 row.start_date.isoformat(),
                 row.end_date.isoformat(),
                 _duration_days(row),
                 _derived_status(row, today=today),
                 _days_remaining(row, today=today) if row.status != "revoked" else "",
                 len(_active_people(row)),
+                len(_active_vehicles(row)),
                 (row.purpose or "").replace("\n", " "),
             ]
         )

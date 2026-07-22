@@ -161,7 +161,7 @@ export type LeaveStatus = 'Pending' | 'Approved' | 'Rejected' | 'Cancelled' | 'C
 
 // ─── Security Permits (greenfield 2026-07) ─────────────────────────────────────
 // Hand-declared until `npm run gen:api` folds them into the generated schema.
-export type PermitZone = 'green' | 'red' | 'both'
+export type PermitZone = 'green' | 'red' | 'work_residence'
 export type PermitStoredStatus = 'active' | 'revoked'
 export type PermitDerivedStatus = 'active' | 'expiring' | 'expired' | 'revoked'
 
@@ -180,7 +180,8 @@ export interface PermitPersonRead {
 
 export interface PermitPersonCreate {
   name: string
-  uae_id?: string | null
+  /** Required — every person on a permit must have a UAE ID. */
+  uae_id: string
   nationality?: string | null
   role?: string | null
 }
@@ -209,7 +210,7 @@ export interface PermitListItem {
   id: number
   permit_no: string | null
   company: string
-  zone: PermitZone
+  zones: PermitZone[]
   start_date: string
   end_date: string
   status: PermitStoredStatus
@@ -243,7 +244,7 @@ export interface PermitListResponse {
 
 export interface PermitCreate {
   company: string
-  zone: PermitZone
+  zones: PermitZone[]
   start_date: string
   end_date: string
   purpose?: string | null
@@ -254,7 +255,7 @@ export interface PermitCreate {
 
 export interface PermitUpdate {
   company?: string
-  zone?: PermitZone
+  zones?: PermitZone[]
   start_date?: string
   end_date?: string
   purpose?: string | null
@@ -269,6 +270,7 @@ export interface PermitSummary {
   people_active: number
   people_green: number
   people_red: number
+  people_work_residence: number
 }
 
 export interface LeaveReturnBody {
@@ -1051,8 +1053,9 @@ export const api = {
   removePermitVehicle: (id: number, vehicleId: number) =>
     request<PermitRead>('DELETE', `/permits/${id}/vehicles/${vehicleId}`),
   /** Absolute URL for the CSV export (used by an anchor download / print). */
-  permitsExportUrl: (params: { state?: string; zone?: PermitZone; company?: string; q?: string } = {}) =>
-    `${BASE}/permits/export${qs({ ...params })}`,
+  permitsExportUrl: (
+    params: { state?: string; zone?: PermitZone; company?: string; q?: string; ids?: string } = {},
+  ) => `${BASE}/permits/export${qs({ ...params })}`,
   /** Upload (or replace) the scanned paper permit. */
   uploadPermitDocument: (id: number, file: File) => {
     const form = new FormData()

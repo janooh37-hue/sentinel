@@ -437,8 +437,9 @@ class Permit(Base):
     # Human-readable reference, stamped after insert as ``PMT-0001``.
     permit_no: Mapped[str | None] = mapped_column(String(32), nullable=True)
     company: Mapped[str] = mapped_column(String(255))
-    # 'green' | 'red' | 'both' — validated in the Pydantic schema.
-    zone: Mapped[str] = mapped_column(String(8), default="green")
+    # One or more of 'green' | 'red' | 'work_residence' — validated in the
+    # Pydantic schema. Stored as a JSON array (SQLite TEXT).
+    zones: Mapped[list[str]] = mapped_column(JSON, default=list)
     start_date: Mapped[date] = mapped_column(Date)
     end_date: Mapped[date] = mapped_column(Date)
     # 'active' | 'revoked'. Expiry is derived from end_date, never stored.
