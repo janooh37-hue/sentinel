@@ -45,6 +45,8 @@ from app.schemas.permit import (
     PermitVehicleCreate,
     PermitVisitCreate,
     PermitVisitRead,
+    PersonIdScan,
+    VehicleLicenceScan,
 )
 from app.services import permit_service
 
@@ -137,6 +139,24 @@ def create_permit(
 ) -> PermitRead:
     row = permit_service.create_permit(db, payload, actor=user.email)
     return permit_service.to_read(row, db=db)
+
+
+@router.post("/scan-vehicle-licence", response_model=VehicleLicenceScan)
+async def scan_vehicle_licence(
+    db: Annotated[Session, Depends(get_db)],
+    _user: Annotated[User, Depends(require_capability("permits.manage"))],
+    upload: Annotated[UploadFile, File(alias="file")],
+) -> VehicleLicenceScan:
+    return permit_service.scan_vehicle_licence(await upload.read())
+
+
+@router.post("/scan-emirates-id", response_model=PersonIdScan)
+async def scan_emirates_id(
+    db: Annotated[Session, Depends(get_db)],
+    _user: Annotated[User, Depends(require_capability("permits.manage"))],
+    upload: Annotated[UploadFile, File(alias="file")],
+) -> PersonIdScan:
+    return permit_service.scan_emirates_id(await upload.read())
 
 
 @router.get("/{permit_id}", response_model=PermitRead)
