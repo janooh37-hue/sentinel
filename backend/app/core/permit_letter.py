@@ -3,6 +3,18 @@
 Count-aware (1 vs ≥2), generic «الفرد/الأفراد» terminology, zone phrase from the
 selected zones, and the vehicle clause + الجدول الثاني table dropped when there
 are no vehicles. Pure + unit-tested — no DB, no I/O.
+
+Layout notes (rendered by ``core.arabic_rtl.html_to_docx``):
+  * The narrative is justified; the company + validity + zones sit centered
+    directly under the letter subject.
+  * Zones render as colour-coded chips (the "colour key") — green / red / blue
+    matching the app's zone palette — so the reader sees the access level at a
+    glance, not only buried in the prose.
+  * Both tables carry an explicit ``<colgroup>`` so columns size to their
+    content (else the renderer splits them evenly and the make/model column
+    wraps while the plate column wastes space). The section title is a merged,
+    shaded header row inside the table (one fewer paragraph than a standalone
+    caption — keeps the signature block on page one).
 """
 
 from __future__ import annotations
@@ -10,16 +22,35 @@ from __future__ import annotations
 from datetime import date
 from html import escape
 
-ZONE_AR: dict[str, str] = {
-    "green": "المنطقة الخضراء",
-    "red": "المنطقة الحمراء",
-    "work_residence": "سكن العمل",
+# These permits authorize entry to the Al Wathba correctional facility; the
+# letter is addressed to its director. Fills the template's {{ recipient_name }}
+# token (rendered as «السيد \ {recipient} المحترم»).
+PERMIT_RECIPIENT = "مدير المؤسسة العقابية والإصلاحية - الوثبة"
+
+# key -> (Arabic label, chip background, chip ink). Palette mirrors the app's
+# ZoneBadge / permit mockup: green, red, blue(=work residence).
+_ZONES: dict[str, tuple[str, str, str]] = {
+    "green": ("المنطقة الخضراء", "#dcfce7", "#15803d"),
+    "red": ("المنطقة الحمراء", "#fee2e2", "#b91c1c"),
+    "work_residence": ("سكن العمل", "#dbeafe", "#1d4ed8"),
 }
+_NBSP = " "
 
 
 def zones_phrase(zones: list[str]) -> str:
-    parts = [ZONE_AR.get(z, z) for z in zones]
+    parts = [_ZONES.get(z, (z, "", ""))[0] for z in zones]
     return " و".join(parts)  # Arabic conjunction "و" prefixes the next word
+
+
+def _zone_chips(zones: list[str]) -> str:
+    chips = []
+    for z in zones:
+        label, bg, ink = _ZONES.get(z, (z, "#eef2f6", "#334155"))
+        chips.append(
+            f'<span style="background-color:{bg}; color:{ink}; font-weight:bold">'
+            f"{_NBSP}{escape(label)}{_NBSP}</span>"
+        )
+    return (_NBSP * 2).join(chips)
 
 
 def _fmt(d: date | str) -> str:
@@ -30,15 +61,21 @@ def _fmt(d: date | str) -> str:
 
 def _people_table(people: list[dict[str, str]]) -> str:
     rows = "".join(
-        f"<tr><td>{i}</td><td>{escape(p.get('name') or '')}</td>"
+        f'<tr><td style="text-align:center">{i}</td>'
+        f'<td style="text-align:right">{escape(p.get("name") or "")}</td>'
         f"<td>{escape(p.get('uae_id') or '')}</td><td>{escape(p.get('nationality') or '')}</td></tr>"
         for i, p in enumerate(people, 1)
     )
     return (
-        "<p><b>الجدول الأول: بيانات الأفراد</b></p>"
-        '<table border="1" cellspacing="0" cellpadding="4"><thead><tr>'
-        "<th>م</th><th>الاسم</th><th>رقم الهوية</th><th>الجنسية</th>"
-        f"</tr></thead><tbody>{rows}</tbody></table>"
+        '<table style="font-size:10pt">'
+        '<colgroup><col style="width:8%"><col style="width:46%">'
+        '<col style="width:28%"><col style="width:18%"></colgroup>'
+        "<thead>"
+        '<tr><th colspan="4" style="background-color:#e6f4f1; color:#0f766e">'
+        "الجدول الأول: بيانات الأفراد</th></tr>"
+        '<tr style="background-color:#eef2f6">'
+        '<th style="text-align:center">م</th><th>الاسم</th><th>رقم الهوية</th><th>الجنسية</th></tr>'
+        f"</thead><tbody>{rows}</tbody></table>"
     )
 
 
@@ -47,16 +84,23 @@ def _vehicle_table(vehicles: list[dict[str, str]]) -> str:
         "<tr>"
         f"<td>{escape(v.get('plate_no') or '')}</td><td>{escape(v.get('plate_emirate') or '')}</td>"
         f"<td>{escape(v.get('plate_category') or '')}</td><td>{escape(v.get('traffic_no') or '')}</td>"
-        f"<td>{escape(v.get('make_model') or '')}</td><td>{escape(v.get('colour') or '')}</td>"
+        f'<td style="text-align:right">{escape(v.get("make_model") or "")}</td>'
+        f"<td>{escape(v.get('colour') or '')}</td>"
         f"<td>{escape(_fmt(v.get('reg_expiry') or ''))}</td></tr>"
         for v in vehicles
     )
     return (
-        "<p><b>الجدول الثاني: بيانات المركبات</b></p>"
-        '<table border="1" cellspacing="0" cellpadding="4"><thead><tr>'
+        '<table style="font-size:9pt">'
+        '<colgroup><col style="width:13%"><col style="width:12%"><col style="width:11%">'
+        '<col style="width:15%"><col style="width:21%"><col style="width:12%">'
+        '<col style="width:16%"></colgroup>'
+        "<thead>"
+        '<tr><th colspan="7" style="background-color:#e6f4f1; color:#0f766e">'
+        "الجدول الثاني: بيانات المركبات</th></tr>"
+        '<tr style="background-color:#eef2f6">'
         "<th>اللوحة</th><th>الإمارة</th><th>الفئة</th><th>رقم المرور</th>"
-        "<th>الطراز / النوع</th><th>اللون</th><th>انتهاء الرخصة</th>"
-        f"</tr></thead><tbody>{rows}</tbody></table>"
+        "<th>الطراز / النوع</th><th>اللون</th><th>انتهاء الرخصة</th></tr>"
+        f"</thead><tbody>{rows}</tbody></table>"
     )
 
 
@@ -68,6 +112,7 @@ def build_permit_letter_html(
     end_date: date,
     people: list[dict[str, str]],
     vehicles: list[dict[str, str]],
+    purpose: str | None = None,
 ) -> str:
     many_people = len(people) >= 2
     has_vehicles = len(vehicles) > 0
@@ -86,17 +131,29 @@ def build_permit_letter_html(
     zone_ar = zones_phrase(zones)
     company_e = escape(company)
 
+    # Company under the subject, then a justified narrative, then the centered
+    # validity + colour-coded zone key.
+    header = f'<p style="text-align:center; font-size:12pt"><b>الجهة: {company_e}</b></p>'
     para = (
-        "<p>يطيب لنا أن نتقدم لسيادتكم بخالص التحية والتقدير، ويرجى من سيادتكم السماح "
+        '<p style="text-align:justify; line-height:1.45">'
+        "يطيب لنا أن نتقدم لسيادتكم بخالص التحية والتقدير، ويرجى من سيادتكم السماح "
         f"{subject_person} بالكشف أدناه بالدخول من البوابة الرئيسية إلى {zone_ar}"
         f"{vehicle_clause}، حتى {verb_tail} في الوقت المحدد.</p>"
     )
-    facts = (
-        f"<p><b>الجهة:</b> {company_e} · <b>صلاحية التصريح:</b> "
+    validity = (
+        '<p style="text-align:center"><b>صلاحية التصريح:</b> '
         f"من {_fmt(start_date)} إلى {_fmt(end_date)}</p>"
     )
+    # Optional reason-for-access line (only when the operator entered one).
+    purpose_line = ""
+    if purpose and purpose.strip():
+        purpose_line = (
+            f'<p style="text-align:center"><b>الغرض من التصريح:</b> {escape(purpose.strip())}</p>'
+        )
+    zones_line = f'<p style="text-align:center">المناطق المصرّح بدخولها: {_zone_chips(zones)}</p>'
 
-    html = para + facts + _people_table(people)
+    spacer = "<p></p>"
+    html = header + para + validity + purpose_line + zones_line + spacer + _people_table(people)
     if has_vehicles:
-        html += _vehicle_table(vehicles)
+        html += spacer + _vehicle_table(vehicles)
     return html

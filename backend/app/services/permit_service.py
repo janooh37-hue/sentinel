@@ -298,7 +298,7 @@ def regenerate_permit_book(db: Session, permit: Permit, *, actor: str | None = N
     ponytail: re-renders docx->PDF on each roster change (Word COM). Fine for
     infrequent admin edits; switch to regenerate-on-print if throughput matters.
     """
-    from app.core.permit_letter import build_permit_letter_html
+    from app.core.permit_letter import PERMIT_RECIPIENT, build_permit_letter_html
     from app.services import document_service
 
     people, vehicles = _letter_dicts(permit)
@@ -309,13 +309,17 @@ def regenerate_permit_book(db: Session, permit: Permit, *, actor: str | None = N
         end_date=permit.end_date,
         people=people,
         vehicles=vehicles,
+        purpose=permit.purpose,
     )
-    subject = f"تصريح دخول أمني — {permit.company}"
+    # Clean الموضوع line; the company renders as a header line under it (see
+    # build_permit_letter_html). The book stays identifiable by its 1/5 ref and
+    # its body text (company) is in the search index.
+    subject = "تصريح دخول أمني"
     result = document_service.generate_document(
         db,
         employee_id=None,
         template_id="General Book",
-        fields={"subject": subject, "body": body},
+        fields={"subject": subject, "body": body, "recipient_name": PERMIT_RECIPIENT},
         classification_code="5/1",
         commit=True,
         manager_id=permit.manager_id,
