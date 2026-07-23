@@ -12,7 +12,6 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from app.db import session as session_mod
 from app.db.models import Base, Book, BookCategory, BookEditSession, Employee, User
-from app.db.models import BookEditSession as _BES  # noqa: F401
 from app.db.session import attach_sqlite_pragmas
 from app.services import perm_service
 

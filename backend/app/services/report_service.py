@@ -9,14 +9,7 @@ from sqlalchemy.orm import Session
 
 from app.api.errors import AppError
 from app.config import get_settings
-from app.db.models import (
-    Employee,
-    GeneralBookRecipient,
-    Submitter,
-)
-
-_TEMPLATE_ID = "Report"
-_GS_CATEGORY = "GS"  # same category the General Book uses → shows in that list
+from app.db.models import Employee, Submitter
 
 
 def _resolve_signer(db: Session, employee_id: str) -> tuple[str, str, str | None]:
@@ -36,10 +29,3 @@ def _resolve_signer(db: Session, employee_id: str) -> tuple[str, str, str | None
             p = get_settings().data_dir / p
         sig = str(p) if p.is_file() else None
     return name, title, sig
-
-
-def _resolve_recipient(db: Session, recipient_id: int | None) -> str:
-    if recipient_id is None:
-        return ""
-    row = db.get(GeneralBookRecipient, recipient_id)
-    return row.name if row is not None else ""
