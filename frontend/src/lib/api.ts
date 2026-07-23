@@ -777,6 +777,9 @@ export type BookDecideAction = 'reject' | 'return' | 'note'
 // Reviewer decision — `reviewed` = approved as reviewer; `changes_requested` = reviewer asks for changes.
 export type BookReviewDecision = 'reviewed' | 'changes_requested'
 
+// Report (Task 4/7) — one-shot synchronous book creation via POST /books/reports.
+export type ReportCreate = components['schemas']['ReportCreate']
+
 // General-book recipients (forms-fix) — hand-mirrored until gen:api picks up the new schema.
 export interface RecipientRead {
   id: number
@@ -1455,6 +1458,8 @@ export const api = {
    *  Returns WordSessionRead with a word_url for WebDAV/Word Direct Access. */
   createWordBook: (body: components['schemas']['WordBookCreate']) =>
     request<components['schemas']['WordSessionRead']>('POST', '/books/word-sessions', body),
+  /** POST /books/reports — one-shot synchronous report creation; returns the finished BookRead. */
+  createReport: (body: ReportCreate) => request<BookRead>('POST', '/books/reports', body),
   /** POST /books/{id}/word-sessions/finish — commit the Word-edited draft. */
   finishWordSession: (bookId: number) =>
     request<BookRead>('POST', `/books/${bookId}/word-sessions/finish`),

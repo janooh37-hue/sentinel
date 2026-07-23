@@ -36,7 +36,7 @@ import { toast } from 'sonner'
 import { shouldShowNotifyToggle } from './notifyToggle'
 import { NotifyEmployeeToggle } from '@/components/notify/NotifyEmployeeToggle'
 import { api, apiErrorMessage } from '@/lib/api'
-import type { DocumentGenerateRequest, StagedAttachmentRead, TemplateMeta, WordSessionRead } from '@/lib/api'
+import type { DocumentGenerateRequest, ReportCreate, StagedAttachmentRead, TemplateMeta, WordSessionRead } from '@/lib/api'
 import type { ExtractionResponse } from '@/lib/extraction'
 import type { TemplateDetailResponse, TemplateField } from '@/components/application/types'
 import { buildZodSchema } from '@/lib/applicationFormSchema'
@@ -277,7 +277,10 @@ export function ApplicationPage(): React.JSX.Element {
   // General Book — the only form carrying the rich Arabic body editor. Its
   // classification picker is REQUIRED: every book (rich-editor or Word) takes
   // its ref from the classified register (1/{tab}/GSSG/{serial}).
-  const isGeneralBookForm = !!schema?.fields.some((f) => f.type === 'arabic_rich_full')
+  const isGeneralBookForm = !!schema?.fields.some((f) => f.type === 'arabic_rich_full') && selectedTemplate !== 'Report'
+  // Report — one-shot synchronous path: submits to POST /books/reports and
+  // navigates to the created book record instead of going through the job-poll flow.
+  const isReportForm = selectedTemplate === 'Report'
 
   // Build Zod schema + RHF instance
   const zodSchema = schema ? buildZodSchema(schema.fields, t) : null
@@ -377,6 +380,29 @@ export function ApplicationPage(): React.JSX.Element {
       // in the tab while it lingers. The handoff dialog's «Open in Word»
       // anchor is the launch point (2026-07-19 dead-buttons audit).
       setPendingWordSession(res)
+    },
+    onError: (err) => {
+      setSubmitError(err instanceof ApiError ? `${err.code}: ${err.message}` : String(err))
+      toast.error(apiErrorMessage(err))
+    },
+  })
+
+  // Report mutation — one-shot synchronous submit; navigates directly to the
+  // created book record (its PDF is viewable there) instead of the job-poll flow.
+  const reportMutation = useMutation({
+    mutationFn: (values: Record<string, unknown>) =>
+      api.createReport({
+        signer_employee_id: String(values.signer_id ?? ''),
+        recipient_id: (values.recipient_id as number | null | undefined) ?? null,
+        subject: String(values.subject ?? ''),
+        date: (values.report_date as string | undefined) ?? null,
+        body_html: String(values.body ?? ''),
+        sign: values.sign !== false,
+      } satisfies ReportCreate),
+    onSuccess: (book) => {
+      void qc.invalidateQueries({ queryKey: ['books'] })
+      toast.success(t('application.toast.saved', { ref: book.ref_number ?? '' }))
+      navigate(`/books?ref=${encodeURIComponent(book.ref_number ?? '')}`)
     },
     onError: (err) => {
       setSubmitError(err instanceof ApiError ? `${err.code}: ${err.message}` : String(err))
@@ -494,6 +520,21 @@ export function ApplicationPage(): React.JSX.Element {
           table_rows,
         })
       }
+    }
+
+    // Report form: one-shot create — skip the job-poll flow entirely.
+    // The result IS the PDF served from the book record, so previewing must
+    // not persist a Book. Only the explicit commit path fires the mutation.
+    if (isReportForm) {
+      if (!commit) {
+        // preview path: swallow the form submit (Enter/Preview must not create a book)
+        return (e?: React.BaseSyntheticEvent) => {
+          e?.preventDefault()
+        }
+      }
+      return form.handleSubmit((values) => {
+        reportMutation.mutate(values as Record<string, unknown>)
+      })
     }
 
     return form.handleSubmit((values) => {
@@ -985,6 +1026,32 @@ export function ApplicationPage(): React.JSX.Element {
                               {wordSessionMutation.isPending
                                 ? t('common.loading')
                                 : t('books.word.createAndOpen')}
+                              {isAr ? (
+                                <ArrowLeft className="h-3.5 w-3.5" strokeWidth={1.8} aria-hidden />
+                              ) : (
+                                <ArrowRight className="h-3.5 w-3.5" strokeWidth={1.8} aria-hidden />
+                              )}
+                            </Button>
+                          </>
+                        ) : isReportForm ? (
+                          // Report form: one-shot create — no Preview step.
+                          <>
+                            <span />
+                            <Button
+                              type="button"
+                              variant="commit"
+                              size="commit"
+                              onClick={() => void handleSave()}
+                              disabled={
+                                (!isAdminCategory && !selectedEmployee) ||
+                                reportMutation.isPending
+                              }
+                              className="min-h-11 disabled:cursor-not-allowed disabled:opacity-50"
+                            >
+                              <FileText className="h-3.5 w-3.5" strokeWidth={1.8} aria-hidden />
+                              {reportMutation.isPending
+                                ? t('common.loading')
+                                : t('application.actions.saveBook')}
                               {isAr ? (
                                 <ArrowLeft className="h-3.5 w-3.5" strokeWidth={1.8} aria-hidden />
                               ) : (

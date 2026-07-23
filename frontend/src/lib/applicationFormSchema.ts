@@ -104,6 +104,12 @@ function buildShape(fields: TemplateField[], t: TFunction): Record<string, AnyZo
         shape[id] = emptyToUndefined(z.string())
         break
 
+      case 'employee_picker':
+        shape[id] = required
+          ? z.string().min(1, { message: t('application.validation.required') })
+          : emptyToUndefined(z.string())
+        break
+
       case 'recipient_picker':
         shape[id] = z.number().nullable().optional()
         break

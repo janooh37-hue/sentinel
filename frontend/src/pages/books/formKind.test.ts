@@ -7,7 +7,7 @@
 
 import { describe, it, expect } from 'vitest'
 
-import { formKindOf, subjectEmployeePart, GENERAL_BOOK_KIND } from './formKind'
+import { formKindOf, subjectEmployeePart, GENERAL_BOOK_KIND, REPORT_KIND } from './formKind'
 
 describe('formKindOf', () => {
   it('classified books are General Book, never chopped', () => {
@@ -22,6 +22,16 @@ describe('formKindOf', () => {
 
   it('unknown non-classified subjects stay Other', () => {
     expect(formKindOf('Some random subject').id).toBe('other')
+  })
+
+  it('template_id "Report" wins regardless of subject', () => {
+    expect(formKindOf('Some random subject', { template_id: 'Report' })).toBe(REPORT_KIND)
+    expect(REPORT_KIND.glyph).toBe('📊')
+    expect(REPORT_KIND.labelKey).toBe('books.formKind.report')
+  })
+
+  it('template_id other than "Report" does not trigger report kind', () => {
+    expect(formKindOf('Some random subject', { template_id: 'Other' }).id).toBe('other')
   })
 })
 

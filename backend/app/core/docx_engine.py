@@ -796,6 +796,9 @@ _FORM_REGISTRY: dict[str, dict[str, Any]] = {
     # Multi-employee passport list — rows come from fields["items"], rendered by
     # the item() Jinja global; no per-employee binding (admin category).
     "Passport Release List": {"adapter": _adapt_common, "post_process": None},
+    # Report: no-classification, no-ref General Book paper; reuses same adapter
+    # and post-process as General Book (body + footer pipeline).
+    "Report": {"adapter": _adapt_general_book, "post_process": _pp_general_book},
 }
 
 

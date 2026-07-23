@@ -30,6 +30,7 @@ export type FieldType =
   | 'recipient_multi_picker' // general-book CC: multi-select recipient chips
   | 'violation_combo'   // warning-form: multi-select violation types + custom
   | 'employees_table'   // passport-release list: multi-employee G-number picker
+  | 'employee_picker'  // single-employee picker (full roster); emits employee id string
 
 export interface TemplateField {
   /** `key` from the backend — aliased as `id` for field-component compatibility */

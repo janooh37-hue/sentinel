@@ -62,6 +62,7 @@ const BASE_BOOK: BookRead = {
   is_word_book: false,
   versions: [],
   doc_manager_has_signature: false,
+  current_template_id: null,
 }
 
 const ACTIVE_SESSION_BOOK: BookRead = {

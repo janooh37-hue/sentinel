@@ -80,7 +80,7 @@ export function RecordsList({
             <span className="font-mono text-[0.62em] text-faint tabular-nums">{items.length}</span>
           </div>
           {items.map((row) => {
-            const classified = { classified: !!row.classification_code }
+            const classified = { classified: !!row.classification_code, template_id: row.current_template_id }
             const kind = formKindOf(row.subject, classified)
             const who = subjectEmployeePart(row.subject, classified)
             const snippet = (row as BookReadWithSnippet).search_snippet
