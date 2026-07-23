@@ -45,6 +45,7 @@ import { EmployeesTableField } from './fields/EmployeesTableField'
 import { ViolationCheckboxesField } from './fields/ViolationCheckboxesField'
 import { ViolationComboField } from './fields/ViolationComboField'
 import { ClassificationField } from './fields/ClassificationField'
+import { EmployeePickerField } from './fields/EmployeePickerField'
 import { TableGridField } from './TableGridField'
 import { WordTemplateManager } from './WordTemplateManager'
 
@@ -238,6 +239,9 @@ function renderField(
 
     case 'employees_table':
       return <EmployeesTableField key={field.id} {...common} />
+
+    case 'employee_picker':
+      return <EmployeePickerField key={field.id} {...common} />
 
     case 'violation_checkboxes':
       return (
