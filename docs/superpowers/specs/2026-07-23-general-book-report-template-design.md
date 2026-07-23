@@ -42,9 +42,9 @@ closing formula.
    Checked + signature on file → the submitter's signature image embeds in the
    `التوقيع` block. Unchecked, or no signature on file → the `التوقيع` line is
    left blank for a wet signature.
-3. **Submitter (author):** chosen from an **employee picker** (not the logged-in
-   user, not hand-typed). Selecting the employee pulls their **name**,
-   **designation** (job title), and **signature**.
+3. **Submitter (author):** the **currently signed-in user** (automatic — not a
+   picker, not hand-typed). Their **name**, **designation** (job title), and
+   **signature** come from their own account (their linked employee record).
 4. **Recipient (addressee):** the existing `GeneralBookRecipient` picker
    (`/general-book/recipients`) — suited to external addressees like a court or
    center director, with inline add.
@@ -101,20 +101,21 @@ preferred so the services gallery can list it as a template.)
 
 ```
 create_report(
-    db, *, operator: User,
-    submitter_employee_id: str,
+    db, *, submitter: User,       # the authenticated caller
     recipient_id: int | None,
     subject: str,
-    date: str | None,       # default: today, dd-mm-yyyy
+    date: str | None,             # default: today, dd-mm-yyyy
     body_html: str,
     sign: bool = True,
 ) -> Book
 ```
 
 Steps:
-1. Resolve the **submitter** employee → `name_ar`, `designation` (job title), and
-   signature path (via the `Submitter` registry `stored_sig_path`, mirroring
-   `_resolve_signer_signature`'s employee branch).
+1. Resolve the **submitter** from the authenticated user → `name_ar`,
+   `designation` (job title) from their linked employee record, and signature
+   path via `_resolve_signer_signature(db, submitter)` (the existing resolver —
+   the user's own approval signature, else their linked employee's stored
+   signature).
 2. Build the data dict as `word_book_service` does **minus `ref`**:
    `{ date, subject, recipient_name (from GeneralBookRecipient),
       body: GENERAL_BOOK_BODY_SENTINEL, body_html, submitter_g, cc: "" }`.
@@ -132,9 +133,9 @@ Steps:
      recorded on the version, not as the book's subject),
      `ref_number` = unique internal filing id (`REPORT-{id}` set after flush, or
      an equivalent unique non-printing token), `subject`, `direction = "outgoing"`,
-     `submitted_by_user_id = operator.id`, `approval_state = "approved"`.
+     `submitted_by_user_id = submitter.id`, `approval_state = "approved"`.
    - `BookVersion`: `template_id = "Report"` (the report discriminator),
-     `fields = {"submitter_employee_id": ..., "signed": sign}`,
+     `fields = {"submitter_user_id": submitter.id, "signed": sign}`,
      `document_id` → the generated file, `signed_pdf_path` = the signed PDF,
      `status = "approved"`, `signed_at`, `manager_sig_embedded = sign`.
    - `Document` row for the rendered file.
@@ -149,7 +150,6 @@ signed PDF available through the standard book document endpoints).
 
 ```
 ReportCreate {
-  submitter_employee_id: str
   recipient_id: int | None
   subject: str
   date: str | None
@@ -157,6 +157,8 @@ ReportCreate {
   sign: bool = true
 }
 ```
+The submitter is the authenticated caller (from the auth dependency), never sent
+in the body.
 
 One-shot: the report is created already-signed (or blank-signature if unchecked)
 and appears in the list. A mistake is corrected with the existing **void**
@@ -171,8 +173,9 @@ After the schema change, resync `openapi.json` + `api.types.ts`
   ApplicationPage services gallery; assign an emoji (`📊`) via the existing
   override map (`formEmoji.ts` `EXTRA_TEMPLATE_EMOJI` or `QUICK_ACTION_META`).
 - **Form** (reusing `TemplateForm` field-dispatch + existing field components):
-  - **Submitter:** the existing `EmployeePicker` (from ApplicationPage) → emits
-    the employee id; a read-only preview shows the resolved name + designation.
+  - **Submitter:** nothing to pick — it is the signed-in user. Show a read-only
+    line “المُقدِّم: «your name» · «designation»” with the signature status (so
+    the operator sees who will sign).
   - **Recipient:** `RecipientPickerField` (`/general-book/recipients`).
   - **Subject:** text.
   - **Date:** date input, defaults to today, editable.

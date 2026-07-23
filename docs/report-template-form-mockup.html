@@ -130,24 +130,18 @@
       <div class="hd"><h2>📊 إنشاء تقرير</h2><span class="tag">/books/reports</span></div>
       <div class="bd">
         <div class="callout">
-          يُنشأ التقرير <b>موقّعاً فوراً</b> باسم المُقدِّم المُختار ويظهر في <b>قائمة الدفتر العام</b>
+          يُنشأ التقرير <b>موقّعاً فوراً</b> باسم المستخدم المُسجَّل دخوله ويظهر في <b>قائمة الدفتر العام</b>
           بوسم «تقرير». <b>لا يحمل رقماً صادراً</b> ولا تبويباً.
-          <br>Created already-signed by the picked submitter, listed in the General Book with a «Report» badge. No outbound ref, no classification.
+          <br>Created already-signed by the signed-in user, listed in the General Book with a «Report» badge. No outbound ref, no classification.
         </div>
 
         <label class="field">
-          <span class="lab">المُقدِّم (الموظف الموقِّع) <span class="req">مطلوب</span></span>
-          <select id="submitter">
-            <option value="">— اختر الموظف —</option>
-            <option value="s1" data-name="مهند عبدالرحمن أل علي" data-desig="مسؤول وحدة الإرساليات" data-sig="1" selected>مهند عبدالرحمن أل علي — G-1042</option>
-            <option value="s2" data-name="سالم خلفان المزروعي" data-desig="مشرف الأمن" data-sig="1">سالم خلفان المزروعي — G-0887</option>
-            <option value="s3" data-name="أحمد يوسف الحمادي" data-desig="ضابط وردية" data-sig="0">أحمد يوسف الحمادي — G-1190 (بلا توقيع)</option>
-          </select>
-          <div class="resolved" id="resolved">
-            <span class="nm" id="rNm">—</span><span class="dg" id="rDg"></span>
+          <span class="lab">المُقدِّم (المُوقِّع) — حسابك</span>
+          <div class="resolved" id="resolved" style="margin-top:0">
+            <span class="nm" id="rNm">مهند عبدالرحمن أل علي</span><span class="dg" id="rDg">· مسؤول وحدة الإرساليات</span>
             <span class="sig has" id="rSig">توقيع محفوظ</span>
           </div>
-          <div class="hint">يُجلب الاسم والمسمّى الوظيفي والتوقيع من سجل الموظف — لا يُكتب يدويّاً.</div>
+          <div class="hint">المُقدِّم هو المستخدم المُسجَّل دخوله — يُؤخذ الاسم والمسمّى الوظيفي والتوقيع من حسابك تلقائيّاً (لا يُختار ولا يُكتب).</div>
         </label>
 
         <label class="checkline" id="signLine">
@@ -249,22 +243,8 @@
 
 <script>
   const $ = id => document.getElementById(id);
-  function syncSubmitter(){
-    const o = $('submitter').selectedOptions[0];
-    const name = o.dataset.name || '—', dg = o.dataset.desig || '', hasSig = o.dataset.sig === '1';
-    $('rNm').textContent = name; $('rDg').textContent = dg ? '· ' + dg : '';
-    $('rSig').textContent = hasSig ? 'توقيع محفوظ' : 'لا يوجد توقيع';
-    $('rSig').className = 'sig ' + (hasSig ? 'has' : 'no');
-    $('vNm').textContent = name; $('vDg').textContent = dg;
-    // sign checkbox availability follows the picked employee
-    const chk = $('signChk'), line = $('signLine'), hint = $('signHint');
-    chk.disabled = !hasSig;
-    if(!hasSig){ chk.checked = false; line.classList.add('disabled');
-      hint.textContent = 'لا يوجد توقيع محفوظ لهذا الموظف — سيُطبع خط توقيع فارغ.'; }
-    else { line.classList.remove('disabled');
-      hint.textContent = 'إن أُلغيت، يُطبع خط توقيع فارغ للتوقيع باليد.'; }
-    syncSign();
-  }
+  // Submitter = the signed-in user (fixed). Its name/designation/signature come
+  // from the account; here we hardcode the demo user (who has a signature).
   function syncSign(){
     const on = $('signChk').checked && !$('signChk').disabled;
     $('vSig').className = 'sigimg ' + (on ? 'signed' : 'blank');
@@ -286,9 +266,8 @@
     $('pdate').addEventListener(ev,syncFields);
     $('body').addEventListener(ev,syncFields);
   });
-  $('submitter').addEventListener('change',syncSubmitter);
   $('signChk').addEventListener('change',syncSign);
-  syncSubmitter(); syncFields();
+  syncSign(); syncFields();
 </script>
 </body>
 </html>
