@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import struct
+import zlib
 from pathlib import Path
 
 import pytest
@@ -157,10 +159,6 @@ def test_create_word_session_dispatches_report(db_session):
     )
     assert r.status_code == 201, r.text
     assert r.json()["ref_number"].startswith("REPORT-")
-
-
-import struct
-import zlib
 
 
 def _png(path: Path) -> None:
