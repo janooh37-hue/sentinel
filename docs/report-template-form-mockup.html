@@ -1,0 +1,294 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>تقرير — نموذج الإدخال والمعاينة · Report form + preview mockup</title>
+<style>
+  :root{
+    --bg:#eef1f5; --card:#ffffff; --ink:#1a2230; --muted:#667085; --line:#e2e6ec;
+    --accent:#4f46e5; --accent-soft:#eef0ff; --ok:#067647; --ok-soft:#eafaf0;
+    --warn:#b54708; --warn-soft:#fff5e9; --gold:#9a7b3f;
+    --navy:#0f2f6b; --red:#c1121f;
+    --radius:14px; --shadow:0 1px 2px rgba(16,24,40,.06),0 8px 24px rgba(16,24,40,.06);
+    --ar:"Segoe UI","Noto Naskh Arabic",Tahoma,"Geeza Pro",system-ui,sans-serif;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--ar);
+    line-height:1.55;-webkit-font-smoothing:antialiased}
+  .bar{position:sticky;top:0;z-index:30;display:flex;align-items:center;gap:14px;
+    padding:12px 22px;background:rgba(255,255,255,.9);backdrop-filter:blur(8px);
+    border-bottom:1px solid var(--line)}
+  .bar h1{font-size:16px;margin:0;font-weight:700;letter-spacing:-.2px}
+  .bar .sub{font-size:12px;color:var(--muted);font-weight:500}
+  .bar .spacer{margin-inline-start:auto}
+  .pill{font-size:11.5px;font-weight:700;padding:3px 10px;border-radius:999px;
+    background:var(--accent-soft);color:var(--accent)}
+  .pill.ok{background:var(--ok-soft);color:var(--ok)}
+  main{max-width:1240px;margin:22px auto;padding:0 22px 80px;
+    display:grid;grid-template-columns:minmax(0,.92fr) minmax(0,1fr);gap:24px;align-items:start}
+  @media(max-width:960px){main{grid-template-columns:1fr}}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);
+    box-shadow:var(--shadow);position:relative}
+  .card .hd{padding:15px 18px 0;display:flex;align-items:baseline;gap:10px}
+  .card .hd h2{font-size:14px;margin:0;font-weight:700}
+  .card .hd .tag{font-size:11px;color:var(--muted);font-weight:600;margin-inline-start:auto}
+  .card .bd{padding:15px 18px 18px}
+  label.field{display:block;margin-bottom:13px}
+  label.field .lab{font-size:12.5px;font-weight:600;color:#344054;margin-bottom:6px;display:flex;gap:8px;align-items:center}
+  .req{color:var(--warn);font-size:11px}
+  select,input[type=text],input[type=date]{width:100%;font:inherit;font-size:13.5px;padding:9px 11px;
+    border:1px solid #cfd6df;border-radius:9px;background:#fdfdfe;color:var(--ink)}
+  select:focus,input:focus{outline:2px solid var(--accent-soft);border-color:var(--accent)}
+  .row2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  .hint{font-size:11.5px;color:var(--muted);margin-top:5px}
+  .resolved{margin-top:7px;font-size:12px;background:#f7f9fc;border:1px solid var(--line);
+    border-radius:9px;padding:8px 10px;display:flex;gap:10px;align-items:center}
+  .resolved .nm{font-weight:700}
+  .resolved .dg{color:var(--muted)}
+  .resolved .sig{margin-inline-start:auto;font-size:11px;font-weight:700;padding:2px 8px;border-radius:6px}
+  .sig.has{background:var(--ok-soft);color:var(--ok)}
+  .sig.no{background:var(--warn-soft);color:var(--warn)}
+  /* rich editor mock */
+  .rt-toolbar{display:flex;gap:4px;flex-wrap:wrap;border:1px solid #cfd6df;border-bottom:none;
+    border-radius:9px 9px 0 0;padding:6px 8px;background:#f6f8fb}
+  .rt-toolbar button{font:inherit;font-size:13px;min-width:30px;height:28px;border:1px solid transparent;
+    border-radius:6px;background:transparent;cursor:pointer;color:#344054}
+  .rt-toolbar button:hover{background:#e6ebf2}
+  .rt-body{min-height:150px;border:1px solid #cfd6df;border-radius:0 0 9px 9px;padding:11px 12px;
+    font-size:13.5px;background:#fff;outline:none;line-height:1.7}
+  .rt-body:focus{border-color:var(--accent);outline:2px solid var(--accent-soft)}
+  .checkline{display:flex;align-items:center;gap:9px;margin:4px 0 2px;font-size:13px;font-weight:600;color:#344054}
+  .checkline input{width:16px;height:16px;accent-color:var(--accent)}
+  .checkline.disabled{color:var(--muted);opacity:.7}
+  .actions{display:flex;gap:10px;margin-top:16px;padding-top:14px;border-top:1px dashed var(--line)}
+  .btn{font:inherit;font-size:13px;font-weight:700;border-radius:9px;padding:9px 16px;cursor:pointer;
+    border:1px solid #cfd6df;background:#fff;color:#344054;display:inline-flex;gap:7px;align-items:center}
+  .btn.pri{background:var(--accent);border-color:var(--accent);color:#fff}
+  .btn.pri:hover{background:#4338ca}
+  .callout{font-size:11.8px;color:var(--muted);background:#f7f9fc;border:1px solid var(--line);
+    border-radius:10px;padding:9px 11px;margin-bottom:14px;line-height:1.5}
+  .callout b{color:#344054}
+  /* ---- A4 preview ---- */
+  .previewWrap{padding:16px;background:#dfe4ea;border-radius:0 0 var(--radius) var(--radius);
+    max-height:82vh;overflow:auto}
+  .a4{background:#fff;width:100%;max-width:520px;margin:0 auto;box-shadow:0 6px 24px rgba(16,24,40,.16);
+    border-radius:2px;min-height:735px;display:flex;flex-direction:column;position:relative;
+    font-size:12.5px;color:#111}
+  .lh{display:flex;align-items:center;gap:12px;padding:16px 22px 10px}
+  .lh .logos{display:flex;gap:8px}
+  .lh .globe,.lh .emirate{width:40px;height:40px;border-radius:50%;display:flex;align-items:center;
+    justify-content:center;font-size:8px;font-weight:800;text-align:center;line-height:1.05;color:#fff}
+  .lh .globe{background:radial-gradient(circle at 40% 35%,#2f6fb0,#0f2f6b);border:2px solid #b8912f}
+  .lh .emirate{background:linear-gradient(#0a7d3c,#0a7d3c 55%,#c1121f 55%);font-size:7px}
+  .lh .org{margin-inline-start:auto;text-align:end}
+  .lh .org .ar{font-size:15px;font-weight:800;color:var(--navy)}
+  .lh .org .en{font-size:9.5px;font-weight:800;color:var(--red);letter-spacing:.3px}
+  .lh .org .web{font-size:8px;color:var(--muted);margin-top:1px}
+  .paper{padding:6px 30px 18px;flex:1;display:flex;flex-direction:column}
+  .p-date{font-style:italic;font-size:12.5px}
+  .p-to{margin-top:10px;font-weight:700}
+  .p-greet{margin-top:6px}
+  .p-subject{margin-top:12px;font-weight:800;text-decoration:underline}
+  .p-body{margin-top:12px;line-height:1.85;text-align:justify;white-space:normal}
+  .p-body p{margin:0 0 8px}
+  .p-body ul,.p-body ol{margin:6px 24px 8px 0;padding:0}
+  .p-close1{margin-top:14px}
+  .p-close2{margin-top:4px}
+  .sigblock{margin-top:22px;line-height:2}
+  .sigblock .lbl{font-weight:700}
+  .sigimg{display:inline-block;min-width:150px;border-bottom:1px solid #333;height:34px;
+    vertical-align:bottom;position:relative}
+  .sigimg.signed::after{content:"م. أل علي";position:absolute;inset:0;bottom:3px;
+    font-family:"Segoe Script","Bradley Hand",cursive;font-size:19px;color:#12386e;
+    transform:rotate(-4deg);display:flex;align-items:flex-end;justify-content:center;padding-bottom:2px}
+  .sigimg.blank::after{content:"";}
+  .noref{margin-top:9px;font-size:10px;color:#9aa4b2}
+  .ftr{margin-top:auto;position:relative;height:58px}
+  .ftr .band{position:absolute;inset:auto 0 0 0;height:44px;
+    background:linear-gradient(105deg,var(--red) 0 60%,var(--navy) 60% 100%);
+    clip-path:polygon(0 42%,100% 0,100% 100%,0 100%)}
+  .ftr .web{position:absolute;bottom:12px;inset-inline-start:24px;color:#fff;font-size:8.5px;font-weight:700;z-index:2}
+  .ftr .g{position:absolute;bottom:3px;inset-inline-start:24px;color:#fff;font-size:7.5px;opacity:.85;z-index:2}
+  .flag{position:absolute;top:8px;inset-inline-start:12px;font-size:10px;font-weight:800;
+    color:#b91c1c;background:#fee2e2;border:1px solid #fecaca;border-radius:6px;padding:1px 7px;
+    transform:rotate(-6deg)}
+  .legend{font-size:11px;color:var(--muted);padding:10px 16px 0;text-align:center}
+</style>
+</head>
+<body>
+  <div class="bar">
+    <h1>تقرير · Report</h1>
+    <span class="sub">نموذج بلا رقم صادر — على ورق الدفتر العام · no-ref report on the General Book paper</span>
+    <span class="spacer"></span>
+    <span class="pill ok">Mockup · end-to-end</span>
+  </div>
+
+  <main>
+    <!-- ============ FORM (input side) ============ -->
+    <section class="card">
+      <div class="hd"><h2>📊 إنشاء تقرير</h2><span class="tag">/books/reports</span></div>
+      <div class="bd">
+        <div class="callout">
+          يُنشأ التقرير <b>موقّعاً فوراً</b> باسم المُقدِّم المُختار ويظهر في <b>قائمة الدفتر العام</b>
+          بوسم «تقرير». <b>لا يحمل رقماً صادراً</b> ولا تبويباً.
+          <br>Created already-signed by the picked submitter, listed in the General Book with a «Report» badge. No outbound ref, no classification.
+        </div>
+
+        <label class="field">
+          <span class="lab">المُقدِّم (الموظف الموقِّع) <span class="req">مطلوب</span></span>
+          <select id="submitter">
+            <option value="">— اختر الموظف —</option>
+            <option value="s1" data-name="مهند عبدالرحمن أل علي" data-desig="مسؤول وحدة الإرساليات" data-sig="1" selected>مهند عبدالرحمن أل علي — G-1042</option>
+            <option value="s2" data-name="سالم خلفان المزروعي" data-desig="مشرف الأمن" data-sig="1">سالم خلفان المزروعي — G-0887</option>
+            <option value="s3" data-name="أحمد يوسف الحمادي" data-desig="ضابط وردية" data-sig="0">أحمد يوسف الحمادي — G-1190 (بلا توقيع)</option>
+          </select>
+          <div class="resolved" id="resolved">
+            <span class="nm" id="rNm">—</span><span class="dg" id="rDg"></span>
+            <span class="sig has" id="rSig">توقيع محفوظ</span>
+          </div>
+          <div class="hint">يُجلب الاسم والمسمّى الوظيفي والتوقيع من سجل الموظف — لا يُكتب يدويّاً.</div>
+        </label>
+
+        <label class="checkline" id="signLine">
+          <input type="checkbox" id="signChk" checked>
+          <span>توقيع التقرير الآن (تضمين صورة توقيع المُقدِّم)</span>
+        </label>
+        <div class="hint" id="signHint" style="margin-bottom:13px">
+          إن أُلغيت، يُطبع خط توقيع فارغ للتوقيع باليد.
+        </div>
+
+        <label class="field">
+          <span class="lab">المُرسَل إليه <span class="req">مطلوب</span></span>
+          <select id="recipient">
+            <option data-name="مدير مركز الإصلاح والتأهيل الوثبة -2" selected>مدير مركز الإصلاح والتأهيل الوثبة -2</option>
+            <option data-name="رئيس المحكمة الاتحادية">رئيس المحكمة الاتحادية</option>
+            <option data-name="مدير إدارة العمليات">مدير إدارة العمليات</option>
+            <option data-name="+ إضافة مُرسَل إليه…">+ إضافة مُرسَل إليه…</option>
+          </select>
+          <div class="hint">نفس مُنتقي المُرسَل إليهم في الدفتر العام (سجل مُدار، مع إضافة سريعة).</div>
+        </label>
+
+        <div class="row2">
+          <label class="field" style="margin-bottom:0">
+            <span class="lab">التاريخ</span>
+            <input type="date" id="pdate" value="2026-07-23">
+          </label>
+          <label class="field" style="margin-bottom:0">
+            <span class="lab">النوع</span>
+            <input type="text" value="تقرير (بلا رقم)" disabled style="background:#f2f4f7;color:#667085">
+          </label>
+        </div>
+
+        <label class="field" style="margin-top:13px">
+          <span class="lab">الموضوع <span class="req">مطلوب</span></span>
+          <input type="text" id="subject" value="النزيل محمد سعيد أحمد الجنسية الإمارات رقم الهوية (497110)">
+        </label>
+
+        <label class="field">
+          <span class="lab">نص التقرير <span class="req">مطلوب</span></span>
+          <div class="rt-toolbar">
+            <button data-cmd="bold" title="عريض"><b>B</b></button>
+            <button data-cmd="italic" title="مائل"><i>I</i></button>
+            <button data-cmd="underline" title="تسطير"><u>U</u></button>
+            <button data-cmd="insertUnorderedList" title="قائمة">• ⁝</button>
+            <button data-cmd="insertOrderedList" title="قائمة مرقّمة">1.</button>
+          </div>
+          <div class="rt-body" id="body" contenteditable="true"><p>يطيب لنا أن نتقدم إليكم بخالص التحية والتقدير، ويرجى العلم بأن النزيل المذكور أعلاه رفض الخروج من الليوان (A3) من أجل حضور جلسته في المحكمة لهذا اليوم الموافق أعلاه، لعدم قيامه بإبلاغ المحامي من أجل إرفاق العديد من المستندات الخاصة بالقضية، وقام بتقديم الطلب المرفق.</p></div>
+          <div class="hint">محرّر HugeRTE (arabic_rich_full) بأدلّة صفحة A4 — يُحوَّل إلى DOCX عبر html_to_docx.</div>
+        </label>
+
+        <div class="actions">
+          <button class="btn pri" onclick="alert('في التطبيق: POST /books/reports → يُنشئ التقرير الموقّع ويعرض PDF ثم يظهر في القائمة.')">إنشاء التقرير</button>
+          <button class="btn">حفظ مسودّة</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ PREVIEW (output side) ============ -->
+    <section class="card">
+      <div class="hd"><h2>معاينة — على ورق الدفتر العام</h2><span class="tag">html → docx → pdf</span></div>
+      <div class="legend">هذه معاينة تقريبية للـ«الرحلة الكاملة»؛ الإخراج الحقيقي تم توليده فعليّاً واجتاز الاختبار.</div>
+      <div class="previewWrap">
+        <div class="a4">
+          <div class="flag" id="noRefFlag">بلا رقم صادر</div>
+          <div class="lh">
+            <div class="logos">
+              <div class="globe">GSSG</div>
+              <div class="emirate">UAE</div>
+            </div>
+            <div class="org">
+              <div class="ar">المجموعة العالمية للخدمات الأمنية</div>
+              <div class="en">GLOBAL SECURITY SERVICES GROUP</div>
+              <div class="web">www.gss-group.net</div>
+            </div>
+          </div>
+          <div class="paper">
+            <div class="p-date">التاريخ: <span id="vDate">23-07-2026</span></div>
+            <div class="p-to">السيد \ <span id="vTo">مدير مركز الإصلاح والتأهيل الوثبة -2</span> &nbsp;المحترم</div>
+            <div class="p-greet">تحية طيبة وبعد ,,</div>
+            <div class="p-subject">الموضوع: <span id="vSubject"></span></div>
+            <div class="p-body" id="vBody"></div>
+            <div class="p-close1">للتفضل بالعلم وإجراءاتكم لطفاً،،،</div>
+            <div class="p-close2">وتفضلوا بقبول فائق الاحترام والتقدير ,,,</div>
+            <div class="sigblock">
+              <div><span class="lbl">الاسم:</span> <span id="vNm">مهند عبدالرحمن أل علي</span></div>
+              <div><span class="lbl">المسمى الوظيفي:</span> <span id="vDg">مسؤول وحدة الإرساليات</span></div>
+              <div><span class="lbl">التوقيع:</span> <span class="sigimg signed" id="vSig"></span></div>
+            </div>
+            <div class="ftr">
+              <div class="band"></div>
+              <div class="web">www.gss-group.net</div>
+              <div class="g">G-1042</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+<script>
+  const $ = id => document.getElementById(id);
+  function syncSubmitter(){
+    const o = $('submitter').selectedOptions[0];
+    const name = o.dataset.name || '—', dg = o.dataset.desig || '', hasSig = o.dataset.sig === '1';
+    $('rNm').textContent = name; $('rDg').textContent = dg ? '· ' + dg : '';
+    $('rSig').textContent = hasSig ? 'توقيع محفوظ' : 'لا يوجد توقيع';
+    $('rSig').className = 'sig ' + (hasSig ? 'has' : 'no');
+    $('vNm').textContent = name; $('vDg').textContent = dg;
+    // sign checkbox availability follows the picked employee
+    const chk = $('signChk'), line = $('signLine'), hint = $('signHint');
+    chk.disabled = !hasSig;
+    if(!hasSig){ chk.checked = false; line.classList.add('disabled');
+      hint.textContent = 'لا يوجد توقيع محفوظ لهذا الموظف — سيُطبع خط توقيع فارغ.'; }
+    else { line.classList.remove('disabled');
+      hint.textContent = 'إن أُلغيت، يُطبع خط توقيع فارغ للتوقيع باليد.'; }
+    syncSign();
+  }
+  function syncSign(){
+    const on = $('signChk').checked && !$('signChk').disabled;
+    $('vSig').className = 'sigimg ' + (on ? 'signed' : 'blank');
+  }
+  function syncFields(){
+    $('vSubject').textContent = $('subject').value;
+    $('vTo').textContent = $('recipient').selectedOptions[0].dataset.name || '';
+    $('vBody').innerHTML = $('body').innerHTML;
+    const d = $('pdate').value; // yyyy-mm-dd -> dd-mm-yyyy
+    if(d){ const [y,m,da]=d.split('-'); $('vDate').textContent = `${da}-${m}-${y}`; }
+  }
+  document.querySelectorAll('.rt-toolbar button').forEach(b=>{
+    b.addEventListener('click',e=>{e.preventDefault();document.execCommand(b.dataset.cmd,false,null);
+      $('body').focus();syncFields();});
+  });
+  ['input','keyup','change'].forEach(ev=>{
+    $('subject').addEventListener(ev,syncFields);
+    $('recipient').addEventListener(ev,syncFields);
+    $('pdate').addEventListener(ev,syncFields);
+    $('body').addEventListener(ev,syncFields);
+  });
+  $('submitter').addEventListener('change',syncSubmitter);
+  $('signChk').addEventListener('change',syncSign);
+  syncSubmitter(); syncFields();
+</script>
+</body>
+</html>
