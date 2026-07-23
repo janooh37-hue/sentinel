@@ -15,6 +15,9 @@ def test_report_template_tokens_and_no_ref():
     assert "الرقم" not in text
     # body + author tokens present, author labelled and ordered name→title→sig
     assert "{{ body }}" in text
+    assert "{{ date }}" in text
+    assert "{{ recipient_name }}" in text
+    assert "الموضوع" in text
     assert "الاسم: {{ manager_name }}" in text
     assert "المسمى الوظيفي: {{ manager_title }}" in text
     assert "التوقيع: {{ manager_sig }}" in text

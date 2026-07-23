@@ -58,7 +58,7 @@ def main() -> None:
 
     closing_para = Paragraph(closing, sig_para._parent) if closing is not None else None
     if closing_para is not None and not closing_para.text.strip():
-        _set_text(closing_para, "وتفضلوا بقبول فائق الاحترام والتقدير ,,,")
+        _set_text(closing_para, "وتفضلوا بقبول فائق الاحترام والتقدير،،،")
         closing_para.alignment = WD_ALIGN_PARAGRAPH.RIGHT
 
     # Reorder by content swap (no element moves): top→bottom becomes name,
