@@ -1,5 +1,6 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { render, screen, waitFor } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 
 import { api } from '@/lib/api'
@@ -85,6 +86,53 @@ describe('PermitDetailDialog', () => {
     expect(screen.getByText('White')).toBeInTheDocument()
     // Print button present when book_id is set
     expect(screen.getByRole('button', { name: /print permit/i })).toBeInTheDocument()
+  })
+
+  it('Add vehicle sends the chosen emirate', async () => {
+    const addSpy = vi
+      .spyOn(api, 'addPermitVehicle')
+      .mockResolvedValue({ ...basePermit } as never)
+
+    renderDetail()
+    await waitFor(() => expect(screen.getByText('Test Corp')).toBeInTheDocument())
+
+    await userEvent.type(screen.getByPlaceholderText('Plate no.'), 'A 5')
+    await userEvent.selectOptions(screen.getByLabelText(/emirate/i), 'دبي')
+    await userEvent.click(screen.getByRole('button', { name: /add vehicle/i }))
+
+    await waitFor(() =>
+      expect(addSpy).toHaveBeenCalledWith(99, expect.objectContaining({ plate_emirate: 'دبي' })),
+    )
+  })
+
+  it('sets the emirate on a vehicle already on the permit', async () => {
+    const patchSpy = vi
+      .spyOn(api, 'updatePermitVehicle')
+      .mockResolvedValue({ ...basePermit } as never)
+
+    renderDetail({
+      vehicles: [
+        {
+          id: 5,
+          permit_id: 99,
+          plate_no: 'A 1',
+          plate_emirate: null,
+          make_model: null,
+          driver_name: null,
+          licence_doc_name: null,
+          created_at: '2026-07-01T00:00:00',
+          removed_at: null,
+          colour: null,
+          reg_expiry: null,
+        },
+      ],
+    })
+    await waitFor(() => expect(screen.getByText('Test Corp')).toBeInTheDocument())
+
+    await userEvent.selectOptions(screen.getByLabelText(/emirate — a 1/i), 'دبي')
+    await waitFor(() =>
+      expect(patchSpy).toHaveBeenCalledWith(99, 5, expect.objectContaining({ plate_emirate: 'دبي' })),
+    )
   })
 
   it('hides Print button when book_id is absent', async () => {

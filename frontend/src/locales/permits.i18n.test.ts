@@ -14,6 +14,7 @@ const KEYS = [
   'permits.actions.printPermit',
   'permits.vehicle.colour',
   'permits.vehicle.vehicleType',
+  'permits.vehicle.plateEmirate',
   'permits.vehicle.plateCategory',
   'permits.vehicle.trafficNo',
   'permits.vehicle.regExpiry',

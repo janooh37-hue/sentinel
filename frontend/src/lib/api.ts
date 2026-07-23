@@ -1092,6 +1092,9 @@ export const api = {
     request<PermitRead>('POST', `/permits/${id}/vehicles`, body),
   removePermitVehicle: (id: number, vehicleId: number) =>
     request<PermitRead>('DELETE', `/permits/${id}/vehicles/${vehicleId}`),
+  /** Partial-update a vehicle already on the permit (e.g. back-fill its emirate). */
+  updatePermitVehicle: (id: number, vehicleId: number, body: Partial<PermitVehicleCreate>) =>
+    request<PermitRead>('PATCH', `/permits/${id}/vehicles/${vehicleId}`, body),
   /** Upload (or replace) the scanned paper permit. */
   uploadPermitDocument: (id: number, file: File) => {
     const form = new FormData()

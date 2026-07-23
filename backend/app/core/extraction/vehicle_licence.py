@@ -39,6 +39,40 @@ _EXPIRY_RE = re.compile(
     r"(?i)(?:reg\.?\s*)?(?:expiry|exp)\s*(?:date)?\s*[:\-]?\s*(\d{2}[/-]\d{2}[/-]\d{4})"
 )
 
+# Canonical Arabic emirate name keyed by its alphabetic OCR aliases (English
+# name and the common 3-letter plate abbreviation). The dropdown stores the
+# canonical Arabic value and the 1/5 letter renders it directly, so the scan
+# must collapse whatever it read onto one of these — else the field is dropped
+# and the operator picks. The plate can't tell us the emirate (a number is
+# Abu Dhabi or Sharjah, a letter is one of five), so this reads it off the
+# licence, not the code.
+_EMIRATE_ALIASES: dict[str, str] = {
+    "abudhabi": "أبوظبي",
+    "dubai": "دبي",
+    "dxb": "دبي",
+    "sharjah": "الشارقة",
+    "shj": "الشارقة",
+    "ajman": "عجمان",
+    "ajm": "عجمان",
+    "ummalquwain": "أم القيوين",
+    "uaq": "أم القيوين",
+    "rasalkhaimah": "رأس الخيمة",
+    "rak": "رأس الخيمة",
+    "fujairah": "الفجيرة",
+    "fuj": "الفجيرة",
+}
+_CANON_EMIRATES = frozenset(_EMIRATE_ALIASES.values())
+
+
+def normalize_emirate(raw: str | None) -> str | None:
+    """Map an OCR'd place-of-issue to its canonical Arabic name, or None."""
+    if not raw:
+        return None
+    raw = raw.strip()
+    if raw in _CANON_EMIRATES:
+        return raw
+    return _EMIRATE_ALIASES.get(re.sub(r"[^a-z]", "", raw.lower()))
+
 
 def extract_vehicle_licence(text: str) -> dict[str, str]:
     if not text or not text.strip():
@@ -53,4 +87,10 @@ def extract_vehicle_licence(text: str) -> dict[str, str]:
         d = parse_date(m.group(1))
         if d:
             out["reg_expiry"] = d.isoformat()
+    if "plate_emirate" in out:
+        canonical = normalize_emirate(out["plate_emirate"])
+        if canonical:
+            out["plate_emirate"] = canonical
+        else:
+            del out["plate_emirate"]
     return out

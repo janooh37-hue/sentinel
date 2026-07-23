@@ -79,6 +79,25 @@ class PermitVehicleCreate(BaseModel):
         return v or None
 
 
+class PermitVehicleUpdate(BaseModel):
+    """PATCH /permits/{id}/vehicles/{vid} — edit fields of an existing vehicle.
+
+    A partial patch: only the fields sent are changed (``exclude_unset`` in the
+    service). Used to back-fill the plate emirate on vehicles added before the
+    dropdown existed.
+    """
+
+    plate_no: str | None = Field(default=None, max_length=32)
+    plate_emirate: str | None = Field(default=None, max_length=32)
+    make_model: str | None = Field(default=None, max_length=128)
+    driver_name: str | None = Field(default=None, max_length=255)
+    colour: str | None = Field(default=None, max_length=32)
+    vehicle_type: str | None = Field(default=None, max_length=64)
+    plate_category: str | None = Field(default=None, max_length=32)
+    traffic_no: str | None = Field(default=None, max_length=32)
+    reg_expiry: date | None = None
+
+
 class PermitVehicleRead(ORMBase):
     id: int
     permit_id: int

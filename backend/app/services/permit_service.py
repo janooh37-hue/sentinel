@@ -41,6 +41,7 @@ from app.schemas.permit import (
     PermitUpdate,
     PermitVehicleCreate,
     PermitVehicleRead,
+    PermitVehicleUpdate,
     PermitVisitCreate,
     PersonIdScan,
     VehicleLicenceScan,
@@ -501,6 +502,42 @@ def add_vehicle(
     row.updated_at = _utcnow()
     db.commit()
     _audit(db, "permit.vehicle_added", permit_id, actor, {"plate_no": payload.plate_no})
+    regenerate_permit_book(db, get_permit(db, permit_id), actor=actor)
+    return get_permit(db, permit_id)
+
+
+def update_vehicle(
+    db: Session,
+    permit_id: int,
+    vehicle_id: int,
+    payload: PermitVehicleUpdate,
+    *,
+    actor: str | None = None,
+) -> Permit:
+    row = get_permit(db, permit_id)
+    if row.status == "revoked":
+        raise ValidationFailedError(
+            "PERMIT_REVOKED", "Cannot edit vehicles on a revoked permit.", id=permit_id
+        )
+    vehicle = next((v for v in row.vehicles if v.id == vehicle_id), None)
+    if vehicle is None:
+        raise NotFoundError(
+            "PERMIT_VEHICLE_NOT_FOUND",
+            f"Vehicle {vehicle_id} is not on permit {permit_id}",
+            permit_id=permit_id,
+            vehicle_id=vehicle_id,
+        )
+    if vehicle.removed_at is not None:
+        raise ValidationFailedError(
+            "PERMIT_VEHICLE_REMOVED",
+            "This vehicle has already been removed from the permit.",
+            vehicle_id=vehicle_id,
+        )
+    for field, value in payload.model_dump(exclude_unset=True).items():
+        setattr(vehicle, field, value)
+    row.updated_at = _utcnow()
+    db.commit()
+    _audit(db, "permit.vehicle_updated", permit_id, actor, {"vehicle_id": vehicle_id})
     regenerate_permit_book(db, get_permit(db, permit_id), actor=actor)
     return get_permit(db, permit_id)
 

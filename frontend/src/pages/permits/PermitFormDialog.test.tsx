@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { render, screen } from '@testing-library/react'
+import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 
@@ -64,5 +64,22 @@ describe('PermitFormDialog', () => {
     // The colour field should be pre-filled
     expect(await screen.findByDisplayValue('White')).toBeInTheDocument()
     expect(screen.getByDisplayValue('A 1')).toBeInTheDocument()
+  })
+
+  it('offers a 7-emirate dropdown and the licence scan pre-selects it', async () => {
+    vi.spyOn(api, 'scanVehicleLicence').mockResolvedValue({ plate_no: 'A 1', plate_emirate: 'دبي' })
+
+    renderForm()
+    await userEvent.click(screen.getByRole('button', { name: /add another vehicle/i }))
+
+    const emirate = screen.getByLabelText(/emirate/i) as HTMLSelectElement
+    // 7 emirates + the placeholder option
+    expect(emirate.querySelectorAll('option')).toHaveLength(8)
+
+    await userEvent.upload(
+      screen.getByLabelText(/scan licence/i),
+      new File(['x'], 'm.jpg', { type: 'image/jpeg' }),
+    )
+    await waitFor(() => expect(emirate.value).toBe('دبي'))
   })
 })

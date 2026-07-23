@@ -29,6 +29,7 @@ import {
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { plusDaysISO, todayISO } from './permitUtils'
+import { EMIRATES } from './emirates'
 
 /** Default validity window for a new permit (days). Long enough that a fresh
  * permit isn't immediately flagged "expiring". */
@@ -451,14 +452,29 @@ export function PermitFormDialog({ open, permit, onOpenChange, onSaved }: Props)
               ) : (
                 vehicles.map((row) => (
                   <div key={row.key} className="flex flex-col gap-1.5">
-                    {/* Row 1: plate + make/model + remove */}
-                    <div className="grid grid-cols-1 gap-2 sm:grid-cols-[1fr_1fr_auto]">
+                    {/* Row 1: plate + emirate + make/model + remove */}
+                    <div className="grid grid-cols-1 gap-2 sm:grid-cols-[1fr_0.9fr_1fr_auto]">
                       <input
                         className={`${inputCls} font-mono`}
                         placeholder={t('permits.vehicle.plate')}
                         value={row.plate_no ?? ''}
                         onChange={(e) => patchVehicle(row.key, { plate_no: e.target.value })}
                       />
+                      <select
+                        className={inputCls}
+                        aria-label={t('permits.vehicle.plateEmirate')}
+                        value={row.plate_emirate ?? ''}
+                        onChange={(e) =>
+                          patchVehicle(row.key, { plate_emirate: e.target.value || undefined })
+                        }
+                      >
+                        <option value="">{t('permits.vehicle.plateEmirate')}</option>
+                        {EMIRATES.map((em) => (
+                          <option key={em.value} value={em.value}>
+                            {em.label}
+                          </option>
+                        ))}
+                      </select>
                       <input
                         className={inputCls}
                         placeholder={t('permits.vehicle.makeModel')}

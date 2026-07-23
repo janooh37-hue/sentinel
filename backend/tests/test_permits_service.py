@@ -13,6 +13,7 @@ from app.schemas.permit import (
     PermitPersonCreate,
     PermitUpdate,
     PermitVehicleCreate,
+    PermitVehicleUpdate,
     PermitVisitCreate,
 )
 from app.services import document_service
@@ -290,6 +291,23 @@ def test_add_and_remove_vehicle(db_session):
     assert svc.to_read(row).vehicle_count == 0
     with pytest.raises(NotFoundError):
         svc.remove_vehicle(db_session, row.id, 9999)
+
+
+def test_update_vehicle_sets_emirate(db_session):
+    row = _mk(db_session)
+    row = svc.add_vehicle(db_session, row.id, PermitVehicleCreate(plate_no="C 111"))
+    vid = svc.to_read(row).vehicles[0].id
+    row = svc.update_vehicle(db_session, row.id, vid, PermitVehicleUpdate(plate_emirate="دبي"))
+    v = svc.to_read(row).vehicles[0]
+    assert v.plate_emirate == "دبي"
+    # A partial patch must leave the fields it didn't set untouched.
+    assert v.plate_no == "C 111"
+
+
+def test_update_vehicle_unknown_id_raises(db_session):
+    row = _mk(db_session)
+    with pytest.raises(NotFoundError):
+        svc.update_vehicle(db_session, row.id, 9999, PermitVehicleUpdate(plate_emirate="دبي"))
 
 
 def test_attach_person_and_vehicle_documents(db_session, tmp_path, monkeypatch):

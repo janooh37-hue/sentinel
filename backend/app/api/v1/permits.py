@@ -43,6 +43,7 @@ from app.schemas.permit import (
     PermitSummary,
     PermitUpdate,
     PermitVehicleCreate,
+    PermitVehicleUpdate,
     PermitVisitCreate,
     PermitVisitRead,
     PersonIdScan,
@@ -279,6 +280,18 @@ def add_vehicle(
     user: Annotated[User, Depends(require_capability("permits.manage"))],
 ) -> PermitRead:
     row = permit_service.add_vehicle(db, permit_id, payload, actor=user.email)
+    return permit_service.to_read(row, db=db)
+
+
+@router.patch("/{permit_id}/vehicles/{vehicle_id}", response_model=PermitRead)
+def update_vehicle(
+    permit_id: int,
+    vehicle_id: int,
+    payload: PermitVehicleUpdate,
+    db: Annotated[Session, Depends(get_db)],
+    user: Annotated[User, Depends(require_capability("permits.manage"))],
+) -> PermitRead:
+    row = permit_service.update_vehicle(db, permit_id, vehicle_id, payload, actor=user.email)
     return permit_service.to_read(row, db=db)
 
 

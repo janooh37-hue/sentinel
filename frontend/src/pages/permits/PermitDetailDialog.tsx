@@ -28,6 +28,7 @@ import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import { useCapabilities } from '@/lib/useCapabilities'
 import { ZoneBadge } from './ZoneBadge'
 import { fmtDate, statusTone } from './permitUtils'
+import { EMIRATES } from './emirates'
 
 const inputCls =
   'h-9 rounded-md border border-input bg-surface px-3 text-sm text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring'
@@ -62,6 +63,7 @@ export function PermitDetailDialog({ permitId, open, onOpenChange, onEdit }: Pro
   const [personUae, setPersonUae] = useState('')
   const [personNationality, setPersonNationality] = useState('')
   const [vehiclePlate, setVehiclePlate] = useState('')
+  const [vehiclePlateEmirate, setVehiclePlateEmirate] = useState('')
   const [vehicleMakeModel, setVehicleMakeModel] = useState('')
   const [vehicleColour, setVehicleColour] = useState('')
   const [vehicleType, setVehicleType] = useState('')
@@ -169,6 +171,7 @@ export function PermitDetailDialog({ permitId, open, onOpenChange, onEdit }: Pro
     mutationFn: () =>
       api.addPermitVehicle(permitId, {
         plate_no: vehiclePlate.trim() || null,
+        plate_emirate: vehiclePlateEmirate.trim() || null,
         make_model: vehicleMakeModel.trim() || null,
         colour: vehicleColour.trim() || null,
         vehicle_type: vehicleType.trim() || null,
@@ -179,6 +182,7 @@ export function PermitDetailDialog({ permitId, open, onOpenChange, onEdit }: Pro
     onSuccess: () => {
       invalidate()
       setVehiclePlate('')
+      setVehiclePlateEmirate('')
       setVehicleMakeModel('')
       setVehicleColour('')
       setVehicleType('')
@@ -192,6 +196,18 @@ export function PermitDetailDialog({ permitId, open, onOpenChange, onEdit }: Pro
   const removeVehicle = useMutation({
     mutationFn: (vehicleId: number) => api.removePermitVehicle(permitId, vehicleId),
     onSuccess: invalidate,
+    onError: onErr,
+  })
+
+  // Back-fill / correct the plate emirate on a vehicle already on the permit
+  // (older vehicles were created before the dropdown existed).
+  const updateVehicleEmirate = useMutation({
+    mutationFn: ({ vehicleId, plate_emirate }: { vehicleId: number; plate_emirate: string }) =>
+      api.updatePermitVehicle(permitId, vehicleId, { plate_emirate: plate_emirate || null }),
+    onSuccess: () => {
+      invalidate()
+      toast.success(t('common.savedToast'))
+    },
     onError: onErr,
   })
 
@@ -237,6 +253,7 @@ export function PermitDetailDialog({ permitId, open, onOpenChange, onEdit }: Pro
     try {
       const result = await api.scanVehicleLicence(file)
       if (result.plate_no) setVehiclePlate(result.plate_no)
+      if (result.plate_emirate) setVehiclePlateEmirate(result.plate_emirate)
       if (result.make_model) setVehicleMakeModel(result.make_model)
       if (result.colour) setVehicleColour(result.colour)
       if (result.vehicle_type) setVehicleType(result.vehicle_type)
@@ -271,7 +288,7 @@ export function PermitDetailDialog({ permitId, open, onOpenChange, onEdit }: Pro
 
   return (
     <DialogRoot open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl">
+      <DialogContent className="max-w-4xl">
         <DialogHeader>
           <DialogTitle>
             {permit ? t('permits.detail.title', { no: permit.permit_no ?? permit.id }) : t('common.loading')}
@@ -524,12 +541,32 @@ export function PermitDetailDialog({ permitId, open, onOpenChange, onEdit }: Pro
                         <div className="min-w-0">
                           <div className="truncate font-medium text-foreground" dir="auto">
                             <span className="font-mono">{v.plate_no ?? t('permits.vehicle.noPlate')}</span>
-                            {v.plate_emirate && (
+                            {!(canManage && !isRevoked) && v.plate_emirate && (
                               <span className="ms-1.5 text-xs font-normal text-muted-foreground">
                                 {v.plate_emirate}
                               </span>
                             )}
                           </div>
+                          {canManage && !isRevoked && (
+                            <select
+                              className={`${inputCls} mt-1 h-8 w-40`}
+                              aria-label={`${t('permits.vehicle.plateEmirate')}${v.plate_no ? ` — ${v.plate_no}` : ''}`}
+                              value={v.plate_emirate ?? ''}
+                              onChange={(e) =>
+                                updateVehicleEmirate.mutate({
+                                  vehicleId: v.id,
+                                  plate_emirate: e.target.value,
+                                })
+                              }
+                            >
+                              <option value="">{t('permits.vehicle.plateEmirate')}</option>
+                              {EMIRATES.map((em) => (
+                                <option key={em.value} value={em.value}>
+                                  {em.label}
+                                </option>
+                              ))}
+                            </select>
+                          )}
                           {(v.make_model || v.driver_name || v.colour || v.vehicle_type) && (
                             <div className="truncate text-xs text-muted-foreground">
                               {[v.make_model, v.colour, v.vehicle_type, v.driver_name].filter(Boolean).join(' · ')}
@@ -569,13 +606,26 @@ export function PermitDetailDialog({ permitId, open, onOpenChange, onEdit }: Pro
                 {/* Add vehicle (manage + not revoked) */}
                 {canManage && !isRevoked && (
                   <div className="flex flex-col gap-2">
-                    <div className="grid grid-cols-1 gap-2 sm:grid-cols-[1fr_1fr_auto]">
+                    <div className="grid grid-cols-1 gap-2 sm:grid-cols-[1fr_0.9fr_1fr_auto]">
                       <input
                         className={inputCls}
                         placeholder={t('permits.vehicle.plate')}
                         value={vehiclePlate}
                         onChange={(e) => setVehiclePlate(e.target.value)}
                       />
+                      <select
+                        className={inputCls}
+                        aria-label={t('permits.vehicle.plateEmirate')}
+                        value={vehiclePlateEmirate}
+                        onChange={(e) => setVehiclePlateEmirate(e.target.value)}
+                      >
+                        <option value="">{t('permits.vehicle.plateEmirate')}</option>
+                        {EMIRATES.map((em) => (
+                          <option key={em.value} value={em.value}>
+                            {em.label}
+                          </option>
+                        ))}
+                      </select>
                       <input
                         className={inputCls}
                         placeholder={t('permits.vehicle.makeModel')}
