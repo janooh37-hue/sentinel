@@ -166,18 +166,30 @@ def create_word_session(
     db: Annotated[Session, Depends(get_db)],
     user: Annotated[User, Depends(require_capability("books.manage"))],
 ) -> WordSessionRead:
-    """Create a classified (or plain) General Book with a Word-editable working docx."""
-    info = word_book_service.create_word_book(
-        db,
-        user=user,
-        classification_code=payload.classification_code,
-        recipient_id=payload.recipient_id,
-        subject=payload.subject,
-        cc=payload.cc,
-        manager_id=payload.manager_id,
-        template_name=payload.template_name,
-        table_rows=payload.table_rows,
-    )
+    """Create a General Book, or a no-ref Report when a signer is given, with a
+    Word-editable working docx."""
+    if payload.signer_employee_id is not None:
+        info = word_book_service.create_report_word_book(
+            db,
+            user=user,
+            signer_employee_id=payload.signer_employee_id,
+            recipient_id=payload.recipient_id,
+            subject=payload.subject,
+            date=payload.date,
+            sign=payload.sign,
+        )
+    else:
+        info = word_book_service.create_word_book(
+            db,
+            user=user,
+            classification_code=payload.classification_code,
+            recipient_id=payload.recipient_id,
+            subject=payload.subject,
+            cc=payload.cc,
+            manager_id=payload.manager_id,
+            template_name=payload.template_name,
+            table_rows=payload.table_rows,
+        )
     return WordSessionRead(
         book_id=info.book_id,
         ref_number=info.ref_number,

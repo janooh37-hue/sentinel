@@ -4,8 +4,43 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from app.db.models import Book, BookCategory, BookEditSession, Employee, User
+import pytest
+from sqlalchemy import create_engine
+from sqlalchemy.orm import Session, sessionmaker
+
+from app.db import session as session_mod
+from app.db.models import Base, Book, BookCategory, BookEditSession, Employee, User
 from app.db.models import BookEditSession as _BES  # noqa: F401
+from app.db.session import attach_sqlite_pragmas
+from app.services import perm_service
+
+
+# File-based SQLite with check_same_thread=False so TestClient (runs in a
+# worker thread) can reuse the same connection created in the test thread.
+@pytest.fixture()
+def api_db(monkeypatch, tmp_path: Path) -> Session:
+    db_file = tmp_path / "word_report_session.db"
+    eng = create_engine(
+        f"sqlite:///{db_file}",
+        future=True,
+        connect_args={"check_same_thread": False},
+    )
+    attach_sqlite_pragmas(eng, wal=False)
+    Base.metadata.create_all(eng)
+    TestSession = sessionmaker(bind=eng, autoflush=False, expire_on_commit=False, future=True)
+    monkeypatch.setattr(session_mod, "engine", eng)
+    monkeypatch.setattr(session_mod, "SessionLocal", TestSession)
+    db = TestSession()
+    perm_service.seed_role_defaults(db)
+    try:
+        yield db
+    finally:
+        db.close()
+
+
+@pytest.fixture()
+def db_session(api_db: Session) -> Session:
+    return api_db
 
 
 def _seed_gs(db) -> None:
@@ -91,3 +126,34 @@ def test_create_report_word_book(db_session):
     assert sess.signer_employee_id == "G1042"
     assert sess.sign_on_finish is True
     assert Path(sess.working_path).is_file()  # working docx rendered
+
+
+def test_create_word_session_dispatches_report(db_session):
+    from fastapi.testclient import TestClient
+
+    from app.api.deps import get_current_user, get_db  # mirror test_reports_api.py's imports
+    from app.db.models import Employee, User
+    from app.main import create_app
+
+    u = User(email="op2@test.ae", password_hash="x", role="admin", status="active")
+    db_session.add(u)
+    db_session.add(Employee(id="G1042", name_en="Muhannad", name_ar="مهند", position="Head"))
+    db_session.commit()
+    db_session.refresh(u)
+
+    app = create_app()
+    app.dependency_overrides[get_db] = lambda: db_session
+    app.dependency_overrides[get_current_user] = lambda: u
+    client = TestClient(app, raise_server_exceptions=True)
+
+    r = client.post(
+        "/api/v1/books/word-sessions",
+        json={
+            "subject": "تقرير",
+            "signer_employee_id": "G1042",
+            "sign": True,
+            "date": "2026-07-23",
+        },
+    )
+    assert r.status_code == 201, r.text
+    assert r.json()["ref_number"].startswith("REPORT-")
