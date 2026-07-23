@@ -1029,6 +1029,7 @@
       "passport": "Passport",
       "material": "Material Request",
       "generalBook": "General Book",
+      "report": "Report",
       "other": "Other records"
     },
     "spine": {

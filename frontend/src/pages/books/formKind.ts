@@ -41,17 +41,28 @@ export const GENERAL_BOOK_KIND: FormKind = {
   prefixes: [],
 }
 
+export const REPORT_KIND: FormKind = {
+  id: 'report',
+  glyph: '📊',
+  labelKey: 'books.formKind.report',
+  prefixes: [],
+}
+
 export interface FormKindOpts {
   /** Classified General Books carry a REAL operator subject — never parse it
    * as "<form> — <employee>" (a subject containing an em-dash used to display
    * as just its last word, labeled "Other records"). */
   classified?: boolean
+  /** When the book's current_template_id equals "Report", return REPORT_KIND
+   * unconditionally — template identity wins over subject parsing. */
+  template_id?: string | null
 }
 
 export function formKindOf(
   subject: string | null | undefined,
   opts?: FormKindOpts,
 ): FormKind {
+  if (opts?.template_id === 'Report') return REPORT_KIND
   if (opts?.classified) return GENERAL_BOOK_KIND
   const s = (subject ?? '').trim().toLowerCase()
   if (!s) return OTHER_KIND
