@@ -157,3 +157,60 @@ def test_create_word_session_dispatches_report(db_session):
     )
     assert r.status_code == 201, r.text
     assert r.json()["ref_number"].startswith("REPORT-")
+
+
+import struct
+import zlib
+
+
+def _png(path: Path) -> None:
+    def ch(tag, data):
+        c = struct.pack(">I", len(data)) + tag + data
+        return c + struct.pack(">I", zlib.crc32(tag + data) & 0xFFFFFFFF)
+
+    path.write_bytes(
+        b"\x89PNG\r\n\x1a\n"
+        + ch(b"IHDR", struct.pack(">IIBBBBB", 1, 1, 8, 2, 0, 0, 0))
+        + ch(b"IDAT", zlib.compress(b"\x00\xff\xff\xff"))
+        + ch(b"IEND", b"")
+    )
+
+
+def test_finish_report_session_embeds_signature(db_session, tmp_path):
+    from datetime import datetime
+
+    from app.db.models import BookEditSession, BookVersion, Document, Employee, Submitter
+    from app.services import word_book_service
+
+    _seed_gs(db_session)
+    sig = tmp_path / "sig.png"
+    _png(sig)
+    db_session.add(Employee(id="G1042", name_en="Muhannad", name_ar="مهند", position="Head"))
+    db_session.add(Employee(id="G3082", name_en="Operator", name_ar="مشغّل", position="Op"))
+    db_session.add(Submitter(employee_id="G1042", name="مهند", stored_sig_path=str(sig)))
+    op = _user(db_session, employee_id="G3082")
+    db_session.commit()
+
+    info = word_book_service.create_report_word_book(
+        db_session,
+        user=op,
+        signer_employee_id="G1042",
+        recipient_id=None,
+        subject="تقرير",
+        date="2026-07-23",
+        sign=True,
+    )
+    # Simulate Word having PUT to the working file.
+    sess = db_session.query(BookEditSession).filter_by(book_id=info.book_id, state="active").one()
+    sess.last_put_at = datetime.now()
+    db_session.commit()
+
+    book = word_book_service.finish_word_session(db_session, user=op, book_id=info.book_id)
+    ver = db_session.query(BookVersion).filter_by(book_id=book.id).one()
+    assert ver.template_id == "Report"
+    assert ver.manager_sig_embedded is True
+    assert ver.signed_pdf_path is not None
+    assert ver.fields["signed"] is True
+    doc = db_session.get(Document, ver.document_id)
+    assert doc.template_id == "Report"
+    assert abs((datetime.now() - ver.created_at).total_seconds()) < 300  # local time

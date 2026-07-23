@@ -358,8 +358,9 @@ def finish_word_session(db: Session, *, user: User, book_id: int) -> Book:
     # ------------------------------------------------------------------
     # 1. Move working docx → stable output dir
     # ------------------------------------------------------------------
-    template_id = _TEMPLATE_ID
-    now = datetime.now(UTC).replace(tzinfo=None)
+    is_report = book.ref_number.startswith("REPORT-")
+    template_id = "Report" if is_report else _TEMPLATE_ID
+    now = datetime.now() if is_report else datetime.now(UTC).replace(tzinfo=None)
     out_dir = _output_dir_for_admin(template_id)
     filename = _build_docx_filename(template_id, book.ref_number.replace("/", "-"), now)
     dest = out_dir / filename
@@ -388,6 +389,7 @@ def finish_word_session(db: Session, *, user: User, book_id: int) -> Book:
         pdf_path=str(pdf_path) if pdf_path else None,
         submission_id=str(uuid.uuid4()),
         role="primary",
+        created_at=now,
     )
     db.add(doc)
     db.flush()  # get doc.id
@@ -411,8 +413,31 @@ def finish_word_session(db: Session, *, user: User, book_id: int) -> Book:
         fields={},
         created_by_user_id=user.id,
         document_id=doc.id,
+        created_at=now,
     )
     db.add(version)
+
+    if is_report and session.sign_on_finish and session.signer_employee_id:
+        from app.db.models import Employee
+        from app.services import document_service, report_service
+
+        _n, _t, sig = report_service._resolve_signer(db, session.signer_employee_id)
+        if sig is not None:
+            db.flush()  # version needs a document_id for render_signed_pdf
+            emp = db.get(Employee, session.signer_employee_id)
+            assert emp is not None  # _resolve_signer already raised if missing
+            names = [n for n in (emp.name_ar, emp.name_en) if n]
+            signed_rel = document_service.render_signed_pdf(
+                db, version=version, signer_signature_path=sig, signer_names=names
+            )
+            version.signed_pdf_path = signed_rel
+            version.signed_by_user_id = user.id
+            version.signed_at = now
+            version.manager_sig_embedded = True
+            version.fields = {
+                "signer_employee_id": session.signer_employee_id,
+                "signed": True,
+            }
 
     # ------------------------------------------------------------------
     # 5. Populate search_text from the finished docx (before commit so the
