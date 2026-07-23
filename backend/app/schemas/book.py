@@ -188,6 +188,11 @@ class WordBookCreate(BaseModel):
     manager_id: int | None = None
     template_name: str | None = None
     table_rows: list[dict[str, str]] | None = None
+    # Report path only: present ⇒ create a Report (no classification/ref). `sign`
+    # embeds the signer's signature at Finish; `date` is the report's document date.
+    signer_employee_id: str | None = None
+    sign: bool = True
+    date: str | None = None
 
 
 class WordSessionRead(BaseModel):

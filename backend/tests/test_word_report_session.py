@@ -35,3 +35,17 @@ def test_edit_session_carries_signer_and_sign(db_session):
     db_session.refresh(s)
     assert s.signer_employee_id == "G3019"
     assert s.sign_on_finish is True
+
+
+def test_wordbookcreate_accepts_report_fields():
+    from app.schemas.book import WordBookCreate
+
+    m = WordBookCreate(subject="s", signer_employee_id="G3019", sign=False, date="2026-07-23")
+    assert m.signer_employee_id == "G3019"
+    assert m.sign is False
+    assert m.date == "2026-07-23"
+    # General Book payload unaffected — the new fields default cleanly.
+    gb = WordBookCreate(subject="s", classification_code="1")
+    assert gb.signer_employee_id is None
+    assert gb.sign is True
+    assert gb.date is None
