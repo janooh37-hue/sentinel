@@ -36,7 +36,7 @@ import { toast } from 'sonner'
 import { shouldShowNotifyToggle } from './notifyToggle'
 import { NotifyEmployeeToggle } from '@/components/notify/NotifyEmployeeToggle'
 import { api, apiErrorMessage } from '@/lib/api'
-import type { DocumentGenerateRequest, ReportCreate, StagedAttachmentRead, TemplateMeta, WordSessionRead } from '@/lib/api'
+import type { DocumentGenerateRequest, StagedAttachmentRead, TemplateMeta, WordSessionRead } from '@/lib/api'
 import type { ExtractionResponse } from '@/lib/extraction'
 import type { TemplateDetailResponse, TemplateField } from '@/components/application/types'
 import { buildZodSchema } from '@/lib/applicationFormSchema'
@@ -387,29 +387,6 @@ export function ApplicationPage(): React.JSX.Element {
     },
   })
 
-  // Report mutation — one-shot synchronous submit; navigates directly to the
-  // created book record (its PDF is viewable there) instead of the job-poll flow.
-  const reportMutation = useMutation({
-    mutationFn: (values: Record<string, unknown>) =>
-      api.createReport({
-        signer_employee_id: String(values.signer_id ?? ''),
-        recipient_id: (values.recipient_id as number | null | undefined) ?? null,
-        subject: String(values.subject ?? ''),
-        date: (values.report_date as string | undefined) ?? null,
-        body_html: String(values.body ?? ''),
-        sign: values.sign !== false,
-      } satisfies ReportCreate),
-    onSuccess: (book) => {
-      void qc.invalidateQueries({ queryKey: ['books'] })
-      toast.success(t('application.toast.saved', { ref: book.ref_number ?? '' }))
-      navigate(`/books?ref=${encodeURIComponent(book.ref_number ?? '')}`)
-    },
-    onError: (err) => {
-      setSubmitError(err instanceof ApiError ? `${err.code}: ${err.message}` : String(err))
-      toast.error(apiErrorMessage(err))
-    },
-  })
-
   // Build the generation payload from current form values. Separated from the
   // submit handler so Preview + Save share the exact same transformation.
   const buildPayload = (
@@ -518,22 +495,22 @@ export function ApplicationPage(): React.JSX.Element {
           manager_id: managerField ? ((values[managerField.id] as number | null | undefined) ?? null) : null,
           template_name: templateName ?? undefined,
           table_rows,
+          sign: true,
         })
       }
     }
 
-    // Report form: one-shot create — skip the job-poll flow entirely.
-    // The result IS the PDF served from the book record, so previewing must
-    // not persist a Book. Only the explicit commit path fires the mutation.
+    // Report form: author body in Word — route through the Word handoff, same as General Book word mode.
     if (isReportForm) {
-      if (!commit) {
-        // preview path: swallow the form submit (Enter/Preview must not create a book)
-        return (e?: React.BaseSyntheticEvent) => {
-          e?.preventDefault()
-        }
-      }
       return form.handleSubmit((values) => {
-        reportMutation.mutate(values as Record<string, unknown>)
+        wordSessionMutation.mutate({
+          subject: String(values.subject ?? '').trim(),
+          recipient_id: (values.recipient_id as number | null | undefined) ?? null,
+          signer_employee_id: String(values.signer_id ?? ''),
+          sign: values.sign !== false,
+          date: (values.report_date as string | undefined) ?? null,
+          cc: [],
+        })
       })
     }
 
@@ -940,8 +917,13 @@ export function ApplicationPage(): React.JSX.Element {
                     // ribbon need an A4-width canvas. Table/grid-heavy forms
                     // (clearance, items, violation checkboxes) need room for
                     // their many columns. Plain forms stay at a tight,
-                    // readable measure.
-                    formWidthClass(schema?.fields)
+                    // readable measure. Report: body is in Word so skip the
+                    // arabic_rich_full width expansion.
+                    formWidthClass(
+                      isReportForm
+                        ? schema?.fields.filter((f) => f.type !== 'arabic_rich_full')
+                        : schema?.fields,
+                    )
                   }
                 >
                   {!isAdminCategory && (
@@ -1034,24 +1016,23 @@ export function ApplicationPage(): React.JSX.Element {
                             </Button>
                           </>
                         ) : isReportForm ? (
-                          // Report form: one-shot create — no Preview step.
+                          // Report form: author body in Word — same Word handoff as General Book.
                           <>
-                            <span />
+                            <p className="text-[0.78em] text-muted-foreground">
+                              {t('books.word.bodyInWord')}
+                            </p>
                             <Button
-                              type="button"
-                              variant="commit"
+                              type="submit"
                               size="commit"
-                              onClick={() => void handleSave()}
                               disabled={
-                                (!isAdminCategory && !selectedEmployee) ||
-                                reportMutation.isPending
+                                wordSessionMutation.isPending
                               }
                               className="min-h-11 disabled:cursor-not-allowed disabled:opacity-50"
+                              style={{ backgroundColor: '#185abd', color: '#fff' }}
                             >
-                              <FileText className="h-3.5 w-3.5" strokeWidth={1.8} aria-hidden />
-                              {reportMutation.isPending
+                              {wordSessionMutation.isPending
                                 ? t('common.loading')
-                                : t('application.actions.saveBook')}
+                                : t('books.word.createAndOpen')}
                               {isAr ? (
                                 <ArrowLeft className="h-3.5 w-3.5" strokeWidth={1.8} aria-hidden />
                               ) : (

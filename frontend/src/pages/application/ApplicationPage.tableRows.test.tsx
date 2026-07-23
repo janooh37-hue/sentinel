@@ -86,6 +86,7 @@ function WordSubmitHarness({
       manager_id: null,
       template_name: undefined,
       table_rows,
+      sign: true,
     })
   }
 

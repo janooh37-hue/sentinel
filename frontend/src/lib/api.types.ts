@@ -1453,7 +1453,8 @@ export interface paths {
         put?: never;
         /**
          * Create Word Session
-         * @description Create a classified (or plain) General Book with a Word-editable working docx.
+         * @description Create a General Book, or a no-ref Report when a signer is given, with a
+         *     Word-editable working docx.
          */
         post: operations["create_word_session_api_v1_books_word_sessions_post"];
         delete?: never;
@@ -1526,26 +1527,6 @@ export interface paths {
          * @description Discard the active Word editing session; void the book if it has no committed versions.
          */
         delete: operations["discard_word_session_api_v1_books__book_id__word_sessions_delete"];
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/books/reports": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Create Report
-         * @description Create a no-classification, no-ref Report signed by a picked employee.
-         */
-        post: operations["create_report_api_v1_books_reports_post"];
-        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -7207,24 +7188,6 @@ export interface components {
             /** New Name */
             new_name: string;
         };
-        /** ReportCreate */
-        ReportCreate: {
-            /** Signer Employee Id */
-            signer_employee_id: string;
-            /** Recipient Id */
-            recipient_id?: number | null;
-            /** Subject */
-            subject: string;
-            /** Date */
-            date?: string | null;
-            /** Body Html */
-            body_html: string;
-            /**
-             * Sign
-             * @default true
-             */
-            sign: boolean;
-        };
         /** ResetPasswordRequest */
         ResetPasswordRequest: {
             /** Password */
@@ -7915,6 +7878,15 @@ export interface components {
             table_rows?: {
                 [key: string]: string;
             }[] | null;
+            /** Signer Employee Id */
+            signer_employee_id?: string | null;
+            /**
+             * Sign
+             * @default true
+             */
+            sign: boolean;
+            /** Date */
+            date?: string | null;
         };
         /** WordSessionRead */
         WordSessionRead: {
@@ -11346,41 +11318,6 @@ export interface operations {
         responses: {
             /** @description Successful Response */
             200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["BookRead"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    create_report_api_v1_books_reports_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: {
-                gssg_session?: string | null;
-            };
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["ReportCreate"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            201: {
                 headers: {
                     [name: string]: unknown;
                 };

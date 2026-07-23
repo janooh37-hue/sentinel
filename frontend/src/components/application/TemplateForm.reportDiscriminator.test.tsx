@@ -5,12 +5,12 @@
  * Before the fix, `isGeneralBook` was true for Report (it has arabic_rich_full),
  * causing the classification picker to show and the body editor to hide.
  *
- * Full ApplicationPage mount is infeasible in this harness (heavy, OOM-prone —
- * see ApplicationPage.tableRows.test.tsx comment block). TemplateForm-level test
- * is the strongest available seam and directly guards the discriminator.
+ * Since Task 8 (report-word-editing), Report's real schema has NO arabic_rich_full
+ * field — the body is authored entirely in Word, not in an in-app editor.
+ * The test schema below reflects the live _fields.json definition.
  *
  * Asserts (per i18n-tests-must-assert-arabic memory note, lng=ar):
- *  - Body editor (arabic_rich_full) IS rendered for Report
+ *  - Body editor (arabic_rich_full) is NOT rendered for Report (no such field in schema)
  *  - Classification picker is NOT rendered for Report
  *
  * Also asserts General Book still gets the classification picker (no regression there).
@@ -56,6 +56,8 @@ import type { TemplateDetailResponse } from './types'
 
 // ── schemas ──────────────────────────────────────────────────────────────────
 
+// Matches the live backend/templates/_fields.json Report definition (Task 8:
+// body field removed — body is now authored in Word via POST /books/word-sessions).
 const REPORT_SCHEMA: TemplateDetailResponse = {
   meta: {
     id: 'Report',
@@ -70,8 +72,10 @@ const REPORT_SCHEMA: TemplateDetailResponse = {
   needs_submitter: false,
   fields: [
     { id: 'signer_id', type: 'employee_picker', label_en: 'Signer', label_ar: 'الموقّع', required: true },
+    { id: 'recipient_id', type: 'recipient_picker', label_en: 'To (Recipient)', label_ar: 'إلى (المستلم)', required: false },
     { id: 'subject', type: 'text', label_en: 'Subject', label_ar: 'الموضوع', required: true },
-    { id: 'body', type: 'arabic_rich_full', label_en: 'Report Body', label_ar: 'نص التقرير', required: true },
+    { id: 'report_date', type: 'date', label_en: 'Date', label_ar: 'التاريخ', required: true },
+    { id: 'sign', type: 'checkbox', label_en: 'Sign now', label_ar: 'توقيع الآن', required: false },
   ],
 }
 
@@ -139,9 +143,9 @@ describe('TemplateForm Report discriminator (Finding 1b)', () => {
     await i18n.changeLanguage('en')
   })
 
-  it('Report: renders the arabic_rich_full body editor', () => {
+  it('Report: does NOT render the arabic_rich_full body editor (no body field in schema)', () => {
     render(<Host templateId="Report" schema={REPORT_SCHEMA} />)
-    expect(screen.getByTestId('rich-editor-body')).toBeInTheDocument()
+    expect(screen.queryByTestId('rich-editor-body')).not.toBeInTheDocument()
   })
 
   it('Report: does NOT render the classification picker', () => {
