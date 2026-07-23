@@ -35,7 +35,7 @@ def _user(db, *, employee_id: str | None = None) -> User:
 
 
 def _write_minimal_png(path: Path) -> None:
-    """Write a 1×1 white PNG — enough for signature embedding to see a real file."""
+    """Write a 1x1 white PNG — enough for signature embedding to see a real file."""
 
     def chunk(tag: bytes, data: bytes) -> bytes:
         c = struct.pack(">I", len(data)) + tag + data
@@ -61,7 +61,7 @@ def test_create_report_no_ref_signer_and_footer(db_session, tmp_path):
 
     _seed_gs(db_session)
 
-    # Write a real 1×1 PNG so stored_sig_path resolves and signed=True
+    # Write a real 1x1 PNG so stored_sig_path resolves and signed=True
     sig_path = tmp_path / "G1042_sig.png"
     _write_minimal_png(sig_path)
 

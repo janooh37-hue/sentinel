@@ -132,19 +132,20 @@ def create_report(
         db.query(func.max(BookVersion.version_no)).filter(BookVersion.book_id == book.id).scalar()
         or 0
     ) + 1
+    embedded = bool(sign and sig_path)
     version = BookVersion(
         book_id=book.id,
         version_no=version_no,
         trigger="initial",
         status="approved",
         template_id=_TEMPLATE_ID,
-        fields={"signer_employee_id": signer_employee_id, "signed": bool(sign and sig_path)},
+        fields={"signer_employee_id": signer_employee_id, "signed": embedded},
         created_by_user_id=operator.id,
         document_id=doc.id,
-        signed_pdf_path=str(pdf_path) if pdf_path else None,
-        signed_by_user_id=operator.id,
-        signed_at=now,
-        manager_sig_embedded=bool(sign and sig_path),
+        signed_pdf_path=str(pdf_path) if (embedded and pdf_path) else None,
+        signed_by_user_id=operator.id if embedded else None,
+        signed_at=now if embedded else None,
+        manager_sig_embedded=embedded,
     )
     db.add(version)
 
