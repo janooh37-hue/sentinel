@@ -67,6 +67,16 @@ Rejected:
 - **Extend `word_book_service` with a report branch** — its mandatory
   `classification_code` and atomic classified-ref allocation directly fight the
   report's requirements, forcing scattered `if report:` bypasses.
+- **Reuse the generic `generate_document` pipeline** (add "Report" to
+  `_fields.json` + the per-template tuples). Tempting — the tile/form/preview
+  come free — but it needs ~9 edits to the shared generation core (serving 15+
+  forms), including new **suppressions** of the header ref-stamp and Aztec/QR,
+  and its signature cluster only embeds *manager*/*submitter* signatures — not an
+  arbitrary **employee** signer (the operator's chosen picker). That is new
+  wiring in the most safety-critical shared code. A thin `report_service` that
+  reuses only the render core (already probed working) keeps the blast radius off
+  every other form. The frontend still reuses the field components + `_fields.json`
+  tile; only the submit branches to a report endpoint.
 - **A new Report model + separate list** — the operator wants it in the General
   Book list; a new table/list is far more code for no benefit.
 
