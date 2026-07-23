@@ -1,4 +1,18 @@
 {
+  "Report": {
+    "category": "admin",
+    "name_en": "Report",
+    "name_ar": "تقرير",
+    "form_number": "300-004",
+    "fields": [
+      { "key": "signer_id", "type": "employee_picker", "label_en": "Signer", "label_ar": "الموقّع", "required": true },
+      { "key": "recipient_id", "type": "recipient_picker", "label_en": "To (Recipient)", "label_ar": "إلى (المستلم)", "required": false },
+      { "key": "subject", "type": "text", "label_en": "Subject", "label_ar": "الموضوع", "required": true },
+      { "key": "report_date", "type": "date", "label_en": "Date", "label_ar": "التاريخ", "required": true },
+      { "key": "body", "type": "arabic_rich_full", "label_en": "Report Body", "label_ar": "نص التقرير", "required": true },
+      { "key": "sign", "type": "checkbox", "label_en": "Sign now", "label_ar": "توقيع الآن", "required": false }
+    ]
+  },
   "Leave Application Form": {
     "category": "personnel",
     "name_en": "Leave Application Form",

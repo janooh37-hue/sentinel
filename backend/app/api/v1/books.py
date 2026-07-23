@@ -57,7 +57,8 @@ from app.schemas.book import (
     WordTemplateTableRead,
 )
 from app.schemas.notify import NotifyMessageRead as NotifyMessageRead
-from app.services import book_service, book_template_service, word_book_service
+from app.schemas.report import ReportCreate
+from app.services import book_service, book_template_service, report_service, word_book_service
 from app.services.book_service import LIST_DEFAULT_LIMIT, LIST_MAX_LIMIT
 
 router = APIRouter(prefix="/books", tags=["books"])
@@ -248,6 +249,29 @@ def reopen_word_session(
         word_url=info.word_url,
         dav_url=info.dav_url,
     )
+
+
+@router.post("/reports", response_model=BookRead, status_code=status.HTTP_201_CREATED)
+def create_report(
+    payload: ReportCreate,
+    db: Annotated[Session, Depends(get_db)],
+    user: Annotated[User, Depends(require_capability("books.manage"))],
+) -> BookRead:
+    """Create a no-classification, no-ref Report signed by a picked employee."""
+    row = report_service.create_report(
+        db,
+        operator=user,
+        signer_employee_id=payload.signer_employee_id,
+        recipient_id=payload.recipient_id,
+        subject=payload.subject,
+        date=payload.date,
+        body_html=payload.body_html,
+        sign=payload.sign,
+    )
+    item = BookRead.model_validate(row)
+    item.subject = book_service.derive_subject(row)
+    item.versions = _build_versions(db, row)
+    return _enrich_path_fields(item, row, db)
 
 
 @router.delete(
