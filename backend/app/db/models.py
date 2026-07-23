@@ -156,6 +156,10 @@ class BookEditSession(Base):
     state: Mapped[str] = mapped_column(String(16), default="active")  # active|finished|discarded
     created_at: Mapped[datetime] = mapped_column(default=_utcnow)
     last_put_at: Mapped[datetime | None] = mapped_column(nullable=True)
+    # Report-only: the picked signer employee + whether to embed their signature
+    # at Finish. Set by create_report_word_book; read by finish_word_session.
+    signer_employee_id: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    sign_on_finish: Mapped[bool | None] = mapped_column(nullable=True)
 
     __table_args__ = (
         Index(
