@@ -69,6 +69,9 @@
   .callout{font-size:11.8px;color:var(--muted);background:#f7f9fc;border:1px solid var(--line);
     border-radius:10px;padding:9px 11px;margin-bottom:14px;line-height:1.5}
   .callout b{color:#344054}
+  .acctnote{font-size:11.8px;color:var(--muted);background:#eef2ff;border:1px solid #dbe4ff;
+    border-radius:9px;padding:8px 11px;margin:-4px 0 14px;line-height:1.5}
+  .acctnote b{color:var(--navy)}
   /* ---- A4 preview ---- */
   .previewWrap{padding:16px;background:#dfe4ea;border-radius:0 0 var(--radius) var(--radius);
     max-height:82vh;overflow:auto}
@@ -130,19 +133,28 @@
       <div class="hd"><h2>📊 إنشاء تقرير</h2><span class="tag">/books/reports</span></div>
       <div class="bd">
         <div class="callout">
-          يُنشأ التقرير <b>موقّعاً فوراً</b> باسم المستخدم المُسجَّل دخوله ويظهر في <b>قائمة الدفتر العام</b>
-          بوسم «تقرير». <b>لا يحمل رقماً صادراً</b> ولا تبويباً.
-          <br>Created already-signed by the signed-in user, listed in the General Book with a «Report» badge. No outbound ref, no classification.
+          يُنشأ التقرير <b>موقّعاً فوراً</b> باسم <b>المُوقِّع المُختار</b> ويظهر في <b>قائمة الدفتر العام</b>
+          بوسم «تقرير». <b>لا يحمل رقماً صادراً</b> ولا تبويباً؛ ويحمل تذييلُ الصفحة حسابَ مُنشئه.
+          <br>Created already-signed by the picked signer, listed in the General Book with a «Report» badge. No outbound ref, no classification; the footer carries the creating account.
         </div>
 
         <label class="field">
-          <span class="lab">المُقدِّم (المُوقِّع) — حسابك</span>
-          <div class="resolved" id="resolved" style="margin-top:0">
-            <span class="nm" id="rNm">مهند عبدالرحمن أل علي</span><span class="dg" id="rDg">· مسؤول وحدة الإرساليات</span>
+          <span class="lab">المُوقِّع — اسم من يوقّع التقرير <span class="req">مطلوب</span></span>
+          <select id="submitter">
+            <option value="s1" data-name="مهند عبدالرحمن أل علي" data-desig="مسؤول وحدة الإرساليات" data-sig="1" selected>مهند عبدالرحمن أل علي — G-1042</option>
+            <option value="s2" data-name="سالم خلفان المزروعي" data-desig="مشرف الأمن" data-sig="1">سالم خلفان المزروعي — G-0887</option>
+            <option value="s3" data-name="أحمد يوسف الحمادي" data-desig="ضابط وردية" data-sig="0">أحمد يوسف الحمادي — G-1190 (بلا توقيع)</option>
+          </select>
+          <div class="resolved" id="resolved">
+            <span class="nm" id="rNm">—</span><span class="dg" id="rDg"></span>
             <span class="sig has" id="rSig">توقيع محفوظ</span>
           </div>
-          <div class="hint">المُقدِّم هو المستخدم المُسجَّل دخوله — يُؤخذ الاسم والمسمّى الوظيفي والتوقيع من حسابك تلقائيّاً (لا يُختار ولا يُكتب).</div>
+          <div class="hint">يظهر في كتلة التوقيع (الاسم / المسمّى الوظيفي / التوقيع) — يُجلب الاسم والمسمّى والتوقيع من سجل الموظف.</div>
         </label>
+
+        <div class="acctnote">
+          تذييل الصفحة (المُقدِّم / الحساب): <b>عبدالله سيف — G-2001</b> · المستخدم المُسجَّل دخوله، تلقائيّاً — مستقلٌّ عن المُوقِّع.
+        </div>
 
         <label class="checkline" id="signLine">
           <input type="checkbox" id="signChk" checked>
@@ -233,7 +245,7 @@
             <div class="ftr">
               <div class="band"></div>
               <div class="web">www.gss-group.net</div>
-              <div class="g">G-1042</div>
+              <div class="g">المُقدِّم/الحساب · G-2001</div>
             </div>
           </div>
         </div>
@@ -243,8 +255,23 @@
 
 <script>
   const $ = id => document.getElementById(id);
-  // Submitter = the signed-in user (fixed). Its name/designation/signature come
-  // from the account; here we hardcode the demo user (who has a signature).
+  // SIGNER = picked employee (name picker) → drives the signature block + sign
+  // availability. FOOTER submitter = signed-in account (fixed, G-2001).
+  function syncSubmitter(){
+    const o = $('submitter').selectedOptions[0];
+    const name = o.dataset.name || '—', dg = o.dataset.desig || '', hasSig = o.dataset.sig === '1';
+    $('rNm').textContent = name; $('rDg').textContent = dg ? '· ' + dg : '';
+    $('rSig').textContent = hasSig ? 'توقيع محفوظ' : 'لا يوجد توقيع';
+    $('rSig').className = 'sig ' + (hasSig ? 'has' : 'no');
+    $('vNm').textContent = name; $('vDg').textContent = dg;   // signature block reflects the signer
+    const chk = $('signChk'), line = $('signLine'), hint = $('signHint');
+    chk.disabled = !hasSig;
+    if(!hasSig){ chk.checked = false; line.classList.add('disabled');
+      hint.textContent = 'لا يوجد توقيع محفوظ لهذا الموظف — سيُطبع خط توقيع فارغ.'; }
+    else { line.classList.remove('disabled');
+      hint.textContent = 'إن أُلغيت، يُطبع خط توقيع فارغ للتوقيع باليد.'; }
+    syncSign();
+  }
   function syncSign(){
     const on = $('signChk').checked && !$('signChk').disabled;
     $('vSig').className = 'sigimg ' + (on ? 'signed' : 'blank');
@@ -266,8 +293,9 @@
     $('pdate').addEventListener(ev,syncFields);
     $('body').addEventListener(ev,syncFields);
   });
+  $('submitter').addEventListener('change',syncSubmitter);
   $('signChk').addEventListener('change',syncSign);
-  syncSign(); syncFields();
+  syncSubmitter(); syncFields();
 </script>
 </body>
 </html>
