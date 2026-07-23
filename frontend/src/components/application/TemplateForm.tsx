@@ -372,7 +372,7 @@ export function TemplateForm({
   }
 
   // General Book Word-mode: detect the arabic_rich_full field.
-  const isGeneralBook = schema.fields.some((f) => f.type === 'arabic_rich_full')
+  const isGeneralBook = schema.fields.some((f) => f.type === 'arabic_rich_full') && templateId !== 'Report'
   // Word mode is purely the body-mode toggle — classification is orthogonal
   // (required for BOTH modes; it only drives the ref, never the editor).
   const wordMode = isGeneralBook && bodyMode === 'word'
