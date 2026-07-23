@@ -417,27 +417,32 @@ def finish_word_session(db: Session, *, user: User, book_id: int) -> Book:
     )
     db.add(version)
 
-    if is_report and session.sign_on_finish and session.signer_employee_id:
+    if is_report:
         from app.db.models import Employee
         from app.services import document_service, report_service
 
-        _n, _t, sig = report_service._resolve_signer(db, session.signer_employee_id)
-        if sig is not None:
-            db.flush()  # version needs a document_id for render_signed_pdf
-            emp = db.get(Employee, session.signer_employee_id)
-            assert emp is not None  # _resolve_signer already raised if missing
-            names = [n for n in (emp.name_ar, emp.name_en) if n]
-            signed_rel = document_service.render_signed_pdf(
-                db, version=version, signer_signature_path=sig, signer_names=names
-            )
-            version.signed_pdf_path = signed_rel
-            version.signed_by_user_id = user.id
-            version.signed_at = now
-            version.manager_sig_embedded = True
-            version.fields = {
-                "signer_employee_id": session.signer_employee_id,
-                "signed": True,
-            }
+        signed = False
+        if session.sign_on_finish and session.signer_employee_id:
+            _n, _t, sig = report_service._resolve_signer(db, session.signer_employee_id)
+            if sig is not None:
+                db.flush()  # version needs a document_id for render_signed_pdf
+                # fields MUST stay {} here → routes render_signed_pdf to _sign_authored_docx,
+                # not the template re-render path (which would blank the Word-authored body).
+                emp = db.get(Employee, session.signer_employee_id)
+                assert emp is not None  # _resolve_signer already raised if missing
+                names = [n for n in (emp.name_ar, emp.name_en) if n]
+                signed_rel = document_service.render_signed_pdf(
+                    db, version=version, signer_signature_path=sig, signer_names=names
+                )
+                version.signed_pdf_path = signed_rel
+                version.signed_by_user_id = user.id
+                version.signed_at = now
+                version.manager_sig_embedded = True
+                signed = True
+        version.fields = {
+            "signer_employee_id": session.signer_employee_id,
+            "signed": signed,
+        }
 
     # ------------------------------------------------------------------
     # 5. Populate search_text from the finished docx (before commit so the
