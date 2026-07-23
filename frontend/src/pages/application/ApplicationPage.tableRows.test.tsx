@@ -179,3 +179,80 @@ describe('ApplicationPage M4d-5 — table_rows in createWordBook payload', () =>
     expect(callArg?.table_rows).toBeUndefined()
   })
 })
+
+// ── Report Word-submit harness ────────────────────────────────────────────
+// Mirrors the isReportForm branch of ApplicationPage.submitWithCommit:
+//   form.handleSubmit((values) => wordSessionMutation.mutate({
+//     subject, signer_employee_id: String(values.signer_id ?? ''), sign, ...
+//   }))
+function ReportWordSubmitHarness({ signerId }: { signerId: number }) {
+  const form = useForm({
+    defaultValues: {
+      subject: 'Test Report',
+      signer_id: signerId,
+      report_date: '2026-07-23',
+      sign: true,
+    },
+  })
+
+  const mutation = useMutation({
+    mutationFn: (body: WordBookCreate) => api.createWordBook(body),
+  })
+
+  const handleSubmit = form.handleSubmit((values) => {
+    mutation.mutate({
+      subject: String(values.subject ?? '').trim(),
+      recipient_id: null,
+      signer_employee_id: String((values as Record<string, unknown>).signer_id ?? ''),
+      sign: (values as Record<string, unknown>).sign !== false,
+      date: (values as Record<string, unknown>).report_date as string | null ?? null,
+      cc: [],
+      manager_id: null,
+    })
+  })
+
+  return (
+    <FormProvider {...form}>
+      <button type="button" onClick={() => void handleSubmit()} data-testid="report-submit">
+        Submit Report
+      </button>
+    </FormProvider>
+  )
+}
+
+describe('ApplicationPage Report — Word-submit wiring', () => {
+  beforeAll(async () => {
+    i18n.addResourceBundle('ar', 'translation', AR_BUNDLE, true, true)
+    await i18n.changeLanguage('ar')
+  })
+  afterAll(async () => {
+    await i18n.changeLanguage('en')
+  })
+
+  it('calls createWordBook with signer_employee_id and sign; does not call createReport', async () => {
+    vi.mocked(api.createWordBook).mockResolvedValue({
+      book_id: 10,
+      ref_number: 'R/1/2026',
+      token: 'rtok',
+      filename: 'report.docx',
+      word_url: 'ms-word://...',
+      dav_url: '/dav/report.docx',
+    })
+
+    wrap(<ReportWordSubmitHarness signerId={42} />)
+
+    fireEvent.click(screen.getByTestId('report-submit'))
+
+    await waitFor(() => expect(vi.mocked(api.createWordBook)).toHaveBeenCalled())
+
+    expect(vi.mocked(api.createWordBook)).toHaveBeenCalledWith(
+      expect.objectContaining({
+        signer_employee_id: '42',
+        sign: true,
+      }),
+    )
+
+    // createReport was removed — the api mock has no such key
+    expect((api as Record<string, unknown>)['createReport']).toBeUndefined()
+  })
+})

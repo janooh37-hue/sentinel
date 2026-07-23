@@ -278,8 +278,8 @@ export function ApplicationPage(): React.JSX.Element {
   // classification picker is REQUIRED: every book (rich-editor or Word) takes
   // its ref from the classified register (1/{tab}/GSSG/{serial}).
   const isGeneralBookForm = !!schema?.fields.some((f) => f.type === 'arabic_rich_full') && selectedTemplate !== 'Report'
-  // Report — one-shot synchronous path: submits to POST /books/reports and
-  // navigates to the created book record instead of going through the job-poll flow.
+  // Report — body authored in Word: routes through the Word handoff
+  // (POST /books/word-sessions), opening WordHandoffDialog for finish/discard.
   const isReportForm = selectedTemplate === 'Report'
 
   // Build Zod schema + RHF instance
