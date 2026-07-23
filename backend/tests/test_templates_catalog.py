@@ -57,3 +57,32 @@ def test_admin_types_labels_have_no_form_prefix():
     assert "نموذج طلب مواد" not in joined
     assert "Acknowledgment Form - استلام المواد" in ADMIN_TYPES
     assert "Material Request Form - طلب مواد" in ADMIN_TYPES
+
+
+def test_every_listed_template_fields_endpoint_loads():
+    """Every listed template's field schema must validate against TemplateField.
+
+    Regression guard: the Report form's _fields.json used field types
+    ('employee_picker', 'checkbox') that were absent from the TemplateField.type
+    Literal, so get_template_fields('Report') raised a 500 and the form never
+    loaded. This asserts no _fields.json entry can carry a type the schema
+    rejects — for *any* template, not just Report.
+    """
+    for meta in template_service.list_templates().items:
+        detail = template_service.get_template_fields(meta.id)
+        assert detail.meta.id == meta.id
+
+
+def test_report_fields_include_signer_picker_and_sign_checkbox():
+    detail = template_service.get_template_fields("Report")
+    by_key = {f.key: f for f in detail.fields}
+    assert by_key["signer_id"].type == "employee_picker"
+    assert by_key["signer_id"].required is True
+    assert by_key["sign"].type == "checkbox"
+
+
+def test_report_tile_has_no_scannable_code_badge():
+    """Report is a no-ref document (no classified register entry), so its
+    Services tile must show 'no code', not 'carries a scannable ref code'."""
+    metas = {m.id: m for m in template_service.list_templates().items}
+    assert metas["Report"].has_code is False

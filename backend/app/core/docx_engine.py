@@ -93,11 +93,12 @@ def aztec_corner_for(template_id: str) -> str:
     return "top-right" if template_id in _AZTEC_TOP_RIGHT else "top-left"
 
 
-# Forms that cannot carry a scannable page-1 code. Empty today — every form
-# fits one (the audit confirmed all 17). Kept as the single source of truth so a
-# FUTURE form/service with no clear corner can be listed here and the Services
-# tile will flag it automatically (operator decision 2026-06-23).
-_NO_CODE_FORMS: frozenset[str] = frozenset()
+# Forms that cannot carry a scannable page-1 code. Report is a no-ref document
+# (no classified register entry, so no ref number and no scannable page-1 code),
+# so its Services tile must show the "no code" indicator, not "carries a code".
+# Kept as the single source of truth so a FUTURE form/service with no clear
+# corner can be listed here and the tile flags it automatically (2026-06-23).
+_NO_CODE_FORMS: frozenset[str] = frozenset({"Report"})
 
 
 def template_has_code(template_id: str) -> bool:

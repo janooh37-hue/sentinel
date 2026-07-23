@@ -55,9 +55,11 @@ class TemplateField(BaseModel):
         "select",
         "manager_picker",
         "submitter_picker",
+        "employee_picker",
         "arabic_rich",
         "arabic_rich_full",
         "signature",
+        "checkbox",
         "hand_sign_checkbox",
         "clearance_table",
         "items_table",
@@ -135,8 +137,7 @@ def get_template_fields(template_id: str) -> TemplateDetailResponse:
     raw_fields: list[dict[str, Any]] = entry.get("fields", [])
     fields = [TemplateField(**f) for f in raw_fields]
     attachment_slots = [
-        AttachmentSlotRead(**asdict(slot))
-        for slot in form_policy.attachment_slots_of(template_id)
+        AttachmentSlotRead(**asdict(slot)) for slot in form_policy.attachment_slots_of(template_id)
     ]
     return TemplateDetailResponse(
         meta=meta,

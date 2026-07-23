@@ -5,7 +5,7 @@ NOT document_service.generate_document (see the design spec)."""
 from __future__ import annotations
 
 import uuid
-from datetime import UTC, datetime
+from datetime import datetime
 from pathlib import Path
 
 from sqlalchemy import func, select
@@ -74,6 +74,12 @@ def create_report(
 ) -> Book:
     name, title, sig_path = _resolve_signer(db, signer_employee_id)
 
+    # Naive LOCAL timestamp — every other book path (document_service) stamps
+    # created_at with datetime.now() (local), so the Report must too or it sorts
+    # 4h behind its siblings in the shared Records list (buries itself off-screen
+    # under a created_at-DESC sort). Do NOT use UTC here (2026-07-23 QA fix).
+    now = datetime.now()
+
     # 1) Book row with a unique internal filing id (invisible on paper).
     book = Book(
         category_id=_GS_CATEGORY,
@@ -84,6 +90,7 @@ def create_report(
         employee_id=None,
         submitted_by_user_id=operator.id,
         approval_state="approved",
+        created_at=now,
     )
     db.add(book)
     db.flush()  # assigns book.id
@@ -110,7 +117,6 @@ def create_report(
     # 3) Render onto the report paper + footer sync. No ref / Aztec stamp.
     settings = get_settings()
     out_dir = _output_dir_for_admin(_TEMPLATE_ID)
-    now = datetime.now(UTC).replace(tzinfo=None)
     docx_path = out_dir / f"Report_{book.ref_number}_{now:%Y%m%d%H%M%S}.docx"
     DocxEngine(settings.templates_dir).fill(_TEMPLATE_ID, data, docx_path)
     _postprocess_general_book_footer(docx_path)
@@ -124,6 +130,7 @@ def create_report(
         pdf_path=str(pdf_path) if pdf_path else None,
         submission_id=str(uuid.uuid4()),
         role="primary",
+        created_at=now,  # local, like Book/BookVersion — dashboard sorts docs by this
     )
     db.add(doc)
     db.flush()
@@ -141,6 +148,7 @@ def create_report(
         template_id=_TEMPLATE_ID,
         fields={"signer_employee_id": signer_employee_id, "signed": embedded},
         created_by_user_id=operator.id,
+        created_at=now,
         document_id=doc.id,
         signed_pdf_path=str(pdf_path) if (embedded and pdf_path) else None,
         signed_by_user_id=operator.id if embedded else None,

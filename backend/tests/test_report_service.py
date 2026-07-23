@@ -10,9 +10,10 @@ from __future__ import annotations
 import secrets
 import struct
 import zlib
+from datetime import datetime
 from pathlib import Path
 
-from app.db.models import BookCategory, BookVersion, Employee, Submitter, User
+from app.db.models import BookCategory, BookVersion, Document, Employee, Submitter, User
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -105,3 +106,17 @@ def test_create_report_no_ref_signer_and_footer(db_session, tmp_path):
     assert ver.fields["signed"] is True
     # generated file exists
     assert ver.document_id is not None
+
+    # created_at must be naive LOCAL wall-clock time, matching every other book
+    # path (document_service). A UTC timestamp would sort the Report hours behind
+    # its siblings and bury it in the Records list. On a non-UTC host a UTC skew
+    # is well outside this window; on a UTC host local==UTC and there is no bug.
+    # Window is generous to tolerate the Word-COM render between the timestamp
+    # and this assertion. Regression guard for the 2026-07-23 QA timezone fix.
+    assert abs((datetime.now() - book.created_at).total_seconds()) < 300
+    assert abs((datetime.now() - ver.created_at).total_seconds()) < 300
+    # Document.created_at too — the dashboard "recent documents" list sorts by it
+    # (dashboard_service), so a UTC skew would drop the Report there as well.
+    doc = db_session.get(Document, ver.document_id)
+    assert doc is not None
+    assert abs((datetime.now() - doc.created_at).total_seconds()) < 300
