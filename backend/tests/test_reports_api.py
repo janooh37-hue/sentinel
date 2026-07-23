@@ -156,6 +156,7 @@ def test_post_reports_creates_signed_report(report_env, tmp_path: Path):
     body = resp.json()
     assert body["classification_code"] is None
     assert body["ref_number"].startswith("REPORT-")
+    assert body["current_template_id"] == "Report"
 
 
 def test_post_reports_requires_books_manage(report_env, tmp_path: Path):

@@ -1531,6 +1531,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/books/reports": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Create Report
+         * @description Create a no-classification, no-ref Report signed by a picked employee.
+         */
+        post: operations["create_report_api_v1_books_reports_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/books/{book_id}/save-as-template": {
         parameters: {
             query?: never;
@@ -3361,6 +3381,291 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/permits": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Permits */
+        get: operations["list_permits_api_v1_permits_get"];
+        put?: never;
+        /** Create Permit */
+        post: operations["create_permit_api_v1_permits_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/permits/summary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Permit Summary */
+        get: operations["permit_summary_api_v1_permits_summary_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/permits/detailed": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Permits Detailed
+         * @description Full permit records (people + vehicles) for the detailed print. One
+         *     request for the whole filtered set, or the selected ``ids``.
+         */
+        get: operations["list_permits_detailed_api_v1_permits_detailed_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/permits/scan-vehicle-licence": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Scan Vehicle Licence */
+        post: operations["scan_vehicle_licence_api_v1_permits_scan_vehicle_licence_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/permits/scan-emirates-id": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Scan Emirates Id */
+        post: operations["scan_emirates_id_api_v1_permits_scan_emirates_id_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/permits/{permit_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Permit */
+        get: operations["get_permit_api_v1_permits__permit_id__get"];
+        put?: never;
+        post?: never;
+        /** Delete Permit */
+        delete: operations["delete_permit_api_v1_permits__permit_id__delete"];
+        options?: never;
+        head?: never;
+        /** Update Permit */
+        patch: operations["update_permit_api_v1_permits__permit_id__patch"];
+        trace?: never;
+    };
+    "/api/v1/permits/{permit_id}/renew": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Renew Permit */
+        post: operations["renew_permit_api_v1_permits__permit_id__renew_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/permits/{permit_id}/revoke": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Revoke Permit */
+        post: operations["revoke_permit_api_v1_permits__permit_id__revoke_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/permits/{permit_id}/people": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Add Person */
+        post: operations["add_person_api_v1_permits__permit_id__people_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/permits/{permit_id}/people/{person_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Remove Person */
+        delete: operations["remove_person_api_v1_permits__permit_id__people__person_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/permits/{permit_id}/people/{person_id}/document": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Download Person Document */
+        get: operations["download_person_document_api_v1_permits__permit_id__people__person_id__document_get"];
+        put?: never;
+        /** Upload Person Document */
+        post: operations["upload_person_document_api_v1_permits__permit_id__people__person_id__document_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/permits/{permit_id}/vehicles": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Add Vehicle */
+        post: operations["add_vehicle_api_v1_permits__permit_id__vehicles_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/permits/{permit_id}/vehicles/{vehicle_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Remove Vehicle */
+        delete: operations["remove_vehicle_api_v1_permits__permit_id__vehicles__vehicle_id__delete"];
+        options?: never;
+        head?: never;
+        /** Update Vehicle */
+        patch: operations["update_vehicle_api_v1_permits__permit_id__vehicles__vehicle_id__patch"];
+        trace?: never;
+    };
+    "/api/v1/permits/{permit_id}/vehicles/{vehicle_id}/document": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Download Vehicle Document */
+        get: operations["download_vehicle_document_api_v1_permits__permit_id__vehicles__vehicle_id__document_get"];
+        put?: never;
+        /** Upload Vehicle Document */
+        post: operations["upload_vehicle_document_api_v1_permits__permit_id__vehicles__vehicle_id__document_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/permits/{permit_id}/document": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Download Permit Document */
+        get: operations["download_permit_document_api_v1_permits__permit_id__document_get"];
+        put?: never;
+        /** Upload Permit Document */
+        post: operations["upload_permit_document_api_v1_permits__permit_id__document_post"];
+        /** Remove Permit Document */
+        delete: operations["remove_permit_document_api_v1_permits__permit_id__document_delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/permits/{permit_id}/visits": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Visits */
+        get: operations["list_visits_api_v1_permits__permit_id__visits_get"];
+        put?: never;
+        /** Record Visit */
+        post: operations["record_visit_api_v1_permits__permit_id__visits_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -3661,6 +3966,22 @@ export interface components {
              */
             upload: string;
         };
+        /** Body_scan_emirates_id_api_v1_permits_scan_emirates_id_post */
+        Body_scan_emirates_id_api_v1_permits_scan_emirates_id_post: {
+            /**
+             * Upload
+             * Format: binary
+             */
+            upload: string;
+        };
+        /** Body_scan_vehicle_licence_api_v1_permits_scan_vehicle_licence_post */
+        Body_scan_vehicle_licence_api_v1_permits_scan_vehicle_licence_post: {
+            /**
+             * Upload
+             * Format: binary
+             */
+            upload: string;
+        };
         /** Body_send_announcement_api_v1_announcements_send_post */
         Body_send_announcement_api_v1_announcements_send_post: {
             /** Group Ids */
@@ -3744,6 +4065,22 @@ export interface components {
              */
             file: string;
         };
+        /** Body_upload_permit_document_api_v1_permits__permit_id__document_post */
+        Body_upload_permit_document_api_v1_permits__permit_id__document_post: {
+            /**
+             * Upload
+             * Format: binary
+             */
+            upload: string;
+        };
+        /** Body_upload_person_document_api_v1_permits__permit_id__people__person_id__document_post */
+        Body_upload_person_document_api_v1_permits__permit_id__people__person_id__document_post: {
+            /**
+             * Upload
+             * Format: binary
+             */
+            upload: string;
+        };
         /** Body_upload_signature_api_v1_employees__employee_id__signature_post */
         Body_upload_signature_api_v1_employees__employee_id__signature_post: {
             /**
@@ -3756,6 +4093,14 @@ export interface components {
         Body_upload_to_vault_api_v1_employees__employee_id__vault_upload_post: {
             /** Kind */
             kind: string;
+            /**
+             * Upload
+             * Format: binary
+             */
+            upload: string;
+        };
+        /** Body_upload_vehicle_document_api_v1_permits__permit_id__vehicles__vehicle_id__document_post */
+        Body_upload_vehicle_document_api_v1_permits__permit_id__vehicles__vehicle_id__document_post: {
             /**
              * Upload
              * Format: binary
@@ -3984,6 +4329,11 @@ export interface components {
             sms?: components["schemas"]["NotifyMessageRead"][];
             /** Search Snippet */
             search_snippet?: string | null;
+            /**
+             * Current Template Id
+             * @description Newest version's template_id — lets the list badge Reports.
+             */
+            readonly current_template_id: string | null;
         };
         /** BookSubmitRequest */
         BookSubmitRequest: {
@@ -6238,6 +6588,426 @@ export interface components {
              */
             created_at: string;
         };
+        /**
+         * PermitCreate
+         * @description POST /permits — issue a new permit.
+         */
+        PermitCreate: {
+            /** Company */
+            company: string;
+            /** Zones */
+            zones: ("green" | "red" | "work_residence")[];
+            /**
+             * Start Date
+             * Format: date
+             */
+            start_date: string;
+            /**
+             * End Date
+             * Format: date
+             */
+            end_date: string;
+            /** Purpose */
+            purpose?: string | null;
+            /** Notes */
+            notes?: string | null;
+            /** People */
+            people?: components["schemas"]["PermitPersonCreate"][];
+            /** Vehicles */
+            vehicles?: components["schemas"]["PermitVehicleCreate"][];
+            /** Manager Id */
+            manager_id?: number | null;
+        };
+        /** PermitListItem */
+        PermitListItem: {
+            /** Id */
+            id: number;
+            /** Permit No */
+            permit_no?: string | null;
+            /** Company */
+            company: string;
+            /** Zones */
+            zones: ("green" | "red" | "work_residence")[];
+            /**
+             * Start Date
+             * Format: date
+             */
+            start_date: string;
+            /**
+             * End Date
+             * Format: date
+             */
+            end_date: string;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "active" | "revoked";
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Derived Status
+             * @default active
+             * @enum {string}
+             */
+            derived_status: "active" | "expiring" | "expired" | "revoked";
+            /**
+             * Duration Days
+             * @default 0
+             */
+            duration_days: number;
+            /** Days Remaining */
+            days_remaining?: number | null;
+            /**
+             * People Count
+             * @default 0
+             */
+            people_count: number;
+            /**
+             * Vehicle Count
+             * @default 0
+             */
+            vehicle_count: number;
+            /**
+             * Has Document
+             * @default false
+             */
+            has_document: boolean;
+        };
+        /** PermitListResponse */
+        PermitListResponse: {
+            /** Items */
+            items: components["schemas"]["PermitListItem"][];
+            /** Total */
+            total: number;
+            /** Limit */
+            limit: number;
+            /** Offset */
+            offset: number;
+        };
+        /** PermitPersonCreate */
+        PermitPersonCreate: {
+            /** Name */
+            name: string;
+            /** Uae Id */
+            uae_id: string;
+            /** Nationality */
+            nationality?: string | null;
+            /** Role */
+            role?: string | null;
+        };
+        /** PermitPersonRead */
+        PermitPersonRead: {
+            /** Id */
+            id: number;
+            /** Permit Id */
+            permit_id: number;
+            /** Name */
+            name: string;
+            /** Uae Id */
+            uae_id?: string | null;
+            /** Nationality */
+            nationality?: string | null;
+            /** Role */
+            role?: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Removed At */
+            removed_at?: string | null;
+            /** Id Doc Name */
+            id_doc_name?: string | null;
+        };
+        /** PermitRead */
+        PermitRead: {
+            /** Id */
+            id: number;
+            /** Permit No */
+            permit_no?: string | null;
+            /** Company */
+            company: string;
+            /** Zones */
+            zones: ("green" | "red" | "work_residence")[];
+            /**
+             * Start Date
+             * Format: date
+             */
+            start_date: string;
+            /**
+             * End Date
+             * Format: date
+             */
+            end_date: string;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "active" | "revoked";
+            /** Purpose */
+            purpose?: string | null;
+            /** Notes */
+            notes?: string | null;
+            /** Revoked At */
+            revoked_at?: string | null;
+            /** Revoke Reason */
+            revoke_reason?: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Updated At */
+            updated_at?: string | null;
+            /**
+             * Derived Status
+             * @default active
+             * @enum {string}
+             */
+            derived_status: "active" | "expiring" | "expired" | "revoked";
+            /**
+             * Duration Days
+             * @default 0
+             */
+            duration_days: number;
+            /** Days Remaining */
+            days_remaining?: number | null;
+            /**
+             * People Count
+             * @default 0
+             */
+            people_count: number;
+            /**
+             * Vehicle Count
+             * @default 0
+             */
+            vehicle_count: number;
+            /** Document Name */
+            document_name?: string | null;
+            /** Manager Id */
+            manager_id?: number | null;
+            /** Book Id */
+            book_id?: number | null;
+            /** Book Ref */
+            book_ref?: string | null;
+            /** People */
+            people?: components["schemas"]["PermitPersonRead"][];
+            /** Vehicles */
+            vehicles?: components["schemas"]["PermitVehicleRead"][];
+        };
+        /**
+         * PermitRenew
+         * @description POST /permits/{id}/renew — extend the permit window.
+         */
+        PermitRenew: {
+            /**
+             * New End Date
+             * Format: date
+             */
+            new_end_date: string;
+            /** Reason */
+            reason?: string | null;
+        };
+        /**
+         * PermitRevoke
+         * @description POST /permits/{id}/revoke — end a permit before its expiry.
+         */
+        PermitRevoke: {
+            /** Reason */
+            reason?: string | null;
+        };
+        /**
+         * PermitSummary
+         * @description Dashboard-tile counts for the register.
+         */
+        PermitSummary: {
+            /** Active */
+            active: number;
+            /** Expiring */
+            expiring: number;
+            /** Expired */
+            expired: number;
+            /** Revoked */
+            revoked: number;
+            /** People Active */
+            people_active: number;
+            /** People Green */
+            people_green: number;
+            /** People Red */
+            people_red: number;
+            /** People Work Residence */
+            people_work_residence: number;
+        };
+        /**
+         * PermitUpdate
+         * @description PATCH /permits/{id} — edit header fields (not the lifecycle status).
+         */
+        PermitUpdate: {
+            /** Company */
+            company?: string | null;
+            /** Zones */
+            zones?: ("green" | "red" | "work_residence")[] | null;
+            /** Start Date */
+            start_date?: string | null;
+            /** End Date */
+            end_date?: string | null;
+            /** Purpose */
+            purpose?: string | null;
+            /** Notes */
+            notes?: string | null;
+        };
+        /** PermitVehicleCreate */
+        PermitVehicleCreate: {
+            /** Plate No */
+            plate_no?: string | null;
+            /** Plate Emirate */
+            plate_emirate?: string | null;
+            /** Make Model */
+            make_model?: string | null;
+            /** Driver Name */
+            driver_name?: string | null;
+            /** Colour */
+            colour?: string | null;
+            /** Vehicle Type */
+            vehicle_type?: string | null;
+            /** Plate Category */
+            plate_category?: string | null;
+            /** Traffic No */
+            traffic_no?: string | null;
+            /** Reg Expiry */
+            reg_expiry?: string | null;
+        };
+        /** PermitVehicleRead */
+        PermitVehicleRead: {
+            /** Id */
+            id: number;
+            /** Permit Id */
+            permit_id: number;
+            /** Plate No */
+            plate_no?: string | null;
+            /** Plate Emirate */
+            plate_emirate?: string | null;
+            /** Make Model */
+            make_model?: string | null;
+            /** Driver Name */
+            driver_name?: string | null;
+            /** Colour */
+            colour?: string | null;
+            /** Vehicle Type */
+            vehicle_type?: string | null;
+            /** Plate Category */
+            plate_category?: string | null;
+            /** Traffic No */
+            traffic_no?: string | null;
+            /** Reg Expiry */
+            reg_expiry?: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Removed At */
+            removed_at?: string | null;
+            /** License Doc Name */
+            license_doc_name?: string | null;
+        };
+        /**
+         * PermitVehicleUpdate
+         * @description PATCH /permits/{id}/vehicles/{vid} — edit fields of an existing vehicle.
+         *
+         *     A partial patch: only the fields sent are changed (``exclude_unset`` in the
+         *     service). Used to back-fill the plate emirate on vehicles added before the
+         *     dropdown existed.
+         */
+        PermitVehicleUpdate: {
+            /** Plate No */
+            plate_no?: string | null;
+            /** Plate Emirate */
+            plate_emirate?: string | null;
+            /** Make Model */
+            make_model?: string | null;
+            /** Driver Name */
+            driver_name?: string | null;
+            /** Colour */
+            colour?: string | null;
+            /** Vehicle Type */
+            vehicle_type?: string | null;
+            /** Plate Category */
+            plate_category?: string | null;
+            /** Traffic No */
+            traffic_no?: string | null;
+            /** Reg Expiry */
+            reg_expiry?: string | null;
+        };
+        /**
+         * PermitVisitCreate
+         * @description POST /permits/{id}/visits — gate/UAE-ID scanner hook (no v1 UI).
+         */
+        PermitVisitCreate: {
+            /**
+             * Direction
+             * @default in
+             * @enum {string}
+             */
+            direction: "in" | "out";
+            /** Person Id */
+            person_id?: number | null;
+            /** Uae Id */
+            uae_id?: string | null;
+            /** Gate */
+            gate?: string | null;
+            /** Occurred At */
+            occurred_at?: string | null;
+            /**
+             * Source
+             * @default manual
+             * @enum {string}
+             */
+            source: "manual" | "gate";
+        };
+        /** PermitVisitRead */
+        PermitVisitRead: {
+            /** Id */
+            id: number;
+            /** Permit Id */
+            permit_id: number;
+            /** Person Id */
+            person_id?: number | null;
+            /** Direction */
+            direction: string;
+            /**
+             * Occurred At
+             * Format: date-time
+             */
+            occurred_at: string;
+            /** Uae Id */
+            uae_id?: string | null;
+            /** Gate */
+            gate?: string | null;
+            /** Source */
+            source: string;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+        };
+        /**
+         * PersonIdScan
+         * @description OCR pre-fill result for an Emirates ID.
+         */
+        PersonIdScan: {
+            /** Name */
+            name?: string | null;
+            /** Uae Id */
+            uae_id?: string | null;
+            /** Nationality */
+            nationality?: string | null;
+        };
         /** PushKeys */
         PushKeys: {
             /** P256Dh */
@@ -6436,6 +7206,24 @@ export interface components {
         RenameTemplateRequest: {
             /** New Name */
             new_name: string;
+        };
+        /** ReportCreate */
+        ReportCreate: {
+            /** Signer Employee Id */
+            signer_employee_id: string;
+            /** Recipient Id */
+            recipient_id?: number | null;
+            /** Subject */
+            subject: string;
+            /** Date */
+            date?: string | null;
+            /** Body Html */
+            body_html: string;
+            /**
+             * Sign
+             * @default true
+             */
+            sign: boolean;
         };
         /** ResetPasswordRequest */
         ResetPasswordRequest: {
@@ -7004,6 +7792,31 @@ export interface components {
             folders: {
                 [key: string]: components["schemas"]["VaultEntry"][];
             };
+        };
+        /**
+         * VehicleLicenceScan
+         * @description OCR pre-fill result for a vehicle licence (mulkiya). All optional; the
+         *     operator confirms/edits every field before saving.
+         */
+        VehicleLicenceScan: {
+            /** Plate No */
+            plate_no?: string | null;
+            /** Plate Emirate */
+            plate_emirate?: string | null;
+            /** Plate Category */
+            plate_category?: string | null;
+            /** Traffic No */
+            traffic_no?: string | null;
+            /** Make Model */
+            make_model?: string | null;
+            /** Vehicle Type */
+            vehicle_type?: string | null;
+            /** Colour */
+            colour?: string | null;
+            /** Reg Expiry */
+            reg_expiry?: string | null;
+            /** Driver Name */
+            driver_name?: string | null;
         };
         /** VerifyPasswordRequest */
         VerifyPasswordRequest: {
@@ -10533,6 +11346,41 @@ export interface operations {
         responses: {
             /** @description Successful Response */
             200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BookRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_report_api_v1_books_reports_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReportCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -14683,6 +15531,899 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PermissionRequestRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_permits_api_v1_permits_get: {
+        parameters: {
+            query?: {
+                state?: string | null;
+                zone?: string | null;
+                company?: string | null;
+                q?: string | null;
+                include_deleted?: boolean;
+                limit?: number;
+                offset?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PermitListResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_permit_api_v1_permits_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PermitCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PermitRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    permit_summary_api_v1_permits_summary_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PermitSummary"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_permits_detailed_api_v1_permits_detailed_get: {
+        parameters: {
+            query?: {
+                state?: string | null;
+                zone?: string | null;
+                company?: string | null;
+                q?: string | null;
+                /** @description Comma-separated permit ids (order preserved) */
+                ids?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PermitRead"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    scan_vehicle_licence_api_v1_permits_scan_vehicle_licence_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_scan_vehicle_licence_api_v1_permits_scan_vehicle_licence_post"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VehicleLicenceScan"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    scan_emirates_id_api_v1_permits_scan_emirates_id_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_scan_emirates_id_api_v1_permits_scan_emirates_id_post"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PersonIdScan"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_permit_api_v1_permits__permit_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                permit_id: number;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PermitRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_permit_api_v1_permits__permit_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                permit_id: number;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_permit_api_v1_permits__permit_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                permit_id: number;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PermitUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PermitRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    renew_permit_api_v1_permits__permit_id__renew_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                permit_id: number;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PermitRenew"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PermitRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    revoke_permit_api_v1_permits__permit_id__revoke_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                permit_id: number;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PermitRevoke"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PermitRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    add_person_api_v1_permits__permit_id__people_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                permit_id: number;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PermitPersonCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PermitRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    remove_person_api_v1_permits__permit_id__people__person_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                permit_id: number;
+                person_id: number;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PermitRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    download_person_document_api_v1_permits__permit_id__people__person_id__document_get: {
+        parameters: {
+            query?: {
+                encoding?: string | null;
+            };
+            header?: never;
+            path: {
+                permit_id: number;
+                person_id: number;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    upload_person_document_api_v1_permits__permit_id__people__person_id__document_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                permit_id: number;
+                person_id: number;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_upload_person_document_api_v1_permits__permit_id__people__person_id__document_post"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PermitRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    add_vehicle_api_v1_permits__permit_id__vehicles_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                permit_id: number;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PermitVehicleCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PermitRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    remove_vehicle_api_v1_permits__permit_id__vehicles__vehicle_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                permit_id: number;
+                vehicle_id: number;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PermitRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_vehicle_api_v1_permits__permit_id__vehicles__vehicle_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                permit_id: number;
+                vehicle_id: number;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PermitVehicleUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PermitRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    download_vehicle_document_api_v1_permits__permit_id__vehicles__vehicle_id__document_get: {
+        parameters: {
+            query?: {
+                encoding?: string | null;
+            };
+            header?: never;
+            path: {
+                permit_id: number;
+                vehicle_id: number;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    upload_vehicle_document_api_v1_permits__permit_id__vehicles__vehicle_id__document_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                permit_id: number;
+                vehicle_id: number;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_upload_vehicle_document_api_v1_permits__permit_id__vehicles__vehicle_id__document_post"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PermitRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    download_permit_document_api_v1_permits__permit_id__document_get: {
+        parameters: {
+            query?: {
+                encoding?: string | null;
+            };
+            header?: never;
+            path: {
+                permit_id: number;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    upload_permit_document_api_v1_permits__permit_id__document_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                permit_id: number;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_upload_permit_document_api_v1_permits__permit_id__document_post"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PermitRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    remove_permit_document_api_v1_permits__permit_id__document_delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                permit_id: number;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PermitRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_visits_api_v1_permits__permit_id__visits_get: {
+        parameters: {
+            query?: {
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                permit_id: number;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PermitVisitRead"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    record_visit_api_v1_permits__permit_id__visits_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                permit_id: number;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PermitVisitCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PermitVisitRead"];
                 };
             };
             /** @description Validation Error */

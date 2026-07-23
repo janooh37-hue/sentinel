@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, computed_field
 
 from app.schemas._base import ORMBase
 from app.schemas.notify import NotifyMessageRead
@@ -272,6 +272,13 @@ class BookRead(ORMBase):
     approval_steps: list[BookApprovalStepRead] = Field(default_factory=list)
     attachment_paths: list[str] = Field(default_factory=list)
     versions: list[BookVersionRead] = Field(default_factory=list)
+
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def current_template_id(self) -> str | None:
+        """Newest version's template_id — lets the list badge Reports."""
+        return self.versions[-1].template_id if self.versions else None
+
     # Outbound notifications sent for this book (WhatsApp + SMS, auto-send + resends).
     sms: list[NotifyMessageRead] = Field(default_factory=list)
     # Set only when the row matched via FTS body search (not on ilike-only hits).

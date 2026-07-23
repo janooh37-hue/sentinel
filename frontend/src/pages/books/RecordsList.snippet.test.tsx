@@ -64,6 +64,7 @@ function makeBook(overrides: Partial<BookRead> & { search_snippet?: string | nul
     sms: [],
     employee_id: null,
     employee_name_snapshot: null,
+    current_template_id: null,
     ...overrides,
   }
 }
