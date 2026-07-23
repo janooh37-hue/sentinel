@@ -522,10 +522,16 @@ export function ApplicationPage(): React.JSX.Element {
       }
     }
 
-    // Report form: one-shot synchronous path — skip the job-poll flow entirely.
-    // Only "Save" (commit=true) makes sense; Preview is disabled for this form
-    // (the result IS the PDF served from the book record).
+    // Report form: one-shot create — skip the job-poll flow entirely.
+    // The result IS the PDF served from the book record, so previewing must
+    // not persist a Book. Only the explicit commit path fires the mutation.
     if (isReportForm) {
+      if (!commit) {
+        // preview path: swallow the form submit (Enter/Preview must not create a book)
+        return (e?: React.BaseSyntheticEvent) => {
+          e?.preventDefault()
+        }
+      }
       return form.handleSubmit((values) => {
         reportMutation.mutate(values as Record<string, unknown>)
       })
@@ -1020,6 +1026,32 @@ export function ApplicationPage(): React.JSX.Element {
                               {wordSessionMutation.isPending
                                 ? t('common.loading')
                                 : t('books.word.createAndOpen')}
+                              {isAr ? (
+                                <ArrowLeft className="h-3.5 w-3.5" strokeWidth={1.8} aria-hidden />
+                              ) : (
+                                <ArrowRight className="h-3.5 w-3.5" strokeWidth={1.8} aria-hidden />
+                              )}
+                            </Button>
+                          </>
+                        ) : isReportForm ? (
+                          // Report form: one-shot create — no Preview step.
+                          <>
+                            <span />
+                            <Button
+                              type="button"
+                              variant="commit"
+                              size="commit"
+                              onClick={() => void handleSave()}
+                              disabled={
+                                (!isAdminCategory && !selectedEmployee) ||
+                                reportMutation.isPending
+                              }
+                              className="min-h-11 disabled:cursor-not-allowed disabled:opacity-50"
+                            >
+                              <FileText className="h-3.5 w-3.5" strokeWidth={1.8} aria-hidden />
+                              {reportMutation.isPending
+                                ? t('common.loading')
+                                : t('application.actions.saveBook')}
                               {isAr ? (
                                 <ArrowLeft className="h-3.5 w-3.5" strokeWidth={1.8} aria-hidden />
                               ) : (
