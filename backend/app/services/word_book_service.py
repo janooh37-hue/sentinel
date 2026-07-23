@@ -227,6 +227,94 @@ def create_word_book(
     )
 
 
+def create_report_word_book(
+    db: Session,
+    *,
+    user: User,
+    signer_employee_id: str,
+    recipient_id: int | None,
+    subject: str,
+    date: str | None,
+    sign: bool,
+) -> WordSessionInfo:
+    """Create a no-ref Report on the report paper with an empty, Word-editable body.
+
+    Mirrors ``create_word_book`` MINUS classification/ref allocation and the Aztec
+    ref stamp: the ref is the internal ``REPORT-{id}``, the paper is ``report.docx``,
+    and the author block is the picked employee (name/title only — the signature is
+    embedded at Finish). The signer + sign choice ride the session to Finish.
+    """
+    from app.services import report_service  # local import: avoid import cycle
+
+    settings = get_settings()
+    name, title, _sig = report_service._resolve_signer(db, signer_employee_id)
+
+    if db.get(BookCategory, "GS") is None:
+        db.add(BookCategory(id="GS", prefix="GS"))
+        db.flush()
+
+    now = datetime.now()  # naive LOCAL — must match every other book path (QA fix)
+    book = Book(
+        category_id="GS",
+        ref_number=f"__pending_{uuid.uuid4().hex}__",
+        subject=subject,
+        classification_code=None,
+        approval_state="approved",
+        submitted_by_user_id=user.id,
+        created_at=now,
+    )
+    db.add(book)
+    db.flush()  # assigns book.id
+    book.ref_number = f"REPORT-{book.id}"
+    db.flush()
+
+    filename = book.ref_number + ".docx"  # REPORT-N has no slashes
+    output_path = settings.data_dir / "editing" / f"book-{book.id}" / filename
+
+    data: dict[str, Any] = {
+        "date": date or now.strftime("%d-%m-%Y"),
+        "subject": subject,
+        "body": GENERAL_BOOK_BODY_SENTINEL,
+        "body_html": "",  # empty → {{ body }} anchor clears; body written in Word
+        "recipient_name": _resolve_recipient(db, recipient_id),
+        "cc": "",
+        "submitter_g": user.employee_id or "",  # footer = signed-in account
+    }
+    manager_override.apply(
+        data,
+        {"name_ar": name, "name_en": name, "title": title, "sig_path": None},
+        embed=False,  # no signature at create — embedded at Finish
+        prefer_arabic=True,
+    )
+    DocxEngine(settings.templates_dir).fill("Report", data, output_path)
+    _postprocess_general_book_footer(output_path)
+    # NO Aztec / ref stamp — Report is no-ref.
+
+    token = secrets.token_urlsafe(32)
+    session = BookEditSession(
+        book_id=book.id,
+        user_id=user.id,
+        token=token,
+        working_path=str(output_path),
+        state="active",
+        signer_employee_id=signer_employee_id,
+        sign_on_finish=sign,
+    )
+    db.add(session)
+    db.commit()
+
+    base_url = settings.public_base_url.rstrip("/")
+    dav_url = f"{base_url}/dav/{token}/{filename}"
+    return WordSessionInfo(
+        book_id=book.id,
+        ref_number=book.ref_number,
+        token=token,
+        filename=filename,
+        word_url=f"ms-word:ofe|u|{dav_url}",
+        dav_url=dav_url,
+    )
+
+
 # ---------------------------------------------------------------------------
 # Private helpers
 # ---------------------------------------------------------------------------
