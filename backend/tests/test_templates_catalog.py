@@ -86,3 +86,11 @@ def test_report_tile_has_no_scannable_code_badge():
     Services tile must show 'no code', not 'carries a scannable ref code'."""
     metas = {m.id: m for m in template_service.list_templates().items}
     assert metas["Report"].has_code is False
+
+
+def test_report_form_has_no_rich_body_field():
+    detail = template_service.get_template_fields("Report")
+    types = {f.type for f in detail.fields}
+    assert "arabic_rich_full" not in types  # body is written in Word, not the form
+    keys = {f.key for f in detail.fields}
+    assert keys == {"signer_id", "recipient_id", "subject", "report_date", "sign"}
