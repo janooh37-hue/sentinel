@@ -36,7 +36,7 @@ import { toast } from 'sonner'
 import { shouldShowNotifyToggle } from './notifyToggle'
 import { NotifyEmployeeToggle } from '@/components/notify/NotifyEmployeeToggle'
 import { api, apiErrorMessage } from '@/lib/api'
-import type { DocumentGenerateRequest, StagedAttachmentRead, TemplateMeta, WordSessionRead } from '@/lib/api'
+import type { DocumentGenerateRequest, ReportCreate, StagedAttachmentRead, TemplateMeta, WordSessionRead } from '@/lib/api'
 import type { ExtractionResponse } from '@/lib/extraction'
 import type { TemplateDetailResponse, TemplateField } from '@/components/application/types'
 import { buildZodSchema } from '@/lib/applicationFormSchema'
@@ -278,6 +278,9 @@ export function ApplicationPage(): React.JSX.Element {
   // classification picker is REQUIRED: every book (rich-editor or Word) takes
   // its ref from the classified register (1/{tab}/GSSG/{serial}).
   const isGeneralBookForm = !!schema?.fields.some((f) => f.type === 'arabic_rich_full')
+  // Report — one-shot synchronous path: submits to POST /books/reports and
+  // navigates to the created book record instead of going through the job-poll flow.
+  const isReportForm = selectedTemplate === 'Report'
 
   // Build Zod schema + RHF instance
   const zodSchema = schema ? buildZodSchema(schema.fields, t) : null
@@ -377,6 +380,29 @@ export function ApplicationPage(): React.JSX.Element {
       // in the tab while it lingers. The handoff dialog's «Open in Word»
       // anchor is the launch point (2026-07-19 dead-buttons audit).
       setPendingWordSession(res)
+    },
+    onError: (err) => {
+      setSubmitError(err instanceof ApiError ? `${err.code}: ${err.message}` : String(err))
+      toast.error(apiErrorMessage(err))
+    },
+  })
+
+  // Report mutation — one-shot synchronous submit; navigates directly to the
+  // created book record (its PDF is viewable there) instead of the job-poll flow.
+  const reportMutation = useMutation({
+    mutationFn: (values: Record<string, unknown>) =>
+      api.createReport({
+        signer_employee_id: String(values.signer_id ?? ''),
+        recipient_id: (values.recipient_id as number | null | undefined) ?? null,
+        subject: String(values.subject ?? ''),
+        date: (values.report_date as string | undefined) ?? null,
+        body_html: String(values.body ?? ''),
+        sign: values.sign !== false,
+      } satisfies ReportCreate),
+    onSuccess: (book) => {
+      void qc.invalidateQueries({ queryKey: ['books'] })
+      toast.success(t('application.toast.saved', { ref: book.ref_number ?? '' }))
+      navigate(`/books?ref=${encodeURIComponent(book.ref_number ?? '')}`)
     },
     onError: (err) => {
       setSubmitError(err instanceof ApiError ? `${err.code}: ${err.message}` : String(err))
@@ -494,6 +520,15 @@ export function ApplicationPage(): React.JSX.Element {
           table_rows,
         })
       }
+    }
+
+    // Report form: one-shot synchronous path — skip the job-poll flow entirely.
+    // Only "Save" (commit=true) makes sense; Preview is disabled for this form
+    // (the result IS the PDF served from the book record).
+    if (isReportForm) {
+      return form.handleSubmit((values) => {
+        reportMutation.mutate(values as Record<string, unknown>)
+      })
     }
 
     return form.handleSubmit((values) => {
