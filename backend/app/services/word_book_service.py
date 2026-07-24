@@ -272,7 +272,7 @@ def create_report_word_book(
     output_path = settings.data_dir / "editing" / f"book-{book.id}" / filename
 
     data: dict[str, Any] = {
-        "date": date or now.strftime("%d-%m-%Y"),
+        "date": _report_display_date(date, now),
         "subject": subject,
         "body": GENERAL_BOOK_BODY_SENTINEL,
         "body_html": "",  # empty → {{ body }} anchor clears; body written in Word
@@ -328,6 +328,16 @@ def _resolve_recipient(db: Session, recipient_id: int | None) -> str:
 
     row = db.get(GeneralBookRecipient, recipient_id)
     return row.name if row is not None else ""
+
+
+def _report_display_date(raw: str | None, now: datetime) -> str:
+    """Human date for the Report paper — DD/MM/YYYY like the reference letter."""
+    if not raw:
+        return now.strftime("%d/%m/%Y")
+    try:
+        return datetime.strptime(raw, "%Y-%m-%d").strftime("%d/%m/%Y")
+    except ValueError:
+        return raw  # already display-formatted — trust the caller
 
 
 # ---------------------------------------------------------------------------

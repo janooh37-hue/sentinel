@@ -211,3 +211,41 @@ def test_finish_report_session_embeds_signature(db_session, tmp_path):
     doc = db_session.get(Document, ver.document_id)
     assert doc.template_id == "Report"
     assert abs((datetime.now() - ver.created_at).total_seconds()) < 300  # local time
+
+
+def test_report_display_date():
+    from datetime import datetime
+
+    from app.services.word_book_service import _report_display_date
+
+    now = datetime(2026, 7, 24, 10, 0, 0)
+    assert _report_display_date("2026-07-23", now) == "23/07/2026"
+    assert _report_display_date(None, now) == "24/07/2026"
+    # Already display-formatted → pass through untouched.
+    assert _report_display_date("23/07/2026", now) == "23/07/2026"
+
+
+def test_create_report_word_book_renders_display_date(db_session):
+    from docx import Document as Docx
+
+    from app.services import word_book_service
+
+    _seed_gs(db_session)
+    db_session.add(Employee(id="G1042", name_en="Muhannad", name_ar="مهند", position="Head"))
+    db_session.add(Employee(id="G3082", name_en="Operator", name_ar="مشغّل", position="Op"))
+    op = _user(db_session, employee_id="G3082")
+    db_session.commit()
+
+    info = word_book_service.create_report_word_book(
+        db_session,
+        user=op,
+        signer_employee_id="G1042",
+        recipient_id=None,
+        subject="تقرير",
+        date="2026-07-23",
+        sign=False,
+    )
+    sess = db_session.query(BookEditSession).filter_by(book_id=info.book_id).one()
+    text = "\n".join(p.text for p in Docx(sess.working_path).paragraphs)
+    assert "التاريخ: 23/07/2026" in text
+    assert "2026-07-23" not in text
