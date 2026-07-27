@@ -3133,5 +3133,9 @@
       "checkedAgo_other": "checked {{count}}s ago",
       "menuLabel": "WhatsApp"
     }
+  },
+  "reportSign": {
+    "previewAlt": "Signer signature",
+    "noSig": "No saved signature for this signer — the report will be created unsigned"
   }
 }

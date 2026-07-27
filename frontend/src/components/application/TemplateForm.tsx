@@ -35,6 +35,7 @@ import { SubmitterPickerField } from './fields/SubmitterPickerField'
 import { RecipientPickerField } from './fields/RecipientPickerField'
 import { MultiRecipientPickerField } from './fields/MultiRecipientPickerField'
 import { EmbedSignatureCheckbox } from './fields/EmbedSignatureCheckbox'
+import { SignerSignaturePreview } from './fields/SignerSignaturePreview'
 import { SignatureField } from './fields/SignatureField'
 import { EmployeeSignatureCard } from './fields/EmployeeSignatureCard'
 import { RichEditor } from '@/components/ui/rich-editor'
@@ -157,6 +158,14 @@ function renderField(
       return <NumberField key={field.id} {...common} />
 
     case 'checkbox':
+      if (field.id === 'sign') {
+        return (
+          <div key={field.id}>
+            <CheckboxField {...common} />
+            <SignerSignaturePreview />
+          </div>
+        )
+      }
       return <CheckboxField key={field.id} {...common} />
 
     case 'manager_picker':
