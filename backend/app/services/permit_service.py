@@ -292,8 +292,11 @@ def _letter_dicts(row: Permit) -> tuple[list[dict[str, Any]], list[dict[str, Any
 def regenerate_permit_book(db: Session, permit: Permit, *, actor: str | None = None) -> None:
     """Generate (or re-version) the permit's 1/5 General Book from its current
     roster. Reuses document_service.generate_document — ref allocation, Arabic
-    letterhead, manager signature, PDF. Resilient: a PDF failure still commits
+    letterhead, PDF. Resilient: a PDF failure still commits
     the Book (pdf_path NULL), same as the rest of the app.
+
+    The letter is generated UNSIGNED — the manager signature is applied by the
+    book approval chain at sign time (book_service.sign_book).
 
     ponytail: re-renders docx->PDF on each roster change (Word COM). Fine for
     infrequent admin edits; switch to regenerate-on-print if throughput matters.
@@ -328,7 +331,6 @@ def regenerate_permit_book(db: Session, permit: Permit, *, actor: str | None = N
         manager_id=permit.manager_id,
         revise_of_book_id=permit.book_id,  # None on first gen → fresh 1/5 ref
         current_user=submitter,
-        force_manager_embed=permit.manager_id is not None,
     )
     if permit.book_id is None:
         permit.book_id = result.book_id

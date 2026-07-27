@@ -1,7 +1,8 @@
-"""Test that regenerate_permit_book embeds the manager signature when manager_id is set.
+"""Permit letters must NOT embed the manager signature at generation.
 
-RED before the force_manager_embed fix (General Book signing_path=="chain" -> embed OFF),
-GREEN after (force_manager_embed=True overrides the chain-path policy).
+The signature is applied by the book approval chain at sign time
+(book_service.sign_book). Even with a manager selected AND a signature file on
+disk, the generated version stays unsigned so it can be submitted for approval.
 """
 
 from __future__ import annotations
@@ -102,26 +103,22 @@ def _payload(**kw: Any) -> PermitCreate:
 # ---------------------------------------------------------------------------
 
 
-def test_permit_book_embeds_manager_signature(gen_env: tuple[Session, Any]) -> None:
-    """manager_sig_embedded must be True on the permit's book version when
-    the permit has manager_id pointing to a manager with a signature on disk.
-
-    This test fails WITHOUT the force_manager_embed fix (General Book
-    signing_path=="chain" -> embed_signature["manager"]=False -> sig1_path popped
-    -> manager_sig_embedded=False) and passes WITH it.
-    """
+def test_permit_book_stays_unsigned(gen_env: tuple[Session, Any]) -> None:
+    """manager_sig_embedded must be False on the permit's book version even when
+    the permit has manager_id pointing to a manager with a signature on disk —
+    signing now happens via the approval chain, not at generation."""
     from app.db.models import Book
 
     db, settings = gen_env
     mgr = _make_manager_with_sig(db, settings)
 
     permit = permit_service.create_permit(db, _payload(manager_id=mgr.id))
-    assert permit.book_id is not None, "book must be generated"
+    assert permit.book_id is not None, "book must still be generated"
 
     book = db.get_one(Book, permit.book_id)
     assert book.versions, "book must have at least one version"
     latest = max(book.versions, key=lambda v: v.version_no)
-    assert latest.manager_sig_embedded is True, (
-        "manager signature should be baked into the permit letter "
-        "(force_manager_embed=True should override the 'chain' signing_path)"
+    assert latest.manager_sig_embedded is False, (
+        "the permit letter must stay unsigned at generation; the approval chain "
+        "embeds the signature at sign time"
     )
