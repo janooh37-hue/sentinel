@@ -265,7 +265,7 @@ def create_permit(db: Session, payload: PermitCreate, *, actor: str | None = Non
     db.commit()
     db.refresh(row)
     _audit(db, "permit.created", row.id, actor, {"company": row.company, "zones": list(row.zones)})
-    regenerate_permit_book(db, row, actor=actor)
+    regenerate_permit_book(db, row, actor=actor, submit=payload.send_for_approval)
     return get_permit(db, row.id)
 
 
@@ -289,7 +289,36 @@ def _letter_dicts(row: Permit) -> tuple[list[dict[str, Any]], list[dict[str, Any
     return people, vehicles
 
 
-def regenerate_permit_book(db: Session, permit: Permit, *, actor: str | None = None) -> None:
+def _submit_book(db: Session, permit: Permit, *, actor: str | None) -> None:
+    """Send the permit's letter into the book approval chain. Best-effort on the
+    auto paths: a failure (e.g. the manager has no login account) leaves the
+    book a draft and audits why — the permit mutation itself stands."""
+    from app.services import book_service
+
+    submitter = db.scalar(select(User).where(User.email == actor)) if actor else None
+    if permit.book_id is None or submitter is None:
+        reason = "NO_BOOK" if permit.book_id is None else "NO_SUBMITTER"
+        _audit(db, "permit.book_submit_failed", permit.id, actor, {"error": reason})
+        return
+    try:
+        book_service.submit_for_approval(
+            db,
+            permit.book_id,
+            priority="Normal",
+            approver_user_id=None,
+            reviewer_user_ids=[],
+            submitted_by_user_id=submitter.id,
+        )
+    except ValidationFailedError as exc:
+        log.warning("permit %s: book submit failed: %s", permit.id, exc.message)
+        _audit(db, "permit.book_submit_failed", permit.id, actor, {"error": exc.code})
+        return
+    _audit(db, "permit.book_submitted", permit.id, actor, {"book_id": permit.book_id})
+
+
+def regenerate_permit_book(
+    db: Session, permit: Permit, *, actor: str | None = None, submit: bool = False
+) -> None:
     """Generate (or re-version) the permit's 1/5 General Book from its current
     roster. Reuses document_service.generate_document — ref allocation, Arabic
     letterhead, PDF. Resilient: a PDF failure still commits
@@ -336,6 +365,8 @@ def regenerate_permit_book(db: Session, permit: Permit, *, actor: str | None = N
         permit.book_id = result.book_id
         db.commit()
     _audit(db, "permit.book_generated", permit.id, actor, {"book_id": permit.book_id})
+    if submit:
+        _submit_book(db, permit, actor=actor)
 
 
 def update_permit(

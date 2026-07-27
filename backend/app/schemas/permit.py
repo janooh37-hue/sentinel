@@ -139,6 +139,9 @@ class PermitCreate(BaseModel):
     people: list[PermitPersonCreate] = Field(default_factory=list)
     vehicles: list[PermitVehicleCreate] = Field(default_factory=list)
     manager_id: int | None = None
+    # When True, the generated 1/5 letter is submitted straight into the book
+    # approval chain. Default False = leave it a draft for double-checking.
+    send_for_approval: bool = False
 
     @field_validator("company")
     @classmethod
