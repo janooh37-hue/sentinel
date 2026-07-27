@@ -979,6 +979,25 @@ async function multipart<T>(path: string, form: FormData, method = 'POST'): Prom
   )
 }
 
+/** Decode a base64 body to a Blob, tagging its MIME type from magic bytes so a
+ *  `blob:` URL opened in a new tab renders (a typeless PDF blob shows as raw
+ *  gibberish text instead of the document).
+ *  ponytail: known magic numbers only; unknown types stay typeless (unchanged,
+ *  non-regressing) rather than forced-download — accept filters cap real input
+ *  to pdf + images anyway. Add signatures here if a new preview type appears. */
+function base64ToBlob(b64: string): Blob {
+  const bytes = Uint8Array.from(atob(b64.trim()), (c) => c.charCodeAt(0))
+  const type =
+    bytes[0] === 0x25 && bytes[1] === 0x50 // %P → %PDF
+      ? 'application/pdf'
+      : bytes[0] === 0xff && bytes[1] === 0xd8
+        ? 'image/jpeg'
+        : bytes[0] === 0x89 && bytes[1] === 0x50 // \x89P → PNG
+          ? 'image/png'
+          : ''
+  return type ? new Blob([bytes], { type }) : new Blob([bytes])
+}
+
 /** IDM-safe attachment fetch (base64 → Blob) shared by the permit endpoints. */
 async function fetchPermitBlob(path: string): Promise<Blob> {
   const res = await fetch(`${BASE}${path}?encoding=base64`, {
@@ -988,9 +1007,7 @@ async function fetchPermitBlob(path: string): Promise<Blob> {
   if (!res.ok) {
     throw new ApiError(res.status, `HTTP_${res.status}`, res.statusText || 'Failed to load document')
   }
-  const b64 = (await res.text()).trim()
-  const bytes = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0))
-  return new Blob([bytes])
+  return base64ToBlob(await res.text())
 }
 
 export interface ListEmployeesParams {
@@ -1159,9 +1176,7 @@ export const api = {
         res.statusText || 'Failed to load certificate',
       )
     }
-    const b64 = (await res.text()).trim()
-    const bytes = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0))
-    return new Blob([bytes])
+    return base64ToBlob(await res.text())
   },
 
   getLeaveBalance: (employeeId: string, asOf?: string) =>
