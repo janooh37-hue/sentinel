@@ -3136,6 +3136,7 @@
   },
   "reportSign": {
     "previewAlt": "Signer signature",
-    "noSig": "No saved signature for this signer — the report will be created unsigned"
+    "noSig": "No saved signature for this signer — the report will be created unsigned",
+    "signingOff": "Signing is off — tick “Sign now” to stamp this signature"
   }
 }

@@ -29,8 +29,8 @@ function makeClient() {
   })
 }
 
-function Host({ signerId }: { signerId?: string }) {
-  const methods = useForm({ defaultValues: { signer_id: signerId ?? '' } })
+function Host({ signerId, sign }: { signerId?: string; sign?: boolean }) {
+  const methods = useForm({ defaultValues: { signer_id: signerId ?? '', sign } })
   return (
     <QueryClientProvider client={makeClient()}>
       <FormProvider {...methods}>
@@ -58,6 +58,37 @@ describe('SignerSignaturePreview — signer with signature', () => {
   })
 })
 
+describe('SignerSignaturePreview — signing toggled OFF (WYSIWYG)', () => {
+  it('shows the "signing off" hint (not the live image) when sign is false', async () => {
+    vi.mocked(api.getEmployeeSignature).mockResolvedValue({
+      dataUrl: 'data:image/png;base64,abc123',
+      updatedAt: '2026-01-01T00:00:00Z',
+    } as never)
+
+    render(<Host signerId="G1234" sign={false} />)
+
+    // The signer HAS a signature, but signing is off — the preview must say so
+    // instead of promising a stamp the toggled-off report will not add.
+    await waitFor(() =>
+      expect(
+        screen.getByText('Signing is off — tick “Sign now” to stamp this signature'),
+      ).toBeInTheDocument(),
+    )
+    expect(screen.queryByRole('img')).toBeNull()
+  })
+
+  it('shows the signature when sign is left at its default (undefined => on)', async () => {
+    vi.mocked(api.getEmployeeSignature).mockResolvedValue({
+      dataUrl: 'data:image/png;base64,abc123',
+      updatedAt: '2026-01-01T00:00:00Z',
+    } as never)
+
+    render(<Host signerId="G1234" />)
+
+    await waitFor(() => expect(screen.getByRole('img')).toBeInTheDocument())
+  })
+})
+
 describe('SignerSignaturePreview — no saved signature (Arabic)', () => {
   beforeAll(async () => {
     i18n.addResourceBundle('ar', 'translation', ar, true, true)
@@ -77,6 +108,22 @@ describe('SignerSignaturePreview — no saved signature (Arabic)', () => {
         screen.getByText('لا يوجد توقيع محفوظ لهذا الموقّع — سيُنشأ التقرير دون توقيع'),
       ).toBeInTheDocument(),
     )
+  })
+
+  it('shows Arabic "signing off" hint when the signer has a signature but sign is off', async () => {
+    vi.mocked(api.getEmployeeSignature).mockResolvedValue({
+      dataUrl: 'data:image/png;base64,abc123',
+      updatedAt: '2026-01-01T00:00:00Z',
+    } as never)
+
+    render(<Host signerId="G1234" sign={false} />)
+
+    await waitFor(() =>
+      expect(
+        screen.getByText('التوقيع متوقف — فعّل «توقيع الآن» لإدراج هذا التوقيع'),
+      ).toBeInTheDocument(),
+    )
+    expect(screen.queryByRole('img')).toBeNull()
   })
 })
 
