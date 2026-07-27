@@ -173,6 +173,36 @@ def _png(path: Path) -> None:
     )
 
 
+def test_resolve_signer_reads_employee_signature_store(db_session, tmp_path, monkeypatch):
+    """The signer's signature must come from the SAME store the form preview and
+    POST /employees/{id}/signature use (signature_core.vault_path) — NOT only the
+    Submitter row. Reading Submitter alone left every roster signer without a
+    Submitter record finishing UNSIGNED, so the sign toggle appeared to do
+    nothing (the operator uploads to the employee store)."""
+    from types import SimpleNamespace
+
+    from app.core import signature as signature_core
+    from app.core.vault_manager import Vault
+    from app.services import report_service
+
+    vault_dir = tmp_path / "vault"
+    monkeypatch.setattr(
+        report_service,
+        "get_settings",
+        lambda: SimpleNamespace(vault_dir=vault_dir, data_dir=tmp_path),
+    )
+    db_session.add(Employee(id="G1042", name_en="Muhannad", name_ar="مهند", position="Head"))
+    db_session.commit()
+    # No Submitter row. Signature ONLY in the employee store.
+    emp_sig = signature_core.vault_path(Vault(vault_dir), "G1042")
+    emp_sig.parent.mkdir(parents=True, exist_ok=True)
+    _png(emp_sig)
+
+    name, _title, sig = report_service._resolve_signer(db_session, "G1042")
+    assert name == "مهند"
+    assert sig == str(emp_sig), "signer signature must resolve from the employee store"
+
+
 def test_finish_report_session_embeds_signature(db_session, tmp_path):
     from datetime import datetime
 
