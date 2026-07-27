@@ -562,13 +562,24 @@ def stamp_signature_above_name(
         center_horizontal=label_anchor,
     )
     if placed and date_below and not anchor.text.strip():
+        from docx.oxml import OxmlElement
+        from docx.text.paragraph import Paragraph
+
         from app.core.arabic_rtl import stamp_run
 
-        run = anchor.add_run(date_below)
+        # The signature float bottoms out ON the anchor line (see
+        # fill_image_behind_text_in_paragraph's v_offset), so a run added to the
+        # anchor sits BEHIND the signature. Put the date on its OWN line right
+        # below the anchor — the float rises up over التوقيع, the date lands
+        # clear beneath the signature, both column-centred so they stack.
+        new_p = OxmlElement("w:p")
+        anchor._p.addnext(new_p)
+        date_para = Paragraph(new_p, anchor._parent)
+        run = date_para.add_run(date_below)
         run.font.size = Pt(12)
         stamp_run(run, "Sakkal Majalla")
         if label_anchor:
-            anchor.alignment = WD_ALIGN_PARAGRAPH.CENTER
+            date_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
     if placed:
         doc.save(str(docx_path))
     return bool(placed)

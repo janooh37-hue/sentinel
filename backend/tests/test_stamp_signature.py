@@ -195,7 +195,9 @@ def test_sig_label_beats_name_anchor(tmp_path: Path) -> None:
 
 
 def test_date_below_written(tmp_path: Path) -> None:
-    """date_below text is written into the blank anchor paragraph, as an RTL run."""
+    """date_below lands on its OWN line BELOW the anchor (para[4]), never on the
+    anchor paragraph itself — the float bottoms out on the anchor line, so a date
+    there would sit behind the signature. RTL + centred so it stacks under it."""
     docx = _make_report_sig_block(tmp_path)
     ok = stamp_signature_above_name(
         docx,
@@ -207,21 +209,22 @@ def test_date_below_written(tmp_path: Path) -> None:
     )
     assert ok
     reloaded = Document(str(docx))
-    # Date text must appear somewhere in the document
-    all_text = " ".join(p.text for p in reloaded.paragraphs)
-    assert "27/07/2026" in all_text, "date_below text not written to document"
-    # The run carrying it must be marked RTL (w:rtl element present in rPr)
-    anchor_para = reloaded.paragraphs[3]
-    assert anchor_para.text.strip() == "27/07/2026"
+    # A new paragraph is inserted after the anchor (para[3]) carrying the date.
+    assert reloaded.paragraphs[3].text.strip() == "", "date must NOT sit on the float's line"
+    date_para = reloaded.paragraphs[4]
+    assert date_para.text.strip() == "27/07/2026"
     from docx.oxml.ns import qn
 
-    has_rtl = any(run._element.find(f".//{qn('w:rtl')}") is not None for run in anchor_para.runs)
+    has_rtl = any(run._element.find(f".//{qn('w:rtl')}") is not None for run in date_para.runs)
     assert has_rtl, "date run must be marked RTL"
-    # Date paragraph is centred so it stacks with the column-centred float —
-    # RTL default start put the date at the right margin, apart from the sign.
+    # Centred so it stacks under the column-centred signature float.
     from docx.enum.text import WD_ALIGN_PARAGRAPH
 
-    assert anchor_para.alignment == WD_ALIGN_PARAGRAPH.CENTER
+    assert date_para.alignment == WD_ALIGN_PARAGRAPH.CENTER
+    # The float (drawing) stays on the anchor line, NOT the date line — the two
+    # must be on separate lines so the date reads clear below the signature.
+    assert _para_has_anchor(reloaded.paragraphs[3])
+    assert not _para_has_anchor(date_para)
 
 
 def test_date_below_none_writes_nothing(tmp_path: Path) -> None:
