@@ -120,3 +120,83 @@ def test_create_flag_with_unlinked_manager_leaves_draft(gen_env: Session) -> Non
     book, _ = _latest_version(db, permit.book_id)
     assert book.approval_state == "none"
     assert "permit.book_submit_failed" in _audit_actions(db)
+
+
+def _set_state(db: Session, book_id: int, state: str) -> None:
+    db.get_one(Book, book_id).approval_state = state
+    db.commit()
+
+
+def test_regen_resubmits_when_pending(gen_env: Session) -> None:
+    """A pending letter is withdrawn, re-rendered in place (draft-edit path,
+    same single version), and resubmitted — no stale steps left behind."""
+    from app.schemas.permit import PermitVehicleCreate
+
+    db = gen_env
+    _actor(db)
+    mgr, mgr_user = _linked_manager(db)
+    permit = permit_service.create_permit(
+        db, _payload(manager_id=mgr.id, send_for_approval=True), actor="op@x.ae"
+    )
+    permit_service.add_vehicle(db, permit.id, PermitVehicleCreate(plate_no="A 1"), actor="op@x.ae")
+    book, latest = _latest_version(db, permit.book_id)
+    assert len(book.versions) == 1  # in-place draft edit, no version churn
+    assert book.approval_state == "pending"
+    steps = sorted(latest.approval_steps, key=lambda s: s.step_order)
+    assert len(steps) == 1  # fresh chain only — the withdrawn step is gone
+    assert steps[0].assignee_user_id == mgr_user.id
+    assert steps[0].state == "pending"
+
+
+def test_regen_resubmits_when_approved(gen_env: Session) -> None:
+    """An approved (signed) letter is never edited in place — a fresh version
+    is appended (history kept) and immediately resubmitted."""
+    from app.schemas.permit import PermitPersonCreate
+
+    db = gen_env
+    _actor(db)
+    mgr, _ = _linked_manager(db)
+    permit = permit_service.create_permit(
+        db, _payload(manager_id=mgr.id, send_for_approval=True), actor="op@x.ae"
+    )
+    _set_state(db, permit.book_id, "approved")
+    permit_service.add_person(
+        db, permit.id, PermitPersonCreate(name="Omar", uae_id="784-2"), actor="op@x.ae"
+    )
+    book, latest = _latest_version(db, permit.book_id)
+    assert len(book.versions) == 2  # prior (signed) version preserved
+    assert book.approval_state == "pending"
+    assert any(s.state == "pending" for s in latest.approval_steps)
+
+
+def test_regen_after_rejection_lands_as_fresh_draft(gen_env: Session) -> None:
+    """No auto-resubmit after a rejection: the edit produces a fresh draft
+    version (generate_document's revise semantics reset the book to 'none');
+    the operator reviews and explicitly resends via the button."""
+    from app.schemas.permit import PermitPersonCreate
+
+    db = gen_env
+    _actor(db)
+    mgr, _ = _linked_manager(db)
+    permit = permit_service.create_permit(
+        db, _payload(manager_id=mgr.id, send_for_approval=True), actor="op@x.ae"
+    )
+    _set_state(db, permit.book_id, "rejected")
+    permit_service.add_person(
+        db, permit.id, PermitPersonCreate(name="Omar", uae_id="784-2"), actor="op@x.ae"
+    )
+    book, latest = _latest_version(db, permit.book_id)
+    assert book.approval_state == "none"  # fresh draft — NOT auto-resubmitted
+    assert latest.approval_steps == []
+
+
+def test_regen_never_sent_stays_draft(gen_env: Session) -> None:
+    from app.schemas.permit import PermitVehicleCreate
+
+    db = gen_env
+    _actor(db)
+    mgr, _ = _linked_manager(db)
+    permit = permit_service.create_permit(db, _payload(manager_id=mgr.id), actor="op@x.ae")
+    permit_service.add_vehicle(db, permit.id, PermitVehicleCreate(plate_no="A 1"), actor="op@x.ae")
+    book, _ = _latest_version(db, permit.book_id)
+    assert book.approval_state == "none"

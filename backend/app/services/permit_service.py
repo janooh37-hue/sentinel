@@ -300,6 +300,13 @@ def _submit_book(db: Session, permit: Permit, *, actor: str | None) -> None:
         reason = "NO_BOOK" if permit.book_id is None else "NO_SUBMITTER"
         _audit(db, "permit.book_submit_failed", permit.id, actor, {"error": reason})
         return
+    # generate_document appends new BookVersion rows by raw FK, which does NOT
+    # refresh an already-loaded Book.versions collection (sessions run
+    # expire_on_commit=False). Expire it so the chain submits against the
+    # CURRENT version, not a stale one.
+    book = db.get(Book, permit.book_id)
+    if book is not None:
+        db.expire(book, ["versions"])
     try:
         book_service.submit_for_approval(
             db,
@@ -325,11 +332,38 @@ def regenerate_permit_book(
     the Book (pdf_path NULL), same as the rest of the app.
 
     The letter is generated UNSIGNED — the manager signature is applied by the
-    book approval chain at sign time (book_service.sign_book).
+    book approval chain at sign time. A regeneration withdraws + auto-resubmits
+    when the book was already pending/approved; rejected/returned/never-sent
+    land as a fresh draft for the operator to resend manually.
 
     ponytail: re-renders docx->PDF on each roster change (Word COM). Fine for
     infrequent admin edits; switch to regenerate-on-print if throughput matters.
     """
+    # A letter already in the approval loop needs the manager's signature again
+    # after any content change — void the stale submission BEFORE regenerating
+    # (generate_document refuses to revise a pending/approved book), remember
+    # the prior state, and resubmit the regenerated letter below.
+    prior_state: str | None = None
+    if permit.book_id is not None:
+        prior = db.get(Book, permit.book_id)
+        prior_state = prior.approval_state if prior is not None else None
+        if prior is not None and prior_state == "pending":
+            # Withdraw: drop the stale request outright so the letter falls
+            # back to the draft-edit path (in-place re-render, same version).
+            cur = prior.versions[-1] if prior.versions else None
+            if cur is not None:
+                cur.approval_steps.clear()
+                cur.status = "none"
+            prior.approval_state = "none"
+            prior.submitted_by_user_id = None
+            db.flush()
+        elif prior is not None and prior_state == "approved":
+            # A signed letter is never edited in place — mark it revisable so
+            # generate_document appends a fresh version (the signed one stays
+            # in history); the fresh version is resubmitted below.
+            prior.approval_state = "returned"
+            db.flush()
+
     from app.core.permit_letter import PERMIT_RECIPIENT, build_permit_letter_html
     from app.services import document_service
 
@@ -365,7 +399,7 @@ def regenerate_permit_book(
         permit.book_id = result.book_id
         db.commit()
     _audit(db, "permit.book_generated", permit.id, actor, {"book_id": permit.book_id})
-    if submit:
+    if submit or prior_state in ("pending", "approved"):
         _submit_book(db, permit, actor=actor)
 
 
