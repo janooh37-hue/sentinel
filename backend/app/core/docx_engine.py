@@ -517,10 +517,15 @@ def stamp_signature_above_name(
     # Priority 0: an explicit signature-label line (the Report paper writes
     # التوقيـــع: with tatweel) — the float rests on the line BELOW the label
     # and rises up into it: the wet-signature look the operators asked for.
+    # Label mode centres BOTH the float and the date on the column so they
+    # stack together under the label (default left-pin + RTL text start had
+    # them at opposite margins).
     anchor = None
+    label_anchor = False
     for i in range(len(paras) - 1, -1, -1):
         if _norm_name(paras[i].text).startswith(_SIG_LABEL_NORM):
             anchor = paras[i + 1] if i + 1 < len(paras) else paras[i]
+            label_anchor = True
             break
 
     if anchor is None:
@@ -543,7 +548,11 @@ def stamp_signature_above_name(
     if anchor is None:
         return False
     placed = fill_image_behind_text_in_paragraph(
-        anchor, sig_path, width_inches=size_mm / 25.4, dilate_radius_px=boldness
+        anchor,
+        sig_path,
+        width_inches=size_mm / 25.4,
+        dilate_radius_px=boldness,
+        center_horizontal=label_anchor,
     )
     if placed and date_below and not anchor.text.strip():
         from app.core.arabic_rtl import stamp_run
@@ -552,6 +561,8 @@ def stamp_signature_above_name(
         run.font.name = "Sakkal Majalla"
         run.font.size = Pt(12)
         stamp_run(run, "Sakkal Majalla")
+        if label_anchor:
+            anchor.alignment = WD_ALIGN_PARAGRAPH.CENTER
     if placed:
         doc.save(str(docx_path))
     return bool(placed)

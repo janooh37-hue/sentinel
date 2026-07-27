@@ -164,6 +164,9 @@ def test_sig_label_anchors_below(tmp_path: Path) -> None:
     # Drawing must be in para[3] (blank below the label), NOT para[0] (above name)
     anchored = [i for i, p in enumerate(paras) if _para_has_anchor(p)]
     assert anchored == [3], f"expected drawing at para[3], got {anchored}"
+    # Label mode centres the float in the column (<wp:align>center</wp:align>) —
+    # the default left-pin put the sign at the far-left, away from the label.
+    assert ">center<" in paras[3]._element.xml, "label-mode float must be column-centred"
 
 
 def test_sig_label_beats_name_anchor(tmp_path: Path) -> None:
@@ -204,6 +207,11 @@ def test_date_below_written(tmp_path: Path) -> None:
 
     has_rtl = any(run._element.find(f".//{qn('w:rtl')}") is not None for run in anchor_para.runs)
     assert has_rtl, "date run must be marked RTL"
+    # Date paragraph is centred so it stacks with the column-centred float —
+    # RTL default start put the date at the right margin, apart from the sign.
+    from docx.enum.text import WD_ALIGN_PARAGRAPH
+
+    assert anchor_para.alignment == WD_ALIGN_PARAGRAPH.CENTER
 
 
 def test_date_below_none_writes_nothing(tmp_path: Path) -> None:
