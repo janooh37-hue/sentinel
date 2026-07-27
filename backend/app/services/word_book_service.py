@@ -448,6 +448,11 @@ def finish_word_session(db: Session, *, user: User, book_id: int) -> Book:
                 version.signed_by_user_id = user.id
                 version.signed_at = now
                 version.manager_sig_embedded = True
+                # "approved" is the canonical signed marker every serve gate reads
+                # (is_document_signed_locked, _signed_pdf_url_of). Without it the
+                # embedded signature is orphaned — the unsigned PDF keeps serving,
+                # so the sign toggle looked like it did nothing.
+                version.status = "approved"
                 signed = True
         version.fields = {
             "signer_employee_id": session.signer_employee_id,

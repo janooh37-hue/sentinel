@@ -242,6 +242,17 @@ def test_finish_report_session_embeds_signature(db_session, tmp_path):
     assert doc.template_id == "Report"
     assert abs((datetime.now() - ver.created_at).total_seconds()) < 300  # local time
 
+    # The embedded signature must actually be SERVED, not orphaned: every serve
+    # gate reads version.status == "approved". Without it the signed PDF exists
+    # on disk but the unsigned copy keeps serving, so the toggle looked dead.
+    assert ver.status == "approved"
+    from app.services import book_service
+
+    assert book_service.is_document_signed_locked(db_session, ver.document_id) == (
+        True,
+        ver.signed_pdf_path,
+    )
+
 
 def test_report_display_date():
     from datetime import datetime

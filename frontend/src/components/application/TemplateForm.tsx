@@ -161,7 +161,7 @@ function renderField(
       if (field.id === 'sign') {
         return (
           <div key={field.id}>
-            <CheckboxField {...common} />
+            <CheckboxField {...common} defaultOn />
             <SignerSignaturePreview />
           </div>
         )
