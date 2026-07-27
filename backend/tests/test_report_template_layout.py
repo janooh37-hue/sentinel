@@ -59,7 +59,7 @@ def test_closing_block(paras):
     assert paras[i_action].alignment == WD_ALIGN_PARAGRAPH.JUSTIFY
     assert paras[i_close].alignment == WD_ALIGN_PARAGRAPH.CENTER
     assert all(not paras[j].text.strip() for j in range(i_action + 1, i_close))
-    assert i_close - i_action - 1 == 7  # blanks pushing the closing down
+    assert i_close - i_action - 1 == 2  # user-tuned (was 7): keeps long bodies on one page
     assert i_name - i_close - 1 == 9  # blanks above the signature block
 
 

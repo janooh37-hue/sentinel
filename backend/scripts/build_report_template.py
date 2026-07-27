@@ -105,7 +105,7 @@ BODY = "".join(
         + "<w:r>"
         + RPR32B
         + "<w:t>للتفضل بالعلم وإجراءاتكم لطفاً،،،</w:t></w:r></w:p>",
-        BLANK * 7,
+        BLANK * 2,  # was 7 in the reference — reduced per operator (long bodies clipped to 2 pages)
         # وتفضلوا بقبول فائق الإحترام والتقدير ,,, — centered bold
         '<w:p><w:pPr><w:bidi/><w:jc w:val="center"/>'
         '<w:rPr><w:rFonts w:cstheme="minorHAnsi"/><w:b/><w:bCs/>'
