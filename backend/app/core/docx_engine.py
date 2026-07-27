@@ -470,11 +470,14 @@ def stamp_signature_above_name(
     normalized (whitespace + tatweel stripped; hand-made templates stretch
     names with tatweel). Search order:
 
-    0. explicit signature-label line: a body paragraph whose normalized text
-       starts with "التوقيع" (the Report paper writes "التوقيـــع:" with
-       tatweel) — the float rests on the paragraph BELOW the label and rises
-       up into it, giving the wet-signature look operators asked for.  General
-       Book papers have no such label so they fall through to rules 1-4.
+    0. explicit signature-label line: active only when ``date_below`` is given
+       (Report signing).  Finds a body paragraph whose normalized text starts
+       with "التوقيع" (the Report paper writes "التوقيـــع:" with tatweel)
+       — the float rests on the paragraph BELOW the label and rises up into
+       it, giving the wet-signature look operators asked for.  When
+       ``date_below`` is None (all non-Report callers) this rule is skipped
+       entirely, so free-form authored General Book text containing "التوقيع"
+       can never hijack the anchor.
     1. exact-equality match on a body paragraph (beats CC lines that merely
        QUOTE the manager's name after the closing block);
     2. containment match, skipping "نسخة إلى" lines;
@@ -520,13 +523,17 @@ def stamp_signature_above_name(
     # Label mode centres BOTH the float and the date on the column so they
     # stack together under the label (default left-pin + RTL text start had
     # them at opposite margins).
+    # IMPORTANT: this rule is active only when date_below is given (Report
+    # signing path).  Free-form General Book body text containing "التوقيع"
+    # must never hijack the anchor; omitting date_below keeps it inert.
     anchor = None
     label_anchor = False
-    for i in range(len(paras) - 1, -1, -1):
-        if _norm_name(paras[i].text).startswith(_SIG_LABEL_NORM):
-            anchor = paras[i + 1] if i + 1 < len(paras) else paras[i]
-            label_anchor = True
-            break
+    if date_below is not None:
+        for i in range(len(paras) - 1, -1, -1):
+            if _norm_name(paras[i].text).startswith(_SIG_LABEL_NORM):
+                anchor = paras[i + 1] if i + 1 < len(paras) else paras[i]
+                label_anchor = True
+                break
 
     if anchor is None:
         idx = _find(paras, exact=True)
@@ -558,7 +565,6 @@ def stamp_signature_above_name(
         from app.core.arabic_rtl import stamp_run
 
         run = anchor.add_run(date_below)
-        run.font.name = "Sakkal Majalla"
         run.font.size = Pt(12)
         stamp_run(run, "Sakkal Majalla")
         if label_anchor:

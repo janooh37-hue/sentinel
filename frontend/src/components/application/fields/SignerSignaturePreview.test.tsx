@@ -87,3 +87,16 @@ describe('SignerSignaturePreview — no signer selected', () => {
     expect(screen.queryByText(/توقيع|signature/i)).toBeNull()
   })
 })
+
+describe('SignerSignaturePreview — API error', () => {
+  it('renders nothing on a transient API error (not the amber warning)', async () => {
+    vi.mocked(api.getEmployeeSignature).mockRejectedValue(new Error('network error'))
+
+    const { container } = render(<Host signerId="G5555" />)
+
+    // Wait for the query to settle (error state)
+    await waitFor(() => expect(api.getEmployeeSignature).toHaveBeenCalled())
+    // Component must be empty — not the false "no signature" amber warning
+    expect(container).toBeEmptyDOMElement()
+  })
+})

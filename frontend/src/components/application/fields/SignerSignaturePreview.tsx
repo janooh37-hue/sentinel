@@ -19,7 +19,7 @@ export function SignerSignaturePreview(): React.JSX.Element | null {
     retry: false,
   })
 
-  if (!signerId || query.isLoading) return null
+  if (!signerId || query.isLoading || query.isError) return null
   const sig = query.data?.dataUrl ?? null
   return sig ? (
     <span className="inline-flex items-center gap-2 rounded-sm border border-border-strong bg-white px-2 py-1">

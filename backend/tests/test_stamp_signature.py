@@ -156,7 +156,12 @@ def test_sig_label_anchors_below(tmp_path: Path) -> None:
     above the name at para[0]."""
     docx = _make_report_sig_block(tmp_path)
     ok = stamp_signature_above_name(
-        docx, str(_make_sig(tmp_path)), ["فلان"], size_mm=32.0, boldness=2
+        docx,
+        str(_make_sig(tmp_path)),
+        ["فلان"],
+        size_mm=32.0,
+        boldness=2,
+        date_below="27/07/2026",
     )
     assert ok
     reloaded = Document(str(docx))
@@ -173,7 +178,12 @@ def test_sig_label_beats_name_anchor(tmp_path: Path) -> None:
     """Even though 'فلان' matches para[0], the التوقيع rule wins."""
     docx = _make_report_sig_block(tmp_path)
     ok = stamp_signature_above_name(
-        docx, str(_make_sig(tmp_path)), ["فلان"], size_mm=32.0, boldness=2
+        docx,
+        str(_make_sig(tmp_path)),
+        ["فلان"],
+        size_mm=32.0,
+        boldness=2,
+        date_below="27/07/2026",
     )
     assert ok
     reloaded = Document(str(docx))
@@ -247,3 +257,25 @@ def test_date_never_clobbers_text(tmp_path: Path) -> None:
     assert reloaded.paragraphs[3].text.strip() == "نص موجود"
     # Image still placed
     assert _para_has_anchor(reloaded.paragraphs[3])
+
+
+def test_sig_label_ignored_without_date_below(tmp_path: Path) -> None:
+    """Without date_below the التوقيع label rule is inactive — name rule wins."""
+    docx = _make_report_sig_block(tmp_path)
+    ok = stamp_signature_above_name(
+        docx,
+        str(_make_sig(tmp_path)),
+        ["فلان"],
+        size_mm=32.0,
+        boldness=2,
+        # date_below omitted — label rule must stay inert
+    )
+    assert ok
+    reloaded = Document(str(docx))
+    paras = reloaded.paragraphs
+    anchored = [i for i, p in enumerate(paras) if _para_has_anchor(p)]
+    # Label rule skipped → name rule fires → anchor above the name (para[0])
+    # i.e. NOT at para[3] (the blank below التوقيع label)
+    assert anchored != [3], "label rule must not fire when date_below is None"
+    # para[3] must have no drawing
+    assert not _para_has_anchor(paras[3]), "para[3] must not hold the drawing without date_below"
