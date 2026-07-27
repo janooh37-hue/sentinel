@@ -21,29 +21,29 @@ SRC = Path("backend/templates/GSSG-GS_300-003_General_Book.docx")
 DST = Path("backend/templates/GSSG-GS_300-004_Report.docx")
 
 # --- run/paragraph properties (copied from the reference letter) ----------
-# Plain 16pt (sz 32 half-points), Calibri for the Arabic (cs) script.
+# Plain 16pt (sz 32 half-points), Sakkal Majalla for the Arabic (cs) script.
 RPR32 = (
-    '<w:rPr><w:rFonts w:eastAsia="Times New Roman" w:cs="Calibri"/>'
+    '<w:rPr><w:rFonts w:ascii="Sakkal Majalla" w:hAnsi="Sakkal Majalla" w:cs="Sakkal Majalla"/>'
     '<w:sz w:val="32"/><w:szCs w:val="32"/><w:rtl/></w:rPr>'
 )
 RPR32CS = (
-    '<w:rPr><w:rFonts w:eastAsia="Times New Roman" w:cs="Calibri" w:hint="cs"/>'
+    '<w:rPr><w:rFonts w:ascii="Sakkal Majalla" w:hAnsi="Sakkal Majalla" w:cs="Sakkal Majalla" w:hint="cs"/>'
     '<w:sz w:val="32"/><w:szCs w:val="32"/><w:rtl/></w:rPr>'
 )
-# Bold 16pt — the body/closing weight in the reference.
+# Bold 16pt — the body anchor weight in the reference.
 RPR32B = (
-    '<w:rPr><w:rFonts w:cstheme="minorHAnsi" w:hint="cs"/><w:b/><w:bCs/>'
+    '<w:rPr><w:rFonts w:ascii="Sakkal Majalla" w:hAnsi="Sakkal Majalla" w:cs="Sakkal Majalla" w:hint="cs"/><w:b/><w:bCs/>'
     '<w:sz w:val="32"/><w:szCs w:val="32"/><w:rtl/></w:rPr>'
 )
-# 18pt — the signature block size in the reference.
+# 18pt — the signature block size in the reference, Sakkal Majalla.
 RPR36 = (
-    '<w:rPr><w:rFonts w:eastAsia="Times New Roman" w:cs="Calibri" w:hint="cs"/>'
+    '<w:rPr><w:rFonts w:ascii="Sakkal Majalla" w:hAnsi="Sakkal Majalla" w:cs="Sakkal Majalla" w:hint="cs"/>'
     '<w:sz w:val="36"/><w:szCs w:val="36"/><w:rtl/></w:rPr>'
 )
 # The reference positions the signature block with a literal bold-italic
-# 16pt run of spaces before the name label — copied verbatim.
+# 16pt run of spaces before the name label — copied verbatim, Sakkal Majalla.
 RPR32BI = (
-    '<w:rPr><w:rFonts w:cstheme="minorHAnsi" w:hint="cs"/><w:b/><w:bCs/>'
+    '<w:rPr><w:rFonts w:ascii="Sakkal Majalla" w:hAnsi="Sakkal Majalla" w:cs="Sakkal Majalla" w:hint="cs"/><w:b/><w:bCs/>'
     '<w:i/><w:iCs/><w:sz w:val="32"/><w:szCs w:val="32"/><w:rtl/>'
     '<w:lang w:bidi="ar-AE"/></w:rPr>'
 )
@@ -51,7 +51,7 @@ RPR32BI = (
 BLANK = "<w:p><w:pPr><w:bidi/>" + RPR32 + "</w:pPr></w:p>"
 PPR_BODY = (
     '<w:pPr><w:bidi/><w:jc w:val="both"/>'
-    '<w:rPr><w:rFonts w:cstheme="minorHAnsi"/><w:b/><w:bCs/>'
+    '<w:rPr><w:rFonts w:ascii="Sakkal Majalla" w:hAnsi="Sakkal Majalla" w:cs="Sakkal Majalla"/><w:b/><w:bCs/>'
     '<w:sz w:val="32"/><w:szCs w:val="32"/><w:rtl/></w:rPr></w:pPr>'
 )
 
@@ -79,12 +79,12 @@ BODY = "".join(
         + RPR32CS
         + '<w:tab/><w:t xml:space="preserve">المحترم </w:t></w:r></w:p>',
         BLANK,
-        # تحية طيبة وبعد ,,  (reference punctuation kept verbatim)
+        # تحية طيبة وبعد ،،  (Arabic commas, operator round 2)
         "<w:p><w:pPr><w:bidi/>"
         + RPR32
         + "</w:pPr><w:r>"
         + RPR32CS
-        + '<w:t xml:space="preserve">تحية طيبة وبعد ,,</w:t></w:r></w:p>',
+        + '<w:t xml:space="preserve">تحية طيبة وبعد ،،</w:t></w:r></w:p>',
         BLANK,
         # الموضوع — centered, hidden entirely when there is no subject.
         '<w:p><w:pPr><w:bidi/><w:jc w:val="center"/>'
@@ -99,18 +99,19 @@ BODY = "".join(
         # matches so typing at the cleared anchor inherits this format.
         "<w:p>" + PPR_BODY + "<w:r>" + RPR32B + "<w:t>{{ body }}</w:t></w:r></w:p>",
         BLANK,
-        # للتفضل بالعلم وإجراءاتكم لطفاً،،،
-        "<w:p>"
-        + PPR_BODY
-        + "<w:r>"
-        + RPR32B
-        + "<w:t>للتفضل بالعلم وإجراءاتكم لطفاً،،،</w:t></w:r></w:p>",
+        # للتفضل … — plain (operator un-bolded in round 2), Arabic commas
+        '<w:p><w:pPr><w:bidi/><w:jc w:val="both"/>'
+        + RPR32
+        + "</w:pPr><w:r>"
+        + RPR32CS
+        + "<w:t>للتفضل بالعلم وإجراءاتكم لطفاً،،</w:t></w:r></w:p>",
         BLANK * 2,  # was 7 in the reference — reduced per operator (long bodies clipped to 2 pages)
-        # وتفضلوا بقبول فائق الإحترام والتقدير ,,, — centered bold
+        # وتفضلوا … — centered, plain (operator un-bolded in round 2)
         '<w:p><w:pPr><w:bidi/><w:jc w:val="center"/>'
-        '<w:rPr><w:rFonts w:cstheme="minorHAnsi"/><w:b/><w:bCs/>'
-        '<w:sz w:val="32"/><w:szCs w:val="32"/><w:rtl/></w:rPr></w:pPr>'
-        "<w:r>" + RPR32B + "<w:t>وتفضلوا بقبول فائق الإحترام والتقدير ,,,</w:t></w:r></w:p>",
+        + RPR32
+        + "</w:pPr><w:r>"
+        + RPR32CS
+        + "<w:t>وتفضلوا بقبول فائق الاحترام والتقدير</w:t></w:r></w:p>",
         BLANK * 9,
         # Signature block — 18pt, positioned like the reference (literal
         # space runs + left indent copied verbatim).

@@ -35,7 +35,7 @@ def test_report_template_tokens_and_no_ref():
     assert "{{ manager_title }}" in text
     assert "{{ manager_sig }}" in text
     # closing formula present (exact labels/layout asserted in test_report_template_layout.py)
-    assert "وتفضلوا بقبول فائق الإحترام والتقدير" in text
+    assert "وتفضلوا بقبول فائق الاحترام والتقدير" in text
     # name paragraph appears before the signature paragraph
     names = [p.text for p in doc.paragraphs]
     i_name = next(i for i, t in enumerate(names) if "{{ manager_name }}" in t)

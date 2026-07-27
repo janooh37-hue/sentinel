@@ -36,7 +36,7 @@ def _index(paras, needle: str) -> int:
 def test_top_block(paras):
     i_date = _index(paras, "التاريخ: {{ date }}")
     i_addr = _index(paras, "المحترم")
-    i_greet = _index(paras, "تحية طيبة وبعد ,,")
+    i_greet = _index(paras, "تحية طيبة وبعد ،،")
     i_subj = _index(paras, "الموضوع : ")
     assert i_date < i_addr < i_greet < i_subj
     # المحترم reaches the line end via a tab, not literal spaces
@@ -50,17 +50,22 @@ def test_body_anchor_bold_16pt_justified(paras):
     (run,) = [r for r in p.runs if "{{ body }}" in r.text]
     assert run.bold is True
     assert run.font.size == Pt(16)
+    assert run.font.name == "Sakkal Majalla"
 
 
 def test_closing_block(paras):
-    i_action = _index(paras, "للتفضل بالعلم وإجراءاتكم لطفاً،،،")
-    i_close = _index(paras, "وتفضلوا بقبول فائق الإحترام والتقدير ,,,")
+    i_action = _index(paras, "للتفضل بالعلم وإجراءاتكم لطفاً،،")
+    i_close = _index(paras, "وتفضلوا بقبول فائق الاحترام والتقدير")
     i_name = _index(paras, "{{ manager_name }}")
     assert paras[i_action].alignment == WD_ALIGN_PARAGRAPH.JUSTIFY
     assert paras[i_close].alignment == WD_ALIGN_PARAGRAPH.CENTER
     assert all(not paras[j].text.strip() for j in range(i_action + 1, i_close))
     assert i_close - i_action - 1 == 2  # user-tuned (was 7): keeps long bodies on one page
     assert i_name - i_close - 1 == 9  # blanks above the signature block
+    (action_run,) = [r for r in paras[i_action].runs if r.text.strip()]
+    assert action_run.bold is not True  # user-unbolded in round 2
+    (close_run,) = [r for r in paras[i_close].runs if r.text.strip()]
+    assert close_run.bold is not True
 
 
 def test_signature_block(paras):
