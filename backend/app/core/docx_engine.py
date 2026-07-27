@@ -452,6 +452,7 @@ def _norm_name(s: str) -> str:
 
 
 _CC_LABEL_NORM = "نسخةإلى"  # "نسخة إلى" normalized — CC lines can quote the manager
+_SIG_LABEL_NORM = "التوقيع"  # "التوقيع" normalized — Report paper signature label
 
 
 def stamp_signature_above_name(
@@ -461,6 +462,7 @@ def stamp_signature_above_name(
     *,
     size_mm: float = DEFAULT_SIG_SIZE_MM,
     boldness: int = DEFAULT_SIG_BOLDNESS,
+    date_below: str | None = None,
 ) -> bool:
     """Float *sig_path* above the closing-name line of an ALREADY-RENDERED docx.
 
@@ -468,6 +470,11 @@ def stamp_signature_above_name(
     normalized (whitespace + tatweel stripped; hand-made templates stretch
     names with tatweel). Search order:
 
+    0. explicit signature-label line: a body paragraph whose normalized text
+       starts with "التوقيع" (the Report paper writes "التوقيـــع:" with
+       tatweel) — the float rests on the paragraph BELOW the label and rises
+       up into it, giving the wet-signature look operators asked for.  General
+       Book papers have no such label so they fall through to rules 1-4.
     1. exact-equality match on a body paragraph (beats CC lines that merely
        QUOTE the manager's name after the closing block);
     2. containment match, skipping "نسخة إلى" lines;
@@ -477,6 +484,11 @@ def stamp_signature_above_name(
 
     Body matches anchor on the paragraph ABOVE the name (the signature gap);
     table matches anchor on the matched paragraph itself (the float rises up).
+
+    ``date_below`` (Report seal): when the label rule fires AND the anchor
+    paragraph is blank, write the date string below the signature image as an
+    RTL run (Sakkal Majalla 12pt).  Never overwrites existing text.
+
     Returns False when the signature file is unusable or no anchor exists —
     callers must treat that as a FAILURE, not a soft skip (a "signed" paper
     without a visible signature is the defect this function exists to prevent).
@@ -502,18 +514,27 @@ def stamp_signature_above_name(
                 return i
         return None
 
+    # Priority 0: an explicit signature-label line (the Report paper writes
+    # التوقيـــع: with tatweel) — the float rests on the line BELOW the label
+    # and rises up into it: the wet-signature look the operators asked for.
     anchor = None
-    idx = _find(paras, exact=True)
-    if idx is None:
-        idx = _find(paras, exact=False)
-    if idx is not None:
-        anchor = paras[idx - 1] if idx > 0 else paras[idx]
-    else:
-        t_idx = _find(table_paras, exact=True)
-        if t_idx is None:
-            t_idx = _find(table_paras, exact=False)
-        if t_idx is not None:
-            anchor = table_paras[t_idx]  # float rises up from the name's own line
+    for i in range(len(paras) - 1, -1, -1):
+        if _norm_name(paras[i].text).startswith(_SIG_LABEL_NORM):
+            anchor = paras[i + 1] if i + 1 < len(paras) else paras[i]
+            break
+
+    if anchor is None:
+        idx = _find(paras, exact=True)
+        if idx is None:
+            idx = _find(paras, exact=False)
+        if idx is not None:
+            anchor = paras[idx - 1] if idx > 0 else paras[idx]
+        else:
+            t_idx = _find(table_paras, exact=True)
+            if t_idx is None:
+                t_idx = _find(table_paras, exact=False)
+            if t_idx is not None:
+                anchor = table_paras[t_idx]  # float rises up from the name's own line
     if anchor is None:
         last = next((p for p in reversed(paras) if p.text.strip()), None) or next(
             (p for p in reversed(table_paras) if p.text.strip()), None
@@ -524,6 +545,13 @@ def stamp_signature_above_name(
     placed = fill_image_behind_text_in_paragraph(
         anchor, sig_path, width_inches=size_mm / 25.4, dilate_radius_px=boldness
     )
+    if placed and date_below and not anchor.text.strip():
+        from app.core.arabic_rtl import stamp_run
+
+        run = anchor.add_run(date_below)
+        run.font.name = "Sakkal Majalla"
+        run.font.size = Pt(12)
+        stamp_run(run, "Sakkal Majalla")
     if placed:
         doc.save(str(docx_path))
     return bool(placed)

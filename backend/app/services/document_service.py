@@ -1838,6 +1838,7 @@ def _sign_authored_docx(
         names,
         size_mm=_appearance.signature_size_mm,
         boldness=_appearance.signature_boldness,
+        date_below=ts.strftime("%d/%m/%Y") if book.ref_number.startswith("REPORT-") else None,
     )
     if not placed:
         # A "signed" paper with no visible signature is the exact defect class
