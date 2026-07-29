@@ -101,6 +101,21 @@ def _probe_client() -> httpx.Client:
     return httpx.Client(transport=_transport, timeout=_PROBE_TIMEOUT)
 
 
+def _json_obj(resp: httpx.Response) -> dict[str, object]:
+    """Response body as a dict, or ``{}`` when it isn't a JSON object.
+
+    WAHA answers some paths with PNG or an HTML error page; every caller here only
+    ever wants named fields, and none of them may raise.
+    """
+    if not resp.content:
+        return {}
+    try:
+        data = resp.json()
+    except ValueError:  # covers JSONDecodeError and UnicodeDecodeError on binary bodies
+        return {}
+    return data if isinstance(data, dict) else {}
+
+
 def _msg_id(data: dict[str, object]) -> str | None:
     mid = data.get("id")
     if isinstance(mid, dict):
@@ -132,7 +147,7 @@ def send_to_chat(chat_id: str, text: str, mentions: list[str] | None = None) -> 
             log.warning("openwa: transport error (attempt %d): %s", attempt + 1, last_err)
             continue
         if resp.status_code // 100 == 2:
-            data = resp.json() if resp.content else {}
+            data = _json_obj(resp)
             return SendResult(ok=True, message_id=_msg_id(data))
         body = resp.text
         not_reg = (
@@ -214,7 +229,7 @@ def send_file(
             last_err = str(e) or e.__class__.__name__
             continue
         if resp.status_code // 100 == 2:
-            return SendResult(ok=True, message_id=_msg_id(resp.json() if resp.content else {}))
+            return SendResult(ok=True, message_id=_msg_id(_json_obj(resp)))
         return SendResult(ok=False, error=f"HTTP {resp.status_code}: {resp.text}")
     return SendResult(ok=False, error=last_err or "network error")
 
@@ -235,7 +250,7 @@ def is_registered(phone: str) -> bool | None:
         return None
     if resp.status_code // 100 != 2:
         return None
-    data = resp.json() if resp.content else {}
+    data = _json_obj(resp)
     val = data.get("numberExists")
     return bool(val) if val is not None else None
 
@@ -252,9 +267,14 @@ def get_ack(message_id: str, chat_id: str) -> DeliveryResult:
             last_err = str(e) or e.__class__.__name__
             continue
         if resp.status_code // 100 == 2:
-            data = resp.json() if resp.content else {}
+            data = _json_obj(resp)
             ack = data.get("ack")
-            state = None if ack is None else _ACK_STATE.get(int(ack), "sent")
+            # WAHA sends a number here, but the body is untyped JSON — a surprise
+            # shape must read as "unknown", not raise out of a never-raises call.
+            try:
+                state = None if ack is None else _ACK_STATE.get(int(ack), "sent")  # type: ignore[call-overload]
+            except (TypeError, ValueError):
+                state = None
             return DeliveryResult(ok=True, state=state)
         return DeliveryResult(ok=False, error=f"HTTP {resp.status_code}: {resp.text}")
     return DeliveryResult(ok=False, error=last_err or "network error")
@@ -278,7 +298,7 @@ def session_state() -> str:
         return "unreachable"
     if resp.status_code // 100 != 2:
         return "unreachable"
-    data = resp.json() if resp.content else {}
+    data = _json_obj(resp)
     if str(data.get("status", "")).upper() in {"CONNECTED", "READY", "WORKING"}:
         return "connected"
     return "disconnected"
@@ -325,13 +345,64 @@ def logout() -> bool:
     return resp.status_code // 100 == 2
 
 
+def _raw_status() -> str | None:
+    """Raw WAHA session status (STOPPED/STARTING/SCAN_QR_CODE/WORKING/FAILED).
+
+    None when the gateway can't be read. Distinct from ``session_state()``, which
+    collapses everything that isn't linked into ``disconnected``.
+    """
+    cfg = get_settings()
+    url = f"{_base()}/api/sessions/{cfg.openwa_session}"
+    try:
+        with _probe_client() as c:
+            resp = c.get(url, headers=_headers())
+    except httpx.HTTPError as e:
+        log.warning("openwa: raw status transport error: %s", e)
+        return None
+    if resp.status_code // 100 != 2:
+        return None
+    data = _json_obj(resp)
+    status = data.get("status")
+    return str(status).upper() if status else None
+
+
+def _restart_session() -> bool:
+    cfg = get_settings()
+    url = f"{_base()}/api/sessions/{cfg.openwa_session}/restart"
+    try:
+        # Short timeout on purpose: this only ever runs to make a QR appear, and the
+        # dialog re-polls every 20 s. Better to give up and let the next poll win than
+        # to pin a worker behind a busy gateway.
+        with _probe_client() as c:
+            resp = c.post(url, headers=_headers())
+    except httpx.HTTPError as e:
+        log.warning("openwa: session restart transport error: %s", e)
+        return False
+    return resp.status_code // 100 == 2
+
+
+# WAHA force-stops a session roughly 90 s after an unscanned QR expires, so the admin
+# reconnect dialog is almost always opened onto a dead session. Restart from these two
+# states only: restarting a STARTING or SCAN_QR_CODE session would reset it on every
+# 20 s dialog poll, and a WORKING one would knock the linked number offline.
+_QR_RESTARTABLE = frozenset({"STOPPED", "FAILED"})
+_QR_WAIT_SECONDS = 3.0
+_QR_POLL_SECONDS = 0.25
+
+
 def fetch_qr() -> str | None:
     """Fetch the current QR code from the gateway as a data URL, or None on any error.
 
-    Returns a ``data:image/png;base64,...`` URL built from WAHA's binary QR
-    response. Never raises.
+    Reviving a stopped session is part of the job: WAHA only serves the QR while the
+    session sits in SCAN_QR_CODE, so without this the dialog shows an empty box forever
+    once the first QR expires. Returns a ``data:image/png;base64,...`` URL built from
+    WAHA's binary QR response. Never raises.
     """
     cfg = get_settings()
+    if _raw_status() in _QR_RESTARTABLE and _restart_session():
+        deadline = time.monotonic() + _QR_WAIT_SECONDS
+        while _raw_status() != "SCAN_QR_CODE" and time.monotonic() < deadline:
+            time.sleep(_QR_POLL_SECONDS)
     url = f"{_base()}/api/{cfg.openwa_session}/auth/qr"
     try:
         with _client() as c:
@@ -355,5 +426,5 @@ def health() -> bool:
         return False
     if resp.status_code // 100 != 2:
         return False
-    data = resp.json() if resp.content else {}
+    data = _json_obj(resp)
     return str(data.get("status", "")).upper() in {"CONNECTED", "READY", "WORKING"}

@@ -65,6 +65,10 @@ def test_update_leave_status_change_triggers_sms(db_session, monkeypatch):
     monkeypatch.setenv("GSSG_SMS_GATEWAY_URL", "http://192.168.1.50:8080")
     monkeypatch.setenv("GSSG_SMS_USERNAME", "user")
     monkeypatch.setenv("GSSG_SMS_PASSWORD", "pass")
+    # This asserts the SMS path, so pin the channel. The operator's .env sets
+    # GSSG_OPENWA_ENABLED=1, which routes to WhatsApp first; the test only ever
+    # reached SMS because the live gateway answered 422 (read: "not on WhatsApp").
+    monkeypatch.setenv("GSSG_OPENWA_ENABLED", "0")
     from app.config import get_settings
 
     get_settings.cache_clear()
