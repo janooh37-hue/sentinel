@@ -122,13 +122,13 @@ def test_fetch_qr_does_not_restart_while_starting(monkeypatch):
     assert "restart" not in calls
 
 
-def test_fetch_qr_does_not_restart_a_working_session(monkeypatch):
-    """A linked session must never be knocked offline just because the dialog opened."""
+def test_fetch_qr_short_circuits_a_working_session(monkeypatch):
+    """Linked means nothing to scan — and WAHA stalls ~10s before 422ing that request."""
     _cfg(monkeypatch)
     calls = []
     wa._transport = httpx.MockTransport(_qr_router(["WORKING"], calls))
-    wa.fetch_qr()
-    assert "restart" not in calls
+    assert wa.fetch_qr() is None
+    assert calls == []  # neither restarted (would unlink) nor asked for a QR
 
 
 def test_logout_true_on_2xx(monkeypatch):

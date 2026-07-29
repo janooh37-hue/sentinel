@@ -399,7 +399,13 @@ def fetch_qr() -> str | None:
     WAHA's binary QR response. Never raises.
     """
     cfg = get_settings()
-    if _raw_status() in _QR_RESTARTABLE and _restart_session():
+    status = _raw_status()
+    if status == "WORKING":
+        # Already linked, so there is no code to scan. Worth short-circuiting: WAHA
+        # sits on this request for ~10 s before answering 422, and the dialog can
+        # poll once more before it notices the connection and closes itself.
+        return None
+    if status in _QR_RESTARTABLE and _restart_session():
         deadline = time.monotonic() + _QR_WAIT_SECONDS
         while _raw_status() != "SCAN_QR_CODE" and time.monotonic() < deadline:
             time.sleep(_QR_POLL_SECONDS)
