@@ -1848,6 +1848,7 @@
     "overdue": "Past due",
     "cancel": "Cancel",
     "cancelled": "Scheduled departure cancelled",
+    "alreadyApplied": "This departure has already been applied",
     "viewAll": "View all employees"
   },
   "viewer": {

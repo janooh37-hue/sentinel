@@ -9,6 +9,9 @@ they still are.
 
 from datetime import date, timedelta
 
+import pytest
+
+from app.api.errors import ValidationFailedError
 from app.db.models import Employee
 from app.schemas.employee import EmployeeUpdate
 from app.services import employee_service
@@ -141,6 +144,49 @@ def test_unrelated_patch_preserves_the_pending_departure(db_session):
     )
     assert out.pending_status == "Resigned"
     assert out.end_date == future
+
+
+def test_full_form_edit_preserves_the_pending_departure(db_session):
+    """The EmployeeForm shape — every field resubmitted, status unchanged.
+
+    EmployeeForm always emits `status` and `end_date`, and EmployeeDetailPage
+    spreads the whole form into the PATCH. So an admin fixing a phone number
+    sends status='Active' on an employee who is *already* Active. That is not a
+    reactivation and must not cancel a departure nobody touched — the bug this
+    guards is silent: no error, the badge and widget just stop showing it.
+    """
+    future = date.today() + timedelta(days=10)
+    _make(db_session, "G9118", end_date=future, pending_status="Resigned")
+    out = employee_service.update_employee(
+        db_session,
+        "G9118",
+        EmployeeUpdate(status="Active", end_date=future, department="Operations"),
+    )
+    assert out.pending_status == "Resigned", "unchanged status is not a reactivation"
+    assert out.end_date == future
+    assert out.status == "Active"
+
+
+def test_cancel_payload_refuses_an_already_departed_employee(db_session):
+    """The widget's Cancel can race the flip job; a departed row must refuse.
+
+    `{end_date: None}` is only meaningful while the employee is still Active.
+    On a row the flip has already applied it must raise, not silently
+    resurrect them with their end date wiped.
+    """
+    _make(
+        db_session,
+        "G9119",
+        status="Resigned",
+        end_date=date.today() - timedelta(days=1),
+        pending_status=None,
+    )
+    with pytest.raises(ValidationFailedError) as exc:
+        employee_service.update_employee(db_session, "G9119", EmployeeUpdate(end_date=None))
+    assert exc.value.code == "EMPLOYEE_INVALID_STATUS_END_DATE"
+    row = employee_service.get_employee(db_session, "G9119")
+    assert row.status == "Resigned", "row untouched"
+    assert row.end_date is not None
 
 
 def test_moving_the_date_reschedules_without_losing_the_target(db_session):

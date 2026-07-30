@@ -16,7 +16,7 @@ import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { CalendarClock, UserMinus } from 'lucide-react'
 
-import { api, apiErrorMessage } from '@/lib/api'
+import { api, apiErrorMessage, ApiError } from '@/lib/api'
 import { useCapabilities } from '@/lib/useCapabilities'
 import { pickEmployeeName } from '@/lib/employeeName'
 import { Button } from '@/components/ui/button'
@@ -45,13 +45,26 @@ export function PendingDeparturesWidget(): React.JSX.Element | null {
   })
 
   const cancel = useMutation({
-    mutationFn: (id: string) =>
-      api.updateEmployee(id, { status: 'Active', end_date: null }),
+    // Send only the end date. Sending status:'Active' too would silently
+    // REACTIVATE an employee the flip job already departed while this list sat
+    // stale — "cancel a scheduled departure" must not become "undo a completed
+    // one". Clearing the end date alone is meaningful only while they are still
+    // Active, so the server's existing status/end-date invariant refuses it.
+    mutationFn: (id: string) => api.updateEmployee(id, { end_date: null }),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ['employees'] })
       toast.success(t('pendingDepartures.cancelled'))
     },
-    onError: (err) => toast.error(apiErrorMessage(err)),
+    onError: (err) => {
+      // Refresh either way: on the raced case the row is already gone, and
+      // leaving it on screen invites the same click again.
+      void qc.invalidateQueries({ queryKey: ['employees'] })
+      toast.error(
+        err instanceof ApiError && err.code === 'EMPLOYEE_INVALID_STATUS_END_DATE'
+          ? t('pendingDepartures.alreadyApplied')
+          : apiErrorMessage(err),
+      )
+    },
   })
 
   if (!has('employees.view')) return null

@@ -1,8 +1,8 @@
 /**
  * Scheduled-departure chip — "Resigned — effective 15/08/2026".
  *
- * Shown beside StatusPill while the employee is still Active but has a
- * departure booked for `endDate`. Composes the canonical
+ * Shown beside the employee's status pill while they are still Active but have
+ * a departure booked for `endDate`. Composes the canonical
  * `employees.status.*` translation with a date wrapper so the Arabic wording
  * stays in one place (مستقيل / مفصول), never duplicated here.
  *

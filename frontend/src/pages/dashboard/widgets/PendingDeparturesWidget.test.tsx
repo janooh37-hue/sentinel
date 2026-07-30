@@ -100,17 +100,17 @@ describe('PendingDeparturesWidget', () => {
     expect(screen.getByText('المغادرات المجدولة')).toBeInTheDocument()
   })
 
-  it('Cancel sends the reset patch', async () => {
+  it('Cancel clears only the end date — it must not send status', async () => {
+    /* Sending status:'Active' would REACTIVATE an employee the flip job had
+       already departed while this list sat stale. Clearing the end date alone
+       is meaningful only on a still-Active row, so the server's existing
+       status/end-date invariant refuses the raced case instead. The exact
+       object match below is the guard: adding `status` back fails this test. */
     vi.mocked(api.listEmployees).mockResolvedValue({ items: [ROW], total: 1 } as never)
     vi.mocked(api.updateEmployee).mockResolvedValue({} as never)
     renderWidget()
     await screen.findByText('Ahmed Ali')
     await userEvent.click(screen.getByRole('button', { name: 'Cancel' }))
-    await waitFor(() =>
-      expect(api.updateEmployee).toHaveBeenCalledWith('G9600', {
-        status: 'Active',
-        end_date: null,
-      }),
-    )
+    await waitFor(() => expect(api.updateEmployee).toHaveBeenCalledWith('G9600', { end_date: null }))
   })
 })

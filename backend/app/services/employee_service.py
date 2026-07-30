@@ -141,29 +141,33 @@ def update_employee(db: Session, employee_id: str, payload: EmployeeUpdate) -> E
     #
     # This lives in the service, not in StatusDialog, so the full EmployeeForm
     # gets the same rule and there is one place to be correct.
-    if (
+    is_scheduled_departure = (
         merged_status != EMPLOYEE_STATUS_ACTIVE
         and merged_end is not None
         and merged_end > date.today()
-    ):
+    )
+    # A REAL reactivation, not merely a payload that happens to carry the
+    # employee's current status. EmployeeForm submits every field it renders,
+    # so an admin editing a phone number sends status='Active' unchanged — that
+    # must not cancel a departure they never touched.
+    is_reactivation = (
+        data.get("status") == EMPLOYEE_STATUS_ACTIVE and row.status != EMPLOYEE_STATUS_ACTIVE
+    )
+    is_end_date_cleared = "end_date" in data and data["end_date"] is None
+    # An immediate (today-or-past) departure supersedes a scheduled one: the
+    # marker must not outlive it, or a now-Terminated employee keeps showing a
+    # stale "Resigned" badge. The schedule branch already claims every
+    # future-dated case, so a non-Active status here is applying now.
+    is_immediate_departure = merged_status != EMPLOYEE_STATUS_ACTIVE
+
+    if is_scheduled_departure:
         data["pending_status"] = merged_status
         data["status"] = EMPLOYEE_STATUS_ACTIVE
         merged_status = EMPLOYEE_STATUS_ACTIVE
-    elif (
-        data.get("status") == EMPLOYEE_STATUS_ACTIVE
-        or ("end_date" in data and data["end_date"] is None)
-        or merged_status != EMPLOYEE_STATUS_ACTIVE
-    ):
-        # Reactivating, or clearing the end date, cancels a pending departure.
-        # This is the Cancel path: the dashboard widget sends
-        # {status: 'Active', end_date: null}, which needs no new endpoint.
-        #
-        # The third clause: an immediate (today-or-past) departure supersedes
-        # any previously scheduled one — the marker must not outlive it, or a
-        # now-Terminated employee could keep showing a stale "Resigned" badge
-        # from before. Since the schedule branch above already claims every
-        # future-dated case, reaching here with a non-Active merged_status
-        # means this departure is applying now, not scheduling.
+    elif is_reactivation or is_end_date_cleared or is_immediate_departure:
+        # Clearing the end date is the widget's Cancel path — it sends
+        # {end_date: null} alone, which validate_status_end_date already
+        # refuses on an already-departed row.
         data["pending_status"] = None
 
     try:
@@ -217,6 +221,9 @@ def apply_due_departures(db: Session, *, today: date | None = None) -> list[Empl
         )
     )
     for row in rows:
+        # The `or` is unreachable — the WHERE clause admits only the two legal
+        # targets, never NULL — but `pending_status` is `str | None`, so it is
+        # what narrows the type for the assignment. Not a real fallback.
         row.status = row.pending_status or EMPLOYEE_STATUS_ACTIVE
         row.pending_status = None
     if rows:
