@@ -72,9 +72,15 @@ makes the read-the-paper state the default and the marking state the exception.
 
 ### Touch handling
 
-`touch-action: none` is applied **only while a highlight drag is in flight** —
-not for the whole armed mode, and never for pins. A tap works fine under
-`touch-action: auto`, so a manager who only ever pins never loses the gesture.
+`touch-action: none` is applied **only when armed *and* the Highlight tool is
+selected** — never for pins, and never while disarmed.
+
+It must key off the selected tool, not off a live drag: the browser decides
+whether a gesture is a scroll on `pointerdown`, so setting `touch-action` once
+the drag is already moving is too late to have any effect. Since Pin is the
+default tool, arming alone does not cost the manager pinch-zoom — only
+deliberately choosing Highlight does, and that is the one gesture that genuinely
+conflicts.
 
 Disarmed, the overlay root is `pointer-events: none`. Persisted mark badges keep
 `pointer-events: auto` so a manager can still tap a numbered badge to read an
@@ -220,8 +226,8 @@ Frontend (vitest), the real check for both sections:
    overlay root has `pointer-events: none` and no tool pill is rendered.
 2. **Arming** — clicking Mark renders the pill and makes the overlay
    interactive.
-3. **Touch-action** — armed with the pin tool, `touch-action` is not `none`;
-   it becomes `none` only during a highlight drag.
+3. **Touch-action** — armed with the Pin tool, `touch-action` is not `none`;
+   it becomes `none` only after the Highlight tool is selected.
 4. **Disarm on save and on cancel** — one arm yields one mark.
 5. **Keyboard** — with a stubbed `window.visualViewport`, the composer's bottom
    offset tracks `height`/`offsetTop`; changing them repositions it.
