@@ -43,51 +43,11 @@ import { DEFAULT_BOOKS_FILTERS, normalizeFilters } from './booksFiltersUtils'
 import { sealDescriptor, signedSourceOf } from './bookStateLabel'
 import { StatusSpine, type SpineState } from './StatusSpine'
 import { FormRail, type RailItem } from './FormRail'
+import { railItemsFrom, spineCountsFrom, useServiceLabel } from './serviceLabels'
 import { RecordsList } from './RecordsList'
 import { RecordPane } from './RecordPane'
 
 const DEFAULT_FILTERS = DEFAULT_BOOKS_FILTERS
-
-// ponytail: compile-only shim for the rail's kind grouping. Task 6 deleted the
-// subject-prefix guessing table from formKind.ts (rows/pane now render
-// row.service_id via serviceLabels.ts); the rail itself still groups by the
-// old 6-way guess pending Task 7, which redesigns FormRail around
-// service_id / getBookFacets(). Kept local (unexported) so nothing outside
-// this file can depend on it. Delete this block once Task 7 lands.
-interface LocalFormKind {
-  id: string
-  glyph: string
-  labelKey: string
-  prefixes: string[]
-}
-const LOCAL_FORM_KINDS: LocalFormKind[] = [
-  { id: 'leave', glyph: '🌴', labelKey: 'books.formKind.leave', prefixes: ['leave application'] },
-  { id: 'salary', glyph: '💵', labelKey: 'books.formKind.salary', prefixes: ['salary transfer'] },
-  { id: 'duty', glyph: '🔄', labelKey: 'books.formKind.duty', prefixes: ['duty resumption'] },
-  { id: 'hr', glyph: '📋', labelKey: 'books.formKind.hr', prefixes: ['hr request'] },
-  { id: 'passport', glyph: '🛂', labelKey: 'books.formKind.passport', prefixes: ['passport release'] },
-  { id: 'material', glyph: '📦', labelKey: 'books.formKind.material', prefixes: ['material request'] },
-]
-const LOCAL_OTHER_KIND: LocalFormKind = { id: 'other', glyph: '📄', labelKey: 'books.formKind.other', prefixes: [] }
-const LOCAL_GENERAL_BOOK_KIND: LocalFormKind = {
-  id: 'general_book',
-  glyph: '📓',
-  labelKey: 'books.formKind.generalBook',
-  prefixes: [],
-}
-
-function localFormKindOf(
-  subject: string | null | undefined,
-  opts?: { classified?: boolean },
-): LocalFormKind {
-  if (opts?.classified) return LOCAL_GENERAL_BOOK_KIND
-  const s = (subject ?? '').trim().toLowerCase()
-  if (!s) return LOCAL_OTHER_KIND
-  for (const kind of LOCAL_FORM_KINDS) {
-    if (kind.prefixes.some((p) => s.startsWith(p))) return kind
-  }
-  return LOCAL_OTHER_KIND
-}
 
 function formatDate(iso: string): string {
   return iso.slice(0, 10)
@@ -117,7 +77,7 @@ export function BooksPage(): React.JSX.Element {
 
   // ── Desktop pane state ──────────────────────────────────────────────────────
   const [spineState, setSpineState] = useState<SpineState>('all')
-  const [railKind, setRailKind] = useState<string>('all')
+  const [railService, setRailService] = useState<string>('all')
   const [search, setSearch] = useState('')
   const [showDrafts, setShowDrafts] = useState(false)
   const [selectedId, setSelectedId] = useState<number | null>(null)
@@ -128,10 +88,20 @@ export function BooksPage(): React.JSX.Element {
   // or falls back to the full-screen record page (id not in the 500-row window).
   const [pendingOpenId, setPendingOpenId] = useState<number | null>(null)
 
+  // Rail + spine numbers over EVERY record — the 500-row page window is why
+  // these used to disagree with the page's own total.
+  const facetsQuery = useQuery({
+    queryKey: ['books', 'facets'],
+    queryFn: () => api.getBookFacets(),
+  })
+
   // ── Data: one unfiltered fetch; both branches filter client-side ───────────
   const listQuery = useQuery({
-    queryKey: ['books', 'all'],
-    queryFn: () => api.listBooks({ limit: 500 }),
+    queryKey: ['books', 'all', railService],
+    queryFn: () =>
+      api.listBooks(
+        railService === 'all' ? { limit: 500 } : { service_id: railService, limit: 500 },
+      ),
   })
   const allRows: BookRead[] = useMemo(() => listQuery.data?.items ?? [], [listQuery.data])
 
@@ -289,56 +259,22 @@ export function BooksPage(): React.JSX.Element {
     !!filters.q.trim() ||
     !!filters.drafts
 
-  // Header-line counts
-  const total = listQuery.data?.total ?? 0
+  // Header-line counts. Sourced from facets (global), not listQuery (now
+  // service-scoped) — this must agree with the rail's "All" count.
+  const total = facetsQuery.data?.total ?? 0
 
   // ── Desktop facets ──────────────────────────────────────────────────────────
-  const spineCounts = useMemo<Record<SpineState, number>>(() => {
-    const counts: Record<SpineState, number> = {
-      all: allRows.length,
-      none: 0,
-      pending: 0,
-      awaiting_scan: 0,
-      returned: 0,
-      approved: 0,
-      rejected: 0,
-    }
-    for (const row of allRows) {
-      const s = row.approval_state as SpineState
-      if (s !== 'all' && s in counts) counts[s] += 1
-    }
-    return counts
-  }, [allRows])
+  const serviceLabel = useServiceLabel()
 
-  const railItems = useMemo<RailItem[]>(() => {
-    const byKind = new Map<string, { count: number; states: Set<string> }>()
-    for (const row of allRows) {
-      const kind = localFormKindOf(row.subject, { classified: !!row.classification_code })
-      let entry = byKind.get(kind.id)
-      if (!entry) {
-        entry = { count: 0, states: new Set() }
-        byKind.set(kind.id, entry)
-      }
-      entry.count += 1
-      if (row.approval_state !== 'none') entry.states.add(row.approval_state)
-    }
-    const items: RailItem[] = [
-      { kindId: 'all', glyph: '🗂', labelKey: 'books.formKind.all', count: allRows.length, states: [] },
-    ]
-    const ordered: LocalFormKind[] = [...LOCAL_FORM_KINDS, LOCAL_GENERAL_BOOK_KIND, LOCAL_OTHER_KIND]
-    for (const kind of ordered) {
-      const entry = byKind.get(kind.id)
-      if (!entry) continue
-      items.push({
-        kindId: kind.id,
-        glyph: kind.glyph,
-        labelKey: kind.labelKey,
-        count: entry.count,
-        states: [...entry.states],
-      })
-    }
-    return items
-  }, [allRows])
+  const spineCounts = useMemo<Record<SpineState, number>>(
+    () => spineCountsFrom(facetsQuery.data, railService),
+    [facetsQuery.data, railService],
+  )
+
+  const railItems = useMemo<RailItem[]>(
+    () => railItemsFrom(facetsQuery.data, t('books.formKind.all'), serviceLabel),
+    [facetsQuery.data, serviceLabel, t],
+  )
 
   // Draft books (is_draft && !voided_at) — shown in the group card above the list
   const draftBooks: BookRead[] = useMemo(
@@ -351,28 +287,23 @@ export function BooksPage(): React.JSX.Element {
     // (which carry search_snippet on body-hit rows) instead of client filtering.
     if (serverSearchActive && searchQuery.data) {
       const serverRows = searchQuery.data.items
+      // The debounced search hits the server unscoped by service, so (unlike
+      // the main list query below) this branch still needs a client guard.
       return serverRows
         .filter((row) => {
           if (showDrafts) return row.is_draft && !row.voided_at
           if (spineState !== 'all' && row.approval_state !== spineState) return false
-          if (
-            railKind !== 'all' &&
-            localFormKindOf(row.subject, { classified: !!row.classification_code }).id !== railKind
-          )
-            return false
+          if (railService !== 'all' && row.service_id !== railService) return false
           return true
         })
         .sort((a, b) => b.created_at.localeCompare(a.created_at))
     }
+    // The server already scoped allRows to railService (listQuery), so no
+    // service filter is needed here.
     const q = search.trim().toLowerCase()
     const filtered = allRows.filter((row) => {
       if (showDrafts) return row.is_draft && !row.voided_at
       if (spineState !== 'all' && row.approval_state !== spineState) return false
-      if (
-        railKind !== 'all' &&
-        localFormKindOf(row.subject, { classified: !!row.classification_code }).id !== railKind
-      )
-        return false
       if (q && !`${row.ref_number} ${row.subject ?? ''}`.toLowerCase().includes(q)) return false
       return true
     })
@@ -380,7 +311,7 @@ export function BooksPage(): React.JSX.Element {
     // so unsorted input would split a day into duplicate sections (key collision).
     // `filtered` is already a copy; never mutate allRows.
     return filtered.sort((a, b) => b.created_at.localeCompare(a.created_at))
-  }, [allRows, spineState, railKind, search, showDrafts, serverSearchActive, searchQuery.data])
+  }, [allRows, spineState, railService, search, showDrafts, serverSearchActive, searchQuery.data])
 
   const selectedBook = useMemo(() => {
     const pool = serverSearchActive && searchQuery.data ? searchQuery.data.items : allRows
@@ -487,7 +418,9 @@ export function BooksPage(): React.JSX.Element {
             <div className="min-w-0">
               <h1 className="text-[1.45em] font-bold tracking-tight text-foreground">{t('books.title')}</h1>
               <div className="mt-0.5 text-[0.8em] text-muted-foreground">
-                {listQuery.isPending ? t('books.subtitle') : t('books.pageMeta', { total })}
+                {listQuery.isPending || facetsQuery.isPending
+                  ? t('books.subtitle')
+                  : t('books.pageMeta', { total })}
               </div>
             </div>
             <div className="flex shrink-0 items-center gap-2">
@@ -504,7 +437,7 @@ export function BooksPage(): React.JSX.Element {
           </header>
           <StatusSpine counts={spineCounts} active={spineState} onChange={setSpineState} />
           <div className="grid min-h-0 flex-1 grid-cols-[15rem_minmax(0,1fr)_clamp(360px,36%,480px)] gap-3">
-            <FormRail items={railItems} active={railKind} onChange={setRailKind} />
+            <FormRail items={railItems} active={railService} onChange={setRailService} />
             <section className="flex min-h-0 flex-col overflow-hidden rounded-2xl border border-hairline bg-surface">
               <div className="flex shrink-0 items-center gap-2 border-b border-hairline p-2.5">
                 <Input
@@ -655,7 +588,7 @@ export function BooksPage(): React.JSX.Element {
                   {t('books.title')}
                 </h1>
                 <div className="mt-1 text-[0.86em] text-muted-foreground">
-                  {listQuery.isPending
+                  {listQuery.isPending || facetsQuery.isPending
                     ? t('books.subtitle')
                     : t('books.pageMeta', { total })}
                 </div>

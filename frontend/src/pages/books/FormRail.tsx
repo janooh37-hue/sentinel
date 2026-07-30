@@ -9,9 +9,10 @@ import { useTranslation } from 'react-i18next'
 import { cn } from '@/lib/utils'
 
 export interface RailItem {
-  kindId: string
+  serviceId: string
   glyph: string
-  labelKey: string
+  /** Already-localised label (from serviceLabels.useServiceLabel). */
+  label: string
   count: number
   /** distinct non-draft approval states present, e.g. ['pending','approved'] */
   states: string[]
@@ -32,7 +33,7 @@ export function FormRail({
 }: {
   items: RailItem[]
   active: string
-  onChange: (kindId: string) => void
+  onChange: (serviceId: string) => void
 }): React.JSX.Element {
   const { t } = useTranslation()
   return (
@@ -41,13 +42,13 @@ export function FormRail({
       className="overflow-y-auto rounded-2xl border border-hairline bg-surface p-2"
     >
       {items.map((item) => {
-        const isActive = active === item.kindId
+        const isActive = active === item.serviceId
         return (
           <button
-            key={item.kindId}
+            key={item.serviceId}
             type="button"
             aria-pressed={isActive}
-            onClick={() => onChange(item.kindId)}
+            onClick={() => onChange(item.serviceId)}
             className={cn(
               'flex w-full items-center gap-2.5 rounded-sm px-2.5 py-2 text-start transition-colors',
               'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset',
@@ -64,7 +65,7 @@ export function FormRail({
               <span
                 className={cn('block truncate text-[0.8em] font-semibold', isActive && 'text-primary')}
               >
-                {t(item.labelKey)}
+                {item.label}
               </span>
               {item.states.length > 0 && (
                 <span className="mt-0.5 flex gap-1">
