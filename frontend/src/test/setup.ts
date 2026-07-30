@@ -66,6 +66,24 @@ if (typeof globalThis.ResizeObserver === 'undefined') {
     disconnect(): void {}
   }
 }
+// jsdom doesn't implement matchMedia at all (not even a stub that always
+// misses) — hooks like useIsMobile/useReducedMotion call it unconditionally
+// on mount, so without this every such component throws in tests. Default to
+// "no match" (desktop / no reduced-motion); tests needing a specific query
+// result override window.matchMedia themselves.
+if (typeof window !== 'undefined' && typeof window.matchMedia !== 'function') {
+  window.matchMedia = ((query: string): MediaQueryList =>
+    ({
+      matches: false,
+      media: query,
+      onchange: null,
+      addListener: () => {},
+      removeListener: () => {},
+      addEventListener: () => {},
+      removeEventListener: () => {},
+      dispatchEvent: () => false,
+    }) as MediaQueryList) as typeof window.matchMedia
+}
 
 // Initialise i18n synchronously for tests so translation keys resolve to
 // English strings without hitting the language detector.

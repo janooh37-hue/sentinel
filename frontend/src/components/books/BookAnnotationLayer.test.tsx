@@ -87,3 +87,45 @@ describe('BookAnnotationLayer touch-action and one-mark-per-arm', () => {
     expect(onDisarm).toHaveBeenCalledTimes(1)
   })
 })
+
+describe('BookAnnotationLayer composer vs keyboard', () => {
+  function openComposer(): void {
+    renderLayer({ armed: true })
+    fireEvent.pointerDown(screen.getByTestId('anno-root'), { clientX: 40, clientY: 40 })
+  }
+
+  it('sits above the keyboard on a phone', () => {
+    window.matchMedia = ((q: string) => ({
+      matches: q.includes('max-width'),
+      media: q,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+    })) as unknown as typeof window.matchMedia
+    const vv = Object.assign(new EventTarget(), { height: 508, offsetTop: 0 })
+    Object.defineProperty(window, 'visualViewport', { value: vv, configurable: true })
+    window.innerHeight = 844
+
+    openComposer()
+    // 844 - 508 = 336px of keyboard; the sheet must clear it.
+    expect(screen.getByTestId('anno-composer').style.bottom).toBe('336px')
+    Reflect.deleteProperty(window, 'visualViewport')
+  })
+
+  it('blurs the textarea before clearing the draft so the keyboard comes down', async () => {
+    const user = userEvent.setup()
+    openComposer()
+    const box = screen.getByRole('textbox')
+    box.focus()
+    expect(document.activeElement).toBe(box)
+    await user.click(screen.getByText('books.annotations.cancel'))
+    expect(document.activeElement).not.toBe(box)
+  })
+
+  it('keeps the draft text when the keyboard is dismissed by hand', () => {
+    openComposer()
+    const box = screen.getByRole('textbox') as HTMLTextAreaElement
+    fireEvent.change(box, { target: { value: 'wrong date' } })
+    fireEvent.blur(box) // user swiped the keyboard away
+    expect((screen.getByRole('textbox') as HTMLTextAreaElement).value).toBe('wrong date')
+  })
+})
