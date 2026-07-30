@@ -86,17 +86,27 @@ def test_already_departed_employee_is_never_touched(db_session, existing):
 
 
 def test_none_employee_is_a_no_op(db_session):
-    """Letters can be generated without a linked employee row."""
+    """Guards the helper itself when there is no linked employee row — the real
+    call site can't reach this for the Resignation Letter (a personnel template,
+    which requires employee_id before generation starts), but the helper is a
+    standalone function and must stay safe if ever called without one."""
     _record_pending_resignation(db_session, None, {"resignation_date": "2026-08-15"})
 
 
 def test_today_parameter_overrides_the_clock(db_session):
     """The ``today`` seam is real, not decorative — a caller-injected clock
-    decides schedule-vs-immediate, not ``date.today()`` baked into the call."""
+    decides schedule-vs-immediate, not ``date.today()`` baked into the call.
+
+    Dates are relative to date.today() so this can't quietly stop discriminating
+    once the calendar moves past a hardcoded date (a helper that ignored
+    ``today=`` would eventually land in the same branch as the real clock and
+    the test would keep passing while testing nothing).
+    """
     emp = _emp(db_session, "G9206")
-    d = date(2026, 8, 15)
+    d = date.today() + timedelta(days=30)
+    injected_today = date.today() + timedelta(days=40)
     _record_pending_resignation(
-        db_session, emp, {"resignation_date": d.isoformat()}, today=date(2026, 8, 20)
+        db_session, emp, {"resignation_date": d.isoformat()}, today=injected_today
     )
     assert emp.status == "Resigned"  # d is in the past relative to the injected today
     assert emp.pending_status is None
