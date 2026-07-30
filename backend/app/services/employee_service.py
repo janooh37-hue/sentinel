@@ -14,6 +14,7 @@ is small (272 employees in live data) and the React side already wants a
 
 from __future__ import annotations
 
+from datetime import date
 from typing import Any
 
 from sqlalchemy import func, or_, select
@@ -22,6 +23,7 @@ from sqlalchemy.orm import Session
 from app.api.errors import ConflictError, NotFoundError, ValidationFailedError
 from app.db.models import Employee
 from app.schemas.employee import (
+    EMPLOYEE_STATUS_ACTIVE,
     EmployeeCreate,
     EmployeeUpdate,
     validate_status_end_date,
@@ -111,6 +113,31 @@ def update_employee(db: Session, employee_id: str, payload: EmployeeUpdate) -> E
     # Merge the patch over the current row to evaluate the invariant.
     merged_status = data.get("status", row.status)
     merged_end = data.get("end_date", row.end_date)
+
+    # Scheduled departure. A departure dated in the FUTURE keeps the employee
+    # Active through their notice period — they are still working — and records
+    # where they are headed in `pending_status`; the daily flip job applies it
+    # on the day. Today-or-past applies immediately, which is the pre-existing
+    # behaviour and the path for someone who walked off site today.
+    #
+    # This lives in the service, not in StatusDialog, so the full EmployeeForm
+    # gets the same rule and there is one place to be correct.
+    if (
+        merged_status != EMPLOYEE_STATUS_ACTIVE
+        and merged_end is not None
+        and merged_end > date.today()
+    ):
+        data["pending_status"] = merged_status
+        data["status"] = EMPLOYEE_STATUS_ACTIVE
+        merged_status = EMPLOYEE_STATUS_ACTIVE
+    elif data.get("status") == EMPLOYEE_STATUS_ACTIVE or (
+        "end_date" in data and data["end_date"] is None
+    ):
+        # Reactivating, or clearing the end date, cancels a pending departure.
+        # This is the Cancel path: the dashboard widget sends
+        # {status: 'Active', end_date: null}, which needs no new endpoint.
+        data["pending_status"] = None
+
     try:
         validate_status_end_date(merged_status, merged_end)
     except ValueError as exc:
