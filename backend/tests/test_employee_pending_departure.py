@@ -261,3 +261,37 @@ def test_flip_honours_an_injected_today(db_session):
     _make(db_session, "G9308", end_date=future, pending_status="Resigned")
     flipped = employee_service.apply_due_departures(db_session, today=future)
     assert [e.id for e in flipped] == ["G9308"]
+
+
+def test_pending_filter_returns_only_scheduled_departures(db_session):
+    _make(db_session, "G9500")  # plain Active
+    _make(db_session, "G9501", status="Resigned", end_date=date(2026, 1, 31))  # departed
+    _make(
+        db_session,
+        "G9502",
+        end_date=date.today() + timedelta(days=10),
+        pending_status="Resigned",
+    )
+    rows, total = employee_service.list_employees(db_session, pending=True)
+    assert [r.id for r in rows] == ["G9502"]
+    assert total == 1
+
+
+def test_pending_filter_orders_soonest_first(db_session):
+    _make(
+        db_session, "G9510", end_date=date.today() + timedelta(days=30), pending_status="Resigned"
+    )
+    _make(
+        db_session, "G9511", end_date=date.today() + timedelta(days=2), pending_status="Terminated"
+    )
+    _make(db_session, "G9512", end_date=date.today() + timedelta(days=9), pending_status="Resigned")
+    rows, _ = employee_service.list_employees(db_session, pending=True)
+    assert [r.id for r in rows] == ["G9511", "G9512", "G9510"]
+
+
+def test_pending_false_does_not_filter(db_session):
+    """Omitting the flag must not change the existing list behaviour."""
+    _make(db_session, "G9520")
+    rows, total = employee_service.list_employees(db_session)
+    assert total >= 1
+    assert any(r.id == "G9520" for r in rows)

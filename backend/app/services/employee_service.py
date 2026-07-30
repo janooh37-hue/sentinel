@@ -17,7 +17,7 @@ from __future__ import annotations
 from datetime import date
 from typing import Any, Final
 
-from sqlalchemy import func, or_, select
+from sqlalchemy import and_, func, or_, select
 from sqlalchemy.orm import Session
 
 from app.api.errors import ConflictError, NotFoundError, ValidationFailedError
@@ -42,10 +42,16 @@ def list_employees(
     status: str | None = None,
     department: str | None = None,
     duty_unit: str | None = None,
+    pending: bool = False,
     limit: int = LIST_DEFAULT_LIMIT,
     offset: int = 0,
 ) -> tuple[list[Employee], int]:
-    """Filtered + paginated list. Returns ``(rows, total_count)``."""
+    """Filtered + paginated list. Returns ``(rows, total_count)``.
+
+    ``pending=True`` narrows to scheduled departures — Active employees with a
+    ``pending_status`` and an ``end_date`` — ordered soonest-first, which is what
+    the dashboard's Pending Departures widget reads.
+    """
     limit = max(1, min(limit, LIST_MAX_LIMIT))
     offset = max(0, offset)
 
@@ -70,8 +76,19 @@ def list_employees(
     if duty_unit:
         stmt = stmt.where(Employee.duty_unit == duty_unit)
         count_stmt = count_stmt.where(Employee.duty_unit == duty_unit)
+    if pending:
+        # Scheduled departure: still Active, but headed somewhere on end_date.
+        clause = and_(
+            Employee.status == EMPLOYEE_STATUS_ACTIVE,
+            Employee.pending_status.is_not(None),
+            Employee.end_date.is_not(None),
+        )
+        stmt = stmt.where(clause)
+        count_stmt = count_stmt.where(clause)
 
-    stmt = stmt.order_by(Employee.name_en).limit(limit).offset(offset)
+    # Soonest departure first when listing pending; otherwise by name.
+    order = Employee.end_date if pending else Employee.name_en
+    stmt = stmt.order_by(order).limit(limit).offset(offset)
 
     rows = list(db.execute(stmt).scalars().all())
     total = int(db.execute(count_stmt).scalar_one())
