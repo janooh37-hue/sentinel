@@ -480,6 +480,13 @@
     "form_number": "301-010",
     "fields": [
       {
+        "key": "resignation_date",
+        "type": "date",
+        "label_en": "Resignation Date",
+        "label_ar": "تاريخ الاستقالة",
+        "required": true
+      },
+      {
         "key": "reason",
         "type": "arabic_rich",
         "label_en": "Resignation Reason",
