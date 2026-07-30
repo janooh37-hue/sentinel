@@ -24,6 +24,7 @@ export function MarkToggle({
       tone={armed ? 'amber' : 'plain'}
       onClick={onToggle}
       testId="mark-toggle"
+      ariaPressed={armed}
     />
   )
 }
