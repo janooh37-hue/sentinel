@@ -160,6 +160,9 @@ def test_fetch_qr_returns_data_url_from_png():
     png = b"\x89PNG\r\n\x1a\nDEADBEEF"
 
     def handler(req):
+        # fetch_qr probes the session first so it can revive a stopped one.
+        if req.url.path == "/api/sessions/default":
+            return httpx.Response(200, json={"status": "SCAN_QR_CODE"})
         assert req.url.path == "/api/default/auth/qr"
         return httpx.Response(200, content=png, headers={"content-type": "image/png"})
 

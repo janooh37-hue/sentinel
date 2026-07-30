@@ -7,7 +7,12 @@ export function CheckboxField({
   name,
   label_en,
   label_ar,
-}: FieldProps): React.JSX.Element {
+  // `defaultOn` mirrors a submit rule of `value !== false` (checked unless the
+  // operator explicitly unticks). The Report sign box uses it so the visible
+  // state matches the default-on signing behaviour instead of showing unticked
+  // while the report still signs.
+  defaultOn = false,
+}: FieldProps & { defaultOn?: boolean }): React.JSX.Element {
   const { i18n } = useTranslation()
   const isAr = i18n.language.startsWith('ar')
   const label = isAr ? label_ar : label_en
@@ -23,7 +28,7 @@ export function CheckboxField({
           <input
             id={name}
             type="checkbox"
-            checked={!!field.value}
+            checked={defaultOn ? field.value !== false : !!field.value}
             onChange={(e) => field.onChange(e.target.checked)}
             className="h-4 w-4 rounded border-input accent-primary"
           />

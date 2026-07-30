@@ -2,10 +2,17 @@
 
 import zipfile
 from pathlib import Path
+from typing import Any
 
 from docx import Document
 
 from app.core.docx_engine import stamp_signature_above_name
+
+# ---------------------------------------------------------------------------
+# Shared helpers
+# ---------------------------------------------------------------------------
+
+_ANCHOR_NS = "http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing"
 
 
 def _make_letter(tmp_path: Path, closing_name: str) -> Path:
@@ -30,6 +37,32 @@ def _make_sig(tmp_path: Path) -> Path:
 def _document_xml(docx: Path) -> bytes:
     with zipfile.ZipFile(docx) as z:
         return z.read("word/document.xml")
+
+
+def _para_has_anchor(para: Any) -> bool:
+    return bool(para._p.findall(f".//{{{_ANCHOR_NS}}}anchor"))
+
+
+def _make_report_sig_block(tmp_path: Path) -> Path:
+    """Docx with the four-paragraph Report signature block:
+    [0] الاسم : فلان
+    [1] المسمى الوظيفي : كذا
+    [2] التوقيـــــع:        (tatweel-stretched label)
+    [3] ""                  (blank — expected anchor for the drawing)
+    """
+    doc = Document()
+    doc.add_paragraph("الاسم : فلان")
+    doc.add_paragraph("المسمى الوظيفي : كذا")
+    doc.add_paragraph("التوقيـــــع:")  # tatweel in the label
+    doc.add_paragraph("")  # blank — drawing lands here
+    p = tmp_path / "report_sig.docx"
+    doc.save(str(p))
+    return p
+
+
+# ---------------------------------------------------------------------------
+# Existing General Book tests (regression guard — must stay green)
+# ---------------------------------------------------------------------------
 
 
 def test_stamps_on_exact_name(tmp_path: Path) -> None:
@@ -111,3 +144,141 @@ def test_stamps_inside_tables(tmp_path: Path) -> None:
     )
     assert ok
     assert b"<wp:anchor" in _document_xml(p)
+
+
+# ---------------------------------------------------------------------------
+# New Report-paper signature-label tests (Task 6)
+# ---------------------------------------------------------------------------
+
+
+def test_sig_label_anchors_below(tmp_path: Path) -> None:
+    """التوقيع label paragraph triggers anchor on para[3] (blank below), not
+    above the name at para[0]."""
+    docx = _make_report_sig_block(tmp_path)
+    ok = stamp_signature_above_name(
+        docx,
+        str(_make_sig(tmp_path)),
+        ["فلان"],
+        size_mm=32.0,
+        boldness=2,
+        date_below="27/07/2026",
+    )
+    assert ok
+    reloaded = Document(str(docx))
+    paras = reloaded.paragraphs
+    # Drawing must be in para[3] (blank below the label), NOT para[0] (above name)
+    anchored = [i for i, p in enumerate(paras) if _para_has_anchor(p)]
+    assert anchored == [3], f"expected drawing at para[3], got {anchored}"
+    # Label mode centres the float in the column (<wp:align>center</wp:align>) —
+    # the default left-pin put the sign at the far-left, away from the label.
+    assert ">center<" in paras[3]._element.xml, "label-mode float must be column-centred"
+
+
+def test_sig_label_beats_name_anchor(tmp_path: Path) -> None:
+    """Even though 'فلان' matches para[0], the التوقيع rule wins."""
+    docx = _make_report_sig_block(tmp_path)
+    ok = stamp_signature_above_name(
+        docx,
+        str(_make_sig(tmp_path)),
+        ["فلان"],
+        size_mm=32.0,
+        boldness=2,
+        date_below="27/07/2026",
+    )
+    assert ok
+    reloaded = Document(str(docx))
+    paras = reloaded.paragraphs
+    # Anchor must NOT be at para[0] or para[-1] (the name gap)
+    anchored = [i for i, p in enumerate(paras) if _para_has_anchor(p)]
+    assert 0 not in anchored, "name anchor must not win when label is present"
+    assert anchored == [3]
+
+
+def test_date_below_written(tmp_path: Path) -> None:
+    """date_below lands on its OWN line BELOW the anchor (para[4]), never on the
+    anchor paragraph itself — the float bottoms out on the anchor line, so a date
+    there would sit behind the signature. RTL + centred so it stacks under it."""
+    docx = _make_report_sig_block(tmp_path)
+    ok = stamp_signature_above_name(
+        docx,
+        str(_make_sig(tmp_path)),
+        ["فلان"],
+        size_mm=32.0,
+        boldness=2,
+        date_below="27/07/2026",
+    )
+    assert ok
+    reloaded = Document(str(docx))
+    # A new paragraph is inserted after the anchor (para[3]) carrying the date.
+    assert reloaded.paragraphs[3].text.strip() == "", "date must NOT sit on the float's line"
+    date_para = reloaded.paragraphs[4]
+    assert date_para.text.strip() == "27/07/2026"
+    from docx.oxml.ns import qn
+
+    has_rtl = any(run._element.find(f".//{qn('w:rtl')}") is not None for run in date_para.runs)
+    assert has_rtl, "date run must be marked RTL"
+    # Centred so it stacks under the column-centred signature float.
+    from docx.enum.text import WD_ALIGN_PARAGRAPH
+
+    assert date_para.alignment == WD_ALIGN_PARAGRAPH.CENTER
+    # The float (drawing) stays on the anchor line, NOT the date line — the two
+    # must be on separate lines so the date reads clear below the signature.
+    assert _para_has_anchor(reloaded.paragraphs[3])
+    assert not _para_has_anchor(date_para)
+
+
+def test_date_below_none_writes_nothing(tmp_path: Path) -> None:
+    """Default call (no date_below) writes no date text."""
+    docx = _make_report_sig_block(tmp_path)
+    stamp_signature_above_name(docx, str(_make_sig(tmp_path)), ["فلان"], size_mm=32.0, boldness=2)
+    reloaded = Document(str(docx))
+    # para[3] was blank; it must still have no visible text (only anchor XML)
+    assert reloaded.paragraphs[3].text.strip() == ""
+
+
+def test_date_never_clobbers_text(tmp_path: Path) -> None:
+    """When the anchor paragraph already has text, date_below is skipped but
+    the image is still placed."""
+    doc = Document()
+    doc.add_paragraph("الاسم : فلان")
+    doc.add_paragraph("المسمى الوظيفي : كذا")
+    doc.add_paragraph("التوقيـــــع:")
+    doc.add_paragraph("نص موجود")  # pre-existing text — must not be overwritten
+    p = tmp_path / "nonempty_anchor.docx"
+    doc.save(str(p))
+    ok = stamp_signature_above_name(
+        p,
+        str(_make_sig(tmp_path)),
+        ["فلان"],
+        size_mm=32.0,
+        boldness=2,
+        date_below="27/07/2026",
+    )
+    assert ok
+    reloaded = Document(str(p))
+    # Original text preserved — date NOT written over it
+    assert reloaded.paragraphs[3].text.strip() == "نص موجود"
+    # Image still placed
+    assert _para_has_anchor(reloaded.paragraphs[3])
+
+
+def test_sig_label_ignored_without_date_below(tmp_path: Path) -> None:
+    """Without date_below the التوقيع label rule is inactive — name rule wins."""
+    docx = _make_report_sig_block(tmp_path)
+    ok = stamp_signature_above_name(
+        docx,
+        str(_make_sig(tmp_path)),
+        ["فلان"],
+        size_mm=32.0,
+        boldness=2,
+        # date_below omitted — label rule must stay inert
+    )
+    assert ok
+    reloaded = Document(str(docx))
+    paras = reloaded.paragraphs
+    anchored = [i for i, p in enumerate(paras) if _para_has_anchor(p)]
+    # Label rule skipped → name rule fires → anchor above the name (para[0])
+    # i.e. NOT at para[3] (the blank below التوقيع label)
+    assert anchored != [3], "label rule must not fire when date_below is None"
+    # para[3] must have no drawing
+    assert not _para_has_anchor(paras[3]), "para[3] must not hold the drawing without date_below"

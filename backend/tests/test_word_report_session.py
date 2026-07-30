@@ -173,6 +173,36 @@ def _png(path: Path) -> None:
     )
 
 
+def test_resolve_signer_reads_employee_signature_store(db_session, tmp_path, monkeypatch):
+    """The signer's signature must come from the SAME store the form preview and
+    POST /employees/{id}/signature use (signature_core.vault_path) — NOT only the
+    Submitter row. Reading Submitter alone left every roster signer without a
+    Submitter record finishing UNSIGNED, so the sign toggle appeared to do
+    nothing (the operator uploads to the employee store)."""
+    from types import SimpleNamespace
+
+    from app.core import signature as signature_core
+    from app.core.vault_manager import Vault
+    from app.services import report_service
+
+    vault_dir = tmp_path / "vault"
+    monkeypatch.setattr(
+        report_service,
+        "get_settings",
+        lambda: SimpleNamespace(vault_dir=vault_dir, data_dir=tmp_path),
+    )
+    db_session.add(Employee(id="G1042", name_en="Muhannad", name_ar="مهند", position="Head"))
+    db_session.commit()
+    # No Submitter row. Signature ONLY in the employee store.
+    emp_sig = signature_core.vault_path(Vault(vault_dir), "G1042")
+    emp_sig.parent.mkdir(parents=True, exist_ok=True)
+    _png(emp_sig)
+
+    name, _title, sig = report_service._resolve_signer(db_session, "G1042")
+    assert name == "مهند"
+    assert sig == str(emp_sig), "signer signature must resolve from the employee store"
+
+
 def test_finish_report_session_embeds_signature(db_session, tmp_path):
     from datetime import datetime
 
@@ -211,3 +241,52 @@ def test_finish_report_session_embeds_signature(db_session, tmp_path):
     doc = db_session.get(Document, ver.document_id)
     assert doc.template_id == "Report"
     assert abs((datetime.now() - ver.created_at).total_seconds()) < 300  # local time
+
+    # The embedded signature must actually be SERVED, not orphaned: every serve
+    # gate reads version.status == "approved". Without it the signed PDF exists
+    # on disk but the unsigned copy keeps serving, so the toggle looked dead.
+    assert ver.status == "approved"
+    from app.services import book_service
+
+    assert book_service.is_document_signed_locked(db_session, ver.document_id) == (
+        True,
+        ver.signed_pdf_path,
+    )
+
+
+def test_report_display_date():
+    from datetime import datetime
+
+    from app.services.word_book_service import _report_display_date
+
+    now = datetime(2026, 7, 24, 10, 0, 0)
+    assert _report_display_date("2026-07-23", now) == "23/07/2026"
+    assert _report_display_date(None, now) == "24/07/2026"
+    # Already display-formatted → pass through untouched.
+    assert _report_display_date("23/07/2026", now) == "23/07/2026"
+
+
+def test_create_report_word_book_renders_display_date(db_session):
+    from docx import Document as Docx
+
+    from app.services import word_book_service
+
+    _seed_gs(db_session)
+    db_session.add(Employee(id="G1042", name_en="Muhannad", name_ar="مهند", position="Head"))
+    db_session.add(Employee(id="G3082", name_en="Operator", name_ar="مشغّل", position="Op"))
+    op = _user(db_session, employee_id="G3082")
+    db_session.commit()
+
+    info = word_book_service.create_report_word_book(
+        db_session,
+        user=op,
+        signer_employee_id="G1042",
+        recipient_id=None,
+        subject="تقرير",
+        date="2026-07-23",
+        sign=False,
+    )
+    sess = db_session.query(BookEditSession).filter_by(book_id=info.book_id).one()
+    text = "\n".join(p.text for p in Docx(sess.working_path).paragraphs)
+    assert "التاريخ: 23/07/2026" in text
+    assert "2026-07-23" not in text

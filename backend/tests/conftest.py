@@ -4,6 +4,7 @@ from __future__ import annotations
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 
+import httpx
 import pytest
 from sqlalchemy import create_engine, event
 from sqlalchemy.orm import Session, sessionmaker
@@ -11,7 +12,24 @@ from sqlalchemy.orm import Session, sessionmaker
 from app.db import session as session_mod
 from app.db.models import Base, User
 from app.db.session import attach_sqlite_pragmas
-from app.services import perm_service
+from app.services import openwa_client, perm_service
+
+
+@pytest.fixture(autouse=True)
+def _block_live_whatsapp_gateway(monkeypatch) -> None:
+    """Keep the suite off the real WhatsApp gateway.
+
+    ``openwa_client`` reads ``GSSG_OPENWA_API_BASE`` from the operator's ``.env``, so
+    an unmocked call reaches the live office gateway — and with a number linked,
+    ``POST /api/sendText`` would put a real message on a fixture phone number. Tests
+    that exercise gateway behaviour assign ``_transport`` themselves and override this;
+    this only makes the *default* a closed door (and skips 10 s connect timeouts).
+    """
+
+    def refuse(request: httpx.Request) -> httpx.Response:
+        raise httpx.ConnectError("live WhatsApp gateway is blocked in tests")
+
+    monkeypatch.setattr(openwa_client, "_transport", httpx.MockTransport(refuse))
 
 
 @pytest.fixture()

@@ -375,6 +375,12 @@ export function ApplicationPage(): React.JSX.Element {
     mutationFn: (body: import('@/lib/api').WordBookCreate) => api.createWordBook(body),
     onSuccess: (res) => {
       void qc.invalidateQueries({ queryKey: ['books'] })
+      // Clear the draft now the book exists — the body lives in Word from here,
+      // so a stale localStorage draft only resurrects last time's values on the
+      // next book. Critically it stops a once-unticked Report "توقيع الآن"
+      // (sign=false) from persisting and silently defaulting every later report
+      // to unsigned. Mirrors the non-word path (handleJobDone → clearDraft).
+      if (selectedTemplate) clearDraft(selectedTemplate)
       // NO auto-launch: navigating to ms-word: outside a user gesture raises
       // Chrome's tab-modal protocol prompt that silently swallows every click
       // in the tab while it lingers. The handoff dialog's «Open in Word»

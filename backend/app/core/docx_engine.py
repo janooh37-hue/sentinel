@@ -452,6 +452,7 @@ def _norm_name(s: str) -> str:
 
 
 _CC_LABEL_NORM = "نسخةإلى"  # "نسخة إلى" normalized — CC lines can quote the manager
+_SIG_LABEL_NORM = "التوقيع"  # "التوقيع" normalized — Report paper signature label
 
 
 def stamp_signature_above_name(
@@ -461,6 +462,7 @@ def stamp_signature_above_name(
     *,
     size_mm: float = DEFAULT_SIG_SIZE_MM,
     boldness: int = DEFAULT_SIG_BOLDNESS,
+    date_below: str | None = None,
 ) -> bool:
     """Float *sig_path* above the closing-name line of an ALREADY-RENDERED docx.
 
@@ -468,6 +470,14 @@ def stamp_signature_above_name(
     normalized (whitespace + tatweel stripped; hand-made templates stretch
     names with tatweel). Search order:
 
+    0. explicit signature-label line: active only when ``date_below`` is given
+       (Report signing).  Finds a body paragraph whose normalized text starts
+       with "التوقيع" (the Report paper writes "التوقيـــع:" with tatweel)
+       — the float rests on the paragraph BELOW the label and rises up into
+       it, giving the wet-signature look operators asked for.  When
+       ``date_below`` is None (all non-Report callers) this rule is skipped
+       entirely, so free-form authored General Book text containing "التوقيع"
+       can never hijack the anchor.
     1. exact-equality match on a body paragraph (beats CC lines that merely
        QUOTE the manager's name after the closing block);
     2. containment match, skipping "نسخة إلى" lines;
@@ -477,6 +487,11 @@ def stamp_signature_above_name(
 
     Body matches anchor on the paragraph ABOVE the name (the signature gap);
     table matches anchor on the matched paragraph itself (the float rises up).
+
+    ``date_below`` (Report seal): when the label rule fires AND the anchor
+    paragraph is blank, write the date string below the signature image as an
+    RTL run (Sakkal Majalla 12pt).  Never overwrites existing text.
+
     Returns False when the signature file is unusable or no anchor exists —
     callers must treat that as a FAILURE, not a soft skip (a "signed" paper
     without a visible signature is the defect this function exists to prevent).
@@ -502,18 +517,36 @@ def stamp_signature_above_name(
                 return i
         return None
 
+    # Priority 0: an explicit signature-label line (the Report paper writes
+    # التوقيـــع: with tatweel) — the float rests on the line BELOW the label
+    # and rises up into it: the wet-signature look the operators asked for.
+    # Label mode centres BOTH the float and the date on the column so they
+    # stack together under the label (default left-pin + RTL text start had
+    # them at opposite margins).
+    # IMPORTANT: this rule is active only when date_below is given (Report
+    # signing path).  Free-form General Book body text containing "التوقيع"
+    # must never hijack the anchor; omitting date_below keeps it inert.
     anchor = None
-    idx = _find(paras, exact=True)
-    if idx is None:
-        idx = _find(paras, exact=False)
-    if idx is not None:
-        anchor = paras[idx - 1] if idx > 0 else paras[idx]
-    else:
-        t_idx = _find(table_paras, exact=True)
-        if t_idx is None:
-            t_idx = _find(table_paras, exact=False)
-        if t_idx is not None:
-            anchor = table_paras[t_idx]  # float rises up from the name's own line
+    label_anchor = False
+    if date_below is not None:
+        for i in range(len(paras) - 1, -1, -1):
+            if _norm_name(paras[i].text).startswith(_SIG_LABEL_NORM):
+                anchor = paras[i + 1] if i + 1 < len(paras) else paras[i]
+                label_anchor = True
+                break
+
+    if anchor is None:
+        idx = _find(paras, exact=True)
+        if idx is None:
+            idx = _find(paras, exact=False)
+        if idx is not None:
+            anchor = paras[idx - 1] if idx > 0 else paras[idx]
+        else:
+            t_idx = _find(table_paras, exact=True)
+            if t_idx is None:
+                t_idx = _find(table_paras, exact=False)
+            if t_idx is not None:
+                anchor = table_paras[t_idx]  # float rises up from the name's own line
     if anchor is None:
         last = next((p for p in reversed(paras) if p.text.strip()), None) or next(
             (p for p in reversed(table_paras) if p.text.strip()), None
@@ -522,8 +555,31 @@ def stamp_signature_above_name(
     if anchor is None:
         return False
     placed = fill_image_behind_text_in_paragraph(
-        anchor, sig_path, width_inches=size_mm / 25.4, dilate_radius_px=boldness
+        anchor,
+        sig_path,
+        width_inches=size_mm / 25.4,
+        dilate_radius_px=boldness,
+        center_horizontal=label_anchor,
     )
+    if placed and date_below and not anchor.text.strip():
+        from docx.oxml import OxmlElement
+        from docx.text.paragraph import Paragraph
+
+        from app.core.arabic_rtl import stamp_run
+
+        # The signature float bottoms out ON the anchor line (see
+        # fill_image_behind_text_in_paragraph's v_offset), so a run added to the
+        # anchor sits BEHIND the signature. Put the date on its OWN line right
+        # below the anchor — the float rises up over التوقيع, the date lands
+        # clear beneath the signature, both column-centred so they stack.
+        new_p = OxmlElement("w:p")
+        anchor._p.addnext(new_p)
+        date_para = Paragraph(new_p, anchor._parent)
+        run = date_para.add_run(date_below)
+        run.font.size = Pt(12)
+        stamp_run(run, "Sakkal Majalla")
+        if label_anchor:
+            date_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
     if placed:
         doc.save(str(docx_path))
     return bool(placed)

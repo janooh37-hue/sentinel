@@ -1,5 +1,12 @@
 # backend/scripts/build_report_template.py
-"""One-shot: derive the Report template from the General Book template.
+"""One-shot: build the Report template on the General Book paper.
+
+The body mirrors the operator's reference letter (تقارير شاملة.docx,
+2026-07-24): letter top block (date / addressee / greeting / centered
+subject), a bold 16pt justified Word-authored body anchor, centered
+closing, and an 18pt kashida signature block. Headers, footers (footer3
+carries {{ submitter_g }}) and styles come from the General Book template
+untouched.
 
 Run once, then commit backend/templates/GSSG-GS_300-004_Report.docx:
     venv\\Scripts\\python.exe backend/scripts/build_report_template.py
@@ -7,72 +14,155 @@ Run once, then commit backend/templates/GSSG-GS_300-004_Report.docx:
 
 from __future__ import annotations
 
+import zipfile
 from pathlib import Path
-
-from docx import Document
-from docx.enum.text import WD_ALIGN_PARAGRAPH
 
 SRC = Path("backend/templates/GSSG-GS_300-003_General_Book.docx")
 DST = Path("backend/templates/GSSG-GS_300-004_Report.docx")
 
+# --- run/paragraph properties (copied from the reference letter) ----------
+# Plain 16pt (sz 32 half-points), Sakkal Majalla for the Arabic (cs) script.
+RPR32 = (
+    '<w:rPr><w:rFonts w:ascii="Sakkal Majalla" w:hAnsi="Sakkal Majalla" w:cs="Sakkal Majalla"/>'
+    '<w:sz w:val="32"/><w:szCs w:val="32"/><w:rtl/></w:rPr>'
+)
+RPR32CS = (
+    '<w:rPr><w:rFonts w:ascii="Sakkal Majalla" w:hAnsi="Sakkal Majalla" w:cs="Sakkal Majalla" w:hint="cs"/>'
+    '<w:sz w:val="32"/><w:szCs w:val="32"/><w:rtl/></w:rPr>'
+)
+# Bold 16pt — the body anchor weight in the reference.
+RPR32B = (
+    '<w:rPr><w:rFonts w:ascii="Sakkal Majalla" w:hAnsi="Sakkal Majalla" w:cs="Sakkal Majalla" w:hint="cs"/><w:b/><w:bCs/>'
+    '<w:sz w:val="32"/><w:szCs w:val="32"/><w:rtl/></w:rPr>'
+)
+# 18pt — the signature block size in the reference, Sakkal Majalla.
+RPR36 = (
+    '<w:rPr><w:rFonts w:ascii="Sakkal Majalla" w:hAnsi="Sakkal Majalla" w:cs="Sakkal Majalla" w:hint="cs"/>'
+    '<w:sz w:val="36"/><w:szCs w:val="36"/><w:rtl/></w:rPr>'
+)
+# The reference positions the signature block with a literal bold-italic
+# 16pt run of spaces before the name label — copied verbatim, Sakkal Majalla.
+RPR32BI = (
+    '<w:rPr><w:rFonts w:ascii="Sakkal Majalla" w:hAnsi="Sakkal Majalla" w:cs="Sakkal Majalla" w:hint="cs"/><w:b/><w:bCs/>'
+    '<w:i/><w:iCs/><w:sz w:val="32"/><w:szCs w:val="32"/><w:rtl/>'
+    '<w:lang w:bidi="ar-AE"/></w:rPr>'
+)
 
-def _set_text(paragraph, text: str) -> None:
-    """Replace the paragraph's text, keeping the first run's formatting."""
-    runs = paragraph.runs
-    if not runs:
-        paragraph.add_run(text)
-        return
-    runs[0].text = text
-    for r in runs[1:]:
-        r._element.getparent().remove(r._element)
+BLANK = "<w:p><w:pPr><w:bidi/>" + RPR32 + "</w:pPr></w:p>"
+PPR_BODY = (
+    '<w:pPr><w:bidi/><w:jc w:val="both"/>'
+    '<w:rPr><w:rFonts w:ascii="Sakkal Majalla" w:hAnsi="Sakkal Majalla" w:cs="Sakkal Majalla"/><w:b/><w:bCs/>'
+    '<w:sz w:val="32"/><w:szCs w:val="32"/><w:rtl/></w:rPr></w:pPr>'
+)
 
+NAME_LABEL = "الإس" + "ـ" * 75 + "م : "
+SIGN_LABEL = "التوقي" + "ـ" * 69 + "ع:"
 
-def _delete(paragraph) -> None:
-    paragraph._element.getparent().remove(paragraph._element)
+BODY = "".join(
+    [
+        # التاريخ: {{ date }}
+        "<w:p><w:pPr><w:bidi/>"
+        + RPR32
+        + "</w:pPr><w:r>"
+        + RPR32CS
+        + '<w:t xml:space="preserve">التاريخ: {{ date }}</w:t></w:r></w:p>',
+        BLANK,
+        # السيد {{ recipient_name }} <tab> المحترم — tab stop pushes المحترم
+        # to the line's end whatever the recipient name length. NB: OOXML
+        # pPr child order is fixed — tabs MUST precede bidi.
+        '<w:p><w:pPr><w:tabs><w:tab w:val="left" w:pos="8789"/></w:tabs><w:bidi/>'
+        + RPR32
+        + "</w:pPr><w:r>"
+        + RPR32CS
+        + '<w:t xml:space="preserve">السيد {{ recipient_name }}</w:t></w:r>'
+        + "<w:r>"
+        + RPR32CS
+        + '<w:tab/><w:t xml:space="preserve">المحترم </w:t></w:r></w:p>',
+        BLANK,
+        # تحية طيبة وبعد ،،  (Arabic commas, operator round 2)
+        "<w:p><w:pPr><w:bidi/>"
+        + RPR32
+        + "</w:pPr><w:r>"
+        + RPR32CS
+        + '<w:t xml:space="preserve">تحية طيبة وبعد ،،</w:t></w:r></w:p>',
+        BLANK,
+        # الموضوع — centered, hidden entirely when there is no subject.
+        '<w:p><w:pPr><w:bidi/><w:jc w:val="center"/>'
+        + RPR32
+        + "</w:pPr><w:r>"
+        + RPR32CS
+        + "<w:t xml:space=\"preserve\">{{ '' if not subject else 'الموضوع : ' ~ subject }}</w:t>"
+        + "</w:r></w:p>",
+        BLANK,
+        BLANK,
+        # {{ body }} anchor — bold 16pt justified; the paragraph-mark rPr
+        # matches so typing at the cleared anchor inherits this format.
+        "<w:p>" + PPR_BODY + "<w:r>" + RPR32B + "<w:t>{{ body }}</w:t></w:r></w:p>",
+        BLANK,
+        # للتفضل … — plain (operator un-bolded in round 2), Arabic commas
+        '<w:p><w:pPr><w:bidi/><w:jc w:val="both"/>'
+        + RPR32
+        + "</w:pPr><w:r>"
+        + RPR32CS
+        + "<w:t>للتفضل بالعلم وإجراءاتكم لطفاً،،</w:t></w:r></w:p>",
+        BLANK * 2,  # was 7 in the reference — reduced per operator (long bodies clipped to 2 pages)
+        # وتفضلوا … — centered, plain (operator un-bolded in round 2)
+        '<w:p><w:pPr><w:bidi/><w:jc w:val="center"/>'
+        + RPR32
+        + "</w:pPr><w:r>"
+        + RPR32CS
+        + "<w:t>وتفضلوا بقبول فائق الاحترام والتقدير</w:t></w:r></w:p>",
+        BLANK * 9,
+        # Signature block — 18pt, positioned like the reference (literal
+        # space runs + left indent copied verbatim).
+        "<w:p><w:pPr><w:bidi/>"
+        + RPR36
+        + "</w:pPr>"
+        + "<w:r>"
+        + RPR32BI
+        + '<w:t xml:space="preserve">'
+        + " " * 73
+        + "</w:t></w:r>"
+        + "<w:r>"
+        + RPR36
+        + '<w:t xml:space="preserve">'
+        + NAME_LABEL
+        + "{{ manager_name }}  </w:t></w:r></w:p>",
+        '<w:p><w:pPr><w:bidi/><w:jc w:val="both"/>'
+        + RPR36
+        + "</w:pPr>"
+        + "<w:r>"
+        + RPR36
+        + '<w:t xml:space="preserve">'
+        + " " * 66
+        + "</w:t></w:r>"
+        + "<w:r>"
+        + RPR36
+        + '<w:t xml:space="preserve">'
+        + "المسمى الوظيفي : {{ manager_title }} </w:t></w:r></w:p>",
+        '<w:p><w:pPr><w:bidi/><w:ind w:left="4680"/>'
+        + RPR36
+        + "</w:pPr>"
+        + "<w:r>"
+        + RPR36
+        + '<w:t xml:space="preserve">       '
+        + SIGN_LABEL
+        + " {{ manager_sig }}</w:t></w:r></w:p>",
+        BLANK,
+    ]
+)
 
 
 def main() -> None:
-    doc = Document(str(SRC))
-
-    def find(token: str):
-        return next(p for p in doc.paragraphs if token in p.text)
-
-    # 1) Remove the ref block entirely (guarantees no الرقم prints, whatever
-    #    the caller passes).
-    _delete(find("{%p if ref %}"))
-    _delete(find("الرقم: {{ ref }}"))
-    _delete(find("{%p endif %}"))  # the FIRST endif == the ref block's
-
-    # 2) Closing courtesy + labelled, reordered author block. Re-find AFTER
-    #    the deletions so we operate on the live tree.
-    lut = find("للتفضل بالعلم وإجراءاتكم")
-    _set_text(lut, "للتفضل بالعلم وإجراءاتكم لطفاً،،،")
-
-    sig_para = find("{{ manager_sig }}")  # was first in the block (CENTER)
-    name_para = find("{{ manager_name }}")  # bold 14pt
-    title_para = find("{{ manager_title }}")  # bold 14pt
-
-    # The blank CENTER paragraph directly above the signature holds the closing.
-    closing = sig_para._element.getprevious()
-    from docx.text.paragraph import Paragraph  # local import; avoids top clutter
-
-    closing_para = Paragraph(closing, sig_para._parent) if closing is not None else None
-    if closing_para is not None and not closing_para.text.strip():
-        _set_text(closing_para, "وتفضلوا بقبول فائق الاحترام والتقدير،،،")
-        closing_para.alignment = WD_ALIGN_PARAGRAPH.RIGHT
-
-    # Reorder by content swap (no element moves): top→bottom becomes name,
-    # title, signature.
-    for p, txt in (
-        (sig_para, "الاسم: {{ manager_name }}"),
-        (name_para, "المسمى الوظيفي: {{ manager_title }}"),
-        (title_para, "التوقيع: {{ manager_sig }}"),
-    ):
-        _set_text(p, txt)
-        p.alignment = WD_ALIGN_PARAGRAPH.RIGHT
-
-    DST.parent.mkdir(parents=True, exist_ok=True)
-    doc.save(str(DST))
+    with zipfile.ZipFile(SRC) as zin:
+        entries = {name: zin.read(name) for name in zin.namelist()}
+    xml = entries["word/document.xml"].decode("utf-8")
+    head = xml[: xml.find("<w:body>") + len("<w:body>")]
+    tail = xml[xml.rfind("<w:sectPr") :]  # body-level sectPr is the last one
+    entries["word/document.xml"] = (head + BODY + tail).encode("utf-8")
+    with zipfile.ZipFile(DST, "w", zipfile.ZIP_DEFLATED) as zout:
+        for name, data in entries.items():
+            zout.writestr(name, data)
     print(f"wrote {DST}")
 
 
