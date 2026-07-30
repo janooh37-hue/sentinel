@@ -267,3 +267,21 @@ def test_create_default_submits_to_manager(gen_env: Session) -> None:
     book, latest = _latest_version(db, permit.book_id)
     assert book.approval_state == "pending"
     assert [s.assignee_user_id for s in latest.approval_steps] == [mgr_user.id]
+
+
+def test_new_permit_lands_in_the_managers_awaiting_queue(gen_env: Session) -> None:
+    """End to end: the whole point of the feature. A newly created permit must
+    show up in the signing manager's "awaiting my approval" list (the query
+    behind the dashboard widget and the bell count) — and in nobody else's."""
+    from app.services import book_service
+
+    db = gen_env
+    operator = _actor(db)
+    mgr, mgr_user = _linked_manager(db)
+    permit = permit_service.create_permit(db, _payload(manager_id=mgr.id), actor="op@x.ae")
+
+    awaiting = book_service.list_awaiting(db, user_id=mgr_user.id)
+    assert [b.id for b in awaiting] == [permit.book_id]
+    assert book_service.your_step_kind(awaiting[0], mgr_user.id) == "approver"
+    # The operator who raised it is not an approver of it.
+    assert book_service.list_awaiting(db, user_id=operator.id) == []
