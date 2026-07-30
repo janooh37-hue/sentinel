@@ -7,7 +7,7 @@
 import { MapPin } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 
-import { HeaderBtn } from './BookRecordPage'
+import { HeaderBtn } from './HeaderBtn'
 
 export function MarkToggle({
   armed,
