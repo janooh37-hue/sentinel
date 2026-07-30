@@ -1,7 +1,7 @@
 """Permit letters ride the book approval chain (spec 2026-07-27).
 
-Create-time behavior: send_for_approval=False (default) leaves the letter a
-draft; True submits it to the permit's manager. A manager without a linked
+Create-time behavior: send_for_approval=True (default) submits the letter to
+the permit's manager; False holds it as a draft. A manager without a linked
 login account must NOT fail the permit mutation — the book stays draft and an
 audit row records why.
 """
@@ -80,11 +80,13 @@ def _audit_actions(db: Session) -> list[str]:
     return list(db.scalars(select(AuditLog.action)))
 
 
-def test_create_without_flag_stays_draft(gen_env: Session) -> None:
+def test_create_with_flag_off_stays_draft(gen_env: Session) -> None:
     db = gen_env
     _actor(db)
     mgr, _ = _linked_manager(db)
-    permit = permit_service.create_permit(db, _payload(manager_id=mgr.id), actor="op@x.ae")
+    permit = permit_service.create_permit(
+        db, _payload(manager_id=mgr.id, send_for_approval=False), actor="op@x.ae"
+    )
     book, latest = _latest_version(db, permit.book_id)
     assert book.approval_state == "none"
     assert latest.approval_steps == []
@@ -196,7 +198,9 @@ def test_regen_never_sent_stays_draft(gen_env: Session) -> None:
     db = gen_env
     _actor(db)
     mgr, _ = _linked_manager(db)
-    permit = permit_service.create_permit(db, _payload(manager_id=mgr.id), actor="op@x.ae")
+    permit = permit_service.create_permit(
+        db, _payload(manager_id=mgr.id, send_for_approval=False), actor="op@x.ae"
+    )
     permit_service.add_vehicle(db, permit.id, PermitVehicleCreate(plate_no="A 1"), actor="op@x.ae")
     book, _ = _latest_version(db, permit.book_id)
     assert book.approval_state == "none"
@@ -206,7 +210,9 @@ def test_manual_submit_happy_path(gen_env: Session) -> None:
     db = gen_env
     _actor(db)
     mgr, _ = _linked_manager(db)
-    permit = permit_service.create_permit(db, _payload(manager_id=mgr.id), actor="op@x.ae")
+    permit = permit_service.create_permit(
+        db, _payload(manager_id=mgr.id, send_for_approval=False), actor="op@x.ae"
+    )
     row = permit_service.submit_permit_book(db, permit.id, actor="op@x.ae")
     book, _ = _latest_version(db, permit.book_id)
     assert book.approval_state == "pending"
@@ -244,6 +250,20 @@ def test_to_read_exposes_draft_state(gen_env: Session) -> None:
     db = gen_env
     _actor(db)
     mgr, _ = _linked_manager(db)
-    permit = permit_service.create_permit(db, _payload(manager_id=mgr.id), actor="op@x.ae")
+    permit = permit_service.create_permit(
+        db, _payload(manager_id=mgr.id, send_for_approval=False), actor="op@x.ae"
+    )
     read = permit_service.to_read(permit, db=db)
     assert read.approval_state == "none"
+
+
+def test_create_default_submits_to_manager(gen_env: Session) -> None:
+    """The default (no flag passed) must reach the manager — a new permit lands
+    in his approval queue without the operator doing anything extra."""
+    db = gen_env
+    _actor(db)
+    mgr, mgr_user = _linked_manager(db)
+    permit = permit_service.create_permit(db, _payload(manager_id=mgr.id), actor="op@x.ae")
+    book, latest = _latest_version(db, permit.book_id)
+    assert book.approval_state == "pending"
+    assert [s.assignee_user_id for s in latest.approval_steps] == [mgr_user.id]

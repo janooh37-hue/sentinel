@@ -140,8 +140,9 @@ class PermitCreate(BaseModel):
     vehicles: list[PermitVehicleCreate] = Field(default_factory=list)
     manager_id: int | None = None
     # When True, the generated 1/5 letter is submitted straight into the book
-    # approval chain. Default False = leave it a draft for double-checking.
-    send_for_approval: bool = False
+    # approval chain. Default True = a new permit reaches its signing manager
+    # without a second step; turn it off to hold the letter as a draft.
+    send_for_approval: bool = True
 
     @field_validator("company")
     @classmethod
