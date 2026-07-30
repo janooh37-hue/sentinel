@@ -46,6 +46,7 @@ vi.mock('@/lib/api', async (importOriginal) => {
       ...mod.api,
       getPermit: vi.fn(),
       getBook: vi.fn(),
+      submitPermitApproval: vi.fn(),
     },
   }
 })
@@ -169,5 +170,46 @@ describe('PermitDetailDialog', () => {
     ))
 
     openSpy.mockRestore()
+  })
+
+  it('draft letter shows Draft badge and Send for approval; clicking submits', async () => {
+    const submitSpy = vi
+      .spyOn(api, 'submitPermitApproval')
+      .mockResolvedValue({ ...basePermit, book_id: 7, approval_state: 'pending' } as never)
+
+    renderDetail({ book_id: 7, book_ref: '1/5/GSSG/0042', approval_state: 'none' })
+    await waitFor(() => expect(screen.getByText('Test Corp')).toBeInTheDocument())
+
+    expect(screen.getByText('Draft')).toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', { name: /send for approval/i }))
+    await waitFor(() => expect(submitSpy).toHaveBeenCalledWith(99))
+  })
+
+  it('pending letter shows the Pending badge and hides the send button', async () => {
+    renderDetail({ book_id: 7, book_ref: '1/5/GSSG/0042', approval_state: 'pending' })
+    await waitFor(() => expect(screen.getByText('Test Corp')).toBeInTheDocument())
+
+    expect(screen.getByText('Pending approval')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /send for approval/i })).not.toBeInTheDocument()
+  })
+
+  it('rejected letter offers to re-send', async () => {
+    renderDetail({ book_id: 7, book_ref: '1/5/GSSG/0042', approval_state: 'rejected' })
+    await waitFor(() => expect(screen.getByText('Test Corp')).toBeInTheDocument())
+
+    expect(screen.getByText('Rejected')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /send for approval/i })).toBeInTheDocument()
+  })
+
+  it('revoked permit hides the send button even while draft', async () => {
+    renderDetail({
+      book_id: 7,
+      book_ref: '1/5/GSSG/0042',
+      approval_state: 'none',
+      status: 'revoked',
+      derived_status: 'revoked',
+    })
+    await waitFor(() => expect(screen.getByText('Test Corp')).toBeInTheDocument())
+    expect(screen.queryByRole('button', { name: /send for approval/i })).not.toBeInTheDocument()
   })
 })

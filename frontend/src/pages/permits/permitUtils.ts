@@ -31,6 +31,24 @@ export function zoneTone(zone: PermitZone): Tone {
   }
 }
 
+/** The linked book's approval state as exposed on PermitRead. */
+export type PermitApprovalState = 'none' | 'pending' | 'approved' | 'rejected' | 'returned'
+
+export function approvalTone(state: PermitApprovalState): Tone {
+  switch (state) {
+    case 'none':
+      return 'outline'
+    case 'pending':
+      return 'warning'
+    case 'approved':
+      return 'active'
+    case 'rejected':
+      return 'danger'
+    case 'returned':
+      return 'info'
+  }
+}
+
 /** ISO date (YYYY-MM-DD or full timestamp) → locale-agnostic YYYY-MM-DD. */
 export function fmtDate(iso: string | null | undefined): string {
   if (!iso) return '—'

@@ -459,7 +459,8 @@
       "noVehicles": "No vehicles added yet.",
       "revokedReason": "Revoked: {{reason}}",
       "createdAt": "Issued {{date}}",
-      "bookRef": "Permit ref (1/5)"
+      "bookRef": "Permit ref (1/5)",
+      "sendForApproval": "Send for approval"
     },
     "person": {
       "name": "Full name",
@@ -551,6 +552,14 @@
       "title": "Delete permit",
       "help": "This removes the permit from the register. This cannot be undone from the app.",
       "confirm": "Delete"
+    },
+    "approval": {
+      "none": "Draft",
+      "pending": "Pending approval",
+      "approved": "Approved",
+      "rejected": "Rejected",
+      "returned": "Returned",
+      "sentToast": "Sent for approval"
     }
   },
   "leaves": {

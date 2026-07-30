@@ -504,7 +504,8 @@
       "noVehicles": "لم تُضف مركبات بعد.",
       "revokedReason": "أُلغي: {{reason}}",
       "createdAt": "صدر في {{date}}",
-      "bookRef": "رقم التصريح (1/5)"
+      "bookRef": "رقم التصريح (1/5)",
+      "sendForApproval": "إرسال للاعتماد"
     },
     "person": {
       "name": "الاسم الكامل",
@@ -596,6 +597,14 @@
       "title": "حذف التصريح",
       "help": "يزيل هذا التصريح من السجل. لا يمكن التراجع عن ذلك من التطبيق.",
       "confirm": "حذف"
+    },
+    "approval": {
+      "none": "مسودة",
+      "pending": "بانتظار الاعتماد",
+      "approved": "معتمد",
+      "rejected": "مرفوض",
+      "returned": "مُعاد",
+      "sentToast": "أُرسل للاعتماد"
     }
   },
   "leaves": {

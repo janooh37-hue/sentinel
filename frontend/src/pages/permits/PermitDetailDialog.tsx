@@ -10,7 +10,7 @@
 import { useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Trash2, UserPlus, FileText, Upload, Car, ScanLine, Printer } from 'lucide-react'
+import { Trash2, UserPlus, FileText, Upload, Car, ScanLine, Printer, Send } from 'lucide-react'
 import { toast } from 'sonner'
 
 import { api, apiErrorMessage, type PermitRead } from '@/lib/api'
@@ -27,7 +27,7 @@ import { Badge } from '@/components/ui/badge'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import { useCapabilities } from '@/lib/useCapabilities'
 import { ZoneBadge } from './ZoneBadge'
-import { fmtDate, statusTone } from './permitUtils'
+import { approvalTone, fmtDate, statusTone, type PermitApprovalState } from './permitUtils'
 import { EMIRATES } from './emirates'
 
 const inputCls =
@@ -122,6 +122,15 @@ export function PermitDetailDialog({ permitId, open, onOpenChange, onEdit }: Pro
       setRevokeOpen(false)
       setRevokeReason('')
       toast.success(t('common.savedToast'))
+    },
+    onError: onErr,
+  })
+
+  const submitApproval = useMutation({
+    mutationFn: () => api.submitPermitApproval(permitId),
+    onSuccess: () => {
+      invalidate()
+      toast.success(t('permits.approval.sentToast'))
     },
     onError: onErr,
   })
@@ -285,6 +294,13 @@ export function PermitDetailDialog({ permitId, open, onOpenChange, onEdit }: Pro
   const activePeople = permit?.people.filter((p) => p.removed_at === null) ?? []
   const activeVehicles = permit?.vehicles.filter((v) => v.removed_at === null) ?? []
   const isRevoked = permit?.status === 'revoked'
+  const approvalState = (permit?.approval_state ?? 'none') as PermitApprovalState
+  // Only a letter that isn't already in the loop can be (re-)sent.
+  const canSend =
+    canManage &&
+    !isRevoked &&
+    Boolean(permit?.book_id) &&
+    ['none', 'rejected', 'returned'].includes(approvalState)
 
   return (
     <DialogRoot open={open} onOpenChange={onOpenChange}>
@@ -310,6 +326,11 @@ export function PermitDetailDialog({ permitId, open, onOpenChange, onEdit }: Pro
                   {t(`permits.status.${permit.derived_status}`)}
                 </Badge>
                 <ZoneBadge zones={permit.zones} full />
+                {permit.book_id && (
+                  <Badge tone={approvalTone(approvalState)}>
+                    {t(`permits.approval.${approvalState}`)}
+                  </Badge>
+                )}
               </div>
 
               {/* Facts grid */}
@@ -801,6 +822,16 @@ export function PermitDetailDialog({ permitId, open, onOpenChange, onEdit }: Pro
             )}
             {!isRevoked && (
               <>
+                {canSend && (
+                  <Button
+                    type="button"
+                    disabled={submitApproval.isPending}
+                    onClick={() => submitApproval.mutate()}
+                  >
+                    <Send className="me-1.5 h-4 w-4" aria-hidden />
+                    {t('permits.detail.sendForApproval')}
+                  </Button>
+                )}
                 <Button type="button" variant="outline" onClick={() => onEdit(permit)}>
                   {t('permits.actions.edit')}
                 </Button>
