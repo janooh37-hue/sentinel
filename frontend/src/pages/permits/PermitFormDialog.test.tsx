@@ -82,4 +82,33 @@ describe('PermitFormDialog', () => {
     )
     await waitFor(() => expect(emirate.value).toBe('دبي'))
   })
+
+  it('send-for-approval switch defaults ON and is sent with the permit', async () => {
+    const created = { id: 7, people: [], vehicles: [] }
+    const createSpy = vi.spyOn(api, 'createPermit').mockResolvedValue(created as never)
+
+    renderForm()
+
+    // Fill the minimum valid form: company + one person (name + UAE ID)
+    await userEvent.type(screen.getByLabelText(/company/i), 'ACME')
+    await userEvent.type(screen.getByPlaceholderText('Full name'), 'Ali')
+    await userEvent.type(screen.getByPlaceholderText('UAE ID'), '784-1')
+
+    const toggle = screen.getByRole('switch', { name: /send for approval/i })
+    expect(toggle).toHaveAttribute('aria-checked', 'true')
+
+    await userEvent.click(screen.getByRole('button', { name: /issue permit/i }))
+    await waitFor(() =>
+      expect(createSpy).toHaveBeenCalledWith(expect.objectContaining({ send_for_approval: true })),
+    )
+
+    // Turning it off holds the letter as a draft
+    createSpy.mockClear()
+    await userEvent.click(toggle)
+    expect(toggle).toHaveAttribute('aria-checked', 'false')
+    await userEvent.click(screen.getByRole('button', { name: /issue permit/i }))
+    await waitFor(() =>
+      expect(createSpy).toHaveBeenCalledWith(expect.objectContaining({ send_for_approval: false })),
+    )
+  })
 })

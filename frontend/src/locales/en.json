@@ -530,7 +530,9 @@
       "signingManager": "Signing manager (optional)",
       "save": "Save permit",
       "create": "Issue permit",
-      "windowError": "End date must not be before the start date."
+      "windowError": "End date must not be before the start date.",
+      "sendForApproval": "Send for approval",
+      "sendForApprovalHint": "Sends the letter to the signing manager as soon as it is generated. Turn off to keep it as a draft."
     },
     "renew": {
       "title": "Renew permit",

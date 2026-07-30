@@ -28,6 +28,8 @@ import {
   DialogDescription,
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
+// Generic labelled switch — same control the notify surfaces use.
+import { NotifyEmployeeToggle as ToggleRow } from '@/components/notify/NotifyEmployeeToggle'
 import { plusDaysISO, todayISO } from './permitUtils'
 import { EMIRATES } from './emirates'
 
@@ -71,6 +73,9 @@ export function PermitFormDialog({ open, permit, onOpenChange, onSaved }: Props)
   const [purpose, setPurpose] = useState('')
   const [notes, setNotes] = useState('')
   const [managerId, setManagerId] = useState<number | null>(null)
+  // On by default: a new permit should reach its signing manager without a
+  // second step. Turn it off to hold the letter as a draft.
+  const [sendForApproval, setSendForApproval] = useState(true)
   const [people, setPeople] = useState<PersonRow[]>([])
   const [vehicles, setVehicles] = useState<VehicleRow[]>([])
   const [docFile, setDocFile] = useState<File | null>(null)
@@ -100,6 +105,7 @@ export function PermitFormDialog({ open, permit, onOpenChange, onSaved }: Props)
     setPurpose(permit?.purpose ?? '')
     setNotes(permit?.notes ?? '')
     setManagerId(permit?.manager_id ?? null)
+    setSendForApproval(true)
     // A permit must authorize at least one person, so start create with one row.
     setPeople(isEdit ? [] : [newRow()])
     setVehicles([])
@@ -147,6 +153,7 @@ export function PermitFormDialog({ open, permit, onOpenChange, onSaved }: Props)
         purpose: purpose.trim() || null,
         notes: notes.trim() || null,
         manager_id: managerId,
+        send_for_approval: sendForApproval,
         people: submittedPeople.map((p) => ({
           name: p.name.trim(),
           uae_id: (p.uae_id ?? '').trim(),
@@ -352,6 +359,16 @@ export function PermitFormDialog({ open, permit, onOpenChange, onSaved }: Props)
                 ))}
               </select>
             </label>
+          )}
+
+          {/* Send for approval — on by default; off holds the letter as a draft */}
+          {!isEdit && (
+            <ToggleRow
+              checked={sendForApproval}
+              onChange={setSendForApproval}
+              label={t('permits.form.sendForApproval')}
+              hint={t('permits.form.sendForApprovalHint')}
+            />
           )}
 
           {/* People — create only (at least one required) */}
