@@ -21,7 +21,6 @@ import {
   CornerUpLeft,
   FileText,
   Loader2,
-  MapPin,
   PenLine,
   Printer,
   RefreshCw,
@@ -57,6 +56,7 @@ import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import { BookStatusChips } from '@/components/books/BookStatusChips'
 import { BookWordActions } from '@/components/books/BookWordActions'
 import { QueueNav } from './QueueNav'
+import { MarkToggle } from './MarkToggle'
 import { nextAfterDecision, useAwaitingQueue } from './useAwaitingQueue'
 
 import { useIsMobile } from '@/lib/useIsMobile'
@@ -509,13 +509,7 @@ export function BookRecordPage(): React.JSX.Element {
             onClick={() => window.print()}
           />
           {canMark && (
-            <HeaderBtn
-              icon={<MapPin className="h-3.5 w-3.5" />}
-              label={armed ? t('books.annotations.markingOn') : t('books.annotations.mark')}
-              tone={armed ? 'amber' : 'plain'}
-              onClick={() => setArmedFor(armed ? null : bookId)}
-              testId="mark-toggle"
-            />
+            <MarkToggle armed={armed} onToggle={() => setArmedFor(armed ? null : bookId)} />
           )}
           {/* Word session actions — isMobile is the REAL device check, not
               the page identity: this full-record page opens on desktop too
@@ -948,8 +942,8 @@ function NotificationBlock({ messages }: { messages: NotifyMessageRead[] }): Rea
   )
 }
 
-type BtnTone = 'plain' | 'amber' | 'red' | 'green-solid' | 'navy-solid'
-function HeaderBtn({
+export type BtnTone = 'plain' | 'amber' | 'red' | 'green-solid' | 'navy-solid'
+export function HeaderBtn({
   icon,
   label,
   tone = 'plain',
