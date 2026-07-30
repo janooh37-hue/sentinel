@@ -16,8 +16,9 @@ import { cn } from '@/lib/utils'
 
 import { BookStatusChips } from '@/components/books/BookStatusChips'
 import { signedSourceOf } from './bookStateLabel'
-import { formKindOf, subjectEmployeePart } from './formKind'
+import { subjectEmployeePart } from './formKind'
 import { paperCountOf } from './recordPapers'
+import { serviceGlyph, useServiceLabel } from './serviceLabels'
 import { StateSeal } from './StateSeal'
 
 /** Parse `[token]` FTS snippet markers into React nodes with <mark>. */
@@ -55,6 +56,7 @@ export function RecordsList({
 }): React.JSX.Element {
   const { t, i18n } = useTranslation()
   const locale = i18n.language.startsWith('ar') ? 'ar-AE' : 'en-GB'
+  const serviceLabel = useServiceLabel()
 
   const days: { date: string; items: BookRead[] }[] = []
   for (const row of rows) {
@@ -80,8 +82,9 @@ export function RecordsList({
             <span className="font-mono text-[0.62em] text-faint tabular-nums">{items.length}</span>
           </div>
           {items.map((row) => {
-            const classified = { classified: !!row.classification_code, template_id: row.current_template_id }
-            const kind = formKindOf(row.subject, classified)
+            const classified = { classified: !!row.classification_code }
+            const glyph = serviceGlyph(row.service_id)
+            const label = serviceLabel(row.service_id)
             const who = subjectEmployeePart(row.subject, classified)
             const snippet = (row as BookReadWithSnippet).search_snippet
             const paperCount = paperCountOf(row)
@@ -129,14 +132,14 @@ export function RecordsList({
                   aria-hidden
                   className="grid h-7 w-7 shrink-0 place-items-center rounded-sm border border-hairline bg-surface-raised text-[0.9em]"
                 >
-                  {kind.glyph}
+                  {glyph}
                 </span>
                 <span className={cn('w-[4.6rem] shrink-0 font-mono text-[0.7em] font-bold text-primary', row.voided_at && 'line-through')}>
                   <bdi dir="ltr">{row.ref_number}</bdi>
                 </span>
                 <span className="min-w-0 flex-1">
                   <span className={cn('block truncate text-[0.78em] font-semibold', row.voided_at && 'line-through')}>
-                    {t(kind.labelKey)}
+                    {label}
                   </span>
                   {who && (
                     <span className="block truncate text-[0.68em] text-muted-foreground" dir="auto">

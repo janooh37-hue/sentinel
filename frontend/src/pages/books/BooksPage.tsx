@@ -45,9 +45,49 @@ import { StatusSpine, type SpineState } from './StatusSpine'
 import { FormRail, type RailItem } from './FormRail'
 import { RecordsList } from './RecordsList'
 import { RecordPane } from './RecordPane'
-import { FORM_KINDS, GENERAL_BOOK_KIND, OTHER_KIND, formKindOf, type FormKind } from './formKind'
 
 const DEFAULT_FILTERS = DEFAULT_BOOKS_FILTERS
+
+// ponytail: compile-only shim for the rail's kind grouping. Task 6 deleted the
+// subject-prefix guessing table from formKind.ts (rows/pane now render
+// row.service_id via serviceLabels.ts); the rail itself still groups by the
+// old 6-way guess pending Task 7, which redesigns FormRail around
+// service_id / getBookFacets(). Kept local (unexported) so nothing outside
+// this file can depend on it. Delete this block once Task 7 lands.
+interface LocalFormKind {
+  id: string
+  glyph: string
+  labelKey: string
+  prefixes: string[]
+}
+const LOCAL_FORM_KINDS: LocalFormKind[] = [
+  { id: 'leave', glyph: '🌴', labelKey: 'books.formKind.leave', prefixes: ['leave application'] },
+  { id: 'salary', glyph: '💵', labelKey: 'books.formKind.salary', prefixes: ['salary transfer'] },
+  { id: 'duty', glyph: '🔄', labelKey: 'books.formKind.duty', prefixes: ['duty resumption'] },
+  { id: 'hr', glyph: '📋', labelKey: 'books.formKind.hr', prefixes: ['hr request'] },
+  { id: 'passport', glyph: '🛂', labelKey: 'books.formKind.passport', prefixes: ['passport release'] },
+  { id: 'material', glyph: '📦', labelKey: 'books.formKind.material', prefixes: ['material request'] },
+]
+const LOCAL_OTHER_KIND: LocalFormKind = { id: 'other', glyph: '📄', labelKey: 'books.formKind.other', prefixes: [] }
+const LOCAL_GENERAL_BOOK_KIND: LocalFormKind = {
+  id: 'general_book',
+  glyph: '📓',
+  labelKey: 'books.formKind.generalBook',
+  prefixes: [],
+}
+
+function localFormKindOf(
+  subject: string | null | undefined,
+  opts?: { classified?: boolean },
+): LocalFormKind {
+  if (opts?.classified) return LOCAL_GENERAL_BOOK_KIND
+  const s = (subject ?? '').trim().toLowerCase()
+  if (!s) return LOCAL_OTHER_KIND
+  for (const kind of LOCAL_FORM_KINDS) {
+    if (kind.prefixes.some((p) => s.startsWith(p))) return kind
+  }
+  return LOCAL_OTHER_KIND
+}
 
 function formatDate(iso: string): string {
   return iso.slice(0, 10)
@@ -273,7 +313,7 @@ export function BooksPage(): React.JSX.Element {
   const railItems = useMemo<RailItem[]>(() => {
     const byKind = new Map<string, { count: number; states: Set<string> }>()
     for (const row of allRows) {
-      const kind = formKindOf(row.subject, { classified: !!row.classification_code })
+      const kind = localFormKindOf(row.subject, { classified: !!row.classification_code })
       let entry = byKind.get(kind.id)
       if (!entry) {
         entry = { count: 0, states: new Set() }
@@ -285,7 +325,7 @@ export function BooksPage(): React.JSX.Element {
     const items: RailItem[] = [
       { kindId: 'all', glyph: '🗂', labelKey: 'books.formKind.all', count: allRows.length, states: [] },
     ]
-    const ordered: FormKind[] = [...FORM_KINDS, GENERAL_BOOK_KIND, OTHER_KIND]
+    const ordered: LocalFormKind[] = [...LOCAL_FORM_KINDS, LOCAL_GENERAL_BOOK_KIND, LOCAL_OTHER_KIND]
     for (const kind of ordered) {
       const entry = byKind.get(kind.id)
       if (!entry) continue
@@ -317,7 +357,7 @@ export function BooksPage(): React.JSX.Element {
           if (spineState !== 'all' && row.approval_state !== spineState) return false
           if (
             railKind !== 'all' &&
-            formKindOf(row.subject, { classified: !!row.classification_code }).id !== railKind
+            localFormKindOf(row.subject, { classified: !!row.classification_code }).id !== railKind
           )
             return false
           return true
@@ -330,7 +370,7 @@ export function BooksPage(): React.JSX.Element {
       if (spineState !== 'all' && row.approval_state !== spineState) return false
       if (
         railKind !== 'all' &&
-        formKindOf(row.subject, { classified: !!row.classification_code }).id !== railKind
+        localFormKindOf(row.subject, { classified: !!row.classification_code }).id !== railKind
       )
         return false
       if (q && !`${row.ref_number} ${row.subject ?? ''}`.toLowerCase().includes(q)) return false

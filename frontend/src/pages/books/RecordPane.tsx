@@ -32,8 +32,9 @@ import { canFileSignedCopy, canSendForApproval } from '@/components/books/book-d
 import { BookStatusChips } from '@/components/books/BookStatusChips'
 import { BookWordActions } from '@/components/books/BookWordActions'
 import { signedSourceOf } from './bookStateLabel'
-import { formKindOf, subjectEmployeePart } from './formKind'
+import { subjectEmployeePart } from './formKind'
 import { papersOf, type Paper } from './recordPapers'
+import { serviceGlyph, useServiceLabel } from './serviceLabels'
 import { StateSeal } from './StateSeal'
 import { useAddScan } from './useAddScan'
 import { useManagePaper } from './useManagePaper'
@@ -58,6 +59,7 @@ export function RecordPane({
   onAddToEmail: (book: BookRead) => void
 }): React.JSX.Element {
   const { t } = useTranslation()
+  const serviceLabel = useServiceLabel()
   const { has } = useCapabilities()
   const canManage = has('books.manage')
   const canScanCap = has('documents.scan')
@@ -114,7 +116,8 @@ export function RecordPane({
   }
 
   const classified = { classified: !!book.classification_code }
-  const kind = formKindOf(book.subject, classified)
+  const glyph = serviceGlyph(book.service_id)
+  const label = serviceLabel(book.service_id)
   const who = subjectEmployeePart(book.subject, classified)
   const state = book.approval_state
   // Word-authored book: its truth is the docx, not re-renderable fields. The
@@ -154,8 +157,8 @@ export function RecordPane({
         </span>
         <span className="min-w-0 flex-1">
           <span className="block truncate text-[0.82em] font-bold">
-            <span aria-hidden className="me-1">{kind.glyph}</span>
-            {t(kind.labelKey)}
+            <span aria-hidden className="me-1">{glyph}</span>
+            {label}
           </span>
           <span className="block truncate text-[0.66em] text-muted-foreground" dir="auto">
             {who ? `${who} · ` : ''}

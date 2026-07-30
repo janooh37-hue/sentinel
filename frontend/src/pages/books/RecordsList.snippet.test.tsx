@@ -9,10 +9,20 @@
 
 import { describe, it, expect, vi } from 'vitest'
 import { render, screen } from '@testing-library/react'
-import { createElement } from 'react'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { createElement, type ReactNode } from 'react'
 
 import { RecordsList } from './RecordsList'
 import type { BookRead } from '@/lib/api'
+
+// RecordsList reads service labels via useServiceLabel(), which queries
+// ['templates'] through React Query — every render needs a provider.
+function renderWithClient(ui: React.ReactElement): ReturnType<typeof render> {
+  const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+  return render(
+    createElement(QueryClientProvider, { client: qc }, ui as unknown as ReactNode),
+  )
+}
 
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
@@ -74,7 +84,7 @@ describe('RecordsList snippet rendering (lng=ar)', () => {
   it('renders Arabic bodyMatch label + highlighted snippet on a body-hit row', () => {
     const book = makeBook({ search_snippet: 'نص الكتاب يحتوي على [تصريح] أمني' })
 
-    render(
+    renderWithClient(
       createElement(RecordsList, {
         rows: [book as BookRead],
         selectedId: null,
@@ -97,7 +107,7 @@ describe('RecordsList snippet rendering (lng=ar)', () => {
   it('does not render bodyMatch label when search_snippet is absent', () => {
     const book = makeBook({ search_snippet: null })
 
-    render(
+    renderWithClient(
       createElement(RecordsList, {
         rows: [book as BookRead],
         selectedId: null,
@@ -112,7 +122,7 @@ describe('RecordsList snippet rendering (lng=ar)', () => {
     // A row without snippet (server search not triggered for short queries)
     const book = makeBook({ search_snippet: undefined })
 
-    render(
+    renderWithClient(
       createElement(RecordsList, {
         rows: [book as BookRead],
         selectedId: null,
