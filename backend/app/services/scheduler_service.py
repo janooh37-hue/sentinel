@@ -20,6 +20,7 @@ import os
 import sys
 from datetime import UTC, date, datetime
 from threading import Lock
+from typing import Final
 
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
@@ -29,6 +30,10 @@ from sqlalchemy import select
 from app.config import get_settings
 from app.db.models import User
 from app.db.session import SessionLocal
+from app.schemas.employee import (
+    EMPLOYEE_STATUS_RESIGNED,
+    EMPLOYEE_STATUS_TERMINATED,
+)
 from app.services import (
     admin_notify,
     digest_service,
@@ -335,6 +340,23 @@ def _run_leave_ending_reminder() -> None:
             log.exception("scheduler: leave-ending reminder failed")
 
 
+_DEPARTURE_LABELS: Final[dict[str, tuple[str, str]]] = {
+    EMPLOYEE_STATUS_RESIGNED: ("Resigned", "مستقيل"),
+    EMPLOYEE_STATUS_TERMINATED: ("Terminated", "مفصول"),
+}
+
+
+def _isolate(s: str) -> str:
+    """Wrap an LTR fragment so it can't scramble inside Arabic text.
+
+    A G-number like ``G9600`` mixes a strong-L letter with digits, so the bidi
+    algorithm won't unify it the way it does a pure-digit date — parenthesised
+    mid-sentence it flips. Same First-Strong-Isolate/Pop-Directional-Isolate
+    pair the frontend uses (``frontend/src/lib/bidi.ts``).
+    """
+    return f"⁦{s}⁩"
+
+
 def _run_pending_departure_flip() -> None:
     """Daily 09:05 Asia/Dubai — apply scheduled departures that have come due.
 
@@ -359,9 +381,18 @@ def _run_pending_departure_flip() -> None:
             log.exception("scheduler: could not list admins for departure notice")
             return
         for emp in moved:
-            name_ar = getattr(emp, "name_ar", None) or emp.name_en
-            status_ar = "مستقيل" if emp.status == "Resigned" else "مفصول"
-            status_en = "Resigned" if emp.status == "Resigned" else "Terminated"
+            labels = _DEPARTURE_LABELS.get(emp.status)
+            if labels is None:
+                # Never say "Terminated" about a real person on a fallback.
+                log.warning(
+                    "scheduler: unexpected status %r for %s, no departure notice",
+                    emp.status,
+                    emp.id,
+                )
+                continue
+            status_en, status_ar = labels
+            name_ar = emp.name_ar or emp.name_en
+            ref = _isolate(f"({emp.id})")
             messages = {
                 "en": (
                     "GSSG Manager",
@@ -369,7 +400,7 @@ def _run_pending_departure_flip() -> None:
                 ),
                 "ar": (
                     "GSSG Manager",
-                    f"تم تطبيق المغادرة\n{name_ar} ({emp.id}) الآن {status_ar}",
+                    f"تم تطبيق المغادرة\n{_isolate(name_ar)} {ref} الآن {status_ar}",
                 ),
             }
             url = f"/employees/{emp.id}"
