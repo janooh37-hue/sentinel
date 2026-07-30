@@ -3,7 +3,8 @@
  * reading. Disarmed it is pointer-events:none so native pinch-zoom and scroll
  * reach the paper underneath; armed it becomes interactive.
  */
-import { render, screen } from '@testing-library/react'
+import { render, screen, fireEvent } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { describe, it, expect, vi } from 'vitest'
 
 import { BookAnnotationLayer } from './BookAnnotationLayer'
@@ -45,5 +46,44 @@ describe('BookAnnotationLayer arming', () => {
   it('stays inert in view mode even if armed is passed', () => {
     renderLayer({ mode: 'view', armed: true })
     expect(screen.getByTestId('anno-root').className).toContain('pointer-events-none')
+  })
+})
+
+describe('BookAnnotationLayer touch-action and one-mark-per-arm', () => {
+  it('keeps touch-action free with the Pin tool so pinch-zoom survives', () => {
+    renderLayer({ armed: true })
+    expect(screen.getByTestId('anno-root').style.touchAction).not.toBe('none')
+  })
+
+  it('takes touch-action only once Highlight is selected', async () => {
+    const user = userEvent.setup()
+    renderLayer({ armed: true })
+    await user.click(screen.getByTitle('books.annotations.highlight'))
+    expect(screen.getByTestId('anno-root').style.touchAction).toBe('none')
+  })
+
+  it('disarms after saving a mark', async () => {
+    const user = userEvent.setup()
+    const onCreate = vi.fn()
+    const onDisarm = vi.fn()
+    renderLayer({ armed: true, onCreate, onDisarm })
+
+    fireEvent.pointerDown(screen.getByTestId('anno-root'), { clientX: 40, clientY: 40 })
+    await user.type(screen.getByRole('textbox'), 'wrong date')
+    await user.click(screen.getByText('books.annotations.save'))
+
+    expect(onCreate).toHaveBeenCalledTimes(1)
+    expect(onDisarm).toHaveBeenCalledTimes(1)
+  })
+
+  it('disarms after cancelling a mark', async () => {
+    const user = userEvent.setup()
+    const onDisarm = vi.fn()
+    renderLayer({ armed: true, onDisarm })
+
+    fireEvent.pointerDown(screen.getByTestId('anno-root'), { clientX: 40, clientY: 40 })
+    await user.click(screen.getByText('books.annotations.cancel'))
+
+    expect(onDisarm).toHaveBeenCalledTimes(1)
   })
 })

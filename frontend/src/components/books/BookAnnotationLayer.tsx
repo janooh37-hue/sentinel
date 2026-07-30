@@ -41,6 +41,7 @@ export function BookAnnotationLayer({
   armed = false,
   onCreate,
   onDelete,
+  onDisarm,
 }: {
   pages: PageBox[]
   annotations: BookAnnotation[]
@@ -142,6 +143,7 @@ export function BookAnnotationLayer({
     onCreate({ page: draft.page, kind: draft.kind, geometry: draft.geometry, comment: draftText.trim() })
     setDraft(null)
     setDraftText('')
+    onDisarm?.()
   }
 
   const numbered = annotations.map((a, i) => ({ a, n: i + 1 }))
@@ -154,7 +156,11 @@ export function BookAnnotationLayer({
       onPointerDown={live ? onPointerDown : undefined}
       onPointerMove={live ? onPointerMove : undefined}
       onPointerUp={live ? onPointerUp : undefined}
-      style={{ touchAction: undefined }}
+      // Only the highlight DRAG conflicts with the browser's own gestures, and
+      // the browser commits to scroll-vs-gesture on pointerdown — so this keys
+      // off the selected tool, not off a live drag (too late by then). Pin is
+      // the default, so arming alone never costs the manager pinch-zoom.
+      style={{ touchAction: live && tool === 'highlight' ? 'none' : undefined }}
     >
       {/* toolbar (mark mode) */}
       {live && (
@@ -294,6 +300,7 @@ export function BookAnnotationLayer({
                     onClick={() => {
                       setDraft(null)
                       setDraftText('')
+                      onDisarm?.()
                     }}
                     className="rounded-md px-2 py-1 text-[0.7em] font-medium text-muted-foreground transition-colors hover:bg-surface-tinted"
                   >
