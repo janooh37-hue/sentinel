@@ -9,6 +9,7 @@ import i18n from 'i18next'
 
 import ar from '@/locales/ar.json'
 import { QueueNav } from './QueueNav'
+import { nextAfterDecision } from './useAwaitingQueue'
 
 vi.mock('@/lib/api', () => ({ api: { listAwaitingBooks: vi.fn() } }))
 
@@ -69,5 +70,15 @@ describe('QueueNav (Arabic)', () => {
     expect(screen.getByLabelText('السجل السابق بانتظار الاعتماد')).toBeInTheDocument()
     expect(screen.getByLabelText('السجل التالي بانتظار الاعتماد')).toBeInTheDocument()
     expect(screen.getByTestId('queue-position')).toHaveTextContent('2 من 3')
+  })
+})
+
+describe('nextAfterDecision', () => {
+  it('advances to the next awaiting book', () => {
+    expect(nextAfterDecision(42)).toBe('/books/42')
+  })
+
+  it('falls back to the list when the queue is empty', () => {
+    expect(nextAfterDecision(null)).toBe('/books')
   })
 })

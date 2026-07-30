@@ -37,3 +37,8 @@ export function useAwaitingQueue(bookId: number | null, enabled: boolean): Await
     nextId: i < ids.length - 1 ? (ids[i + 1] ?? null) : null,
   }
 }
+
+/** Where a return/reject lands: the next book still awaiting, else the list. */
+export function nextAfterDecision(nextId: number | null): string {
+  return nextId != null ? `/books/${nextId}` : '/books'
+}

@@ -57,7 +57,7 @@ import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import { BookStatusChips } from '@/components/books/BookStatusChips'
 import { BookWordActions } from '@/components/books/BookWordActions'
 import { QueueNav } from './QueueNav'
-import { useAwaitingQueue } from './useAwaitingQueue'
+import { nextAfterDecision, useAwaitingQueue } from './useAwaitingQueue'
 
 import { useIsMobile } from '@/lib/useIsMobile'
 import { smsDeliveryTone } from '@/lib/smsDelivery'
@@ -364,7 +364,7 @@ export function BookRecordPage(): React.JSX.Element {
   const armed = armedFor === bookId
   const canMark = state === 'pending' && action === 'decide'
   const annMode: 'view' | 'mark' = canMark ? 'mark' : 'view'
-  const queue = useAwaitingQueue(book?.id ?? null, canApprove)
+  const queue = useAwaitingQueue(Number.isFinite(bookId) ? bookId : null, canApprove)
   const { data: annotations = [] } = useQuery({
     queryKey: ['books', 'annotations', bookId, current?.id],
     queryFn: () => api.listBookAnnotations(bookId, current!.id),
@@ -394,7 +394,11 @@ export function BookRecordPage(): React.JSX.Element {
     onDecided: () => {
       setDecision(null)
       setReason('')
-      navigate('/books')
+      // Straight on to the next document awaiting this manager — the whole
+      // point of the arrows is not having to go back to the list. The mutation
+      // already invalidated ['books','awaiting'], so the decided book has
+      // dropped out and `nextId` points past it.
+      navigate(nextAfterDecision(queue.nextId))
     },
     // Stay on the record after signing (do NOT navigate away): the refetch flips
     // the state to approved and the desk reloads the signed PDF, so the signer
