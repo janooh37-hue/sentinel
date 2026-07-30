@@ -1209,9 +1209,14 @@ In `BookRecordPage.tsx`, replace the `onDecided` body (`:380-384`) with:
       setDecision(null)
       setReason('')
       // Straight on to the next document awaiting this manager — the whole
-      // point of the arrows is not having to go back to the list. The mutation
-      // already invalidated ['books','awaiting'], so the decided book has
-      // dropped out and `nextId` points past it.
+      // point of the arrows is not having to go back to the list.
+      //
+      // `queue.nextId` is a snapshot from the render BEFORE the decision, while
+      // this book was still in the queue — that is exactly why it points at the
+      // right neighbour. Do NOT "improve" this by awaiting the invalidation in
+      // useBookApprovalActions: once the refetch drops this book from the list,
+      // useAwaitingQueue's indexOf returns -1 and nextId goes null, which would
+      // silently send every decision back to /books instead of advancing.
       navigate(nextAfterDecision(queue.nextId))
     },
 ```
