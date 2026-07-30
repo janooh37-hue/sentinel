@@ -190,6 +190,8 @@
     "title": "Employees",
     "eyebrow": "Operations",
     "newEmployee": "New employee",
+    "pendingDeparture": "{{status}} — effective {{date}}",
+    "pendingDepartureTitle": "Scheduled departure on {{date}}",
     "pageMeta_one": "{{count}} employee · {{active}} active",
     "pageMeta_other": "{{count}} employees · {{active}} active",
     "chips": {

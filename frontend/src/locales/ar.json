@@ -203,6 +203,8 @@
     "title": "الموظفون",
     "eyebrow": "العمليات",
     "newEmployee": "موظف جديد",
+    "pendingDeparture": "{{status}} — اعتباراً من {{date}}",
+    "pendingDepartureTitle": "مغادرة مجدولة بتاريخ {{date}}",
     "pageMeta_zero": "لا موظفين · {{active}} نشط",
     "pageMeta_one": "موظف واحد · {{active}} نشط",
     "pageMeta_two": "موظفان · {{active}} نشط",
