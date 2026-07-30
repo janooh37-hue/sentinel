@@ -24,6 +24,12 @@ from app.main import create_app
 from app.services import book_service, perm_service
 
 #: (ref, subject, template_id, versioned, approval_state)
+#: F-8..F-11 mirror the four OTHER_SERVICE_ID branches in
+#: test_books_service_filter.FIXTURES (A-4/A-5/A-6/B-7) — the branches where
+#: the resolver rule is easiest to get wrong. Without them, the agreement
+#: test below would never exercise a companion template, an unknown
+#: template, a versioned book with a NULL newest template_id, or an
+#: unversioned book with a NULL subject.
 ROWS = [
     ("F-1", "x", "Leave Application Form", True, "pending"),
     ("F-2", "x", "Leave Application Form", True, "approved"),
@@ -31,6 +37,10 @@ ROWS = [
     ("F-4", "x", "Report", True, "approved"),
     ("F-5", "Resignation Form - X", None, False, "none"),
     ("F-6", "تصاريح الامنية", None, False, "none"),
+    ("F-8", "whatever", "Leave Undertaking", True, "none"),  # companion template -> other
+    ("F-9", "whatever", "Ghost Form", True, "none"),  # unknown template -> other
+    ("F-10", "whatever", None, True, "none"),  # versioned, newest template_id NULL -> other
+    ("F-11", None, None, False, "none"),  # unversioned, NULL subject -> other
 ]
 
 
@@ -100,7 +110,7 @@ def test_counts_are_per_service(db_session: Session) -> None:
     assert by_id["Leave Application Form"].count == 3
     assert by_id["Report"].count == 1
     assert by_id["Resignation Letter"].count == 1
-    assert by_id[OTHER_SERVICE_ID].count == 1
+    assert by_id[OTHER_SERVICE_ID].count == 5
 
 
 def test_states_are_per_service(db_session: Session) -> None:
@@ -113,7 +123,7 @@ def test_states_are_per_service(db_session: Session) -> None:
 def test_totals_agree_and_exclude_deleted(db_session: Session) -> None:
     _seed(db_session)
     all_records, services = book_service.service_facets(db_session)
-    assert all_records.count == 6  # F-7 is deleted
+    assert all_records.count == 10  # F-7 is deleted
     assert sum(s.count for s in services) == all_records.count
     assert sum(all_records.states.values()) == all_records.count
 
