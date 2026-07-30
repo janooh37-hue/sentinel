@@ -19,6 +19,15 @@ const KEYS = [
   'permits.vehicle.trafficNo',
   'permits.vehicle.regExpiry',
   'permits.vehicle.expiry',
+  'permits.form.sendForApproval',
+  'permits.form.sendForApprovalHint',
+  'permits.detail.sendForApproval',
+  'permits.approval.none',
+  'permits.approval.pending',
+  'permits.approval.approved',
+  'permits.approval.rejected',
+  'permits.approval.returned',
+  'permits.approval.sentToast',
 ]
 
 describe('permit i18n parity', () => {

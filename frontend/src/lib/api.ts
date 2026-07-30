@@ -248,6 +248,8 @@ export interface PermitRead extends PermitListItem {
   book_id?: number | null
   /** Human-readable ref of the generated permit book (e.g. "1/5/GSSG/..."). */
   book_ref?: string | null
+  /** The linked book's approval state: none | pending | approved | rejected | returned. */
+  approval_state?: string | null
 }
 
 export interface PermitListResponse {
@@ -265,6 +267,9 @@ export interface PermitCreate {
   purpose?: string | null
   notes?: string | null
   manager_id?: number | null
+  /** Send the generated 1/5 letter straight to the signing manager. Defaults to
+   * true server-side; the form sends it explicitly. */
+  send_for_approval?: boolean
   people?: PermitPersonCreate[]
   vehicles?: PermitVehicleCreate[]
 }
