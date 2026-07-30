@@ -430,6 +430,13 @@ function MarkPopover({
         'pointer-events-auto fixed z-[70]',
         sheetBottom != null ? 'inset-x-2' : 'left-0 top-0',
         className,
+        // Closed-keyboard is bottom:0 (sheetBottom is 0, and 0 != null) — the
+        // state the composer opens in on every phone, since autoFocus is
+        // desktop-only. Pad for the home indicator / gesture strip so Cancel
+        // and Save aren't flush against it; ordered after `className` (whose
+        // `p-3` would otherwise win the padding-bottom conflict), and this
+        // never touches `bottom` so it can't disturb the keyboard-open offset.
+        sheetBottom != null && 'pb-[env(safe-area-inset-bottom)]',
       )}
       style={sheetBottom != null ? { bottom: `${sheetBottom}px` } : undefined}
     >
