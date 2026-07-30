@@ -140,32 +140,46 @@ def service_clause(service_id: str) -> ColumnElement[bool]:
     """SQL for "this book belongs to `service_id`".
 
     Mirrors `form_kind.resolve_service`, generated from the same prefix table:
-    a book belongs to a service if it has a version with that `template_id`, or
-    — being version-less — its subject starts with one of the service's names.
-    `OTHER_SERVICE_ID` is the literal negation of every named clause, so the
-    buckets are provably complementary: no book can land in two or in none.
-    Any `service_id` that is neither `OTHER_SERVICE_ID` nor a member of
-    `SERVICE_IDS` matches nothing — `resolve_service` never returns such a
-    value, so the SQL must not invent a match for it either.
+    a book belongs to a service if its NEWEST version carries that
+    `template_id`, or — being version-less — its subject starts with one of
+    the service's names. `OTHER_SERVICE_ID` is the literal negation of every
+    named clause, so the buckets are provably complementary: no book can land
+    in two or in none. Any `service_id` that is neither `OTHER_SERVICE_ID` nor
+    a member of `SERVICE_IDS` matches nothing — `resolve_service` never
+    returns such a value, so the SQL must not invent a match for it either.
+
+    "Newest" means highest `version_no` (a correlated per-book subquery), NOT
+    "any version" — `resolve_service` (via `BookRead.service_id`) only ever
+    consults `versions[-1]`, the relationship's `order_by="version_no"` tail.
+    Today no live book carries two distinct `template_id`s across its
+    versions, so the two would agree either way — but matching "any version"
+    would silently break the "exactly one bucket" guarantee the moment a book
+    ever does acquire two differently-templated versions (it would be claimed
+    by two named services and excluded from `other` simultaneously).
 
     `subject_prefixes()` is asserted wildcard-free in test_form_kind, so
-    interpolating it into ILIKE cannot widen the match. The subject branch is
-    guarded with ``is_not(None)``: ILIKE against a NULL subject evaluates to
-    SQL's UNKNOWN (not FALSE), which would otherwise make a subject-less,
-    version-less book vanish from every bucket instead of landing in `other`.
+    interpolating it into ILIKE cannot widen the match. Both the subject
+    branch and the newest-version comparison are guarded with ``is_not(None)``:
+    ILIKE/``==`` against a NULL value evaluates to SQL's UNKNOWN (not FALSE),
+    which would otherwise make a subject-less, version-less book (or a
+    versioned book whose newest version has a NULL `template_id`) vanish from
+    every bucket instead of landing in `other`.
     """
     if service_id == OTHER_SERVICE_ID:
         return and_(*[not_(service_clause(s)) for s in SERVICE_IDS])
     if service_id not in SERVICE_IDS:
         return false()
-    has_version_of = Book.id.in_(
-        select(BookVersion.book_id).where(BookVersion.template_id == service_id)
+    newest_template_id = (
+        select(BookVersion.template_id)
+        .where(BookVersion.book_id == Book.id)
+        .order_by(BookVersion.version_no.desc())
+        .limit(1)
+        .scalar_subquery()
     )
+    is_newest_version_of = and_(newest_template_id.is_not(None), newest_template_id == service_id)
     prefixes = subject_prefixes(service_id)
-    if not prefixes:
-        return has_version_of
     return or_(
-        has_version_of,
+        is_newest_version_of,
         and_(
             Book.id.not_in(select(BookVersion.book_id)),
             Book.subject.is_not(None),
