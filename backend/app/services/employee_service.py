@@ -130,12 +130,21 @@ def update_employee(db: Session, employee_id: str, payload: EmployeeUpdate) -> E
         data["pending_status"] = merged_status
         data["status"] = EMPLOYEE_STATUS_ACTIVE
         merged_status = EMPLOYEE_STATUS_ACTIVE
-    elif data.get("status") == EMPLOYEE_STATUS_ACTIVE or (
-        "end_date" in data and data["end_date"] is None
+    elif (
+        data.get("status") == EMPLOYEE_STATUS_ACTIVE
+        or ("end_date" in data and data["end_date"] is None)
+        or merged_status != EMPLOYEE_STATUS_ACTIVE
     ):
         # Reactivating, or clearing the end date, cancels a pending departure.
         # This is the Cancel path: the dashboard widget sends
         # {status: 'Active', end_date: null}, which needs no new endpoint.
+        #
+        # The third clause: an immediate (today-or-past) departure supersedes
+        # any previously scheduled one — the marker must not outlive it, or a
+        # now-Terminated employee could keep showing a stale "Resigned" badge
+        # from before. Since the schedule branch above already claims every
+        # future-dated case, reaching here with a non-Active merged_status
+        # means this departure is applying now, not scheduling.
         data["pending_status"] = None
 
     try:

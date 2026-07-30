@@ -164,3 +164,36 @@ def test_non_active_without_end_date_still_rejected(db_session):
     _make(db_session, "G9118")
     with pytest.raises(ValidationFailedError):
         employee_service.update_employee(db_session, "G9118", EmployeeUpdate(status="Resigned"))
+
+
+def test_immediate_departure_clears_a_stale_pending_marker(db_session):
+    """An immediate departure supersedes an earlier scheduled one — the
+    marker must not outlive it, or a now-Terminated employee could keep
+    showing a stale 'Resigned' badge from before."""
+    _make(
+        db_session,
+        "G9119",
+        end_date=date.today() + timedelta(days=10),
+        pending_status="Resigned",
+    )
+    out = employee_service.update_employee(
+        db_session, "G9119", EmployeeUpdate(status="Terminated", end_date=date.today())
+    )
+    assert out.status == "Terminated"
+    assert out.end_date == date.today()
+    assert out.pending_status is None
+
+
+def test_immediate_departure_clears_a_stale_pending_marker_mirrored(db_session):
+    """Same supersede case, mirrored: immediate Resigned over a pending Terminated."""
+    _make(
+        db_session,
+        "G9120",
+        end_date=date.today() + timedelta(days=10),
+        pending_status="Terminated",
+    )
+    out = employee_service.update_employee(
+        db_session, "G9120", EmployeeUpdate(status="Resigned", end_date=date.today())
+    )
+    assert out.status == "Resigned"
+    assert out.pending_status is None
