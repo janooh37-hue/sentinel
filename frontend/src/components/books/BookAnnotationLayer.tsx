@@ -80,14 +80,19 @@ export function BookAnnotationLayer({
   const rootRef = useRef<HTMLDivElement>(null)
   const draftBoxRef = useRef<HTMLTextAreaElement>(null)
 
+  // Keyed off `live`, not `mode`: a disarm (armed -> false) must drop the
+  // draft too, or the composer outlives the arm. Without this, tapping a
+  // queue arrow while a draft is open leaves the composer mounted holding
+  // the previous record's text/geometry, and Save writes it onto the new
+  // record once its detail query is cached — a cross-record annotation.
   useEffect(() => {
-    if (mode !== 'mark') {
+    if (!live) {
       // eslint-disable-next-line react-hooks/set-state-in-effect
       setDraft(null)
       setDraftText('')
       dragRef.current = null
     }
-  }, [mode])
+  }, [live])
 
   function contentPoint(e: React.PointerEvent): { cx: number; cy: number } {
     const r = (e.currentTarget as HTMLElement).getBoundingClientRect()

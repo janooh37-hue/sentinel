@@ -86,6 +86,24 @@ describe('BookAnnotationLayer touch-action and one-mark-per-arm', () => {
 
     expect(onDisarm).toHaveBeenCalledTimes(1)
   })
+
+  it('drops an open draft when the overlay is disarmed', () => {
+    const { rerender } = renderLayer({ armed: true })
+    fireEvent.pointerDown(screen.getByTestId('anno-root'), { clientX: 40, clientY: 40 })
+    expect(screen.getByTestId('anno-composer')).toBeInTheDocument()
+    rerender(
+      <BookAnnotationLayer
+        pages={PAGES}
+        annotations={[]}
+        mode="mark"
+        armed={false}
+        currentUserId={1}
+        onCreate={vi.fn()}
+        onDelete={vi.fn()}
+      />,
+    )
+    expect(screen.queryByTestId('anno-composer')).not.toBeInTheDocument()
+  })
 })
 
 describe('BookAnnotationLayer composer vs keyboard', () => {
