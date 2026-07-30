@@ -712,21 +712,20 @@ body {
    page per sheet — so the print matches the downloaded PDF 1:1, nothing
    cropped and nothing shrunk. */
 @media print {
+  /* No page margin, and NO named pages. The document sheet prints edge-to-edge
+     at 1:1 with the generated PDF — its pages are already A4 with their own
+     margins baked in, so any @page margin boxes an A4 page inside a smaller A4
+     page (12mm cost ~11% of the width and the letterhead's bleed).
+
+     Do NOT reach for a named page (`@page doc` + `page: doc`) to give one
+     surface different margins: a page-NAME change forces a page break, so any
+     in-flow box outside the named element — sonner's <Toaster> renders an empty
+     <section> right after the shell — emits a blank trailing sheet. Surfaces
+     that want margins pad their own root instead (see PermitsPage's
+     PermitPrintView). */
   @page {
     size: A4;
-    margin: 12mm;
-  }
-  /* The document sheet prints edge-to-edge at 1:1 with the generated PDF. Its
-     pages are already A4 with their own margins baked in, so any @page margin
-     boxes an A4 page inside a smaller A4 page — 12mm cost ~11% of the width and
-     the letterhead's bleed. Named page (`page: doc`) so the permits register
-     printout above keeps its 12mm. */
-  @page doc {
-    size: A4;
     margin: 0;
-  }
-  .print-paper {
-    page: doc;
   }
   /* The desk that hosts the sheet pads the document on screen (px-6); on paper
      that padding is another ~13mm off the width. */
