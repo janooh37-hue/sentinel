@@ -5442,6 +5442,10 @@ export interface components {
             has_photo: boolean;
             /** Contact */
             contact?: string | null;
+            /** End Date */
+            end_date?: string | null;
+            /** Pending Status */
+            pending_status?: ("Active" | "Resigned" | "Terminated") | null;
         };
         /** EmployeeListResponse */
         EmployeeListResponse: {
@@ -5475,6 +5479,8 @@ export interface components {
             status: "Active" | "Resigned" | "Terminated";
             /** End Date */
             end_date: string | null;
+            /** Pending Status */
+            pending_status: ("Active" | "Resigned" | "Terminated") | null;
             /** Department */
             department: string | null;
             /** Position */
@@ -9084,6 +9090,7 @@ export interface operations {
                 status?: string | null;
                 department?: string | null;
                 duty_unit?: string | null;
+                pending?: boolean;
                 limit?: number;
                 offset?: number;
             };

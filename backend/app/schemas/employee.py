@@ -128,7 +128,7 @@ class EmployeeRead(ORMBase):
     # None = no pending departure. Read-only: EmployeeUpdate deliberately has no
     # counterpart, because cancelling rides the existing
     # `{status: 'Active', end_date: null}` patch (see update_employee).
-    pending_status: EmployeeStatus | None = None
+    pending_status: EmployeeStatus | None
     department: str | None
     position: str | None
     position_ar: str | None
