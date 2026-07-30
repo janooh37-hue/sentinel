@@ -38,14 +38,20 @@ export function BookAnnotationLayer({
   mode,
   currentUserId,
   busy,
+  armed = false,
   onCreate,
   onDelete,
+  // @ts-ignore -- wired in Task 2
+  onDisarm,
 }: {
   pages: PageBox[]
   annotations: BookAnnotation[]
   mode: 'view' | 'mark'
   currentUserId?: number
   busy?: boolean
+  /** Mark mode only accepts touches while armed — disarmed, the paper keeps
+   *  its native pinch-zoom and scroll. */
+  armed?: boolean
   onCreate?: (m: {
     page: number
     kind: AnnotationKind
@@ -53,8 +59,16 @@ export function BookAnnotationLayer({
     comment: string
   }) => void
   onDelete?: (id: number) => void
+  /** Fired after a mark is saved or cancelled — one arm yields one mark. */
+  onDisarm?: () => void
 }): React.JSX.Element {
   const { t } = useTranslation()
+
+  // Interaction is live only when the decider has explicitly armed marking.
+  // Disarmed, the overlay must not intercept a single touch: the paper below
+  // needs its native pinch-zoom and scroll back (the phone is the approval
+  // surface, and an A4 page is unreadable at ~330px without zoom).
+  const live = mode === 'mark' && armed
   const [tool, setTool] = useState<AnnotationKind>('pin')
   const [openId, setOpenId] = useState<number | null>(null)
   const [draft, setDraft] = useState<DraftMark | null>(null)
@@ -137,14 +151,15 @@ export function BookAnnotationLayer({
   return (
     <div
       ref={rootRef}
-      className={cn('absolute inset-0', mode === 'mark' ? 'pointer-events-auto' : 'pointer-events-none')}
-      onPointerDown={mode === 'mark' ? onPointerDown : undefined}
-      onPointerMove={mode === 'mark' ? onPointerMove : undefined}
-      onPointerUp={mode === 'mark' ? onPointerUp : undefined}
-      style={{ touchAction: mode === 'mark' ? 'none' : undefined }}
+      data-testid="anno-root"
+      className={cn('absolute inset-0', live ? 'pointer-events-auto' : 'pointer-events-none')}
+      onPointerDown={live ? onPointerDown : undefined}
+      onPointerMove={live ? onPointerMove : undefined}
+      onPointerUp={live ? onPointerUp : undefined}
+      style={{ touchAction: undefined }}
     >
       {/* toolbar (mark mode) */}
-      {mode === 'mark' && (
+      {live && (
         <div className="pointer-events-auto absolute left-1/2 top-2 z-30 flex -translate-x-1/2 items-center gap-1 rounded-full border border-hairline bg-surface/95 px-2 py-1 shadow-lg backdrop-blur">
           <ToolBtn
             active={tool === 'pin'}
@@ -171,7 +186,7 @@ export function BookAnnotationLayer({
         if (!box) return null
         const r = placeMark(box, a.geometry, a.kind)
         const open = openId === a.id
-        const canDelete = mode === 'mark' && a.author_user_id === currentUserId && onDelete != null
+        const canDelete = live && a.author_user_id === currentUserId && onDelete != null
         return (
           <div key={a.id}>
             {a.kind === 'highlight' && (
