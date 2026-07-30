@@ -57,6 +57,7 @@ function makeBook(overrides: Partial<BookRead> & { search_snippet?: string | nul
     doc_manager_name: null,
     doc_manager_has_signature: false,
     is_word_book: false,
+    service_id: 'General Book',
     your_step_kind: null,
     approval_steps: [],
     attachment_paths: [],
