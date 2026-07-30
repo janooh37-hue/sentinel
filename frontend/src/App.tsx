@@ -272,7 +272,12 @@ function Shell(): React.JSX.Element {
         </div>
         {isMobile && <BottomTabBar />}
       </div>
-      <Toaster position="bottom-right" richColors closeButton />
+      {/* Wrapped so print can hide it: sonner renders an empty <section> in
+          normal flow here, and a trailing in-flow box after a named-@page
+          element (the permits register) costs a blank sheet. */}
+      <div data-print-hide>
+        <Toaster position="bottom-right" richColors closeButton />
+      </div>
       <ShortcutsHelpDialog />
       {locked && <LockOverlay onUnlocked={unlock} />}
     </>

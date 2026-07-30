@@ -717,15 +717,24 @@ body {
      margins baked in, so any @page margin boxes an A4 page inside a smaller A4
      page (12mm cost ~11% of the width and the letterhead's bleed).
 
-     Do NOT reach for a named page (`@page doc` + `page: doc`) to give one
-     surface different margins: a page-NAME change forces a page break, so any
-     in-flow box outside the named element — sonner's <Toaster> renders an empty
-     <section> right after the shell — emits a blank trailing sheet. Surfaces
-     that want margins pad their own root instead (see PermitsPage's
-     PermitPrintView). */
+     A page-NAME change forces a page break, so any in-flow box outside the
+     named element emits a blank sheet — sonner's <Toaster> renders an empty
+     <section> right after the shell and did exactly that. The record sheet is
+     the daily path, so it takes the UNNAMED page and can never regress that
+     way; only the permits register (rare, bulk) carries a name, and the one
+     known trailing box is print-hidden in App.tsx. */
   @page {
     size: A4;
     margin: 0;
+  }
+  /* The permits register is text on blank paper, so it needs a real per-sheet
+     margin — element padding would only inset the first and last sheet. */
+  @page register {
+    size: A4;
+    margin: 12mm;
+  }
+  .print-register {
+    page: register;
   }
   /* The desk that hosts the sheet pads the document on screen (px-6); on paper
      that padding is another ~13mm off the width. */

@@ -397,11 +397,9 @@ function PermitPrintView({
 }): React.JSX.Element {
   const { t } = useTranslation()
   return (
-    // p-[12mm] is this printout's page margin: @page carries none, because a
-    // per-surface @page margin needs a named page and that emits blank sheets
-    // (see index.css). Pads the sides of every sheet, the top of the first and
-    // the bottom of the last.
-    <div className="hidden bg-white p-[12mm] text-black print:block">
+    // print-register = the named @page that carries this printout's 12mm margin
+    // (the default @page has none, so the record sheet prints full-bleed).
+    <div className="print-register hidden bg-white p-0 text-black print:block">
       <div className="mb-2 flex items-center gap-3 border-b border-black pb-1.5">
         <img src="/brand/gssg-logo.png" alt="" className="h-10 w-auto" />
         <div>
