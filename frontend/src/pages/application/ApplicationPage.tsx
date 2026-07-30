@@ -64,6 +64,7 @@ import { useShortcutAction } from '@/lib/useKeyboardShortcuts'
 import { EmployeeHeader } from './EmployeeHeader'
 import { JobStatus } from './JobStatus'
 import { emojiForTemplate, resolveTemplateIdFromSlug } from './formEmoji'
+import { seedResignationDate, todayIso } from './resignationDate'
 import { WordHandoffDialog } from '@/pages/books/WordHandoffDialog'
 
 type TabValue = 'fields' | 'preview'
@@ -642,6 +643,14 @@ export function ApplicationPage(): React.JSX.Element {
       form.reset(values)
       base = parseAttachmentsState(__attachments)
       if (base) attachmentsDirtyRef.current = false
+    }
+    // Prefill the Resignation Letter's date to today, so an untouched form
+    // renders what it rendered before the field existed. Runs AFTER the draft /
+    // revise restore and only when the value is absent — seeding earlier or
+    // unconditionally would overwrite the operator's saved date.
+    if (schemaQuery.data?.fields?.some((f) => f.id === 'resignation_date')) {
+      const seed = seedResignationDate(form.getValues('resignation_date'), todayIso())
+      if (seed !== null) form.setValue('resignation_date', seed)
     }
     // Seed the intake-staged scan on top of the restored draft (or onto an
     // empty state). attachmentsWithSeed is a pure function so draft content
