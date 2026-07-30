@@ -16,12 +16,14 @@ from functools import lru_cache
 from pathlib import Path, PurePath
 from typing import Any
 
-from sqlalchemy import Integer, func, or_, select, text
+from sqlalchemy import Integer, and_, false, func, not_, or_, select, text
 from sqlalchemy.orm import Session, selectinload
+from sqlalchemy.sql.elements import ColumnElement
 
 from app.api.errors import AppError, NotFoundError, ValidationFailedError
 from app.config import get_settings
 from app.core.constants import ALLOWED_DOC_EXTS, STAMP_STYLES
+from app.core.form_kind import OTHER_SERVICE_ID, SERVICE_IDS, subject_prefixes
 from app.db.models import (
     AuditLog,
     Book,
@@ -134,10 +136,49 @@ def _fts_query_books(db: Session, q: str) -> dict[int, str]:
         return {}
 
 
+def service_clause(service_id: str) -> ColumnElement[bool]:
+    """SQL for "this book belongs to `service_id`".
+
+    Mirrors `form_kind.resolve_service`, generated from the same prefix table:
+    a book belongs to a service if it has a version with that `template_id`, or
+    — being version-less — its subject starts with one of the service's names.
+    `OTHER_SERVICE_ID` is the literal negation of every named clause, so the
+    buckets are provably complementary: no book can land in two or in none.
+    Any `service_id` that is neither `OTHER_SERVICE_ID` nor a member of
+    `SERVICE_IDS` matches nothing — `resolve_service` never returns such a
+    value, so the SQL must not invent a match for it either.
+
+    `subject_prefixes()` is asserted wildcard-free in test_form_kind, so
+    interpolating it into ILIKE cannot widen the match. The subject branch is
+    guarded with ``is_not(None)``: ILIKE against a NULL subject evaluates to
+    SQL's UNKNOWN (not FALSE), which would otherwise make a subject-less,
+    version-less book vanish from every bucket instead of landing in `other`.
+    """
+    if service_id == OTHER_SERVICE_ID:
+        return and_(*[not_(service_clause(s)) for s in SERVICE_IDS])
+    if service_id not in SERVICE_IDS:
+        return false()
+    has_version_of = Book.id.in_(
+        select(BookVersion.book_id).where(BookVersion.template_id == service_id)
+    )
+    prefixes = subject_prefixes(service_id)
+    if not prefixes:
+        return has_version_of
+    return or_(
+        has_version_of,
+        and_(
+            Book.id.not_in(select(BookVersion.book_id)),
+            Book.subject.is_not(None),
+            or_(*[Book.subject.ilike(f"{p}%") for p in prefixes]),
+        ),
+    )
+
+
 def list_books(
     db: Session,
     *,
     category_id: str | None = None,
+    service_id: str | None = None,
     direction: str | None = None,
     approval_state: str | None = None,
     q: str | None = None,
@@ -173,6 +214,11 @@ def list_books(
     if category_id is not None:
         stmt = stmt.where(Book.category_id == category_id)
         count_stmt = count_stmt.where(Book.category_id == category_id)
+
+    if service_id is not None:
+        svc_clause = service_clause(service_id)
+        stmt = stmt.where(svc_clause)
+        count_stmt = count_stmt.where(svc_clause)
 
     if direction is not None:
         stmt = stmt.where(Book.direction == direction)
@@ -1634,6 +1680,7 @@ __all__ = [
     "resolve_attachment_path",
     "resolve_doc_manager_user",
     "resolve_user_name_by_id",
+    "service_clause",
     "sign_book",
     "sms_for_book",
     "submit_for_approval",

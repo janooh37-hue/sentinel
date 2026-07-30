@@ -334,6 +334,7 @@ def _fill_draft_fields(
 def list_books(
     db: Annotated[Session, Depends(get_db)],
     category_id: str | None = None,
+    service_id: str | None = None,
     direction: str | None = None,
     approval_state: str | None = None,
     q: str | None = None,
@@ -346,6 +347,7 @@ def list_books(
     rows, total, fts_snippets = book_service.list_books(
         db,
         category_id=category_id,
+        service_id=service_id,
         direction=direction,
         approval_state=approval_state,
         q=q,
