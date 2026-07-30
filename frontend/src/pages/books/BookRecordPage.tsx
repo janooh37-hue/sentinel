@@ -473,8 +473,14 @@ export function BookRecordPage(): React.JSX.Element {
         <QueueNav
           position={queue.position}
           total={queue.total}
-          onPrev={() => queue.prevId != null && navigate(`/books/${queue.prevId}`)}
-          onNext={() => queue.nextId != null && navigate(`/books/${queue.nextId}`)}
+          onPrev={() => {
+            setArmedFor(null)
+            if (queue.prevId != null) navigate(`/books/${queue.prevId}`)
+          }}
+          onNext={() => {
+            setArmedFor(null)
+            if (queue.nextId != null) navigate(`/books/${queue.nextId}`)
+          }}
         />
         <div className="min-w-0 flex-1">
           <div className="font-mono text-[0.72em] font-semibold tracking-wide text-primary">
