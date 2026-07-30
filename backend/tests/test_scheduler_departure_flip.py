@@ -115,10 +115,15 @@ def test_arabic_body_isolates_the_latin_id(monkeypatch):
     sched._run_pending_departure_flip()
 
     ar = sent[0]["ar"][1]
-    assert "⁦(G9405)⁩" in ar, "id + its parens isolated as one LTR run"
-    assert "⁦Latin Name⁩" in ar, "name_ar fell back to Latin, must be isolated"
+    # Spelled as escapes: the controls are invisible, and an earlier version of
+    # this shipped U+2066 LRI while claiming FSI. FSI takes direction from the
+    # first strong character; LRI would force LTR onto a real Arabic name_ar.
+    fsi, pdi = "⁨", "⁩"
+    assert f"{fsi}(G9405){pdi}" in ar, "id + its parens isolated as one run"
+    assert f"{fsi}Latin Name{pdi}" in ar, "name_ar fell back to Latin, must be isolated"
+    assert "⁦" not in ar, "LRI would force LTR on an unknown-direction value"
     # The English body is pure LTR and needs no isolates.
-    assert "⁦" not in sent[0]["en"][1]
+    assert fsi not in sent[0]["en"][1]
 
 
 def test_flip_job_swallows_service_errors(monkeypatch):

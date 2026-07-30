@@ -126,8 +126,9 @@ class EmployeeRead(ORMBase):
     end_date: date | None
     # Where a scheduled departure is headed, while `status` is still 'Active'.
     # None = no pending departure. Read-only: EmployeeUpdate deliberately has no
-    # counterpart, because cancelling rides the existing
-    # `{status: 'Active', end_date: null}` patch (see update_employee).
+    # counterpart, because cancelling rides an `{end_date: null}` patch — which
+    # is only valid while they are still Active, so it cannot resurrect someone
+    # the flip job already departed (see update_employee).
     pending_status: EmployeeStatus | None
     department: str | None
     position: str | None

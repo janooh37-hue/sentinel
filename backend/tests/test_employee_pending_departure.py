@@ -109,7 +109,8 @@ def test_past_dated_departure_applies_immediately(db_session):
 
 
 def test_reactivating_cancels_a_pending_departure(db_session):
-    """This is the Cancel path — the widget sends exactly this patch."""
+    """A genuine reactivation from StatusDialog. NOT the widget's Cancel patch —
+    that sends `{end_date: null}` alone (see the test below)."""
     _make(
         db_session,
         "G9114",
@@ -156,10 +157,10 @@ def test_full_form_edit_preserves_the_pending_departure(db_session):
     guards is silent: no error, the badge and widget just stop showing it.
     """
     future = date.today() + timedelta(days=10)
-    _make(db_session, "G9118", end_date=future, pending_status="Resigned")
+    _make(db_session, "G9130", end_date=future, pending_status="Resigned")
     out = employee_service.update_employee(
         db_session,
-        "G9118",
+        "G9130",
         EmployeeUpdate(status="Active", end_date=future, department="Operations"),
     )
     assert out.pending_status == "Resigned", "unchanged status is not a reactivation"
@@ -176,15 +177,15 @@ def test_cancel_payload_refuses_an_already_departed_employee(db_session):
     """
     _make(
         db_session,
-        "G9119",
+        "G9131",
         status="Resigned",
         end_date=date.today() - timedelta(days=1),
         pending_status=None,
     )
     with pytest.raises(ValidationFailedError) as exc:
-        employee_service.update_employee(db_session, "G9119", EmployeeUpdate(end_date=None))
+        employee_service.update_employee(db_session, "G9131", EmployeeUpdate(end_date=None))
     assert exc.value.code == "EMPLOYEE_INVALID_STATUS_END_DATE"
-    row = employee_service.get_employee(db_session, "G9119")
+    row = employee_service.get_employee(db_session, "G9131")
     assert row.status == "Resigned", "row untouched"
     assert row.end_date is not None
 

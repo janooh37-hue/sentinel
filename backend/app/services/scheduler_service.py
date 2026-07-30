@@ -347,14 +347,19 @@ _DEPARTURE_LABELS: Final[dict[str, tuple[str, str]]] = {
 
 
 def _isolate(s: str) -> str:
-    """Wrap an LTR fragment so it can't scramble inside Arabic text.
+    """Wrap a fragment so it can't scramble the Arabic text around it.
 
     A G-number like ``G9600`` mixes a strong-L letter with digits, so the bidi
     algorithm won't unify it the way it does a pure-digit date — parenthesised
-    mid-sentence it flips. Same First-Strong-Isolate/Pop-Directional-Isolate
-    pair the frontend uses (``frontend/src/lib/bidi.ts``).
+    mid-sentence it flips.
+
+    U+2068 FIRST STRONG ISOLATE, not U+2066 LRI: this wraps values whose
+    direction isn't known here (``name_ar`` falls back to a Latin name), and
+    FSI takes its direction from the first strong character instead of forcing
+    LTR. Closed by U+2069 PDI. Same pair as ``frontend/src/lib/bidi.ts`` — the
+    controls are invisible in an editor, so verify by codepoint, not by eye.
     """
-    return f"⁦{s}⁩"
+    return f"⁨{s}⁩"
 
 
 def _run_pending_departure_flip() -> None:
