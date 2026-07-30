@@ -3505,6 +3505,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/permits/{permit_id}/submit-approval": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Submit Permit Approval
+         * @description Send the permit's 1/5 letter into the book approval chain.
+         */
+        post: operations["submit_permit_approval_api_v1_permits__permit_id__submit_approval_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/permits/{permit_id}/people": {
         parameters: {
             query?: never;
@@ -6598,6 +6618,11 @@ export interface components {
             vehicles?: components["schemas"]["PermitVehicleCreate"][];
             /** Manager Id */
             manager_id?: number | null;
+            /**
+             * Send For Approval
+             * @default true
+             */
+            send_for_approval: boolean;
         };
         /** PermitListItem */
         PermitListItem: {
@@ -6775,6 +6800,8 @@ export interface components {
             book_id?: number | null;
             /** Book Ref */
             book_ref?: string | null;
+            /** Approval State */
+            approval_state?: string | null;
             /** People */
             people?: components["schemas"]["PermitPersonRead"][];
             /** Vehicles */
@@ -15848,6 +15875,39 @@ export interface operations {
                 "application/json": components["schemas"]["PermitRevoke"];
             };
         };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PermitRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    submit_permit_approval_api_v1_permits__permit_id__submit_approval_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                permit_id: number;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
         responses: {
             /** @description Successful Response */
             200: {

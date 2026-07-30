@@ -1083,6 +1083,9 @@ export const api = {
     request<PermitRead>('POST', `/permits/${id}/renew`, body),
   revokePermit: (id: number, body: { reason?: string }) =>
     request<PermitRead>('POST', `/permits/${id}/revoke`, body),
+  /** POST /permits/{id}/submit-approval — send the 1/5 letter into the approval chain. */
+  submitPermitApproval: (id: number) =>
+    request<PermitRead>('POST', `/permits/${id}/submit-approval`),
   deletePermit: (id: number) => request<void>('DELETE', `/permits/${id}`),
   addPermitPerson: (id: number, body: PermitPersonCreate) =>
     request<PermitRead>('POST', `/permits/${id}/people`, body),
