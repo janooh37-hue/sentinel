@@ -83,6 +83,39 @@ describe('PermitFormDialog', () => {
     await waitFor(() => expect(emirate.value).toBe('دبي'))
   })
 
+  it('warns that the letter will stay a draft when no manager can receive it', async () => {
+    // listManagers returns [] by default, so nothing is routable.
+    renderForm()
+    expect(screen.getByRole('switch', { name: /send for approval/i })).toHaveAttribute(
+      'aria-checked',
+      'true',
+    )
+    expect(screen.getByText(/will stay a draft/i)).toBeInTheDocument()
+
+    // Turning the switch off is a deliberate draft — no warning needed.
+    await userEvent.click(screen.getByRole('switch', { name: /send for approval/i }))
+    expect(screen.queryByText(/will stay a draft/i)).not.toBeInTheDocument()
+  })
+
+  it('drops the warning once a manager with a login account is picked', async () => {
+    vi.spyOn(api, 'listManagers').mockResolvedValue([
+      { id: 1, name_en: 'Linked Boss', active: true, user_id: 42 },
+      { id: 2, name_en: 'No Account', active: true, user_id: null },
+    ] as never)
+
+    renderForm()
+    const select = await screen.findByRole('combobox', { name: /signing manager/i })
+    await screen.findByRole('option', { name: 'No Account' }) // wait for the list to load
+
+    await userEvent.selectOptions(select, '2') // manager without a login account
+    expect(screen.getByText(/will stay a draft/i)).toBeInTheDocument()
+
+    await userEvent.selectOptions(select, '1') // linked manager — routable
+    await waitFor(() =>
+      expect(screen.queryByText(/will stay a draft/i)).not.toBeInTheDocument(),
+    )
+  })
+
   it('send-for-approval switch defaults ON and is sent with the permit', async () => {
     const created = { id: 7, people: [], vehicles: [] }
     const createSpy = vi.spyOn(api, 'createPermit').mockResolvedValue(created as never)

@@ -533,7 +533,8 @@
       "create": "Issue permit",
       "windowError": "End date must not be before the start date.",
       "sendForApproval": "Send for approval",
-      "sendForApprovalHint": "Sends the letter to the signing manager as soon as it is generated. Turn off to keep it as a draft."
+      "sendForApprovalHint": "Sends the letter to the signing manager as soon as it is generated. Turn off to keep it as a draft.",
+      "sendForApprovalUnroutable": "No signing manager with a login account is selected, so the letter will stay a draft. Pick one, or link the manager to an account in Settings → Managers."
     },
     "renew": {
       "title": "Renew permit",

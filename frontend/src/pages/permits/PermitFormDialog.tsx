@@ -121,6 +121,10 @@ export function PermitFormDialog({ open, permit, onOpenChange, onSaved }: Props)
   const hasPerson = namedPeople.some((p) => (p.uae_id ?? '').trim().length > 0)
   const toggleZone = (z: PermitZone): void =>
     setZones((cur) => (cur.includes(z) ? cur.filter((x) => x !== z) : [...cur, z]))
+  // The approval chain reaches the manager through his linked login account
+  // (Manager.user_id). No manager picked, or one without an account, means the
+  // submit can't be routed and the letter would quietly stay a draft.
+  const canRoute = Boolean(managers?.find((m) => m.id === managerId)?.user_id)
   const canSave =
     company.trim().length > 0 &&
     windowValid &&
@@ -363,12 +367,21 @@ export function PermitFormDialog({ open, permit, onOpenChange, onSaved }: Props)
 
           {/* Send for approval — on by default; off holds the letter as a draft */}
           {!isEdit && (
-            <ToggleRow
-              checked={sendForApproval}
-              onChange={setSendForApproval}
-              label={t('permits.form.sendForApproval')}
-              hint={t('permits.form.sendForApprovalHint')}
-            />
+            <div className="flex flex-col gap-1.5">
+              <ToggleRow
+                checked={sendForApproval}
+                onChange={setSendForApproval}
+                label={t('permits.form.sendForApproval')}
+                hint={t('permits.form.sendForApprovalHint')}
+              />
+              {/* The chain routes via the manager's login account. Without one
+                  the letter silently stays a draft — say so before it happens. */}
+              {sendForApproval && !canRoute && (
+                <p className="text-[0.75em] text-warning">
+                  {t('permits.form.sendForApprovalUnroutable')}
+                </p>
+              )}
+            </div>
           )}
 
           {/* People — create only (at least one required) */}

@@ -21,6 +21,7 @@ const KEYS = [
   'permits.vehicle.expiry',
   'permits.form.sendForApproval',
   'permits.form.sendForApprovalHint',
+  'permits.form.sendForApprovalUnroutable',
   'permits.detail.sendForApproval',
   'permits.approval.none',
   'permits.approval.pending',
