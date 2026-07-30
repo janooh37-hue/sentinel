@@ -200,3 +200,50 @@ def test_regen_never_sent_stays_draft(gen_env: Session) -> None:
     permit_service.add_vehicle(db, permit.id, PermitVehicleCreate(plate_no="A 1"), actor="op@x.ae")
     book, _ = _latest_version(db, permit.book_id)
     assert book.approval_state == "none"
+
+
+def test_manual_submit_happy_path(gen_env: Session) -> None:
+    db = gen_env
+    _actor(db)
+    mgr, _ = _linked_manager(db)
+    permit = permit_service.create_permit(db, _payload(manager_id=mgr.id), actor="op@x.ae")
+    row = permit_service.submit_permit_book(db, permit.id, actor="op@x.ae")
+    book, _ = _latest_version(db, permit.book_id)
+    assert book.approval_state == "pending"
+    read = permit_service.to_read(row, db=db)
+    assert read.approval_state == "pending"
+
+
+def test_manual_submit_unlinked_manager_raises(gen_env: Session) -> None:
+    from app.api.errors import ValidationFailedError
+
+    db = gen_env
+    _actor(db)
+    m = Manager(name_en="Names Only")
+    db.add(m)
+    db.commit()
+    db.refresh(m)
+    permit = permit_service.create_permit(db, _payload(manager_id=m.id), actor="op@x.ae")
+    with pytest.raises(ValidationFailedError):
+        permit_service.submit_permit_book(db, permit.id, actor="op@x.ae")
+
+
+def test_manual_submit_revoked_raises(gen_env: Session) -> None:
+    from app.api.errors import ValidationFailedError
+
+    db = gen_env
+    _actor(db)
+    mgr, _ = _linked_manager(db)
+    permit = permit_service.create_permit(db, _payload(manager_id=mgr.id), actor="op@x.ae")
+    permit_service.revoke_permit(db, permit.id, actor="op@x.ae")
+    with pytest.raises(ValidationFailedError):
+        permit_service.submit_permit_book(db, permit.id, actor="op@x.ae")
+
+
+def test_to_read_exposes_draft_state(gen_env: Session) -> None:
+    db = gen_env
+    _actor(db)
+    mgr, _ = _linked_manager(db)
+    permit = permit_service.create_permit(db, _payload(manager_id=mgr.id), actor="op@x.ae")
+    read = permit_service.to_read(permit, db=db)
+    assert read.approval_state == "none"

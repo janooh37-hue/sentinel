@@ -111,9 +111,11 @@ def to_read(row: Permit, *, today: date | None = None, db: Session | None = None
     people = _active_people(row)
     vehicles = _active_vehicles(row)
     book_ref: str | None = None
+    approval_state: str | None = None
     if db is not None and row.book_id is not None:
         b = db.get(Book, row.book_id)
         book_ref = b.ref_number if b is not None else None
+        approval_state = b.approval_state if b is not None else None
     return PermitRead.model_validate(row).model_copy(
         update={
             "derived_status": _derived_status(row, today=today),
@@ -125,6 +127,7 @@ def to_read(row: Permit, *, today: date | None = None, db: Session | None = None
             "manager_id": row.manager_id,
             "book_id": row.book_id,
             "book_ref": book_ref,
+            "approval_state": approval_state,
             "people": [_person_read(p) for p in people],
             "vehicles": [_vehicle_read(v) for v in vehicles],
         }
@@ -401,6 +404,38 @@ def regenerate_permit_book(
     _audit(db, "permit.book_generated", permit.id, actor, {"book_id": permit.book_id})
     if submit or prior_state in ("pending", "approved"):
         _submit_book(db, permit, actor=actor)
+
+
+def submit_permit_book(db: Session, permit_id: int, *, actor: str | None = None) -> Permit:
+    """Manual "Send for approval". Unlike the auto paths this does NOT swallow
+    chain errors — the operator sees exactly why it can't be sent (e.g. the
+    manager needs a login account in Settings → Managers)."""
+    from app.services import book_service
+
+    row = get_permit(db, permit_id)
+    if row.status == "revoked":
+        raise ValidationFailedError(
+            "PERMIT_REVOKED", "A revoked permit cannot be sent for approval.", id=permit_id
+        )
+    if row.book_id is None:
+        raise ValidationFailedError(
+            "PERMIT_NO_BOOK", "This permit has no generated letter to submit.", id=permit_id
+        )
+    submitter = db.scalar(select(User).where(User.email == actor)) if actor else None
+    if submitter is None:
+        raise ValidationFailedError(
+            "SUBMITTER_UNRESOLVED", "Could not resolve the submitting user account."
+        )
+    book_service.submit_for_approval(
+        db,
+        row.book_id,
+        priority="Normal",
+        approver_user_id=None,
+        reviewer_user_ids=[],
+        submitted_by_user_id=submitter.id,
+    )
+    _audit(db, "permit.book_submitted", permit_id, actor, {"book_id": row.book_id})
+    return get_permit(db, permit_id)
 
 
 def update_permit(

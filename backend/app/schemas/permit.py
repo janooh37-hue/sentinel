@@ -234,6 +234,9 @@ class PermitRead(ORMBase):
     manager_id: int | None = None
     book_id: int | None = None
     book_ref: str | None = None
+    # The linked book's approval state, verbatim:
+    # none | pending | approved | rejected | returned. None when no book.
+    approval_state: str | None = None
     people: list[PermitPersonRead] = Field(default_factory=list)
     vehicles: list[PermitVehicleRead] = Field(default_factory=list)
 

@@ -9,6 +9,7 @@ Routes (all under ``/api/v1``):
   PATCH  /permits/{id}                  — edit header fields
   POST   /permits/{id}/renew            — extend the window
   POST   /permits/{id}/revoke           — revoke early
+  POST   /permits/{id}/submit-approval  — send the 1/5 letter for approval
   DELETE /permits/{id}                  — soft-delete (204)
   POST   /permits/{id}/people           — add a person
   DELETE /permits/{id}/people/{pid}     — remove a person (soft)
@@ -207,6 +208,17 @@ def revoke_permit(
     user: Annotated[User, Depends(require_capability("permits.manage"))],
 ) -> PermitRead:
     row = permit_service.revoke_permit(db, permit_id, reason=payload.reason, actor=user.email)
+    return permit_service.to_read(row, db=db)
+
+
+@router.post("/{permit_id}/submit-approval", response_model=PermitRead)
+def submit_permit_approval(
+    permit_id: int,
+    db: Annotated[Session, Depends(get_db)],
+    user: Annotated[User, Depends(require_capability("permits.manage"))],
+) -> PermitRead:
+    """Send the permit's 1/5 letter into the book approval chain."""
+    row = permit_service.submit_permit_book(db, permit_id, actor=user.email)
     return permit_service.to_read(row, db=db)
 
 
