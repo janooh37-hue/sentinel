@@ -754,6 +754,8 @@ export type BookRead = components['schemas']['BookRead'] & {
   doc_manager_has_signature?: boolean
   imported_doc?: ImportedDocRead | null
 }
+export type BookFacetsResponse = components['schemas']['BookFacetsResponse']
+export type ServiceFacetRead = components['schemas']['ServiceFacetRead']
 
 // Annotation overlay (Slice 3). Hand-typed mirror of schemas.book.BookAnnotationRead
 // until gen:api folds it into the generated schema.
@@ -1450,6 +1452,7 @@ export const api = {
   // --- books (Phase 05) ---
   listBooks: (params: {
     category_id?: string
+    service_id?: string
     direction?: 'incoming' | 'outgoing'
     approval_state?: 'none' | 'pending' | 'approved' | 'returned' | 'rejected'
     q?: string
@@ -1516,6 +1519,10 @@ export const api = {
     request<BookRead>('PATCH', `/books/${id}`, body),
   deleteBook: (id: number) => request<void>('DELETE', `/books/${id}`),
   listBookCategories: () => request<BookCategoryRead[]>('GET', '/book-categories'),
+  /** GET /books/facets — per-service counts + per-service approval-state
+   *  counts, over every record (not a page window). Backs the Records rail
+   *  and the status spine. */
+  getBookFacets: () => request<BookFacetsResponse>('GET', '/books/facets'),
 
   // --- books approval (feat/mobile-and-approval) ---
   /** GET /books/awaiting — books pending the signed-in user's decision. */
