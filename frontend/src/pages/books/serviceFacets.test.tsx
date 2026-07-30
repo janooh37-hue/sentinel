@@ -103,3 +103,30 @@ describe('FormRail', () => {
     expect(onChange).toHaveBeenCalledWith('Report')
   })
 })
+
+describe('facets query failure', () => {
+  // `railItemsFrom`/`spineCountsFrom` receive `facets: undefined` for BOTH
+  // "still loading" and "the request failed" — the derivations themselves
+  // cannot tell those apart, and must not pretend to. It is BooksPage's job
+  // (via facetsQuery.isError) to swap in a retry affordance instead of
+  // rendering these derivations at all; that render-level gate has no test
+  // harness in this repo (no BooksPage render test — see the file banner),
+  // so what's pinned here is the contract the gate depends on: an absent
+  // payload must never resolve to a fabricated "All: 0" that a user could
+  // mistake for "there are zero records".
+  it('produces no rail items at all for a missing payload — never a lone "All: 0"', () => {
+    expect(railItemsFrom(undefined, 'All forms', label)).toEqual([])
+  })
+
+  it('produces all-zero counts for a missing payload, not a real reading', () => {
+    expect(spineCountsFrom(undefined, 'all')).toEqual({
+      all: 0, none: 0, pending: 0, awaiting_scan: 0,
+      returned: 0, approved: 0, rejected: 0,
+    })
+  })
+
+  it('FormRail renders no buttons (not a fake "All" entry) when handed no items', () => {
+    render(<FormRail items={[]} active="all" onChange={vi.fn()} />)
+    expect(screen.queryAllByRole('button')).toHaveLength(0)
+  })
+})

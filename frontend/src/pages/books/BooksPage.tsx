@@ -96,11 +96,16 @@ export function BooksPage(): React.JSX.Element {
   })
 
   // ── Data: one unfiltered fetch; both branches filter client-side ───────────
+  // The service scope is a desktop-only concept (mobile has no FormRail to set
+  // it) — gate on isDesktop too, not just railService, so a desktop→mobile
+  // resize with a service selected can't leave the mobile list silently
+  // filtered with no indicator that a filter is active.
+  const railScope = isDesktop ? railService : 'all'
   const listQuery = useQuery({
-    queryKey: ['books', 'all', railService],
+    queryKey: ['books', 'all', railScope],
     queryFn: () =>
       api.listBooks(
-        railService === 'all' ? { limit: 500 } : { service_id: railService, limit: 500 },
+        railScope === 'all' ? { limit: 500 } : { service_id: railScope, limit: 500 },
       ),
   })
   const allRows: BookRead[] = useMemo(() => listQuery.data?.items ?? [], [listQuery.data])
@@ -348,9 +353,13 @@ export function BooksPage(): React.JSX.Element {
 
   const handleAddToEmail = useCallback(async () => {
     const ids = [...selectedForBasket]
+    // Same pool-then-fallback as selectedBook: a checkbox can only be set on a
+    // row that's currently rendered (desktopRows), which during an active
+    // search comes from searchQuery.data, not allRows.
+    const pool = serverSearchActive && searchQuery.data ? searchQuery.data.items : allRows
     const results = await Promise.allSettled(
       ids.map((id) => {
-        const book = allRows.find((r) => r.id === id)
+        const book = pool.find((r) => r.id === id) ?? allRows.find((r) => r.id === id)
         return book ? buildRecordBasketItem(book) : Promise.resolve(null)
       }),
     )
@@ -366,7 +375,7 @@ export function BooksPage(): React.JSX.Element {
     } else {
       toast(t('basket.tray.alreadyIn', { kind: t('basket.add') }))
     }
-  }, [selectedForBasket, allRows, t])
+  }, [selectedForBasket, allRows, serverSearchActive, searchQuery.data, t])
 
   // Single-record "Add to email" from the record pane (same enrichment as the
   // bulk multi-select; toasts added / already-in / not-found).
@@ -420,7 +429,9 @@ export function BooksPage(): React.JSX.Element {
               <div className="mt-0.5 text-[0.8em] text-muted-foreground">
                 {listQuery.isPending || facetsQuery.isPending
                   ? t('books.subtitle')
-                  : t('books.pageMeta', { total })}
+                  : facetsQuery.isError
+                    ? t('common.loadError')
+                    : t('books.pageMeta', { total })}
               </div>
             </div>
             <div className="flex shrink-0 items-center gap-2">
@@ -435,9 +446,36 @@ export function BooksPage(): React.JSX.Element {
               </button>
             </div>
           </header>
-          <StatusSpine counts={spineCounts} active={spineState} onChange={setSpineState} />
+          {facetsQuery.isError ? (
+            // A failed facets fetch must never render as an honest "0" — the spine's
+            // whole reason to exist is to be a number the operator can trust. Show a
+            // retry affordance in its place, matching the list pane's error pattern.
+            <div className="mb-3 flex items-center justify-between gap-3 rounded-2xl border border-hairline bg-surface px-3.5 py-2.5">
+              <span className="text-[0.8em] text-muted-foreground">{t('common.loadError')}</span>
+              <button
+                type="button"
+                onClick={() => void facetsQuery.refetch()}
+                className="rounded-full border border-hairline px-3 py-1 text-[0.75em] font-semibold text-muted-foreground transition-colors hover:border-primary hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              >
+                {t('common.retry')}
+              </button>
+            </div>
+          ) : (
+            <StatusSpine counts={spineCounts} active={spineState} onChange={setSpineState} />
+          )}
           <div className="grid min-h-0 flex-1 grid-cols-[15rem_minmax(0,1fr)_clamp(360px,36%,480px)] gap-3">
-            <FormRail items={railItems} active={railService} onChange={setRailService} />
+            {facetsQuery.isError ? (
+              <div className="rounded-2xl border border-hairline bg-surface py-8">
+                <EmptyState
+                  icon={BookOpen}
+                  message={t('common.loadError')}
+                  actionLabel={t('common.retry')}
+                  onAction={() => void facetsQuery.refetch()}
+                />
+              </div>
+            ) : (
+              <FormRail items={railItems} active={railService} onChange={setRailService} />
+            )}
             <section className="flex min-h-0 flex-col overflow-hidden rounded-2xl border border-hairline bg-surface">
               <div className="flex shrink-0 items-center gap-2 border-b border-hairline p-2.5">
                 <Input
