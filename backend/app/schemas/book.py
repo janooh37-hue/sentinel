@@ -7,6 +7,7 @@ from typing import Literal
 
 from pydantic import BaseModel, Field, computed_field
 
+from app.core.form_kind import resolve_service
 from app.schemas._base import ORMBase
 from app.schemas.notify import NotifyMessageRead
 
@@ -283,6 +284,21 @@ class BookRead(ORMBase):
     def current_template_id(self) -> str | None:
         """Newest version's template_id — lets the list badge Reports."""
         return self.versions[-1].template_id if self.versions else None
+
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def service_id(self) -> str:
+        """Which service produced this record — the Records rail's category.
+
+        Single source of truth for the rule (app.core.form_kind); the frontend
+        reads this instead of parsing the subject. `versions` is empty for
+        v3-imported records, which is exactly when the subject fallback applies.
+        """
+        return resolve_service(
+            self.subject,
+            self.versions[-1].template_id if self.versions else None,
+            versioned=bool(self.versions),
+        )
 
     # Outbound notifications sent for this book (WhatsApp + SMS, auto-send + resends).
     sms: list[NotifyMessageRead] = Field(default_factory=list)
