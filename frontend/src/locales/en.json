@@ -1022,7 +1022,10 @@
       "metaPending": "pending",
       "metaDraft": "draft",
       "metaAwaitingScan": "out for signing",
-      "metaScanned": "signed copy filed"
+      "metaScanned": "signed copy filed",
+      "prevAwaiting": "Previous awaiting record",
+      "nextAwaiting": "Next awaiting record",
+      "queuePosition": "{{n}} of {{total}}"
     },
     "preview": {
       "description": "Draft document preview",

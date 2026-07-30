@@ -21,6 +21,7 @@ import {
   CornerUpLeft,
   FileText,
   Loader2,
+  MapPin,
   PenLine,
   Printer,
   RefreshCw,
@@ -55,6 +56,8 @@ import { cn } from '@/lib/utils'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import { BookStatusChips } from '@/components/books/BookStatusChips'
 import { BookWordActions } from '@/components/books/BookWordActions'
+import { QueueNav } from './QueueNav'
+import { useAwaitingQueue } from './useAwaitingQueue'
 
 import { useIsMobile } from '@/lib/useIsMobile'
 import { smsDeliveryTone } from '@/lib/smsDelivery'
@@ -350,7 +353,18 @@ export function BookRecordPage(): React.JSX.Element {
   // Annotation overlay (Slice 3). Marks live on the current version; shown while
   // the book is in an active review state.
   const annotatable = state === 'pending' || state === 'returned' || state === 'rejected'
-  const annMode: 'view' | 'mark' = state === 'pending' && action === 'decide' ? 'mark' : 'view'
+  // Marking is opt-in. It used to be forced on for the decider, which put a
+  // pointer-eating overlay across the whole document — on a phone that killed
+  // pinch-zoom and made an A4 page unreadable. Now the manager arms it.
+  //
+  // Arm is per-record, not a plain boolean: `/books/:id` doesn't remount when
+  // the queue arrows change the id param, so a bare useState(false) would
+  // carry a live overlay from one record onto the next unarmed paper.
+  const [armedFor, setArmedFor] = useState<number | null>(null)
+  const armed = armedFor === bookId
+  const canMark = state === 'pending' && action === 'decide'
+  const annMode: 'view' | 'mark' = canMark ? 'mark' : 'view'
+  const queue = useAwaitingQueue(book?.id ?? null, canApprove)
   const { data: annotations = [] } = useQuery({
     queryKey: ['books', 'annotations', bookId, current?.id],
     queryFn: () => api.listBookAnnotations(bookId, current!.id),
@@ -446,6 +460,12 @@ export function BookRecordPage(): React.JSX.Element {
         >
           <ArrowLeft className="h-4 w-4 rtl:-scale-x-100" strokeWidth={2.2} />
         </button>
+        <QueueNav
+          position={queue.position}
+          total={queue.total}
+          onPrev={() => queue.prevId != null && navigate(`/books/${queue.prevId}`)}
+          onNext={() => queue.nextId != null && navigate(`/books/${queue.nextId}`)}
+        />
         <div className="min-w-0 flex-1">
           <div className="font-mono text-[0.72em] font-semibold tracking-wide text-primary">
             {book?.ref_number ?? '—'}
@@ -479,6 +499,15 @@ export function BookRecordPage(): React.JSX.Element {
             label={t('books.record.print')}
             onClick={() => window.print()}
           />
+          {canMark && (
+            <HeaderBtn
+              icon={<MapPin className="h-3.5 w-3.5" />}
+              label={armed ? t('books.annotations.markingOn') : t('books.annotations.mark')}
+              tone={armed ? 'amber' : 'plain'}
+              onClick={() => setArmedFor(armed ? null : bookId)}
+              testId="mark-toggle"
+            />
+          )}
           {/* Word session actions — isMobile is the REAL device check, not
               the page identity: this full-record page opens on desktop too
               ("Open full record"), where Edit-in-Word must stay usable. */}
@@ -733,10 +762,12 @@ export function BookRecordPage(): React.JSX.Element {
                               pages={pages}
                               annotations={annotations}
                               mode={annMode}
+                              armed={armed}
                               currentUserId={user?.id}
                               busy={createMark.isPending || deleteMark.isPending}
                               onCreate={(m) => createMark.mutate(m)}
                               onDelete={(id) => deleteMark.mutate(id)}
+                              onDisarm={() => setArmedFor(null)}
                             />
                           </div>
                         )
@@ -915,12 +946,14 @@ function HeaderBtn({
   tone = 'plain',
   onClick,
   disabled,
+  testId,
 }: {
   icon: React.ReactNode
   label: string
   tone?: BtnTone
   onClick?: () => void
   disabled?: boolean
+  testId?: string
 }): React.JSX.Element {
   const styles: Record<BtnTone, string> = {
     plain: 'border-hairline bg-surface text-primary hover:bg-surface-tinted',
@@ -932,6 +965,7 @@ function HeaderBtn({
   return (
     <button
       type="button"
+      data-testid={testId}
       onClick={onClick}
       disabled={disabled}
       className={cn(

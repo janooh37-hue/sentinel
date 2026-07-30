@@ -1106,7 +1106,10 @@
       "metaPending": "قيد الانتظار",
       "metaDraft": "مسودة",
       "metaAwaitingScan": "قيد التوقيع الورقي",
-      "metaScanned": "أُودعت النسخة الموقعة"
+      "metaScanned": "أُودعت النسخة الموقعة",
+      "prevAwaiting": "السجل السابق بانتظار الاعتماد",
+      "nextAwaiting": "السجل التالي بانتظار الاعتماد",
+      "queuePosition": "{{n}} من {{total}}"
     },
     "preview": {
       "description": "معاينة مستند المسودة",
