@@ -57,7 +57,8 @@ def test_list_item_projection_exposes_the_pending_fields(db_session):
 
 
 def _make(db_session, employee_id: str, **kw) -> Employee:
-    row = Employee(id=employee_id, name_en=f"Emp {employee_id}", status="Active", **kw)
+    kw.setdefault("status", "Active")
+    row = Employee(id=employee_id, name_en=f"Emp {employee_id}", **kw)
     db_session.add(row)
     db_session.commit()
     return row
@@ -197,3 +198,66 @@ def test_immediate_departure_clears_a_stale_pending_marker_mirrored(db_session):
     )
     assert out.status == "Resigned"
     assert out.pending_status is None
+
+
+def test_flip_applies_a_due_departure(db_session):
+    due = date.today()
+    _make(db_session, "G9300", end_date=due, pending_status="Resigned")
+    flipped = employee_service.apply_due_departures(db_session)
+    assert [e.id for e in flipped] == ["G9300"]
+    row = db_session.get(Employee, "G9300")
+    assert row.status == "Resigned"
+    assert row.pending_status is None
+    assert row.end_date == due, "end_date is already correct — never rewritten"
+
+
+def test_flip_applies_an_overdue_departure(db_session):
+    """A missed run (deploy, restart, box off) is caught up on the next run."""
+    _make(
+        db_session, "G9301", end_date=date.today() - timedelta(days=3), pending_status="Terminated"
+    )
+    employee_service.apply_due_departures(db_session)
+    assert db_session.get(Employee, "G9301").status == "Terminated"
+
+
+def test_flip_leaves_a_future_departure_alone(db_session):
+    _make(db_session, "G9302", end_date=date.today() + timedelta(days=1), pending_status="Resigned")
+    assert employee_service.apply_due_departures(db_session) == []
+    row = db_session.get(Employee, "G9302")
+    assert row.status == "Active"
+    assert row.pending_status == "Resigned"
+
+
+def test_flip_is_idempotent(db_session):
+    _make(db_session, "G9303", end_date=date.today(), pending_status="Resigned")
+    assert len(employee_service.apply_due_departures(db_session)) == 1
+    assert employee_service.apply_due_departures(db_session) == [], "second run same day"
+
+
+def test_flip_ignores_rows_without_a_pending_status(db_session):
+    """The 280 live Active employees and the 21 already-departed must not move."""
+    _make(db_session, "G9304")
+    _make(db_session, "G9305", status="Resigned", end_date=date(2026, 1, 31))
+    assert employee_service.apply_due_departures(db_session) == []
+    assert db_session.get(Employee, "G9304").status == "Active"
+
+
+def test_flip_ignores_a_junk_pending_status(db_session):
+    """pending_status is free text on SQLite; junk must never reach `status`."""
+    _make(db_session, "G9306", end_date=date.today(), pending_status="Banana")
+    assert employee_service.apply_due_departures(db_session) == []
+    row = db_session.get(Employee, "G9306")
+    assert row.status == "Active"
+    assert row.pending_status == "Banana", "junk is left in place, not silently cleared"
+
+
+def test_flip_ignores_a_pending_row_with_no_end_date(db_session):
+    _make(db_session, "G9307", pending_status="Resigned")
+    assert employee_service.apply_due_departures(db_session) == []
+
+
+def test_flip_honours_an_injected_today(db_session):
+    future = date.today() + timedelta(days=5)
+    _make(db_session, "G9308", end_date=future, pending_status="Resigned")
+    flipped = employee_service.apply_due_departures(db_session, today=future)
+    assert [e.id for e in flipped] == ["G9308"]

@@ -15,7 +15,7 @@ is small (272 employees in live data) and the React side already wants a
 from __future__ import annotations
 
 from datetime import date
-from typing import Any
+from typing import Any, Final
 
 from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
@@ -24,6 +24,8 @@ from app.api.errors import ConflictError, NotFoundError, ValidationFailedError
 from app.db.models import Employee
 from app.schemas.employee import (
     EMPLOYEE_STATUS_ACTIVE,
+    EMPLOYEE_STATUS_RESIGNED,
+    EMPLOYEE_STATUS_TERMINATED,
     EmployeeCreate,
     EmployeeUpdate,
     validate_status_end_date,
@@ -164,9 +166,51 @@ def update_employee(db: Session, employee_id: str, payload: EmployeeUpdate) -> E
     return row
 
 
+# Only these may be promoted out of `pending_status` into `status`.
+_PENDING_TARGETS: Final[frozenset[str]] = frozenset(
+    {EMPLOYEE_STATUS_RESIGNED, EMPLOYEE_STATUS_TERMINATED}
+)
+
+
+def apply_due_departures(db: Session, *, today: date | None = None) -> list[Employee]:
+    """Flip every scheduled departure that has come due. Returns the rows moved.
+
+    A pending departure is `status == 'Active'` with a `pending_status` and an
+    `end_date`. On or after that date the employee becomes what
+    `pending_status` says and the pending marker is cleared. `end_date` is
+    already correct, so it is never rewritten.
+
+    Idempotent: clearing `pending_status` means a second run the same day moves
+    nothing. A missed run (deploy, restart) is caught up on the next one,
+    because the filter is `<= today` rather than `== today`.
+
+    `pending_status` is free text — SQLite has no enum — so the filter is
+    restricted to the two legal targets. A hand-edited or imported junk value is
+    left in place rather than promoted into `status`.
+    """
+    cutoff = today or date.today()
+    rows = list(
+        db.scalars(
+            select(Employee).where(
+                Employee.status == EMPLOYEE_STATUS_ACTIVE,
+                Employee.pending_status.in_(tuple(_PENDING_TARGETS)),
+                Employee.end_date.is_not(None),
+                Employee.end_date <= cutoff,
+            )
+        )
+    )
+    for row in rows:
+        row.status = row.pending_status or EMPLOYEE_STATUS_ACTIVE
+        row.pending_status = None
+    if rows:
+        db.commit()
+    return rows
+
+
 __all__ = [
     "LIST_DEFAULT_LIMIT",
     "LIST_MAX_LIMIT",
+    "apply_due_departures",
     "create_employee",
     "get_employee",
     "list_employees",

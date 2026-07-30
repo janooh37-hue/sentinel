@@ -30,8 +30,10 @@ from app.config import get_settings
 from app.db.models import User
 from app.db.session import SessionLocal
 from app.services import (
+    admin_notify,
     digest_service,
     email_service,
+    employee_service,
     notification_service,
     notify_dispatch,
     openwa_client,
@@ -57,6 +59,7 @@ _OPENWA_HEALTH_JOB_ID = "openwa-health"
 _OPENWA_HEALTH_INTERVAL_MINUTES = 5
 _DIGEST_JOB_ID = "monthly_leave_digest"
 _LEAVE_ENDING_JOB_ID = "leave-ending-reminder"
+_DEPARTURE_FLIP_JOB_ID = "pending-departure-flip"
 
 _scheduler: BackgroundScheduler | None = None
 _lock = Lock()
@@ -332,6 +335,51 @@ def _run_leave_ending_reminder() -> None:
             log.exception("scheduler: leave-ending reminder failed")
 
 
+def _run_pending_departure_flip() -> None:
+    """Daily 09:05 Asia/Dubai — apply scheduled departures that have come due.
+
+    An employee whose resignation or termination was dated in the future stayed
+    Active through their notice period; today they become what
+    ``pending_status`` says. Admins get one in-app notification per flip.
+
+    Employees are never messaged by this job.
+    """
+    with SessionLocal() as session:
+        try:
+            moved = employee_service.apply_due_departures(session)
+        except Exception:
+            log.exception("scheduler: pending-departure flip failed")
+            return
+        if not moved:
+            return
+        log.info("scheduler: %d scheduled departure(s) applied", len(moved))
+        try:
+            admins = admin_notify.active_admins(session)
+        except Exception:
+            log.exception("scheduler: could not list admins for departure notice")
+            return
+        for emp in moved:
+            name_ar = getattr(emp, "name_ar", None) or emp.name_en
+            status_ar = "مستقيل" if emp.status == "Resigned" else "مفصول"
+            status_en = "Resigned" if emp.status == "Resigned" else "Terminated"
+            messages = {
+                "en": (
+                    "GSSG Manager",
+                    f"Departure applied\n{emp.name_en} ({emp.id}) is now {status_en}",
+                ),
+                "ar": (
+                    "GSSG Manager",
+                    f"تم تطبيق المغادرة\n{name_ar} ({emp.id}) الآن {status_ar}",
+                ),
+            }
+            url = f"/employees/{emp.id}"
+            for admin in admins:
+                try:
+                    push_service.send_to_user(session, admin.id, messages, url)
+                except Exception:
+                    log.exception("scheduler: departure notice failed for admin %s", admin.id)
+
+
 def _disabled_in_environment() -> bool:
     """Skip startup under pytest or when explicitly disabled via env var.
 
@@ -424,6 +472,13 @@ def start() -> None:
                 replace_existing=True,
             )
             log.info("scheduler: leave-ending reminder daily at 09:00 Asia/Dubai")
+            _scheduler.add_job(
+                _run_pending_departure_flip,
+                trigger=CronTrigger(hour=9, minute=5, timezone="Asia/Dubai"),
+                id=_DEPARTURE_FLIP_JOB_ID,
+                replace_existing=True,
+            )
+            log.info("scheduler: pending-departure flip daily at 09:05 Asia/Dubai")
 
 
 def shutdown() -> None:
@@ -486,6 +541,7 @@ __all__ = [
     "_run_notify_delivery_poll",
     "_run_notify_retry",
     "_run_openwa_health",
+    "_run_pending_departure_flip",
     "_run_push_notifier",
     "reschedule_email_sync",
     "run_drain_once",
