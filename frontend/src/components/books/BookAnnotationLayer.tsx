@@ -41,8 +41,6 @@ export function BookAnnotationLayer({
   armed = false,
   onCreate,
   onDelete,
-  // @ts-ignore -- wired in Task 2
-  onDisarm,
 }: {
   pages: PageBox[]
   annotations: BookAnnotation[]
