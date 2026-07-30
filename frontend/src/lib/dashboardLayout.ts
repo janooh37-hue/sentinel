@@ -22,7 +22,7 @@ import type {
 export type WidgetZone = 'top' | 'under_workspace' | 'under_quick_actions'
 export type WidgetSize = 'metric' | 'panel'
 
-/** All 12 canonical widget ids (order = catalog order in the editor). */
+/** All 13 canonical widget ids (order = catalog order in the editor). */
 export const WIDGET_IDS = [
   'pending',
   'workspace',
@@ -36,6 +36,7 @@ export const WIDGET_IDS = [
   'upcoming_leave',
   'recent_docs',
   'recent_ledger',
+  'pending_departures',
 ] as const
 
 export type WidgetId = (typeof WIDGET_IDS)[number]
@@ -60,6 +61,7 @@ export const WIDGET_SIZE: Record<WidgetId, WidgetSize> = {
   upcoming_leave: 'panel',
   recent_docs: 'panel',
   recent_ledger: 'panel',
+  pending_departures: 'panel',
 }
 
 export const LOWER_ZONES = ['under_workspace', 'under_quick_actions'] as const

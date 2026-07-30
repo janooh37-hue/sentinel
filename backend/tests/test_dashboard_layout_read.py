@@ -1,5 +1,6 @@
 """A dashboard layout persisted before a quick-action id was removed must still
 load — the read path drops now-unknown ids instead of raising."""
+
 from __future__ import annotations
 
 import json
@@ -54,3 +55,16 @@ def test_quick_action_tuple_and_literal_stay_in_sync():
     from app.schemas.settings import DASHBOARD_QUICK_ACTION_IDS, DashboardQuickActionId
 
     assert set(DASHBOARD_QUICK_ACTION_IDS) == set(get_args(DashboardQuickActionId))
+
+
+def test_widget_tuple_and_literal_stay_in_sync():
+    # Same hand-duplication risk as the quick-action ids above, for the widget
+    # catalog (e.g. `pending_departures`): the tuple gates the tolerant read
+    # in settings_service, the Literal gates API validation. If they diverge,
+    # an operator can enable a widget in Customize, save, and watch it vanish
+    # on reload because the read path silently drops the unknown id.
+    from typing import get_args
+
+    from app.schemas.settings import DASHBOARD_WIDGET_IDS, DashboardWidgetId
+
+    assert set(DASHBOARD_WIDGET_IDS) == set(get_args(DashboardWidgetId))

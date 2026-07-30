@@ -15,7 +15,8 @@ from pydantic import BaseModel, Field
 #   - Original bottom row: violations, drafts, ledger
 #   - Promoted section cards: on_leave_today, upcoming_leave
 #   - New widgets:           recent_docs, email_sync_status,
-#                            waiting_approvals, expiring_soon, recent_ledger
+#                            waiting_approvals, expiring_soon, recent_ledger,
+#                            pending_departures
 #
 # Quick-action IDs combine the original 4 service tiles with every template_id
 # from `app.core.constants.TEMPLATE_FILES` so an operator can pin a specific
@@ -33,6 +34,7 @@ DASHBOARD_WIDGET_IDS = (
     "waiting_approvals",
     "expiring_soon",
     "recent_ledger",
+    "pending_departures",
 )
 DASHBOARD_QUICK_ACTION_IDS = (
     "hr",
@@ -68,6 +70,7 @@ DashboardWidgetId = Literal[
     "waiting_approvals",
     "expiring_soon",
     "recent_ledger",
+    "pending_departures",
 ]
 DashboardQuickActionId = Literal[
     "hr",

@@ -4855,7 +4855,7 @@ export interface components {
              * Id
              * @enum {string}
              */
-            id: "pending" | "workspace" | "violations" | "drafts" | "ledger" | "on_leave_today" | "upcoming_leave" | "recent_docs" | "email_sync_status" | "waiting_approvals" | "expiring_soon" | "recent_ledger";
+            id: "pending" | "workspace" | "violations" | "drafts" | "ledger" | "on_leave_today" | "upcoming_leave" | "recent_docs" | "email_sync_status" | "waiting_approvals" | "expiring_soon" | "recent_ledger" | "pending_departures";
             /**
              * Visible
              * @default true
