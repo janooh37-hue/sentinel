@@ -313,6 +313,27 @@ class BookListResponse(BaseModel):
     offset: int
 
 
+class ServiceFacetRead(BaseModel):
+    """One Records-rail entry: a service id, its record count, and how those
+    records split across approval states (drives the rail's mini-dots)."""
+
+    id: str
+    count: int
+    states: dict[str, int]
+
+
+class BookFacetsResponse(BaseModel):
+    """Rail + status-spine numbers over every non-deleted book (no paging).
+
+    `services` omits services with no records and is ordered by TEMPLATE_FILES
+    with "other" last. `total`/`states` are the office-wide "All" figures.
+    """
+
+    total: int
+    states: dict[str, int]
+    services: list[ServiceFacetRead]
+
+
 class ApproverOptionRead(BaseModel):
     """Minimal user info for the submit-for-approval approver picker."""
 

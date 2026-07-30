@@ -40,6 +40,7 @@ from app.schemas.book import (
     BookCreate,
     BookDecisionRequest,
     BookEditSessionRead,
+    BookFacetsResponse,
     BookListResponse,
     BookRead,
     BookSubmitRequest,
@@ -51,6 +52,7 @@ from app.schemas.book import (
     ReviewersAddRequest,
     ReviewRequest,
     SaveAsTemplateRequest,
+    ServiceFacetRead,
     WordBookCreate,
     WordSessionRead,
     WordTemplateRead,
@@ -114,6 +116,23 @@ def list_classifications(
             )
             for c in CLASSIFICATIONS
         ]
+    )
+
+
+@router.get("/facets", response_model=BookFacetsResponse)
+def book_facets(
+    db: Annotated[Session, Depends(get_db)],
+    _user: Annotated[User, Depends(get_current_user)],
+) -> BookFacetsResponse:
+    """Per-service counts for the Records rail + per-service approval-state
+    counts for the status spine. Global, unpaginated."""
+    all_records, services = book_service.service_facets(db)
+    return BookFacetsResponse(
+        total=all_records.count,
+        states=all_records.states,
+        services=[
+            ServiceFacetRead(id=s.service_id, count=s.count, states=s.states) for s in services
+        ],
     )
 
 

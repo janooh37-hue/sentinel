@@ -10,11 +10,12 @@ from __future__ import annotations
 import json
 import logging
 import re
+from collections import Counter
 from collections.abc import Sequence
 from datetime import UTC, date, datetime, timedelta
 from functools import lru_cache
 from pathlib import Path, PurePath
-from typing import Any
+from typing import Any, NamedTuple
 
 from sqlalchemy import Integer, and_, false, func, not_, or_, select, text
 from sqlalchemy.orm import Session, selectinload
@@ -23,7 +24,7 @@ from sqlalchemy.sql.elements import ColumnElement
 from app.api.errors import AppError, NotFoundError, ValidationFailedError
 from app.config import get_settings
 from app.core.constants import ALLOWED_DOC_EXTS, STAMP_STYLES
-from app.core.form_kind import OTHER_SERVICE_ID, SERVICE_IDS, subject_prefixes
+from app.core.form_kind import OTHER_SERVICE_ID, SERVICE_IDS, resolve_service, subject_prefixes
 from app.db.models import (
     AuditLog,
     Book,
@@ -186,6 +187,69 @@ def service_clause(service_id: str) -> ColumnElement[bool]:
             or_(*[Book.subject.ilike(f"{p}%") for p in prefixes]),
         ),
     )
+
+
+class ServiceCount(NamedTuple):
+    """One rail entry's numbers. `states` maps approval_state → count."""
+
+    service_id: str
+    count: int  # type: ignore[assignment]  # shadows tuple.count; field name is the public API
+    states: dict[str, int]
+
+
+def service_facets(db: Session) -> tuple[ServiceCount, list[ServiceCount]]:
+    """`(all_records, per_service)` over EVERY non-deleted book.
+
+    Deliberately unpaginated: these are the numbers the Records rail and the
+    status spine display, and computing them from a page window is what made
+    them disagree with the page's own total.
+
+    "The book's template" is its NEWEST version's template_id, defined exactly
+    as `service_clause` and `BookRead.service_id` define it — highest
+    `version_no`. Do NOT use `func.max(BookVersion.template_id)`: that is the
+    lexicographic max across all versions, which reintroduces the any-vs-newest
+    divergence Task 3 removed, and would let a multi-template book be counted
+    under a service it no longer belongs to. The separate version count
+    distinguishes "no version at all" from "has a version whose template is
+    NULL" — the two resolve differently.
+
+    # ponytail: one full scan with two correlated subqueries per row — 629 rows
+    # today, and book_versions.book_id is indexed. If books pass ~50k,
+    # denormalise service_id onto `books`.
+    """
+    newest_template_id = (
+        select(BookVersion.template_id)
+        .where(BookVersion.book_id == Book.id)
+        .order_by(BookVersion.version_no.desc())
+        .limit(1)
+        .scalar_subquery()
+    )
+    n_versions = (
+        select(func.count())
+        .select_from(BookVersion)
+        .where(BookVersion.book_id == Book.id)
+        .scalar_subquery()
+    )
+    stmt = select(Book.subject, Book.approval_state, newest_template_id, n_versions).where(
+        Book.deleted_at.is_(None)
+    )
+
+    all_states: Counter[str] = Counter()
+    per_service: dict[str, Counter[str]] = {}
+    for subject, approval_state, template_id, n_versions in db.execute(stmt):
+        service_id = resolve_service(subject, template_id, versioned=n_versions > 0)
+        state = approval_state or "none"
+        all_states[state] += 1
+        per_service.setdefault(service_id, Counter())[state] += 1
+
+    ordered = [*SERVICE_IDS, OTHER_SERVICE_ID]
+    services = [
+        ServiceCount(sid, sum(per_service[sid].values()), dict(per_service[sid]))
+        for sid in ordered
+        if sid in per_service
+    ]
+    all_records = ServiceCount("all", sum(all_states.values()), dict(all_states))
+    return all_records, services
 
 
 def list_books(
