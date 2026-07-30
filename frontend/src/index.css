@@ -708,12 +708,30 @@ body {
    (1) release that height/scroll cage up the ancestor chain so the document
    flows onto as many A4 sheets as it needs; (2) hide every chrome element
    (top nav, page header, progress timeline, bottom tab bar, action panels,
-   review pins); (3) fit each rendered PDF page to the A4 printable width,
-   centered, each on its own sheet — nothing cropped. */
+   review pins); (3) fill the whole A4 sheet with each rendered PDF page, one
+   page per sheet — so the print matches the downloaded PDF 1:1, nothing
+   cropped and nothing shrunk. */
 @media print {
   @page {
     size: A4;
     margin: 12mm;
+  }
+  /* The document sheet prints edge-to-edge at 1:1 with the generated PDF. Its
+     pages are already A4 with their own margins baked in, so any @page margin
+     boxes an A4 page inside a smaller A4 page — 12mm cost ~11% of the width and
+     the letterhead's bleed. Named page (`page: doc`) so the permits register
+     printout above keeps its 12mm. */
+  @page doc {
+    size: A4;
+    margin: 0;
+  }
+  .print-paper {
+    page: doc;
+  }
+  /* The desk that hosts the sheet pads the document on screen (px-6); on paper
+     that padding is another ~13mm off the width. */
+  :has(> .print-paper) {
+    padding: 0 !important;
   }
   html,
   body {
@@ -727,7 +745,9 @@ body {
     height: auto !important;
     overflow: visible !important;
   }
-  #root * {
+  /* :not(canvas) — the sheet needs its own max-height cap below, and this rule
+     would out-specify it. */
+  #root *:not(canvas) {
     overflow: visible !important;
     max-height: none !important;
   }
@@ -769,13 +789,17 @@ body {
     box-shadow: none !important;
     padding: 0 !important;
   }
-  /* Each rendered PDF page: fit the A4 printable width, centered, never split,
-     and start a fresh sheet so multi-page records aren't cropped. */
+  /* Each rendered PDF page: fill the sheet, centered, never split, and start a
+     fresh sheet so multi-page records aren't cropped. `max-height: 100vh` is
+     the guard that keeps it to ONE sheet — pdf.js floors the raster dimensions,
+     so the canvas is a hair taller than A4 and width alone would spill a blank
+     second page (and on Letter paper it fits to the shorter sheet). */
   .print-paper canvas {
     display: block !important;
     width: auto !important;
     max-width: 100% !important;
     height: auto !important;
+    max-height: 100vh !important;
     margin: 0 auto !important;
     box-shadow: none !important;
     border-radius: 0 !important;
