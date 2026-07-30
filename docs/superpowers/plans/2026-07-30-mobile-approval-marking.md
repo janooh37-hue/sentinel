@@ -626,9 +626,11 @@ Give the textarea a ref so it can be blurred. Add near the other refs:
   const draftBoxRef = useRef<HTMLTextAreaElement>(null)
 ```
 
-Add `ref={draftBoxRef}` to the composer `<textarea>`, and drop its `autoFocus`
-(the sheet is already in view above the keyboard; autofocus on first paint
-raced the positioning).
+Add `ref={draftBoxRef}` to the composer `<textarea>` and make its autofocus
+desktop-only — `autoFocus={!isPhone}`. On a phone, focusing on first paint
+raises the keyboard before the sheet has been positioned against it; on
+desktop there is no keyboard to race and losing autofocus would just cost the
+user a click.
 
 Add a helper next to `saveDraft` and use it from both exits:
 
