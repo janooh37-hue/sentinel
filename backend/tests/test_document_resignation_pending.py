@@ -88,3 +88,15 @@ def test_already_departed_employee_is_never_touched(db_session, existing):
 def test_none_employee_is_a_no_op(db_session):
     """Letters can be generated without a linked employee row."""
     _record_pending_resignation(db_session, None, {"resignation_date": "2026-08-15"})
+
+
+def test_today_parameter_overrides_the_clock(db_session):
+    """The ``today`` seam is real, not decorative — a caller-injected clock
+    decides schedule-vs-immediate, not ``date.today()`` baked into the call."""
+    emp = _emp(db_session, "G9206")
+    d = date(2026, 8, 15)
+    _record_pending_resignation(
+        db_session, emp, {"resignation_date": d.isoformat()}, today=date(2026, 8, 20)
+    )
+    assert emp.status == "Resigned"  # d is in the past relative to the injected today
+    assert emp.pending_status is None
