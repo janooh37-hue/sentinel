@@ -4,11 +4,16 @@
  * Desktop — three-pane register (visual contract:
  * docs/prototypes/records-redesign-2026-06-10/final-records.html):
  *   Header (title · meta · "New entry" pill)
- *   StatusSpine (All + 5 approval states, live counts — the active segment filters)
- *   FormRail (form kinds) | day-grouped RecordsList | RecordPane (papers + actions)
+ *   StatusSpine (All + 5 approval states, counts from /books/facets — the active
+ *     segment filters, and the counts scope to the selected service)
+ *   FormRail (one entry per service) | day-grouped RecordsList | RecordPane
  *
- * Mobile — unchanged: BooksFilterBar + BookMobileCard list, now filtered
- * client-side over the single unfiltered fetch.
+ * Mobile — BooksFilterBar + BookMobileCard list.
+ *
+ * Both layouts scope the list fetch SERVER-side to the selected service
+ * (`railScope`, see below) — desktop from the rail, mobile from the filter bar's
+ * Service popover. Filtering a service client-side would silently truncate it to
+ * whatever fell inside the 500-row window.
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
