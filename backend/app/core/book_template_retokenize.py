@@ -252,7 +252,12 @@ def retokenize_general_book(docx_path: Path, *, submitter_g: str | None = None) 
     addressee = next((p for p in doc.paragraphs if _ADDRESSEE.match(p.text)), None)
     if addressee is not None:
         sep = _ADDRESSEE.match(addressee.text).group(1)  # type: ignore[union-attr]
+        # The recipient picker is optional, so guard the line too — an unpicked
+        # recipient would otherwise print a bare «السيد \ المحترم» with a hole
+        # in the middle (the base paper's own behaviour, unguarded there).
+        _guard_para(addressee, "{%p if recipient_name %}", after=False)
         _retokenize_labeled_line(addressee, f"السيد {sep} ", "{{ recipient_name }}", " المحترم ")
+        _guard_para(addressee, "{%p endif %}", after=True)
     subject_para = next((p for p in doc.paragraphs if _SUBJECT_LABEL.match(p.text)), None)
     if subject_para is not None:
         _guard_para(subject_para, "{%p if subject %}", after=False)

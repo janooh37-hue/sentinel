@@ -312,6 +312,16 @@ def test_empty_subject_and_cc_hide_their_labels(tmp_path):
     assert "نسخة إلى" not in text
 
 
+def test_empty_recipient_hides_the_addressee_line(tmp_path):
+    """The recipient picker is optional, so an unpicked recipient must hide the
+    whole line — not print a bare «السيد \\ المحترم» with a hole in the middle."""
+    p = _book_with_addressee(tmp_path)
+    retokenize_general_book(p)
+    text = _rendered_text(p, tmp_path, ref="9/9/999", date="31-12-2099", recipient_name="")
+    assert "السيد" not in text
+    assert "المحترم" not in text
+
+
 def test_addressee_retokenize_idempotent(tmp_path):
     p = _book_with_addressee(tmp_path)
     retokenize_general_book(p)
