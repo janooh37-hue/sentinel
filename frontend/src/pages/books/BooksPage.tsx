@@ -39,7 +39,7 @@ import { useCapabilities } from '@/lib/useCapabilities'
 import { cn } from '@/lib/utils'
 import { PullToRefresh } from '@/components/refresh/PullToRefresh'
 import { RefreshButton } from '@/components/refresh/RefreshButton'
-import { DEFAULT_BOOKS_FILTERS, normalizeFilters } from './booksFiltersUtils'
+import { DEFAULT_BOOKS_FILTERS, matchesBookFilters, matchesDesktopSearchRow, normalizeFilters } from './booksFiltersUtils'
 import { sealDescriptor, signedSourceOf } from './bookStateLabel'
 import { StatusSpine, type SpineState } from './StatusSpine'
 import { FormRail, type RailItem } from './FormRail'
@@ -232,21 +232,12 @@ export function BooksPage(): React.JSX.Element {
   )
 
   // ── Mobile: client-side filtering with the old server-side predicates ──────
-  const mobileRows: BookRead[] = useMemo(() => {
-    const q = filters.q.trim().toLowerCase()
-    return allRows.filter((row) => {
-      if (filters.drafts) return row.is_draft && !row.voided_at
-      if (filters.categoryIds.length > 0 && !filters.categoryIds.includes(row.category_id)) return false
-      if (filters.serviceId !== 'all' && row.service_id !== filters.serviceId) return false
-      if (filters.direction !== 'all' && row.direction !== filters.direction) return false
-      if (filters.status !== 'all' && row.approval_state !== filters.status) return false
-      const day = row.created_at.slice(0, 10)
-      if (filters.fromDate && day < filters.fromDate) return false
-      if (filters.toDate && day > filters.toDate) return false
-      if (q && !`${row.ref_number} ${row.subject ?? ''}`.toLowerCase().includes(q)) return false
-      return true
-    })
-  }, [allRows, filters])
+  // Predicate lives in booksFiltersUtils.ts (single source of truth, unit-tested
+  // directly) so this ordering can't drift out of sync with the desktop paths again.
+  const mobileRows: BookRead[] = useMemo(
+    () => allRows.filter((row) => matchesBookFilters(row, filters)),
+    [allRows, filters],
+  )
 
   // Mobile open routing: full-screen record page (`/books/:id`) in any state.
   const openBook = useCallback(
@@ -258,6 +249,7 @@ export function BooksPage(): React.JSX.Element {
 
   const hasFilters =
     filters.categoryIds.length > 0 ||
+    filters.serviceId !== 'all' ||
     filters.direction !== 'all' ||
     filters.status !== 'all' ||
     !!filters.fromDate ||
@@ -305,12 +297,7 @@ export function BooksPage(): React.JSX.Element {
       // The debounced search hits the server unscoped by service, so (unlike
       // the main list query below) this branch still needs a client guard.
       return serverRows
-        .filter((row) => {
-          if (showDrafts) return row.is_draft && !row.voided_at
-          if (spineState !== 'all' && row.approval_state !== spineState) return false
-          if (railService !== 'all' && row.service_id !== railService) return false
-          return true
-        })
+        .filter((row) => matchesDesktopSearchRow(row, { railService, showDrafts, spineState }))
         .sort((a, b) => b.created_at.localeCompare(a.created_at))
     }
     // The server already scoped allRows to railService (listQuery), so no
