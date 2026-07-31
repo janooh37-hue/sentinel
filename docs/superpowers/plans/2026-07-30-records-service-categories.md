@@ -39,6 +39,32 @@ These numbers are load-bearing for the tests below.
 - The 365 version-less books hold exactly 13 distinct subject heads; 10 are verbatim `TEMPLATE_FILES` keys, and these three are not:
   `Resignation Form` (8 rows) → `Resignation Letter`; `كتاب عام` (1) → `General Book`; `تصاريح الامنية` (1) → Other.
 
+### Gate drift measured on `main` before this branch started (2026-07-30)
+
+**`main` was NOT clean when this branch started — measured directly, not
+assumed.** Every "Expected: all pass" / "Expected: all green" in the steps
+below means *no new failure versus this table*, not a literal zero. Do not
+try to fix any of this; it would bury the review diff in unrelated churn.
+
+```
+pytest                 : 815 passed, 1 FAILED (backend/tests/test_dav.py::
+                          test_dav_diagnostic_event_is_structured_and_redacted)  <- pre-existing
+ruff check .            : 13 errors in 9 unrelated files
+ruff format --check .   : 97 files would reformat (none of ours)
+mypy                    : 28 errors in 11 unrelated files
+pnpm -C frontend test   : 437 passed, 1 FAILED (src/components/application/
+                          TemplateForm.bodyMode.test.tsx, "picker renders base
+                          and custom options as separate groups")               <- pre-existing
+pnpm run lint           : exits 1 with 8 findings (3 errors, 5 warnings) in
+                          unrelated files
+```
+
+Every later task's gate check compares against this table: the two named
+pre-existing failures (`test_dav.py`, `TemplateForm.bodyMode.test.tsx`) are
+expected to keep failing throughout; ruff/format/mypy/lint counts should stay
+in files this plan never touches. A regression is a NEW failure or a failure
+in a file this plan touched — not the persistence of one of the above.
+
 ---
 
 ### Task 0: Prepare the worktree and record a green baseline
@@ -64,7 +90,9 @@ pnpm -C frontend install
 C:/Users/Admin/sentinel/venv/Scripts/python.exe -m pytest -q
 ```
 
-Expected: all pass. Write the passed count down — every later task must not reduce it.
+Expected: 815 passed, 1 pre-existing failure — see "Gate drift measured on
+`main`" above. Write the passed count down — every later task must not
+reduce it (it may grow, since later tasks add tests).
 
 - [ ] **Step 3: Run the frontend suite and record the count**
 
@@ -72,7 +100,8 @@ Expected: all pass. Write the passed count down — every later task must not re
 pnpm -C frontend test -- --run
 ```
 
-Expected: all pass. Write the passed count down.
+Expected: 437 passed, 1 pre-existing failure — see "Gate drift measured on
+`main`" above. Write the passed count down.
 
 - [ ] **Step 4: Confirm the tree is clean**
 
@@ -2048,9 +2077,13 @@ pnpm -C frontend run lint
 pnpm -C frontend run build
 ```
 
-Expected: all green, and the two suite counts at or above the Task 0 baseline.
-`build` writes into `backend/app/static/` — **do not commit that output**; it is
-built at deploy time.
+Expected: no NEW failures and no failures in files this branch touched — not
+literal all-green. Compare against "Gate drift measured on `main`" above:
+pytest should still show exactly the one `test_dav.py` failure (count at or
+above 815), vitest exactly the one `TemplateForm.bodyMode.test.tsx` failure
+(count at or above 437), ruff/format/mypy/lint counts unchanged and in the
+same unrelated files. `build` writes into `backend/app/static/` — **do not
+commit that output**; it is built at deploy time.
 
 - [x] **Step 5: Run the mandatory reviewer agents**
 
