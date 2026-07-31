@@ -55,6 +55,10 @@ import { cn } from '@/lib/utils'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import { BookStatusChips } from '@/components/books/BookStatusChips'
 import { BookWordActions } from '@/components/books/BookWordActions'
+import { QueueNav } from './QueueNav'
+import { MarkToggle } from './MarkToggle'
+import { HeaderBtn } from './HeaderBtn'
+import { nextAfterDecision, useAwaitingQueue } from './useAwaitingQueue'
 
 import { useIsMobile } from '@/lib/useIsMobile'
 import { smsDeliveryTone } from '@/lib/smsDelivery'
@@ -350,7 +354,18 @@ export function BookRecordPage(): React.JSX.Element {
   // Annotation overlay (Slice 3). Marks live on the current version; shown while
   // the book is in an active review state.
   const annotatable = state === 'pending' || state === 'returned' || state === 'rejected'
-  const annMode: 'view' | 'mark' = state === 'pending' && action === 'decide' ? 'mark' : 'view'
+  // Marking is opt-in. It used to be forced on for the decider, which put a
+  // pointer-eating overlay across the whole document — on a phone that killed
+  // pinch-zoom and made an A4 page unreadable. Now the manager arms it.
+  //
+  // Arm is per-record, not a plain boolean: `/books/:id` doesn't remount when
+  // the queue arrows change the id param, so a bare useState(false) would
+  // carry a live overlay from one record onto the next unarmed paper.
+  const [armedFor, setArmedFor] = useState<number | null>(null)
+  const armed = armedFor === bookId
+  const canMark = state === 'pending' && action === 'decide'
+  const annMode: 'view' | 'mark' = canMark ? 'mark' : 'view'
+  const queue = useAwaitingQueue(Number.isFinite(bookId) ? bookId : null, canApprove)
   const { data: annotations = [] } = useQuery({
     queryKey: ['books', 'annotations', bookId, current?.id],
     queryFn: () => api.listBookAnnotations(bookId, current!.id),
@@ -380,7 +395,16 @@ export function BookRecordPage(): React.JSX.Element {
     onDecided: () => {
       setDecision(null)
       setReason('')
-      navigate('/books')
+      // Straight on to the next document awaiting this manager — the whole
+      // point of the arrows is not having to go back to the list.
+      //
+      // `queue.nextId` is a snapshot from the render BEFORE the decision, while
+      // this book was still in the queue — that is exactly why it points at the
+      // right neighbour. Do NOT "improve" this by awaiting the invalidation in
+      // useBookApprovalActions: once the refetch drops this book from the list,
+      // useAwaitingQueue's indexOf returns -1 and nextId goes null, which would
+      // silently send every decision back to /books instead of advancing.
+      navigate(nextAfterDecision(queue.nextId))
     },
     // Stay on the record after signing (do NOT navigate away): the refetch flips
     // the state to approved and the desk reloads the signed PDF, so the signer
@@ -446,6 +470,18 @@ export function BookRecordPage(): React.JSX.Element {
         >
           <ArrowLeft className="h-4 w-4 rtl:-scale-x-100" strokeWidth={2.2} />
         </button>
+        <QueueNav
+          position={queue.position}
+          total={queue.total}
+          onPrev={() => {
+            setArmedFor(null)
+            if (queue.prevId != null) navigate(`/books/${queue.prevId}`)
+          }}
+          onNext={() => {
+            setArmedFor(null)
+            if (queue.nextId != null) navigate(`/books/${queue.nextId}`)
+          }}
+        />
         <div className="min-w-0 flex-1">
           <div className="font-mono text-[0.72em] font-semibold tracking-wide text-primary">
             {book?.ref_number ?? '—'}
@@ -479,6 +515,9 @@ export function BookRecordPage(): React.JSX.Element {
             label={t('books.record.print')}
             onClick={() => window.print()}
           />
+          {canMark && (
+            <MarkToggle armed={armed} onToggle={() => setArmedFor(armed ? null : bookId)} />
+          )}
           {/* Word session actions — isMobile is the REAL device check, not
               the page identity: this full-record page opens on desktop too
               ("Open full record"), where Edit-in-Word must stay usable. */}
@@ -733,10 +772,12 @@ export function BookRecordPage(): React.JSX.Element {
                               pages={pages}
                               annotations={annotations}
                               mode={annMode}
+                              armed={armed}
                               currentUserId={user?.id}
                               busy={createMark.isPending || deleteMark.isPending}
                               onCreate={(m) => createMark.mutate(m)}
                               onDelete={(id) => deleteMark.mutate(id)}
+                              onDisarm={() => setArmedFor(null)}
                             />
                           </div>
                         )
@@ -905,43 +946,6 @@ function NotificationBlock({ messages }: { messages: NotifyMessageRead[] }): Rea
         })}
       </div>
     </div>
-  )
-}
-
-type BtnTone = 'plain' | 'amber' | 'red' | 'green-solid' | 'navy-solid'
-function HeaderBtn({
-  icon,
-  label,
-  tone = 'plain',
-  onClick,
-  disabled,
-}: {
-  icon: React.ReactNode
-  label: string
-  tone?: BtnTone
-  onClick?: () => void
-  disabled?: boolean
-}): React.JSX.Element {
-  const styles: Record<BtnTone, string> = {
-    plain: 'border-hairline bg-surface text-primary hover:bg-surface-tinted',
-    amber: 'border-warning/40 bg-surface text-warning hover:bg-warning/10',
-    red: 'border-accent/40 bg-surface text-accent hover:bg-accent/10',
-    'green-solid': 'border-transparent bg-success text-white hover:bg-success/90',
-    'navy-solid': 'border-transparent bg-primary text-primary-foreground hover:bg-primary-hover',
-  }
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      disabled={disabled}
-      className={cn(
-        'inline-flex h-9 items-center gap-1.5 rounded-lg border px-3 text-[0.78em] font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50',
-        styles[tone],
-      )}
-    >
-      {icon}
-      {label}
-    </button>
   )
 }
 

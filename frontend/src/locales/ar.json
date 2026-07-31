@@ -1061,7 +1061,9 @@
       "composerPlaceholder": "ما الذي يجب تصحيحه هنا؟",
       "save": "حفظ",
       "cancel": "إلغاء",
-      "viewHint": "صحّح هنا، ثم راجِع وأعد الإرسال."
+      "viewHint": "صحّح هنا، ثم راجِع وأعد الإرسال.",
+      "mark": "تحديد",
+      "markingOn": "التحديد مُفعّل — انقر للإلغاء"
     },
     "versions": {
       "title": "سجل النسخ",
@@ -1105,7 +1107,10 @@
       "metaPending": "قيد الانتظار",
       "metaDraft": "مسودة",
       "metaAwaitingScan": "قيد التوقيع الورقي",
-      "metaScanned": "أُودعت النسخة الموقعة"
+      "metaScanned": "أُودعت النسخة الموقعة",
+      "prevAwaiting": "السجل السابق بانتظار الاعتماد",
+      "nextAwaiting": "السجل التالي بانتظار الاعتماد",
+      "queuePosition": "{{n}} من {{total}}"
     },
     "preview": {
       "description": "معاينة مستند المسودة",

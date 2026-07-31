@@ -17,6 +17,8 @@ import { useTranslation } from 'react-i18next'
 import { Check, Highlighter, MapPin, Trash2 } from 'lucide-react'
 
 import { cn } from '@/lib/utils'
+import { useIsMobile } from '@/lib/useIsMobile'
+import { useKeyboardInset } from '@/lib/useKeyboardInset'
 import {
   normalizePoint,
   pageAtPoint,
@@ -38,14 +40,19 @@ export function BookAnnotationLayer({
   mode,
   currentUserId,
   busy,
+  armed = false,
   onCreate,
   onDelete,
+  onDisarm,
 }: {
   pages: PageBox[]
   annotations: BookAnnotation[]
   mode: 'view' | 'mark'
   currentUserId?: number
   busy?: boolean
+  /** Mark mode only accepts touches while armed — disarmed, the paper keeps
+   *  its native pinch-zoom and scroll. */
+  armed?: boolean
   onCreate?: (m: {
     page: number
     kind: AnnotationKind
@@ -53,23 +60,39 @@ export function BookAnnotationLayer({
     comment: string
   }) => void
   onDelete?: (id: number) => void
+  /** Fired after a mark is saved or cancelled — one arm yields one mark. */
+  onDisarm?: () => void
 }): React.JSX.Element {
   const { t } = useTranslation()
+
+  // Interaction is live only when the decider has explicitly armed marking.
+  // Disarmed, the overlay must not intercept a single touch: the paper below
+  // needs its native pinch-zoom and scroll back (the phone is the approval
+  // surface, and an A4 page is unreadable at ~330px without zoom).
+  const live = mode === 'mark' && armed
+  const isPhone = useIsMobile()
+  const keyboardInset = useKeyboardInset()
   const [tool, setTool] = useState<AnnotationKind>('pin')
   const [openId, setOpenId] = useState<number | null>(null)
   const [draft, setDraft] = useState<DraftMark | null>(null)
   const [draftText, setDraftText] = useState('')
   const dragRef = useRef<{ page: number; x0: number; y0: number } | null>(null)
   const rootRef = useRef<HTMLDivElement>(null)
+  const draftBoxRef = useRef<HTMLTextAreaElement>(null)
 
+  // Keyed off `live`, not `mode`: a disarm (armed -> false) must drop the
+  // draft too, or the composer outlives the arm. Without this, tapping a
+  // queue arrow while a draft is open leaves the composer mounted holding
+  // the previous record's text/geometry, and Save writes it onto the new
+  // record once its detail query is cached — a cross-record annotation.
   useEffect(() => {
-    if (mode !== 'mark') {
+    if (!live) {
       // eslint-disable-next-line react-hooks/set-state-in-effect
       setDraft(null)
       setDraftText('')
       dragRef.current = null
     }
-  }, [mode])
+  }, [live])
 
   function contentPoint(e: React.PointerEvent): { cx: number; cy: number } {
     const r = (e.currentTarget as HTMLElement).getBoundingClientRect()
@@ -125,11 +148,20 @@ export function BookAnnotationLayer({
     )
   }
 
+  /** Close the composer. Blur FIRST: iOS keeps the keyboard raised when a
+   *  focused element simply unmounts, which left the manager with a keyboard
+   *  and no box. */
+  function closeDraft(): void {
+    draftBoxRef.current?.blur()
+    setDraft(null)
+    setDraftText('')
+    onDisarm?.()
+  }
+
   function saveDraft(): void {
     if (!draft || !draftText.trim() || !onCreate) return
     onCreate({ page: draft.page, kind: draft.kind, geometry: draft.geometry, comment: draftText.trim() })
-    setDraft(null)
-    setDraftText('')
+    closeDraft()
   }
 
   const numbered = annotations.map((a, i) => ({ a, n: i + 1 }))
@@ -137,14 +169,19 @@ export function BookAnnotationLayer({
   return (
     <div
       ref={rootRef}
-      className={cn('absolute inset-0', mode === 'mark' ? 'pointer-events-auto' : 'pointer-events-none')}
-      onPointerDown={mode === 'mark' ? onPointerDown : undefined}
-      onPointerMove={mode === 'mark' ? onPointerMove : undefined}
-      onPointerUp={mode === 'mark' ? onPointerUp : undefined}
-      style={{ touchAction: mode === 'mark' ? 'none' : undefined }}
+      data-testid="anno-root"
+      className={cn('absolute inset-0', live ? 'pointer-events-auto' : 'pointer-events-none')}
+      onPointerDown={live ? onPointerDown : undefined}
+      onPointerMove={live ? onPointerMove : undefined}
+      onPointerUp={live ? onPointerUp : undefined}
+      // Only the highlight DRAG conflicts with the browser's own gestures, and
+      // the browser commits to scroll-vs-gesture on pointerdown — so this keys
+      // off the selected tool, not off a live drag (too late by then). Pin is
+      // the default, so arming alone never costs the manager pinch-zoom.
+      style={{ touchAction: live && tool === 'highlight' ? 'none' : undefined }}
     >
       {/* toolbar (mark mode) */}
-      {mode === 'mark' && (
+      {live && (
         <div className="pointer-events-auto absolute left-1/2 top-2 z-30 flex -translate-x-1/2 items-center gap-1 rounded-full border border-hairline bg-surface/95 px-2 py-1 shadow-lg backdrop-blur">
           <ToolBtn
             active={tool === 'pin'}
@@ -171,7 +208,7 @@ export function BookAnnotationLayer({
         if (!box) return null
         const r = placeMark(box, a.geometry, a.kind)
         const open = openId === a.id
-        const canDelete = mode === 'mark' && a.author_user_id === currentUserId && onDelete != null
+        const canDelete = live && a.author_user_id === currentUserId && onDelete != null
         return (
           <div key={a.id}>
             {a.kind === 'highlight' && (
@@ -265,10 +302,16 @@ export function BookAnnotationLayer({
                 anchorLeft={r.left}
                 anchorTop={top + 8}
                 dir="auto"
-                className="w-[224px] rounded-xl border border-hairline bg-surface p-3 shadow-2xl"
+                testId="anno-composer"
+                sheetBottom={isPhone ? keyboardInset : undefined}
+                className={cn(
+                  'rounded-xl border border-hairline bg-surface p-3 shadow-2xl',
+                  isPhone ? 'w-auto' : 'w-[224px]',
+                )}
               >
                 <textarea
-                  autoFocus
+                  ref={draftBoxRef}
+                  autoFocus={!isPhone}
                   rows={2}
                   value={draftText}
                   onChange={(e) => setDraftText(e.target.value)}
@@ -278,10 +321,7 @@ export function BookAnnotationLayer({
                 <div className="mt-2 flex items-center justify-end gap-1.5">
                   <button
                     type="button"
-                    onClick={() => {
-                      setDraft(null)
-                      setDraftText('')
-                    }}
+                    onClick={closeDraft}
                     className="rounded-md px-2 py-1 text-[0.7em] font-medium text-muted-foreground transition-colors hover:bg-surface-tinted"
                   >
                     {t('books.annotations.cancel')}
@@ -324,6 +364,9 @@ function MarkPopover({
   anchorTop,
   className,
   dir,
+  /** Phone: ignore the anchor and pin to the bottom, clear of the keyboard. */
+  sheetBottom,
+  testId,
   children,
 }: {
   rootRef: React.RefObject<HTMLDivElement | null>
@@ -331,6 +374,8 @@ function MarkPopover({
   anchorTop: number
   className?: string
   dir?: 'auto' | 'ltr' | 'rtl'
+  sheetBottom?: number
+  testId?: string
   children: React.ReactNode
 }): React.JSX.Element {
   const cardRef = useRef<HTMLDivElement>(null)
@@ -340,6 +385,7 @@ function MarkPopover({
   // before paint, so the first placement lands without a flash.
   useLayoutEffect(() => {
     const place = (): void => {
+      if (sheetBottom != null) return
       const card = cardRef.current
       const root = rootRef.current
       if (!card || !root) return
@@ -372,14 +418,32 @@ function MarkPopover({
       window.removeEventListener('resize', place)
       ro.disconnect()
     }
-  }, [anchorLeft, anchorTop, rootRef])
+  }, [anchorLeft, anchorTop, rootRef, sheetBottom])
 
   return createPortal(
     <div
       ref={cardRef}
       dir={dir}
       data-anno-ui
-      className={cn('pointer-events-auto fixed left-0 top-0 z-[70]', className)}
+      data-testid={testId}
+      className={cn(
+        'pointer-events-auto fixed z-[70]',
+        sheetBottom != null ? 'inset-x-2' : 'left-0 top-0',
+        className,
+        // Closed-keyboard is bottom:0 (sheetBottom is 0, and 0 != null) — the
+        // state the composer opens in on every phone, since autoFocus is
+        // desktop-only. Floor the bottom padding at the design's own 12px
+        // (p-3, matched here as 0.75rem) and grow to the safe area only where
+        // one exists — a bare `env(safe-area-inset-bottom)` with no fallback
+        // resolves to 0 on every device without an inset (all Android, older
+        // iPhones, desktop), which would have *removed* the sheet's existing
+        // bottom padding instead of adding to it. Ordered after `className`
+        // (whose `p-3` would otherwise win the padding-bottom conflict), and
+        // this never touches `bottom` so it can't disturb the keyboard-open
+        // offset.
+        sheetBottom != null && 'pb-[max(0.75rem,env(safe-area-inset-bottom))]',
+      )}
+      style={sheetBottom != null ? { bottom: `${sheetBottom}px` } : undefined}
     >
       {children}
     </div>,
