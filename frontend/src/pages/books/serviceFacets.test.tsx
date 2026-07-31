@@ -8,7 +8,7 @@ import { describe, it, expect, vi } from 'vitest'
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 
-import { railItemsFrom, spineCountsFrom } from './serviceLabels'
+import { bookHeaderText, railItemsFrom, spineCountsFrom } from './serviceLabels'
 import { FormRail } from './FormRail'
 import type { BookFacetsResponse } from '@/lib/api'
 
@@ -128,5 +128,35 @@ describe('facets query failure', () => {
   it('FormRail renders no buttons (not a fake "All" entry) when handed no items', () => {
     render(<FormRail items={[]} active="all" onChange={vi.fn()} />)
     expect(screen.queryAllByRole('button')).toHaveLength(0)
+  })
+})
+
+describe('bookHeaderText', () => {
+  // One function both the desktop and mobile headers call — this is what
+  // makes it structurally impossible for one layout to show a confident
+  // total while the other shows the retry state. (The mobile header used to
+  // hand-copy this ternary and simply omitted the error branch.)
+  const t = (key: string, options?: Record<string, unknown>): string =>
+    options ? `${key}:${JSON.stringify(options)}` : key
+
+  it('is loading when either query is pending, even if facets already errored', () => {
+    expect(
+      bookHeaderText({ listPending: true, facetsPending: false, facetsError: true, total: 0 }, t),
+    ).toBe('books.subtitle')
+    expect(
+      bookHeaderText({ listPending: false, facetsPending: true, facetsError: false, total: 0 }, t),
+    ).toBe('books.subtitle')
+  })
+
+  it('is the load-error message on a facets failure — never a confident total', () => {
+    expect(
+      bookHeaderText({ listPending: false, facetsPending: false, facetsError: true, total: 0 }, t),
+    ).toBe('common.loadError')
+  })
+
+  it('is the real total once both queries have resolved cleanly', () => {
+    expect(
+      bookHeaderText({ listPending: false, facetsPending: false, facetsError: false, total: 629 }, t),
+    ).toBe('books.pageMeta:{"total":629}')
   })
 })

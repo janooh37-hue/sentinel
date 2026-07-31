@@ -72,6 +72,21 @@ export function railItemsFrom(
   ]
 }
 
+/**
+ * Records header subtitle — ONE decision both the desktop and mobile headers
+ * render, so they can't diverge (that's how the mobile header missed the
+ * facets-error case in the first place: two hand-copied ternaries instead of
+ * one). Loading (either query) wins over error; error wins over the real count.
+ */
+export function bookHeaderText(
+  status: { listPending: boolean; facetsPending: boolean; facetsError: boolean; total: number },
+  t: (key: string, options?: Record<string, unknown>) => string,
+): string {
+  if (status.listPending || status.facetsPending) return t('books.subtitle')
+  if (status.facetsError) return t('common.loadError')
+  return t('books.pageMeta', { total: status.total })
+}
+
 /** Status-spine counts, scoped to the selected service ('all' = office-wide). */
 export function spineCountsFrom(
   facets: BookFacetsResponse | undefined,

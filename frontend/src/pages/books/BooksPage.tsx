@@ -43,7 +43,7 @@ import { DEFAULT_BOOKS_FILTERS, normalizeFilters } from './booksFiltersUtils'
 import { sealDescriptor, signedSourceOf } from './bookStateLabel'
 import { StatusSpine, type SpineState } from './StatusSpine'
 import { FormRail, type RailItem } from './FormRail'
-import { railItemsFrom, spineCountsFrom, useServiceLabel } from './serviceLabels'
+import { bookHeaderText, railItemsFrom, spineCountsFrom, useServiceLabel } from './serviceLabels'
 import { RecordsList } from './RecordsList'
 import { RecordPane } from './RecordPane'
 
@@ -267,6 +267,15 @@ export function BooksPage(): React.JSX.Element {
   // Header-line counts. Sourced from facets (global), not listQuery (now
   // service-scoped) — this must agree with the rail's "All" count.
   const total = facetsQuery.data?.total ?? 0
+  // One status object both the desktop and mobile headers pass through
+  // bookHeaderText — a single decision they can't diverge on (that's how the
+  // mobile header missed the facets-error case: two hand-copied ternaries).
+  const headerStatus = {
+    listPending: listQuery.isPending,
+    facetsPending: facetsQuery.isPending,
+    facetsError: facetsQuery.isError,
+    total,
+  }
 
   // ── Desktop facets ──────────────────────────────────────────────────────────
   const serviceLabel = useServiceLabel()
@@ -427,11 +436,7 @@ export function BooksPage(): React.JSX.Element {
             <div className="min-w-0">
               <h1 className="text-[1.45em] font-bold tracking-tight text-foreground">{t('books.title')}</h1>
               <div className="mt-0.5 text-[0.8em] text-muted-foreground">
-                {listQuery.isPending || facetsQuery.isPending
-                  ? t('books.subtitle')
-                  : facetsQuery.isError
-                    ? t('common.loadError')
-                    : t('books.pageMeta', { total })}
+                {bookHeaderText(headerStatus, t)}
               </div>
             </div>
             <div className="flex shrink-0 items-center gap-2">
@@ -626,9 +631,7 @@ export function BooksPage(): React.JSX.Element {
                   {t('books.title')}
                 </h1>
                 <div className="mt-1 text-[0.86em] text-muted-foreground">
-                  {listQuery.isPending || facetsQuery.isPending
-                    ? t('books.subtitle')
-                    : t('books.pageMeta', { total })}
+                  {bookHeaderText(headerStatus, t)}
                 </div>
               </div>
               <div className="flex shrink-0 items-center gap-2">
