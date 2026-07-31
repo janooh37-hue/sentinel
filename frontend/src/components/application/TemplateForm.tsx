@@ -402,17 +402,14 @@ export function TemplateForm({
 
   // Group fields by their `group` attribute.
   // In Word mode, skip the arabic_rich_full body field — it's in Word.
-  // When a template is selected, also skip recipient/CC — the boilerplate
-  // already carries that content. The MANAGER picker stays: it drives the
-  // approval chain (default approver) and the signature anchor, while the
-  // template's printed closing stays as-is (2026-07-19 fix — templated books
-  // used to lose doc_manager_id and land with no default approver).
+  // Recipient/CC pickers stay even with a template selected: save-as-template
+  // re-injects {{ recipient_name }} / {{ cc }}, so the template is a shell and
+  // these fields fill it (they were hidden while templates froze the source
+  // book's addressee — that freeze is gone).
   // Ungrouped fields land in a synthetic "_default" bucket, rendered first.
-  const TEMPLATE_BAKED_TYPES = new Set(['recipient_picker', 'recipient_multi_picker'])
   const groups = new Map<string, TemplateField[]>()
   for (const field of schema.fields) {
     if (wordMode && field.type === 'arabic_rich_full') continue
-    if (wordMode && templateName && TEMPLATE_BAKED_TYPES.has(field.type)) continue
     const groupKey = field.group ?? '_default'
     const existing = groups.get(groupKey)
     if (existing) {

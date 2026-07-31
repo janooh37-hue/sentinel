@@ -1,6 +1,10 @@
 from pathlib import Path
 
 from docx import Document
+from docx.enum.text import WD_ALIGN_PARAGRAPH
+from docx.oxml.ns import nsdecls, qn
+from docx.oxml.parser import parse_xml
+from docx.oxml.xmlchemy import BaseOxmlElement
 
 from app.core.book_template_retokenize import retokenize_general_book
 from app.core.book_text import docx_to_text
@@ -39,6 +43,40 @@ def test_retokenize_table_idempotent(tmp_path: Path) -> None:
     retokenize_general_book(p)
     t2 = docx_to_text(p)
     assert t1 == t2
+
+
+def _loop_row_cell(path: Path) -> BaseOxmlElement:
+    """First cell of the {{ row.cN }} loop row of the single normalized table."""
+    tbl = Document(str(path)).element.body.findall(qn("w:tbl"))[0]
+    for tr in tbl.findall(qn("w:tr")):
+        tc = tr.findall(qn("w:tc"))[0]
+        if "row.c0" in "".join(t.text or "" for t in tc.findall(f".//{qn('w:t')}")):
+            return tc
+    raise AssertionError("no loop row found")
+
+
+def test_loop_row_keeps_data_row_styling_not_headers(tmp_path: Path) -> None:
+    """The repeating row must look like the operator's BODY row: header shading
+    (a coloured title band) must not bleed into it, and the body cells' own
+    alignment must survive."""
+    p = _book_with_table(tmp_path, ["الاسم", "الرقم"], [["أحمد", "G-001"]])
+    doc = Document(str(p))
+    t = doc.tables[0]
+    # header: red band, no explicit alignment; body: light grey, centred
+    for cell, fill in ((t.cell(0, 0), "C00000"), (t.cell(1, 0), "D9D9D9")):
+        cell._tc.get_or_add_tcPr().append(
+            parse_xml(f'<w:shd {nsdecls("w")} w:val="clear" w:fill="{fill}"/>')
+        )
+    t.cell(1, 0).paragraphs[0].alignment = WD_ALIGN_PARAGRAPH.CENTER
+    doc.save(str(p))
+
+    retokenize_general_book(p)
+
+    tc = _loop_row_cell(p)
+    shd = tc.find(f".//{qn('w:shd')}")
+    assert shd is not None and shd.get(qn("w:fill")) == "D9D9D9", "loop row took the header's fill"
+    jc = tc.find(f".//{qn('w:jc')}")
+    assert jc is not None and jc.get(qn("w:val")) == "center", "data-row alignment lost"
 
 
 def test_retokenize_plain_book_no_table_tokens(tmp_path: Path) -> None:

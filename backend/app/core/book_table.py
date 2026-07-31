@@ -114,8 +114,13 @@ def normalize_data_table(doc: Document) -> None:
     if len(rows) > 1:
         first_data_cells = rows[1].findall(qn("w:tc"))
         if first_data_cells and _strip_zwsp(_cell_text(first_data_cells[0])).startswith("{%tr"):
+            # Drop the for/endfor directive rows ONLY — the {{ row.cN }} row
+            # stays as the style sample so re-saving a template keeps its body
+            # styling instead of falling back to the header's.
             for tr in rows[1:]:
-                tbl.remove(tr)
+                cells = tr.findall(qn("w:tc"))
+                if cells and _strip_zwsp(_cell_text(cells[0])).startswith("{%tr"):
+                    tbl.remove(tr)
 
     schema = detect_table_schema(doc)
     if schema is None:
@@ -125,8 +130,11 @@ def normalize_data_table(doc: Document) -> None:
     rows = tbl.findall(qn("w:tr"))
     header_row = rows[0]
 
-    # --- capture run properties from header row (data rows were stripped above) ---
-    style_source = header_row
+    # --- the loop row must look like the operator's BODY row, not the header:
+    # a coloured header band would otherwise fill every rendered data row and
+    # the body cells' alignment would be lost. Fall back to the header only
+    # when the table has no data row to sample.
+    style_source = rows[1] if len(rows) > 1 else header_row
 
     style_cells = style_source.findall(qn("w:tc"))
     rpr_copies: list[etree._Element | None] = []
@@ -152,17 +160,23 @@ def normalize_data_table(doc: Document) -> None:
     _single_cell_row("{%tr for row in table_rows %}")
 
     # --- build data-row: copy header row structure, replace cell contents ---
-    data_row = copy.deepcopy(header_row)
-    # Strip any w:trPr (e.g. tblHeader from a prior normalize) so injected rows
-    # don't accumulate header properties on repeated calls (idempotency fix).
+    data_row = copy.deepcopy(style_source)
+    # Drop only tblHeader (a header sample would repeat it on every rendered
+    # row); keep the rest of w:trPr — row height is operator formatting.
     for _trPr in data_row.findall(qn("w:trPr")):
-        data_row.remove(_trPr)
+        for _th in _trPr.findall(qn("w:tblHeader")):
+            _trPr.remove(_th)
     data_cells = data_row.findall(qn("w:tc"))
     for i, tc in enumerate(data_cells):
-        # strip all paragraphs in this cell and replace with a single one
-        for p in tc.findall(qn("w:p")):
-            tc.remove(p)
-        p = etree.SubElement(tc, qn("w:p"))
+        # Keep the first paragraph — its w:pPr carries alignment/bidi/indent —
+        # and empty it; drop any extra paragraphs.
+        paras = tc.findall(qn("w:p"))
+        p = paras[0] if paras else etree.SubElement(tc, qn("w:p"))
+        for extra in paras[1:]:
+            tc.remove(extra)
+        for child in list(p):
+            if child.tag != qn("w:pPr"):
+                p.remove(child)
         r = etree.SubElement(p, qn("w:r"))
         if rpr_copies[i] is not None:
             r.insert(0, copy.deepcopy(rpr_copies[i]))
