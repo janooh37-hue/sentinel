@@ -10,18 +10,21 @@ from __future__ import annotations
 import json
 import logging
 import re
+from collections import Counter
 from collections.abc import Sequence
 from datetime import UTC, date, datetime, timedelta
 from functools import lru_cache
 from pathlib import Path, PurePath
-from typing import Any
+from typing import Any, NamedTuple
 
-from sqlalchemy import Integer, func, or_, select, text
+from sqlalchemy import Integer, and_, false, func, not_, or_, select, text
 from sqlalchemy.orm import Session, selectinload
+from sqlalchemy.sql.elements import ColumnElement
 
 from app.api.errors import AppError, NotFoundError, ValidationFailedError
 from app.config import get_settings
 from app.core.constants import ALLOWED_DOC_EXTS, STAMP_STYLES
+from app.core.form_kind import OTHER_SERVICE_ID, SERVICE_IDS, resolve_service, subject_prefixes
 from app.db.models import (
     AuditLog,
     Book,
@@ -134,10 +137,126 @@ def _fts_query_books(db: Session, q: str) -> dict[int, str]:
         return {}
 
 
+def service_clause(service_id: str) -> ColumnElement[bool]:
+    """SQL for "this book belongs to `service_id`".
+
+    Mirrors `form_kind.resolve_service`, generated from the same prefix table:
+    a book belongs to a service if its NEWEST version carries that
+    `template_id`, or — being version-less — its subject starts with one of
+    the service's names. `OTHER_SERVICE_ID` is the literal negation of every
+    named clause, so the buckets are provably complementary: no book can land
+    in two or in none. Any `service_id` that is neither `OTHER_SERVICE_ID` nor
+    a member of `SERVICE_IDS` matches nothing — `resolve_service` never
+    returns such a value, so the SQL must not invent a match for it either.
+
+    "Newest" means highest `version_no` (a correlated per-book subquery), NOT
+    "any version" — `resolve_service` (via `BookRead.service_id`) only ever
+    consults `versions[-1]`, the relationship's `order_by="version_no"` tail.
+    Today no live book carries two distinct `template_id`s across its
+    versions, so the two would agree either way — but matching "any version"
+    would silently break the "exactly one bucket" guarantee the moment a book
+    ever does acquire two differently-templated versions (it would be claimed
+    by two named services and excluded from `other` simultaneously).
+
+    `subject_prefixes()` is asserted wildcard-free in test_form_kind, so
+    interpolating it into ILIKE cannot widen the match. Both the subject
+    branch and the newest-version comparison are guarded with ``is_not(None)``:
+    ILIKE/``==`` against a NULL value evaluates to SQL's UNKNOWN (not FALSE),
+    which would otherwise make a subject-less, version-less book (or a
+    versioned book whose newest version has a NULL `template_id`) vanish from
+    every bucket instead of landing in `other`.
+    """
+    if service_id == OTHER_SERVICE_ID:
+        return and_(*[not_(service_clause(s)) for s in SERVICE_IDS])
+    if service_id not in SERVICE_IDS:
+        return false()
+    newest_template_id = (
+        select(BookVersion.template_id)
+        .where(BookVersion.book_id == Book.id)
+        .order_by(BookVersion.version_no.desc())
+        .limit(1)
+        .scalar_subquery()
+    )
+    is_newest_version_of = and_(newest_template_id.is_not(None), newest_template_id == service_id)
+    prefixes = subject_prefixes(service_id)
+    return or_(
+        is_newest_version_of,
+        and_(
+            Book.id.not_in(select(BookVersion.book_id)),
+            Book.subject.is_not(None),
+            or_(*[Book.subject.ilike(f"{p}%") for p in prefixes]),
+        ),
+    )
+
+
+class ServiceCount(NamedTuple):
+    """One rail entry's numbers. `states` maps approval_state → count."""
+
+    service_id: str
+    count: int  # type: ignore[assignment]  # shadows tuple.count; field name is the public API
+    states: dict[str, int]
+
+
+def service_facets(db: Session) -> tuple[ServiceCount, list[ServiceCount]]:
+    """`(all_records, per_service)` over EVERY non-deleted book.
+
+    Deliberately unpaginated: these are the numbers the Records rail and the
+    status spine display, and computing them from a page window is what made
+    them disagree with the page's own total.
+
+    "The book's template" is its NEWEST version's template_id, defined exactly
+    as `service_clause` and `BookRead.service_id` define it — highest
+    `version_no`. Do NOT use `func.max(BookVersion.template_id)`: that is the
+    lexicographic max across all versions, which reintroduces the any-vs-newest
+    divergence Task 3 removed, and would let a multi-template book be counted
+    under a service it no longer belongs to. The separate version count
+    distinguishes "no version at all" from "has a version whose template is
+    NULL" — the two resolve differently.
+
+    # ponytail: one full scan with two correlated subqueries per row — 629 rows
+    # today, and book_versions.book_id is indexed. If books pass ~50k,
+    # denormalise service_id onto `books`.
+    """
+    newest_template_id = (
+        select(BookVersion.template_id)
+        .where(BookVersion.book_id == Book.id)
+        .order_by(BookVersion.version_no.desc())
+        .limit(1)
+        .scalar_subquery()
+    )
+    n_versions = (
+        select(func.count())
+        .select_from(BookVersion)
+        .where(BookVersion.book_id == Book.id)
+        .scalar_subquery()
+    )
+    stmt = select(Book.subject, Book.approval_state, newest_template_id, n_versions).where(
+        Book.deleted_at.is_(None)
+    )
+
+    all_states: Counter[str] = Counter()
+    per_service: dict[str, Counter[str]] = {}
+    for subject, approval_state, template_id, n_versions in db.execute(stmt):
+        service_id = resolve_service(subject, template_id, versioned=n_versions > 0)
+        state = approval_state or "none"
+        all_states[state] += 1
+        per_service.setdefault(service_id, Counter())[state] += 1
+
+    ordered = [*SERVICE_IDS, OTHER_SERVICE_ID]
+    services = [
+        ServiceCount(sid, sum(per_service[sid].values()), dict(per_service[sid]))
+        for sid in ordered
+        if sid in per_service
+    ]
+    all_records = ServiceCount("all", sum(all_states.values()), dict(all_states))
+    return all_records, services
+
+
 def list_books(
     db: Session,
     *,
     category_id: str | None = None,
+    service_id: str | None = None,
     direction: str | None = None,
     approval_state: str | None = None,
     q: str | None = None,
@@ -173,6 +292,11 @@ def list_books(
     if category_id is not None:
         stmt = stmt.where(Book.category_id == category_id)
         count_stmt = count_stmt.where(Book.category_id == category_id)
+
+    if service_id is not None:
+        svc_clause = service_clause(service_id)
+        stmt = stmt.where(svc_clause)
+        count_stmt = count_stmt.where(svc_clause)
 
     if direction is not None:
         stmt = stmt.where(Book.direction == direction)
@@ -1634,6 +1758,7 @@ __all__ = [
     "resolve_attachment_path",
     "resolve_doc_manager_user",
     "resolve_user_name_by_id",
+    "service_clause",
     "sign_book",
     "sms_for_book",
     "submit_for_approval",

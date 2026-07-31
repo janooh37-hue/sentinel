@@ -9,10 +9,11 @@ import { useEffect, useRef, useState } from 'react'
 import { ChevronDown, X } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 
-import type { BookCategoryRead } from '@/lib/api'
+import type { BookCategoryRead, ServiceFacetRead } from '@/lib/api'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { cn } from '@/lib/utils'
+import { serviceGlyph, useServiceLabel } from './serviceLabels'
 
 export interface BooksFilters {
   categoryIds: string[]
@@ -22,24 +23,30 @@ export interface BooksFilters {
   toDate: string
   q: string
   drafts?: boolean
+  serviceId: string
 }
 
 interface BooksFilterBarProps {
   filters: BooksFilters
   categories: BookCategoryRead[]
+  services: ServiceFacetRead[]
   onChange: (filters: BooksFilters) => void
 }
 
 export function BooksFilterBar({
   filters,
   categories,
+  services,
   onChange,
 }: BooksFilterBarProps): React.JSX.Element {
   const { t, i18n } = useTranslation()
   const isAr = i18n.language.startsWith('ar')
+  const serviceLabel = useServiceLabel()
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [catOpen, setCatOpen] = useState(false)
   const catRootRef = useRef<HTMLDivElement>(null)
+  const [svcOpen, setSvcOpen] = useState(false)
+  const svcRootRef = useRef<HTMLDivElement>(null)
 
   const isAnyFilterActive =
     filters.categoryIds.length > 0 ||
@@ -48,10 +55,11 @@ export function BooksFilterBar({
     filters.fromDate !== '' ||
     filters.toDate !== '' ||
     filters.q !== '' ||
-    !!filters.drafts
+    !!filters.drafts ||
+    filters.serviceId !== 'all'
 
   const clear = (): void => {
-    onChange({ categoryIds: [], direction: 'all', status: 'all', fromDate: '', toDate: '', q: '', drafts: false })
+    onChange({ categoryIds: [], direction: 'all', status: 'all', fromDate: '', toDate: '', q: '', drafts: false, serviceId: 'all' })
   }
 
   const toggleCategory = (id: string): void => {
@@ -97,6 +105,25 @@ export function BooksFilterBar({
       window.removeEventListener('keydown', onKey)
     }
   }, [catOpen])
+
+  // Close the service popover on outside-click or Escape
+  useEffect(() => {
+    if (!svcOpen) return
+    function onDown(e: MouseEvent): void {
+      if (svcRootRef.current && !svcRootRef.current.contains(e.target as Node)) {
+        setSvcOpen(false)
+      }
+    }
+    function onKey(e: KeyboardEvent): void {
+      if (e.key === 'Escape') setSvcOpen(false)
+    }
+    window.addEventListener('mousedown', onDown)
+    window.addEventListener('keydown', onKey)
+    return () => {
+      window.removeEventListener('mousedown', onDown)
+      window.removeEventListener('keydown', onKey)
+    }
+  }, [svcOpen])
 
   return (
     <div
@@ -190,6 +217,89 @@ export function BooksFilterBar({
                 </button>
               </div>
             )}
+          </div>
+        )}
+      </div>
+
+      <div className="hidden h-5 w-px bg-hairline md:block" />
+
+      {/* Service compact popover trigger — single-select, distinct from Category */}
+      <div ref={svcRootRef} className="relative shrink-0">
+        <button
+          type="button"
+          data-testid="service-filter"
+          aria-haspopup="listbox"
+          aria-expanded={svcOpen}
+          onClick={() => setSvcOpen((v) => !v)}
+          className={cn(
+            'inline-flex h-8 items-center gap-1.5 rounded-full border border-hairline px-3 text-[0.78em] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 focus-visible:ring-offset-background',
+            filters.serviceId !== 'all'
+              ? 'bg-primary-soft font-semibold text-primary'
+              : 'bg-surface-tinted text-muted-foreground hover:bg-border hover:text-foreground',
+          )}
+        >
+          <span>{t('books.filters.service')}</span>
+          <span className={filters.serviceId !== 'all' ? '' : 'text-muted-foreground/70'}>
+            {filters.serviceId === 'all' ? t('books.filters.serviceAll') : serviceLabel(filters.serviceId)}
+          </span>
+          <ChevronDown
+            className={cn('h-3.5 w-3.5 shrink-0 transition-transform', svcOpen && 'rotate-180')}
+            strokeWidth={2}
+          />
+        </button>
+
+        {svcOpen && (
+          <div
+            role="listbox"
+            aria-label={t('books.filters.service')}
+            className="absolute start-0 top-full z-50 mt-1.5 min-w-[200px] overflow-hidden rounded-xl border border-hairline bg-surface shadow-lg"
+          >
+            <ul className="max-h-64 overflow-y-auto py-1">
+              <li>
+                <button
+                  type="button"
+                  role="option"
+                  aria-selected={filters.serviceId === 'all'}
+                  onClick={() => {
+                    onChange({ ...filters, serviceId: 'all' })
+                    setSvcOpen(false)
+                  }}
+                  className={cn(
+                    'flex w-full items-center gap-2.5 px-3 py-2 text-start text-[0.82em] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring',
+                    filters.serviceId === 'all'
+                      ? 'bg-primary-soft font-semibold text-primary'
+                      : 'text-foreground hover:bg-surface-tinted',
+                  )}
+                >
+                  <span dir="auto">{t('books.filters.serviceAll')}</span>
+                </button>
+              </li>
+              {services.map((s) => {
+                const checked = filters.serviceId === s.id
+                return (
+                  <li key={s.id}>
+                    <button
+                      type="button"
+                      role="option"
+                      aria-selected={checked}
+                      onClick={() => {
+                        onChange({ ...filters, serviceId: s.id })
+                        setSvcOpen(false)
+                      }}
+                      className={cn(
+                        'flex w-full items-center gap-2.5 px-3 py-2 text-start text-[0.82em] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring',
+                        checked
+                          ? 'bg-primary-soft font-semibold text-primary'
+                          : 'text-foreground hover:bg-surface-tinted',
+                      )}
+                    >
+                      <span aria-hidden="true">{serviceGlyph(s.id)}</span>
+                      <span dir="auto">{serviceLabel(s.id)}</span>
+                    </button>
+                  </li>
+                )
+              })}
+            </ul>
           </div>
         )}
       </div>

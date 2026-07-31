@@ -60,6 +60,7 @@ const BASE_BOOK: BookRead = {
   edit_session: null,
   classification_code: null,
   is_word_book: false,
+  service_id: 'General Book',
   versions: [],
   doc_manager_has_signature: false,
   current_template_id: null,

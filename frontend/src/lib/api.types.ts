@@ -1378,6 +1378,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/books/facets": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Book Facets
+         * @description Per-service counts for the Records rail + per-service approval-state
+         *     counts for the status spine. Global, unpaginated.
+         */
+        get: operations["book_facets_api_v1_books_facets_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/books/word-templates": {
         parameters: {
             query?: never;
@@ -4242,6 +4263,23 @@ export interface components {
              */
             created_at: string;
         };
+        /**
+         * BookFacetsResponse
+         * @description Rail + status-spine numbers over every non-deleted book (no paging).
+         *
+         *     `services` omits services with no records and is ordered by TEMPLATE_FILES
+         *     with "other" last. `total`/`states` are the office-wide "All" figures.
+         */
+        BookFacetsResponse: {
+            /** Total */
+            total: number;
+            /** States */
+            states: {
+                [key: string]: number;
+            };
+            /** Services */
+            services: components["schemas"]["ServiceFacetRead"][];
+        };
         /** BookListResponse */
         BookListResponse: {
             /** Items */
@@ -4335,6 +4373,15 @@ export interface components {
              * @description Newest version's template_id — lets the list badge Reports.
              */
             readonly current_template_id: string | null;
+            /**
+             * Service Id
+             * @description Which service produced this record — the Records rail's category.
+             *
+             *     Single source of truth for the rule (app.core.form_kind); the frontend
+             *     reads this instead of parsing the subject. `versions` is empty for
+             *     v3-imported records, which is exactly when the subject fallback applies.
+             */
+            readonly service_id: string;
         };
         /** BookSubmitRequest */
         BookSubmitRequest: {
@@ -7368,6 +7415,21 @@ export interface components {
             employee_id: string;
             /** Kind */
             kind: string;
+        };
+        /**
+         * ServiceFacetRead
+         * @description One Records-rail entry: a service id, its record count, and how those
+         *     records split across approval states (drives the rail's mini-dots).
+         */
+        ServiceFacetRead: {
+            /** Id */
+            id: string;
+            /** Count */
+            count: number;
+            /** States */
+            states: {
+                [key: string]: number;
+            };
         };
         /**
          * SessionUser
@@ -11062,6 +11124,37 @@ export interface operations {
             };
         };
     };
+    book_facets_api_v1_books_facets_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BookFacetsResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     list_word_templates_api_v1_books_word_templates_get: {
         parameters: {
             query?: never;
@@ -11404,6 +11497,7 @@ export interface operations {
         parameters: {
             query?: {
                 category_id?: string | null;
+                service_id?: string | null;
                 direction?: string | null;
                 approval_state?: string | null;
                 q?: string | null;

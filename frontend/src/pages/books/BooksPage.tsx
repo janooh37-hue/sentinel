@@ -4,17 +4,22 @@
  * Desktop — three-pane register (visual contract:
  * docs/prototypes/records-redesign-2026-06-10/final-records.html):
  *   Header (title · meta · "New entry" pill)
- *   StatusSpine (All + 5 approval states, live counts — the active segment filters)
- *   FormRail (form kinds) | day-grouped RecordsList | RecordPane (papers + actions)
+ *   StatusSpine (All + 5 approval states, counts from /books/facets — the active
+ *     segment filters, and the counts scope to the selected service)
+ *   FormRail (one entry per service) | day-grouped RecordsList | RecordPane
  *
- * Mobile — unchanged: BooksFilterBar + BookMobileCard list, now filtered
- * client-side over the single unfiltered fetch.
+ * Mobile — BooksFilterBar + BookMobileCard list.
+ *
+ * Both layouts scope the list fetch SERVER-side to the selected service
+ * (`railScope`, see below) — desktop from the rail, mobile from the filter bar's
+ * Service popover. Filtering a service client-side would silently truncate it to
+ * whatever fell inside the 500-row window.
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useNavigate, useSearchParams } from 'react-router-dom'
-import { ArrowDownLeft, ArrowUpRight, BookOpen, Plus, Send, Trash2 } from 'lucide-react'
+import { ArrowDownLeft, ArrowUpRight, BookOpen, ChevronRight, Plus, Send, Trash2 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 
@@ -39,13 +44,13 @@ import { useCapabilities } from '@/lib/useCapabilities'
 import { cn } from '@/lib/utils'
 import { PullToRefresh } from '@/components/refresh/PullToRefresh'
 import { RefreshButton } from '@/components/refresh/RefreshButton'
-import { DEFAULT_BOOKS_FILTERS, normalizeFilters } from './booksFiltersUtils'
+import { DEFAULT_BOOKS_FILTERS, matchesBookFilters, matchesDesktopSearchRow, normalizeFilters } from './booksFiltersUtils'
 import { sealDescriptor, signedSourceOf } from './bookStateLabel'
 import { StatusSpine, type SpineState } from './StatusSpine'
 import { FormRail, type RailItem } from './FormRail'
+import { bookHeaderText, railItemsFrom, spineCountsFrom, useServiceLabel } from './serviceLabels'
 import { RecordsList } from './RecordsList'
 import { RecordPane } from './RecordPane'
-import { FORM_KINDS, GENERAL_BOOK_KIND, OTHER_KIND, formKindOf, type FormKind } from './formKind'
 
 const DEFAULT_FILTERS = DEFAULT_BOOKS_FILTERS
 
@@ -77,7 +82,7 @@ export function BooksPage(): React.JSX.Element {
 
   // ── Desktop pane state ──────────────────────────────────────────────────────
   const [spineState, setSpineState] = useState<SpineState>('all')
-  const [railKind, setRailKind] = useState<string>('all')
+  const [railService, setRailService] = useState<string>('all')
   const [search, setSearch] = useState('')
   const [showDrafts, setShowDrafts] = useState(false)
   const [selectedId, setSelectedId] = useState<number | null>(null)
@@ -88,10 +93,30 @@ export function BooksPage(): React.JSX.Element {
   // or falls back to the full-screen record page (id not in the 500-row window).
   const [pendingOpenId, setPendingOpenId] = useState<number | null>(null)
 
-  // ── Data: one unfiltered fetch; both branches filter client-side ───────────
+  // Rail + spine numbers over EVERY record — the 500-row page window is why
+  // these used to disagree with the page's own total.
+  const facetsQuery = useQuery({
+    queryKey: ['books', 'facets'],
+    queryFn: () => api.getBookFacets(),
+  })
+
+  // ── Data: one server-scoped fetch; both branches filter client-side ────────
+  // `railService` (the desktop rail's own selection) is a desktop-only concept
+  // — it must never leak into mobile, so a desktop→mobile resize with a rail
+  // service selected can't leave the mobile list silently filtered with no
+  // indicator that a filter is active. Mobile instead scopes on
+  // `filters.serviceId`, the operator's own visible choice in the mobile
+  // Service popover (its trigger shows the selected label), so the scoping is
+  // never silent. Without this, mobile filtered client-side over an unscoped
+  // 500-row window, undercounting services with more rows further back in the
+  // table (e.g. Leave Application Form: 276 true vs 230 visible).
+  const railScope = isDesktop ? railService : filters.serviceId
   const listQuery = useQuery({
-    queryKey: ['books', 'all'],
-    queryFn: () => api.listBooks({ limit: 500 }),
+    queryKey: ['books', 'all', railScope],
+    queryFn: () =>
+      api.listBooks(
+        railScope === 'all' ? { limit: 500 } : { service_id: railScope, limit: 500 },
+      ),
   })
   const allRows: BookRead[] = useMemo(() => listQuery.data?.items ?? [], [listQuery.data])
 
@@ -217,20 +242,12 @@ export function BooksPage(): React.JSX.Element {
   )
 
   // ── Mobile: client-side filtering with the old server-side predicates ──────
-  const mobileRows: BookRead[] = useMemo(() => {
-    const q = filters.q.trim().toLowerCase()
-    return allRows.filter((row) => {
-      if (filters.drafts) return row.is_draft && !row.voided_at
-      if (filters.categoryIds.length > 0 && !filters.categoryIds.includes(row.category_id)) return false
-      if (filters.direction !== 'all' && row.direction !== filters.direction) return false
-      if (filters.status !== 'all' && row.approval_state !== filters.status) return false
-      const day = row.created_at.slice(0, 10)
-      if (filters.fromDate && day < filters.fromDate) return false
-      if (filters.toDate && day > filters.toDate) return false
-      if (q && !`${row.ref_number} ${row.subject ?? ''}`.toLowerCase().includes(q)) return false
-      return true
-    })
-  }, [allRows, filters])
+  // Predicate lives in booksFiltersUtils.ts (single source of truth, unit-tested
+  // directly) so this ordering can't drift out of sync with the desktop paths again.
+  const mobileRows: BookRead[] = useMemo(
+    () => allRows.filter((row) => matchesBookFilters(row, filters)),
+    [allRows, filters],
+  )
 
   // Mobile open routing: full-screen record page (`/books/:id`) in any state.
   const openBook = useCallback(
@@ -242,6 +259,7 @@ export function BooksPage(): React.JSX.Element {
 
   const hasFilters =
     filters.categoryIds.length > 0 ||
+    filters.serviceId !== 'all' ||
     filters.direction !== 'all' ||
     filters.status !== 'all' ||
     !!filters.fromDate ||
@@ -249,56 +267,31 @@ export function BooksPage(): React.JSX.Element {
     !!filters.q.trim() ||
     !!filters.drafts
 
-  // Header-line counts
-  const total = listQuery.data?.total ?? 0
+  // Header-line counts. Sourced from facets (global), not listQuery (now
+  // service-scoped) — this must agree with the rail's "All" count.
+  const total = facetsQuery.data?.total ?? 0
+  // One status object both the desktop and mobile headers pass through
+  // bookHeaderText — a single decision they can't diverge on (that's how the
+  // mobile header missed the facets-error case: two hand-copied ternaries).
+  const headerStatus = {
+    listPending: listQuery.isPending,
+    facetsPending: facetsQuery.isPending,
+    facetsError: facetsQuery.isError,
+    total,
+  }
 
   // ── Desktop facets ──────────────────────────────────────────────────────────
-  const spineCounts = useMemo<Record<SpineState, number>>(() => {
-    const counts: Record<SpineState, number> = {
-      all: allRows.length,
-      none: 0,
-      pending: 0,
-      awaiting_scan: 0,
-      returned: 0,
-      approved: 0,
-      rejected: 0,
-    }
-    for (const row of allRows) {
-      const s = row.approval_state as SpineState
-      if (s !== 'all' && s in counts) counts[s] += 1
-    }
-    return counts
-  }, [allRows])
+  const serviceLabel = useServiceLabel()
 
-  const railItems = useMemo<RailItem[]>(() => {
-    const byKind = new Map<string, { count: number; states: Set<string> }>()
-    for (const row of allRows) {
-      const kind = formKindOf(row.subject, { classified: !!row.classification_code })
-      let entry = byKind.get(kind.id)
-      if (!entry) {
-        entry = { count: 0, states: new Set() }
-        byKind.set(kind.id, entry)
-      }
-      entry.count += 1
-      if (row.approval_state !== 'none') entry.states.add(row.approval_state)
-    }
-    const items: RailItem[] = [
-      { kindId: 'all', glyph: '🗂', labelKey: 'books.formKind.all', count: allRows.length, states: [] },
-    ]
-    const ordered: FormKind[] = [...FORM_KINDS, GENERAL_BOOK_KIND, OTHER_KIND]
-    for (const kind of ordered) {
-      const entry = byKind.get(kind.id)
-      if (!entry) continue
-      items.push({
-        kindId: kind.id,
-        glyph: kind.glyph,
-        labelKey: kind.labelKey,
-        count: entry.count,
-        states: [...entry.states],
-      })
-    }
-    return items
-  }, [allRows])
+  const spineCounts = useMemo<Record<SpineState, number>>(
+    () => spineCountsFrom(facetsQuery.data, railService),
+    [facetsQuery.data, railService],
+  )
+
+  const railItems = useMemo<RailItem[]>(
+    () => railItemsFrom(facetsQuery.data, t('books.formKind.all'), serviceLabel),
+    [facetsQuery.data, serviceLabel, t],
+  )
 
   // Draft books (is_draft && !voided_at) — shown in the group card above the list
   const draftBooks: BookRead[] = useMemo(
@@ -311,28 +304,18 @@ export function BooksPage(): React.JSX.Element {
     // (which carry search_snippet on body-hit rows) instead of client filtering.
     if (serverSearchActive && searchQuery.data) {
       const serverRows = searchQuery.data.items
+      // The debounced search hits the server unscoped by service, so (unlike
+      // the main list query below) this branch still needs a client guard.
       return serverRows
-        .filter((row) => {
-          if (showDrafts) return row.is_draft && !row.voided_at
-          if (spineState !== 'all' && row.approval_state !== spineState) return false
-          if (
-            railKind !== 'all' &&
-            formKindOf(row.subject, { classified: !!row.classification_code }).id !== railKind
-          )
-            return false
-          return true
-        })
+        .filter((row) => matchesDesktopSearchRow(row, { railService, showDrafts, spineState }))
         .sort((a, b) => b.created_at.localeCompare(a.created_at))
     }
+    // The server already scoped allRows to railService (listQuery), so no
+    // service filter is needed here.
     const q = search.trim().toLowerCase()
     const filtered = allRows.filter((row) => {
       if (showDrafts) return row.is_draft && !row.voided_at
       if (spineState !== 'all' && row.approval_state !== spineState) return false
-      if (
-        railKind !== 'all' &&
-        formKindOf(row.subject, { classified: !!row.classification_code }).id !== railKind
-      )
-        return false
       if (q && !`${row.ref_number} ${row.subject ?? ''}`.toLowerCase().includes(q)) return false
       return true
     })
@@ -340,7 +323,7 @@ export function BooksPage(): React.JSX.Element {
     // so unsorted input would split a day into duplicate sections (key collision).
     // `filtered` is already a copy; never mutate allRows.
     return filtered.sort((a, b) => b.created_at.localeCompare(a.created_at))
-  }, [allRows, spineState, railKind, search, showDrafts, serverSearchActive, searchQuery.data])
+  }, [allRows, spineState, railService, search, showDrafts, serverSearchActive, searchQuery.data])
 
   const selectedBook = useMemo(() => {
     const pool = serverSearchActive && searchQuery.data ? searchQuery.data.items : allRows
@@ -377,9 +360,13 @@ export function BooksPage(): React.JSX.Element {
 
   const handleAddToEmail = useCallback(async () => {
     const ids = [...selectedForBasket]
+    // Same pool-then-fallback as selectedBook: a checkbox can only be set on a
+    // row that's currently rendered (desktopRows), which during an active
+    // search comes from searchQuery.data, not allRows.
+    const pool = serverSearchActive && searchQuery.data ? searchQuery.data.items : allRows
     const results = await Promise.allSettled(
       ids.map((id) => {
-        const book = allRows.find((r) => r.id === id)
+        const book = pool.find((r) => r.id === id) ?? allRows.find((r) => r.id === id)
         return book ? buildRecordBasketItem(book) : Promise.resolve(null)
       }),
     )
@@ -395,7 +382,7 @@ export function BooksPage(): React.JSX.Element {
     } else {
       toast(t('basket.tray.alreadyIn', { kind: t('basket.add') }))
     }
-  }, [selectedForBasket, allRows, t])
+  }, [selectedForBasket, allRows, serverSearchActive, searchQuery.data, t])
 
   // Single-record "Add to email" from the record pane (same enrichment as the
   // bulk multi-select; toasts added / already-in / not-found).
@@ -447,7 +434,7 @@ export function BooksPage(): React.JSX.Element {
             <div className="min-w-0">
               <h1 className="text-[1.45em] font-bold tracking-tight text-foreground">{t('books.title')}</h1>
               <div className="mt-0.5 text-[0.8em] text-muted-foreground">
-                {listQuery.isPending ? t('books.subtitle') : t('books.pageMeta', { total })}
+                {bookHeaderText(headerStatus, t)}
               </div>
             </div>
             <div className="flex shrink-0 items-center gap-2">
@@ -462,9 +449,36 @@ export function BooksPage(): React.JSX.Element {
               </button>
             </div>
           </header>
-          <StatusSpine counts={spineCounts} active={spineState} onChange={setSpineState} />
+          {facetsQuery.isError ? (
+            // A failed facets fetch must never render as an honest "0" — the spine's
+            // whole reason to exist is to be a number the operator can trust. Show a
+            // retry affordance in its place, matching the list pane's error pattern.
+            <div className="mb-3 flex items-center justify-between gap-3 rounded-2xl border border-hairline bg-surface px-3.5 py-2.5">
+              <span className="text-[0.8em] text-muted-foreground">{t('common.loadError')}</span>
+              <button
+                type="button"
+                onClick={() => void facetsQuery.refetch()}
+                className="rounded-full border border-hairline px-3 py-1 text-[0.75em] font-semibold text-muted-foreground transition-colors hover:border-primary hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              >
+                {t('common.retry')}
+              </button>
+            </div>
+          ) : (
+            <StatusSpine counts={spineCounts} active={spineState} onChange={setSpineState} />
+          )}
           <div className="grid min-h-0 flex-1 grid-cols-[15rem_minmax(0,1fr)_clamp(360px,36%,480px)] gap-3">
-            <FormRail items={railItems} active={railKind} onChange={setRailKind} />
+            {facetsQuery.isError ? (
+              <div className="rounded-2xl border border-hairline bg-surface py-8">
+                <EmptyState
+                  icon={BookOpen}
+                  message={t('common.loadError')}
+                  actionLabel={t('common.retry')}
+                  onAction={() => void facetsQuery.refetch()}
+                />
+              </div>
+            ) : (
+              <FormRail items={railItems} active={railService} onChange={setRailService} />
+            )}
             <section className="flex min-h-0 flex-col overflow-hidden rounded-2xl border border-hairline bg-surface">
               <div className="flex shrink-0 items-center gap-2 border-b border-hairline p-2.5">
                 <Input
@@ -514,20 +528,24 @@ export function BooksPage(): React.JSX.Element {
                   {/* Drafts group card — dashed border, raised bg, above the list */}
                   {draftBooks.length > 0 && !showDrafts && (
                     <div className="shrink-0 border-b border-hairline bg-surface-raised px-3 py-2.5">
-                      <div className="rounded-xl border border-dashed border-warning/50 bg-warning-soft/30 p-3">
-                        <div className="mb-2 flex items-center justify-between gap-2">
-                          <span className="text-[0.75em] font-bold uppercase tracking-[0.07em] text-warning">
+                      <details className="group rounded-xl border border-dashed border-warning/50 bg-warning-soft/30 p-3">
+                        <summary className="flex cursor-pointer list-none items-center gap-2 [&::-webkit-details-marker]:hidden focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:rounded-sm">
+                          <span className="flex items-center gap-1.5 text-[0.75em] font-bold uppercase tracking-[0.07em] text-warning">
+                            <ChevronRight
+                              aria-hidden
+                              className="h-3.5 w-3.5 transition-transform group-open:rotate-90 rtl:-scale-x-100"
+                            />
                             {t('books.filters.drafts')} ({draftBooks.length})
                           </span>
+                        </summary>
+                        <div className="mt-2 flex flex-col gap-1.5">
                           <button
                             type="button"
                             onClick={() => setShowDrafts(true)}
-                            className="text-[0.72em] text-muted-foreground underline hover:text-foreground"
+                            className="self-end text-[0.72em] text-muted-foreground underline hover:text-foreground"
                           >
                             {t('books.filters.drafts')}
                           </button>
-                        </div>
-                        <div className="flex flex-col gap-1.5">
                           {draftBooks.slice(0, 3).map((draft) => (
                             <div
                               key={draft.id}
@@ -553,7 +571,7 @@ export function BooksPage(): React.JSX.Element {
                             </button>
                           )}
                         </div>
-                      </div>
+                      </details>
                     </div>
                   )}
                   {selectedForBasket.size > 0 && (
@@ -615,9 +633,7 @@ export function BooksPage(): React.JSX.Element {
                   {t('books.title')}
                 </h1>
                 <div className="mt-1 text-[0.86em] text-muted-foreground">
-                  {listQuery.isPending
-                    ? t('books.subtitle')
-                    : t('books.pageMeta', { total })}
+                  {bookHeaderText(headerStatus, t)}
                 </div>
               </div>
               <div className="flex shrink-0 items-center gap-2">
@@ -639,6 +655,7 @@ export function BooksPage(): React.JSX.Element {
             <BooksFilterBar
               filters={filters}
               categories={categories}
+              services={facetsQuery.data?.services ?? []}
               onChange={setFilters}
             />
           </div>

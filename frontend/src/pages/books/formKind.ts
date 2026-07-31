@@ -1,75 +1,19 @@
 /**
- * Form-kind derivation for the Records page rail + register rows.
+ * subjectEmployeePart — splits the employee's name off a generated-form
+ * subject for the Records page rail + register rows.
  *
- * Books carry only a coarse category; the *form type* lives in the subject
- * string the backend derives from version fields ("Leave Application Form -
- * <employee>"). We match known prefixes (case-insensitive) and fall back to a
- * generic kind. Glyphs are wayfinding per the Services-tile convention
- * (DESIGN principle 1) — keep them.
+ * The record's service/form type itself comes from the backend
+ * (`BookRead.service_id`, rendered via `serviceLabels.ts`) — this module no
+ * longer guesses it from the subject string. What's left is purely cosmetic:
+ * stripping the "<form> — " prefix so rows can show form (bold) + employee
+ * (muted) separately.
  */
-
-export interface FormKind {
-  id: string
-  glyph: string
-  /** i18n key under books.formKind.* */
-  labelKey: string
-  /** lower-case subject prefixes that select this kind */
-  prefixes: string[]
-}
-
-export const FORM_KINDS: FormKind[] = [
-  { id: 'leave', glyph: '🌴', labelKey: 'books.formKind.leave', prefixes: ['leave application'] },
-  { id: 'salary', glyph: '💵', labelKey: 'books.formKind.salary', prefixes: ['salary transfer'] },
-  { id: 'duty', glyph: '🔄', labelKey: 'books.formKind.duty', prefixes: ['duty resumption'] },
-  { id: 'hr', glyph: '📋', labelKey: 'books.formKind.hr', prefixes: ['hr request'] },
-  { id: 'passport', glyph: '🛂', labelKey: 'books.formKind.passport', prefixes: ['passport release'] },
-  { id: 'material', glyph: '📦', labelKey: 'books.formKind.material', prefixes: ['material request'] },
-]
-
-export const OTHER_KIND: FormKind = {
-  id: 'other',
-  glyph: '📄',
-  labelKey: 'books.formKind.other',
-  prefixes: [],
-}
-
-/** Classified General Books (classification_code set) — Word or rich path. */
-export const GENERAL_BOOK_KIND: FormKind = {
-  id: 'general_book',
-  glyph: '📓',
-  labelKey: 'books.formKind.generalBook',
-  prefixes: [],
-}
-
-export const REPORT_KIND: FormKind = {
-  id: 'report',
-  glyph: '📊',
-  labelKey: 'books.formKind.report',
-  prefixes: [],
-}
 
 export interface FormKindOpts {
   /** Classified General Books carry a REAL operator subject — never parse it
    * as "<form> — <employee>" (a subject containing an em-dash used to display
    * as just its last word, labeled "Other records"). */
   classified?: boolean
-  /** When the book's current_template_id equals "Report", return REPORT_KIND
-   * unconditionally — template identity wins over subject parsing. */
-  template_id?: string | null
-}
-
-export function formKindOf(
-  subject: string | null | undefined,
-  opts?: FormKindOpts,
-): FormKind {
-  if (opts?.template_id === 'Report') return REPORT_KIND
-  if (opts?.classified) return GENERAL_BOOK_KIND
-  const s = (subject ?? '').trim().toLowerCase()
-  if (!s) return OTHER_KIND
-  for (const kind of FORM_KINDS) {
-    if (kind.prefixes.some((p) => s.startsWith(p))) return kind
-  }
-  return OTHER_KIND
 }
 
 /** Strip the form-name prefix so rows can show form (bold) + employee (muted).

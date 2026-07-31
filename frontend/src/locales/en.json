@@ -879,7 +879,9 @@
       "status": "Status",
       "statusAll": "All",
       "categoryAll": "All",
-      "drafts": "Drafts"
+      "drafts": "Drafts",
+      "service": "Service",
+      "serviceAll": "All"
     },
     "direction": {
       "all": "All",
@@ -1034,14 +1036,6 @@
     },
     "formKind": {
       "all": "All forms",
-      "leave": "Leave Application",
-      "salary": "Salary Transfer",
-      "duty": "Duty Resumption",
-      "hr": "HR Request",
-      "passport": "Passport",
-      "material": "Material Request",
-      "generalBook": "General Book",
-      "report": "Report",
       "other": "Other records"
     },
     "spine": {

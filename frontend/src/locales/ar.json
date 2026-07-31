@@ -963,7 +963,9 @@
       "status": "الحالة",
       "statusAll": "الكل",
       "categoryAll": "الكل",
-      "drafts": "المسودات"
+      "drafts": "المسودات",
+      "service": "النموذج",
+      "serviceAll": "الكل"
     },
     "direction": {
       "all": "الكل",
@@ -1118,14 +1120,6 @@
     },
     "formKind": {
       "all": "كل النماذج",
-      "leave": "طلب إجازة",
-      "salary": "تحويل راتب",
-      "duty": "استئناف عمل",
-      "hr": "طلب موارد بشرية",
-      "passport": "جواز السفر",
-      "material": "طلب مواد",
-      "generalBook": "كتاب عام",
-      "report": "تقرير",
       "other": "سجلات أخرى"
     },
     "spine": {
