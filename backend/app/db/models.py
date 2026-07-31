@@ -65,6 +65,11 @@ class Employee(Base):
     doj_company: Mapped[date | None] = mapped_column(Date, nullable=True)
     status: Mapped[str] = mapped_column(String(32), default="Active", server_default="Active")
     end_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    # Scheduled departure — the status this employee flips to on `end_date`,
+    # while `status` stays 'Active' through the notice period. NULL means no
+    # pending departure. Only ever 'Resigned' or 'Terminated': written by the
+    # Resignation Letter and by update_employee, cleared on flip or cancel.
+    pending_status: Mapped[str | None] = mapped_column(String(32), nullable=True)
     department: Mapped[str | None] = mapped_column(String(128), nullable=True)
     position: Mapped[str | None] = mapped_column(String(128), nullable=True)
     position_ar: Mapped[str | None] = mapped_column(String(128), nullable=True)

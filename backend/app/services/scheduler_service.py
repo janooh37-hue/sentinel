@@ -20,6 +20,7 @@ import os
 import sys
 from datetime import UTC, date, datetime
 from threading import Lock
+from typing import Final
 
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
@@ -29,9 +30,15 @@ from sqlalchemy import select
 from app.config import get_settings
 from app.db.models import User
 from app.db.session import SessionLocal
+from app.schemas.employee import (
+    EMPLOYEE_STATUS_RESIGNED,
+    EMPLOYEE_STATUS_TERMINATED,
+)
 from app.services import (
+    admin_notify,
     digest_service,
     email_service,
+    employee_service,
     notification_service,
     notify_dispatch,
     openwa_client,
@@ -57,6 +64,7 @@ _OPENWA_HEALTH_JOB_ID = "openwa-health"
 _OPENWA_HEALTH_INTERVAL_MINUTES = 5
 _DIGEST_JOB_ID = "monthly_leave_digest"
 _LEAVE_ENDING_JOB_ID = "leave-ending-reminder"
+_DEPARTURE_FLIP_JOB_ID = "pending-departure-flip"
 
 _scheduler: BackgroundScheduler | None = None
 _lock = Lock()
@@ -332,6 +340,82 @@ def _run_leave_ending_reminder() -> None:
             log.exception("scheduler: leave-ending reminder failed")
 
 
+_DEPARTURE_LABELS: Final[dict[str, tuple[str, str]]] = {
+    EMPLOYEE_STATUS_RESIGNED: ("Resigned", "مستقيل"),
+    EMPLOYEE_STATUS_TERMINATED: ("Terminated", "مفصول"),
+}
+
+
+def _isolate(s: str) -> str:
+    """Wrap a fragment so it can't scramble the Arabic text around it.
+
+    A G-number like ``G9600`` mixes a strong-L letter with digits, so the bidi
+    algorithm won't unify it the way it does a pure-digit date — parenthesised
+    mid-sentence it flips.
+
+    U+2068 FIRST STRONG ISOLATE, not U+2066 LRI: this wraps values whose
+    direction isn't known here (``name_ar`` falls back to a Latin name), and
+    FSI takes its direction from the first strong character instead of forcing
+    LTR. Closed by U+2069 PDI. Same pair as ``frontend/src/lib/bidi.ts`` — the
+    controls are invisible in an editor, so verify by codepoint, not by eye.
+    """
+    return f"⁨{s}⁩"
+
+
+def _run_pending_departure_flip() -> None:
+    """Daily 09:05 Asia/Dubai — apply scheduled departures that have come due.
+
+    An employee whose resignation or termination was dated in the future stayed
+    Active through their notice period; today they become what
+    ``pending_status`` says. Admins get one in-app notification per flip.
+
+    Employees are never messaged by this job.
+    """
+    with SessionLocal() as session:
+        try:
+            moved = employee_service.apply_due_departures(session)
+        except Exception:
+            log.exception("scheduler: pending-departure flip failed")
+            return
+        if not moved:
+            return
+        log.info("scheduler: %d scheduled departure(s) applied", len(moved))
+        try:
+            admins = admin_notify.active_admins(session)
+        except Exception:
+            log.exception("scheduler: could not list admins for departure notice")
+            return
+        for emp in moved:
+            labels = _DEPARTURE_LABELS.get(emp.status)
+            if labels is None:
+                # Never say "Terminated" about a real person on a fallback.
+                log.warning(
+                    "scheduler: unexpected status %r for %s, no departure notice",
+                    emp.status,
+                    emp.id,
+                )
+                continue
+            status_en, status_ar = labels
+            name_ar = emp.name_ar or emp.name_en
+            ref = _isolate(f"({emp.id})")
+            messages = {
+                "en": (
+                    "GSSG Manager",
+                    f"Departure applied\n{emp.name_en} ({emp.id}) is now {status_en}",
+                ),
+                "ar": (
+                    "GSSG Manager",
+                    f"تم تطبيق المغادرة\n{_isolate(name_ar)} {ref} الآن {status_ar}",
+                ),
+            }
+            url = f"/employees/{emp.id}"
+            for admin in admins:
+                try:
+                    push_service.send_to_user(session, admin.id, messages, url)
+                except Exception:
+                    log.exception("scheduler: departure notice failed for admin %s", admin.id)
+
+
 def _disabled_in_environment() -> bool:
     """Skip startup under pytest or when explicitly disabled via env var.
 
@@ -424,6 +508,13 @@ def start() -> None:
                 replace_existing=True,
             )
             log.info("scheduler: leave-ending reminder daily at 09:00 Asia/Dubai")
+            _scheduler.add_job(
+                _run_pending_departure_flip,
+                trigger=CronTrigger(hour=9, minute=5, timezone="Asia/Dubai"),
+                id=_DEPARTURE_FLIP_JOB_ID,
+                replace_existing=True,
+            )
+            log.info("scheduler: pending-departure flip daily at 09:05 Asia/Dubai")
 
 
 def shutdown() -> None:
@@ -486,6 +577,7 @@ __all__ = [
     "_run_notify_delivery_poll",
     "_run_notify_retry",
     "_run_openwa_health",
+    "_run_pending_departure_flip",
     "_run_push_notifier",
     "reschedule_email_sync",
     "run_drain_once",

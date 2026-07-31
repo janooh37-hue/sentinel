@@ -4902,7 +4902,7 @@ export interface components {
              * Id
              * @enum {string}
              */
-            id: "pending" | "workspace" | "violations" | "drafts" | "ledger" | "on_leave_today" | "upcoming_leave" | "recent_docs" | "email_sync_status" | "waiting_approvals" | "expiring_soon" | "recent_ledger";
+            id: "pending" | "workspace" | "violations" | "drafts" | "ledger" | "on_leave_today" | "upcoming_leave" | "recent_docs" | "email_sync_status" | "waiting_approvals" | "expiring_soon" | "recent_ledger" | "pending_departures";
             /**
              * Visible
              * @default true
@@ -5489,6 +5489,10 @@ export interface components {
             has_photo: boolean;
             /** Contact */
             contact?: string | null;
+            /** End Date */
+            end_date?: string | null;
+            /** Pending Status */
+            pending_status?: ("Active" | "Resigned" | "Terminated") | null;
         };
         /** EmployeeListResponse */
         EmployeeListResponse: {
@@ -5522,6 +5526,8 @@ export interface components {
             status: "Active" | "Resigned" | "Terminated";
             /** End Date */
             end_date: string | null;
+            /** Pending Status */
+            pending_status: ("Active" | "Resigned" | "Terminated") | null;
             /** Department */
             department: string | null;
             /** Position */
@@ -9146,6 +9152,7 @@ export interface operations {
                 status?: string | null;
                 department?: string | null;
                 duty_unit?: string | null;
+                pending?: boolean;
                 limit?: number;
                 offset?: number;
             };

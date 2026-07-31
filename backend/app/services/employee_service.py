@@ -14,14 +14,18 @@ is small (272 employees in live data) and the React side already wants a
 
 from __future__ import annotations
 
-from typing import Any
+from datetime import date
+from typing import Any, Final
 
-from sqlalchemy import func, or_, select
+from sqlalchemy import and_, func, or_, select
 from sqlalchemy.orm import Session
 
 from app.api.errors import ConflictError, NotFoundError, ValidationFailedError
 from app.db.models import Employee
 from app.schemas.employee import (
+    EMPLOYEE_STATUS_ACTIVE,
+    EMPLOYEE_STATUS_RESIGNED,
+    EMPLOYEE_STATUS_TERMINATED,
     EmployeeCreate,
     EmployeeUpdate,
     validate_status_end_date,
@@ -38,10 +42,16 @@ def list_employees(
     status: str | None = None,
     department: str | None = None,
     duty_unit: str | None = None,
+    pending: bool = False,
     limit: int = LIST_DEFAULT_LIMIT,
     offset: int = 0,
 ) -> tuple[list[Employee], int]:
-    """Filtered + paginated list. Returns ``(rows, total_count)``."""
+    """Filtered + paginated list. Returns ``(rows, total_count)``.
+
+    ``pending=True`` narrows to scheduled departures — Active employees with a
+    ``pending_status`` and an ``end_date`` — ordered soonest-first, which is what
+    the dashboard's Pending Departures widget reads.
+    """
     limit = max(1, min(limit, LIST_MAX_LIMIT))
     offset = max(0, offset)
 
@@ -66,8 +76,19 @@ def list_employees(
     if duty_unit:
         stmt = stmt.where(Employee.duty_unit == duty_unit)
         count_stmt = count_stmt.where(Employee.duty_unit == duty_unit)
+    if pending:
+        # Scheduled departure: still Active, but headed somewhere on end_date.
+        clause = and_(
+            Employee.status == EMPLOYEE_STATUS_ACTIVE,
+            Employee.pending_status.is_not(None),
+            Employee.end_date.is_not(None),
+        )
+        stmt = stmt.where(clause)
+        count_stmt = count_stmt.where(clause)
 
-    stmt = stmt.order_by(Employee.name_en).limit(limit).offset(offset)
+    # Soonest departure first when listing pending; otherwise by name.
+    order = Employee.end_date if pending else Employee.name_en
+    stmt = stmt.order_by(order).limit(limit).offset(offset)
 
     rows = list(db.execute(stmt).scalars().all())
     total = int(db.execute(count_stmt).scalar_one())
@@ -111,6 +132,44 @@ def update_employee(db: Session, employee_id: str, payload: EmployeeUpdate) -> E
     # Merge the patch over the current row to evaluate the invariant.
     merged_status = data.get("status", row.status)
     merged_end = data.get("end_date", row.end_date)
+
+    # Scheduled departure. A departure dated in the FUTURE keeps the employee
+    # Active through their notice period — they are still working — and records
+    # where they are headed in `pending_status`; the daily flip job applies it
+    # on the day. Today-or-past applies immediately, which is the pre-existing
+    # behaviour and the path for someone who walked off site today.
+    #
+    # This lives in the service, not in StatusDialog, so the full EmployeeForm
+    # gets the same rule and there is one place to be correct.
+    is_scheduled_departure = (
+        merged_status != EMPLOYEE_STATUS_ACTIVE
+        and merged_end is not None
+        and merged_end > date.today()
+    )
+    # A REAL reactivation, not merely a payload that happens to carry the
+    # employee's current status. EmployeeForm submits every field it renders,
+    # so an admin editing a phone number sends status='Active' unchanged — that
+    # must not cancel a departure they never touched.
+    is_reactivation = (
+        data.get("status") == EMPLOYEE_STATUS_ACTIVE and row.status != EMPLOYEE_STATUS_ACTIVE
+    )
+    is_end_date_cleared = "end_date" in data and data["end_date"] is None
+    # An immediate (today-or-past) departure supersedes a scheduled one: the
+    # marker must not outlive it, or a now-Terminated employee keeps showing a
+    # stale "Resigned" badge. The schedule branch already claims every
+    # future-dated case, so a non-Active status here is applying now.
+    is_immediate_departure = merged_status != EMPLOYEE_STATUS_ACTIVE
+
+    if is_scheduled_departure:
+        data["pending_status"] = merged_status
+        data["status"] = EMPLOYEE_STATUS_ACTIVE
+        merged_status = EMPLOYEE_STATUS_ACTIVE
+    elif is_reactivation or is_end_date_cleared or is_immediate_departure:
+        # Clearing the end date is the widget's Cancel path — it sends
+        # {end_date: null} alone, which validate_status_end_date already
+        # refuses on an already-departed row.
+        data["pending_status"] = None
+
     try:
         validate_status_end_date(merged_status, merged_end)
     except ValueError as exc:
@@ -128,9 +187,54 @@ def update_employee(db: Session, employee_id: str, payload: EmployeeUpdate) -> E
     return row
 
 
+# Only these may be promoted out of `pending_status` into `status`.
+_PENDING_TARGETS: Final[frozenset[str]] = frozenset(
+    {EMPLOYEE_STATUS_RESIGNED, EMPLOYEE_STATUS_TERMINATED}
+)
+
+
+def apply_due_departures(db: Session, *, today: date | None = None) -> list[Employee]:
+    """Flip every scheduled departure that has come due. Returns the rows moved.
+
+    A pending departure is `status == 'Active'` with a `pending_status` and an
+    `end_date`. On or after that date the employee becomes what
+    `pending_status` says and the pending marker is cleared. `end_date` is
+    already correct, so it is never rewritten.
+
+    Idempotent: clearing `pending_status` means a second run the same day moves
+    nothing. A missed run (deploy, restart) is caught up on the next one,
+    because the filter is `<= today` rather than `== today`.
+
+    `pending_status` is free text — SQLite has no enum — so the filter is
+    restricted to the two legal targets. A hand-edited or imported junk value is
+    left in place rather than promoted into `status`.
+    """
+    cutoff = today or date.today()
+    rows = list(
+        db.scalars(
+            select(Employee).where(
+                Employee.status == EMPLOYEE_STATUS_ACTIVE,
+                Employee.pending_status.in_(tuple(_PENDING_TARGETS)),
+                Employee.end_date.is_not(None),
+                Employee.end_date <= cutoff,
+            )
+        )
+    )
+    for row in rows:
+        # The `or` is unreachable — the WHERE clause admits only the two legal
+        # targets, never NULL — but `pending_status` is `str | None`, so it is
+        # what narrows the type for the assignment. Not a real fallback.
+        row.status = row.pending_status or EMPLOYEE_STATUS_ACTIVE
+        row.pending_status = None
+    if rows:
+        db.commit()
+    return rows
+
+
 __all__ = [
     "LIST_DEFAULT_LIMIT",
     "LIST_MAX_LIMIT",
+    "apply_due_departures",
     "create_employee",
     "get_employee",
     "list_employees",

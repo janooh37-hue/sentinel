@@ -42,6 +42,7 @@ from app.core import signature as signature_core
 from app.core.book_text import build_search_text, html_to_text
 from app.core.classifications import classified_ref, get_classification
 from app.core.constants import STAMP_STYLE_HEADER, TEMPLATE_FILES
+from app.core.dateutils import excel_date_to_datetime
 from app.core.docx_engine import DocxEngine, aztec_corner_for
 from app.core.pdf_merge import merge_attachments_into_pdf
 from app.core.vault_manager import Vault
@@ -61,6 +62,7 @@ from app.db.models import (
 )
 from app.db.repos.classified_refs_repo import allocate_classified_serial
 from app.db.repos.refs_repo import allocate_ref_with_retry
+from app.schemas.employee import EMPLOYEE_STATUS_ACTIVE, EMPLOYEE_STATUS_RESIGNED
 from app.services._pdf_executor import convert_docx_to_pdf
 
 if TYPE_CHECKING:
@@ -269,6 +271,42 @@ def companion_pdf_paths(db: Session, primary: Document) -> list[Path]:
         if p.is_file():
             out.append(p)
     return out
+
+
+def _record_pending_resignation(
+    db: Session,
+    employee: Employee | None,
+    fields: dict[str, Any],
+    *,
+    today: date | None = None,
+) -> None:
+    """Record where a Resignation Letter's subject is headed.
+
+    A resignation dated in the FUTURE keeps the employee Active through their
+    notice period — they are still on duty — and stores the target in
+    ``pending_status`` for the daily flip job. Dated today or earlier, it is
+    applied immediately.
+
+    No-ops when there is no linked employee, no parseable ``resignation_date``,
+    or the employee has already departed: a second letter must never rewrite the
+    record of someone already Resigned or Terminated.
+
+    The caller invokes this inside ``generate_document``'s transaction, just
+    before the terminal commit, so the employee change is atomic with the
+    Document insert.
+    """
+    if employee is None or employee.status != EMPLOYEE_STATUS_ACTIVE:
+        return
+    parsed = excel_date_to_datetime(fields.get("resignation_date"))
+    if parsed is None:
+        return
+    effective = parsed.date()
+    employee.end_date = effective
+    if effective > (today or date.today()):
+        employee.pending_status = EMPLOYEE_STATUS_RESIGNED
+    else:
+        employee.status = EMPLOYEE_STATUS_RESIGNED
+        employee.pending_status = None
 
 
 @functools.cache
@@ -1704,6 +1742,11 @@ def generate_document(
     # ------------------------------------------------------------------
     # 15. Commit
     # ------------------------------------------------------------------
+    # A committed Resignation Letter records where the employee is headed —
+    # inside this transaction, so it is atomic with the Document insert. Preview
+    # (commit=False) must not touch the employee record.
+    if commit and template_id == "Resignation Letter":
+        _record_pending_resignation(db, employee, fields)
     db.commit()
     db.refresh(doc_row)
 

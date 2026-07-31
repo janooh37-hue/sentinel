@@ -85,6 +85,7 @@ def list_employees(
     employee_status: Annotated[str | None, Query(alias="status")] = None,
     department: str | None = None,
     duty_unit: str | None = None,
+    pending: bool = False,
     limit: int = Query(LIST_DEFAULT_LIMIT, ge=1, le=LIST_MAX_LIMIT),
     offset: int = Query(0, ge=0),
 ) -> EmployeeListResponse:
@@ -94,6 +95,7 @@ def list_employees(
         status=employee_status,
         department=department,
         duty_unit=duty_unit,
+        pending=pending,
         limit=limit,
         offset=offset,
     )

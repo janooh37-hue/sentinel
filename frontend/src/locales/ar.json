@@ -203,6 +203,8 @@
     "title": "الموظفون",
     "eyebrow": "العمليات",
     "newEmployee": "موظف جديد",
+    "pendingDeparture": "{{status}} — اعتباراً من {{date}}",
+    "pendingDepartureTitle": "مغادرة مجدولة بتاريخ {{date}}",
     "pageMeta_zero": "لا موظفين · {{active}} نشط",
     "pageMeta_one": "موظف واحد · {{active}} نشط",
     "pageMeta_two": "موظفان · {{active}} نشط",
@@ -1984,6 +1986,21 @@
     "awaitingReturnDashCount_many": "{{count}} موظفًا بانتظار",
     "awaitingReturnDashCount_other": "{{count}} بانتظار"
   },
+  "pendingDepartures": {
+    "empty": "لا توجد مغادرات مجدولة",
+    "daysLeft_zero": "لم يبقَ أي يوم",
+    "daysLeft_one": "بقي يوم واحد",
+    "daysLeft_two": "بقي يومان",
+    "daysLeft_few": "بقي {{count}} أيام",
+    "daysLeft_many": "بقي {{count}} يوماً",
+    "daysLeft_other": "بقي {{count}} يوم",
+    "dueToday": "آخر يوم عمل اليوم",
+    "overdue": "تجاوز الموعد",
+    "cancel": "إلغاء",
+    "cancelled": "تم إلغاء المغادرة المجدولة",
+    "alreadyApplied": "تم تطبيق هذه المغادرة بالفعل",
+    "viewAll": "عرض جميع الموظفين"
+  },
   "viewer": {
     "title": "معاينة",
     "unavailable": "المعاينة غير متاحة لهذا النوع من الملفات",
@@ -2471,7 +2488,8 @@
       "waiting_approvals_aria_many": "بانتظار الاعتماد: {{count}}. مراجعة.",
       "waiting_approvals_aria_other": "بانتظار الاعتماد: {{count}}. مراجعة.",
       "expiring_soon": "قرب الانتهاء",
-      "recent_ledger": "أحدث المراسلات"
+      "recent_ledger": "أحدث المراسلات",
+      "pending_departures": "المغادرات المجدولة"
     },
     "quickActionLabels": {
       "hr": "طلبات الموارد البشرية",

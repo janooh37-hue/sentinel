@@ -63,6 +63,7 @@ from app.core.constants import (
     STAMP_STYLE_WATERMARK,
     TEMPLATE_FILES,
 )
+from app.core.dateutils import excel_date_to_datetime
 from app.core.docx_render import render
 from app.core.signature_render import DEFAULT_SIG_BOLDNESS, DEFAULT_SIG_SIZE_MM
 
@@ -145,15 +146,29 @@ def _adapt_common(data: dict[str, Any]) -> dict[str, Any]:
 
 
 def _adapt_resignation_letter(data: dict[str, Any]) -> dict[str, Any]:
-    """Split today into day/month/year for the body cell's three X marks,
-    and route purpose_plain → reason."""
+    """Split the operator's resignation date into the body cell's three slots.
+
+    The paper has three date positions. `today` feeds the header `التاريخ` and
+    the signature-block `التاريخ` — both the day the paper was made, and both
+    left alone here. Only the body line
+    "أتقدم لسيادتكم بطلب إستقالة عن العمل بتاريخ __/__/__" follows the
+    operator's `resignation_date`, so an employee can hand in notice today for a
+    departure next month.
+
+    Falls back to `today` when `resignation_date` is absent or unparseable: the
+    records created before the field existed, the preview path, and the
+    re-render on sign all reach here without it.
+
+    Also routes purpose_plain → reason.
+    """
     out = _adapt_common(data)
     today_str = out.get("today") or datetime.now().strftime(_TODAY_FMT)
-    try:
-        dt = datetime.strptime(today_str, _TODAY_FMT)
-    except ValueError:
-        dt = datetime.now()
     out["today"] = today_str
+    dt = (
+        excel_date_to_datetime(out.get("resignation_date"))
+        or excel_date_to_datetime(today_str)
+        or datetime.now()
+    )
     out["day"] = dt.strftime("%d")
     out["month"] = dt.strftime("%m")
     out["year"] = dt.strftime("%Y")
@@ -214,11 +229,8 @@ def _adapt_resignation_declaration(data: dict[str, Any]) -> dict[str, Any]:
     """Use Arabic weekday + date for the header row."""
     out = _adapt_common(data)
     today_str = out.get("today") or datetime.now().strftime(_TODAY_FMT)
-    try:
-        dt = datetime.strptime(today_str, _TODAY_FMT)
-    except ValueError:
-        dt = datetime.now()
     out["today"] = today_str
+    dt = excel_date_to_datetime(today_str) or datetime.now()
     out["weekday_ar"] = ARABIC_WEEKDAYS[dt.weekday()]
     return out
 

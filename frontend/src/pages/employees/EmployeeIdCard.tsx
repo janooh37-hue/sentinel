@@ -17,6 +17,7 @@ import type { EmployeeRead, EmployeeStatus } from '@/lib/api'
 import { pickEmployeeName } from '@/lib/employeeName'
 import { pickPosition } from '@/lib/employeePosition'
 import { useCapabilities } from '@/lib/useCapabilities'
+import { PendingDepartureBadge } from '@/components/employees/PendingDepartureBadge'
 import { useEmployeePhoto } from '@/components/employees/useEmployeePhoto'
 
 const STATUS_DOT_CLS: Record<EmployeeStatus, string> = {
@@ -169,6 +170,11 @@ export function EmployeeIdCard({
                   {t(`employees.status.${employee.status}`, employee.status)}
                 </span>
               )}
+              <PendingDepartureBadge
+                status={employee.status}
+                pendingStatus={employee.pending_status}
+                endDate={employee.end_date}
+              />
             </div>
           </div>
           <div>

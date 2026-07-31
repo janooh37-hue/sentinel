@@ -190,6 +190,8 @@
     "title": "Employees",
     "eyebrow": "Operations",
     "newEmployee": "New employee",
+    "pendingDeparture": "{{status}} — effective {{date}}",
+    "pendingDepartureTitle": "Scheduled departure on {{date}}",
     "pageMeta_one": "{{count}} employee · {{active}} active",
     "pageMeta_other": "{{count}} employees · {{active}} active",
     "chips": {
@@ -1837,6 +1839,17 @@
     "awaitingReturnDashCount_one": "{{count}} employee awaiting",
     "awaitingReturnDashCount_other": "{{count}} employees awaiting"
   },
+  "pendingDepartures": {
+    "empty": "No scheduled departures",
+    "daysLeft_one": "{{count}} day left",
+    "daysLeft_other": "{{count}} days left",
+    "dueToday": "Last day today",
+    "overdue": "Past due",
+    "cancel": "Cancel",
+    "cancelled": "Scheduled departure cancelled",
+    "alreadyApplied": "This departure has already been applied",
+    "viewAll": "View all employees"
+  },
   "viewer": {
     "title": "Preview",
     "unavailable": "Preview isn't available for this file type",
@@ -2312,7 +2325,8 @@
       "waiting_approvals_aria_one": "Waiting approvals: {{count}}. Review.",
       "waiting_approvals_aria_other": "Waiting approvals: {{count}}. Review.",
       "expiring_soon": "Expiring Soon",
-      "recent_ledger": "Recent Ledger"
+      "recent_ledger": "Recent Ledger",
+      "pending_departures": "Pending Departures"
     },
     "quickActionLabels": {
       "hr": "HR Requests",

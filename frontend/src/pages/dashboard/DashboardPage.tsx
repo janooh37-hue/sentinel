@@ -53,6 +53,7 @@ import { CustomizeWidgetsDialog } from '@/components/dashboard/CustomizeWidgetsD
 import { EmailSyncStatusWidget } from '@/components/dashboard/widgets/EmailSyncStatusWidget'
 import { BooksAwaitingWidget } from '@/pages/dashboard/widgets/BooksAwaitingWidget'
 import { ExpiringSoonWidget } from '@/pages/dashboard/widgets/ExpiringSoonWidget'
+import { PendingDeparturesWidget } from '@/pages/dashboard/widgets/PendingDeparturesWidget'
 import { WaitingApprovalsCard } from '@/pages/dashboard/widgets/WaitingApprovalsCard'
 import {
   DEFAULT_LAYOUT,
@@ -389,6 +390,8 @@ export function DashboardPage({ onNavigate }: DashboardPageProps): React.JSX.Ele
         return <EmailSyncStatusWidget summary={summary} />
       case 'expiring_soon':
         return <ExpiringSoonWidget />
+      case 'pending_departures':
+        return <PendingDeparturesWidget />
       case 'on_leave_today':
         return (
           <SectionCard icon={CalendarCheck} title={t('dashboard.onLeave.title')} count={summary?.on_leave_today.length}>

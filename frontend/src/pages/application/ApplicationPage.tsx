@@ -64,6 +64,7 @@ import { useShortcutAction } from '@/lib/useKeyboardShortcuts'
 import { EmployeeHeader } from './EmployeeHeader'
 import { JobStatus } from './JobStatus'
 import { emojiForTemplate, resolveTemplateIdFromSlug } from './formEmoji'
+import { restoreThenSeedResignationDate, todayIso } from './resignationDate'
 import { WordHandoffDialog } from '@/pages/books/WordHandoffDialog'
 
 type TabValue = 'fields' | 'preview'
@@ -634,15 +635,26 @@ export function ApplicationPage(): React.JSX.Element {
     }
     const draft = loadDraft(selectedTemplate)
     let base: AttachmentsState | null = null
+    let restoredValues: Record<string, unknown> | null = null
     if (draft) {
       // The draft payload carries the attachments state under a reserved
       // `__attachments` key (spec §6: a refresh keeps staged tokens). Split
       // it out before resetting RHF so the form never sees the blob.
       const { __attachments, ...values } = draft
-      form.reset(values)
+      restoredValues = values
       base = parseAttachmentsState(__attachments)
       if (base) attachmentsDirtyRef.current = false
     }
+    // Restore the draft into the form (if any), then prefill the Resignation
+    // Letter's date to today — restoreThenSeedResignationDate owns that
+    // ordering as one call, so there is no separate restore/seed sequence
+    // left here for a future edit to reorder or make unconditional.
+    restoreThenSeedResignationDate(
+      form,
+      restoredValues,
+      !!schemaQuery.data?.fields?.some((f) => f.id === 'resignation_date'),
+      todayIso(),
+    )
     // Seed the intake-staged scan on top of the restored draft (or onto an
     // empty state). attachmentsWithSeed is a pure function so draft content
     // is never dropped even when a pendingAttachment is present.

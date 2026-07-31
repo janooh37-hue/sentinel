@@ -17,6 +17,7 @@ import { api } from '@/lib/api'
 import { pickEmployeeName } from '@/lib/employeeName'
 import { pickPosition } from '@/lib/employeePosition'
 import { useDebouncedValue } from '@/lib/useDebouncedValue'
+import { PendingDepartureBadge } from '@/components/employees/PendingDepartureBadge'
 
 // ─── Props ────────────────────────────────────────────────────────────────────
 interface Props {
@@ -221,6 +222,11 @@ export function EmployeeSearchHero({
                           />
                           {pillLabel}
                         </span>
+                        <PendingDepartureBadge
+                          status={row.status}
+                          pendingStatus={row.pending_status}
+                          endDate={row.end_date}
+                        />
                       </button>
                     )
                   })

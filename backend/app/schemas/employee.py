@@ -124,6 +124,12 @@ class EmployeeRead(ORMBase):
     doj_company: date | None
     status: EmployeeStatus
     end_date: date | None
+    # Where a scheduled departure is headed, while `status` is still 'Active'.
+    # None = no pending departure. Read-only: EmployeeUpdate deliberately has no
+    # counterpart, because cancelling rides an `{end_date: null}` patch — which
+    # is only valid while they are still Active, so it cannot resurrect someone
+    # the flip job already departed (see update_employee).
+    pending_status: EmployeeStatus | None
     department: str | None
     position: str | None
     position_ar: str | None
@@ -167,6 +173,10 @@ class EmployeeListItem(ORMBase):
     has_photo: bool = False
     # Raw contact number as stored on the employee (used for WhatsApp mentions).
     contact: str | None = None
+    # Scheduled departure — the widget and the search-row badge both need the
+    # target and the date, so this minimal projection carries both.
+    end_date: date | None = None
+    pending_status: EmployeeStatus | None = None
 
 
 class EmployeeListResponse(BaseModel):
