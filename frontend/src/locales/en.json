@@ -879,7 +879,9 @@
       "status": "Status",
       "statusAll": "All",
       "categoryAll": "All",
-      "drafts": "Drafts"
+      "drafts": "Drafts",
+      "service": "Service",
+      "serviceAll": "All"
     },
     "direction": {
       "all": "All",

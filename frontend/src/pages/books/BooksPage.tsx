@@ -237,6 +237,7 @@ export function BooksPage(): React.JSX.Element {
     return allRows.filter((row) => {
       if (filters.drafts) return row.is_draft && !row.voided_at
       if (filters.categoryIds.length > 0 && !filters.categoryIds.includes(row.category_id)) return false
+      if (filters.serviceId !== 'all' && row.service_id !== filters.serviceId) return false
       if (filters.direction !== 'all' && row.direction !== filters.direction) return false
       if (filters.status !== 'all' && row.approval_state !== filters.status) return false
       const day = row.created_at.slice(0, 10)
@@ -653,6 +654,7 @@ export function BooksPage(): React.JSX.Element {
             <BooksFilterBar
               filters={filters}
               categories={categories}
+              services={facetsQuery.data?.services ?? []}
               onChange={setFilters}
             />
           </div>

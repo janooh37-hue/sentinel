@@ -8,6 +8,7 @@ export const DEFAULT_BOOKS_FILTERS: BooksFilters = {
   toDate: '',
   q: '',
   drafts: false,
+  serviceId: 'all',
 }
 
 /**
