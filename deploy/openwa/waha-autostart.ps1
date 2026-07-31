@@ -4,6 +4,10 @@
 # (Invoking any `wsl -d ...` command implicitly boots the distro first.)
 $ErrorActionPreference = 'Continue'
 $distro = 'podman-uosserver'
+# No systemd in this distro, so nothing creates XDG_RUNTIME_DIR - and /run is tmpfs, so it
+# vanishes on every reboot. Without it rootless podman dies with "creating events dirs:
+# permission denied". Recreate it first (idempotent) or every command below fails.
+wsl.exe -d $distro -u root -- install -d -o 1000 -g 1000 -m 700 /run/user/1000
 $exists = (wsl.exe -d $distro -- sh -c "podman container exists waha && echo yes || echo no")
 if ($exists -match 'yes') {
     wsl.exe -d $distro -- podman start waha | Out-Null
