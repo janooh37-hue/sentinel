@@ -30,7 +30,6 @@ vi.mock('react-i18next', () => ({
       const ar: Record<string, string> = {
         'books.search.bodyMatch': 'تطابق في نص الكتاب',
         'books.empty': 'لا توجد إدخالات',
-        'books.formKind.general': 'كتاب عام',
         'books.pane.papers': 'الأوراق',
       }
       return ar[k] ?? k

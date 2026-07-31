@@ -95,12 +95,17 @@ export function BooksPage(): React.JSX.Element {
     queryFn: () => api.getBookFacets(),
   })
 
-  // ── Data: one unfiltered fetch; both branches filter client-side ───────────
-  // The service scope is a desktop-only concept (mobile has no FormRail to set
-  // it) — gate on isDesktop too, not just railService, so a desktop→mobile
-  // resize with a service selected can't leave the mobile list silently
-  // filtered with no indicator that a filter is active.
-  const railScope = isDesktop ? railService : 'all'
+  // ── Data: one server-scoped fetch; both branches filter client-side ────────
+  // `railService` (the desktop rail's own selection) is a desktop-only concept
+  // — it must never leak into mobile, so a desktop→mobile resize with a rail
+  // service selected can't leave the mobile list silently filtered with no
+  // indicator that a filter is active. Mobile instead scopes on
+  // `filters.serviceId`, the operator's own visible choice in the mobile
+  // Service popover (its trigger shows the selected label), so the scoping is
+  // never silent. Without this, mobile filtered client-side over an unscoped
+  // 500-row window, undercounting services with more rows further back in the
+  // table (e.g. Leave Application Form: 276 true vs 230 visible).
+  const railScope = isDesktop ? railService : filters.serviceId
   const listQuery = useQuery({
     queryKey: ['books', 'all', railScope],
     queryFn: () =>
