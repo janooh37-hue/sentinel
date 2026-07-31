@@ -58,10 +58,17 @@ def test_missing_ref_line_inserted_above_date(tmp_path):
 
 
 def test_prose_date_untouched(tmp_path):
-    p = _finished_book(tmp_path)
+    """Only the labelled التاريخ line becomes a token — a date written inside
+    the body prose is boilerplate and must survive verbatim."""
+    p = tmp_path / "prose_date.docx"
+    doc = Document()
+    doc.add_paragraph("الرقم: 1/5/140")
+    doc.add_paragraph("التاريخ: 13/07/2026")
+    doc.add_paragraph("بالإشارة إلى تعميمنا الصادر بتاريخ 01/07/2026 نفيدكم بالآتي")
+    doc.save(str(p))
     retokenize_general_book(p)
     text = _rendered_text(p, tmp_path, ref="9/9/999", date="31-12-2099")
-    assert "بتاريخ 01/07/2026" in text  # date inside الموضوع prose survives
+    assert "بتاريخ 01/07/2026" in text
 
 
 def test_foreign_jinja_neutralized(tmp_path):
@@ -251,3 +258,63 @@ def test_validate_no_double_expand_cell_value(tmp_path):
     # Handled internally: validate injects a dummy cell value "{{ ref }}" and asserts
     # it renders literally. If double-expansion occurred, validate would raise.
     validate_book_template(_table_template(tmp_path, n_cols=1))
+
+
+# ---------------------------------------------------------------------------
+# Recipient / subject / CC must not freeze into the template
+# ---------------------------------------------------------------------------
+
+
+def _book_with_addressee(tmp_path: Path) -> Path:
+    """A finished book as the General Book paper renders it: the addressee,
+    subject and CC lines already carry the previous book's literal values."""
+    p = tmp_path / "addressee.docx"
+    doc = Document()
+    doc.add_paragraph("الرقم: 1/11/167")
+    doc.add_paragraph("التاريخ: 30-07-2026")
+    doc.add_paragraph("السيد \\ مدير العمليات الداخلية المحترم ")
+    doc.add_paragraph("الموضوع: أعمال الصيانة في اجهزة التفتيش")
+    doc.add_paragraph("نص الكتاب القديم هنا لأغراض الاختبار")
+    doc.add_paragraph("• نسخة إلى: مدير فرع الأمن والحراسة")
+    doc.save(str(p))
+    return p
+
+
+def test_addressee_subject_cc_become_tokens(tmp_path):
+    p = _book_with_addressee(tmp_path)
+    retokenize_general_book(p)
+    validate_book_template(p)  # must not raise
+
+    text = _rendered_text(
+        p,
+        tmp_path,
+        ref="9/9/999",
+        date="31-12-2099",
+        recipient_name="مدير الموارد البشرية",
+        subject="موضوع جديد",
+        cc="إدارة الأفراد",
+    )
+    # the new book's values land on the paper …
+    assert r"السيد \ مدير الموارد البشرية المحترم" in text
+    assert "الموضوع: موضوع جديد" in text
+    assert "نسخة إلى: إدارة الأفراد" in text
+    # … and the source book's values are gone
+    assert "مدير العمليات الداخلية" not in text
+    assert "أعمال الصيانة" not in text
+    assert "مدير فرع الأمن والحراسة" not in text
+
+
+def test_empty_subject_and_cc_hide_their_labels(tmp_path):
+    p = _book_with_addressee(tmp_path)
+    retokenize_general_book(p)
+    text = _rendered_text(p, tmp_path, ref="9/9/999", date="31-12-2099", subject="", cc="")
+    assert "الموضوع" not in text
+    assert "نسخة إلى" not in text
+
+
+def test_addressee_retokenize_idempotent(tmp_path):
+    p = _book_with_addressee(tmp_path)
+    retokenize_general_book(p)
+    t1 = docx_to_text(p)
+    retokenize_general_book(p)
+    assert docx_to_text(p) == t1

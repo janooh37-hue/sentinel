@@ -1,7 +1,9 @@
 """Turn a finished General Book docx into a library boilerplate template.
 
-Exactly three tokens are (re)injected -- ``{{ ref }}``, ``{{ date }}``,
-``{{ submitter_g }}`` -- and ALL pre-existing Jinja delimiters in the document
+The per-book fields are (re)injected as tokens -- ``{{ ref }}``, ``{{ date }}``,
+``{{ submitter_g }}``, ``{{ recipient_name }}``, ``{{ subject }}``, ``{{ cc }}``
+-- so a template is a reusable shell, not a snapshot frozen to the addressee and
+subject of the book it was saved from. ALL pre-existing Jinja delimiters in the document
 are neutralized (a zero-width space inside each delimiter) so operator-typed
 text can never execute server-side (SSTI defense; stored templates are
 untrusted). Validation test-renders under StrictUndefined + sandbox and
@@ -33,9 +35,21 @@ _WP_NS = "http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing
 
 _REF_LABEL = re.compile(r"^\s*الرقم\s*[:：]")  # noqa: RUF001 — full-width colon is a legitimate Arabic-text variant
 _DATE_LABEL = re.compile(r"^\s*التاريخ\s*[:：]")  # noqa: RUF001 — full-width colon is a legitimate Arabic-text variant
+_SUBJECT_LABEL = re.compile(r"^\s*الموضوع\s*[:：]")  # noqa: RUF001 — full-width colon is a legitimate Arabic-text variant
+# The paper's addressee line: «السيد \ {name} المحترم» (the separator is a
+# backslash on the current template, a slash on the older hand-typed books).
+_ADDRESSEE = re.compile(r"^\s*السيد\s*([\\/])")
 _G_NUMBER = re.compile(r"\bG[-\s]?\d{1,6}\b")
 
-_DUMMY = {"ref": "9/9/9999", "date": "31-12-2099", "submitter_g": "G-9999"}
+_DUMMY = {
+    "ref": "9/9/9999",
+    "date": "31-12-2099",
+    "submitter_g": "G-9999",
+    # Truthy so the {%p if %} guards render — asserted only via the body check.
+    "recipient_name": "DUMMY_RECIPIENT",
+    "subject": "DUMMY_SUBJECT",
+    "cc": "DUMMY_CC",
+}
 
 # w:t namespace for walking raw XML runs
 _W_NS = "http://schemas.openxmlformats.org/wordprocessingml/2006/main"
@@ -78,6 +92,29 @@ def _first_run_style(para: Paragraph) -> Any | None:
     return para.runs[0] if para.runs else None
 
 
+def _guard_body(para: Paragraph) -> str:
+    """Paragraph text with ZWSP and Jinja delimiters stripped — "p if ref" for a
+    (possibly neutralized) ``{%p if ref %}`` guard."""
+    return _JINJA_DELIM.sub("", (para.text or "").replace(_ZWSP, "")).strip()
+
+
+def _guard_para(para: Paragraph, directive: str, *, after: bool) -> None:
+    """Ensure a guard paragraph carrying *directive* sits immediately before
+    (or after) *para*. Reuses a guard that is already there — possibly with
+    ZWSP-broken delimiters from the neutralize pass — so a second retokenize
+    call doesn't accumulate duplicates."""
+    body = _JINJA_DELIM.sub("", directive).strip()
+    sibling = para._p.getnext() if after else para._p.getprevious()
+    if sibling is not None and _guard_body(Paragraph(sibling, para._parent)) == body:
+        guard = Paragraph(sibling, para._parent)
+    else:
+        clone = copy.deepcopy(para._p)
+        (para._p.addnext if after else para._p.addprevious)(clone)
+        guard = Paragraph(clone, para._parent)
+    _clear_runs(guard)
+    guard.add_run(directive)
+
+
 def _write_ref_block(anchor: Paragraph, *, replace: bool, style_src: Any | None = None) -> None:
     """Write {%p if ref %} / الرقم: {{ ref }} / {%p endif %} at *anchor*.
 
@@ -102,24 +139,7 @@ def _write_ref_block(anchor: Paragraph, *, replace: bool, style_src: Any | None 
         anchor._p.addprevious(new_p)
         label_para = Paragraph(new_p, anchor._parent)
 
-    # Reuse an existing (possibly ZWSP-neutralized) guard paragraph if present,
-    # so a second retokenize call doesn't accumulate duplicate guards.
-    prev_p = label_para._p.getprevious()
-    if (
-        prev_p is not None
-        and _JINJA_DELIM.sub(
-            "", Paragraph(prev_p, label_para._parent).text.replace(_ZWSP, "")
-        ).strip()
-        == "p if ref"
-    ):
-        p_if = Paragraph(prev_p, label_para._parent)
-        _clear_runs(p_if)
-    else:
-        guard_open = copy.deepcopy(label_para._p)
-        label_para._p.addprevious(guard_open)
-        p_if = Paragraph(guard_open, label_para._parent)
-        _clear_runs(p_if)
-    p_if.add_run("{%p if ref %}")
+    _guard_para(label_para, "{%p if ref %}", after=False)
 
     _clear_runs(label_para)
     styled(label_para.add_run("الرقم: "))
@@ -132,39 +152,21 @@ def _write_ref_block(anchor: Paragraph, *, replace: bool, style_src: Any | None 
     ref_run = styled(label_para.add_run("{{ ref }}"))
     ref_run.font.rtl = True
 
-    next_p = label_para._p.getnext()
-    if (
-        next_p is not None
-        and _JINJA_DELIM.sub(
-            "", Paragraph(next_p, label_para._parent).text.replace(_ZWSP, "")
-        ).strip()
-        == "p endif"
-    ):
-        p_endif = Paragraph(next_p, label_para._parent)
-        _clear_runs(p_endif)
-    else:
-        guard_close = copy.deepcopy(label_para._p)
-        label_para._p.addnext(guard_close)
-        p_endif = Paragraph(guard_close, label_para._parent)
-        _clear_runs(p_endif)
-    p_endif.add_run("{%p endif %}")
+    _guard_para(label_para, "{%p endif %}", after=True)
 
 
-def _retokenize_labeled_line(para: Paragraph, prefix: str, token: str) -> None:
+def _retokenize_labeled_line(para: Paragraph, *parts: str) -> None:
+    """Replace *para*'s runs with *parts*, all carrying the original first
+    run's font. Token runs inherit the paragraph's RTL context (same rationale
+    as the ref run — match the legacy books' natural bidi flow)."""
     src = _first_run_style(para)
     _clear_runs(para)
-
-    def styled(run: Any) -> Any:
+    for part in parts:
+        run = para.add_run(part)
         if src is not None:
             run.font.name = src.font.name
             run.font.size = src.font.size
             run.font.bold = src.font.bold
-        return run
-
-    styled(para.add_run(prefix))
-    # Token run inherits the paragraph's RTL context (same rationale as the
-    # ref run — match the legacy books' natural bidi flow).
-    styled(para.add_run(token))
 
 
 def _strip_header_artifacts(doc: Any) -> None:
@@ -242,6 +244,27 @@ def retokenize_general_book(docx_path: Path, *, submitter_g: str | None = None) 
     else:
         _write_ref_block(date_para, replace=False)
     _retokenize_labeled_line(date_para, "التاريخ: ", "{{ date }}")
+
+    # 3b. Addressee / subject / CC — the source book's literal values would
+    # otherwise be frozen into every book made from this template (the form's
+    # pickers had nothing to fill). Subject and CC keep the base paper's
+    # {%p if %} guard so an empty value hides the whole line, label and all.
+    addressee = next((p for p in doc.paragraphs if _ADDRESSEE.match(p.text)), None)
+    if addressee is not None:
+        sep = _ADDRESSEE.match(addressee.text).group(1)  # type: ignore[union-attr]
+        _retokenize_labeled_line(addressee, f"السيد {sep} ", "{{ recipient_name }}", " المحترم ")
+    subject_para = next((p for p in doc.paragraphs if _SUBJECT_LABEL.match(p.text)), None)
+    if subject_para is not None:
+        _guard_para(subject_para, "{%p if subject %}", after=False)
+        _retokenize_labeled_line(subject_para, "الموضوع: ", "{{ subject }}")
+        _guard_para(subject_para, "{%p endif %}", after=True)
+    # The CC line is post-processed into "• نسخة إلى: X" bullets, so match on
+    # the label alone rather than anchoring to the paragraph start.
+    cc_para = next((p for p in doc.paragraphs if "نسخة إلى" in (p.text or "")), None)
+    if cc_para is not None:
+        _guard_para(cc_para, "{%p if cc %}", after=False)
+        _retokenize_labeled_line(cc_para, "نسخة إلى: ", "{{ cc }}")
+        _guard_para(cc_para, "{%p endif %}", after=True)
 
     # 4. Footer G-number → token (both footers).
     _retokenize_footers(doc, submitter_g)

@@ -218,12 +218,14 @@ describe('TemplateForm template picker (Arabic, Task 11)', () => {
     expect(await screen.findByRole('combobox', { name: 'القالب' })).toBeInTheDocument()
   })
 
-  it('hides recipient/cc/manager fields when a template is selected', () => {
+  it('keeps the recipient picker when a template is selected', () => {
+    // Templates carry {{ recipient_name }} / {{ cc }} tokens, so these pickers
+    // must stay — hiding them left the addressee line blank on the paper.
     vi.mocked(api.listWordTemplates).mockResolvedValue([
       { name: 'الصيانة.docx', modified_at: '2026-07-19T00:00:00', kind: 'custom' },
     ])
     render(<HostWithRecipient bodyMode="word" templateName="الصيانة.docx" />)
-    expect(screen.queryByText(/المرسل إليه|recipient/i)).not.toBeInTheDocument()
+    expect(screen.getByText('المرسل إليه')).toBeInTheDocument()
   })
 })
 
