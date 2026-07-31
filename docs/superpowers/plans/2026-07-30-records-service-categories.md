@@ -26,7 +26,14 @@
 These numbers are load-bearing for the tests below.
 
 - 629 live (non-deleted) books; 325 versions total.
-- **No book has more than one distinct `template_id` across its versions** — so "the book's template" needs no newest-version subquery.
+- **No book currently has more than one distinct `template_id` across its
+  versions — but this is a data coincidence, not a guarantee.** `service_clause`
+  (Task 3) and `service_facets` (Task 4) both key off the book's NEWEST version
+  (highest `version_no`), matching exactly what `resolve_service` /
+  `BookRead.service_id` already consult. Do not read "no book has two today" as
+  license to substitute `func.max(template_id)` — that is the lexicographic max
+  across all versions, not the newest, and reintroduces an any-vs-newest
+  divergence the moment a book acquires two differently-templated versions.
 - 365 live books have **no version row at all** (v3 imports).
 - 1 version row has a NULL `template_id`, but **no live book's newest version is NULL** — the resolver must still handle "has a version, template unknown".
 - The 365 version-less books hold exactly 13 distinct subject heads; 10 are verbatim `TEMPLATE_FILES` keys, and these three are not:
@@ -976,25 +983,35 @@ def service_facets(db: Session) -> tuple[ServiceCount, list[ServiceCount]]:
     status spine display, and computing them from a page window is what made
     them disagree with the page's own total.
 
-    `func.max(template_id)` is safe as "the book's template": no book has more
-    than one distinct template_id across its versions (verified against live
-    data), and the version count distinguishes "no version" from "version with
-    a NULL template".
+    "The book's template" is its NEWEST version's template_id, defined exactly
+    as `service_clause` and `BookRead.service_id` define it — highest
+    `version_no`. Do NOT use `func.max(BookVersion.template_id)`: that is the
+    lexicographic max across all versions, which reintroduces the any-vs-newest
+    divergence Task 3 removed, and would let a multi-template book be counted
+    under a service it no longer belongs to. The separate version count
+    distinguishes "no version at all" from "has a version whose template is
+    NULL" — the two resolve differently.
 
-    # ponytail: one full scan of 4 narrow columns per page load — 629 rows
-    # today. If books pass ~50k, denormalise service_id onto `books`.
+    # ponytail: one full scan with two correlated subqueries per row — 629 rows
+    # today, and book_versions.book_id is indexed. If books pass ~50k,
+    # denormalise service_id onto `books`.
     """
-    stmt = (
-        select(
-            Book.subject,
-            Book.approval_state,
-            func.max(BookVersion.template_id),
-            func.count(BookVersion.id),
-        )
-        .outerjoin(BookVersion, BookVersion.book_id == Book.id)
-        .where(Book.deleted_at.is_(None))
-        .group_by(Book.id)
+    newest_template_id = (
+        select(BookVersion.template_id)
+        .where(BookVersion.book_id == Book.id)
+        .order_by(BookVersion.version_no.desc())
+        .limit(1)
+        .scalar_subquery()
     )
+    n_versions = (
+        select(func.count())
+        .select_from(BookVersion)
+        .where(BookVersion.book_id == Book.id)
+        .scalar_subquery()
+    )
+    stmt = select(
+        Book.subject, Book.approval_state, newest_template_id, n_versions
+    ).where(Book.deleted_at.is_(None))
 
     all_states: Counter[str] = Counter()
     per_service: dict[str, Counter[str]] = {}
@@ -1996,13 +2013,13 @@ git commit -m "feat(records): collapse the drafts card by default"
 - Consumes: everything above
 - Produces: a branch ready to review and merge
 
-- [ ] **Step 1: Delete the eight superseded keys**
+- [x] **Step 1: Delete the eight superseded keys**
 
 Under `books.formKind` in **both** `en.json` and `ar.json`, remove exactly:
 `leave`, `salary`, `duty`, `hr`, `passport`, `material`, `generalBook`,
 `report`. **Keep** `all` and `other` — both are still used.
 
-- [ ] **Step 2: Prove nothing references them**
+- [x] **Step 2: Prove nothing references them**
 
 ```bash
 grep -rn "formKind\.\(leave\|salary\|duty\|hr\|passport\|material\|generalBook\|report\)" frontend/src
@@ -2010,7 +2027,7 @@ grep -rn "formKind\.\(leave\|salary\|duty\|hr\|passport\|material\|generalBook\|
 
 Expected: no matches. Any hit means a consumer was missed in Task 6 or 7.
 
-- [ ] **Step 3: Check EN/AR key parity**
+- [x] **Step 3: Check EN/AR key parity**
 
 ```bash
 C:/Users/Admin/sentinel/venv/Scripts/python.exe -c "import json; a=json.load(open('frontend/src/locales/en.json',encoding='utf-8')); b=json.load(open('frontend/src/locales/ar.json',encoding='utf-8')); f=lambda d,p='': {k2 for k,v in d.items() for k2 in (f(v,p+k+'.') if isinstance(v,dict) else {p+k})}; x,y=f(a),f(b); print('EN only:',sorted(x-y)); print('AR only:',sorted(y-x))"
@@ -2019,7 +2036,7 @@ C:/Users/Admin/sentinel/venv/Scripts/python.exe -c "import json; a=json.load(ope
 Expected: both lists unchanged from the Task 0 baseline (run the same command
 before editing to capture it). New drift means a missing translation.
 
-- [ ] **Step 4: Run every gate**
+- [x] **Step 4: Run every gate**
 
 ```bash
 C:/Users/Admin/sentinel/venv/Scripts/python.exe -m pytest -q
@@ -2035,7 +2052,7 @@ Expected: all green, and the two suite counts at or above the Task 0 baseline.
 `build` writes into `backend/app/static/` — **do not commit that output**; it is
 built at deploy time.
 
-- [ ] **Step 5: Run the mandatory reviewer agents**
+- [x] **Step 5: Run the mandatory reviewer agents**
 
 Both are required by `CLAUDE.md` for this change:
 - `i18n-rtl-reviewer` — new labels, the mobile Service popover, the RTL chevron.
@@ -2045,12 +2062,12 @@ Both are required by `CLAUDE.md` for this change:
 
 Fix anything they raise, then re-run Step 4.
 
-- [ ] **Step 6: Verify against the live database one last time**
+- [x] **Step 6: Verify against the live database one last time**
 
 Re-run the Task 4 Step 5 command. The distribution must still be exactly the 17
 figures listed there, totalling 629.
 
-- [ ] **Step 7: Confirm the diff contains no churn**
+- [x] **Step 7: Confirm the diff contains no churn**
 
 ```bash
 git status --porcelain
@@ -2060,7 +2077,7 @@ git diff --stat main...HEAD
 Expected: no `backend/templates/*.docx`, no `backend/app/static/`, no
 `frontend/node_modules`. If templates churned, `git checkout -- backend/templates/`.
 
-- [ ] **Step 8: Commit the plan with its boxes ticked**
+- [x] **Step 8: Commit the plan with its boxes ticked**
 
 ```bash
 git add docs/superpowers/plans/2026-07-30-records-service-categories.md frontend/src/locales/en.json frontend/src/locales/ar.json
