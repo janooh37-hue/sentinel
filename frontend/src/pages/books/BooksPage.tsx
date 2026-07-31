@@ -14,7 +14,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useNavigate, useSearchParams } from 'react-router-dom'
-import { ArrowDownLeft, ArrowUpRight, BookOpen, Plus, Send, Trash2 } from 'lucide-react'
+import { ArrowDownLeft, ArrowUpRight, BookOpen, ChevronRight, Plus, Send, Trash2 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 
@@ -518,20 +518,24 @@ export function BooksPage(): React.JSX.Element {
                   {/* Drafts group card — dashed border, raised bg, above the list */}
                   {draftBooks.length > 0 && !showDrafts && (
                     <div className="shrink-0 border-b border-hairline bg-surface-raised px-3 py-2.5">
-                      <div className="rounded-xl border border-dashed border-warning/50 bg-warning-soft/30 p-3">
-                        <div className="mb-2 flex items-center justify-between gap-2">
-                          <span className="text-[0.75em] font-bold uppercase tracking-[0.07em] text-warning">
+                      <details className="group rounded-xl border border-dashed border-warning/50 bg-warning-soft/30 p-3">
+                        <summary className="flex cursor-pointer list-none items-center gap-2 [&::-webkit-details-marker]:hidden focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:rounded-sm">
+                          <span className="flex items-center gap-1.5 text-[0.75em] font-bold uppercase tracking-[0.07em] text-warning">
+                            <ChevronRight
+                              aria-hidden
+                              className="h-3.5 w-3.5 transition-transform group-open:rotate-90 rtl:-scale-x-100"
+                            />
                             {t('books.filters.drafts')} ({draftBooks.length})
                           </span>
+                        </summary>
+                        <div className="mt-2 flex flex-col gap-1.5">
                           <button
                             type="button"
                             onClick={() => setShowDrafts(true)}
-                            className="text-[0.72em] text-muted-foreground underline hover:text-foreground"
+                            className="self-end text-[0.72em] text-muted-foreground underline hover:text-foreground"
                           >
                             {t('books.filters.drafts')}
                           </button>
-                        </div>
-                        <div className="flex flex-col gap-1.5">
                           {draftBooks.slice(0, 3).map((draft) => (
                             <div
                               key={draft.id}
@@ -557,7 +561,7 @@ export function BooksPage(): React.JSX.Element {
                             </button>
                           )}
                         </div>
-                      </div>
+                      </details>
                     </div>
                   )}
                   {selectedForBasket.size > 0 && (
