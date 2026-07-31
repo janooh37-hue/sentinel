@@ -41,9 +41,14 @@ export function useServiceLabel(): (serviceId: string) => string {
   return useCallback(
     (serviceId: string): string => {
       if (serviceId === OTHER_SERVICE_ID) return t('books.formKind.other')
-      const tpl = data?.items.find((x) => x.id === serviceId)
+      // No templates yet (pending or errored `data`) means no name in ANY
+      // language — rendering the raw (English) id would leak into the AR UI.
+      if (!data) return t('books.record.loading')
+      const tpl = data.items.find((x) => x.id === serviceId)
       if (!tpl) return serviceId
-      return (isAr ? tpl.name_ar : tpl.name_en) || tpl.name_en || serviceId
+      // Never cross-fall to the other language's name: an empty name_ar must
+      // not resolve to the English name under an Arabic UI.
+      return (isAr ? tpl.name_ar : tpl.name_en) || serviceId
     },
     [data, isAr, t],
   )
