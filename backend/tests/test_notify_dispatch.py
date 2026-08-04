@@ -603,7 +603,8 @@ def test_send_leave_status_admin_leave_swaps_to_admin_leave(db_session, monkeypa
 
 def test_auto_send_for_book_leave_permit_renders_hours_and_local_time(db_session, monkeypatch):
     """Generating a Leave Permit Form sends the permit body: issue time is the
-    book's created_at converted UTC→Asia/Dubai, plus duration_hours."""
+    book's created_at verbatim (document_service already stamps it in local
+    wall-clock), plus duration_hours."""
     from app.db.models import Book, BookCategory, BookVersion
     from app.services import notify_dispatch as nd
     from app.services import openwa_client
@@ -631,7 +632,7 @@ def test_auto_send_for_book_leave_permit_renders_hours_and_local_time(db_session
         )
     )
     db_session.commit()
-    book.created_at = datetime(2026, 7, 16, 6, 30)  # 06:30 UTC → 10:30 Asia/Dubai
+    book.created_at = datetime(2026, 7, 16, 10, 30)  # local wall-clock, as stamped
     db_session.commit()
 
     monkeypatch.setattr(nd, "_autosend_enabled", lambda db: True)
@@ -645,6 +646,42 @@ def test_auto_send_for_book_leave_permit_renders_hours_and_local_time(db_session
     assert row.event_type == "leave_permit"
     assert "Your leave permit has been issued." in (row.body or "")
     assert "Valid from 10:30 AM on Thursday, 16/07/2026, for 3 hour(s)." in (row.body or "")
+
+
+def test_load_book_event_keeps_evening_created_at_on_the_same_day(db_session):
+    """A permit issued at 21:00 must render 9:00 PM *that* Thursday. The old
+    +4h conversion rolled it to 01:00 the next day — wrong hour, date AND
+    weekday."""
+    from app.db.models import Book, BookCategory, BookVersion
+    from app.services import notify_dispatch as nd
+    from app.services import notify_format as nf
+    from app.services import sms_templates as st
+
+    emp = Employee(id="GLPX", name_en="Evening Permit", name_ar="مساء", msg_language="en")
+    db_session.add(emp)
+    if db_session.get(BookCategory, "HR") is None:
+        db_session.add(BookCategory(id="HR", prefix="HR"))
+    db_session.flush()
+    book = Book(category_id="HR", ref_number="HR-7002", employee_id="GLPX")
+    db_session.add(book)
+    db_session.flush()
+    db_session.add(
+        BookVersion(
+            book_id=book.id,
+            version_no=1,
+            template_id="Leave Permit Form",
+            fields={"duration_hours": "2"},
+        )
+    )
+    db_session.commit()
+    book.created_at = datetime(2026, 7, 16, 21, 0)  # Thursday 9 PM, local
+    db_session.commit()
+
+    rec = nd._load_book_event(db_session, book.id)
+    assert rec is not None
+    assert rec.created_at == datetime(2026, 7, 16, 21, 0)
+    text = st.render_text(nf.EVENT_LEAVE_PERMIT, "en", rec, emp)
+    assert "Valid from 9:00 PM on Thursday, 16/07/2026, for 2 hour(s)." in text
 
 
 def test_auto_send_for_book_admin_leave_routes_via_leave_row(db_session, monkeypatch):

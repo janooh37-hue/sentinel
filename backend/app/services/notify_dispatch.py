@@ -74,13 +74,17 @@ def _load_book_event(db: Session, book_id: int) -> BookEvent | None:
     if employee is None:
         return None
     version = book.versions[-1]  # relationship ordered by version_no ascending
-    # created_at is stored naive-UTC; UAE is a fixed UTC+4 (no DST) year-round.
-    issued_local = book.created_at + timedelta(hours=4)
+    # Book.created_at is ALREADY local wall-clock on every book that reaches
+    # here: document_service stamps it with datetime.now() (naive local), not
+    # the naive-UTC the column default implies. Verified on live data — 383
+    # book rows sit +4h from their Document.created_at (naive UTC), 26 at +0
+    # (the book_service.create_book path, which raises none of these events).
+    # Converting again here pushed every permit 4h into the future.
     return BookEvent(
         employee=employee,
         fields=version.fields or {},
         today=date.today(),
-        created_at=issued_local,
+        created_at=book.created_at,
     )
 
 
