@@ -638,6 +638,38 @@ def _pp_material_request(doc: Any, ctx: dict[str, Any]) -> None:
         float_inline_images_in_cell(cell, bottom_align=True)
 
 
+# Passport Release List: table-0 row index of item slot 0, and the template's
+# slot capacity (mirrored by MAX_ROWS in EmployeesTableField.tsx).
+_ITEM_ROW_0 = 7
+_ITEM_SLOTS = 15
+
+
+def _pp_passport_release_list(doc: Any, ctx: dict[str, Any]) -> None:
+    """Drop the item rows nobody filled.
+
+    The template carries 15 fixed ``{{ item(n, ...) }}`` slots and the signature
+    block lives in the SAME table, below them. Rendered as-is, the unused slots
+    stay as blank bordered rows that shove the signature block onto page 2 — the
+    form was 2 pages even with a single employee. Deleting them bottom-up (so the
+    surviving indices don't shift) keeps the paper one page.
+
+    Rows ``_ITEM_ROW_0 + len(items)`` .. ``_ITEM_ROW_0 + 14`` go; a row is only
+    removed once confirmed empty, so a template edit that moves the block can't
+    silently eat data."""
+    items = ctx.get("items")
+    used = len(items) if isinstance(items, list) else 0
+    try:
+        rows = doc.tables[0].rows
+        stale = [rows[_ITEM_ROW_0 + slot] for slot in range(used, _ITEM_SLOTS)]
+    except IndexError:
+        log.warning("Passport Release List: item rows missing — row trim skipped")
+        return
+    for row in reversed(stale):
+        if any(cell.text.strip() for cell in row.cells):
+            continue
+        row._tr.getparent().remove(row._tr)
+
+
 def _pp_general_book_cc(doc: Any, ctx: dict[str, Any]) -> None:
     """Render each CC recipient as its own right-aligned, bulleted line, each
     prefixed with the "نسخة إلى:" label (not just the first recipient).
@@ -863,8 +895,12 @@ _FORM_REGISTRY: dict[str, dict[str, Any]] = {
     },
     "Warning Form": {"adapter": _adapt_common, "post_process": None},
     # Multi-employee passport list — rows come from fields["items"], rendered by
-    # the item() Jinja global; no per-employee binding (admin category).
-    "Passport Release List": {"adapter": _adapt_common, "post_process": None},
+    # the item() Jinja global; no per-employee binding (admin category). The
+    # post-process trims the unfilled slots so the paper stays one page.
+    "Passport Release List": {
+        "adapter": _adapt_common,
+        "post_process": _pp_passport_release_list,
+    },
     # Report: no-classification, no-ref General Book paper; reuses same adapter
     # and post-process as General Book (body + footer pipeline).
     "Report": {"adapter": _adapt_general_book, "post_process": _pp_general_book},
