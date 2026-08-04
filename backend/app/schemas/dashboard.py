@@ -12,6 +12,8 @@ from datetime import date, datetime
 
 from pydantic import BaseModel
 
+from app.schemas._base import ORMBase
+
 
 class DashboardTotals(BaseModel):
     employees_active: int
@@ -37,7 +39,7 @@ class DashboardUpcomingLeaveItem(DashboardLeaveItem):
     days_remaining: int
 
 
-class DashboardRecentDocument(BaseModel):
+class DashboardRecentDocument(ORMBase):
     id: int
     # Nullable: admin-category docs (e.g. General Book) have no employee.
     employee_id: str | None
@@ -49,7 +51,7 @@ class DashboardRecentDocument(BaseModel):
     created_at: datetime
 
 
-class DashboardRecentLedger(BaseModel):
+class DashboardRecentLedger(ORMBase):
     id: int
     entry_date: date
     direction: str
@@ -62,7 +64,7 @@ class DashboardRecentLedger(BaseModel):
     created_at: datetime
 
 
-class DashboardSyncStatus(BaseModel):
+class DashboardSyncStatus(ORMBase):
     """Email-sync widget payload (Phase 18).
 
     ``enabled`` requires both: an EmailAccount row exists AND its

@@ -4,7 +4,9 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
+
+from app.schemas._base import ORMBase
 
 
 class EmployeeCandidate(BaseModel):
@@ -14,7 +16,7 @@ class EmployeeCandidate(BaseModel):
     score: float
 
 
-class ScanInboxItem(BaseModel):
+class ScanInboxItem(ORMBase):
     id: int
     created_at: datetime
     source: str
@@ -34,8 +36,8 @@ class ScanInboxItem(BaseModel):
     email_sender: str | None = None
     email_subject: str | None = None
     error_detail: str | None = None
-    fields: dict[str, str] = {}
-    candidates: list[EmployeeCandidate] = []
+    fields: dict[str, str] = Field(default_factory=dict)
+    candidates: list[EmployeeCandidate] = Field(default_factory=list)
 
 
 class ScanInboxList(BaseModel):

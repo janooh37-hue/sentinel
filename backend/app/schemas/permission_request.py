@@ -4,6 +4,8 @@ from datetime import datetime
 
 from pydantic import BaseModel
 
+from app.schemas._base import ORMBase
+
 
 class CreateRequestIn(BaseModel):
     capability: str
@@ -15,7 +17,7 @@ class DecideIn(BaseModel):
     note: str | None = None
 
 
-class PermissionRequestRead(BaseModel):
+class PermissionRequestRead(ORMBase):
     id: int
     user_id: int
     requester_name: str

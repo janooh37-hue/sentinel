@@ -12,6 +12,8 @@ from __future__ import annotations
 
 from datetime import datetime
 
+from pydantic import BaseModel
+
 from app.schemas.book import BookRead, BookVersionRead
 from app.schemas.notify import NotifyMessageRead
 
@@ -36,7 +38,7 @@ def _notify(**kw: object) -> NotifyMessageRead:
         phone="+971589911905",
     )
     base.update(kw)
-    return NotifyMessageRead(**base)  # type: ignore[arg-type]
+    return NotifyMessageRead(**base)
 
 
 def _book(**kw: object) -> BookRead:
@@ -53,7 +55,7 @@ def _book(**kw: object) -> BookRead:
         approval_state="none",
     )
     base.update(kw)
-    return BookRead(**base)  # type: ignore[arg-type]
+    return BookRead(**base)
 
 
 def test_naive_utc_timestamp_serializes_with_a_utc_offset() -> None:
@@ -98,6 +100,47 @@ def test_book_created_at_keeps_its_local_calendar_date() -> None:
     day; the +04:00 tag keeps the slice on the local date."""
     early = _book(created_at=datetime(2026, 8, 4, 1, 30))
     assert early.model_dump_json().split('"created_at":"')[1][:10] == "2026-08-04"
+
+
+def test_every_schema_with_a_timestamp_inherits_the_tagging() -> None:
+    """Guard against the gap that shipped first: 18 Read schemas carried
+    timestamps but declared their own BaseModel, so /system/update-check still
+    served a bare "2026-08-04T10:07:24" after the ORMBase fix. Request models
+    are exempt — tagging inbound values would change service comparisons."""
+    import importlib
+    import pkgutil
+    import typing
+
+    import app.schemas as pkg
+    from app.schemas._base import ORMBase
+
+    for m in pkgutil.iter_modules(pkg.__path__):
+        importlib.import_module(f"app.schemas.{m.name}")
+
+    def is_datetime(ann: object) -> bool:
+        """True for datetime, incl. inside `| None` / unions. NOT plain `date`,
+        which carries no timezone and needs no tag."""
+        if ann is datetime:
+            return True
+        return any(is_datetime(a) for a in typing.get_args(ann))
+
+    exempt = {"SetPermissionRequest", "CrashReportPayload", "PermitVisitCreate"}
+    gaps: list[str] = []
+    stack = [BaseModel]
+    seen: set[type[BaseModel]] = set()
+    while stack:
+        for sub in stack.pop().__subclasses__():
+            if sub in seen:
+                continue
+            seen.add(sub)
+            stack.append(sub)
+            if not sub.__module__.startswith("app.schemas"):
+                continue
+            if sub.__name__ in exempt or issubclass(sub, ORMBase):
+                continue
+            if any(is_datetime(f.annotation) for f in sub.model_fields.values()):
+                gaps.append(f"{sub.__module__}.{sub.__name__}")
+    assert not gaps, f"schemas with timestamps not inheriting ORMBase: {sorted(gaps)}"
 
 
 def test_openapi_response_schema_keeps_field_types() -> None:

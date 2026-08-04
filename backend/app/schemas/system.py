@@ -6,6 +6,8 @@ from datetime import datetime
 
 from pydantic import BaseModel
 
+from app.schemas._base import ORMBase
+
 
 class SystemInfo(BaseModel):
     version: str
@@ -17,7 +19,7 @@ class SystemInfo(BaseModel):
     uptime_seconds: int
 
 
-class UpdateCheckResult(BaseModel):
+class UpdateCheckResult(ORMBase):
     current: str
     latest: str | None
     update_available: bool

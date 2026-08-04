@@ -6,8 +6,10 @@ from datetime import datetime
 
 from pydantic import BaseModel
 
+from app.schemas._base import ORMBase
 
-class MigrationStatus(BaseModel):
+
+class MigrationStatus(ORMBase):
     has_db: bool
     has_data: bool
     v3_data_dir_detected: str | None

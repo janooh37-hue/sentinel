@@ -162,7 +162,7 @@ class ImportedDocRead(BaseModel):
     format: str  # lowercase extension without dot, e.g. "pdf" | "docx"
 
 
-class BookEditSessionRead(BaseModel):
+class BookEditSessionRead(ORMBase):
     """Active Word-editing session on a Book — only present when state='active'."""
 
     user_id: int
@@ -213,7 +213,7 @@ class WordTemplateTableRead(BaseModel):
     columns: list[str]
 
 
-class WordTemplateRead(BaseModel):
+class WordTemplateRead(ORMBase):
     name: str
     modified_at: datetime
     kind: Literal["base", "custom"] = "custom"

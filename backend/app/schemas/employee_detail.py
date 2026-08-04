@@ -65,7 +65,7 @@ class RecentLedgerRead(ORMBase):
     created_at: datetime
 
 
-class ActivityItemRead(BaseModel):
+class ActivityItemRead(ORMBase):
     when: datetime
     kind: Literal["document", "leave", "violation", "ledger"]
     summary: str

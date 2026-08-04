@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Literal
+from typing import ClassVar, Literal
 
 from pydantic import BaseModel, Field
 
@@ -32,7 +32,7 @@ class VaultFileRead(ORMBase):
     created_at: datetime
 
 
-class VaultEntry(BaseModel):
+class VaultEntry(ORMBase):
     """Represents one file inside a vault folder.
 
     Built directly from filesystem listings since v3 didn't index files in
@@ -44,6 +44,10 @@ class VaultEntry(BaseModel):
     kind: VaultKind
     size_bytes: int
     modified: datetime
+
+    # vault_service builds this with datetime.fromtimestamp(st_mtime) and no
+    # tz — that is LOCAL wall-clock, unlike every DB-backed timestamp here.
+    LOCAL_WALLCLOCK_FIELDS: ClassVar[frozenset[str]] = frozenset({"modified"})
     is_pdf: bool
 
 

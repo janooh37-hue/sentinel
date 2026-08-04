@@ -11,6 +11,8 @@ from datetime import datetime
 
 from pydantic import BaseModel, Field
 
+from app.schemas._base import ORMBase
+
 
 class RegisterRequest(BaseModel):
     """Request-access (or bootstrap-admin) payload."""
@@ -61,7 +63,7 @@ class RegisterResult(BaseModel):
     user: SessionUser | None = None
 
 
-class AdminUserRead(BaseModel):
+class AdminUserRead(ORMBase):
     id: int
     email: str
     employee_id: str | None = None
@@ -109,7 +111,7 @@ class RejectRequest(BaseModel):
     reason: str | None = Field(default=None, max_length=512)
 
 
-class AuditEntryRead(BaseModel):
+class AuditEntryRead(ORMBase):
     """One user-management event, projected for the History tab."""
 
     id: int

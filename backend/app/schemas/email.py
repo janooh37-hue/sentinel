@@ -62,14 +62,14 @@ class EmailAccountUpsert(BaseModel):
         return self
 
 
-class EmailSyncResult(BaseModel):
+class EmailSyncResult(ORMBase):
     imported: int
     skipped_duplicate: int
     errors: list[str] = Field(default_factory=list)
     last_synced_at: datetime
 
 
-class EmailSyncStatus(BaseModel):
+class EmailSyncStatus(ORMBase):
     """Live sync state for the Ledger status strip.
 
     ``syncing`` reflects the module sync lock — true during BOTH a manual
