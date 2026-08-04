@@ -360,25 +360,40 @@ def _leave_permit(rec: Any, emp: Employee, lang: str) -> str:
     """Same-day exit permit (تصريح خروج). Book-backed: the start is the record's
     creation time (``created_at``, already local) and the length is the form's
     ``duration_hours``. No end time is stated — the employee knows their own
-    duty hours and works out when it ends (spec 2026-07-16)."""
+    duty hours and works out when it ends (spec 2026-07-16).
+
+    ``duration_hours`` is free text and operators overwhelmingly type a *period*
+    into it rather than a count — "من الساعة 7:15 صباحاً إلى الساعة الثالثة
+    مساءاً", 17 of 18 live permits on 2026-08-04. Forced through the
+    "ولمدة {n} ساعة" phrasing that produced two contradictory clock times in one
+    sentence plus a dangling "ساعة". So the wording branches on the value: a
+    number keeps the locked count phrasing; anything else is the operator's own
+    period statement on its own labelled line, with the issue *time* dropped so
+    only one time expression survives."""
     name = nf.employee_name(emp, lang)
     issued = rec.created_at
     d, wd = nf.fmt_date(issued.date()), nf.weekday(issued.date(), lang)
     t = nf.fmt_time(issued, lang)
     hours = str((rec.fields or {}).get("duration_hours", "") or "").strip()
+    # str.isdigit() is true for Arabic-Indic digits too, so "٢" counts as a number.
+    numeric = bool(hours) and hours.replace(".", "", 1).isdigit()
     if lang == "ar":
-        return (
-            f"عزيزي {name}،\n"
-            f"تم إصدار تصريح خروجك.\n"
-            f"اعتباراً من الساعة {t} يوم {wd} {d}، ولمدة {hours} ساعة.\n"
-            f"{_SIGNATURE_AR}"
-        )
-    return (
-        f"Dear {name},\n"
-        f"Your leave permit has been issued.\n"
-        f"Valid from {t} on {wd}, {d}, for {hours} hour(s).\n"
-        f"{_SIGNATURE_EN}"
-    )
+        issued_line = "تم إصدار تصريح خروجك."
+        if numeric:
+            body = f"{issued_line}\nاعتباراً من الساعة {t} يوم {wd} {d}، ولمدة {hours} ساعة."
+        elif hours:
+            body = f"تم إصدار تصريح خروجك بتاريخ {wd} {d}.\nالمدة: {hours}."
+        else:
+            body = f"{issued_line}\nاعتباراً من الساعة {t} يوم {wd} {d}."
+        return f"عزيزي {name}،\n{body}\n{_SIGNATURE_AR}"
+    issued_line = "Your leave permit has been issued."
+    if numeric:
+        body = f"{issued_line}\nValid from {t} on {wd}, {d}, for {hours} hour(s)."
+    elif hours:
+        body = f"Your leave permit has been issued on {wd}, {d}.\nDuration: {hours}."
+    else:
+        body = f"{issued_line}\nValid from {t} on {wd}, {d}."
+    return f"Dear {name},\n{body}\n{_SIGNATURE_EN}"
 
 
 def _admin_leave(leave: Any, emp: Employee, lang: str) -> str:

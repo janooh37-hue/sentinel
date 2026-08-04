@@ -563,6 +563,66 @@ def test_leave_permit_afternoon_uses_pm_marker():
     assert "الساعة 2:05 مساءً" in ar
 
 
+# 17 of 18 live permits (2026-08-04) hold a typed period here, not a count.
+_TYPED_PERIOD = "من الساعة 7:15 صباحاً إلى الساعة الثالثة مساءاً"
+
+
+def test_leave_permit_typed_period_replaces_the_hour_count_ar():
+    """A free-text duration used to render as
+    'اعتباراً من الساعة 10:30 صباحاً ...، ولمدة من الساعة 7:15 صباحاً ... ساعة.'
+    — two clock times in one sentence and a dangling 'ساعة'."""
+    rec = _permit(fields={"duration_hours": _TYPED_PERIOD})
+    text = st.render_text(nf.EVENT_LEAVE_PERMIT, "ar", rec, _emp())
+    assert text == (
+        "عزيزي جون سميث،\n"
+        "تم إصدار تصريح خروجك بتاريخ الخميس 16/07/2026.\n"
+        f"المدة: {_TYPED_PERIOD}.\n"
+        "إدارة مركز الإصلاح والتأهيل بالوثبة"
+    )
+    assert "ولمدة" not in text  # no count phrasing
+    assert "10:30" not in text  # the issue time is gone, so only ONE time remains
+    assert not _has_ascii_letter(text)
+
+
+def test_leave_permit_typed_period_replaces_the_hour_count_en():
+    rec = _permit(fields={"duration_hours": "8:30 to end of shift"})
+    text = st.render_text(nf.EVENT_LEAVE_PERMIT, "en", rec, _emp(msg_language="en"))
+    assert text == (
+        "Dear John Smith,\n"
+        "Your leave permit has been issued on Thursday, 16/07/2026.\n"
+        "Duration: 8:30 to end of shift.\n"
+        "Al Wathba Rehabilitation Centre"
+    )
+    assert "hour(s)" not in text
+
+
+def test_leave_permit_arabic_indic_digits_count_as_a_number():
+    """'٢' is a duration count, not a typed period — str.isdigit() covers it."""
+    rec = _permit(fields={"duration_hours": "٢"})
+    ar = st.render_text(nf.EVENT_LEAVE_PERMIT, "ar", rec, _emp())
+    assert "اعتباراً من الساعة 10:30 صباحاً يوم الخميس 16/07/2026، ولمدة ٢ ساعة." in ar
+
+
+def test_leave_permit_decimal_hours_still_count_as_a_number():
+    rec = _permit(fields={"duration_hours": "2.5"})
+    en = st.render_text(nf.EVENT_LEAVE_PERMIT, "en", rec, _emp(msg_language="en"))
+    assert "for 2.5 hour(s)." in en
+
+
+def test_leave_permit_missing_duration_drops_the_clause_entirely():
+    """Was 'ولمدة  ساعة.' — a blank count with a dangling unit."""
+    rec = _permit(fields={})
+    ar = st.render_text(nf.EVENT_LEAVE_PERMIT, "ar", rec, _emp())
+    assert ar == (
+        "عزيزي جون سميث،\n"
+        "تم إصدار تصريح خروجك.\n"
+        "اعتباراً من الساعة 10:30 صباحاً يوم الخميس 16/07/2026.\n"
+        "إدارة مركز الإصلاح والتأهيل بالوثبة"
+    )
+    en = st.render_text(nf.EVENT_LEAVE_PERMIT, "en", rec, _emp(msg_language="en"))
+    assert en.count("\n") == 3 and "hour(s)" not in en and "Valid from 10:30 AM" in en
+
+
 # ── Administrative Leave (إجازة إدارية) — Leave-backed, period + days ──────────
 
 
