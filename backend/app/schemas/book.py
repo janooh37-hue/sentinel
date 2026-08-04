@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Literal
+from typing import ClassVar, Literal
 
 from pydantic import BaseModel, Field, computed_field
 
@@ -117,6 +117,9 @@ class BookVersionRead(ORMBase):
     # "in_app" for sign_book-rendered artifacts, None while unsigned.
     signed_source: Literal["in_app", "scan"] | None = None
     approval_steps: list[BookApprovalStepRead] = Field(default_factory=list)
+
+    # document_service stamps this with datetime.now() — local, not UTC.
+    LOCAL_WALLCLOCK_FIELDS: ClassVar[frozenset[str]] = frozenset({"created_at"})
 
 
 class BookAnnotationCreate(BaseModel):
@@ -278,6 +281,11 @@ class BookRead(ORMBase):
     approval_steps: list[BookApprovalStepRead] = Field(default_factory=list)
     attachment_paths: list[str] = Field(default_factory=list)
     versions: list[BookVersionRead] = Field(default_factory=list)
+
+    # document_service stamps Book.created_at with datetime.now() — local, not
+    # UTC. ``deleted_at`` / ``voided_at`` on this model ARE naive UTC and are
+    # deliberately absent here so they get tagged UTC.
+    LOCAL_WALLCLOCK_FIELDS: ClassVar[frozenset[str]] = frozenset({"created_at"})
 
     @computed_field  # type: ignore[prop-decorator]
     @property

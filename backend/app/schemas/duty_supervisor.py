@@ -2,7 +2,9 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, Field
+
+from app.schemas._base import ORMBase
 
 
 class DutySupervisorCreate(BaseModel):
@@ -10,9 +12,7 @@ class DutySupervisorCreate(BaseModel):
     recipient_duty_post: str = Field(min_length=1, max_length=128)
 
 
-class DutySupervisorRead(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
-
+class DutySupervisorRead(ORMBase):
     id: int
     duty_unit: str
     recipient_duty_post: str

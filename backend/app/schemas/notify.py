@@ -2,7 +2,9 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel
+
+from app.schemas._base import ORMBase
 
 
 class NotifySendRequest(BaseModel):
@@ -19,8 +21,7 @@ class NotifySendResponse(BaseModel):
     error: str | None = None
 
 
-class NotifyStatusItem(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
+class NotifyStatusItem(ORMBase):
     id: int
     event_type: str
     event_ref: str

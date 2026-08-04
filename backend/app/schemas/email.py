@@ -5,13 +5,13 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Self
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, Field, model_validator
+
+from app.schemas._base import ORMBase
 
 
-class EmailAccountRead(BaseModel):
+class EmailAccountRead(ORMBase):
     """Public view — never includes the password."""
-
-    model_config = ConfigDict(from_attributes=True)
 
     id: int
     email: str
