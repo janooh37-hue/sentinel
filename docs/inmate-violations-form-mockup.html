@@ -1,0 +1,583 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>تقرير المخالفات المسلكية — نموذج الإدخال والمعاينة · Inmate Conduct Violations mockup</title>
+<style>
+  :root{
+    --bg:#eef1f5; --card:#fff; --ink:#1a2230; --muted:#667085; --line:#e2e6ec;
+    --accent:#4f46e5; --accent-soft:#eef0ff; --ok:#067647; --ok-soft:#eafaf0;
+    --warn:#b54708; --warn-soft:#fff5e9; --err:#b42318; --err-soft:#fef3f2;
+    --navy:#0f2f6b; --red:#c1121f;
+    --hdrblue:#B4C6E7; --lblblue:#DEEAF6; --band:#C00000;
+    --radius:14px; --shadow:0 1px 2px rgba(16,24,40,.06),0 8px 24px rgba(16,24,40,.06);
+    --ar:"Segoe UI","Noto Naskh Arabic",Tahoma,"Geeza Pro",system-ui,sans-serif;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--ar);line-height:1.55;
+    -webkit-font-smoothing:antialiased}
+  .bar{position:sticky;top:0;z-index:30;display:flex;align-items:center;gap:14px;
+    padding:12px 22px;background:rgba(255,255,255,.92);backdrop-filter:blur(8px);
+    border-bottom:1px solid var(--line);flex-wrap:wrap}
+  .bar h1{font-size:16px;margin:0;font-weight:700;letter-spacing:-.2px}
+  .bar .sub{font-size:12px;color:var(--muted);font-weight:500}
+  .bar .spacer{margin-inline-start:auto}
+  .pill{font-size:11.5px;font-weight:700;padding:3px 10px;border-radius:999px;
+    background:var(--accent-soft);color:var(--accent)}
+  .pill.ok{background:var(--ok-soft);color:var(--ok)}
+  main{max-width:1420px;margin:22px auto;padding:0 22px 60px;
+    display:grid;grid-template-columns:minmax(0,.95fr) minmax(0,1.05fr);gap:24px;align-items:start}
+  @media(max-width:1080px){main{grid-template-columns:1fr}}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);
+    box-shadow:var(--shadow);margin-bottom:22px}
+  .card .hd{padding:15px 18px 0;display:flex;align-items:baseline;gap:10px}
+  .card .hd h2{font-size:14px;margin:0;font-weight:700}
+  .card .hd .tag{font-size:11px;color:var(--muted);font-weight:600;margin-inline-start:auto;
+    font-family:ui-monospace,Menlo,Consolas,monospace}
+  .card .bd{padding:15px 18px 18px}
+  .sec{font-size:12px;font-weight:800;color:#344054;margin:18px 0 9px;padding-inline-start:9px;
+    border-inline-start:3px solid var(--accent);letter-spacing:-.1px}
+  .sec:first-child{margin-top:0}
+  label.field{display:block;margin-bottom:13px}
+  .lab{font-size:12.5px;font-weight:600;color:#344054;margin-bottom:6px;display:flex;gap:8px;align-items:center}
+  .req{color:var(--warn);font-size:11px}
+  .auto{font-size:10.5px;font-weight:700;color:var(--accent);background:var(--accent-soft);
+    border-radius:5px;padding:1px 6px}
+  input[type=text],input[type=date],input[type=time],select,textarea{width:100%;font:inherit;font-size:13.5px;
+    padding:9px 11px;border:1px solid #cfd6df;border-radius:9px;background:#fdfdfe;color:var(--ink)}
+  input:focus,select:focus,textarea:focus{outline:2px solid var(--accent-soft);border-color:var(--accent)}
+  input:disabled{background:#f2f4f7;color:#667085}
+  .row3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px}
+  .row2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  .hint{font-size:11.5px;color:var(--muted);margin-top:5px}
+  .callout{font-size:11.8px;color:var(--muted);background:#f7f9fc;border:1px solid var(--line);
+    border-radius:10px;padding:9px 11px;margin-bottom:14px;line-height:1.55}
+  .callout b{color:#344054}
+  .callout.warn{background:var(--warn-soft);border-color:#fde3c4;color:#7a4b12}
+  .callout.warn b{color:#7a4b12}
+  .acctnote{font-size:11.8px;color:var(--muted);background:#eef2ff;border:1px solid #dbe4ff;
+    border-radius:9px;padding:8px 11px;margin-top:9px;line-height:1.5}
+  .acctnote b{color:var(--navy);font-family:ui-monospace,Menlo,Consolas,monospace}
+  /* grid field (TableGridField look) */
+  .grid{border:1px solid var(--line);border-radius:10px;overflow:hidden;background:#fbfcfe}
+  table.g{width:100%;border-collapse:collapse;font-size:12.5px}
+  table.g th{background:#f2f5f9;font-size:11px;font-weight:700;color:#475467;padding:8px 6px;
+    text-align:start;border-bottom:1px solid var(--line)}
+  table.g td{padding:4px 5px;border-top:1px solid var(--line)}
+  table.g input,table.g select{padding:6px 8px;font-size:12.5px;border-radius:7px}
+  table.g td.n{text-align:center;color:var(--muted);font-weight:700;width:34px}
+  .del{border:none;background:transparent;color:#b42318;cursor:pointer;font-size:15px;padding:0 6px;line-height:1}
+  .gfoot{display:flex;gap:9px;padding:8px;border-top:1px solid var(--line);background:#f7f9fc}
+  .btn{font:inherit;font-size:13px;font-weight:700;border-radius:9px;padding:9px 16px;cursor:pointer;
+    border:1px solid #cfd6df;background:#fff;color:#344054;display:inline-flex;gap:7px;align-items:center}
+  .btn.sm{font-size:12px;padding:6px 11px}
+  .btn.pri{background:var(--accent);border-color:var(--accent);color:#fff}
+  .btn.pri:hover{background:#4338ca}
+  /* rich editor mock */
+  .rt-toolbar{display:flex;gap:4px;flex-wrap:wrap;border:1px solid #cfd6df;border-bottom:none;
+    border-radius:9px 9px 0 0;padding:6px 8px;background:#f6f8fb}
+  .rt-toolbar button{font:inherit;font-size:13px;min-width:30px;height:28px;border:1px solid transparent;
+    border-radius:6px;background:transparent;cursor:pointer;color:#344054}
+  .rt-toolbar button:hover{background:#e6ebf2}
+  .rt-body{min-height:120px;border:1px solid #cfd6df;border-radius:0 0 9px 9px;padding:11px 12px;
+    font-size:13.5px;background:#fff;outline:none;line-height:1.75}
+  .rt-body:focus{border-color:var(--accent);outline:2px solid var(--accent-soft)}
+  .checkline{display:flex;align-items:flex-start;gap:9px;margin:7px 0;font-size:13px;color:#344054}
+  .checkline input{width:16px;height:16px;accent-color:var(--accent);margin-top:3px;flex:none}
+  .checkline.disabled{color:var(--muted);opacity:.7}
+  /* employee combobox */
+  .combo{position:relative}
+  .combo ul{position:absolute;z-index:20;inset-inline:0;top:100%;margin:4px 0 0;padding:4px;list-style:none;
+    background:#fff;border:1px solid #cfd6df;border-radius:10px;box-shadow:0 8px 24px rgba(16,24,40,.14);
+    max-height:210px;overflow:auto}
+  .combo li{display:flex;align-items:center;gap:9px;padding:7px 9px;border-radius:7px;cursor:pointer;font-size:13px}
+  .combo li:hover,.combo li[aria-selected=true]{background:var(--accent-soft)}
+  .combo li .g{margin-inline-start:auto;font-size:11.5px;font-weight:700;color:var(--accent);
+    font-family:ui-monospace,Menlo,Consolas,monospace;direction:ltr}
+  .combo li .dg{font-size:11.5px;color:var(--muted)}
+  .combo li.empty{color:var(--muted);cursor:default;justify-content:center}
+  .combo li.empty:hover{background:transparent}
+  .combo mark{background:#fde68a;color:inherit;border-radius:3px;padding:0 1px}
+  .who{display:flex;gap:10px;align-items:center;font-size:12.5px;background:#f7f9fc;border:1px solid var(--line);
+    border-radius:9px;padding:9px 11px}
+  .who .nm{font-weight:700}
+  .who .dg{color:var(--muted)}
+  .who .sig{margin-inline-start:auto;font-size:11px;font-weight:700;padding:2px 8px;border-radius:6px}
+  .sig.has{background:var(--ok-soft);color:var(--ok)}
+  .sig.no{background:var(--warn-soft);color:var(--warn)}
+  .actions{display:flex;gap:10px;margin-top:16px;padding-top:14px;border-top:1px dashed var(--line);flex-wrap:wrap}
+  /* ---- A4 preview ---- */
+  .previewWrap{padding:16px;background:#dfe4ea;border-radius:0 0 var(--radius) var(--radius);
+    max-height:86vh;overflow:auto}
+  .a4{background:#fff;width:100%;max-width:700px;margin:0 auto;box-shadow:0 6px 24px rgba(16,24,40,.16);
+    border-radius:2px;min-height:840px;display:flex;flex-direction:column;font-size:12px;color:#111;
+    padding:14px 16px 0}
+  .lh{display:flex;align-items:center;gap:12px;padding:2px 4px 10px}
+  .lh .logos{display:flex;gap:8px}
+  .lh .globe,.lh .emirate{width:38px;height:38px;border-radius:50%;display:flex;align-items:center;
+    justify-content:center;font-size:8px;font-weight:800;text-align:center;line-height:1.05;color:#fff}
+  .lh .globe{background:radial-gradient(circle at 40% 35%,#2f6fb0,#0f2f6b);border:2px solid #b8912f}
+  .lh .emirate{background:linear-gradient(#0a7d3c,#0a7d3c 55%,#c1121f 55%);font-size:7px}
+  .lh .org{margin-inline-start:auto;text-align:end}
+  .lh .org .ar{font-size:14px;font-weight:800;color:var(--navy)}
+  .lh .org .en{font-size:9px;font-weight:800;color:var(--red);letter-spacing:.3px}
+  .title{background:var(--band);color:#fff;text-align:center;font-weight:800;font-size:15px;padding:6px;
+    border:1px solid #8f0000}
+  table.doc{width:100%;border-collapse:collapse;font-size:11.5px;table-layout:fixed}
+  table.doc td{border:1px solid #7f7f7f;padding:4px 6px;vertical-align:middle;word-wrap:break-word}
+  /* narrow label cells (التاريخ/اليوم/الوقت/الرقم) — tight padding so they don't wrap */
+  td.hb{background:var(--hdrblue);font-weight:700;text-align:center;font-size:11px;padding:4px 3px}
+  td.lb{background:var(--lblblue);font-weight:700;text-align:center;font-size:11px;padding:4px 3px}
+  td.band{background:var(--band);color:#fff;font-weight:800;text-align:center;padding:5px}
+  td.cell{text-align:center}
+  td.body{height:110px;vertical-align:top;text-align:center;line-height:1.9;padding:8px 10px}
+  td.acts{height:80px;vertical-align:middle;padding:6px 12px}
+  td.acts ul{margin:0;padding-inline-start:18px;line-height:2}
+  td.spacer{height:14px;border-inline:1px solid #7f7f7f;border-block:none}
+  .mgr{margin-top:14px;line-height:2.1;font-size:12.5px}
+  .mgr .c{text-align:center}
+  .sigimg{display:inline-block;min-width:150px;border-bottom:1px solid #333;height:34px;
+    vertical-align:bottom;position:relative}
+  .sigimg.signed::after{content:"ناصر الساعدي";position:absolute;inset:0;bottom:3px;
+    font-family:"Segoe Script","Bradley Hand",cursive;font-size:18px;color:#12386e;
+    transform:rotate(-4deg);display:flex;align-items:flex-end;justify-content:center;padding-bottom:2px}
+  .sigimg.pending::after{content:"بانتظار التوقيع";position:absolute;inset:0;bottom:4px;font-size:10px;
+    color:#b54708;display:flex;align-items:flex-end;justify-content:center;font-family:var(--ar)}
+  .ftr{margin-top:auto;position:relative;height:56px;margin-inline:-16px}
+  .ftr .band{position:absolute;inset:auto 0 0 0;height:42px;
+    background:linear-gradient(105deg,var(--red) 0 60%,var(--navy) 60% 100%);
+    clip-path:polygon(0 42%,100% 0,100% 100%,0 100%)}
+  .ftr .web{position:absolute;bottom:14px;inset-inline-start:24px;color:#fff;font-size:8.5px;font-weight:700;z-index:2}
+  .ftr .g{position:absolute;bottom:3px;inset-inline-start:24px;color:#fff;font-size:9.5px;font-weight:700;z-index:2}
+  .ftr .g b{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:10px}
+  .legend{font-size:11px;color:var(--muted);padding:10px 16px 0;text-align:center}
+  /* token map */
+  table.tok{width:100%;border-collapse:collapse;font-size:12px}
+  table.tok th{text-align:start;font-size:11px;color:#475467;font-weight:700;padding:6px 8px;
+    border-bottom:1px solid var(--line);background:#f7f9fc}
+  table.tok td{padding:6px 8px;border-top:1px solid var(--line);vertical-align:top}
+  code{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:11.5px;background:#f2f4f7;
+    border-radius:5px;padding:1px 5px;direction:ltr;display:inline-block}
+  .bad code{background:var(--err-soft);color:var(--err)}
+  .flow{display:flex;gap:10px;flex-wrap:wrap;align-items:stretch}
+  .step{flex:1 1 190px;border:1px solid var(--line);border-radius:11px;padding:11px 13px;background:#fbfcfe}
+  .step.on{border-color:var(--accent);background:var(--accent-soft)}
+  .step .k{font-size:10.5px;font-weight:800;color:var(--muted);letter-spacing:.4px}
+  .step .t{font-size:13px;font-weight:700;margin:3px 0 4px}
+  .step .d{font-size:11.5px;color:var(--muted);line-height:1.5}
+</style>
+</head>
+<body>
+  <div class="bar">
+    <h1>تقرير المخالفات المسلكية · Inmate Conduct Violations</h1>
+    <span class="sub">نموذج جديد — شؤون النزلاء · مقترح واجهة داخل التطبيق</span>
+    <span class="spacer"></span>
+    <span class="pill">Mockup</span>
+    <span class="pill ok">من ملف Word المرفق</span>
+  </div>
+
+  <main>
+    <!-- ============ FORM ============ -->
+    <div>
+    <section class="card">
+      <div class="hd"><h2>📝 إنشاء تقرير مخالفات مسلكية</h2><span class="tag">/application?form=Inmate Conduct Violations</span></div>
+      <div class="bd">
+        <div class="callout">
+          يظهر ضمن <b>الخدمات → إدارية</b> بجانب «تقرير» و«كتاب عام». الحقول تُملأ هنا، والمعاينة على اليسار
+          هي ما سيخرج فعليّاً من قالب Word (نفس مسار docxtpl → PDF).
+          <br>Listed under Services → Admin; fields below feed the same docx template you supplied.
+        </div>
+
+        <div class="sec">١ · التاريخ والوقت <span class="auto">Auto_edit</span></div>
+        <div class="row3">
+          <label class="field" style="margin-bottom:0">
+            <span class="lab">التاريخ</span>
+            <input type="date" id="fDate">
+          </label>
+          <label class="field" style="margin-bottom:0">
+            <span class="lab">اليوم</span>
+            <input type="text" id="fDay" disabled>
+          </label>
+          <label class="field" style="margin-bottom:0">
+            <span class="lab">الوقت</span>
+            <input type="time" id="fTime">
+          </label>
+        </div>
+        <div class="hint">تُملأ تلقائيّاً عند فتح النموذج (اليوم يُشتقّ من التاريخ ولا يُكتب يدويّاً) — قابلة للتعديل قبل الإنشاء.</div>
+
+        <div class="sec">٢ · النزلاء</div>
+        <div class="grid">
+          <table class="g">
+            <thead><tr>
+              <th style="width:34px">ت</th><th>إسم النزيل</th><th style="width:88px">الجنسية</th>
+              <th style="width:66px">الليوان</th><th style="width:112px">الرقم الموحد</th>
+              <th style="width:104px">رقم الامانات</th><th style="width:30px"></th>
+            </tr></thead>
+            <tbody id="rows"></tbody>
+          </table>
+          <div class="gfoot">
+            <button class="btn sm" type="button" id="addRow">+ إضافة نزيل</button>
+            <span class="hint" style="margin:0;align-self:center">صف واحد لكل نزيل — يتكرر صفّ الجدول في الورقة تلقائيّاً.</span>
+          </div>
+        </div>
+
+        <div class="sec">٣ · تفاصيل المخالفة <span class="req">مطلوب</span></div>
+        <div class="rt-toolbar">
+          <button data-cmd="bold" title="عريض"><b>B</b></button>
+          <button data-cmd="italic" title="مائل"><i>I</i></button>
+          <button data-cmd="underline" title="تسطير"><u>U</u></button>
+          <button data-cmd="insertUnorderedList" title="قائمة">• ⁝</button>
+          <button data-cmd="insertOrderedList" title="قائمة مرقّمة">1.</button>
+        </div>
+        <div class="rt-body" id="fBody" contenteditable="true">قام النزيل المذكور أعلاه بالاعتداء بالضرب على أحد النزلاء داخل الليوان (1A) أثناء فترة التنفّس، وعند محاولة فضّ الاشتباك رفض الامتثال لتعليمات الدورية.</div>
+        <div class="hint">محرّر عربي (arabic_rich) — يُحقن مكان <code>{{ BODY }}</code> في خليّة «تفاصيل المخالفة».</div>
+
+        <div class="sec">٤ · إجراءات المشرف</div>
+        <label class="checkline"><input type="checkbox" class="act" checked value="تم ابلاغ مدير فرع شؤون النزلاء"><span>تم ابلاغ مدير فرع شؤون النزلاء</span></label>
+        <label class="checkline"><input type="checkbox" class="act" checked value="تم كتابة مخالفة مسلكية في حق النزلاء"><span>تم كتابة مخالفة مسلكية في حق النزلاء</span></label>
+        <label class="checkline"><input type="checkbox" class="act" checked value="تم نقل النزيل الى قسم B وتقييده"><span>تم نقل النزيل الى قسم B وتقييده</span></label>
+        <label class="checkline"><input type="checkbox" id="actOtherChk"><span>إجراء آخر:</span></label>
+        <input type="text" id="actOther" placeholder="اكتب الإجراء…" disabled>
+        <div class="hint">القائمة الثابتة الثلاثية من القالب؛ غير المحدَّد لا يُطبع. «إجراء آخر» سطر حر إضافي.</div>
+
+        <div class="sec">٥ · بيانات مقدم التقرير</div>
+        <div class="row2">
+          <div class="field combo" style="margin-bottom:0">
+            <span class="lab">مقدم التقرير <span class="req">مطلوب</span></span>
+            <input type="text" id="fEmp" autocomplete="off" role="combobox" aria-expanded="false"
+                   placeholder="ابحث بالاسم أو الرقم (G-2001)…">
+            <ul id="fEmpList" role="listbox" hidden></ul>
+          </div>
+          <label class="field" style="margin-bottom:0">
+            <span class="lab">الرقم <span class="auto">تلقائي</span></span>
+            <input type="text" id="fGnum" disabled>
+          </label>
+        </div>
+        <div class="hint">
+          مُنتقي الموظفين نفسه المستخدم في باقي النماذج (<code>employee_picker</code>) — البحث يشمل
+          <b>الرقم (G-…)</b> والاسم العربي والإنجليزي معاً (<code>GET /employees?q=</code>)؛ اكتب الرقم
+          فيظهر الاسم ويُختار به. الرقم في الخانة المجاورة يُملأ من السجل ولا يُكتب يدويّاً.
+          يبدأ مُحدَّداً على المستخدم المسجّل دخوله.
+        </div>
+        <div class="acctnote">
+          تذييل الصفحة (المُقدِّم / الحساب): <b>G-2001</b> — حساب المستخدم الذي أنشأ الوثيقة، يُختم تلقائيّاً
+          ولا يتغيّر بتغيير مُنتقي الموظفين أعلاه.
+        </div>
+
+        <div class="sec">٦ · التوقيع</div>
+        <label class="field">
+          <span class="lab">المُوقِّع (مدير فرع شؤون النزلاء)</span>
+          <select id="fMgr">
+            <option data-name="ناصر فاضل الساعدي" data-rank="مدير فرع شؤون النزلاء" data-sig="1" selected>ناصر فاضل الساعدي — مدير فرع شؤون النزلاء</option>
+            <option data-name="سالم خلفان المزروعي" data-rank="مدير فرع شؤون النزلاء (بالإنابة)" data-sig="0">سالم خلفان المزروعي — بالإنابة (بلا توقيع محفوظ)</option>
+          </select>
+          <div class="hint">من سجلّ المدراء (الإعدادات ← المدراء) — الرتبة والاسم يُطبعان أسفل الجدول.</div>
+        </label>
+        <label class="checkline" id="signLine">
+          <input type="checkbox" id="signChk" checked>
+          <span>توقيع الآن — تضمين التوقيع المحفوظ للمدير مكان <code>{{MANAGER-SIGN}}</code></span>
+        </label>
+        <div class="hint" id="signHint">إن أُلغيت، يُرسَل التقرير إلى المدير ويظهر في قائمة «بانتظار التوقيع» عنده مع خط توقيع فارغ حتى يعتمده.</div>
+
+        <div class="actions">
+          <button class="btn pri" type="button" onclick="alert('في التطبيق: POST /books → إنشاء + توليد DOCX/PDF ثم فتح سجل الدفتر.')">إنشاء التقرير</button>
+          <button class="btn" type="button">حفظ مسودّة</button>
+        </div>
+      </div>
+    </section>
+
+    <section class="card">
+      <div class="hd"><h2>مسار التوقيع</h2><span class="tag">form_policy.py</span></div>
+      <div class="bd">
+        <div class="flow">
+          <div class="step on"><div class="k">١</div><div class="t">المشرف يُنشئ</div>
+            <div class="d">يملأ النزلاء + التفاصيل + الإجراءات؛ اسمه ورقمه يُختمان تلقائيّاً.</div></div>
+          <div class="step" id="stepWait"><div class="k">٢</div><div class="t">بانتظار المدير</div>
+            <div class="d">يظهر عند مدير فرع شؤون النزلاء في «بانتظار التوقيع» + جرس الإشعارات.</div></div>
+          <div class="step" id="stepSigned"><div class="k">٣</div><div class="t">موقَّع ومقفول</div>
+            <div class="d">تُضمَّن صورة التوقيع، يُعاد توليد PDF، ويُقفل السجلّ.</div></div>
+        </div>
+        <div class="callout" style="margin:14px 0 0">
+          خياران في الكود: <b>auto</b> (يُضمَّن توقيع المدير لحظة الإنشاء — سريع، بلا مراجعة) أو
+          <b>chain</b> (يمرّ على المدير كما في الكتاب العام والتصاريح). المُقترح هنا: <b>chain</b> —
+          لأن كاتب التقرير مشرف والمُوقِّع مدير مختلف عنه؛ ومربّع «توقيع الآن» يختصره لمن يملك صلاحية المدير.
+        </div>
+      </div>
+    </section>
+    </div>
+
+    <!-- ============ PREVIEW ============ -->
+    <div>
+    <section class="card">
+      <div class="hd"><h2>معاينة الورقة</h2><span class="tag">docxtpl → PDF</span></div>
+      <div class="legend">مطابقة لتخطيط ملف Word المرفق (عرض الأعمدة، ألوان الرؤوس، الأشرطة الحمراء).</div>
+      <div class="previewWrap">
+        <div class="a4">
+          <div class="lh">
+            <div class="logos"><div class="globe">GSSG</div><div class="emirate">UAE</div></div>
+            <div class="org">
+              <div class="ar">المجموعة العالمية للخدمات الأمنية</div>
+              <div class="en">GLOBAL SECURITY SERVICES GROUP</div>
+            </div>
+          </div>
+          <div class="title">تقرير المخالفات المسلكية</div>
+          <table class="doc">
+            <!-- 13-column grid copied from the docx (w:tblGrid) so every row keeps
+                 its real width; each row spans exactly as Word does. -->
+            <colgroup>
+              <col style="width:7.34%"><col style="width:4.27%"><col style="width:20.84%"><col style="width:0.23%">
+              <col style="width:5.69%"><col style="width:3.77%"><col style="width:8.72%"><col style="width:0.63%">
+              <col style="width:6.82%"><col style="width:12.99%"><col style="width:6.08%"><col style="width:0.05%">
+              <col style="width:22.58%">
+            </colgroup>
+            <tr>
+              <td class="hb">التاريخ</td><td class="cell" colspan="3" id="vDate">—</td>
+              <td class="hb">اليوم</td><td class="cell" colspan="3" id="vDay">—</td>
+              <td class="hb">الوقت</td><td class="cell" colspan="4" id="vTime">—</td>
+            </tr>
+            <tr>
+              <td class="hb">ت</td><td class="hb" colspan="2">إسم النزيل</td><td class="hb" colspan="3">الجنسية</td>
+              <td class="hb">الليوان</td><td class="hb" colspan="5">الرقم الموحد</td><td class="hb">رقم الامانات</td>
+            </tr>
+            <tbody id="vRows"></tbody>
+            <tr><td class="spacer" colspan="13"></td></tr>
+            <tr><td class="band" colspan="13">تفاصيل المخالفة</td></tr>
+            <tr><td class="body" colspan="13" id="vBody"></td></tr>
+            <tr><td class="band" colspan="13">إجراءات المشرف</td></tr>
+            <tr><td class="acts" colspan="13"><ul id="vActs"></ul></td></tr>
+            <tr><td class="band" colspan="13">بيانات مقدم التقرير</td></tr>
+            <tr>
+              <td class="lb" colspan="2">الأســــــــــم</td>
+              <td class="cell" colspan="8" id="vEmp">—</td>
+              <td class="lb">الرقم</td><td class="cell" colspan="2" id="vGnum">—</td>
+            </tr>
+          </table>
+          <div class="mgr">
+            <div>الرتبـــــــــــة : <span id="vRank">مدير فرع شؤون النزلاء</span></div>
+            <div class="c">الإســـــــــم: <span id="vMgr">ناصر فاضل الساعدي</span></div>
+            <div class="c">التوقيع: <span class="sigimg signed" id="vSig"></span></div>
+          </div>
+          <div class="ftr">
+            <div class="band"></div>
+            <div class="web">www.gss-group.net</div>
+            <div class="g">المُقدِّم/الحساب · <b>G-2001</b></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="card">
+      <div class="hd"><h2>خريطة الرموز — الرمز ← الحقل</h2><span class="tag">_fields.json</span></div>
+      <div class="bd">
+        <table class="tok">
+          <thead><tr><th style="width:38%">الرمز في القالب</th><th>مصدره في الواجهة</th></tr></thead>
+          <tbody>
+            <tr><td><code>Auto_edit</code> (التاريخ/اليوم/الوقت)</td><td>يُملأ تلقائيّاً — اليوم مُشتقّ من التاريخ</td></tr>
+            <tr><td><code>{{Personas name}}</code></td><td>عمود «إسم النزيل» — يُقترح <code>inmates[].name</code></td></tr>
+            <tr><td><code>{{Nat}}</code></td><td>عمود «الجنسية» — <code>inmates[].nat</code></td></tr>
+            <tr><td><code>{{Cell}}</code></td><td>عمود «الليوان» — قائمة ثابتة <code>1A…6B</code> (٦ ليوانات × A/B)، لا إدخال حر — <code>inmates[].wing</code></td></tr>
+            <tr class="bad"><td><code>{( personal ID for persionar ))</code></td><td>عمود «الرقم الموحد» — <b>الرمز مكسور</b> (أقواس خاطئة) ولن يُستبدل؛ يجب أن يصير <code>{{ uid }}</code></td></tr>
+            <tr><td><code>{{ holding num }}</code></td><td>عمود «رقم الامانات» — المسافة داخل الاسم غير صالحة، يصير <code>{{ holding_num }}</code></td></tr>
+            <tr><td><code>{{ BODY }}</code></td><td>محرّر «تفاصيل المخالفة»</td></tr>
+            <tr><td>قائمة إجراءات المشرف (نص ثابت)</td><td>مربّعات الاختيار الثلاثة + «إجراء آخر»</td></tr>
+            <tr><td><code>{{ EMPLOYEE NAME }}</code> · <code>{{ G-NUMBER}}</code></td><td>مُنتقي الموظفين (<code>employee_picker</code>) — الاسم والرقم من سجلّ الموظفين، مبدئيّاً المستخدم المسجّل دخوله. (المسافة والشرطة غير صالحتين في Jinja — <code>{{ employee_name }}</code> / <code>{{ g_number }}</code>)</td></tr>
+            <tr><td><code>{{MANAGER-SIGN}}</code></td><td>صورة توقيع المدير — الاصطلاح في التطبيق <code>manager_sig_path</code> ← <code>{{ manager_sig }}</code></td></tr>
+            <tr><td>الرتبة / الاسم أسفل الجدول</td><td>ثابتان في القالب حاليّاً — يُقترح ربطهما بسجلّ المدراء</td></tr>
+            <tr><td>تذييل الصفحة (شريط GSSG)</td><td>رقم مُقدِّم التقرير <code>G-…</code> يُطبع على الشريط — نفس اصطلاح «تقرير» والدفتر العام</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="card">
+      <div class="hd"><h2>ما يلزم في القالب قبل الربط</h2><span class="tag">backend/templates</span></div>
+      <div class="bd">
+        <div class="callout warn">
+          <b>١.</b> أسماء الرموز في Jinja لا تقبل مسافة ولا شرطة ولا أقواس <code>{( … ))</code> — الأربعة أعلاه لن تُستبدل كما هي.
+          <br><b>٢.</b> الصف الثاني في الجدول (محمد سالم ياسر / 159809450) بيانات تجريبية — يجب حذفه.
+          <br><b>٣.</b> لتكرار النزلاء يلزم صفّ واحد بـ <code>{%tr for i in inmates %}</code> … <code>{%tr endfor %}</code> بدل صفّين ثابتين.
+          <br><b>٤.</b> ترويسة الصفحة الحالية فيها اسم المجموعة فقط بلا شعارات — نفس ترويسة الدفتر العام تُستخدم في المعاينة.
+        </div>
+      </div>
+    </section>
+    </div>
+  </main>
+
+<script>
+  const $ = id => document.getElementById(id);
+  const SEED = [
+    {name:'محمد سالم ياسر', nat:'الامارات', wing:'1A', uid:'159809450', hold:'1565118'},
+  ];
+  // الليوان: 1..6 × A/B — fixed wing list, no free text
+  const WINGS = [1,2,3,4,5,6].flatMap(n => ['A','B'].map(s => `${n}${s}`));
+
+  /* ---------- inmate rows ---------- */
+  function rowHtml(r, i){
+    const opts = ['<option value=""></option>']
+      .concat(WINGS.map(w => `<option${w === r.wing ? ' selected' : ''}>${w}</option>`)).join('');
+    return `<tr>
+      <td class="n">${i+1}</td>
+      <td><input type="text" data-k="name" value="${r.name||''}" placeholder="الاسم الكامل"></td>
+      <td><input type="text" data-k="nat" value="${r.nat||''}"></td>
+      <td><select data-k="wing">${opts}</select></td>
+      <td><input type="text" data-k="uid" value="${r.uid||''}" inputmode="numeric"></td>
+      <td><input type="text" data-k="hold" value="${r.hold||''}" inputmode="numeric"></td>
+      <td><button class="del" type="button" title="حذف">✕</button></td>
+    </tr>`;
+  }
+  function readRows(){
+    return [...$('rows').querySelectorAll('tr')].map(tr => {
+      const o = {};
+      tr.querySelectorAll('input,select').forEach(inp => o[inp.dataset.k] = inp.value.trim());
+      return o;
+    });
+  }
+  function renderRows(list){
+    $('rows').innerHTML = list.map(rowHtml).join('');
+    sync();
+  }
+  function renumber(){
+    [...$('rows').querySelectorAll('tr')].forEach((tr,i) => tr.querySelector('td.n').textContent = i+1);
+  }
+  $('addRow').addEventListener('click', () => {
+    $('rows').insertAdjacentHTML('beforeend', rowHtml({}, $('rows').children.length));
+    renumber(); sync();
+  });
+  // delegation: rows are replaced wholesale, so bind on the container
+  $('rows').addEventListener('click', e => {
+    if(!e.target.closest('.del')) return;
+    e.target.closest('tr').remove(); renumber(); sync();
+  });
+  $('rows').addEventListener('input', sync);
+  $('rows').addEventListener('change', sync);
+
+  /* ---------- submitter (employee picker: search by name OR G-number) ---------- */
+  const ROSTER = [
+    {g:'G-2001', name:'عبدالله سيف المنصوري', desig:'مشرف وردية'},
+    {g:'G-1042', name:'مهند عبدالرحمن أل علي', desig:'مسؤول وحدة الإرساليات'},
+    {g:'G-0887', name:'سالم خلفان المزروعي', desig:'مشرف الأمن'},
+    {g:'G-1190', name:'أحمد يوسف الحمادي', desig:'ضابط وردية'},
+    {g:'G-0312', name:'خالد راشد الكعبي', desig:'دورية'},
+    {g:'G-1755', name:'يوسف عمر البلوشي', desig:'ضابط استقبال'},
+  ];
+  let picked = ROSTER[0];
+
+  const hi = (s, q) => q ? s.replace(new RegExp(`(${q.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')})`,'ig'),'<mark>$1</mark>') : s;
+
+  function openEmpList(q){
+    const needle = q.trim().toLowerCase();
+    // same needle the backend uses: id OR name_ar OR name_en
+    const hits = ROSTER.filter(e =>
+      !needle || e.g.toLowerCase().includes(needle) || e.name.includes(q.trim()));
+    $('fEmpList').innerHTML = hits.length
+      ? hits.map(e => `<li role="option" data-g="${e.g}"><span>${hi(e.name, q.trim())}</span>
+          <span class="dg">· ${e.desig}</span><span class="g">${hi(e.g, q.trim())}</span></li>`).join('')
+      : '<li class="empty">لا نتائج</li>';
+    $('fEmpList').hidden = false;
+    $('fEmp').setAttribute('aria-expanded','true');
+  }
+  function closeEmpList(){
+    $('fEmpList').hidden = true;
+    $('fEmp').setAttribute('aria-expanded','false');
+    $('fEmp').value = picked.name;   // collapsed state shows the NAME
+  }
+  function syncEmp(){
+    $('fEmp').value = picked.name;
+    $('fGnum').value = picked.g;
+    $('vEmp').textContent = picked.name;
+    $('vGnum').textContent = picked.g;
+  }
+  $('fEmp').addEventListener('focus', () => { $('fEmp').value = ''; openEmpList(''); });
+  $('fEmp').addEventListener('input', e => openEmpList(e.target.value));
+  $('fEmp').addEventListener('blur', () => setTimeout(closeEmpList, 120));
+  $('fEmpList').addEventListener('mousedown', e => {
+    const li = e.target.closest('li[data-g]');
+    if(!li) return;
+    picked = ROSTER.find(r => r.g === li.dataset.g);
+    syncEmp(); closeEmpList();
+  });
+
+  /* ---------- supervisor actions ---------- */
+  $('actOtherChk').addEventListener('change', e => {
+    $('actOther').disabled = !e.target.checked;
+    if(e.target.checked) $('actOther').focus();
+    sync();
+  });
+
+  /* ---------- signer ---------- */
+  function syncSigner(){
+    const o = $('fMgr').selectedOptions[0];
+    const hasSig = o.dataset.sig === '1';
+    $('vMgr').textContent = o.dataset.name;
+    $('vRank').textContent = o.dataset.rank;
+    const chk = $('signChk');
+    chk.disabled = !hasSig;
+    $('signLine').classList.toggle('disabled', !hasSig);
+    if(!hasSig){
+      chk.checked = false;
+      $('signHint').textContent = 'لا يوجد توقيع محفوظ لهذا المدير — سيُطبع خط فارغ ويوقّع يدويّاً بعد الطباعة.';
+    } else {
+      $('signHint').textContent = 'إن أُلغيت، يُرسَل التقرير إلى المدير ويظهر في قائمة «بانتظار التوقيع» عنده مع خط توقيع فارغ حتى يعتمده.';
+    }
+    sync();
+  }
+  $('fMgr').addEventListener('change', syncSigner);
+  $('signChk').addEventListener('change', sync);
+
+  /* ---------- live preview ---------- */
+  function sync(){
+    // date / day / time
+    const d = $('fDate').value;
+    if(d){
+      const [y,m,da] = d.split('-');
+      $('vDate').textContent = `${da}-${m}-${y}`;
+      const day = new Intl.DateTimeFormat('ar', {weekday:'long'}).format(new Date(+y, +m-1, +da));
+      $('fDay').value = day; $('vDay').textContent = day;
+    }
+    const t = $('fTime').value;
+    if(t){
+      const [h, mi] = t.split(':').map(Number);
+      const ampm = h < 12 ? 'ص' : 'م';
+      $('vTime').textContent = `${((h+11)%12)+1}:${String(mi).padStart(2,'0')} ${ampm}`;
+    }
+    // inmates
+    const rows = readRows();
+    $('vRows').innerHTML = (rows.length ? rows : [{}]).map((r,i) => `<tr>
+      <td class="cell">${i+1}</td><td class="cell" colspan="2">${r.name||'—'}</td>
+      <td class="cell" colspan="3">${r.nat||'—'}</td><td class="cell">${r.wing||'—'}</td>
+      <td class="cell" colspan="5">${r.uid||'—'}</td><td class="cell">${r.hold||'—'}</td>
+    </tr>`).join('');
+    // body
+    $('vBody').innerHTML = $('fBody').innerHTML;
+    // actions
+    const acts = [...document.querySelectorAll('.act:checked')].map(c => c.value);
+    if($('actOtherChk').checked && $('actOther').value.trim()) acts.push($('actOther').value.trim());
+    $('vActs').innerHTML = acts.map(a => `<li>${a}</li>`).join('') || '<li style="color:#999">—</li>';
+    // signature + flow steps
+    const signedNow = $('signChk').checked && !$('signChk').disabled;
+    $('vSig').className = 'sigimg ' + (signedNow ? 'signed' : 'pending');
+    $('stepWait').classList.toggle('on', !signedNow);
+    $('stepSigned').classList.toggle('on', signedNow);
+  }
+  ['input','change','keyup'].forEach(ev => {
+    ['fDate','fTime','fBody','actOther'].forEach(id => $(id).addEventListener(ev, sync));
+  });
+  document.querySelectorAll('.act').forEach(c => c.addEventListener('change', sync));
+  document.querySelectorAll('.rt-toolbar button').forEach(b => {
+    b.addEventListener('click', e => {
+      e.preventDefault(); document.execCommand(b.dataset.cmd, false, null);
+      $('fBody').focus(); sync();
+    });
+  });
+
+  // seed: today + now
+  const now = new Date();
+  $('fDate').value = now.toISOString().slice(0,10);
+  $('fTime').value = String(now.getHours()).padStart(2,'0') + ':' + String(now.getMinutes()).padStart(2,'0');
+  renderRows(SEED);
+  syncEmp();
+  syncSigner();
+</script>
+</body>
+</html>
