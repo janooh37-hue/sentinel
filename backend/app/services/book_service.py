@@ -963,6 +963,46 @@ def list_awaiting(db: Session, *, user_id: int) -> list[Book]:
     return out
 
 
+# Hours a record may sit at `awaiting_scan` before it starts nagging its owner.
+# Normal turnaround is same-day, so 24h means "genuinely forgotten", not "in
+# transit". Raise this if papers legitimately sit with a manager overnight.
+SCANBACK_STALE_HOURS = 24
+
+
+def list_awaiting_scan(
+    db: Session, *, user_id: int | None, stale_hours: int = SCANBACK_STALE_HOURS
+) -> list[Book]:
+    """Books stranded at ``awaiting_scan`` past the stale line, oldest first.
+
+    ``user_id=None`` returns every user's rows (the Everyone scope); otherwise
+    only books whose CURRENT version was created by ``user_id`` — that is the
+    person holding the paper. ``submitted_by_user_id`` is NULL on this path and
+    must not be used.
+
+    The cutoff is LOCAL naive time on purpose: ``Book.created_at`` is stamped by
+    ``document_service`` with ``datetime.now()``, unlike ``Document.created_at``.
+    Comparing against ``datetime.now(UTC)`` reintroduces the +4h bug (f111177).
+    """
+    cutoff = datetime.now() - timedelta(hours=stale_hours)
+    stmt = (
+        select(Book)
+        .options(selectinload(Book.versions))
+        .where(Book.deleted_at.is_(None))
+        .where(Book.approval_state == "awaiting_scan")
+        .where(Book.created_at < cutoff)
+        .order_by(Book.created_at)
+    )
+    out: list[Book] = []
+    for book in db.execute(stmt).scalars().all():
+        if user_id is None:
+            out.append(book)
+            continue
+        version = _current_version(book)
+        if version is not None and version.created_by_user_id == user_id:
+            out.append(book)
+    return out
+
+
 def your_step_kind(book: Book, user_id: int) -> str | None:
     """The caller's role on the current version's pending chain: 'approver',
     'reviewer', or None. Approver wins if (improbably) both match."""
