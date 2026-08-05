@@ -75,12 +75,16 @@
     "settings": "Settings",
     "menu": "Menu",
     "sendToGroup": "Send to Group",
+    "scanBack": "Scan-back",
     "bell": {
       "awaitingReturn": "{{count}} awaiting return form",
       "awaitingReturnTitle": "Awaiting return form",
       "awaitingApprovalTitle": "Awaiting your approval",
       "awaitingApproval": "{{count}} document needs your signature",
       "awaitingApproval_other": "{{count}} documents need your signature",
+      "scanBackTitle": "Signed copy not filed",
+      "scanBack_one": "{{count}} record needs its signed copy",
+      "scanBack_other": "{{count}} records need their signed copy",
       "notify": {
         "approval": "A document needs your approval",
         "leave": "A leave request needs action",
@@ -2693,6 +2697,40 @@
       "viewRecord": "View record",
       "movedNoBook_one": "Moved 1 employee",
       "movedNoBook_other": "Moved {{count}} employees"
+    }
+  },
+  "scanBack": {
+    "title": "Scan-back",
+    "blurb": "Printed, signed, but the scan was never filed. Upload one and the record closes itself.",
+    "empty": "Nothing waiting — every signed copy is filed.",
+    "age_one": "{{count}} day",
+    "age_other": "{{count}} days",
+    "viewAll_one": "View all {{count}}",
+    "viewAll_other": "View all {{count}}",
+    "drop": "Drop the scan here, or click to browse",
+    "filed": "Filed — {{ref}} is closed",
+    "uploadError": "Could not file that scan",
+    "scope": { "mine": "Mine", "all": "Everyone" },
+    "sort": { "oldest": "Oldest first", "newest": "Newest first" },
+    "group": {
+      "overMonth": "Over a month",
+      "weeks": "Two to four weeks",
+      "recent": "This month"
+    },
+    "gate": {
+      "title_one": "{{count}} record is waiting for its signed copy",
+      "title_other": "{{count}} records are waiting for their signed copy",
+      "blurb": "You printed these but the scan never made it back. The three oldest:",
+      "upload": "Upload",
+      "later": "Not now",
+      "close": "Dismiss until tomorrow"
+    },
+    "dock": {
+      "pill_one": "{{count}} to scan back",
+      "pill_other": "{{count}} to scan back",
+      "header": "Waiting for their signed copy",
+      "expand": "Show stranded records",
+      "collapse": "Hide stranded records"
     }
   },
   "scanInbox": {
