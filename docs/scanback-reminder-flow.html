@@ -1,0 +1,489 @@
+<meta charset="utf-8">
+<title>Scan-back reminder — A → D → E flow</title>
+<style>
+  :root{
+    --bg:#f5f4f1; --surface:#fff; --surface-raised:#fafaf6; --surface-tinted:#f0eee8;
+    --primary:#0d2845; --primary-hover:#1d3a5e; --primary-soft:#e8edf3;
+    --accent:#c8102e; --accent-hover:#a30d24; --accent-soft:#fbe5e8;
+    --success:#047857; --success-soft:#d6f0e4;
+    --warning:#92400e; --warning-soft:#fbedd8;
+    --info:#1d4ed8; --info-soft:#e0e8f8;
+    --text:#1c1f24; --text-muted:#5a6068; --text-faint:#8b9098;
+    --border:#e6e4dd; --border-strong:#d4d1c8; --hairline:#efece5;
+    --rail:#16243a; --rail-2:#1d3150; --rail-text:#c5d2e4; --rail-faint:#7e93b3; --rail-line:#2c405f;
+    --radius-sm:8px; --radius-md:12px; --radius-lg:16px; --radius-pill:99px;
+    --ease-out-expo:cubic-bezier(.16,1,.3,1); --ease-spring:cubic-bezier(.34,1.35,.64,1);
+    --font:"Inter",ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;
+    --mono:"IBM Plex Mono",ui-monospace,"SF Mono",Consolas,monospace;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font-family:var(--font);background:#e9e7e2;color:var(--text);
+       font-size:15px;line-height:1.5;-webkit-font-smoothing:antialiased}
+  .page{max-width:1340px;margin:0 auto;padding:26px 24px 70px}
+
+  /* ── masthead ── */
+  .masthead{display:flex;align-items:flex-end;justify-content:space-between;gap:24px;flex-wrap:wrap}
+  h1{font-size:1.5rem;font-weight:700;letter-spacing:-.02em;margin:0}
+  .sub{color:var(--text-muted);font-size:.86rem;margin:6px 0 0;max-width:70ch}
+  .sub b{color:var(--text);font-weight:600}
+  .toggles{display:flex;gap:8px}
+  .tg{border:1px solid var(--border-strong);background:var(--surface);border-radius:var(--radius-pill);
+      padding:7px 15px;font:inherit;font-size:.79rem;font-weight:600;cursor:pointer;color:var(--text-muted)}
+  .tg:hover{border-color:var(--primary);color:var(--primary)}
+  .tg[aria-pressed="true"]{background:var(--primary);border-color:var(--primary);color:#fff}
+
+  /* ── flow strip ── */
+  .flow{display:flex;align-items:stretch;gap:0;margin:20px 0 16px;
+        background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-md);
+        overflow:hidden}
+  .step{flex:1;padding:13px 16px;border-inline-end:1px solid var(--hairline);position:relative;
+        cursor:pointer;transition:background .16s}
+  .step:last-child{border-inline-end:0}
+  .step:hover{background:var(--surface-raised)}
+  .step.on{background:var(--primary-soft)}
+  .step.on::after{content:"";position:absolute;inset-block-end:0;inset-inline:0;height:2px;background:var(--primary)}
+  .step .sk{display:flex;align-items:center;gap:7px;margin-bottom:4px}
+  .step .badge{width:19px;height:19px;border-radius:5px;background:var(--primary);color:#fff;
+               font:700 .64rem/19px var(--mono);text-align:center;flex:0 0 19px}
+  .step.on .badge{background:var(--accent)}
+  .step b{font-size:.81rem;font-weight:650;letter-spacing:-.01em}
+  .step p{margin:0;font-size:.73rem;color:var(--text-muted);line-height:1.42}
+
+  /* ── app frame ── */
+  .frame{position:relative;background:var(--bg);border:1px solid var(--border-strong);
+         border-radius:var(--radius-lg);overflow:hidden;height:640px;display:flex;
+         box-shadow:0 18px 44px -22px rgba(13,40,69,.42)}
+  .rail{width:190px;flex:0 0 190px;background:var(--rail);color:var(--rail-text);
+        padding:16px 12px;display:flex;flex-direction:column;gap:2px}
+  .brand{display:flex;align-items:center;gap:9px;padding:2px 8px 15px;
+         border-bottom:1px solid var(--rail-line);margin-bottom:11px}
+  .brand .logo{width:26px;height:26px;border-radius:7px;background:linear-gradient(135deg,#c8102e,#8a0b20);
+               display:grid;place-items:center;color:#fff;font-weight:700;font-size:.64rem;flex:0 0 26px}
+  .brand span{font-weight:650;font-size:.81rem;color:#fff}
+  .nav{display:flex;align-items:center;gap:9px;padding:8px 9px;border-radius:var(--radius-sm);
+       font-size:.79rem;color:var(--rail-faint);cursor:pointer}
+  .nav:hover{background:var(--rail-2);color:#fff}
+  .nav.on{background:var(--rail-2);color:#fff;font-weight:600}
+  .nav .ic{width:15px;text-align:center;opacity:.85;font-size:.84rem}
+  .nav .cnt{margin-inline-start:auto;font:700 .64rem/1 var(--mono);background:var(--accent);
+            color:#fff;border-radius:var(--radius-pill);padding:3px 6px}
+
+  .main{flex:1;min-width:0;display:flex;flex-direction:column}
+  .top{height:52px;flex:0 0 52px;background:var(--surface);border-bottom:1px solid var(--border);
+       display:flex;align-items:center;gap:11px;padding:0 18px}
+  .top h2{font-size:.94rem;font-weight:650;margin:0;letter-spacing:-.01em}
+  .spacer{flex:1}
+  .bell{position:relative;width:31px;height:31px;border-radius:var(--radius-sm);display:grid;
+        place-items:center;color:var(--text-muted);font-size:.95rem;background:var(--surface-tinted)}
+  .bell .dot{position:absolute;top:-3px;inset-inline-end:-3px;min-width:16px;height:16px;padding:0 3px;
+             border-radius:var(--radius-pill);background:var(--accent);color:#fff;
+             font:700 .6rem/16px var(--mono);text-align:center;border:2px solid var(--surface)}
+  .avatar{width:29px;height:29px;border-radius:50%;background:var(--primary-soft);color:var(--primary);
+          display:grid;place-items:center;font-weight:650;font-size:.69rem}
+  .stage{flex:1;overflow:hidden;position:relative;padding:18px}
+
+  /* faux books list */
+  .fauxbar{display:flex;gap:8px;margin-bottom:13px}
+  .chip{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-pill);
+        padding:5px 11px;font-size:.71rem;color:var(--text-muted)}
+  .chip.on{background:var(--primary);border-color:var(--primary);color:#fff;font-weight:600}
+  .rec{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-md);
+       padding:11px 13px;margin-bottom:8px;display:flex;align-items:center;gap:11px}
+  .ref{font:600 .69rem/1 var(--mono);background:var(--surface-tinted);border-radius:6px;
+       padding:4px 7px;white-space:nowrap}
+  .rec .t{flex:1;min-width:0;font-size:.78rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .pill{font-size:.65rem;font-weight:600;border-radius:var(--radius-pill);padding:3px 8px;white-space:nowrap}
+  .pill.scan{background:var(--info-soft);color:var(--info)}
+  .pill.ok{background:var(--success-soft);color:var(--success)}
+  .blur{filter:blur(1.4px) saturate(.55);opacity:.5}
+
+  /* shared */
+  .btn{border:0;border-radius:var(--radius-sm);padding:8px 14px;font:inherit;font-size:.77rem;
+       font-weight:600;cursor:pointer;background:var(--primary);color:#fff;white-space:nowrap}
+  .btn:hover{background:var(--primary-hover)}
+  .btn.acc{background:var(--accent)} .btn.acc:hover{background:var(--accent-hover)}
+  .btn.ghost{background:transparent;color:var(--text-muted);font-weight:500}
+  .btn.ghost:hover{background:var(--surface-tinted);color:var(--text)}
+  .btn.sm{padding:6px 11px;font-size:.71rem}
+  .lnk{background:0;border:0;font:inherit;font-size:.73rem;font-weight:600;color:var(--info);
+       cursor:pointer;padding:2px 4px;border-radius:5px;white-space:nowrap}
+  .lnk:hover{background:var(--info-soft)}
+  .age{font:700 .65rem/1 var(--mono);white-space:nowrap}
+  .age.hot{color:var(--accent)} .age.warm{color:var(--warning)} .age.cool{color:var(--text-faint)}
+  .drop{border:1.5px dashed var(--border-strong);border-radius:var(--radius-sm);
+        background:var(--surface-raised);padding:8px 11px;font-size:.72rem;color:var(--text-muted);
+        display:flex;align-items:center;gap:7px;cursor:pointer;transition:.15s;white-space:nowrap}
+  .drop:hover{border-color:var(--info);background:var(--info-soft);color:var(--info)}
+  .drop.done{border-style:solid;border-color:var(--success);background:var(--success-soft);color:var(--success)}
+
+  /* ── A · dismissible gate ── */
+  .scrim{position:absolute;inset:0;background:rgba(13,40,69,.42);backdrop-filter:blur(3px);
+         display:grid;place-items:center;padding:26px;z-index:20;animation:fade .2s var(--ease-out-expo)}
+  @keyframes fade{from{opacity:0}}
+  @keyframes rise{from{opacity:0;transform:translateY(14px) scale(.97)}}
+  .modal{background:var(--surface);border-radius:var(--radius-lg);width:min(480px,100%);
+         box-shadow:0 26px 60px -18px rgba(13,40,69,.5);overflow:hidden;
+         animation:rise .3s var(--ease-out-expo)}
+  .modal .hd{padding:19px 21px 14px;border-bottom:1px solid var(--hairline);position:relative}
+  .modal .icn{width:37px;height:37px;border-radius:11px;background:var(--accent-soft);color:var(--accent);
+              display:grid;place-items:center;font-size:1.05rem;margin-bottom:10px}
+  .modal h3{margin:0;font-size:1rem;font-weight:680;letter-spacing:-.015em}
+  .modal .hd p{margin:5px 0 0;font-size:.78rem;color:var(--text-muted)}
+  .modal .x{position:absolute;top:13px;inset-inline-end:13px;width:26px;height:26px;border:0;
+            background:var(--surface-tinted);color:var(--text-muted);border-radius:7px;cursor:pointer;
+            font-size:.95rem;line-height:1}
+  .modal .x:hover{background:var(--accent-soft);color:var(--accent)}
+  .modal .list{padding:8px 13px}
+  .modal .row{display:flex;align-items:center;gap:10px;padding:9px 8px;border-radius:var(--radius-sm)}
+  .modal .row:hover{background:var(--surface-raised)}
+  .modal .row .t{flex:1;min-width:0;font-size:.77rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .modal .ft{display:flex;align-items:center;gap:9px;padding:12px 17px;background:var(--surface-raised);
+             border-top:1px solid var(--hairline)}
+
+  /* ── D · dock ── */
+  .dock{position:absolute;inset-block-end:16px;inset-inline-end:16px;z-index:10;
+        display:flex;flex-direction:column;align-items:flex-end;gap:9px}
+  [dir=rtl] .dock{align-items:flex-start}
+  .dockpill{display:flex;align-items:center;gap:9px;background:var(--primary);color:#fff;border:0;
+            border-radius:var(--radius-pill);padding:10px 17px;font:inherit;font-size:.78rem;
+            font-weight:620;cursor:pointer;box-shadow:0 10px 26px -8px rgba(13,40,69,.55);
+            animation:pop .32s var(--ease-spring)}
+  .dockpill:hover{background:var(--primary-hover)}
+  @keyframes pop{from{opacity:0;transform:scale(.82)}}
+  .dockpill .n{background:var(--accent);border-radius:var(--radius-pill);
+               font:700 .67rem/1 var(--mono);padding:3px 7px}
+  .dockpill .puls{width:7px;height:7px;border-radius:50%;background:#fff;animation:puls 1.9s ease-in-out infinite}
+  @keyframes puls{0%,100%{opacity:.35}50%{opacity:1}}
+  .dockpill .car{font-size:.7rem;opacity:.65}
+  .dockpanel{width:322px;background:var(--surface);border:1px solid var(--border);
+             border-radius:var(--radius-md);box-shadow:0 16px 40px -12px rgba(13,40,69,.42);
+             overflow:hidden;animation:rise .24s var(--ease-out-expo)}
+  .dockpanel .dh{padding:10px 13px;border-bottom:1px solid var(--hairline);
+                 display:flex;align-items:center;gap:8px;font-size:.76rem;font-weight:650}
+  .dockpanel .dh .sp{flex:1}
+  .dockpanel .dl{max-height:236px;overflow:auto}
+  .dockpanel .dr{padding:9px 13px;border-bottom:1px solid var(--hairline)}
+  .dockpanel .dr:last-child{border:0}
+  .dockpanel .dr .m{display:flex;align-items:center;gap:8px;margin-bottom:7px}
+  .dockpanel .dr .m .t{flex:1;min-width:0;font-size:.74rem;
+                       overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .dockpanel .df{padding:9px 13px;background:var(--surface-raised);border-top:1px solid var(--hairline);
+                 text-align:center}
+
+  /* ── E · full page ── */
+  .full{position:absolute;inset:0;background:var(--bg);z-index:15;display:flex;flex-direction:column;
+        animation:fade .2s var(--ease-out-expo)}
+  .full .fh{padding:20px 26px 15px;background:var(--surface);border-bottom:1px solid var(--border)}
+  .full .crumb{display:flex;align-items:center;gap:7px;font-size:.72rem;color:var(--text-muted);
+               margin-bottom:9px}
+  .full h3{margin:0;font-size:1.16rem;font-weight:700;letter-spacing:-.02em;
+           display:flex;align-items:center;gap:10px}
+  .full h3 .cnt{font:700 .7rem/1 var(--mono);background:var(--accent-soft);color:var(--accent);
+                border-radius:var(--radius-pill);padding:5px 9px}
+  .full .fp{margin:5px 0 0;font-size:.79rem;color:var(--text-muted)}
+  .full .fbar{display:flex;align-items:center;gap:8px;margin-top:13px}
+  .full .fl{flex:1;overflow:auto;padding:14px 26px 22px}
+  .grp{font:700 .64rem/1 var(--mono);letter-spacing:.09em;text-transform:uppercase;
+       color:var(--text-faint);margin:14px 0 8px}
+  .grp:first-child{margin-top:0}
+  .item{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-md);
+        padding:11px 14px;margin-bottom:7px;display:flex;align-items:center;gap:12px}
+  .item.hot{border-inline-start:3px solid var(--accent)}
+  .item .t{flex:1;min-width:0}
+  .item .t b{display:block;font-size:.79rem;font-weight:620;
+             overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .item .t span{font-size:.71rem;color:var(--text-muted)}
+
+  /* ── notes ── */
+  .why{margin-top:18px;display:grid;grid-template-columns:repeat(3,1fr);gap:13px}
+  .card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-md);
+        padding:15px 17px}
+  .card h4{margin:0 0 8px;font-size:.79rem;font-weight:680;display:flex;align-items:center;gap:8px}
+  .card h4 .badge{width:19px;height:19px;border-radius:5px;background:var(--primary);color:#fff;
+                  font:700 .63rem/19px var(--mono);text-align:center;flex:0 0 19px}
+  .card ul{margin:0;padding-inline-start:16px;font-size:.77rem;color:var(--text-muted);line-height:1.6}
+  .card li+li{margin-top:4px}
+  .card code{font:600 .72em/1 var(--mono);background:var(--surface-tinted);padding:2px 4px;border-radius:4px}
+  .open{margin-top:14px;background:var(--warning-soft);border:1px solid #e8d3ad;
+        border-radius:var(--radius-md);padding:14px 17px;font-size:.8rem;color:var(--warning);line-height:1.6}
+  .open b{font-weight:700}
+  .open .lab{font:700 .64rem/1 var(--mono);letter-spacing:.09em;text-transform:uppercase;
+             display:block;margin-bottom:7px}
+  [dir=rtl]{font-family:"Noto Sans Arabic",var(--font)}
+</style>
+
+<div class="page">
+  <div class="masthead">
+    <div>
+      <h1>Scan-back reminder — the wired flow</h1>
+      <p class="sub">One system, three tiers: <b>A</b> interrupts once a day, <b>D</b> sits there all day,
+        <b>E</b> is where both of them point. Walk it — close A, open the dock, click “View all”.
+        Live data: <b>19 records</b> past the 2-day line, oldest <b>40 days</b>.</p>
+    </div>
+    <div class="toggles">
+      <button class="tg" id="lang" aria-pressed="false">العربية</button>
+      <button class="tg" id="reset">↻ Start over</button>
+    </div>
+  </div>
+
+  <div class="flow" id="flow"></div>
+
+  <div class="frame" id="frame">
+    <aside class="rail">
+      <div class="brand"><div class="logo">GS</div><span>GSSG Manager</span></div>
+      <div class="nav"><span class="ic">▦</span><span data-t="nDash">Dashboard</span></div>
+      <div class="nav on"><span class="ic">▤</span><span data-t="nBooks">Books</span></div>
+      <div class="nav" id="railScan"><span class="ic">⎙</span><span data-t="nBack">Scan-back</span><span class="cnt" id="railCnt">19</span></div>
+      <div class="nav"><span class="ic">☷</span><span data-t="nLeaves">Leaves</span></div>
+      <div class="nav"><span class="ic">✉</span><span data-t="nLedger">Ledger</span></div>
+      <div class="nav"><span class="ic">⌖</span><span data-t="nEmp">Employees</span></div>
+    </aside>
+
+    <div class="main">
+      <div class="top">
+        <h2 id="topTitle">Books</h2>
+        <div class="spacer"></div>
+        <div class="bell">🔔<span class="dot" id="bellCnt">19</span></div>
+        <div class="avatar">HS</div>
+      </div>
+      <div class="stage" id="stage">
+        <div id="content">
+          <div class="fauxbar">
+            <span class="chip on" data-t="fAll">All 629</span>
+            <span class="chip" data-t="fDraft">Draft 100</span>
+            <span class="chip" data-t="fPend">Pending 3</span>
+            <span class="chip" data-t="fScan">Awaiting copy 29</span>
+          </div>
+          <div class="rec"><span class="ref">NAT-0774</span><span class="t" data-t="r1">Violation Form — Khaled A.</span><span class="pill scan" data-t="pScan">Awaiting copy</span></div>
+          <div class="rec"><span class="ref">NAT-0773</span><span class="t" data-t="r2">Violation Form — Saeed A.</span><span class="pill ok" data-t="pOk">Signed</span></div>
+          <div class="rec blur"><span class="ref">NAT-0762</span><span class="t">Warning Form — Salem H.</span><span class="pill ok">Signed</span></div>
+          <div class="rec blur"><span class="ref">NAT-0761</span><span class="t">Warning Form — Saeed A.</span><span class="pill ok">Signed</span></div>
+          <div class="rec blur"><span class="ref">GS-0695</span><span class="t">Acknowledgment Form</span><span class="pill ok">Signed</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="why" id="why"></div>
+  <div class="open" id="open"></div>
+</div>
+
+<script>
+/* ── the real >2-day backlog, straight out of data/gssg.db ── */
+const RECS = [
+  {ref:'GS-0410',  en:'Acknowledgment Form',      ar:'نموذج إقرار',            days:40},
+  {ref:'GS-0411',  en:'Acknowledgment Form',      ar:'نموذج إقرار',            days:40},
+  {ref:'NAT-0424', en:'Warning Form — Sulaiman S.',ar:'نموذج إنذار — سليمان س.', days:36},
+  {ref:'NAT-0429', en:'Violation Form — Hazza A.', ar:'نموذج مخالفة — هزاع ع.', days:34},
+  {ref:'NAT-0476', en:'Violation Form — Faisal A.',ar:'نموذج مخالفة — فيصل ع.', days:26},
+  {ref:'NAT-0478', en:'Violation Form — Fahad A.', ar:'نموذج مخالفة — فهد ع.',  days:26},
+  {ref:'NAT-0479', en:'Violation Form — Fahad A.', ar:'نموذج مخالفة — فهد ع.',  days:26},
+  {ref:'NAT-0486', en:'Warning Form — Ahmed M.',   ar:'نموذج إنذار — أحمد م.',  days:26},
+  {ref:'NAT-0489', en:'Violation Form — Ahmed M.', ar:'نموذج مخالفة — أحمد م.', days:26},
+  {ref:'NAT-0542', en:'Warning Form — Said K.',    ar:'نموذج إنذار — سعيد خ.',  days:22},
+  {ref:'NAT-0612', en:'Violation Form — Mohammed A.',ar:'نموذج مخالفة — محمد ع.',days:13},
+  {ref:'NAT-0613', en:'Violation Form — Ali A.',   ar:'نموذج مخالفة — علي ع.',  days:13},
+  {ref:'NAT-0618', en:'Violation Form — Hamad H.', ar:'نموذج مخالفة — حمد ح.',  days:12},
+  {ref:'NAT-0642', en:'Warning Form — Mohammed Z.',ar:'نموذج إنذار — محمد ز.',  days:8},
+  {ref:'NAT-0643', en:'Warning Form — Abdulrahman M.',ar:'نموذج إنذار — عبدالرحمن م.',days:8},
+  {ref:'NAT-0663', en:'Violation Form — Mohamed A.',ar:'نموذج مخالفة — محمد ع.',days:7},
+  {ref:'NAT-0677', en:'Warning Form — Ali K.',     ar:'نموذج إنذار — علي خ.',   days:6},
+  {ref:'NAT-0693', en:'Violation Form — Abdulnaser A.',ar:'نموذج مخالفة — عبدالناصر ع.',days:5},
+  {ref:'GS-0695',  en:'Acknowledgment Form',       ar:'نموذج إقرار',            days:5},
+];
+
+const T = {
+  en:{dir:'ltr',
+    nDash:'Dashboard', nBooks:'Books', nBack:'Scan-back', nLeaves:'Leaves', nLedger:'Ledger', nEmp:'Employees',
+    books:'Books', fAll:'All 629', fDraft:'Draft 100', fPend:'Pending 3', fScan:'Awaiting copy 29',
+    r1:'Violation Form — Khaled A.', r2:'Violation Form — Saeed A.', pScan:'Awaiting copy', pOk:'Signed',
+    gateH:'{n} records are waiting for their signed copy',
+    gateP:'You printed these but the scan never made it back. The three oldest:',
+    upload:'Upload', later:'Not now', viewAll:'View all {n}', close:'Close',
+    dockT:'to scan back', dockH:'Waiting for their signed copy', dockAll:'View all {n} →',
+    fullTitle:'Scan-back', fullP:'Printed, signed, but the scan was never filed. Upload one and the record closes itself.',
+    crumbHome:'Books', crumbHere:'Scan-back',
+    drop:'Drop the scan here, or click to browse', filed:'Filed — record closed',
+    gOver:'Over a month', gWeeks:'Two to four weeks', gDays:'This month',
+    ago:'d', mine:'Mine', all:'Everyone', oldest:'Oldest first'},
+  ar:{dir:'rtl',
+    nDash:'اللوحة', nBooks:'الدفاتر', nBack:'النسخ الموقّعة', nLeaves:'الإجازات', nLedger:'السجل', nEmp:'الموظفون',
+    books:'الدفاتر', fAll:'الكل ٦٢٩', fDraft:'مسودة ١٠٠', fPend:'قيد الاعتماد ٣', fScan:'بانتظار النسخة ٢٩',
+    r1:'نموذج مخالفة — خالد ع.', r2:'نموذج مخالفة — سعيد ع.', pScan:'بانتظار النسخة', pOk:'موقّع',
+    gateH:'{n} سجلاً بانتظار نسختها الموقّعة',
+    gateP:'تمت طباعتها ولم تُرفَع نسختها الممسوحة. أقدم ثلاثة:',
+    upload:'رفع', later:'ليس الآن', viewAll:'عرض الكل ({n})', close:'إغلاق',
+    dockT:'بانتظار المسح', dockH:'بانتظار النسخة الموقّعة', dockAll:'عرض الكل ({n}) ←',
+    fullTitle:'النسخ الموقّعة', fullP:'طُبعت ووُقّعت، لكن النسخة الممسوحة لم تُرفع. ارفعها ليُغلق السجل تلقائياً.',
+    crumbHome:'الدفاتر', crumbHere:'النسخ الموقّعة',
+    drop:'أفلت الملف هنا أو انقر للاختيار', filed:'تم الرفع — أُغلق السجل',
+    gOver:'أكثر من شهر', gWeeks:'من أسبوعين إلى شهر', gDays:'هذا الشهر',
+    ago:' يوم', mine:'سجلاتي', all:'الجميع', oldest:'الأقدم أولاً'},
+};
+
+const STEPS=[
+  {k:'A', t:{en:'Login gate',  ar:'بوابة الدخول'},
+      d:{en:'Once a day, first load. Closeable — “Not now” dismisses it until tomorrow.',
+         ar:'مرة يومياً عند أول دخول. قابلة للإغلاق — «ليس الآن» تؤجلها للغد.'}},
+  {k:'D', t:{en:'Bottom dock', ar:'الشريط السفلي'},
+      d:{en:'Collapsed pill all day. Click to expand the list with drop targets.',
+         ar:'زر مطوي طوال اليوم. انقر لتوسيع القائمة مع مناطق الإفلات.'}},
+  {k:'E', t:{en:'Scan-back page', ar:'صفحة النسخ الموقّعة'},
+      d:{en:'The full list. Reached from A, from D, or from the sidebar.',
+         ar:'القائمة الكاملة. يُوصل إليها من A أو D أو من الشريط الجانبي.'}},
+];
+
+let lang='en', view='A', dockOpen=false;
+const filed=new Set();
+const $=s=>document.querySelector(s), t=()=>T[lang], nm=o=>o[lang];
+const live=()=>RECS.filter(r=>!filed.has(r.ref));
+const ago=d=>lang==='ar' ? d+T.ar.ago : d+'d';
+const heat=d=>d>=30?'hot':d>=14?'warm':'cool';
+
+/* ── flow strip ── */
+function drawFlow(){
+  $('#flow').innerHTML=STEPS.map(s=>`
+    <div class="step ${s.k===view?'on':''}" data-go="${s.k}">
+      <div class="sk"><span class="badge">${s.k}</span><b>${nm(s.t)}</b></div>
+      <p>${nm(s.d)}</p>
+    </div>`).join('');
+}
+$('#flow').addEventListener('click',e=>{
+  const s=e.target.closest('.step'); if(!s) return;
+  view=s.dataset.go; dockOpen=(view==='D'); render();
+});
+
+/* ── A ── */
+function surfaceA(){
+  const top=live().slice(0,3);
+  return `<div class="scrim"><div class="modal">
+    <div class="hd">
+      <button class="x" data-act="dismiss">×</button>
+      <div class="icn">⎙</div>
+      <h3>${fill(t().gateH, live().length)}</h3>
+      <p>${t().gateP}</p>
+    </div>
+    <div class="list">${top.map(r=>`<div class="row">
+      <span class="ref">${r.ref}</span>
+      <span class="t">${nm(r)}</span>
+      <span class="age ${heat(r.days)}">${ago(r.days)}</span>
+      <button class="btn sm" data-file="${r.ref}">${t().upload}</button>
+    </div>`).join('')}</div>
+    <div class="ft">
+      <button class="btn acc" data-act="viewall">${fill(t().viewAll, live().length)}</button>
+      <button class="btn ghost" data-act="dismiss">${t().later}</button>
+    </div>
+  </div></div>`;
+}
+
+/* ── D ── */
+function surfaceD(){
+  const n=live().length;
+  const panel = dockOpen ? `<div class="dockpanel">
+      <div class="dh">⎙ <span class="sp">${t().dockH}</span>
+        <button class="lnk" data-act="viewall">${fill(t().dockAll, n)}</button></div>
+      <div class="dl">${live().slice(0,6).map(r=>`<div class="dr">
+        <div class="m"><span class="ref">${r.ref}</span><span class="t">${nm(r)}</span>
+          <span class="age ${heat(r.days)}">${ago(r.days)}</span></div>
+        <div class="drop" data-file="${r.ref}">⬆ ${t().drop}</div>
+      </div>`).join('')}</div>
+    </div>` : '';
+  return `<div class="dock">${panel}
+    <button class="dockpill" data-act="toggledock">
+      <span class="puls"></span>${lang==='ar'?ar(n):n} ${t().dockT}
+      <span class="car">${dockOpen?'▼':'▲'}</span></button>
+  </div>`;
+}
+
+/* ── E ── */
+function surfaceE(){
+  const groups=[['gOver',r=>r.days>=30],['gWeeks',r=>r.days>=14&&r.days<30],['gDays',r=>r.days<14]];
+  const n=live().length;
+  return `<div class="full">
+    <div class="fh">
+      <div class="crumb"><button class="lnk" data-act="home">${t().crumbHome}</button>
+        <span>/</span><span>${t().crumbHere}</span></div>
+      <h3>${t().fullTitle}<span class="cnt">${lang==='ar'?ar(n):n}</span></h3>
+      <p class="fp">${t().fullP}</p>
+      <div class="fbar">
+        <span class="chip on">${t().mine}</span>
+        <span class="chip">${t().all}</span>
+        <span class="chip">${t().oldest}</span>
+      </div>
+    </div>
+    <div class="fl">
+      ${groups.map(([k,f])=>{const g=live().filter(f); if(!g.length) return '';
+        return `<div class="grp">${t()[k]} · ${lang==='ar'?ar(g.length):g.length}</div>
+        ${g.map(r=>`<div class="item ${r.days>=30?'hot':''}">
+          <span class="ref">${r.ref}</span>
+          <span class="t"><b>${nm(r)}</b><span>${ago(r.days)}</span></span>
+          <span class="drop" data-file="${r.ref}">⬆ ${t().drop}</span>
+        </div>`).join('')}`;}).join('')}
+    </div>
+  </div>`;
+}
+
+const ar=n=>String(n).replace(/\d/g,d=>'٠١٢٣٤٥٦٧٨٩'[d]);
+const num=n=>lang==='ar'?ar(n):String(n);
+const fill=(s,n)=>s.replace('{n}',num(n));
+
+/* ── actions ── */
+$('#stage').addEventListener('click',e=>{
+  const f=e.target.closest('[data-file]');
+  if(f){ filed.add(f.dataset.file); render(); return; }
+  const a=e.target.closest('[data-act]'); if(!a) return;
+  const act=a.dataset.act;
+  if(act==='dismiss'){ view='D'; dockOpen=false; }
+  if(act==='viewall'){ view='E'; }
+  if(act==='home'){ view='D'; dockOpen=false; }
+  if(act==='toggledock'){ dockOpen=!dockOpen; }
+  render();
+});
+$('#railScan').onclick=()=>{view='E'; render();};
+
+const SURFACE={A:surfaceA,D:surfaceD,E:surfaceE};
+
+function render(){
+  const L=t(), n=live().length;
+  $('#frame').dir=L.dir;
+  document.querySelectorAll('[data-t]').forEach(e=>{e.textContent=L[e.dataset.t]??e.textContent});
+  $('#topTitle').textContent = view==='E' ? L.fullTitle : L.books;
+  $('#railCnt').textContent = lang==='ar'?ar(n):n;
+  $('#bellCnt').textContent = lang==='ar'?ar(n):n;
+  $('#stage').querySelectorAll('.scrim,.dock,.full').forEach(e=>e.remove());
+  // D is ambient: it stays behind E and under A, exactly as it would in the app.
+  if(view!=='A') $('#stage').insertAdjacentHTML('beforeend', surfaceD());
+  if(view==='A') $('#stage').insertAdjacentHTML('beforeend', surfaceA());
+  if(view==='E') $('#stage').insertAdjacentHTML('beforeend', surfaceE());
+  drawFlow(); drawWhy();
+}
+
+function drawWhy(){
+  $('#why').innerHTML=`
+    <div class="card"><h4><span class="badge">A</span>Login gate</h4><ul>
+      <li>Fires on first load of the day, only when the user has records past the 2-day line.</li>
+      <li>Dismissal is per-user per-day in <code>localStorage</code> — no table, no migration.</li>
+      <li>Shows the three oldest, not all 15. A wall of rows reads as unfixable.</li>
+      <li>Both buttons lead somewhere: <b>View all</b> → E, <b>Not now</b> → the dock.</li></ul></div>
+    <div class="card"><h4><span class="badge">D</span>Bottom dock</h4><ul>
+      <li>Collapsed pill whenever the count is above zero; hidden entirely at zero.</li>
+      <li>Expanded shows the six oldest with drop targets — upload without leaving the page.</li>
+      <li>Open/closed persists in <code>localStorage</code>, so it stays how they left it.</li>
+      <li>On mobile it sits above the bottom nav, not on top of it.</li></ul></div>
+    <div class="card"><h4><span class="badge">E</span>Scan-back page</h4><ul>
+      <li>Real route <code>/scan-back</code>, also in the sidebar with a live count.</li>
+      <li>Grouped by age so the 40-day items can't hide behind the 5-day ones.</li>
+      <li>Every row is a drop target; filing one flips the record to approved on the spot.</li>
+      <li><b>Mine / Everyone</b> — Everyone is gated on <code>books.manage</code> for oversight.</li></ul></div>`;
+  $('#open').innerHTML=`<span class="lab">Still open — decide before I write the spec</span>
+    <b>1.</b> Does <b>A</b> fire once a day, or once a week? Daily is stronger but wears out faster; I'd start daily and drop to weekly if people complain.
+    &nbsp;<b>2.</b> Should <b>E</b>'s "Everyone" tab exist at all, or is Mine-only enough? It's ~5 lines, and it's the only way Ahmed sees that Hamdan is sitting on 19.
+    &nbsp;<b>3.</b> The <b>2-day threshold</b> — records younger than that never appear anywhere. Sound right?`;
+}
+
+$('#lang').onclick=e=>{lang=lang==='en'?'ar':'en';
+  e.currentTarget.textContent=lang==='en'?'العربية':'English';
+  e.currentTarget.setAttribute('aria-pressed',lang==='ar'); render();};
+$('#reset').onclick=()=>{filed.clear(); view='A'; dockOpen=false; render();};
+render();
+</script>

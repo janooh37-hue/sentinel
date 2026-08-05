@@ -1,0 +1,510 @@
+<meta charset="utf-8">
+<title>Scan-back reminder — 5 surfaces</title>
+<style>
+  :root{
+    --bg:#f5f4f1; --surface:#fff; --surface-raised:#fafaf6; --surface-tinted:#f0eee8;
+    --primary:#0d2845; --primary-hover:#1d3a5e; --primary-soft:#e8edf3;
+    --accent:#c8102e; --accent-soft:#fbe5e8;
+    --success:#047857; --success-soft:#d6f0e4;
+    --warning:#92400e; --warning-soft:#fbedd8;
+    --info:#1d4ed8; --info-soft:#e0e8f8;
+    --text:#1c1f24; --text-muted:#5a6068; --text-faint:#8b9098;
+    --border:#e6e4dd; --border-strong:#d4d1c8; --hairline:#efece5;
+    --rail:#16243a; --rail-2:#1d3150; --rail-text:#c5d2e4; --rail-faint:#7e93b3; --rail-line:#2c405f;
+    --radius-sm:8px; --radius-md:12px; --radius-lg:16px; --radius-pill:99px;
+    --ease-out-expo:cubic-bezier(.16,1,.3,1);
+    --ease-spring:cubic-bezier(.34,1.35,.64,1);
+    --font:"Inter",ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;
+    --mono:"IBM Plex Mono",ui-monospace,"SF Mono",Consolas,monospace;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font-family:var(--font);background:#e9e7e2;color:var(--text);
+       font-size:15px;line-height:1.5;-webkit-font-smoothing:antialiased}
+
+  /* ─────────── page shell ─────────── */
+  .page{max-width:1320px;margin:0 auto;padding:28px 24px 80px}
+  .masthead{display:flex;align-items:flex-end;justify-content:space-between;gap:24px;
+            flex-wrap:wrap;margin-bottom:6px}
+  h1{font-size:1.55rem;font-weight:700;letter-spacing:-.02em;margin:0}
+  .sub{color:var(--text-muted);font-size:.88rem;margin:6px 0 0;max-width:64ch}
+  .sub b{color:var(--text);font-weight:600}
+  .toggles{display:flex;gap:8px;align-items:center}
+  .tg{border:1px solid var(--border-strong);background:var(--surface);border-radius:var(--radius-pill);
+      padding:7px 14px;font:inherit;font-size:.8rem;font-weight:600;cursor:pointer;color:var(--text-muted)}
+  .tg[aria-pressed="true"]{background:var(--primary);border-color:var(--primary);color:#fff}
+
+  /* ─────────── variant picker ─────────── */
+  .picker{display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin:22px 0 18px}
+  .pick{position:relative;text-align:start;background:var(--surface);border:1px solid var(--border);
+        border-radius:var(--radius-md);padding:13px 14px 14px;cursor:pointer;font:inherit;
+        transition:border-color .16s,box-shadow .16s,transform .16s var(--ease-out-expo)}
+  .pick:hover{border-color:var(--border-strong);transform:translateY(-1px)}
+  .pick[aria-pressed="true"]{border-color:var(--primary);box-shadow:0 0 0 3px var(--primary-soft)}
+  .pick .k{font:600 .68rem/1 var(--mono);color:var(--text-faint);letter-spacing:.08em}
+  .pick .n{display:block;font-weight:650;font-size:.86rem;margin:7px 0 5px;letter-spacing:-.01em}
+  .pick .d{display:block;font-size:.74rem;color:var(--text-muted);line-height:1.4}
+  .meter{display:flex;gap:3px;margin-top:9px}
+  .meter i{height:3px;flex:1;border-radius:2px;background:var(--border-strong)}
+  .meter i.on{background:var(--accent)}
+
+  /* ─────────── app frame ─────────── */
+  .frame{position:relative;background:var(--bg);border:1px solid var(--border-strong);
+         border-radius:var(--radius-lg);overflow:hidden;height:600px;display:flex;
+         box-shadow:0 18px 44px -22px rgba(13,40,69,.4)}
+  .rail{width:186px;flex:0 0 186px;background:var(--rail);color:var(--rail-text);
+        padding:16px 12px;display:flex;flex-direction:column;gap:2px}
+  .brand{display:flex;align-items:center;gap:9px;padding:2px 8px 16px;
+         border-bottom:1px solid var(--rail-line);margin-bottom:12px}
+  .brand .logo{width:26px;height:26px;border-radius:7px;background:linear-gradient(135deg,#c8102e,#8a0b20);
+               display:grid;place-items:center;color:#fff;font-weight:700;font-size:.65rem;flex:0 0 26px}
+  .brand span{font-weight:650;font-size:.82rem;color:#fff;letter-spacing:-.01em}
+  .nav{display:flex;align-items:center;gap:9px;padding:8px 9px;border-radius:var(--radius-sm);
+       font-size:.8rem;color:var(--rail-faint);position:relative}
+  .nav.on{background:var(--rail-2);color:#fff;font-weight:600}
+  .nav .ic{width:15px;text-align:center;opacity:.85;font-size:.85rem}
+  .nav .cnt{margin-inline-start:auto;font:600 .66rem/1 var(--mono);background:rgba(200,16,46,.9);
+            color:#fff;border-radius:var(--radius-pill);padding:3px 6px}
+
+  .main{flex:1;min-width:0;display:flex;flex-direction:column}
+  .top{height:52px;flex:0 0 52px;background:var(--surface);border-bottom:1px solid var(--border);
+       display:flex;align-items:center;gap:12px;padding:0 18px}
+  .top h2{font-size:.95rem;font-weight:650;margin:0;letter-spacing:-.01em}
+  .spacer{flex:1}
+  .bell{position:relative;width:32px;height:32px;border-radius:var(--radius-sm);display:grid;
+        place-items:center;color:var(--text-muted);font-size:1rem;background:var(--surface-tinted)}
+  .bell .dot{position:absolute;top:4px;inset-inline-end:4px;min-width:15px;height:15px;padding:0 3px;
+             border-radius:var(--radius-pill);background:var(--accent);color:#fff;
+             font:700 .58rem/15px var(--mono);text-align:center;border:2px solid var(--surface)}
+  .avatar{width:29px;height:29px;border-radius:50%;background:var(--primary-soft);color:var(--primary);
+          display:grid;place-items:center;font-weight:650;font-size:.7rem}
+  .body{flex:1;overflow:hidden;position:relative;padding:18px}
+  .body::after{content:"";position:absolute;inset:0;pointer-events:none}
+
+  /* faux content */
+  .fauxbar{display:flex;gap:8px;margin-bottom:14px}
+  .chip{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-pill);
+        padding:5px 11px;font-size:.72rem;color:var(--text-muted)}
+  .chip.on{background:var(--primary);border-color:var(--primary);color:#fff;font-weight:600}
+  .rec{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-md);
+       padding:11px 13px;margin-bottom:8px;display:flex;align-items:center;gap:11px}
+  .ref{font:600 .7rem/1 var(--mono);background:var(--surface-tinted);border-radius:6px;padding:4px 7px}
+  .rec .t{flex:1;min-width:0;font-size:.79rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .pill{font-size:.66rem;font-weight:600;border-radius:var(--radius-pill);padding:3px 8px}
+  .pill.scan{background:var(--info-soft);color:var(--info)}
+  .pill.ok{background:var(--success-soft);color:var(--success)}
+  .blur{filter:blur(1.5px) saturate(.6);opacity:.5}
+
+  /* ─────────── shared bits ─────────── */
+  .btn{border:0;border-radius:var(--radius-sm);padding:8px 14px;font:inherit;font-size:.78rem;
+       font-weight:600;cursor:pointer;background:var(--primary);color:#fff;white-space:nowrap}
+  .btn:hover{background:var(--primary-hover)}
+  .btn.ghost{background:transparent;color:var(--text-muted);font-weight:500}
+  .btn.ghost:hover{background:var(--surface-tinted);color:var(--text)}
+  .btn.sm{padding:6px 11px;font-size:.72rem}
+  .btn.acc{background:var(--accent)} .btn.acc:hover{background:#a30d24}
+  .age{font:600 .66rem/1 var(--mono);color:var(--accent)}
+  .age.warn{color:var(--warning)}
+
+  /* drop target */
+  .drop{border:1.5px dashed var(--border-strong);border-radius:var(--radius-sm);
+        background:var(--surface-raised);padding:9px 12px;font-size:.73rem;color:var(--text-muted);
+        display:flex;align-items:center;gap:8px;cursor:pointer;transition:.16s}
+  .drop:hover{border-color:var(--info);background:var(--info-soft);color:var(--info)}
+
+  /* ─────────── A · login gate ─────────── */
+  .scrim{position:absolute;inset:0;background:rgba(13,40,69,.42);backdrop-filter:blur(3px);
+         display:grid;place-items:center;padding:26px;animation:fade .22s var(--ease-out-expo)}
+  @keyframes fade{from{opacity:0}}
+  @keyframes rise{from{opacity:0;transform:translateY(14px) scale(.97)}}
+  .modal{background:var(--surface);border-radius:var(--radius-lg);width:min(470px,100%);
+         box-shadow:0 26px 60px -18px rgba(13,40,69,.5);overflow:hidden;
+         animation:rise .3s var(--ease-out-expo)}
+  .modal .hd{padding:20px 22px 15px;border-bottom:1px solid var(--hairline)}
+  .modal .icn{width:38px;height:38px;border-radius:11px;background:var(--accent-soft);color:var(--accent);
+              display:grid;place-items:center;font-size:1.1rem;margin-bottom:11px}
+  .modal h3{margin:0;font-size:1.02rem;font-weight:680;letter-spacing:-.015em}
+  .modal p{margin:5px 0 0;font-size:.79rem;color:var(--text-muted)}
+  .modal .list{padding:9px 14px;max-height:190px;overflow:auto}
+  .modal .row{display:flex;align-items:center;gap:10px;padding:9px 8px;border-radius:var(--radius-sm)}
+  .modal .row:hover{background:var(--surface-raised)}
+  .modal .row .t{flex:1;min-width:0;font-size:.78rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .modal .ft{display:flex;align-items:center;gap:9px;padding:13px 18px;background:var(--surface-raised);
+             border-top:1px solid var(--hairline)}
+
+  /* ─────────── B · sticky banner ─────────── */
+  .banner{background:linear-gradient(90deg,var(--warning-soft),#fdf4e4);
+          border-bottom:1px solid #e8d3ad;padding:9px 18px;display:flex;align-items:center;gap:11px;
+          animation:drop .26s var(--ease-out-expo)}
+  @keyframes drop{from{transform:translateY(-100%)}}
+  .banner .bi{width:22px;height:22px;border-radius:6px;background:var(--warning);color:#fff;
+              display:grid;place-items:center;font-size:.75rem;flex:0 0 22px}
+  .banner .bt{flex:1;min-width:0;font-size:.79rem;color:var(--warning)}
+  .banner .bt b{font-weight:680}
+
+  /* ─────────── C · drop toast ─────────── */
+  .toasts{position:absolute;inset-block-end:16px;inset-inline-end:16px;width:308px;
+          display:flex;flex-direction:column;gap:9px;z-index:5}
+  .toast{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-md);
+         box-shadow:0 12px 32px -12px rgba(13,40,69,.34);padding:12px 13px;
+         animation:slidein .3s var(--ease-out-expo) backwards}
+  .toast:nth-child(2){animation-delay:.1s}
+  @keyframes slidein{from{opacity:0;transform:translateX(22px)}}
+  [dir=rtl] @keyframes slidein{from{opacity:0;transform:translateX(-22px)}}
+  .toast .th{display:flex;align-items:center;gap:8px;margin-bottom:9px}
+  .toast .th .t{flex:1;min-width:0;font-size:.77rem;font-weight:620;
+                overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .toast .x{border:0;background:0;color:var(--text-faint);cursor:pointer;font-size:.9rem;padding:0 2px}
+
+  /* ─────────── D · dock pill ─────────── */
+  .dock{position:absolute;inset-block-end:18px;inset-inline-end:18px;z-index:5;
+        display:flex;flex-direction:column;align-items:flex-end;gap:9px}
+  [dir=rtl] .dock{align-items:flex-start}
+  .dockpill{display:flex;align-items:center;gap:9px;background:var(--primary);color:#fff;
+            border:0;border-radius:var(--radius-pill);padding:10px 17px;font:inherit;font-size:.79rem;
+            font-weight:620;cursor:pointer;box-shadow:0 10px 26px -8px rgba(13,40,69,.55);
+            animation:pop .34s var(--ease-spring)}
+  @keyframes pop{from{opacity:0;transform:scale(.8)}}
+  .dockpill .n{background:var(--accent);border-radius:var(--radius-pill);
+               font:700 .68rem/1 var(--mono);padding:3px 7px}
+  .dockpill .puls{width:7px;height:7px;border-radius:50%;background:#fff;
+                  animation:puls 1.9s ease-in-out infinite}
+  @keyframes puls{0%,100%{opacity:.35}50%{opacity:1}}
+  .dockpanel{width:296px;background:var(--surface);border:1px solid var(--border);
+             border-radius:var(--radius-md);box-shadow:0 16px 40px -14px rgba(13,40,69,.4);
+             overflow:hidden;animation:rise .26s var(--ease-out-expo)}
+  .dockpanel .dh{padding:11px 13px;border-bottom:1px solid var(--hairline);
+                 font-size:.77rem;font-weight:650;display:flex;align-items:center;gap:7px}
+  .dockpanel .dr{padding:9px 13px;border-bottom:1px solid var(--hairline)}
+  .dockpanel .dr:last-child{border:0}
+  .dockpanel .dr .m{display:flex;align-items:center;gap:8px;margin-bottom:7px}
+  .dockpanel .dr .m .t{flex:1;min-width:0;font-size:.75rem;
+                       overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+  /* ─────────── E · interstitial ─────────── */
+  .inter{position:absolute;inset:0;background:var(--bg);z-index:6;display:flex;flex-direction:column;
+         padding:26px 32px;animation:fade .24s var(--ease-out-expo);overflow:auto}
+  .inter .ih{margin-bottom:18px}
+  .inter .eyebrow{font:600 .68rem/1 var(--mono);letter-spacing:.1em;color:var(--accent);
+                  text-transform:uppercase}
+  .inter h3{margin:9px 0 5px;font-size:1.25rem;font-weight:700;letter-spacing:-.02em}
+  .inter p{margin:0;font-size:.82rem;color:var(--text-muted)}
+  .check{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-md);
+         padding:12px 14px;margin-bottom:9px;display:flex;align-items:center;gap:12px}
+  .check .box{width:19px;height:19px;border-radius:5px;border:2px solid var(--border-strong);flex:0 0 19px}
+  .check .t{flex:1;min-width:0}
+  .check .t b{display:block;font-size:.8rem;font-weight:620}
+  .check .t span{font-size:.72rem;color:var(--text-muted)}
+  .inter .if{margin-top:auto;padding-top:16px;display:flex;align-items:center;gap:12px}
+
+  /* ─────────── notes ─────────── */
+  .notes{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:20px}
+  .note{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-md);
+        padding:15px 17px}
+  .note h4{margin:0 0 8px;font-size:.79rem;font-weight:680;display:flex;align-items:center;gap:7px}
+  .note h4 .tag{font:700 .6rem/1 var(--mono);border-radius:4px;padding:3px 5px;letter-spacing:.04em}
+  .note.good h4 .tag{background:var(--success-soft);color:var(--success)}
+  .note.bad h4 .tag{background:var(--accent-soft);color:var(--accent)}
+  .note ul{margin:0;padding-inline-start:17px;font-size:.78rem;color:var(--text-muted);line-height:1.62}
+  .note li+li{margin-top:4px}
+  .verdict{margin-top:16px;background:var(--primary);color:#fff;border-radius:var(--radius-md);
+           padding:15px 18px;font-size:.82rem;line-height:1.6}
+  .verdict b{font-weight:680}
+  .verdict .lab{font:600 .66rem/1 var(--mono);letter-spacing:.1em;text-transform:uppercase;
+                color:#8ea6c4;display:block;margin-bottom:7px}
+  .hide{display:none!important}
+  [dir=rtl]{font-family:"Noto Sans Arabic",var(--font)}
+</style>
+
+<div class="page">
+  <div class="masthead">
+    <div>
+      <h1>Scan-back reminder — 5 surfaces</h1>
+      <p class="sub">The bell is passive. These are the active options, weakest to strongest.
+        Live data: <b>29 records</b> sitting in <code>awaiting_scan</code>, <b>19 of them older than 2 days</b>,
+        oldest <b>40 days</b>.</p>
+    </div>
+    <div class="toggles">
+      <button class="tg" id="lang" aria-pressed="false">العربية</button>
+      <button class="tg" id="replay">↻ Replay</button>
+    </div>
+  </div>
+
+  <div class="picker" id="picker"></div>
+
+  <div class="frame" id="frame">
+    <aside class="rail">
+      <div class="brand"><div class="logo">GS</div><span>GSSG Manager</span></div>
+      <div class="nav"><span class="ic">▦</span><span data-t="nDash">Dashboard</span></div>
+      <div class="nav on"><span class="ic">▤</span><span data-t="nBooks">Books</span><span class="cnt" id="railCnt">3</span></div>
+      <div class="nav"><span class="ic">☷</span><span data-t="nLeaves">Leaves</span></div>
+      <div class="nav"><span class="ic">✉</span><span data-t="nLedger">Ledger</span></div>
+      <div class="nav"><span class="ic">⌖</span><span data-t="nEmp">Employees</span></div>
+      <div class="nav"><span class="ic">⎙</span><span data-t="nScan">Scan Inbox</span></div>
+    </aside>
+
+    <div class="main">
+      <div class="top">
+        <h2 data-t="books">Books</h2>
+        <div class="spacer"></div>
+        <div class="bell">🔔<span class="dot">3</span></div>
+        <div class="avatar">HS</div>
+      </div>
+
+      <div id="bannerSlot"></div>
+
+      <div class="body" id="stage">
+        <div id="content">
+          <div class="fauxbar">
+            <span class="chip on" data-t="fAll">All 629</span>
+            <span class="chip" data-t="fDraft">Draft 100</span>
+            <span class="chip" data-t="fPend">Pending 3</span>
+            <span class="chip" data-t="fScan">Awaiting copy 29</span>
+          </div>
+          <div class="rec"><span class="ref">NAT-0774</span><span class="t" data-t="r1">Violation Form — Khaled A.</span><span class="pill scan" data-t="pScan">Awaiting copy</span></div>
+          <div class="rec"><span class="ref">NAT-0773</span><span class="t" data-t="r2">Violation Form — Saeed A.</span><span class="pill ok" data-t="pOk">Signed</span></div>
+          <div class="rec blur"><span class="ref">NAT-0762</span><span class="t">Warning Form — Salem H.</span><span class="pill ok">Signed</span></div>
+          <div class="rec blur"><span class="ref">NAT-0761</span><span class="t">Warning Form — Saeed A.</span><span class="pill ok">Signed</span></div>
+          <div class="rec blur"><span class="ref">GS-0695</span><span class="t">Acknowledgment Form</span><span class="pill ok">Signed</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="notes" id="notes"></div>
+  <div class="verdict" id="verdict"></div>
+</div>
+
+<script>
+/* ── the three genuinely-stale records, from the live DB ── */
+const RECS = [
+  {ref:'NAT-0612', en:'Violation Form — Mohammed A.', ar:'نموذج مخالفة — محمد ع.', days:13},
+  {ref:'NAT-0642', en:'Warning Form — Mohammed Z.',   ar:'نموذج إنذار — محمد ز.',  days:8},
+  {ref:'GS-0410',  en:'Acknowledgment Form',          ar:'نموذج إقرار',            days:40},
+];
+
+const T = {
+  en:{
+    dir:'ltr', books:'Books', nDash:'Dashboard', nBooks:'Books', nLeaves:'Leaves',
+    nLedger:'Ledger', nEmp:'Employees', nScan:'Scan Inbox',
+    fAll:'All 629', fDraft:'Draft 100', fPend:'Pending 3', fScan:'Awaiting copy 29',
+    r1:'Violation Form — Khaled A.', r2:'Violation Form — Saeed A.',
+    pScan:'Awaiting copy', pOk:'Signed',
+    gateH:'3 records are waiting for their signed copy',
+    gateP:'You printed these but the scan never made it back into the app.',
+    upload:'Upload', later:'Remind me later', fileAll:'File them now',
+    bannerT:'<b>3 records</b> are waiting for their signed copy — oldest is 40 days.',
+    bannerB:'File them', ago:'d ago',
+    toastT:'Signed copy not filed', toastDrop:'Drop the scan here, or click to browse',
+    dockT:'to scan back', dockH:'Waiting for their signed copy',
+    interE:'Before you start', interH:'Three papers never came back',
+    interP:'You printed these, they were signed, but the scan was never filed. Clear them and the record closes itself.',
+    skip:'Skip for today', done:'Done — take me to Books',
+  },
+  ar:{
+    dir:'rtl', books:'الدفاتر', nDash:'اللوحة', nBooks:'الدفاتر', nLeaves:'الإجازات',
+    nLedger:'السجل', nEmp:'الموظفون', nScan:'صندوق المسح',
+    fAll:'الكل ٦٢٩', fDraft:'مسودة ١٠٠', fPend:'قيد الاعتماد ٣', fScan:'بانتظار النسخة ٢٩',
+    r1:'نموذج مخالفة — خالد ع.', r2:'نموذج مخالفة — سعيد ع.',
+    pScan:'بانتظار النسخة', pOk:'موقّع',
+    gateH:'٣ سجلات بانتظار نسختها الموقّعة',
+    gateP:'تمت طباعتها ولكن لم تُرفَع النسخة الممسوحة إلى التطبيق.',
+    upload:'رفع', later:'ذكّرني لاحقاً', fileAll:'رفعها الآن',
+    bannerT:'<b>٣ سجلات</b> بانتظار نسختها الموقّعة — أقدمها ٤٠ يوماً.',
+    bannerB:'رفعها', ago:' يوم',
+    toastT:'لم تُرفع النسخة الموقّعة', toastDrop:'أفلت الملف هنا أو انقر للاختيار',
+    dockT:'بانتظار المسح', dockH:'بانتظار النسخة الموقّعة',
+    interE:'قبل أن تبدأ', interH:'ثلاث أوراق لم تعد',
+    interP:'طبعتها ووُقّعت، لكن النسخة الممسوحة لم تُرفع. ارفعها ليُغلق السجل تلقائياً.',
+    skip:'تخطٍّ اليوم', done:'تم — إلى الدفاتر',
+  }
+};
+
+const VARIANTS = [
+  {k:'A', force:5, name:{en:'Login gate',        ar:'بوابة الدخول'},
+   desc:{en:'Blocking modal on first load of the day',   ar:'نافذة إلزامية عند أول دخول يومياً'}},
+  {k:'B', force:2, name:{en:'Sticky banner',     ar:'شريط ثابت'},
+   desc:{en:'Bar under the header on every page',        ar:'شريط أسفل الترويسة في كل صفحة'}},
+  {k:'C', force:3, name:{en:'Drop-zone toast',   ar:'إشعار بمنطقة إفلات'},
+   desc:{en:'Corner card you drag the file straight onto', ar:'بطاقة جانبية تُفلت عليها الملف مباشرة'}},
+  {k:'D', force:2, name:{en:'Dock pill',         ar:'زر عائم'},
+   desc:{en:'Always-there counter, expands on click',    ar:'عدّاد دائم يتوسع عند النقر'}},
+  {k:'E', force:5, name:{en:'Interstitial',      ar:'شاشة اعتراضية'},
+   desc:{en:'Full-screen checklist gate after login',    ar:'شاشة كاملة بقائمة مهام بعد الدخول'}},
+];
+
+const NOTES = {
+  A:{good:['Impossible to miss — it owns the screen before any work starts.',
+           'Upload happens inside the modal; zero navigation.',
+           'Fires once per day, so it never becomes background noise.'],
+     bad :['Blocks someone who opened the app to do something urgent.',
+           '"Remind me later" becomes a reflex within a week.',
+           'Needs a per-user per-day dismissal record — the only variant here that needs new state.']},
+  B:{good:['Zero interruption — it never takes a click away from you.',
+           'Persistent: stays until the count is actually zero.',
+           'Smallest build of all five — one component in the app shell.'],
+     bad :['Banner blindness is real; in two weeks nobody sees it.',
+           'Costs 34px of vertical space on every page, forever.',
+           'Doesn\'t reach anyone who never opens the app that day.']},
+  C:{good:['The file is already on their PC — drag it from the desktop onto the toast. Nothing else comes close on friction.',
+           'Non-blocking: ignorable in the moment, re-appears next session.',
+           'Can also fire right after printing: "this one is coming back to you."'],
+     bad :['Auto-dismissing toasts get swiped away without reading.',
+           'Only lands if they are on a desktop with the file visible.',
+           'Needs real drag-and-drop upload wiring, not just a link.']},
+  D:{good:['Always visible, never in the way — the count is glanceable from any page.',
+           'Expands to per-record drop targets, so upload is two clicks.',
+           'Familiar pattern; nothing new to learn.'],
+     bad :['Weakest pull of the five — it waits to be noticed.',
+           'Floating elements get mentally filtered fast.',
+           'Overlaps mobile bottom nav; needs a separate mobile position.']},
+  E:{good:['Strongest close rate — the backlog is the screen, not a corner of it.',
+           'Checklist framing makes clearing it feel finishable.',
+           'Good one-off: run it once to burn down the 29, then retire it.'],
+     bad :['Most intrusive thing you can do to someone opening an app.',
+           'Biggest build — a real route, not a component.',
+           'If it shows daily it will be resented daily.']},
+};
+
+let cur='C', lang='en';
+const $=s=>document.querySelector(s), t=()=>T[lang];
+const nm=o=>o[lang], ago=d=>lang==='ar'? d+T.ar.ago : d+'d ago';
+
+/* ── picker ──
+   Built once (and again only on a language switch). Selection is a class flip,
+   never a rebuild: replacing the button inside its own click handler detaches
+   the node mid-dispatch, which makes the click land on nothing. Delegation on
+   the container survives any rebuild. */
+function drawPicker(){
+  $('#picker').innerHTML = VARIANTS.map(v=>`
+    <button class="pick" data-k="${v.k}" aria-pressed="${v.k===cur}">
+      <span class="k">${v.k}</span>
+      <b class="n">${nm(v.name)}</b>
+      <span class="d">${nm(v.desc)}</span>
+      <span class="meter">${[1,2,3,4,5].map(i=>`<i class="${i<=v.force?'on':''}"></i>`).join('')}</span>
+    </button>`).join('');
+}
+function markPicker(){
+  document.querySelectorAll('.pick').forEach(b=>
+    b.setAttribute('aria-pressed', b.dataset.k===cur));
+}
+$('#picker').addEventListener('click', e=>{
+  const b = e.target.closest('.pick');
+  if (b) { cur = b.dataset.k; render(); }
+});
+
+/* ── the five surfaces ── */
+const rowsHTML = () => RECS.map(r=>`
+  <div class="row">
+    <span class="ref">${r.ref}</span>
+    <span class="t">${nm(r)}</span>
+    <span class="age${r.days<15?' warn':''}">${ago(r.days)}</span>
+    <button class="btn sm">${t().upload}</button>
+  </div>`).join('');
+
+function surfaceA(){
+  return `<div class="scrim"><div class="modal">
+    <div class="hd">
+      <div class="icn">⎙</div>
+      <h3>${t().gateH}</h3>
+      <p>${t().gateP}</p>
+    </div>
+    <div class="list">${rowsHTML()}</div>
+    <div class="ft">
+      <button class="btn acc">${t().fileAll}</button>
+      <button class="btn ghost">${t().later}</button>
+    </div>
+  </div></div>`;
+}
+
+function surfaceB(){
+  $('#bannerSlot').innerHTML = `<div class="banner">
+      <div class="bi">⎙</div>
+      <div class="bt">${t().bannerT}</div>
+      <button class="btn sm">${t().bannerB}</button>
+    </div>`;
+  return '';
+}
+
+function surfaceC(){
+  return `<div class="toasts">
+    ${RECS.slice(0,2).map(r=>`<div class="toast">
+      <div class="th">
+        <span class="ref">${r.ref}</span>
+        <span class="t">${t().toastT}</span>
+        <button class="x">×</button>
+      </div>
+      <div class="drop">⬆ ${t().toastDrop}</div>
+    </div>`).join('')}
+  </div>`;
+}
+
+function surfaceD(){
+  return `<div class="dock">
+    <div class="dockpanel">
+      <div class="dh">⎙ ${t().dockH}</div>
+      ${RECS.map(r=>`<div class="dr">
+        <div class="m"><span class="ref">${r.ref}</span><span class="t">${nm(r)}</span>
+          <span class="age${r.days<15?' warn':''}">${ago(r.days)}</span></div>
+        <div class="drop">⬆ ${t().toastDrop}</div>
+      </div>`).join('')}
+    </div>
+    <button class="dockpill"><span class="puls"></span>3 ${t().dockT}<span class="n">!</span></button>
+  </div>`;
+}
+
+function surfaceE(){
+  return `<div class="inter">
+    <div class="ih">
+      <span class="eyebrow">${t().interE}</span>
+      <h3>${t().interH}</h3>
+      <p>${t().interP}</p>
+    </div>
+    ${RECS.map(r=>`<div class="check">
+      <span class="box"></span>
+      <span class="t"><b>${r.ref} · ${nm(r)}</b><span>${ago(r.days)}</span></span>
+      <span class="drop">⬆ ${t().toastDrop}</span>
+    </div>`).join('')}
+    <div class="if">
+      <button class="btn acc">${t().done}</button>
+      <button class="btn ghost">${t().skip}</button>
+    </div>
+  </div>`;
+}
+
+const SURFACE={A:surfaceA,B:surfaceB,C:surfaceC,D:surfaceD,E:surfaceE};
+
+function render(){
+  const L=t();
+  $('#frame').dir=L.dir;   // RTL only inside the app frame — the notes stay LTR
+  document.querySelectorAll('[data-t]').forEach(e=>{e.textContent=L[e.dataset.t]??e.textContent});
+  $('#bannerSlot').innerHTML='';
+  $('#stage').querySelectorAll('.scrim,.toasts,.dock,.inter').forEach(e=>e.remove());
+  $('#stage').insertAdjacentHTML('beforeend', SURFACE[cur]());
+  markPicker();
+  drawNotes();
+}
+
+function drawNotes(){
+  const n=NOTES[cur], v=VARIANTS.find(x=>x.k===cur);
+  $('#notes').innerHTML=`
+    <div class="note good"><h4><span class="tag">WORKS</span>${nm(v.name)}</h4>
+      <ul>${n.good.map(x=>`<li>${x}</li>`).join('')}</ul></div>
+    <div class="note bad"><h4><span class="tag">COSTS</span>${nm(v.name)}</h4>
+      <ul>${n.bad.map(x=>`<li>${x}</li>`).join('')}</ul></div>`;
+  $('#verdict').innerHTML=`<span class="lab">Recommendation</span>
+    <b>C (drop-zone toast) + B (sticky banner)</b> — C because the signed scan is already sitting on their
+    PC and dragging it onto a corner card is the shortest path that exists; B because it keeps the count
+    on screen for anyone who dismissed the toast. Both are components in the existing app shell, no new
+    route and no new table. <b>E is worth running once</b> as a one-off to burn down the current 29,
+    then retiring. <b>A blocks urgent work</b> and <b>D is too easy to ignore</b> for a problem that
+    already reached 40 days.`;
+}
+
+$('#lang').onclick=e=>{lang=lang==='en'?'ar':'en';
+  e.currentTarget.textContent=lang==='en'?'العربية':'English';
+  e.currentTarget.setAttribute('aria-pressed',lang==='ar');
+  drawPicker(); render();};          // labels are localized → rebuild the picker
+$('#replay').onclick=render;
+drawPicker();
+render();
+</script>
