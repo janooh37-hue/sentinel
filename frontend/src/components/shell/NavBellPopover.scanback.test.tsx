@@ -48,4 +48,20 @@ describe('bell — scan-back row', () => {
     await userEvent.click(screen.getByRole('button', { name: /notification|الإشعارات/i }))
     expect(await screen.findByText('لم تُرفع النسخة الموقّعة')).toBeInTheDocument()
   })
+
+  // Every other bell reminder (approvals, follow-ups, scan-inbox, ...) feeds
+  // both the trigger's numeric badge and the `hasNothing` empty-state check.
+  // Scan-back must too, or a scan-back-only inbox shows a "0" bell with an
+  // empty-state message sitting right above the reminder row that disproves it.
+  it('folds the scan-back count into the bell badge when nothing else is pending', async () => {
+    renderBell()
+    expect(await screen.findByRole('button', { name: 'Notifications, 2 unread' })).toBeInTheDocument()
+  })
+
+  it('does not show the empty state when scan-back is the only pending reminder', async () => {
+    renderBell()
+    await userEvent.click(screen.getByRole('button', { name: /notification/i }))
+    await screen.findByText('Signed copy not filed')
+    expect(screen.queryByText('No unread notifications')).not.toBeInTheDocument()
+  })
 })

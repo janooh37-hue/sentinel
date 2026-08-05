@@ -164,12 +164,12 @@ export function NavBellPopover(): React.JSX.Element {
   const items = recentQuery.data?.items ?? []
   const totalUnread = recentQuery.data?.total_unread ?? 0
   const moreCount = Math.max(0, totalUnread - items.length)
-  const hasNothing = items.length === 0 && pendingRequests === 0 && expiryUrgent === 0 && awaitingReturn === 0 && scanInbox === 0 && awaitingApproval === 0 && followUps === 0
+  const hasNothing = items.length === 0 && pendingRequests === 0 && expiryUrgent === 0 && awaitingReturn === 0 && scanInbox === 0 && awaitingApproval === 0 && followUps === 0 && scanBackCount === 0
 
   return (
     <div ref={rootRef} className="relative">
       <NavBell
-        count={totalUnread + pendingRequests + expiryUrgent + awaitingReturn + scanInbox + awaitingApproval + followUps}
+        count={totalUnread + pendingRequests + expiryUrgent + awaitingReturn + scanInbox + awaitingApproval + followUps + scanBackCount}
         onClick={() => setOpen((v) => !v)}
       />
 
