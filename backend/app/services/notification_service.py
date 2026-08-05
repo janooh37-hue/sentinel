@@ -31,7 +31,7 @@ from app.services import (
 class ActionableItem:
     """One owned, actionable item for Web Push — carries its own deep link."""
 
-    kind: str  # 'approval' (sign) | 'review' | 'scan' | 'email'
+    kind: str  # 'approval' (sign) | 'review' | 'scan' | 'email' | 'scanback'
     ref: str  # opaque, stable per-kind key, e.g. 'book:42'
     url: str  # frontend deep-link path the notification click navigates to
     label: str  # short human label (ref number / id) for the body text
@@ -78,11 +78,11 @@ def actionable_items(db: Session, user: User) -> list[ActionableItem]:
     """Per-user OWNED actionable items for Web Push, each with a deep link.
 
     Mirrors the *owned* categories of ``relevant_counts`` (approvals, scans,
-    emails) but returns the actual items (with ids) so the notifier pushes each
-    one exactly once and the click deep-links to it. Org-wide **leaves** are
-    intentionally excluded here: they have no owner, so a per-user push would
-    ping every user about every leave. Leaves stay in the in-app bell via
-    ``relevant_counts``.
+    emails, scanback) but returns the actual items (with ids) so the notifier
+    pushes each one exactly once and the click deep-links to it. Org-wide
+    **leaves** are intentionally excluded here: they have no owner, so a
+    per-user push would ping every user about every leave. Leaves stay in the
+    in-app bell via ``relevant_counts``.
 
     Approval-chain items are split by the user's role on the pending step so
     the copy is correct: ``approval`` (the signing manager → "sign") vs
@@ -129,6 +129,20 @@ def actionable_items(db: Session, user: User) -> list[ActionableItem]:
                 attachments=len(e.attachment_paths or []),
             )
         )
+
+    # Stranded scan-backs — same books.manage gate as the bell count: a push is
+    # only worth sending to someone who can actually file the scan.
+    if perm_service.has_capability(db, user, "books.manage"):
+        for book in book_service.list_awaiting_scan(db, user_id=user.id):
+            items.append(
+                ActionableItem(
+                    "scanback",
+                    f"book:{book.id}",
+                    f"/books/{book.id}",
+                    book.ref_number or f"#{book.id}",
+                    subject=book.subject,
+                )
+            )
 
     return items
 
