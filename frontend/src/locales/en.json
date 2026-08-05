@@ -2265,6 +2265,17 @@
       "gNumber": "G-number",
       "add": "Add",
       "addAnother": "+ Add another"
+    },
+    "inmatesTable": {
+      "addRow": "+ Add inmate",
+      "removeRow": "Remove inmate",
+      "empty": "No rows yet — add an inmate to begin.",
+      "serial": "#",
+      "name": "Inmate name",
+      "nationality": "Nationality",
+      "wing": "Wing",
+      "uid": "Unified number",
+      "holdingNo": "Property number"
     }
   },
   "dashboard": {
