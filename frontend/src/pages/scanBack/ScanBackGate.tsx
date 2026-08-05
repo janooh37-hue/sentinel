@@ -90,17 +90,33 @@ export function ScanBackGate(): React.JSX.Element | null {
   const key = dismissKeyFor(user?.id ?? 'anon')
   const [shownBefore] = useState(() => localStorage.getItem(key) === today())
   const [closed, setClosed] = useState(false)
+  // Tracks "has this mount shown the gate at all", independent of `closed` —
+  // `closed` alone only catches the three buttons. `<ScanBackGate />` sits
+  // outside App.tsx's route-keyed <main>, so it never remounts on navigation;
+  // within one mount, count can drop to 0 and rise again (an upload, then a
+  // fresh record crossing the 24h line), or the pathname can swing off
+  // /scan-back and back (browser Back/Forward past the modal). Either would
+  // silently reopen the gate with the key already stamped if `wasShown`
+  // didn't also convert that show->hide into a permanent close.
+  const wasShown = useRef(false)
 
-  // Nothing to nag about, already shown today (however it was closed last
-  // time), or the user is already on the page that IS the fix — same
-  // suppression ScanBackDock.tsx applies.
+  // Nothing to nag about, already shown today (this mount or a previous
+  // one, however it stopped showing), or the user is already on the page
+  // that IS the fix — same suppression ScanBackDock.tsx applies.
   const show = !shownBefore && !closed && count > 0 && pathname !== '/scan-back'
 
-  // Stamp "shown today" the instant it's actually shown — not on close — so a
-  // remount later today (route change, tab reload) reads the key and renders
-  // nothing, even if the user never explicitly dismissed it.
+  // Stamp "shown today" the instant it's actually shown — not on close — so
+  // a remount later today (route change, tab reload) reads the key and
+  // renders nothing, even if the user never explicitly dismissed it. And:
+  // once shown in this mount, any show -> hide transition counts as closed,
+  // same as clicking a button — see `wasShown` comment above.
   useEffect(() => {
-    if (show) localStorage.setItem(key, today())
+    if (show) {
+      wasShown.current = true
+      localStorage.setItem(key, today())
+    } else if (wasShown.current) {
+      setClosed(true)
+    }
   }, [show, key])
 
   if (!show) return null

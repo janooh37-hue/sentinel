@@ -77,9 +77,13 @@ def _sender_name(counterparty: str | None) -> str:
 def actionable_items(db: Session, user: User) -> list[ActionableItem]:
     """Per-user OWNED actionable items for Web Push, each with a deep link.
 
-    Mirrors the *owned* categories of ``relevant_counts`` (approvals, scans,
-    emails, scanback) but returns the actual items (with ids) so the notifier
-    pushes each one exactly once and the click deep-links to it. Org-wide
+    Mirrors the *owned* categories ``relevant_counts`` exposes (approvals,
+    scans, emails) plus ``scanback``, which ``relevant_counts`` no longer
+    tracks (its count was dropped — nothing read it, and it cost an
+    ``awaiting_scan`` query per connected user per SSE tick; this push path
+    and its ``books.manage`` gate are unaffected) — returns the actual items
+    (with ids) so the notifier pushes each one exactly once and the click
+    deep-links to it. Org-wide
     **leaves** are intentionally excluded here: they have no owner, so a
     per-user push would ping every user about every leave. Leaves stay in the
     in-app bell via ``relevant_counts``.

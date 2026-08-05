@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen, within, fireEvent } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { MemoryRouter } from 'react-router-dom'
+import { MemoryRouter, useNavigate } from 'react-router-dom'
 import i18n from '@/lib/i18n'
 
 import { ScanBackGate } from './ScanBackGate'
@@ -30,6 +30,21 @@ vi.mock('@/lib/authContext', () => ({ useAuth: () => ({ user: { id: 42 }, status
 
 const renderGate = (path = '/') =>
   render(<MemoryRouter initialEntries={[path]}><ScanBackGate /></MemoryRouter>)
+
+// Renders the gate alongside two real react-router nav triggers, so a test
+// can navigate within the SAME mount (no unmount/remount) — the shape that
+// actually exercises App.tsx's layout, where <ScanBackGate /> sits outside
+// the route-keyed <main> and never remounts on navigation.
+function NavHarness(): React.JSX.Element {
+  const navigate = useNavigate()
+  return (
+    <>
+      <ScanBackGate />
+      <button type="button" onClick={() => navigate('/scan-back')}>go-scan-back</button>
+      <button type="button" onClick={() => navigate('/')}>go-home</button>
+    </>
+  )
+}
 
 describe('ScanBackGate', () => {
   beforeEach(async () => { localStorage.clear(); await i18n.changeLanguage('en') })
@@ -104,6 +119,45 @@ describe('ScanBackGate', () => {
     unmount()
 
     renderGate()
+    expect(screen.queryByText(/records are waiting/i)).not.toBeInTheDocument()
+  })
+
+  // Both of the following stay within ONE mount — no unmount()/re-render, the
+  // gap the earlier `it.each` (which does unmount+remount) cannot express:
+  // `<ScanBackGate />` lives outside App.tsx's route-keyed <main> and never
+  // remounts during a session, so a show->hide->show swing has to be caught
+  // in place or the gate silently reopens with the key already stamped.
+  it('does not return when the count drops to 0 and rises again within the same mount', () => {
+    const original = state.count
+    try {
+      state.count = 4
+      const { rerender } = renderGate()
+      expect(screen.getByText(/records are waiting/i)).toBeInTheDocument()
+
+      // Gate self-hides (all rows uploaded, no button clicked) — count hits 0.
+      state.count = 0
+      rerender(<MemoryRouter><ScanBackGate /></MemoryRouter>)
+      expect(screen.queryByText(/records are waiting/i)).not.toBeInTheDocument()
+
+      // A fresh record crosses the 24h line later the same day.
+      state.count = 4
+      rerender(<MemoryRouter><ScanBackGate /></MemoryRouter>)
+      expect(screen.queryByText(/records are waiting/i)).not.toBeInTheDocument()
+    } finally {
+      state.count = original
+    }
+  })
+
+  it('does not return after navigating onto /scan-back and back, within the same mount', async () => {
+    render(<MemoryRouter initialEntries={['/']}><NavHarness /></MemoryRouter>)
+    expect(screen.getByText(/records are waiting/i)).toBeInTheDocument()
+
+    // Browser Back into a /scan-back history entry (or "View all"'s own nav).
+    await userEvent.click(screen.getByText('go-scan-back'))
+    expect(screen.queryByText(/records are waiting/i)).not.toBeInTheDocument()
+
+    // Forward/Back off /scan-back again — must not reopen.
+    await userEvent.click(screen.getByText('go-home'))
     expect(screen.queryByText(/records are waiting/i)).not.toBeInTheDocument()
   })
 
