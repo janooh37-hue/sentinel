@@ -121,7 +121,7 @@ def test_no_malformed_tokens_survive(rendered: Document) -> None:
 
 def test_footer_renders_submitter_g(rendered: Document) -> None:
     """The inherited first-page footer originally carried a non-framework
-    token, {{ submitter_id }} — nothing ever filled it. Task 1's build script
+    token, {{ submitter_id }} — nothing ever filled it. Task 3's build script
     rewrote it to the canonical {{ submitter_g }}; guard the render end to
     end so a future template regeneration can't silently reintroduce the
     stray token or drop the fix.
