@@ -62,7 +62,10 @@ export function ScanBackThumb({
           />
         </Suspense>
       ) : (
-        <span className="flex h-full w-full items-center justify-center bg-surface-tinted text-faint">
+        <span
+          data-testid="thumb-fallback"
+          className="flex h-full w-full items-center justify-center bg-surface-tinted text-faint"
+        >
           <FileText className="h-4 w-4" strokeWidth={1.8} />
         </span>
       )}

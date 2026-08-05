@@ -32,7 +32,7 @@ function DockRow({
   const ref = book.ref_number ?? `#${book.id}`
   return (
     <div className="flex gap-2 border-b border-hairline px-3 py-2 last:border-0">
-      <ScanBackThumb book={book} className="w-16" />
+      <ScanBackThumb book={book} className="w-28" />
       <div className="min-w-0 flex-1">
       <div className="mb-1.5 flex items-center gap-2">
         <span className="shrink-0 rounded bg-surface-tinted px-1.5 py-0.5 font-mono text-[0.68em] font-semibold">
@@ -114,9 +114,9 @@ export function ScanBackDock(): React.JSX.Element | null {
       )}
     >
       {open && (
-        /* 26rem, not 20rem: each row now carries a page-1 thumbnail, and a
-           thumb narrower than ~4rem shows "a paper exists" rather than which
-           paper — which is the whole point of the preview. */
+        /* 26rem, not 20rem: each row now carries a page-1 thumbnail, and the
+           dock has to be wide enough for the thumb to still be a preview
+           (~7rem here) and leave the drop target room beside it. */
         <div className="w-[min(26rem,calc(100vw-2rem))] overflow-hidden rounded-xl border border-border bg-surface shadow-lg">
           <div className="flex items-center gap-2 border-b border-hairline px-3 py-2">
             <Printer className="h-3.5 w-3.5 text-warning" strokeWidth={2} aria-hidden />

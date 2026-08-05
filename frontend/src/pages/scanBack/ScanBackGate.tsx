@@ -51,14 +51,21 @@ function GateRow({
   const days = ageDays(book.created_at)
   return (
     <div className="flex items-center gap-3 rounded-lg px-2 py-2 hover:bg-surface-raised">
-      <ScanBackThumb book={book} className="w-20" />
-      <span className="shrink-0 rounded bg-surface-tinted px-1.5 py-1 font-mono text-[0.7em] font-semibold">
-        {ref}
-      </span>
-      <span className="min-w-0 flex-1 truncate text-[0.78em]">{book.subject}</span>
-      <span className={cn('shrink-0 font-mono text-[0.68em] font-bold', AGE_COLOR[ageGroup(days)])}>
-        {t('scanBack.age', { count: days })}
-      </span>
+      {/* w-32 is a measured floor, not a taste call: at 80px this page renders
+          as a grey smudge, at ~128px the doc title, date, G-number and name are
+          all readable — which is the whole point of showing the paper. */}
+      <ScanBackThumb book={book} className="w-32" />
+      <div className="min-w-0 flex-1">
+        <div className="flex items-center gap-2">
+          <span className="shrink-0 rounded bg-surface-tinted px-1.5 py-1 font-mono text-[0.7em] font-semibold">
+            {ref}
+          </span>
+          <span className={cn('shrink-0 font-mono text-[0.68em] font-bold', AGE_COLOR[ageGroup(days)])}>
+            {t('scanBack.age', { count: days })}
+          </span>
+        </div>
+        <p className="mt-1 truncate text-[0.78em]">{book.subject}</p>
+      </div>
       <button
         type="button"
         disabled={busy}

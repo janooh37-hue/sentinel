@@ -32,7 +32,7 @@ export function ScanBackRow({
         days >= 30 && 'border-s-[3px] border-s-accent',
       )}
     >
-      <ScanBackThumb book={book} className="w-20" />
+      <ScanBackThumb book={book} className="w-32" />
       <span className="shrink-0 rounded-md bg-surface-tinted px-1.5 py-1 font-mono text-[0.72em] font-semibold">
         {ref}
       </span>
