@@ -78,6 +78,7 @@ export function useNotificationStream(enabled = true): void {
 
     const invalidate = (): void => {
       void qc.invalidateQueries({ queryKey: ['books', 'awaiting'] })
+      void qc.invalidateQueries({ queryKey: ['books', 'awaiting-scan'] })
       void qc.invalidateQueries({ queryKey: ['leaves-list', 'report-all'] })
       void qc.invalidateQueries({ queryKey: ['scan-inbox', 'count'] })
       void qc.invalidateQueries({ queryKey: ['ledger', 'unread-recent'] })

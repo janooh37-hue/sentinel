@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { render, screen, fireEvent } from '@testing-library/react'
+import { render, screen, within, fireEvent } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import i18n from '@/lib/i18n'
@@ -28,8 +28,8 @@ vi.mock('./useScanBack', async (orig) => ({
 }))
 vi.mock('@/lib/authContext', () => ({ useAuth: () => ({ user: { id: 42 }, status: 'authed' }) }))
 
-const renderGate = (): void => {
-  render(<MemoryRouter><ScanBackGate /></MemoryRouter>)
+const renderGate = (path = '/'): void => {
+  render(<MemoryRouter initialEntries={[path]}><ScanBackGate /></MemoryRouter>)
 }
 
 describe('ScanBackGate', () => {
@@ -115,5 +115,39 @@ describe('ScanBackGate', () => {
     await i18n.changeLanguage('ar')
     renderGate()
     expect(screen.getByText(/بانتظار نسختها الموقّعة/)).toBeInTheDocument()
+  })
+
+  it('renders nothing on the scan-back page itself', () => {
+    renderGate('/scan-back')
+    expect(screen.queryByText(/records are waiting/i)).not.toBeInTheDocument()
+  })
+
+  it('is hidden from print output', () => {
+    renderGate()
+    expect(screen.getByRole('dialog')).toHaveAttribute('data-print-hide')
+  })
+
+  it('colors the age chip by the spec tiers (red >=30d, amber >=14d, grey below)', () => {
+    // Pin the clock and swap in rows whose ages land squarely in each tier —
+    // the module fixture's fixed 2026 dates don't reliably straddle all
+    // three, so this overrides `state.books` for just this test.
+    const original = state.books
+    state.books = [
+      { id: 1, ref_number: 'RED', subject: 'x', created_at: '2026-07-01 12:00:00' }, // 35d
+      { id: 2, ref_number: 'AMBER', subject: 'x', created_at: '2026-07-16 12:00:00' }, // 20d
+      { id: 3, ref_number: 'GREY', subject: 'x', created_at: '2026-07-31 12:00:00' }, // 5d
+    ]
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-08-05T12:00:00Z'))
+    try {
+      renderGate()
+      const row = (ref: string): HTMLElement => screen.getByText(ref).closest('div')!
+      expect(within(row('RED')).getByText(/day/)).toHaveClass('text-destructive')
+      expect(within(row('AMBER')).getByText(/day/)).toHaveClass('text-warning')
+      expect(within(row('GREY')).getByText(/day/)).toHaveClass('text-muted-foreground')
+    } finally {
+      vi.useRealTimers()
+      state.books = original
+    }
   })
 })

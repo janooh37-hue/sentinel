@@ -11,7 +11,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 
-import { api, apiErrorMessage, type BookRead } from '@/lib/api'
+import { api, type BookRead } from '@/lib/api'
 import { useCapabilities } from '@/lib/useCapabilities'
 
 export type AgeGroup = 'overMonth' | 'weeks' | 'recent'
@@ -88,7 +88,9 @@ export function useFileSignedCopy(): {
       void qc.invalidateQueries({ queryKey: ['notifications', 'counts'] })
       toast.success(t('scanBack.filed', { ref: vars.ref }))
     },
-    onError: (err) => toast.error(apiErrorMessage(err)),
+    // Localized, not `apiErrorMessage(err)` — that can surface a raw English
+    // backend string to an Arabic-locale user (project's #1 recurring defect).
+    onError: () => toast.error(t('scanBack.uploadError')),
   })
 
   return {

@@ -69,6 +69,12 @@ def owner(db: Session) -> User:
     return u
 
 
+@pytest.fixture()
+def other_user(db: Session, owner: User) -> User:
+    """The second user `owner` already seeded — the real row, not `owner.id + 1`."""
+    return db.query(User).filter(User.email == "other@x.ae").one()
+
+
 def test_23h_old_is_not_stale_but_25h_is(db, owner):
     _seed(db, ref="GS-0001", hours_ago=23, owner_id=owner.id)
     _seed(db, ref="GS-0002", hours_ago=25, owner_id=owner.id)
@@ -76,12 +82,37 @@ def test_23h_old_is_not_stale_but_25h_is(db, owner):
     assert refs == ["GS-0002"]
 
 
-def test_only_the_creator_sees_it(db, owner):
-    other_id = owner.id + 1
-    _seed(db, ref="GS-0003", hours_ago=48, owner_id=other_id)
+def test_only_the_creator_sees_it(db, owner, other_user):
+    _seed(db, ref="GS-0003", hours_ago=48, owner_id=other_user.id)
     assert book_service.list_awaiting_scan(db, user_id=owner.id) == []
     refs = [b.ref_number for b in book_service.list_awaiting_scan(db, user_id=None)]
     assert refs == ["GS-0003"]
+
+
+def test_ownership_follows_the_current_version_not_the_first(db, owner, other_user):
+    """The load-bearing rule: ownership is whoever created the CURRENT
+    (highest-numbered) version, not whoever created the book's first one.
+
+    Every other fixture in this file seeds exactly one version, so an
+    implementation that read `versions[0]` instead of `_current_version`
+    (the last one) would pass all of them while attributing every
+    re-generated book to its original author forever.
+    """
+    book = _seed(db, ref="GS-0009", hours_ago=48, owner_id=owner.id)
+    db.add(
+        BookVersion(
+            book_id=book.id,
+            version_no=2,
+            status="awaiting_scan",
+            trigger="regenerate",
+            created_by_user_id=other_user.id,
+        )
+    )
+    db.commit()
+
+    assert book_service.list_awaiting_scan(db, user_id=owner.id) == []
+    refs = [b.ref_number for b in book_service.list_awaiting_scan(db, user_id=other_user.id)]
+    assert refs == ["GS-0009"]
 
 
 def test_other_states_and_deleted_are_excluded(db, owner):

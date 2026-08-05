@@ -134,3 +134,24 @@ def test_count_reflects_my_stranded_records(api_db):
     _stranded(api_db, ref="GS-0005", owner_id=mgr.id, hours_ago=2)  # fresh, not counted
     counts = notification_service.relevant_counts(api_db, mgr, precomputed_leaves=0)
     assert counts.scanback == 1
+
+
+def test_actionable_items_scanback_is_zero_without_books_manage(api_db):
+    """Same gate as the bell count: a push must never nag someone who would
+    get a 403 filing the upload it points at."""
+    op = _user(api_db, email="op@x.ae", role="operator")
+    _stranded(api_db, ref="GS-0006", owner_id=op.id)
+    items = notification_service.actionable_items(api_db, op)
+    assert [i for i in items if i.kind == "scanback"] == []
+
+
+def test_actionable_items_scanback_shape_with_books_manage(api_db):
+    mgr = _user(api_db, email="m2@x.ae", role="manager")
+    book = _stranded(api_db, ref="GS-0007", owner_id=mgr.id)
+    items = [i for i in notification_service.actionable_items(api_db, mgr) if i.kind == "scanback"]
+    assert len(items) == 1
+    item = items[0]
+    assert item.kind == "scanback"
+    assert item.ref == f"book:{book.id}"
+    assert item.url == f"/books/{book.id}"
+    assert item.label == "GS-0007"

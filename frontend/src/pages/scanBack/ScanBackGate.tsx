@@ -7,13 +7,19 @@
  * no migration.
  */
 import { useRef, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useLocation, useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { Printer, X } from 'lucide-react'
 
 import type { BookRead } from '@/lib/api'
 import { useAuth } from '@/lib/authContext'
-import { ageDays, dismissKeyFor, useFileSignedCopy, useScanBack } from './useScanBack'
+import { cn } from '@/lib/utils'
+import { ageDays, ageGroup, dismissKeyFor, useFileSignedCopy, useScanBack } from './useScanBack'
+
+// Spec tiers (design doc §2): red >=30d, amber >=14d, grey below — same
+// buckets `ageGroup` already defines for the page's tabs, and the same
+// tokens ExpiringSoonWidget.tsx uses for its expired/critical/soon tiers.
+const AGE_COLOR = { overMonth: 'text-destructive', weeks: 'text-warning', recent: 'text-muted-foreground' } as const
 
 const SHOWN = 3
 
@@ -34,14 +40,15 @@ function GateRow({
   const { t } = useTranslation()
   const inputRef = useRef<HTMLInputElement>(null)
   const ref = book.ref_number ?? `#${book.id}`
+  const days = ageDays(book.created_at)
   return (
     <div className="flex items-center gap-3 rounded-lg px-2 py-2 hover:bg-surface-raised">
       <span className="shrink-0 rounded bg-surface-tinted px-1.5 py-1 font-mono text-[0.7em] font-semibold">
         {ref}
       </span>
       <span className="min-w-0 flex-1 truncate text-[0.78em]">{book.subject}</span>
-      <span className="shrink-0 font-mono text-[0.68em] font-bold text-accent">
-        {t('scanBack.age', { count: ageDays(book.created_at) })}
+      <span className={cn('shrink-0 font-mono text-[0.68em] font-bold', AGE_COLOR[ageGroup(days)])}>
+        {t('scanBack.age', { count: days })}
       </span>
       <button
         type="button"
@@ -69,13 +76,16 @@ function GateRow({
 export function ScanBackGate(): React.JSX.Element | null {
   const { t } = useTranslation()
   const navigate = useNavigate()
+  const { pathname } = useLocation()
   const { user } = useAuth()
   const { books, count } = useScanBack()
   const { file, busy } = useFileSignedCopy()
   const key = dismissKeyFor(user?.id ?? 'anon')
   const [dismissed, setDismissed] = useState(() => localStorage.getItem(key) === today())
 
-  if (dismissed || count === 0) return null
+  // Nothing to nag about, already dismissed today, or the user is already on
+  // the page that IS the fix — same suppression ScanBackDock.tsx applies.
+  if (dismissed || count === 0 || pathname === '/scan-back') return null
 
   const dismiss = (): void => {
     localStorage.setItem(key, today())
@@ -87,6 +97,7 @@ export function ScanBackGate(): React.JSX.Element | null {
       role="dialog"
       aria-modal="true"
       aria-labelledby="scanback-gate-title"
+      data-print-hide
       className="fixed inset-0 z-50 grid place-items-center bg-primary/40 p-6 backdrop-blur-sm"
     >
       <div className="w-full max-w-md overflow-hidden rounded-2xl bg-surface shadow-2xl">

@@ -214,7 +214,14 @@ function Shell(): React.JSX.Element {
               <Route path="/application" element={<ApplicationPage />} />
               <Route path="/books" element={<BooksPage />} />
               <Route path="/books/:id" element={<BookRecordPage />} />
-              <Route path="/scan-back" element={<ScanBackPage />} />
+              <Route
+                path="/scan-back"
+                element={
+                  <RequireCapability cap="books.manage">
+                    <ScanBackPage />
+                  </RequireCapability>
+                }
+              />
               <Route path="/leaves" element={<LeavesPage />} />
               <Route
                 path="/permits"

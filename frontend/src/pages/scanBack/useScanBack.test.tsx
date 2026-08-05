@@ -69,4 +69,16 @@ describe('useFileSignedCopy', () => {
     expect(toast.error).toHaveBeenCalledTimes(1)
     expect(toast.success).not.toHaveBeenCalled()
   })
+
+  it('toasts the localized message, not the raw backend error string', async () => {
+    // Arabic-leak guard: a raw `apiErrorMessage(err)` would surface this
+    // English string straight to an Arabic-locale user.
+    const qc = new QueryClient()
+    vi.spyOn(apiMod.api, 'addBookAttachment').mockRejectedValue(
+      new Error('Internal Server Error: something exploded'),
+    )
+    const { result } = renderHook(() => useFileSignedCopy(), { wrapper: wrapperFor(qc) })
+    await result.current.file(1, 'GS-0410', new File([], 'x.pdf'))
+    expect(toast.error).toHaveBeenCalledWith('scanBack.uploadError')
+  })
 })
