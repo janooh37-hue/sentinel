@@ -3,7 +3,7 @@ import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { FormProvider, useForm } from 'react-hook-form'
 import { useTranslation } from 'react-i18next'
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it } from 'vitest'
 
 import i18n from '@/lib/i18n'
 import { buildZodSchema } from '@/lib/applicationFormSchema'
@@ -41,6 +41,14 @@ function ValidatedHarness(): React.JSX.Element {
 }
 
 describe('InmatesTableField', () => {
+  // If an assertion inside the Arabic test below fails, an inline restore at
+  // the end of that `it` never runs — the language stays 'ar' and the NEXT
+  // test fails with a misleading "button not found" instead of pointing at
+  // the real Arabic regression. afterEach runs regardless of pass/fail.
+  afterEach(async () => {
+    await i18n.changeLanguage('en')
+  })
+
   it('starts empty and adds a row on demand', async () => {
     render(<Harness />)
     expect(screen.getByText(/no rows yet/i)).toBeInTheDocument()
@@ -75,10 +83,9 @@ describe('InmatesTableField', () => {
     render(<Harness />)
     // Assert the Arabic string itself — an English-only assertion cannot catch
     // an AR leak when the EN label happens to equal the key.
-    expect(screen.getByText('إسم النزيل')).toBeInTheDocument()
+    expect(screen.getByText('اسم النزيل')).toBeInTheDocument()
     expect(screen.getByText('الرقم الموحد')).toBeInTheDocument()
     expect(screen.getByText('ت')).toBeInTheDocument()
-    await i18n.changeLanguage('en')
   })
 
   it('surfaces a visible error when a required cell (name) is left blank — not a silent no-op', async () => {

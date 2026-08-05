@@ -76,4 +76,18 @@ describe('CheckboxField — submitted payload types', () => {
     expect(payload.action_notified).toBe(true)
     expect(typeof payload.action_notified).toBe('boolean')
   })
+
+  // This is the actual dangerous path: an UNTICKED box that gets stringified
+  // as "false" is still truthy to the backend's `fields.get(key)` and would
+  // print as a ticked bullet on an official document. The ticked→true case
+  // above doesn't exercise this at all.
+  it('an untouched (unticked) submit is boolean false, typeof "boolean" — not the string "false"', async () => {
+    const onSubmit = vi.fn()
+    render(<Harness onSubmit={onSubmit} />)
+    await userEvent.click(screen.getByRole('button', { name: 'submit' }))
+    expect(onSubmit).toHaveBeenCalledTimes(1)
+    const payload = onSubmit.mock.calls[0][0] as Record<string, unknown>
+    expect(payload.action_notified).toBe(false)
+    expect(typeof payload.action_notified).toBe('boolean')
+  })
 })
