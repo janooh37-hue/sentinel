@@ -17,10 +17,15 @@ import { useCapabilities } from '@/lib/useCapabilities'
 export type AgeGroup = 'overMonth' | 'weeks' | 'recent'
 
 /**
- * Whole days since `iso`, which is a NAIVE LOCAL timestamp from the backend
- * (`Book.created_at` is stamped with `datetime.now()`, not UTC). Normalising
- * the separator keeps Safari from returning NaN on "YYYY-MM-DD HH:MM:SS", and
- * we deliberately do NOT append 'Z' — that would re-introduce the 4h shift.
+ * Whole days since `iso`. `Book.created_at` is stored naive LOCAL (Asia/Dubai,
+ * `datetime.now()`, not UTC) but is never serialized bare: `ORMBase._tag_timezone`
+ * (`backend/app/schemas/_base.py`) tags it with an explicit `+04:00` offset before
+ * it hits the wire (`backend/app/schemas/book.py` LOCAL_WALLCLOCK_FIELDS), so JS
+ * parses it as the correct absolute instant. The `' '`→`'T'` swap is a defensive
+ * fallback for any legacy naive ("YYYY-MM-DD HH:MM:SS") shape, which also keeps
+ * Safari from returning NaN. We deliberately never append 'Z': for a naive local
+ * value that's the +4h regression this field once shipped (f111177); for an
+ * already-offset-tagged value it produces an invalid, doubly-suffixed string.
  */
 export function ageDays(iso: string): number {
   const ms = Date.now() - new Date(iso.replace(' ', 'T')).getTime()
