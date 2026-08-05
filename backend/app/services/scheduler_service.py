@@ -183,6 +183,7 @@ _KIND_META: dict[str, str] = {
     "review": "/books?status=pending",
     "scan": "/scan-inbox",
     "email": "/ledger",
+    "scanback": "/scan-back",
 }
 
 
@@ -275,6 +276,47 @@ def _scan_push(new_items: list, section_url: str) -> tuple[dict, str]:
     )
 
 
+def _ar_records_waiting(n: int) -> str:
+    """Arabic count-noun agreement for n>=2 stranded records, matching the CLDR
+    Arabic plural rule and word-for-word the same phrasing as ar.json's
+    ``scanBack.gate.title_*`` family — two/few/many/other. Not a general-purpose
+    pluralizer; only this one phrase, only for the push body's n>=2 case."""
+    if n == 2:
+        return "سجلان بانتظار نسختهما الموقّعة"
+    if 3 <= n % 100 <= 10:
+        return f"{n} سجلات بانتظار نسختها الموقّعة"
+    if 11 <= n % 100 <= 99:
+        return f"{n} سجلاً بانتظار نسخته الموقّعة"
+    return f"{n} سجل بانتظار نسخته الموقّعة"
+
+
+def _scanback_push(new_items: list, section_url: str) -> tuple[dict, str]:
+    """Scan-back push — a printed paper was signed but never scanned into the app.
+
+    Deliberately NOT routed through `_doc_push`: that copy says "Signature
+    needed", which is the opposite ask. Here the signature already exists on
+    paper; what's missing is the upload.
+    """
+    n = len(new_items)
+    if n == 1:
+        it = new_items[0]
+        subj = f" — {it.subject}" if it.subject else ""
+        return (
+            _localized(
+                f"Signed copy not filed · {it.label}{subj}\nScan it into the record",
+                f"لم تُرفع النسخة الموقّعة · {it.label}{subj}\nامسحها وأرفقها بالسجل",
+            ),
+            it.url,
+        )
+    return (
+        _localized(
+            f"{n} records waiting for their signed copy",
+            _ar_records_waiting(n),
+        ),
+        section_url,
+    )
+
+
 def _build_push(
     kind: str, new_items: list, section_url: str
 ) -> tuple[dict[str, tuple[str, str]], str]:
@@ -287,6 +329,8 @@ def _build_push(
         return _email_push(new_items, section_url)
     if kind == "scan":
         return _scan_push(new_items, section_url)
+    if kind == "scanback":
+        return _scanback_push(new_items, section_url)
     return _doc_push(kind, new_items, section_url)
 
 

@@ -1,0 +1,221 @@
+import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { render, screen, within, fireEvent } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
+import { MemoryRouter, useNavigate } from 'react-router-dom'
+import i18n from '@/lib/i18n'
+
+import { ScanBackGate } from './ScanBackGate'
+import { dismissKeyFor } from './useScanBack'
+
+// Local calendar date, matching ScanBackGate's own `today()` (see that file's
+// comment) — NOT `toISOString().slice(0, 10)`, which is the UTC date and, at
+// this app's UTC+4 offset, is still "yesterday" between 00:00 and 04:00 local.
+const localToday = (): string => new Date().toLocaleDateString('en-CA')
+
+const state = {
+  count: 4,
+  books: [
+    { id: 1, ref_number: 'GS-0410', subject: 'Ack', created_at: '2026-06-25 12:00:00' },
+    { id: 2, ref_number: 'GS-0411', subject: 'Ack', created_at: '2026-06-25 12:00:00' },
+    { id: 3, ref_number: 'NAT-0424', subject: 'Warning', created_at: '2026-06-29 12:00:00' },
+    { id: 4, ref_number: 'NAT-0642', subject: 'Warning', created_at: '2026-07-28 12:00:00' },
+  ],
+}
+vi.mock('./useScanBack', async (orig) => ({
+  ...(await orig<Record<string, unknown>>()),
+  useScanBack: () => ({ ...state, isLoading: false, enabled: true }),
+  useFileSignedCopy: () => ({ file: vi.fn(), busy: false }),
+}))
+vi.mock('@/lib/authContext', () => ({ useAuth: () => ({ user: { id: 42 }, status: 'authed' }) }))
+
+const renderGate = (path = '/') =>
+  render(<MemoryRouter initialEntries={[path]}><ScanBackGate /></MemoryRouter>)
+
+// Renders the gate alongside two real react-router nav triggers, so a test
+// can navigate within the SAME mount (no unmount/remount) — the shape that
+// actually exercises App.tsx's layout, where <ScanBackGate /> sits outside
+// the route-keyed <main> and never remounts on navigation.
+function NavHarness(): React.JSX.Element {
+  const navigate = useNavigate()
+  return (
+    <>
+      <ScanBackGate />
+      <button type="button" onClick={() => navigate('/scan-back')}>go-scan-back</button>
+      <button type="button" onClick={() => navigate('/')}>go-home</button>
+    </>
+  )
+}
+
+describe('ScanBackGate', () => {
+  beforeEach(async () => { localStorage.clear(); await i18n.changeLanguage('en') })
+
+  it('shows the count and only the three oldest rows', () => {
+    renderGate()
+    expect(screen.getByText(/4 records are waiting/i)).toBeInTheDocument()
+    expect(screen.getByText('GS-0410')).toBeInTheDocument()
+    expect(screen.getByText('NAT-0424')).toBeInTheDocument()
+    expect(screen.queryByText('NAT-0642')).not.toBeInTheDocument()
+  })
+
+  it('stamps the per-user per-day key as soon as it is shown, not on close', () => {
+    renderGate()
+    expect(localStorage.getItem(dismissKeyFor(42))).toBe(localToday())
+  })
+
+  it('Not now hides the gate for this mount', async () => {
+    renderGate()
+    await userEvent.click(screen.getByRole('button', { name: /not now/i }))
+    expect(screen.queryByText(/records are waiting/i)).not.toBeInTheDocument()
+    expect(localStorage.getItem(dismissKeyFor(42))).toBe(localToday())
+  })
+
+  // `localToday()` above evaluates the SAME expression the implementation uses
+  // (`toLocaleDateString('en-CA')`), at the same instant, in the same zone —
+  // so it can never disagree with a correct implementation, and can't catch a
+  // regression back to `toISOString().slice(0, 10)` either (the two only ever
+  // differ inside the local midnight/UTC-midnight gap). This test pins the
+  // clock to exactly that gap so the two formulas diverge, deriving which
+  // side of UTC midnight to land on from the runner's OWN offset so it's
+  // deterministic on any machine, not just this UTC+4 box.
+  it('stores the LOCAL calendar date even when it differs from the UTC one', () => {
+    const offsetMin = new Date().getTimezoneOffset() // >0 behind UTC, <0 ahead, 0 at UTC
+    if (offsetMin === 0) {
+      // Runner's zone IS UTC: local and UTC calendar dates can never differ,
+      // so no instant exists that would discriminate the two formulas here.
+      return
+    }
+    const now = new Date()
+    const utcMidnightMs = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate())
+    // Behind-UTC zones (offset > 0) still read yesterday just after UTC
+    // midnight; ahead-of-UTC zones (offset < 0) already read tomorrow just
+    // before it — either way, one minute off UTC midnight straddles the gap.
+    const pinnedMs = offsetMin > 0 ? utcMidnightMs + 60_000 : utcMidnightMs - 60_000
+    const expectedLocal = new Date(pinnedMs).toLocaleDateString('en-CA')
+    const expectedUtc = new Date(pinnedMs).toISOString().slice(0, 10)
+    expect(expectedLocal).not.toBe(expectedUtc) // sanity: the pin actually straddles the boundary
+
+    vi.useFakeTimers()
+    vi.setSystemTime(pinnedMs)
+    try {
+      renderGate()
+      fireEvent.click(screen.getByRole('button', { name: /not now/i }))
+      expect(localStorage.getItem(dismissKeyFor(42))).toBe(expectedLocal)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  // The gate shows once. Whichever route closes it — X, Not now, or View all —
+  // the key was already stamped the moment it was shown, so a same-day
+  // remount (route change, tab reload) must render nothing regardless.
+  it.each([
+    ['the × button', /dismiss/i],
+    ['Not now', /not now/i],
+    ['View all', /view all/i],
+  ])('shows once; after closing via %s, a same-day remount renders nothing', async (_label, buttonName) => {
+    const { unmount } = renderGate()
+    expect(screen.getByText(/records are waiting/i)).toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', { name: buttonName }))
+    unmount()
+
+    renderGate()
+    expect(screen.queryByText(/records are waiting/i)).not.toBeInTheDocument()
+  })
+
+  // Both of the following stay within ONE mount — no unmount()/re-render, the
+  // gap the earlier `it.each` (which does unmount+remount) cannot express:
+  // `<ScanBackGate />` lives outside App.tsx's route-keyed <main> and never
+  // remounts during a session, so a show->hide->show swing has to be caught
+  // in place or the gate silently reopens with the key already stamped.
+  it('does not return when the count drops to 0 and rises again within the same mount', () => {
+    const original = state.count
+    try {
+      state.count = 4
+      const { rerender } = renderGate()
+      expect(screen.getByText(/records are waiting/i)).toBeInTheDocument()
+
+      // Gate self-hides (all rows uploaded, no button clicked) — count hits 0.
+      state.count = 0
+      rerender(<MemoryRouter><ScanBackGate /></MemoryRouter>)
+      expect(screen.queryByText(/records are waiting/i)).not.toBeInTheDocument()
+
+      // A fresh record crosses the 24h line later the same day.
+      state.count = 4
+      rerender(<MemoryRouter><ScanBackGate /></MemoryRouter>)
+      expect(screen.queryByText(/records are waiting/i)).not.toBeInTheDocument()
+    } finally {
+      state.count = original
+    }
+  })
+
+  it('does not return after navigating onto /scan-back and back, within the same mount', async () => {
+    render(<MemoryRouter initialEntries={['/']}><NavHarness /></MemoryRouter>)
+    expect(screen.getByText(/records are waiting/i)).toBeInTheDocument()
+
+    // Browser Back into a /scan-back history entry (or "View all"'s own nav).
+    await userEvent.click(screen.getByText('go-scan-back'))
+    expect(screen.queryByText(/records are waiting/i)).not.toBeInTheDocument()
+
+    // Forward/Back off /scan-back again — must not reopen.
+    await userEvent.click(screen.getByText('go-home'))
+    expect(screen.queryByText(/records are waiting/i)).not.toBeInTheDocument()
+  })
+
+  it('stays hidden when already shown today', () => {
+    localStorage.setItem(dismissKeyFor(42), localToday())
+    renderGate()
+    expect(screen.queryByText(/records are waiting/i)).not.toBeInTheDocument()
+  })
+
+  it('returns the next day', () => {
+    localStorage.setItem(dismissKeyFor(42), '2020-01-01')
+    renderGate()
+    expect(screen.getByText(/records are waiting/i)).toBeInTheDocument()
+  })
+
+  it("does not silence a different user's gate", () => {
+    localStorage.setItem(dismissKeyFor(99), localToday())
+    renderGate()
+    expect(screen.getByText(/records are waiting/i)).toBeInTheDocument()
+  })
+
+  it('renders Arabic under lng=ar', async () => {
+    await i18n.changeLanguage('ar')
+    renderGate()
+    expect(screen.getByText(/بانتظار نسختها الموقّعة/)).toBeInTheDocument()
+  })
+
+  it('renders nothing on the scan-back page itself', () => {
+    renderGate('/scan-back')
+    expect(screen.queryByText(/records are waiting/i)).not.toBeInTheDocument()
+  })
+
+  it('is hidden from print output', () => {
+    renderGate()
+    expect(screen.getByRole('dialog')).toHaveAttribute('data-print-hide')
+  })
+
+  it('colors the age chip by the spec tiers (red >=30d, amber >=14d, grey below)', () => {
+    // Pin the clock and swap in rows whose ages land squarely in each tier —
+    // the module fixture's fixed 2026 dates don't reliably straddle all
+    // three, so this overrides `state.books` for just this test.
+    const original = state.books
+    state.books = [
+      { id: 1, ref_number: 'RED', subject: 'x', created_at: '2026-07-01 12:00:00' }, // 35d
+      { id: 2, ref_number: 'AMBER', subject: 'x', created_at: '2026-07-16 12:00:00' }, // 20d
+      { id: 3, ref_number: 'GREY', subject: 'x', created_at: '2026-07-31 12:00:00' }, // 5d
+    ]
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-08-05T12:00:00Z'))
+    try {
+      renderGate()
+      const row = (ref: string): HTMLElement => screen.getByText(ref).closest('div')!
+      expect(within(row('RED')).getByText(/day/)).toHaveClass('text-destructive')
+      expect(within(row('AMBER')).getByText(/day/)).toHaveClass('text-warning')
+      expect(within(row('GREY')).getByText(/day/)).toHaveClass('text-muted-foreground')
+    } finally {
+      vi.useRealTimers()
+      state.books = original
+    }
+  })
+})

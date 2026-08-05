@@ -25,6 +25,8 @@ import { useNotificationStream } from '@/hooks/useNotificationStream'
 import { TopProgressBar } from './components/refresh/TopProgressBar'
 import { useRefreshHeartbeat } from './hooks/useRefreshHeartbeat'
 import { useRefreshHotkeys } from './hooks/useRefreshHotkeys'
+import { ScanBackDock } from './pages/scanBack/ScanBackDock'
+import { ScanBackGate } from './pages/scanBack/ScanBackGate'
 import '@/lib/i18n'
 
 // Code-split the HugeRTE-using pages (Application, Ledger) and the larger
@@ -76,6 +78,9 @@ const ScanInboxPage = lazy(() =>
 )
 const SendToGroupPage = lazy(() =>
   import('@/pages/announcements/SendToGroupPage').then((m) => ({ default: m.SendToGroupPage })),
+)
+const ScanBackPage = lazy(() =>
+  import('@/pages/scanBack/ScanBackPage').then((m) => ({ default: m.ScanBackPage })),
 )
 
 const queryClient = new QueryClient({
@@ -209,6 +214,14 @@ function Shell(): React.JSX.Element {
               <Route path="/application" element={<ApplicationPage />} />
               <Route path="/books" element={<BooksPage />} />
               <Route path="/books/:id" element={<BookRecordPage />} />
+              <Route
+                path="/scan-back"
+                element={
+                  <RequireCapability cap="books.manage">
+                    <ScanBackPage />
+                  </RequireCapability>
+                }
+              />
               <Route path="/leaves" element={<LeavesPage />} />
               <Route
                 path="/permits"
@@ -272,6 +285,8 @@ function Shell(): React.JSX.Element {
         </div>
         {isMobile && <BottomTabBar />}
       </div>
+      <ScanBackDock />
+      <ScanBackGate />
       {/* Wrapped so print can hide it: sonner renders an empty <section> in
           normal flow here, and a trailing in-flow box after a named-@page
           element (the permits register) costs a blank sheet. */}

@@ -31,7 +31,7 @@ from app.services import (
 class ActionableItem:
     """One owned, actionable item for Web Push — carries its own deep link."""
 
-    kind: str  # 'approval' (sign) | 'review' | 'scan' | 'email'
+    kind: str  # 'approval' (sign) | 'review' | 'scan' | 'email' | 'scanback'
     ref: str  # opaque, stable per-kind key, e.g. 'book:42'
     url: str  # frontend deep-link path the notification click navigates to
     label: str  # short human label (ref number / id) for the body text
@@ -77,12 +77,16 @@ def _sender_name(counterparty: str | None) -> str:
 def actionable_items(db: Session, user: User) -> list[ActionableItem]:
     """Per-user OWNED actionable items for Web Push, each with a deep link.
 
-    Mirrors the *owned* categories of ``relevant_counts`` (approvals, scans,
-    emails) but returns the actual items (with ids) so the notifier pushes each
-    one exactly once and the click deep-links to it. Org-wide **leaves** are
-    intentionally excluded here: they have no owner, so a per-user push would
-    ping every user about every leave. Leaves stay in the in-app bell via
-    ``relevant_counts``.
+    Mirrors the *owned* categories ``relevant_counts`` exposes (approvals,
+    scans, emails) plus ``scanback``, which ``relevant_counts`` no longer
+    tracks (its count was dropped — nothing read it, and it cost an
+    ``awaiting_scan`` query per connected user per SSE tick; this push path
+    and its ``books.manage`` gate are unaffected) — returns the actual items
+    (with ids) so the notifier pushes each one exactly once and the click
+    deep-links to it. Org-wide
+    **leaves** are intentionally excluded here: they have no owner, so a
+    per-user push would ping every user about every leave. Leaves stay in the
+    in-app bell via ``relevant_counts``.
 
     Approval-chain items are split by the user's role on the pending step so
     the copy is correct: ``approval`` (the signing manager → "sign") vs
@@ -110,9 +114,7 @@ def actionable_items(db: Session, user: User) -> list[ActionableItem]:
 
     # Scans — owned inbox items needing action (matches counts()'s "total").
     for state in ("awaiting_confirmation", "unrouted"):
-        for s in scan_inbox_service.list_items(
-            db, owner_user_id=user.id, state=state
-        ):
+        for s in scan_inbox_service.list_items(db, owner_user_id=user.id, state=state):
             items.append(ActionableItem("scan", f"scan:{s.id}", "/scan-inbox", f"#{s.id}"))
 
     # Emails — unread received mail in this user's mailbox. Carry the sender,
@@ -132,7 +134,22 @@ def actionable_items(db: Session, user: User) -> list[ActionableItem]:
             )
         )
 
+    # Stranded scan-backs — same books.manage gate as the bell count: a push is
+    # only worth sending to someone who can actually file the scan.
+    if perm_service.has_capability(db, user, "books.manage"):
+        for book in book_service.list_awaiting_scan(db, user_id=user.id):
+            items.append(
+                ActionableItem(
+                    "scanback",
+                    f"book:{book.id}",
+                    f"/books/{book.id}",
+                    book.ref_number or f"#{book.id}",
+                    subject=book.subject,
+                )
+            )
+
     return items
+
 
 _LEAVE_PAGE = 500  # == leaves LIST_MAX_LIMIT in api/v1/leaves.py
 
@@ -144,9 +161,7 @@ def _leaves_needing_action(db: Session, today_iso: str) -> int:
     while True:
         rows, total = leave_service.list_leaves(db, limit=_LEAVE_PAGE, offset=offset)
         for r in rows:
-            if leave_lifecycle.needs_action(
-                r.leave_type, r.status, str(r.end_date), today_iso
-            ):
+            if leave_lifecycle.needs_action(r.leave_type, r.status, str(r.end_date), today_iso):
                 need += 1
         total_seen += len(rows)
         if not rows or total_seen >= total:
@@ -199,6 +214,4 @@ def relevant_counts(
         if precomputed_leaves is not None
         else _leaves_needing_action(db, today_iso)
     )
-    return NotificationCounts(
-        approvals=approvals, leaves=leaves, scans=scans, emails=emails
-    )
+    return NotificationCounts(approvals=approvals, leaves=leaves, scans=scans, emails=emails)

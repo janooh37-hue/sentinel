@@ -4,6 +4,7 @@ import {
   FileText,
   LayoutDashboard,
   Mail,
+  Printer,
   ShieldCheck,
   Users,
   type LucideIcon,
@@ -24,5 +25,6 @@ export const NAV_ITEMS: readonly NavItem[] = [
   { to: '/leaves', key: 'nav.leaves', Icon: CalendarDays },
   { to: '/application', key: 'nav.services', Icon: FileText },
   { to: '/books', key: 'nav.records', Icon: BookText },
+  { to: '/scan-back', key: 'nav.scanBack', Icon: Printer, cap: 'books.manage' },
   { to: '/permits', key: 'nav.permits', Icon: ShieldCheck, cap: 'permits.view' },
 ]

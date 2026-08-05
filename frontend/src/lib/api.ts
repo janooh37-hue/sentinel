@@ -1529,6 +1529,10 @@ export const api = {
   // --- books approval (feat/mobile-and-approval) ---
   /** GET /books/awaiting — books pending the signed-in user's decision. */
   listAwaitingBooks: () => request<BookRead[]>('GET', '/books/awaiting'),
+  /** GET /books/awaiting-scan — records stranded at `awaiting_scan` past 24h.
+   * `scope='all'` returns everyone's (both scopes need books.manage). */
+  listAwaitingScanBooks: (scope: 'mine' | 'all' = 'mine') =>
+    request<BookRead[]>('GET', `/books/awaiting-scan?scope=${scope}`),
   /** GET /books/approvers — valid approver candidates for the submit picker. */
   listApprovers: () => request<ApproverOptionRead[]>('GET', '/books/approvers'),
   /** POST /books/{id}/submit — submit a draft book for approval. */
