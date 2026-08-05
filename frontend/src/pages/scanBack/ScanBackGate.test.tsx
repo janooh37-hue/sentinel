@@ -1,10 +1,11 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { render, screen } from '@testing-library/react'
+import { render, screen, fireEvent } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import i18n from '@/lib/i18n'
 
-import { ScanBackGate, dismissKeyFor } from './ScanBackGate'
+import { ScanBackGate } from './ScanBackGate'
+import { dismissKeyFor } from './useScanBack'
 
 // Local calendar date, matching ScanBackGate's own `today()` (see that file's
 // comment) — NOT `toISOString().slice(0, 10)`, which is the UTC date and, at
@@ -47,6 +48,42 @@ describe('ScanBackGate', () => {
     await userEvent.click(screen.getByRole('button', { name: /not now/i }))
     expect(localStorage.getItem(dismissKeyFor(42))).toBe(localToday())
     expect(screen.queryByText(/records are waiting/i)).not.toBeInTheDocument()
+  })
+
+  // `localToday()` above evaluates the SAME expression the implementation uses
+  // (`toLocaleDateString('en-CA')`), at the same instant, in the same zone —
+  // so it can never disagree with a correct implementation, and can't catch a
+  // regression back to `toISOString().slice(0, 10)` either (the two only ever
+  // differ inside the local midnight/UTC-midnight gap). This test pins the
+  // clock to exactly that gap so the two formulas diverge, deriving which
+  // side of UTC midnight to land on from the runner's OWN offset so it's
+  // deterministic on any machine, not just this UTC+4 box.
+  it('stores the LOCAL calendar date even when it differs from the UTC one', () => {
+    const offsetMin = new Date().getTimezoneOffset() // >0 behind UTC, <0 ahead, 0 at UTC
+    if (offsetMin === 0) {
+      // Runner's zone IS UTC: local and UTC calendar dates can never differ,
+      // so no instant exists that would discriminate the two formulas here.
+      return
+    }
+    const now = new Date()
+    const utcMidnightMs = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate())
+    // Behind-UTC zones (offset > 0) still read yesterday just after UTC
+    // midnight; ahead-of-UTC zones (offset < 0) already read tomorrow just
+    // before it — either way, one minute off UTC midnight straddles the gap.
+    const pinnedMs = offsetMin > 0 ? utcMidnightMs + 60_000 : utcMidnightMs - 60_000
+    const expectedLocal = new Date(pinnedMs).toLocaleDateString('en-CA')
+    const expectedUtc = new Date(pinnedMs).toISOString().slice(0, 10)
+    expect(expectedLocal).not.toBe(expectedUtc) // sanity: the pin actually straddles the boundary
+
+    vi.useFakeTimers()
+    vi.setSystemTime(pinnedMs)
+    try {
+      renderGate()
+      fireEvent.click(screen.getByRole('button', { name: /not now/i }))
+      expect(localStorage.getItem(dismissKeyFor(42))).toBe(expectedLocal)
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('View all closes the gate without silencing tomorrow', async () => {

@@ -38,6 +38,13 @@ export function ageGroup(days: number): AgeGroup {
   return 'recent'
 }
 
+// Lives here (not ScanBackGate.tsx) so that component file exports only its
+// component — react-refresh/only-export-components forbids a non-component
+// export sharing a component module (see useContextSource.ts for the same
+// discipline elsewhere in the repo).
+export const dismissKeyFor = (userId: number | string): string =>
+  `scanback-gate-dismissed:${userId}`
+
 export function useScanBack(scope: 'mine' | 'all' = 'mine'): {
   books: BookRead[]
   isLoading: boolean

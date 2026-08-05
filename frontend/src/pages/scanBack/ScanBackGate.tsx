@@ -13,16 +13,9 @@ import { Printer, X } from 'lucide-react'
 
 import type { BookRead } from '@/lib/api'
 import { useAuth } from '@/lib/authContext'
-import { ageDays, useFileSignedCopy, useScanBack } from './useScanBack'
+import { ageDays, dismissKeyFor, useFileSignedCopy, useScanBack } from './useScanBack'
 
 const SHOWN = 3
-
-// The test imports this alongside the component, so it must live here rather
-// than the usual sibling-file split (see useContextSource.ts) — disable the
-// fast-refresh rule for just this one non-component export.
-// eslint-disable-next-line react-refresh/only-export-components
-export const dismissKeyFor = (userId: number | string): string =>
-  `scanback-gate-dismissed:${userId}`
 
 // Local calendar date, NOT `toISOString().slice(0, 10)` (that's the UTC date).
 // This app runs at UTC+4: between 00:00 and 04:00 local, the UTC date is still
