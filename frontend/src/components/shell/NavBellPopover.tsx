@@ -19,7 +19,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { Link, useNavigate } from 'react-router-dom'
-import { ArrowRight, CalendarClock, ClipboardCheck, Flag, Inbox, Paperclip, ScanLine, ShieldCheck, Stamp } from 'lucide-react'
+import { ArrowRight, CalendarClock, ClipboardCheck, Flag, Inbox, Paperclip, Printer, ScanLine, ShieldCheck, Stamp } from 'lucide-react'
 import { toast } from 'sonner'
 
 import { api, apiErrorMessage } from '@/lib/api'
@@ -27,6 +27,7 @@ import { useCapabilities } from '@/lib/useCapabilities'
 import { useIdentity } from '@/lib/useIdentity'
 import { useAwaitingReturnCount } from '@/pages/leaves/useAwaitingReturnCount'
 import { useFlagCount } from '@/pages/ledger/outlook/useFlagCount'
+import { useScanBack } from '@/pages/scanBack/useScanBack'
 import { useScanInboxCount } from '@/pages/scanInbox/useScanInboxCount'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { EmptyState } from '@/components/ui/empty-state'
@@ -105,6 +106,7 @@ export function NavBellPopover(): React.JSX.Element {
   const awaitingReturn = useAwaitingReturnCount()
   const scanInbox = useScanInboxCount()
   const followUps = useFlagCount()
+  const { count: scanBackCount } = useScanBack()
 
   // Phase 4 LAN — awaiting MY approval (books.approve-gated).
   // Query key ['books','awaiting'] is also invalidated by useNotificationStream.
@@ -244,6 +246,33 @@ export function NavBellPopover(): React.JSX.Element {
                 </span>
                 <span className="text-[0.78em] text-muted-foreground">
                   {t('nav.bell.awaitingApproval', { count: awaitingApproval })}
+                </span>
+              </div>
+              <ArrowRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground rtl:rotate-180" strokeWidth={1.8} />
+            </button>
+          )}
+
+          {/* Signed copy never filed — books.manage-gated inside useScanBack */}
+          {scanBackCount > 0 && (
+            <button
+              type="button"
+              onClick={() => {
+                setOpen(false)
+                navigate('/scan-back')
+              }}
+              className="flex w-full items-center gap-3 border-b border-hairline px-4 py-3 text-start transition-colors hover:bg-surface-tinted focus-visible:bg-surface-tinted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+            >
+              <Avatar className="h-8 w-8 bg-warning-soft text-warning">
+                <AvatarFallback className="bg-transparent">
+                  <Printer className="h-4 w-4" strokeWidth={1.8} />
+                </AvatarFallback>
+              </Avatar>
+              <div className="flex min-w-0 flex-1 flex-col">
+                <span className="truncate text-[0.9em] font-semibold text-foreground">
+                  {t('nav.bell.scanBackTitle')}
+                </span>
+                <span className="text-[0.78em] text-muted-foreground">
+                  {t('nav.bell.scanBack', { count: scanBackCount })}
                 </span>
               </div>
               <ArrowRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground rtl:rotate-180" strokeWidth={1.8} />
