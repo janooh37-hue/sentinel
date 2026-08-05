@@ -115,6 +115,33 @@ reintroduce. Compare against `datetime.now()`, never `datetime.now(UTC)`.
 Mirror the existing route pattern with `GET /api/v1/books/awaiting-scan`
 (`scope=mine|all`, `all` gated on `books.manage` in `api/v1/books.py`).
 
+### The capability gap — gate the nag on `books.manage`
+
+Generating a document needs `documents.generate` (`api/v1/documents.py:285`).
+Filing the signed copy needs `books.manage` (`api/v1/books.py:841`). These are
+**not the same capability**, and two live users sit in the gap:
+
+| User | Role | `documents.generate` | `books.manage` |
+|---|---|---|---|
+| Ibrahim Younes Ahmad Ayyash | operator | yes | **no** |
+| Mohamed Salem Al Maskari | operator | yes | **no** |
+
+They can strand a record and cannot clear it. Nagging them would produce a
+count, a dock row and a drop target that 403s.
+
+So **every personal surface — bell, push, A, D, and E's Mine tab — is gated on
+`books.manage`.** This is the same precedent `relevant_counts` already sets: it
+gates `approvals` on `books.approve` specifically so the bell never shows a
+count for an action the user cannot take (`notification_service.py:188-194`).
+
+Records stranded by someone in the gap are not lost — they surface on **E's
+Everyone tab**, where an admin can file them. No record becomes invisible; it
+just routes to someone with the authority to act.
+
+> **Worth doing regardless, as an ops action, not code:** 5 of the 7 operators
+> already carry a per-user `books.manage` grant. Ibrahim and Mohammed look
+> simply missed. Granting them closes the gap at the source.
+
 ## Section 1 — Bell and push
 
 **Bell.** `NotificationCounts` (`backend/app/schemas/notifications.py`) gains
@@ -131,8 +158,18 @@ ActionableItem("scanback", f"book:{b.id}", f"/books/{b.id}", b.ref_number,
                subject=b.subject)
 ```
 
+The single-record deep link goes to `/books/{id}`, which is a live upload
+surface — `BookRecordPage` wires `useAddScan` and calls `fileSignedCopy`
+(`BookRecordPage.tsx:315,558`). Tapping the push lands the operator somewhere
+they can act, not on a read-only view.
+
 `scheduler_service` gains `_KIND_META["scanback"] = "/scan-back"` and a
-`_scanback_push` alongside `_scan_push`/`_doc_push`:
+`_scanback_push` alongside `_scan_push`/`_doc_push`.
+
+**`_build_push` needs an explicit `if kind == "scanback"` branch**
+(`scheduler_service.py:286-290`). Its fallthrough is `_doc_push`, so omitting
+the branch renders *"Signature needed · NAT-0612"* — plausible, wrong, and it
+ships green because nothing raises.
 
 > **1 record** — `Signed copy not filed · NAT-0612 — Violation Form` / `Scan it into the record`
 > **N records** — `25 records waiting for their signed copy`
@@ -221,6 +258,8 @@ Push copy lives in `scheduler_service._scanback_push`, matching how
   4h — this is the regression that `f111177` fixed.
 - Filing the signed copy removes the record from the list.
 - `scope=all` is rejected without `books.manage`.
+- A user with `documents.generate` but not `books.manage` gets `scanback=0` and
+  no push, while their stranded record still appears under `scope=all`.
 
 **Frontend**
 - Gate renders with ≥1 stale record and not at zero; dismissal writes the
@@ -230,6 +269,16 @@ Push copy lives in `scheduler_service._scanback_push`, matching how
 - **Assert the Arabic string under `lng=ar`, not just the English.** An
   English-only i18n test cannot catch an AR leak when the EN label equals the
   key — that is exactly how the leave-type leak shipped green (`c0db9fb`).
+
+## Build order
+
+**Section 0 + 1 first** (query → route → bell → push). It is independently
+verifiable — the push fires and the bell counts without a single new screen
+existing — and it is the half that actually reaches someone who is not looking
+at the app.
+
+**Then E, then D, then A.** Both A and D link to `/scan-back`; building either
+first leaves "View all" pointing at a 404.
 
 ## Files
 
