@@ -1637,6 +1637,33 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/books/awaiting-scan": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Awaiting Scan
+         * @description Records stranded at ``awaiting_scan`` past 24h, oldest first.
+         *
+         *     ``scope=mine`` (default) is the caller's own; ``scope=all`` is everyone's,
+         *     so an admin can clear records stranded by a user who lacks books.manage.
+         *
+         *     Declared before ``/{book_id}`` so the literal ``awaiting-scan`` segment isn't
+         *     swallowed by the int path param — same reason as ``/awaiting`` above.
+         *     Authority is ``books.manage``: the same capability filing the scan requires.
+         */
+        get: operations["list_awaiting_scan_api_v1_books_awaiting_scan_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/books/approvers": {
         parameters: {
             query?: never;
@@ -6514,6 +6541,11 @@ export interface components {
             scans: number;
             /** Emails */
             emails: number;
+            /**
+             * Scanback
+             * @default 0
+             */
+            scanback: number;
         };
         /** NotifyMessageRead */
         NotifyMessageRead: {
@@ -7380,18 +7412,12 @@ export interface components {
             email_subject?: string | null;
             /** Error Detail */
             error_detail?: string | null;
-            /**
-             * Fields
-             * @default {}
-             */
-            fields: {
+            /** Fields */
+            fields?: {
                 [key: string]: string;
             };
-            /**
-             * Candidates
-             * @default []
-             */
-            candidates: components["schemas"]["EmployeeCandidate"][];
+            /** Candidates */
+            candidates?: components["schemas"]["EmployeeCandidate"][];
         };
         /** ScanInboxList */
         ScanInboxList: {
@@ -11613,6 +11639,39 @@ export interface operations {
     list_awaiting_api_v1_books_awaiting_get: {
         parameters: {
             query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BookRead"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_awaiting_scan_api_v1_books_awaiting_scan_get: {
+        parameters: {
+            query?: {
+                scope?: string;
+            };
             header?: never;
             path?: never;
             cookie?: {

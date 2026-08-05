@@ -484,6 +484,25 @@ def list_awaiting(
     return out
 
 
+@router.get("/awaiting-scan", response_model=list[BookRead])
+def list_awaiting_scan(
+    db: Annotated[Session, Depends(get_db)],
+    user: Annotated[User, Depends(require_capability("books.manage"))],
+    scope: Annotated[str, Query(pattern="^(mine|all)$")] = "mine",
+) -> list[BookRead]:
+    """Records stranded at ``awaiting_scan`` past 24h, oldest first.
+
+    ``scope=mine`` (default) is the caller's own; ``scope=all`` is everyone's,
+    so an admin can clear records stranded by a user who lacks books.manage.
+
+    Declared before ``/{book_id}`` so the literal ``awaiting-scan`` segment isn't
+    swallowed by the int path param — same reason as ``/awaiting`` above.
+    Authority is ``books.manage``: the same capability filing the scan requires.
+    """
+    rows = book_service.list_awaiting_scan(db, user_id=None if scope == "all" else user.id)
+    return [BookRead.model_validate(r) for r in rows]
+
+
 @router.get("/approvers", response_model=list[ApproverOptionRead])
 def list_approvers(
     db: Annotated[Session, Depends(get_db)],
