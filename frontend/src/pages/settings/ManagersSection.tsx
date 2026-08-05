@@ -97,12 +97,21 @@ export function ManagersSection(): React.JSX.Element {
 
   const formFields = (
     <div className="space-y-2">
-      <input className={inputCls} dir="auto" placeholder={t('settings.managers.nameEn')}
-        value={form.name_en} onChange={(e) => setForm({ ...form, name_en: e.target.value })} />
-      <input className={inputCls} dir="auto" placeholder={t('settings.managers.nameAr')}
-        value={form.name_ar} onChange={(e) => setForm({ ...form, name_ar: e.target.value })} />
-      <input className={inputCls} dir="auto" placeholder={t('settings.managers.jobTitle')}
-        value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} />
+      <label className="block text-[0.72em] font-semibold uppercase tracking-[0.1em] text-muted-foreground rtl:tracking-normal">
+        {t('settings.managers.nameEn')}
+        <input className={`${inputCls} mt-1.5 font-normal normal-case tracking-normal`} dir="auto"
+          value={form.name_en} onChange={(e) => setForm({ ...form, name_en: e.target.value })} />
+      </label>
+      <label className="block text-[0.72em] font-semibold uppercase tracking-[0.1em] text-muted-foreground rtl:tracking-normal">
+        {t('settings.managers.nameAr')}
+        <input className={`${inputCls} mt-1.5 font-normal normal-case tracking-normal`} dir="auto"
+          value={form.name_ar} onChange={(e) => setForm({ ...form, name_ar: e.target.value })} />
+      </label>
+      <label className="block text-[0.72em] font-semibold uppercase tracking-[0.1em] text-muted-foreground rtl:tracking-normal">
+        {t('settings.managers.jobTitle')}
+        <input className={`${inputCls} mt-1.5 font-normal normal-case tracking-normal`} dir="auto"
+          value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} />
+      </label>
     </div>
   )
 
@@ -127,7 +136,7 @@ export function ManagersSection(): React.JSX.Element {
               </div>
             </div>
           ) : (
-            <div key={m.id} className="flex items-center justify-between gap-3 rounded-lg border border-hairline bg-surface-raised px-4 py-2.5">
+            <div key={m.id} className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-hairline bg-surface-raised px-4 py-2.5">
               <div className="min-w-0">
                 <span className="block truncate text-[0.9em] font-medium text-foreground" dir="auto">
                   {m.name_en ?? m.name_ar}
@@ -137,7 +146,7 @@ export function ManagersSection(): React.JSX.Element {
                   {m.has_signature ? t('settings.managers.hasSignature') : t('settings.managers.noSignature')}
                 </span>
               </div>
-              <div className="flex shrink-0 items-center gap-2">
+              <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto">
                 <select aria-label={t('settings.managers.noAccount')}
                   className="rounded-lg border border-border bg-surface px-3 py-1.5 text-[0.84em]"
                   value={m.user_id != null ? String(m.user_id) : ''}
@@ -148,11 +157,11 @@ export function ManagersSection(): React.JSX.Element {
                   ))}
                 </select>
                 <button type="button" onClick={() => openEdit(m)}
-                  className="rounded-full px-3 py-1 text-[0.78em] font-medium text-primary hover:bg-primary/10">
+                  className="min-h-11 rounded-full px-3 py-1 text-[0.78em] font-medium text-primary hover:bg-primary/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary sm:min-h-0">
                   {t('settings.managers.edit')}
                 </button>
                 <button type="button" onClick={() => setDeactivateId(m.id)}
-                  className="rounded-full px-3 py-1 text-[0.78em] font-medium text-accent hover:bg-accent-soft">
+                  className="min-h-11 rounded-full px-3 py-1 text-[0.78em] font-medium text-accent hover:bg-accent-soft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent sm:min-h-0">
                   {t('settings.managers.deactivate')}
                 </button>
               </div>

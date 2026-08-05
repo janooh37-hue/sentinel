@@ -1,18 +1,4 @@
-/**
- * SettingsPage — TAMM redesign (Task 10).
- *
- * Page shell: max-w-[1180px] mx-auto px-8 py-6, eyebrow + big title + meta line.
- * Section cards: bg-surface rounded-2xl p-6 with h3 header + sub-paragraph +
- * border-b border-hairline separator.
- *
- * Sections (top to bottom):
- *  1. Appearance — informational only (font + theme moved to TopNav)
- *  2. Defaults — stamp style, manager hand-sign
- *  3. Email integration — Email + Signature + linked-employee (manager-gated)
- *  4. Submitters — CRUD list (manager-gated)
- *  5. System — diagnostic info + update check
- *  6. Advanced — admin gate, paths copy (manager-gated)
- */
+/** Roomy settings workspace: grouped category rail, focused controls, editor. */
 
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
@@ -27,9 +13,9 @@ import {
   type AppSettingsUpdate,
   type SubmitterCreate,
 } from '@/lib/api'
-import { RoleGate } from '@/components/shell/RoleGate'
 import { CapabilityGate } from '@/components/shell/CapabilityGate'
 import { useAuth } from '@/lib/authContext'
+import { useCapabilities } from '@/lib/useCapabilities'
 import { copyToClipboard } from '@/lib/clipboard'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import { EmailSection } from './EmailSection'
@@ -59,7 +45,7 @@ export function SectionCard({
   children: React.ReactNode
 }): React.JSX.Element {
   return (
-    <section className="rounded-2xl bg-surface p-6">
+    <section className="rounded-2xl bg-surface p-4 sm:p-6">
       <div className="mb-4 border-b border-hairline pb-4">
         <h3 className="text-[1.05em] font-semibold tracking-tight text-foreground">
           {title}
@@ -83,7 +69,7 @@ function KeyValueRow({
 }): React.JSX.Element {
   return (
     <div className="grid grid-cols-1 gap-0.5 border-b border-hairline/60 py-3 last:border-0 sm:grid-cols-[180px_1fr] sm:items-center sm:gap-4">
-      <span className="text-[0.72em] font-semibold uppercase tracking-[0.1em] text-muted-foreground">
+      <span className="text-[0.72em] font-semibold uppercase tracking-[0.1em] text-muted-foreground rtl:tracking-normal">
         {label}
       </span>
       <div className="min-w-0 text-[0.9em] text-foreground [overflow-wrap:anywhere]">{children}</div>
@@ -186,7 +172,7 @@ function AccountSection(): React.JSX.Element {
 // Appearance — informational only (font size + theme live in TopNav)
 // ---------------------------------------------------------------------------
 
-function AppearanceSection({
+function CrashReportingSection({
   settings,
   onUpdate,
 }: {
@@ -200,10 +186,7 @@ function AppearanceSection({
       title={t('settings.appearance.title')}
       description={t('settings.appearance.description')}
     >
-      <p className="text-[0.86em] text-muted-foreground">
-        {t('settings.appearance.hint')}
-      </p>
-      <div className="mt-4 border-t border-hairline/60 pt-4">
+      <div>
         <label className="flex cursor-pointer items-center gap-2.5 text-[0.86em] text-foreground">
           <input
             type="checkbox"
@@ -217,7 +200,25 @@ function AppearanceSection({
           {t('settings.appearance.sentryHint')}
         </p>
       </div>
-      <div className="mt-3 border-t border-hairline/60 pt-3">
+    </SectionCard>
+  )
+}
+
+function SmsAutosendSection({
+  settings,
+  onUpdate,
+}: {
+  settings: AppSettingsRead
+  onUpdate: (u: AppSettingsUpdate) => void
+}): React.JSX.Element {
+  const { t } = useTranslation()
+
+  return (
+    <SectionCard
+      title={t('settings.smsAutosend.label')}
+      description={t('settings.smsAutosend.hint')}
+    >
+      <div>
         <label className="flex cursor-pointer items-center gap-2.5 text-[0.86em] text-foreground">
           <input
             type="checkbox"
@@ -227,9 +228,6 @@ function AppearanceSection({
           />
           <span>{t('settings.smsAutosend.label')}</span>
         </label>
-        <p className="ms-6 mt-1 text-[0.78em] text-muted-foreground">
-          {t('settings.smsAutosend.hint')}
-        </p>
       </div>
     </SectionCard>
   )
@@ -261,7 +259,7 @@ function DefaultsSection({
     >
       <div className="space-y-4">
         <div className="flex flex-col gap-1.5">
-          <label className="text-[0.72em] font-semibold uppercase tracking-[0.1em] text-muted-foreground">
+          <label className="text-[0.72em] font-semibold uppercase tracking-[0.1em] text-muted-foreground rtl:tracking-normal">
             {t('settings.defaults.stampStyle')}
           </label>
           <Select
@@ -345,7 +343,7 @@ function SubmittersSection(): React.JSX.Element {
         {submitters?.map((s) => (
           <div
             key={s.id}
-            className="flex items-center justify-between rounded-lg border border-hairline bg-surface-raised px-4 py-2.5"
+            className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-hairline bg-surface-raised px-4 py-2.5"
           >
             <div className="min-w-0">
               <span className="text-[0.9em] font-medium text-foreground">{s.name}</span>
@@ -358,7 +356,7 @@ function SubmittersSection(): React.JSX.Element {
             <button
               type="button"
               onClick={() => setDeleteId(s.id)}
-              className="rounded-full px-3 py-1 text-[0.78em] font-medium text-accent hover:bg-accent-soft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+              className="ms-auto min-h-11 shrink-0 rounded-full px-3 py-1 text-[0.78em] font-medium text-accent hover:bg-accent-soft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent sm:min-h-0"
             >
               {t('settings.submitters.delete')}
             </button>
@@ -367,20 +365,24 @@ function SubmittersSection(): React.JSX.Element {
 
         {showAdd ? (
           <div className="space-y-2.5 rounded-lg border border-hairline bg-surface-tinted p-3">
-            <div className="flex gap-2">
-              <input
-                autoFocus
-                className="flex-1 rounded-lg border border-border bg-surface px-3.5 py-2.5 text-[0.86em] text-foreground placeholder:text-muted-foreground transition-colors focus:border-primary focus:outline-none focus:ring-3 focus:ring-primary/15"
-                placeholder={t('settings.submitters.name')}
-                value={newName}
-                onChange={(e) => setNewName(e.target.value)}
-              />
-              <input
-                className="w-32 rounded-lg border border-border bg-surface px-3.5 py-2.5 font-mono text-[0.86em] text-foreground placeholder:text-muted-foreground transition-colors focus:border-primary focus:outline-none focus:ring-3 focus:ring-primary/15"
-                placeholder={t('settings.submitters.employeeId')}
-                value={newEmpId}
-                onChange={(e) => setNewEmpId(e.target.value)}
-              />
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-[1fr_8rem]">
+              <label className="text-[0.72em] font-semibold uppercase tracking-[0.1em] text-muted-foreground rtl:tracking-normal">
+                {t('settings.submitters.name')}
+                <input
+                  autoFocus
+                  className="mt-1.5 w-full rounded-lg border border-border bg-surface px-3.5 py-2.5 text-[0.86em] font-normal normal-case tracking-normal text-foreground transition-colors focus:border-primary focus:outline-none focus:ring-3 focus:ring-primary/15"
+                  value={newName}
+                  onChange={(e) => setNewName(e.target.value)}
+                />
+              </label>
+              <label className="text-[0.72em] font-semibold uppercase tracking-[0.1em] text-muted-foreground rtl:tracking-normal">
+                {t('settings.submitters.employeeId')}
+                <input
+                  className="mt-1.5 w-full rounded-lg border border-border bg-surface px-3.5 py-2.5 font-mono text-[0.86em] font-normal normal-case tracking-normal text-foreground transition-colors focus:border-primary focus:outline-none focus:ring-3 focus:ring-primary/15"
+                  value={newEmpId}
+                  onChange={(e) => setNewEmpId(e.target.value)}
+                />
+              </label>
             </div>
             <div className="flex justify-end gap-2">
               <OutlineButton onClick={() => setShowAdd(false)}>
@@ -568,18 +570,20 @@ function SystemSection(): React.JSX.Element {
             {updateResult.message}
           </span>
         )}
-        <OutlineButton
-          onClick={() => {
-            try {
-              localStorage.removeItem(MIGRATION_SKIPPED_KEY)
-            } catch {
-              /* ignore */
-            }
-            setShowMigration(true)
-          }}
-        >
-          {t('migration.buttons.runMigration')}
-        </OutlineButton>
+        <CapabilityGate cap="system.admin">
+          <OutlineButton
+            onClick={() => {
+              try {
+                localStorage.removeItem(MIGRATION_SKIPPED_KEY)
+              } catch {
+                /* ignore */
+              }
+              setShowMigration(true)
+            }}
+          >
+            {t('migration.buttons.runMigration')}
+          </OutlineButton>
+        </CapabilityGate>
       </div>
       {showMigration && (
         <MigrationWizard detectedDir={null} onClose={() => setShowMigration(false)} />
@@ -630,19 +634,18 @@ function AdvancedSection({
       description={t('settings.advanced.description')}
     >
       <div className="space-y-1">
-        {settings.admin_gate_enabled && (
-          <KeyValueRow label={t('settings.advanced.adminGate')}>
-            <label className="inline-flex cursor-pointer items-center gap-2 text-[0.86em] text-foreground">
-              <input
-                type="checkbox"
-                checked={settings.admin_gate_enabled}
-                onChange={(e) => adminMut.mutate(e.target.checked)}
-                className="h-4 w-4 accent-primary"
-              />
-              {t('settings.advanced.adminGateEnabled')}
-            </label>
-          </KeyValueRow>
-        )}
+        <KeyValueRow label={t('settings.advanced.adminGate')}>
+          <label className="inline-flex cursor-pointer items-center gap-2 text-[0.86em] text-foreground">
+            <input
+              type="checkbox"
+              checked={settings.admin_gate_enabled}
+              disabled={adminMut.isPending}
+              onChange={(e) => adminMut.mutate(e.target.checked)}
+              className="h-4 w-4 accent-primary"
+            />
+            {t('settings.advanced.adminGateEnabled')}
+          </label>
+        </KeyValueRow>
         {info && (
           <>
             <KeyValueRow label={t('settings.advanced.dataDir')}>
@@ -678,9 +681,39 @@ function AdvancedSection({
 // Main SettingsPage
 // ---------------------------------------------------------------------------
 
+type SettingsPanelId =
+  | 'account'
+  | 'signing'
+  | 'defaults'
+  | 'submitters'
+  | 'managers'
+  | 'email'
+  | 'sms'
+  | 'access'
+  | 'crashReporting'
+  | 'system'
+  | 'advanced'
+
+type SettingsGroupId = 'personal' | 'operations' | 'administration'
+
+interface SettingsPanelItem {
+  id: SettingsPanelId
+  title: string
+  description: string
+}
+
+interface SettingsCategory {
+  id: string
+  group: SettingsGroupId
+  label: string
+  panels: SettingsPanelItem[]
+}
+
 export function SettingsPage(): React.JSX.Element {
   const { t } = useTranslation()
   const qc = useQueryClient()
+  const { has } = useCapabilities()
+  const [activePanel, setActivePanel] = useState<SettingsPanelId>('account')
 
   const { data: settings, isLoading } = useQuery({
     queryKey: ['settings'],
@@ -700,9 +733,172 @@ export function SettingsPage(): React.JSX.Element {
     updateMut.mutate(body)
   }
 
+  const panels: Record<SettingsPanelId, SettingsPanelItem> = {
+    account: {
+      id: 'account',
+      title: t('settings.account.title'),
+      description: t('settings.account.description'),
+    },
+    signing: {
+      id: 'signing',
+      title: t('settings.signingSignature.title'),
+      description: t('settings.signingSignature.description'),
+    },
+    defaults: {
+      id: 'defaults',
+      title: t('settings.defaults.title'),
+      description: t('settings.defaults.description'),
+    },
+    submitters: {
+      id: 'submitters',
+      title: t('settings.submitters.title'),
+      description: t('settings.submitters.description'),
+    },
+    managers: {
+      id: 'managers',
+      title: t('settings.managers.title'),
+      description: t('settings.managers.description'),
+    },
+    email: {
+      id: 'email',
+      title: t('settings.email.heading'),
+      description: t('settings.email.description'),
+    },
+    sms: {
+      id: 'sms',
+      title: t('settings.smsAutosend.label'),
+      description: t('settings.smsAutosend.hint'),
+    },
+    access: {
+      id: 'access',
+      title: t('access.settingsCard.title'),
+      description: t('access.settingsCard.desc'),
+    },
+    crashReporting: {
+      id: 'crashReporting',
+      title: t('settings.appearance.title'),
+      description: t('settings.appearance.description'),
+    },
+    system: {
+      id: 'system',
+      title: t('settings.system.title'),
+      description: t('settings.system.description'),
+    },
+    advanced: {
+      id: 'advanced',
+      title: t('settings.advanced.title'),
+      description: t('settings.advanced.description'),
+    },
+  }
+
+  const categories = ([
+    {
+      id: 'profile',
+      group: 'personal',
+      label: t('settings.navigation.profile'),
+      panels: [panels.account, panels.signing],
+    },
+    {
+      id: 'documents',
+      group: 'operations',
+      label: t('settings.navigation.documents'),
+      panels: [
+        ...(has('settings.edit') ? [panels.defaults, panels.managers] : []),
+        ...(has('submitters.manage') ? [panels.submitters] : []),
+      ],
+    },
+    {
+      id: 'communications',
+      group: 'operations',
+      label: t('settings.navigation.communications'),
+      panels: [
+        ...(has('email.manage') ? [panels.email] : []),
+        ...(has('settings.edit') ? [panels.sms] : []),
+      ],
+    },
+    {
+      id: 'people',
+      group: 'administration',
+      label: t('settings.navigation.peopleAccess'),
+      panels: has('users.manage') ? [panels.access] : [],
+    },
+    {
+      id: 'application',
+      group: 'administration',
+      label: t('settings.navigation.application'),
+      panels: has('settings.edit') ? [panels.crashReporting] : [],
+    },
+    {
+      id: 'system',
+      group: 'administration',
+      label: t('settings.navigation.system'),
+      panels: [panels.system, ...(has('system.admin') ? [panels.advanced] : [])],
+    },
+  ] satisfies SettingsCategory[]).filter((category) => category.panels.length > 0)
+
+  const visiblePanelIds = new Set(
+    categories.flatMap((category) => category.panels.map((panel) => panel.id)),
+  )
+  const selectedPanelId = visiblePanelIds.has(activePanel) ? activePanel : 'account'
+  const selectedCategory =
+    categories.find((category) =>
+      category.panels.some((panel) => panel.id === selectedPanelId),
+    ) ?? categories[0]!
+
+  const groups: { id: SettingsGroupId; label: string }[] = [
+    { id: 'personal', label: t('settings.navigation.personal') },
+    { id: 'operations', label: t('settings.navigation.operations') },
+    { id: 'administration', label: t('settings.navigation.administration') },
+  ]
+
+  const settingsSkeleton = (
+    <div className="space-y-3 rounded-2xl bg-surface p-4 sm:p-6">
+      <Skeleton className="h-6 w-48 rounded-md" />
+      <Skeleton className="h-4 w-72 max-w-full rounded-md" />
+      <Skeleton className="h-40 w-full rounded-xl" />
+    </div>
+  )
+
+  const renderSelectedPanel = (): React.JSX.Element => {
+    switch (selectedPanelId) {
+      case 'account':
+        return <AccountSection />
+      case 'signing':
+        return settings ? (
+          <SigningSignatureSection settings={settings} onUpdate={handleUpdate} />
+        ) : (
+          <SigningSignatureSection />
+        )
+      case 'defaults':
+        return settings ? (
+          <DefaultsSection settings={settings} onUpdate={handleUpdate} />
+        ) : settingsSkeleton
+      case 'submitters':
+        return <SubmittersSection />
+      case 'managers':
+        return <ManagersSection />
+      case 'email':
+        return <EmailSection />
+      case 'sms':
+        return settings ? (
+          <SmsAutosendSection settings={settings} onUpdate={handleUpdate} />
+        ) : settingsSkeleton
+      case 'access':
+        return <AccessRequestsSection />
+      case 'crashReporting':
+        return settings ? (
+          <CrashReportingSection settings={settings} onUpdate={handleUpdate} />
+        ) : settingsSkeleton
+      case 'system':
+        return <SystemSection />
+      case 'advanced':
+        return settings ? <AdvancedSection settings={settings} /> : settingsSkeleton
+    }
+  }
+
   return (
     <div className="flex flex-1 flex-col overflow-auto bg-background">
-      <div className="mx-auto w-full max-w-[1180px] flex-1 px-8 pb-10 pt-6">
+      <div className="mx-auto w-full max-w-[1240px] flex-1 px-4 pb-10 pt-6 sm:px-8">
         {/* TAMM page header */}
         <header className="mb-5">
           <div className="text-[0.75em] font-medium uppercase tracking-[0.18em] text-muted-foreground">
@@ -716,58 +912,110 @@ export function SettingsPage(): React.JSX.Element {
           </p>
         </header>
 
-        {isLoading ? (
-          <div className="space-y-4">
-            {[1, 2, 3, 4].map((i) => (
-              <Skeleton key={i} className="h-40 w-full rounded-2xl" />
-            ))}
-          </div>
-        ) : (
-          <div className="space-y-4">
-            <AccountSection />
+        <div className="overflow-hidden rounded-2xl border border-hairline bg-surface shadow-sm lg:grid lg:grid-cols-[250px_220px_minmax(0,1fr)] xl:grid-cols-[285px_240px_minmax(0,1fr)]">
+          <nav
+            aria-label={t('settings.navigation.categories')}
+            className="overflow-x-auto bg-primary p-2 text-primary-foreground lg:min-h-[620px] lg:overflow-y-auto lg:p-5"
+          >
+            <div className="hidden lg:block">
+              <h2 className="text-xl font-bold">{t('settings.title')}</h2>
+              <p className="mt-1 text-xs leading-relaxed text-primary-foreground/70">
+                {t('settings.subtitle')}
+              </p>
+            </div>
 
-            {settings ? (
-              <SigningSignatureSection settings={settings} onUpdate={handleUpdate} />
-            ) : (
-              <SigningSignatureSection />
-            )}
+            <div className="flex min-w-max gap-1 lg:mt-5 lg:block lg:min-w-0">
+              {groups.map((group) => {
+                const groupCategories = categories.filter(
+                  (category) => category.group === group.id,
+                )
+                if (groupCategories.length === 0) return null
+                return (
+                  <div key={group.id} className="contents lg:block">
+                    <div className="mb-1 mt-5 hidden px-2 text-[0.68em] font-bold uppercase tracking-[0.16em] text-primary-foreground/55 first:mt-0 rtl:tracking-normal lg:block">
+                      {group.label}
+                    </div>
+                    {groupCategories.map((category) => {
+                      const active = category.id === selectedCategory.id
+                      return (
+                        <button
+                          key={category.id}
+                          type="button"
+                          aria-pressed={active}
+                          onClick={() => setActivePanel(category.panels[0].id)}
+                          className={`flex min-h-11 shrink-0 items-center justify-between gap-3 rounded-lg px-3 py-2.5 text-start text-sm transition-colors lg:mb-0.5 lg:w-full ${
+                            active
+                              ? 'bg-surface font-semibold text-primary shadow-sm'
+                              : 'text-primary-foreground/80 hover:bg-white/10 hover:text-primary-foreground'
+                          }`}
+                        >
+                          <span>{category.label}</span>
+                          {category.panels.length > 1 && (
+                            <span
+                              className={`rounded-full px-2 py-0.5 text-[0.72em] ${
+                                active
+                                  ? 'bg-surface-tinted text-primary'
+                                  : 'bg-white/10 text-primary-foreground/75'
+                              }`}
+                            >
+                              {category.panels.length}
+                            </span>
+                          )}
+                        </button>
+                      )
+                    })}
+                  </div>
+                )
+              })}
+            </div>
+          </nav>
 
-            {settings && (
-              <AppearanceSection settings={settings} onUpdate={handleUpdate} />
-            )}
+          <nav
+            aria-label={t('settings.navigation.controls')}
+            className="max-h-64 overflow-y-auto border-b border-hairline lg:max-h-none lg:min-h-[620px] lg:border-b-0 lg:border-e"
+          >
+            <div className="border-b border-hairline px-4 py-4">
+              <h2 className="font-semibold text-foreground">{selectedCategory.label}</h2>
+              <p className="mt-1 text-xs text-muted-foreground">
+                {t('settings.navigation.controlsCount', {
+                  count: selectedCategory.panels.length,
+                })}
+              </p>
+            </div>
+            {selectedCategory.panels.map((panel) => {
+              const active = panel.id === selectedPanelId
+              return (
+                <button
+                  key={panel.id}
+                  type="button"
+                  aria-pressed={active}
+                  onClick={() => setActivePanel(panel.id)}
+                  className={`block min-h-[4.5rem] w-full border-b border-hairline border-s-4 px-4 py-3 text-start transition-colors ${
+                    active
+                      ? 'border-s-primary bg-primary/5'
+                      : 'border-s-transparent hover:bg-surface-tinted'
+                  }`}
+                >
+                  <span className="block text-sm font-semibold text-foreground">
+                    {panel.title}
+                  </span>
+                  <span className="mt-1 line-clamp-2 block text-xs leading-relaxed text-muted-foreground">
+                    {panel.description}
+                  </span>
+                </button>
+              )
+            })}
+          </nav>
 
-            {settings && (
-              <DefaultsSection settings={settings} onUpdate={handleUpdate} />
-            )}
-
-            {/* Email integration is its own composite section. The EmailSection
-                component renders its own SectionCard chrome so it can host
-                Signature + linked-employee as sub-cards. Gated to users with
-                the email.manage capability so they can see/edit their own
-                mailbox credentials (backend enforces the same). */}
-            <CapabilityGate cap="email.manage">
-              <EmailSection />
-            </CapabilityGate>
-
-            <CapabilityGate cap="users.manage">
-              <AccessRequestsSection />
-            </CapabilityGate>
-
-            <RoleGate role="manager">
-              <SubmittersSection />
-            </RoleGate>
-
-            <CapabilityGate cap="settings.edit">
-              <ManagersSection />
-            </CapabilityGate>
-
-            <SystemSection />
-
-            <RoleGate role="manager">
-              {settings && <AdvancedSection settings={settings} />}
-            </RoleGate>
-          </div>
-        )}
+          <section
+            aria-label={panels[selectedPanelId].title}
+            className="min-w-0 bg-surface-raised p-3 sm:p-4"
+          >
+            {isLoading && selectedPanelId !== 'account' && selectedPanelId !== 'system'
+              ? settingsSkeleton
+              : renderSelectedPanel()}
+          </section>
+        </div>
       </div>
     </div>
   )
