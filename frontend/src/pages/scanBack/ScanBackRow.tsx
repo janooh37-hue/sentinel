@@ -5,6 +5,7 @@ import { Upload } from 'lucide-react'
 
 import type { BookRead } from '@/lib/api'
 import { cn } from '@/lib/utils'
+import { ScanBackThumb } from './ScanBackThumb'
 import { ageDays } from './useScanBack'
 
 export function ScanBackRow({
@@ -31,6 +32,7 @@ export function ScanBackRow({
         days >= 30 && 'border-s-[3px] border-s-accent',
       )}
     >
+      <ScanBackThumb book={book} className="w-20" />
       <span className="shrink-0 rounded-md bg-surface-tinted px-1.5 py-1 font-mono text-[0.72em] font-semibold">
         {ref}
       </span>

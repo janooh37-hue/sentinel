@@ -51,6 +51,7 @@ import { FormRail, type RailItem } from './FormRail'
 import { bookHeaderText, railItemsFrom, spineCountsFrom, useServiceLabel } from './serviceLabels'
 import { RecordsList } from './RecordsList'
 import { RecordPane } from './RecordPane'
+import { ScanBackEntry } from '@/pages/scanBack/ScanBackEntry'
 
 const DEFAULT_FILTERS = DEFAULT_BOOKS_FILTERS
 
@@ -439,6 +440,7 @@ export function BooksPage(): React.JSX.Element {
             </div>
             <div className="flex shrink-0 items-center gap-2">
               <RefreshButton />
+              <ScanBackEntry />
               <button
                 type="button"
                 onClick={() => setNewBookOpen(true)}
@@ -638,6 +640,7 @@ export function BooksPage(): React.JSX.Element {
               </div>
               <div className="flex shrink-0 items-center gap-2">
                 <RefreshButton />
+                <ScanBackEntry compact />
                 <button
                   type="button"
                   onClick={() => setNewBookOpen(true)}

@@ -66,6 +66,32 @@ if (typeof globalThis.ResizeObserver === 'undefined') {
     disconnect(): void {}
   }
 }
+// jsdom has no layout, so it has no IntersectionObserver either. Stub it as
+// "everything observed is on screen" — components that defer work until
+// visible (ScanBackThumb) then behave in tests as they do in a real viewport
+// instead of silently never loading.
+if (typeof globalThis.IntersectionObserver === 'undefined') {
+  globalThis.IntersectionObserver = class {
+    private readonly cb: IntersectionObserverCallback
+    constructor(cb: IntersectionObserverCallback) {
+      this.cb = cb
+    }
+    observe(target: Element): void {
+      this.cb(
+        [{ isIntersecting: true, target } as IntersectionObserverEntry],
+        this as unknown as IntersectionObserver,
+      )
+    }
+    unobserve(): void {}
+    disconnect(): void {}
+    takeRecords(): IntersectionObserverEntry[] {
+      return []
+    }
+    readonly root = null
+    readonly rootMargin = ''
+    readonly thresholds: readonly number[] = []
+  }
+}
 // jsdom doesn't implement matchMedia at all (not even a stub that always
 // misses) — hooks like useIsMobile/useReducedMotion call it unconditionally
 // on mount, so without this every such component throws in tests. Default to

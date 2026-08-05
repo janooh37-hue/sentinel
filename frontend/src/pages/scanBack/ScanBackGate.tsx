@@ -21,6 +21,7 @@ import { Printer, X } from 'lucide-react'
 import type { BookRead } from '@/lib/api'
 import { useAuth } from '@/lib/authContext'
 import { cn } from '@/lib/utils'
+import { ScanBackThumb } from './ScanBackThumb'
 import { ageDays, ageGroup, dismissKeyFor, useFileSignedCopy, useScanBack } from './useScanBack'
 
 // Spec tiers (design doc §2): red >=30d, amber >=14d, grey below — same
@@ -50,6 +51,7 @@ function GateRow({
   const days = ageDays(book.created_at)
   return (
     <div className="flex items-center gap-3 rounded-lg px-2 py-2 hover:bg-surface-raised">
+      <ScanBackThumb book={book} className="w-20" />
       <span className="shrink-0 rounded bg-surface-tinted px-1.5 py-1 font-mono text-[0.7em] font-semibold">
         {ref}
       </span>
@@ -131,8 +133,10 @@ export function ScanBackGate(): React.JSX.Element | null {
       data-print-hide
       className="fixed inset-0 z-50 grid place-items-center bg-primary/40 p-6 backdrop-blur-sm"
     >
-      <div className="w-full max-w-md overflow-hidden rounded-2xl bg-surface shadow-2xl">
-        <div className="relative border-b border-hairline px-5 py-5">
+      {/* max-w-lg, not -md: the rows carry a page-1 thumbnail now — the paper
+          is what the operator recognises, so it needs room to be legible. */}
+      <div className="flex max-h-full w-full max-w-lg flex-col overflow-hidden rounded-2xl bg-surface shadow-2xl">
+        <div className="relative shrink-0 border-b border-hairline px-5 py-5">
           <button
             type="button"
             onClick={dismiss}
@@ -150,13 +154,15 @@ export function ScanBackGate(): React.JSX.Element | null {
           <p className="mt-1 text-[0.79em] text-muted-foreground">{t('scanBack.gate.blurb')}</p>
         </div>
 
-        <div className="px-3 py-2">
+        {/* Scrolls rather than growing past the viewport on a short screen —
+            three thumbnailed rows are ~3x taller than the old text rows. */}
+        <div className="min-h-0 overflow-auto px-3 py-2">
           {books.slice(0, SHOWN).map((b) => (
             <GateRow key={b.id} book={b} onFile={file} busy={busy} />
           ))}
         </div>
 
-        <div className="flex items-center gap-3 border-t border-hairline bg-surface-raised px-4 py-3">
+        <div className="flex shrink-0 items-center gap-3 border-t border-hairline bg-surface-raised px-4 py-3">
           <button
             type="button"
             onClick={() => { navigate('/scan-back'); setClosed(true) }}

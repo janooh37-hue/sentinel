@@ -14,6 +14,7 @@ import { ChevronDown, ChevronUp, Printer, Upload } from 'lucide-react'
 
 import type { BookRead } from '@/lib/api'
 import { cn } from '@/lib/utils'
+import { ScanBackThumb } from './ScanBackThumb'
 import { ageDays, useFileSignedCopy, useScanBack } from './useScanBack'
 
 const OPEN_KEY = 'scanback-dock-open'
@@ -30,7 +31,9 @@ function DockRow({
   const inputRef = useRef<HTMLInputElement>(null)
   const ref = book.ref_number ?? `#${book.id}`
   return (
-    <div className="border-b border-hairline px-3 py-2 last:border-0">
+    <div className="flex gap-2 border-b border-hairline px-3 py-2 last:border-0">
+      <ScanBackThumb book={book} className="w-16" />
+      <div className="min-w-0 flex-1">
       <div className="mb-1.5 flex items-center gap-2">
         <span className="shrink-0 rounded bg-surface-tinted px-1.5 py-0.5 font-mono text-[0.68em] font-semibold">
           {ref}
@@ -66,6 +69,7 @@ function DockRow({
           e.target.value = ''
         }}
       />
+      </div>
     </div>
   )
 }
@@ -110,7 +114,10 @@ export function ScanBackDock(): React.JSX.Element | null {
       )}
     >
       {open && (
-        <div className="w-[min(20rem,calc(100vw-2rem))] overflow-hidden rounded-xl border border-border bg-surface shadow-lg">
+        /* 26rem, not 20rem: each row now carries a page-1 thumbnail, and a
+           thumb narrower than ~4rem shows "a paper exists" rather than which
+           paper — which is the whole point of the preview. */
+        <div className="w-[min(26rem,calc(100vw-2rem))] overflow-hidden rounded-xl border border-border bg-surface shadow-lg">
           <div className="flex items-center gap-2 border-b border-hairline px-3 py-2">
             <Printer className="h-3.5 w-3.5 text-warning" strokeWidth={2} aria-hidden />
             <span className="flex-1 text-[0.76em] font-semibold">{t('scanBack.dock.header')}</span>
@@ -122,7 +129,7 @@ export function ScanBackDock(): React.JSX.Element | null {
               {t('scanBack.viewAll', { count })}
             </button>
           </div>
-          <div className="max-h-60 overflow-auto">
+          <div className="max-h-[22rem] overflow-auto">
             {books.slice(0, MAX_ROWS).map((b) => (
               <DockRow key={b.id} book={b} onFile={file} busy={busy} />
             ))}
