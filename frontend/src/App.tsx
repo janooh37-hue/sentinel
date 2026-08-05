@@ -77,6 +77,9 @@ const ScanInboxPage = lazy(() =>
 const SendToGroupPage = lazy(() =>
   import('@/pages/announcements/SendToGroupPage').then((m) => ({ default: m.SendToGroupPage })),
 )
+const ScanBackPage = lazy(() =>
+  import('@/pages/scanBack/ScanBackPage').then((m) => ({ default: m.ScanBackPage })),
+)
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -209,6 +212,7 @@ function Shell(): React.JSX.Element {
               <Route path="/application" element={<ApplicationPage />} />
               <Route path="/books" element={<BooksPage />} />
               <Route path="/books/:id" element={<BookRecordPage />} />
+              <Route path="/scan-back" element={<ScanBackPage />} />
               <Route path="/leaves" element={<LeavesPage />} />
               <Route
                 path="/permits"
