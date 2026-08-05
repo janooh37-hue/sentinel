@@ -2,11 +2,18 @@
  * The once-a-day interrupt. Shows the THREE oldest stranded records, never all
  * of them — a wall of rows reads as unfixable, three reads as a task.
  *
- * Dismissal is per-user per-day in localStorage: per-user so a shared browser
+ * The localStorage key is per-user per-day: per-user so a shared browser
  * doesn't silence the next person, per-day so it comes back tomorrow. No table,
  * no migration.
+ *
+ * The key is stamped the moment the gate is actually SHOWN, not when the user
+ * closes it — "shown today" alone must suppress it for the rest of the day,
+ * however the count moves afterward and whichever button closes it (X, Not
+ * now, View all are all just visual closes; none of them writes the key).
+ * Otherwise a record crossing the 24h line at 2pm would drop a second
+ * full-screen modal on someone mid-task who already saw one this morning.
  */
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { Printer, X } from 'lucide-react'
@@ -81,16 +88,24 @@ export function ScanBackGate(): React.JSX.Element | null {
   const { books, count } = useScanBack()
   const { file, busy } = useFileSignedCopy()
   const key = dismissKeyFor(user?.id ?? 'anon')
-  const [dismissed, setDismissed] = useState(() => localStorage.getItem(key) === today())
+  const [shownBefore] = useState(() => localStorage.getItem(key) === today())
+  const [closed, setClosed] = useState(false)
 
-  // Nothing to nag about, already dismissed today, or the user is already on
-  // the page that IS the fix — same suppression ScanBackDock.tsx applies.
-  if (dismissed || count === 0 || pathname === '/scan-back') return null
+  // Nothing to nag about, already shown today (however it was closed last
+  // time), or the user is already on the page that IS the fix — same
+  // suppression ScanBackDock.tsx applies.
+  const show = !shownBefore && !closed && count > 0 && pathname !== '/scan-back'
 
-  const dismiss = (): void => {
-    localStorage.setItem(key, today())
-    setDismissed(true)
-  }
+  // Stamp "shown today" the instant it's actually shown — not on close — so a
+  // remount later today (route change, tab reload) reads the key and renders
+  // nothing, even if the user never explicitly dismissed it.
+  useEffect(() => {
+    if (show) localStorage.setItem(key, today())
+  }, [show, key])
+
+  if (!show) return null
+
+  const dismiss = (): void => setClosed(true)
 
   return (
     <div
@@ -128,7 +143,7 @@ export function ScanBackGate(): React.JSX.Element | null {
         <div className="flex items-center gap-3 border-t border-hairline bg-surface-raised px-4 py-3">
           <button
             type="button"
-            onClick={() => { navigate('/scan-back'); setDismissed(true) }}
+            onClick={() => { navigate('/scan-back'); setClosed(true) }}
             className="rounded-lg bg-accent px-4 py-2 text-[0.78em] font-semibold text-white hover:bg-accent-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
             {t('scanBack.viewAll', { count })}

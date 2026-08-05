@@ -6541,11 +6541,6 @@ export interface components {
             scans: number;
             /** Emails */
             emails: number;
-            /**
-             * Scanback
-             * @default 0
-             */
-            scanback: number;
         };
         /** NotifyMessageRead */
         NotifyMessageRead: {

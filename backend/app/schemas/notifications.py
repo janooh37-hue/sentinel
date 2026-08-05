@@ -10,4 +10,3 @@ class NotificationCounts(BaseModel):
     leaves: int  # leave rows needing action (pending + awaiting-return), org-wide
     scans: int  # scan-inbox items awaiting MY confirmation/routing
     emails: int  # unread received email in MY mailbox
-    scanback: int = 0  # my records stranded at awaiting_scan past 24h (books.manage-gated)

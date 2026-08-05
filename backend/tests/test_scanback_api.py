@@ -1,8 +1,8 @@
-"""TDD: the /books/awaiting-scan route and the scanback bell count.
+"""TDD: the /books/awaiting-scan route and the scanback Web Push item.
 
 Both are gated on books.manage — the same capability POST /attachments needs.
-A user who can generate a document but not file its signed copy must get a
-count of 0 and an empty list, not a nag whose drop target 403s.
+A user who can generate a document but not file its signed copy must get an
+empty list and no push, not a nag whose drop target 403s.
 """
 
 from __future__ import annotations
@@ -119,21 +119,6 @@ def test_awaiting_scan_is_not_swallowed_by_the_int_path_param(api_db):
     """The literal segment must be declared before /{book_id} or it 422s."""
     mgr = _user(api_db, email="m@x.ae", role="manager")
     assert _client(api_db, mgr).get("/api/v1/books/awaiting-scan").status_code == 200
-
-
-def test_count_is_zero_without_books_manage(api_db):
-    op = _user(api_db, email="op@x.ae", role="operator")
-    _stranded(api_db, ref="GS-0003", owner_id=op.id)
-    counts = notification_service.relevant_counts(api_db, op, precomputed_leaves=0)
-    assert counts.scanback == 0
-
-
-def test_count_reflects_my_stranded_records(api_db):
-    mgr = _user(api_db, email="m@x.ae", role="manager")
-    _stranded(api_db, ref="GS-0004", owner_id=mgr.id)
-    _stranded(api_db, ref="GS-0005", owner_id=mgr.id, hours_ago=2)  # fresh, not counted
-    counts = notification_service.relevant_counts(api_db, mgr, precomputed_leaves=0)
-    assert counts.scanback == 1
 
 
 def test_actionable_items_scanback_is_zero_without_books_manage(api_db):

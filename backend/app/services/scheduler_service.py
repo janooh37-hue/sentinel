@@ -276,6 +276,20 @@ def _scan_push(new_items: list, section_url: str) -> tuple[dict, str]:
     )
 
 
+def _ar_records_waiting(n: int) -> str:
+    """Arabic count-noun agreement for n>=2 stranded records, matching the CLDR
+    Arabic plural rule and word-for-word the same phrasing as ar.json's
+    ``scanBack.gate.title_*`` family — two/few/many/other. Not a general-purpose
+    pluralizer; only this one phrase, only for the push body's n>=2 case."""
+    if n == 2:
+        return "سجلان بانتظار نسختهما الموقّعة"
+    if 3 <= n % 100 <= 10:
+        return f"{n} سجلات بانتظار نسختها الموقّعة"
+    if 11 <= n % 100 <= 99:
+        return f"{n} سجلاً بانتظار نسخته الموقّعة"
+    return f"{n} سجل بانتظار نسخته الموقّعة"
+
+
 def _scanback_push(new_items: list, section_url: str) -> tuple[dict, str]:
     """Scan-back push — a printed paper was signed but never scanned into the app.
 
@@ -297,7 +311,7 @@ def _scanback_push(new_items: list, section_url: str) -> tuple[dict, str]:
     return (
         _localized(
             f"{n} records waiting for their signed copy",
-            f"{n} سجلات بانتظار نسختها الموقّعة",
+            _ar_records_waiting(n),
         ),
         section_url,
     )

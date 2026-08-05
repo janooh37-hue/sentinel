@@ -191,7 +191,6 @@ def relevant_counts(
                  the same tick (avoids repeating the org-wide paging per user).
     - scans:     scan-inbox items owned by this user (awaiting_confirmation + unrouted).
     - emails:    unread incoming email in this user's mailbox.
-    - scanback:  my books stuck at `awaiting_scan` past 24h (books.manage-gated).
 
     This is the Phase 5 contract: Phase 5 Web Push calls the same function.
     Keep it pure (no side effects, no request objects).
@@ -211,14 +210,4 @@ def relevant_counts(
         if precomputed_leaves is not None
         else _leaves_needing_action(db, today_iso)
     )
-    # Stranded scan-backs — gated on books.manage for the same reason `approvals`
-    # is gated on books.approve: never show a count for an action the user cannot
-    # take. POST /books/{id}/attachments requires books.manage, and two live
-    # operators hold documents.generate without it.
-    if perm_service.has_capability(db, user, "books.manage"):
-        scanback = len(book_service.list_awaiting_scan(db, user_id=user.id))
-    else:
-        scanback = 0
-    return NotificationCounts(
-        approvals=approvals, leaves=leaves, scans=scans, emails=emails, scanback=scanback
-    )
+    return NotificationCounts(approvals=approvals, leaves=leaves, scans=scans, emails=emails)

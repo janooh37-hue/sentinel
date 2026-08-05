@@ -28,9 +28,8 @@ vi.mock('./useScanBack', async (orig) => ({
 }))
 vi.mock('@/lib/authContext', () => ({ useAuth: () => ({ user: { id: 42 }, status: 'authed' }) }))
 
-const renderGate = (path = '/'): void => {
+const renderGate = (path = '/') =>
   render(<MemoryRouter initialEntries={[path]}><ScanBackGate /></MemoryRouter>)
-}
 
 describe('ScanBackGate', () => {
   beforeEach(async () => { localStorage.clear(); await i18n.changeLanguage('en') })
@@ -43,11 +42,16 @@ describe('ScanBackGate', () => {
     expect(screen.queryByText('NAT-0642')).not.toBeInTheDocument()
   })
 
-  it('dismissal writes a per-user per-day key and hides it', async () => {
+  it('stamps the per-user per-day key as soon as it is shown, not on close', () => {
+    renderGate()
+    expect(localStorage.getItem(dismissKeyFor(42))).toBe(localToday())
+  })
+
+  it('Not now hides the gate for this mount', async () => {
     renderGate()
     await userEvent.click(screen.getByRole('button', { name: /not now/i }))
-    expect(localStorage.getItem(dismissKeyFor(42))).toBe(localToday())
     expect(screen.queryByText(/records are waiting/i)).not.toBeInTheDocument()
+    expect(localStorage.getItem(dismissKeyFor(42))).toBe(localToday())
   })
 
   // `localToday()` above evaluates the SAME expression the implementation uses
@@ -86,14 +90,24 @@ describe('ScanBackGate', () => {
     }
   })
 
-  it('View all closes the gate without silencing tomorrow', async () => {
+  // The gate shows once. Whichever route closes it — X, Not now, or View all —
+  // the key was already stamped the moment it was shown, so a same-day
+  // remount (route change, tab reload) must render nothing regardless.
+  it.each([
+    ['the × button', /dismiss/i],
+    ['Not now', /not now/i],
+    ['View all', /view all/i],
+  ])('shows once; after closing via %s, a same-day remount renders nothing', async (_label, buttonName) => {
+    const { unmount } = renderGate()
+    expect(screen.getByText(/records are waiting/i)).toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', { name: buttonName }))
+    unmount()
+
     renderGate()
-    await userEvent.click(screen.getByRole('button', { name: /view all/i }))
     expect(screen.queryByText(/records are waiting/i)).not.toBeInTheDocument()
-    expect(localStorage.getItem(dismissKeyFor(42))).toBeNull()
   })
 
-  it('stays hidden when already dismissed today', () => {
+  it('stays hidden when already shown today', () => {
     localStorage.setItem(dismissKeyFor(42), localToday())
     renderGate()
     expect(screen.queryByText(/records are waiting/i)).not.toBeInTheDocument()

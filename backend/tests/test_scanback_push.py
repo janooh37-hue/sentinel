@@ -51,3 +51,23 @@ def test_arabic_body_is_arabic():
 
 def test_kind_meta_points_at_the_scan_back_page():
     assert scheduler_service._KIND_META["scanback"] == "/scan-back"
+
+
+def test_arabic_multi_record_body_agrees_by_count():
+    """The Arabic body must pick the correct count-noun form (CLDR Arabic
+    plural rules), matching ar.json's scanBack.gate.title_* family word for
+    word. A hardcoded few-form ('سجلات ... نسختها') for every n is wrong for
+    the live ~25-record backlog (many-form) and would ship silently."""
+    items = {n: [_item(f"NAT-{i:04d}") for i in range(n)] for n in (2, 5, 25, 100)}
+
+    messages2, _ = scheduler_service._build_push("scanback", items[2], "/scan-back")
+    assert messages2["ar"][1] == "سجلان بانتظار نسختهما الموقّعة"
+
+    messages5, _ = scheduler_service._build_push("scanback", items[5], "/scan-back")
+    assert messages5["ar"][1] == "5 سجلات بانتظار نسختها الموقّعة"
+
+    messages25, _ = scheduler_service._build_push("scanback", items[25], "/scan-back")
+    assert messages25["ar"][1] == "25 سجلاً بانتظار نسخته الموقّعة"
+
+    messages100, _ = scheduler_service._build_push("scanback", items[100], "/scan-back")
+    assert messages100["ar"][1] == "100 سجل بانتظار نسخته الموقّعة"
