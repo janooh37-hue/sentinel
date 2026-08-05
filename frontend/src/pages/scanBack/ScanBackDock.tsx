@@ -2,11 +2,10 @@
  * The all-day ambient reminder: a pill anchored bottom-end that expands into
  * the six oldest stranded records, each a drop target.
  *
- * Positioned with `inset-inline-end` so it flips in Arabic, and lifted above
- * BottomTabBar (`fixed inset-x-0 bottom-0 z-40`) on mobile — it must sit above
- * the tab bar, not on top of it. The main content area already reserves
- * `3.5rem + env(safe-area-inset-bottom)` for that bar (App.tsx's `<main>`
- * padding); the dock clears the same amount plus a visible gap.
+ * Positioned with `inset-inline-end` so it flips in Arabic, and lifted clear
+ * of both BottomTabBar (mobile, `fixed inset-x-0 bottom-0 z-40`) and sonner's
+ * app-wide bottom-right Toaster (same corner in LTR, z-index far above ours)
+ * — see the `bottom-[...]` comment below for the clearance arithmetic.
  */
 import { useRef, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
@@ -98,10 +97,15 @@ export function ScanBackDock(): React.JSX.Element | null {
         // `end-4` is the logical utility (inset-inline-end) — it flips in RTL.
         // Never `right-4`. Precedent: BookDetailDrawer.tsx:340, IdentityDocCard.tsx:97.
         'fixed z-30 flex flex-col items-end gap-2 end-4',
-        // Clear BottomTabBar on mobile (main content itself reserves 3.5rem +
-        // safe-area-inset-bottom below it — see App.tsx's <main> padding); sit
-        // near the edge on desktop where there is no tab bar.
-        'bottom-[calc(4.25rem+env(safe-area-inset-bottom))] md:bottom-5',
+        // sonner's Toaster (App.tsx, position="bottom-right") sits at the same
+        // corner in LTR and paints over anything under it (z-index 999999999 —
+        // we clear it spatially, not by fighting z-index). Its default 24px
+        // bottom offset + a single toast's ~64px height is a ~88px (5.5rem)
+        // band; 5.5rem also exceeds the 3.5rem BottomTabBar clearance
+        // App.tsx's <main> already reserves on mobile, so one value covers
+        // both viewports. A stack of several toasts can still reach higher —
+        // accepted residual, not solved here.
+        'bottom-[calc(5.5rem+env(safe-area-inset-bottom))] md:bottom-[5.5rem]',
         'rtl:items-start',
       )}
     >

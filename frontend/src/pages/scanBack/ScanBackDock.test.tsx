@@ -21,7 +21,14 @@ const renderDock = (path = '/books'): void => {
 }
 
 describe('ScanBackDock', () => {
-  beforeEach(async () => { localStorage.clear(); await i18n.changeLanguage('en') })
+  // Reset here, not at the end of the test body that mutates it: if an
+  // assertion above a manual reset throws, `count: 0` would otherwise leak
+  // into every later test in this file.
+  beforeEach(async () => {
+    localStorage.clear()
+    state.count = 2
+    await i18n.changeLanguage('en')
+  })
 
   it('starts collapsed and expands on click', async () => {
     renderDock()
@@ -40,7 +47,6 @@ describe('ScanBackDock', () => {
     state.count = 0
     renderDock()
     expect(screen.queryByRole('button', { name: /to scan back/i })).not.toBeInTheDocument()
-    state.count = 2
   })
 
   it('renders nothing on the scan-back page itself', () => {
