@@ -746,7 +746,13 @@ def _build_template_data(
             # These forms render the manager as an Arabic signature block, so the
             # Arabic name reads correctly beside the Arabic designation.
             prefer_arabic=(
-                template_id in ("General Book", "Leave Permit Form", "Administrative Leave Form")
+                template_id
+                in (
+                    "General Book",
+                    "Leave Permit Form",
+                    "Administrative Leave Form",
+                    "Inmate Conduct Violations",
+                )
             ),
         )
     else:
@@ -756,15 +762,33 @@ def _build_template_data(
         data.pop("sig1_path", None)
 
     # ------------------------------------------------------------------
-    # 4b. Submitter G-number for the document footer — ONLY the General Book
-    # footer consumes `{{ submitter_g }}`. Scoped to that template so other
-    # forms don't silently emit the caller's G-number. Resolves to the
-    # authenticated caller's `employee_id` (G-number); empty string when the
-    # user is unlinked or no auth context was threaded through (the template
-    # hides the line via a Jinja {% if %} guard).
+    # 4b. Submitter G-number for the document footer — General Book and
+    # Inmate Conduct Violations footers consume `{{ submitter_g }}`. Scoped
+    # to these templates so other forms don't silently emit the caller's
+    # G-number. Resolves to the authenticated caller's `employee_id`
+    # (G-number); empty string when the user is unlinked or no auth context
+    # was threaded through — the footer token is bare (no Jinja guard), so
+    # that renders as a blank G-number, not a hidden line.
     # ------------------------------------------------------------------
-    if template_id == "General Book":
+    if template_id in ("General Book", "Inmate Conduct Violations"):
         data["submitter_g"] = (current_user.employee_id or "") if current_user is not None else ""
+
+    # ------------------------------------------------------------------
+    # 4b-2. Inmate Conduct Violations — the "بيانات مقدم التقرير" row names the
+    # employee who filed the report, picked from the roster. It is deliberately
+    # NOT the request's employee_id: the paper is about the inmates, so the book
+    # stays unattached to any employee file. The footer's {{ submitter_g }}
+    # remains the signed-in account and is a different person.
+    # ------------------------------------------------------------------
+    if template_id == "Inmate Conduct Violations":
+        reporter_id = str(fields.get("reporter_id", "") or "").strip()
+        reporter = db.get(Employee, reporter_id) if reporter_id else None
+        # Arabic paper: prefer the Arabic name, fall back to English only when
+        # the record has none.
+        data["reporter_name"] = (
+            (reporter.name_ar or reporter.name_en or "") if reporter is not None else ""
+        )
+        data["reporter_g"] = reporter.id if reporter is not None else ""
 
     # ------------------------------------------------------------------
     # 4c. Administrative Leave Form — auto-count this employee's admin leaves

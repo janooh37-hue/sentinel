@@ -28,6 +28,12 @@ def _table_texts(doc: Document) -> list[list[str]]:
     return out
 
 
+def _footer_text(doc: Document) -> str:
+    """Join every cell of the first-page footer (word/footer3.xml)."""
+    footer = doc.sections[0].first_page_footer
+    return "\n".join(c.text for t in footer.tables for r in t.rows for c in r.cells)
+
+
 @pytest.fixture
 def rendered(tmp_path: Path) -> Document:
     src = TEMPLATES_DIR / TEMPLATE_FILES[TEMPLATE_ID]
@@ -58,6 +64,7 @@ def rendered(tmp_path: Path) -> Document:
             "reporter_name": "عبدالله سيف المنصوري",
             "reporter_g": "G-2001",
             "manager_name": "ناصر فاضل الساعدي",
+            "submitter_g": "G-0312",
         },
         out,
     )
@@ -110,3 +117,17 @@ def test_no_malformed_tokens_survive(rendered: Document) -> None:
     whole += "\n".join(c.text for r in rendered.tables[1].rows for c in r.cells)
     for bad in ("{{", "}}", "{%", "MANAGER-SIGN", "persionar"):
         assert bad not in whole
+
+
+def test_footer_renders_submitter_g(rendered: Document) -> None:
+    """The inherited first-page footer originally carried a non-framework
+    token, {{ submitter_id }} — nothing ever filled it. Task 1's build script
+    rewrote it to the canonical {{ submitter_g }}; guard the render end to
+    end so a future template regeneration can't silently reintroduce the
+    stray token or drop the fix.
+    """
+    footer = _footer_text(rendered)
+    assert "G-0312" in footer
+    assert "submitter_id" not in footer
+    # The sibling paragraph in the same footer cell must survive the rewrite.
+    assert "www.gss-group.net" in footer

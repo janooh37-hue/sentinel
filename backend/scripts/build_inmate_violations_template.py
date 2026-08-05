@@ -11,6 +11,9 @@ with valid Jinja ones:
   * ``{{Personas name}}`` / ``{( personal ID for persionar ))`` /
     ``{{ EMPLOYEE NAME }}`` / ``{{ G-NUMBER}}`` / ``{{MANAGER-SIGN}}`` are not
     legal Jinja (spaces, hyphens, wrong braces) — each is rewritten.
+  * The inherited first-page footer's ``{{ submitter_id }}`` — a token no
+    framework code ever fills — is rewritten to the canonical
+    ``{{ submitter_g }}`` (see ``fix_footer_token``).
 
 Tokens are split across ``w:r`` runs in the source, so a ``w:t`` string replace
 misses them: every cell is rewritten run-and-all via ``set_cell_text``.
@@ -69,6 +72,32 @@ def set_para_text(para: Any, text: str) -> None:
         para.add_run(text)
 
 
+def fix_footer_token(doc: Any) -> None:
+    """The source docx's first-page footer (``word/footer3.xml``) carries a
+    stray, non-framework token — ``{{ submitter_id }}``, split across w:r
+    runs same as the body tokens above — that nothing in the app ever fills.
+    The canonical footer token every other form uses is ``{{ submitter_g }}``
+    (see ``docx_engine.py``'s ``out.setdefault("submitter_g", "")``).
+
+    The token's paragraph shares its table cell with a sibling
+    "www.gss-group.net" paragraph — a cell-level rewrite (``set_cell_text``)
+    would delete that sibling. Target the exact ``<w:p>`` instead, found by
+    walking every paragraph in the footer part (tokens can be nested
+    arbitrarily deep in tables), so only the token paragraph is touched.
+    """
+    footer_root = doc.sections[0].first_page_footer.part.element
+    hits = 0
+    for p in footer_root.iter(qn("w:p")):
+        text = "".join(t.text or "" for t in p.iter(qn("w:t")))
+        if "submitter_id" in text:
+            set_para_text(Paragraph(p, None), "{{ submitter_g }}")  # type: ignore[arg-type]
+            hits += 1
+    if hits != 1:
+        raise RuntimeError(
+            f"expected exactly one paragraph with the stray submitter_id footer token, found {hits}"
+        )
+
+
 def build(src: Path) -> None:
     shutil.copy(src, DEST)
     doc = Document(str(DEST))
@@ -123,6 +152,9 @@ def build(src: Path) -> None:
             set_para_text(para, "الإســـــــــم: {{ manager_name }}")
         elif "MANAGER-SIGN" in para.text:
             set_para_text(para, "التوقيع: {{ manager_sig }}")
+
+    # --- 6. footer: stray {{ submitter_id }} -> canonical {{ submitter_g }} ---
+    fix_footer_token(doc)
 
     doc.save(str(DEST))
     print(f"wrote {DEST}")
