@@ -96,6 +96,7 @@ _FORM_CATEGORY: dict[str, str] = {
     "Leave Permit Form": "HR",
     "Administrative Leave Form": "HR",
     "Passport Release List": "HR",
+    "Inmate Conduct Violations": "NAT",
 }
 
 # Short filename prefix per form — mirrors v3's fn = f"LeaveApp_..." pattern
@@ -118,6 +119,7 @@ _FORM_SHORT_NAME: dict[str, str] = {
     "Administrative Leave Form": "AdminLeave",
     "General Book": "GeneralBook",
     "Passport Release List": "PassportReleaseList",
+    "Inmate Conduct Violations": "InmateViolations",
 }
 
 # Forms that create a Leave row in the DB

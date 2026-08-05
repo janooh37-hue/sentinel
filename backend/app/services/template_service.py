@@ -68,6 +68,8 @@ class TemplateField(BaseModel):
         "violation_combo",
         "recipient_picker",
         "recipient_multi_picker",
+        "inmates_table",
+        "time",
     ]
     label_en: str
     label_ar: str

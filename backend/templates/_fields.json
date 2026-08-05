@@ -803,5 +803,24 @@
         "required": true
       }
     ]
+  },
+  "Inmate Conduct Violations": {
+    "category": "admin",
+    "name_en": "Inmate Conduct Violations",
+    "name_ar": "تقرير المخالفات المسلكية",
+    "form_number": "300-005",
+    "fields": [
+      {"key": "report_date", "type": "date", "label_en": "Date", "label_ar": "التاريخ", "required": true},
+      {"key": "report_time", "type": "time", "label_en": "Time", "label_ar": "الوقت", "required": true},
+      {"key": "inmates", "type": "inmates_table", "label_en": "Inmates", "label_ar": "النزلاء", "required": true},
+      {"key": "violation_details", "type": "arabic_rich", "label_en": "Violation details", "label_ar": "تفاصيل المخالفة", "required": true},
+      {"key": "action_notified", "type": "checkbox", "label_en": "Branch manager of Inmate Affairs was notified", "label_ar": "تم ابلاغ مدير فرع شؤون النزلاء", "required": false},
+      {"key": "action_written", "type": "checkbox", "label_en": "A conduct violation was written against the inmate", "label_ar": "تم كتابة مخالفة مسلكية في حق النزلاء", "required": false},
+      {"key": "action_transferred", "type": "checkbox", "label_en": "Inmate moved to section B and restrained", "label_ar": "تم نقل النزيل الى قسم B وتقييده", "required": false},
+      {"key": "action_other", "type": "text", "label_en": "Other action", "label_ar": "إجراء آخر", "required": false},
+      {"key": "reporter_id", "type": "employee_picker", "label_en": "Reported by", "label_ar": "مقدم التقرير", "required": true},
+      {"key": "manager_id", "type": "manager_picker", "label_en": "Signing manager", "label_ar": "المُوقِّع", "required": false},
+      {"key": "hand_sign_manager", "type": "hand_sign_checkbox", "label_en": "Embed manager's saved signature", "label_ar": "تضمين توقيع المدير المحفوظ", "required": false}
+    ]
   }
 }

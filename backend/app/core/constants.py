@@ -58,6 +58,7 @@ TEMPLATE_FILES: Final[Mapping[str, str]] = MappingProxyType(
         # "Passport Release Form" but now displays as "Passport Request".
         "Passport Release List": "GSSG-HR_300-004b_Passport_Release_List.docx",
         "Report": "GSSG-GS_300-004_Report.docx",
+        "Inmate Conduct Violations": "GSSG-NAT_300-005_Inmate_Conduct_Violations.docx",
     }
 )
 
