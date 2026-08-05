@@ -26,6 +26,7 @@ import { TopProgressBar } from './components/refresh/TopProgressBar'
 import { useRefreshHeartbeat } from './hooks/useRefreshHeartbeat'
 import { useRefreshHotkeys } from './hooks/useRefreshHotkeys'
 import { ScanBackDock } from './pages/scanBack/ScanBackDock'
+import { ScanBackGate } from './pages/scanBack/ScanBackGate'
 import '@/lib/i18n'
 
 // Code-split the HugeRTE-using pages (Application, Ledger) and the larger
@@ -278,6 +279,7 @@ function Shell(): React.JSX.Element {
         {isMobile && <BottomTabBar />}
       </div>
       <ScanBackDock />
+      <ScanBackGate />
       {/* Wrapped so print can hide it: sonner renders an empty <section> in
           normal flow here, and a trailing in-flow box after a named-@page
           element (the permits register) costs a blank sheet. */}
