@@ -205,7 +205,7 @@ export function EmailSection(): React.JSX.Element {
   const hasAccount = !!accountQuery.data
 
   return (
-    <section className="rounded-2xl bg-surface p-6">
+    <section className="rounded-2xl bg-surface p-4 sm:p-6">
       {/* Section header */}
       <div className="mb-4 border-b border-hairline pb-4">
         <h3 className="text-[1.05em] font-semibold tracking-tight text-foreground">
@@ -227,7 +227,7 @@ export function EmailSection(): React.JSX.Element {
         <div className="flex flex-col gap-1.5">
           <label
             htmlFor="email-address"
-            className="text-[0.72em] font-semibold uppercase tracking-[0.1em] text-muted-foreground"
+            className="text-[0.72em] font-semibold uppercase tracking-[0.1em] text-muted-foreground rtl:tracking-normal"
           >
             {t('settings.email.address', { defaultValue: 'Email address' })}
             <span className="ms-0.5 text-accent">*</span>
@@ -245,7 +245,7 @@ export function EmailSection(): React.JSX.Element {
         <div className="flex flex-col gap-1.5">
           <label
             htmlFor="email-username"
-            className="text-[0.72em] font-semibold uppercase tracking-[0.1em] text-muted-foreground"
+            className="text-[0.72em] font-semibold uppercase tracking-[0.1em] text-muted-foreground rtl:tracking-normal"
           >
             {t('settings.email.username', { defaultValue: 'IMAP username' })}
             <span className="ms-0.5 text-accent">*</span>
@@ -262,7 +262,7 @@ export function EmailSection(): React.JSX.Element {
         <div className="flex flex-col gap-1.5 sm:col-span-2">
           <label
             htmlFor="email-password"
-            className="text-[0.72em] font-semibold uppercase tracking-[0.1em] text-muted-foreground"
+            className="text-[0.72em] font-semibold uppercase tracking-[0.1em] text-muted-foreground rtl:tracking-normal"
           >
             {t('settings.email.password', { defaultValue: 'Password' })}
             {!hasAccount && <span className="ms-0.5 text-accent">*</span>}
@@ -287,13 +287,12 @@ export function EmailSection(): React.JSX.Element {
             <button
               type="button"
               onClick={() => setShowPassword((s) => !s)}
-              className="absolute inset-y-0 end-0 flex w-10 items-center justify-center text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:text-foreground"
+              className="absolute inset-y-0 end-0 flex w-10 items-center justify-center text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:text-foreground"
               aria-label={
                 showPassword
                   ? t('settings.email.hidePassword', { defaultValue: 'Hide password' })
                   : t('settings.email.showPassword', { defaultValue: 'Show password' })
               }
-              tabIndex={-1}
             >
               {showPassword ? (
                 <EyeOff className="h-4 w-4" strokeWidth={1.7} />
@@ -307,7 +306,7 @@ export function EmailSection(): React.JSX.Element {
         <div className="flex flex-col gap-1.5">
           <label
             htmlFor="email-inbox"
-            className="text-[0.72em] font-semibold uppercase tracking-[0.1em] text-muted-foreground"
+            className="text-[0.72em] font-semibold uppercase tracking-[0.1em] text-muted-foreground rtl:tracking-normal"
           >
             {t('settings.email.inboxFolder', { defaultValue: 'Inbox folder' })}
           </label>
@@ -322,7 +321,7 @@ export function EmailSection(): React.JSX.Element {
         <div className="flex flex-col gap-1.5">
           <label
             htmlFor="email-sent"
-            className="text-[0.72em] font-semibold uppercase tracking-[0.1em] text-muted-foreground"
+            className="text-[0.72em] font-semibold uppercase tracking-[0.1em] text-muted-foreground rtl:tracking-normal"
           >
             {t('settings.email.sentFolder', { defaultValue: 'Sent folder' })}
           </label>
@@ -349,7 +348,7 @@ export function EmailSection(): React.JSX.Element {
         <div className="flex flex-col gap-1.5">
           <label
             htmlFor="email-sync-interval"
-            className="text-[0.72em] font-semibold uppercase tracking-[0.1em] text-muted-foreground"
+            className="text-[0.72em] font-semibold uppercase tracking-[0.1em] text-muted-foreground rtl:tracking-normal"
           >
             {t('settings.email.syncInterval', {
               defaultValue: 'Background sync interval',
@@ -474,7 +473,7 @@ export function EmailSection(): React.JSX.Element {
                 )}
               </div>
               <div className="flex min-w-0 flex-1 flex-col">
-                <div className="text-[0.72em] font-semibold uppercase tracking-[0.1em] text-muted-foreground">
+                <div className="text-[0.72em] font-semibold uppercase tracking-[0.1em] text-muted-foreground rtl:tracking-normal">
                   {t('settings.email.linkedHeading')}
                 </div>
                 <div className="text-[0.95em] font-semibold text-foreground">
@@ -508,7 +507,7 @@ export function EmailSection(): React.JSX.Element {
           ) : (
             <div className="flex flex-col gap-3">
               <div className="flex flex-col gap-1">
-                <div className="text-[0.72em] font-semibold uppercase tracking-[0.1em] text-muted-foreground">
+                <div className="text-[0.72em] font-semibold uppercase tracking-[0.1em] text-muted-foreground rtl:tracking-normal">
                   {t('settings.email.linkHeading')}
                 </div>
                 <p className="text-[0.82em] text-muted-foreground">

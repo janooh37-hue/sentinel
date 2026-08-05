@@ -1596,6 +1596,21 @@
     },
     "eyebrow": "System",
     "savedToast": "Settings saved",
+    "navigation": {
+      "categories": "Settings categories",
+      "controls": "Settings controls",
+      "personal": "Personal",
+      "operations": "Operations",
+      "administration": "Administration",
+      "profile": "My profile",
+      "documents": "Documents",
+      "communications": "Communications",
+      "peopleAccess": "People & access",
+      "application": "Application",
+      "system": "System",
+      "controlsCount_one": "{{count}} control available",
+      "controlsCount_other": "{{count}} controls available"
+    },
     "account": {
       "title": "Your account",
       "description": "The account you are currently signed in with.",
@@ -1608,8 +1623,8 @@
       "roleOperator": "Operator"
     },
     "appearance": {
-      "title": "Appearance",
-      "description": "Text size and theme are set from the top navigation.",
+      "title": "Application behavior",
+      "description": "Crash reporting and diagnostics.",
       "hint": "Use the Aa slider and the moon/sun toggle in the top bar to customize the display.",
       "sentryLabel": "Share crash reports (Sentry)",
       "sentryHint": "Helps improve stability. No personal data is sent.",

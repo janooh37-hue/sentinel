@@ -24,6 +24,7 @@ import { api, apiErrorMessage } from '@/lib/api'
 import type { AppSettingsRead, AppSettingsUpdate } from '@/lib/api'
 import { useAuth } from '@/lib/authContext'
 import { RangeSlider } from '@/components/ui/range-slider'
+import { CapabilityGate } from '@/components/shell/CapabilityGate'
 import {
   BOLDNESS_LABELS,
   SIG_BOLDNESS_DEFAULT,
@@ -298,7 +299,7 @@ export function SigningSignatureSection({
   }, [refetch, t])
 
   return (
-    <section className="rounded-2xl bg-surface p-6">
+    <section className="rounded-2xl bg-surface p-4 sm:p-6">
       <div className="mb-4 border-b border-hairline pb-4">
         <div className="flex items-start gap-2.5">
           <FileSignature className="mt-0.5 h-4 w-4 shrink-0 text-primary" strokeWidth={1.7} />
@@ -331,7 +332,7 @@ export function SigningSignatureSection({
               type="button"
               onClick={() => void remove()}
               disabled={busy}
-              className="inline-flex items-center gap-1.5 rounded-full px-3 py-2 text-[0.82em] font-medium text-destructive transition-colors hover:bg-destructive/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-destructive disabled:cursor-not-allowed disabled:opacity-50"
+              className="inline-flex items-center gap-1.5 rounded-full px-3 py-2 text-[0.82em] font-medium text-accent transition-colors hover:bg-accent-soft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:cursor-not-allowed disabled:opacity-50"
             >
               {busy && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
               {t('settings.signingSignature.remove')}
@@ -385,9 +386,11 @@ export function SigningSignatureSection({
       )}
 
       {/* Appearance block — only rendered when settings are available */}
-      {settings && onUpdate && (
-        <AppearanceBlock settings={settings} onUpdate={onUpdate} />
-      )}
+      <CapabilityGate cap="settings.edit">
+        {settings && onUpdate && (
+          <AppearanceBlock settings={settings} onUpdate={onUpdate} />
+        )}
+      </CapabilityGate>
     </section>
   )
 }

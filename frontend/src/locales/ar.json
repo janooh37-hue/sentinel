@@ -1739,6 +1739,25 @@
     },
     "eyebrow": "النظام",
     "savedToast": "تم حفظ الإعدادات",
+    "navigation": {
+      "categories": "فئات الإعدادات",
+      "controls": "عناصر التحكم في الإعدادات",
+      "personal": "شخصي",
+      "operations": "العمليات",
+      "administration": "الإدارة",
+      "profile": "ملفي الشخصي",
+      "documents": "المستندات",
+      "communications": "الاتصالات",
+      "peopleAccess": "الأشخاص والصلاحيات",
+      "application": "التطبيق",
+      "system": "النظام",
+      "controlsCount_zero": "لا توجد عناصر تحكم متاحة",
+      "controlsCount_one": "عنصر تحكم واحد متاح",
+      "controlsCount_two": "عنصرا تحكم متاحان",
+      "controlsCount_few": "{{count}} عناصر تحكم متاحة",
+      "controlsCount_many": "{{count}} عنصر تحكم متاح",
+      "controlsCount_other": "{{count}} عنصر تحكم متاح"
+    },
     "account": {
       "title": "حسابك",
       "description": "الحساب الذي سجّلت الدخول به حالياً.",
@@ -1751,8 +1770,8 @@
       "roleOperator": "مشغّل"
     },
     "appearance": {
-      "title": "المظهر",
-      "description": "يتم ضبط حجم النص والمظهر من شريط التنقل العلوي.",
+      "title": "سلوك التطبيق",
+      "description": "تقارير الأعطال والتشخيصات.",
       "hint": "استخدم منزلق Aa والمفتاح المظلم/الفاتح في الأعلى لتخصيص العرض.",
       "sentryLabel": "المشاركة في تقارير الأعطال (Sentry)",
       "sentryHint": "يساعد على تحسين الاستقرار. لا تُرسل بيانات شخصية.",

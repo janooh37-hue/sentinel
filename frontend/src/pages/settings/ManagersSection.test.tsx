@@ -77,7 +77,7 @@ describe('ManagersSection', () => {
     fireEvent.click(await screen.findByText('settings.managers.add'))
 
     // Fill in the English name
-    const nameInput = screen.getByPlaceholderText('settings.managers.nameEn')
+    const nameInput = screen.getByLabelText('settings.managers.nameEn')
     fireEvent.change(nameInput, { target: { value: 'Grace' } })
 
     // Submit
