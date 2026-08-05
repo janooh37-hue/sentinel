@@ -24,11 +24,11 @@ const DEFAULT_EMOJI = '📄'
  * union mirrors the backend and is closed, so new forms that don't ship a tile
  * register their glyph here instead). Wayfinding per DESIGN principle 1.
  */
-const EXTRA_TEMPLATE_EMOJI: Record<string, string> = {
+export const EXTRA_TEMPLATE_EMOJI: Record<string, string> = {
   'Warning Form': '⚠️',
   'Passport Release List': '🛂',
   'Report': '📊',
-  'Inmate Conduct Violations': '🚨',
+  'Inmate Conduct Violations': '⛓️',
 }
 
 /**

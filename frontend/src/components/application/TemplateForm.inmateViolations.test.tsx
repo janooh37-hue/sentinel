@@ -152,8 +152,13 @@ describe('Inmate Conduct Violations form', () => {
     await i18n.changeLanguage('en')
   })
 
-  it('has its own Services glyph', () => {
-    expect(emojiForTemplate('Inmate Conduct Violations')).toBe('🚨')
+  it('has its own Services glyph, distinct from the similarly-named Violation Form', () => {
+    // 🚨 is already spoken for by 'Violation Form' (quickActions.ts) — this
+    // form got its own glyph after review caught the collision.
+    expect(emojiForTemplate('Inmate Conduct Violations')).toBe('⛓️')
+    expect(emojiForTemplate('Inmate Conduct Violations')).not.toBe(
+      emojiForTemplate('Violation Form'),
+    )
   })
 
   it('renders every field type without an unknown-type warning', () => {
