@@ -25,6 +25,7 @@ import { useNotificationStream } from '@/hooks/useNotificationStream'
 import { TopProgressBar } from './components/refresh/TopProgressBar'
 import { useRefreshHeartbeat } from './hooks/useRefreshHeartbeat'
 import { useRefreshHotkeys } from './hooks/useRefreshHotkeys'
+import { ScanBackDock } from './pages/scanBack/ScanBackDock'
 import '@/lib/i18n'
 
 // Code-split the HugeRTE-using pages (Application, Ledger) and the larger
@@ -276,6 +277,7 @@ function Shell(): React.JSX.Element {
         </div>
         {isMobile && <BottomTabBar />}
       </div>
+      <ScanBackDock />
       {/* Wrapped so print can hide it: sonner renders an empty <section> in
           normal flow here, and a trailing in-flow box after a named-@page
           element (the permits register) costs a blank sheet. */}
