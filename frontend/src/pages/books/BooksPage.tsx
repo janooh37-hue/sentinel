@@ -440,7 +440,6 @@ export function BooksPage(): React.JSX.Element {
             </div>
             <div className="flex shrink-0 items-center gap-2">
               <RefreshButton />
-              <ScanBackEntry />
               <button
                 type="button"
                 onClick={() => setNewBookOpen(true)}
@@ -451,6 +450,7 @@ export function BooksPage(): React.JSX.Element {
               </button>
             </div>
           </header>
+          <ScanBackEntry />
           {facetsQuery.isError ? (
             // A failed facets fetch must never render as an honest "0" — the spine's
             // whole reason to exist is to be a number the operator can trust. Show a
@@ -640,7 +640,6 @@ export function BooksPage(): React.JSX.Element {
               </div>
               <div className="flex shrink-0 items-center gap-2">
                 <RefreshButton />
-                <ScanBackEntry compact />
                 <button
                   type="button"
                   onClick={() => setNewBookOpen(true)}
@@ -652,6 +651,10 @@ export function BooksPage(): React.JSX.Element {
               </div>
             </div>
           </header>
+
+          <div className="px-6">
+            <ScanBackEntry />
+          </div>
 
           {/* Filter bar — TAMM surface pill */}
           <div className="px-6 pb-2">

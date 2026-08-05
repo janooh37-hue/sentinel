@@ -64,7 +64,10 @@ function GateRow({
             {t('scanBack.age', { count: days })}
           </span>
         </div>
-        <p className="mt-1 truncate text-[0.78em]">{book.subject}</p>
+        {/* dir="auto": subjects are often Latin ("Warning Form — <name>") inside
+            an RTL page, and without it the ellipsis eats the START of the string
+            — the part that says which form this is. */}
+        <p dir="auto" className="mt-1 truncate text-[0.78em]">{book.subject}</p>
       </div>
       <button
         type="button"

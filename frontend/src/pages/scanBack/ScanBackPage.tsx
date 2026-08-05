@@ -45,36 +45,42 @@ export function ScanBackPage(): React.JSX.Element {
 
   return (
     <div className="flex flex-1 flex-col overflow-hidden">
+      {/* Both bands stay full-width (the header rule reads across the page),
+          but their content is centred on a reading measure — one record
+          stretched across a 1900px desk monitor put the paper and its drop
+          target at opposite edges of the screen. */}
       <header className="border-b border-border bg-surface px-6 py-5">
-        <h1 className="flex items-center gap-3 text-[1.15em] font-bold tracking-tight">
-          {t('scanBack.title')}
-          {books.length > 0 && (
-            <span className="rounded-full bg-accent-soft px-2 py-1 font-mono text-[0.62em] font-bold text-accent">
-              {books.length}
-            </span>
-          )}
-        </h1>
-        <p className="mt-1 text-[0.82em] text-muted-foreground">{t('scanBack.blurb')}</p>
-        <div className="mt-3 flex flex-wrap items-center gap-2">
-          <button type="button" className={chip(scope === 'mine')} onClick={() => setScope('mine')}>
-            {t('scanBack.scope.mine')}
-          </button>
-          {has('books.manage') && (
-            <button type="button" className={chip(scope === 'all')} onClick={() => setScope('all')}>
-              {t('scanBack.scope.all')}
+        <div className="mx-auto w-full max-w-4xl">
+          <h1 className="flex items-center gap-3 text-[1.15em] font-bold tracking-tight">
+            {t('scanBack.title')}
+            {books.length > 0 && (
+              <span className="rounded-full bg-accent-soft px-2 py-1 font-mono text-[0.62em] font-bold text-accent">
+                {books.length}
+              </span>
+            )}
+          </h1>
+          <p className="mt-1 text-[0.82em] text-muted-foreground">{t('scanBack.blurb')}</p>
+          <div className="mt-3 flex flex-wrap items-center gap-2">
+            <button type="button" className={chip(scope === 'mine')} onClick={() => setScope('mine')}>
+              {t('scanBack.scope.mine')}
             </button>
-          )}
-          <button
-            type="button"
-            className={chip(false)}
-            onClick={() => setNewestFirst((v) => !v)}
-          >
-            {newestFirst ? t('scanBack.sort.newest') : t('scanBack.sort.oldest')}
-          </button>
+            {has('books.manage') && (
+              <button type="button" className={chip(scope === 'all')} onClick={() => setScope('all')}>
+                {t('scanBack.scope.all')}
+              </button>
+            )}
+            <button
+              type="button"
+              className={chip(false)}
+              onClick={() => setNewestFirst((v) => !v)}
+            >
+              {newestFirst ? t('scanBack.sort.newest') : t('scanBack.sort.oldest')}
+            </button>
+          </div>
         </div>
       </header>
 
-      <div className="flex-1 overflow-auto px-6 py-4">
+      <div className="mx-auto w-full max-w-4xl flex-1 overflow-auto px-6 py-4">
         {isLoading ? (
           <div className="flex flex-col gap-2">
             {Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-16 rounded-xl" />)}

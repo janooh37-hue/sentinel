@@ -50,7 +50,13 @@ export function ScanBackThumb({
       ref={boxRef}
       aria-hidden
       className={cn(
-        'aspect-[210/297] shrink-0 overflow-hidden rounded-md border border-hairline bg-white',
+        // The TOP of the sheet, not the whole A4: a government form carries its
+        // identity in the first third (letterhead, title, date, ref, name) and
+        // the rest is body text no thumbnail can render legibly. Cropping there
+        // keeps rows ~90px instead of ~180px, which matters at 20+ rows and on
+        // a short viewport. ScanPdfCanvas top-anchors its canvas, so the
+        // overflow simply clips the bottom of the page.
+        'aspect-[16/11] shrink-0 overflow-hidden rounded-md border border-hairline bg-white',
         className,
       )}
     >

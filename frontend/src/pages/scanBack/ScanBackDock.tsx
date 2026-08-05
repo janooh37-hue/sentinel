@@ -38,7 +38,7 @@ function DockRow({
         <span className="shrink-0 rounded bg-surface-tinted px-1.5 py-0.5 font-mono text-[0.68em] font-semibold">
           {ref}
         </span>
-        <span className="min-w-0 flex-1 truncate text-[0.74em]">{book.subject}</span>
+        <span dir="auto" className="min-w-0 flex-1 truncate text-[0.74em]">{book.subject}</span>
         <span className="shrink-0 font-mono text-[0.66em] font-bold text-muted-foreground">
           {t('scanBack.age', { count: ageDays(book.created_at) })}
         </span>
