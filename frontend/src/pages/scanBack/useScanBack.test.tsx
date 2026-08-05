@@ -1,5 +1,19 @@
-import { describe, it, expect } from 'vitest'
-import { ageDays, ageGroup } from './useScanBack'
+import { describe, it, expect, vi } from 'vitest'
+import { renderHook } from '@testing-library/react'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { createElement, type ReactNode } from 'react'
+import { toast } from 'sonner'
+
+import { ageDays, ageGroup, useFileSignedCopy } from './useScanBack'
+import * as apiMod from '@/lib/api'
+
+vi.mock('react-i18next', () => ({ useTranslation: () => ({ t: (k: string) => k }) }))
+vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }))
+
+function wrapperFor(qc: QueryClient) {
+  return ({ children }: { children: ReactNode }) =>
+    createElement(QueryClientProvider, { client: qc }, children)
+}
 
 // Real wire shape: `Book.created_at` is stored naive LOCAL (Asia/Dubai) but is
 // serialized with an explicit `+04:00` offset by `ORMBase._tag_timezone`
@@ -36,5 +50,23 @@ describe('ageGroup', () => {
     expect(ageGroup(14)).toBe('weeks')
     expect(ageGroup(13)).toBe('recent')
     expect(ageGroup(2)).toBe('recent')
+  })
+})
+
+describe('useFileSignedCopy', () => {
+  it('resolves (never rejects) on a failed upload, and toasts the error exactly once', async () => {
+    const qc = new QueryClient()
+    vi.spyOn(apiMod.api, 'addBookAttachment').mockRejectedValue(new Error('boom'))
+    const { result } = renderHook(() => useFileSignedCopy(), { wrapper: wrapperFor(qc) })
+
+    // mutateAsync rejects on failure even though onError already fires (that's
+    // the documented difference from `mutate`) — file() must swallow it so every
+    // fire-and-forget `void onFile(...)` call site (row, dock, gate) stays safe.
+    await expect(
+      result.current.file(1, 'GS-0410', new File([], 'x.pdf')),
+    ).resolves.toBeUndefined()
+
+    expect(toast.error).toHaveBeenCalledTimes(1)
+    expect(toast.success).not.toHaveBeenCalled()
   })
 })

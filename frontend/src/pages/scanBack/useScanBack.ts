@@ -67,7 +67,10 @@ export function useFileSignedCopy(): {
   // as_signed=true is the scan-back flip: the backend approves the record.
   // Same call `useAddScan.fileSignedCopy` makes — no OCR ref matching, because
   // the operator picked this record deliberately and OCR cannot be trusted to
-  // re-read a stamped ref off a gov-form scan (GS-0333 -> "65-3").
+  // re-read a stamped ref off a gov-form scan (GS-0333 -> "65-3"). It also
+  // mirrors that hook's error handling: the failure is toasted once (here, via
+  // onError) and never rethrown, so `file()` always resolves — every
+  // fire-and-forget `void onFile(...)` call site (row, dock, gate) stays safe.
   const mutation = useMutation({
     // `ref` is unused by the call itself — it rides along so onSuccess can name
     // the record in the toast without a second lookup.
@@ -87,6 +90,10 @@ export function useFileSignedCopy(): {
       setBusy(true)
       try {
         await mutation.mutateAsync({ bookId, ref, f })
+      } catch {
+        // mutateAsync rejects on failure even though onError above already
+        // toasted it (the documented difference from `mutate`) — swallow so
+        // this promise resolves instead. Do not toast again here.
       } finally {
         setBusy(false)
       }
