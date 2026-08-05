@@ -28,6 +28,7 @@ const EXTRA_TEMPLATE_EMOJI: Record<string, string> = {
   'Warning Form': '⚠️',
   'Passport Release List': '🛂',
   'Report': '📊',
+  'Inmate Conduct Violations': '🚨',
 }
 
 /**
