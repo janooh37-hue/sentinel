@@ -99,6 +99,15 @@ _FORM_CATEGORY: dict[str, str] = {
     "Inmate Conduct Violations": "NAT",
 }
 
+#: Inmate Conduct Violations — the fixed "إجراءات المشرف" bullets, in the order
+#: they print. Key = the _fields.json checkbox key. The Arabic copy lives here
+#: (not in the docx) so the template stays a layout and the wording has one home.
+_INMATE_ACTION_LABELS: tuple[tuple[str, str], ...] = (
+    ("action_notified", "تم ابلاغ مدير فرع شؤون النزلاء"),
+    ("action_written", "تم كتابة مخالفة مسلكية في حق النزلاء"),
+    ("action_transferred", "تم نقل النزيل الى قسم B وتقييده"),
+)
+
 # Short filename prefix per form — mirrors v3's fn = f"LeaveApp_..." pattern
 _FORM_SHORT_NAME: dict[str, str] = {
     "Leave Application Form": "LeaveApp",
@@ -789,6 +798,14 @@ def _build_template_data(
             (reporter.name_ar or reporter.name_en or "") if reporter is not None else ""
         )
         data["reporter_g"] = reporter.id if reporter is not None else ""
+        # Supervisor action checkboxes → the template's `{%p for a in actions %}`
+        # bullet loop. Fixed paper order (_INMATE_ACTION_LABELS), free-text
+        # "other" entry appended last, blank/whitespace-only text dropped.
+        actions = [label for key, label in _INMATE_ACTION_LABELS if fields.get(key)]
+        other = str(fields.get("action_other", "") or "").strip()
+        if other:
+            actions.append(other)
+        data["actions"] = actions
 
     # ------------------------------------------------------------------
     # 4c. Administrative Leave Form — auto-count this employee's admin leaves

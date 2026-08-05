@@ -116,3 +116,70 @@ def test_manager_name_renders_in_arabic(db_session) -> None:
     )
     # An English name on an Arabic paper is the #1 recurring defect here.
     assert data["manager_name"] == "ناصر فاضل الساعدي"
+
+
+def _actions(db, **fields) -> list[str]:
+    data = _build_template_data(
+        db,
+        template_id=TEMPLATE_ID,
+        employee=None,
+        employee_id=None,
+        fields=fields,
+        manager_id=None,
+        submitter_id=None,
+        embed_signature=None,
+        current_user=None,
+    )
+    return data["actions"]
+
+
+def test_only_ticked_actions_render(db_session) -> None:
+    assert _actions(db_session, action_notified=True, action_transferred=True) == [
+        "تم ابلاغ مدير فرع شؤون النزلاء",
+        "تم نقل النزيل الى قسم B وتقييده",
+    ]
+
+
+def test_actions_keep_paper_order_regardless_of_input_order(db_session) -> None:
+    assert _actions(db_session, action_transferred=True, action_written=True) == [
+        "تم كتابة مخالفة مسلكية في حق النزلاء",
+        "تم نقل النزيل الى قسم B وتقييده",
+    ]
+
+
+def test_all_actions_render_in_declared_order_regardless_of_input_order(
+    db_session,
+) -> None:
+    # Ticks all three out of paper order plus a custom entry — the only
+    # assertion that pins every pairwise position in _INMATE_ACTION_LABELS
+    # (the two-key tests above don't constrain notified vs. written relative
+    # to each other).
+    assert _actions(
+        db_session,
+        action_transferred=True,
+        action_written=True,
+        action_notified=True,
+        action_other="تم إبلاغ الطبيب المناوب",
+    ) == [
+        "تم ابلاغ مدير فرع شؤون النزلاء",
+        "تم كتابة مخالفة مسلكية في حق النزلاء",
+        "تم نقل النزيل الى قسم B وتقييده",
+        "تم إبلاغ الطبيب المناوب",
+    ]
+
+
+def test_custom_action_appends_last(db_session) -> None:
+    assert _actions(db_session, action_notified=True, action_other="تم إبلاغ الطبيب المناوب") == [
+        "تم ابلاغ مدير فرع شؤون النزلاء",
+        "تم إبلاغ الطبيب المناوب",
+    ]
+
+
+def test_blank_custom_action_is_dropped(db_session) -> None:
+    assert _actions(db_session, action_notified=True, action_other="   ") == [
+        "تم ابلاغ مدير فرع شؤون النزلاء"
+    ]
+
+
+def test_no_actions_ticked_yields_empty_list(db_session) -> None:
+    assert _actions(db_session) == []
