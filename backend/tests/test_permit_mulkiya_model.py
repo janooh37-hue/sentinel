@@ -11,6 +11,8 @@ def test_vehicle_has_mulkiya_columns(db_session: Session) -> None:
         company="ACME",
         zones=["green"],
         start_date=date(2026, 7, 22),
+        validity_value=11,
+        validity_unit="day",
         end_date=date(2026, 8, 1),
         status="active",
     )
