@@ -231,7 +231,9 @@ describe('PermitDetailDialog', () => {
     renderDetail()
     await waitFor(() => expect(screen.getByText('Test Corp')).toBeInTheDocument())
 
-    expect(screen.getByText('Starts 06 Aug 2026')).toBeInTheDocument()
+    const validityFact = screen.getByText('Starts 06 Aug 2026').closest('dd')
+    expect(validityFact).toHaveTextContent('Starts 06 Aug 2026')
+    expect(validityFact).toHaveTextContent('Permit time: 1 month')
     expect(screen.getByText('Permit time: 1 month')).toBeInTheDocument()
     expect(screen.queryByText('06 Sep 2026')).not.toBeInTheDocument()
     expect(screen.queryByText('2026-09-06')).not.toBeInTheDocument()

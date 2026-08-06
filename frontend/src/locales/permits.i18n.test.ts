@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest'
+import i18n from '@/lib/i18n'
 import en from '@/locales/en.json'
 import ar from '@/locales/ar.json'
 
@@ -54,6 +55,7 @@ const KEYS = [
   'permits.form.unitWeek',
   'permits.form.unitMonth',
   'permits.form.unitYear',
+  'permits.form.jobRequired',
   'permits.person.role',
   'permits.validityUnits.day',
   'permits.validityUnits.week',
@@ -108,10 +110,16 @@ describe('permit i18n parity', () => {
     })
   }
 
-  it('uses whole-period plural forms without mechanical unit composition', () => {
-    expect(get(en as unknown as Rec, 'permits.validityPeriod.month_other').replace('{{count}}', '6')).toBe('6 months')
-    expect(get(ar as unknown as Rec, 'permits.validityPeriod.month_one')).toBe('شهر واحد')
-    expect(get(ar as unknown as Rec, 'permits.validityPeriod.month_two')).toBe('شهران')
-    expect(get(ar as unknown as Rec, 'permits.validityPeriod.month_few').replace('{{count}}', '6')).toBe('6 أشهر')
+  it('pluralizes whole periods through configured i18next resources', async () => {
+    await i18n.changeLanguage('en')
+    try {
+      expect(i18n.t('permits.validityPeriod.month', { count: 6 })).toBe('6 months')
+      await i18n.changeLanguage('ar')
+      expect(i18n.t('permits.validityPeriod.month', { count: 1 })).toBe('شهر واحد')
+      expect(i18n.t('permits.validityPeriod.month', { count: 2 })).toBe('شهران')
+      expect(i18n.t('permits.validityPeriod.month', { count: 6 })).toBe('6 أشهر')
+    } finally {
+      await i18n.changeLanguage('en')
+    }
   })
 })

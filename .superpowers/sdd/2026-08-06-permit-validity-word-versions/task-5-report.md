@@ -85,3 +85,27 @@ The focused tests intentionally avoid the broad project suite per the task brief
 - `git diff --check`: passed.
 
 Follow-up commit message: `fix(permits): localize validity surface wording`.
+
+## Follow-up review round two
+
+### Test-quality RED/GREEN
+
+- Added rendered Arabic count coverage: detail exercises Arabic six-month and two-month periods (with English six-month coverage retained); register renders Arabic one- and two-month rows; print renders Arabic one-, two-, and six-month periods.
+- Strengthened the detail assertion to verify the combined parent fact contains both separated `Starts` and `Permit time` presentations.
+- Replaced JSON suffix/placeholder checks with the configured i18next instance and `count` arguments for English six months and Arabic 1/2/6 months.
+- Restored `permits.form.jobRequired` to parity coverage.
+- Focused RED/GREEN result: all added/strengthened tests pass after the test-only changes.
+
+### Round-two files
+
+- `frontend/src/pages/permits/PermitDetailDialog.test.tsx`
+- `frontend/src/pages/permits/PermitsPage.test.tsx`
+- `frontend/src/locales/permits.i18n.test.ts`
+
+### Round-two verification
+
+- `pnpm -C frontend exec vitest run src/pages/permits/PermitDetailDialog.test.tsx src/pages/permits/PermitsPage.test.tsx src/locales/permits.i18n.test.ts`: 3 files, 191 tests passed.
+- `pnpm -C frontend exec tsc -b --pretty false`: passed with no output.
+- `git diff --check`: passed.
+
+Round-two commit message: `test(permits): cover localized validity surfaces`.

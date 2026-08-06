@@ -33,7 +33,7 @@ vi.mock('@/lib/api', async (importOriginal) => {
           {
             id: 2, permit_no: 'PMT-0002', company: 'Descon Engineering', zones: ['green', 'work_residence'],
             access_areas: null,
-            start_date: '2026-07-21', validity: { value: 1, unit: 'month' }, end_date: '2026-08-21', status: 'active',
+            start_date: '2026-07-21', validity: { value: 2, unit: 'month' }, end_date: '2026-08-21', status: 'active',
             created_at: '2026-07-21T00:00:00', derived_status: 'active',
             duration_days: 32, days_remaining: 31, people_count: 5, vehicle_count: 3,
             has_document: false,
@@ -48,6 +48,22 @@ vi.mock('@/lib/api', async (importOriginal) => {
           start_date: '2026-07-01', validity: { value: 6, unit: 'month' }, end_date: '2026-07-30', status: 'active',
           created_at: '2026-07-01T00:00:00', derived_status: 'active',
           duration_days: 30, days_remaining: 9, people_count: 0, vehicle_count: 0,
+          people: [], vehicles: [],
+        },
+        {
+          id: 2, permit_no: 'PMT-0002', company: 'Descon Engineering', zones: ['green', 'work_residence'],
+          access_areas: null,
+          start_date: '2026-07-21', validity: { value: 2, unit: 'month' }, end_date: '2026-08-21', status: 'active',
+          created_at: '2026-07-21T00:00:00', derived_status: 'active',
+          duration_days: 32, days_remaining: 31, people_count: 0, vehicle_count: 0,
+          people: [], vehicles: [],
+        },
+        {
+          id: 3, permit_no: 'PMT-0003', company: 'Falcon Works', zones: ['red'],
+          access_areas: { al_wathba_1: [], al_wathba_2: ['red'], work_residence: false },
+          start_date: '2026-07-22', validity: { value: 1, unit: 'month' }, end_date: '2026-08-22', status: 'active',
+          created_at: '2026-07-22T00:00:00', derived_status: 'active',
+          duration_days: 31, days_remaining: 32, people_count: 0, vehicle_count: 0,
           people: [], vehicles: [],
         },
       ]),
@@ -155,7 +171,7 @@ describe('PermitsPage', () => {
       renderPage()
       await waitFor(() => expect(screen.getByText('Acme Contracting')).toBeInTheDocument())
       expect(screen.getAllByText(/شهر واحد من/).length).toBeGreaterThan(0)
-      expect(screen.getByText(/9 أيام متبقية/)).toBeInTheDocument()
+      expect(screen.getAllByText(/شهران من/).length).toBeGreaterThan(0)
       expect(document.documentElement.dir).toBe('rtl')
       expect(screen.queryByText(/month from/i)).not.toBeInTheDocument()
     } finally {
@@ -163,3 +179,23 @@ describe('PermitsPage', () => {
     }
   })
 })
+
+  it('prints Arabic one-, two-, and six-month periods', async () => {
+    await i18n.changeLanguage('ar')
+    let printed = ''
+    const printSpy = vi.spyOn(window, 'print').mockImplementation(() => {
+      printed = document.body.textContent ?? ''
+    })
+    try {
+      renderPage()
+      await waitFor(() => expect(screen.getByText('Acme Contracting')).toBeInTheDocument())
+      await screen.getByRole('button', { name: /طباعة/ }).click()
+      await waitFor(() => expect(printSpy).toHaveBeenCalled())
+      expect(printed).toMatch(/6 أشهر من/)
+      expect(printed).toMatch(/شهران من/)
+      expect(printed).toMatch(/شهر واحد من/)
+    } finally {
+      printSpy.mockRestore()
+      await i18n.changeLanguage('en')
+    }
+  })
