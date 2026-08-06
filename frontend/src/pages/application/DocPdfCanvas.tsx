@@ -129,7 +129,7 @@ export default function DocPdfCanvas({
           canvas.style.width = `${Math.floor(viewport.width)}px`
           canvas.className = 'mb-3 h-auto max-w-full rounded-lg bg-white shadow-lg'
           const ctx = canvas.getContext('2d')
-          if (!ctx) continue
+          if (!ctx) throw new Error('Canvas 2D context unavailable')
           container.appendChild(canvas)
           await page.render({
             canvas,

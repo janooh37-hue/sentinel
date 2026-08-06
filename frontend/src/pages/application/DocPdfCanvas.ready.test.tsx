@@ -49,4 +49,24 @@ describe('DocPdfCanvas readiness', () => {
     await waitFor(() => expect(view.getByText("Couldn't render this file")).toBeInTheDocument())
     expect(onReady).not.toHaveBeenCalled()
   })
+
+  it('does not call onReady when a page has no 2D canvas context', async () => {
+    const onReady = vi.fn()
+    getDocumentMock.mockReturnValue({
+      promise: Promise.resolve({
+        numPages: 1,
+        getPage: vi.fn().mockResolvedValue({
+          getViewport: vi.fn(() => ({ width: 100, height: 100 })),
+          render: vi.fn(() => ({ promise: Promise.resolve() })),
+        }),
+      }),
+    })
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, text: async () => 'AQ==' }))
+    vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue(null)
+
+    const view = render(<DocPdfCanvas pdfUrl="/document.pdf" onReady={onReady} />)
+
+    await waitFor(() => expect(view.getByText("Couldn't render this file")).toBeInTheDocument())
+    expect(onReady).not.toHaveBeenCalled()
+  })
 })
