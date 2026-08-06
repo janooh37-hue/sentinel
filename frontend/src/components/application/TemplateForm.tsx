@@ -43,6 +43,8 @@ import { GENERAL_BOOK_PAGE_VIEW } from '@/components/ui/rich-editor-config'
 import { ClearanceTableField } from './fields/ClearanceTableField'
 import { ItemsTableField } from './fields/ItemsTableField'
 import { EmployeesTableField } from './fields/EmployeesTableField'
+import { InmatesTableField } from './fields/InmatesTableField'
+import { TimeField } from './fields/TimeField'
 import { ViolationCheckboxesField } from './fields/ViolationCheckboxesField'
 import { ViolationComboField } from './fields/ViolationComboField'
 import { ClassificationField } from './fields/ClassificationField'
@@ -145,6 +147,9 @@ function renderField(
     case 'date':
       return <DateField key={field.id} {...common} />
 
+    case 'time':
+      return <TimeField key={field.id} {...common} />
+
     case 'select':
       return (
         <SelectField
@@ -185,7 +190,16 @@ function renderField(
       // type string remains "hand_sign_checkbox" for backwards-compat with
       // the existing _fields.json. The checkbox now binds to
       // `embed_signature.<entity>` and means "embed my saved signature".
-      return <EmbedSignatureCheckbox key={field.id} {...common} />
+      // defaultOn is per-field (field.default === 'true' in _fields.json,
+      // e.g. Inmate Conduct Violations' hand_sign_manager) — every sibling
+      // form's hand_sign_manager has no `default` and stays unchecked.
+      return (
+        <EmbedSignatureCheckbox
+          key={field.id}
+          {...common}
+          defaultOn={field.default === 'true'}
+        />
+      )
 
     case 'signature': {
       const paired = findPairedHandSign(field, fields)
@@ -248,6 +262,9 @@ function renderField(
 
     case 'employees_table':
       return <EmployeesTableField key={field.id} {...common} />
+
+    case 'inmates_table':
+      return <InmatesTableField key={field.id} {...common} />
 
     case 'employee_picker':
       return <EmployeePickerField key={field.id} {...common} />

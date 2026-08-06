@@ -84,6 +84,7 @@ _AZTEC_TOP_RIGHT: frozenset[str] = frozenset(
         "Warning Form",
         "Administrative Leave Form",
         "Leave Permit Form",
+        "Inmate Conduct Violations",
     }
 )
 
@@ -904,6 +905,7 @@ _FORM_REGISTRY: dict[str, dict[str, Any]] = {
     # Report: no-classification, no-ref General Book paper; reuses same adapter
     # and post-process as General Book (body + footer pipeline).
     "Report": {"adapter": _adapt_general_book, "post_process": _pp_general_book},
+    "Inmate Conduct Violations": {"adapter": _adapt_common, "post_process": None},
 }
 
 

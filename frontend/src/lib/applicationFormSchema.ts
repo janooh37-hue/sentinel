@@ -57,6 +57,12 @@ function buildShape(fields: TemplateField[], t: TFunction): Record<string, AnyZo
             )
         break
 
+      case 'time':
+        shape[id] = required
+          ? z.string().min(1, { message: t('application.validation.required') })
+          : emptyToUndefined(z.string())
+        break
+
       case 'select': {
         const opts = options ?? []
         if (required && opts.length > 0) {
@@ -72,7 +78,10 @@ function buildShape(fields: TemplateField[], t: TFunction): Record<string, AnyZo
         // Round 2 — Fix E: `hand_sign_checkbox` keys still bind to the field
         // id (e.g. "hand_sign_employee") but the value now means "embed
         // signature" — flipped semantics, same wire shape.
-        shape[id] = z.boolean().default(false)
+        // Per-field default (field.default === 'true', e.g. Inmate Conduct
+        // Violations' hand_sign_manager) — every other checkbox has no
+        // `default` in _fields.json and keeps the false default unchanged.
+        shape[id] = z.boolean().default(field.default === 'true')
         break
 
       case 'number':
@@ -184,6 +193,23 @@ function buildShape(fields: TemplateField[], t: TFunction): Record<string, AnyZo
                 }),
               })
               .optional()
+        break
+      }
+
+      case 'inmates_table': {
+        const inmate = z.object({
+          // .trim() rejects a whitespace-only name (would otherwise satisfy
+          // .min(1) and print as a numbered but nameless inmate row) and
+          // normalizes the stored value to the trimmed text.
+          name: z.string().trim().min(1, { message: t('application.validation.required') }),
+          nationality: z.string().optional(),
+          wing: z.string().optional(),
+          uid: z.string().optional(),
+          holding_no: z.string().optional(),
+        })
+        shape[id] = required
+          ? z.array(inmate).min(1, { message: t('application.validation.required') })
+          : z.array(inmate).optional()
         break
       }
 

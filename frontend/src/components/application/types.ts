@@ -31,6 +31,8 @@ export type FieldType =
   | 'violation_combo'   // warning-form: multi-select violation types + custom
   | 'employees_table'   // passport-release list: multi-employee G-number picker
   | 'employee_picker'  // single-employee picker (full roster); emits employee id string
+  | 'inmates_table'    // Inmate Conduct Violations: add/remove inmate row grid
+  | 'time'             // native <input type="time">; emits "HH:MM"
 
 export interface TemplateField {
   /** `key` from the backend — aliased as `id` for field-component compatibility */

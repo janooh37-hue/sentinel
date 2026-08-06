@@ -28,6 +28,7 @@ against a data dict.
 * ``clearance(table_idx, row, default="")`` — formatted "Y - remark" / "N"
   from `data["clearance_marks"][f"{table_idx}_{row}"]`.
 * ``weekday_ar`` (variable) — Arabic weekday name for `data["today"]` (or now).
+* ``now_time`` (variable) — Arabic 12-hour clock for now, e.g. "1:05 م".
 
 ## post_process hook
 
@@ -182,6 +183,20 @@ def _arabic_weekday(today_str: str) -> str:
     return ARABIC_WEEKDAYS[dt.weekday()]
 
 
+def _arabic_clock(now: datetime) -> str:
+    """12-hour clock with the Arabic meridiem, e.g. "1:05 م" (ص before noon)."""
+    hour = now.hour % 12 or 12
+    meridiem = "ص" if now.hour < 12 else "م"
+    return f"{hour}:{now.minute:02d} {meridiem}"
+
+
+def _apply_context_defaults(context: dict[str, Any]) -> None:
+    """Date/weekday/time tokens every template may use. Caller values win."""
+    context.setdefault("today", datetime.now().strftime("%d/%m/%Y"))
+    context.setdefault("weekday_ar", _arabic_weekday(context["today"]))
+    context.setdefault("now_time", _arabic_clock(datetime.now()))
+
+
 def render(
     template_path: Path | str,
     data: Mapping[str, Any],
@@ -212,8 +227,7 @@ def render(
     tpl = DocxTemplate(str(template_path))
 
     context: dict[str, Any] = dict(data)
-    context.setdefault("today", datetime.now().strftime("%d/%m/%Y"))
-    context.setdefault("weekday_ar", _arabic_weekday(context["today"]))
+    _apply_context_defaults(context)
 
     # _sig_path → _sig (InlineImage or "").
     sig_w = int(context.get("_sig_size_mm", DEFAULT_SIG_WIDTH_MM))

@@ -16,7 +16,7 @@ from app.core.form_kind import (
 
 def test_service_ids_are_templates_minus_companions() -> None:
     assert set(SERVICE_IDS) == set(TEMPLATE_FILES) - set(COMPANION_TEMPLATE_IDS)
-    assert len(SERVICE_IDS) == 17
+    assert len(SERVICE_IDS) == 18
     # TEMPLATE_FILES order is preserved (drives rail order).
     assert list(SERVICE_IDS) == [t for t in TEMPLATE_FILES if t not in COMPANION_TEMPLATE_IDS]
 

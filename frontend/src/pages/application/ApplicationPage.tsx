@@ -64,7 +64,12 @@ import { useShortcutAction } from '@/lib/useKeyboardShortcuts'
 import { EmployeeHeader } from './EmployeeHeader'
 import { JobStatus } from './JobStatus'
 import { emojiForTemplate, resolveTemplateIdFromSlug } from './formEmoji'
-import { restoreThenSeedResignationDate, todayIso } from './resignationDate'
+import {
+  nowHM,
+  restoreThenSeedResignationDate,
+  seedReportDateTime,
+  todayIso,
+} from './resignationDate'
 import { WordHandoffDialog } from '@/pages/books/WordHandoffDialog'
 
 type TabValue = 'fields' | 'preview'
@@ -414,12 +419,17 @@ export function ApplicationPage(): React.JSX.Element {
     // remain "hand_sign_<entity>" for backwards-compat with _fields.json, but
     // Round 2 — Fix E inverted the semantics: a checked box now means
     // "embed the saved signature image". The payload key is the bare entity
-    // ("employee" / "manager").
+    // ("employee" / "manager"). A field with `default: "true"` (e.g. Inmate
+    // Conduct Violations' hand_sign_manager) is treated as checked unless the
+    // operator explicitly unticks it — same `value !== false` rule as the
+    // Report form's `sign` field below, generalized via the per-field default
+    // instead of a hardcoded field id.
     const embedSignature: Record<string, boolean> = {}
     for (const field of schema?.fields ?? []) {
       if (field.type === 'hand_sign_checkbox') {
         const entity = field.id.replace(/^hand_sign_/, '')
-        embedSignature[entity] = Boolean(values[field.id])
+        embedSignature[entity] =
+          field.default === 'true' ? values[field.id] !== false : Boolean(values[field.id])
       }
     }
 
@@ -654,6 +664,18 @@ export function ApplicationPage(): React.JSX.Element {
       restoredValues,
       !!schemaQuery.data?.fields?.some((f) => f.id === 'resignation_date'),
       todayIso(),
+    )
+    // Inmate Conduct Violations: report_date/report_time pre-fill with "now"
+    // on open and stay editable before generating (mockup spec) — seeded
+    // AFTER the draft restore above so a resumed draft's own values win.
+    // seedReportDateTime owns that ordering as one call, same pattern as
+    // restoreThenSeedResignationDate just above.
+    seedReportDateTime(
+      form,
+      !!schemaQuery.data?.fields?.some((f) => f.id === 'report_date'),
+      !!schemaQuery.data?.fields?.some((f) => f.id === 'report_time'),
+      todayIso(),
+      nowHM(),
     )
     // Seed the intake-staged scan on top of the restored draft (or onto an
     // empty state). attachmentsWithSeed is a pure function so draft content

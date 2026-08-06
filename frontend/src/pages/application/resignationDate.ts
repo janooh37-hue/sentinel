@@ -57,3 +57,34 @@ export function restoreThenSeedResignationDate(
     if (seed !== null) form.setValue('resignation_date', seed)
   }
 }
+
+/** Local browser time as `HH:MM` (24h), matching `<input type="time">`'s value format. */
+export function nowHM(now: Date = new Date()): string {
+  const h = String(now.getHours()).padStart(2, '0')
+  const m = String(now.getMinutes()).padStart(2, '0')
+  return `${h}:${m}`
+}
+
+/**
+ * Inmate Conduct Violations: report_date/report_time pre-fill with "now" on
+ * open and stay editable before generating (mockup spec). Call AFTER
+ * restoreThenSeedResignationDate in the same effect so a resumed draft's own
+ * values win — same "seed only if absent" rule as seedResignationDate,
+ * reused directly for both fields despite the name (it is date/time-agnostic).
+ */
+export function seedReportDateTime(
+  form: SeedableForm,
+  hasReportDateField: boolean,
+  hasReportTimeField: boolean,
+  today: string,
+  nowHm: string,
+): void {
+  if (hasReportDateField) {
+    const seed = seedResignationDate(form.getValues('report_date'), today)
+    if (seed !== null) form.setValue('report_date', seed)
+  }
+  if (hasReportTimeField) {
+    const seed = seedResignationDate(form.getValues('report_time'), nowHm)
+    if (seed !== null) form.setValue('report_time', seed)
+  }
+}

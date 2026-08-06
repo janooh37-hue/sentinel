@@ -44,6 +44,7 @@ from app.core.classifications import classified_ref, get_classification
 from app.core.constants import STAMP_STYLE_HEADER, TEMPLATE_FILES
 from app.core.dateutils import excel_date_to_datetime
 from app.core.docx_engine import DocxEngine, aztec_corner_for
+from app.core.docx_render import _arabic_clock, _arabic_weekday
 from app.core.pdf_merge import merge_attachments_into_pdf
 from app.core.vault_manager import Vault
 from app.db.models import (
@@ -96,7 +97,17 @@ _FORM_CATEGORY: dict[str, str] = {
     "Leave Permit Form": "HR",
     "Administrative Leave Form": "HR",
     "Passport Release List": "HR",
+    "Inmate Conduct Violations": "NAT",
 }
+
+#: Inmate Conduct Violations — the fixed "إجراءات المشرف" bullets, in the order
+#: they print. Key = the _fields.json checkbox key. The Arabic copy lives here
+#: (not in the docx) so the template stays a layout and the wording has one home.
+_INMATE_ACTION_LABELS: tuple[tuple[str, str], ...] = (
+    ("action_notified", "تم إبلاغ مدير فرع شؤون النزلاء"),
+    ("action_written", "تم كتابة مخالفة مسلكية في حق النزلاء"),
+    ("action_transferred", "تم نقل النزيل إلى قسم B وتقييده"),
+)
 
 # Short filename prefix per form — mirrors v3's fn = f"LeaveApp_..." pattern
 _FORM_SHORT_NAME: dict[str, str] = {
@@ -118,6 +129,7 @@ _FORM_SHORT_NAME: dict[str, str] = {
     "Administrative Leave Form": "AdminLeave",
     "General Book": "GeneralBook",
     "Passport Release List": "PassportReleaseList",
+    "Inmate Conduct Violations": "InmateViolations",
 }
 
 # Forms that create a Leave row in the DB
@@ -744,7 +756,13 @@ def _build_template_data(
             # These forms render the manager as an Arabic signature block, so the
             # Arabic name reads correctly beside the Arabic designation.
             prefer_arabic=(
-                template_id in ("General Book", "Leave Permit Form", "Administrative Leave Form")
+                template_id
+                in (
+                    "General Book",
+                    "Leave Permit Form",
+                    "Administrative Leave Form",
+                    "Inmate Conduct Violations",
+                )
             ),
         )
     else:
@@ -754,15 +772,72 @@ def _build_template_data(
         data.pop("sig1_path", None)
 
     # ------------------------------------------------------------------
-    # 4b. Submitter G-number for the document footer — ONLY the General Book
-    # footer consumes `{{ submitter_g }}`. Scoped to that template so other
-    # forms don't silently emit the caller's G-number. Resolves to the
-    # authenticated caller's `employee_id` (G-number); empty string when the
-    # user is unlinked or no auth context was threaded through (the template
-    # hides the line via a Jinja {% if %} guard).
+    # 4b. Submitter G-number for the document footer — General Book and
+    # Inmate Conduct Violations footers consume `{{ submitter_g }}`. Scoped
+    # to these templates so other forms don't silently emit the caller's
+    # G-number. Resolves to the authenticated caller's `employee_id`
+    # (G-number); empty string when the user is unlinked or no auth context
+    # was threaded through — the footer token is bare (no Jinja guard), so
+    # that renders as a blank G-number, not a hidden line.
     # ------------------------------------------------------------------
-    if template_id == "General Book":
+    if template_id in ("General Book", "Inmate Conduct Violations"):
         data["submitter_g"] = (current_user.employee_id or "") if current_user is not None else ""
+
+    # ------------------------------------------------------------------
+    # 4b-2. Inmate Conduct Violations — the "بيانات مقدم التقرير" row names the
+    # employee who filed the report, picked from the roster. It is deliberately
+    # NOT the request's employee_id: the paper is about the inmates, so the book
+    # stays unattached to any employee file. The footer's {{ submitter_g }}
+    # remains the signed-in account and is a different person.
+    # ------------------------------------------------------------------
+    if template_id == "Inmate Conduct Violations":
+        reporter_id = str(fields.get("reporter_id", "") or "").strip()
+        reporter = db.get(Employee, reporter_id) if reporter_id else None
+        # Arabic paper: prefer the Arabic name, fall back to English only when
+        # the record has none.
+        data["reporter_name"] = (
+            (reporter.name_ar or reporter.name_en or "") if reporter is not None else ""
+        )
+        data["reporter_g"] = reporter.id if reporter is not None else ""
+        # Supervisor action checkboxes → the template's `{%p for a in actions %}`
+        # bullet loop. Fixed paper order (_INMATE_ACTION_LABELS), free-text
+        # "other" entry appended last, blank/whitespace-only text dropped.
+        actions = [label for key, label in _INMATE_ACTION_LABELS if fields.get(key)]
+        other = str(fields.get("action_other", "") or "").strip()
+        if other:
+            actions.append(other)
+        data["actions"] = actions
+        # report_date/report_time are the operator's own input (when the
+        # incident happened / was logged) — they must reach the paper, not
+        # generation time. `docx_render._apply_context_defaults` only fills
+        # today/weekday_ar/now_time from datetime.now() when the caller left
+        # them unset, so setting all three here (when parseable) makes the
+        # operator's values win. Two real conversions, not a bare rename:
+        # report_date is ISO "YYYY-MM-DD" (<input type=date>) vs. today's
+        # dd/mm/yyyy, and weekday_ar must be derived from the SAME converted
+        # date (never the ISO string) or it would print a mismatched weekday.
+        # report_time is 24h "HH:MM" (<input type=time>) vs. now_time's
+        # Arabic 12h clock — reuses _arabic_weekday/_arabic_clock verbatim
+        # rather than a parallel formatter. An unparsable/absent value is
+        # left unset so _apply_context_defaults' now()-fallback still applies
+        # (draft/preview before the operator has filled them in).
+        report_date_raw = str(fields.get("report_date", "") or "").strip()
+        if report_date_raw:
+            try:
+                report_dt = datetime.strptime(report_date_raw, "%Y-%m-%d")
+            except ValueError:
+                report_dt = None
+            if report_dt is not None:
+                data["today"] = report_dt.strftime("%d/%m/%Y")
+                data["weekday_ar"] = _arabic_weekday(data["today"])
+        report_time_raw = str(fields.get("report_time", "") or "").strip()
+        if report_time_raw:
+            try:
+                report_tm = datetime.strptime(report_time_raw, "%H:%M")
+            except ValueError:
+                report_tm = None
+            if report_tm is not None:
+                data["now_time"] = _arabic_clock(report_tm)
 
     # ------------------------------------------------------------------
     # 4c. Administrative Leave Form — auto-count this employee's admin leaves
@@ -1051,11 +1126,19 @@ def generate_document(
     # Forms with an explicit manager-signature checkbox honor the operator's
     # choice; all other forms keep their server-enforced signing policy.
     signing_path = form_policy.signing_path_of(template_id)
-    optional_manager_signature = any(
-        field.get("key") == "hand_sign_manager" for field in form_meta.get("fields", [])
+    hand_sign_manager_field = next(
+        (f for f in form_meta.get("fields", []) if f.get("key") == "hand_sign_manager"),
+        None,
     )
-    if not optional_manager_signature:
+    if hand_sign_manager_field is None:
         embed_signature["manager"] = signing_path == "auto"
+    elif "manager" not in embed_signature and hand_sign_manager_field.get("default") == "true":
+        # Per-field default (_fields.json), e.g. Inmate Conduct Violations —
+        # only seeded when the caller genuinely omitted the key (a script, a
+        # test, or any non-UI caller must not silently land unsigned and
+        # unrouted just because it didn't think to send embed_signature).
+        # An explicit {"manager": False} from the caller is left untouched.
+        embed_signature["manager"] = True
 
     is_personnel = form_meta.get("category", "personnel") == "personnel"
 

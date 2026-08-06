@@ -7674,7 +7674,7 @@ export interface components {
              * Type
              * @enum {string}
              */
-            type: "text" | "textarea" | "date" | "select" | "manager_picker" | "submitter_picker" | "employee_picker" | "arabic_rich" | "arabic_rich_full" | "signature" | "checkbox" | "hand_sign_checkbox" | "clearance_table" | "items_table" | "employees_table" | "violation_checkboxes" | "violation_combo" | "recipient_picker" | "recipient_multi_picker";
+            type: "text" | "textarea" | "date" | "select" | "manager_picker" | "submitter_picker" | "employee_picker" | "arabic_rich" | "arabic_rich_full" | "signature" | "checkbox" | "hand_sign_checkbox" | "clearance_table" | "items_table" | "employees_table" | "violation_checkboxes" | "violation_combo" | "recipient_picker" | "recipient_multi_picker" | "inmates_table" | "time";
             /** Label En */
             label_en: string;
             /** Label Ar */
