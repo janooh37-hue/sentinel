@@ -40,7 +40,7 @@ def _permit_docgen(db_session, tmp_path, monkeypatch):
 
 
 def _person(name, uae_id="784-1000-1000000-1", **kw):
-    return PermitPersonCreate(name=name, uae_id=uae_id, **kw)
+    return PermitPersonCreate(name=name, uae_id=uae_id, role=kw.pop("role", "Electrician"), **kw)
 
 
 def _mk(db, **over):

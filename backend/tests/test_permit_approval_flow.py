@@ -64,7 +64,7 @@ def _payload(**kw: Any) -> PermitCreate:
         access_areas={"al_wathba_1": ["green"], "al_wathba_2": [], "work_residence": False},
         start_date=date(2026, 7, 1),
         validity={"value": 1, "unit": "month"},
-        people=[{"name": "Ali", "uae_id": "784-1", "nationality": "مصر"}],
+        people=[{"name": "Ali", "uae_id": "784-1", "nationality": "مصر", "role": "Electrician"}],
         vehicles=[],
     )
     base.update(kw)
@@ -163,7 +163,7 @@ def test_regen_resubmits_when_approved(gen_env: Session) -> None:
     )
     _set_state(db, permit.book_id, "approved")
     permit_service.add_person(
-        db, permit.id, PermitPersonCreate(name="Omar", uae_id="784-2"), actor="op@x.ae"
+        db, permit.id, PermitPersonCreate(name="Omar", uae_id="784-2", role="Electrician"), actor="op@x.ae"
     )
     book, latest = _latest_version(db, permit.book_id)
     assert len(book.versions) == 2  # prior (signed) version preserved
@@ -185,7 +185,7 @@ def test_regen_after_rejection_lands_as_fresh_draft(gen_env: Session) -> None:
     )
     _set_state(db, permit.book_id, "rejected")
     permit_service.add_person(
-        db, permit.id, PermitPersonCreate(name="Omar", uae_id="784-2"), actor="op@x.ae"
+        db, permit.id, PermitPersonCreate(name="Omar", uae_id="784-2", role="Electrician"), actor="op@x.ae"
     )
     book, latest = _latest_version(db, permit.book_id)
     assert book.approval_state == "none"  # fresh draft — NOT auto-resubmitted
