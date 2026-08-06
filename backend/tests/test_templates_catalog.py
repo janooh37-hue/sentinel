@@ -4,7 +4,8 @@ internally accessible (they still auto-generate with their primary)."""
 from __future__ import annotations
 
 from app.core.constants import COMPANION_TEMPLATE_IDS, TEMPLATE_FILES
-from app.services import template_service
+
+from app.services import notify_format, template_service
 
 
 def test_companions_excluded_from_listing():
@@ -94,3 +95,21 @@ def test_report_form_has_no_rich_body_field():
     assert "arabic_rich_full" not in types  # body is written in Word, not the form
     keys = {f.key for f in detail.fields}
     assert keys == {"signer_id", "recipient_id", "subject", "report_date", "sign"}
+
+
+def test_every_auto_notifying_template_publishes_capability():
+    by_id = {item.id: item for item in template_service.list_templates().items}
+    assert notify_format.AUTO_NOTIFY_TEMPLATE_IDS
+    for template_id in notify_format.AUTO_NOTIFY_TEMPLATE_IDS:
+        assert by_id[template_id].notifies_employee is True
+
+
+def test_non_notifying_word_templates_publish_false():
+    assert template_service.get_template_fields("General Book").meta.notifies_employee is False
+    assert template_service.get_template_fields("Report").meta.notifies_employee is False
+
+
+def test_auto_notify_capability_is_union_of_mapped_and_special_routes():
+    assert notify_format.AUTO_NOTIFY_TEMPLATE_IDS == frozenset(
+        set(notify_format.TEMPLATE_EVENTS) | set(notify_format.SPECIAL_TEMPLATE_ROUTES)
+    )

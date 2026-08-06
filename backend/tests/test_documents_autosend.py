@@ -1,5 +1,9 @@
 """Unit tests for the _should_autosend guard in the document generation API."""
 
+from types import SimpleNamespace
+
+import pytest
+
 from app.api.v1 import documents as docs_api
 
 
@@ -28,3 +32,54 @@ def test_should_autosend_false_when_notify_employee_off():
         )
         is False
     )
+
+
+@pytest.mark.parametrize(
+    ("template_id", "notify_kwargs", "expected_dispatches"),
+    [
+        ("Salary Deduction Form", {"notify_employee": False}, []),
+        ("Violation Form", {"notify_employee": False}, []),
+        ("Salary Deduction Form", {}, [42]),
+        ("Violation Form", {"notify_employee": True}, [42]),
+    ],
+)
+def test_run_generation_notification_choice_and_book_id(
+    monkeypatch,
+    template_id,
+    notify_kwargs,
+    expected_dispatches,
+):
+    class FakeSession:
+        def close(self) -> None:
+            return None
+
+    dispatched: list[int] = []
+    monkeypatch.setattr(docs_api, "SessionLocal", FakeSession)
+    monkeypatch.setattr(
+        docs_api.document_service,
+        "generate_document",
+        lambda *args, **kwargs: SimpleNamespace(
+            book_id=42,
+            submission_id="sub",
+            documents=[],
+        ),
+    )
+    monkeypatch.setattr(
+        docs_api.notify_dispatch,
+        "auto_send_for_book",
+        lambda db, book_id, *, sent_by: dispatched.append(book_id),
+    )
+
+    job_id = docs_api.submit_job()
+    request = docs_api.DocumentGenerateRequest(
+        template_id=template_id,
+        commit=True,
+        **notify_kwargs,
+    )
+    docs_api._run_generation(job_id, request)
+
+    job = docs_api.get_job(job_id)
+    assert job is not None
+    assert job.status == "done"
+    assert job.book_id == 42
+    assert dispatched == expected_dispatches

@@ -145,10 +145,10 @@ class DocumentGenerateRequest(BaseModel):
     # is retired for this form.
     classification_code: str | None = None
     # Per-book notify opt-out (2026-07-20). The generation preview shows an
-    # On-by-default switch for the 8 forms that notify the employee on save;
-    # sending False suppresses the notification for THIS book only. Default
-    # True keeps every existing caller's behaviour unchanged. ANDed with the
-    # global `sms_autosend_enabled` setting inside notify_dispatch.
+    # On-by-default switch for notifier-backed forms; sending False suppresses
+    # the notification for THIS book only. Default True keeps every existing
+    # caller's behaviour unchanged. ANDed with the global
+    # `sms_autosend_enabled` setting inside notify_dispatch.
     notify_employee: bool = True
 
 
@@ -170,6 +170,7 @@ class JobDocumentItem(BaseModel):
 class JobStatusResponse(BaseModel):
     job_id: str
     status: Literal["queued", "running", "done", "failed"]
+    book_id: int | None = None
     submission_id: str | None = None
     documents: list[JobDocumentItem] | None = None
     error_code: str | None = None
@@ -253,6 +254,7 @@ def _run_generation(
         ]
         set_done(
             job_id,
+            book_id=result.book_id,
             submission_id=result.submission_id,
             documents=registry_docs,
         )
@@ -331,6 +333,7 @@ def get_job_status(
             for d in job.documents
         ]
     return JobStatusResponse(
+        book_id=job.book_id,
         job_id=job.job_id,
         status=job.status,
         submission_id=job.submission_id,

@@ -5966,6 +5966,8 @@ export interface components {
              * @enum {string}
              */
             status: "queued" | "running" | "done" | "failed";
+            /** Book Id */
+            book_id?: number | null;
             /** Submission Id */
             submission_id?: string | null;
             /** Documents */
@@ -7715,6 +7717,8 @@ export interface components {
             signing_path: "auto" | "in_app" | "scan" | "chain";
             /** Has Code */
             has_code: boolean;
+            /** Notifies Employee */
+            notifies_employee: boolean;
         };
         /** TransferAdminRequest */
         TransferAdminRequest: {

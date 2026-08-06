@@ -61,6 +61,17 @@ TEMPLATE_EVENTS: dict[str, str] = {
     "Leave Permit Form": EVENT_LEAVE_PERMIT,
 }
 
+SPECIAL_TEMPLATE_ROUTES: dict[str, str] = {
+    "Leave Application Form": "leave_status",
+    "Administrative Leave Form": "leave_status",
+    "Duty Resumption Form": "duty_resumption",
+    "Violation Form": "violation",
+}
+
+AUTO_NOTIFY_TEMPLATE_IDS: frozenset[str] = frozenset(TEMPLATE_EVENTS) | frozenset(
+    SPECIAL_TEMPLATE_ROUTES
+)
+
 # Monday-first to match datetime.weekday() and ARABIC_WEEKDAYS' ordering.
 ENGLISH_WEEKDAYS: tuple[str, ...] = (
     "Monday",

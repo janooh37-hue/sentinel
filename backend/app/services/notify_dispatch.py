@@ -344,16 +344,13 @@ def auto_send_for_book(
     version = book.versions[-1]
     tpl = version.template_id or ""
     doc = db.get(Document, version.document_id) if version.document_id else None
+    route = nf.SPECIAL_TEMPLATE_ROUTES.get(tpl)
     if doc is not None:
-        if tpl == "Leave Application Form" and doc.leave_id is not None:
+        if route == "leave_status" and doc.leave_id is not None:
             return _send_leave_status(db, doc.leave_id, sent_by=sent_by)
-        # Administrative Leave Form creates a Leave row (start/end/days) — route
-        # by it so the admin_leave wording renders from typed dates (spec 2026-07-16).
-        if tpl == "Administrative Leave Form" and doc.leave_id is not None:
-            return _send_leave_status(db, doc.leave_id, sent_by=sent_by)
-        if tpl == "Duty Resumption Form" and doc.leave_id is not None:
+        if route == "duty_resumption" and doc.leave_id is not None:
             return send_for_event(db, nf.EVENT_DUTY_RESUMPTION, doc.leave_id, sent_by=sent_by)
-        if tpl == "Violation Form" and doc.violation_id is not None:
+        if route == "violation" and doc.violation_id is not None:
             return send_for_event(db, nf.EVENT_VIOLATION, doc.violation_id, sent_by=sent_by)
     event = nf.TEMPLATE_EVENTS.get(tpl)
     if event is None:

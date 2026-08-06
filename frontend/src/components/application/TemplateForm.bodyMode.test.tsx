@@ -48,7 +48,7 @@ import { api } from '@/lib/api'
 import type { TemplateDetailResponse } from './types'
 
 const GENERAL_BOOK_SCHEMA: TemplateDetailResponse = {
-  meta: { id: 'General Book', name_en: 'General Book', name_ar: 'الكتاب العام', category: 'admin', form_number: '', signing_path: 'in_app', has_code: false },
+  meta: { id: 'General Book', name_en: 'General Book', name_ar: 'الكتاب العام', category: 'admin', form_number: '', signing_path: 'in_app', has_code: false, notifies_employee: false },
   needs_manager: false,
   needs_submitter: false,
   fields: [

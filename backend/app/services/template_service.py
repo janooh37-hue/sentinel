@@ -17,6 +17,8 @@ from app.core import form_policy
 from app.core.constants import COMPANION_TEMPLATE_IDS, TEMPLATE_FILES
 from app.core.docx_engine import template_has_code
 from app.core.form_policy import SigningPath
+
+from app.services import notify_format
 from app.services.document_service import load_fields_meta
 
 # ---------------------------------------------------------------------------
@@ -35,6 +37,8 @@ class TemplateMeta(BaseModel):
     # ref code. True for every form today; False only for future forms with no
     # clear corner (see _NO_CODE_FORMS) — drives the Services-tile indicator.
     has_code: bool
+
+    notifies_employee: bool
 
 
 class AttachmentSlotRead(BaseModel):
@@ -106,6 +110,7 @@ def _build_meta(template_id: str, entry: dict[str, Any]) -> TemplateMeta:
         category=entry.get("category", "personnel"),
         signing_path=signing_path,
         has_code=template_has_code(template_id),
+        notifies_employee=template_id in notify_format.AUTO_NOTIFY_TEMPLATE_IDS,
     )
 
 
