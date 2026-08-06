@@ -68,3 +68,29 @@ Added EN/AR parity for permit validity heading, all exact preset labels, custom 
 ## Commit
 
 `feat(permits): select preset or custom validity` (final SHA is recorded in the delivery status)
+
+## Follow-up preservation round
+
+### RED
+
+Added regression tests for the labelled start-date input and create/edit start-date payloads, no-access submit blocking/no request, and edit hydration of a stored custom `{ value: 2, unit: 'month' }` period. Before implementation, the focused form run reported **4 failed / 16 passed** tests: missing start-date input (create and edit), missing access gating, and missing custom edit controls.
+
+### GREEN
+
+Restored the start-date input before validity controls, restored `hasAnyAccess` in `canSave`, and set `customOpen` from stored validity when it is not one of the five presets. Focused verification now reports:
+
+```text
+pnpm -C frontend exec vitest run src/pages/permits/PermitFormDialog.test.tsx src/locales/permits.i18n.test.ts
+Test Files 2 passed; Tests 117 passed
+
+pnpm -C frontend exec tsc -b --noEmit
+(no output; exit 0)
+```
+
+### Files and downstream concern
+
+Follow-up changes are limited to `PermitFormDialog.tsx` and `PermitFormDialog.test.tsx`. The existing temporary `api.ts` compatibility for unchanged Task 5 detail add-person/renew callers remains documented above and is not addressed in this round.
+
+### Follow-up commit
+
+`fix(permits): preserve validity form behavior` (final SHA is recorded in the delivery status)

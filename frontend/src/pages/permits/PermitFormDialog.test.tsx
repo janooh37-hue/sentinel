@@ -342,3 +342,54 @@ describe('PermitFormDialog', () => {
       })),
     )
   })
+  it('keeps Issue Permit disabled and sends no request until access is selected', async () => {
+    const createSpy = vi.spyOn(api, 'createPermit').mockResolvedValue({ id: 7, people: [], vehicles: [] } as never)
+    renderForm()
+    await userEvent.type(screen.getByLabelText(/company/i), 'ACME')
+    createSpy.mockClear()
+    await userEvent.type(screen.getByPlaceholderText('Full name'), 'Ali')
+    await userEvent.type(screen.getByPlaceholderText('UAE ID'), '784-1')
+    await userEvent.type(screen.getByLabelText(/job \/ trade/i), 'Electrician')
+    expect(screen.getByRole('button', { name: /issue permit/i })).toBeDisabled()
+    expect(createSpy).not.toHaveBeenCalled()
+  })
+
+  it('uses a changed start date in the create payload', async () => {
+    const createSpy = vi.spyOn(api, 'createPermit').mockResolvedValue({ id: 7, people: [], vehicles: [] } as never)
+    renderForm()
+    await userEvent.type(screen.getByLabelText(/company/i), 'ACME')
+    await userEvent.type(screen.getByPlaceholderText('Full name'), 'Ali')
+    await userEvent.type(screen.getByPlaceholderText('UAE ID'), '784-1')
+    await userEvent.type(screen.getByLabelText(/job \/ trade/i), 'Electrician')
+    await userEvent.clear(screen.getByLabelText(/start date/i))
+    await userEvent.type(screen.getByLabelText(/start date/i), '2026-09-01')
+    await userEvent.click(screen.getByRole('button', { name: /al wathba 1.*green/i }))
+    await userEvent.click(screen.getByRole('button', { name: /issue permit/i }))
+    await waitFor(() => expect(createSpy).toHaveBeenCalledWith(expect.objectContaining({
+      start_date: '2026-09-01',
+    })))
+  })
+
+  it('uses a changed start date in the edit payload', async () => {
+    const updateSpy = vi.spyOn(api, 'updatePermit').mockResolvedValue({ id: 7 } as never)
+    renderForm(editPermit({ al_wathba_1: ['green'], al_wathba_2: [], work_residence: false }))
+    await userEvent.clear(screen.getByLabelText(/start date/i))
+    await userEvent.type(screen.getByLabelText(/start date/i), '2026-09-03')
+    await userEvent.click(screen.getByRole('button', { name: /save permit/i }))
+    await waitFor(() => expect(updateSpy).toHaveBeenCalledWith(7, expect.objectContaining({
+      start_date: '2026-09-03',
+    })))
+  })
+
+  it('hydrates and round-trips a stored custom validity period in edit mode', async () => {
+    const updateSpy = vi.spyOn(api, 'updatePermit').mockResolvedValue({ id: 7 } as never)
+    const permit = editPermit({ al_wathba_1: ['green'], al_wathba_2: [], work_residence: false })
+    permit.validity = { value: 2, unit: 'month' }
+    renderForm(permit)
+    expect(screen.getByLabelText(/duration/i)).toHaveValue(2)
+    expect(screen.getByLabelText(/unit/i)).toHaveValue('month')
+    await userEvent.click(screen.getByRole('button', { name: /save permit/i }))
+    await waitFor(() => expect(updateSpy).toHaveBeenCalledWith(7, expect.objectContaining({
+      validity: { value: 2, unit: 'month' },
+    })))
+  })

@@ -122,8 +122,11 @@ export function PermitFormDialog({ open, permit, onOpenChange, onSaved }: Props)
           ...EMPTY_ACCESS_AREAS,
           work_residence: permit?.zones.includes('work_residence') ?? false,
         })
-    setValidity(permit?.validity ?? { value: 1, unit: 'month' })
-    setCustomOpen(false)
+    const hydratedValidity = permit?.validity ?? { value: 1, unit: 'month' }
+    setValidity(hydratedValidity)
+    setCustomOpen(!PRESETS.some((preset) =>
+      preset.value === hydratedValidity.value && preset.unit === hydratedValidity.unit,
+    ))
     setPurpose(permit?.purpose ?? '')
     setNotes(permit?.notes ?? '')
     setManagerId(permit?.manager_id ?? null)
@@ -163,10 +166,10 @@ export function PermitFormDialog({ open, permit, onOpenChange, onSaved }: Props)
   // The approval chain reaches the manager through his linked login account.
   const canRoute = Boolean(managers?.find((m) => m.id === managerId)?.user_id)
   const canSave =
-    company.trim().length > 0 &&
+    hasAnyAccess &&
+    (!legacyNeedsLocation || hasLocationAccess) &&
     Number.isInteger(validity.value) &&
     validity.value > 0 &&
-    (!legacyNeedsLocation || hasLocationAccess) &&
     (isEdit || (hasPerson && peopleComplete))
 
   const mutation = useMutation({
@@ -382,6 +385,15 @@ export function PermitFormDialog({ open, permit, onOpenChange, onSaved }: Props)
               </p>
             )}
           </div>
+          <label className="flex flex-col gap-1.5">
+            <span className="text-xs text-muted-foreground">{t('permits.form.startDate')}</span>
+            <input
+              type="date"
+              className={`${inputCls} font-mono`}
+              value={startDate}
+              onChange={(e) => setStartDate(e.target.value)}
+            />
+          </label>
 
           {/* Validity */}
           <div className="flex flex-col gap-2">
