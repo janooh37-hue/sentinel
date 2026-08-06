@@ -262,6 +262,11 @@ export function ApplicationPage(): React.JSX.Element {
   })
   const schema = schemaQuery.data ? adaptSchema(schemaQuery.data) : null
   const selectedMeta = templates.find((tpl) => tpl.id === selectedTemplate) ?? null
+  const showNotifyEmployee = shouldShowNotifyToggle({
+    notifiesEmployee: selectedMeta?.notifies_employee ?? false,
+    autosendEnabled: settingsQuery.data?.sms_autosend_enabled ?? false,
+    isRevision: reviseBookId !== null,
+  })
 
   // Attachments (spec 2026-06-11 §6) — named slots come from the template
   // policy on the detail response; the block itself renders on EVERY form
@@ -1123,10 +1128,7 @@ export function ApplicationPage(): React.JSX.Element {
                 <div className="flex min-h-[400px] flex-col">
                   <JobStatus key={activeJobId} jobId={activeJobId} onDone={handleJobDone} />
 
-                  {shouldShowNotifyToggle(
-                    selectedTemplate,
-                    settingsQuery.data?.sms_autosend_enabled ?? false,
-                  ) && (
+                  {showNotifyEmployee && (
                     <NotifyEmployeeToggle
                       className="mt-4"
                       checked={notifyEmployee}

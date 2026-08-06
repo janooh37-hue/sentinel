@@ -14,6 +14,7 @@ interface NotifyEmployeeToggleProps {
   onChange: (checked: boolean) => void
   label: string
   hint?: string
+  disabled?: boolean
   /** Extra classes for the outer row (e.g. spacing). */
   className?: string
 }
@@ -23,6 +24,7 @@ export function NotifyEmployeeToggle({
   onChange,
   label,
   hint,
+  disabled = false,
   className,
 }: NotifyEmployeeToggleProps): React.JSX.Element {
   return (
@@ -43,9 +45,10 @@ export function NotifyEmployeeToggle({
         role="switch"
         aria-checked={checked}
         aria-label={label}
+        disabled={disabled}
         onClick={() => onChange(!checked)}
         className={cn(
-          'relative ms-auto inline-flex h-6 w-11 shrink-0 items-center rounded-full px-0.5 transition-colors',
+          'relative ms-auto inline-flex h-6 w-11 shrink-0 items-center rounded-full px-0.5 transition-colors disabled:cursor-not-allowed disabled:opacity-50',
           checked ? 'bg-primary' : 'bg-muted',
         )}
       >
