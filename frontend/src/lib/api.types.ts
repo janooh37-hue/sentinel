@@ -6727,7 +6727,7 @@ export interface components {
              * Format: date
              */
             start_date: string;
-            validity: components["schemas"]["PermitValidityPeriod"];
+            validity: components["schemas"]["PermitValidityRead"];
             /**
              * End Date
              * Format: date
@@ -6834,7 +6834,7 @@ export interface components {
              * Format: date
              */
             start_date: string;
-            validity: components["schemas"]["PermitValidityPeriod"];
+            validity: components["schemas"]["PermitValidityRead"];
             /**
              * End Date
              * Format: date
@@ -6956,6 +6956,16 @@ export interface components {
         };
         /** PermitValidityPeriod */
         PermitValidityPeriod: {
+            /** Value */
+            value: number;
+            /**
+             * Unit
+             * @enum {string}
+             */
+            unit: "day" | "week" | "month" | "year";
+        };
+        /** PermitValidityRead */
+        PermitValidityRead: {
             /** Value */
             value: number;
             /**
