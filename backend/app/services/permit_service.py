@@ -545,8 +545,20 @@ def renew_permit(
             "PERMIT_REVOKED", "A revoked permit cannot be renewed.", id=permit_id
         )
     old_end = row.end_date
+    previous = {
+        "start_date": row.start_date.isoformat(),
+        "end_date": row.end_date.isoformat(),
+        "validity_value": row.validity_value,
+        "validity_unit": row.validity_unit,
+    }
     renewal_start = max(_today(), old_end + timedelta(days=1))
     _set_validity(row, start=renewal_start, validity=validity)
+    current = {
+        "start_date": row.start_date.isoformat(),
+        "end_date": row.end_date.isoformat(),
+        "validity_value": row.validity_value,
+        "validity_unit": row.validity_unit,
+    }
     row.updated_at = _utcnow()
     db.commit()
     _audit(
@@ -554,7 +566,7 @@ def renew_permit(
         "permit.renewed",
         permit_id,
         actor,
-        {"from": str(old_end), "to": str(row.end_date), "reason": reason},
+        {"previous": previous, "current": current, "reason": reason},
     )
     regenerate_permit_book(db, get_permit(db, permit_id), actor=actor)
     return get_permit(db, permit_id)

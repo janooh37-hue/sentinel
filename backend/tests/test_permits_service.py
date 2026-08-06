@@ -332,6 +332,47 @@ def test_renew_active_starts_after_current_end(db_session, monkeypatch) -> None:
     assert renewed.start_date == date(2026, 9, 1)
     assert renewed.end_date == date(2026, 9, 30)
 
+def test_renew_audit_records_complete_previous_and_current_windows(
+    db_session, monkeypatch
+) -> None:
+    monkeypatch.setattr(svc, "_today", lambda: date(2026, 8, 6))
+    row = _mk(
+        db_session,
+        start_date=date(2026, 8, 1),
+        validity={"value": 31, "unit": "day"},
+    )
+
+    renewed = svc.renew_permit(
+        db_session,
+        row.id,
+        validity=PermitValidityPeriod(value=1, unit="week"),
+        reason="contract extension",
+    )
+
+    audit = (
+        db_session.query(AuditLog)
+        .filter_by(action="permit.renewed", entity_id=str(row.id))
+        .order_by(AuditLog.id.desc())
+        .first()
+    )
+    assert audit is not None
+    assert json.loads(audit.payload) == {
+        "previous": {
+            "start_date": "2026-08-01",
+            "end_date": "2026-08-31",
+            "validity_value": 31,
+            "validity_unit": "day",
+        },
+        "current": {
+            "start_date": "2026-09-01",
+            "end_date": "2026-09-07",
+            "validity_value": 1,
+            "validity_unit": "week",
+        },
+        "reason": "contract extension",
+    }
+    assert renewed.start_date == date(2026, 9, 1)
+    assert renewed.end_date == date(2026, 9, 7)
 
 def test_renew_expired_starts_today(db_session, monkeypatch) -> None:
     monkeypatch.setattr(svc, "_today", lambda: date(2026, 8, 6))
