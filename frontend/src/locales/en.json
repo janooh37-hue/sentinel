@@ -2719,6 +2719,10 @@
       "viewRecord": "View record",
       "movedNoBook_one": "Moved 1 employee",
       "movedNoBook_other": "Moved {{count}} employees"
+    },
+    "completion": {
+      "detail_one": "1 employee transferred",
+      "detail_other": "{{count}} employees transferred"
     }
   },
   "scanBack": {

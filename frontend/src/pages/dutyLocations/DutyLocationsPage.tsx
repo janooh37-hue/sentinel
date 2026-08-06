@@ -17,7 +17,7 @@ import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { Search, X } from 'lucide-react'
 
-import { api, type EmployeeListItem } from '@/lib/api'
+import { api, type DutyTransferResult, type EmployeeListItem } from '@/lib/api'
 import {
   UNASSIGNED,
   SEED_UNITS,
@@ -29,6 +29,7 @@ import { UnitRail, type UnitRailItem } from './UnitRail'
 import { RosterTable } from './RosterTable'
 import { AssignPopover } from './AssignPopover'
 import { TransferDialog } from './TransferDialog'
+import { SavedRecordActions } from '@/components/books/SavedRecordActions'
 import { SupervisorDesignations } from './SupervisorDesignations'
 import { LeaveDigestPanel } from './LeaveDigestPanel'
 
@@ -53,6 +54,7 @@ export function DutyLocationsPage(): React.JSX.Element {
 
   const [assignTarget, setAssignTarget] = useState<EmployeeListItem | null>(null)
   const [transferOpen, setTransferOpen] = useState(false)
+  const [completedTransfer, setCompletedTransfer] = useState<DutyTransferResult | null>(null)
 
   // Rail items: all 6 seed units ALWAYS shown (count 0 if none assigned yet —
   // they convey the org structure and are valid transfer destinations), then any
@@ -159,6 +161,14 @@ export function DutyLocationsPage(): React.JSX.Element {
             {t('dutyLocations.page.subtitle')}
           </p>
         </header>
+        {completedTransfer?.book_id != null && completedTransfer.ref && (
+          <SavedRecordActions
+            bookId={completedTransfer.book_id}
+            refNumber={completedTransfer.ref}
+            detail={t('dutyLocations.completion.detail', { count: completedTransfer.moved.length })}
+            className="mb-5"
+          />
+        )}
 
         {employeesQuery.isError ? (
           <p className="py-12 text-center text-sm text-accent">
@@ -282,7 +292,10 @@ export function DutyLocationsPage(): React.JSX.Element {
           employees={selectedEmployees}
           allEmployees={employees}
           onOpenChange={setTransferOpen}
-          onTransferred={() => setSelected(new Set())}
+          onTransferred={(result) => {
+            setSelected(new Set())
+            setCompletedTransfer(result.book_id != null && result.ref ? result : null)
+          }}
         />
       )}
     </div>

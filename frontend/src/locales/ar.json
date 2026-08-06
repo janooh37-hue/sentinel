@@ -2938,6 +2938,10 @@
       "viewRecord": "عرض السجل",
       "movedNoBook_one": "تم نقل موظف واحد",
       "movedNoBook_other": "تم نقل {{count}} من الموظفين"
+    },
+    "completion": {
+      "detail_one": "تم نقل موظف واحد",
+      "detail_other": "تم نقل {{count}} من الموظفين"
     }
   },
   "scanBack": {
