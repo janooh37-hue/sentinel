@@ -505,7 +505,7 @@ def update_permit(
     validity_changed = validity is not None and (
         validity["value"] != row.validity_value or validity["unit"] != row.validity_unit
     )
-    if start_supplied and new_start != row.start_date or validity_changed:
+    if (start_supplied and new_start != row.start_date) or validity_changed:
         candidate = validity or {
             "value": row.validity_value,
             "unit": row.validity_unit,
