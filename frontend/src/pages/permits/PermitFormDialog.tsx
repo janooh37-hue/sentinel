@@ -148,10 +148,11 @@ export function PermitFormDialog({ open, permit, onOpenChange, onSaved }: Props)
     accessAreas.al_wathba_2.length > 0 ||
     accessAreas.work_residence
   const hasLocationAccess = accessAreas.al_wathba_1.length > 0 || accessAreas.al_wathba_2.length > 0
-  const legacyNeedsLocation =
-    Boolean(permit?.access_areas == null) &&
-    (permit?.zones.includes('green') || permit?.zones.includes('red') || false)
-  const legacyAccess = Boolean(permit && permit.access_areas == null && permit.zones.length > 0)
+  const legacyLocationZones: PermitLocationZone[] =
+    permit && permit.access_areas == null
+      ? LOCATION_ZONES.filter((zone) => permit.zones.includes(zone))
+      : []
+  const legacyNeedsLocation = legacyLocationZones.length > 0
   // The approval chain reaches the manager through his linked login account.
   const canRoute = Boolean(managers?.find((m) => m.id === managerId)?.user_id)
   const canSave =
@@ -366,10 +367,10 @@ export function PermitFormDialog({ open, permit, onOpenChange, onSaved }: Props)
             {!hasAnyAccess && (
               <p className="text-xs text-destructive">{t('permits.form.accessRequired')}</p>
             )}
-            {legacyAccess && (
+            {legacyNeedsLocation && (
               <p className="rounded-md border border-warning/40 bg-warning/10 px-3 py-2 text-xs text-warning">
                 {t('permits.form.legacyAccessWarning', {
-                  zones: permit?.zones.map((zone) => t(`permits.zone.${zone}`)).join(', '),
+                  zones: legacyLocationZones.map((zone) => t(`permits.zone.${zone}`)).join(', '),
                 })}
               </p>
             )}

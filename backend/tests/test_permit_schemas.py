@@ -56,6 +56,11 @@ def test_permit_update_rejects_explicit_null_access():
     with pytest.raises(ValidationError):
         PermitUpdate(access_areas=None)
 
+def test_permit_update_rejects_obsolete_flat_zones():
+    with pytest.raises(ValidationError):
+        PermitUpdate.model_validate({"zones": ["red"]})
+
+
 
 def test_permit_update_access_area_is_omittable_but_not_nullable():
     schema = PermitUpdate.model_json_schema()

@@ -25514,6 +25514,7 @@
             "title": "Notes"
           }
         },
+        "additionalProperties": false,
         "type": "object",
         "title": "PermitUpdate",
         "description": "PATCH /permits/{id} — edit header fields (not the lifecycle status)."

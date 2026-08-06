@@ -138,6 +138,15 @@ describe('PermitFormDialog', () => {
     expect(save).not.toBeDisabled()
   })
 
+  it('does not warn for a work-residence-only legacy permit', () => {
+    renderForm(editPermit(null, ['work_residence']))
+    expect(screen.getByRole('button', { name: /work residence/i })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    )
+    expect(screen.queryByText(/previously recorded/i)).not.toBeInTheDocument()
+  })
+
   it('scanning a licence pre-fills vehicle fields (editable)', async () => {
     vi.spyOn(api, 'scanVehicleLicence').mockResolvedValue({
       plate_no: 'A 1',

@@ -11,7 +11,7 @@ from __future__ import annotations
 from datetime import date, datetime
 from typing import Literal
 
-from pydantic import BaseModel, Field, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 from pydantic.json_schema import SkipJsonSchema
 
 from app.schemas._base import ORMBase
@@ -167,6 +167,9 @@ class PermitCreate(BaseModel):
 
 class PermitUpdate(BaseModel):
     """PATCH /permits/{id} — edit header fields (not the lifecycle status)."""
+
+    model_config = ConfigDict(extra="forbid")
+
     company: str | None = Field(default=None, min_length=1, max_length=255)
     access_areas: PermitAccessAreas | SkipJsonSchema[None] = None
     start_date: date | None = None
