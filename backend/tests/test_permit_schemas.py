@@ -1,4 +1,4 @@
-from datetime import date
+from datetime import date, datetime
 
 import pytest
 from pydantic import ValidationError
@@ -8,6 +8,7 @@ from app.schemas.permit import (
     PermitCreate,
     PermitRenew,
     PermitPersonCreate,
+    PermitPersonRead,
     PermitUpdate,
     PermitValidityPeriod,
     PermitVehicleCreate,
@@ -21,6 +22,26 @@ from app.schemas.permit import (
 def test_new_visitor_requires_job() -> None:
     with pytest.raises(ValidationError):
         PermitPersonCreate(name="Ali", uae_id="784-1", nationality="UAE")
+
+
+def test_visitor_job_is_normalized_and_legacy_read_role_stays_nullable() -> None:
+    visitor = PermitPersonCreate(
+        name="Ali", uae_id="784-1", nationality="UAE", role="  Electrician  "
+    )
+    assert visitor.role == "Electrician"
+    with pytest.raises(ValidationError):
+        PermitPersonCreate(name="Ali", uae_id="784-1", nationality="UAE", role="   ")
+
+    legacy = PermitPersonRead(
+        id=1,
+        permit_id=1,
+        name="Legacy",
+        created_at=datetime(2026, 8, 6),
+        role=None,
+    )
+    assert legacy.role is None
+
+
 BASE_CREATE = {
     "company": "ACME",
     "access_areas": {"al_wathba_1": ["green"]},

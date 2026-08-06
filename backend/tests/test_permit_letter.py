@@ -272,14 +272,26 @@ def test_letter_renders_job_and_no_end_date() -> None:
                 "name": "Ali",
                 "uae_id": "784-1",
                 "nationality": "UAE",
-                "role": "Electrician",
-            }
+                "role": "R&D <lead>",
+            },
+            {
+                "name": "Legacy",
+                "uae_id": "784-2",
+                "nationality": "UAE",
+                "role": None,
+            },
         ],
         vehicles=[],
         access_areas={"al_wathba_1": ["green"], "al_wathba_2": [], "work_residence": False},
         zones=["green"],
     )
-    assert "المهنة" in html
-    assert "Electrician" in html
-    assert "شهران" in html
-    assert "06/10/2026" not in html
+    assert '<th>م</th><th>الاسم</th><th>رقم الهوية</th><th>الجنسية</th><th>المهنة</th>' in html
+    assert '<th>م</th><th>الاسم</th><th>رقم الهوية</th><th>الجنسية</th><th>المهنة</th>'.count(
+        "<th>"
+    ) == 5
+    first_row = "<tr><td>1</td><td>Ali</td><td>784-1</td><td>UAE</td><td>R&amp;D &lt;lead&gt;</td></tr>"
+    legacy_row = "<tr><td>2</td><td>Legacy</td><td>784-2</td><td>UAE</td><td></td></tr>"
+    assert first_row in html and first_row.count("<td>") == 5
+    assert legacy_row in html and legacy_row.count("<td>") == 5
+    assert "شهران اعتباراً من 2026/08/06" in html
+    assert "2026/10/05" not in html
