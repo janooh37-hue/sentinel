@@ -193,7 +193,7 @@ def renew_permit(
     row = permit_service.renew_permit(
         db,
         permit_id,
-        new_end_date=payload.new_end_date,
+        validity=payload.validity,
         reason=payload.reason,
         actor=user.email,
     )

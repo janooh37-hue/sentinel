@@ -23,6 +23,7 @@ from sqlalchemy.orm import Session, selectinload
 
 from app.api.errors import NotFoundError, ValidationFailedError
 from app.config import get_settings
+from app.core.permit_validity import period_end
 from app.db.models import (
     AuditLog,
     Book,
@@ -40,6 +41,7 @@ from app.schemas.permit import (
     PermitPersonRead,
     PermitRead,
     PermitUpdate,
+    PermitValidityPeriod,
     PermitVehicleCreate,
     PermitVehicleRead,
     PermitVehicleUpdate,
@@ -54,10 +56,20 @@ log = logging.getLogger(__name__)
 EXPIRING_WITHIN_DAYS = 7
 
 
+def _today() -> date:
+    return date.today()
+
+
 def _utcnow() -> datetime:
     # Naive UTC — matches app.db.models._utcnow so timestamps compare cleanly.
     return datetime.now(UTC).replace(tzinfo=None)
 
+
+def _set_validity(row: Permit, *, start: date, validity: PermitValidityPeriod) -> None:
+    row.start_date = start
+    row.validity_value = validity.value
+    row.validity_unit = validity.unit
+    row.end_date = period_end(start, validity.value, validity.unit)
 
 
 def _zones_from_access(access: PermitAccessAreas) -> list[str]:
@@ -126,7 +138,12 @@ def to_read(row: Permit, *, today: date | None = None, db: Session | None = None
         b = db.get(Book, row.book_id)
         book_ref = b.ref_number if b is not None else None
         approval_state = b.approval_state if b is not None else None
-    return PermitRead.model_validate(row).model_copy(
+    return PermitRead.model_validate(
+        {
+            **row.__dict__,
+            "validity": {"value": row.validity_value, "unit": row.validity_unit},
+        }
+    ).model_copy(
         update={
             "derived_status": _derived_status(row, today=today),
             "duration_days": _duration_days(row),
@@ -146,7 +163,12 @@ def to_read(row: Permit, *, today: date | None = None, db: Session | None = None
 
 def to_list_item(row: Permit, *, today: date | None = None) -> PermitListItem:
     today = today or date.today()
-    return PermitListItem.model_validate(row).model_copy(
+    return PermitListItem.model_validate(
+        {
+            **row.__dict__,
+            "validity": {"value": row.validity_value, "unit": row.validity_unit},
+        }
+    ).model_copy(
         update={
             "derived_status": _derived_status(row, today=today),
             "duration_days": _duration_days(row),
@@ -242,18 +264,9 @@ def get_permit(db: Session, permit_id: int, *, include_deleted: bool = False) ->
 # ─── mutations ─────────────────────────────────────────────────────────────────
 
 
-def _validate_window(start: date, end: date) -> None:
-    if end < start:
-        raise ValidationFailedError(
-            "PERMIT_BAD_WINDOW",
-            "Permit end date must not be before its start date.",
-            start_date=str(start),
-            end_date=str(end),
-        )
 
 
 def create_permit(db: Session, payload: PermitCreate, *, actor: str | None = None) -> Permit:
-    _validate_window(payload.start_date, payload.end_date)
     if not payload.people:
         raise ValidationFailedError(
             "PERMIT_NO_PEOPLE", "A permit must authorize at least one person."
@@ -263,12 +276,12 @@ def create_permit(db: Session, payload: PermitCreate, *, actor: str | None = Non
         access_areas=payload.access_areas.model_dump(mode="json"),
         zones=_zones_from_access(payload.access_areas),
         start_date=payload.start_date,
-        end_date=payload.end_date,
         purpose=payload.purpose,
         notes=payload.notes,
         status="active",
         manager_id=payload.manager_id,
     )
+    _set_validity(row, start=payload.start_date, validity=payload.validity)
     for person in payload.people:
         row.people.append(_new_person(person))
     for vehicle in payload.vehicles:
@@ -471,9 +484,16 @@ def update_permit(
     data = payload.model_dump(exclude_unset=True)
     fields = sorted(data.keys())
     access = data.pop("access_areas", None)
-    new_start = data.get("start_date", row.start_date)
-    new_end = data.get("end_date", row.end_date)
-    _validate_window(new_start, new_end)
+    validity = data.pop("validity", None)
+    start_supplied = "start_date" in data
+    new_start = data.pop("start_date", row.start_date)
+    if start_supplied or validity is not None:
+        new_validity = (
+            PermitValidityPeriod.model_validate(validity)
+            if validity is not None
+            else PermitValidityPeriod(value=row.validity_value, unit=row.validity_unit)
+        )
+        _set_validity(row, start=new_start, validity=new_validity)
     for field, value in data.items():
         setattr(row, field, value)
     if access is not None:
@@ -490,7 +510,7 @@ def renew_permit(
     db: Session,
     permit_id: int,
     *,
-    new_end_date: date,
+    validity: PermitValidityPeriod,
     reason: str | None = None,
     actor: str | None = None,
 ) -> Permit:
@@ -499,15 +519,9 @@ def renew_permit(
         raise ValidationFailedError(
             "PERMIT_REVOKED", "A revoked permit cannot be renewed.", id=permit_id
         )
-    if new_end_date <= row.end_date:
-        raise ValidationFailedError(
-            "PERMIT_BAD_RENEWAL",
-            "The new end date must be after the current end date.",
-            current_end=str(row.end_date),
-            new_end=str(new_end_date),
-        )
     old_end = row.end_date
-    row.end_date = new_end_date
+    renewal_start = max(_today(), old_end + timedelta(days=1))
+    _set_validity(row, start=renewal_start, validity=validity)
     row.updated_at = _utcnow()
     db.commit()
     _audit(
@@ -515,7 +529,7 @@ def renew_permit(
         "permit.renewed",
         permit_id,
         actor,
-        {"from": str(old_end), "to": str(new_end_date), "reason": reason},
+        {"from": str(old_end), "to": str(row.end_date), "reason": reason},
     )
     regenerate_permit_book(db, get_permit(db, permit_id), actor=actor)
     return get_permit(db, permit_id)
