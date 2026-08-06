@@ -14,6 +14,14 @@ def test_period_end_is_inclusive() -> None:
     assert period_end(start, 1, "year") == date(2027, 8, 5)
 
 
+def test_period_end_clamps_month_boundary_to_leap_day_before_inclusive_end() -> None:
+    assert period_end(date(2028, 1, 31), 1, "month") == date(2028, 2, 28)
+
+
+def test_period_end_clamps_year_boundary_from_leap_day_before_inclusive_end() -> None:
+    assert period_end(date(2028, 2, 29), 1, "year") == date(2029, 2, 27)
+
+
 def test_period_labels_preserve_custom_unit() -> None:
     assert period_label(2, "month", "en") == "2 months"
     assert period_label(2, "month", "ar") == "شهران"
