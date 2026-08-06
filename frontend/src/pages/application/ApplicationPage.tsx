@@ -376,6 +376,7 @@ export function ApplicationPage(): React.JSX.Element {
       // Preview tab stays disabled until JobStatus reports a successful
       // render.
       setPreviewJobStatus('queued')
+      setLastSaved(null)
       setActiveTab('preview')
       setSubmitError(null)
     },
