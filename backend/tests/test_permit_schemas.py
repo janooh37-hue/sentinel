@@ -8,8 +8,8 @@ from app.schemas.permit import (
     PermitCreate,
     PermitPersonCreate,
     PermitPersonRead,
-    PermitUpdate,
     PermitRenew,
+    PermitUpdate,
     PermitValidityPeriod,
     PermitVehicleCreate,
     PersonIdScan,
@@ -60,9 +60,7 @@ def test_custom_validity_bounds_are_unit_specific():
 
 def test_create_update_renew_reject_strict_validity_upper_bounds():
     with pytest.raises(ValidationError):
-        PermitCreate.model_validate(
-            {**BASE_CREATE, "validity": {"value": 3651, "unit": "day"}}
-        )
+        PermitCreate.model_validate({**BASE_CREATE, "validity": {"value": 3651, "unit": "day"}})
     with pytest.raises(ValidationError):
         PermitUpdate(validity={"value": 521, "unit": "week"})
     with pytest.raises(ValidationError):
@@ -112,10 +110,10 @@ def test_permit_update_rejects_explicit_null_access():
     with pytest.raises(ValidationError):
         PermitUpdate(access_areas=None)
 
+
 def test_permit_update_rejects_obsolete_flat_zones():
     with pytest.raises(ValidationError):
         PermitUpdate.model_validate({"zones": ["red"]})
-
 
 
 def test_permit_update_access_area_is_omittable_but_not_nullable():
@@ -124,6 +122,7 @@ def test_permit_update_access_area_is_omittable_but_not_nullable():
     assert "access_areas" not in schema.get("required", [])
     assert "anyOf" not in properties
     assert "$ref" in properties
+
 
 def test_scan_response_shapes():
     assert VehicleLicenceScan(colour="White").colour == "White"

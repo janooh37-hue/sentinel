@@ -73,6 +73,8 @@ def test_create_stamps_permit_no_and_defaults(db_session):
     assert read.duration_days == 31
     assert read.derived_status == "active"
     assert read.people_count == 1  # the default person
+
+
 def test_create_persists_access_and_derives_zone_union(db_session):
     row = _mk(
         db_session,
@@ -298,6 +300,7 @@ def test_renew_expired_starts_today(db_session, monkeypatch) -> None:
     assert renewed.start_date == date(2026, 8, 6)
     assert renewed.end_date == date(2026, 8, 12)
 
+
 def test_revoke_then_blocks_edits(db_session):
     row = _mk(db_session)
     revoked = svc.revoke_permit(db_session, row.id, reason="site closed")
@@ -420,7 +423,11 @@ def test_create_with_vehicles_counts_active(db_session):
         db_session,
         PermitCreate(
             company="X",
-            access_areas={"al_wathba_1": ["green", "red"], "al_wathba_2": [], "work_residence": False},
+            access_areas={
+                "al_wathba_1": ["green", "red"],
+                "al_wathba_2": [],
+                "work_residence": False,
+            },
             start_date=TODAY,
             validity={"value": 11, "unit": "day"},
             people=[_person("Driver")],
@@ -504,9 +511,7 @@ def test_safe_filename_strips_traversal_and_bidi():
 
 def test_mutations_write_audit_rows(db_session):
     row = _mk(db_session)
-    svc.renew_permit(
-        db_session, row.id, validity=PermitValidityPeriod(value=3, unit="month")
-    )
+    svc.renew_permit(db_session, row.id, validity=PermitValidityPeriod(value=3, unit="month"))
     actions = {a.action for a in db_session.query(AuditLog).all()}
     assert "permit.created" in actions
     assert "permit.renewed" in actions

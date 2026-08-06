@@ -24,19 +24,18 @@ def test_permit_model_exposes_validity_columns_and_unit_constraint() -> None:
 def test_metadata_created_permit_rejects_invalid_validity_unit() -> None:
     engine = create_engine("sqlite://")
     Permit.__table__.create(engine)
-    with engine.begin() as connection:
-        with pytest.raises(IntegrityError):
-            connection.execute(
-                Permit.__table__.insert().values(
-                    company="ACME",
-                    zones=["green"],
-                    start_date=date(2026, 1, 1),
-                    validity_value=1,
-                    validity_unit="fortnight",
-                    end_date=date(2026, 1, 1),
-                    created_at=datetime(2026, 1, 1),
-                )
+    with engine.begin() as connection, pytest.raises(IntegrityError):
+        connection.execute(
+            Permit.__table__.insert().values(
+                company="ACME",
+                zones=["green"],
+                start_date=date(2026, 1, 1),
+                validity_value=1,
+                validity_unit="fortnight",
+                end_date=date(2026, 1, 1),
+                created_at=datetime(2026, 1, 1),
             )
+        )
 
 
 def test_permit_read_accepts_legacy_ten_year_period() -> None:
@@ -138,4 +137,3 @@ def test_permit_validity_migration_backfills_and_downgrades(tmp_path: Path) -> N
             )
         ).one()
         assert row == ("2016-01-01", "2025-12-31", 3653, "day")
-

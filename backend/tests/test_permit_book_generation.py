@@ -60,7 +60,6 @@ def test_create_permit_generates_1_5_book(gen_env):
     assert book.ref_number.startswith("1/5/")
 
 
-
 def test_generated_book_body_preserves_location_zone_pairings(gen_env, monkeypatch):
     captured: dict[str, str] = {}
     original = document_service.generate_document
@@ -72,7 +71,9 @@ def test_generated_book_body_preserves_location_zone_pairings(gen_env, monkeypat
     monkeypatch.setattr(document_service, "generate_document", _spy)
     permit_service.create_permit(
         gen_env,
-        _payload(access_areas={"al_wathba_1": ["green"], "al_wathba_2": ["red"], "work_residence": False}),
+        _payload(
+            access_areas={"al_wathba_1": ["green"], "al_wathba_2": ["red"], "work_residence": False}
+        ),
     )
 
     body = captured["body"]
@@ -84,9 +85,10 @@ def test_generated_book_body_preserves_location_zone_pairings(gen_env, monkeypat
     w2_start = body.index("الوثبة 2")
     assert "المنطقة الخضراء" in body[w1_start:w2_start]
     assert "المنطقة الحمراء" not in body[w1_start:w2_start]
-    w2_fragment = body[w2_start:body.index("</td>", w2_start)]
+    w2_fragment = body[w2_start : body.index("</td>", w2_start)]
     assert "المنطقة الحمراء" in w2_fragment
     assert "المنطقة الخضراء" not in w2_fragment
+
 
 def test_submitter_g_resolved_from_actor(gen_env, monkeypatch):
     """The issuing operator's G-number reaches the footer: regenerate resolves
@@ -165,11 +167,11 @@ def _mark_latest_as_finished_word(db, permit_id: int) -> tuple[int, str, str | N
     return latest.id, document.docx_path, document.pdf_path
 
 
-def test_finished_word_version_survives_structured_regeneration_with_pdf(
-    gen_env, monkeypatch
-):
+def test_finished_word_version_survives_structured_regeneration_with_pdf(gen_env, monkeypatch):
     db = gen_env
-    monkeypatch.setattr(document_service, "convert_docx_to_pdf", lambda path: path.with_suffix(".pdf"))
+    monkeypatch.setattr(
+        document_service, "convert_docx_to_pdf", lambda path: path.with_suffix(".pdf")
+    )
     permit = permit_service.create_permit(db, _payload())
     old_version_id, old_docx_path, old_pdf_path = _mark_latest_as_finished_word(db, permit.id)
 
@@ -194,7 +196,9 @@ def test_finished_word_version_keeps_older_pdf_when_new_conversion_returns_none(
     gen_env, monkeypatch
 ):
     db = gen_env
-    monkeypatch.setattr(document_service, "convert_docx_to_pdf", lambda path: path.with_suffix(".pdf"))
+    monkeypatch.setattr(
+        document_service, "convert_docx_to_pdf", lambda path: path.with_suffix(".pdf")
+    )
     permit = permit_service.create_permit(db, _payload())
     old_version_id, _, old_pdf_path = _mark_latest_as_finished_word(db, permit.id)
     assert old_pdf_path is not None

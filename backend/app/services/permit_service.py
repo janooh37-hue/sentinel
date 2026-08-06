@@ -80,6 +80,8 @@ def _zones_from_access(access: PermitAccessAreas) -> list[str]:
     if access.work_residence:
         zones.append("work_residence")
     return zones
+
+
 # ─── derived / computed fields ─────────────────────────────────────────────────
 
 
@@ -262,8 +264,6 @@ def get_permit(db: Session, permit_id: int, *, include_deleted: bool = False) ->
 
 
 # ─── mutations ─────────────────────────────────────────────────────────────────
-
-
 
 
 def create_permit(db: Session, payload: PermitCreate, *, actor: str | None = None) -> Permit:

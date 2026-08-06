@@ -88,8 +88,6 @@ def _fmt(d: date | str) -> str:
     return str(d).replace("-", "/")
 
 
-
-
 def _people_table(people: list[dict[str, str]]) -> str:
     rows = "".join(
         f"<tr><td>{i}</td><td>{escape(p.get('name') or '')}</td>"
@@ -172,7 +170,9 @@ def build_permit_letter_html(
         f"{vehicle_clause}، حتى {verb_tail} في الوقت المحدد.</p>"
     )
 
-    validity_val = f"{period_label(validity_value, validity_unit, 'ar')} اعتباراً من {_fmt(start_date)}"
+    validity_val = (
+        f"{period_label(validity_value, validity_unit, 'ar')} اعتباراً من {_fmt(start_date)}"
+    )
     rows = _info_row("صلاحية التصريح:", validity_val)
     if purpose and purpose.strip():
         rows += _info_row("الغرض من التصريح:", escape(purpose.strip()))

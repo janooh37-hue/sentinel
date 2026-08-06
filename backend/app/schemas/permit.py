@@ -58,9 +58,7 @@ class PermitAccessAreas(BaseModel):
 
     @field_validator("al_wathba_1", "al_wathba_2")
     @classmethod
-    def _normalize_location_zones(
-        cls, value: list[PermitLocationZone]
-    ) -> list[PermitLocationZone]:
+    def _normalize_location_zones(cls, value: list[PermitLocationZone]) -> list[PermitLocationZone]:
         return [zone for zone in _LOCATION_ZONE_ORDER if zone in value]
 
     @model_validator(mode="after")
@@ -169,7 +167,6 @@ class PermitVehicleRead(ORMBase):
     removed_at: datetime | None = None
     # Basename of the attached vehicle-licence scan, if any.
     license_doc_name: str | None = None
-
 
 
 class PermitCreate(BaseModel):

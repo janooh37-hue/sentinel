@@ -18,8 +18,6 @@ V1 = [
 ]
 
 
-
-
 def test_single_person_single_vehicle():
     html = build_permit_letter_html(
         company="ACME",
@@ -239,7 +237,7 @@ def test_access_rows_preserve_location_zone_pairings():
     w1_start = html.index("الوثبة 1")
     w2_start = html.index("الوثبة 2")
     w1_fragment = html[w1_start:w2_start]
-    w2_fragment = html[w2_start:html.index("</td>", w2_start)]
+    w2_fragment = html[w2_start : html.index("</td>", w2_start)]
     assert "المنطقة الخضراء" in w1_fragment
     assert "المنطقة الحمراء" not in w1_fragment
     assert "المنطقة الحمراء" in w2_fragment
@@ -300,7 +298,9 @@ def test_letter_renders_job_and_no_end_date() -> None:
     header_row = html[header_start : html.index("</tr>", header_start) + len("</tr>")]
     assert header_row == f'<tr style="background-color:#eef2f6">{expected_header}</tr>'
     assert header_row.count("<th>") == 5
-    first_row = "<tr><td>1</td><td>Ali</td><td>784-1</td><td>UAE</td><td>R&amp;D &lt;lead&gt;</td></tr>"
+    first_row = (
+        "<tr><td>1</td><td>Ali</td><td>784-1</td><td>UAE</td><td>R&amp;D &lt;lead&gt;</td></tr>"
+    )
     legacy_row = "<tr><td>2</td><td>Legacy</td><td>784-2</td><td>UAE</td><td></td></tr>"
     assert first_row in html and first_row.count("<td>") == 5
     assert legacy_row in html and legacy_row.count("<td>") == 5
