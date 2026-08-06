@@ -6950,6 +6950,7 @@ export interface components {
         PermitUpdate: {
             /** Company */
             company?: string | null;
+            /** Access Areas */
             access_areas?: components["schemas"]["PermitAccessAreas"];
             /** Start Date */
             start_date?: string | null;

@@ -25464,7 +25464,8 @@
             "title": "Company"
           },
           "access_areas": {
-            "$ref": "#/components/schemas/PermitAccessAreas"
+            "$ref": "#/components/schemas/PermitAccessAreas",
+            "title": "Access Areas"
           },
           "start_date": {
             "anyOf": [
