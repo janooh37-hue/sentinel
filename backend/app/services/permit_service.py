@@ -394,6 +394,7 @@ def regenerate_permit_book(
     people, vehicles = _letter_dicts(permit)
     body = build_permit_letter_html(
         company=permit.company,
+        access_areas=permit.access_areas,
         zones=list(permit.zones),
         start_date=permit.start_date,
         end_date=permit.end_date,

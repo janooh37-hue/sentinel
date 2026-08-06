@@ -60,6 +60,30 @@ def test_create_permit_generates_1_5_book(gen_env):
     assert book.ref_number.startswith("1/5/")
 
 
+
+def test_generated_book_body_preserves_location_zone_pairings(gen_env, monkeypatch):
+    captured: dict[str, str] = {}
+    original = document_service.generate_document
+
+    def _spy(*args, **kw):
+        captured["body"] = kw["fields"]["body"]
+        return original(*args, **kw)
+
+    monkeypatch.setattr(document_service, "generate_document", _spy)
+    permit_service.create_permit(
+        gen_env,
+        _payload(access_areas={"al_wathba_1": ["green"], "al_wathba_2": ["red"], "work_residence": False}),
+    )
+
+    body = captured["body"]
+    w1_start = body.index("الوثبة 1")
+    w2_start = body.index("الوثبة 2")
+    assert "المنطقة الخضراء" in body[w1_start:w2_start]
+    assert "المنطقة الحمراء" not in body[w1_start:w2_start]
+    w2_fragment = body[w2_start:body.index("</td>", w2_start)]
+    assert "المنطقة الحمراء" in w2_fragment
+    assert "المنطقة الخضراء" not in w2_fragment
+
 def test_submitter_g_resolved_from_actor(gen_env, monkeypatch):
     """The issuing operator's G-number reaches the footer: regenerate resolves
     the actor's User row and threads it as generate_document(current_user=...)."""

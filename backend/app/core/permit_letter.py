@@ -37,20 +37,38 @@ _ZONES: dict[str, tuple[str, str, str]] = {
 _NBSP = " "
 
 
-def zones_phrase(zones: list[str]) -> str:
-    parts = [_ZONES.get(z, (z, "", ""))[0] for z in zones]
-    return " و".join(parts)  # Arabic conjunction "و" prefixes the next word
-
-
-def _zone_chips(zones: list[str]) -> str:
+def _access_chips(zones: list[object]) -> str:
     chips = []
-    for z in zones:
-        label, bg, ink = _ZONES.get(z, (z, "#eef2f6", "#334155"))
+    for zone in zones:
+        key = str(zone)
+        label, bg, ink = _ZONES.get(key, (key, "#eef2f6", "#334155"))
         chips.append(
             f'<span style="background-color:{bg}; color:{ink}; font-weight:bold">'
             f"{_NBSP}{escape(label)}{_NBSP}</span>"
         )
     return (_NBSP * 2).join(chips)
+
+
+def _access_rows(access_areas: dict[str, object] | None, zones: list[str]) -> str:
+    rows: list[str] = []
+
+    def line(label: str, selected: list[object], separator: str = ":") -> None:
+        if selected:
+            rows.append(f"<div><b>{label}{separator}</b> {_access_chips(selected)}</div>")
+
+    if access_areas is None:
+        line("الموقع غير محدد", [zone for zone in zones if zone != "work_residence"])
+        if "work_residence" in zones:
+            line("منطقة أخرى", ["work_residence"], " —")
+    else:
+        for key, label in (("al_wathba_1", "الوثبة 1"), ("al_wathba_2", "الوثبة 2")):
+            selected = access_areas.get(key, [])
+            if isinstance(selected, list):
+                line(label, selected)
+        if access_areas.get("work_residence") is True:
+            line("منطقة أخرى", ["work_residence"], " —")
+
+    return "".join(rows)
 
 
 def _info_row(label: str, value_html: str) -> str:
@@ -130,6 +148,7 @@ def _vehicle_table(vehicles: list[dict[str, str]]) -> str:
 def build_permit_letter_html(
     *,
     company: str,
+    access_areas: dict[str, object] | None,
     zones: list[str],
     start_date: date,
     end_date: date,
@@ -151,7 +170,6 @@ def build_permit_letter_html(
     else:
         vehicle_clause = ""
 
-    zone_ar = zones_phrase(zones)
     company_e = escape(company)
 
     # Company sits directly under the subject, aligned to the LEFT. Then a
@@ -164,7 +182,7 @@ def build_permit_letter_html(
     para = (
         '<p style="text-align:justify; line-height:1.45">'
         "يطيب لنا أن نتقدم لسيادتكم بخالص التحية والتقدير، ويرجى من سيادتكم السماح "
-        f"{subject_person} بالكشف أدناه بالدخول من البوابة الرئيسية إلى {zone_ar}"
+        f"{subject_person} بالكشف أدناه بالدخول من البوابة الرئيسية إلى المواقع والمناطق الموضحة أدناه"
         f"{vehicle_clause}، حتى {verb_tail} في الوقت المحدد.</p>"
     )
 
@@ -175,7 +193,7 @@ def build_permit_letter_html(
     rows = _info_row("صلاحية التصريح:", validity_val)
     if purpose and purpose.strip():
         rows += _info_row("الغرض من التصريح:", escape(purpose.strip()))
-    rows += _info_row("المناطق المصرّح بدخولها:", _zone_chips(zones))
+    rows += _info_row("مواقع ومناطق الدخول المصرّح بها:", _access_rows(access_areas, zones))
     info = (
         '<table style="border:none; font-size:11pt">'
         '<colgroup><col style="width:32%"><col style="width:68%"></colgroup>'
