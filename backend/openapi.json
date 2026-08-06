@@ -25483,7 +25483,7 @@
           "validity": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/PermitValidityPeriod"
+                "$ref": "#/components/schemas/PermitValidityRead"
               },
               {
                 "type": "null"

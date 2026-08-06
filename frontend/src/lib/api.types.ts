@@ -6948,7 +6948,7 @@ export interface components {
             access_areas?: components["schemas"]["PermitAccessAreas"];
             /** Start Date */
             start_date?: string | null;
-            validity?: components["schemas"]["PermitValidityPeriod"] | null;
+            validity?: components["schemas"]["PermitValidityRead"] | null;
             /** Purpose */
             purpose?: string | null;
             /** Notes */
