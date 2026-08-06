@@ -22,8 +22,13 @@ export function PermitDocumentVersions({ bookId }: { bookId: number }): React.JS
   const linkClass =
     'rounded-sm text-xs font-medium text-primary underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring'
 
+  const headingId = `permit-document-versions-${bookId}-title`
+
   return (
-    <section aria-label={t('permits.documentVersions.title')} className="flex flex-col gap-3">
+    <section aria-labelledby={headingId} className="flex flex-col gap-3">
+      <h3 id={headingId} className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+        {t('permits.documentVersions.title')}
+      </h3>
       {has('books.manage') && <BookWordActions book={book} isMobile={isMobile} />}
       <ol className="flex flex-col divide-y divide-border rounded-lg border border-border">
         {versions.map((version) => {

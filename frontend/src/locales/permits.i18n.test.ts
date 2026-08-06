@@ -90,6 +90,9 @@ const KEYS = [
   'permits.detail.starts',
   'permits.detail.permitTime',
   'permits.renew.help',
+  'permits.documentVersions.title',
+  'permits.documentVersions.docx',
+  'permits.documentVersions.pdf',
 ]
 
 describe('permit i18n parity', () => {
@@ -103,7 +106,7 @@ describe('permit i18n parity', () => {
       expect(get(ar as unknown as Rec, k)).toBeTruthy()
     })
     it(`${k} ar != en (no English leak)`, () => {
-      if (k === 'permits.access.pair') return
+      if (k === 'permits.access.pair' || k.endsWith('.docx') || k.endsWith('.pdf')) return
       const e = get(en as unknown as Rec, k)
       const a = get(ar as unknown as Rec, k)
       expect(a).not.toBe(e)

@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi, beforeEach } from 'vitest'
 import i18n from '@/lib/i18n'
@@ -313,6 +313,29 @@ describe('PermitDetailDialog', () => {
     } finally {
       await i18n.changeLanguage('en')
     }
+  })
+
+  it('gives every add-person input a visible mobile label', async () => {
+    renderDetail()
+    await waitFor(() => expect(screen.getByText('Test Corp')).toBeInTheDocument())
+
+    for (const name of ['Full name', 'UAE ID', 'Job / trade', 'Nationality']) {
+      const input = screen.getByLabelText(name, { selector: 'input' })
+      const label = input.closest('label')
+      expect(label).not.toBeNull()
+      const text = within(label as HTMLLabelElement).getByText(name)
+      expect(text).toBeVisible()
+      expect(text).toHaveClass('sm:sr-only')
+      expect(text).not.toHaveClass('sr-only')
+    }
+  })
+
+  it('exposes renewal validity choices as a named group', async () => {
+    renderDetail()
+    await waitFor(() => expect(screen.getByText('Test Corp')).toBeInTheDocument())
+    await userEvent.click(screen.getByRole('button', { name: /^renew$/i }))
+
+    expect(screen.getByRole('group', { name: 'Permit validity' })).toBeInTheDocument()
   })
 
   it('requires a job role and sends it when adding a person, then resets the form', async () => {

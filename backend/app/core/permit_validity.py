@@ -35,10 +35,10 @@ def period_end(start: date, value: int, unit: str) -> date:
 
 
 _AR_PERIODS = {
-    "day": ("يوم واحد", "يومان", "أيام", "يوماً"),
-    "week": ("أسبوع واحد", "أسبوعان", "أسابيع", "أسبوعاً"),
-    "month": ("شهر واحد", "شهران", "أشهر", "شهراً"),
-    "year": ("سنة واحدة", "سنتان", "سنوات", "سنة"),
+    "day": ("يوم واحد", "يومان", "أيام", "يوماً", "يوم"),
+    "week": ("أسبوع واحد", "أسبوعان", "أسابيع", "أسبوعاً", "أسبوع"),
+    "month": ("شهر واحد", "شهران", "أشهر", "شهراً", "شهر"),
+    "year": ("سنة واحدة", "سنتان", "سنوات", "سنة", "سنة"),
 }
 
 
@@ -46,9 +46,16 @@ def period_label(value: int, unit: str, lang: Literal["en", "ar"]) -> str:
     validate_period_read(value, unit)
     if lang == "en":
         return f"{value} {unit if value == 1 else unit + 's'}"
-    one, two, few, many = _AR_PERIODS[unit]
+    one, two, few, many, other = _AR_PERIODS[unit]
     if value == 1:
         return one
     if value == 2:
         return two
-    return f"{value} {few if 3 <= value <= 10 else many}"
+    remainder = value % 100
+    if 3 <= remainder <= 10:
+        noun = few
+    elif 11 <= remainder <= 99:
+        noun = many
+    else:
+        noun = other
+    return f"{value} {noun}"

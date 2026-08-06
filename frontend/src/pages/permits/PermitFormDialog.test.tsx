@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 
@@ -75,6 +75,25 @@ const editPermit = (access_areas: PermitRead['access_areas'], zones: PermitRead[
 
 
 describe('PermitFormDialog', () => {
+  it('gives every visitor input a visible mobile label', () => {
+    renderForm()
+
+    for (const name of ['Full name', 'UAE ID', 'Job / trade', 'Nationality']) {
+      const input = screen.getByLabelText(name, { selector: 'input' })
+      const label = input.closest('label')
+      expect(label).not.toBeNull()
+      const text = within(label as HTMLLabelElement).getByText(name)
+      expect(text).toBeVisible()
+      expect(text).toHaveClass('sm:sr-only')
+      expect(text).not.toHaveClass('sr-only')
+    }
+  })
+
+  it('exposes the validity choices as a named group', () => {
+    renderForm()
+    expect(screen.getByRole('group', { name: 'Permit validity' })).toBeInTheDocument()
+  })
+
   it('starts with no access and requires an explicit selection', async () => {
     renderForm()
     expect(screen.getByRole('button', { name: /issue permit/i })).toBeDisabled()

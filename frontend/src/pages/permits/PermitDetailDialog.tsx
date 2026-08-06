@@ -534,21 +534,27 @@ export function PermitDetailDialog({ permitId, open, onOpenChange, onEdit }: Pro
                 {canManage && !isRevoked && (
                   <div className="flex flex-col gap-2">
                     <div className="grid grid-cols-1 gap-2 sm:grid-cols-[1.3fr_1fr_1fr_1fr_auto]">
-                      <input
-                        className={inputCls}
-                        placeholder={t('permits.person.name')}
-                        dir="auto"
-                        value={personName}
-                        onChange={(e) => setPersonName(e.target.value)}
-                      />
-                      <input
-                        className={inputCls}
-                        placeholder={t('permits.person.uaeId')}
-                        value={personUae}
-                        onChange={(e) => setPersonUae(e.target.value)}
-                      />
                       <label className="flex flex-col gap-1">
-                        <span className="text-xs text-muted-foreground sm:hidden">{t('permits.person.role')}</span>
+                        <span className="text-xs text-muted-foreground sm:sr-only">{t('permits.person.name')}</span>
+                        <input
+                          className={inputCls}
+                          placeholder={t('permits.person.name')}
+                          dir="auto"
+                          value={personName}
+                          onChange={(e) => setPersonName(e.target.value)}
+                        />
+                      </label>
+                      <label className="flex flex-col gap-1">
+                        <span className="text-xs text-muted-foreground sm:sr-only">{t('permits.person.uaeId')}</span>
+                        <input
+                          className={inputCls}
+                          placeholder={t('permits.person.uaeId')}
+                          value={personUae}
+                          onChange={(e) => setPersonUae(e.target.value)}
+                        />
+                      </label>
+                      <label className="flex flex-col gap-1">
+                        <span className="text-xs text-muted-foreground sm:sr-only">{t('permits.person.role')}</span>
                         <input
                           className={inputCls}
                           placeholder={t('permits.person.role')}
@@ -558,13 +564,16 @@ export function PermitDetailDialog({ permitId, open, onOpenChange, onEdit }: Pro
                           onChange={(e) => setPersonRole(e.target.value)}
                         />
                       </label>
-                      <input
-                        className={inputCls}
-                        placeholder={t('permits.person.nationality')}
-                        dir="auto"
-                        value={personNationality}
-                        onChange={(e) => setPersonNationality(e.target.value)}
-                      />
+                      <label className="flex flex-col gap-1">
+                        <span className="text-xs text-muted-foreground sm:sr-only">{t('permits.person.nationality')}</span>
+                        <input
+                          className={inputCls}
+                          placeholder={t('permits.person.nationality')}
+                          dir="auto"
+                          value={personNationality}
+                          onChange={(e) => setPersonNationality(e.target.value)}
+                        />
+                      </label>
                       <Button
                         type="button"
                         variant="outline"
@@ -779,8 +788,8 @@ export function PermitDetailDialog({ permitId, open, onOpenChange, onEdit }: Pro
               {renewOpen && (
                 <div className="flex flex-col gap-2 rounded-lg border border-border p-3">
                   <p className="text-xs text-muted-foreground">{t('permits.renew.help')}</p>
-                  <div className="flex flex-col gap-2">
-                    <span className="text-xs text-muted-foreground">{t('permits.form.permitValidity')}</span>
+                  <fieldset className="flex min-w-0 flex-col gap-2">
+                    <legend className="text-xs text-muted-foreground">{t('permits.form.permitValidity')}</legend>
                     <div className="grid grid-cols-2 gap-2 sm:grid-cols-6">
                       {PRESETS.map((preset) => (
                         <button
@@ -849,7 +858,7 @@ export function PermitDetailDialog({ permitId, open, onOpenChange, onEdit }: Pro
                         </label>
                       </div>
                     )}
-                  </div>
+                  </fieldset>
                   <label className="flex flex-col gap-1">
                     <span className="text-xs text-muted-foreground">{t('permits.renew.reason')}</span>
                     <input

@@ -5,6 +5,7 @@ import { createElement, type ReactNode } from 'react'
 
 import { PermitDocumentVersions } from './PermitDocumentVersions'
 import { api } from '@/lib/api'
+import i18n from '@/lib/i18n'
 
 const hasCapability = vi.hoisted(() => vi.fn(() => true))
 const mobileState = vi.hoisted(() => ({ value: false }))
@@ -61,14 +62,33 @@ function wrapper() {
     createElement(QueryClientProvider, { client: qc }, children)
 }
 
-beforeEach(() => {
+beforeEach(async () => {
   vi.restoreAllMocks()
   mobileState.value = false
   hasCapability.mockReturnValue(true)
+  await i18n.changeLanguage('en')
   vi.spyOn(api, 'getBook').mockResolvedValue({ id: 9, versions: [versions[1], versions[0], versions[2]] } as never)
 })
 
 describe('PermitDocumentVersions', () => {
+  it('shows a visible translated section heading in English and Arabic', async () => {
+    const english = render(<PermitDocumentVersions bookId={9} />, { wrapper: wrapper() })
+    const englishHeading = await screen.findByRole('heading', { name: 'Generated permit documents' })
+    expect(englishHeading).toBeVisible()
+    expect(screen.getByRole('region', { name: 'Generated permit documents' })).toContainElement(englishHeading)
+    english.unmount()
+
+    await i18n.changeLanguage('ar')
+    try {
+      render(<PermitDocumentVersions bookId={9} />, { wrapper: wrapper() })
+      const arabicHeading = await screen.findByRole('heading', { name: 'مستندات التصريح المُنشأة' })
+      expect(arabicHeading).toBeVisible()
+      expect(screen.getByRole('region', { name: 'مستندات التصريح المُنشأة' })).toContainElement(arabicHeading)
+    } finally {
+      await i18n.changeLanguage('en')
+    }
+  })
+
   it('renders versions newest first', async () => {
     render(<PermitDocumentVersions bookId={9} />, { wrapper: wrapper() })
     await waitFor(() => expect(screen.getByText('v3')).toBeInTheDocument())

@@ -397,8 +397,8 @@ export function PermitFormDialog({ open, permit, onOpenChange, onSaved }: Props)
           </label>
 
           {/* Validity */}
-          <div className="flex flex-col gap-2">
-            <span className="text-xs text-muted-foreground">{t('permits.form.permitValidity')}</span>
+          <fieldset className="flex min-w-0 flex-col gap-2">
+            <legend className="text-xs text-muted-foreground">{t('permits.form.permitValidity')}</legend>
             <div className="grid grid-cols-2 gap-2 sm:grid-cols-6">
               {PRESETS.map((preset) => (
                 <button
@@ -466,7 +466,7 @@ export function PermitFormDialog({ open, permit, onOpenChange, onSaved }: Props)
                 </label>
               </div>
             )}
-          </div>
+          </fieldset>
 
           {/* Purpose */}
           <label className="flex flex-col gap-1.5">
@@ -540,19 +540,25 @@ export function PermitFormDialog({ open, permit, onOpenChange, onSaved }: Props)
                 people.map((row) => (
                   <div key={row.key} className="flex flex-col gap-1.5">
                     <div className="grid grid-cols-1 gap-2 sm:grid-cols-[1.3fr_1fr_1fr_1fr_auto]">
-                      <input
-                        className={inputCls}
-                        placeholder={t('permits.person.name')}
-                        dir="auto"
-                        value={row.name}
-                        onChange={(e) => patchRow(row.key, { name: e.target.value })}
-                      />
-                      <input
-                        className={inputCls}
-                        placeholder={t('permits.person.uaeId')}
-                        value={row.uae_id ?? ''}
-                        onChange={(e) => patchRow(row.key, { uae_id: e.target.value })}
-                      />
+                      <label className="flex flex-col gap-1">
+                        <span className="text-xs text-muted-foreground sm:sr-only">{t('permits.person.name')}</span>
+                        <input
+                          className={inputCls}
+                          placeholder={t('permits.person.name')}
+                          dir="auto"
+                          value={row.name}
+                          onChange={(e) => patchRow(row.key, { name: e.target.value })}
+                        />
+                      </label>
+                      <label className="flex flex-col gap-1">
+                        <span className="text-xs text-muted-foreground sm:sr-only">{t('permits.person.uaeId')}</span>
+                        <input
+                          className={inputCls}
+                          placeholder={t('permits.person.uaeId')}
+                          value={row.uae_id ?? ''}
+                          onChange={(e) => patchRow(row.key, { uae_id: e.target.value })}
+                        />
+                      </label>
                       <label className="flex flex-col gap-1">
                         <span className="text-xs text-muted-foreground sm:sr-only">{t('permits.person.role')}</span>
                         <input
@@ -564,13 +570,16 @@ export function PermitFormDialog({ open, permit, onOpenChange, onSaved }: Props)
                           onChange={(e) => patchRow(row.key, { role: e.target.value })}
                         />
                       </label>
-                      <input
-                        className={inputCls}
-                        placeholder={t('permits.person.nationality')}
-                        dir="auto"
-                        value={row.nationality ?? ''}
-                        onChange={(e) => patchRow(row.key, { nationality: e.target.value })}
-                      />
+                      <label className="flex flex-col gap-1">
+                        <span className="text-xs text-muted-foreground sm:sr-only">{t('permits.person.nationality')}</span>
+                        <input
+                          className={inputCls}
+                          placeholder={t('permits.person.nationality')}
+                          dir="auto"
+                          value={row.nationality ?? ''}
+                          onChange={(e) => patchRow(row.key, { nationality: e.target.value })}
+                        />
+                      </label>
                       <button
                         type="button"
                         aria-label={t('common.remove')}

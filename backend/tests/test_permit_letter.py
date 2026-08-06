@@ -159,6 +159,14 @@ def test_validity_uses_period_label_from_start_date():
     assert "2026/08/01" not in html
 
 
+def test_validity_renders_high_count_arabic_categories() -> None:
+    hundred_days = _sample(validity_value=100, validity_unit="day")
+    hundred_three_days = _sample(validity_value=103, validity_unit="day")
+
+    assert "100 يوم اعتباراً من 2026/07/01" in hundred_days
+    assert "103 أيام اعتباراً من 2026/07/01" in hundred_three_days
+
+
 def test_tables_are_autofit_and_centered():
     # Tables opt into Word AutoFit-to-Contents (width:auto) so columns hug their
     # text and the table centers, instead of stretching full-width.
