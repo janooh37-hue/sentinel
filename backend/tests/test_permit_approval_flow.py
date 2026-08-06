@@ -296,13 +296,13 @@ def test_new_permit_lands_in_the_managers_awaiting_queue(gen_env: Session) -> No
     mgr, mgr_user = _linked_manager(db)
     permit = permit_service.create_permit(db, _payload(manager_id=mgr.id), actor="op@x.ae")
 
-
-
     awaiting = book_service.list_awaiting(db, user_id=mgr_user.id)
     assert [b.id for b in awaiting] == [permit.book_id]
     assert book_service.your_step_kind(awaiting[0], mgr_user.id) == "approver"
     # The operator who raised it is not an approver of it.
     assert book_service.list_awaiting(db, user_id=operator.id) == []
+
+
 def test_pending_word_version_survives_structured_regeneration(gen_env, tmp_path, monkeypatch):
     """A finished Word snapshot stays immutable when a pending permit changes."""
     from app.config import Settings
@@ -332,12 +332,10 @@ def test_pending_word_version_survives_structured_regeneration(gen_env, tmp_path
     initial_path.parent.mkdir(parents=True, exist_ok=True)
     initial_path.write_bytes(b"PK generated permit docx")
 
-    word_book_service.reopen_word_session(db, user=db.query(User).filter_by(email="op@x.ae").one(), book_id=book.id)
-    session = (
-        db.query(BookEditSession)
-        .filter_by(book_id=book.id, state="active")
-        .one()
+    word_book_service.reopen_word_session(
+        db, user=db.query(User).filter_by(email="op@x.ae").one(), book_id=book.id
     )
+    session = db.query(BookEditSession).filter_by(book_id=book.id, state="active").one()
     session.last_put_at = datetime.now(UTC).replace(tzinfo=None)
     db.commit()
     word_book_service.finish_word_session(

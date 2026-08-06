@@ -332,9 +332,8 @@ def test_renew_active_starts_after_current_end(db_session, monkeypatch) -> None:
     assert renewed.start_date == date(2026, 9, 1)
     assert renewed.end_date == date(2026, 9, 30)
 
-def test_renew_audit_records_complete_previous_and_current_windows(
-    db_session, monkeypatch
-) -> None:
+
+def test_renew_audit_records_complete_previous_and_current_windows(db_session, monkeypatch) -> None:
     monkeypatch.setattr(svc, "_today", lambda: date(2026, 8, 6))
     row = _mk(
         db_session,
@@ -373,6 +372,7 @@ def test_renew_audit_records_complete_previous_and_current_windows(
     }
     assert renewed.start_date == date(2026, 9, 1)
     assert renewed.end_date == date(2026, 9, 7)
+
 
 def test_renew_expired_starts_today(db_session, monkeypatch) -> None:
     monkeypatch.setattr(svc, "_today", lambda: date(2026, 8, 6))
