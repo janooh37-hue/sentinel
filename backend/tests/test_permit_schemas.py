@@ -57,6 +57,13 @@ def test_permit_update_rejects_explicit_null_access():
         PermitUpdate(access_areas=None)
 
 
+def test_permit_update_access_area_is_omittable_but_not_nullable():
+    schema = PermitUpdate.model_json_schema()
+    properties = schema["properties"]["access_areas"]
+    assert "access_areas" not in schema.get("required", [])
+    assert "anyOf" not in properties
+    assert "$ref" in properties
+
 def test_scan_response_shapes():
     assert VehicleLicenceScan(colour="White").colour == "White"
     assert PersonIdScan(name="X", uae_id="1").uae_id == "1"

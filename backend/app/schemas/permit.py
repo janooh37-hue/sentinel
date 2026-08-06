@@ -167,7 +167,7 @@ class PermitCreate(BaseModel):
 class PermitUpdate(BaseModel):
     """PATCH /permits/{id} — edit header fields (not the lifecycle status)."""
     company: str | None = Field(default=None, min_length=1, max_length=255)
-    access_areas: PermitAccessAreas | None = None
+    access_areas: PermitAccessAreas = None
     start_date: date | None = None
     end_date: date | None = None
     purpose: str | None = None

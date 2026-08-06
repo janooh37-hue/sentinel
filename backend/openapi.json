@@ -25464,14 +25464,7 @@
             "title": "Company"
           },
           "access_areas": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/PermitAccessAreas"
-              },
-              {
-                "type": "null"
-              }
-            ]
+            "$ref": "#/components/schemas/PermitAccessAreas"
           },
           "start_date": {
             "anyOf": [
