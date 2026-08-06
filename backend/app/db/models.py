@@ -451,6 +451,8 @@ class Permit(Base):
     zones: Mapped[list[str]] = mapped_column(JSON, default=list)
     access_areas: Mapped[dict[str, object] | None] = mapped_column(JSON, nullable=True)
     start_date: Mapped[date] = mapped_column(Date)
+    validity_value: Mapped[int] = mapped_column(Integer)
+    validity_unit: Mapped[str] = mapped_column(String(8))
     end_date: Mapped[date] = mapped_column(Date)
     # 'active' | 'revoked'. Expiry is derived from end_date, never stored.
     status: Mapped[str] = mapped_column(String(16), default="active")

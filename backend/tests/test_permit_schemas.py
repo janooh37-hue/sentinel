@@ -6,11 +6,31 @@ from pydantic import ValidationError
 from app.schemas.permit import (
     PermitAccessAreas,
     PermitCreate,
+    PermitRenew,
     PermitUpdate,
+    PermitValidityPeriod,
     PermitVehicleCreate,
     PersonIdScan,
     VehicleLicenceScan,
 )
+
+
+BASE_CREATE = {
+    "company": "ACME",
+    "access_areas": {"al_wathba_1": ["green"]},
+    "start_date": date(2026, 7, 1),
+}
+
+
+def test_create_requires_validity_and_rejects_end_date():
+    with pytest.raises(ValidationError):
+        PermitCreate.model_validate({**BASE_CREATE, "end_date": "2026-09-01"})
+
+
+def test_custom_validity_bounds_are_unit_specific():
+    assert PermitValidityPeriod(value=2, unit="month").value == 2
+    with pytest.raises(ValidationError):
+        PermitValidityPeriod(value=11, unit="year")
 
 
 def test_vehicle_create_accepts_mulkiya_fields():
@@ -30,7 +50,7 @@ def test_permit_create_accepts_manager_id():
         company="ACME",
         access_areas={"al_wathba_1": ["green"], "al_wathba_2": [], "work_residence": False},
         start_date=date(2026, 7, 1),
-        end_date=date(2026, 7, 2),
+        validity={"value": 2, "unit": "day"},
         people=[{"name": "X", "uae_id": "1"}],
         manager_id=3,
     )

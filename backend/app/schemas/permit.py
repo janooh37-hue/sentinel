@@ -14,6 +14,7 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 from pydantic.json_schema import SkipJsonSchema
 
+from app.core.permit_validity import PermitValidityUnit, validate_period
 from app.schemas._base import ORMBase
 
 # The security zones a permit can cover. A permit carries one or more.
@@ -24,6 +25,16 @@ _LOCATION_ZONE_ORDER: tuple[PermitLocationZone, ...] = ("green", "red")
 PermitStatus = Literal["active", "revoked"]
 # What the UI shows — stored status widened with the date-derived states.
 PermitDerivedStatus = Literal["active", "expiring", "expired", "revoked"]
+
+
+class PermitValidityPeriod(BaseModel):
+    value: int
+    unit: PermitValidityUnit
+
+    @model_validator(mode="after")
+    def _validate_bounds(self) -> PermitValidityPeriod:
+        validate_period(self.value, self.unit)
+        return self
 
 
 class PermitAccessAreas(BaseModel):
@@ -142,10 +153,12 @@ class PermitVehicleRead(ORMBase):
 class PermitCreate(BaseModel):
     """POST /permits — issue a new permit."""
 
+    model_config = ConfigDict(extra="forbid")
+
     company: str = Field(min_length=1, max_length=255)
     access_areas: PermitAccessAreas
     start_date: date
-    end_date: date
+    validity: PermitValidityPeriod
     purpose: str | None = None
     notes: str | None = None
     people: list[PermitPersonCreate] = Field(default_factory=list)
@@ -173,7 +186,7 @@ class PermitUpdate(BaseModel):
     company: str | None = Field(default=None, min_length=1, max_length=255)
     access_areas: PermitAccessAreas | SkipJsonSchema[None] = None
     start_date: date | None = None
-    end_date: date | None = None
+    validity: PermitValidityPeriod | None = None
     purpose: str | None = None
     notes: str | None = None
 
@@ -187,7 +200,9 @@ class PermitUpdate(BaseModel):
 class PermitRenew(BaseModel):
     """POST /permits/{id}/renew — extend the permit window."""
 
-    new_end_date: date
+    model_config = ConfigDict(extra="forbid")
+
+    validity: PermitValidityPeriod
     reason: str | None = None
 
 
@@ -227,6 +242,7 @@ class PermitRead(ORMBase):
     zones: list[PermitZone]
     access_areas: PermitAccessAreas | None = None
     start_date: date
+    validity: PermitValidityPeriod
     end_date: date
     status: PermitStatus
     purpose: str | None = None
@@ -260,6 +276,7 @@ class PermitListItem(ORMBase):
     zones: list[PermitZone]
     access_areas: PermitAccessAreas | None = None
     start_date: date
+    validity: PermitValidityPeriod
     end_date: date
     status: PermitStatus
     created_at: datetime
