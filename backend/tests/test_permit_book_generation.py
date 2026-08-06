@@ -14,7 +14,7 @@ from datetime import date
 
 import pytest
 
-from app.db.models import Book, BookCategory, Employee, User
+from app.db.models import Book, BookCategory, BookVersion, Document, Employee, User
 from app.schemas.permit import PermitCreate, PermitVehicleCreate
 from app.services import document_service, permit_service
 
@@ -149,3 +149,64 @@ def test_revoke_does_not_regenerate(gen_env, monkeypatch):
     monkeypatch.setattr(permit_service, "regenerate_permit_book", _spy)
     permit_service.revoke_permit(db, permit.id, reason="test")
     assert calls == []  # regenerate was NOT called
+
+
+def _mark_latest_as_finished_word(db, permit_id: int) -> tuple[int, str, str | None]:
+    permit = permit_service.get_permit(db, permit_id)
+    assert permit.book_id is not None
+    book = db.get(Book, permit.book_id)
+    assert book is not None and book.versions
+    latest = book.versions[-1]
+    assert latest.document_id is not None
+    document = db.get(Document, latest.document_id)
+    assert document is not None
+    latest.fields = {}
+    db.commit()
+    return latest.id, document.docx_path, document.pdf_path
+
+
+def test_finished_word_version_survives_structured_regeneration_with_pdf(
+    gen_env, monkeypatch
+):
+    db = gen_env
+    monkeypatch.setattr(document_service, "convert_docx_to_pdf", lambda path: path.with_suffix(".pdf"))
+    permit = permit_service.create_permit(db, _payload())
+    old_version_id, old_docx_path, old_pdf_path = _mark_latest_as_finished_word(db, permit.id)
+
+    permit_service.add_vehicle(db, permit.id, PermitVehicleCreate(plate_no="A 1"))
+
+    book = db.get(Book, permit.book_id)
+    assert book is not None
+    assert [version.version_no for version in book.versions] == [1, 2]
+    assert book.approval_state == "none"
+    assert book.versions[-1].status == "none"
+    old_version = db.get(BookVersion, old_version_id)
+    assert old_version is not None
+    old_document = db.get(Document, old_version.document_id)
+    assert old_document is not None
+    assert old_version.fields == {}
+    assert (old_document.docx_path, old_document.pdf_path) == (old_docx_path, old_pdf_path)
+    latest_document = db.get(Document, book.versions[-1].document_id)
+    assert latest_document is not None and latest_document.pdf_path is not None
+
+
+def test_finished_word_version_keeps_older_pdf_when_new_conversion_returns_none(
+    gen_env, monkeypatch
+):
+    db = gen_env
+    monkeypatch.setattr(document_service, "convert_docx_to_pdf", lambda path: path.with_suffix(".pdf"))
+    permit = permit_service.create_permit(db, _payload())
+    old_version_id, _, old_pdf_path = _mark_latest_as_finished_word(db, permit.id)
+    assert old_pdf_path is not None
+
+    monkeypatch.setattr(document_service, "convert_docx_to_pdf", lambda path: None)
+    permit_service.add_vehicle(db, permit.id, PermitVehicleCreate(plate_no="A 2"))
+
+    book = db.get(Book, permit.book_id)
+    assert book is not None and len(book.versions) == 2
+    old_version = db.get(BookVersion, old_version_id)
+    assert old_version is not None
+    old_document = db.get(Document, old_version.document_id)
+    latest_document = db.get(Document, book.versions[-1].document_id)
+    assert old_document is not None and old_document.pdf_path == old_pdf_path
+    assert latest_document is not None and latest_document.pdf_path is None

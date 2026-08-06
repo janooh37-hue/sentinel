@@ -532,6 +532,11 @@
       "printPermit": "طباعة التصريح (1/5)"
     },
     "printNoPdf": "لا يوجد ملف PDF متاح لهذا التصريح بعد.",
+    "documentVersions": {
+      "title": "مستندات التصريح المُنشأة",
+      "docx": "DOCX",
+      "pdf": "PDF"
+    },
     "detail": {
       "title": "التصريح {{no}}",
       "company": "الشركة",

@@ -405,6 +405,14 @@ def regenerate_permit_book(
             # in history); the fresh version is resubmitted below.
             prior.approval_state = "returned"
             db.flush()
+        elif prior is not None and prior_state == "none":
+            # A finished Word-authored version has no structured fields. Treat
+            # a later structured regeneration as a revision so its immutable
+            # DOCX/PDF remains in history and the new version is appended.
+            latest = prior.versions[-1] if prior.versions else None
+            if latest is not None and latest.document_id is not None and latest.fields == {}:
+                prior.approval_state = "returned"
+                db.flush()
 
     from app.core.permit_letter import PERMIT_RECIPIENT, build_permit_letter_html
     from app.services import document_service

@@ -150,6 +150,13 @@ describe('PermitDetailDialog', () => {
     )
   })
 
+  it('keeps generated document history inert when book_id is absent', async () => {
+    vi.mocked(api.getBook).mockClear()
+    renderDetail({ book_id: null, book_ref: null })
+    await waitFor(() => expect(screen.getByText('Test Corp')).toBeInTheDocument())
+    expect(screen.queryByRole('region', { name: /generated permit documents/i })).not.toBeInTheDocument()
+    expect(api.getBook).not.toHaveBeenCalled()
+  })
   it('hides Print button when book_id is absent', async () => {
     renderDetail({ book_id: null, book_ref: null })
     await waitFor(() => expect(screen.getByText('Test Corp')).toBeInTheDocument())

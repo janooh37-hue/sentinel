@@ -14,6 +14,7 @@ import { Trash2, UserPlus, FileText, Upload, Car, ScanLine, Printer, Send } from
 import { toast } from 'sonner'
 
 import { api, apiErrorMessage, type PermitRead, type PermitValidityPeriod } from '@/lib/api'
+import { PermitDocumentVersions } from './PermitDocumentVersions'
 import { RowDocButton } from './RowDocButton'
 import {
   DialogRoot,
@@ -480,6 +481,7 @@ export function PermitDetailDialog({ permitId, open, onOpenChange, onEdit }: Pro
                   <p className="text-xs text-muted-foreground">{t('permits.paper.none')}</p>
                 )}
               </section>
+              {permit.book_id != null && <PermitDocumentVersions bookId={permit.book_id} />}
 
               {/* People */}
               <section className="flex flex-col gap-2">

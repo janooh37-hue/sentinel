@@ -491,6 +491,11 @@
       "printPermit": "Print permit (1/5)"
     },
     "printNoPdf": "No PDF available for this permit yet.",
+    "documentVersions": {
+      "title": "Generated permit documents",
+      "docx": "DOCX",
+      "pdf": "PDF"
+    },
     "detail": {
       "title": "Permit {{no}}",
       "company": "Company",
