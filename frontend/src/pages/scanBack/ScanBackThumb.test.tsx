@@ -1,6 +1,7 @@
 import { useEffect } from 'react'
 import { describe, it, expect, vi } from 'vitest'
 import { render, screen } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 
 import type { BookRead } from '@/lib/api'
 import { ScanBackThumb } from './ScanBackThumb'
@@ -18,6 +19,14 @@ vi.mock('@/pages/scanInbox/ScanPdfCanvas', () => {
   }
   return { default: MockScanPdfCanvas }
 })
+
+// The real lightbox portals + lazy-loads pdf.js; here we only care that the
+// thumb opens it, and with which document.
+vi.mock('@/components/ui/document-viewer-dialog', () => ({
+  DocumentViewerDialog: ({ items }: { items: { name: string; downloadUrl: string }[] }) => (
+    <div data-testid="viewer">{`${items[0]?.name} | ${items[0]?.downloadUrl}`}</div>
+  ),
+}))
 
 const book = (versions: BookRead['versions']): BookRead =>
   ({ id: 7, ref_number: 'GS-0410', subject: 'Ack', created_at: '2026-06-25 12:00:00', versions }) as BookRead
@@ -42,5 +51,21 @@ describe('ScanBackThumb', () => {
   it('falls back to the icon tile when the PDF fails to render', async () => {
     render(<ScanBackThumb book={book(versions(99))} />)
     expect(await screen.findByTestId('thumb-fallback')).toBeInTheDocument()
+  })
+
+  // A 128px crop narrows the form down; only the full sheet identifies it.
+  it('opens the full-screen viewer on the record document', async () => {
+    render(<ScanBackThumb book={book(versions(22))} />)
+    expect(screen.queryByTestId('viewer')).not.toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button'))
+    expect(screen.getByTestId('viewer')).toHaveTextContent(
+      'GS-0410 — Ack | /api/v1/documents/22/download?format=pdf',
+    )
+  })
+
+  // Nothing to open, so the tile must not become a focus stop.
+  it('is not clickable when the record has no document', () => {
+    render(<ScanBackThumb book={book([])} />)
+    expect(screen.queryByRole('button')).not.toBeInTheDocument()
   })
 })
