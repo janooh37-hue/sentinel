@@ -39,6 +39,7 @@ export default function DocPdfCanvas({
   pdfUrl,
   docxUrl,
   renderOverlay,
+  onReady,
 }: {
   /** Inline PDF download URL, e.g. `/api/v1/documents/{id}/download?format=pdf`. */
   pdfUrl: string
@@ -55,10 +56,16 @@ export default function DocPdfCanvas({
    * it scrolls with the pages. Absent → behavior is unchanged.
    */
   renderOverlay?: (pages: PageBox[]) => React.ReactNode
+  /** Called once after all PDF pages have finished painting. */
+  onReady?: () => void
 }): React.JSX.Element {
   const { t } = useTranslation()
   const containerRef = useRef<HTMLDivElement | null>(null)
   const wrapperRef = useRef<HTMLDivElement | null>(null)
+  const onReadyRef = useRef(onReady)
+  useEffect(() => {
+    onReadyRef.current = onReady
+  }, [onReady])
   const [status, setStatus] = useState<'loading' | 'ready' | 'error'>('loading')
   // 'missing' = the PDF was never generated (backend 404 / PDF_NOT_AVAILABLE);
   // 'render' = the bytes came back but pdf.js (or the worker asset) couldn't
@@ -134,6 +141,7 @@ export default function DocPdfCanvas({
         if (!cancelled) {
           setStatus('ready')
           measure()
+          onReadyRef.current?.()
         }
       } catch (err) {
         if (!cancelled) {
