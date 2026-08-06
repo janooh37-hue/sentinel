@@ -31,12 +31,17 @@ import {
 import { Button } from '@/components/ui/button'
 // Generic labelled switch — same control the notify surfaces use.
 import { NotifyEmployeeToggle as ToggleRow } from '@/components/notify/NotifyEmployeeToggle'
-import { plusDaysISO, todayISO } from './permitUtils'
+import { todayISO } from './permitUtils'
 import { EMIRATES } from './emirates'
 
-/** Default validity window for a new permit (days). Long enough that a fresh
- * permit isn't immediately flagged "expiring". */
-const DEFAULT_WINDOW_DAYS = 30
+type Validity = { value: number; unit: 'day' | 'week' | 'month' | 'year' }
+const PRESETS: Array<{ label: string; value: number; unit: Validity['unit'] }> = [
+  { label: 'oneDay', value: 1, unit: 'day' },
+  { label: 'oneWeek', value: 1, unit: 'week' },
+  { label: 'oneMonth', value: 1, unit: 'month' },
+  { label: 'sixMonths', value: 6, unit: 'month' },
+  { label: 'oneYear', value: 1, unit: 'year' },
+]
 const LOCATION_ZONES: PermitLocationZone[] = ['green', 'red']
 type FormAccessAreas = Required<PermitAccessAreas>
 const EMPTY_ACCESS_AREAS: FormAccessAreas = {
@@ -63,7 +68,7 @@ interface VehicleRow extends PermitVehicleCreate {
 }
 
 let rowSeq = 0
-const newRow = (): PersonRow => ({ key: `r${rowSeq++}`, name: '', uae_id: '' })
+const newRow = (): PersonRow => ({ key: `r${rowSeq++}`, name: '', uae_id: '', role: '' })
 const newVehicleRow = (): VehicleRow => ({ key: `v${rowSeq++}`, plate_no: '' })
 
 export function PermitFormDialog({ open, permit, onOpenChange, onSaved }: Props): React.JSX.Element {
@@ -74,7 +79,8 @@ export function PermitFormDialog({ open, permit, onOpenChange, onSaved }: Props)
   const [company, setCompany] = useState('')
   const [accessAreas, setAccessAreas] = useState<FormAccessAreas>(EMPTY_ACCESS_AREAS)
   const [startDate, setStartDate] = useState(todayISO())
-  const [endDate, setEndDate] = useState(plusDaysISO(DEFAULT_WINDOW_DAYS))
+  const [validity, setValidity] = useState<Validity>({ value: 1, unit: 'month' })
+  const [customOpen, setCustomOpen] = useState(false)
   const [purpose, setPurpose] = useState('')
   const [notes, setNotes] = useState('')
   const [managerId, setManagerId] = useState<number | null>(null)
@@ -116,7 +122,8 @@ export function PermitFormDialog({ open, permit, onOpenChange, onSaved }: Props)
           ...EMPTY_ACCESS_AREAS,
           work_residence: permit?.zones.includes('work_residence') ?? false,
         })
-    setEndDate(permit ? permit.end_date.slice(0, 10) : plusDaysISO(DEFAULT_WINDOW_DAYS))
+    setValidity(permit?.validity ?? { value: 1, unit: 'month' })
+    setCustomOpen(false)
     setPurpose(permit?.purpose ?? '')
     setNotes(permit?.notes ?? '')
     setManagerId(permit?.manager_id ?? null)
@@ -129,10 +136,10 @@ export function PermitFormDialog({ open, permit, onOpenChange, onSaved }: Props)
     vehicleScanFiles.current.clear()
   }, [open, permit, isEdit])
 
-  const windowValid = endDate >= startDate
-  // Every named person must also carry a UAE ID (mandatory); create needs ≥1.
   const namedPeople = people.filter((p) => p.name.trim().length > 0)
-  const peopleComplete = namedPeople.every((p) => (p.uae_id ?? '').trim().length > 0)
+  const peopleComplete = namedPeople.every((p) =>
+    (p.uae_id ?? '').trim().length > 0 && (p.role ?? '').trim().length > 0,
+  )
   const hasPerson = namedPeople.some((p) => (p.uae_id ?? '').trim().length > 0)
   const toggleLocationZone = (location: keyof Pick<FormAccessAreas, 'al_wathba_1' | 'al_wathba_2'>, zone: PermitLocationZone): void =>
     setAccessAreas((current) => ({
@@ -157,8 +164,8 @@ export function PermitFormDialog({ open, permit, onOpenChange, onSaved }: Props)
   const canRoute = Boolean(managers?.find((m) => m.id === managerId)?.user_id)
   const canSave =
     company.trim().length > 0 &&
-    windowValid &&
-    hasAnyAccess &&
+    Number.isInteger(validity.value) &&
+    validity.value > 0 &&
     (!legacyNeedsLocation || hasLocationAccess) &&
     (isEdit || (hasPerson && peopleComplete))
 
@@ -169,7 +176,7 @@ export function PermitFormDialog({ open, permit, onOpenChange, onSaved }: Props)
           company: company.trim(),
           access_areas: accessAreas,
           start_date: startDate,
-          end_date: endDate,
+          validity,
           purpose: purpose.trim() || null,
           notes: notes.trim() || null,
         })
@@ -184,7 +191,7 @@ export function PermitFormDialog({ open, permit, onOpenChange, onSaved }: Props)
         company: company.trim(),
         access_areas: accessAreas,
         start_date: startDate,
-        end_date: endDate,
+        validity,
         purpose: purpose.trim() || null,
         notes: notes.trim() || null,
         manager_id: managerId,
@@ -193,7 +200,7 @@ export function PermitFormDialog({ open, permit, onOpenChange, onSaved }: Props)
           name: p.name.trim(),
           uae_id: (p.uae_id ?? '').trim(),
           nationality: p.nationality?.trim() || null,
-          role: p.role?.trim() || null,
+          role: (p.role ?? '').trim(),
         })),
         vehicles: submittedVehicles.map((v) => ({
           plate_no: (v.plate_no ?? '').trim() || null,
@@ -376,31 +383,77 @@ export function PermitFormDialog({ open, permit, onOpenChange, onSaved }: Props)
             )}
           </div>
 
-          {/* Dates */}
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-            <label className="flex flex-col gap-1.5">
-              <span className="text-xs text-muted-foreground">{t('permits.form.startDate')}</span>
-              <input
-                type="date"
-                className={`${inputCls} font-mono`}
-                value={startDate}
-                onChange={(e) => setStartDate(e.target.value)}
-              />
-            </label>
-            <label className="flex flex-col gap-1.5">
-              <span className="text-xs text-muted-foreground">{t('permits.form.endDate')}</span>
-              <input
-                type="date"
-                className={`${inputCls} font-mono`}
-                value={endDate}
-                min={startDate}
-                onChange={(e) => setEndDate(e.target.value)}
-              />
-            </label>
+          {/* Validity */}
+          <div className="flex flex-col gap-2">
+            <span className="text-xs text-muted-foreground">{t('permits.form.permitValidity')}</span>
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-6">
+              {PRESETS.map((preset) => (
+                <button
+                  key={preset.label}
+                  type="button"
+                  aria-pressed={!customOpen && validity.value === preset.value && validity.unit === preset.unit}
+                  onClick={() => {
+                    setValidity({ value: preset.value, unit: preset.unit })
+                    setCustomOpen(false)
+                  }}
+                  className={`rounded-lg border px-2 py-2 text-sm font-medium text-start transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
+                    !customOpen && validity.value === preset.value && validity.unit === preset.unit
+                      ? 'border-primary bg-primary-soft text-primary'
+                      : 'border-border text-muted-foreground hover:bg-surface-tinted'
+                  }`}
+                >
+                  {t(`permits.form.${preset.label}`)}
+                </button>
+              ))}
+              <button
+                type="button"
+                aria-pressed={customOpen}
+                onClick={() => setCustomOpen(true)}
+                className={`rounded-lg border px-2 py-2 text-sm font-medium text-start transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
+                  customOpen
+                    ? 'border-primary bg-primary-soft text-primary'
+                    : 'border-border text-muted-foreground hover:bg-surface-tinted'
+                }`}
+              >
+                {t('permits.form.customPeriod')}
+              </button>
+            </div>
+            {customOpen && (
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                <label className="flex flex-col gap-1">
+                  <span className="text-xs text-muted-foreground">{t('permits.form.durationValue')}</span>
+                  <input
+                    type="number"
+                    min="1"
+                    step="1"
+                    className={inputCls}
+                    aria-label={t('permits.form.durationValue')}
+                    value={validity.value || ''}
+                    onChange={(e) => setValidity((current) => ({
+                      ...current,
+                      value: Number(e.target.value),
+                    }))}
+                  />
+                </label>
+                <label className="flex flex-col gap-1">
+                  <span className="text-xs text-muted-foreground">{t('permits.form.durationUnit')}</span>
+                  <select
+                    className={inputCls}
+                    aria-label={t('permits.form.durationUnit')}
+                    value={validity.unit}
+                    onChange={(e) => setValidity((current) => ({
+                      ...current,
+                      unit: e.target.value as Validity['unit'],
+                    }))}
+                  >
+                    {(['day', 'week', 'month', 'year'] as const).map((unit) => (
+                      <option key={unit} value={unit}>{t(`permits.form.unit${unit[0].toUpperCase()}${unit.slice(1)}`)}</option>
+                    ))}
+                  </select>
+                </label>
+              </div>
+            )}
           </div>
-          {!windowValid && (
-            <p className="text-xs text-destructive">{t('permits.form.windowError')}</p>
-          )}
 
           {/* Purpose */}
           <label className="flex flex-col gap-1.5">
@@ -473,7 +526,7 @@ export function PermitFormDialog({ open, permit, onOpenChange, onSaved }: Props)
               {people.length === 0 ? null : (
                 people.map((row) => (
                   <div key={row.key} className="flex flex-col gap-1.5">
-                    <div className="grid grid-cols-1 gap-2 sm:grid-cols-[1.3fr_1fr_1fr_auto]">
+                    <div className="grid grid-cols-1 gap-2 sm:grid-cols-[1.3fr_1fr_1fr_1fr_auto]">
                       <input
                         className={inputCls}
                         placeholder={t('permits.person.name')}
@@ -487,6 +540,17 @@ export function PermitFormDialog({ open, permit, onOpenChange, onSaved }: Props)
                         value={row.uae_id ?? ''}
                         onChange={(e) => patchRow(row.key, { uae_id: e.target.value })}
                       />
+                      <label className="flex flex-col gap-1">
+                        <span className="text-xs text-muted-foreground sm:sr-only">{t('permits.person.role')}</span>
+                        <input
+                          className={inputCls}
+                          aria-label={t('permits.person.role')}
+                          placeholder={t('permits.person.role')}
+                          dir="auto"
+                          value={row.role ?? ''}
+                          onChange={(e) => patchRow(row.key, { role: e.target.value })}
+                        />
+                      </label>
                       <input
                         className={inputCls}
                         placeholder={t('permits.person.nationality')}

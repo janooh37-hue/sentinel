@@ -41,6 +41,21 @@ const KEYS = [
   'permits.approval.rejected',
   'permits.approval.returned',
   'permits.approval.sentToast',
+  'permits.form.permitValidity',
+  'permits.form.oneDay',
+  'permits.form.oneWeek',
+  'permits.form.oneMonth',
+  'permits.form.sixMonths',
+  'permits.form.oneYear',
+  'permits.form.customPeriod',
+  'permits.form.durationValue',
+  'permits.form.durationUnit',
+  'permits.form.unitDay',
+  'permits.form.unitWeek',
+  'permits.form.unitMonth',
+  'permits.form.unitYear',
+  'permits.form.jobRequired',
+  'permits.person.role',
 ]
 
 describe('permit i18n parity', () => {

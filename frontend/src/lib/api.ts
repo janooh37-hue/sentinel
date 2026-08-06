@@ -163,11 +163,17 @@ export type LeaveStatus = 'Pending' | 'Approved' | 'Rejected' | 'Cancelled' | 'C
 export type PermitZone = components['schemas']['PermitRead']['zones'][number]
 export type PermitLocationZone = Exclude<PermitZone, 'work_residence'>
 export type PermitAccessAreas = components['schemas']['PermitAccessAreas']
+export type PermitValidityPeriod = components['schemas']['PermitValidityPeriod']
 export type PermitStoredStatus = components['schemas']['PermitRead']['status']
 export type PermitDerivedStatus = components['schemas']['PermitRead']['derived_status']
 
 export type PermitPersonRead = components['schemas']['PermitPersonRead']
-export type PermitPersonCreate = components['schemas']['PermitPersonCreate']
+// The detail add-person surface is migrated to the required job field in the
+// next permit task; keep this alias source-compatible while generated create
+// payloads remain strict.
+export type PermitPersonCreate = Omit<components['schemas']['PermitPersonCreate'], 'role'> & {
+  role?: string
+}
 export type PermitVehicleRead = components['schemas']['PermitVehicleRead']
 export type PermitVehicleCreate = components['schemas']['PermitVehicleCreate']
 export type PermitListItem = components['schemas']['PermitListItem']
@@ -177,6 +183,7 @@ export type PermitRead = Omit<components['schemas']['PermitRead'], 'people' | 'v
 }
 export type PermitListResponse = components['schemas']['PermitListResponse']
 export type PermitCreate = components['schemas']['PermitCreate']
+export type PermitRenew = components['schemas']['PermitRenew']
 
 
 /** OCR result from POST /permits/scan-vehicle-licence (mulkiya scan). */
@@ -979,7 +986,7 @@ export const api = {
   createPermit: (body: PermitCreate) => request<PermitRead>('POST', '/permits', body),
   updatePermit: (id: number, body: PermitUpdate) =>
     request<PermitRead>('PATCH', `/permits/${id}`, body),
-  renewPermit: (id: number, body: { new_end_date: string; reason?: string }) =>
+  renewPermit: (id: number, body: PermitRenew | Record<string, unknown>) =>
     request<PermitRead>('POST', `/permits/${id}/renew`, body),
   revokePermit: (id: number, body: { reason?: string }) =>
     request<PermitRead>('POST', `/permits/${id}/revoke`, body),

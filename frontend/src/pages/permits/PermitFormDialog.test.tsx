@@ -52,6 +52,7 @@ const editPermit = (access_areas: PermitRead['access_areas'], zones: PermitRead[
     access_areas,
     zones,
     start_date: '2026-08-01',
+    validity: { value: 1, unit: 'month' },
     end_date: '2026-08-31',
     status: 'active',
     created_at: '2026-08-01T00:00:00Z',
@@ -89,6 +90,7 @@ describe('PermitFormDialog', () => {
     await userEvent.type(screen.getByLabelText(/company/i), 'ACME')
     await userEvent.type(screen.getByPlaceholderText('Full name'), 'Ali')
     await userEvent.type(screen.getByPlaceholderText('UAE ID'), '784-1')
+    await userEvent.type(screen.getByLabelText(/job \/ trade/i), 'Electrician')
     await userEvent.click(screen.getByRole('button', { name: /al wathba 1.*green/i }))
     await userEvent.click(screen.getByRole('button', { name: /al wathba 2.*red/i }))
     await userEvent.click(screen.getByRole('button', { name: /issue permit/i }))
@@ -229,8 +231,8 @@ describe('PermitFormDialog', () => {
     await userEvent.type(screen.getByLabelText(/company/i), 'ACME')
     await userEvent.type(screen.getByPlaceholderText('Full name'), 'Ali')
     await userEvent.type(screen.getByPlaceholderText('UAE ID'), '784-1')
+    await userEvent.type(screen.getByLabelText(/job \/ trade/i), 'Electrician')
     await userEvent.click(screen.getByRole('button', { name: /al wathba 1.*green/i }))
-
     const toggle = screen.getByRole('switch', { name: /send for approval/i })
     expect(toggle).toHaveAttribute('aria-checked', 'true')
 
@@ -249,3 +251,94 @@ describe('PermitFormDialog', () => {
     )
   })
 })
+  it('submits validity presets and a trimmed visitor job without an end date', async () => {
+    const createSpy = vi.spyOn(api, 'createPermit').mockResolvedValue({ id: 7, people: [], vehicles: [] } as never)
+    renderForm()
+    await userEvent.type(screen.getByLabelText(/company/i), 'ACME')
+    await userEvent.type(screen.getByPlaceholderText('Full name'), 'Ali')
+    await userEvent.type(screen.getByPlaceholderText('UAE ID'), '784-1')
+    await userEvent.type(screen.getByLabelText(/job \/ trade/i), '  Electrician  ')
+    await userEvent.click(screen.getByRole('button', { name: /al wathba 1.*green/i }))
+    await userEvent.click(screen.getByRole('button', { name: /^6 months$/i }))
+    await userEvent.click(screen.getByRole('button', { name: /issue permit/i }))
+
+    await waitFor(() =>
+      expect(createSpy).toHaveBeenCalledWith(expect.objectContaining({
+        start_date: expect.any(String),
+        validity: { value: 6, unit: 'month' },
+        people: [expect.objectContaining({ uae_id: '784-1', role: 'Electrician' })],
+      })),
+    )
+    expect(createSpy.mock.calls[0][0]).not.toHaveProperty('end_date')
+  })
+
+  it('renders the approved validity presets in order and has no three-month preset', () => {
+    renderForm()
+    const names = screen.getAllByRole('button').map((button) => button.textContent?.trim())
+    const validityNames = ['1 day', '1 week', '1 month', '6 months', '1 year', 'Custom period']
+    expect(names.filter((name) => validityNames.includes(name ?? ''))).toEqual(validityNames)
+    expect(screen.queryByRole('button', { name: /3 months/i })).not.toBeInTheDocument()
+  })
+
+  it('opens custom validity controls and enables issue after a positive value and unit', async () => {
+    const createSpy = vi.spyOn(api, 'createPermit').mockResolvedValue({ id: 7, people: [], vehicles: [] } as never)
+    renderForm()
+    await userEvent.type(screen.getByLabelText(/company/i), 'ACME')
+    await userEvent.type(screen.getByPlaceholderText('Full name'), 'Ali')
+    await userEvent.type(screen.getByPlaceholderText('UAE ID'), '784-1')
+    await userEvent.type(screen.getByLabelText(/job \/ trade/i), 'Electrician')
+    await userEvent.click(screen.getByRole('button', { name: /al wathba 1.*green/i }))
+    await userEvent.click(screen.getByRole('button', { name: /custom period/i }))
+    await userEvent.clear(screen.getByLabelText(/duration/i))
+    await userEvent.type(screen.getByLabelText(/duration/i), '2')
+    await userEvent.selectOptions(screen.getByLabelText(/unit/i), 'month')
+    expect(screen.getByRole('button', { name: /issue permit/i })).toBeEnabled()
+    await userEvent.click(screen.getByRole('button', { name: /issue permit/i }))
+    await waitFor(() => expect(createSpy).toHaveBeenCalledWith(expect.objectContaining({
+      validity: { value: 2, unit: 'month' },
+    })))
+  })
+
+  it('requires a nonblank job / trade for each new person', async () => {
+    renderForm()
+    await userEvent.type(screen.getByLabelText(/company/i), 'ACME')
+    await userEvent.type(screen.getByPlaceholderText('Full name'), 'Ali')
+    await userEvent.type(screen.getByPlaceholderText('UAE ID'), '784-1')
+    await userEvent.click(screen.getByRole('button', { name: /al wathba 1.*green/i }))
+    expect(screen.getByRole('button', { name: /issue permit/i })).toBeDisabled()
+    await userEvent.type(screen.getByLabelText(/job \/ trade/i), ' Electrician ')
+    expect(screen.getByRole('button', { name: /issue permit/i })).toBeEnabled()
+  })
+
+  it('round-trips validity when editing a permit without writing an end date', async () => {
+    const updateSpy = vi.spyOn(api, 'updatePermit').mockResolvedValue({ id: 7 } as never)
+    renderForm(editPermit({ al_wathba_1: ['green'], al_wathba_2: [], work_residence: false }))
+    await userEvent.click(screen.getByRole('button', { name: /save permit/i }))
+    await waitFor(() =>
+      expect(updateSpy).toHaveBeenCalledWith(7, expect.objectContaining({
+        start_date: '2026-08-01',
+        validity: { value: 1, unit: 'month' },
+      })),
+    )
+    expect(updateSpy.mock.calls[0][1]).not.toHaveProperty('end_date')
+  })
+
+  it('keeps all vehicle fields in the create payload', async () => {
+    const createSpy = vi.spyOn(api, 'createPermit').mockResolvedValue({ id: 7, people: [], vehicles: [] } as never)
+    renderForm()
+    await userEvent.type(screen.getByLabelText(/company/i), 'ACME')
+    await userEvent.type(screen.getByPlaceholderText('Full name'), 'Ali')
+    await userEvent.type(screen.getByPlaceholderText('UAE ID'), '784-1')
+    await userEvent.type(screen.getByLabelText(/job \/ trade/i), 'Electrician')
+    await userEvent.click(screen.getByRole('button', { name: /al wathba 1.*green/i }))
+    await userEvent.click(screen.getByRole('button', { name: /add another vehicle/i }))
+    await userEvent.type(screen.getByPlaceholderText(/plate no/i), 'A 1')
+    await userEvent.type(screen.getByPlaceholderText(/make \/ model/i), 'Sedan')
+    await userEvent.type(screen.getByPlaceholderText(/colour/i), 'White')
+    await userEvent.click(screen.getByRole('button', { name: /issue permit/i }))
+    await waitFor(() =>
+      expect(createSpy).toHaveBeenCalledWith(expect.objectContaining({
+        vehicles: [expect.objectContaining({ plate_no: 'A 1', make_model: 'Sedan', colour: 'White' })],
+      })),
+    )
+  })

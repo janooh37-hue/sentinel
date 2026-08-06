@@ -6694,11 +6694,7 @@ export interface components {
              * Format: date
              */
             start_date: string;
-            /**
-             * End Date
-             * Format: date
-             */
-            end_date: string;
+            validity: components["schemas"]["PermitValidityPeriod"];
             /** Purpose */
             purpose?: string | null;
             /** Notes */
@@ -6731,6 +6727,7 @@ export interface components {
              * Format: date
              */
             start_date: string;
+            validity: components["schemas"]["PermitValidityPeriod"];
             /**
              * End Date
              * Format: date
@@ -6795,7 +6792,7 @@ export interface components {
             /** Nationality */
             nationality?: string | null;
             /** Role */
-            role?: string | null;
+            role: string;
         };
         /** PermitPersonRead */
         PermitPersonRead: {
@@ -6837,6 +6834,7 @@ export interface components {
              * Format: date
              */
             start_date: string;
+            validity: components["schemas"]["PermitValidityPeriod"];
             /**
              * End Date
              * Format: date
@@ -6905,11 +6903,7 @@ export interface components {
          * @description POST /permits/{id}/renew — extend the permit window.
          */
         PermitRenew: {
-            /**
-             * New End Date
-             * Format: date
-             */
-            new_end_date: string;
+            validity: components["schemas"]["PermitValidityPeriod"];
             /** Reason */
             reason?: string | null;
         };
@@ -6954,12 +6948,21 @@ export interface components {
             access_areas?: components["schemas"]["PermitAccessAreas"];
             /** Start Date */
             start_date?: string | null;
-            /** End Date */
-            end_date?: string | null;
+            validity?: components["schemas"]["PermitValidityPeriod"] | null;
             /** Purpose */
             purpose?: string | null;
             /** Notes */
             notes?: string | null;
+        };
+        /** PermitValidityPeriod */
+        PermitValidityPeriod: {
+            /** Value */
+            value: number;
+            /**
+             * Unit
+             * @enum {string}
+             */
+            unit: "day" | "week" | "month" | "year";
         };
         /** PermitVehicleCreate */
         PermitVehicleCreate: {

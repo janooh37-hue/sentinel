@@ -24762,10 +24762,8 @@
             "format": "date",
             "title": "Start Date"
           },
-          "end_date": {
-            "type": "string",
-            "format": "date",
-            "title": "End Date"
+          "validity": {
+            "$ref": "#/components/schemas/PermitValidityPeriod"
           },
           "purpose": {
             "anyOf": [
@@ -24820,12 +24818,13 @@
             "default": true
           }
         },
+        "additionalProperties": false,
         "type": "object",
         "required": [
           "company",
           "access_areas",
           "start_date",
-          "end_date"
+          "validity"
         ],
         "title": "PermitCreate",
         "description": "POST /permits — issue a new permit."
@@ -24877,6 +24876,9 @@
             "type": "string",
             "format": "date",
             "title": "Start Date"
+          },
+          "validity": {
+            "$ref": "#/components/schemas/PermitValidityPeriod"
           },
           "end_date": {
             "type": "string",
@@ -24945,6 +24947,7 @@
           "company",
           "zones",
           "start_date",
+          "validity",
           "end_date",
           "status",
           "created_at"
@@ -25009,22 +25012,17 @@
             "title": "Nationality"
           },
           "role": {
-            "anyOf": [
-              {
-                "type": "string",
-                "maxLength": 128
-              },
-              {
-                "type": "null"
-              }
-            ],
+            "type": "string",
+            "maxLength": 128,
+            "minLength": 1,
             "title": "Role"
           }
         },
         "type": "object",
         "required": [
           "name",
-          "uae_id"
+          "uae_id",
+          "role"
         ],
         "title": "PermitPersonCreate"
       },
@@ -25160,6 +25158,9 @@
             "type": "string",
             "format": "date",
             "title": "Start Date"
+          },
+          "validity": {
+            "$ref": "#/components/schemas/PermitValidityPeriod"
           },
           "end_date": {
             "type": "string",
@@ -25349,6 +25350,7 @@
           "company",
           "zones",
           "start_date",
+          "validity",
           "end_date",
           "status",
           "created_at"
@@ -25357,10 +25359,8 @@
       },
       "PermitRenew": {
         "properties": {
-          "new_end_date": {
-            "type": "string",
-            "format": "date",
-            "title": "New End Date"
+          "validity": {
+            "$ref": "#/components/schemas/PermitValidityPeriod"
           },
           "reason": {
             "anyOf": [
@@ -25374,9 +25374,10 @@
             "title": "Reason"
           }
         },
+        "additionalProperties": false,
         "type": "object",
         "required": [
-          "new_end_date"
+          "validity"
         ],
         "title": "PermitRenew",
         "description": "POST /permits/{id}/renew — extend the permit window."
@@ -25479,17 +25480,15 @@
             ],
             "title": "Start Date"
           },
-          "end_date": {
+          "validity": {
             "anyOf": [
               {
-                "type": "string",
-                "format": "date"
+                "$ref": "#/components/schemas/PermitValidityPeriod"
               },
               {
                 "type": "null"
               }
-            ],
-            "title": "End Date"
+            ]
           },
           "purpose": {
             "anyOf": [
@@ -25518,6 +25517,30 @@
         "type": "object",
         "title": "PermitUpdate",
         "description": "PATCH /permits/{id} — edit header fields (not the lifecycle status)."
+      },
+      "PermitValidityPeriod": {
+        "properties": {
+          "value": {
+            "type": "integer",
+            "title": "Value"
+          },
+          "unit": {
+            "type": "string",
+            "enum": [
+              "day",
+              "week",
+              "month",
+              "year"
+            ],
+            "title": "Unit"
+          }
+        },
+        "type": "object",
+        "required": [
+          "value",
+          "unit"
+        ],
+        "title": "PermitValidityPeriod"
       },
       "PermitVehicleCreate": {
         "properties": {
