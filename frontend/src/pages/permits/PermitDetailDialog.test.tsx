@@ -1,7 +1,8 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it, vi, beforeEach } from 'vitest'
+import i18n from '@/lib/i18n'
 
 import { api } from '@/lib/api'
 import { PermitDetailDialog } from './PermitDetailDialog'
@@ -63,6 +64,10 @@ function renderDetail(permitOverrides: object = {}) {
   )
 }
 
+
+beforeEach(async () => {
+  await i18n.changeLanguage('en')
+})
 describe('PermitDetailDialog', () => {
   it('shows 1/5 book ref and vehicle colour when present', async () => {
     renderDetail({
@@ -229,6 +234,24 @@ describe('PermitDetailDialog', () => {
     expect(screen.getByText('Starts 06 Aug 2026')).toBeInTheDocument()
     expect(screen.getByText('Permit time: 1 month')).toBeInTheDocument()
     expect(screen.queryByText('06 Sep 2026')).not.toBeInTheDocument()
+    expect(screen.queryByText('2026-09-06')).not.toBeInTheDocument()
+  })
+
+  it('pluralizes a six-month detail period in English', async () => {
+    renderDetail({ validity: { value: 6, unit: 'month' } })
+    await waitFor(() => expect(screen.getByText('Permit time: 6 months')).toBeInTheDocument())
+  })
+
+  it('renders Arabic detail period and localized date direction', async () => {
+    await i18n.changeLanguage('ar')
+    try {
+      renderDetail({ validity: { value: 6, unit: 'month' } })
+      await waitFor(() => expect(screen.getByText(/مدة التصريح: 6 أشهر/)).toBeInTheDocument())
+      expect(document.documentElement.dir).toBe('rtl')
+      expect(screen.getByText(/يبدأ في/)).toBeInTheDocument()
+    } finally {
+      await i18n.changeLanguage('en')
+    }
   })
 
   it('requires a job role and sends it when adding a person, then resets the form', async () => {
@@ -263,7 +286,7 @@ describe('PermitDetailDialog', () => {
 
     await userEvent.click(screen.getByRole('button', { name: /^renew$/i }))
     const validityNames = ['1 day', '1 week', '1 month', '6 months', '1 year', 'Custom period']
-    expect(screen.getAllByRole('button').map((button) => button.textContent?.trim()).filter((name) => validityNames.includes(name ?? ''))).toEqual(validityNames)
+    expect(screen.getAllByRole('button').filter((button) => button.hasAttribute('aria-pressed')).map((button) => button.textContent?.trim())).toEqual(validityNames)
     expect(screen.queryByLabelText(/new end date/i)).not.toBeInTheDocument()
 
     await userEvent.click(screen.getByRole('button', { name: /custom period/i }))

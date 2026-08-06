@@ -53,3 +53,35 @@ Task 4 left `PermitPersonCreate.role` optional and `renewPermit` accepting `Perm
 ## Concerns
 
 The focused tests intentionally avoid the broad project suite per the task brief. The server still retains `end_date` internally for status/filter calculations and API responses; it is not rendered in the operator-facing detail/register/print surfaces.
+
+## Follow-up review round
+
+### RED
+
+- Review findings required whole-period pluralization, locale-derived date formatting, bidi-safe surface text, exact preset-button assertions, raw end-date rejection, and expanded locale parity/behavior tests.
+- Added failing/strengthened assertions for English `6 months`, Arabic detail/page wording and RTL direction, Arabic plural forms for 1/2/6, exact six validity buttons via `aria-pressed`, and both formatted and raw permit end-date absence.
+
+### GREEN
+
+- Replaced mechanical `<value> <unit>` composition with i18next plural whole-period keys for day/week/month/year, including Arabic zero/one/two/few/many/other forms.
+- Detail, register, and print now pass the whole localized period into their translated phrases; detail facts are separate block lines.
+- Date formatting now derives its locale from `i18n.language` (`en-GB` for the English presentation and the active Arabic locale for Arabic dates); removed whole-phrase `dir=\"ltr\"`.
+- Expanded locale parity covers validity units, every whole-period plural key, `validityFrom`, `expired`, detail start/period copy, and renewal help.
+
+### Follow-up files
+
+- `frontend/src/pages/permits/PermitDetailDialog.tsx`
+- `frontend/src/pages/permits/PermitDetailDialog.test.tsx`
+- `frontend/src/pages/permits/PermitsPage.tsx`
+- `frontend/src/pages/permits/PermitsPage.test.tsx`
+- `frontend/src/locales/en.json`
+- `frontend/src/locales/ar.json`
+- `frontend/src/locales/permits.i18n.test.ts`
+
+### Follow-up verification
+
+- Focused Vitest: 3 files, 188 tests passed.
+- `pnpm -C frontend exec tsc -b --pretty false`: passed with no output.
+- `git diff --check`: passed.
+
+Follow-up commit message: `fix(permits): localize validity surface wording`.

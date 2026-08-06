@@ -1,6 +1,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { render, screen, waitFor } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
+import i18n from '@/lib/i18n'
 
 import { statusTone, zoneTone, fmtDate } from './permitUtils'
 import { PermitsPage } from './PermitsPage'
@@ -44,7 +45,7 @@ vi.mock('@/lib/api', async (importOriginal) => {
         {
           id: 1, permit_no: 'PMT-0001', company: 'Acme Contracting', zones: ['green', 'red'],
           access_areas: { al_wathba_1: ['green'], al_wathba_2: ['red'], work_residence: false },
-          start_date: '2026-07-01', validity: { value: 1, unit: 'month' }, end_date: '2026-07-30', status: 'active',
+          start_date: '2026-07-01', validity: { value: 6, unit: 'month' }, end_date: '2026-07-30', status: 'active',
           created_at: '2026-07-01T00:00:00', derived_status: 'active',
           duration_days: 30, days_remaining: 9, people_count: 0, vehicle_count: 0,
           people: [], vehicles: [],
@@ -143,8 +144,22 @@ describe('PermitsPage', () => {
     await waitFor(() => expect(screen.getByText('Acme Contracting')).toBeInTheDocument())
     await screen.getByRole('button', { name: /^print$/i }).click()
     await waitFor(() => expect(printSpy).toHaveBeenCalled())
-    expect(printed).toContain('1 month from 01 Jul 2026')
+    expect(printed).toContain('6 months from 01 Jul 2026')
     expect(printed).not.toContain('2026-07-30')
     printSpy.mockRestore()
+  })
+
+  it('renders Arabic whole periods, localized dates, and RTL direction', async () => {
+    await i18n.changeLanguage('ar')
+    try {
+      renderPage()
+      await waitFor(() => expect(screen.getByText('Acme Contracting')).toBeInTheDocument())
+      expect(screen.getAllByText(/شهر واحد من/).length).toBeGreaterThan(0)
+      expect(screen.getByText(/9 أيام متبقية/)).toBeInTheDocument()
+      expect(document.documentElement.dir).toBe('rtl')
+      expect(screen.queryByText(/month from/i)).not.toBeInTheDocument()
+    } finally {
+      await i18n.changeLanguage('en')
+    }
   })
 })

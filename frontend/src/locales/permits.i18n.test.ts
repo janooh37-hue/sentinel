@@ -54,8 +54,40 @@ const KEYS = [
   'permits.form.unitWeek',
   'permits.form.unitMonth',
   'permits.form.unitYear',
-  'permits.form.jobRequired',
   'permits.person.role',
+  'permits.validityUnits.day',
+  'permits.validityUnits.week',
+  'permits.validityUnits.month',
+  'permits.validityUnits.year',
+  'permits.validityPeriod.day_one',
+  'permits.validityPeriod.day_other',
+  'permits.validityPeriod.week_one',
+  'permits.validityPeriod.week_other',
+  'permits.validityPeriod.month_one',
+  'permits.validityPeriod.month_other',
+  'permits.validityPeriod.year_one',
+  'permits.validityPeriod.year_other',
+  'permits.validityPeriod.day_zero',
+  'permits.validityPeriod.day_two',
+  'permits.validityPeriod.day_few',
+  'permits.validityPeriod.day_many',
+  'permits.validityPeriod.week_zero',
+  'permits.validityPeriod.week_two',
+  'permits.validityPeriod.week_few',
+  'permits.validityPeriod.week_many',
+  'permits.validityPeriod.month_zero',
+  'permits.validityPeriod.month_two',
+  'permits.validityPeriod.month_few',
+  'permits.validityPeriod.month_many',
+  'permits.validityPeriod.year_zero',
+  'permits.validityPeriod.year_two',
+  'permits.validityPeriod.year_few',
+  'permits.validityPeriod.year_many',
+  'permits.validityFrom',
+  'permits.expired',
+  'permits.detail.starts',
+  'permits.detail.permitTime',
+  'permits.renew.help',
 ]
 
 describe('permit i18n parity', () => {
@@ -75,4 +107,11 @@ describe('permit i18n parity', () => {
       expect(a).not.toBe(e)
     })
   }
+
+  it('uses whole-period plural forms without mechanical unit composition', () => {
+    expect(get(en as unknown as Rec, 'permits.validityPeriod.month_other').replace('{{count}}', '6')).toBe('6 months')
+    expect(get(ar as unknown as Rec, 'permits.validityPeriod.month_one')).toBe('شهر واحد')
+    expect(get(ar as unknown as Rec, 'permits.validityPeriod.month_two')).toBe('شهران')
+    expect(get(ar as unknown as Rec, 'permits.validityPeriod.month_few').replace('{{count}}', '6')).toBe('6 أشهر')
+  })
 })

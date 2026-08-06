@@ -42,8 +42,8 @@ const PRESETS: Array<{ label: string; value: number; unit: Validity['unit'] }> =
   { label: 'oneYear', value: 1, unit: 'year' },
 ]
 
-const fmtLongDate = (iso: string): string =>
-  new Intl.DateTimeFormat('en-GB', {
+const fmtLongDate = (iso: string, language: string): string =>
+  new Intl.DateTimeFormat(language.startsWith('ar') ? language : 'en-GB', {
     day: '2-digit',
     month: 'short',
     year: 'numeric',
@@ -58,7 +58,7 @@ interface Props {
 }
 
 export function PermitDetailDialog({ permitId, open, onOpenChange, onEdit }: Props): React.JSX.Element {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   const qc = useQueryClient()
   const { has } = useCapabilities()
   const canManage = has('permits.manage')
@@ -360,16 +360,18 @@ export function PermitDetailDialog({ permitId, open, onOpenChange, onEdit }: Pro
                 <Fact
                   label={t('permits.detail.window')}
                   value={
-                    <>
-                      <span>{t('permits.detail.starts', { date: fmtLongDate(permit.start_date) })}</span>
-                      <span>{t('permits.detail.permitTime', {
-                        value: permit.validity.value,
-                        unit: t(`permits.validityUnits.${permit.validity.unit}`),
-                      })}</span>
-                    </>
+                    <div>
+                      <span className="block">
+                        {t('permits.detail.starts', { date: fmtLongDate(permit.start_date, i18n.language) })}
+                      </span>
+                      <span className="block">
+                        {t('permits.detail.permitTime', {
+                          period: t(`permits.validityPeriod.${permit.validity.unit}`, { count: permit.validity.value }),
+                        })}
+                      </span>
+                    </div>
                   }
                   mono
-                  ltr
                 />
                 <Fact
                   label={t('permits.detail.duration')}

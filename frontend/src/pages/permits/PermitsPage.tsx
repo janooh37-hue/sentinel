@@ -42,8 +42,8 @@ const ZONE_OPTIONS: ('' | PermitZone)[] = ['', 'green', 'red', 'work_residence']
 const selectCls =
   'h-9 rounded-md border border-input bg-surface px-2.5 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring'
 
-const fmtLongDate = (iso: string): string =>
-  new Intl.DateTimeFormat('en-GB', {
+const fmtLongDate = (iso: string, language: string): string =>
+  new Intl.DateTimeFormat(language.startsWith('ar') ? language : 'en-GB', {
     day: '2-digit',
     month: 'short',
     year: 'numeric',
@@ -333,7 +333,7 @@ function PermitRowView({
   onToggle: () => void
   onOpen: () => void
 }): React.JSX.Element {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   const remaining =
     row.derived_status === 'revoked' || row.days_remaining === null
       ? null
@@ -367,11 +367,10 @@ function PermitRowView({
         <PermitAccessBadge accessAreas={row.access_areas} zones={row.zones} square />
       </TableCell>
       <TableCell className="whitespace-nowrap font-mono text-xs text-muted-foreground">
-        <span dir="ltr">
+        <span>
           {t('permits.validityFrom', {
-            value: row.validity.value,
-            unit: t(`permits.validityUnits.${row.validity.unit}`),
-            date: fmtLongDate(row.start_date),
+            period: t(`permits.validityPeriod.${row.validity.unit}`, { count: row.validity.value }),
+            date: fmtLongDate(row.start_date, i18n.language),
           })}
         </span>
         {remaining && <span className="ms-2 not-italic">· {remaining}</span>}
@@ -433,7 +432,7 @@ function PermitPrintView({
 }
 
 function PermitPrintCard({ permit }: { permit: PermitRead }): React.JSX.Element {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   const people = permit.people.filter((p) => p.removed_at === null)
   const vehicles = permit.vehicles.filter((v) => v.removed_at === null)
   return (
@@ -443,11 +442,10 @@ function PermitPrintCard({ permit }: { permit: PermitRead }): React.JSX.Element 
         <span className="font-mono text-[11px] font-bold">{permit.permit_no ?? `#${permit.id}`}</span>
         <span className="text-[11px] font-semibold" dir="auto">{permit.company}</span>
         <PermitAccessBadge accessAreas={permit.access_areas} zones={permit.zones} square />
-        <span className="font-mono" dir="ltr">
+        <span className="font-mono">
           {t('permits.validityFrom', {
-            value: permit.validity.value,
-            unit: t(`permits.validityUnits.${permit.validity.unit}`),
-            date: fmtLongDate(permit.start_date),
+            period: t(`permits.validityPeriod.${permit.validity.unit}`, { count: permit.validity.value }),
+            date: fmtLongDate(permit.start_date, i18n.language),
           })}
         </span>
         <span className="font-semibold">{t(`permits.status.${permit.derived_status}`)}</span>
