@@ -267,7 +267,8 @@ The component:
   availability;
 - reads `books.manage` capability;
 - shows Print and Open record;
-- shows Send for approval only when `canSendForApproval` permits it;
+- shows Send for approval only for a draft (`approval_state === "none"`) when
+  `canSendForApproval` permits it;
 - owns the `SubmitForApprovalDialog` open state;
 - reflects the refetched pending state after submission.
 
@@ -329,9 +330,11 @@ After successful submission, the invalidated book-detail query changes the
 record state to `pending`; the completion surface replaces the action with the
 pending status rather than leaving a re-submit-looking control.
 
-The action is absent when the user lacks `books.manage` or
-`canSendForApproval()` rejects the current state. Print and Open record remain
-available.
+The action is absent when the user lacks `books.manage`, when
+`canSendForApproval()` rejects the state, or when the record is already
+`pending`. The full record screen may still offer its existing pending-request
+reroute action; the completion surface deliberately shows status instead of a
+re-submit-looking control. Print and Open record remain available.
 
 ## State and reset rules
 
