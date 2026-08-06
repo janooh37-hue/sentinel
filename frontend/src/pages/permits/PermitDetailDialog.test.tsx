@@ -162,6 +162,43 @@ describe('PermitDetailDialog', () => {
     await waitFor(() => expect(screen.getByText('Test Corp')).toBeInTheDocument())
     expect(screen.queryByRole('button', { name: /print permit/i })).not.toBeInTheDocument()
   })
+  it('refetches generated history after a structured permit mutation', async () => {
+    const getBookSpy = vi.spyOn(api, 'getBook')
+      .mockResolvedValueOnce({
+        id: 7,
+        versions: [{
+          id: 1,
+          version_no: 1,
+          status: 'none',
+          document_id: 1,
+          docx_url: '/v1.docx',
+          pdf_url: '/v1.pdf',
+          signed_pdf_url: null,
+          manager_sig_embedded: false,
+        }],
+      } as never)
+      .mockResolvedValueOnce({
+        id: 7,
+        versions: [{
+          id: 2,
+          version_no: 2,
+          status: 'none',
+          document_id: 2,
+          docx_url: '/v2.docx',
+          pdf_url: '/v2.pdf',
+          signed_pdf_url: null,
+          manager_sig_embedded: false,
+        }],
+      } as never)
+    vi.spyOn(api, 'addPermitVehicle').mockResolvedValue({ ...basePermit, book_id: 7 } as never)
+
+    renderDetail({ book_id: 7, book_ref: '1/5/GSSG/0007' })
+    await waitFor(() => expect(screen.getByText('v1')).toBeInTheDocument())
+    await userEvent.type(screen.getByPlaceholderText('Plate no.'), 'A 5')
+    await userEvent.click(screen.getByRole('button', { name: /add vehicle/i }))
+    await waitFor(() => expect(getBookSpy).toHaveBeenCalledTimes(2))
+    expect(await screen.findByText('v2')).toBeInTheDocument()
+  })
 
   it('calls getBook on Print click and opens the PDF URL', async () => {
     vi.spyOn(api, 'getBook').mockResolvedValue({

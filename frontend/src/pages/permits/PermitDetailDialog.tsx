@@ -96,6 +96,7 @@ export function PermitDetailDialog({ permitId, open, onOpenChange, onEdit }: Pro
     void qc.invalidateQueries({ queryKey: ['permit', permitId] })
     void qc.invalidateQueries({ queryKey: ['permits-list'] })
     void qc.invalidateQueries({ queryKey: ['permits-summary'] })
+    void qc.invalidateQueries({ queryKey: ['books', 'permit'] })
   }
 
   const onErr = (err: unknown): void => {

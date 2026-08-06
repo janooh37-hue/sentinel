@@ -65,7 +65,7 @@ beforeEach(() => {
   vi.restoreAllMocks()
   mobileState.value = false
   hasCapability.mockReturnValue(true)
-  vi.spyOn(api, 'getBook').mockResolvedValue({ id: 9, versions: [...versions].reverse() } as never)
+  vi.spyOn(api, 'getBook').mockResolvedValue({ id: 9, versions: [versions[1], versions[0], versions[2]] } as never)
 })
 
 describe('PermitDocumentVersions', () => {
@@ -84,12 +84,12 @@ describe('PermitDocumentVersions', () => {
     expect(pdfLinks[0]).toHaveAttribute('target', '_blank')
   })
 
-  it('prefers signed PDF while retaining DOCX on signed versions', async () => {
+  it('uses signed PDF exclusively for signed versions', async () => {
     render(<PermitDocumentVersions bookId={9} />, { wrapper: wrapper() })
     await waitFor(() => expect(screen.getByText('v2')).toBeInTheDocument())
     const row = screen.getByText('v2').closest('li')
     expect(row).not.toBeNull()
-    expect(row).toHaveTextContent('DOCX')
+    expect(row).not.toHaveTextContent('DOCX')
     expect(row).toHaveTextContent('PDF')
     expect(row?.querySelector('a[href="/v2-signed.pdf"]')).not.toBeNull()
     expect(row?.querySelector('a[href="/v2.pdf"]')).toBeNull()

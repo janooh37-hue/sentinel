@@ -27,12 +27,13 @@ export function PermitDocumentVersions({ bookId }: { bookId: number }): React.JS
       {has('books.manage') && <BookWordActions book={book} isMobile={isMobile} />}
       <ol className="flex flex-col divide-y divide-border rounded-lg border border-border">
         {versions.map((version) => {
+          const signed = Boolean(version.signed_pdf_url)
           const pdfUrl = version.signed_pdf_url ?? version.pdf_url
           return (
             <li key={version.id} className="flex items-center justify-between gap-3 px-3 py-2">
               <span className="font-mono text-xs">v{version.version_no}</span>
               <span className="flex items-center gap-2">
-                {version.docx_url && (
+                {!signed && version.docx_url && (
                   <a className={linkClass} href={version.docx_url}>
                     {t('permits.documentVersions.docx')}
                   </a>

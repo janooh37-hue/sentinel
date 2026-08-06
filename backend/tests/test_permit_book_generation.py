@@ -207,6 +207,13 @@ def test_finished_word_version_keeps_older_pdf_when_new_conversion_returns_none(
     old_version = db.get(BookVersion, old_version_id)
     assert old_version is not None
     old_document = db.get(Document, old_version.document_id)
+    from app.api.v1.books import _build_versions
+
+    payload = _build_versions(db, book)
+    old_payload = next(version for version in payload if version.version_no == 1)
+    latest_payload = next(version for version in payload if version.version_no == 2)
+    assert old_payload.pdf_url is not None
+    assert latest_payload.pdf_url is None
     latest_document = db.get(Document, book.versions[-1].document_id)
     assert old_document is not None and old_document.pdf_path == old_pdf_path
     assert latest_document is not None and latest_document.pdf_path is None
