@@ -468,6 +468,7 @@ def update_permit(
             "PERMIT_REVOKED", "A revoked permit cannot be edited.", id=permit_id
         )
     data = payload.model_dump(exclude_unset=True)
+    fields = sorted(data.keys())
     access = data.pop("access_areas", None)
     new_start = data.get("start_date", row.start_date)
     new_end = data.get("end_date", row.end_date)
@@ -479,7 +480,7 @@ def update_permit(
         row.zones = _zones_from_access(PermitAccessAreas.model_validate(access))
     row.updated_at = _utcnow()
     db.commit()
-    _audit(db, "permit.updated", permit_id, actor, {"fields": sorted(data.keys())})
+    _audit(db, "permit.updated", permit_id, actor, {"fields": fields})
     regenerate_permit_book(db, get_permit(db, permit_id), actor=actor)
     return get_permit(db, permit_id)
 

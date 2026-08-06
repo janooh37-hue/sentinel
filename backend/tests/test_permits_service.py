@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from datetime import date, timedelta
 
 import pytest
@@ -442,3 +443,26 @@ def test_mutations_write_audit_rows(db_session):
     actions = {a.action for a in db_session.query(AuditLog).all()}
     assert "permit.created" in actions
     assert "permit.renewed" in actions
+
+
+def test_access_update_audit_lists_access_areas_field(db_session):
+    row = _mk(db_session)
+    svc.update_permit(
+        db_session,
+        row.id,
+        PermitUpdate(
+            access_areas={
+                "al_wathba_1": [],
+                "al_wathba_2": ["red"],
+                "work_residence": False,
+            }
+        ),
+    )
+    audit = (
+        db_session.query(AuditLog)
+        .filter_by(action="permit.updated", entity_id=str(row.id))
+        .order_by(AuditLog.id.desc())
+        .first()
+    )
+    assert audit is not None
+    assert json.loads(audit.payload)["fields"] == ["access_areas"]
