@@ -1,6 +1,16 @@
 from datetime import date
 
-from app.schemas.permit import PermitCreate, PermitVehicleCreate, PersonIdScan, VehicleLicenceScan
+import pytest
+from pydantic import ValidationError
+
+from app.schemas.permit import (
+    PermitAccessAreas,
+    PermitCreate,
+    PermitUpdate,
+    PermitVehicleCreate,
+    PersonIdScan,
+    VehicleLicenceScan,
+)
 
 
 def test_vehicle_create_accepts_mulkiya_fields():
@@ -18,13 +28,33 @@ def test_vehicle_create_accepts_mulkiya_fields():
 def test_permit_create_accepts_manager_id():
     p = PermitCreate(
         company="ACME",
-        zones=["green"],
+        access_areas={"al_wathba_1": ["green"], "al_wathba_2": [], "work_residence": False},
         start_date=date(2026, 7, 1),
         end_date=date(2026, 7, 2),
         people=[{"name": "X", "uae_id": "1"}],
         manager_id=3,
     )
     assert p.manager_id == 3
+
+
+def test_access_areas_normalize_location_zone_order_and_duplicates():
+    access = PermitAccessAreas(
+        al_wathba_1=["red", "green", "red"],
+        al_wathba_2=["red"],
+        work_residence=False,
+    )
+    assert access.al_wathba_1 == ["green", "red"]
+    assert access.al_wathba_2 == ["red"]
+
+
+def test_access_areas_require_at_least_one_selection():
+    with pytest.raises(ValidationError):
+        PermitAccessAreas()
+
+
+def test_permit_update_rejects_explicit_null_access():
+    with pytest.raises(ValidationError):
+        PermitUpdate(access_areas=None)
 
 
 def test_scan_response_shapes():

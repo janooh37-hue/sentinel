@@ -449,6 +449,7 @@ class Permit(Base):
     # One or more of 'green' | 'red' | 'work_residence' — validated in the
     # Pydantic schema. Stored as a JSON array (SQLite TEXT).
     zones: Mapped[list[str]] = mapped_column(JSON, default=list)
+    access_areas: Mapped[dict[str, object] | None] = mapped_column(JSON, nullable=True)
     start_date: Mapped[date] = mapped_column(Date)
     end_date: Mapped[date] = mapped_column(Date)
     # 'active' | 'revoked'. Expiry is derived from end_date, never stored.

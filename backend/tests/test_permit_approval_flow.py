@@ -61,7 +61,7 @@ def _linked_manager(db: Session) -> tuple[Manager, User]:
 def _payload(**kw: Any) -> PermitCreate:
     base: dict[str, Any] = dict(
         company="ACME",
-        zones=["green"],
+        access_areas={"al_wathba_1": ["green"], "al_wathba_2": [], "work_residence": False},
         start_date=date(2026, 7, 1),
         end_date=date(2026, 8, 1),
         people=[{"name": "Ali", "uae_id": "784-1", "nationality": "مصر"}],

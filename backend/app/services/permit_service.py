@@ -33,6 +33,7 @@ from app.db.models import (
     User,
 )
 from app.schemas.permit import (
+    PermitAccessAreas,
     PermitCreate,
     PermitListItem,
     PermitPersonCreate,
@@ -58,6 +59,15 @@ def _utcnow() -> datetime:
     return datetime.now(UTC).replace(tzinfo=None)
 
 
+
+def _zones_from_access(access: PermitAccessAreas) -> list[str]:
+    zones: list[str] = []
+    for zone in ("green", "red"):
+        if zone in access.al_wathba_1 or zone in access.al_wathba_2:
+            zones.append(zone)
+    if access.work_residence:
+        zones.append("work_residence")
+    return zones
 # ─── derived / computed fields ─────────────────────────────────────────────────
 
 
@@ -250,7 +260,8 @@ def create_permit(db: Session, payload: PermitCreate, *, actor: str | None = Non
         )
     row = Permit(
         company=payload.company,
-        zones=list(payload.zones),
+        access_areas=payload.access_areas.model_dump(mode="json"),
+        zones=_zones_from_access(payload.access_areas),
         start_date=payload.start_date,
         end_date=payload.end_date,
         purpose=payload.purpose,
@@ -267,7 +278,17 @@ def create_permit(db: Session, payload: PermitCreate, *, actor: str | None = Non
     row.permit_no = f"PMT-{row.id:04d}"
     db.commit()
     db.refresh(row)
-    _audit(db, "permit.created", row.id, actor, {"company": row.company, "zones": list(row.zones)})
+    _audit(
+        db,
+        "permit.created",
+        row.id,
+        actor,
+        {
+            "company": row.company,
+            "access_areas": row.access_areas,
+            "zones": list(row.zones),
+        },
+    )
     regenerate_permit_book(db, row, actor=actor, submit=payload.send_for_approval)
     return get_permit(db, row.id)
 
@@ -447,11 +468,15 @@ def update_permit(
             "PERMIT_REVOKED", "A revoked permit cannot be edited.", id=permit_id
         )
     data = payload.model_dump(exclude_unset=True)
+    access = data.pop("access_areas", None)
     new_start = data.get("start_date", row.start_date)
     new_end = data.get("end_date", row.end_date)
     _validate_window(new_start, new_end)
     for field, value in data.items():
         setattr(row, field, value)
+    if access is not None:
+        row.access_areas = access
+        row.zones = _zones_from_access(PermitAccessAreas.model_validate(access))
     row.updated_at = _utcnow()
     db.commit()
     _audit(db, "permit.updated", permit_id, actor, {"fields": sorted(data.keys())})
