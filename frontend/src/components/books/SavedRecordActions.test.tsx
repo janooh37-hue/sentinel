@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { render, screen, waitFor, cleanup } from '@testing-library/react'
+import { render, screen, waitFor, cleanup, act } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { MemoryRouter, useLocation } from 'react-router-dom'
@@ -114,7 +114,7 @@ describe('SavedRecordActions', () => {
 
   it('hides approval action without books.manage', async () => {
     mockUseCapabilities.mockReturnValue({ capabilities: new Set(), isLoading: false, has: () => false })
-    vi.mocked(api.getBook).mockResolvedValue(makeBook({ approval_state: 'pending' }))
+    vi.mocked(api.getBook).mockResolvedValue(makeBook({ approval_state: 'none' }))
     renderActions()
 
     await screen.findByText('تم الحفظ في السجلات')
@@ -129,6 +129,21 @@ describe('SavedRecordActions', () => {
 
     expect(await screen.findByRole('button', { name: 'طباعة' })).toBeDisabled()
     expect(await screen.findByText('ملف PDF غير متاح — افتح السجل لاستخدام ملف DOCX البديل.')).toBeVisible()
+  })
+  it('does not claim PDF unavailability when the book query rejects', async () => {
+    let rejectQuery!: (reason: Error) => void
+    const queryPromise = new Promise<BookRead>((_, reject) => {
+      rejectQuery = reject
+    })
+    vi.mocked(api.getBook).mockReturnValue(queryPromise)
+    renderActions()
+
+    rejectQuery(new Error('offline'))
+    await act(async () => {
+      await queryPromise.catch(() => undefined)
+      await new Promise((resolve) => setTimeout(resolve, 25))
+    })
+    expect(screen.queryByText('ملف PDF غير متاح — افتح السجل لاستخدام ملف DOCX البديل.')).not.toBeInTheDocument()
   })
 
   it('opens print in a new tab and clears the opener', async () => {

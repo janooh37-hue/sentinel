@@ -100,7 +100,7 @@ export function SavedRecordActions({
         )}
       </div>
 
-      {!bookQuery.isPending && !printable && (
+      {bookQuery.data !== undefined && !printable && (
         <p className="mt-3 text-sm text-muted-foreground">{t('books.completion.printUnavailable')}</p>
       )}
 
