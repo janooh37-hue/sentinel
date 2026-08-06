@@ -22,7 +22,7 @@ import type { BookRead } from '@/lib/api'
 import { useAuth } from '@/lib/authContext'
 import { cn } from '@/lib/utils'
 import { ScanBackThumb } from './ScanBackThumb'
-import { ageDays, ageGroup, dismissKeyFor, useFileSignedCopy, useScanBack } from './useScanBack'
+import { ageDays, ageGroup, dismissKeyFor, today, useFileSignedCopy, useScanBack } from './useScanBack'
 
 // Spec tiers (design doc §2): red >=30d, amber >=14d, grey below — same
 // buckets `ageGroup` already defines for the page's tabs, and the same
@@ -30,13 +30,6 @@ import { ageDays, ageGroup, dismissKeyFor, useFileSignedCopy, useScanBack } from
 const AGE_COLOR = { overMonth: 'text-destructive', weeks: 'text-warning', recent: 'text-muted-foreground' } as const
 
 const SHOWN = 3
-
-// Local calendar date, NOT `toISOString().slice(0, 10)` (that's the UTC date).
-// This app runs at UTC+4: between 00:00 and 04:00 local, the UTC date is still
-// yesterday, so a UTC-keyed dismissal would re-open a few hours into the same
-// working day (the same local-vs-UTC trap as Book.created_at, bug f111177).
-// `toLocaleDateString('en-CA')` gives YYYY-MM-DD in the browser's local time.
-const today = (): string => new Date().toLocaleDateString('en-CA')
 
 function GateRow({
   book, onFile, busy,

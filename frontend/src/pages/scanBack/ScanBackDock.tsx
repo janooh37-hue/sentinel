@@ -10,12 +10,13 @@
 import { useRef, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
-import { ChevronDown, ChevronUp, Printer, Upload } from 'lucide-react'
+import { ChevronDown, ChevronUp, Printer, Upload, X } from 'lucide-react'
 
 import type { BookRead } from '@/lib/api'
+import { useAuth } from '@/lib/authContext'
 import { cn } from '@/lib/utils'
 import { ScanBackThumb } from './ScanBackThumb'
-import { ageDays, useFileSignedCopy, useScanBack } from './useScanBack'
+import { ageDays, dockDismissKeyFor, today, useFileSignedCopy, useScanBack } from './useScanBack'
 
 const OPEN_KEY = 'scanback-dock-open'
 const MAX_ROWS = 6
@@ -78,12 +79,17 @@ export function ScanBackDock(): React.JSX.Element | null {
   const { t } = useTranslation()
   const navigate = useNavigate()
   const { pathname } = useLocation()
+  const { user } = useAuth()
   const { books, count } = useScanBack()
   const { file, busy } = useFileSignedCopy()
   const [open, setOpen] = useState(() => localStorage.getItem(OPEN_KEY) === '1')
+  const dismissKey = dockDismissKeyFor(user?.id ?? 'anon')
+  const [dismissed, setDismissed] = useState(() => localStorage.getItem(dismissKey) === today())
 
-  // Nothing to nag about, or the user is already on the page that IS the dock.
-  if (count === 0 || pathname === '/scan-back') return null
+  // Nothing to nag about, the user is already on the page that IS the dock, or
+  // they put it away for today — an ambient reminder that can't be silenced is
+  // just an obstacle, and it floats over the record pane's own buttons.
+  if (count === 0 || pathname === '/scan-back' || dismissed) return null
 
   // Compute-write-set, not a side effect inside the updater: React 19 dev
   // StrictMode double-invokes state updaters to surface impurity, and a
@@ -137,22 +143,34 @@ export function ScanBackDock(): React.JSX.Element | null {
         </div>
       )}
 
-      <button
-        type="button"
-        onClick={toggle}
-        aria-expanded={open}
-        className="flex items-center gap-2 rounded-full bg-primary px-4 py-2.5 text-[0.78em] font-semibold text-primary-foreground shadow-lg transition-colors hover:bg-primary-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-      >
-        <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-primary-foreground" aria-hidden />
-        {t('scanBack.dock.pill', { count })}
-        {/* The visible pill text is already a meaningful accessible name (and
-            is what callers query by); expand/collapse is state, not identity,
-            so it rides along as extra text for screen readers rather than
-            overriding the name via aria-label. */}
-        <span className="sr-only">{open ? t('scanBack.dock.collapse') : t('scanBack.dock.expand')}</span>
-        {open ? <ChevronDown className="h-3.5 w-3.5" aria-hidden />
-              : <ChevronUp className="h-3.5 w-3.5" aria-hidden />}
-      </button>
+      {/* Two buttons in one pill, not a button inside a button: the toggle and
+          the dismiss are separate actions and nested buttons are invalid. */}
+      <div className="flex items-center rounded-full bg-primary pe-1 shadow-lg">
+        <button
+          type="button"
+          onClick={toggle}
+          aria-expanded={open}
+          className="flex items-center gap-2 rounded-full py-2.5 ps-4 pe-2 text-[0.78em] font-semibold text-primary-foreground transition-colors hover:bg-primary-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        >
+          <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-primary-foreground" aria-hidden />
+          {t('scanBack.dock.pill', { count })}
+          {/* The visible pill text is already a meaningful accessible name (and
+              is what callers query by); expand/collapse is state, not identity,
+              so it rides along as extra text for screen readers rather than
+              overriding the name via aria-label. */}
+          <span className="sr-only">{open ? t('scanBack.dock.collapse') : t('scanBack.dock.expand')}</span>
+          {open ? <ChevronDown className="h-3.5 w-3.5" aria-hidden />
+                : <ChevronUp className="h-3.5 w-3.5" aria-hidden />}
+        </button>
+        <button
+          type="button"
+          onClick={() => { localStorage.setItem(dismissKey, today()); setDismissed(true) }}
+          aria-label={t('scanBack.gate.close')}
+          className="rounded-full p-1.5 text-primary-foreground/70 transition-colors hover:bg-primary-hover hover:text-primary-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        >
+          <X className="h-3.5 w-3.5" strokeWidth={2.2} aria-hidden />
+        </button>
+      </div>
     </div>
   )
 }

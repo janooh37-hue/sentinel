@@ -38,12 +38,26 @@ export function ageGroup(days: number): AgeGroup {
   return 'recent'
 }
 
-// Lives here (not ScanBackGate.tsx) so that component file exports only its
+// These live here (not in the component files) so those export only their
 // component — react-refresh/only-export-components forbids a non-component
 // export sharing a component module (see useContextSource.ts for the same
 // discipline elsewhere in the repo).
+//
+// Two keys, both per-user (a shared browser mustn't silence the next person)
+// and per-day (tomorrow the chore is back): the gate's is stamped when it
+// shows, the dock's only when the operator explicitly puts it away.
 export const dismissKeyFor = (userId: number | string): string =>
   `scanback-gate-dismissed:${userId}`
+
+export const dockDismissKeyFor = (userId: number | string): string =>
+  `scanback-dock-dismissed:${userId}`
+
+// Local calendar date, NOT `toISOString().slice(0, 10)` (that's the UTC date).
+// This app runs at UTC+4: between 00:00 and 04:00 local, the UTC date is still
+// yesterday, so a UTC-keyed dismissal would re-open a few hours into the same
+// working day (the same local-vs-UTC trap as Book.created_at, bug f111177).
+// `toLocaleDateString('en-CA')` gives YYYY-MM-DD in the browser's local time.
+export const today = (): string => new Date().toLocaleDateString('en-CA')
 
 export function useScanBack(scope: 'mine' | 'all' = 'mine'): {
   books: BookRead[]

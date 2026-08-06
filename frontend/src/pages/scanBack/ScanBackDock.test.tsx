@@ -15,6 +15,7 @@ vi.mock('./useScanBack', async (orig) => ({
   useScanBack: () => ({ ...state, isLoading: false, enabled: true }),
   useFileSignedCopy: () => ({ file: vi.fn(), busy: false }),
 }))
+vi.mock('@/lib/authContext', () => ({ useAuth: () => ({ user: { id: 42 }, status: 'authed' }) }))
 
 const renderDock = (path = '/books'): void => {
   render(<MemoryRouter initialEntries={[path]}><ScanBackDock /></MemoryRouter>)
@@ -58,5 +59,26 @@ describe('ScanBackDock', () => {
     await i18n.changeLanguage('ar')
     renderDock()
     expect(screen.getByRole('button', { name: /بانتظار المسح/ })).toBeInTheDocument()
+  })
+
+  // The dock floats over whatever is in that corner (the record pane's own
+  // buttons included), so it has to be silenceable — for today, not forever.
+  it('dismisses for the day and stays gone on the next mount', async () => {
+    renderDock()
+    await userEvent.click(screen.getByRole('button', { name: /dismiss until tomorrow/i }))
+    expect(screen.queryByRole('button', { name: /to scan back/i })).not.toBeInTheDocument()
+    expect(localStorage.getItem('scanback-dock-dismissed:42')).toBe(
+      new Date().toLocaleDateString('en-CA'),
+    )
+
+    renderDock()
+    expect(screen.queryByRole('button', { name: /to scan back/i })).not.toBeInTheDocument()
+  })
+
+  // Per-day, not forever: yesterday's dismissal must not silence today.
+  it('comes back the next day', () => {
+    localStorage.setItem('scanback-dock-dismissed:42', '2020-01-01')
+    renderDock()
+    expect(screen.getByRole('button', { name: /to scan back/i })).toBeInTheDocument()
   })
 })
