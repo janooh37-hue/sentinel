@@ -33,7 +33,7 @@ import { useCapabilities } from '@/lib/useCapabilities'
 import { useDebouncedValue } from '@/lib/useDebouncedValue'
 import { PermitFormDialog } from './PermitFormDialog'
 import { PermitDetailDialog } from './PermitDetailDialog'
-import { ZoneBadge } from './ZoneBadge'
+import { PermitAccessBadge } from './PermitAccessBadge'
 import { fmtDate, statusTone } from './permitUtils'
 
 const STATE_OPTIONS = ['', 'valid', 'active', 'expiring', 'expired', 'revoked'] as const
@@ -356,7 +356,7 @@ function PermitRowView({
         {row.company}
       </TableCell>
       <TableCell>
-        <ZoneBadge zones={row.zones} square />
+        <PermitAccessBadge accessAreas={row.access_areas} zones={row.zones} square />
       </TableCell>
       <TableCell className="whitespace-nowrap font-mono text-xs text-muted-foreground">
         <span dir="ltr">
@@ -430,7 +430,7 @@ function PermitPrintCard({ permit }: { permit: PermitRead }): React.JSX.Element 
       <div className="flex flex-wrap items-baseline gap-x-3 gap-y-0.5 border-b border-neutral-400 bg-neutral-100 px-2 py-1 text-[10px]">
         <span className="font-mono text-[11px] font-bold">{permit.permit_no ?? `#${permit.id}`}</span>
         <span className="text-[11px] font-semibold" dir="auto">{permit.company}</span>
-        <span>{permit.zones.map((z) => t(`permits.zone.${z}Short`)).join(' + ')}</span>
+        <PermitAccessBadge accessAreas={permit.access_areas} zones={permit.zones} square />
         <span className="font-mono" dir="ltr">
           {fmtDate(permit.start_date)} → {fmtDate(permit.end_date)}
         </span>

@@ -16,7 +16,8 @@ const basePermit = {
   id: 99,
   permit_no: 'PMT-0099',
   company: 'Test Corp',
-  zones: ['green'] as const,
+  zones: ['green', 'red'] as const,
+  access_areas: { al_wathba_1: ['green'], al_wathba_2: ['red'], work_residence: false },
   start_date: '2026-07-01',
   end_date: '2026-12-31',
   status: 'active' as const,
@@ -87,6 +88,12 @@ describe('PermitDetailDialog', () => {
     expect(screen.getByText('White')).toBeInTheDocument()
     // Print button present when book_id is set
     expect(screen.getByRole('button', { name: /print permit/i })).toBeInTheDocument()
+  })
+  it('shows full structured access pairings', async () => {
+    renderDetail()
+    await waitFor(() => expect(screen.getByText('Test Corp')).toBeInTheDocument())
+    expect(screen.getByText('Al Wathba 1 · Green zone')).toBeInTheDocument()
+    expect(screen.getByText('Al Wathba 2 · Red zone')).toBeInTheDocument()
   })
 
   it('Add vehicle sends the chosen emirate', async () => {

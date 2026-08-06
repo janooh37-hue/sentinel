@@ -22,7 +22,8 @@ vi.mock('@/lib/api', async (importOriginal) => {
       listPermits: vi.fn().mockResolvedValue({
         items: [
           {
-            id: 1, permit_no: 'PMT-0001', company: 'Acme Contracting', zones: ['red'],
+            id: 1, permit_no: 'PMT-0001', company: 'Acme Contracting', zones: ['green', 'red'],
+            access_areas: { al_wathba_1: ['green'], al_wathba_2: ['red'], work_residence: false },
             start_date: '2026-07-01', end_date: '2026-07-30', status: 'active',
             created_at: '2026-07-01T00:00:00', derived_status: 'active',
             duration_days: 30, days_remaining: 9, people_count: 4, vehicle_count: 2,
@@ -30,6 +31,7 @@ vi.mock('@/lib/api', async (importOriginal) => {
           },
           {
             id: 2, permit_no: 'PMT-0002', company: 'Descon Engineering', zones: ['green', 'work_residence'],
+            access_areas: null,
             start_date: '2026-07-21', end_date: '2026-08-21', status: 'active',
             created_at: '2026-07-21T00:00:00', derived_status: 'active',
             duration_days: 32, days_remaining: 31, people_count: 5, vehicle_count: 3,
@@ -77,6 +79,15 @@ describe('PermitsPage', () => {
     expect(screen.getByText('PMT-0001')).toBeInTheDocument()
     // Manager sees the "New permit" action.
     expect(screen.getByRole('button', { name: /new permit/i })).toBeInTheDocument()
+    expect(screen.getByRole('columnheader', { name: /access areas/i })).toBeInTheDocument()
+  })
+
+  it('renders exact structured pairings and honest legacy location labels', async () => {
+    renderPage()
+    await waitFor(() => expect(screen.getByText('Acme Contracting')).toBeInTheDocument())
+    expect(screen.getAllByText(/W1 · Green/i).length).toBeGreaterThan(0)
+    expect(screen.getAllByText(/W2 · Red/i).length).toBeGreaterThan(0)
+    expect(screen.getAllByText(/Unspecified · Green/i).length).toBeGreaterThan(0)
   })
 
   it('renders multi-zone chips (incl. work residence) and a clip for attached papers', async () => {

@@ -26,7 +26,7 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import { useCapabilities } from '@/lib/useCapabilities'
-import { ZoneBadge } from './ZoneBadge'
+import { PermitAccessBadge } from './PermitAccessBadge'
 import { approvalTone, fmtDate, statusTone, type PermitApprovalState } from './permitUtils'
 import { EMIRATES } from './emirates'
 
@@ -325,7 +325,7 @@ export function PermitDetailDialog({ permitId, open, onOpenChange, onEdit }: Pro
                 <Badge tone={statusTone(permit.derived_status)}>
                   {t(`permits.status.${permit.derived_status}`)}
                 </Badge>
-                <ZoneBadge zones={permit.zones} full />
+                <PermitAccessBadge accessAreas={permit.access_areas} zones={permit.zones} full />
                 {permit.book_id && (
                   <Badge tone={approvalTone(approvalState)}>
                     {t(`permits.approval.${approvalState}`)}

@@ -433,7 +433,7 @@
     "columns": {
       "permitNo": "Permit no.",
       "company": "Company",
-      "zone": "Zone",
+      "zone": "Access areas",
       "window": "Window",
       "duration": "Duration",
       "people": "People",
@@ -461,7 +461,7 @@
     "detail": {
       "title": "Permit {{no}}",
       "company": "Company",
-      "zone": "Zone",
+      "zone": "Access areas",
       "window": "Valid window",
       "duration": "Duration",
       "status": "Status",
