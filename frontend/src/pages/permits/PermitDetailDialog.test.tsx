@@ -92,6 +92,7 @@ describe('PermitDetailDialog', () => {
   it('shows full structured access pairings', async () => {
     renderDetail()
     await waitFor(() => expect(screen.getByText('Test Corp')).toBeInTheDocument())
+    expect(screen.getByText('Access areas')).toBeInTheDocument()
     expect(screen.getByText('Al Wathba 1 · Green zone')).toBeInTheDocument()
     expect(screen.getByText('Al Wathba 2 · Red zone')).toBeInTheDocument()
   })

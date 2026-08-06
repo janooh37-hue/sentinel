@@ -325,7 +325,6 @@ export function PermitDetailDialog({ permitId, open, onOpenChange, onEdit }: Pro
                 <Badge tone={statusTone(permit.derived_status)}>
                   {t(`permits.status.${permit.derived_status}`)}
                 </Badge>
-                <PermitAccessBadge accessAreas={permit.access_areas} zones={permit.zones} full />
                 {permit.book_id && (
                   <Badge tone={approvalTone(approvalState)}>
                     {t(`permits.approval.${approvalState}`)}
@@ -353,6 +352,11 @@ export function PermitDetailDialog({ permitId, open, onOpenChange, onEdit }: Pro
                 <Fact
                   label={t('permits.columns.vehicles')}
                   value={t('permits.detail.vehicleCount', { count: permit.vehicle_count })}
+                />
+                <Fact
+                  label={t('permits.detail.zone')}
+                  value={<PermitAccessBadge accessAreas={permit.access_areas} zones={permit.zones} full />}
+                  span
                 />
                 {permit.purpose && (
                   <Fact label={t('permits.detail.purpose')} value={permit.purpose} span />
@@ -883,7 +887,7 @@ function Fact({
   ltr = false,
 }: {
   label: string
-  value: string
+  value: React.ReactNode
   mono?: boolean
   span?: boolean
   /** Force LTR — for values like the date window whose `→` reverses under RTL. */
