@@ -393,3 +393,23 @@ describe('PermitFormDialog', () => {
       validity: { value: 2, unit: 'month' },
     })))
   })
+  it('keeps Issue Permit disabled with a blank company and sends no request', async () => {
+    const createSpy = vi.spyOn(api, 'createPermit').mockResolvedValue({ id: 7, people: [], vehicles: [] } as never)
+    renderForm()
+    createSpy.mockClear()
+    await userEvent.type(screen.getByPlaceholderText('Full name'), 'Ali')
+    await userEvent.type(screen.getByPlaceholderText('UAE ID'), '784-1')
+    await userEvent.type(screen.getByLabelText(/job \/ trade/i), 'Electrician')
+    await userEvent.click(screen.getByRole('button', { name: /al wathba 1.*green/i }))
+    expect(screen.getByRole('button', { name: /issue permit/i })).toBeDisabled()
+    expect(createSpy).not.toHaveBeenCalled()
+  })
+
+  it('keeps Save disabled with a blank company and sends no edit request', async () => {
+    const updateSpy = vi.spyOn(api, 'updatePermit').mockResolvedValue({ id: 7 } as never)
+    renderForm(editPermit({ al_wathba_1: ['green'], al_wathba_2: [], work_residence: false }))
+    updateSpy.mockClear()
+    await userEvent.clear(screen.getByLabelText(/company/i))
+    expect(screen.getByRole('button', { name: /save permit/i })).toBeDisabled()
+    expect(updateSpy).not.toHaveBeenCalled()
+  })

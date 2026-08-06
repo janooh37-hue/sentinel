@@ -94,3 +94,27 @@ Follow-up changes are limited to `PermitFormDialog.tsx` and `PermitFormDialog.te
 ### Follow-up commit
 
 `fix(permits): preserve validity form behavior` (final SHA is recorded in the delivery status)
+
+## Company-validation preservation round
+
+### RED
+
+Added create and edit regression tests proving an otherwise-complete form with a blank company keeps Issue/Save disabled and sends no request. Before the guard fix, the focused form run reported **2 failed / 20 passed** tests.
+
+### GREEN
+
+Restored `company.trim().length > 0` alongside the access, validity, and people requirements in `canSave`. Verification:
+
+```text
+pnpm -C frontend exec vitest run src/pages/permits/PermitFormDialog.test.tsx src/locales/permits.i18n.test.ts
+Test Files 2 passed; Tests 119 passed
+
+pnpm -C frontend exec tsc -b --noEmit
+(no output; exit 0)
+```
+
+### Files, concerns, and commit
+
+Changed `PermitFormDialog.tsx`, `PermitFormDialog.test.tsx`, and this report only. The two temporary `api.ts` compatibility relaxations remain downstream Task 5 blockers as documented above.
+
+`fix(permits): retain company form validation` (final SHA is recorded in delivery status)

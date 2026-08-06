@@ -166,6 +166,7 @@ export function PermitFormDialog({ open, permit, onOpenChange, onSaved }: Props)
   // The approval chain reaches the manager through his linked login account.
   const canRoute = Boolean(managers?.find((m) => m.id === managerId)?.user_id)
   const canSave =
+    company.trim().length > 0 &&
     hasAnyAccess &&
     (!legacyNeedsLocation || hasLocationAccess) &&
     Number.isInteger(validity.value) &&
