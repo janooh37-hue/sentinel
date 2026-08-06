@@ -403,6 +403,18 @@
       "redShort": "Red",
       "work_residenceShort": "Work res."
     },
+    "location": {
+      "al_wathba_1": "Al Wathba 1",
+      "al_wathba_1Short": "W1",
+      "al_wathba_2": "Al Wathba 2",
+      "al_wathba_2Short": "W2",
+      "unspecified": "Location not specified",
+      "unspecifiedShort": "Unspecified"
+    },
+    "access": {
+      "pair": "{{location}} · {{zone}}",
+      "other": "Other access"
+    },
     "status": {
       "active": "Active",
       "expiring": "Expiring",
@@ -521,6 +533,10 @@
       "zones": "Zones (tick at least one)",
       "zonesRequired": "Select at least one zone.",
       "startDate": "Start date",
+      "accessAreas": "Access areas",
+      "accessAreasHelp": "Choose each location and zone this permit authorizes.",
+      "accessRequired": "Select at least one access area.",
+      "legacyAccessWarning": "Previously recorded zones: {{zones}}. Select a site below; the previous zones are not assigned to a site.",
       "endDate": "End date",
       "purpose": "Purpose (optional)",
       "notes": "Notes (optional)",

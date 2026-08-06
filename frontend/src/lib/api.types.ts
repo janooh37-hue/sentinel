@@ -6669,6 +6669,18 @@ export interface components {
              */
             created_at: string;
         };
+        /** PermitAccessAreas */
+        PermitAccessAreas: {
+            /** Al Wathba 1 */
+            al_wathba_1?: ("green" | "red")[];
+            /** Al Wathba 2 */
+            al_wathba_2?: ("green" | "red")[];
+            /**
+             * Work Residence
+             * @default false
+             */
+            work_residence: boolean;
+        };
         /**
          * PermitCreate
          * @description POST /permits — issue a new permit.
@@ -6676,8 +6688,7 @@ export interface components {
         PermitCreate: {
             /** Company */
             company: string;
-            /** Zones */
-            zones: ("green" | "red" | "work_residence")[];
+            access_areas: components["schemas"]["PermitAccessAreas"];
             /**
              * Start Date
              * Format: date
@@ -6714,6 +6725,7 @@ export interface components {
             company: string;
             /** Zones */
             zones: ("green" | "red" | "work_residence")[];
+            access_areas?: components["schemas"]["PermitAccessAreas"] | null;
             /**
              * Start Date
              * Format: date
@@ -6819,6 +6831,7 @@ export interface components {
             company: string;
             /** Zones */
             zones: ("green" | "red" | "work_residence")[];
+            access_areas?: components["schemas"]["PermitAccessAreas"] | null;
             /**
              * Start Date
              * Format: date
@@ -6937,8 +6950,7 @@ export interface components {
         PermitUpdate: {
             /** Company */
             company?: string | null;
-            /** Zones */
-            zones?: ("green" | "red" | "work_residence")[] | null;
+            access_areas?: components["schemas"]["PermitAccessAreas"] | null;
             /** Start Date */
             start_date?: string | null;
             /** End Date */

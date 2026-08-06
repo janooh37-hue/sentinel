@@ -436,6 +436,18 @@
       "redShort": "حمراء",
       "work_residenceShort": "سكن العمل"
     },
+    "location": {
+      "al_wathba_1": "الوثبة 1",
+      "al_wathba_1Short": "و1",
+      "al_wathba_2": "الوثبة 2",
+      "al_wathba_2Short": "و2",
+      "unspecified": "الموقع غير محدد",
+      "unspecifiedShort": "غير محدد"
+    },
+    "access": {
+      "pair": "{{location}} · {{zone}}",
+      "other": "دخول آخر"
+    },
     "status": {
       "active": "نشِط",
       "expiring": "قارب على الانتهاء",
@@ -570,6 +582,10 @@
       "zones": "المناطق (اختر واحدة على الأقل)",
       "zonesRequired": "اختر منطقة واحدة على الأقل.",
       "startDate": "تاريخ البدء",
+      "accessAreas": "مناطق الدخول",
+      "accessAreasHelp": "اختر كل موقع ومنطقة يصرّح بهما هذا التصريح.",
+      "accessRequired": "اختر منطقة دخول واحدة على الأقل.",
+      "legacyAccessWarning": "المناطق المسجلة سابقًا: {{zones}}. اختر موقعًا أدناه؛ لا تُنسب المناطق السابقة إلى موقع.",
       "endDate": "تاريخ الانتهاء",
       "purpose": "الغرض (اختياري)",
       "notes": "ملاحظات (اختياري)",
