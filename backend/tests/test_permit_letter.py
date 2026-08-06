@@ -285,10 +285,13 @@ def test_letter_renders_job_and_no_end_date() -> None:
         access_areas={"al_wathba_1": ["green"], "al_wathba_2": [], "work_residence": False},
         zones=["green"],
     )
-    assert '<th>م</th><th>الاسم</th><th>رقم الهوية</th><th>الجنسية</th><th>المهنة</th>' in html
-    assert '<th>م</th><th>الاسم</th><th>رقم الهوية</th><th>الجنسية</th><th>المهنة</th>'.count(
-        "<th>"
-    ) == 5
+    expected_header = "<th>م</th><th>الاسم</th><th>رقم الهوية</th><th>الجنسية</th><th>المهنة</th>"
+    assert expected_header in html
+    people_table_start = html.index("الجدول الأول")
+    header_start = html.index('<tr style="background-color:#eef2f6">', people_table_start)
+    header_row = html[header_start : html.index("</tr>", header_start) + len("</tr>")]
+    assert header_row == f'<tr style="background-color:#eef2f6">{expected_header}</tr>'
+    assert header_row.count("<th>") == 5
     first_row = "<tr><td>1</td><td>Ali</td><td>784-1</td><td>UAE</td><td>R&amp;D &lt;lead&gt;</td></tr>"
     legacy_row = "<tr><td>2</td><td>Legacy</td><td>784-2</td><td>UAE</td><td></td></tr>"
     assert first_row in html and first_row.count("<td>") == 5
