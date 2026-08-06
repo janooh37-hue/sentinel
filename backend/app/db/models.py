@@ -484,6 +484,10 @@ class Permit(Base):
     )
 
     __table_args__ = (
+        CheckConstraint(
+            "validity_unit IN ('day', 'week', 'month', 'year')",
+            name="ck_permits_validity_unit",
+        ),
         Index("ix_permits_status_end", "status", "end_date"),
         Index("ix_permits_company", "company"),
         Index(

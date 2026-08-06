@@ -11,6 +11,11 @@ def validate_period(value: int, unit: str) -> None:
         raise ValueError("invalid permit validity period")
 
 
+def validate_period_read(value: int, unit: str) -> None:
+    if unit not in _MAX_BY_UNIT or value < 1:
+        raise ValueError("invalid permit validity period")
+
+
 def _shift_months(value: date, months: int) -> date:
     month_index = value.year * 12 + value.month - 1 + months
     year, month_zero = divmod(month_index, 12)
@@ -38,7 +43,7 @@ _AR_PERIODS = {
 
 
 def period_label(value: int, unit: str, lang: Literal["en", "ar"]) -> str:
-    validate_period(value, unit)
+    validate_period_read(value, unit)
     if lang == "en":
         return f"{value} {unit if value == 1 else unit + 's'}"
     one, two, few, many = _AR_PERIODS[unit]

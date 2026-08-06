@@ -14,7 +14,11 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 from pydantic.json_schema import SkipJsonSchema
 
-from app.core.permit_validity import PermitValidityUnit, validate_period
+from app.core.permit_validity import (
+    PermitValidityUnit,
+    validate_period,
+    validate_period_read,
+)
 from app.schemas._base import ORMBase
 
 # The security zones a permit can cover. A permit carries one or more.
@@ -34,6 +38,16 @@ class PermitValidityPeriod(BaseModel):
     @model_validator(mode="after")
     def _validate_bounds(self) -> PermitValidityPeriod:
         validate_period(self.value, self.unit)
+        return self
+
+
+class PermitValidityRead(BaseModel):
+    value: int
+    unit: PermitValidityUnit
+
+    @model_validator(mode="after")
+    def _validate_positive(self) -> PermitValidityRead:
+        validate_period_read(self.value, self.unit)
         return self
 
 
@@ -250,7 +264,7 @@ class PermitRead(ORMBase):
     zones: list[PermitZone]
     access_areas: PermitAccessAreas | None = None
     start_date: date
-    validity: PermitValidityPeriod
+    validity: PermitValidityRead
     end_date: date
     status: PermitStatus
     purpose: str | None = None
@@ -284,7 +298,7 @@ class PermitListItem(ORMBase):
     zones: list[PermitZone]
     access_areas: PermitAccessAreas | None = None
     start_date: date
-    validity: PermitValidityPeriod
+    validity: PermitValidityRead
     end_date: date
     status: PermitStatus
     created_at: datetime
