@@ -34,9 +34,10 @@ from docx.oxml.ns import qn
 from docx.shared import Twips
 from docx.text.paragraph import Paragraph
 
-#: Right indent (twips, = 2") the closing block sits at. Reuses the value the
-#: source already carried on the signature line, so the block keeps its place.
-SIGN_BLOCK_INDENT = 2880
+#: Right indent (twips) of the closing block. Measured, not guessed: it puts the
+#: three labels' shared right edge where the longest of them (الإســم) already sat
+#: in the source, so the block keeps its original place on the LEFT of the page.
+SIGN_BLOCK_INDENT = 3364
 
 #: The three closing lines, matched on their label prefix.
 SIGN_BLOCK_PREFIXES = ("الرتب", "الإســـــــــم", "التوقيع")
@@ -122,12 +123,17 @@ def align_signature_block(doc: Any) -> None:
         if text != para.text:
             set_para_text(para, text)  # drop the leading-space positioning hack
         fmt = para.paragraph_format
-        # No explicit w:jc: these are w:bidi paragraphs, so the default is the
-        # RTL start edge — physically the right. Setting jc=right here would be
-        # swapped to the logical END and hug the left instead (observed).
+        # These are w:bidi paragraphs, so both knobs are mirrored:
+        #   * no explicit w:jc -> the RTL start edge, physically the RIGHT
+        #     (jc=right would be swapped to the logical END and hug the left)
+        #   * w:ind w:left is the logical START, so it sets the distance from
+        #     the physical right margin; w:ind w:right does nothing visible here
+        # Setting left_indent explicitly also overrides the 720-twip start indent
+        # that the ListParagraph style puts on two of these three lines, which is
+        # what made them sit 0.5" apart even once they shared an alignment.
         fmt.alignment = None
-        fmt.left_indent = None
-        fmt.right_indent = Twips(SIGN_BLOCK_INDENT)
+        fmt.right_indent = None
+        fmt.left_indent = Twips(SIGN_BLOCK_INDENT)
 
 
 def build(src: Path) -> None:
