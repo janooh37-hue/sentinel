@@ -39,7 +39,7 @@ class PermitAccessAreas(BaseModel):
         return [zone for zone in _LOCATION_ZONE_ORDER if zone in value]
 
     @model_validator(mode="after")
-    def _require_access(self) -> "PermitAccessAreas":
+    def _require_access(self) -> PermitAccessAreas:
         if not self.al_wathba_1 and not self.al_wathba_2 and not self.work_residence:
             raise ValueError("at least one access area is required")
         return self
@@ -175,7 +175,7 @@ class PermitUpdate(BaseModel):
     notes: str | None = None
 
     @model_validator(mode="after")
-    def _reject_explicit_null_access(self) -> "PermitUpdate":
+    def _reject_explicit_null_access(self) -> PermitUpdate:
         if "access_areas" in self.model_fields_set and self.access_areas is None:
             raise ValueError("access_areas must not be null when supplied")
         return self

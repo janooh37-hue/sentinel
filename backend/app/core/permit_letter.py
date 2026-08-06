@@ -34,7 +34,7 @@ _ZONES: dict[str, tuple[str, str, str]] = {
     "red": ("المنطقة الحمراء", "#fee2e2", "#b91c1c"),
     "work_residence": ("سكن العمل", "#dbeafe", "#1d4ed8"),
 }
-_NBSP = " "
+_NBSP = "\u00a0"
 
 
 def _access_chips(zones: list[object]) -> str:

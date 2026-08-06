@@ -146,7 +146,7 @@ def test_validity_shows_total_days_with_arabic_grammar():
 
     assert "المدة يوم واحد" in span(date(2026, 7, 1), date(2026, 7, 1))  # inclusive: 1
     assert "المدة يومان" in span(date(2026, 7, 1), date(2026, 7, 2))  # 2
-    assert "المدة 5 أيام" in span(date(2026, 7, 1), date(2026, 7, 5))  # 3–10
+    assert "المدة 5 أيام" in span(date(2026, 7, 1), date(2026, 7, 5))  # 3-10
     assert "المدة 31 يوماً" in span(date(2026, 7, 1), date(2026, 7, 31))  # 11+
 
 
