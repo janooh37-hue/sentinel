@@ -78,7 +78,10 @@ function buildShape(fields: TemplateField[], t: TFunction): Record<string, AnyZo
         // Round 2 — Fix E: `hand_sign_checkbox` keys still bind to the field
         // id (e.g. "hand_sign_employee") but the value now means "embed
         // signature" — flipped semantics, same wire shape.
-        shape[id] = z.boolean().default(false)
+        // Per-field default (field.default === 'true', e.g. Inmate Conduct
+        // Violations' hand_sign_manager) — every other checkbox has no
+        // `default` in _fields.json and keeps the false default unchanged.
+        shape[id] = z.boolean().default(field.default === 'true')
         break
 
       case 'number':

@@ -5,7 +5,11 @@
  *
  * Round 2 — Fix E: renamed from HandSignCheckbox with inverted semantics.
  * Previously: checked = "I'll sign by hand" (no embed). Now: checked = "embed
- * my saved signature". Default unchecked → no embed → operator signs by hand.
+ * my saved signature". Default unchecked → no embed → operator signs by hand
+ * — UNLESS the field declares `default: "true"` in _fields.json (e.g. Inmate
+ * Conduct Violations' hand_sign_manager), threaded in as `defaultOn`. Mirrors
+ * CheckboxField's `defaultOn` prop/contract exactly (see there for the
+ * `value !== false` rationale) rather than inventing a parallel mechanism.
  */
 
 import { Controller, useFormContext } from 'react-hook-form'
@@ -17,7 +21,8 @@ export function EmbedSignatureCheckbox({
   name,
   label_en,
   label_ar,
-}: FieldProps): React.JSX.Element {
+  defaultOn = false,
+}: FieldProps & { defaultOn?: boolean }): React.JSX.Element {
   const { i18n } = useTranslation()
   const isAr = i18n.language.startsWith('ar')
   const label = isAr ? label_ar : label_en
@@ -33,7 +38,7 @@ export function EmbedSignatureCheckbox({
           <input
             id={name}
             type="checkbox"
-            checked={!!field.value}
+            checked={defaultOn ? field.value !== false : !!field.value}
             onChange={(e) => field.onChange(e.target.checked)}
             className="h-4 w-4 rounded border-input accent-primary"
           />

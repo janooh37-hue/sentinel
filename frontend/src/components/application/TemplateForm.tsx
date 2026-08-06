@@ -190,7 +190,16 @@ function renderField(
       // type string remains "hand_sign_checkbox" for backwards-compat with
       // the existing _fields.json. The checkbox now binds to
       // `embed_signature.<entity>` and means "embed my saved signature".
-      return <EmbedSignatureCheckbox key={field.id} {...common} />
+      // defaultOn is per-field (field.default === 'true' in _fields.json,
+      // e.g. Inmate Conduct Violations' hand_sign_manager) — every sibling
+      // form's hand_sign_manager has no `default` and stays unchecked.
+      return (
+        <EmbedSignatureCheckbox
+          key={field.id}
+          {...common}
+          defaultOn={field.default === 'true'}
+        />
+      )
 
     case 'signature': {
       const paired = findPairedHandSign(field, fields)

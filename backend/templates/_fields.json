@@ -820,7 +820,7 @@
       {"key": "action_other", "type": "text", "label_en": "Other action", "label_ar": "إجراء آخر", "required": false},
       {"key": "reporter_id", "type": "employee_picker", "label_en": "Reported by", "label_ar": "مقدم التقرير", "required": true},
       {"key": "manager_id", "type": "manager_picker", "label_en": "Signing manager", "label_ar": "المُوقِّع", "required": false},
-      {"key": "hand_sign_manager", "type": "hand_sign_checkbox", "label_en": "Embed manager's saved signature", "label_ar": "تضمين توقيع المدير المحفوظ", "required": false}
+      {"key": "hand_sign_manager", "type": "hand_sign_checkbox", "label_en": "Embed manager's saved signature", "label_ar": "تضمين توقيع المدير المحفوظ", "required": false, "default": "true"}
     ]
   }
 }
