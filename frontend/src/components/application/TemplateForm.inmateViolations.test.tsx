@@ -189,4 +189,23 @@ describe('Inmate Conduct Violations form', () => {
     expect(screen.getByText('تم ابلاغ مدير فرع شؤون النزلاء')).toBeInTheDocument()
     await i18n.changeLanguage('en')
   })
+
+  // Task 9 review: the prior Arabic test above only ever checked one field
+  // (action_notified). report_time (TimeField) and action_other's label were
+  // asserted in English ONLY (getByLabelText(/time/i) is language-agnostic —
+  // it would pass just as well against a broken/English label under lng=ar).
+  // This repo's documented trap is exactly a green suite that never actually
+  // rendered the Arabic string.
+  it('labels report_time and action_other in Arabic under lng=ar', async () => {
+    await i18n.changeLanguage('ar')
+    render(<Harness />)
+    // report_time is required, so its label also carries a trailing "*" —
+    // exact: false matches the label text regardless, same as the original
+    // English assertion's /time/i regex avoided the same asterisk collision.
+    expect(screen.getByLabelText('الوقت', { exact: false })).toBeInTheDocument()
+    expect(screen.queryByLabelText('Time', { exact: false })).not.toBeInTheDocument()
+    expect(screen.getByLabelText('إجراء آخر')).toBeInTheDocument()
+    expect(screen.queryByLabelText('Other action')).not.toBeInTheDocument()
+    await i18n.changeLanguage('en')
+  })
 })

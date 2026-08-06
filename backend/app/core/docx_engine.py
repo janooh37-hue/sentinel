@@ -84,6 +84,7 @@ _AZTEC_TOP_RIGHT: frozenset[str] = frozenset(
         "Warning Form",
         "Administrative Leave Form",
         "Leave Permit Form",
+        "Inmate Conduct Violations",
     }
 )
 

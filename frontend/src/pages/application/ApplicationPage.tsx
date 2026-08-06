@@ -64,7 +64,12 @@ import { useShortcutAction } from '@/lib/useKeyboardShortcuts'
 import { EmployeeHeader } from './EmployeeHeader'
 import { JobStatus } from './JobStatus'
 import { emojiForTemplate, resolveTemplateIdFromSlug } from './formEmoji'
-import { restoreThenSeedResignationDate, todayIso } from './resignationDate'
+import {
+  nowHM,
+  restoreThenSeedResignationDate,
+  seedReportDateTime,
+  todayIso,
+} from './resignationDate'
 import { WordHandoffDialog } from '@/pages/books/WordHandoffDialog'
 
 type TabValue = 'fields' | 'preview'
@@ -659,6 +664,18 @@ export function ApplicationPage(): React.JSX.Element {
       restoredValues,
       !!schemaQuery.data?.fields?.some((f) => f.id === 'resignation_date'),
       todayIso(),
+    )
+    // Inmate Conduct Violations: report_date/report_time pre-fill with "now"
+    // on open and stay editable before generating (mockup spec) — seeded
+    // AFTER the draft restore above so a resumed draft's own values win.
+    // seedReportDateTime owns that ordering as one call, same pattern as
+    // restoreThenSeedResignationDate just above.
+    seedReportDateTime(
+      form,
+      !!schemaQuery.data?.fields?.some((f) => f.id === 'report_date'),
+      !!schemaQuery.data?.fields?.some((f) => f.id === 'report_time'),
+      todayIso(),
+      nowHM(),
     )
     // Seed the intake-staged scan on top of the restored draft (or onto an
     // empty state). attachmentsWithSeed is a pure function so draft content

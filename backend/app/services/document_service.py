@@ -44,6 +44,7 @@ from app.core.classifications import classified_ref, get_classification
 from app.core.constants import STAMP_STYLE_HEADER, TEMPLATE_FILES
 from app.core.dateutils import excel_date_to_datetime
 from app.core.docx_engine import DocxEngine, aztec_corner_for
+from app.core.docx_render import _arabic_clock, _arabic_weekday
 from app.core.pdf_merge import merge_attachments_into_pdf
 from app.core.vault_manager import Vault
 from app.db.models import (
@@ -103,9 +104,9 @@ _FORM_CATEGORY: dict[str, str] = {
 #: they print. Key = the _fields.json checkbox key. The Arabic copy lives here
 #: (not in the docx) so the template stays a layout and the wording has one home.
 _INMATE_ACTION_LABELS: tuple[tuple[str, str], ...] = (
-    ("action_notified", "تم ابلاغ مدير فرع شؤون النزلاء"),
+    ("action_notified", "تم إبلاغ مدير فرع شؤون النزلاء"),
     ("action_written", "تم كتابة مخالفة مسلكية في حق النزلاء"),
-    ("action_transferred", "تم نقل النزيل الى قسم B وتقييده"),
+    ("action_transferred", "تم نقل النزيل إلى قسم B وتقييده"),
 )
 
 # Short filename prefix per form — mirrors v3's fn = f"LeaveApp_..." pattern
@@ -806,6 +807,37 @@ def _build_template_data(
         if other:
             actions.append(other)
         data["actions"] = actions
+        # report_date/report_time are the operator's own input (when the
+        # incident happened / was logged) — they must reach the paper, not
+        # generation time. `docx_render._apply_context_defaults` only fills
+        # today/weekday_ar/now_time from datetime.now() when the caller left
+        # them unset, so setting all three here (when parseable) makes the
+        # operator's values win. Two real conversions, not a bare rename:
+        # report_date is ISO "YYYY-MM-DD" (<input type=date>) vs. today's
+        # dd/mm/yyyy, and weekday_ar must be derived from the SAME converted
+        # date (never the ISO string) or it would print a mismatched weekday.
+        # report_time is 24h "HH:MM" (<input type=time>) vs. now_time's
+        # Arabic 12h clock — reuses _arabic_weekday/_arabic_clock verbatim
+        # rather than a parallel formatter. An unparsable/absent value is
+        # left unset so _apply_context_defaults' now()-fallback still applies
+        # (draft/preview before the operator has filled them in).
+        report_date_raw = str(fields.get("report_date", "") or "").strip()
+        if report_date_raw:
+            try:
+                report_dt = datetime.strptime(report_date_raw, "%Y-%m-%d")
+            except ValueError:
+                report_dt = None
+            if report_dt is not None:
+                data["today"] = report_dt.strftime("%d/%m/%Y")
+                data["weekday_ar"] = _arabic_weekday(data["today"])
+        report_time_raw = str(fields.get("report_time", "") or "").strip()
+        if report_time_raw:
+            try:
+                report_tm = datetime.strptime(report_time_raw, "%H:%M")
+            except ValueError:
+                report_tm = None
+            if report_tm is not None:
+                data["now_time"] = _arabic_clock(report_tm)
 
     # ------------------------------------------------------------------
     # 4c. Administrative Leave Form — auto-count this employee's admin leaves

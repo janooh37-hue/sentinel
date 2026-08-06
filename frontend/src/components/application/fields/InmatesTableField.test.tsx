@@ -95,4 +95,12 @@ describe('InmatesTableField', () => {
     await userEvent.click(screen.getByRole('button', { name: 'submit' }))
     expect(await screen.findByRole('alert')).toBeInTheDocument()
   })
+
+  it('rejects a whitespace-only name — a bare min(1) would let it through and print a numbered but nameless row', async () => {
+    render(<ValidatedHarness />)
+    await userEvent.click(screen.getByRole('button', { name: /add inmate/i }))
+    await userEvent.type(screen.getByLabelText('Inmate name'), '   ')
+    await userEvent.click(screen.getByRole('button', { name: 'submit' }))
+    expect(await screen.findByRole('alert')).toBeInTheDocument()
+  })
 })

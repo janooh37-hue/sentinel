@@ -60,7 +60,7 @@ def rendered(tmp_path: Path) -> Document:
                 },
             ],
             "violation_details": "قام النزيل بالاعتداء داخل الليوان",
-            "actions": ["تم ابلاغ مدير فرع شؤون النزلاء", "تم نقل النزيل الى قسم B وتقييده"],
+            "actions": ["تم إبلاغ مدير فرع شؤون النزلاء", "تم نقل النزيل إلى قسم B وتقييده"],
             "reporter_name": "عبدالله سيف المنصوري",
             "reporter_g": "G-2001",
             "manager_name": "ناصر فاضل الساعدي",
@@ -98,8 +98,8 @@ def test_date_day_time_filled(rendered: Document) -> None:
 
 def test_actions_render_one_bullet_each(rendered: Document) -> None:
     body = "\n".join(p.text for p in rendered.tables[1].rows[8].cells[0].paragraphs)
-    assert "تم ابلاغ مدير فرع شؤون النزلاء" in body
-    assert "تم نقل النزيل الى قسم B وتقييده" in body
+    assert "تم إبلاغ مدير فرع شؤون النزلاء" in body
+    assert "تم نقل النزيل إلى قسم B وتقييده" in body
     # The unchosen action must NOT print.
     assert "تم كتابة مخالفة مسلكية" not in body
 

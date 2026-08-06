@@ -2,11 +2,20 @@
 
 from __future__ import annotations
 
+from app.core.docx_engine import aztec_corner_for
 from app.db.models import Employee, Manager
 from app.services.document_service import _build_template_data
 from tests.conftest import make_user
 
 TEMPLATE_ID = "Inmate Conduct Violations"
+
+
+def test_aztec_code_stamps_top_right_like_its_letterhead_siblings() -> None:
+    # ICV's page-1 header is structurally identical to General Book/Warning
+    # Form/Administrative Leave Form/Leave Permit Form — the logo owns
+    # top-left on all of them, so the ref code prints top-right or lands on
+    # top of the logo.
+    assert aztec_corner_for(TEMPLATE_ID) == "top-right"
 
 
 def _employee(db, **kw) -> Employee:
@@ -135,15 +144,15 @@ def _actions(db, **fields) -> list[str]:
 
 def test_only_ticked_actions_render(db_session) -> None:
     assert _actions(db_session, action_notified=True, action_transferred=True) == [
-        "تم ابلاغ مدير فرع شؤون النزلاء",
-        "تم نقل النزيل الى قسم B وتقييده",
+        "تم إبلاغ مدير فرع شؤون النزلاء",
+        "تم نقل النزيل إلى قسم B وتقييده",
     ]
 
 
 def test_actions_keep_paper_order_regardless_of_input_order(db_session) -> None:
     assert _actions(db_session, action_transferred=True, action_written=True) == [
         "تم كتابة مخالفة مسلكية في حق النزلاء",
-        "تم نقل النزيل الى قسم B وتقييده",
+        "تم نقل النزيل إلى قسم B وتقييده",
     ]
 
 
@@ -161,23 +170,23 @@ def test_all_actions_render_in_declared_order_regardless_of_input_order(
         action_notified=True,
         action_other="تم إبلاغ الطبيب المناوب",
     ) == [
-        "تم ابلاغ مدير فرع شؤون النزلاء",
+        "تم إبلاغ مدير فرع شؤون النزلاء",
         "تم كتابة مخالفة مسلكية في حق النزلاء",
-        "تم نقل النزيل الى قسم B وتقييده",
+        "تم نقل النزيل إلى قسم B وتقييده",
         "تم إبلاغ الطبيب المناوب",
     ]
 
 
 def test_custom_action_appends_last(db_session) -> None:
     assert _actions(db_session, action_notified=True, action_other="تم إبلاغ الطبيب المناوب") == [
-        "تم ابلاغ مدير فرع شؤون النزلاء",
+        "تم إبلاغ مدير فرع شؤون النزلاء",
         "تم إبلاغ الطبيب المناوب",
     ]
 
 
 def test_blank_custom_action_is_dropped(db_session) -> None:
     assert _actions(db_session, action_notified=True, action_other="   ") == [
-        "تم ابلاغ مدير فرع شؤون النزلاء"
+        "تم إبلاغ مدير فرع شؤون النزلاء"
     ]
 
 
