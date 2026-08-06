@@ -22,6 +22,8 @@ from __future__ import annotations
 from datetime import date
 from html import escape
 
+from app.core.permit_validity import period_label
+
 # These permits authorize entry to the Al Wathba correctional facility; the
 # letter is addressed to its director. Fills the template's {{ recipient_name }}
 # token (rendered as «السيد \ {recipient} المحترم»).
@@ -86,39 +88,22 @@ def _fmt(d: date | str) -> str:
     return str(d).replace("-", "/")
 
 
-def _as_date(v: date | str) -> date:
-    return v if isinstance(v, date) else date.fromisoformat(str(v)[:10])
-
-
-def _days_ar(n: int) -> str:
-    """Arabic count-noun agreement for a whole-day span (يوم/يومان/أيام/يوماً)."""
-    if n == 1:
-        return "يوم واحد"
-    if n == 2:
-        return "يومان"
-    if 3 <= n <= 10:
-        return f"{n} أيام"
-    return f"{n} يوماً"  # 11+ (accusative singular)
-
-
-def _span_days(start: date | str, end: date | str) -> int:
-    """Inclusive day count of a [start, end] window (both endpoints count)."""
-    return max(1, (_as_date(end) - _as_date(start)).days + 1)
 
 
 def _people_table(people: list[dict[str, str]]) -> str:
     rows = "".join(
         f"<tr><td>{i}</td><td>{escape(p.get('name') or '')}</td>"
-        f"<td>{escape(p.get('uae_id') or '')}</td><td>{escape(p.get('nationality') or '')}</td></tr>"
+        f"<td>{escape(p.get('uae_id') or '')}</td><td>{escape(p.get('nationality') or '')}</td>"
+        f"<td>{escape(p.get('role') or '')}</td></tr>"
         for i, p in enumerate(people, 1)
     )
     return (
         '<table style="font-size:10pt; text-align:center; width:auto">'
         "<thead>"
-        '<tr><th colspan="4" style="background-color:#e6f4f1; color:#0f766e">'
+        '<tr><th colspan="5" style="background-color:#e6f4f1; color:#0f766e">'
         "الجدول الأول: بيانات الأفراد</th></tr>"
         '<tr style="background-color:#eef2f6">'
-        "<th>م</th><th>الاسم</th><th>رقم الهوية</th><th>الجنسية</th></tr>"
+        "<th>م</th><th>الاسم</th><th>رقم الهوية</th><th>الجنسية</th><th>المهنة</th></tr>"
         f"</thead><tbody>{rows}</tbody></table>"
     )
 
@@ -151,7 +136,8 @@ def build_permit_letter_html(
     access_areas: dict[str, object] | None,
     zones: list[str],
     start_date: date,
-    end_date: date,
+    validity_value: int,
+    validity_unit: str,
     people: list[dict[str, str]],
     vehicles: list[dict[str, str]],
     purpose: str | None = None,
@@ -186,10 +172,7 @@ def build_permit_letter_html(
         f"{vehicle_clause}، حتى {verb_tail} في الوقت المحدد.</p>"
     )
 
-    validity_val = (
-        f"من {_fmt(start_date)} إلى {_fmt(end_date)} — المدة "
-        f"{_days_ar(_span_days(start_date, end_date))}"
-    )
+    validity_val = f"{period_label(validity_value, validity_unit, 'ar')} اعتباراً من {_fmt(start_date)}"
     rows = _info_row("صلاحية التصريح:", validity_val)
     if purpose and purpose.strip():
         rows += _info_row("الغرض من التصريح:", escape(purpose.strip()))

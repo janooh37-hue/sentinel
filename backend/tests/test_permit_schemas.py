@@ -7,6 +7,7 @@ from app.schemas.permit import (
     PermitAccessAreas,
     PermitCreate,
     PermitRenew,
+    PermitPersonCreate,
     PermitUpdate,
     PermitValidityPeriod,
     PermitVehicleCreate,
@@ -15,6 +16,11 @@ from app.schemas.permit import (
 )
 
 
+
+
+def test_new_visitor_requires_job() -> None:
+    with pytest.raises(ValidationError):
+        PermitPersonCreate(name="Ali", uae_id="784-1", nationality="UAE")
 BASE_CREATE = {
     "company": "ACME",
     "access_areas": {"al_wathba_1": ["green"]},
@@ -51,7 +57,7 @@ def test_permit_create_accepts_manager_id():
         access_areas={"al_wathba_1": ["green"], "al_wathba_2": [], "work_residence": False},
         start_date=date(2026, 7, 1),
         validity={"value": 2, "unit": "day"},
-        people=[{"name": "X", "uae_id": "1"}],
+        people=[{"name": "X", "uae_id": "1", "role": "Technician"}],
         manager_id=3,
     )
     assert p.manager_id == 3

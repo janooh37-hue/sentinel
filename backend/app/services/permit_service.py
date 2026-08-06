@@ -308,7 +308,12 @@ def create_permit(db: Session, payload: PermitCreate, *, actor: str | None = Non
 
 def _letter_dicts(row: Permit) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
     people: list[dict[str, Any]] = [
-        {"name": p.name, "uae_id": p.uae_id, "nationality": p.nationality}
+        {
+            "name": p.name,
+            "uae_id": p.uae_id,
+            "nationality": p.nationality,
+            "role": p.role,
+        }
         for p in _active_people(row)
     ]
     vehicles: list[dict[str, Any]] = [
@@ -410,7 +415,8 @@ def regenerate_permit_book(
         access_areas=permit.access_areas,
         zones=list(permit.zones),
         start_date=permit.start_date,
-        end_date=permit.end_date,
+        validity_value=permit.validity_value,
+        validity_unit=permit.validity_unit,
         people=people,
         vehicles=vehicles,
         purpose=permit.purpose,

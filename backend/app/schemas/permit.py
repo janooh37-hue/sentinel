@@ -61,7 +61,7 @@ class PermitPersonCreate(BaseModel):
     # UAE ID is mandatory for every person on a permit.
     uae_id: str = Field(min_length=1, max_length=32)
     nationality: str | None = Field(default=None, max_length=64)
-    role: str | None = Field(default=None, max_length=128)
+    role: str = Field(min_length=1, max_length=128)
 
     @field_validator("name")
     @classmethod
@@ -78,6 +78,14 @@ class PermitPersonCreate(BaseModel):
         if not v:
             raise ValueError("uae_id is required")
         return v
+
+    @field_validator("role")
+    @classmethod
+    def _strip_role(cls, value: str) -> str:
+        value = value.strip()
+        if not value:
+            raise ValueError("role is required")
+        return value
 
 
 class PermitPersonRead(ORMBase):

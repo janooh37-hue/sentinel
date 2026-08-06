@@ -26,7 +26,8 @@ def test_single_person_single_vehicle():
         access_areas={"al_wathba_1": ["green"], "al_wathba_2": [], "work_residence": False},
         zones=["green"],
         start_date=date(2026, 7, 1),
-        end_date=date(2026, 7, 2),
+        validity_value=1,
+        validity_unit="day",
         people=P1,
         vehicles=V1,
     )
@@ -40,7 +41,8 @@ def test_many_persons_many_vehicles():
         access_areas={"al_wathba_1": ["green"], "al_wathba_2": [], "work_residence": False},
         zones=["green"],
         start_date=date(2026, 7, 1),
-        end_date=date(2026, 7, 2),
+        validity_value=1,
+        validity_unit="day",
         people=P2,
         vehicles=[*V1, *V1],
     )
@@ -57,7 +59,8 @@ def test_no_vehicles_drops_clause_and_table():
         access_areas={"al_wathba_1": ["green"], "al_wathba_2": [], "work_residence": False},
         zones=["green"],
         start_date=date(2026, 7, 1),
-        end_date=date(2026, 7, 2),
+        validity_value=1,
+        validity_unit="day",
         people=P2,
         vehicles=[],
     )
@@ -72,7 +75,8 @@ def test_uses_individual_not_employee_term():
         access_areas={"al_wathba_1": ["green"], "al_wathba_2": [], "work_residence": False},
         zones=["green"],
         start_date=date(2026, 7, 1),
-        end_date=date(2026, 7, 2),
+        validity_value=1,
+        validity_unit="day",
         people=P1,
         vehicles=[],
     )
@@ -87,7 +91,8 @@ def test_work_residence_zone_phrase_and_person_term():
         access_areas={"al_wathba_1": [], "al_wathba_2": [], "work_residence": True},
         zones=["work_residence"],
         start_date=date(2026, 7, 1),
-        end_date=date(2026, 7, 2),
+        validity_value=1,
+        validity_unit="day",
         people=P1,
         vehicles=[],
     )
@@ -108,7 +113,8 @@ def _sample(**kw):
         access_areas={"al_wathba_1": ["green"], "al_wathba_2": [], "work_residence": False},
         zones=["green"],
         start_date=date(2026, 7, 1),
-        end_date=date(2026, 8, 1),
+        validity_value=1,
+        validity_unit="month",
         people=P2,
         vehicles=V1,
     )
@@ -138,16 +144,19 @@ def test_info_block_label_right_value_center():
     assert '<td style="text-align:center">' in html  # the value cells
 
 
-def test_validity_shows_total_days_with_arabic_grammar():
-    def span(d1, d2):
-        return build_permit_letter_html(
-            company="X", access_areas={"al_wathba_1": ["green"], "al_wathba_2": [], "work_residence": False}, zones=["green"], start_date=d1, end_date=d2, people=P1, vehicles=[]
-        )
-
-    assert "المدة يوم واحد" in span(date(2026, 7, 1), date(2026, 7, 1))  # inclusive: 1
-    assert "المدة يومان" in span(date(2026, 7, 1), date(2026, 7, 2))  # 2
-    assert "المدة 5 أيام" in span(date(2026, 7, 1), date(2026, 7, 5))  # 3-10
-    assert "المدة 31 يوماً" in span(date(2026, 7, 1), date(2026, 7, 31))  # 11+
+def test_validity_uses_period_label_from_start_date():
+    html = build_permit_letter_html(
+        company="X",
+        access_areas={"al_wathba_1": ["green"], "al_wathba_2": [], "work_residence": False},
+        zones=["green"],
+        start_date=date(2026, 7, 1),
+        validity_value=2,
+        validity_unit="month",
+        people=P1,
+        vehicles=[],
+    )
+    assert "شهران اعتباراً من 2026/07/01" in html
+    assert "2026/08/01" not in html
 
 
 def test_tables_are_autofit_and_centered():
@@ -162,7 +171,7 @@ def test_section_titles_are_merged_shaded_header_rows():
     # Titles live INSIDE the table as a merged, shaded row (not a standalone
     # paragraph), keeping the letter compact.
     html = _sample()
-    assert 'colspan="4"' in html and "الجدول الأول: بيانات الأفراد" in html
+    assert 'colspan="5"' in html and "الجدول الأول: بيانات الأفراد" in html
     assert 'colspan="7"' in html and "الجدول الثاني: بيانات المركبات" in html
     assert "<p><b>الجدول" not in html  # no standalone caption paragraphs
 
@@ -193,7 +202,8 @@ def test_zones_are_colour_coded_chips():
         },
         zones=["green", "red", "work_residence"],
         start_date=date(2026, 7, 1),
-        end_date=date(2026, 8, 1),
+        validity_value=1,
+        validity_unit="month",
         people=P1,
         vehicles=[],
     )
@@ -249,3 +259,27 @@ def test_legacy_letter_labels_location_unspecified():
     assert "الموقع غير محدد" in html
     assert "المنطقة الخضراء" in html and "المنطقة الحمراء" in html
     assert "منطقة أخرى" in html and "سكن العمل" in html
+
+
+def test_letter_renders_job_and_no_end_date() -> None:
+    html = build_permit_letter_html(
+        company="ACME",
+        start_date=date(2026, 8, 6),
+        validity_value=2,
+        validity_unit="month",
+        people=[
+            {
+                "name": "Ali",
+                "uae_id": "784-1",
+                "nationality": "UAE",
+                "role": "Electrician",
+            }
+        ],
+        vehicles=[],
+        access_areas={"al_wathba_1": ["green"], "al_wathba_2": [], "work_residence": False},
+        zones=["green"],
+    )
+    assert "المهنة" in html
+    assert "Electrician" in html
+    assert "شهران" in html
+    assert "06/10/2026" not in html

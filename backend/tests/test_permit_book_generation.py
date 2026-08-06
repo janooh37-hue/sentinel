@@ -42,8 +42,8 @@ def _payload(**kw):
         company="ACME",
         access_areas={"al_wathba_1": ["green"], "al_wathba_2": [], "work_residence": False},
         start_date=date(2026, 7, 1),
-        end_date=date(2026, 8, 1),
-        people=[{"name": "Ali", "uae_id": "784-1", "nationality": "مصر"}],
+        validity={"value": 2, "unit": "month"},
+        people=[{"name": "Ali", "uae_id": "784-1", "nationality": "مصر", "role": "Electrician"}],
         vehicles=[],
     )
     base.update(kw)
@@ -76,6 +76,10 @@ def test_generated_book_body_preserves_location_zone_pairings(gen_env, monkeypat
     )
 
     body = captured["body"]
+    assert "Electrician" in body
+    assert "المهنة" in body
+    assert "شهران" in body
+    assert "2026/08/31" not in body
     w1_start = body.index("الوثبة 1")
     w2_start = body.index("الوثبة 2")
     assert "المنطقة الخضراء" in body[w1_start:w2_start]
