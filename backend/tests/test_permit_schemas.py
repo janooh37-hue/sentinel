@@ -6,7 +6,6 @@ from pydantic import ValidationError
 from app.schemas.permit import (
     PermitAccessAreas,
     PermitCreate,
-    PermitRenew,
     PermitPersonCreate,
     PermitPersonRead,
     PermitUpdate,
@@ -15,8 +14,6 @@ from app.schemas.permit import (
     PersonIdScan,
     VehicleLicenceScan,
 )
-
-
 
 
 def test_new_visitor_requires_job() -> None:
