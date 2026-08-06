@@ -8,14 +8,24 @@ audit row records why.
 
 from __future__ import annotations
 
-from datetime import date
+from datetime import UTC, date, datetime
+from pathlib import Path
 from typing import Any
 
 import pytest
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.db.models import AuditLog, Book, BookCategory, Manager, User
+from app.db.models import (
+    AuditLog,
+    Book,
+    BookCategory,
+    BookEditSession,
+    BookVersion,
+    Document,
+    Manager,
+    User,
+)
 from app.schemas.permit import PermitCreate
 from app.services import document_service, permit_service
 
@@ -286,8 +296,99 @@ def test_new_permit_lands_in_the_managers_awaiting_queue(gen_env: Session) -> No
     mgr, mgr_user = _linked_manager(db)
     permit = permit_service.create_permit(db, _payload(manager_id=mgr.id), actor="op@x.ae")
 
+
+
     awaiting = book_service.list_awaiting(db, user_id=mgr_user.id)
     assert [b.id for b in awaiting] == [permit.book_id]
     assert book_service.your_step_kind(awaiting[0], mgr_user.id) == "approver"
     # The operator who raised it is not an approver of it.
     assert book_service.list_awaiting(db, user_id=operator.id) == []
+def test_pending_word_version_survives_structured_regeneration(gen_env, tmp_path, monkeypatch):
+    """A finished Word snapshot stays immutable when a pending permit changes."""
+    from app.config import Settings
+    from app.schemas.permit import PermitVehicleCreate
+    from app.services import word_book_service
+
+    db = gen_env
+    settings = Settings(data_dir=tmp_path / "data", templates_dir=tmp_path / "templates")
+    monkeypatch.setattr(word_book_service, "get_settings", lambda: settings)
+    monkeypatch.setattr(
+        word_book_service, "convert_docx_to_pdf", lambda path: path.with_suffix(".pdf")
+    )
+
+    _actor(db)
+    manager, _ = _linked_manager(db)
+    permit = permit_service.create_permit(
+        db,
+        _payload(manager_id=manager.id, send_for_approval=False),
+        actor="op@x.ae",
+    )
+    book = db.get(Book, permit.book_id)
+    assert book is not None
+    initial = max(book.versions, key=lambda version: version.version_no)
+    initial_document = db.get(Document, initial.document_id)
+    assert initial_document is not None
+    initial_path = Path(initial_document.docx_path)
+    initial_path.parent.mkdir(parents=True, exist_ok=True)
+    initial_path.write_bytes(b"PK generated permit docx")
+
+    word_book_service.reopen_word_session(db, user=db.query(User).filter_by(email="op@x.ae").one(), book_id=book.id)
+    session = (
+        db.query(BookEditSession)
+        .filter_by(book_id=book.id, state="active")
+        .one()
+    )
+    session.last_put_at = datetime.now(UTC).replace(tzinfo=None)
+    db.commit()
+    word_book_service.finish_word_session(
+        db,
+        user=db.query(User).filter_by(email="op@x.ae").one(),
+        book_id=book.id,
+    )
+
+    db.refresh(book)
+    word_version = max(book.versions, key=lambda version: version.version_no)
+    word_document = db.get(Document, word_version.document_id)
+    assert word_document is not None
+    assert word_version.fields == {}
+    old_snapshot = (
+        word_version.id,
+        word_document.id,
+        word_document.docx_path,
+        word_document.pdf_path,
+    )
+
+    permit_service.submit_permit_book(db, permit.id, actor="op@x.ae")
+    db.refresh(book)
+    assert book.approval_state == "pending"
+
+    permit_service.add_vehicle(
+        db,
+        permit.id,
+        PermitVehicleCreate(plate_no="A 1"),
+        actor="op@x.ae",
+    )
+
+    db.refresh(book)
+    assert [version.version_no for version in book.versions] == [1, 2, 3]
+    preserved = db.get(BookVersion, old_snapshot[0])
+    assert preserved is not None
+    preserved_document = db.get(Document, old_snapshot[1])
+    assert preserved_document is not None
+    assert (
+        preserved.id,
+        preserved_document.id,
+        preserved_document.docx_path,
+        preserved_document.pdf_path,
+    ) == old_snapshot
+
+    latest = max(book.versions, key=lambda version: version.version_no)
+    assert latest.version_no == 3
+    assert latest.fields
+    assert latest.document_id != old_snapshot[1]
+    latest_document = db.get(Document, latest.document_id)
+    assert latest_document is not None
+    assert latest_document.docx_path != old_snapshot[2]
+    assert latest_document.pdf_path != old_snapshot[3]
+    assert book.approval_state == "pending"
+    assert any(step.state == "pending" for step in latest.approval_steps)
