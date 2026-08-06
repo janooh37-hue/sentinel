@@ -1,0 +1,673 @@
+<!doctype html>
+<html lang="en" dir="ltr">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Service completion actions — UI review</title>
+<style>
+  :root {
+    color-scheme: light;
+    --bg: #f5f4f1;
+    --surface: #ffffff;
+    --raised: #fafaf6;
+    --tinted: #f0eee8;
+    --text: #1c1f24;
+    --muted: #5a6068;
+    --faint: #8b9098;
+    --border: #e6e4dd;
+    --border-strong: #d4d1c8;
+    --hairline: #efece5;
+    --primary: #0d2845;
+    --primary-hover: #1d3a5e;
+    --primary-soft: #e8edf3;
+    --on-primary: #ffffff;
+    --success: #047857;
+    --success-soft: #d6f0e4;
+    --warning: #b45309;
+    --warning-soft: #fbedd8;
+    --accent: #c8102e;
+    --accent-soft: #fbe5e8;
+    --word: #185abd;
+    --shadow: 0 14px 36px rgba(13, 40, 69, .09), 0 2px 5px rgba(28, 31, 36, .05);
+    --shadow-sm: 0 2px 8px rgba(28, 31, 36, .06);
+    --sans: Inter, "Segoe UI", system-ui, sans-serif;
+    --arabic: "Noto Sans Arabic", Tahoma, Arial, sans-serif;
+    --mono: "IBM Plex Mono", Consolas, monospace;
+  }
+  html.dark {
+    color-scheme: dark;
+    --bg: #0a0e18;
+    --surface: #131826;
+    --raised: #1a2034;
+    --tinted: #1f263b;
+    --text: #e6e9f2;
+    --muted: #8a93a7;
+    --faint: #5f6678;
+    --border: #2a3148;
+    --border-strong: #3a4360;
+    --hairline: #1f263b;
+    --primary: #5778cf;
+    --primary-hover: #7491db;
+    --primary-soft: #1c2849;
+    --on-primary: #0a0e18;
+    --success: #34d399;
+    --success-soft: #142d23;
+    --warning: #fbbf24;
+    --warning-soft: #3a2a10;
+    --accent: #ef4858;
+    --accent-soft: #3a1820;
+    --word: #5b93e0;
+    --shadow: 0 18px 46px rgba(0, 0, 0, .28);
+    --shadow-sm: 0 2px 8px rgba(0, 0, 0, .22);
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font: 15px/1.5 var(--sans);
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+  html[lang="ar"] body { font-family: var(--arabic); }
+  button, a { font: inherit; }
+  button { cursor: pointer; }
+  h1, h2, h3, p { margin: 0; }
+  svg { display: block; }
+  :focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+  [hidden] { display: none !important; }
+
+  .reviewbar {
+    position: sticky;
+    inset-block-start: 0;
+    z-index: 50;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    min-height: 54px;
+    padding: 9px clamp(12px, 3vw, 30px);
+    color: #fff;
+    background: #0d2845;
+    box-shadow: 0 3px 16px rgba(4, 14, 25, .2);
+  }
+  .reviewbar-brand { display: flex; align-items: center; gap: 10px; min-width: max-content; font-size: 13px; font-weight: 750; }
+  .brand-rule { width: 4px; height: 26px; border-radius: 3px; background: #c8102e; }
+  .reviewbar small { color: #b9c6d6; font-size: 11px; font-weight: 500; }
+  .review-controls { display: flex; align-items: center; gap: 6px; margin-inline-start: auto; flex-wrap: wrap; justify-content: flex-end; }
+  .review-control {
+    min-height: 32px;
+    border: 1px solid rgba(255,255,255,.22);
+    border-radius: 9px;
+    padding: 5px 10px;
+    color: #eaf0f7;
+    background: transparent;
+    font-size: 11.5px;
+    font-weight: 650;
+  }
+  .review-control:hover, .review-control.active { color: #0d2845; background: #fff; border-color: #fff; }
+
+  .intro, .review-stage { width: min(1180px, calc(100% - 28px)); margin-inline: auto; }
+  .intro { padding: 30px 0 22px; }
+  .eyebrow { color: var(--primary); font-size: 11px; font-weight: 750; letter-spacing: .12em; text-transform: uppercase; }
+  html[dir="rtl"] .eyebrow { letter-spacing: 0; }
+  .intro h1 { max-width: 780px; margin-top: 7px; font-size: clamp(25px, 4vw, 38px); line-height: 1.18; letter-spacing: -.035em; }
+  html[dir="rtl"] .intro h1 { letter-spacing: 0; }
+  .intro p { max-width: 790px; margin-top: 10px; color: var(--muted); font-size: 14px; }
+  .decision-strip {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 1px;
+    margin-top: 22px;
+    overflow: hidden;
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    background: var(--border);
+  }
+  .decision { min-height: 84px; padding: 14px; background: var(--surface); }
+  .decision b { display: block; color: var(--text); font-size: 12px; }
+  .decision span { display: block; margin-top: 4px; color: var(--muted); font-size: 11px; }
+
+  .scenario-nav {
+    display: flex;
+    gap: 7px;
+    margin-bottom: 16px;
+    padding: 5px;
+    overflow-x: auto;
+    border: 1px solid var(--border);
+    border-radius: 13px;
+    background: var(--surface);
+    scrollbar-width: thin;
+  }
+  .scenario-tab {
+    flex: 1 0 max-content;
+    min-height: 38px;
+    border: 0;
+    border-radius: 9px;
+    padding: 7px 13px;
+    color: var(--muted);
+    background: transparent;
+    font-size: 12px;
+    font-weight: 650;
+  }
+  .scenario-tab:hover { background: var(--tinted); color: var(--text); }
+  .scenario-tab.active { background: var(--primary-soft); color: var(--primary); }
+
+  .app-frame {
+    overflow: hidden;
+    border: 1px solid var(--border);
+    border-radius: 18px;
+    background: var(--surface);
+    box-shadow: var(--shadow);
+  }
+  .app-nav {
+    display: flex;
+    align-items: center;
+    min-height: 52px;
+    padding: 0 20px;
+    border-bottom: 1px solid var(--hairline);
+    background: var(--surface);
+  }
+  .app-logo { color: var(--primary); font-size: 14px; font-weight: 800; letter-spacing: -.02em; }
+  .app-navlinks { display: flex; gap: 17px; margin-inline-start: 28px; color: var(--muted); font-size: 11.5px; font-weight: 600; }
+  .app-navlinks span.active { color: var(--primary); }
+  .user-dot { width: 28px; height: 28px; margin-inline-start: auto; border-radius: 50%; background: var(--primary-soft); border: 1px solid var(--border); }
+  .app-body { min-height: 600px; padding: 22px; background: var(--bg); }
+  .form-heading { display: flex; align-items: center; gap: 12px; width: min(910px, 100%); margin: 0 auto 15px; }
+  .service-glyph { display: grid; place-items: center; width: 42px; height: 42px; border: 1px solid var(--border); border-radius: 12px; color: var(--primary); background: var(--surface); }
+  .form-heading h2 { font-size: 18px; letter-spacing: -.02em; }
+  .form-heading p { margin-top: 2px; color: var(--muted); font-size: 11.5px; }
+  .preview-card { width: min(910px, 100%); margin-inline: auto; padding: 16px; border-radius: 16px; background: var(--surface); }
+  .tabrow { display: flex; align-items: center; gap: 5px; min-height: 40px; padding-bottom: 13px; border-bottom: 1px solid var(--hairline); }
+  .pill { border: 0; border-radius: 99px; padding: 6px 12px; color: var(--muted); background: transparent; font-size: 11.5px; font-weight: 650; }
+  .pill.active { color: var(--primary); background: var(--primary-soft); }
+  .quiet-links { display: flex; align-items: center; gap: 7px; margin-inline-start: auto; }
+  .quiet-link { border: 1px solid var(--border); border-radius: 99px; padding: 5px 9px; color: var(--muted); background: var(--surface); font-size: 10.5px; font-weight: 600; }
+
+  .completion {
+    position: relative;
+    display: grid;
+    grid-template-columns: minmax(230px, 1fr) auto;
+    gap: 16px;
+    align-items: center;
+    margin-top: 14px;
+    padding: 14px 15px 14px 18px;
+    overflow: hidden;
+    border: 1px solid var(--border);
+    border-radius: 13px;
+    background: var(--raised);
+    box-shadow: var(--shadow-sm);
+  }
+  html[dir="rtl"] .completion { padding: 14px 18px 14px 15px; }
+  .completion::before { content: ""; position: absolute; inset-block: 0; inset-inline-start: 0; width: 4px; background: var(--success); }
+  .completion-status { display: flex; align-items: center; gap: 11px; min-width: 0; }
+  .success-seal { display: grid; place-items: center; width: 34px; height: 34px; flex: 0 0 auto; border-radius: 50%; color: var(--success); background: var(--success-soft); }
+  .completion-copy { min-width: 0; }
+  .completion-titleline { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .completion-title { font-size: 13px; font-weight: 750; }
+  .ref-chip {
+    display: inline-flex;
+    align-items: center;
+    min-height: 23px;
+    max-width: 100%;
+    border: 1px solid color-mix(in srgb, var(--primary) 25%, var(--border));
+    border-radius: 7px;
+    padding: 2px 7px;
+    color: var(--primary);
+    background: var(--surface);
+    font: 700 10.5px/1.2 var(--mono);
+    white-space: nowrap;
+  }
+  .completion-note { margin-top: 2px; overflow: hidden; color: var(--muted); font-size: 10.5px; text-overflow: ellipsis; white-space: nowrap; }
+  .completion-actions { display: flex; align-items: center; gap: 7px; justify-content: flex-end; }
+  .action {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    min-height: 36px;
+    border: 1px solid var(--border-strong);
+    border-radius: 9px;
+    padding: 7px 11px;
+    color: var(--primary);
+    background: var(--surface);
+    font-size: 11px;
+    font-weight: 700;
+    white-space: nowrap;
+    transition: background .15s ease, border-color .15s ease;
+  }
+  .action:hover { background: var(--tinted); }
+  .action.primary { color: var(--on-primary); background: var(--primary); border-color: var(--primary); }
+  .action.primary:hover { background: var(--primary-hover); border-color: var(--primary-hover); }
+  .action svg { width: 14px; height: 14px; }
+  .completion.ready::before { background: var(--primary); }
+  .ready-seal {
+    display: grid;
+    place-items: center;
+    width: 34px;
+    height: 34px;
+    flex: 0 0 auto;
+    border-radius: 50%;
+    color: var(--primary);
+    background: var(--primary-soft);
+  }
+  .notify-save-actions { display: flex; align-items: stretch; gap: 8px; justify-content: flex-end; }
+  .notify-inline {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    min-height: 38px;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 5px 7px 5px 10px;
+    background: var(--surface);
+  }
+  html[dir="rtl"] .notify-inline { padding: 5px 10px 5px 7px; }
+  .notify-label { min-width: 0; }
+  .notify-label b { display: block; font-size: 10.5px; line-height: 1.25; white-space: nowrap; }
+  .notify-label small { display: block; margin-top: 1px; color: var(--muted); font-size: 8.5px; white-space: nowrap; }
+  .switch-state { color: var(--primary); font-size: 9.5px; font-weight: 750; }
+  .notify-switch {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    width: 42px;
+    height: 23px;
+    flex: 0 0 auto;
+    border: 0;
+    border-radius: 99px;
+    padding: 2px;
+    background: var(--border-strong);
+    transition: background .15s ease;
+  }
+  .notify-switch[aria-checked="true"] { background: var(--primary); }
+  .notify-switch-thumb {
+    width: 19px;
+    height: 19px;
+    border-radius: 50%;
+    background: #fff;
+    box-shadow: 0 1px 3px rgba(0,0,0,.24);
+    transition: transform .15s ease;
+  }
+  .notify-switch[aria-checked="true"] .notify-switch-thumb { transform: translateX(19px); }
+  html[dir="rtl"] .notify-switch[aria-checked="true"] .notify-switch-thumb { transform: translateX(-19px); }
+  .notify-outcome { display: inline-flex; align-items: center; gap: 4px; color: var(--success); font-weight: 650; }
+  .notify-outcome.off { color: var(--muted); }
+  .phone-mode .notify-save-actions { display: grid; grid-template-columns: 1fr; width: 100%; }
+  .phone-mode .notify-inline, .phone-mode .notify-save-actions .action { width: 100%; }
+  .phone-mode .notify-inline { justify-content: flex-start; }
+  .phone-mode .notify-switch { margin-inline-start: auto; }
+
+
+  .preview-layout { display: grid; grid-template-columns: minmax(0, 1fr) 190px; gap: 12px; margin-top: 13px; }
+  .paper-desk { display: grid; place-items: start center; min-height: 400px; padding: 22px; border-radius: 11px; background: var(--tinted); }
+  .paper {
+    position: relative;
+    width: min(395px, 92%);
+    aspect-ratio: 210 / 297;
+    padding: 36px 34px;
+    color: #20242b;
+    background: #fff;
+    box-shadow: 0 8px 24px rgba(18, 29, 43, .13);
+  }
+  .paper-letterhead { height: 9px; border-top: 3px solid #0d2845; border-bottom: 1px solid #c8102e; }
+  .paper-ref { margin-top: 16px; color: #0d2845; font: 700 8px var(--mono); text-align: end; }
+  .paper-title { margin-top: 34px; font-size: 15px; font-weight: 800; text-align: center; }
+  .paper-line { height: 5px; margin-top: 10px; border-radius: 4px; background: #d8dbe0; }
+  .paper-line.short { width: 64%; }
+  .paper-sign { position: absolute; inset-inline-end: 34px; inset-block-end: 46px; width: 94px; border-top: 1px solid #9ba0a7; padding-top: 6px; color: #585d66; font-size: 7px; text-align: center; }
+  .record-note { padding: 14px; border: 1px solid var(--hairline); border-radius: 11px; background: var(--raised); }
+  .record-note .label { color: var(--muted); font-size: 9.5px; font-weight: 750; letter-spacing: .08em; text-transform: uppercase; }
+  .record-note h3 { margin-top: 5px; font-size: 12px; }
+  .record-note p { margin-top: 6px; color: var(--muted); font-size: 10.5px; }
+  .record-note .state { display: inline-flex; margin-top: 10px; border-radius: 99px; padding: 4px 8px; color: var(--success); background: var(--success-soft); font-size: 9.5px; font-weight: 700; }
+
+  .word-note {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 12px;
+    padding: 9px 11px;
+    border: 1px solid color-mix(in srgb, var(--word) 24%, var(--border));
+    border-radius: 10px;
+    color: var(--muted);
+    background: color-mix(in srgb, var(--word) 7%, var(--surface));
+    font-size: 10.5px;
+  }
+  .word-mark { display: grid; place-items: center; width: 23px; height: 23px; flex: 0 0 auto; border-radius: 5px; color: #fff; background: var(--word); font: 800 13px Georgia, serif; }
+  .secondary-row { display: flex; align-items: center; min-height: 48px; margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--hairline); }
+  .text-action { border: 0; padding: 5px 0; color: var(--primary); background: transparent; font-size: 10.5px; font-weight: 650; text-decoration: underline; text-underline-offset: 3px; }
+  .secondary-row .context-explanation { margin-inline-start: auto; color: var(--muted); font-size: 10px; }
+
+  .duty-shell { width: min(970px, 100%); margin-inline: auto; }
+  .duty-heading { display: flex; align-items: flex-end; justify-content: space-between; gap: 10px; margin-bottom: 14px; }
+  .duty-heading h2 { font-size: 20px; }
+  .duty-heading p { color: var(--muted); font-size: 11px; }
+  .duty-board { display: grid; grid-template-columns: 180px 1fr; min-height: 390px; overflow: hidden; border: 1px solid var(--border); border-radius: 14px; background: var(--surface); }
+  .unit-rail { padding: 15px; border-inline-end: 1px solid var(--hairline); background: var(--raised); }
+  .unit { margin-bottom: 7px; border-radius: 8px; padding: 8px; color: var(--muted); font-size: 10.5px; }
+  .unit.active { color: var(--primary); background: var(--primary-soft); font-weight: 700; }
+  .roster { padding: 16px; }
+  .roster-row { display: flex; align-items: center; gap: 9px; padding: 10px 4px; border-bottom: 1px solid var(--hairline); font-size: 11px; }
+  .avatar { width: 28px; height: 28px; border-radius: 50%; background: var(--primary-soft); }
+  .roster-row span:last-child { margin-inline-start: auto; color: var(--muted); }
+
+  .phone-mode .app-frame { width: 390px; max-width: 100%; margin-inline: auto; border-radius: 28px; }
+  .phone-mode .app-navlinks { display: none; }
+  .phone-mode .app-nav { padding-inline: 16px; }
+  .phone-mode .app-body { min-height: 690px; padding: 15px 12px 22px; }
+  .phone-mode .form-heading { align-items: flex-start; }
+  .phone-mode .preview-card { padding: 12px; }
+  .phone-mode .quiet-links { display: none; }
+  .phone-mode .completion { grid-template-columns: 1fr; gap: 11px; padding: 13px 12px 12px 16px; }
+  html[dir="rtl"] .phone-mode .completion { padding: 13px 16px 12px 12px; }
+  .phone-mode .completion-actions { display: grid; grid-template-columns: 1fr 1fr; }
+  .phone-mode .completion-actions .primary { grid-column: 1 / -1; grid-row: 1; }
+  .phone-mode .action { width: 100%; }
+  .phone-mode .preview-layout { grid-template-columns: 1fr; }
+  .phone-mode .record-note { display: none; }
+  .phone-mode .paper-desk { min-height: 390px; padding: 15px 8px; }
+  .phone-mode .paper { width: 92%; }
+  .phone-mode .duty-heading { align-items: flex-start; flex-direction: column; }
+  .phone-mode .duty-board { grid-template-columns: 1fr; }
+  .phone-mode .unit-rail { display: flex; gap: 5px; overflow-x: auto; border-inline-end: 0; border-bottom: 1px solid var(--hairline); }
+  .phone-mode .unit { min-width: max-content; margin: 0; }
+
+  .plan {
+    width: min(1180px, calc(100% - 28px));
+    margin: 28px auto 70px;
+  }
+  .plan h2 { font-size: 20px; }
+  .plan-intro { margin-top: 5px; color: var(--muted); font-size: 12px; }
+  .plan-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-top: 15px; }
+  .plan-card { padding: 15px; border: 1px solid var(--border); border-radius: 13px; background: var(--surface); }
+  .plan-card .step { display: grid; place-items: center; width: 25px; height: 25px; border-radius: 8px; color: var(--on-primary); background: var(--primary); font: 750 11px var(--mono); }
+  .plan-card h3 { margin-top: 9px; font-size: 13px; }
+  .plan-card p { margin-top: 6px; color: var(--muted); font-size: 11px; }
+  .rules { margin-top: 12px; overflow: hidden; border: 1px solid var(--border); border-radius: 13px; background: var(--surface); }
+  .rule { display: grid; grid-template-columns: 165px 1fr; gap: 14px; padding: 11px 14px; border-top: 1px solid var(--hairline); font-size: 11px; }
+  .rule:first-child { border-top: 0; }
+  .rule b { color: var(--text); }
+  .rule span { color: var(--muted); }
+
+  .toast {
+    position: fixed;
+    inset-inline-end: 18px;
+    inset-block-end: 18px;
+    z-index: 80;
+    display: none;
+    align-items: center;
+    gap: 9px;
+    max-width: 340px;
+    padding: 11px 13px;
+    border: 1px solid var(--border);
+    border-radius: 11px;
+    color: var(--text);
+    background: var(--surface);
+    box-shadow: var(--shadow);
+    font-size: 11px;
+  }
+  .toast.show { display: flex; animation: toastin .18s ease-out; }
+  @keyframes toastin { from { transform: translateY(8px); opacity: 0; } }
+  @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } .toast.show { animation: none; } }
+
+  @media (max-width: 840px) {
+    .reviewbar small { display: none; }
+    .decision-strip { grid-template-columns: 1fr 1fr; }
+    .preview-layout { grid-template-columns: 1fr; }
+    .record-note { display: none; }
+    .completion { grid-template-columns: 1fr; }
+    .completion-actions { justify-content: flex-start; }
+    .plan-grid { grid-template-columns: 1fr; }
+  }
+  @media (max-width: 560px) {
+    .reviewbar { align-items: flex-start; }
+    .reviewbar-brand { margin-top: 4px; }
+    .reviewbar-brand span:last-child { display: none; }
+    .decision-strip { grid-template-columns: 1fr; }
+    .app-body { padding: 15px 11px; }
+    .app-navlinks { display: none; }
+    .completion-actions { display: grid; grid-template-columns: 1fr 1fr; width: 100%; }
+    .completion-actions .primary { grid-column: 1 / -1; grid-row: 1; }
+    .rule { grid-template-columns: 1fr; gap: 3px; }
+  }
+</style>
+</head>
+<body>
+<header class="reviewbar">
+  <div class="reviewbar-brand"><span class="brand-rule"></span><span data-en="GSSG Manager — completion actions" data-ar="مدير GSSG — إجراءات ما بعد الحفظ">GSSG Manager — completion actions</span></div>
+  <small data-en="Review artifact · no production changes" data-ar="نموذج للمراجعة · دون أي تغيير في النظام">Review artifact · no production changes</small>
+  <div class="review-controls">
+    <button class="review-control" id="phoneToggle" type="button" onclick="togglePhone()" data-en="Phone view" data-ar="عرض الجوال">Phone view</button>
+    <button class="review-control" id="themeToggle" type="button" onclick="toggleTheme()" data-en="Dark" data-ar="داكن">Dark</button>
+    <button class="review-control" id="langToggle" type="button" onclick="toggleLanguage()">العربية</button>
+  </div>
+</header>
+
+<section class="intro">
+  <div class="eyebrow" data-en="Approved flow direction · SMS revision" data-ar="مسار العمل المعتمد · إضافة الإشعارات">Approved flow direction · SMS revision</div>
+  <h1 data-en="Save, choose the notification, then continue the document handoff." data-ar="احفظ، واختر إرسال الإشعار، ثم أكمل تسليم المستند.">Save, choose the notification, then continue the document handoff.</h1>
+  <p data-en="For every service template backed by an automatic employee notification, the top preview area shows a default-on switch before the final save. The same area then becomes the durable Saved bar with the notification outcome, Print, Send for approval, and Open record." data-ar="في كل نموذج خدمة مرتبط بإشعار تلقائي للموظف، يظهر أعلى المعاينة مفتاح مفعّل افتراضياً قبل الحفظ النهائي. بعد الحفظ يتحول المكان نفسه إلى شريط «تم الحفظ» مع نتيجة الإشعار والطباعة والإرسال للاعتماد وفتح السجل.">For every service template backed by an automatic employee notification, the top preview area shows a default-on switch before the final save. The same area then becomes the durable Saved bar with the notification outcome, Print, Send for approval, and Open record.</p>
+  <div class="decision-strip">
+    <div class="decision"><b data-en="Coverage" data-ar="النطاق">Coverage</b><span data-en="Every document-producing service" data-ar="كل خدمة تُنشئ مستنداً">Every document-producing service</span></div>
+    <div class="decision"><b data-en="Notification choice" data-ar="اختيار الإشعار">Notification choice</b><span data-en="Shown before Save · On by default" data-ar="يظهر قبل الحفظ · مفعّل افتراضياً">Shown before Save · On by default</span></div>
+    <div class="decision"><b data-en="After save" data-ar="بعد الحفظ">After save</b><span data-en="Notification choice + three handoff actions" data-ar="خيار الإشعار + ثلاثة إجراءات">Notification choice + three handoff actions</span></div>
+    <div class="decision"><b data-en="No dead controls" data-ar="دون أزرار غير صالحة">No dead controls</b><span data-en="Conditional by notifier, permission, and record type" data-ar="حسب الإشعار والصلاحية ونوع السجل">Conditional by notifier, permission, and record type</span></div>
+  </div>
+</section>
+
+<main class="review-stage" id="reviewStage">
+  <nav class="scenario-nav" aria-label="Scenarios">
+    <button class="scenario-tab active" type="button" data-scenario="generated" onclick="setScenario('generated')" data-en="Generated form" data-ar="نموذج مُنشأ">Generated form</button>
+    <button class="scenario-tab" type="button" data-scenario="general" onclick="setScenario('general')" data-en="General Book · Word" data-ar="كتاب عام · Word">General Book · Word</button>
+    <button class="scenario-tab" type="button" data-scenario="report" onclick="setScenario('report')" data-en="Report · Word" data-ar="تقرير · Word">Report · Word</button>
+    <button class="scenario-tab" type="button" data-scenario="duty" onclick="setScenario('duty')" data-en="Duty transfer" data-ar="نقل موقع العمل">Duty transfer</button>
+  </nav>
+
+  <div class="app-frame">
+    <div class="app-nav">
+      <div class="app-logo">GSSG</div>
+      <div class="app-navlinks"><span data-en="Dashboard" data-ar="الرئيسية">Dashboard</span><span class="active" data-en="Services" data-ar="الخدمات">Services</span><span data-en="Records" data-ar="السجلات">Records</span></div>
+      <div class="user-dot" aria-hidden="true"></div>
+    </div>
+
+    <div class="app-body">
+      <section class="scenario-panel" data-panel="generated">
+        <div class="form-heading">
+          <div class="service-glyph" aria-hidden="true">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M6 2h9l3 3v17H6z"/><path d="M14 2v5h5M9 12h6M9 16h6"/></svg>
+          </div>
+          <div><h2 data-en="Leave application" data-ar="طلب إجازة">Leave application</h2><p data-en="Notifier-backed form · preview before final save" data-ar="نموذج مرتبط بإشعار · معاينة قبل الحفظ النهائي">Notifier-backed form · preview before final save</p></div>
+        </div>
+        <div class="preview-card">
+          <div class="tabrow">
+            <button class="pill" data-en="Fields" data-ar="الحقول">Fields</button>
+            <button class="pill active" data-en="Preview" data-ar="المعاينة">Preview</button>
+            <div class="quiet-links">
+              <button class="quiet-link" data-en="Edit fields" data-ar="تعديل الحقول">Edit fields</button>
+              <button class="quiet-link" data-en="New form" data-ar="نموذج جديد">New form</button>
+              <button class="quiet-link" id="resetGenerated" type="button" onclick="setGeneratedState('ready')" data-en="Review SMS choice" data-ar="مراجعة خيار الإشعار" hidden>Review SMS choice</button>
+            </div>
+          </div>
+
+          <div class="completion ready" id="generatedReady">
+            <div class="completion-status">
+              <span class="ready-seal" aria-hidden="true">
+                <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4"/></svg>
+              </span>
+              <div class="completion-copy">
+                <div class="completion-titleline"><span class="completion-title" data-en="Ready to save to Records" data-ar="جاهز للحفظ في السجلات">Ready to save to Records</span></div>
+                <div class="completion-note" data-en="Choose whether this employee receives the configured notification." data-ar="اختر ما إذا كان الموظف سيستلم الإشعار المجهّز لهذا النموذج.">Choose whether this employee receives the configured notification.</div>
+              </div>
+            </div>
+            <div class="notify-save-actions">
+              <div class="notify-inline">
+                <span class="notify-label"><b data-en="Notify employee" data-ar="إشعار الموظف">Notify employee</b><small data-en="WhatsApp, then SMS fallback" data-ar="واتساب، ثم رسالة نصية احتياطية">WhatsApp, then SMS fallback</small></span>
+                <span class="switch-state" id="notifyState" data-en="On" data-ar="مفعّل">On</span>
+                <button class="notify-switch" id="notifySwitch" type="button" role="switch" aria-checked="true" aria-label="Notify employee" onclick="toggleNotify()"><span class="notify-switch-thumb"></span></button>
+              </div>
+              <button class="action primary" type="button" onclick="simulateGeneratedSave()">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M9 15h6"/></svg>
+                <span data-en="Save to Records" data-ar="حفظ في السجلات">Save to Records</span>
+              </button>
+            </div>
+          </div>
+
+          <div class="completion" id="generatedSaved" hidden>
+            <div class="completion-status">
+              <span class="success-seal" aria-hidden="true"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="m5 12 4 4L19 6"/></svg></span>
+              <div class="completion-copy">
+                <div class="completion-titleline"><span class="completion-title" data-en="Saved to Records" data-ar="تم الحفظ في السجلات">Saved to Records</span><bdi class="ref-chip" dir="ltr">LV-2026-0184</bdi></div>
+                <div class="completion-note"><span class="notify-outcome" id="savedNotifyOutcome" data-en="Notification enabled for this save" data-ar="تم تفعيل الإشعار لهذا الحفظ">Notification enabled for this save</span></div>
+              </div>
+            </div>
+            <div class="completion-actions">
+              <button class="action" type="button" onclick="demoAction('print')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><path d="M6 9V2h12v7M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><path d="M6 14h12v8H6z"/></svg><span data-en="Print" data-ar="طباعة">Print</span></button>
+              <button class="action primary" type="button" onclick="demoAction('approval')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><path d="m22 2-7 20-4-9-9-4zM22 2 11 13"/></svg><span data-en="Send for approval" data-ar="إرسال للاعتماد">Send for approval</span></button>
+              <button class="action" type="button" onclick="demoAction('record')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M9 13h6M9 17h6"/></svg><span data-en="Open record" data-ar="فتح السجل">Open record</span></button>
+            </div>
+          </div>
+
+          <div class="preview-layout">
+            <div class="paper-desk"><div class="paper"><div class="paper-letterhead"></div><div class="paper-ref">LV-2026-0184</div><div class="paper-title" data-en="LEAVE APPLICATION" data-ar="طـلـب إجــازة">LEAVE APPLICATION</div><div class="paper-line"></div><div class="paper-line short"></div><div class="paper-line"></div><div class="paper-line"></div><div class="paper-line short"></div><div class="paper-sign" data-en="Authorized signature" data-ar="التوقيع المعتمد">Authorized signature</div></div></div>
+            <aside class="record-note"><div class="label" data-en="Notification rule" data-ar="قاعدة الإشعار">Notification rule</div><h3 data-en="Choice applies to this save only" data-ar="الخيار يخص عملية الحفظ الحالية فقط">Choice applies to this save only</h3><p data-en="The switch appears for every form that has an automatic notifier. It starts On for each new form and never changes the global setting." data-ar="يظهر المفتاح لكل نموذج لديه إشعار تلقائي. يبدأ مفعّلاً في كل نموذج جديد ولا يغيّر الإعداد العام.">The switch appears for every form that has an automatic notifier. It starts On for each new form and never changes the global setting.</p><span class="state" data-en="On by default" data-ar="مفعّل افتراضياً">On by default</span></aside>
+          </div>
+        </div>
+      </section>
+
+      <section class="scenario-panel" data-panel="general" hidden>
+        <div class="form-heading"><div class="service-glyph" aria-hidden="true"><span class="word-mark">W</span></div><div><h2 data-en="General Book" data-ar="كتاب عام">General Book</h2><p data-en="Word handoff finished · final PDF" data-ar="اكتمل التحرير في Word · ملف PDF النهائي">Word handoff finished · final PDF</p></div></div>
+        <div class="preview-card">
+          <div class="tabrow"><button class="pill active" data-en="Finished document" data-ar="المستند النهائي">Finished document</button><div class="quiet-links"><button class="quiet-link" data-en="Close" data-ar="إغلاق">Close</button></div></div>
+          <div class="completion">
+            <div class="completion-status"><span class="success-seal" aria-hidden="true"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="m5 12 4 4L19 6"/></svg></span><div class="completion-copy"><div class="completion-titleline"><span class="completion-title" data-en="Saved to Records" data-ar="تم الحفظ في السجلات">Saved to Records</span><bdi class="ref-chip" dir="ltr">1/5/GSSG/141</bdi></div><div class="completion-note" data-en="Word editing is finished; version 1 is committed." data-ar="اكتمل التحرير في Word وتم اعتماد الإصدار الأول.">Word editing is finished; version 1 is committed.</div></div></div>
+            <div class="completion-actions"><button class="action" type="button" onclick="demoAction('print')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><path d="M6 9V2h12v7M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><path d="M6 14h12v8H6z"/></svg><span data-en="Print" data-ar="طباعة">Print</span></button><button class="action primary" type="button" onclick="demoAction('approval')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><path d="m22 2-7 20-4-9-9-4zM22 2 11 13"/></svg><span data-en="Send for approval" data-ar="إرسال للاعتماد">Send for approval</span></button><button class="action" type="button" onclick="demoAction('record')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M9 13h6M9 17h6"/></svg><span data-en="Open record" data-ar="فتح السجل">Open record</span></button></div>
+          </div>
+          <div class="word-note"><span class="word-mark">W</span><span data-en="The Word session is closed. Reopen from the record only when another version is needed." data-ar="أُغلقت جلسة Word. يُعاد فتحها من السجل فقط عند الحاجة إلى إصدار جديد.">The Word session is closed. Reopen from the record only when another version is needed.</span></div>
+          <div class="preview-layout"><div class="paper-desk"><div class="paper"><div class="paper-letterhead"></div><div class="paper-ref">1/5/GSSG/141</div><div class="paper-title" data-en="SECURITY PERMITS" data-ar="التصاريح الأمنية">SECURITY PERMITS</div><div class="paper-line"></div><div class="paper-line"></div><div class="paper-line short"></div><div class="paper-line"></div><div class="paper-sign" data-en="Signing manager" data-ar="المدير الموقّع">Signing manager</div></div></div><aside class="record-note"><div class="label" data-en="General Book only" data-ar="للكتاب العام فقط">General Book only</div><h3 data-en="Template library is supported" data-ar="مكتبة القوالب مدعومة">Template library is supported</h3><p data-en="Save as template stays outside the main handoff actions because it is optional and specific to General Books." data-ar="يبقى الحفظ كقالب خارج إجراءات التسليم الرئيسية لأنه اختياري ومخصص للكتب العامة.">Save as template stays outside the main handoff actions because it is optional and specific to General Books.</p></aside></div>
+          <div class="secondary-row"><button class="text-action" data-en="Save this General Book as a reusable template" data-ar="حفظ هذا الكتاب العام كقالب قابل لإعادة الاستخدام">Save this General Book as a reusable template</button><span class="context-explanation" data-en="Secondary · General Book only" data-ar="إجراء ثانوي · للكتاب العام فقط">Secondary · General Book only</span></div>
+        </div>
+      </section>
+
+      <section class="scenario-panel" data-panel="report" hidden>
+        <div class="form-heading"><div class="service-glyph" aria-hidden="true"><span class="word-mark">W</span></div><div><h2 data-en="Report" data-ar="تقرير">Report</h2><p data-en="Word handoff finished · final PDF" data-ar="اكتمل التحرير في Word · ملف PDF النهائي">Word handoff finished · final PDF</p></div></div>
+        <div class="preview-card">
+          <div class="tabrow"><button class="pill active" data-en="Finished document" data-ar="المستند النهائي">Finished document</button><div class="quiet-links"><button class="quiet-link" data-en="Close" data-ar="إغلاق">Close</button></div></div>
+          <div class="completion">
+            <div class="completion-status"><span class="success-seal" aria-hidden="true"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="m5 12 4 4L19 6"/></svg></span><div class="completion-copy"><div class="completion-titleline"><span class="completion-title" data-en="Saved to Records" data-ar="تم الحفظ في السجلات">Saved to Records</span><bdi class="ref-chip" dir="ltr">RPT-2026-0087</bdi></div><div class="completion-note" data-en="The finished report is ready for the next step." data-ar="التقرير النهائي جاهز للخطوة التالية.">The finished report is ready for the next step.</div></div></div>
+            <div class="completion-actions"><button class="action" type="button" onclick="demoAction('print')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><path d="M6 9V2h12v7M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><path d="M6 14h12v8H6z"/></svg><span data-en="Print" data-ar="طباعة">Print</span></button><button class="action primary" type="button" onclick="demoAction('approval')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><path d="m22 2-7 20-4-9-9-4zM22 2 11 13"/></svg><span data-en="Send for approval" data-ar="إرسال للاعتماد">Send for approval</span></button><button class="action" type="button" onclick="demoAction('record')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M9 13h6M9 17h6"/></svg><span data-en="Open record" data-ar="فتح السجل">Open record</span></button></div>
+          </div>
+          <div class="word-note"><span class="word-mark">W</span><span data-en="Report authoring used Word, but Reports are not sources for the General Book template library." data-ar="تمت كتابة التقرير في Word، لكن التقارير ليست مصدراً لمكتبة قوالب الكتاب العام.">Report authoring used Word, but Reports are not sources for the General Book template library.</span></div>
+          <div class="preview-layout"><div class="paper-desk"><div class="paper"><div class="paper-letterhead"></div><div class="paper-ref">RPT-2026-0087</div><div class="paper-title" data-en="INCIDENT REPORT" data-ar="تقرير واقعة">INCIDENT REPORT</div><div class="paper-line"></div><div class="paper-line"></div><div class="paper-line"></div><div class="paper-line short"></div><div class="paper-line"></div><div class="paper-sign" data-en="Report signer" data-ar="موقّع التقرير">Report signer</div></div></div><aside class="record-note"><div class="label" data-en="Cleanup" data-ar="تنظيف الواجهة">Cleanup</div><h3 data-en="No dead template action" data-ar="لا يوجد زر قالب غير صالح">No dead template action</h3><p data-en="The unsupported Save as template button is absent. The backend only accepts finished General Books as templates." data-ar="زر الحفظ كقالب غير المدعوم غير ظاهر. الخادم يقبل الكتب العامة النهائية فقط كمصدر للقوالب.">The unsupported Save as template button is absent. The backend only accepts finished General Books as templates.</p><span class="state" data-en="Correct capability" data-ar="إجراء صحيح">Correct capability</span></aside></div>
+        </div>
+      </section>
+
+      <section class="scenario-panel" data-panel="duty" hidden>
+        <div class="duty-shell">
+          <div class="duty-heading"><div><h2 data-en="Duty Locations" data-ar="مواقع العمل">Duty Locations</h2><p data-en="Transfer employees and generate the transfer letter" data-ar="نقل الموظفين وإنشاء كتاب النقل">Transfer employees and generate the transfer letter</p></div></div>
+          <div class="completion" style="margin:0 0 13px">
+            <div class="completion-status"><span class="success-seal" aria-hidden="true"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="m5 12 4 4L19 6"/></svg></span><div class="completion-copy"><div class="completion-titleline"><span class="completion-title" data-en="Transfer completed · letter saved" data-ar="اكتمل النقل · تم حفظ الكتاب">Transfer completed · letter saved</span><bdi class="ref-chip" dir="ltr">1/15/GSSG/204</bdi></div><div class="completion-note" data-en="4 employees moved to Operations Unit." data-ar="تم نقل 4 موظفين إلى وحدة العمليات.">4 employees moved to Operations Unit.</div></div></div>
+            <div class="completion-actions"><button class="action" type="button" onclick="demoAction('print')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><path d="M6 9V2h12v7M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><path d="M6 14h12v8H6z"/></svg><span data-en="Print" data-ar="طباعة">Print</span></button><button class="action primary" type="button" onclick="demoAction('approval')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><path d="m22 2-7 20-4-9-9-4zM22 2 11 13"/></svg><span data-en="Send for approval" data-ar="إرسال للاعتماد">Send for approval</span></button><button class="action" type="button" onclick="demoAction('record')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M9 13h6M9 17h6"/></svg><span data-en="Open record" data-ar="فتح السجل">Open record</span></button></div>
+          </div>
+          <div class="duty-board"><aside class="unit-rail"><div class="unit active" data-en="Operations Unit · 18" data-ar="وحدة العمليات · 18">Operations Unit · 18</div><div class="unit" data-en="Security · 24" data-ar="الأمن · 24">Security · 24</div><div class="unit" data-en="Administration · 12" data-ar="الإدارة · 12">Administration · 12</div></aside><div class="roster"><div class="roster-row"><span class="avatar"></span><bdi dir="ltr">G-1048</bdi><b data-en="Employee name" data-ar="اسم الموظف">Employee name</b><span data-en="Operations" data-ar="العمليات">Operations</span></div><div class="roster-row"><span class="avatar"></span><bdi dir="ltr">G-1071</bdi><b data-en="Employee name" data-ar="اسم الموظف">Employee name</b><span data-en="Operations" data-ar="العمليات">Operations</span></div><div class="roster-row"><span class="avatar"></span><bdi dir="ltr">G-1114</bdi><b data-en="Employee name" data-ar="اسم الموظف">Employee name</b><span data-en="Operations" data-ar="العمليات">Operations</span></div><div class="roster-row"><span class="avatar"></span><bdi dir="ltr">G-1152</bdi><b data-en="Employee name" data-ar="اسم الموظف">Employee name</b><span data-en="Operations" data-ar="العمليات">Operations</span></div></div></div>
+        </div>
+      </section>
+    </div>
+  </div>
+</main>
+
+<section class="plan">
+  <h2 data-en="Implementation plan after UI approval" data-ar="خطة التنفيذ بعد اعتماد الواجهة">Implementation plan after UI approval</h2>
+  <p class="plan-intro" data-en="Clean cutover: one server-owned notifier capability, one two-state handoff surface, the existing approval dialog, and the existing printable record page." data-ar="تحويل مباشر ونظيف: قدرة إشعار يحددها الخادم، وسطح تسليم واحد بحالتين، ونافذة الاعتماد الحالية، وصفحة السجل الحالية للطباعة.">Clean cutover: one server-owned notifier capability, one two-state handoff surface, the existing approval dialog, and the existing printable record page.</p>
+  <div class="plan-grid">
+    <article class="plan-card"><span class="step">01</span><h3 data-en="Make notifier coverage server-owned" data-ar="جعل نطاق الإشعار محدداً من الخادم">Make notifier coverage server-owned</h3><p data-en="Expose a notifies_employee flag in template metadata from the same backend capability set used by auto-send—including leave, administrative leave, duty resumption, violation, and every mapped book event. Remove the duplicated frontend form list." data-ar="إضافة notifies_employee إلى بيانات النموذج من مجموعة القدرات الخلفية نفسها المستخدمة في الإرسال التلقائي، بما يشمل الإجازة والإجازة الإدارية ومباشرة العمل والمخالفة وكل أحداث الكتب المرتبطة. إزالة قائمة النماذج المكررة في الواجهة.">Expose a notifies_employee flag in template metadata from the same backend capability set used by auto-send—including leave, administrative leave, duty resumption, violation, and every mapped book event. Remove the duplicated frontend form list.</p></article>
+    <article class="plan-card"><span class="step">02</span><h3 data-en="Build one two-state handoff bar" data-ar="إنشاء شريط تسليم واحد بحالتين">Build one two-state handoff bar</h3><p data-en="Before save: notifier-backed forms show the default-on per-record switch and Save to Records. After save: the same position shows Saved, the notification outcome, Print, Send for approval, and Open record." data-ar="قبل الحفظ: تعرض النماذج المرتبطة بإشعار المفتاح المفعّل افتراضياً وزر الحفظ في السجلات. بعد الحفظ: يعرض الموضع نفسه حالة الحفظ ونتيجة الإشعار والطباعة والإرسال للاعتماد وفتح السجل.">Before save: notifier-backed forms show the default-on per-record switch and Save to Records. After save: the same position shows Saved, the notification outcome, Print, Send for approval, and Open record.</p></article>
+    <article class="plan-card"><span class="step">03</span><h3 data-en="Connect every save path" data-ar="ربط جميع مسارات الحفظ">Connect every save path</h3><p data-en="Generated forms pass notify_employee with the committed save and resolve the new book by reference. Word Finish already returns BookRead; Duty transfer already returns book_id and ref. Non-notifying services skip the switch." data-ar="تمرر النماذج notify_employee مع الحفظ النهائي وتستخرج السجل الجديد بالمرجع. يعيد إنهاء Word بيانات السجل مباشرة، ويعيد نقل موقع العمل رقم السجل والمرجع. الخدمات غير المرتبطة بإشعار لا تعرض المفتاح.">Generated forms pass notify_employee with the committed save and resolve the new book by reference. Word Finish already returns BookRead; Duty transfer already returns book_id and ref. Non-notifying services skip the switch.</p></article>
+    <article class="plan-card"><span class="step">04</span><h3 data-en="Make Print consistent and reliable" data-ar="توحيد الطباعة وضمان عملها">Make Print consistent and reliable</h3><p data-en="Use the existing full-record print surface for every service. Open the record in print mode, wait for its PDF canvas to finish, then invoke the print dialog once." data-ar="استخدام سطح طباعة السجل الكامل الحالي لكل خدمة. يُفتح السجل في وضع الطباعة، وينتظر اكتمال عرض PDF، ثم يفتح مربع الطباعة مرة واحدة.">Use the existing full-record print surface for every service. Open the record in print mode, wait for its PDF canvas to finish, then invoke the print dialog once.</p></article>
+    <article class="plan-card"><span class="step">05</span><h3 data-en="Reuse the approval workflow" data-ar="إعادة استخدام مسار الاعتماد">Reuse the approval workflow</h3><p data-en="Open the current manager/reviewer dialog. No duplicate approval logic. On success, refresh Books/Dashboard and change the completion status to “Sent for approval.”" data-ar="فتح نافذة المدير والمراجعين الحالية دون تكرار منطق الاعتماد. بعد النجاح، تُحدّث السجلات والرئيسية وتتغير الحالة إلى «أُرسل للاعتماد».">Open the current manager/reviewer dialog. No duplicate approval logic. On success, refresh Books/Dashboard and change the completion status to “Sent for approval.”</p></article>
+    <article class="plan-card"><span class="step">06</span><h3 data-en="Remove the Report dead action" data-ar="إزالة الإجراء غير الصالح من التقرير">Remove the Report dead action</h3><p data-en="Show Save as template only when the finished version’s template_id is General Book. Reports keep the same Word finish and preview, without an action the backend rejects." data-ar="يظهر الحفظ كقالب فقط عندما يكون نوع الإصدار النهائي «كتاب عام». يحتفظ التقرير بإنهاء Word والمعاينة نفسها دون زر يرفضه الخادم.">Show Save as template only when the finished version’s template_id is General Book. Reports keep the same Word finish and preview, without an action the backend rejects.</p></article>
+    <article class="plan-card"><span class="step">07</span><h3 data-en="Verify real operator paths" data-ar="التحقق من مسارات العمل الفعلية">Verify real operator paths</h3><p data-en="Exercise notifier On and Off for every notifier-backed template family, plus General Book, Report, and Duty transfer in English/Arabic, desktop/phone, light/dark. Verify actual outbound-message logs, print output, and approval submission." data-ar="تجربة الإشعار مفعّلاً ومعطّلاً لكل عائلة نماذج مرتبطة بإشعار، إضافة إلى الكتاب العام والتقرير ونقل موقع العمل بالإنجليزية والعربية وعلى سطح المكتب والجوال والوضعين الفاتح والداكن. التحقق من سجل الرسائل الفعلي والطباعة والإرسال للاعتماد.">Exercise notifier On and Off for every notifier-backed template family, plus General Book, Report, and Duty transfer in English/Arabic, desktop/phone, light/dark. Verify actual outbound-message logs, print output, and approval submission.</p></article>
+  </div>
+  <div class="rules">
+    <div class="rule"><b data-en="Notification switch" data-ar="مفتاح الإشعار">Notification switch</b><span data-en="On by default for each new notifier-backed form; turning it Off suppresses only that save. Hidden when no notifier exists or global auto-send is disabled." data-ar="مفعّل افتراضياً لكل نموذج جديد مرتبط بإشعار؛ تعطيله يمنع إشعار عملية الحفظ الحالية فقط. لا يظهر إن لم يوجد إشعار أو كان الإرسال التلقائي العام معطّلاً.">On by default for each new notifier-backed form; turning it Off suppresses only that save. Hidden when no notifier exists or global auto-send is disabled.</span></div>
+    <div class="rule"><b data-en="Channel wording" data-ar="صياغة القناة">Channel wording</b><span data-en="UI says “Notify employee” because delivery tries WhatsApp first and falls back to SMS; the user controls the notification, not a specific transport." data-ar="تستخدم الواجهة «إشعار الموظف» لأن الإرسال يجرب واتساب أولاً ثم الرسالة النصية؛ يتحكم المستخدم في الإشعار لا في قناة محددة.">UI says “Notify employee” because delivery tries WhatsApp first and falls back to SMS; the user controls the notification, not a specific transport.</span></div>
+    <div class="rule"><b data-en="Toast" data-ar="الرسالة العابرة">Toast</b><span data-en="Keep as a short confirmation only; never the sole way to reach next actions." data-ar="تبقى كتأكيد مختصر فقط، ولا تكون الطريق الوحيد للإجراءات التالية.">Keep as a short confirmation only; never the sole way to reach next actions.</span></div>
+    <div class="rule"><b data-en="Approval visibility" data-ar="إظهار الاعتماد">Approval visibility</b><span data-en="Show only when the user can manage books and the record state accepts submission; do not show a dead or unauthorized control." data-ar="يظهر فقط لمن يملك صلاحية إدارة الكتب وعندما تسمح حالة السجل بالإرسال؛ لا يظهر زر معطّل أو غير مصرح.">Show only when the user can manage books and the record state accepts submission; do not show a dead or unauthorized control.</span></div>
+    <div class="rule"><b data-en="National Service" data-ar="الخدمة الوطنية">National Service</b><span data-en="Unchanged: its Services tile does not create a document/book through this flow." data-ar="دون تغيير: بطاقة الخدمة لا تُنشئ مستنداً أو كتاباً عبر هذا المسار.">Unchanged: its Services tile does not create a document/book through this flow.</span></div>
+    <div class="rule"><b data-en="Responsive order" data-ar="ترتيب الجوال">Responsive order</b><span data-en="Before save on phone: notification switch, then full-width Save. After save: full-width Send for approval first, then Print and Open record side by side." data-ar="قبل الحفظ على الجوال: مفتاح الإشعار ثم زر الحفظ بعرض كامل. بعد الحفظ: إرسال للاعتماد بعرض كامل أولاً، ثم الطباعة وفتح السجل جنباً إلى جنب.">Before save on phone: notification switch, then full-width Save. After save: full-width Send for approval first, then Print and Open record side by side.</span></div>
+  </div>
+</section>
+
+<div class="toast" id="demoToast" role="status"><span class="success-seal" style="width:26px;height:26px"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="m5 12 4 4L19 6"/></svg></span><span id="demoToastText">Action preview</span></div>
+
+<script>
+  let language = 'en';
+  let scenario = 'generated';
+  let notifyEmployee = true;
+  function translate() {
+    document.documentElement.lang = language;
+    document.documentElement.dir = language === 'ar' ? 'rtl' : 'ltr';
+    document.querySelectorAll('[data-en][data-ar]').forEach((el) => {
+      el.textContent = el.getAttribute('data-' + language);
+    });
+    document.getElementById('langToggle').textContent = language === 'en' ? 'العربية' : 'English';
+  }
+  function toggleLanguage() { language = language === 'en' ? 'ar' : 'en'; translate(); }
+  function toggleTheme() {
+    document.documentElement.classList.toggle('dark');
+    document.getElementById('themeToggle').classList.toggle('active');
+  }
+  function togglePhone() {
+    document.getElementById('reviewStage').classList.toggle('phone-mode');
+    document.getElementById('phoneToggle').classList.toggle('active');
+  }
+  function updateNotifyUi() {
+    const toggle = document.getElementById('notifySwitch');
+    const state = document.getElementById('notifyState');
+    toggle.setAttribute('aria-checked', String(notifyEmployee));
+    state.setAttribute('data-en', notifyEmployee ? 'On' : 'Off');
+    state.setAttribute('data-ar', notifyEmployee ? 'مفعّل' : 'معطّل');
+    state.textContent = state.getAttribute('data-' + language);
+  }
+  function toggleNotify() {
+    notifyEmployee = !notifyEmployee;
+    updateNotifyUi();
+  }
+  function setGeneratedState(next) {
+    const saved = next === 'saved';
+    document.getElementById('generatedReady').hidden = saved;
+    document.getElementById('generatedSaved').hidden = !saved;
+    document.getElementById('resetGenerated').hidden = !saved;
+    if (saved) {
+      const outcome = document.getElementById('savedNotifyOutcome');
+      outcome.setAttribute('data-en', notifyEmployee ? 'Notification enabled for this save' : 'Saved without notifying the employee');
+      outcome.setAttribute('data-ar', notifyEmployee ? 'تم تفعيل الإشعار لهذا الحفظ' : 'تم الحفظ دون إشعار الموظف');
+      outcome.classList.toggle('off', !notifyEmployee);
+      outcome.textContent = outcome.getAttribute('data-' + language);
+    }
+  }
+  function simulateGeneratedSave() {
+    setGeneratedState('saved');
+    demoAction(notifyEmployee ? 'notifyOn' : 'notifyOff');
+  }
+  function setScenario(next) {
+    scenario = next;
+    document.querySelectorAll('.scenario-tab').forEach((el) => el.classList.toggle('active', el.dataset.scenario === next));
+    document.querySelectorAll('.scenario-panel').forEach((el) => { el.hidden = el.dataset.panel !== next; });
+  }
+  function demoAction(kind) {
+    const text = {
+      en: { print: 'Print opens the existing record print surface.', approval: 'The existing manager and reviewer dialog opens here.', record: 'The full record opens here.', notifyOn: 'Saved with the employee notification enabled.', notifyOff: 'Saved without notifying the employee.' },
+      ar: { print: 'تفتح الطباعة سطح طباعة السجل الحالي.', approval: 'تفتح هنا نافذة المدير والمراجعين الحالية.', record: 'يفتح هنا السجل الكامل.', notifyOn: 'تم الحفظ مع تفعيل إشعار الموظف.', notifyOff: 'تم الحفظ دون إشعار الموظف.' }
+    };
+    const toast = document.getElementById('demoToast');
+    document.getElementById('demoToastText').textContent = text[language][kind];
+    toast.classList.add('show');
+    window.clearTimeout(window.__toastTimer);
+    window.__toastTimer = window.setTimeout(() => toast.classList.remove('show'), 2600);
+  }
+  translate();
+  setScenario(scenario);
+</script>
+</body>
+</html>
