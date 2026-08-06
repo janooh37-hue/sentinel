@@ -2235,7 +2235,10 @@
       "saveBook": "حفظ الكتاب",
       "waitingForPreview": "بانتظار المعاينة…",
       "saved": "تم الحفظ",
-      "generate": "إنشاء المستند"
+      "generate": "إنشاء المستند",
+      "readyToSave": "جاهز للحفظ في السجلات",
+      "saveToRecords": "حفظ في السجلات",
+      "notificationChannel": "واتساب، ثم الرسائل النصية كخيار بديل"
     },
     "previewFirstHint": "اعرض المعاينة أولًا — يظهر زر الحفظ بعد إنشاء المستند.",
     "saveBookHint": "جارٍ إنشاء المعاينة…",

@@ -2076,7 +2076,10 @@
       "saveBook": "Save book",
       "waitingForPreview": "Waiting for preview…",
       "saved": "Saved",
-      "generate": "Generate document"
+      "generate": "Generate document",
+      "readyToSave": "Ready to save to Records",
+      "saveToRecords": "Save to Records",
+      "notificationChannel": "WhatsApp, then SMS fallback"
     },
     "previewFirstHint": "Preview first — Save appears once the document renders.",
     "saveBookHint": "Generating preview…",

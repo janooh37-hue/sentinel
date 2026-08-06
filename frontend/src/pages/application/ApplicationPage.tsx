@@ -30,13 +30,15 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom'
-import { ChevronLeft, ChevronRight, Eye, FileText, Mail, Pencil, QrCode, RotateCcw, Search, ArrowRight, ArrowLeft } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Eye, Mail, Pencil, QrCode, RotateCcw, Search, ArrowRight, ArrowLeft } from 'lucide-react'
 import { toast } from 'sonner'
 
 import { shouldShowNotifyToggle } from './notifyToggle'
-import { NotifyEmployeeToggle } from '@/components/notify/NotifyEmployeeToggle'
+import { GeneratedSaveActions } from './GeneratedSaveActions'
+import { savedGenerationFromJob, type SavedGeneration } from './savedGeneration'
+import { SavedRecordActions, type NotificationChoice } from '@/components/books/SavedRecordActions'
 import { api, apiErrorMessage } from '@/lib/api'
-import type { DocumentGenerateRequest, StagedAttachmentRead, TemplateMeta, WordSessionRead } from '@/lib/api'
+import type { DocumentGenerateRequest, JobStatusResponse, StagedAttachmentRead, TemplateMeta, WordSessionRead } from '@/lib/api'
 import type { ExtractionResponse } from '@/lib/extraction'
 import type { TemplateDetailResponse, TemplateField } from '@/components/application/types'
 import { buildZodSchema } from '@/lib/applicationFormSchema'
@@ -167,12 +169,7 @@ export function ApplicationPage(): React.JSX.Element {
   // The Preview tab's Save button only lights up when status === 'done', so the
   // operator literally cannot save without first seeing a successful preview.
   const [previewJobStatus, setPreviewJobStatus] =
-    useState<import('@/lib/api').JobStatusResponse['status'] | null>(null)
-  // Whether the currently-shown preview is the committed doc (real ref) or a
-  // throw-away DRAFT. Used to swap Save-book copy after a successful save so
-  // we don't keep prompting "Save to commit…" when the doc *is* the committed
-  // one.
-  const [previewIsCommitted, setPreviewIsCommitted] = useState(false)
+    useState<JobStatusResponse['status'] | null>(null)
   const [submitError, setSubmitError] = useState<string | null>(null)
   const [query, setQuery] = useState('')
   // General Book: classification code selected by the picker. Required for
@@ -194,9 +191,12 @@ export function ApplicationPage(): React.JSX.Element {
   // localStorage-clear in JobStatus.onDone branch on this. Stored in a ref
   // (not state) so we don't re-render the form just to flip the flag.
   const pendingCommitRef = useRef<boolean>(false)
+  const pendingNotificationRef = useRef<NotificationChoice | undefined>(undefined)
 
   // Last successfully committed document — used to populate the basket item.
-  const [lastSaved, setLastSaved] = useState<{ docId: number; ref: string } | null>(null)
+  const [lastSaved, setLastSaved] = useState<
+    (SavedGeneration & { notification?: NotificationChoice }) | null
+  >(null)
 
   // Invalidate the Books ('Records') list once the generation job completes —
   // every generated form is now also a Book row (see document_service step 11b),
@@ -376,7 +376,6 @@ export function ApplicationPage(): React.JSX.Element {
       // Preview tab stays disabled until JobStatus reports a successful
       // render.
       setPreviewJobStatus('queued')
-      setPreviewIsCommitted(false)
       setActiveTab('preview')
       setSubmitError(null)
     },
@@ -563,6 +562,11 @@ export function ApplicationPage(): React.JSX.Element {
       const payload = buildPayload(values, commit)
       if (!payload) return
       pendingCommitRef.current = commit
+      if (commit) {
+        pendingNotificationRef.current = showNotifyEmployee
+          ? notifyEmployee ? 'enabled' : 'skipped'
+          : undefined
+      }
       generateMutation.mutate(payload)
     })
   }
@@ -575,18 +579,14 @@ export function ApplicationPage(): React.JSX.Element {
   // beyond the inline PDF render. Books-list invalidation always runs so
   // Records refreshes immediately after a save (no-op for preview).
   const handleJobDone = useCallback(
-    (job: import('@/lib/api').JobStatusResponse) => {
+    (job: JobStatusResponse) => {
       setPreviewJobStatus(job.status)
-      const primary = job.documents?.find((d) => d.role === 'primary')
-      const ref = primary?.ref_number
-      setPreviewIsCommitted(!!ref && ref !== 'DRAFT')
+      const saved = savedGenerationFromJob(job)
       void qc.invalidateQueries({ queryKey: ['books'] })
       if (pendingCommitRef.current && selectedTemplate) {
-        if (ref && ref !== 'DRAFT') {
-          toast.success(t('application.toast.saved', { ref }))
-          if (primary?.document_id != null) {
-            setLastSaved({ docId: primary.document_id, ref })
-          }
+        if (saved) {
+          setLastSaved({ ...saved, notification: pendingNotificationRef.current })
+          toast.success(t('application.toast.saved', { ref: saved.ref }))
         } else {
           toast.success(t('application.toast.generated'))
         }
@@ -599,11 +599,12 @@ export function ApplicationPage(): React.JSX.Element {
         // and button label reflect "this preview is the committed doc"
         // rather than "still saving".
         pendingCommitRef.current = false
+        pendingNotificationRef.current = undefined
         // Revise mode is one-shot: after a successful committed save the book
         // is back to approval_state="none", so threading revise_of_book_id on a
         // SECOND save would hit the BOOK_NOT_REVISABLE guard. Clear it now (only
         // for committed saves, not previews) so subsequent saves behave normally.
-        if (ref && ref !== 'DRAFT') setReviseBookId(null)
+        if (saved) setReviseBookId(null)
       }
     },
     [qc, selectedTemplate, t],
@@ -620,8 +621,8 @@ export function ApplicationPage(): React.JSX.Element {
     setActiveTab('fields')
     setActiveJobId(null)
     setPreviewJobStatus(null)
-    setPreviewIsCommitted(false)
     setLastSaved(null)
+    pendingNotificationRef.current = undefined
     // Per-book notify switch is not remembered — each newly-picked form starts On.
     setNotifyEmployee(true)
     setSubmitError(null)
@@ -759,8 +760,8 @@ export function ApplicationPage(): React.JSX.Element {
     setAttachmentsState(emptyAttachmentsState())
     setActiveJobId(null)
     setPreviewJobStatus(null)
-    setPreviewIsCommitted(false)
     setLastSaved(null)
+    pendingNotificationRef.current = undefined
     // Per-book notify switch is not remembered — reset to On when clearing.
     setNotifyEmployee(true)
     setActiveTab('fields')
@@ -1126,115 +1127,81 @@ export function ApplicationPage(): React.JSX.Element {
 
               {activeTab === 'preview' && activeJobId && (
                 <div className="flex min-h-[400px] flex-col">
-                  <JobStatus key={activeJobId} jobId={activeJobId} onDone={handleJobDone} />
-
-                  {showNotifyEmployee && (
-                    <NotifyEmployeeToggle
-                      className="mt-4"
-                      checked={notifyEmployee}
-                      onChange={setNotifyEmployee}
-                      label={t('application.notify.label')}
-                      hint={
-                        notifyEmployee
-                          ? t('application.notify.hintOn')
-                          : t('application.notify.hintOff')
+                  {previewJobStatus === 'done' && !lastSaved && (
+                    <GeneratedSaveActions
+                      showNotify={showNotifyEmployee}
+                      notifyEmployee={notifyEmployee}
+                      notifyDisabled={generateMutation.isPending}
+                      saveDisabled={
+                        (!isAdminCategory && !selectedEmployee) ||
+                        generateMutation.isPending ||
+                        missingSlotKeys.length > 0
                       }
-                    />
-                  )}
-
-                  {/* Save book lives here — only enabled when the preview job
-                      reports `done`. While the job is queued/running the
-                      button stays disabled with a "Waiting for preview…"
-                      label so the gate is visible, not just implicit.
-                      Once the visible preview IS the committed doc (real ref),
-                      we swap copy to "Saved" and disable the button to prevent
-                      a double-commit. */}
-                  <div className="mt-6 flex flex-wrap items-center justify-between gap-2.5 border-t border-hairline pt-4">
-                    <p className="text-[0.78em] text-muted-foreground">
-                      {previewIsCommitted
-                        ? t('application.savedHint')
-                        : missingSlotKeys.length > 0
+                      saving={generateMutation.isPending && pendingCommitRef.current}
+                      hint={
+                        missingSlotKeys.length > 0
                           ? t('application.attachments.requiredHint', {
                               slot: firstMissingSlotLabel,
                             })
-                          : previewJobStatus === 'done'
-                            ? t('application.saveReadyHint')
-                            : t('application.saveBookHint')}
-                    </p>
-                    <div className="flex items-center gap-2">
-                      {lastSaved && selectedTemplate && employeeQuery.data && (
-                        <Button
-                          type="button"
-                          variant="secondary"
-                          onClick={async () => {
-                            let bookId: number
-                            try {
-                              const book = await api.getBookByRef(lastSaved.ref)
-                              bookId = book.id
-                            } catch {
-                              toast.error(t('basket.addError'))
-                              return
-                            }
-                            const v = form.getValues()
-                            const leaveType =
-                              typeof v.leave_type === 'string'
-                                ? v.leave_type.split(' ')[0]
-                                : undefined
-                            const detail =
-                              v.start_date && v.end_date
-                                ? `${String(v.start_date)} → ${String(v.end_date)}`
-                                : selectedTemplate
-                            const item: EmailBasketItem = {
-                              bookId,
-                              docId: lastSaved.docId,
-                              ref: lastSaved.ref,
-                              employeeId: selectedEmployee as string,
-                              nameEn: employeeQuery.data.name_en ?? '',
-                              nameAr: employeeQuery.data.name_ar ?? null,
-                              formKind: selectedTemplate,
-                              leaveType:
-                                selectedTemplate === 'Leave Application Form'
-                                  ? leaveType
-                                  : undefined,
-                              detail,
-                            }
-                            const { added, key } = addToBasket(item)
-                            const kind = basketLabel(key, (k: string) => t(k))
-                            if (added) {
-                              toast.success(t('basket.tray.added', { kind }))
-                            } else {
-                              toast(t('basket.tray.alreadyIn', { kind }))
-                            }
-                          }}
-                        >
-                          {t('basket.add')}
-                        </Button>
-                      )}
+                          : t('application.saveReadyHint')
+                      }
+                      onNotifyChange={setNotifyEmployee}
+                      onSave={() => void handleSave()}
+                    />
+                  )}
+
+                  {lastSaved && (
+                    <SavedRecordActions
+                      bookId={lastSaved.bookId}
+                      refNumber={lastSaved.ref}
+                      notification={lastSaved.notification}
+                    />
+                  )}
+
+                  <JobStatus key={activeJobId} jobId={activeJobId} onDone={handleJobDone} />
+
+                  {lastSaved && selectedTemplate && employeeQuery.data && (
+                    <div className="mt-4 flex justify-end">
                       <Button
                         type="button"
-                        variant="commit"
-                        size="commit"
-                        onClick={() => void handleSave()}
-                        disabled={
-                          (!isAdminCategory && !selectedEmployee) ||
-                          generateMutation.isPending ||
-                          previewJobStatus !== 'done' ||
-                          previewIsCommitted ||
-                          missingSlotKeys.length > 0
-                        }
-                        className="min-h-11 disabled:cursor-not-allowed disabled:opacity-50"
+                        variant="secondary"
+                        onClick={() => {
+                          const v = form.getValues()
+                          const leaveType =
+                            typeof v.leave_type === 'string'
+                              ? v.leave_type.split(' ')[0]
+                              : undefined
+                          const detail =
+                            v.start_date && v.end_date
+                              ? `${String(v.start_date)} → ${String(v.end_date)}`
+                              : selectedTemplate
+                          const item: EmailBasketItem = {
+                            bookId: lastSaved.bookId,
+                            docId: lastSaved.docId,
+                            ref: lastSaved.ref,
+                            employeeId: selectedEmployee as string,
+                            nameEn: employeeQuery.data.name_en ?? '',
+                            nameAr: employeeQuery.data.name_ar ?? null,
+                            formKind: selectedTemplate,
+                            leaveType:
+                              selectedTemplate === 'Leave Application Form'
+                                ? leaveType
+                                : undefined,
+                            detail,
+                          }
+                          const { added, key } = addToBasket(item)
+                          const kind = basketLabel(key, (k: string) => t(k))
+                          if (added) {
+                            toast.success(t('basket.tray.added', { kind }))
+                          } else {
+                            toast(t('basket.tray.alreadyIn', { kind }))
+                          }
+                        }}
                       >
-                        <FileText className="h-3.5 w-3.5" strokeWidth={1.8} aria-hidden />
-                        {generateMutation.isPending && pendingCommitRef.current
-                          ? t('common.loading')
-                          : previewIsCommitted
-                            ? t('application.actions.saved')
-                            : previewJobStatus === 'done'
-                              ? t('application.actions.saveBook')
-                              : t('application.actions.waitingForPreview')}
+                        {t('basket.add')}
                       </Button>
                     </div>
-                  </div>
+                  )}
                 </div>
               )}
             </section>
