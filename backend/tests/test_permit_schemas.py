@@ -58,13 +58,17 @@ def test_custom_validity_bounds_are_unit_specific():
         PermitValidityPeriod(value=11, unit="year")
 
 
-def test_create_update_renew_reject_strict_validity_upper_bounds():
+def test_create_and_renew_reject_strict_validity_upper_bounds():
     with pytest.raises(ValidationError):
         PermitCreate.model_validate({**BASE_CREATE, "validity": {"value": 3651, "unit": "day"}})
     with pytest.raises(ValidationError):
-        PermitUpdate(validity={"value": 521, "unit": "week"})
-    with pytest.raises(ValidationError):
         PermitRenew(validity={"value": 121, "unit": "month"})
+
+
+def test_update_accepts_positive_legacy_validity():
+    update = PermitUpdate(validity={"value": 3653, "unit": "day"})
+    assert update.validity is not None
+    assert update.validity.value == 3653
 
 
 def test_vehicle_create_accepts_mulkiya_fields():

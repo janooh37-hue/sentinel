@@ -18,6 +18,7 @@ from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
+from pydantic import ValidationError
 from sqlalchemy import Select, func, or_, select, text
 from sqlalchemy.orm import Session, selectinload
 
@@ -501,12 +502,22 @@ def update_permit(
     validity = data.pop("validity", None)
     start_supplied = "start_date" in data
     new_start = data.pop("start_date", row.start_date)
-    if start_supplied or validity is not None:
-        new_validity = (
-            PermitValidityPeriod.model_validate(validity)
-            if validity is not None
-            else PermitValidityPeriod(value=row.validity_value, unit=row.validity_unit)
-        )
+    validity_changed = validity is not None and (
+        validity["value"] != row.validity_value or validity["unit"] != row.validity_unit
+    )
+    if start_supplied and new_start != row.start_date or validity_changed:
+        candidate = validity or {
+            "value": row.validity_value,
+            "unit": row.validity_unit,
+        }
+        try:
+            new_validity = PermitValidityPeriod.model_validate(candidate)
+        except (ValidationError, ValueError) as exc:
+            raise ValidationFailedError(
+                "PERMIT_INVALID_VALIDITY",
+                "Invalid permit validity period.",
+                id=permit_id,
+            ) from exc
         _set_validity(row, start=new_start, validity=new_validity)
     for field, value in data.items():
         setattr(row, field, value)

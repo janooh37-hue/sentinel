@@ -273,6 +273,52 @@ def test_update_start_or_validity_recomputes_end(db_session) -> None:
     assert updated.end_date == date(2027, 2, 5)
 
 
+def _legacy_permit(db_session) -> Permit:
+    row = Permit(
+        company="Legacy",
+        zones=["green"],
+        access_areas={"al_wathba_1": ["green"], "al_wathba_2": [], "work_residence": False},
+        start_date=date(2016, 1, 1),
+        validity_value=3653,
+        validity_unit="day",
+        end_date=date(2025, 12, 31),
+    )
+    db_session.add(row)
+    db_session.commit()
+    return row
+
+
+def test_legacy_permit_read_to_update_round_trip_preserves_dates(db_session) -> None:
+    row = _legacy_permit(db_session)
+    read = svc.to_read(row)
+    payload = PermitUpdate.model_validate(
+        read.model_dump(
+            include={"company", "access_areas", "start_date", "validity", "purpose", "notes"}
+        )
+    )
+
+    updated = svc.update_permit(db_session, row.id, payload)
+
+    assert updated.start_date == date(2016, 1, 1)
+    assert updated.end_date == date(2025, 12, 31)
+    assert updated.validity_value == 3653
+    assert updated.validity_unit == "day"
+
+
+def test_legacy_permit_rejects_changed_over_limit_update(db_session) -> None:
+    row = _legacy_permit(db_session)
+
+    with pytest.raises(ValidationFailedError):
+        svc.update_permit(
+            db_session,
+            row.id,
+            PermitUpdate(validity={"value": 3651, "unit": "day"}),
+        )
+    assert row.start_date == date(2016, 1, 1)
+    assert row.end_date == date(2025, 12, 31)
+    assert row.validity_value == 3653
+
+
 def test_renew_active_starts_after_current_end(db_session, monkeypatch) -> None:
     monkeypatch.setattr(svc, "_today", lambda: date(2026, 8, 6))
     row = _mk(

@@ -205,7 +205,7 @@ class PermitUpdate(BaseModel):
     company: str | None = Field(default=None, min_length=1, max_length=255)
     access_areas: PermitAccessAreas | SkipJsonSchema[None] = None
     start_date: date | None = None
-    validity: PermitValidityPeriod | None = None
+    validity: PermitValidityRead | None = None
     purpose: str | None = None
     notes: str | None = None
 
