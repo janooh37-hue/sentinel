@@ -919,6 +919,14 @@
       "created": "Book entry created",
       "deleted": "Draft discarded"
     },
+    "completion": {
+      "savedToRecords": "Saved to Records",
+      "reference": "Reference {{ref}}",
+      "notificationEnabled": "Employee notification enabled for this save.",
+      "notificationSkipped": "Saved without notifying the employee.",
+      "pendingApproval": "Pending approval",
+      "printUnavailable": "PDF unavailable — open the record for the DOCX fallback."
+    },
     "emptyUnfiltered": "No book entries yet",
     "approval": {
       "awaitingTitle": "Books · awaiting your approval",

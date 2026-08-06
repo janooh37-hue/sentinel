@@ -1007,6 +1007,14 @@
       "created": "تم إنشاء إدخال الدفتر",
       "deleted": "تم حذف المسودة"
     },
+    "completion": {
+      "savedToRecords": "تم الحفظ في السجلات",
+      "reference": "المرجع {{ref}}",
+      "notificationEnabled": "تم الحفظ مع تفعيل إشعار الموظف.",
+      "notificationSkipped": "تم الحفظ دون إشعار الموظف.",
+      "pendingApproval": "بانتظار الاعتماد",
+      "printUnavailable": "ملف PDF غير متاح — افتح السجل لاستخدام ملف DOCX البديل."
+    },
     "emptyUnfiltered": "لا توجد إدخالات بعد",
     "approval": {
       "awaitingTitle": "الدفاتر · في انتظار موافقتك",
