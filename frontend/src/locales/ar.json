@@ -480,13 +480,20 @@
     "duration_few": "{{count}} أيام",
     "duration_many": "{{count}} يومًا",
     "duration_other": "{{count}} يوم",
+    "validityUnits": {
+      "day": "يوم",
+      "week": "أسبوع",
+      "month": "شهر",
+      "year": "سنة"
+    },
+    "validityFrom": "{{value}} {{unit}} من {{date}}",
     "daysLeft_zero": "{{count}} يوم متبقٍ",
     "daysLeft_one": "يوم واحد متبقٍ",
     "daysLeft_two": "يومان متبقيان",
     "daysLeft_few": "{{count}} أيام متبقية",
     "daysLeft_many": "{{count}} يومًا متبقيًا",
     "daysLeft_other": "{{count}} يوم متبقٍ",
-    "expiredOn": "انتهى في {{date}}",
+    "expired": "منتهٍ",
     "endsToday": "ينتهي اليوم",
     "actions": {
       "view": "عرض",
@@ -526,6 +533,8 @@
       "noVehicles": "لم تُضف مركبات بعد.",
       "revokedReason": "أُلغي: {{reason}}",
       "createdAt": "صدر في {{date}}",
+      "starts": "يبدأ في {{date}}",
+      "permitTime": "مدة التصريح: {{value}} {{unit}}",
       "bookRef": "رقم التصريح (1/5)",
       "sendForApproval": "إرسال للاعتماد"
     },
@@ -621,8 +630,7 @@
     },
     "renew": {
       "title": "تجديد التصريح",
-      "help": "مدّد التصريح إلى تاريخ انتهاء جديد. تاريخ الانتهاء الحالي {{end}}.",
-      "newEnd": "تاريخ الانتهاء الجديد",
+      "help": "اختر مدة التصريح الإضافية.",
       "reason": "السبب (اختياري)",
       "save": "تجديد"
     },

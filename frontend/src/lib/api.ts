@@ -168,12 +168,7 @@ export type PermitStoredStatus = components['schemas']['PermitRead']['status']
 export type PermitDerivedStatus = components['schemas']['PermitRead']['derived_status']
 
 export type PermitPersonRead = components['schemas']['PermitPersonRead']
-// The detail add-person surface is migrated to the required job field in the
-// next permit task; keep this alias source-compatible while generated create
-// payloads remain strict.
-export type PermitPersonCreate = Omit<components['schemas']['PermitPersonCreate'], 'role'> & {
-  role?: string
-}
+export type PermitPersonCreate = components['schemas']['PermitPersonCreate']
 export type PermitVehicleRead = components['schemas']['PermitVehicleRead']
 export type PermitVehicleCreate = components['schemas']['PermitVehicleCreate']
 export type PermitListItem = components['schemas']['PermitListItem']
@@ -986,7 +981,7 @@ export const api = {
   createPermit: (body: PermitCreate) => request<PermitRead>('POST', '/permits', body),
   updatePermit: (id: number, body: PermitUpdate) =>
     request<PermitRead>('PATCH', `/permits/${id}`, body),
-  renewPermit: (id: number, body: PermitRenew | Record<string, unknown>) =>
+  renewPermit: (id: number, body: PermitRenew) =>
     request<PermitRead>('POST', `/permits/${id}/renew`, body),
   revokePermit: (id: number, body: { reason?: string }) =>
     request<PermitRead>('POST', `/permits/${id}/revoke`, body),

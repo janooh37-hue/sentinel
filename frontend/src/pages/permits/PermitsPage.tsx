@@ -42,6 +42,14 @@ const ZONE_OPTIONS: ('' | PermitZone)[] = ['', 'green', 'red', 'work_residence']
 const selectCls =
   'h-9 rounded-md border border-input bg-surface px-2.5 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring'
 
+const fmtLongDate = (iso: string): string =>
+  new Intl.DateTimeFormat('en-GB', {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+    timeZone: 'UTC',
+  }).format(new Date(`${iso.slice(0, 10)}T00:00:00Z`))
+
 export function PermitsPage(): React.JSX.Element {
   const { t } = useTranslation()
   const { has } = useCapabilities()
@@ -330,7 +338,7 @@ function PermitRowView({
     row.derived_status === 'revoked' || row.days_remaining === null
       ? null
       : row.days_remaining < 0
-        ? t('permits.expiredOn', { date: fmtDate(row.end_date) })
+        ? t('permits.expired')
         : row.days_remaining === 0
           ? t('permits.endsToday')
           : t('permits.daysLeft', { count: row.days_remaining })
@@ -360,7 +368,11 @@ function PermitRowView({
       </TableCell>
       <TableCell className="whitespace-nowrap font-mono text-xs text-muted-foreground">
         <span dir="ltr">
-          {fmtDate(row.start_date)} → {fmtDate(row.end_date)}
+          {t('permits.validityFrom', {
+            value: row.validity.value,
+            unit: t(`permits.validityUnits.${row.validity.unit}`),
+            date: fmtLongDate(row.start_date),
+          })}
         </span>
         {remaining && <span className="ms-2 not-italic">· {remaining}</span>}
       </TableCell>
@@ -432,9 +444,12 @@ function PermitPrintCard({ permit }: { permit: PermitRead }): React.JSX.Element 
         <span className="text-[11px] font-semibold" dir="auto">{permit.company}</span>
         <PermitAccessBadge accessAreas={permit.access_areas} zones={permit.zones} square />
         <span className="font-mono" dir="ltr">
-          {fmtDate(permit.start_date)} → {fmtDate(permit.end_date)}
+          {t('permits.validityFrom', {
+            value: permit.validity.value,
+            unit: t(`permits.validityUnits.${permit.validity.unit}`),
+            date: fmtLongDate(permit.start_date),
+          })}
         </span>
-        <span>{t('permits.duration', { count: permit.duration_days })}</span>
         <span className="font-semibold">{t(`permits.status.${permit.derived_status}`)}</span>
         {permit.purpose && (
           <span className="text-neutral-600" dir="auto">

@@ -443,9 +443,16 @@
     },
     "duration_one": "{{count}} day",
     "duration_other": "{{count}} days",
+    "validityUnits": {
+      "day": "day",
+      "week": "week",
+      "month": "month",
+      "year": "year"
+    },
+    "validityFrom": "{{value}} {{unit}} from {{date}}",
     "daysLeft_one": "{{count}} day left",
     "daysLeft_other": "{{count}} days left",
-    "expiredOn": "Expired {{date}}",
+    "expired": "Expired",
     "endsToday": "Ends today",
     "actions": {
       "view": "View",
@@ -478,6 +485,8 @@
       "revokedReason": "Revoked: {{reason}}",
       "createdAt": "Issued {{date}}",
       "bookRef": "Permit ref (1/5)",
+      "starts": "Starts {{date}}",
+      "permitTime": "Permit time: {{value}} {{unit}}",
       "sendForApproval": "Send for approval"
     },
     "person": {
@@ -572,8 +581,7 @@
     },
     "renew": {
       "title": "Renew permit",
-      "help": "Extend the permit to a new end date. The current end is {{end}}.",
-      "newEnd": "New end date",
+      "help": "Choose the additional permit time.",
       "reason": "Reason (optional)",
       "save": "Renew"
     },

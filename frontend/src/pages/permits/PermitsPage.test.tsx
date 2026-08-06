@@ -24,7 +24,7 @@ vi.mock('@/lib/api', async (importOriginal) => {
           {
             id: 1, permit_no: 'PMT-0001', company: 'Acme Contracting', zones: ['green', 'red'],
             access_areas: { al_wathba_1: ['green'], al_wathba_2: ['red'], work_residence: false },
-            start_date: '2026-07-01', end_date: '2026-07-30', status: 'active',
+            start_date: '2026-07-01', validity: { value: 1, unit: 'month' }, end_date: '2026-07-30', status: 'active',
             created_at: '2026-07-01T00:00:00', derived_status: 'active',
             duration_days: 30, days_remaining: 9, people_count: 4, vehicle_count: 2,
             has_document: true,
@@ -32,7 +32,7 @@ vi.mock('@/lib/api', async (importOriginal) => {
           {
             id: 2, permit_no: 'PMT-0002', company: 'Descon Engineering', zones: ['green', 'work_residence'],
             access_areas: null,
-            start_date: '2026-07-21', end_date: '2026-08-21', status: 'active',
+            start_date: '2026-07-21', validity: { value: 1, unit: 'month' }, end_date: '2026-08-21', status: 'active',
             created_at: '2026-07-21T00:00:00', derived_status: 'active',
             duration_days: 32, days_remaining: 31, people_count: 5, vehicle_count: 3,
             has_document: false,
@@ -40,6 +40,16 @@ vi.mock('@/lib/api', async (importOriginal) => {
         ],
         total: 2, limit: 500, offset: 0,
       }),
+      listPermitsDetailed: vi.fn().mockResolvedValue([
+        {
+          id: 1, permit_no: 'PMT-0001', company: 'Acme Contracting', zones: ['green', 'red'],
+          access_areas: { al_wathba_1: ['green'], al_wathba_2: ['red'], work_residence: false },
+          start_date: '2026-07-01', validity: { value: 1, unit: 'month' }, end_date: '2026-07-30', status: 'active',
+          created_at: '2026-07-01T00:00:00', derived_status: 'active',
+          duration_days: 30, days_remaining: 9, people_count: 0, vehicle_count: 0,
+          people: [], vehicles: [],
+        },
+      ]),
     },
   }
 })
@@ -115,5 +125,26 @@ describe('PermitsPage', () => {
     const rowCheckbox = screen.getByLabelText(/select permit PMT-0001/i)
     rowCheckbox.click()
     expect(screen.getByRole('button', { name: /print 1/i })).toBeInTheDocument()
+  })
+  it('renders start and validity from server fields while retaining server status text', async () => {
+    renderPage()
+    await waitFor(() => expect(screen.getByText('Acme Contracting')).toBeInTheDocument())
+    expect(screen.getByText('1 month from 01 Jul 2026')).toBeInTheDocument()
+    expect(screen.getByText(/9 days left/)).toBeInTheDocument()
+    expect(screen.queryByText(/2026-07-30/)).not.toBeInTheDocument()
+  })
+
+  it('prints start and validity without printing the visible end date', async () => {
+    let printed = ''
+    const printSpy = vi.spyOn(window, 'print').mockImplementation(() => {
+      printed = document.body.textContent ?? ''
+    })
+    renderPage()
+    await waitFor(() => expect(screen.getByText('Acme Contracting')).toBeInTheDocument())
+    await screen.getByRole('button', { name: /^print$/i }).click()
+    await waitFor(() => expect(printSpy).toHaveBeenCalled())
+    expect(printed).toContain('1 month from 01 Jul 2026')
+    expect(printed).not.toContain('2026-07-30')
+    printSpy.mockRestore()
   })
 })

@@ -18,12 +18,13 @@ const basePermit = {
   company: 'Test Corp',
   zones: ['green', 'red'] as const,
   access_areas: { al_wathba_1: ['green'], al_wathba_2: ['red'], work_residence: false },
-  start_date: '2026-07-01',
-  end_date: '2026-12-31',
+  start_date: '2026-08-06',
+  validity: { value: 1, unit: 'month' },
+  end_date: '2026-09-06',
   status: 'active' as const,
   created_at: '2026-07-01T00:00:00',
   derived_status: 'active' as const,
-  duration_days: 183,
+  duration_days: 31,
   days_remaining: 90,
   people_count: 1,
   vehicle_count: 1,
@@ -221,3 +222,58 @@ describe('PermitDetailDialog', () => {
     expect(screen.queryByRole('button', { name: /send for approval/i })).not.toBeInTheDocument()
   })
 })
+  it('renders start date and validity period without exposing the end date', async () => {
+    renderDetail()
+    await waitFor(() => expect(screen.getByText('Test Corp')).toBeInTheDocument())
+
+    expect(screen.getByText('Starts 06 Aug 2026')).toBeInTheDocument()
+    expect(screen.getByText('Permit time: 1 month')).toBeInTheDocument()
+    expect(screen.queryByText('06 Sep 2026')).not.toBeInTheDocument()
+  })
+
+  it('requires a job role and sends it when adding a person, then resets the form', async () => {
+    const addSpy = vi.spyOn(api, 'addPermitPerson').mockResolvedValue({ ...basePermit } as never)
+    renderDetail()
+    await waitFor(() => expect(screen.getByText('Test Corp')).toBeInTheDocument())
+
+    const addButton = screen.getByRole('button', { name: /add person/i })
+    expect(addButton).toBeDisabled()
+    await userEvent.type(screen.getByPlaceholderText('Full name'), '  Jane Doe  ')
+    await userEvent.type(screen.getByPlaceholderText('UAE ID'), ' 784-123 ')
+    expect(addButton).toBeDisabled()
+    await userEvent.type(screen.getByLabelText('Job / trade'), '  Electrician  ')
+    expect(addButton).toBeEnabled()
+    await userEvent.click(addButton)
+
+    await waitFor(() => expect(addSpy).toHaveBeenCalledWith(99, {
+      name: 'Jane Doe',
+      uae_id: '784-123',
+      nationality: null,
+      role: 'Electrician',
+    }))
+    expect(screen.getByPlaceholderText('Full name')).toHaveValue('')
+    expect(screen.getByPlaceholderText('UAE ID')).toHaveValue('')
+    expect(screen.getByLabelText('Job / trade')).toHaveValue('')
+  })
+
+  it('renews with a duration validity payload and exposes the approved presets', async () => {
+    const renewSpy = vi.spyOn(api, 'renewPermit').mockResolvedValue({ ...basePermit } as never)
+    renderDetail()
+    await waitFor(() => expect(screen.getByText('Test Corp')).toBeInTheDocument())
+
+    await userEvent.click(screen.getByRole('button', { name: /^renew$/i }))
+    const validityNames = ['1 day', '1 week', '1 month', '6 months', '1 year', 'Custom period']
+    expect(screen.getAllByRole('button').map((button) => button.textContent?.trim()).filter((name) => validityNames.includes(name ?? ''))).toEqual(validityNames)
+    expect(screen.queryByLabelText(/new end date/i)).not.toBeInTheDocument()
+
+    await userEvent.click(screen.getByRole('button', { name: /custom period/i }))
+    await userEvent.clear(screen.getByLabelText('Duration'))
+    await userEvent.type(screen.getByLabelText('Duration'), '2')
+    await userEvent.type(screen.getByLabelText(/reason/i), 'Extended works')
+    await userEvent.click(screen.getAllByRole('button', { name: /^renew$/i })[0])
+
+    await waitFor(() => expect(renewSpy).toHaveBeenCalledWith(99, {
+      validity: { value: 2, unit: 'month' },
+      reason: 'Extended works',
+    }))
+  })
