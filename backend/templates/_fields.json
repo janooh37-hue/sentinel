@@ -807,7 +807,7 @@
   "Inmate Conduct Violations": {
     "category": "admin",
     "name_en": "Inmate Conduct Violations",
-    "name_ar": "تقرير المخالفات المسلكية",
+    "name_ar": "المخالفات المسلكية",
     "form_number": "300-005",
     "fields": [
       {"key": "report_date", "type": "date", "label_en": "Date", "label_ar": "التاريخ", "required": true},

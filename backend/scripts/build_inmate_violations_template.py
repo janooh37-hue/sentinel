@@ -31,7 +31,15 @@ from typing import Any
 
 from docx import Document
 from docx.oxml.ns import qn
+from docx.shared import Twips
 from docx.text.paragraph import Paragraph
+
+#: Right indent (twips, = 2") the closing block sits at. Reuses the value the
+#: source already carried on the signature line, so the block keeps its place.
+SIGN_BLOCK_INDENT = 2880
+
+#: The three closing lines, matched on their label prefix.
+SIGN_BLOCK_PREFIXES = ("الرتب", "الإســـــــــم", "التوقيع")
 
 DEST = (
     Path(__file__).resolve().parents[1]
@@ -98,6 +106,30 @@ def fix_footer_token(doc: Any) -> None:
         )
 
 
+def align_signature_block(doc: Any) -> None:
+    """Line the three closing lines up on one rule.
+
+    The source positioned each differently — الرتبة by 97 leading spaces,
+    الإســـــــــم by ``jc=center``, and التوقيع by ``jc=center`` plus a 2" left
+    indent — so their labels stepped down the page instead of stacking. Put all
+    three on RTL right alignment at the same right indent: an RTL line starts at
+    the right, so the labels line up under each other.
+    """
+    for para in doc.paragraphs:
+        text = para.text.strip()
+        if not text.startswith(SIGN_BLOCK_PREFIXES):
+            continue
+        if text != para.text:
+            set_para_text(para, text)  # drop the leading-space positioning hack
+        fmt = para.paragraph_format
+        # No explicit w:jc: these are w:bidi paragraphs, so the default is the
+        # RTL start edge — physically the right. Setting jc=right here would be
+        # swapped to the logical END and hug the left instead (observed).
+        fmt.alignment = None
+        fmt.left_indent = None
+        fmt.right_indent = Twips(SIGN_BLOCK_INDENT)
+
+
 def build(src: Path) -> None:
     shutil.copy(src, DEST)
     doc = Document(str(DEST))
@@ -152,6 +184,8 @@ def build(src: Path) -> None:
             set_para_text(para, "الإســـــــــم: {{ manager_name }}")
         elif "MANAGER-SIGN" in para.text:
             set_para_text(para, "التوقيع: {{ manager_sig }}")
+
+    align_signature_block(doc)
 
     # --- 6. footer: stray {{ submitter_id }} -> canonical {{ submitter_g }} ---
     fix_footer_token(doc)

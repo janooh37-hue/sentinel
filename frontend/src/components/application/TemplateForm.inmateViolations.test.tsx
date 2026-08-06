@@ -115,7 +115,7 @@ const SCHEMA: TemplateDetailResponse = {
   meta: {
     id: 'Inmate Conduct Violations',
     name_en: 'Inmate Conduct Violations',
-    name_ar: 'تقرير المخالفات المسلكية',
+    name_ar: 'المخالفات المسلكية',
     form_number: '300-005',
     category: 'admin',
     signing_path: 'auto',

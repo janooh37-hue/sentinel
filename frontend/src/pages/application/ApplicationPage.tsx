@@ -86,7 +86,13 @@ function adaptSchema(raw: Awaited<ReturnType<typeof api.getTemplateFields>>): Te
 
 // Field types whose components span the full form width and carry many columns;
 // the form track widens to accommodate them.
-const WIDE_FIELD_TYPES = new Set(['clearance_table', 'items_table', 'violation_checkboxes', 'employees_table'])
+const WIDE_FIELD_TYPES = new Set([
+  'clearance_table',
+  'items_table',
+  'violation_checkboxes',
+  'employees_table',
+  'inmates_table',
+])
 
 /** Pick the form-detail max-width track from the field set:
  *   - A4 ribbon (arabic_rich_full)         → max-w-5xl
