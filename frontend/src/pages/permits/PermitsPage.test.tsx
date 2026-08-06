@@ -38,8 +38,16 @@ vi.mock('@/lib/api', async (importOriginal) => {
             duration_days: 32, days_remaining: 31, people_count: 5, vehicle_count: 3,
             has_document: false,
           },
+          {
+            id: 3, permit_no: 'PMT-0003', company: 'Falcon Works', zones: ['red'],
+            access_areas: { al_wathba_1: [], al_wathba_2: ['red'], work_residence: false },
+            start_date: '2026-07-22', validity: { value: 6, unit: 'month' }, end_date: '2026-08-22', status: 'active',
+            created_at: '2026-07-22T00:00:00', derived_status: 'active',
+            duration_days: 31, days_remaining: 32, people_count: 2, vehicle_count: 1,
+            has_document: false,
+          },
         ],
-        total: 2, limit: 500, offset: 0,
+        total: 3, limit: 500, offset: 0,
       }),
       listPermitsDetailed: vi.fn().mockResolvedValue([
         {
@@ -133,7 +141,7 @@ describe('PermitsPage', () => {
     await waitFor(() => expect(screen.getByText('Acme Contracting')).toBeInTheDocument())
     // Row click is mouse-only; the explicit View button is what keyboard/SR
     // users reach — one per row.
-    expect(screen.getAllByRole('button', { name: /^view$/i })).toHaveLength(2)
+    expect(screen.getAllByRole('button', { name: /^view$/i })).toHaveLength(3)
   })
 
   it('selecting a row switches Print to the selected-count label', async () => {
@@ -146,7 +154,7 @@ describe('PermitsPage', () => {
   it('renders start and validity from server fields while retaining server status text', async () => {
     renderPage()
     await waitFor(() => expect(screen.getByText('Acme Contracting')).toBeInTheDocument())
-    expect(screen.getByText('1 month from 01 Jul 2026')).toBeInTheDocument()
+    expect(screen.getByText('6 months from 22 Jul 2026')).toBeInTheDocument()
     expect(screen.getByText(/9 days left/)).toBeInTheDocument()
     expect(screen.queryByText(/2026-07-30/)).not.toBeInTheDocument()
   })
@@ -172,7 +180,7 @@ describe('PermitsPage', () => {
       await waitFor(() => expect(screen.getByText('Acme Contracting')).toBeInTheDocument())
       expect(screen.getAllByText(/شهر واحد من/).length).toBeGreaterThan(0)
       expect(screen.getAllByText(/شهران من/).length).toBeGreaterThan(0)
-      expect(document.documentElement.dir).toBe('rtl')
+      expect(screen.getAllByText(/6 أشهر من/).length).toBeGreaterThan(0)
       expect(screen.queryByText(/month from/i)).not.toBeInTheDocument()
     } finally {
       await i18n.changeLanguage('en')

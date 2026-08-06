@@ -256,6 +256,21 @@ describe('PermitDetailDialog', () => {
     }
   })
 
+  it('renders Arabic one- and two-month detail periods', async () => {
+    await i18n.changeLanguage('ar')
+    try {
+      const oneMonth = renderDetail({ validity: { value: 1, unit: 'month' } })
+      await waitFor(() => expect(screen.getByText(/مدة التصريح: شهر واحد/)).toBeInTheDocument())
+      oneMonth.unmount()
+
+      const twoMonths = renderDetail({ validity: { value: 2, unit: 'month' } })
+      await waitFor(() => expect(screen.getByText(/مدة التصريح: شهران/)).toBeInTheDocument())
+      twoMonths.unmount()
+    } finally {
+      await i18n.changeLanguage('en')
+    }
+  })
+
   it('requires a job role and sends it when adding a person, then resets the form', async () => {
     const addSpy = vi.spyOn(api, 'addPermitPerson').mockResolvedValue({ ...basePermit } as never)
     renderDetail()

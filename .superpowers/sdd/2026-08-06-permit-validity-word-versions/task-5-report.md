@@ -90,7 +90,7 @@ Follow-up commit message: `fix(permits): localize validity surface wording`.
 
 ### Test-quality RED/GREEN
 
-- Added rendered Arabic count coverage: detail exercises Arabic six-month and two-month periods (with English six-month coverage retained); register renders Arabic one- and two-month rows; print renders Arabic one-, two-, and six-month periods.
+- Added rendered plural matrix coverage on every surface: English count 6 and Arabic counts 1/2/6 for detail, register, and print.
 - Strengthened the detail assertion to verify the combined parent fact contains both separated `Starts` and `Permit time` presentations.
 - Replaced JSON suffix/placeholder checks with the configured i18next instance and `count` arguments for English six months and Arabic 1/2/6 months.
 - Restored `permits.form.jobRequired` to parity coverage.
@@ -109,3 +109,23 @@ Follow-up commit message: `fix(permits): localize validity surface wording`.
 - `git diff --check`: passed.
 
 Round-two commit message: `test(permits): cover localized validity surfaces`.
+
+## Follow-up review round three
+
+### Test-quality RED/GREEN
+
+- Completed the rendered matrix gaps from round two: detail now renders Arabic 1, 2, and 6 month periods; register now renders English 6 and Arabic 1, 2, and 6 month periods; print continues to render English 6 and Arabic 1, 2, and 6 month periods.
+- Corrected the report coverage statement to reflect the complete matrix.
+
+### Round-three files
+
+- `frontend/src/pages/permits/PermitDetailDialog.test.tsx`
+- `frontend/src/pages/permits/PermitsPage.test.tsx`
+
+### Round-three verification
+
+- `pnpm -C frontend exec vitest run src/pages/permits/PermitDetailDialog.test.tsx src/pages/permits/PermitsPage.test.tsx src/locales/permits.i18n.test.ts`: 3 files, 192 tests passed.
+- `pnpm -C frontend exec tsc -b --pretty false`: passed with no output.
+- `git diff --check`: passed.
+
+Round-three commit message: `test(permits): complete validity plural matrix`.
