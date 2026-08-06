@@ -63,6 +63,20 @@ vi.mock('@/pages/application/DocPdfCanvas', () => ({
   default: ({ pdfUrl }: { pdfUrl: string }) =>
     createElement('div', { 'data-testid': 'doc-pdf-canvas', 'data-pdf-url': pdfUrl }),
 }))
+vi.mock('@/components/books/SavedRecordActions', () => ({
+  SavedRecordActions: ({
+    bookId,
+    refNumber,
+  }: {
+    bookId: number
+    refNumber: string
+  }) => createElement(
+    'div',
+    { 'data-testid': 'saved-record-actions', 'data-book-id': bookId, 'data-ref-number': refNumber },
+    `saved:${bookId}`,
+  ),
+}))
+
 
 const FAKE_SESSION: WordSessionRead = {
   book_id: 42,
@@ -119,6 +133,7 @@ describe('WordHandoffDialog', () => {
       }),
       { wrapper: makeWrapper(qc) },
     )
+    expect(screen.queryByTestId('saved-record-actions')).toBeNull()
 
     // Arabic eyebrow — appears in visible div + sr-only DialogTitle; at least one present
     expect(screen.getAllByText('تم إنشاء الكتاب وحجز الرقم').length).toBeGreaterThan(0)
@@ -208,6 +223,7 @@ describe('WordHandoffDialog', () => {
         {
           id: 1,
           version_no: 1,
+          template_id: 'General Book',
           pdf_url: '/api/v1/documents/9/download?format=pdf',
           docx_url: '/api/v1/documents/9/download?format=docx',
         },
@@ -237,7 +253,14 @@ describe('WordHandoffDialog', () => {
     expect(onClose).not.toHaveBeenCalled()
     const canvas = await screen.findByTestId('doc-pdf-canvas')
     expect(canvas.getAttribute('data-pdf-url')).toBe('/api/v1/documents/9/download?format=pdf')
-    // Arabic finished title with the ref (bidi() wraps the ref in isolate
+    expect(screen.getByTestId('saved-record-actions')).toHaveAttribute('data-book-id', '42')
+    expect(screen.getByTestId('saved-record-actions')).toHaveAttribute(
+      'data-ref-number',
+      '1/5/GSSG/141',
+    )
+    expect(screen.getByTestId('saved-record-actions').compareDocumentPosition(canvas)).toBe(
+      Node.DOCUMENT_POSITION_FOLLOWING,
+    )
     // control chars, so match loosely)
     expect(screen.getByText(/تم حفظ الكتاب/)).toBeTruthy()
     expect(screen.getByText(/1\/5\/GSSG\/141/)).toBeTruthy()
@@ -301,6 +324,44 @@ describe('WordHandoffDialog', () => {
     expect(canvas?.getAttribute('data-pdf-url')).toContain('/word-sessions/preview')
   })
 
+  it('finished Report view shows shared actions but not Save as template', async () => {
+    const user = userEvent.setup()
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    vi.spyOn(apiMod.api, 'getBook').mockResolvedValue(bookWith('2026-07-17T10:05:00Z'))
+    const finished = {
+      ...bookWith(null),
+      versions: [
+        {
+          id: 1,
+          version_no: 1,
+          template_id: 'Report',
+          pdf_url: '/api/v1/documents/9/download?format=pdf',
+          docx_url: '/api/v1/documents/9/download?format=docx',
+        },
+      ],
+    } as unknown as BookRead
+    vi.spyOn(apiMod.api, 'finishWordSession').mockResolvedValue(finished)
+
+    render(
+      createElement(WordHandoffDialog, {
+        session: FAKE_SESSION,
+        open: true,
+        onClose: vi.fn(),
+      }),
+      { wrapper: makeWrapper(qc) },
+    )
+
+    await waitFor(() => {
+      const btn = screen.getByText('إنهاء التحرير').closest('button')
+      expect(btn?.disabled).toBe(false)
+    })
+    await user.click(screen.getByText('إنهاء التحرير'))
+    await screen.findByTestId('doc-pdf-canvas')
+
+    expect(screen.getByTestId('saved-record-actions')).toBeTruthy()
+    expect(screen.queryByText('حفظ كقالب')).toBeNull()
+  })
+
   it('finished view offers Save as template', async () => {
     const user = userEvent.setup()
     const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
@@ -311,6 +372,7 @@ describe('WordHandoffDialog', () => {
         {
           id: 1,
           version_no: 1,
+          template_id: 'General Book',
           pdf_url: '/api/v1/documents/9/download?format=pdf',
           docx_url: '/api/v1/documents/9/download?format=docx',
         },

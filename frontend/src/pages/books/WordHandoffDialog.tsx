@@ -40,6 +40,7 @@ import {
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
+import { SavedRecordActions } from '@/components/books/SavedRecordActions'
 
 interface Props {
   session: WordSessionRead | null
@@ -58,6 +59,12 @@ export function WordHandoffDialog({ session, open, onClose }: Props): React.JSX.
   const [finishedBook, setFinishedBook] = useState<BookRead | null>(null)
   const [saveTplOpen, setSaveTplOpen] = useState(false)
   const [tplName, setTplName] = useState('')
+  const handleClose = () => {
+    setFinishedBook(null)
+    setSaveTplOpen(false)
+    setTplName('')
+    onClose()
+  }
 
   // The dialog stays mounted between sessions (ApplicationPage/BookWordActions
   // just swap the `session` prop) — a fresh session must not inherit the
@@ -102,7 +109,7 @@ export function WordHandoffDialog({ session, open, onClose }: Props): React.JSX.
     mutationFn: () => api.discardWordSession(session!.book_id),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ['books'] })
-      onClose()
+      handleClose()
     },
     onError: (err) => {
       toast.error(apiErrorMessage(err))
@@ -130,11 +137,12 @@ export function WordHandoffDialog({ session, open, onClose }: Props): React.JSX.
   if (finishedBook) {
     const versions = finishedBook.versions ?? []
     const latest = versions.length > 0 ? versions[versions.length - 1] : null
+    const canSaveAsTemplate = latest?.template_id === 'General Book'
     const pdfUrl = latest?.pdf_url ?? null
     const docxUrl = latest?.docx_url ?? undefined
     return (
       <>
-        <DialogRoot open={open} onOpenChange={(v) => { if (!v) onClose() }}>
+          <DialogRoot open={open} onOpenChange={(v) => { if (!v) handleClose() }}>
           <DialogContent className="max-w-3xl p-0 overflow-hidden">
             <div className="h-2 bg-[#0d2845]" aria-hidden />
             <div className="flex max-h-[85vh] flex-col px-6 pb-6 pt-4">
@@ -143,6 +151,12 @@ export function WordHandoffDialog({ session, open, onClose }: Props): React.JSX.
                   {t('books.word.finishedPdfTitle', { ref: bidi(session.ref_number) })}
                 </DialogTitle>
               </DialogHeader>
+              <SavedRecordActions
+                bookId={finishedBook.id}
+                refNumber={session.ref_number}
+                detail={finishedBook.subject ?? undefined}
+                className="mb-4"
+              />
               <div className="min-h-[400px] flex-1 overflow-hidden">
                 {pdfUrl ? (
                   <Suspense fallback={<p className="text-[0.82em] text-muted-foreground">…</p>}>
@@ -165,18 +179,20 @@ export function WordHandoffDialog({ session, open, onClose }: Props): React.JSX.
               <div className="mt-4 flex items-center justify-between gap-2 border-t border-hairline pt-4">
                 {/* Template save lives HERE (the General Book flow), not in
                     Records — the operator just wrote the boilerplate. */}
-                <button
-                  type="button"
-                  disabled={saveTemplateMutation.isPending}
-                  onClick={() => {
-                    setTplName(finishedBook.subject ?? '')
-                    setSaveTplOpen(true)
-                  }}
-                  className="inline-flex items-center gap-1.5 rounded-lg border border-hairline px-3 py-2 text-[0.82em] font-semibold text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
-                >
-                  {t('books.word.saveAsTemplate')}
-                </button>
-                <Button type="button" variant="commit" size="commit" onClick={onClose}>
+                {canSaveAsTemplate && (
+                  <button
+                    type="button"
+                    disabled={saveTemplateMutation.isPending}
+                    onClick={() => {
+                      setTplName(finishedBook.subject ?? '')
+                      setSaveTplOpen(true)
+                    }}
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-hairline px-3 py-2 text-[0.82em] font-semibold text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
+                  >
+                    {t('books.word.saveAsTemplate')}
+                  </button>
+                )}
+                <Button type="button" variant="commit" size="commit" onClick={handleClose}>
                   {t('books.word.close')}
                 </Button>
               </div>
@@ -184,8 +200,8 @@ export function WordHandoffDialog({ session, open, onClose }: Props): React.JSX.
           </DialogContent>
         </DialogRoot>
 
-        {/* Save-as-template name dialog */}
-        <DialogRoot open={saveTplOpen} onOpenChange={setSaveTplOpen}>
+        {canSaveAsTemplate && (
+          <DialogRoot open={saveTplOpen} onOpenChange={setSaveTplOpen}>
           <DialogContent>
             <DialogHeader>
               <DialogTitle>{t('books.word.saveAsTemplate')}</DialogTitle>
@@ -224,6 +240,7 @@ export function WordHandoffDialog({ session, open, onClose }: Props): React.JSX.
             </div>
           </DialogContent>
         </DialogRoot>
+        )}
       </>
     )
   }
@@ -236,7 +253,7 @@ export function WordHandoffDialog({ session, open, onClose }: Props): React.JSX.
 
   return (
     <>
-      <DialogRoot open={open} onOpenChange={(v) => { if (!v) onClose() }}>
+      <DialogRoot open={open} onOpenChange={(v) => { if (!v) handleClose() }}>
         <DialogContent
           className={cn('p-0 overflow-hidden', hasSave ? 'max-w-3xl' : 'max-w-lg')}
           // Prevent accidental close while the Word session is live.
