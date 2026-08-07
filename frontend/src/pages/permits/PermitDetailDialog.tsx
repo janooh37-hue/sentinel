@@ -13,7 +13,8 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Trash2, UserPlus, FileText, Upload, Car, ScanLine, Printer, Send } from 'lucide-react'
 import { toast } from 'sonner'
 
-import { api, apiErrorMessage, type PermitRead } from '@/lib/api'
+import { api, apiErrorMessage, type PermitRead, type PermitValidityPeriod } from '@/lib/api'
+import { PermitDocumentVersions } from './PermitDocumentVersions'
 import { RowDocButton } from './RowDocButton'
 import {
   DialogRoot,
@@ -26,12 +27,29 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import { useCapabilities } from '@/lib/useCapabilities'
-import { ZoneBadge } from './ZoneBadge'
+import { PermitAccessBadge } from './PermitAccessBadge'
 import { approvalTone, fmtDate, statusTone, type PermitApprovalState } from './permitUtils'
 import { EMIRATES } from './emirates'
 
 const inputCls =
   'h-9 rounded-md border border-input bg-surface px-3 text-sm text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring'
+
+type Validity = PermitValidityPeriod
+const PRESETS: Array<{ label: string; value: number; unit: Validity['unit'] }> = [
+  { label: 'oneDay', value: 1, unit: 'day' },
+  { label: 'oneWeek', value: 1, unit: 'week' },
+  { label: 'oneMonth', value: 1, unit: 'month' },
+  { label: 'sixMonths', value: 6, unit: 'month' },
+  { label: 'oneYear', value: 1, unit: 'year' },
+]
+
+const fmtLongDate = (iso: string, language: string): string =>
+  new Intl.DateTimeFormat(language.startsWith('ar') ? language : 'en-GB', {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+    timeZone: 'UTC',
+  }).format(new Date(`${iso.slice(0, 10)}T00:00:00Z`))
 
 interface Props {
   permitId: number
@@ -41,7 +59,7 @@ interface Props {
 }
 
 export function PermitDetailDialog({ permitId, open, onOpenChange, onEdit }: Props): React.JSX.Element {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   const qc = useQueryClient()
   const { has } = useCapabilities()
   const canManage = has('permits.manage')
@@ -56,11 +74,13 @@ export function PermitDetailDialog({ permitId, open, onOpenChange, onEdit }: Pro
   const [renewOpen, setRenewOpen] = useState(false)
   const [revokeOpen, setRevokeOpen] = useState(false)
   const [deleteOpen, setDeleteOpen] = useState(false)
-  const [newEnd, setNewEnd] = useState('')
+  const [renewValidity, setRenewValidity] = useState<Validity>({ value: 1, unit: 'month' })
+  const [renewCustomOpen, setRenewCustomOpen] = useState(false)
   const [renewReason, setRenewReason] = useState('')
   const [revokeReason, setRevokeReason] = useState('')
   const [personName, setPersonName] = useState('')
   const [personUae, setPersonUae] = useState('')
+  const [personRole, setPersonRole] = useState('')
   const [personNationality, setPersonNationality] = useState('')
   const [vehiclePlate, setVehiclePlate] = useState('')
   const [vehiclePlateEmirate, setVehiclePlateEmirate] = useState('')
@@ -76,23 +96,25 @@ export function PermitDetailDialog({ permitId, open, onOpenChange, onEdit }: Pro
     void qc.invalidateQueries({ queryKey: ['permit', permitId] })
     void qc.invalidateQueries({ queryKey: ['permits-list'] })
     void qc.invalidateQueries({ queryKey: ['permits-summary'] })
+    void qc.invalidateQueries({ queryKey: ['books', 'permit'] })
   }
 
   const onErr = (err: unknown): void => {
     toast.error(apiErrorMessage(err))
   }
-
   const addPerson = useMutation({
     mutationFn: () =>
       api.addPermitPerson(permitId, {
         name: personName.trim(),
         uae_id: personUae.trim(),
         nationality: personNationality.trim() || null,
+        role: personRole.trim(),
       }),
     onSuccess: () => {
       invalidate()
       setPersonName('')
       setPersonUae('')
+      setPersonRole('')
       setPersonNationality('')
     },
     onError: onErr,
@@ -103,9 +125,11 @@ export function PermitDetailDialog({ permitId, open, onOpenChange, onEdit }: Pro
     onSuccess: invalidate,
     onError: onErr,
   })
-
   const renew = useMutation({
-    mutationFn: () => api.renewPermit(permitId, { new_end_date: newEnd, reason: renewReason.trim() || undefined }),
+    mutationFn: () => api.renewPermit(permitId, {
+      validity: renewValidity,
+      reason: renewReason.trim() || undefined,
+    }),
     onSuccess: () => {
       invalidate()
       setRenewOpen(false)
@@ -325,7 +349,6 @@ export function PermitDetailDialog({ permitId, open, onOpenChange, onEdit }: Pro
                 <Badge tone={statusTone(permit.derived_status)}>
                   {t(`permits.status.${permit.derived_status}`)}
                 </Badge>
-                <ZoneBadge zones={permit.zones} full />
                 {permit.book_id && (
                   <Badge tone={approvalTone(approvalState)}>
                     {t(`permits.approval.${approvalState}`)}
@@ -338,9 +361,19 @@ export function PermitDetailDialog({ permitId, open, onOpenChange, onEdit }: Pro
                 <Fact label={t('permits.detail.company')} value={permit.company} />
                 <Fact
                   label={t('permits.detail.window')}
-                  value={`${fmtDate(permit.start_date)} → ${fmtDate(permit.end_date)}`}
+                  value={
+                    <div>
+                      <span className="block">
+                        {t('permits.detail.starts', { date: fmtLongDate(permit.start_date, i18n.language) })}
+                      </span>
+                      <span className="block">
+                        {t('permits.detail.permitTime', {
+                          period: t(`permits.validityPeriod.${permit.validity.unit}`, { count: permit.validity.value }),
+                        })}
+                      </span>
+                    </div>
+                  }
                   mono
-                  ltr
                 />
                 <Fact
                   label={t('permits.detail.duration')}
@@ -353,6 +386,11 @@ export function PermitDetailDialog({ permitId, open, onOpenChange, onEdit }: Pro
                 <Fact
                   label={t('permits.columns.vehicles')}
                   value={t('permits.detail.vehicleCount', { count: permit.vehicle_count })}
+                />
+                <Fact
+                  label={t('permits.detail.zone')}
+                  value={<PermitAccessBadge accessAreas={permit.access_areas} zones={permit.zones} full />}
+                  span
                 />
                 {permit.purpose && (
                   <Fact label={t('permits.detail.purpose')} value={permit.purpose} span />
@@ -444,6 +482,7 @@ export function PermitDetailDialog({ permitId, open, onOpenChange, onEdit }: Pro
                   <p className="text-xs text-muted-foreground">{t('permits.paper.none')}</p>
                 )}
               </section>
+              {permit.book_id != null && <PermitDocumentVersions bookId={permit.book_id} />}
 
               {/* People */}
               <section className="flex flex-col gap-2">
@@ -494,33 +533,54 @@ export function PermitDetailDialog({ permitId, open, onOpenChange, onEdit }: Pro
                 {/* Add person (manage + not revoked) */}
                 {canManage && !isRevoked && (
                   <div className="flex flex-col gap-2">
-                    <div className="grid grid-cols-1 gap-2 sm:grid-cols-[1.3fr_1fr_1fr_auto]">
-                      <input
-                        className={inputCls}
-                        placeholder={t('permits.person.name')}
-                        dir="auto"
-                        value={personName}
-                        onChange={(e) => setPersonName(e.target.value)}
-                      />
-                      <input
-                        className={inputCls}
-                        placeholder={t('permits.person.uaeId')}
-                        value={personUae}
-                        onChange={(e) => setPersonUae(e.target.value)}
-                      />
-                      <input
-                        className={inputCls}
-                        placeholder={t('permits.person.nationality')}
-                        dir="auto"
-                        value={personNationality}
-                        onChange={(e) => setPersonNationality(e.target.value)}
-                      />
+                    <div className="grid grid-cols-1 gap-2 sm:grid-cols-[1.3fr_1fr_1fr_1fr_auto]">
+                      <label className="flex flex-col gap-1">
+                        <span className="text-xs text-muted-foreground sm:sr-only">{t('permits.person.name')}</span>
+                        <input
+                          className={inputCls}
+                          placeholder={t('permits.person.name')}
+                          dir="auto"
+                          value={personName}
+                          onChange={(e) => setPersonName(e.target.value)}
+                        />
+                      </label>
+                      <label className="flex flex-col gap-1">
+                        <span className="text-xs text-muted-foreground sm:sr-only">{t('permits.person.uaeId')}</span>
+                        <input
+                          className={inputCls}
+                          placeholder={t('permits.person.uaeId')}
+                          value={personUae}
+                          onChange={(e) => setPersonUae(e.target.value)}
+                        />
+                      </label>
+                      <label className="flex flex-col gap-1">
+                        <span className="text-xs text-muted-foreground sm:sr-only">{t('permits.person.role')}</span>
+                        <input
+                          className={inputCls}
+                          placeholder={t('permits.person.role')}
+                          aria-label={t('permits.person.role')}
+                          dir="auto"
+                          value={personRole}
+                          onChange={(e) => setPersonRole(e.target.value)}
+                        />
+                      </label>
+                      <label className="flex flex-col gap-1">
+                        <span className="text-xs text-muted-foreground sm:sr-only">{t('permits.person.nationality')}</span>
+                        <input
+                          className={inputCls}
+                          placeholder={t('permits.person.nationality')}
+                          dir="auto"
+                          value={personNationality}
+                          onChange={(e) => setPersonNationality(e.target.value)}
+                        />
+                      </label>
                       <Button
                         type="button"
                         variant="outline"
                         disabled={
                           personName.trim().length === 0 ||
                           personUae.trim().length === 0 ||
+                          personRole.trim().length === 0 ||
                           addPerson.isPending
                         }
                         onClick={() => addPerson.mutate()}
@@ -727,38 +787,94 @@ export function PermitDetailDialog({ permitId, open, onOpenChange, onEdit }: Pro
               {/* Renew panel */}
               {renewOpen && (
                 <div className="flex flex-col gap-2 rounded-lg border border-border p-3">
-                  <p className="text-xs text-muted-foreground">
-                    {t('permits.renew.help', { end: fmtDate(permit.end_date) })}
-                  </p>
-                  <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-                    <label className="flex flex-col gap-1">
-                      <span className="text-xs text-muted-foreground">{t('permits.renew.newEnd')}</span>
-                      <input
-                        type="date"
-                        className={`${inputCls} font-mono`}
-                        min={permit.end_date.slice(0, 10)}
-                        value={newEnd}
-                        autoFocus
-                        onChange={(e) => setNewEnd(e.target.value)}
-                      />
-                    </label>
-                    <label className="flex flex-col gap-1">
-                      <span className="text-xs text-muted-foreground">{t('permits.renew.reason')}</span>
-                      <input
-                        className={inputCls}
-                        dir="auto"
-                        value={renewReason}
-                        onChange={(e) => setRenewReason(e.target.value)}
-                      />
-                    </label>
-                  </div>
+                  <p className="text-xs text-muted-foreground">{t('permits.renew.help')}</p>
+                  <fieldset className="flex min-w-0 flex-col gap-2">
+                    <legend className="text-xs text-muted-foreground">{t('permits.form.permitValidity')}</legend>
+                    <div className="grid grid-cols-2 gap-2 sm:grid-cols-6">
+                      {PRESETS.map((preset) => (
+                        <button
+                          key={preset.label}
+                          type="button"
+                          aria-pressed={!renewCustomOpen && renewValidity.value === preset.value && renewValidity.unit === preset.unit}
+                          onClick={() => {
+                            setRenewValidity({ value: preset.value, unit: preset.unit })
+                            setRenewCustomOpen(false)
+                          }}
+                          className={`rounded-lg border px-2 py-2 text-sm font-medium text-start transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
+                            !renewCustomOpen && renewValidity.value === preset.value && renewValidity.unit === preset.unit
+                              ? 'border-primary bg-primary-soft text-primary'
+                              : 'border-border text-muted-foreground hover:bg-surface-tinted'
+                          }`}
+                        >
+                          {t(`permits.form.${preset.label}`)}
+                        </button>
+                      ))}
+                      <button
+                        type="button"
+                        aria-pressed={renewCustomOpen}
+                        onClick={() => setRenewCustomOpen(true)}
+                        className={`rounded-lg border px-2 py-2 text-sm font-medium text-start transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
+                          renewCustomOpen
+                            ? 'border-primary bg-primary-soft text-primary'
+                            : 'border-border text-muted-foreground hover:bg-surface-tinted'
+                        }`}
+                      >
+                        {t('permits.form.customPeriod')}
+                      </button>
+                    </div>
+                    {renewCustomOpen && (
+                      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                        <label className="flex flex-col gap-1">
+                          <span className="text-xs text-muted-foreground">{t('permits.form.durationValue')}</span>
+                          <input
+                            type="number"
+                            min="1"
+                            step="1"
+                            className={inputCls}
+                            aria-label={t('permits.form.durationValue')}
+                            value={renewValidity.value || ''}
+                            autoFocus
+                            onChange={(e) => setRenewValidity((current) => ({
+                              ...current,
+                              value: Number(e.target.value),
+                            }))}
+                          />
+                        </label>
+                        <label className="flex flex-col gap-1">
+                          <span className="text-xs text-muted-foreground">{t('permits.form.durationUnit')}</span>
+                          <select
+                            className={inputCls}
+                            aria-label={t('permits.form.durationUnit')}
+                            value={renewValidity.unit}
+                            onChange={(e) => setRenewValidity((current) => ({
+                              ...current,
+                              unit: e.target.value as Validity['unit'],
+                            }))}
+                          >
+                            {(['day', 'week', 'month', 'year'] as const).map((unit) => (
+                              <option key={unit} value={unit}>{t(`permits.form.unit${unit[0].toUpperCase()}${unit.slice(1)}`)}</option>
+                            ))}
+                          </select>
+                        </label>
+                      </div>
+                    )}
+                  </fieldset>
+                  <label className="flex flex-col gap-1">
+                    <span className="text-xs text-muted-foreground">{t('permits.renew.reason')}</span>
+                    <input
+                      className={inputCls}
+                      dir="auto"
+                      value={renewReason}
+                      onChange={(e) => setRenewReason(e.target.value)}
+                    />
+                  </label>
                   <div className="flex justify-end gap-2">
                     <Button type="button" variant="ghost" onClick={() => setRenewOpen(false)}>
                       {t('common.cancel')}
                     </Button>
                     <Button
                       type="button"
-                      disabled={!newEnd || newEnd <= permit.end_date.slice(0, 10) || renew.isPending}
+                      disabled={!Number.isInteger(renewValidity.value) || renewValidity.value <= 0 || renew.isPending}
                       onClick={() => renew.mutate()}
                     >
                       {t('permits.renew.save')}
@@ -839,7 +955,9 @@ export function PermitDetailDialog({ permitId, open, onOpenChange, onEdit }: Pro
                   type="button"
                   variant="outline"
                   onClick={() => {
-                    setNewEnd('')
+                    setRenewValidity({ value: 1, unit: 'month' })
+                    setRenewCustomOpen(false)
+                    setRenewReason('')
                     setRenewOpen((v) => !v)
                     setRevokeOpen(false)
                   }}
@@ -883,7 +1001,7 @@ function Fact({
   ltr = false,
 }: {
   label: string
-  value: string
+  value: React.ReactNode
   mono?: boolean
   span?: boolean
   /** Force LTR — for values like the date window whose `→` reverses under RTL. */

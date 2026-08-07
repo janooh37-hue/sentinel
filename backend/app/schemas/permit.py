@@ -11,16 +11,61 @@ from __future__ import annotations
 from datetime import date, datetime
 from typing import Literal
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from pydantic.json_schema import SkipJsonSchema
 
+from app.core.permit_validity import (
+    PermitValidityUnit,
+    validate_period,
+    validate_period_read,
+)
 from app.schemas._base import ORMBase
 
 # The security zones a permit can cover. A permit carries one or more.
 PermitZone = Literal["green", "red", "work_residence"]
+PermitLocationZone = Literal["green", "red"]
+_LOCATION_ZONE_ORDER: tuple[PermitLocationZone, ...] = ("green", "red")
 # Stored lifecycle. Expiry is derived, not stored (see models.Permit).
 PermitStatus = Literal["active", "revoked"]
 # What the UI shows — stored status widened with the date-derived states.
 PermitDerivedStatus = Literal["active", "expiring", "expired", "revoked"]
+
+
+class PermitValidityPeriod(BaseModel):
+    value: int
+    unit: PermitValidityUnit
+
+    @model_validator(mode="after")
+    def _validate_bounds(self) -> PermitValidityPeriod:
+        validate_period(self.value, self.unit)
+        return self
+
+
+class PermitValidityRead(BaseModel):
+    value: int
+    unit: PermitValidityUnit
+
+    @model_validator(mode="after")
+    def _validate_positive(self) -> PermitValidityRead:
+        validate_period_read(self.value, self.unit)
+        return self
+
+
+class PermitAccessAreas(BaseModel):
+    al_wathba_1: list[PermitLocationZone] = Field(default_factory=list)
+    al_wathba_2: list[PermitLocationZone] = Field(default_factory=list)
+    work_residence: bool = False
+
+    @field_validator("al_wathba_1", "al_wathba_2")
+    @classmethod
+    def _normalize_location_zones(cls, value: list[PermitLocationZone]) -> list[PermitLocationZone]:
+        return [zone for zone in _LOCATION_ZONE_ORDER if zone in value]
+
+    @model_validator(mode="after")
+    def _require_access(self) -> PermitAccessAreas:
+        if not self.al_wathba_1 and not self.al_wathba_2 and not self.work_residence:
+            raise ValueError("at least one access area is required")
+        return self
 
 
 class PermitPersonCreate(BaseModel):
@@ -28,7 +73,7 @@ class PermitPersonCreate(BaseModel):
     # UAE ID is mandatory for every person on a permit.
     uae_id: str = Field(min_length=1, max_length=32)
     nationality: str | None = Field(default=None, max_length=64)
-    role: str | None = Field(default=None, max_length=128)
+    role: str = Field(min_length=1, max_length=128)
 
     @field_validator("name")
     @classmethod
@@ -45,6 +90,14 @@ class PermitPersonCreate(BaseModel):
         if not v:
             raise ValueError("uae_id is required")
         return v
+
+    @field_validator("role")
+    @classmethod
+    def _strip_role(cls, value: str) -> str:
+        value = value.strip()
+        if not value:
+            raise ValueError("role is required")
+        return value
 
 
 class PermitPersonRead(ORMBase):
@@ -116,24 +169,15 @@ class PermitVehicleRead(ORMBase):
     license_doc_name: str | None = None
 
 
-def _clean_zones(v: list[str]) -> list[str]:
-    """De-duplicate (order-preserving) and require at least one zone."""
-    seen: list[str] = []
-    for z in v:
-        if z not in seen:
-            seen.append(z)
-    if not seen:
-        raise ValueError("at least one zone is required")
-    return seen
-
-
 class PermitCreate(BaseModel):
     """POST /permits — issue a new permit."""
 
+    model_config = ConfigDict(extra="forbid")
+
     company: str = Field(min_length=1, max_length=255)
-    zones: list[PermitZone] = Field(min_length=1)
+    access_areas: PermitAccessAreas
     start_date: date
-    end_date: date
+    validity: PermitValidityPeriod
     purpose: str | None = None
     notes: str | None = None
     people: list[PermitPersonCreate] = Field(default_factory=list)
@@ -152,32 +196,32 @@ class PermitCreate(BaseModel):
             raise ValueError("company must not be empty")
         return v
 
-    @field_validator("zones")
-    @classmethod
-    def _dedupe_zones(cls, v: list[str]) -> list[str]:
-        return _clean_zones(v)
-
 
 class PermitUpdate(BaseModel):
     """PATCH /permits/{id} — edit header fields (not the lifecycle status)."""
 
+    model_config = ConfigDict(extra="forbid")
+
     company: str | None = Field(default=None, min_length=1, max_length=255)
-    zones: list[PermitZone] | None = None
+    access_areas: PermitAccessAreas | SkipJsonSchema[None] = None
     start_date: date | None = None
-    end_date: date | None = None
+    validity: PermitValidityRead | None = None
     purpose: str | None = None
     notes: str | None = None
 
-    @field_validator("zones")
-    @classmethod
-    def _dedupe_zones(cls, v: list[str] | None) -> list[str] | None:
-        return _clean_zones(v) if v is not None else None
+    @model_validator(mode="after")
+    def _reject_explicit_null_access(self) -> PermitUpdate:
+        if "access_areas" in self.model_fields_set and self.access_areas is None:
+            raise ValueError("access_areas must not be null when supplied")
+        return self
 
 
 class PermitRenew(BaseModel):
     """POST /permits/{id}/renew — extend the permit window."""
 
-    new_end_date: date
+    model_config = ConfigDict(extra="forbid")
+
+    validity: PermitValidityPeriod
     reason: str | None = None
 
 
@@ -215,7 +259,9 @@ class PermitRead(ORMBase):
     permit_no: str | None = None
     company: str
     zones: list[PermitZone]
+    access_areas: PermitAccessAreas | None = None
     start_date: date
+    validity: PermitValidityRead
     end_date: date
     status: PermitStatus
     purpose: str | None = None
@@ -247,7 +293,9 @@ class PermitListItem(ORMBase):
     permit_no: str | None = None
     company: str
     zones: list[PermitZone]
+    access_areas: PermitAccessAreas | None = None
     start_date: date
+    validity: PermitValidityRead
     end_date: date
     status: PermitStatus
     created_at: datetime

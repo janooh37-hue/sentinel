@@ -1,7 +1,8 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it, vi, beforeEach } from 'vitest'
+import i18n from '@/lib/i18n'
 
 import { api } from '@/lib/api'
 import { PermitDetailDialog } from './PermitDetailDialog'
@@ -16,13 +17,15 @@ const basePermit = {
   id: 99,
   permit_no: 'PMT-0099',
   company: 'Test Corp',
-  zones: ['green'] as const,
-  start_date: '2026-07-01',
-  end_date: '2026-12-31',
+  zones: ['green', 'red'] as const,
+  access_areas: { al_wathba_1: ['green'], al_wathba_2: ['red'], work_residence: false },
+  start_date: '2026-08-06',
+  validity: { value: 1, unit: 'month' },
+  end_date: '2026-09-06',
   status: 'active' as const,
   created_at: '2026-07-01T00:00:00',
   derived_status: 'active' as const,
-  duration_days: 183,
+  duration_days: 31,
   days_remaining: 90,
   people_count: 1,
   vehicle_count: 1,
@@ -61,6 +64,10 @@ function renderDetail(permitOverrides: object = {}) {
   )
 }
 
+
+beforeEach(async () => {
+  await i18n.changeLanguage('en')
+})
 describe('PermitDetailDialog', () => {
   it('shows 1/5 book ref and vehicle colour when present', async () => {
     renderDetail({
@@ -87,6 +94,13 @@ describe('PermitDetailDialog', () => {
     expect(screen.getByText('White')).toBeInTheDocument()
     // Print button present when book_id is set
     expect(screen.getByRole('button', { name: /print permit/i })).toBeInTheDocument()
+  })
+  it('shows full structured access pairings', async () => {
+    renderDetail()
+    await waitFor(() => expect(screen.getByText('Test Corp')).toBeInTheDocument())
+    expect(screen.getByText('Access areas')).toBeInTheDocument()
+    expect(screen.getByText('Al Wathba 1 · Green zone')).toBeInTheDocument()
+    expect(screen.getByText('Al Wathba 2 · Red zone')).toBeInTheDocument()
   })
 
   it('Add vehicle sends the chosen emirate', async () => {
@@ -136,10 +150,54 @@ describe('PermitDetailDialog', () => {
     )
   })
 
+  it('keeps generated document history inert when book_id is absent', async () => {
+    vi.mocked(api.getBook).mockClear()
+    renderDetail({ book_id: null, book_ref: null })
+    await waitFor(() => expect(screen.getByText('Test Corp')).toBeInTheDocument())
+    expect(screen.queryByRole('region', { name: /generated permit documents/i })).not.toBeInTheDocument()
+    expect(api.getBook).not.toHaveBeenCalled()
+  })
   it('hides Print button when book_id is absent', async () => {
     renderDetail({ book_id: null, book_ref: null })
     await waitFor(() => expect(screen.getByText('Test Corp')).toBeInTheDocument())
     expect(screen.queryByRole('button', { name: /print permit/i })).not.toBeInTheDocument()
+  })
+  it('refetches generated history after a structured permit mutation', async () => {
+    const getBookSpy = vi.spyOn(api, 'getBook')
+      .mockResolvedValueOnce({
+        id: 7,
+        versions: [{
+          id: 1,
+          version_no: 1,
+          status: 'none',
+          document_id: 1,
+          docx_url: '/v1.docx',
+          pdf_url: '/v1.pdf',
+          signed_pdf_url: null,
+          manager_sig_embedded: false,
+        }],
+      } as never)
+      .mockResolvedValueOnce({
+        id: 7,
+        versions: [{
+          id: 2,
+          version_no: 2,
+          status: 'none',
+          document_id: 2,
+          docx_url: '/v2.docx',
+          pdf_url: '/v2.pdf',
+          signed_pdf_url: null,
+          manager_sig_embedded: false,
+        }],
+      } as never)
+    vi.spyOn(api, 'addPermitVehicle').mockResolvedValue({ ...basePermit, book_id: 7 } as never)
+
+    renderDetail({ book_id: 7, book_ref: '1/5/GSSG/0007' })
+    await waitFor(() => expect(screen.getByText('v1')).toBeInTheDocument())
+    await userEvent.type(screen.getByPlaceholderText('Plate no.'), 'A 5')
+    await userEvent.click(screen.getByRole('button', { name: /add vehicle/i }))
+    await waitFor(() => expect(getBookSpy).toHaveBeenCalledTimes(2))
+    expect(await screen.findByText('v2')).toBeInTheDocument()
   })
 
   it('calls getBook on Print click and opens the PDF URL', async () => {
@@ -213,3 +271,116 @@ describe('PermitDetailDialog', () => {
     expect(screen.queryByRole('button', { name: /send for approval/i })).not.toBeInTheDocument()
   })
 })
+  it('renders start date and validity period without exposing the end date', async () => {
+    renderDetail()
+    await waitFor(() => expect(screen.getByText('Test Corp')).toBeInTheDocument())
+
+    const validityFact = screen.getByText('Starts 06 Aug 2026').closest('dd')
+    expect(validityFact).toHaveTextContent('Starts 06 Aug 2026')
+    expect(validityFact).toHaveTextContent('Permit time: 1 month')
+    expect(screen.getByText('Permit time: 1 month')).toBeInTheDocument()
+    expect(screen.queryByText('06 Sep 2026')).not.toBeInTheDocument()
+    expect(screen.queryByText('2026-09-06')).not.toBeInTheDocument()
+  })
+
+  it('pluralizes a six-month detail period in English', async () => {
+    renderDetail({ validity: { value: 6, unit: 'month' } })
+    await waitFor(() => expect(screen.getByText('Permit time: 6 months')).toBeInTheDocument())
+  })
+
+  it('renders Arabic detail period and localized date direction', async () => {
+    await i18n.changeLanguage('ar')
+    try {
+      renderDetail({ validity: { value: 6, unit: 'month' } })
+      await waitFor(() => expect(screen.getByText(/مدة التصريح: 6 أشهر/)).toBeInTheDocument())
+      expect(document.documentElement.dir).toBe('rtl')
+      expect(screen.getByText(/يبدأ في/)).toBeInTheDocument()
+    } finally {
+      await i18n.changeLanguage('en')
+    }
+  })
+
+  it('renders Arabic one- and two-month detail periods', async () => {
+    await i18n.changeLanguage('ar')
+    try {
+      const oneMonth = renderDetail({ validity: { value: 1, unit: 'month' } })
+      await waitFor(() => expect(screen.getByText(/مدة التصريح: شهر واحد/)).toBeInTheDocument())
+      oneMonth.unmount()
+
+      const twoMonths = renderDetail({ validity: { value: 2, unit: 'month' } })
+      await waitFor(() => expect(screen.getByText(/مدة التصريح: شهران/)).toBeInTheDocument())
+      twoMonths.unmount()
+    } finally {
+      await i18n.changeLanguage('en')
+    }
+  })
+
+  it('gives every add-person input a visible mobile label', async () => {
+    renderDetail()
+    await waitFor(() => expect(screen.getByText('Test Corp')).toBeInTheDocument())
+
+    for (const name of ['Full name', 'UAE ID', 'Job / trade', 'Nationality']) {
+      const input = screen.getByLabelText(name, { selector: 'input' })
+      const label = input.closest('label')
+      expect(label).not.toBeNull()
+      const text = within(label as HTMLLabelElement).getByText(name)
+      expect(text).toBeVisible()
+      expect(text).toHaveClass('sm:sr-only')
+      expect(text).not.toHaveClass('sr-only')
+    }
+  })
+
+  it('exposes renewal validity choices as a named group', async () => {
+    renderDetail()
+    await waitFor(() => expect(screen.getByText('Test Corp')).toBeInTheDocument())
+    await userEvent.click(screen.getByRole('button', { name: /^renew$/i }))
+
+    expect(screen.getByRole('group', { name: 'Permit validity' })).toBeInTheDocument()
+  })
+
+  it('requires a job role and sends it when adding a person, then resets the form', async () => {
+    const addSpy = vi.spyOn(api, 'addPermitPerson').mockResolvedValue({ ...basePermit } as never)
+    renderDetail()
+    await waitFor(() => expect(screen.getByText('Test Corp')).toBeInTheDocument())
+
+    const addButton = screen.getByRole('button', { name: /add person/i })
+    expect(addButton).toBeDisabled()
+    await userEvent.type(screen.getByPlaceholderText('Full name'), '  Jane Doe  ')
+    await userEvent.type(screen.getByPlaceholderText('UAE ID'), ' 784-123 ')
+    expect(addButton).toBeDisabled()
+    await userEvent.type(screen.getByLabelText('Job / trade'), '  Electrician  ')
+    expect(addButton).toBeEnabled()
+    await userEvent.click(addButton)
+
+    await waitFor(() => expect(addSpy).toHaveBeenCalledWith(99, {
+      name: 'Jane Doe',
+      uae_id: '784-123',
+      nationality: null,
+      role: 'Electrician',
+    }))
+    expect(screen.getByPlaceholderText('Full name')).toHaveValue('')
+    expect(screen.getByPlaceholderText('UAE ID')).toHaveValue('')
+    expect(screen.getByLabelText('Job / trade')).toHaveValue('')
+  })
+
+  it('renews with a duration validity payload and exposes the approved presets', async () => {
+    const renewSpy = vi.spyOn(api, 'renewPermit').mockResolvedValue({ ...basePermit } as never)
+    renderDetail()
+    await waitFor(() => expect(screen.getByText('Test Corp')).toBeInTheDocument())
+
+    await userEvent.click(screen.getByRole('button', { name: /^renew$/i }))
+    const validityNames = ['1 day', '1 week', '1 month', '6 months', '1 year', 'Custom period']
+    expect(screen.getAllByRole('button').filter((button) => button.hasAttribute('aria-pressed')).map((button) => button.textContent?.trim())).toEqual(validityNames)
+    expect(screen.queryByLabelText(/new end date/i)).not.toBeInTheDocument()
+
+    await userEvent.click(screen.getByRole('button', { name: /custom period/i }))
+    await userEvent.clear(screen.getByLabelText('Duration'))
+    await userEvent.type(screen.getByLabelText('Duration'), '2')
+    await userEvent.type(screen.getByLabelText(/reason/i), 'Extended works')
+    await userEvent.click(screen.getAllByRole('button', { name: /^renew$/i })[0])
+
+    await waitFor(() => expect(renewSpy).toHaveBeenCalledWith(99, {
+      validity: { value: 2, unit: 'month' },
+      reason: 'Extended works',
+    }))
+  })

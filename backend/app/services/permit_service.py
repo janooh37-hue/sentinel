@@ -18,11 +18,13 @@ from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
+from pydantic import ValidationError
 from sqlalchemy import Select, func, or_, select, text
 from sqlalchemy.orm import Session, selectinload
 
 from app.api.errors import NotFoundError, ValidationFailedError
 from app.config import get_settings
+from app.core.permit_validity import period_end
 from app.db.models import (
     AuditLog,
     Book,
@@ -33,12 +35,14 @@ from app.db.models import (
     User,
 )
 from app.schemas.permit import (
+    PermitAccessAreas,
     PermitCreate,
     PermitListItem,
     PermitPersonCreate,
     PermitPersonRead,
     PermitRead,
     PermitUpdate,
+    PermitValidityPeriod,
     PermitVehicleCreate,
     PermitVehicleRead,
     PermitVehicleUpdate,
@@ -53,9 +57,30 @@ log = logging.getLogger(__name__)
 EXPIRING_WITHIN_DAYS = 7
 
 
+def _today() -> date:
+    return date.today()
+
+
 def _utcnow() -> datetime:
     # Naive UTC — matches app.db.models._utcnow so timestamps compare cleanly.
     return datetime.now(UTC).replace(tzinfo=None)
+
+
+def _set_validity(row: Permit, *, start: date, validity: PermitValidityPeriod) -> None:
+    row.start_date = start
+    row.validity_value = validity.value
+    row.validity_unit = validity.unit
+    row.end_date = period_end(start, validity.value, validity.unit)
+
+
+def _zones_from_access(access: PermitAccessAreas) -> list[str]:
+    zones: list[str] = []
+    for zone in ("green", "red"):
+        if zone in access.al_wathba_1 or zone in access.al_wathba_2:
+            zones.append(zone)
+    if access.work_residence:
+        zones.append("work_residence")
+    return zones
 
 
 # ─── derived / computed fields ─────────────────────────────────────────────────
@@ -116,7 +141,12 @@ def to_read(row: Permit, *, today: date | None = None, db: Session | None = None
         b = db.get(Book, row.book_id)
         book_ref = b.ref_number if b is not None else None
         approval_state = b.approval_state if b is not None else None
-    return PermitRead.model_validate(row).model_copy(
+    return PermitRead.model_validate(
+        {
+            **row.__dict__,
+            "validity": {"value": row.validity_value, "unit": row.validity_unit},
+        }
+    ).model_copy(
         update={
             "derived_status": _derived_status(row, today=today),
             "duration_days": _duration_days(row),
@@ -136,7 +166,12 @@ def to_read(row: Permit, *, today: date | None = None, db: Session | None = None
 
 def to_list_item(row: Permit, *, today: date | None = None) -> PermitListItem:
     today = today or date.today()
-    return PermitListItem.model_validate(row).model_copy(
+    return PermitListItem.model_validate(
+        {
+            **row.__dict__,
+            "validity": {"value": row.validity_value, "unit": row.validity_unit},
+        }
+    ).model_copy(
         update={
             "derived_status": _derived_status(row, today=today),
             "duration_days": _duration_days(row),
@@ -232,32 +267,22 @@ def get_permit(db: Session, permit_id: int, *, include_deleted: bool = False) ->
 # ─── mutations ─────────────────────────────────────────────────────────────────
 
 
-def _validate_window(start: date, end: date) -> None:
-    if end < start:
-        raise ValidationFailedError(
-            "PERMIT_BAD_WINDOW",
-            "Permit end date must not be before its start date.",
-            start_date=str(start),
-            end_date=str(end),
-        )
-
-
 def create_permit(db: Session, payload: PermitCreate, *, actor: str | None = None) -> Permit:
-    _validate_window(payload.start_date, payload.end_date)
     if not payload.people:
         raise ValidationFailedError(
             "PERMIT_NO_PEOPLE", "A permit must authorize at least one person."
         )
     row = Permit(
         company=payload.company,
-        zones=list(payload.zones),
+        access_areas=payload.access_areas.model_dump(mode="json"),
+        zones=_zones_from_access(payload.access_areas),
         start_date=payload.start_date,
-        end_date=payload.end_date,
         purpose=payload.purpose,
         notes=payload.notes,
         status="active",
         manager_id=payload.manager_id,
     )
+    _set_validity(row, start=payload.start_date, validity=payload.validity)
     for person in payload.people:
         row.people.append(_new_person(person))
     for vehicle in payload.vehicles:
@@ -267,14 +292,29 @@ def create_permit(db: Session, payload: PermitCreate, *, actor: str | None = Non
     row.permit_no = f"PMT-{row.id:04d}"
     db.commit()
     db.refresh(row)
-    _audit(db, "permit.created", row.id, actor, {"company": row.company, "zones": list(row.zones)})
+    _audit(
+        db,
+        "permit.created",
+        row.id,
+        actor,
+        {
+            "company": row.company,
+            "access_areas": row.access_areas,
+            "zones": list(row.zones),
+        },
+    )
     regenerate_permit_book(db, row, actor=actor, submit=payload.send_for_approval)
     return get_permit(db, row.id)
 
 
 def _letter_dicts(row: Permit) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
     people: list[dict[str, Any]] = [
-        {"name": p.name, "uae_id": p.uae_id, "nationality": p.nationality}
+        {
+            "name": p.name,
+            "uae_id": p.uae_id,
+            "nationality": p.nationality,
+            "role": p.role,
+        }
         for p in _active_people(row)
     ]
     vehicles: list[dict[str, Any]] = [
@@ -367,15 +407,26 @@ def regenerate_permit_book(
             prior.approval_state = "returned"
             db.flush()
 
+        # A completed Word-authored version has no structured fields. Treat a
+        # later structured regeneration as a revision regardless of the
+        # approval state it had before normalization, so its immutable DOCX/PDF
+        # remains in history and the new version is appended.
+        latest = prior.versions[-1] if prior is not None and prior.versions else None
+        if latest is not None and latest.document_id is not None and latest.fields == {}:
+            prior.approval_state = "returned"
+            db.flush()
+
     from app.core.permit_letter import PERMIT_RECIPIENT, build_permit_letter_html
     from app.services import document_service
 
     people, vehicles = _letter_dicts(permit)
     body = build_permit_letter_html(
         company=permit.company,
+        access_areas=permit.access_areas,
         zones=list(permit.zones),
         start_date=permit.start_date,
-        end_date=permit.end_date,
+        validity_value=permit.validity_value,
+        validity_unit=permit.validity_unit,
         people=people,
         vehicles=vehicles,
         purpose=permit.purpose,
@@ -398,6 +449,10 @@ def regenerate_permit_book(
         revise_of_book_id=permit.book_id,  # None on first gen → fresh 1/5 ref
         current_user=submitter,
     )
+    if permit.book_id is not None:
+        current_book = db.get(Book, permit.book_id)
+        if current_book is not None:
+            db.expire(current_book, ["versions"])
     if permit.book_id is None:
         permit.book_id = result.book_id
         db.commit()
@@ -447,14 +502,36 @@ def update_permit(
             "PERMIT_REVOKED", "A revoked permit cannot be edited.", id=permit_id
         )
     data = payload.model_dump(exclude_unset=True)
-    new_start = data.get("start_date", row.start_date)
-    new_end = data.get("end_date", row.end_date)
-    _validate_window(new_start, new_end)
+    fields = sorted(data.keys())
+    access = data.pop("access_areas", None)
+    validity = data.pop("validity", None)
+    start_supplied = "start_date" in data
+    new_start = data.pop("start_date", row.start_date)
+    validity_changed = validity is not None and (
+        validity["value"] != row.validity_value or validity["unit"] != row.validity_unit
+    )
+    if (start_supplied and new_start != row.start_date) or validity_changed:
+        candidate = validity or {
+            "value": row.validity_value,
+            "unit": row.validity_unit,
+        }
+        try:
+            new_validity = PermitValidityPeriod.model_validate(candidate)
+        except (ValidationError, ValueError) as exc:
+            raise ValidationFailedError(
+                "PERMIT_INVALID_VALIDITY",
+                "Invalid permit validity period.",
+                id=permit_id,
+            ) from exc
+        _set_validity(row, start=new_start, validity=new_validity)
     for field, value in data.items():
         setattr(row, field, value)
+    if access is not None:
+        row.access_areas = access
+        row.zones = _zones_from_access(PermitAccessAreas.model_validate(access))
     row.updated_at = _utcnow()
     db.commit()
-    _audit(db, "permit.updated", permit_id, actor, {"fields": sorted(data.keys())})
+    _audit(db, "permit.updated", permit_id, actor, {"fields": fields})
     regenerate_permit_book(db, get_permit(db, permit_id), actor=actor)
     return get_permit(db, permit_id)
 
@@ -463,7 +540,7 @@ def renew_permit(
     db: Session,
     permit_id: int,
     *,
-    new_end_date: date,
+    validity: PermitValidityPeriod,
     reason: str | None = None,
     actor: str | None = None,
 ) -> Permit:
@@ -472,15 +549,21 @@ def renew_permit(
         raise ValidationFailedError(
             "PERMIT_REVOKED", "A revoked permit cannot be renewed.", id=permit_id
         )
-    if new_end_date <= row.end_date:
-        raise ValidationFailedError(
-            "PERMIT_BAD_RENEWAL",
-            "The new end date must be after the current end date.",
-            current_end=str(row.end_date),
-            new_end=str(new_end_date),
-        )
     old_end = row.end_date
-    row.end_date = new_end_date
+    previous = {
+        "start_date": row.start_date.isoformat(),
+        "end_date": row.end_date.isoformat(),
+        "validity_value": row.validity_value,
+        "validity_unit": row.validity_unit,
+    }
+    renewal_start = max(_today(), old_end + timedelta(days=1))
+    _set_validity(row, start=renewal_start, validity=validity)
+    current = {
+        "start_date": row.start_date.isoformat(),
+        "end_date": row.end_date.isoformat(),
+        "validity_value": row.validity_value,
+        "validity_unit": row.validity_unit,
+    }
     row.updated_at = _utcnow()
     db.commit()
     _audit(
@@ -488,7 +571,7 @@ def renew_permit(
         "permit.renewed",
         permit_id,
         actor,
-        {"from": str(old_end), "to": str(new_end_date), "reason": reason},
+        {"previous": previous, "current": current, "reason": reason},
     )
     regenerate_permit_book(db, get_permit(db, permit_id), actor=actor)
     return get_permit(db, permit_id)

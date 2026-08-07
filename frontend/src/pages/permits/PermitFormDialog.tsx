@@ -8,17 +8,18 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Trash2, Plus, Upload, Car, ScanLine } from 'lucide-react'
+import { Trash2, Plus, Upload, Car, ScanLine, Check } from 'lucide-react'
 import { toast } from 'sonner'
 
 import {
   api,
   apiErrorMessage,
+  type PermitAccessAreas,
   type PermitCreate,
+  type PermitLocationZone,
   type PermitPersonCreate,
   type PermitRead,
   type PermitVehicleCreate,
-  type PermitZone,
 } from '@/lib/api'
 import {
   DialogRoot,
@@ -30,15 +31,24 @@ import {
 import { Button } from '@/components/ui/button'
 // Generic labelled switch — same control the notify surfaces use.
 import { NotifyEmployeeToggle as ToggleRow } from '@/components/notify/NotifyEmployeeToggle'
-import { plusDaysISO, todayISO } from './permitUtils'
+import { todayISO } from './permitUtils'
 import { EMIRATES } from './emirates'
 
-/** Default validity window for a new permit (days). Long enough that a fresh
- * permit isn't immediately flagged "expiring". */
-const DEFAULT_WINDOW_DAYS = 30
-
-const ZONES: PermitZone[] = ['green', 'red', 'work_residence']
-
+type Validity = { value: number; unit: 'day' | 'week' | 'month' | 'year' }
+const PRESETS: Array<{ label: string; value: number; unit: Validity['unit'] }> = [
+  { label: 'oneDay', value: 1, unit: 'day' },
+  { label: 'oneWeek', value: 1, unit: 'week' },
+  { label: 'oneMonth', value: 1, unit: 'month' },
+  { label: 'sixMonths', value: 6, unit: 'month' },
+  { label: 'oneYear', value: 1, unit: 'year' },
+]
+const LOCATION_ZONES: PermitLocationZone[] = ['green', 'red']
+type FormAccessAreas = Required<PermitAccessAreas>
+const EMPTY_ACCESS_AREAS: FormAccessAreas = {
+  al_wathba_1: [],
+  al_wathba_2: [],
+  work_residence: false,
+}
 const inputCls =
   'h-9 rounded-md border border-input bg-surface px-3 text-sm text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring'
 
@@ -58,7 +68,7 @@ interface VehicleRow extends PermitVehicleCreate {
 }
 
 let rowSeq = 0
-const newRow = (): PersonRow => ({ key: `r${rowSeq++}`, name: '', uae_id: '' })
+const newRow = (): PersonRow => ({ key: `r${rowSeq++}`, name: '', uae_id: '', role: '' })
 const newVehicleRow = (): VehicleRow => ({ key: `v${rowSeq++}`, plate_no: '' })
 
 export function PermitFormDialog({ open, permit, onOpenChange, onSaved }: Props): React.JSX.Element {
@@ -67,9 +77,10 @@ export function PermitFormDialog({ open, permit, onOpenChange, onSaved }: Props)
   const isEdit = Boolean(permit)
 
   const [company, setCompany] = useState('')
-  const [zones, setZones] = useState<PermitZone[]>(['green'])
+  const [accessAreas, setAccessAreas] = useState<FormAccessAreas>(EMPTY_ACCESS_AREAS)
   const [startDate, setStartDate] = useState(todayISO())
-  const [endDate, setEndDate] = useState(plusDaysISO(DEFAULT_WINDOW_DAYS))
+  const [validity, setValidity] = useState<Validity>({ value: 1, unit: 'month' })
+  const [customOpen, setCustomOpen] = useState(false)
   const [purpose, setPurpose] = useState('')
   const [notes, setNotes] = useState('')
   const [managerId, setManagerId] = useState<number | null>(null)
@@ -99,9 +110,23 @@ export function PermitFormDialog({ open, permit, onOpenChange, onSaved }: Props)
     if (!open) return
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setCompany(permit?.company ?? '')
-    setZones(permit?.zones ?? ['green'])
     setStartDate(permit ? permit.start_date.slice(0, 10) : todayISO())
-    setEndDate(permit ? permit.end_date.slice(0, 10) : plusDaysISO(DEFAULT_WINDOW_DAYS))
+    const existingAccess = permit?.access_areas
+    setAccessAreas(existingAccess
+      ? {
+          al_wathba_1: [...(existingAccess.al_wathba_1 ?? [])],
+          al_wathba_2: [...(existingAccess.al_wathba_2 ?? [])],
+          work_residence: existingAccess.work_residence,
+        }
+      : {
+          ...EMPTY_ACCESS_AREAS,
+          work_residence: permit?.zones.includes('work_residence') ?? false,
+        })
+    const hydratedValidity = permit?.validity ?? { value: 1, unit: 'month' }
+    setValidity(hydratedValidity)
+    setCustomOpen(!PRESETS.some((preset) =>
+      preset.value === hydratedValidity.value && preset.unit === hydratedValidity.unit,
+    ))
     setPurpose(permit?.purpose ?? '')
     setNotes(permit?.notes ?? '')
     setManagerId(permit?.manager_id ?? null)
@@ -114,21 +139,38 @@ export function PermitFormDialog({ open, permit, onOpenChange, onSaved }: Props)
     vehicleScanFiles.current.clear()
   }, [open, permit, isEdit])
 
-  const windowValid = endDate >= startDate
-  // Every named person must also carry a UAE ID (mandatory); create needs ≥1.
   const namedPeople = people.filter((p) => p.name.trim().length > 0)
-  const peopleComplete = namedPeople.every((p) => (p.uae_id ?? '').trim().length > 0)
+  const peopleComplete = namedPeople.every((p) =>
+    (p.uae_id ?? '').trim().length > 0 && (p.role ?? '').trim().length > 0,
+  )
   const hasPerson = namedPeople.some((p) => (p.uae_id ?? '').trim().length > 0)
-  const toggleZone = (z: PermitZone): void =>
-    setZones((cur) => (cur.includes(z) ? cur.filter((x) => x !== z) : [...cur, z]))
-  // The approval chain reaches the manager through his linked login account
-  // (Manager.user_id). No manager picked, or one without an account, means the
-  // submit can't be routed and the letter would quietly stay a draft.
+  const toggleLocationZone = (location: keyof Pick<FormAccessAreas, 'al_wathba_1' | 'al_wathba_2'>, zone: PermitLocationZone): void =>
+    setAccessAreas((current) => ({
+      ...current,
+      [location]: current[location].includes(zone)
+        ? current[location].filter((value) => value !== zone)
+        : [...current[location], zone],
+    }))
+  const setWorkResidence = (value: boolean): void =>
+    setAccessAreas((current) => ({ ...current, work_residence: value }))
+  const hasAnyAccess =
+    accessAreas.al_wathba_1.length > 0 ||
+    accessAreas.al_wathba_2.length > 0 ||
+    accessAreas.work_residence
+  const hasLocationAccess = accessAreas.al_wathba_1.length > 0 || accessAreas.al_wathba_2.length > 0
+  const legacyLocationZones: PermitLocationZone[] =
+    permit && permit.access_areas == null
+      ? LOCATION_ZONES.filter((zone) => permit.zones.includes(zone))
+      : []
+  const legacyNeedsLocation = legacyLocationZones.length > 0
+  // The approval chain reaches the manager through his linked login account.
   const canRoute = Boolean(managers?.find((m) => m.id === managerId)?.user_id)
   const canSave =
     company.trim().length > 0 &&
-    windowValid &&
-    zones.length > 0 &&
+    hasAnyAccess &&
+    (!legacyNeedsLocation || hasLocationAccess) &&
+    Number.isInteger(validity.value) &&
+    validity.value > 0 &&
     (isEdit || (hasPerson && peopleComplete))
 
   const mutation = useMutation({
@@ -136,9 +178,9 @@ export function PermitFormDialog({ open, permit, onOpenChange, onSaved }: Props)
       if (isEdit && permit) {
         return api.updatePermit(permit.id, {
           company: company.trim(),
-          zones,
+          access_areas: accessAreas,
           start_date: startDate,
-          end_date: endDate,
+          validity,
           purpose: purpose.trim() || null,
           notes: notes.trim() || null,
         })
@@ -151,9 +193,9 @@ export function PermitFormDialog({ open, permit, onOpenChange, onSaved }: Props)
 
       const body: PermitCreate = {
         company: company.trim(),
-        zones,
+        access_areas: accessAreas,
         start_date: startDate,
-        end_date: endDate,
+        validity,
         purpose: purpose.trim() || null,
         notes: notes.trim() || null,
         manager_id: managerId,
@@ -162,7 +204,7 @@ export function PermitFormDialog({ open, permit, onOpenChange, onSaved }: Props)
           name: p.name.trim(),
           uae_id: (p.uae_id ?? '').trim(),
           nationality: p.nationality?.trim() || null,
-          role: p.role?.trim() || null,
+          role: (p.role ?? '').trim(),
         })),
         vehicles: submittedVehicles.map((v) => ({
           plate_no: (v.plate_no ?? '').trim() || null,
@@ -278,62 +320,153 @@ export function PermitFormDialog({ open, permit, onOpenChange, onSaved }: Props)
             />
           </label>
 
-          {/* Zones — checklist, at least one */}
-          <div className="flex flex-col gap-1.5">
-            <span className="text-xs text-muted-foreground">{t('permits.form.zones')}</span>
-            <div className="flex flex-wrap gap-2">
-              {ZONES.map((z) => {
-                const on = zones.includes(z)
-                const dot =
-                  z === 'green' ? 'bg-success' : z === 'red' ? 'bg-destructive' : 'bg-info'
-                return (
-                  <button
-                    key={z}
-                    type="button"
-                    aria-pressed={on}
-                    onClick={() => toggleZone(z)}
-                    className={`inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-sm font-medium transition-colors ${
-                      on
-                        ? 'border-primary bg-primary-soft text-primary'
-                        : 'border-border text-muted-foreground hover:bg-surface-tinted'
-                    }`}
-                  >
-                    <span className={`h-2.5 w-2.5 rounded-full ${dot}`} aria-hidden />
-                    {t(`permits.zone.${z}`)}
-                  </button>
-                )
-              })}
+          {/* Structured access areas */}
+          <div className="flex flex-col gap-2">
+            <div>
+              <span className="text-xs text-muted-foreground">{t('permits.form.accessAreas')}</span>
+              <p className="text-xs text-muted-foreground">{t('permits.form.accessAreasHelp')}</p>
             </div>
-            {zones.length === 0 && (
-              <p className="text-xs text-destructive">{t('permits.form.zonesRequired')}</p>
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              {(['al_wathba_1', 'al_wathba_2'] as const).map((location) => (
+                <div key={location} className="rounded-lg border border-border p-3">
+                  <p className="mb-2 text-sm font-medium">{t(`permits.location.${location}`)}</p>
+                  <div className="grid grid-cols-2 gap-2">
+                    {LOCATION_ZONES.map((zone) => {
+                      const selected = accessAreas[location].includes(zone)
+                      return (
+                        <button
+                          key={zone}
+                          type="button"
+                          aria-pressed={selected}
+                          onClick={() => toggleLocationZone(location, zone)}
+                          className={`inline-flex items-center justify-center gap-1.5 rounded-lg border px-2 py-1.5 text-sm font-medium text-start transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
+                            selected
+                              ? 'border-primary bg-primary-soft text-primary'
+                              : 'border-border text-muted-foreground hover:bg-surface-tinted'
+                          }`}
+                        >
+                          <span
+                            className={`h-2.5 w-2.5 rounded-full ${zone === 'green' ? 'bg-success' : 'bg-destructive'}`}
+                            aria-hidden
+                          />
+                          {t('permits.access.pair', {
+                            location: t(`permits.location.${location}`),
+                            zone: t(`permits.zone.${zone}`),
+                          })}
+                          {selected && <Check className="ms-auto h-3.5 w-3.5" aria-hidden />}
+                        </button>
+                      )
+                    })}
+                  </div>
+                </div>
+              ))}
+            </div>
+            <button
+              type="button"
+              aria-pressed={accessAreas.work_residence}
+              onClick={() => setWorkResidence(!accessAreas.work_residence)}
+              className={`inline-flex items-center gap-1.5 rounded-lg border px-3 py-2 text-sm font-medium text-start transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
+                accessAreas.work_residence
+                  ? 'border-primary bg-primary-soft text-primary'
+                  : 'border-border text-muted-foreground hover:bg-surface-tinted'
+              }`}
+            >
+              <span className="h-2.5 w-2.5 rounded-full bg-info" aria-hidden />
+              {t('permits.zone.work_residence')}
+              {accessAreas.work_residence && <Check className="ms-auto h-3.5 w-3.5" aria-hidden />}
+            </button>
+            {!hasAnyAccess && (
+              <p className="text-xs text-destructive">{t('permits.form.accessRequired')}</p>
+            )}
+            {legacyNeedsLocation && (
+              <p className="rounded-md border border-warning/40 bg-warning/10 px-3 py-2 text-xs text-warning">
+                {t('permits.form.legacyAccessWarning', {
+                  zones: legacyLocationZones.map((zone) => t(`permits.zone.${zone}`)).join(', '),
+                })}
+              </p>
             )}
           </div>
+          <label className="flex flex-col gap-1.5">
+            <span className="text-xs text-muted-foreground">{t('permits.form.startDate')}</span>
+            <input
+              type="date"
+              className={`${inputCls} font-mono`}
+              value={startDate}
+              onChange={(e) => setStartDate(e.target.value)}
+            />
+          </label>
 
-          {/* Dates */}
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-            <label className="flex flex-col gap-1.5">
-              <span className="text-xs text-muted-foreground">{t('permits.form.startDate')}</span>
-              <input
-                type="date"
-                className={`${inputCls} font-mono`}
-                value={startDate}
-                onChange={(e) => setStartDate(e.target.value)}
-              />
-            </label>
-            <label className="flex flex-col gap-1.5">
-              <span className="text-xs text-muted-foreground">{t('permits.form.endDate')}</span>
-              <input
-                type="date"
-                className={`${inputCls} font-mono`}
-                value={endDate}
-                min={startDate}
-                onChange={(e) => setEndDate(e.target.value)}
-              />
-            </label>
-          </div>
-          {!windowValid && (
-            <p className="text-xs text-destructive">{t('permits.form.windowError')}</p>
-          )}
+          {/* Validity */}
+          <fieldset className="flex min-w-0 flex-col gap-2">
+            <legend className="text-xs text-muted-foreground">{t('permits.form.permitValidity')}</legend>
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-6">
+              {PRESETS.map((preset) => (
+                <button
+                  key={preset.label}
+                  type="button"
+                  aria-pressed={!customOpen && validity.value === preset.value && validity.unit === preset.unit}
+                  onClick={() => {
+                    setValidity({ value: preset.value, unit: preset.unit })
+                    setCustomOpen(false)
+                  }}
+                  className={`rounded-lg border px-2 py-2 text-sm font-medium text-start transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
+                    !customOpen && validity.value === preset.value && validity.unit === preset.unit
+                      ? 'border-primary bg-primary-soft text-primary'
+                      : 'border-border text-muted-foreground hover:bg-surface-tinted'
+                  }`}
+                >
+                  {t(`permits.form.${preset.label}`)}
+                </button>
+              ))}
+              <button
+                type="button"
+                aria-pressed={customOpen}
+                onClick={() => setCustomOpen(true)}
+                className={`rounded-lg border px-2 py-2 text-sm font-medium text-start transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
+                  customOpen
+                    ? 'border-primary bg-primary-soft text-primary'
+                    : 'border-border text-muted-foreground hover:bg-surface-tinted'
+                }`}
+              >
+                {t('permits.form.customPeriod')}
+              </button>
+            </div>
+            {customOpen && (
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                <label className="flex flex-col gap-1">
+                  <span className="text-xs text-muted-foreground">{t('permits.form.durationValue')}</span>
+                  <input
+                    type="number"
+                    min="1"
+                    step="1"
+                    className={inputCls}
+                    aria-label={t('permits.form.durationValue')}
+                    value={validity.value || ''}
+                    onChange={(e) => setValidity((current) => ({
+                      ...current,
+                      value: Number(e.target.value),
+                    }))}
+                  />
+                </label>
+                <label className="flex flex-col gap-1">
+                  <span className="text-xs text-muted-foreground">{t('permits.form.durationUnit')}</span>
+                  <select
+                    className={inputCls}
+                    aria-label={t('permits.form.durationUnit')}
+                    value={validity.unit}
+                    onChange={(e) => setValidity((current) => ({
+                      ...current,
+                      unit: e.target.value as Validity['unit'],
+                    }))}
+                  >
+                    {(['day', 'week', 'month', 'year'] as const).map((unit) => (
+                      <option key={unit} value={unit}>{t(`permits.form.unit${unit[0].toUpperCase()}${unit.slice(1)}`)}</option>
+                    ))}
+                  </select>
+                </label>
+              </div>
+            )}
+          </fieldset>
 
           {/* Purpose */}
           <label className="flex flex-col gap-1.5">
@@ -406,27 +539,47 @@ export function PermitFormDialog({ open, permit, onOpenChange, onSaved }: Props)
               {people.length === 0 ? null : (
                 people.map((row) => (
                   <div key={row.key} className="flex flex-col gap-1.5">
-                    <div className="grid grid-cols-1 gap-2 sm:grid-cols-[1.3fr_1fr_1fr_auto]">
-                      <input
-                        className={inputCls}
-                        placeholder={t('permits.person.name')}
-                        dir="auto"
-                        value={row.name}
-                        onChange={(e) => patchRow(row.key, { name: e.target.value })}
-                      />
-                      <input
-                        className={inputCls}
-                        placeholder={t('permits.person.uaeId')}
-                        value={row.uae_id ?? ''}
-                        onChange={(e) => patchRow(row.key, { uae_id: e.target.value })}
-                      />
-                      <input
-                        className={inputCls}
-                        placeholder={t('permits.person.nationality')}
-                        dir="auto"
-                        value={row.nationality ?? ''}
-                        onChange={(e) => patchRow(row.key, { nationality: e.target.value })}
-                      />
+                    <div className="grid grid-cols-1 gap-2 sm:grid-cols-[1.3fr_1fr_1fr_1fr_auto]">
+                      <label className="flex flex-col gap-1">
+                        <span className="text-xs text-muted-foreground sm:sr-only">{t('permits.person.name')}</span>
+                        <input
+                          className={inputCls}
+                          placeholder={t('permits.person.name')}
+                          dir="auto"
+                          value={row.name}
+                          onChange={(e) => patchRow(row.key, { name: e.target.value })}
+                        />
+                      </label>
+                      <label className="flex flex-col gap-1">
+                        <span className="text-xs text-muted-foreground sm:sr-only">{t('permits.person.uaeId')}</span>
+                        <input
+                          className={inputCls}
+                          placeholder={t('permits.person.uaeId')}
+                          value={row.uae_id ?? ''}
+                          onChange={(e) => patchRow(row.key, { uae_id: e.target.value })}
+                        />
+                      </label>
+                      <label className="flex flex-col gap-1">
+                        <span className="text-xs text-muted-foreground sm:sr-only">{t('permits.person.role')}</span>
+                        <input
+                          className={inputCls}
+                          aria-label={t('permits.person.role')}
+                          placeholder={t('permits.person.role')}
+                          dir="auto"
+                          value={row.role ?? ''}
+                          onChange={(e) => patchRow(row.key, { role: e.target.value })}
+                        />
+                      </label>
+                      <label className="flex flex-col gap-1">
+                        <span className="text-xs text-muted-foreground sm:sr-only">{t('permits.person.nationality')}</span>
+                        <input
+                          className={inputCls}
+                          placeholder={t('permits.person.nationality')}
+                          dir="auto"
+                          value={row.nationality ?? ''}
+                          onChange={(e) => patchRow(row.key, { nationality: e.target.value })}
+                        />
+                      </label>
                       <button
                         type="button"
                         aria-label={t('common.remove')}
