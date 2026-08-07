@@ -1,118 +1,144 @@
 # White-label first-run configuration — plan
 
-**Mockup:** `docs/first-run-setup-wizard.html`
+**Mockup:** `docs/first-run-setup-wizard.html` (11 steps)
 **Working script:** `scripts/bulk_import_ids.py` (real, tested — not a mockup)
 
 ## Outcome
 
 Turn this single-tenant build into a product a second company can stand up
 themselves: identity and branding, reference numbering and barcode symbology,
-which modules survive, the buyer's own Word templates and the tokens they need,
-the services derived from those templates, the employee roster, and a bulk
-import of passport / national-ID scans matched by ID number.
+their own Word templates and the fields behind them, the services those
+templates become, which modules survive, the employee roster, signatories and
+accounts, and a bulk import of passport / national-ID scans.
 
-## Decisions taken (2026-08-07 review)
+## Decisions taken
 
 | Question | Decision |
 | --- | --- |
 | Multi-tenant? | **One install per company.** No tenant column on shared tables. |
-| Custom tokens | **Extensible by the buyer.** A custom field becomes a token, a form question and a reportable column, with no release from us. |
-| Service icons | **Bundled SVG set, not emoji.** Emoji render per-OS and print badly into DOCX. Buyers may upload their own SVG. |
-| Module trimming | **Hide, one build.** The flag gates the API router — a disabled module returns 404, not just an empty menu. |
-| Re-running setup | **Every step re-openable after go-live**, no data loss, behind a warning naming exactly what it overwrites. Only the reference *pattern* locks, once documents carry numbers. |
-| Shipped content | **Clean slate.** No templates, categories, managers or sample data ship. Our internal-only forms and site-specific modules are excluded from the buyer build entirely. |
-| Vault retention | **Open.** See below. |
+| Custom tokens | **Extensible by the buyer**, in their own namespace so a future core token cannot collide. |
+| Service icons | **Lucide** — already a dependency, already draws the navigation. Uploaded marks are rasterised to PNG, not inlined as SVG. |
+| Module trimming | **Hide, one build.** The flag gates the API router — a disabled module returns 404. |
+| Re-running setup | **Every step re-openable**, no data loss, behind a warning naming what it overwrites. Reference pattern and personnel-ID scheme lock once data exists. |
+| Shipped content | **Clean slate.** No templates, categories, managers or sample data. |
+| Atomic apply | **No apply.** Each step writes as it goes; the last step is a test document, not a commit. |
+| Vault retention | Access logging moved into step 8 as default-on. Encryption at rest: rely on full-disk, verified in step 1. Purge rule: configurable, default never. |
 
-## What is hard-coded today
+## What the three-reviewer pass changed
 
-Each of these becomes a tenant setting or is dropped from the buyer build:
+A product/UX, a security/data, and a deployment/support reviewer read the
+mockup, the plan and the importer against the real codebase. Every claim cited
+below was independently verified before acting on it.
 
-| Today | Where | Becomes |
-| --- | --- | --- |
-| `COMPANY_NAME`, `WEBSITE`, `PROJECT_LOCATION` | `core/constants.py` | Identity step |
-| `"GSSG:"` payload prefix, Aztec-only | `core/qr.py` | Numbering step |
-| 21 entries in `TEMPLATE_FILES` | `core/constants.py` | **Dropped.** Buyer uploads their own. |
-| 12 entries in `DEFAULT_CATEGORIES` | `core/constants.py` | **Dropped.** Buyer defines their own. |
-| `DEFAULT_MANAGER_NAME` / `_TITLE` | `core/constants.py` | **Dropped.** |
-| `G`-prefix normaliser on every vault path | `core/vault_manager.py` | Roster step — configurable scheme |
-| Emoji per service | `lib/quickActions.ts`, `pages/application/formEmoji.ts` | **Replaced** by the SVG icon library |
-| Fixed navigation, every module always present | `components/shell/*` | Modules step |
-| `GSSG_` env prefix, `gssg.lan` base URL | `config.py` | Identity / deploy |
-| Site-specific modules (inmate violations, duty locations) | various | Excluded from the buyer build |
+**A real bug in the importer, with a proof of failure.** Rule 2 matched
+document numbers by substring containment, so a roster row whose passport
+column read `N/A` squashed to `NA` and claimed every file with "na" anywhere in
+its name — reported as a confident match, indistinguishable in the report from a
+correct one. A passport numbered `123456` also claimed scans of `1234567`.
+Fixed by whole-token matching plus an unusable-key filter; verified that all
+three proven misfiles now fail and every legitimate match survives.
 
-## Shape
+Also fixed in the same pass: path traversal via a crafted employee ID (guard
+added to `Vault.normalize_g_number`, which the importer reached past); symlinks
+being dereferenced and copied (a link named `*.pdf` pointing at the database was
+copied into the vault as a passport scan); a `--move` run with a typo in the
+second folder deleting sources and then dying before writing its report;
+re-runs silently duplicating every file; rule 3 walking above the scan root;
+rule 1 being dead for any non-`G` ID scheme; and the report being world-readable
+plaintext mapping names to passport numbers.
 
-Ten steps, resumable, saved to `setup.draft.json` after each. Templates are
-uploaded (step 5) *before* services are configured (step 6), because a service
-is now derived from a template rather than picked from a fixed list.
+**Three gaps in the wizard that were not small.**
 
-1. Welcome & install check — including an explicit "what ships / what you provide" split
-2. Company identity — names, logo, colours, locale
-3. Reference numbering & barcode symbology
-4. Modules to keep
-5. **Your templates & tokens** — upload `.docx`, scan for tokens, define custom fields
-6. **Services & icons** — one service per uploaded template
-7. Employee roster
-8. Bulk passport / ID scan import *(optional)*
-9. Communications *(optional)*
-10. Administrator account, review, apply
+1. *"A template becomes a service" had no path behind it.* Services are five
+   parallel hard-coded registries today, and `DocxEngine.fill()` raises
+   `KeyError` for anything not in them. Token names alone cannot yield field
+   types, Arabic labels, required flags or option lists. Step 4 is now a field
+   designer and is openly the longest step.
+2. *Uploaded forms recorded nothing.* Whether a document creates a leave or
+   violation row is decided by frozensets of **our** template names, so a
+   buyer's own leave form would generate a DOCX and leave the Leave module
+   permanently empty while switched on. Step 4 now asks what each document
+   *does*, and step 6 (modules) moved after it and pre-ticks from the answers.
+3. *Nothing configured who signs or who logs in.* The token dictionary
+   advertised `{{ manager_name }}` / `{{ manager_title }}` / `{{ manager_sig }}`
+   and nothing created a signatory, so day one printed blank signature blocks;
+   and the wizard created exactly one account for 318 people. New step 8 covers
+   signatories, approvers, per-record document access, view logging, and
+   accounts — with two administrators required to finish.
 
-## Bulk importer — as built
+**Also corrected:** the install check verified Python and Word but not the
+hostname, TLS, backups or disk encryption — the four things a buyer discovers
+the hard way; setup had no access control at all before the first admin existed,
+while account registration promotes the first caller to administrator (now a
+one-time setup token); "twenty minutes" became "an afternoon"; a hand-drawn
+45-icon set was dropped for Lucide; the SVG "sanitiser" was replaced with
+server-side rasterisation; and the manager heuristic that infers authority from
+English job-title substrings was removed from the buyer build.
 
-`scripts/bulk_import_ids.py` takes one folder per document kind and files each
-scan into the employee's vault through the same `Vault` the app writes through.
-Dry-run by default; `--apply` copies, `--move` deletes the source afterwards,
-`--report` writes a per-file CSV.
+## Blocking work, in order
 
-Rules are tried in order and the first one resolving to *exactly one* employee
-wins. Ambiguous keys are dropped from the index rather than resolved to the
-first row:
+The previous version of this plan deferred all backend work behind the
+token-loop question. That was wrong: the questions it waited on are
+product-surface questions, while the items below are substrate and are
+independent of every answer.
 
-1. `id` — personnel ID in the file name (`G3082_passport.pdf`), bounded so
-   `IMG3082.jpg` does not read as employee G3082.
-2. `doc` — document number for that folder's kind, separator-insensitive, so
-   `784-1990-1234567-1` and `784199012345671` both match.
-3. `dir` — a parent folder named after the personnel ID (`Passports/G3082/…`).
-
-No fuzzy name matching and no OCR guessing: a near-miss files someone's
-passport under a colleague and nobody notices until it matters.
-
-Verified end to end against a seeded database — 5 of 8 fixture files filed
-across both kinds and all three rules, with the `IMG3082.jpg` decoy rejected.
+1. **Move templates out of the code tree.** `settings.templates_dir` resolves to
+   git-tracked `backend/templates/`, including `_fields.json` — the exact file
+   the field designer writes — and `mng.ps1` upgrades via `git pull --ff-only`.
+   As designed, every upgrade after the first template edit is a merge conflict
+   on a customer's production server. Move to `data_dir/templates/` (the
+   precedent already exists in `book_template_service`) and resolve templates
+   through a database row rather than the frozen `TEMPLATE_FILES` mapping.
+   This is the largest single code change the white-label needs.
+2. **Stop shipping as a git clone.** Delivering the repo hands customer two the
+   full history — customer one's forms, constants and internal plans. Ship the
+   PyInstaller build `scripts/build.ps1` already produces.
+3. **Clean slate is a migration, not a constant.** `0004` seeds twelve GSSG
+   categories into every fresh database and `0032` seeds correspondence
+   categories as undeletable system rows.
+4. **A scripted install that writes `.env` before registering the service.**
+   `config.py` defaults port to 0 and `serve.py` raises on 0, so a
+   correctly-followed install with no `.env` crash-loops silently. Nothing
+   copies `.env.example`; no installer sets NSSM environment.
+5. **Backup coverage and a restore script.** `backup_service` copies six
+   subtrees and misses `.email_key` and `.vapid_key` (both at data-dir root),
+   `book_templates/`, `.env` and the Caddy CA. There is no restore path at all.
+6. **A tenant profile with a `schema_version`,** stored in the database so it
+   lands in backups, with the export allow-list enforced in the schema.
+7. **The existing customer's migration.** This repo *is* one company's live
+   install, and the wizard assumes an empty database — so they could never run
+   it and would stay permanently on a different path from every buyer. A
+   backfill that synthesises their profile from the current constants is the
+   honest test of the design: if it cannot describe an install that exists, it
+   will not describe the third one either.
+8. **Module gating at router registration,** with a test asserting 404 for every
+   route of every disabled module. Built in the natural order this ships
+   nav-hidden-but-API-live, which is the hole the design explicitly warns about.
 
 ## Open questions
 
-Ordered by how much they block the build.
+1. **Repeating rows.** A single token cannot express "one row per employee".
+   Loop syntax exposed to buyers, or multi-row documents stay unavailable.
+2. **Calculated fields.** Gratuity derived from joining date and salary, or
+   typed by a human? A formula means shipping a small expression language.
+3. **Leave policy is hard-coded UAE labour law** — probation, accrual, caps,
+   sick days, and a leave-type vocabulary including "National Service". A buyer
+   in another country silently inherits it. Also: day counting is calendar days,
+   so the weekend setting in step 2 currently does nothing.
+4. **Per-unit document access, or per-record rules?** Per-unit fits the existing
+   capability model; per-record is a permissions engine.
+5. **Batch id on imports.** The importer writes no database rows for what it
+   files, so there is nothing to attach an undo to. Change before the first
+   real handover.
+6. **Support ceiling.** Realistically three to five installs before upgrades and
+   diagnosis consume a person; fifteen to twenty with a scripted install, a real
+   restore, a support bundle and a working update check (`check_for_updates` is
+   a stub that returns "no update" forever).
 
-1. **Repeating rows in templates.** A single token cannot express "one row per
-   employee". Handover lists and register tables need loop syntax
-   (`{% for %}`) exposed to buyers, or they stay unavailable. This is the
-   largest gap left in the extensible-token decision and it will surface in the
-   first week of the first rollout.
-2. **Calculated custom fields.** Someone will want gratuity derived from joining
-   date and salary rather than typed. Allowing a formula means shipping a small
-   expression language; refusing means every value is typed by a human.
-3. **Vault retention** *(deferred in review)*. Split into answerable parts:
-   is this a PDPL obligation or a product choice; encryption at rest (recommend
-   relying on full-disk encryption and documenting that explicitly, rather than
-   encrypting the vault and risking key loss); a per-file access log (add
-   regardless — cheap now, impossible to reconstruct later); and a configurable
-   purge-after-leaving defaulting to never. The same conversation covers the
-   messaging-consent question in step 9.
-4. **Re-import safety.** Update-by-ID overwrites hand-corrections. A warning is
-   not a safeguard — should a re-import show a diff ("42 rows will change, here
-   is what") before writing?
-5. **Icon set provenance.** 45 marks are drawn in the mockup as a first pass.
-   Licensing an open set (Lucide, Phosphor) is faster and more complete — is a
-   third-party set acceptable in a product sold on?
-6. **Atomic apply.** Database rows roll back; copied scans and generated icons
-   do not. Proposal: transactional database, best-effort files, cleanup log.
-7. **Second administrator required before finishing?** One admin plus one
-   forgotten password equals a dead install, with no recovery on a LAN box that
-   has no mail configured.
+## Not fixed, deliberately
 
-## Implementation boundary
-
-This pass delivers the mockup, the plan and the working importer. No backend
-setting, route or migration is introduced until questions 1–3 are answered —
-they change the data model, not just the surface.
+`Vault.normalize_g_number` still force-prefixes `G` onto every path, so an
+employee whose ID is `3300` files to disk under `G3300`. Changing it would move
+the live install's vault paths, so it needs a decision and a migration rather
+than a quiet edit. It is the reason step 7 warns that "free text" IDs weaken
+scan matching.

@@ -230,7 +230,7 @@
 <div class="stage">
   <div class="caption">
     <h1>White-label configuration menu — first start-up guide</h1>
-    <p>A ten-step wizard that runs once on a brand-new install and can be re-opened afterwards. The install ships
+    <p>An eleven-step wizard that runs once on a brand-new install and can be re-opened afterwards. The install ships
       <b>empty</b>: no templates, no register categories, no sample data, none of our internal forms. The buyer brings
       their own Word documents, their own numbering and their own staff list, and the wizard turns those into a
       working app. Steps carry an <b>Open decisions</b> block; the ones you have already settled are marked
@@ -290,14 +290,14 @@ const ICONS = ('doc doc-check doc-plus doc-minus clipboard folder archive book b
 const ico = (name, cls='ic') => `<svg class="${cls}" aria-hidden="true"><use href="#i-${name}"></use></svg>`;
 
 /* Services are NOT a fixed list any more — they are whatever templates the
-   buyer uploaded in step 5. These stand in for one buyer's uploads. */
+   buyer uploaded in step 4. These stand in for one buyer's uploads. */
 const UPLOADED = [
-  {file:'Leave_Application.docx',   label:'Leave Application',   ar:'طلب إجازة',        icon:'palm',      group:'Leave',    tokens:11, on:true},
-  {file:'Warning_Letter.docx',      label:'Warning Letter',      ar:'خطاب إنذار',       icon:'warning',   group:'Discipline',tokens:8,  on:true},
-  {file:'Clearance.docx',           label:'Employee Clearance',  ar:'إخلاء طرف',        icon:'doc-check', group:'HR',       tokens:14, on:true},
-  {file:'Salary_Certificate.docx',  label:'Salary Certificate',  ar:'شهادة راتب',       icon:'bank',      group:'HR',       tokens:9,  on:true},
-  {file:'Passport_Handover.docx',   label:'Passport Handover',   ar:'تسليم جواز',       icon:'passport',  group:'Custody',  tokens:7,  on:true},
-  {file:'Memo_Internal.docx',       label:'Internal Memo',       ar:'مذكرة داخلية',     icon:'book',      group:'Register', tokens:6,  on:false},
+  {file:'Leave_Application.docx',   label:'Leave Application',   ar:'طلب إجازة',        icon:'palm',      group:'Leave',    tokens:11, fields:9,  ready:true,  records:'Leave record',     on:true},
+  {file:'Warning_Letter.docx',      label:'Warning Letter',      ar:'خطاب إنذار',       icon:'warning',   group:'Discipline',tokens:8,  fields:6,  ready:true,  records:'Violation record', on:true},
+  {file:'Clearance.docx',           label:'Employee Clearance',  ar:'إخلاء طرف',        icon:'doc-check', group:'HR',       tokens:14, fields:10, ready:false, records:'Register entry',   on:false},
+  {file:'Salary_Certificate.docx',  label:'Salary Certificate',  ar:'شهادة راتب',       icon:'bank',      group:'HR',       tokens:9,  fields:4,  ready:true,  records:'Register entry',   on:true},
+  {file:'Passport_Handover.docx',   label:'Passport Handover',   ar:'تسليم جواز',       icon:'passport',  group:'Custody',  tokens:7,  fields:5,  ready:true,  records:'Register entry',   on:true},
+  {file:'Memo_Internal.docx',       label:'Internal Memo',       ar:'مذكرة داخلية',     icon:'book',      group:'Register', tokens:6,  fields:3,  ready:true,  records:'Register entry',   on:false},
 ];
 
 const MODULES = [
@@ -368,16 +368,17 @@ const state = {
 
 /* ── step definitions ─────────────────────────────────────────────────── */
 const STEPS = [
-  {t:'Welcome & install check', k:'Required', render:paneWelcome},
+  {t:'Install check & network', k:'Required', render:paneWelcome},
   {t:'Company identity',        k:'Required', render:paneIdentity},
   {t:'Numbering & barcode',     k:'Required', render:paneNumbering},
-  {t:'Modules to keep',         k:'Required', render:paneModules},
-  {t:'Your templates & tokens', k:'Required', render:paneTemplates},
+  {t:'Your templates',          k:'Required', render:paneTemplates},
   {t:'Services & icons',        k:'Required', render:paneServices},
+  {t:'Modules to keep',         k:'Required', render:paneModules},
   {t:'Employee roster',         k:'Required', render:paneRoster},
+  {t:'Managers & accounts',     k:'Required', render:paneApprovers},
   {t:'Bulk ID & passport scans',k:'Optional', render:paneBulk},
   {t:'Communications',          k:'Optional', render:paneComms},
-  {t:'Administrator & finish',  k:'Required', render:paneFinish},
+  {t:'First document',          k:'Required', render:paneFinish},
 ];
 
 /* Re-run warnings — what a second pass over each step would overwrite. */
@@ -385,13 +386,14 @@ const REWRITE = [
   null,
   'Re-running this step replaces the logo, colours and company names everywhere they appear — including on documents already generated, because those read the live identity at print time. Reference numbers already issued are <b>not</b> renumbered.',
   'The reference <b>pattern</b> is locked because 1,284 documents already carry numbers in the old format. You may still add categories and change the barcode symbology — existing stamps stay valid, new documents use the new one.',
-  'Switching a module off hides it and returns 404 from its API. Data already captured is retained, not deleted, and reappears intact if you switch it back on.',
-  'Re-uploading a template with the same file name <b>replaces</b> it. Documents already generated keep their saved copy and are unaffected. Deleting a custom field that a template still uses will make that token render blank.',
+  'Re-uploading a template with the same file name <b>replaces</b> it. Documents already generated keep their saved copy and are unaffected. Deleting a custom field that a template still uses will make that token render blank on every future document that used it.',
   'Changing a service label renames it everywhere, including in the history list. Disabling a service stops new documents only — past ones stay readable.',
-  'Re-importing the roster updates people matched by personnel ID and <b>overwrites hand-corrections</b> made since the last import. Rows missing from the file are never deactivated automatically.',
-  'Files already filed are not touched. Re-running only looks at what is in the source folders now.',
+  'Switching a module off hides it and returns 404 from its API. Data already captured is <b>retained, not deleted</b> — if you are switching Violations off for a compliance reason, the records are still on disk and in the database.',
+  'Re-importing the roster updates people matched by personnel ID and <b>overwrites hand-corrections</b> made since the last import. You will see a row-by-row diff before anything is written. Rows missing from the file are never deactivated automatically.',
+  'Changing who signs a form affects documents generated from now on. Approvals already in flight keep the approver they were routed to.',
+  'Files already filed are recognised by content and skipped, so re-running after fixing a few unmatched files does not duplicate anything.',
   'Saved credentials are replaced, not merged. A blank password field leaves the stored one alone.',
-  'The administrator account is not re-created. Use People &amp; access to add or transfer administrators.',
+  null,
 ];
 
 /* ── panes ────────────────────────────────────────────────────────────── */
@@ -402,11 +404,12 @@ function decide(title, items, settled){
 
 function paneWelcome(){
   return `
-  <span class="eyebrow">Step 1 of 10</span>
+  <span class="eyebrow">Step 1 of 11</span>
   <h2>Welcome — let's set this install up for your company</h2>
   <p class="lede">This install ships empty on purpose. There are no forms, no register categories and no sample
     people in it — nothing from the company that built it. You bring your own Word documents and your own staff
-    list, and this wizard turns them into a working app. About twenty minutes if you have everything to hand.</p>
+    list, and this wizard turns them into a working app. Set aside an afternoon: most of the time goes on step 4,
+    where each of your forms gets its fields defined, and that is the work that makes the rest of the app real.</p>
 
   <div class="card">
     <h3>What ships, and what you provide</h3>
@@ -433,9 +436,10 @@ function paneWelcome(){
         </ul>
       </div>
     </div>
-    <div class="note" style="margin-top:14px">Nothing here is seeded from another customer. If you finish this
-      wizard without uploading a template, the app has no services — which is a valid state; you can add the first
-      one whenever you are ready.</div>
+    <div class="note" style="margin-top:14px">Nothing here is seeded from another customer — not the forms, not the
+      register categories, not the managers. An install with no templates is a dead app, so setup does not finish
+      until <b>one</b> form has been taken all the way through: uploaded, its fields defined, and a real document
+      generated from it. Everything after that first one is repetition.</div>
   </div>
 
   <div class="card">
@@ -450,14 +454,29 @@ function paneWelcome(){
   </div>
 
   <div class="card">
+    <h3>Who is allowed to run this</h3>
+    <p>Until the first administrator exists there is nobody to authenticate against, so setup is protected by a
+      one-time token instead.</p>
+    <label><span class="label">Setup token</span><input class="field" placeholder="Printed by the installer, and written to data/logs/setup-token.txt"></label>
+    <div class="note stop" style="margin-top:12px">This matters more than it looks. The service binds the whole LAN,
+      and account registration promotes the <b>first</b> account to administrator. Without this gate, any device in
+      the building that reaches the app before you finish owns the install. The token is required on every setup
+      route, is invalidated when setup completes, and afterwards Settings → Setup asks for an administrator
+      password instead.</div>
+  </div>
+
+  <div class="card">
     <h3>Install check</h3>
-    <p>Runs before anything is written, so a broken host fails now rather than on day one.</p>
+    <p>Runs before anything is written. The network and safety rows <b>block</b> setup rather than warn — nothing
+      later in the wizard would surface them again, and all four are things a buyer discovers the hard way.</p>
     <table><tbody>
-      <tr><td style="width:62%"><b>Python 3.12 runtime</b><br><span class="hint">3.12.4 detected</span></td><td><span class="note ok" style="display:inline-block;padding:5px 10px">Ready</span></td></tr>
-      <tr><td><b>Database</b><br><span class="hint">Empty schema — migrations at head</span></td><td><span class="note ok" style="display:inline-block;padding:5px 10px">Ready</span></td></tr>
+      <tr><td style="width:62%"><b>Python runtime and database</b><br><span class="hint">3.12.4 · empty schema · migrations at head</span></td><td><span class="note ok" style="display:inline-block;padding:5px 10px">Ready</span></td></tr>
       <tr><td><b>Data directory writable</b><br><span class="hint">214 GB free</span></td><td><span class="note ok" style="display:inline-block;padding:5px 10px">Ready</span></td></tr>
-      <tr><td><b>Barcode decoder</b><br><span class="hint">Optional — without it, scanned pages fall back to OCR matching</span></td><td><span class="note warn" style="display:inline-block;padding:5px 10px">Missing</span></td></tr>
-      <tr><td><b>OCR engine</b><br><span class="hint">Needed to read numbers off scans in step 8</span></td><td><span class="note warn" style="display:inline-block;padding:5px 10px">Missing</span></td></tr>
+      <tr><td><b>Hostname reachable, on a fixed port</b><br><span class="hint">Fetches the health endpoint over the address other people will actually use and checks it answers the same version as this machine. A stable name and port are what make bookmarks, the installable app and edit-in-Word work at all.</span></td><td><span class="note stop" style="display:inline-block;padding:5px 10px">Not set</span></td></tr>
+      <tr><td><b>HTTPS terminated, secure cookies on</b><br><span class="hint">Without it, session cookies for a system holding passport scans cross the office network in clear. Also required for the installable app and push.</span></td><td><span class="note stop" style="display:inline-block;padding:5px 10px">Plain HTTP</span></td></tr>
+      <tr><td><b>Scheduled backup registered, and restored once</b><br><span class="hint">Checks the task exists, has run, and that one restore rehearsal is on record. A backup nobody has restored is a hypothesis.</span></td><td><span class="note stop" style="display:inline-block;padding:5px 10px">Missing</span></td></tr>
+      <tr><td><b>Data volume encrypted, key files locked down</b><br><span class="hint">Full-disk encryption is how the vault is protected at rest — see step 9. The credential key must be readable by the service account and nobody else.</span></td><td><span class="note warn" style="display:inline-block;padding:5px 10px">Unverified</span></td></tr>
+      <tr><td><b>Barcode decoder</b><br><span class="hint">Optional. Without it, a printed reference stamp cannot be read back off a scanned page.</span></td><td><span class="note warn" style="display:inline-block;padding:5px 10px">Missing</span></td></tr>
       <tr><td><b>Microsoft Word</b><br><span class="hint">Needed for edit-in-Word handoff and PDF conversion</span></td><td><span class="note ok" style="display:inline-block;padding:5px 10px">Found</span></td></tr>
     </tbody></table>
   </div>
@@ -476,7 +495,7 @@ function paneWelcome(){
 
 function paneIdentity(){
   return `
-  <span class="eyebrow">Step 2 of 10</span>
+  <span class="eyebrow">Step 2 of 11</span>
   <h2>Company identity</h2>
   <p class="lede">Every value here replaces a constant that is currently hard-coded to the company that built this.
     It flows to the top bar, the login page, the installable-app icons, document headers, e-mail signatures and
@@ -554,7 +573,7 @@ function paneIdentity(){
 
 function paneNumbering(){
   return `
-  <span class="eyebrow">Step 3 of 10</span>
+  <span class="eyebrow">Step 3 of 11</span>
   <h2>Reference numbering &amp; barcode</h2>
   <p class="lede">Registered documents get a reference number and, optionally, a machine-readable stamp — which is
     what lets a scanned paper find its way back to its record. The register starts empty: define the categories
@@ -613,16 +632,20 @@ function paneNumbering(){
 
 function paneModules(){
   return `
-  <span class="eyebrow">Step 4 of 10</span>
+  <span class="eyebrow">Step 6 of 11</span>
   <h2>Modules to keep</h2>
   <p class="lede">Most buyers want a fraction of what this can do. Switch off what they do not need — navigation,
-    API routes, scheduled jobs and dashboard tiles disappear together, so nobody meets a half-built feature.</p>
+    API routes, scheduled jobs and dashboard tiles disappear together, so nobody meets a half-built feature. This
+    step comes <i>after</i> your templates on purpose: nobody can answer "do you want approvals?" before seeing that
+    four of their six forms need a manager's signature.</p>
 
   <div class="card">
-    <h3>Choose the modules this company will use</h3>
-    <p>A module that is off is hidden from the interface <b>and</b> its API returns 404 — a hidden route that still
-      answers would be a security hole, not a cosmetic one. Data is retained either way, so switching one back on
-      restores it intact.</p>
+    <h3>Confirm the modules this company will use</h3>
+    <p>Already ticked from what your templates implied — a form that records leave switched Leave on, a form that
+      routes to a manager switched Approvals on. Change anything you disagree with.</p>
+    <div class="note ok" style="margin-bottom:14px">From your six templates: <b>Leave</b> (Leave_Application records
+      leave), <b>Violations</b> (Warning_Letter records a violation), <b>Approvals</b> (4 forms route to a manager),
+      <b>Register</b> (5 forms take a reference number).</div>
     <div class="modlist" id="modList"></div>
   </div>
 
@@ -634,8 +657,9 @@ function paneModules(){
     '<b>Nothing site-specific ships.</b> Modules written for one customer\'s site are excluded from the buyer build entirely rather than shipped switched off.',
   ], true)}
 
-  ${decide('One left.',[
-    '<b>Is a plain on/off enough?</b> Some modules are useful but noisy — notifications, digests. Do we need "on / on but quiet / off", or is that a per-user preference rather than a tenant setting? I lean toward per-user, which keeps this step simple.',
+  ${decide('Two left, and the first is a sequencing risk rather than a design question.',[
+    '<b>The nav half is a day\'s work; the router half is not.</b> Built in the natural order, this ships as menu-hidden-but-API-live — which is precisely the hole the paragraph above calls out. The gate has to go in at router registration with a test asserting 404 for every route of every disabled module, or the claim should come off the page until it is true.',
+    '<b>Is a plain on/off enough?</b> Some modules are useful but noisy — notifications, digests. "On / on but quiet / off", or is quietness a per-user preference? I lean per-user, which keeps this step simple.',
   ])}`;
 }
 
@@ -648,41 +672,105 @@ function paneTemplates(){
     <td><span class="hint">${type}</span></td>
     <td><span class="hint">${used} · ${req==='Yes'?'required':'optional'}</span></td></tr>`).join('');
   return `
-  <span class="eyebrow">Step 5 of 10</span>
-  <h2>Your templates &amp; tokens</h2>
-  <p class="lede">Upload your own Word documents. A template is an ordinary <code>.docx</code> with
-    <code>{{ token }}</code> placeholders — put one anywhere, including headers, footers and table cells, and the app
-    fills it at generation time. If a template needs something the core dictionary does not have, define it here as
-    a custom field and it becomes a question on that form.</p>
+  <span class="eyebrow">Step 4 of 11 &middot; the long one</span>
+  <h2>Your templates</h2>
+  <p class="lede">Upload your Word documents, then tell the app what each one <i>is</i>. A template is an ordinary
+    <code>.docx</code> with <code>{{ token }}</code> placeholders — put one anywhere, including headers, footers and
+    table cells. But a token only says where text goes; it does not say that a field is a date, that it is required,
+    what its Arabic label reads, or that this particular form books ten days of annual leave. That is what this step
+    captures, and it is why it takes an afternoon rather than a minute.</p>
 
   <div class="card">
-    <h3>Upload your templates</h3>
+    <h3>Upload</h3>
     <p>Each file is scanned on arrival and its tokens reported. Nothing is accepted silently.</p>
     <input class="field" type="file" multiple accept=".docx">
     <div class="scroll" style="margin-top:14px;max-height:230px">
-      <table><thead><tr><th>File</th><th>Tokens</th><th>Status</th><th></th></tr></thead><tbody>
+      <table><thead><tr><th>File</th><th>Tokens</th><th>Fields defined</th><th>Status</th><th></th></tr></thead><tbody>
         ${UPLOADED.map(u=>`<tr><td><b>${u.file}</b></td><td>${u.tokens}</td>
-          <td><span style="color:var(--ok)">All recognised</span></td>
-          <td><button class="btn ghost" type="button" style="padding:5px 10px;min-height:32px">Preview</button></td></tr>`).join('')}
+          <td>${u.fields}</td>
+          <td>${u.ready
+            ? '<span style="color:var(--ok)">Ready</span>'
+            : '<span style="color:var(--amber)">Needs fields</span>'}</td>
+          <td><button class="btn ghost" type="button" style="padding:5px 10px;min-height:32px">Open designer</button></td></tr>`).join('')}
       </tbody></table>
     </div>
-    <div class="note warn" style="margin-top:12px"><b><code>Clearance.docx</code> uses 2 tokens that do not exist yet:</b>
-      <code>{{ gratuity_amount }}</code> and <code>{{ final_settlement }}</code>. Create each one as a custom field
-      below, map it to an existing field, or leave it to render blank.</div>
+    <div class="note warn" style="margin-top:12px"><b><code>Clearance.docx</code> uses 2 tokens that are not defined
+      yet:</b> <code>{{ gratuity_amount }}</code> and <code>{{ final_settlement }}</code>. Until they are, this form
+      cannot be enabled — a clearance letter that prints an empty gratuity box is worse than no clearance letter.
+      Define them below, map them onto existing fields, or delete them from the document.</div>
   </div>
 
   <div class="card">
-    <h3>Custom fields — your own tokens</h3>
-    <p>A custom field does three things at once: it becomes a token your template can use, a question on the form
-      when someone generates that document, and a column you can report on. You do not need a release from us to
-      add one.</p>
+    <h3>Field designer — <code>Leave_Application.docx</code></h3>
+    <p>One row per question the person filling this form will answer. Tokens found in the document are listed
+      automatically; you supply the type, the labels and whether it is required. This is the largest screen in the
+      product and the one that decides whether the app feels finished.</p>
+    <div class="scroll">
+      <table><thead><tr><th>Token</th><th>Label (EN)</th><th>Label (AR)</th><th>Type</th><th>Required</th></tr></thead>
+      <tbody>
+        <tr><td><code class="tok">{{ leave_type }}</code></td><td>Leave type</td><td dir="rtl">نوع الإجازة</td>
+          <td><span class="hint">Choice — 7 options</span></td><td>Yes</td></tr>
+        <tr><td><code class="tok">{{ start_date }}</code></td><td>From</td><td dir="rtl">من تاريخ</td>
+          <td><span class="hint">Date</span></td><td>Yes</td></tr>
+        <tr><td><code class="tok">{{ end_date }}</code></td><td>To</td><td dir="rtl">إلى تاريخ</td>
+          <td><span class="hint">Date</span></td><td>Yes</td></tr>
+        <tr><td><code class="tok">{{ address_on_leave }}</code></td><td>Address while on leave</td><td dir="rtl">العنوان أثناء الإجازة</td>
+          <td><span class="hint">Text</span></td><td>No</td></tr>
+        <tr><td><code class="tok">{{ manager_name }}</code></td><td>Approving manager</td><td dir="rtl">المدير المعتمد</td>
+          <td><span class="hint">Manager picker</span></td><td>Yes</td></tr>
+        <tr><td colspan="5"><button class="btn ghost" type="button">+ Add a field the document does not mention</button></td></tr>
+      </tbody></table>
+    </div>
+    <div class="note" style="margin-top:14px">Nine fields for one leave form is normal, and six templates is roughly
+      fifty. The designer copies a field set from another template, so the second form is much faster than the first.</div>
+  </div>
+
+  <div class="card">
+    <h3>What does this document do?</h3>
+    <p>The most important question in the wizard, and the easiest to skip. Generating a DOCX is only half of what a
+      form does — the other half is the record it leaves behind. A leave form that does not book leave produces a
+      tidy document and an empty Leave page.</p>
+    <div class="grid2">
+      <label><span class="label">On generate, also record</span><select class="field">
+        <option>A leave record</option><option>A violation record</option><option>A register entry only</option>
+        <option>Nothing — just the document</option></select></label>
+      <label><span class="label">Count days from</span><select class="field">
+        <option>{{ start_date }} → {{ end_date }}</option><option>A field I will pick</option><option>Not applicable</option></select></label>
+      <label><span class="label">Who signs it</span><select class="field">
+        <option>Signs itself — no approval</option><option>Routes to a manager in the app</option>
+        <option>Printed, signed by hand, scanned back</option><option>Chain: manager, then HR</option></select></label>
+      <label><span class="label">Where the finished file is filed</span><select class="field">
+        <option>The employee's vault</option><option>The register only</option><option>Both</option></select></label>
+    </div>
+    <div class="note warn" style="margin-top:14px">Answering "a leave record" here is what connects this form to the
+      Leave module, the balance calculation, the leave calendar and the "on leave today" widget. Without it, that
+      module is switched on and permanently empty — which is the single most likely way a buyer concludes the
+      product is broken.</div>
+  </div>
+
+  <div class="card">
+    <h3>Placement preview</h3>
+    <p>Where the reference stamp and the signature land on <i>your</i> layout — not ours. Drag either one if it is
+      wrong. This is also how a template is validated: rather than rejecting a file you cannot easily fix, the
+      wizard shows you the result and lets you move things.</p>
+    <div class="empty"><strong>Page 1 of Leave_Application.docx</strong>
+      <p>Reference stamp top-right &middot; signature above the manager's name block &middot; both draggable.
+        Defaults are a guess from the document's own layout, and a guess is exactly why you are being shown it.</p></div>
+  </div>
+
+  <div class="card">
+    <h3>Custom fields shared across templates</h3>
+    <p>A field defined here is a token, a form question, and a column you can report on. Set it on <b>the employee
+      record</b> and it is answered once and reused by every document — bank account, grade, contract type. Set it on
+      <b>a template</b> and it is asked each time. That choice is the difference between typing something once and
+      typing it two hundred times.</p>
     <div class="scroll">
       <table><thead><tr><th>Token</th><th>Label</th><th>Type</th><th>Used by</th></tr></thead>
       <tbody>${custom}</tbody></table>
     </div>
     <div class="row" style="margin-top:14px">
       <button class="btn primary" type="button">+ Add a custom field</button>
-      <button class="btn" type="button">Create fields for the 2 unknown tokens</button>
+      <button class="btn" type="button">Define the 2 tokens Clearance.docx is missing</button>
     </div>
     <div class="grid3" style="margin-top:16px">
       <label><span class="label">Field type</span><select class="field">
@@ -691,19 +779,17 @@ function paneTemplates(){
         <option>Choice from a list</option><option>Employee picker</option><option>Manager picker</option>
         <option>Signature</option><option>Attached image</option></select></label>
       <label><span class="label">Applies to</span><select class="field">
-        <option>One template</option><option>Several templates</option><option>Every template</option>
+        <option>One template</option><option>Several templates</option>
         <option>The employee record (asked once, reused)</option></select></label>
       <label><span class="label">Required?</span><select class="field"><option>Optional</option><option>Required before generating</option></select></label>
     </div>
-    <div class="note" style="margin-top:14px">A field set on <b>the employee record</b> is answered once and reused
-      by every document — bank account, contract type, grade. A field set on <b>a template</b> is asked each time.
-      Choosing wrongly is the difference between typing something once and typing it two hundred times.</div>
+    <div class="note" style="margin-top:14px">Your field names live in their own namespace, so a token we add in a
+      future release can never collide with one of yours and silently change what your document prints.</div>
   </div>
 
   <div class="card">
     <h3>Token dictionary</h3>
-    <p>Case-sensitive, whitespace-tolerant: <code>{{name}}</code> and <code>{{ name }}</code> are the same. An
-      unknown token renders blank rather than failing the document.</p>
+    <p>Case-sensitive, whitespace-tolerant: <code>{{name}}</code> and <code>{{ name }}</code> are the same.</p>
     <div class="row" style="margin-bottom:12px">
       <input class="field" style="max-width:260px" placeholder="Filter tokens…" id="tokFilter">
       <button class="btn" type="button">Copy all</button>
@@ -718,30 +804,31 @@ function paneTemplates(){
       empty paragraph or table cell sized the way you want the image to appear.</p>
   </div>
 
-  ${decide('Settled in review — and it is the largest item on the plan.',[
+  ${decide('Settled in review.',[
     '<b>Tokens are extensible by the buyer.</b> Custom fields become tokens, form questions and reportable columns without a release from us.',
     '<b>The buyer brings every template.</b> None of ours ship, not even as examples.',
   ], true)}
 
-  ${decide('Extensible tokens open three questions I cannot answer for you.',[
-    '<b>Repeating rows.</b> A single token cannot express "one row per employee" — a handover list or a register table needs loop syntax (<code>{% for %}</code>). Do buyers get that, or do multi-row documents stay unavailable to them? This is the biggest remaining gap and it will come up in the first week.',
-    '<b>Calculated fields.</b> Someone will want gratuity computed from joining date and salary rather than typed. Do we allow a formula in a custom field, or is every value typed by a human? Formulas are a small language, with everything that implies.',
-    '<b>Does a rejected upload block the buyer?</b> If their DOCX has a corrupt content control or a token split across formatting runs, do we reject at upload with a clear explanation, or accept and fail later? Reject-at-upload is more work and much better — but they will need a way to fix the file, and it will not always be obvious.',
-    '<b>Arabic token names.</b> Do buyers writing Arabic documents need <code>{{ الاسم }}</code>? Word handles Arabic identifiers badly inside RTL runs, and it doubles every name in the dictionary.',
+  ${decide('This step is where the white-label either works or does not. Four questions.',[
+    '<b>Repeating rows.</b> A single token cannot express "one row per employee" — a handover list or a register table needs loop syntax (<code>{% for %}</code>). Do buyers get that, or do multi-row documents stay unavailable to them? Still the largest gap, and it will surface in the first week.',
+    '<b>Calculated fields.</b> Someone will want gratuity computed from joining date and salary rather than typed. Allowing a formula means shipping a small expression language.',
+    '<b>How much of what our own forms do is reachable through this screen?</b> Honest answer today: substitution, field types, leave/violation recording and the signing path. Anything one of our forms does beyond that — a bespoke table layout, a per-form footer swap — is code, not configuration. The wizard should say which of the two a buyer is getting rather than imply parity.',
+    '<b>Placement defaults.</b> The signature is currently positioned by searching the rendered text for the manager\'s name, which is a rule written for our documents. On a buyer template that does not repeat the name as literal text it lands somewhere arbitrary and reports success. Either the preview above becomes mandatory, or that fallback has to fail loudly instead of silently.',
   ])}`;
 }
 
 function paneServices(){
   return `
-  <span class="eyebrow">Step 6 of 10</span>
+  <span class="eyebrow">Step 5 of 11</span>
   <h2>Services &amp; icons</h2>
-  <p class="lede">Each template you uploaded becomes a service — one tile staff tap to fill that form. Name it in
+  <p class="lede">Each template you defined becomes a service — one tile staff tap to fill that form. Name it in
     both languages, group it, and give it an icon. Icons are the primary wayfinding device: people learn a tile by
     its shape long before they read the label.</p>
 
   <div class="card">
     <h3>Services from your templates <span class="hint" style="font-weight:400">— click an icon to change it</span></h3>
-    <p>Order here is the order on the services page. In the built version these drag to reorder.</p>
+    <p>Order here is the order on the services page. In the built version these drag to reorder. A template whose
+      fields are not finished cannot be enabled — <code>Clearance.docx</code> is greyed out until step 4 is done.</p>
     <div class="tiles" id="tileList"></div>
     <div class="row" style="margin-top:16px">
       <button class="btn" type="button">+ Upload another template</button>
@@ -751,16 +838,20 @@ function paneServices(){
 
   <div class="card">
     <h3>Icons</h3>
-    <p>A bundled single-colour set of ${ICONS.length} marks, drawn to one grid and one stroke weight. They inherit
-      your primary colour, stay legible at 16&nbsp;px, and print cleanly into a DOCX — which is why this is not an
-      emoji picker. If none of them fit, upload your own SVG.</p>
+    <p>A single-colour line set that inherits your primary colour, stays legible at 16&nbsp;px, and prints cleanly
+      into a DOCX — which is why this is not an emoji picker. The app already ships Lucide and already draws its
+      navigation with it, so the service icons come from the same set: consistent with the rest of the interface,
+      about 1,500 marks instead of 45, and no drawing for us to maintain. The marks below stand in for it, because
+      this mockup is a single self-contained file.</p>
     <div class="row" style="gap:12px;color:var(--navy);flex-wrap:wrap">
       ${ICONS.slice(0,22).map(n=>ico(n)).join('')}
-      <span class="hint" style="margin:0">…and ${ICONS.length-22} more</span>
+      <span class="hint" style="margin:0">…and the rest of the library</span>
     </div>
-    <div class="note" style="margin-top:14px">Uploaded SVGs are sanitised on arrival — scripts, external references
-      and embedded raster images are stripped — then recoloured to the current stroke weight so they sit with the
-      rest of the set instead of standing out.</div>
+    <div class="note warn" style="margin-top:14px"><b>Upload-your-own is a PNG upload, not an SVG one.</b> Recolouring
+      an SVG to your primary requires rendering it inline, and inline SVG from an upload is script execution in the
+      app's own origin — the scan-inbox viewer already refuses to inline SVG for exactly this reason. So an uploaded
+      mark is rasterised on arrival at three sizes and the SVG discarded. It will not recolour with your palette,
+      which is the honest trade and a much smaller risk than a sanitiser we would have to get right forever.</div>
   </div>
 
   <div class="card">
@@ -773,41 +864,46 @@ function paneServices(){
     </div>
   </div>
 
-  ${decide('Settled in review.',[
-    '<b>SVG icon set, not emoji.</b> Emoji render differently on Windows 10, Windows 11, Android and iOS, so the same tile looked different on the office PC and the phone — and they print badly into documents.',
+  ${decide('Settled.',[
+    '<b>Line icons, not emoji.</b> Emoji render differently on Windows 10, Windows 11, Android and iOS, so the same tile looked different on the office PC and the phone — and they print badly into documents.',
+    '<b>Lucide, not a hand-drawn set.</b> It is already a dependency and already draws the navigation. A bespoke set of 45 would sit next to it and visibly mismatch, for no product benefit and a permanent maintenance tail.',
     '<b>Services are derived from uploaded templates,</b> not from a fixed list. A buyer with four forms sees four tiles.',
   ], true)}
 
-  ${decide('Two left on presentation.',[
-    '<b>Who draws the icons?</b> A hand-drawn set of 40 is a real design task, and the set above is a first pass. Buying a licensed open set (Lucide, Phosphor) is faster and more complete — is a third-party set acceptable in a product you sell on?',
-    '<b>Groups — buyer-defined or fixed?</b> Fixed groups keep every install navigable and supportable. Free-text groups mean each buyer invents their own taxonomy and support gets harder. I lean fixed, with "Other" as the escape hatch.',
+  ${decide('One left.',[
+    '<b>Groups — buyer-defined or fixed?</b> Fixed groups keep every install navigable and supportable. Free-text groups mean each buyer invents their own taxonomy and every support call starts with "where is it filed?". I lean fixed, with "Other" as the escape hatch.',
   ])}`;
 }
 
 function paneRoster(){
   return `
-  <span class="eyebrow">Step 7 of 10</span>
+  <span class="eyebrow">Step 7 of 11</span>
   <h2>Employee roster</h2>
   <p class="lede">Load the staff list. Everything downstream keys off the personnel ID — documents, the file vault,
     leave records and the scan import in the next step — so settle the ID scheme before importing.</p>
 
   <div class="card">
-    <h3>Personnel ID scheme</h3>
+    <h3>Personnel ID scheme <span class="hint" style="font-weight:400">— locks after the first import</span></h3>
     <div class="grid3">
       <label><span class="label">Format</span><select class="field">
         <option>Prefix + digits (G3082)</option><option>Digits only (3082)</option><option>Free text — use theirs as-is</option></select></label>
       <label><span class="label">Prefix</span><input class="field" placeholder="G" maxlength="4"></label>
       <label><span class="label">If a row has no ID</span><select class="field"><option>Assign the next free number</option><option>Reject the row</option></select></label>
     </div>
-    <div class="note warn" style="margin-top:14px">The ID becomes the vault folder name on disk and appears on
-      generated documents. Changing the scheme after import means renaming folders — the wizard will warn you and
-      will not do it silently.</div>
+    <div class="note stop" style="margin-top:14px"><b>This locks the way the reference format does, and for a harder
+      reason.</b> The personnel ID is the primary key: it is referenced by fourteen other tables, it is the vault
+      folder name on disk, it is stored inside every filed document's path, and it is printed on every document
+      already generated. Changing it later is not a rename — it is a key rewrite across the database <i>and</i> the
+      filesystem <i>and</i> paper that has already left the building. Pick it now, with the buyer in the room.</div>
+    <div class="note warn" style="margin-top:10px">Whichever format you choose is also what the scan importer in
+      step 9 matches file names against. "Free text" weakens that matching — arbitrary IDs give it less to anchor
+      on — so prefer a consistent scheme even where the buyer's spreadsheet is untidy.</div>
   </div>
 
   <div class="card">
     <h3>Load the list</h3>
     <p>Download the template, fill it in Excel, upload it back — or paste rows straight from a spreadsheet. The
-      template includes any custom fields you marked as belonging to the employee record in step 5.</p>
+      template includes any custom fields you marked as belonging to the employee record in step 4.</p>
     <div class="row">
       <button class="btn primary" type="button">Download employees_template.xlsx</button>
       <button class="btn" type="button">Download CSV version</button>
@@ -829,7 +925,7 @@ function paneRoster(){
         <tr><td>Passport</td><td><code class="tok">passport_no</code></td><td>No</td><td>P1234567</td></tr>
         <tr><td>Emirates ID</td><td><code class="tok">national_id_no</code></td><td>No</td><td>784-1990-1234567-1</td></tr>
         <tr><td>Grade</td><td><code class="tok">grade</code> <span class="hint">— your custom field</span></td><td>No</td><td>B2</td></tr>
-        <tr><td>Salary</td><td><span class="hint">Ignored — no matching field. Add one in step 5?</span></td><td>—</td><td>—</td></tr>
+        <tr><td>Salary</td><td><span class="hint">Ignored — no matching field. Add one in step 4?</span></td><td>—</td><td>—</td></tr>
       </tbody></table>
     </div>
   </div>
@@ -840,6 +936,9 @@ function paneRoster(){
     <div class="note warn" style="margin-top:10px"><b>7 rows need attention.</b> 2 duplicate IDs (G3110 twice),
       3 invalid national-ID checksums, 1 joining date in the future, 1 missing name. Accepted with a flag and
       collected in a data-quality list you can work through later.</div>
+    <div class="note" style="margin-top:10px"><b>A flagged national ID is excluded from scan matching.</b> A
+      mistyped number would otherwise become a matching key in step 9 and could claim someone else's documents, so
+      a number we do not trust is not a number we file on.</div>
     <div class="row" style="margin-top:14px">
       <button class="btn primary" type="button">Import 318 rows</button>
       <button class="btn" type="button">Review the 7 flagged rows</button>
@@ -847,17 +946,116 @@ function paneRoster(){
     </div>
   </div>
 
-  ${decide('Re-import is the sharpest edge in the whole wizard.',[
-    '<b>Update, skip, or fail on re-import?</b> Update-by-ID is what people expect and it silently overwrites hand-corrections. The warning at the top of this step says so, but a warning is not a safeguard. Should a re-import instead show a diff — "42 rows will change, here is what" — before writing?',
+  <div class="card">
+    <h3>Re-importing later shows a diff first</h3>
+    <p>The warning at the top of a re-run says the import overwrites hand-corrections. A warning is not a safeguard,
+      so it does not simply overwrite — it shows you what will change and lets you deselect rows.</p>
+    <div class="scroll" style="max-height:180px">
+      <table><thead><tr><th>ID</th><th>Field</th><th>Currently</th><th>File says</th><th>Apply</th></tr></thead><tbody>
+        <tr><td>G3082</td><td>department</td><td>Operations</td><td>Ops</td><td><input type="checkbox" style="accent-color:var(--navy)"></td></tr>
+        <tr><td>G3120</td><td>contact</td><td>+971500000000</td><td>0500000000</td><td><input type="checkbox" style="accent-color:var(--navy)"></td></tr>
+        <tr><td>G3140</td><td>position</td><td>Security Officer</td><td>Security Guard</td><td><input type="checkbox" checked style="accent-color:var(--navy)"></td></tr>
+        <tr><td colspan="5"><span class="hint">42 rows would change · 6 people in the database are absent from this file and will be left alone, never deactivated</span></td></tr>
+      </tbody></table>
+    </div>
+  </div>
+
+  ${decide('Three left on the roster.',[
     '<b>Never auto-deactivate.</b> I have assumed a person missing from a re-uploaded file is left alone, because a partial file would otherwise fire half the workforce. Confirm.',
-    '<b>Departments and positions — free text or picklists?</b> Free text means "Ops", "Operations" and "operations" become three departments within a month, and every report splits three ways.',
-    '<b>How strict on national ID?</b> I have gone with accept-and-flag rather than reject, because real rosters have typos and a blocked import helps nobody.',
+    '<b>Departments and positions — free text or picklists?</b> This is not only reporting hygiene. Today the app decides who is a <i>manager</i> by looking for "manager", "director", "head", "chief" or "supervisor" inside the English job title. A roster of Arabic titles, or of "Team Lead" and "Foreman", produces an install where nobody can approve anything. I have removed that heuristic from the buyer build and made approvers an explicit list in step 8 — confirm you agree, because it changes who can do what on day one.',
+    '<b>How strict on national ID?</b> Accept-and-flag rather than reject, because real rosters have typos and a blocked import helps nobody — with flagged values kept out of scan matching, as above.',
+  ])}`;
+}
+
+function paneApprovers(){
+  return `
+  <span class="eyebrow">Step 8 of 11</span>
+  <h2>Managers &amp; accounts</h2>
+  <p class="lede">Who signs, who approves, and who can log in on Monday. This step exists because the previous
+    version of this wizard did not have it, and the result was an install where every signature token printed blank,
+    approvals had nobody to route to, and 318 employees shared one administrator login.</p>
+
+  <div class="card">
+    <h3>Signatories</h3>
+    <p>A signatory is a name, a title and a signature image. This is what fills <code>{{ manager_name }}</code>,
+      <code>{{ manager_title }}</code> and <code>{{ manager_sig }}</code> — the tokens the dictionary advertises and
+      nothing else in the wizard creates. Without at least one, every document that carries a signature block prints
+      an empty one.</p>
+    <div class="scroll">
+      <table><thead><tr><th>Name (EN)</th><th>Name (AR)</th><th>Title</th><th>Signature</th><th>Default for</th></tr></thead>
+      <tbody>
+        <tr><td>Ahmed Al Mansoori</td><td dir="rtl">أحمد المنصوري</td><td>Operations Manager</td>
+          <td><span style="color:var(--ok)">Uploaded</span></td><td><span class="hint">All HR forms</span></td></tr>
+        <tr><td>Sara Haddad</td><td dir="rtl">سارة حداد</td><td>HR Manager</td>
+          <td><span style="color:var(--amber)">Missing</span></td><td><span class="hint">Clearance</span></td></tr>
+        <tr><td colspan="5"><button class="btn ghost" type="button">+ Add a signatory</button></td></tr>
+      </tbody></table>
+    </div>
+    <div class="note warn" style="margin-top:14px">A signatory with no signature image cannot approve anything —
+      the app refuses to sign a document with an empty mark, and the person meets that refusal at the moment they
+      are trying to get work out. Upload it now, not when it blocks them.</div>
+  </div>
+
+  <div class="card">
+    <h3>Who may approve</h3>
+    <p>An explicit list, not a guess. Earlier versions of this app decided who was a manager by looking for
+      "manager", "director", "head", "chief" or "supervisor" inside the English job title — which quietly fails for
+      any company whose titles are in Arabic, or who say "Team Lead", "Foreman" or "In-charge".</p>
+    <div class="grid2">
+      <label><span class="label">Approvers</span><select class="field" multiple size="4">
+        <option selected>Ahmed Al Mansoori — Operations Manager</option>
+        <option selected>Sara Haddad — HR Manager</option>
+        <option>Rahul Menon — Shift Supervisor</option></select></label>
+      <label><span class="label">If the named approver is on leave</span><select class="field">
+        <option>Route to their deputy</option><option>Hold until they return</option><option>Anyone with approval rights</option></select></label>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3>Who can see whose documents</h3>
+    <p>The vault holds passport and national-ID scans. Today, anyone who can open the Employees page can download
+      any of them — which is the first question a buyer's compliance officer will ask, and the wizard had no answer.</p>
+    <div class="modlist">
+      <div class="mod"><input type="checkbox" checked><div><strong>Administrators and HR see every record</strong><small>The people whose job it is.</small></div><span class="meta">Always</span></div>
+      <div class="mod"><input type="checkbox" checked><div><strong>Supervisors see their own unit only</strong><small>Scoped by department or duty unit.</small></div><span class="meta">Recommended</span></div>
+      <div class="mod"><input type="checkbox" checked><div><strong>Everyone else sees only their own record</strong><small>Their documents, their leave, nobody else's.</small></div><span class="meta">Recommended</span></div>
+      <div class="mod"><input type="checkbox" checked><div><strong>Log every identity-document view</strong><small>Who opened whose passport, and when. Cheap to record now and impossible to reconstruct later.</small></div><span class="meta">Recommended</span></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3>Accounts for Monday morning</h3>
+    <p>Not just the administrator. Create logins for the handful of people who actually run the system — the same
+      people you just listed as approvers — and print a credentials sheet to hand over. Everyone else can register
+      themselves and be approved from the queue.</p>
+    <div class="scroll" style="max-height:170px">
+      <table><thead><tr><th>Person</th><th>Sign-in email</th><th>Role</th><th>Password</th></tr></thead><tbody>
+        <tr><td>Ahmed Al Mansoori</td><td>ahmed@example.ae</td><td>Administrator</td><td><span class="hint">Set now</span></td></tr>
+        <tr><td>Sara Haddad</td><td>sara@example.ae</td><td>Administrator</td><td><span class="hint">Generated</span></td></tr>
+        <tr><td>Rahul Menon</td><td>rahul@example.ae</td><td>Operator</td><td><span class="hint">Generated</span></td></tr>
+        <tr><td colspan="4"><button class="btn ghost" type="button">+ Add an account</button></td></tr>
+      </tbody></table>
+    </div>
+    <div class="note stop" style="margin-top:14px"><b>Two administrators are required to finish.</b> There is no
+      password recovery on a LAN install with no mail configured, so one administrator plus one forgotten password
+      is a dead system that only a database edit can revive. A server-side console reset script also ships, for the
+      case where both of them leave the company.</div>
+    <div class="row" style="margin-top:14px">
+      <button class="btn" type="button">Print the credentials sheet</button>
+      <span class="hint" style="margin:0">Printed once, never shown again, forced change on first sign-in.</span>
+    </div>
+  </div>
+
+  ${decide('This whole step is new — it is what the review found missing rather than wrong.',[
+    '<b>Is per-unit scoping enough,</b> or do buyers need per-record rules ("only HR may see passports, supervisors see leave only")? Per-unit is a day\'s work on the existing capability model; per-record is a permissions engine.',
+    '<b>Should the signature image be required</b> before a signatory can be saved, rather than warned about? I lean required — a signatory who cannot sign is not a signatory.',
+    '<b>Password policy is currently ours, not the buyer\'s.</b> Minimum length, expiry, session timeout and lockout should be tenant settings, because they are exactly what a buyer\'s IT policy dictates. Worth building now or later?',
   ])}`;
 }
 
 function paneBulk(){
   return `
-  <span class="eyebrow">Step 8 of 10</span>
+  <span class="eyebrow">Step 9 of 11</span>
   <h2>Bulk passport &amp; ID scan import</h2>
   <p class="lede">One folder of passport scans, one folder of national-ID scans. Each file is matched to an employee
     by the ID number in its file name and filed into that person's vault. Nothing is copied until you approve the
@@ -879,20 +1077,25 @@ function paneBulk(){
       nothing — or more than one person — is left untouched and listed for you. Filing a passport under the wrong
       person is worse than not filing it, so the importer never guesses.</p>
     <table><tbody>
-      <tr><td style="width:38px">1</td><td><b>Personnel ID in the file name</b><br>
-        <span class="hint">Most reliable. <code>G3082_passport.pdf</code>. Bounded so <code>IMG3082.jpg</code> does not read as employee G3082.</span></td></tr>
-      <tr><td>2</td><td><b>Document number in the file name</b><br>
-        <span class="hint">Passport number for the passport folder, national ID for the ID folder. Separators ignored — <code>784-1990-1234567-1</code> and <code>784199012345671</code> both match.</span></td></tr>
-      <tr><td>3</td><td><b>A parent folder named after the person</b><br>
-        <span class="hint"><code>Passports/G3082/scan01.pdf</code> — handles the common "one folder per employee" handover shape.</span></td></tr>
+      <tr><td style="width:38px">1</td><td><b>Personnel ID as a whole word in the file name</b><br>
+        <span class="hint">Most reliable. <code>G3082_passport.pdf</code>. Works with any ID scheme, because the keys come from your roster rather than a fixed pattern — and <code>IMG3082.jpg</code> is not a match, because <code>IMG3082</code> is a different word from <code>G3082</code>.</span></td></tr>
+      <tr><td>2</td><td><b>Document number as a whole word</b><br>
+        <span class="hint">Passport number for the passport folder, national ID for the ID folder. Separators ignored — <code>784-1990-1234567-1</code> and <code>784199012345671</code> both match. Never a fragment: a passport numbered <code>123456</code> will not claim a scan of passport <code>1234567</code>.</span></td></tr>
+      <tr><td>3</td><td><b>A folder named after the person</b><br>
+        <span class="hint"><code>Passports/G3082/scan01.pdf</code> — the common "one folder per employee" handover shape. Only folders inside the one you pointed at count.</span></td></tr>
     </tbody></table>
     <div class="note stop" style="margin-top:14px"><b>There is deliberately no fuzzy name matching and no OCR
-      guessing.</b> Both were considered and left out: a near-miss on a name files someone's passport under a
-      colleague, and nobody notices until it matters. Leftovers are listed for a human instead.</div>
+      guessing.</b> A near-miss on a name files someone's passport under a colleague, and nobody notices until it
+      matters. Leftovers are listed for a human instead. For the same reason, numbers that cannot be matched safely
+      — too short, all letters, or a placeholder like <code>N/A</code> — are dropped from matching rather than used
+      loosely; one <code>N/A</code> in a roster would otherwise turn that person into a sink that swallows an
+      arbitrary share of the folder.</div>
     <div class="grid3" style="margin-top:14px">
-      <label><span class="label">On duplicate file name</span><select class="field"><option>Keep both (append _1)</option><option>Skip</option></select></label>
+      <label><span class="label">Already-filed files</span><select class="field"><option>Recognise by content and skip</option></select>
+        <span class="hint">So re-running after fixing a few unmatched files does not duplicate anything.</span></label>
       <label><span class="label">Original files</span><select class="field"><option>Copy (leave originals)</option><option>Move</option></select></label>
-      <label><span class="label">Also fill missing numbers</span><select class="field"><option>Yes, from the file name</option><option>No, files only</option></select></label>
+      <label><span class="label">Trust rule 2 without review</span><select class="field"><option>No — list them for me</option><option>Yes</option></select>
+        <span class="hint">Rule 2 is the weakest: a short number can coincide with an unrelated one.</span></label>
     </div>
   </div>
 
@@ -906,14 +1109,22 @@ function paneBulk(){
         <tr><td>G3120/scan01.pdf</td><td>Passport</td><td>Rule 3 — folder</td><td>G3120 · Rahul Menon</td><td style="color:var(--ok)">Will file</td></tr>
         <tr><td>IMG3082.jpg</td><td>National ID</td><td>—</td><td>—</td><td style="color:var(--amber)">No match — skipped</td></tr>
         <tr><td>scan_0042.pdf</td><td>Passport</td><td>—</td><td>—</td><td style="color:var(--amber)">No match — skipped</td></tr>
+        <tr><td>link_to_share.pdf</td><td>Passport</td><td>—</td><td>—</td><td style="color:var(--muted)">Shortcut — skipped</td></tr>
         <tr><td>notes.txt</td><td>—</td><td>—</td><td>—</td><td style="color:var(--muted)">Not a document type</td></tr>
       </tbody></table>
     </div>
+    <div class="note warn" style="margin-top:12px"><b>96 of the 571 matched on document number alone (rule 2).</b>
+      Listed separately so you can scan them before trusting them — that is the rule where a short number can
+      coincide with an unrelated one.</div>
     <div class="row" style="margin-top:14px">
       <button class="btn primary" type="button">Import the 571 matched files</button>
+      <button class="btn" type="button">Review the 96 number-only matches</button>
       <button class="btn" type="button">Resolve the 33 unmatched by hand</button>
-      <button class="btn ghost" type="button">Download the full report (CSV)</button>
+      <button class="btn ghost" type="button">Download the report (CSV)</button>
     </div>
+    <div class="note" style="margin-top:12px">That CSV maps names to personnel IDs to passport and national-ID
+      numbers — it is the same kind of file this wizard calls a data-protection incident when it is a setup export.
+      It is written readable only by you, carries no employee names, and has a redacted mode. Treat it accordingly.</div>
     <p class="hint" style="margin-top:10px">Same importer from the command line for large handovers:
       <code>python scripts/bulk_import_ids.py --passports "D:\\Handover\\Passports" --uae-ids "D:\\Handover\\EmiratesID" --report out.csv</code></p>
   </div>
@@ -921,16 +1132,16 @@ function paneBulk(){
   ${decide('You said you were not sure on retention — here is the shape of the question, split so it is answerable.',[
     '<b>Is this a legal obligation or a product choice?</b> A few hundred passport scans on an office server is personal data under UAE PDPL. Worth one conversation with whoever handles compliance before the first buyer, not after. If it is an obligation, it stops being a feature we can defer.',
     '<b>Encryption at rest.</b> The vault is plain folders on disk today — readable by anyone with the server or a backup tape. Options: leave as-is and rely on disk encryption (cheapest, and honestly what most LAN installs do), or encrypt the vault itself (real work, and a lost key means lost documents). <b>My recommendation: rely on full-disk encryption, and say so explicitly in the deployment guide</b> so it is a documented decision rather than an oversight.',
-    '<b>Access log.</b> Recording who opened whose passport is cheap to add now and near-impossible to reconstruct later. I would add it regardless of the retention answer.',
+    '<b>Access log — no longer waiting on the retention answer.</b> Moved into step 8 as a default-on setting, because it is cheap now, impossible to reconstruct later, and independent of everything else here.',
     '<b>Purge after leaving.</b> Needs a rule you cannot invent — "N days after end of service" where N comes from labour law and the contract, not from us. Leave it configurable, default to never, and let each buyer set it.',
     '<b>Multi-page documents.</b> Front and back of an ID as two JPGs — file separately, or merge into one PDF per document? Merging is tidier downstream and is a decision made once, at import.',
-    '<b>Undo.</b> Every import gets a batch id so a 600-file mistake is one click to reverse. Cheap now, impossible to retrofit.',
+    '<b>Undo.</b> A batch id per import, so a 600-file mistake is one click to reverse. The importer does not write database rows for what it files today — it copies to disk and the Records tab finds them by walking the folder — so there is nothing to attach a batch id to yet. That is the change to make before the first real handover, not after.',
   ])}`;
 }
 
 function paneComms(){
   return `
-  <span class="eyebrow">Step 9 of 10</span>
+  <span class="eyebrow">Step 10 of 11</span>
   <h2>Communications</h2>
   <p class="lede">Optional — skip it entirely if this company only generates documents. Every channel can be switched
     on later without touching anything else.</p>
@@ -972,60 +1183,78 @@ function paneComms(){
 
 function paneFinish(){
   return `
-  <span class="eyebrow">Step 10 of 10</span>
-  <h2>Administrator &amp; finish</h2>
-  <p class="lede">Create the first account, review, apply. Applying writes the tenant profile, creates the vault
-    tree, imports the roster and files the scans. If anything fails, you come back here.</p>
+  <span class="eyebrow">Step 11 of 11</span>
+  <h2>Your first document</h2>
+  <p class="lede">Setup does not end with a button that commits everything at once. Every step wrote its own
+    settings as you went, so there is nothing held back to apply — and nothing to half-apply and roll back. What is
+    left is the only proof that any of it worked: generate a real document, from a real template, for a real person.</p>
 
   <div class="card">
-    <h3>First administrator</h3>
-    <div class="grid2">
-      <label><span class="label">Link to an employee</span><select class="field"><option>G3082 — Ahmed Al Mansoori</option><option>Do not link (system account)</option></select></label>
-      <label><span class="label">Sign-in e-mail</span><input class="field" type="email" placeholder="admin@example.ae"></label>
-      <label><span class="label">Password</span><input class="field" type="password" placeholder="At least 12 characters"></label>
-      <label><span class="label">Confirm password</span><input class="field" type="password"></label>
+    <h3>Generate a test document</h3>
+    <p>Pick a form and an employee. This exercises the whole chain in one go — template, fields, tokens, identity,
+      logo, reference number, barcode stamp, signature placement and filing — and it is the only way to find out
+      that a token is blank or a signature landed in the footer before an employee does.</p>
+    <div class="grid3">
+      <label><span class="label">Form</span><select class="field">${UPLOADED.filter(u=>u.ready).map(u=>`<option>${u.label}</option>`).join('')}</select></label>
+      <label><span class="label">Employee</span><select class="field"><option>G3082 — Ahmed Al Mansoori</option></select></label>
+      <label><span class="label">Signatory</span><select class="field"><option>Ahmed Al Mansoori — Operations Manager</option></select></label>
     </div>
-    <div class="note warn" style="margin-top:12px">There is no password recovery on a LAN install with no mail
-      configured. Create a second administrator before you finish, or write this one down.</div>
+    <div class="row" style="margin-top:16px">
+      <button class="btn primary" type="button">Generate and open it</button>
+      <button class="btn ghost" type="button">Generate as PDF too</button>
+    </div>
+    <div class="note ok" style="margin-top:12px"><b>Generated.</b> Reference FFM-0001 · barcode read back
+      successfully from the printed page · all 9 fields filled · signature placed above the name block. Every
+      element of the chain answered.</div>
   </div>
 
   <div class="card">
-    <h3>Review</h3>
+    <h3>What you have configured</h3>
+    <p>Read-only. Each line links back to the step that set it, and every step stays open from Settings → Setup.</p>
     <dl class="kv">
       <dt>Company</dt><dd id="revName">Not set</dd>
+      <dt>Network</dt><dd>https://falcon.lan · fixed port · certificate trusted · backup nightly, restore rehearsed</dd>
       <dt>Numbering</dt><dd>FFM-0001 · never resets · 2 categories</dd>
       <dt>Barcode</dt><dd id="revCode">Aztec · payload FFM:{ref}</dd>
-      <dt>Modules on</dt><dd id="revMods">—</dd>
-      <dt>Templates</dt><dd>6 uploaded · 4 custom fields defined · 0 unmapped tokens</dd>
+      <dt>Templates</dt><dd>6 uploaded · 5 ready · <b>Clearance.docx still needs 2 fields</b></dd>
       <dt>Services on</dt><dd id="revSvcs">—</dd>
+      <dt>Modules on</dt><dd id="revMods">—</dd>
       <dt>Employees</dt><dd>318 rows · 7 flagged for data quality</dd>
-      <dt>Scans</dt><dd>571 files will be filed · 33 left for a human</dd>
+      <dt>Managers &amp; accounts</dt><dd>2 signatories · 2 administrators · document access logged</dd>
+      <dt>Scans</dt><dd>571 filed · 96 matched on number only · 33 left for a human</dd>
       <dt>Communications</dt><dd>In-app notifications only</dd>
     </dl>
     <div class="row" style="margin-top:16px">
-      <button class="btn primary" type="button">Apply configuration</button>
-      <button class="btn" type="button">Export setup.json</button>
-      <button class="btn ghost" type="button">Import a setup.json</button>
+      <button class="btn" type="button">Export the configuration</button>
+      <button class="btn ghost" type="button">Import a configuration</button>
+      <button class="btn ghost" type="button">Download a support bundle</button>
     </div>
-    <p class="hint" style="margin-top:10px">The export carries settings only — never the roster or any document
-      number. A setup file containing 318 people's passport numbers would be a data-protection incident in an
-      e-mail attachment.</p>
+    <p class="hint" style="margin-top:10px">The export carries settings only — never the roster, never credentials,
+      never the administrator's e-mail, never a hostname, never a sequence position. An import is an administrator
+      action, and it shows a diff before it changes anything: it can repoint your mail server and rename your
+      company on every future document, so it is not a file to accept from an e-mail.</p>
+    <p class="hint" style="margin-top:8px">The support bundle is what to send when something breaks: version and
+      database revision, this configuration with secrets removed, which templates resolve all their tokens, row
+      counts, and when the last backup ran. It is how a problem gets diagnosed without someone driving to your office.</p>
   </div>
 
   <div class="card">
-    <h3>After Apply</h3>
-    <p>The wizard is replaced by a three-item checklist on the dashboard that disappears once done: upload a
-      signature, generate a test document, invite the rest of the staff. Every step stays re-openable from
-      Settings → Setup, each with the warning describing exactly what it will overwrite.</p>
+    <h3>What happens now</h3>
+    <p>The setup token stops working. The wizard moves to Settings → Setup, where any step can be re-opened behind
+      an administrator password and a warning naming exactly what it overwrites. One item stays on the dashboard
+      until it is done — <b>finish Clearance.docx</b> — because a form uploaded but never completed is the most
+      likely thing to be forgotten and then discovered by whoever needs it most.</p>
   </div>
 
-  ${decide('Settled in review.',[
-    '<b>Setup is re-runnable.</b> Any step re-opens after go-live without losing data, behind an explicit warning naming what it overwrites. The one exception is the reference pattern, which locks once documents carry numbers.',
+  ${decide('Settled.',[
+    '<b>Setup is re-runnable.</b> Any step re-opens after go-live without losing data, behind an explicit warning naming what it overwrites. Two exceptions lock once data exists: the reference pattern and the personnel ID scheme.',
+    '<b>No big-bang Apply.</b> Each step writes as it goes, so the atomicity question disappears rather than being answered. There is no half-applied state to roll back, and the review screen is a summary rather than a commit.',
+    '<b>Two administrators are required</b> before setup completes, plus a server-side console reset for the case where both leave.',
   ], true)}
 
-  ${decide('Two left on the finish line.',[
-    '<b>How atomic is Apply?</b> Database rows roll back; copied scans and generated icons do not. Proposal: transactional database, best-effort files, cleanup log. Good enough?',
-    '<b>Require a second administrator before finishing?</b> One admin plus one forgotten password equals a dead install, and on a LAN box with no mail there is no recovery path at all.',
+  ${decide('What the wizard still cannot promise, stated plainly rather than buried.',[
+    '<b>Upgrades.</b> A buyer configures this, then a new version ships. Their templates, brand assets and configuration must survive it — which today they would not, because uploaded templates land in the code tree and the update path overwrites it. That is the first thing to fix in the build, before any of the wizard\'s own screens.',
+    '<b>The existing install.</b> This product is currently one company\'s live system, and the wizard assumes an empty database — so that company can never run it and stays on a separate path from every buyer. A migration that synthesises their configuration from what is already hard-coded is the honest test of whether this design holds: if it cannot describe an install that already exists, it will not describe the third one either.',
   ])}`;
 }
 
@@ -1086,10 +1315,15 @@ function hydrate(){
   if (tileList){
     tileList.innerHTML = UPLOADED.map((u,i)=>{
       const s = state.services[i];
-      return `<div class="tile ${s.on?'':'off'}">
+      // A template whose fields are unfinished cannot be enabled — it would
+      // generate documents with blank tokens.
+      return `<div class="tile ${s.on&&u.ready?'':'off'}">
         <button class="iconbtn" type="button" data-icon="${i}" aria-label="Change the icon for ${u.label}">${ico(s.icon)}</button>
-        <span><strong>${u.label}</strong><small>${u.group} · ${u.file}</small></span>
-        <input type="checkbox" data-svc="${i}" ${s.on?'checked':''} aria-label="Enable ${u.label}"></div>`;
+        <span><strong>${u.label}</strong><small>${u.ready
+          ? `${u.group} · ${u.records}`
+          : '<span style="color:var(--amber)">Fields unfinished — finish step 4</span>'}</small></span>
+        <input type="checkbox" data-svc="${i}" ${s.on&&u.ready?'checked':''} ${u.ready?'':'disabled'}
+          aria-label="Enable ${u.label}"></div>`;
     }).join('');
   }
 

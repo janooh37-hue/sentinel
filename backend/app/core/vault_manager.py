@@ -48,10 +48,19 @@ class Vault:
 
     @staticmethod
     def normalize_g_number(g_number: str) -> str:
-        """Uppercase, strip, ensure ``G`` prefix. v3 line 1530."""
+        """Uppercase, strip, ensure ``G`` prefix. v3 line 1530.
+
+        The result is joined straight onto the vault root as a directory name,
+        so it must be a single path segment. ``vault_service`` re-checks
+        containment on every call it makes, but ``Vault`` is also used directly
+        (the bulk importer, signature paths, form output dirs) and those callers
+        inherit nothing — so the guard belongs here, on the primitive.
+        """
         g = (g_number or "").upper().strip()
         if not g:
             raise ValueError("g_number must be non-empty")
+        if g in (".", "..") or "/" in g or "\\" in g or g != Path(g).name:
+            raise ValueError(f"g_number must be a single path segment: {g_number!r}")
         if not g.startswith("G"):
             g = "G" + g
         return g
