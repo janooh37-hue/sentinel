@@ -16,16 +16,16 @@
     body{margin:0}
 
     /* ── review chrome (not part of the product) ───────────────────────── */
-    .review{min-height:68px;background:var(--navy);color:#fff;padding:13px 24px;display:flex;align-items:center;gap:18px;position:sticky;top:0;z-index:5;flex-wrap:wrap}
-    .review strong{white-space:nowrap}
+    .review{min-height:68px;background:var(--navy);color:#fff;padding:13px 24px;display:flex;align-items:center;gap:10px;position:sticky;top:0;z-index:5;flex-wrap:wrap}
+    .review strong{white-space:nowrap;margin-inline-end:8px}
     .review small{margin-inline-start:auto;color:#b9c9db;font-size:11px}
-    .review button{background:#ffffff1a;border:1px solid #ffffff40;color:#dce7f3;border-radius:999px;padding:8px 12px;font:650 12px inherit;min-height:38px}
+    .review button{background:#ffffff1a;border:1px solid #ffffff40;color:#dce7f3;border-radius:999px;padding:8px 12px;font:650 12px inherit;min-height:38px;cursor:pointer}
     .review button.on{background:#fff;color:var(--navy);border-color:#fff}
 
     .stage{padding:26px}
     .caption{max-width:1240px;margin:0 auto 13px}
     .caption h1{font-size:18px;margin:0}
-    .caption p{font-size:13px;color:var(--muted);margin:5px 0 0;max-width:80ch;line-height:1.5}
+    .caption p{font-size:13px;color:var(--muted);margin:5px 0 0;max-width:82ch;line-height:1.55}
 
     /* ── app frame ─────────────────────────────────────────────────────── */
     .app{max-width:1240px;margin:auto;background:var(--cream);border-radius:18px;overflow:hidden;box-shadow:var(--shadow);border:1px solid #fff}
@@ -33,14 +33,14 @@
     .brand{display:flex;align-items:center;gap:10px;color:var(--navy);font-weight:800}
     .logoslot{width:38px;height:38px;border-radius:9px;background:var(--soft);border:1px dashed var(--line);display:grid;place-items:center;font-size:16px;color:var(--muted)}
     .brand em{font-style:normal;font-size:10px;color:var(--muted);font-weight:600;display:block}
-    .topbar .tools{margin-inline-start:auto;display:flex;align-items:center;gap:10px;color:var(--muted);font-size:12px}
+    .topbar .tools{margin-inline-start:auto;display:flex;align-items:center;gap:10px;color:var(--muted);font-size:12px;flex-wrap:wrap}
     .pill{border:1px solid var(--line);border-radius:999px;padding:6px 11px;font-size:11px;background:#fbfbf8}
 
     .workspace{display:grid;grid-template-columns:268px minmax(0,1fr);min-height:720px}
     .rail{border-inline-end:1px solid var(--line);background:#fbfbf8;padding:16px 12px;overflow:auto}
     .railhead{padding:4px 10px 12px}
     .railhead strong{font-size:12px;display:block}
-    .railhead small{display:block;color:var(--muted);font-size:10px;margin-top:5px;line-height:1.4}
+    .railhead small{display:block;color:var(--muted);font-size:10px;margin-top:5px;line-height:1.45}
     .progress{height:6px;border-radius:999px;background:#e3e0d8;margin:10px 10px 14px;overflow:hidden}
     .progress i{display:block;height:100%;background:var(--navy);width:10%;transition:width .18s}
     .rail button.step{display:flex;width:100%;text-align:start;gap:10px;align-items:center;background:transparent;border:0;color:#4b5059;padding:10px 11px;border-radius:9px;font:600 12px inherit;margin:2px 0;min-height:44px;cursor:pointer}
@@ -56,18 +56,17 @@
 
     /* ── panes ─────────────────────────────────────────────────────────── */
     .pane{padding:24px 28px 30px;overflow:auto}
-    .pane[hidden]{display:none}
     .eyebrow{font-size:9px;text-transform:uppercase;letter-spacing:.16em;color:var(--muted);font-weight:800}
     .pane h2{font-size:24px;margin:4px 0 0}
-    .lede{font-size:13px;color:var(--muted);margin:7px 0 0;max-width:78ch;line-height:1.55}
+    .lede{font-size:13px;color:var(--muted);margin:7px 0 0;max-width:80ch;line-height:1.6}
     .card{background:#fff;border:1px solid var(--line);border-radius:13px;padding:18px 20px;margin-top:18px}
     .card > h3{font-size:14px;margin:0 0 3px}
-    .card > h3 + p{font-size:11px;color:var(--muted);margin:0 0 14px;line-height:1.5}
+    .card > h3 + p{font-size:11px;color:var(--muted);margin:0 0 14px;line-height:1.55}
     .label{display:block;color:var(--muted);font-size:9px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;margin:14px 0 6px}
     .field{width:100%;min-height:40px;border:1px solid var(--line);border-radius:8px;background:#fff;padding:10px 12px;font:inherit;font-size:12px;color:#343942}
     textarea.field{min-height:96px;line-height:1.5;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11px}
     .field:focus{outline:2px solid var(--navy);outline-offset:2px}
-    .hint{font-size:10px;color:var(--muted);margin:5px 0 0;line-height:1.45}
+    .hint{font-size:10px;color:var(--muted);margin:5px 0 0;line-height:1.5}
     .grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
     .grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
     .row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
@@ -77,70 +76,70 @@
     button.btn.primary{background:var(--navy);border-color:var(--navy);color:#fff}
     button.btn.primary:hover{background:#123457}
     button.btn.ghost{background:transparent}
-    button.btn.danger{color:var(--red);border-color:#e8c6cd}
+    button.btn.warn{background:#a8690f;border-color:#a8690f;color:#fff}
     button.btn:focus-visible{outline:2px solid var(--navy);outline-offset:2px}
 
-    .note{padding:11px 13px;border:1px solid #d7e0e9;background:#f3f6f8;border-radius:9px;color:#43576a;font-size:11px;line-height:1.5}
+    .note{padding:11px 13px;border:1px solid #d7e0e9;background:#f3f6f8;border-radius:9px;color:#43576a;font-size:11px;line-height:1.55}
     .note.warn{border-color:#e8d5b6;background:#fdf6ec;color:var(--amber)}
     .note.ok{border-color:#c6dfd4;background:var(--okbg);color:var(--ok)}
+    .note.stop{border-color:#e8c6cd;background:#fdf1f3;color:var(--red)}
     .note code{background:#ffffff9c;border:1px solid #00000012;border-radius:4px;padding:1px 5px;font-size:10px}
 
-    /* decisions callout — the "grill" */
     .decide{margin-top:18px;border:1px solid #e8d5b6;background:#fffaf1;border-radius:13px;padding:15px 18px}
     .decide h4{margin:0 0 4px;font-size:12px;color:var(--amber);text-transform:uppercase;letter-spacing:.1em}
     .decide p{margin:0 0 10px;font-size:11px;color:#8a6a34}
     .decide ol{margin:0;padding-inline-start:20px}
-    .decide li{font-size:12px;line-height:1.65;margin-bottom:7px;color:#4a3f2c}
+    .decide li{font-size:12px;line-height:1.7;margin-bottom:7px;color:#4a3f2c}
     .decide li b{color:#2f2718}
+    .settled{border-color:#c6dfd4;background:#f4faf7}
+    .settled h4{color:var(--ok)}
+    .settled p{color:#3d6b58}
+    .settled li{color:#2f4a40}
 
-    /* tables */
     table{width:100%;border-collapse:collapse;font-size:11px}
     th{text-align:start;font-size:9px;text-transform:uppercase;letter-spacing:.09em;color:var(--muted);padding:8px 10px;border-bottom:1px solid var(--line);white-space:nowrap}
-    td{padding:9px 10px;border-bottom:1px solid #efece5;vertical-align:top}
+    td{padding:9px 10px;border-bottom:1px solid #efece5;vertical-align:middle}
     tbody tr:hover{background:#fbfbf8}
     code.tok{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;background:var(--soft);border-radius:5px;padding:2px 6px;color:var(--navy);font-size:11px;white-space:nowrap}
-    .scroll{max-height:330px;overflow:auto;border:1px solid var(--line);border-radius:10px;background:#fff}
+    .scroll{max-height:340px;overflow:auto;border:1px solid var(--line);border-radius:10px;background:#fff}
 
-    /* toggles */
     .modlist{display:grid;gap:9px}
     .mod{display:grid;grid-template-columns:auto 1fr auto;gap:12px;align-items:start;padding:12px 14px;border:1px solid var(--line);border-radius:10px;background:#fff}
     .mod.off{background:#faf9f6;opacity:.72}
     .mod input[type=checkbox]{width:18px;height:18px;accent-color:var(--navy);margin-top:2px}
     .mod strong{font-size:12px;display:block}
-    .mod small{display:block;color:var(--muted);font-size:10px;margin-top:4px;line-height:1.45}
+    .mod small{display:block;color:var(--muted);font-size:10px;margin-top:4px;line-height:1.5}
     .mod .meta{font-size:9px;color:var(--muted);text-align:end;white-space:nowrap;font-weight:700}
     .dep{display:inline-block;margin-top:6px;font-size:9px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;background:var(--amberbg);color:var(--amber);border-radius:999px;padding:3px 8px}
 
-    /* service tiles */
-    .tiles{display:grid;grid-template-columns:repeat(auto-fill,minmax(196px,1fr));gap:10px}
-    .tile{border:1px solid var(--line);border-radius:11px;background:#fff;padding:12px;display:grid;grid-template-columns:auto 1fr;gap:10px;align-items:center}
-    .tile.off{background:#faf9f6;opacity:.6}
-    .tile .glyph{width:40px;height:40px;border-radius:10px;background:var(--soft);display:grid;place-items:center;font-size:20px;cursor:pointer;border:1px solid transparent}
-    .tile .glyph:hover{border-color:var(--navy)}
-    .tile strong{font-size:11px;display:block;line-height:1.3}
-    .tile small{display:block;color:var(--muted);font-size:9px;margin-top:3px}
-    .tile input[type=checkbox]{accent-color:var(--navy)}
+    /* ── icons ─────────────────────────────────────────────────────────── */
+    .ic{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round;display:block}
+    .iconbtn{width:42px;height:42px;border-radius:10px;background:var(--soft);border:1px solid transparent;display:grid;place-items:center;color:var(--navy);cursor:pointer;padding:0;flex:none}
+    .iconbtn:hover,.iconbtn:focus-visible{border-color:var(--navy);outline:none}
 
-    /* emoji picker */
+    .tiles{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:10px}
+    .tile{border:1px solid var(--line);border-radius:11px;background:#fff;padding:12px;display:grid;grid-template-columns:auto 1fr auto;gap:11px;align-items:center}
+    .tile.off{background:#faf9f6;opacity:.6}
+    .tile strong{font-size:11px;display:block;line-height:1.35}
+    .tile small{display:block;color:var(--muted);font-size:9px;margin-top:3px}
+    .tile input[type=checkbox]{accent-color:var(--navy);width:16px;height:16px}
+
     .picker{position:fixed;inset:0;background:#0d284566;display:grid;place-items:center;z-index:9;padding:20px}
     .picker[hidden]{display:none}
-    .pickerbox{background:#fff;border-radius:14px;max-width:420px;width:100%;padding:18px;box-shadow:var(--shadow)}
+    .pickerbox{background:#fff;border-radius:14px;max-width:470px;width:100%;padding:18px;box-shadow:var(--shadow)}
     .pickerbox h4{margin:0 0 3px;font-size:13px}
     .pickerbox p{margin:0 0 12px;font-size:11px;color:var(--muted)}
-    .emojis{display:grid;grid-template-columns:repeat(8,1fr);gap:6px;max-height:210px;overflow:auto}
-    .emojis button{font-size:19px;padding:7px;border:1px solid var(--line);border-radius:8px;background:#fff;cursor:pointer;min-height:40px}
-    .emojis button:hover{background:var(--soft);border-color:var(--navy)}
+    .icongrid{display:grid;grid-template-columns:repeat(8,1fr);gap:6px;max-height:240px;overflow:auto;padding:2px}
+    .icongrid button{padding:8px;border:1px solid var(--line);border-radius:8px;background:#fff;cursor:pointer;min-height:42px;display:grid;place-items:center;color:#3a4049}
+    .icongrid button:hover{background:var(--soft);border-color:var(--navy);color:var(--navy)}
 
-    /* barcode picker */
     .codes{display:grid;grid-template-columns:repeat(auto-fill,minmax(178px,1fr));gap:10px}
-    .code{border:1px solid var(--line);border-radius:11px;background:#fff;padding:13px;cursor:pointer}
+    .code{border:1px solid var(--line);border-radius:11px;background:#fff;padding:13px;cursor:pointer;text-align:start}
     .code[aria-pressed=true]{border-color:var(--navy);box-shadow:0 0 0 2px #0d284522}
     .code strong{font-size:12px;display:block}
-    .code small{display:block;color:var(--muted);font-size:10px;margin-top:5px;line-height:1.45}
-    .swatchrow{display:flex;gap:8px;align-items:center;margin-top:8px}
-    .swatch{width:34px;height:34px;border-radius:8px;border:1px solid var(--line)}
+    .code small{display:block;color:var(--muted);font-size:10px;margin-top:5px;line-height:1.5}
+    .swatch{width:44px;height:34px;border-radius:8px;border:1px solid var(--line);padding:2px}
 
-    /* footer nav */
     .foot{display:flex;gap:10px;align-items:center;margin-top:24px;padding-top:16px;border-top:1px solid var(--line);flex-wrap:wrap}
     .foot .spacer{margin-inline-start:auto}
     .stepcount{font-size:11px;color:var(--muted)}
@@ -149,42 +148,93 @@
     .kv dt{color:var(--muted);font-size:11px}
     .kv dd{margin:0}
 
-    .sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
+    .empty{border:1px dashed var(--line);border-radius:11px;padding:26px;text-align:center;color:var(--muted);background:#fbfbf8}
+    .empty strong{display:block;color:var(--text);font-size:13px;margin-bottom:5px}
+    .empty p{font-size:11px;margin:0 auto;max-width:52ch;line-height:1.6}
 
+    .sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
     [dir=rtl] .eyebrow,[dir=rtl] .label,[dir=rtl] .decide h4{letter-spacing:normal}
-    [dir=rtl] .rail{border-inline-end:1px solid var(--line)}
 
     @media(max-width:960px){
       .stage{padding:12px}
       .app{border-radius:12px}
       .workspace{display:block}
-      .rail{border-inline-end:0;border-bottom:1px solid var(--line);display:block}
+      .rail{border-inline-end:0;border-bottom:1px solid var(--line)}
       .rail button.step{display:inline-flex;width:auto;margin-inline-end:6px}
       .pane{padding:18px 15px 24px}
       .grid2,.grid3{grid-template-columns:1fr}
       .kv{grid-template-columns:1fr}
-      .emojis{grid-template-columns:repeat(6,1fr)}
+      .icongrid{grid-template-columns:repeat(6,1fr)}
     }
   </style>
 </head>
 <body>
 
+<!-- ── bundled icon library (the replacement for emoji) ─────────────────── -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
+<symbol id="i-doc" viewBox="0 0 24 24"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/></symbol>
+<symbol id="i-doc-check" viewBox="0 0 24 24"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/><path d="M9 15l1.8 1.8L14.5 13"/></symbol>
+<symbol id="i-doc-plus" viewBox="0 0 24 24"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/><path d="M12 13v5M9.5 15.5h5"/></symbol>
+<symbol id="i-doc-minus" viewBox="0 0 24 24"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/><path d="M9.5 15.5h5"/></symbol>
+<symbol id="i-clipboard" viewBox="0 0 24 24"><path d="M9 4.5h6V8H9z"/><path d="M9 6H7a2 2 0 0 0-2 2v11a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-2"/><path d="M9 12h6M9 16h4"/></symbol>
+<symbol id="i-folder" viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></symbol>
+<symbol id="i-archive" viewBox="0 0 24 24"><path d="M3 5h18v4H3z"/><path d="M5 9v10h14V9"/><path d="M10 13h4"/></symbol>
+<symbol id="i-book" viewBox="0 0 24 24"><path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H19v14H6.5A2.5 2.5 0 0 0 4 19.5z"/><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H19v4H6.5A2.5 2.5 0 0 1 4 19.5z"/></symbol>
+<symbol id="i-bank" viewBox="0 0 24 24"><path d="M3 10l9-6 9 6"/><path d="M5.5 10v9M9.5 10v9M14.5 10v9M18.5 10v9"/><path d="M3 20h18"/></symbol>
+<symbol id="i-cash" viewBox="0 0 24 24"><rect x="2.5" y="6.5" width="19" height="11" rx="1.5"/><circle cx="12" cy="12" r="2.5"/><path d="M6 12h.01M18 12h.01"/></symbol>
+<symbol id="i-receipt" viewBox="0 0 24 24"><path d="M6 3h12v18l-3-1.8-3 1.8-3-1.8L6 21z"/><path d="M9 8h6M9 12h6"/></symbol>
+<symbol id="i-warning" viewBox="0 0 24 24"><path d="M12 4l9 16H3z"/><path d="M12 10v4M12 17.2h.01"/></symbol>
+<symbol id="i-ban" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M6 6l12 12"/></symbol>
+<symbol id="i-shield" viewBox="0 0 24 24"><path d="M12 3l8 3v6c0 5-3.5 8.2-8 9-4.5-.8-8-4-8-9V6z"/></symbol>
+<symbol id="i-check" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M8.5 12.3l2.4 2.4 4.6-5"/></symbol>
+<symbol id="i-refresh" viewBox="0 0 24 24"><path d="M20 12a8 8 0 1 1-2.4-5.7"/><path d="M20 4v5h-5"/></symbol>
+<symbol id="i-palm" viewBox="0 0 24 24"><path d="M12 21v-9"/><path d="M12 12c-2.6-3.6-7.5-2.8-7.5-2.8S7 4.4 12 7.2C17 4.4 19.5 9.2 19.5 9.2S14.6 8.4 12 12z"/></symbol>
+<symbol id="i-ticket" viewBox="0 0 24 24"><path d="M4 8.5A1.5 1.5 0 0 1 5.5 7h13A1.5 1.5 0 0 1 20 8.5a2 2 0 0 0 0 7 1.5 1.5 0 0 1-1.5 1.5h-13A1.5 1.5 0 0 1 4 15.5a2 2 0 0 0 0-7z"/><path d="M10.5 7v10"/></symbol>
+<symbol id="i-idcard" viewBox="0 0 24 24"><rect x="3" y="5.5" width="18" height="13" rx="2"/><circle cx="8.5" cy="11" r="2"/><path d="M5.8 15.5c.3-1.4 1.4-2.1 2.7-2.1s2.4.7 2.7 2.1"/><path d="M14.5 10h4M14.5 14h4"/></symbol>
+<symbol id="i-passport" viewBox="0 0 24 24"><rect x="5" y="3" width="14" height="18" rx="2"/><circle cx="12" cy="10" r="3.2"/><path d="M8.8 10h6.4M12 6.8c1.6 1.8 1.6 4.6 0 6.4-1.6-1.8-1.6-4.6 0-6.4z"/><path d="M9.5 17.5h5"/></symbol>
+<symbol id="i-badge" viewBox="0 0 24 24"><path d="M12 3l2 2h3.5v3.5l2 2-2 2V16H14l-2 2-2-2H6.5v-3.5l-2-2 2-2V5H10z"/><path d="M9.6 11.8l1.6 1.6 3.2-3.4"/></symbol>
+<symbol id="i-box" viewBox="0 0 24 24"><path d="M3 8l9-4 9 4v9l-9 4-9-4z"/><path d="M3 8l9 4 9-4M12 12v9"/></symbol>
+<symbol id="i-truck" viewBox="0 0 24 24"><path d="M3 7h11v9H3z"/><path d="M14 10.5h3.6L21 14v2h-7z"/><circle cx="7.5" cy="18" r="1.8"/><circle cx="17.5" cy="18" r="1.8"/></symbol>
+<symbol id="i-wrench" viewBox="0 0 24 24"><path d="M15.5 3a5 5 0 0 0-4.4 7.3l-7.4 7.4 2.6 2.6 7.4-7.4A5 5 0 1 0 15.5 3z"/></symbol>
+<symbol id="i-chart" viewBox="0 0 24 24"><path d="M3 21h18"/><path d="M6.5 18v-5M11.5 18V7M16.5 18v-8"/></symbol>
+<symbol id="i-trend" viewBox="0 0 24 24"><path d="M3 17l5.5-5.5 3.5 3.5L20 7"/><path d="M15 7h5v5"/></symbol>
+<symbol id="i-mail" viewBox="0 0 24 24"><rect x="3" y="5.5" width="18" height="13" rx="2"/><path d="M3.5 7l8.5 6 8.5-6"/></symbol>
+<symbol id="i-send" viewBox="0 0 24 24"><path d="M21 3L3 10.5l7 2.8 2.8 7z"/><path d="M10 13.3L14 9.3"/></symbol>
+<symbol id="i-user" viewBox="0 0 24 24"><circle cx="12" cy="8" r="3.5"/><path d="M5 20c0-3.6 3.1-6 7-6s7 2.4 7 6"/></symbol>
+<symbol id="i-users" viewBox="0 0 24 24"><circle cx="9.5" cy="8" r="3.2"/><path d="M3.5 19.5c0-3.3 2.7-5.5 6-5.5s6 2.2 6 5.5"/><path d="M16 5.4a3.2 3.2 0 0 1 0 5.2M17.5 14.4c2 .7 3.5 2.5 3.5 5.1"/></symbol>
+<symbol id="i-building" viewBox="0 0 24 24"><path d="M4 21V5a2 2 0 0 1 2-2h6a2 2 0 0 1 2 2v16"/><path d="M14 10h4a2 2 0 0 1 2 2v9"/><path d="M7.5 7h3M7.5 11h3M7.5 15h3"/><path d="M3 21h18"/></symbol>
+<symbol id="i-lock" viewBox="0 0 24 24"><rect x="5.5" y="10.5" width="13" height="9.5" rx="2"/><path d="M9 10.5V8a3 3 0 0 1 6 0v2.5"/></symbol>
+<symbol id="i-key" viewBox="0 0 24 24"><circle cx="8" cy="15.5" r="3.2"/><path d="M10.4 13.2L20 3.6"/><path d="M17.2 6.4l2.2 2.2M15 8.6l2.2 2.2"/></symbol>
+<symbol id="i-scales" viewBox="0 0 24 24"><path d="M12 4v16M5 20h14M3.5 8h17"/><path d="M6.5 8L3.5 14.5h6zM17.5 8l-3 6.5h6z"/></symbol>
+<symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.2V12l3 2"/></symbol>
+<symbol id="i-calendar" viewBox="0 0 24 24"><rect x="3.5" y="5.5" width="17" height="15" rx="2"/><path d="M3.5 10h17M8.5 3v4.5M15.5 3v4.5"/></symbol>
+<symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="6"/><path d="M15.4 15.4L21 21"/></symbol>
+<symbol id="i-pin" viewBox="0 0 24 24"><path d="M12 21s6.8-6.2 6.8-11a6.8 6.8 0 1 0-13.6 0C5.2 14.8 12 21 12 21z"/><circle cx="12" cy="10" r="2.4"/></symbol>
+<symbol id="i-pen" viewBox="0 0 24 24"><path d="M4 20l4.2-1L19 8.2 15.8 5 5 15.8z"/><path d="M14.6 6.2l3.2 3.2"/></symbol>
+<symbol id="i-briefcase" viewBox="0 0 24 24"><rect x="3" y="7.5" width="18" height="11.5" rx="2"/><path d="M8.5 7.5V6a2 2 0 0 1 2-2h3a2 2 0 0 1 2 2v1.5"/><path d="M3 13h18"/></symbol>
+<symbol id="i-chain" viewBox="0 0 24 24"><path d="M10.5 13.5a3.8 3.8 0 0 0 5.4 0l2.2-2.2a3.8 3.8 0 0 0-5.4-5.4L11.5 7"/><path d="M13.5 10.5a3.8 3.8 0 0 0-5.4 0l-2.2 2.2a3.8 3.8 0 0 0 5.4 5.4L12.5 17"/></symbol>
+<symbol id="i-medical" viewBox="0 0 24 24"><path d="M10 3.5h4V9h5.5v4H14v5.5h-4V13H4.5V9H10z"/></symbol>
+<symbol id="i-stamp" viewBox="0 0 24 24"><path d="M9 3.5h6V8a3 3 0 0 1-1.2 2.4h3.7A2.5 2.5 0 0 1 20 12.9V16H4v-3.1a2.5 2.5 0 0 1 2.5-2.5h3.7A3 3 0 0 1 9 8z"/><path d="M4.5 20h15"/></symbol>
+<symbol id="i-bell" viewBox="0 0 24 24"><path d="M6 16V10.5a6 6 0 1 1 12 0V16l1.6 2.2H4.4z"/><path d="M10 20.5a2.2 2.2 0 0 0 4 0"/></symbol>
+<symbol id="i-flag" viewBox="0 0 24 24"><path d="M6 21V4"/><path d="M6 4.5h11l-2.2 3.8L17 12H6z"/></symbol>
+</defs></svg>
+
 <header class="review">
   <strong>First-run setup wizard</strong>
   <button type="button" id="rtl">Toggle العربية / RTL</button>
+  <button type="button" id="rerun">Preview re-run mode</button>
   <button type="button" id="jump">Jump to review step</button>
-  <small>Mockup &middot; docs/first-run-setup-wizard.html &middot; plan: docs/superpowers/plans/2026-08-07-white-label-first-run-config.md</small>
+  <small>v2 &middot; docs/first-run-setup-wizard.html</small>
 </header>
 
 <div class="stage">
   <div class="caption">
     <h1>White-label configuration menu — first start-up guide</h1>
-    <p>A ten-step wizard that runs once on a brand-new install, before any employee data exists. It turns this
-      single-tenant build into a tenant-configured install: identity and branding, reference numbering and barcode
-      symbology, which modules survive, which services appear (and with what emoji), the token dictionary the Word
-      templates are written against, the employee roster, and a bulk import of passport / Emirates-ID scans matched
-      by ID number. Every step carries an <b>Open decisions</b> block — those are the questions that need your answer
-      before this becomes code.</p>
+    <p>A ten-step wizard that runs once on a brand-new install and can be re-opened afterwards. The install ships
+      <b>empty</b>: no templates, no register categories, no sample data, none of our internal forms. The buyer brings
+      their own Word documents, their own numbering and their own staff list, and the wizard turns those into a
+      working app. Steps carry an <b>Open decisions</b> block; the ones you have already settled are marked
+      <b>Settled</b>.</p>
   </div>
 
   <div class="app">
@@ -194,8 +244,8 @@
         <div><span id="brandName">Your company</span><em id="brandSub">Not configured yet</em></div>
       </div>
       <div class="tools">
-        <span class="pill">Setup mode — app locked until finished</span>
-        <span class="pill" id="envPill">SQLite · empty database</span>
+        <span class="pill" id="modePill">Setup mode — app locked until finished</span>
+        <span class="pill">Clean install · empty database</span>
       </div>
     </header>
 
@@ -203,7 +253,7 @@
       <nav class="rail" aria-label="Setup steps">
         <div class="railhead">
           <strong>Setup progress</strong>
-          <small>You can leave and resume — answers are saved to <code>setup.draft.json</code> after every step.</small>
+          <small>Leave and resume any time — answers save to <code>setup.draft.json</code> after every step.</small>
         </div>
         <div class="progress"><i id="bar"></i></div>
         <div id="steps"></div>
@@ -216,10 +266,12 @@
 
 <div class="picker" id="picker" hidden role="dialog" aria-modal="true" aria-labelledby="pickerTitle">
   <div class="pickerbox">
-    <h4 id="pickerTitle">Choose an emoji</h4>
+    <h4 id="pickerTitle">Choose an icon</h4>
     <p id="pickerFor">Service</p>
-    <div class="emojis" id="emojis"></div>
+    <div class="icongrid" id="iconGrid"></div>
     <div class="foot" style="margin-top:14px;padding-top:12px">
+      <button class="btn ghost" type="button" id="uploadSvg">Upload your own SVG…</button>
+      <span class="spacer"></span>
       <button class="btn ghost" type="button" id="pickerClose">Cancel</button>
     </div>
   </div>
@@ -227,104 +279,124 @@
 
 <script>
 /* ────────────────────────────────────────────────────────────────────────
-   Mockup data — mirrors the real constants in the codebase so the wizard
-   shows what an operator would actually see on this build.
+   Bundled icon library. Emoji are gone: they render differently per OS and
+   print badly into DOCX. These are single-colour strokes that inherit the
+   tenant's primary colour and scale to any size.
    ──────────────────────────────────────────────────────────────────────── */
+const ICONS = ('doc doc-check doc-plus doc-minus clipboard folder archive book bank cash receipt warning ban '
+  + 'shield check refresh palm ticket idcard passport badge box truck wrench chart trend mail send user users '
+  + 'building lock key scales clock calendar search pin pen briefcase chain medical stamp bell flag').split(' ');
 
-const SERVICES = [
-  ['Acknowledgment Form','📝','HR'],['Salary Transfer Request','🏦','HR'],
-  ['Salary Deduction Form','➖','HR'],['Violation Form','⚠️','Discipline'],
-  ['Employee Clearance Form','✅','HR'],['Leave Application Form','🌴','Leave'],
-  ['Passport Release Form','🛂','Custody'],['Duty Resumption Form','🔄','Leave'],
-  ['Material Request Form','📦','Logistics'],['General Book','📓','Correspondence'],
-  ['HR Request Form','📋','HR'],['Resignation Letter','✉️','HR'],
-  ['Leave Permit Form','🎫','Leave'],['Administrative Leave Form','🗂️','Leave'],
-  ['Warning Form','⚠️','Discipline'],['Passport Release List','🛂','Custody'],
-  ['Report','📊','Reporting'],['Inmate Conduct Violations','⛓️','Site-specific'],
+const ico = (name, cls='ic') => `<svg class="${cls}" aria-hidden="true"><use href="#i-${name}"></use></svg>`;
+
+/* Services are NOT a fixed list any more — they are whatever templates the
+   buyer uploaded in step 5. These stand in for one buyer's uploads. */
+const UPLOADED = [
+  {file:'Leave_Application.docx',   label:'Leave Application',   ar:'طلب إجازة',        icon:'palm',      group:'Leave',    tokens:11, on:true},
+  {file:'Warning_Letter.docx',      label:'Warning Letter',      ar:'خطاب إنذار',       icon:'warning',   group:'Discipline',tokens:8,  on:true},
+  {file:'Clearance.docx',           label:'Employee Clearance',  ar:'إخلاء طرف',        icon:'doc-check', group:'HR',       tokens:14, on:true},
+  {file:'Salary_Certificate.docx',  label:'Salary Certificate',  ar:'شهادة راتب',       icon:'bank',      group:'HR',       tokens:9,  on:true},
+  {file:'Passport_Handover.docx',   label:'Passport Handover',   ar:'تسليم جواز',       icon:'passport',  group:'Custody',  tokens:7,  on:true},
+  {file:'Memo_Internal.docx',       label:'Internal Memo',       ar:'مذكرة داخلية',     icon:'book',      group:'Register', tokens:6,  on:false},
 ];
-
-const EMOJI_SET = ('📝 📋 📄 📑 🗂️ 🗃️ 📓 📔 📕 📗 📘 📙 🏦 💰 💵 🧾 ➖ ➕ ⚠️ 🚫 ⛔ 🛑 ✅ ☑️ 🔄 ♻️ 🌴 🏖️ 🎫 🎟️ 🛂 🛃 🪪 🆔 📦 🚚 🔧 🛠️ 📊 📈 📉 🗒️ ✉️ 📧 📨 📮 👤 👥 🧑‍💼 🏢 🏭 🛡️ 🔒 🔑 ⛓️ ⚖️ 🩺 🚑 🕐 📅 🗓️ ⏱️ 🔍 📌 📎 🖊️').split(' ');
 
 const MODULES = [
   ['docs','Document generation','Tokenised Word templates → DOCX/PDF, per-form workflows.','required',[]],
   ['employees','Employee registry & vault','People records plus the per-person document folder tree.','required',[]],
-  ['ledger','Correspondence ledger (Books)','Incoming/outgoing register with reference numbers and barcode stamps.','on',[]],
+  ['ledger','Correspondence register','Incoming/outgoing register with reference numbers and barcode stamps.','on',[]],
   ['approvals','Approvals & reviewer chains','Manager routing, approval states, delegated signing.','on',[]],
   ['leave','Leave tracking','Balances, lifecycle, leave calendar and reports.','on',[]],
   ['violations','Violations & warnings','Disciplinary records tied to employees.','on',[]],
   ['permits','Permits & validity','Access permits with validity windows.','off',[]],
   ['duty','Duty roster & locations','Posts, units, supervisor handover.','off',[]],
-  ['expiry','Expiry watch','Passport / Emirates ID expiry alerts.','on',['employees']],
-  ['ocr','OCR & scan intake','Passport/ID OCR, scan-inbox triage, barcode ref matching.','on',['docs']],
+  ['expiry','Expiry watch','Passport / national-ID expiry alerts.','on',['employees']],
+  ['ocr','OCR & scan intake','Document OCR, scan-inbox triage, barcode reference matching.','on',['docs']],
   ['email','Mailboxes (IMAP/SMTP)','Per-user inbox plus admin all-mail view.','off',[]],
   ['sms','SMS gateway','On-site SIM gateway for employee notifications.','off',[]],
-  ['whatsapp','WhatsApp gateway','Self-hosted OpenWA router.','off',[]],
-  ['push','Push notifications & PWA','Installable app, Web Push, SSE notifications.','on',[]],
+  ['whatsapp','WhatsApp gateway','Self-hosted gateway router.','off',[]],
+  ['push','Notifications & installable app','Web Push and live in-app notifications.','on',[]],
   ['reports','Reports & dashboards','Aggregate figures, register tables, exports.','on',[]],
 ];
 
-const TOKENS = [
-  ['{{ name }}','Employee full name (English)','Employee record','Ahmed Al Mansoori'],
-  ['{{ employee_name_ar }}','Employee full name (Arabic)','Employee record','أحمد المنصوري'],
-  ['{{ employee_id }}','Staff number / personnel ID','Employee record','G3082'],
-  ['{{ department }}','Department','Employee record','Operations'],
-  ['{{ position }}','Job title (English)','Employee record','Security Officer'],
-  ['{{ position_ar }}','Job title (Arabic)','Employee record','ضابط أمن'],
-  ['{{ nationality }}','Nationality','Employee record','India'],
-  ['{{ passport_no }}','Passport number','Employee record / OCR','P1234567'],
-  ['{{ uae_id_no }}','National / Emirates ID number','Employee record / OCR','784-1990-1234567-1'],
-  ['{{ phone }}','Contact number','Employee record','+971 50 000 0000'],
-  ['{{ join_date }}','Date of joining (dd/mm/yyyy)','Employee record','01/03/2021'],
-  ['{{ termination_date }}','End of service date','Employee record',''],
-  ['{{ issue_date }}','Date the document is issued','Generated','07/08/2026'],
-  ['{{ today }}','Today, formatted','Generated','07/08/2026'],
-  ['{{ ref_number }}','Reference number for this document','Numbering','GS-0333'],
-  ['{{ company_name }}','Company legal name','Identity step','—'],
-  ['{{ company_name_ar }}','Company legal name (Arabic)','Identity step','—'],
-  ['{{ project_location }}','Project / site code','Identity step','—'],
-  ['{{ website }}','Company website','Identity step','—'],
-  ['{{ manager_name }}','Signing manager name','Managers','—'],
-  ['{{ manager_title }}','Signing manager designation','Managers','—'],
-  ['{{ manager_sig }}','Signing manager signature image','Managers','(image)'],
-  ['{{ employee_sig }}','Employee signature image','Signature capture','(image)'],
-  ['{{ barcode }}','Reference barcode image','Numbering','(image)'],
+/* Core tokens ship with the product. Custom fields (step 5) add to this list. */
+const CORE_TOKENS = [
+  ['{{ name }}','Employee full name (English)','Employee'],
+  ['{{ employee_name_ar }}','Employee full name (Arabic)','Employee'],
+  ['{{ employee_id }}','Personnel ID','Employee'],
+  ['{{ department }}','Department','Employee'],
+  ['{{ position }}','Job title (English)','Employee'],
+  ['{{ position_ar }}','Job title (Arabic)','Employee'],
+  ['{{ nationality }}','Nationality','Employee'],
+  ['{{ passport_no }}','Passport number','Employee'],
+  ['{{ national_id_no }}','National / Emirates ID number','Employee'],
+  ['{{ phone }}','Contact number','Employee'],
+  ['{{ join_date }}','Date of joining','Employee'],
+  ['{{ termination_date }}','End of service date','Employee'],
+  ['{{ issue_date }}','Date this document is issued','Generated'],
+  ['{{ today }}','Today, formatted','Generated'],
+  ['{{ ref_number }}','Reference number for this document','Numbering'],
+  ['{{ barcode }}','Reference barcode image','Numbering'],
+  ['{{ company_name }}','Company legal name','Identity'],
+  ['{{ company_name_ar }}','Company legal name (Arabic)','Identity'],
+  ['{{ company_logo }}','Company logo image','Identity'],
+  ['{{ website }}','Company website','Identity'],
+  ['{{ manager_name }}','Signing manager name','Managers'],
+  ['{{ manager_title }}','Signing manager designation','Managers'],
+  ['{{ manager_sig }}','Signing manager signature image','Managers'],
+  ['{{ employee_sig }}','Employee signature image','Signature'],
+];
+
+const CUSTOM_FIELDS = [
+  ['{{ gratuity_amount }}','Gratuity amount','مبلغ مكافأة نهاية الخدمة','Number','Clearance.docx','Yes'],
+  ['{{ final_settlement }}','Final settlement total','إجمالي التسوية النهائية','Number','Clearance.docx','Yes'],
+  ['{{ handover_to }}','Handed over to','تم التسليم إلى','Employee picker','Clearance.docx','No'],
+  ['{{ warning_level }}','Warning level','درجة الإنذار','Choice: First / Second / Final','Warning_Letter.docx','Yes'],
 ];
 
 const CODES = [
-  ['aztec','Aztec','Compact, strong error correction, no quiet zone needed. Current build default.'],
-  ['qr','QR Code','Universally scannable by phones. Needs a wider quiet zone.'],
-  ['datamatrix','Data Matrix','Very small footprint, common on industrial labels.'],
-  ['pdf417','PDF417','Rectangular, holds more text. Used on some government IDs.'],
-  ['code128','Code 128','1-D linear. Fine for short refs, cheap laser scanners read it.'],
+  ['aztec','Aztec','Compact, strong error correction, no wide quiet zone needed.'],
+  ['qr','QR Code','Any phone camera reads it. Needs a wider quiet zone.'],
   ['none','No barcode','Reference number printed as text only.'],
 ];
 
 const state = {
-  step:0, rtl:false,
-  services:SERVICES.map(([id,e])=>({id,emoji:e,on:true})),
+  step:0, rtl:false, rerun:false,
+  services:UPLOADED.map(u=>({icon:u.icon,on:u.on})),
   modules:MODULES.map(([id,,, def])=>({id,on:def!=='off'})),
   code:'aztec',
 };
 
 /* ── step definitions ─────────────────────────────────────────────────── */
-
 const STEPS = [
   {t:'Welcome & install check', k:'Required', render:paneWelcome},
   {t:'Company identity',        k:'Required', render:paneIdentity},
   {t:'Numbering & barcode',     k:'Required', render:paneNumbering},
   {t:'Modules to keep',         k:'Required', render:paneModules},
-  {t:'Services & emoji',        k:'Required', render:paneServices},
-  {t:'Templates & tokens',      k:'Required', render:paneTokens},
+  {t:'Your templates & tokens', k:'Required', render:paneTemplates},
+  {t:'Services & icons',        k:'Required', render:paneServices},
   {t:'Employee roster',         k:'Required', render:paneRoster},
   {t:'Bulk ID & passport scans',k:'Optional', render:paneBulk},
   {t:'Communications',          k:'Optional', render:paneComms},
   {t:'Administrator & finish',  k:'Required', render:paneFinish},
 ];
 
-/* ── panes ────────────────────────────────────────────────────────────── */
+/* Re-run warnings — what a second pass over each step would overwrite. */
+const REWRITE = [
+  null,
+  'Re-running this step replaces the logo, colours and company names everywhere they appear — including on documents already generated, because those read the live identity at print time. Reference numbers already issued are <b>not</b> renumbered.',
+  'The reference <b>pattern</b> is locked because 1,284 documents already carry numbers in the old format. You may still add categories and change the barcode symbology — existing stamps stay valid, new documents use the new one.',
+  'Switching a module off hides it and returns 404 from its API. Data already captured is retained, not deleted, and reappears intact if you switch it back on.',
+  'Re-uploading a template with the same file name <b>replaces</b> it. Documents already generated keep their saved copy and are unaffected. Deleting a custom field that a template still uses will make that token render blank.',
+  'Changing a service label renames it everywhere, including in the history list. Disabling a service stops new documents only — past ones stay readable.',
+  'Re-importing the roster updates people matched by personnel ID and <b>overwrites hand-corrections</b> made since the last import. Rows missing from the file are never deactivated automatically.',
+  'Files already filed are not touched. Re-running only looks at what is in the source folders now.',
+  'Saved credentials are replaced, not merged. A blank password field leaves the stored one alone.',
+  'The administrator account is not re-created. Use People &amp; access to add or transfer administrators.',
+];
 
-function decide(title, items){
-  return `<section class="decide"><h4>Open decisions</h4>
+/* ── panes ────────────────────────────────────────────────────────────── */
+function decide(title, items, settled){
+  return `<section class="decide ${settled?'settled':''}"><h4>${settled?'Settled':'Open decisions'}</h4>
     <p>${title}</p><ol>${items.map(i=>`<li>${i}</li>`).join('')}</ol></section>`;
 }
 
@@ -332,43 +404,73 @@ function paneWelcome(){
   return `
   <span class="eyebrow">Step 1 of 10</span>
   <h2>Welcome — let's set this install up for your company</h2>
-  <p class="lede">This build ships pre-configured for one organisation. Nothing here is hard-coded any more:
-    this wizard writes a tenant profile, and the whole app reads from it. Setup takes about 20 minutes if you have
-    your logo, your Word templates and your staff list ready.</p>
+  <p class="lede">This install ships empty on purpose. There are no forms, no register categories and no sample
+    people in it — nothing from the company that built it. You bring your own Word documents and your own staff
+    list, and this wizard turns them into a working app. About twenty minutes if you have everything to hand.</p>
 
   <div class="card">
-    <h3>Before you start, have these to hand</h3>
-    <p>Missing an item? Every step except identity can be skipped and completed later from Settings → Setup.</p>
-    <ul style="font-size:12px;line-height:1.85;margin:0;padding-inline-start:20px;color:#3a4049">
-      <li>Company logo — square PNG or SVG, transparent background, at least 512&times;512.</li>
-      <li>Legal company name in English and Arabic, plus the short code used in reference numbers.</li>
-      <li>Your Word templates (<code>.docx</code>) — the wizard will scan them and tell you which tokens they use.</li>
+    <h3>What ships, and what you provide</h3>
+    <p>The line between product and content is deliberate: we ship the machine, you load the paper.</p>
+    <div class="grid2">
+      <div>
+        <span class="label">Ships with the product</span>
+        <ul style="font-size:12px;line-height:1.9;margin:0;padding-inline-start:20px;color:#3a4049">
+          <li>The document engine and its token language</li>
+          <li>The core token dictionary (employee, dates, references)</li>
+          <li>The icon library</li>
+          <li>The register, approvals, leave, vault and reporting modules</li>
+          <li>The bulk scan importer</li>
+        </ul>
+      </div>
+      <div>
+        <span class="label">You provide</span>
+        <ul style="font-size:12px;line-height:1.9;margin:0;padding-inline-start:20px;color:#3a4049">
+          <li>Your Word templates — <b>every</b> form you want</li>
+          <li>Your register categories and reference format</li>
+          <li>Your logo, colours and company names</li>
+          <li>Your staff list</li>
+          <li>Your passport / national-ID scans</li>
+        </ul>
+      </div>
+    </div>
+    <div class="note" style="margin-top:14px">Nothing here is seeded from another customer. If you finish this
+      wizard without uploading a template, the app has no services — which is a valid state; you can add the first
+      one whenever you are ready.</div>
+  </div>
+
+  <div class="card">
+    <h3>Have these to hand</h3>
+    <ul style="font-size:12px;line-height:1.9;margin:0;padding-inline-start:20px;color:#3a4049">
+      <li>Company logo — square PNG or SVG, transparent, at least 512&times;512.</li>
+      <li>Legal name in English and Arabic, plus the short code for reference numbers.</li>
+      <li>Your <code>.docx</code> templates. They do not need tokens yet — the wizard shows you how to add them.</li>
       <li>Staff list as CSV or XLSX, or paste it straight in.</li>
-      <li>Two folders of scans: one of passports, one of national IDs. File names must contain the ID number.</li>
+      <li>Two folders of scans: one of passports, one of national IDs, with the ID number in each file name.</li>
     </ul>
   </div>
 
   <div class="card">
     <h3>Install check</h3>
-    <p>Run before anything is written, so a broken host fails now rather than on day one.</p>
-    <table>
-      <tbody>
-        <tr><td style="width:60%"><b>Python 3.12 runtime</b><br><span class="hint">3.12.4 detected</span></td><td><span class="note ok" style="display:inline-block;padding:5px 10px">Ready</span></td></tr>
-        <tr><td><b>Database</b><br><span class="hint">Empty schema — migrations at head</span></td><td><span class="note ok" style="display:inline-block;padding:5px 10px">Ready</span></td></tr>
-        <tr><td><b>Data directory writable</b><br><span class="hint">C:\\GSSGData — 214 GB free</span></td><td><span class="note ok" style="display:inline-block;padding:5px 10px">Ready</span></td></tr>
-        <tr><td><b>Barcode decoder (zxing-cpp)</b><br><span class="hint">Optional — without it, scanned refs fall back to OCR</span></td><td><span class="note warn" style="display:inline-block;padding:5px 10px">Missing</span></td></tr>
-        <tr><td><b>OCR engine (Tesseract)</b><br><span class="hint">Needed for passport / ID auto-reading in step 8</span></td><td><span class="note warn" style="display:inline-block;padding:5px 10px">Missing</span></td></tr>
-        <tr><td><b>Microsoft Word</b><br><span class="hint">Needed for edit-in-Word handoff and PDF conversion</span></td><td><span class="note ok" style="display:inline-block;padding:5px 10px">Found</span></td></tr>
-      </tbody>
-    </table>
+    <p>Runs before anything is written, so a broken host fails now rather than on day one.</p>
+    <table><tbody>
+      <tr><td style="width:62%"><b>Python 3.12 runtime</b><br><span class="hint">3.12.4 detected</span></td><td><span class="note ok" style="display:inline-block;padding:5px 10px">Ready</span></td></tr>
+      <tr><td><b>Database</b><br><span class="hint">Empty schema — migrations at head</span></td><td><span class="note ok" style="display:inline-block;padding:5px 10px">Ready</span></td></tr>
+      <tr><td><b>Data directory writable</b><br><span class="hint">214 GB free</span></td><td><span class="note ok" style="display:inline-block;padding:5px 10px">Ready</span></td></tr>
+      <tr><td><b>Barcode decoder</b><br><span class="hint">Optional — without it, scanned pages fall back to OCR matching</span></td><td><span class="note warn" style="display:inline-block;padding:5px 10px">Missing</span></td></tr>
+      <tr><td><b>OCR engine</b><br><span class="hint">Needed to read numbers off scans in step 8</span></td><td><span class="note warn" style="display:inline-block;padding:5px 10px">Missing</span></td></tr>
+      <tr><td><b>Microsoft Word</b><br><span class="hint">Needed for edit-in-Word handoff and PDF conversion</span></td><td><span class="note ok" style="display:inline-block;padding:5px 10px">Found</span></td></tr>
+    </tbody></table>
   </div>
 
-  ${decide('These shape whether the wizard is a one-time thing or a permanent surface.',[
-    '<b>Single tenant or many?</b> Is this one install per company (a profile file, simple), or one install serving several companies at once (tenant column on every table, ~10× the work)? I have assumed <b>one install per company</b>.',
-    '<b>Is the current data a fixture or a seed?</b> On a fresh install for another company, do we ship the 18 existing forms as starting examples they can rename, or start with zero templates and make them upload their own?',
-    '<b>Who runs setup?</b> The buyer\'s IT person, or you during handover? That decides how much explanation each step needs and whether we expose things like IMAP hosts at all.',
-    '<b>Can setup be re-entered?</b> Should Settings → Setup let them re-run any step after go-live, or does the wizard lock permanently once finished (safer — reference numbering in particular cannot be changed once documents exist)?',
-    '<b>Is a wrong answer recoverable?</b> Do we support a "factory reset" that wipes the tenant profile and data, and if so does it require typing the company name to confirm?',
+  ${decide('Answered in review — recorded here so the build follows them.',[
+    '<b>One install per company.</b> Not multi-tenant on shared tables.',
+    '<b>Clean slate.</b> No templates, categories, managers or sample data ship with the product. Internal-only forms and site-specific modules are excluded from the buyer build entirely.',
+    '<b>Re-runnable.</b> Every step can be re-opened after go-live without losing data, with a warning up front stating exactly what it will overwrite.',
+  ], true)}
+
+  ${decide('Still open at the product level.',[
+    '<b>Who runs setup — the buyer\'s IT person, or you during handover?</b> This decides how much each step explains and whether raw IMAP hosts are exposed at all.',
+    '<b>Is there a factory reset?</b> A wrong company code cannot be undone otherwise. If yes, I would require typing the company name to confirm.',
   ])}`;
 }
 
@@ -376,60 +478,58 @@ function paneIdentity(){
   return `
   <span class="eyebrow">Step 2 of 10</span>
   <h2>Company identity</h2>
-  <p class="lede">Everything in this step replaces a hard-coded constant. The values land in the tenant profile and
-    flow to the top bar, the login page, the PWA manifest and icons, generated document headers, e-mail signatures
-    and every <code>{{ company_name }}</code>-style token.</p>
+  <p class="lede">Every value here replaces a constant that is currently hard-coded to the company that built this.
+    It flows to the top bar, the login page, the installable-app icons, document headers, e-mail signatures and
+    the <code>{{ company_name }}</code> family of tokens.</p>
 
   <div class="card">
     <h3>Names</h3>
-    <p>English is required. Arabic is required if you generate any Arabic document — the wizard checks this later.</p>
     <div class="grid2">
       <label><span class="label">Legal name (English)</span>
         <input class="field" id="nameEn" placeholder="e.g. Falcon Facilities Management LLC"></label>
       <label><span class="label">Legal name (Arabic)</span>
         <input class="field" dir="rtl" placeholder="مثال: شركة الصقر لإدارة المرافق"></label>
       <label><span class="label">Short display name</span>
-        <input class="field" id="nameShort" placeholder="Falcon FM"><span class="hint">Used in the top bar and window title.</span></label>
+        <input class="field" placeholder="Falcon FM"><span class="hint">Top bar and window title.</span></label>
       <label><span class="label">Company code</span>
         <input class="field" placeholder="FFM" maxlength="8" style="text-transform:uppercase">
-        <span class="hint">2–8 letters. Appears in reference numbers and barcode payloads. <b>Cannot be changed later.</b></span></label>
+        <span class="hint">2–8 letters. Goes into reference numbers and barcode payloads. Locked once the first
+          document is issued.</span></label>
       <label><span class="label">Website</span><input class="field" placeholder="www.example.ae"></label>
-      <label><span class="label">Project / site code</span><input class="field" placeholder="0331">
-        <span class="hint">Optional. Only if this install serves one site of a larger company.</span></label>
+      <label><span class="label">Site / branch code</span><input class="field" placeholder="Optional">
+        <span class="hint">Only if this install serves one site of a larger company.</span></label>
     </div>
   </div>
 
   <div class="card">
     <h3>Logo &amp; marks</h3>
-    <p>One upload generates the top-bar mark, the login lockup, the favicon, the PWA icon set and the document header image.</p>
+    <p>One upload generates the top-bar mark, the login lockup, the favicon, the installable-app icon set and the
+      <code>{{ company_logo }}</code> image used in document headers.</p>
     <div class="grid3">
-      <label><span class="label">Primary logo</span>
-        <input class="field" type="file" accept=".png,.svg,.jpg">
+      <label><span class="label">Primary logo</span><input class="field" type="file" accept=".png,.svg,.jpg">
         <span class="hint">Square, transparent, ≥512px.</span></label>
-      <label><span class="label">Wordmark for documents</span>
-        <input class="field" type="file" accept=".png,.svg">
+      <label><span class="label">Wordmark for documents</span><input class="field" type="file" accept=".png,.svg">
         <span class="hint">Optional wide version for letterheads.</span></label>
-      <label><span class="label">Stamp / seal</span>
-        <input class="field" type="file" accept=".png">
+      <label><span class="label">Stamp / seal</span><input class="field" type="file" accept=".png">
         <span class="hint">Optional. Overlaid on approved PDFs.</span></label>
     </div>
-    <div class="note" style="margin-top:14px">Generated automatically from the primary logo:
-      <code>favicon.ico</code>, <code>icon-192.png</code>, <code>icon-512.png</code>, <code>maskable-512.png</code>,
-      <code>apple-touch-icon.png</code> — the same set <code>scripts/make_pwa_icons.py</code> builds today.</div>
   </div>
 
   <div class="card">
     <h3>Colours &amp; type</h3>
-    <p>Two colours drive the whole palette. The preview above updates as you choose.</p>
+    <p>Two colours drive the whole palette — including the icon set, which is single-colour and inherits the primary.</p>
     <div class="row">
       <label><span class="label">Primary</span><input class="swatch" type="color" value="#0d2845" id="c1"></label>
       <label><span class="label">Accent / destructive</span><input class="swatch" type="color" value="#c8102e" id="c2"></label>
-      <label><span class="label">Paper</span><input class="swatch" type="color" value="#f5f4f1"></label>
-      <label style="flex:1;min-width:200px"><span class="label">Arabic font</span>
+      <label style="flex:1;min-width:220px"><span class="label">Arabic font</span>
         <select class="field"><option>Noto Sans Arabic (bundled)</option><option>Dubai</option><option>Cairo</option><option>System default</option></select></label>
     </div>
-    <div class="note warn" style="margin-top:14px">Contrast is checked as you pick. A primary colour lighter than
-      #767676 fails WCAG AA against white and will be rejected — the whole app uses white-on-primary chrome.</div>
+    <div class="row" style="margin-top:16px;gap:14px;color:var(--navy)">
+      <span class="hint" style="margin:0">Live preview:</span>
+      ${['doc','palm','warning','bank','passport','chart'].map(n=>ico(n)).join('')}
+    </div>
+    <div class="note warn" style="margin-top:14px">A primary lighter than #767676 fails contrast against white and
+      is rejected — the whole app uses white-on-primary chrome.</div>
   </div>
 
   <div class="card">
@@ -442,16 +542,13 @@ function paneIdentity(){
       <label><span class="label">Weekend days</span><select class="field"><option>Saturday &amp; Sunday</option><option>Friday &amp; Saturday</option></select></label>
       <label><span class="label">Phone country code</span><input class="field" value="+971"></label>
     </div>
-    <div class="note" style="margin-top:14px">Weekend days matter more than they look — leave-day counting reads them.
-      Getting this wrong silently mis-counts every leave request.</div>
+    <div class="note" style="margin-top:14px">Weekend days matter more than they look — leave-day counting reads
+      them. Wrong here means every leave request is silently mis-counted.</div>
   </div>
 
-  ${decide('Identity is the step most likely to be re-opened later, so the rules need to be explicit.',[
-    '<b>Is the company code immutable?</b> It is baked into every reference number and barcode payload. I propose locking it after the first document is generated, and showing a permanent banner explaining why. Agree?',
-    '<b>How far does branding go?</b> Logo + two colours is cheap. A full theme (typography scale, corner radius, custom login art) is a design system, not a setting. Where do you want the line?',
-    '<b>Bilingual by default, or a choice?</b> The app is built Arabic/English throughout. If a buyer is English-only, do we hide every Arabic field — or keep them and let them stay blank?',
-    '<b>Arabic name — required or optional?</b> Several DOCX templates render an Arabic header. If the Arabic name is blank, do we fall back to the English name, print nothing, or refuse to generate?',
-    '<b>Where do brand assets live?</b> In the data directory (survives upgrade, needs backup) or in the app bundle (rebuilt on deploy)? I recommend the data directory.',
+  ${decide('Two left on identity.',[
+    '<b>Bilingual by default, or a choice?</b> The app is built Arabic/English throughout. For an English-only buyer, do we hide every Arabic field or leave them present and blank? Hiding them is cleaner but means the language choice has to be made before this step.',
+    '<b>If the Arabic company name is blank</b> and a template renders an Arabic header — fall back to the English name, print nothing, or refuse to generate? I lean toward falling back to English silently.',
   ])}`;
 }
 
@@ -459,9 +556,9 @@ function paneNumbering(){
   return `
   <span class="eyebrow">Step 3 of 10</span>
   <h2>Reference numbering &amp; barcode</h2>
-  <p class="lede">Every registered document gets a reference number and, optionally, a machine-readable stamp.
-    The stamp is what lets a scanned paper find its way back to its record automatically. This is the hardest
-    step to change later — a live install cannot renumber its history.</p>
+  <p class="lede">Registered documents get a reference number and, optionally, a machine-readable stamp — which is
+    what lets a scanned paper find its way back to its record. The register starts empty: define the categories
+    your company actually uses.</p>
 
   <div class="card">
     <h3>Reference format</h3>
@@ -470,25 +567,23 @@ function paneNumbering(){
       <label><span class="label">Sequence starts at</span><input class="field" inputmode="numeric" value="1"></label>
       <label><span class="label">Reset sequence</span><select class="field"><option>Never</option><option>Yearly</option><option>Per category</option></select></label>
     </div>
-    <p class="hint">Available placeholders: <code class="tok">{CODE}</code> <code class="tok">{CAT}</code>
+    <p class="hint">Placeholders: <code class="tok">{CODE}</code> <code class="tok">{CAT}</code>
       <code class="tok">{SEQ:n}</code> <code class="tok">{YY}</code> <code class="tok">{YYYY}</code>
       <code class="tok">{SITE}</code>. Preview: <b>FFM-0001</b>, next <b>FFM-0002</b>.</p>
   </div>
 
   <div class="card">
     <h3>Register categories</h3>
-    <p>The correspondence register is split by category. Start from a template or define your own — each needs a
-      prefix and whether it requires approval before a number is issued.</p>
+    <p>Empty to start. Add the categories your correspondence actually falls into — each needs a prefix and whether
+      a number may be issued before approval.</p>
     <div class="scroll">
       <table>
-        <thead><tr><th>#</th><th>Name (English)</th><th>Name (Arabic)</th><th>Prefix</th><th>Approval</th></tr></thead>
+        <thead><tr><th>#</th><th>Name (English)</th><th>Name (Arabic)</th><th>Prefix</th><th>Approval</th><th></th></tr></thead>
         <tbody>
-          <tr><td>1</td><td>Employee Affairs</td><td dir="rtl">شؤون الموظفين</td><td><code class="tok">HR</code></td><td>Required</td></tr>
-          <tr><td>2</td><td>Logistics</td><td dir="rtl">اللوجستيك</td><td><code class="tok">LG</code></td><td>—</td></tr>
-          <tr><td>3</td><td>Incidents</td><td dir="rtl">الحوادث</td><td><code class="tok">IN</code></td><td>Required</td></tr>
-          <tr><td>4</td><td>Memos</td><td dir="rtl">المذكرات</td><td><code class="tok">MM</code></td><td>—</td></tr>
-          <tr><td colspan="5"><button class="btn ghost" type="button">+ Add category</button>
-            <button class="btn ghost" type="button">Load 12-category default set</button></td></tr>
+          <tr><td>1</td><td>Employee Affairs</td><td dir="rtl">شؤون الموظفين</td><td><code class="tok">HR</code></td><td>Required</td><td><button class="btn ghost" type="button" style="padding:5px 10px;min-height:32px">Edit</button></td></tr>
+          <tr><td>2</td><td>Logistics</td><td dir="rtl">اللوجستيك</td><td><code class="tok">LG</code></td><td>—</td><td><button class="btn ghost" type="button" style="padding:5px 10px;min-height:32px">Edit</button></td></tr>
+          <tr><td colspan="6"><button class="btn" type="button">+ Add category</button>
+            <span class="hint" style="display:inline;margin-inline-start:10px">Import from CSV if you have a long list.</span></td></tr>
         </tbody>
       </table>
     </div>
@@ -496,26 +591,23 @@ function paneNumbering(){
 
   <div class="card">
     <h3>Machine-readable stamp</h3>
-    <p>Pick the symbology stamped on generated documents. Payload is
-      <code>{CODE}:{ref}</code> — e.g. <code>FFM:FFM-0001</code>. The prefix lets the scanner ignore unrelated
-      symbols on the same page, such as an Emirates ID or a vendor stamp.</p>
+    <p>Payload is <code>{CODE}:{ref}</code> — e.g. <code>FFM:FFM-0001</code>. The prefix lets the scanner ignore
+      unrelated symbols on the same page, such as a national ID or a vendor stamp.</p>
     <div class="codes" id="codeList"></div>
     <div class="grid3" style="margin-top:16px">
       <label><span class="label">Payload prefix</span><input class="field" value="FFM:"></label>
       <label><span class="label">Placement</span><select class="field"><option>Header, top-right</option><option>Footer, bottom-right</option><option>Watermark, centre</option><option>First page only</option></select></label>
       <label><span class="label">Module size</span><select class="field"><option>8 px (default)</option><option>6 px — smaller</option><option>10 px — for poor scanners</option></select></label>
     </div>
-    <div class="note warn" style="margin-top:14px"><b>zxing-cpp is not installed on this host.</b> You can still
-      <i>print</i> the stamp, but scanned pages will not be matched back automatically until it is installed. Step 1
-      flagged this.</div>
+    <div class="note warn" style="margin-top:14px"><b>The barcode decoder is not installed on this host.</b> Stamps
+      will still print, but scanned pages will not be matched back automatically until it is installed.</div>
   </div>
 
-  ${decide('Numbering decisions are effectively permanent, so I want them nailed down before writing code.',[
-    '<b>Is one sequence enough?</b> Today there is a single global sequence plus a separate classified sequence. Do other companies need per-category or per-year sequences? Per-year is common and cheap to add now, painful later.',
-    '<b>What happens to a voided document?</b> Is its number burned forever, or returned to the pool? Auditors usually want it burned — confirm.',
-    '<b>Do you actually need a choice of symbology,</b> or is "Aztec, or nothing" enough? Every extra format is another encoder dependency, another print-quality test and another scanner failure mode. My instinct: ship Aztec + QR, drop the rest unless a buyer demands it.',
-    '<b>Should the barcode carry more than the ref?</b> A URL (<code>https://host/b/FFM-0001</code>) makes any phone camera open the record — much better in the field, but leaks the hostname onto every printed page.',
-    '<b>Is the register optional?</b> If a buyer only wants document generation, can numbering be switched off entirely and documents saved unnumbered?',
+  ${decide('Numbering is the one place where re-running has hard limits.',[
+    '<b>Once documents exist, the pattern locks.</b> Categories and symbology stay editable; the format cannot change without renumbering history. Confirm that is the right line.',
+    '<b>A voided number — burned or returned to the pool?</b> Auditors normally want it burned. Confirm.',
+    '<b>Should the barcode carry a URL</b> (<code>https://host/b/FFM-0001</code>) so any phone camera opens the record? Much better in the field, but it prints your hostname on every page that leaves the building.',
+    '<b>Can the register be switched off entirely</b> for a buyer who only wants document generation, leaving documents unnumbered?',
   ])}`;
 }
 
@@ -523,119 +615,172 @@ function paneModules(){
   return `
   <span class="eyebrow">Step 4 of 10</span>
   <h2>Modules to keep</h2>
-  <p class="lede">This build carries a decade of features for one customer. Most buyers want a fraction of it.
-    Switch off what they do not need — the navigation, the API routes, the scheduled jobs and the dashboard tiles
-    all disappear together, so nobody ever meets a half-built feature.</p>
+  <p class="lede">Most buyers want a fraction of what this can do. Switch off what they do not need — navigation,
+    API routes, scheduled jobs and dashboard tiles disappear together, so nobody meets a half-built feature.</p>
 
   <div class="card">
     <h3>Choose the modules this company will use</h3>
-    <p>Turning a module off hides it completely. It can be turned back on later without data loss, because the
-      tables stay in place — only the surface is removed.</p>
+    <p>A module that is off is hidden from the interface <b>and</b> its API returns 404 — a hidden route that still
+      answers would be a security hole, not a cosmetic one. Data is retained either way, so switching one back on
+      restores it intact.</p>
     <div class="modlist" id="modList"></div>
   </div>
 
-  <div class="note" style="margin-top:16px">Estimated result: <b id="modCount">—</b> modules on.
-    Navigation drops to <b id="navCount">—</b> top-level destinations. Everything else is reachable from search.</div>
+  <div class="note" style="margin-top:16px">Result: <b id="modCount">—</b> modules on,
+    <b id="navCount">—</b> top-level destinations in the navigation. Everything else is reachable from search.</div>
 
-  ${decide('"Cut what is not needed" is the highest-value part of this work and also the riskiest.',[
-    '<b>Hide, or actually remove?</b> Hiding is a flag — one code path, everything still ships and still has to keep working. Removing is a build profile — smaller and faster, but now you maintain several builds. I strongly recommend <b>hide, one build</b>. Push back if you disagree.',
-    '<b>Do disabled modules still enforce their API?</b> A hidden route that still answers is a security hole. I propose the flag gates the router itself, so a disabled module returns 404 — not just an invisible menu entry.',
-    '<b>What happens to data already captured</b> if a module is switched off after go-live? Hidden but retained, or exported and purged?',
-    '<b>Which modules are genuinely site-specific?</b> "Inmate Conduct Violations" and "Duty locations" look bound to the correctional site. Should those be excluded from the generic build entirely and shipped as a plug-in?',
-    '<b>Is there a middle setting?</b> Some features are useful but noisy (push, digests). Do we need per-module "on / on but quiet / off" rather than a plain toggle?',
+  ${decide('Settled in review.',[
+    '<b>Hide, do not fork the build.</b> One artefact, one test matrix. The flag gates the API router, not just the menu.',
+    '<b>Nothing site-specific ships.</b> Modules written for one customer\'s site are excluded from the buyer build entirely rather than shipped switched off.',
+  ], true)}
+
+  ${decide('One left.',[
+    '<b>Is a plain on/off enough?</b> Some modules are useful but noisy — notifications, digests. Do we need "on / on but quiet / off", or is that a per-user preference rather than a tenant setting? I lean toward per-user, which keeps this step simple.',
+  ])}`;
+}
+
+function paneTemplates(){
+  const core = CORE_TOKENS.map(([t,d,s])=>`<tr data-kind="core">
+    <td><code class="tok">${t}</code></td><td>${d}</td><td><span class="hint">${s}</span></td>
+    <td><span class="hint">Ships with product</span></td></tr>`).join('');
+  const custom = CUSTOM_FIELDS.map(([t,l,ar,type,used,req])=>`<tr data-kind="custom">
+    <td><code class="tok">${t}</code></td><td>${l}<br><span class="hint" dir="rtl">${ar}</span></td>
+    <td><span class="hint">${type}</span></td>
+    <td><span class="hint">${used} · ${req==='Yes'?'required':'optional'}</span></td></tr>`).join('');
+  return `
+  <span class="eyebrow">Step 5 of 10</span>
+  <h2>Your templates &amp; tokens</h2>
+  <p class="lede">Upload your own Word documents. A template is an ordinary <code>.docx</code> with
+    <code>{{ token }}</code> placeholders — put one anywhere, including headers, footers and table cells, and the app
+    fills it at generation time. If a template needs something the core dictionary does not have, define it here as
+    a custom field and it becomes a question on that form.</p>
+
+  <div class="card">
+    <h3>Upload your templates</h3>
+    <p>Each file is scanned on arrival and its tokens reported. Nothing is accepted silently.</p>
+    <input class="field" type="file" multiple accept=".docx">
+    <div class="scroll" style="margin-top:14px;max-height:230px">
+      <table><thead><tr><th>File</th><th>Tokens</th><th>Status</th><th></th></tr></thead><tbody>
+        ${UPLOADED.map(u=>`<tr><td><b>${u.file}</b></td><td>${u.tokens}</td>
+          <td><span style="color:var(--ok)">All recognised</span></td>
+          <td><button class="btn ghost" type="button" style="padding:5px 10px;min-height:32px">Preview</button></td></tr>`).join('')}
+      </tbody></table>
+    </div>
+    <div class="note warn" style="margin-top:12px"><b><code>Clearance.docx</code> uses 2 tokens that do not exist yet:</b>
+      <code>{{ gratuity_amount }}</code> and <code>{{ final_settlement }}</code>. Create each one as a custom field
+      below, map it to an existing field, or leave it to render blank.</div>
+  </div>
+
+  <div class="card">
+    <h3>Custom fields — your own tokens</h3>
+    <p>A custom field does three things at once: it becomes a token your template can use, a question on the form
+      when someone generates that document, and a column you can report on. You do not need a release from us to
+      add one.</p>
+    <div class="scroll">
+      <table><thead><tr><th>Token</th><th>Label</th><th>Type</th><th>Used by</th></tr></thead>
+      <tbody>${custom}</tbody></table>
+    </div>
+    <div class="row" style="margin-top:14px">
+      <button class="btn primary" type="button">+ Add a custom field</button>
+      <button class="btn" type="button">Create fields for the 2 unknown tokens</button>
+    </div>
+    <div class="grid3" style="margin-top:16px">
+      <label><span class="label">Field type</span><select class="field">
+        <option>Text (single line)</option><option>Text (paragraph)</option><option>Number</option>
+        <option>Amount with currency</option><option>Date</option><option>Yes / No</option>
+        <option>Choice from a list</option><option>Employee picker</option><option>Manager picker</option>
+        <option>Signature</option><option>Attached image</option></select></label>
+      <label><span class="label">Applies to</span><select class="field">
+        <option>One template</option><option>Several templates</option><option>Every template</option>
+        <option>The employee record (asked once, reused)</option></select></label>
+      <label><span class="label">Required?</span><select class="field"><option>Optional</option><option>Required before generating</option></select></label>
+    </div>
+    <div class="note" style="margin-top:14px">A field set on <b>the employee record</b> is answered once and reused
+      by every document — bank account, contract type, grade. A field set on <b>a template</b> is asked each time.
+      Choosing wrongly is the difference between typing something once and typing it two hundred times.</div>
+  </div>
+
+  <div class="card">
+    <h3>Token dictionary</h3>
+    <p>Case-sensitive, whitespace-tolerant: <code>{{name}}</code> and <code>{{ name }}</code> are the same. An
+      unknown token renders blank rather than failing the document.</p>
+    <div class="row" style="margin-bottom:12px">
+      <input class="field" style="max-width:260px" placeholder="Filter tokens…" id="tokFilter">
+      <button class="btn" type="button">Copy all</button>
+      <button class="btn ghost" type="button">Download the token guide (PDF)</button>
+      <span class="hint" style="margin:0">${CORE_TOKENS.length} core + ${CUSTOM_FIELDS.length} of yours</span>
+    </div>
+    <div class="scroll">
+      <table><thead><tr><th>Token</th><th>Fills with</th><th>Source / type</th><th>Notes</th></tr></thead>
+      <tbody id="tokBody">${custom}${core}</tbody></table>
+    </div>
+    <p class="hint" style="margin-top:10px">Signature, logo and barcode tokens insert an image — put them in an
+      empty paragraph or table cell sized the way you want the image to appear.</p>
+  </div>
+
+  ${decide('Settled in review — and it is the largest item on the plan.',[
+    '<b>Tokens are extensible by the buyer.</b> Custom fields become tokens, form questions and reportable columns without a release from us.',
+    '<b>The buyer brings every template.</b> None of ours ship, not even as examples.',
+  ], true)}
+
+  ${decide('Extensible tokens open three questions I cannot answer for you.',[
+    '<b>Repeating rows.</b> A single token cannot express "one row per employee" — a handover list or a register table needs loop syntax (<code>{% for %}</code>). Do buyers get that, or do multi-row documents stay unavailable to them? This is the biggest remaining gap and it will come up in the first week.',
+    '<b>Calculated fields.</b> Someone will want gratuity computed from joining date and salary rather than typed. Do we allow a formula in a custom field, or is every value typed by a human? Formulas are a small language, with everything that implies.',
+    '<b>Does a rejected upload block the buyer?</b> If their DOCX has a corrupt content control or a token split across formatting runs, do we reject at upload with a clear explanation, or accept and fail later? Reject-at-upload is more work and much better — but they will need a way to fix the file, and it will not always be obvious.',
+    '<b>Arabic token names.</b> Do buyers writing Arabic documents need <code>{{ الاسم }}</code>? Word handles Arabic identifiers badly inside RTL runs, and it doubles every name in the dictionary.',
   ])}`;
 }
 
 function paneServices(){
   return `
-  <span class="eyebrow">Step 5 of 10</span>
-  <h2>Services &amp; emoji</h2>
-  <p class="lede">Each service is one form the staff can fill. Turn off what this company does not use, rename them
-    into their own language, and pick the emoji that appears on the tile. Emoji are the primary wayfinding device in
-    the services gallery and on the dashboard quick-launch tiles — people learn them by shape long before they read
-    the label.</p>
+  <span class="eyebrow">Step 6 of 10</span>
+  <h2>Services &amp; icons</h2>
+  <p class="lede">Each template you uploaded becomes a service — one tile staff tap to fill that form. Name it in
+    both languages, group it, and give it an icon. Icons are the primary wayfinding device: people learn a tile by
+    its shape long before they read the label.</p>
 
   <div class="card">
-    <h3>Enabled services <span class="hint" style="font-weight:400">— click an emoji to change it</span></h3>
-    <p>Order here is the order on the services page. Drag to reorder in the real implementation.</p>
+    <h3>Services from your templates <span class="hint" style="font-weight:400">— click an icon to change it</span></h3>
+    <p>Order here is the order on the services page. In the built version these drag to reorder.</p>
     <div class="tiles" id="tileList"></div>
     <div class="row" style="margin-top:16px">
-      <button class="btn" type="button">+ Add a service from an uploaded template</button>
-      <button class="btn ghost" type="button">Enable all</button>
-      <button class="btn ghost" type="button">Disable all</button>
+      <button class="btn" type="button">+ Upload another template</button>
+      <button class="btn ghost" type="button">Manage groups</button>
     </div>
+  </div>
+
+  <div class="card">
+    <h3>Icons</h3>
+    <p>A bundled single-colour set of ${ICONS.length} marks, drawn to one grid and one stroke weight. They inherit
+      your primary colour, stay legible at 16&nbsp;px, and print cleanly into a DOCX — which is why this is not an
+      emoji picker. If none of them fit, upload your own SVG.</p>
+    <div class="row" style="gap:12px;color:var(--navy);flex-wrap:wrap">
+      ${ICONS.slice(0,22).map(n=>ico(n)).join('')}
+      <span class="hint" style="margin:0">…and ${ICONS.length-22} more</span>
+    </div>
+    <div class="note" style="margin-top:14px">Uploaded SVGs are sanitised on arrival — scripts, external references
+      and embedded raster images are stripped — then recoloured to the current stroke weight so they sit with the
+      rest of the set instead of standing out.</div>
   </div>
 
   <div class="card">
     <h3>Rename a service</h3>
     <p>The internal id never changes — only what staff see.</p>
     <div class="grid3">
-      <label><span class="label">Service</span><select class="field"><option>Leave Application Form</option><option>Violation Form</option></select></label>
+      <label><span class="label">Service</span><select class="field">${UPLOADED.map(u=>`<option>${u.label}</option>`).join('')}</select></label>
       <label><span class="label">Label (English)</span><input class="field" value="Leave Application"></label>
       <label><span class="label">Label (Arabic)</span><input class="field" dir="rtl" value="طلب إجازة"></label>
     </div>
   </div>
 
-  ${decide('Emoji look trivial and are not — they are the app\'s icon system.',[
-    '<b>Emoji or a real icon set?</b> Emoji render differently on Windows 10, Windows 11, Android and iOS — the same tile does not look the same on the office PC and the guard\'s phone. A bundled SVG set is consistent and printable; emoji are free and instantly editable. Which matters more to you?',
-    '<b>Free-typed emoji, or a curated list?</b> A free field lets an operator paste a skin-toned or flag emoji that breaks the grid. I have shown a curated picker — confirm that is enough.',
-    '<b>Do emoji appear on printed documents,</b> or only on screen? They print badly in DOCX.',
-    '<b>Does disabling a service hide past documents</b> generated from it, or only stop new ones? I assume only new ones — records must stay readable.',
-    '<b>Category grouping:</b> with 18 services the gallery already needs grouping. Do we let each company define their own groups, or ship fixed ones (HR / Leave / Discipline / Correspondence)?',
-  ])}`;
-}
+  ${decide('Settled in review.',[
+    '<b>SVG icon set, not emoji.</b> Emoji render differently on Windows 10, Windows 11, Android and iOS, so the same tile looked different on the office PC and the phone — and they print badly into documents.',
+    '<b>Services are derived from uploaded templates,</b> not from a fixed list. A buyer with four forms sees four tiles.',
+  ], true)}
 
-function paneTokens(){
-  const rows = TOKENS.map(([t,d,s,e])=>`<tr>
-    <td><code class="tok">${t.replace(/</g,'&lt;')}</code></td><td>${d}</td>
-    <td><span class="hint">${s}</span></td><td><span class="hint">${e||'&mdash;'}</span></td></tr>`).join('');
-  return `
-  <span class="eyebrow">Step 6 of 10</span>
-  <h2>Templates &amp; the token dictionary</h2>
-  <p class="lede">Documents are ordinary Word files with <code>{{ token }}</code> placeholders. Put a token
-    anywhere in the document — body, table cell, header, footer — and the app fills it at generation time.
-    This is the full list for this install. Copy a token, paste it into your template, done.</p>
-
-  <div class="card">
-    <h3>Upload your templates</h3>
-    <p>Drop your <code>.docx</code> files here. Each one is scanned immediately and reported below.</p>
-    <input class="field" type="file" multiple accept=".docx">
-    <div class="note ok" style="margin-top:12px"><b>3 templates scanned.</b>
-      <code>Leave_Application.docx</code> — 11 tokens, all recognised.
-      <code>Warning_Letter.docx</code> — 8 tokens, all recognised.</div>
-    <div class="note warn" style="margin-top:10px"><b><code>Clearance.docx</code> uses 2 unknown tokens:</b>
-      <code>{{ gratuity_amount }}</code> and <code>{{ final_settlement }}</code>.
-      Map each one to an existing field, define it as a form question the user answers, or leave it blank on output.
-      <div class="row" style="margin-top:10px">
-        <button class="btn" type="button">Map to a field</button>
-        <button class="btn" type="button">Make it a form question</button>
-        <button class="btn ghost" type="button">Leave blank</button>
-      </div></div>
-  </div>
-
-  <div class="card">
-    <h3>Token dictionary</h3>
-    <p>Tokens are case-sensitive and whitespace-tolerant: <code>{{name}}</code> and <code>{{ name }}</code> are the
-      same. Unknown tokens render as empty rather than failing the document.</p>
-    <div class="row" style="margin-bottom:12px">
-      <input class="field" style="max-width:280px" placeholder="Filter tokens…" id="tokFilter">
-      <button class="btn" type="button">Copy all as a reference sheet</button>
-      <button class="btn ghost" type="button">Download token guide (PDF)</button>
-    </div>
-    <div class="scroll">
-      <table><thead><tr><th>Token</th><th>Fills with</th><th>Source</th><th>Example</th></tr></thead>
-      <tbody id="tokBody">${rows}</tbody></table>
-    </div>
-    <p class="hint" style="margin-top:10px">Signature and barcode tokens insert an image, not text — put them in an
-      empty paragraph or table cell sized the way you want the image to appear.</p>
-  </div>
-
-  ${decide('Templates are where a white-label rollout usually stalls.',[
-    '<b>Are tokens fixed or extensible?</b> If a company needs <code>{{ gratuity_amount }}</code>, can they define a custom field in setup and have it appear as a form question — or do they wait for a release? Extensible is a much bigger build, and probably the difference between this being sellable and not.',
-    '<b>What about repeating rows?</b> The passport-release list and the leave register render tables of N rows. A single-token model cannot express that. Do we need loop syntax (<code>{% for %}</code>) exposed to buyers, or do we keep table forms as code-defined only?',
-    '<b>Who fixes a broken template?</b> If they upload a DOCX with a corrupt content control, does setup reject it with a clear message, or accept and fail at generation time? Reject at upload is more work and far better.',
-    '<b>Migration path for the existing 18 forms:</b> are they the starting library for every new tenant, or does each tenant start empty? A half-relevant library may be worse than none.',
-    '<b>Language of the token names.</b> These are English identifiers inside possibly-Arabic documents. Do we need Arabic aliases (<code>{{ الاسم }}</code>), which Word handles poorly in RTL runs?',
+  ${decide('Two left on presentation.',[
+    '<b>Who draws the icons?</b> A hand-drawn set of 40 is a real design task, and the set above is a first pass. Buying a licensed open set (Lucide, Phosphor) is faster and more complete — is a third-party set acceptable in a product you sell on?',
+    '<b>Groups — buyer-defined or fixed?</b> Fixed groups keep every install navigable and supportable. Free-text groups mean each buyer invents their own taxonomy and support gets harder. I lean fixed, with "Other" as the escape hatch.',
   ])}`;
 }
 
@@ -644,74 +789,69 @@ function paneRoster(){
   <span class="eyebrow">Step 7 of 10</span>
   <h2>Employee roster</h2>
   <p class="lede">Load the staff list. Everything downstream keys off the personnel ID — documents, the file vault,
-    leave records and the bulk scan import in the next step — so get the ID scheme right before importing.</p>
+    leave records and the scan import in the next step — so settle the ID scheme before importing.</p>
 
   <div class="card">
     <h3>Personnel ID scheme</h3>
     <div class="grid3">
-      <label><span class="label">Prefix</span><input class="field" value="G" maxlength="4">
-        <span class="hint">Current install uses <code>G</code>, e.g. G3082.</span></label>
-      <label><span class="label">Digits</span><input class="field" inputmode="numeric" value="4"></label>
+      <label><span class="label">Format</span><select class="field">
+        <option>Prefix + digits (G3082)</option><option>Digits only (3082)</option><option>Free text — use theirs as-is</option></select></label>
+      <label><span class="label">Prefix</span><input class="field" placeholder="G" maxlength="4"></label>
       <label><span class="label">If a row has no ID</span><select class="field"><option>Assign the next free number</option><option>Reject the row</option></select></label>
     </div>
-    <div class="note warn" style="margin-top:14px">The ID becomes the vault folder name and appears on generated
-      documents. Changing the scheme after import means renaming folders on disk — the wizard will not do it for you.</div>
+    <div class="note warn" style="margin-top:14px">The ID becomes the vault folder name on disk and appears on
+      generated documents. Changing the scheme after import means renaming folders — the wizard will warn you and
+      will not do it silently.</div>
   </div>
 
   <div class="card">
     <h3>Load the list</h3>
-    <p>Download the template, fill it in Excel, upload it back. Or paste rows straight from a spreadsheet.</p>
+    <p>Download the template, fill it in Excel, upload it back — or paste rows straight from a spreadsheet. The
+      template includes any custom fields you marked as belonging to the employee record in step 5.</p>
     <div class="row">
       <button class="btn primary" type="button">Download employees_template.xlsx</button>
       <button class="btn" type="button">Download CSV version</button>
-      <span class="hint">Includes a filled example row and a data-validation sheet for status, department and nationality.</span>
     </div>
     <label><span class="label">Or paste rows here (tab or comma separated)</span>
-      <textarea class="field" placeholder="employee_id&#9;name_en&#9;name_ar&#9;department&#9;position&#9;nationality&#9;passport_no&#9;uae_id_no&#9;doj&#9;contact
-G3082&#9;Ahmed Al Mansoori&#9;أحمد المنصوري&#9;Operations&#9;Security Officer&#9;UAE&#9;P1234567&#9;784-1990-1234567-1&#9;01/03/2021&#9;+971500000000"></textarea></label>
+      <textarea class="field" placeholder="employee_id&#9;name_en&#9;name_ar&#9;department&#9;position&#9;nationality&#9;passport_no&#9;national_id_no&#9;doj&#9;contact"></textarea></label>
   </div>
 
   <div class="card">
     <h3>Column mapping</h3>
-    <p>Detected from your header row. Correct anything the wizard guessed wrong.</p>
-    <div class="scroll" style="max-height:250px">
-      <table>
-        <thead><tr><th>Your column</th><th>Maps to</th><th>Required</th><th>Sample</th></tr></thead>
-        <tbody>
-          <tr><td>Staff No</td><td><code class="tok">employee_id</code></td><td>Yes</td><td>G3082</td></tr>
-          <tr><td>Full Name</td><td><code class="tok">name_en</code></td><td>Yes</td><td>Ahmed Al Mansoori</td></tr>
-          <tr><td>الاسم</td><td><code class="tok">name_ar</code></td><td>No</td><td dir="rtl">أحمد المنصوري</td></tr>
-          <tr><td>Dept</td><td><code class="tok">department</code></td><td>No</td><td>Operations</td></tr>
-          <tr><td>Designation</td><td><code class="tok">position</code></td><td>No</td><td>Security Officer</td></tr>
-          <tr><td>Passport</td><td><code class="tok">passport_no</code></td><td>No</td><td>P1234567</td></tr>
-          <tr><td>Emirates ID</td><td><code class="tok">uae_id_no</code></td><td>No</td><td>784-1990-1234567-1</td></tr>
-          <tr><td>Joining</td><td><code class="tok">doj</code></td><td>No</td><td>01/03/2021</td></tr>
-          <tr><td>Mobile</td><td><code class="tok">contact</code></td><td>No</td><td>+971500000000</td></tr>
-          <tr><td>Salary</td><td><span class="hint">Ignored — no matching field</span></td><td>—</td><td>—</td></tr>
-        </tbody>
-      </table>
+    <p>Detected from your header row. Correct anything guessed wrong.</p>
+    <div class="scroll" style="max-height:230px">
+      <table><thead><tr><th>Your column</th><th>Maps to</th><th>Required</th><th>Sample</th></tr></thead><tbody>
+        <tr><td>Staff No</td><td><code class="tok">employee_id</code></td><td>Yes</td><td>G3082</td></tr>
+        <tr><td>Full Name</td><td><code class="tok">name_en</code></td><td>Yes</td><td>Ahmed Al Mansoori</td></tr>
+        <tr><td>الاسم</td><td><code class="tok">name_ar</code></td><td>No</td><td dir="rtl">أحمد المنصوري</td></tr>
+        <tr><td>Dept</td><td><code class="tok">department</code></td><td>No</td><td>Operations</td></tr>
+        <tr><td>Designation</td><td><code class="tok">position</code></td><td>No</td><td>Security Officer</td></tr>
+        <tr><td>Passport</td><td><code class="tok">passport_no</code></td><td>No</td><td>P1234567</td></tr>
+        <tr><td>Emirates ID</td><td><code class="tok">national_id_no</code></td><td>No</td><td>784-1990-1234567-1</td></tr>
+        <tr><td>Grade</td><td><code class="tok">grade</code> <span class="hint">— your custom field</span></td><td>No</td><td>B2</td></tr>
+        <tr><td>Salary</td><td><span class="hint">Ignored — no matching field. Add one in step 5?</span></td><td>—</td><td>—</td></tr>
+      </tbody></table>
     </div>
   </div>
 
   <div class="card">
     <h3>Validation — always a dry run first</h3>
     <div class="note ok"><b>318 rows ready to import.</b></div>
-    <div class="note warn" style="margin-top:10px"><b>7 rows need attention.</b>
-      2 duplicate IDs (G3110 appears twice), 3 invalid Emirates ID checksums, 1 joining date in the future,
-      1 missing name. Fix in place below, or import the clean rows and handle the rest by hand.</div>
+    <div class="note warn" style="margin-top:10px"><b>7 rows need attention.</b> 2 duplicate IDs (G3110 twice),
+      3 invalid national-ID checksums, 1 joining date in the future, 1 missing name. Accepted with a flag and
+      collected in a data-quality list you can work through later.</div>
     <div class="row" style="margin-top:14px">
-      <button class="btn primary" type="button">Import 318 clean rows</button>
-      <button class="btn" type="button">Review the 7 problem rows</button>
+      <button class="btn primary" type="button">Import 318 rows</button>
+      <button class="btn" type="button">Review the 7 flagged rows</button>
       <button class="btn ghost" type="button">Download the error report</button>
     </div>
   </div>
 
-  ${decide('Import is where bad data enters and never leaves.',[
-    '<b>Is the personnel ID theirs or ours?</b> If they bring their own scheme (alphanumeric, no prefix, variable length), the <code>G</code>-prefix normaliser in the vault has to go. Do any target customers not use a simple prefix+digits ID?',
-    '<b>How strict on Emirates ID?</b> Real rosters contain typos. Reject the row, accept with a warning flag, or accept silently? I propose accept-with-flag and a "data quality" list they can work through later.',
-    '<b>Re-import behaviour.</b> Second upload of the same file: update existing rows, skip them, or fail? Update-by-ID is what people expect, but it silently overwrites hand-corrections.',
-    '<b>Do you need departments and positions as real records</b> (a picklist, an org chart) rather than free text? Free text means "Ops", "Operations" and "operations" become three departments in a month.',
-    '<b>Leavers.</b> Does the import carry a status column, and can it deactivate someone who has vanished from the new file — or is deactivation always manual? Automatic deactivation from a partial file is dangerous.',
+  ${decide('Re-import is the sharpest edge in the whole wizard.',[
+    '<b>Update, skip, or fail on re-import?</b> Update-by-ID is what people expect and it silently overwrites hand-corrections. The warning at the top of this step says so, but a warning is not a safeguard. Should a re-import instead show a diff — "42 rows will change, here is what" — before writing?',
+    '<b>Never auto-deactivate.</b> I have assumed a person missing from a re-uploaded file is left alone, because a partial file would otherwise fire half the workforce. Confirm.',
+    '<b>Departments and positions — free text or picklists?</b> Free text means "Ops", "Operations" and "operations" become three departments within a month, and every report splits three ways.',
+    '<b>How strict on national ID?</b> I have gone with accept-and-flag rather than reject, because real rosters have typos and a blocked import helps nobody.',
   ])}`;
 }
 
@@ -719,35 +859,38 @@ function paneBulk(){
   return `
   <span class="eyebrow">Step 8 of 10</span>
   <h2>Bulk passport &amp; ID scan import</h2>
-  <p class="lede">Point the importer at one folder of passport scans and one folder of national-ID scans. It matches
-    each file to an employee by the ID number found in the file name, then files it into that person's vault under
-    <code>documents/passport/</code> or <code>documents/uae_id/</code>. Nothing is copied until you approve the dry run.</p>
+  <p class="lede">One folder of passport scans, one folder of national-ID scans. Each file is matched to an employee
+    by the ID number in its file name and filed into that person's vault. Nothing is copied until you approve the
+    dry run. <b>This step is already built</b> — <code>scripts/bulk_import_ids.py</code>, tested end to end.</p>
 
   <div class="card">
     <h3>Source folders</h3>
     <div class="grid2">
-      <label><span class="label">🛂 Passport scans folder</span>
-        <input class="field" value="D:\\HandoverData\\Passports"><span class="hint">PDF, JPG, PNG, TIFF. Sub-folders are searched too.</span></label>
-      <label><span class="label">🪪 National ID scans folder</span>
-        <input class="field" value="D:\\HandoverData\\EmiratesID"></label>
+      <label><span class="label">Passport scans folder</span>
+        <input class="field" value="D:\\Handover\\Passports"><span class="hint">PDF, JPG, PNG. Sub-folders are searched too.</span></label>
+      <label><span class="label">National ID scans folder</span>
+        <input class="field" value="D:\\Handover\\EmiratesID"></label>
     </div>
   </div>
 
   <div class="card">
     <h3>How files are matched</h3>
-    <p>The importer tries each rule in order and stops at the first that finds exactly one employee. Anything that
-      matches nothing — or matches more than one person — is left untouched and listed for you.</p>
-    <table>
-      <tbody>
-        <tr><td style="width:38px">1</td><td><b>Personnel ID in the file name</b><br><span class="hint">Most reliable. <code>G3082_passport.pdf</code>, <code>G3082 (1).jpg</code></span></td><td><input type="checkbox" checked style="accent-color:var(--navy)"></td></tr>
-        <tr><td>2</td><td><b>Document number in the file name</b><br><span class="hint">Passport number for the passport folder, Emirates ID for the ID folder. Separators are ignored, so <code>784-1990-1234567-1</code> and <code>784199012345671</code> both match.</span></td><td><input type="checkbox" checked style="accent-color:var(--navy)"></td></tr>
-        <tr><td>3</td><td><b>Sub-folder named after the person</b><br><span class="hint"><code>Passports/G3082/scan01.pdf</code></span></td><td><input type="checkbox" checked style="accent-color:var(--navy)"></td></tr>
-        <tr><td>4</td><td><b>Read the number off the scan with OCR</b><br><span class="hint">Slow, and needs Tesseract — flagged missing in step 1. Use only for the leftovers.</span></td><td><input type="checkbox" style="accent-color:var(--navy)"></td></tr>
-        <tr><td>5</td><td><b>Fuzzy name match</b><br><span class="hint">Last resort. Always asks you to confirm — it will never file a document on a guess.</span></td><td><input type="checkbox" style="accent-color:var(--navy)"></td></tr>
-      </tbody>
-    </table>
+    <p>Rules are tried in order and the first one resolving to <b>exactly one</b> employee wins. A file that matches
+      nothing — or more than one person — is left untouched and listed for you. Filing a passport under the wrong
+      person is worse than not filing it, so the importer never guesses.</p>
+    <table><tbody>
+      <tr><td style="width:38px">1</td><td><b>Personnel ID in the file name</b><br>
+        <span class="hint">Most reliable. <code>G3082_passport.pdf</code>. Bounded so <code>IMG3082.jpg</code> does not read as employee G3082.</span></td></tr>
+      <tr><td>2</td><td><b>Document number in the file name</b><br>
+        <span class="hint">Passport number for the passport folder, national ID for the ID folder. Separators ignored — <code>784-1990-1234567-1</code> and <code>784199012345671</code> both match.</span></td></tr>
+      <tr><td>3</td><td><b>A parent folder named after the person</b><br>
+        <span class="hint"><code>Passports/G3082/scan01.pdf</code> — handles the common "one folder per employee" handover shape.</span></td></tr>
+    </tbody></table>
+    <div class="note stop" style="margin-top:14px"><b>There is deliberately no fuzzy name matching and no OCR
+      guessing.</b> Both were considered and left out: a near-miss on a name files someone's passport under a
+      colleague, and nobody notices until it matters. Leftovers are listed for a human instead.</div>
     <div class="grid3" style="margin-top:14px">
-      <label><span class="label">On duplicate file name</span><select class="field"><option>Keep both (append _1)</option><option>Skip</option><option>Replace</option></select></label>
+      <label><span class="label">On duplicate file name</span><select class="field"><option>Keep both (append _1)</option><option>Skip</option></select></label>
       <label><span class="label">Original files</span><select class="field"><option>Copy (leave originals)</option><option>Move</option></select></label>
       <label><span class="label">Also fill missing numbers</span><select class="field"><option>Yes, from the file name</option><option>No, files only</option></select></label>
     </div>
@@ -756,35 +899,32 @@ function paneBulk(){
   <div class="card">
     <h3>Dry run — nothing has been copied yet</h3>
     <div class="note ok"><b>571 of 604 files matched</b> to 312 of 318 employees.</div>
-    <div class="scroll" style="margin-top:12px;max-height:230px">
-      <table>
-        <thead><tr><th>File</th><th>Kind</th><th>Matched by</th><th>Employee</th><th>Result</th></tr></thead>
-        <tbody>
-          <tr><td>G3082_passport.pdf</td><td>🛂 Passport</td><td>Rule 1 — ID</td><td>G3082 · Ahmed Al Mansoori</td><td style="color:var(--ok)">Will file</td></tr>
-          <tr><td>784-1990-1234567-1.jpg</td><td>🪪 National ID</td><td>Rule 2 — doc number</td><td>G3082 · Ahmed Al Mansoori</td><td style="color:var(--ok)">Will file</td></tr>
-          <tr><td>P1234567_front.jpg</td><td>🛂 Passport</td><td>Rule 2 — doc number</td><td>G3120 · Rahul Menon</td><td style="color:var(--ok)">Will file</td></tr>
-          <tr><td>scan_0042.pdf</td><td>🛂 Passport</td><td>—</td><td>—</td><td style="color:var(--amber)">No match — skipped</td></tr>
-          <tr><td>copy of passport.pdf</td><td>🛂 Passport</td><td>Rule 5 — name</td><td>2 candidates</td><td style="color:var(--amber)">Needs your decision</td></tr>
-          <tr><td>G3110_eid.pdf</td><td>🪪 National ID</td><td>Rule 1 — ID</td><td>G3110 — duplicate ID in roster</td><td style="color:var(--red)">Blocked</td></tr>
-        </tbody>
-      </table>
+    <div class="scroll" style="margin-top:12px;max-height:220px">
+      <table><thead><tr><th>File</th><th>Kind</th><th>Matched by</th><th>Employee</th><th>Result</th></tr></thead><tbody>
+        <tr><td>G3082_passport.pdf</td><td>Passport</td><td>Rule 1 — ID</td><td>G3082 · Ahmed Al Mansoori</td><td style="color:var(--ok)">Will file</td></tr>
+        <tr><td>784-1990-1234567-1.jpg</td><td>National ID</td><td>Rule 2 — number</td><td>G3082 · Ahmed Al Mansoori</td><td style="color:var(--ok)">Will file</td></tr>
+        <tr><td>G3120/scan01.pdf</td><td>Passport</td><td>Rule 3 — folder</td><td>G3120 · Rahul Menon</td><td style="color:var(--ok)">Will file</td></tr>
+        <tr><td>IMG3082.jpg</td><td>National ID</td><td>—</td><td>—</td><td style="color:var(--amber)">No match — skipped</td></tr>
+        <tr><td>scan_0042.pdf</td><td>Passport</td><td>—</td><td>—</td><td style="color:var(--amber)">No match — skipped</td></tr>
+        <tr><td>notes.txt</td><td>—</td><td>—</td><td>—</td><td style="color:var(--muted)">Not a document type</td></tr>
+      </tbody></table>
     </div>
     <div class="row" style="margin-top:14px">
       <button class="btn primary" type="button">Import the 571 matched files</button>
-      <button class="btn" type="button">Resolve the 33 unmatched</button>
+      <button class="btn" type="button">Resolve the 33 unmatched by hand</button>
       <button class="btn ghost" type="button">Download the full report (CSV)</button>
     </div>
-    <p class="hint" style="margin-top:10px">The same importer runs from the command line for very large handovers:
-      <code>python scripts/bulk_import_ids.py --passports D:\\...\\Passports --uae-ids D:\\...\\EmiratesID --dry-run</code></p>
+    <p class="hint" style="margin-top:10px">Same importer from the command line for large handovers:
+      <code>python scripts/bulk_import_ids.py --passports "D:\\Handover\\Passports" --uae-ids "D:\\Handover\\EmiratesID" --report out.csv</code></p>
   </div>
 
-  ${decide('Bulk import touches personal identity documents — the failure modes are worse than usual.',[
-    '<b>Filing a passport under the wrong person is the single worst bug this feature can have.</b> Do you accept fuzzy name matching at all, even behind a confirmation — or should rules 4 and 5 be removed and leftovers handled by hand?',
-    '<b>One folder each, or one folder per person?</b> You said one folder each. Real handovers often arrive as <code>Employee Files/Ahmed Al Mansoori/passport.pdf</code> — no ID anywhere. Should the importer handle that shape too (rule 3 with name folders), or do you insist the source be renamed first?',
-    '<b>Multi-page and multi-file documents.</b> Front and back of an ID as two JPGs — file both separately, or merge to a single PDF per document? Merging is much tidier downstream.',
-    '<b>Should the import also read expiry dates</b> via OCR and populate the expiry-watch module, or is that a separate later pass? Doing it during import is the only time the whole set is in one place.',
-    '<b>Retention and encryption.</b> These are passport scans on an office server. Does the vault need at-rest encryption, an access log per file, and an automatic purge N days after an employee leaves? That may be a legal requirement rather than a feature.',
-    '<b>Undo.</b> If a 600-file import goes to the wrong place, is there a one-click rollback of that import batch? I would build the batch id in from the start.',
+  ${decide('You said you were not sure on retention — here is the shape of the question, split so it is answerable.',[
+    '<b>Is this a legal obligation or a product choice?</b> A few hundred passport scans on an office server is personal data under UAE PDPL. Worth one conversation with whoever handles compliance before the first buyer, not after. If it is an obligation, it stops being a feature we can defer.',
+    '<b>Encryption at rest.</b> The vault is plain folders on disk today — readable by anyone with the server or a backup tape. Options: leave as-is and rely on disk encryption (cheapest, and honestly what most LAN installs do), or encrypt the vault itself (real work, and a lost key means lost documents). <b>My recommendation: rely on full-disk encryption, and say so explicitly in the deployment guide</b> so it is a documented decision rather than an oversight.',
+    '<b>Access log.</b> Recording who opened whose passport is cheap to add now and near-impossible to reconstruct later. I would add it regardless of the retention answer.',
+    '<b>Purge after leaving.</b> Needs a rule you cannot invent — "N days after end of service" where N comes from labour law and the contract, not from us. Leave it configurable, default to never, and let each buyer set it.',
+    '<b>Multi-page documents.</b> Front and back of an ID as two JPGs — file separately, or merge into one PDF per document? Merging is tidier downstream and is a decision made once, at import.',
+    '<b>Undo.</b> Every import gets a batch id so a 600-file mistake is one click to reverse. Cheap now, impossible to retrofit.',
   ])}`;
 }
 
@@ -792,42 +932,41 @@ function paneComms(){
   return `
   <span class="eyebrow">Step 9 of 10</span>
   <h2>Communications</h2>
-  <p class="lede">Optional. Skip the whole step if this company only generates documents — every channel here can be
-    switched on later without touching anything else.</p>
+  <p class="lede">Optional — skip it entirely if this company only generates documents. Every channel can be switched
+    on later without touching anything else.</p>
 
   <div class="card">
     <h3>Mail</h3>
     <div class="grid2">
-      <label><span class="label">Mail server preset</span><select class="field"><option>Microsoft 365</option><option>Google Workspace</option><option>IONOS</option><option>Custom IMAP/SMTP</option><option>No mail</option></select></label>
+      <label><span class="label">Server preset</span><select class="field"><option>Microsoft 365</option><option>Google Workspace</option><option>Other IMAP/SMTP</option><option>No mail</option></select></label>
       <label><span class="label">Domain</span><input class="field" placeholder="example.ae"></label>
     </div>
-    <div class="note" style="margin-top:12px">Presets fill hosts and ports so the operator never types
-      <code>imap.example.com:993</code>. Credentials are encrypted per workstation and never displayed again.</div>
+    <div class="note" style="margin-top:12px">Presets fill hosts and ports so nobody types
+      <code>imap.example.com:993</code>. Credentials are encrypted per workstation and never shown again.</div>
   </div>
 
   <div class="card">
     <h3>Messaging</h3>
     <div class="modlist">
-      <div class="mod"><input type="checkbox"><div><strong>SMS via on-site SIM gateway</strong><small>Needs an Android handset running SMS Gate on the LAN. Cheapest per message, no per-country approval.</small></div><span class="meta">Optional</span></div>
+      <div class="mod"><input type="checkbox"><div><strong>SMS via on-site SIM gateway</strong><small>Needs an Android handset on the LAN. Cheapest per message, no per-country approval.</small></div><span class="meta">Optional</span></div>
       <div class="mod"><input type="checkbox"><div><strong>WhatsApp via self-hosted gateway</strong><small>Needs a dedicated number and a supervised first login. Highest delivery rate in this region.</small></div><span class="meta">Optional</span></div>
-      <div class="mod"><input type="checkbox" checked><div><strong>In-app notifications &amp; push</strong><small>Works with no external service. Requires HTTPS for installable-app push.</small></div><span class="meta">Recommended</span></div>
+      <div class="mod"><input type="checkbox" checked><div><strong>In-app notifications</strong><small>Works with no external service. HTTPS required for the installable app and push.</small></div><span class="meta">Recommended</span></div>
     </div>
   </div>
 
   <div class="card">
     <h3>Message templates</h3>
-    <p>Two per channel, in both languages, using the same tokens as the documents.</p>
+    <p>Same token language as the documents, including your custom fields.</p>
     <label><span class="label">Document ready — English</span>
-      <textarea class="field" style="min-height:64px">{{ company_name }}: your {{ document_name }} is ready. Reference {{ ref_number }}.</textarea></label>
+      <textarea class="field" style="min-height:60px">{{ company_name }}: your {{ document_name }} is ready. Reference {{ ref_number }}.</textarea></label>
     <label><span class="label">Document ready — Arabic</span>
-      <textarea class="field" dir="rtl" style="min-height:64px">{{ company_name }}: مستند {{ document_name }} جاهز. الرقم المرجعي {{ ref_number }}.</textarea></label>
+      <textarea class="field" dir="rtl" style="min-height:60px">{{ company_name }}: مستند {{ document_name }} جاهز. الرقم المرجعي {{ ref_number }}.</textarea></label>
   </div>
 
-  ${decide('Communications is the step most likely to be skipped and then blamed.',[
-    '<b>Is any channel actually required</b> for the product to be useful, or is document generation alone a valid install? That decides whether this step can be skipped entirely.',
-    '<b>Consent.</b> Messaging employees on personal numbers has legal weight in some jurisdictions. Should the roster carry a consent flag, and should the app refuse to message anyone without it?',
-    '<b>Do we ship an outbound relay</b> so a buyer with no mail server still gets notifications, or is bring-your-own-server the only supported model? A relay means we hold their credentials and their deliverability problems.',
-    '<b>Quiet hours.</b> Should notifications be suppressed outside working hours by default? Site staff work nights — the answer may differ per company, which makes it a setting, not a constant.',
+  ${decide('Mostly deferrable, one that is not.',[
+    '<b>Consent.</b> Messaging employees on personal numbers carries legal weight. Should the roster carry a consent flag, and should the app refuse to message anyone without it? This is the same conversation as vault retention — worth settling once, for both.',
+    '<b>Bring-your-own-server only, or do we host a relay?</b> A relay means we hold their credentials and inherit their deliverability problems. I lean bring-your-own.',
+    '<b>Quiet hours.</b> Site staff work nights, so the right answer differs per company — which makes it a setting rather than a constant.',
   ])}`;
 }
 
@@ -835,9 +974,8 @@ function paneFinish(){
   return `
   <span class="eyebrow">Step 10 of 10</span>
   <h2>Administrator &amp; finish</h2>
-  <p class="lede">Create the first account, review everything, then apply. Applying writes the tenant profile,
-    creates the vault folder tree, imports the roster and files the scans — as one transaction. If anything fails,
-    nothing is written and you come back here.</p>
+  <p class="lede">Create the first account, review, apply. Applying writes the tenant profile, creates the vault
+    tree, imports the roster and files the scans. If anything fails, you come back here.</p>
 
   <div class="card">
     <h3>First administrator</h3>
@@ -847,52 +985,51 @@ function paneFinish(){
       <label><span class="label">Password</span><input class="field" type="password" placeholder="At least 12 characters"></label>
       <label><span class="label">Confirm password</span><input class="field" type="password"></label>
     </div>
-    <div class="note warn" style="margin-top:12px">This account holds every permission and can transfer the
-      administrator slot. There is no password recovery on a LAN install without mail configured — write it down.</div>
+    <div class="note warn" style="margin-top:12px">There is no password recovery on a LAN install with no mail
+      configured. Create a second administrator before you finish, or write this one down.</div>
   </div>
 
   <div class="card">
     <h3>Review</h3>
     <dl class="kv">
       <dt>Company</dt><dd id="revName">Not set</dd>
-      <dt>Code &amp; numbering</dt><dd>FFM · FFM-0001 · sequence never resets</dd>
-      <dt>Barcode</dt><dd id="revCode">Aztec · payload FFM:{ref} · header top-right</dd>
+      <dt>Numbering</dt><dd>FFM-0001 · never resets · 2 categories</dd>
+      <dt>Barcode</dt><dd id="revCode">Aztec · payload FFM:{ref}</dd>
       <dt>Modules on</dt><dd id="revMods">—</dd>
+      <dt>Templates</dt><dd>6 uploaded · 4 custom fields defined · 0 unmapped tokens</dd>
       <dt>Services on</dt><dd id="revSvcs">—</dd>
-      <dt>Templates</dt><dd>3 uploaded · 2 unmapped tokens still open</dd>
-      <dt>Employees</dt><dd>318 rows ready · 7 flagged</dd>
-      <dt>Scans</dt><dd>571 files will be filed · 33 unmatched</dd>
+      <dt>Employees</dt><dd>318 rows · 7 flagged for data quality</dd>
+      <dt>Scans</dt><dd>571 files will be filed · 33 left for a human</dd>
       <dt>Communications</dt><dd>In-app notifications only</dd>
     </dl>
-    <div class="note warn" style="margin-top:14px"><b>2 items still open.</b> You can apply anyway — unmapped tokens
-      render blank and unmatched scans stay where they are.</div>
     <div class="row" style="margin-top:16px">
       <button class="btn primary" type="button">Apply configuration</button>
       <button class="btn" type="button">Export setup.json</button>
-      <button class="btn ghost" type="button">Import a setup.json from another install</button>
+      <button class="btn ghost" type="button">Import a setup.json</button>
     </div>
-    <p class="hint" style="margin-top:10px">Exporting lets you configure a second site in a minute instead of
-      twenty, and gives support something to read when a customer says "it stopped working".</p>
+    <p class="hint" style="margin-top:10px">The export carries settings only — never the roster or any document
+      number. A setup file containing 318 people's passport numbers would be a data-protection incident in an
+      e-mail attachment.</p>
   </div>
 
   <div class="card">
-    <h3>What happens after Apply</h3>
-    <p>The wizard is replaced by a three-item checklist on the dashboard, which disappears once all three are done:
-      upload a signature, generate a test document, invite the rest of the staff. Nothing else greets a new user
-      with an empty screen.</p>
+    <h3>After Apply</h3>
+    <p>The wizard is replaced by a three-item checklist on the dashboard that disappears once done: upload a
+      signature, generate a test document, invite the rest of the staff. Every step stays re-openable from
+      Settings → Setup, each with the warning describing exactly what it will overwrite.</p>
   </div>
 
-  ${decide('The last step decides how the first real day goes.',[
-    '<b>Atomic apply — how atomic?</b> Database rows can roll back. Copied files and generated icons cannot, easily. Do we accept "database transactional, files best-effort with a cleanup log", or is that not good enough?',
-    '<b>Can setup be exported and re-imported</b> with the roster included, or profile-only? Profile-only is safer — a setup file with 318 people\'s passport numbers in it is a data-protection incident waiting to happen.',
-    '<b>Second administrator.</b> Should setup require two admin accounts before finishing? One admin plus one forgotten password equals a dead install.',
-    '<b>Does the wizard ever run again</b> on an install that already has data — for instance after a company rebrand or a merger? If yes, most of these steps need an "edit" mode as well as a "create" mode, which roughly doubles the work.',
-    '<b>What is the very first thing a new user should see</b> after setup? I have proposed a three-item checklist. Would you rather it drop them straight into generating the first document?',
+  ${decide('Settled in review.',[
+    '<b>Setup is re-runnable.</b> Any step re-opens after go-live without losing data, behind an explicit warning naming what it overwrites. The one exception is the reference pattern, which locks once documents carry numbers.',
+  ], true)}
+
+  ${decide('Two left on the finish line.',[
+    '<b>How atomic is Apply?</b> Database rows roll back; copied scans and generated icons do not. Proposal: transactional database, best-effort files, cleanup log. Good enough?',
+    '<b>Require a second administrator before finishing?</b> One admin plus one forgotten password equals a dead install, and on a LAN box with no mail there is no recovery path at all.',
   ])}`;
 }
 
 /* ── wiring ───────────────────────────────────────────────────────────── */
-
 const stepsEl = document.getElementById('steps');
 const panesEl = document.getElementById('panes');
 const barEl   = document.getElementById('bar');
@@ -909,16 +1046,19 @@ function buildRail(){
 
 function buildPane(){
   const s = STEPS[state.step];
-  panesEl.innerHTML = `<section class="pane">${s.render()}
+  const warn = state.rerun && REWRITE[state.step]
+    ? `<div class="note warn" style="margin-bottom:16px"><b>You are re-running a step on a live install.</b>
+        ${REWRITE[state.step]}</div>` : '';
+  panesEl.innerHTML = `<section class="pane">${warn}${s.render()}
     <div class="foot">
       <button class="btn ghost" type="button" data-nav="-1" ${state.step===0?'disabled':''}>&larr; Back</button>
       <span class="stepcount">Step ${state.step+1} of ${STEPS.length}</span>
       <span class="spacer"></span>
       ${s.k==='Optional'?'<button class="btn ghost" type="button" data-nav="1">Skip this step</button>':''}
-      <button class="btn primary" type="button" data-nav="1" ${state.step===STEPS.length-1?'disabled':''}>Save &amp; continue &rarr;</button>
+      <button class="btn ${state.rerun?'warn':'primary'}" type="button" data-nav="1"
+        ${state.step===STEPS.length-1?'disabled':''}>${state.rerun?'Save &amp; overwrite':'Save &amp; continue'} &rarr;</button>
     </div></section>`;
   hydrate();
-  panesEl.scrollTop = 0;
   window.scrollTo({top:0,behavior:'smooth'});
 }
 
@@ -927,13 +1067,11 @@ function go(i){
   buildRail(); buildPane();
 }
 
-/* per-pane hydration */
 function hydrate(){
   const modList = document.getElementById('modList');
   if (modList){
     modList.innerHTML = MODULES.map(([id,name,desc,def,deps])=>{
-      const on = state.modules.find(m=>m.id===id).on;
-      const req = def==='required';
+      const on = state.modules.find(m=>m.id===id).on, req = def==='required';
       return `<label class="mod ${on?'':'off'}">
         <input type="checkbox" data-mod="${id}" ${on?'checked':''} ${req?'disabled':''}>
         <div><strong>${name}</strong><small>${desc}</small>
@@ -946,13 +1084,12 @@ function hydrate(){
 
   const tileList = document.getElementById('tileList');
   if (tileList){
-    tileList.innerHTML = SERVICES.map(([id,,group],i)=>{
+    tileList.innerHTML = UPLOADED.map((u,i)=>{
       const s = state.services[i];
-      return `<label class="tile ${s.on?'':'off'}">
-        <span class="glyph" role="button" tabindex="0" data-emoji="${i}"
-          aria-label="Change emoji for ${id}">${s.emoji}</span>
-        <span><input type="checkbox" data-svc="${i}" ${s.on?'checked':''}>
-          <strong>${id}</strong><small>${group}</small></span></label>`;
+      return `<div class="tile ${s.on?'':'off'}">
+        <button class="iconbtn" type="button" data-icon="${i}" aria-label="Change the icon for ${u.label}">${ico(s.icon)}</button>
+        <span><strong>${u.label}</strong><small>${u.group} · ${u.file}</small></span>
+        <input type="checkbox" data-svc="${i}" ${s.on?'checked':''} aria-label="Enable ${u.label}"></div>`;
     }).join('');
   }
 
@@ -964,14 +1101,12 @@ function hydrate(){
   }
 
   const tokFilter = document.getElementById('tokFilter');
-  if (tokFilter){
-    tokFilter.addEventListener('input', ()=>{
-      const q = tokFilter.value.toLowerCase();
-      document.querySelectorAll('#tokBody tr').forEach(tr=>{
-        tr.hidden = q && !tr.textContent.toLowerCase().includes(q);
-      });
+  if (tokFilter) tokFilter.addEventListener('input', ()=>{
+    const q = tokFilter.value.toLowerCase();
+    document.querySelectorAll('#tokBody tr').forEach(tr=>{
+      tr.hidden = q && !tr.textContent.toLowerCase().includes(q);
     });
-  }
+  });
 
   const nameEn = document.getElementById('nameEn');
   if (nameEn){
@@ -992,11 +1127,10 @@ function hydrate(){
   if (revMods){
     revMods.textContent = state.modules.filter(m=>m.on).length + ' of ' + MODULES.length;
     document.getElementById('revSvcs').textContent =
-      state.services.filter(s=>s.on).length + ' of ' + SERVICES.length;
-    document.getElementById('revName').textContent =
-      document.getElementById('brandName').textContent;
-    const c = CODES.find(c=>c[0]===state.code);
-    document.getElementById('revCode').textContent = c[1] + ' · payload FFM:{ref} · header top-right';
+      state.services.filter(s=>s.on).length + ' of ' + UPLOADED.length;
+    document.getElementById('revName').textContent = document.getElementById('brandName').textContent;
+    document.getElementById('revCode').textContent =
+      CODES.find(c=>c[0]===state.code)[1] + ' · payload FFM:{ref}';
   }
 }
 
@@ -1007,14 +1141,11 @@ function refreshModCount(){
   document.getElementById('navCount').textContent = Math.max(3, Math.round(on*0.6));
 }
 
-/* delegated events */
 document.addEventListener('click', e=>{
   const nav = e.target.closest('[data-nav]');
   if (nav){ go(state.step + Number(nav.dataset.nav)); return; }
-
   const goto = e.target.closest('[data-go]');
   if (goto){ go(Number(goto.dataset.go)); return; }
-
   const code = e.target.closest('[data-code]');
   if (code){
     state.code = code.dataset.code;
@@ -1022,9 +1153,8 @@ document.addEventListener('click', e=>{
       b.setAttribute('aria-pressed', String(b.dataset.code===state.code)));
     return;
   }
-
-  const glyph = e.target.closest('[data-emoji]');
-  if (glyph){ openPicker(Number(glyph.dataset.emoji)); return; }
+  const icon = e.target.closest('[data-icon]');
+  if (icon){ openPicker(Number(icon.dataset.icon)); return; }
 });
 
 document.addEventListener('change', e=>{
@@ -1041,28 +1171,28 @@ document.addEventListener('change', e=>{
   }
 });
 
-/* emoji picker */
+/* icon picker */
 const picker = document.getElementById('picker');
-let pickingIndex = null;
-document.getElementById('emojis').innerHTML =
-  EMOJI_SET.map(e=>`<button type="button" data-pick="${e}">${e}</button>`).join('');
+let picking = null;
+document.getElementById('iconGrid').innerHTML =
+  ICONS.map(n=>`<button type="button" data-pick="${n}" title="${n}">${ico(n)}</button>`).join('');
 
 function openPicker(i){
-  pickingIndex = i;
-  document.getElementById('pickerFor').textContent = SERVICES[i][0];
+  picking = i;
+  document.getElementById('pickerFor').textContent = UPLOADED[i].label + ' — ' + UPLOADED[i].file;
   picker.hidden = false;
-  picker.querySelector('button').focus();
+  picker.querySelector('#iconGrid button').focus();
 }
-function closePicker(){ picker.hidden = true; pickingIndex = null; }
+function closePicker(){ picker.hidden = true; picking = null; }
 
 document.getElementById('pickerClose').addEventListener('click', closePicker);
+document.getElementById('uploadSvg').addEventListener('click', closePicker);
 picker.addEventListener('click', e=>{
   if (e.target === picker) return closePicker();
   const b = e.target.closest('[data-pick]');
-  if (!b || pickingIndex === null) return;
-  state.services[pickingIndex].emoji = b.dataset.pick;
-  closePicker();
-  hydrate();
+  if (!b || picking === null) return;
+  state.services[picking].icon = b.dataset.pick;
+  closePicker(); hydrate();
 });
 document.addEventListener('keydown', e=>{ if (e.key==='Escape' && !picker.hidden) closePicker(); });
 
@@ -1071,6 +1201,14 @@ document.getElementById('rtl').addEventListener('click', e=>{
   state.rtl = !state.rtl;
   document.documentElement.dir = state.rtl ? 'rtl' : 'ltr';
   e.target.classList.toggle('on', state.rtl);
+});
+document.getElementById('rerun').addEventListener('click', e=>{
+  state.rerun = !state.rerun;
+  e.target.classList.toggle('on', state.rerun);
+  document.getElementById('modePill').textContent = state.rerun
+    ? 'Re-run mode — live install with data'
+    : 'Setup mode — app locked until finished';
+  buildPane();
 });
 document.getElementById('jump').addEventListener('click', ()=>go(STEPS.length-1));
 
