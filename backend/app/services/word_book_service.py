@@ -515,18 +515,20 @@ def reopen_word_session(db: Session, *, user: User, book_id: int) -> WordSession
         )
 
     source_doc = db.get(Document, latest_version.document_id)
-    if source_doc is None or not source_doc.docx_path or not Path(source_doc.docx_path).exists():
+    settings = get_settings()
+    source_path = Path(source_doc.docx_path) if source_doc and source_doc.docx_path else None
+    if source_path is not None and not source_path.is_absolute():
+        source_path = settings.data_dir / source_path
+    if source_path is None or not source_path.is_file():
         raise AppError(
             "NO_SOURCE_DOCX", "The latest version's docx file is missing on disk", http_status=409
         )
-
-    settings = get_settings()
     # Reuse the same filename slug as create (ref with slashes → dashes)
     filename = book.ref_number.replace("/", "-") + ".docx"
     output_path = settings.data_dir / "editing" / f"book-{book_id}" / filename
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
-    shutil.copy2(str(Path(source_doc.docx_path)), str(output_path))
+    shutil.copy2(str(source_path), str(output_path))
 
     token = secrets.token_urlsafe(32)
     session = BookEditSession(

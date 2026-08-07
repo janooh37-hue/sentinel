@@ -158,6 +158,28 @@ def test_reopen_creates_active_session_and_working_file(db_session, tmp_path, mo
     assert db_session.query(BookVersion).filter_by(book_id=book.id).one() == version
 
 
+def test_reopen_resolves_relative_document_path_from_data_dir(db_session, tmp_path, monkeypatch):
+    """Generated documents store paths relative to data_dir; reopen must resolve them."""
+    from app.services import word_book_service
+
+    settings = _settings(tmp_path)
+    monkeypatch.setattr(word_book_service, "get_settings", lambda: settings)
+
+    user = _user(db_session)
+    book, doc, _version = _make_finished_book(db_session, user, tmp_path)
+    relative_path = Path("output") / "General_Book" / Path(doc.docx_path).name
+    source_path = settings.data_dir / relative_path
+    source_path.parent.mkdir(parents=True, exist_ok=True)
+    Path(doc.docx_path).replace(source_path)
+    doc.docx_path = str(relative_path)
+    db_session.commit()
+
+    word_book_service.reopen_word_session(db_session, user=user, book_id=book.id)
+
+    session = db_session.query(BookEditSession).filter_by(book_id=book.id, state="active").one()
+    assert Path(session.working_path).read_bytes() == source_path.read_bytes()
+
+
 def test_reopen_then_finish_gives_version_2_revision(db_session, tmp_path, monkeypatch):
     """Reopen a v1 book, finish → version_no=2, trigger=revision; v1 Document untouched."""
     from app.services import word_book_service
