@@ -160,159 +160,35 @@ export type LeaveBalanceRead = components['schemas']['LeaveBalanceRead']
 export type LeaveStatus = 'Pending' | 'Approved' | 'Rejected' | 'Cancelled' | 'Completed'
 
 // ─── Security Permits (greenfield 2026-07) ─────────────────────────────────────
-// Hand-declared until `npm run gen:api` folds them into the generated schema.
-export type PermitZone = 'green' | 'red' | 'work_residence'
-export type PermitStoredStatus = 'active' | 'revoked'
-export type PermitDerivedStatus = 'active' | 'expiring' | 'expired' | 'revoked'
+export type PermitZone = components['schemas']['PermitRead']['zones'][number]
+export type PermitLocationZone = Exclude<PermitZone, 'work_residence'>
+export type PermitAccessAreas = components['schemas']['PermitAccessAreas']
+export type PermitValidityPeriod = components['schemas']['PermitValidityPeriod']
+export type PermitStoredStatus = components['schemas']['PermitRead']['status']
+export type PermitDerivedStatus = components['schemas']['PermitRead']['derived_status']
 
-export interface PermitPersonRead {
-  id: number
-  permit_id: number
-  name: string
-  uae_id: string | null
-  nationality: string | null
-  role: string | null
-  created_at: string
-  removed_at: string | null
-  /** Basename of the attached UAE ID scan, if any. */
-  id_doc_name: string | null
+export type PermitPersonRead = components['schemas']['PermitPersonRead']
+export type PermitPersonCreate = components['schemas']['PermitPersonCreate']
+export type PermitVehicleRead = components['schemas']['PermitVehicleRead']
+export type PermitVehicleCreate = components['schemas']['PermitVehicleCreate']
+export type PermitListItem = components['schemas']['PermitListItem']
+export type PermitRead = Omit<components['schemas']['PermitRead'], 'people' | 'vehicles'> & {
+  people: NonNullable<components['schemas']['PermitRead']['people']>
+  vehicles: NonNullable<components['schemas']['PermitRead']['vehicles']>
 }
+export type PermitListResponse = components['schemas']['PermitListResponse']
+export type PermitCreate = components['schemas']['PermitCreate']
+export type PermitRenew = components['schemas']['PermitRenew']
 
-export interface PermitPersonCreate {
-  name: string
-  /** Required — every person on a permit must have a UAE ID. */
-  uae_id: string
-  nationality?: string | null
-  role?: string | null
-}
-
-export interface PermitVehicleRead {
-  id: number
-  permit_id: number
-  plate_no: string | null
-  plate_emirate: string | null
-  make_model: string | null
-  driver_name: string | null
-  colour?: string | null
-  vehicle_type?: string | null
-  plate_category?: string | null
-  traffic_no?: string | null
-  reg_expiry?: string | null
-  created_at: string
-  removed_at: string | null
-  /** Basename of the attached vehicle-licence scan, if any. */
-  license_doc_name: string | null
-}
-
-export interface PermitVehicleCreate {
-  plate_no?: string | null
-  plate_emirate?: string | null
-  make_model?: string | null
-  driver_name?: string | null
-  colour?: string | null
-  vehicle_type?: string | null
-  plate_category?: string | null
-  traffic_no?: string | null
-  reg_expiry?: string | null
-}
-
-export interface PermitListItem {
-  id: number
-  permit_no: string | null
-  company: string
-  zones: PermitZone[]
-  start_date: string
-  end_date: string
-  status: PermitStoredStatus
-  created_at: string
-  derived_status: PermitDerivedStatus
-  duration_days: number
-  days_remaining: number | null
-  people_count: number
-  vehicle_count: number
-  has_document: boolean
-}
-
-export interface PermitRead extends PermitListItem {
-  purpose: string | null
-  notes: string | null
-  revoked_at: string | null
-  revoke_reason: string | null
-  updated_at: string | null
-  /** Basename of the attached permit scan, if any. */
-  document_name: string | null
-  people: PermitPersonRead[]
-  vehicles: PermitVehicleRead[]
-  manager_id?: number | null
-  /** Book id of the generated 1/5 permit book (set after first PDF generation). */
-  book_id?: number | null
-  /** Human-readable ref of the generated permit book (e.g. "1/5/GSSG/..."). */
-  book_ref?: string | null
-  /** The linked book's approval state: none | pending | approved | rejected | returned. */
-  approval_state?: string | null
-}
-
-export interface PermitListResponse {
-  items: PermitListItem[]
-  total: number
-  limit: number
-  offset: number
-}
-
-export interface PermitCreate {
-  company: string
-  zones: PermitZone[]
-  start_date: string
-  end_date: string
-  purpose?: string | null
-  notes?: string | null
-  manager_id?: number | null
-  /** Send the generated 1/5 letter straight to the signing manager. Defaults to
-   * true server-side; the form sends it explicitly. */
-  send_for_approval?: boolean
-  people?: PermitPersonCreate[]
-  vehicles?: PermitVehicleCreate[]
-}
 
 /** OCR result from POST /permits/scan-vehicle-licence (mulkiya scan). */
-export interface VehicleLicenceScan {
-  plate_no?: string | null
-  plate_emirate?: string | null
-  plate_category?: string | null
-  traffic_no?: string | null
-  make_model?: string | null
-  vehicle_type?: string | null
-  colour?: string | null
-  reg_expiry?: string | null
-  driver_name?: string | null
-}
+export type VehicleLicenceScan = components['schemas']['VehicleLicenceScan']
 
 /** OCR result from POST /permits/scan-emirates-id. */
-export interface PersonIdScan {
-  name?: string | null
-  uae_id?: string | null
-  nationality?: string | null
-}
+export type PersonIdScan = components['schemas']['PersonIdScan']
 
-export interface PermitUpdate {
-  company?: string
-  zones?: PermitZone[]
-  start_date?: string
-  end_date?: string
-  purpose?: string | null
-  notes?: string | null
-}
-
-export interface PermitSummary {
-  active: number
-  expiring: number
-  expired: number
-  revoked: number
-  people_active: number
-  people_green: number
-  people_red: number
-  people_work_residence: number
-}
+export type PermitUpdate = components['schemas']['PermitUpdate']
+export type PermitSummary = components['schemas']['PermitSummary']
 
 export interface LeaveReturnBody {
   resumption_date: string // ISO yyyy-mm-dd
@@ -1105,7 +981,7 @@ export const api = {
   createPermit: (body: PermitCreate) => request<PermitRead>('POST', '/permits', body),
   updatePermit: (id: number, body: PermitUpdate) =>
     request<PermitRead>('PATCH', `/permits/${id}`, body),
-  renewPermit: (id: number, body: { new_end_date: string; reason?: string }) =>
+  renewPermit: (id: number, body: PermitRenew) =>
     request<PermitRead>('POST', `/permits/${id}/renew`, body),
   revokePermit: (id: number, body: { reason?: string }) =>
     request<PermitRead>('POST', `/permits/${id}/revoke`, body),

@@ -6669,6 +6669,18 @@ export interface components {
              */
             created_at: string;
         };
+        /** PermitAccessAreas */
+        PermitAccessAreas: {
+            /** Al Wathba 1 */
+            al_wathba_1?: ("green" | "red")[];
+            /** Al Wathba 2 */
+            al_wathba_2?: ("green" | "red")[];
+            /**
+             * Work Residence
+             * @default false
+             */
+            work_residence: boolean;
+        };
         /**
          * PermitCreate
          * @description POST /permits — issue a new permit.
@@ -6676,18 +6688,13 @@ export interface components {
         PermitCreate: {
             /** Company */
             company: string;
-            /** Zones */
-            zones: ("green" | "red" | "work_residence")[];
+            access_areas: components["schemas"]["PermitAccessAreas"];
             /**
              * Start Date
              * Format: date
              */
             start_date: string;
-            /**
-             * End Date
-             * Format: date
-             */
-            end_date: string;
+            validity: components["schemas"]["PermitValidityPeriod"];
             /** Purpose */
             purpose?: string | null;
             /** Notes */
@@ -6714,11 +6721,13 @@ export interface components {
             company: string;
             /** Zones */
             zones: ("green" | "red" | "work_residence")[];
+            access_areas?: components["schemas"]["PermitAccessAreas"] | null;
             /**
              * Start Date
              * Format: date
              */
             start_date: string;
+            validity: components["schemas"]["PermitValidityRead"];
             /**
              * End Date
              * Format: date
@@ -6783,7 +6792,7 @@ export interface components {
             /** Nationality */
             nationality?: string | null;
             /** Role */
-            role?: string | null;
+            role: string;
         };
         /** PermitPersonRead */
         PermitPersonRead: {
@@ -6819,11 +6828,13 @@ export interface components {
             company: string;
             /** Zones */
             zones: ("green" | "red" | "work_residence")[];
+            access_areas?: components["schemas"]["PermitAccessAreas"] | null;
             /**
              * Start Date
              * Format: date
              */
             start_date: string;
+            validity: components["schemas"]["PermitValidityRead"];
             /**
              * End Date
              * Format: date
@@ -6892,11 +6903,7 @@ export interface components {
          * @description POST /permits/{id}/renew — extend the permit window.
          */
         PermitRenew: {
-            /**
-             * New End Date
-             * Format: date
-             */
-            new_end_date: string;
+            validity: components["schemas"]["PermitValidityPeriod"];
             /** Reason */
             reason?: string | null;
         };
@@ -6937,16 +6944,35 @@ export interface components {
         PermitUpdate: {
             /** Company */
             company?: string | null;
-            /** Zones */
-            zones?: ("green" | "red" | "work_residence")[] | null;
+            /** Access Areas */
+            access_areas?: components["schemas"]["PermitAccessAreas"];
             /** Start Date */
             start_date?: string | null;
-            /** End Date */
-            end_date?: string | null;
+            validity?: components["schemas"]["PermitValidityRead"] | null;
             /** Purpose */
             purpose?: string | null;
             /** Notes */
             notes?: string | null;
+        };
+        /** PermitValidityPeriod */
+        PermitValidityPeriod: {
+            /** Value */
+            value: number;
+            /**
+             * Unit
+             * @enum {string}
+             */
+            unit: "day" | "week" | "month" | "year";
+        };
+        /** PermitValidityRead */
+        PermitValidityRead: {
+            /** Value */
+            value: number;
+            /**
+             * Unit
+             * @enum {string}
+             */
+            unit: "day" | "week" | "month" | "year";
         };
         /** PermitVehicleCreate */
         PermitVehicleCreate: {

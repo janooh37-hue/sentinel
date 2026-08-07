@@ -33,7 +33,7 @@ import { useCapabilities } from '@/lib/useCapabilities'
 import { useDebouncedValue } from '@/lib/useDebouncedValue'
 import { PermitFormDialog } from './PermitFormDialog'
 import { PermitDetailDialog } from './PermitDetailDialog'
-import { ZoneBadge } from './ZoneBadge'
+import { PermitAccessBadge } from './PermitAccessBadge'
 import { fmtDate, statusTone } from './permitUtils'
 
 const STATE_OPTIONS = ['', 'valid', 'active', 'expiring', 'expired', 'revoked'] as const
@@ -41,6 +41,14 @@ const ZONE_OPTIONS: ('' | PermitZone)[] = ['', 'green', 'red', 'work_residence']
 
 const selectCls =
   'h-9 rounded-md border border-input bg-surface px-2.5 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring'
+
+const fmtLongDate = (iso: string, language: string): string =>
+  new Intl.DateTimeFormat(language.startsWith('ar') ? language : 'en-GB', {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+    timeZone: 'UTC',
+  }).format(new Date(`${iso.slice(0, 10)}T00:00:00Z`))
 
 export function PermitsPage(): React.JSX.Element {
   const { t } = useTranslation()
@@ -325,12 +333,12 @@ function PermitRowView({
   onToggle: () => void
   onOpen: () => void
 }): React.JSX.Element {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   const remaining =
     row.derived_status === 'revoked' || row.days_remaining === null
       ? null
       : row.days_remaining < 0
-        ? t('permits.expiredOn', { date: fmtDate(row.end_date) })
+        ? t('permits.expired')
         : row.days_remaining === 0
           ? t('permits.endsToday')
           : t('permits.daysLeft', { count: row.days_remaining })
@@ -356,11 +364,14 @@ function PermitRowView({
         {row.company}
       </TableCell>
       <TableCell>
-        <ZoneBadge zones={row.zones} square />
+        <PermitAccessBadge accessAreas={row.access_areas} zones={row.zones} square />
       </TableCell>
       <TableCell className="whitespace-nowrap font-mono text-xs text-muted-foreground">
-        <span dir="ltr">
-          {fmtDate(row.start_date)} → {fmtDate(row.end_date)}
+        <span>
+          {t('permits.validityFrom', {
+            period: t(`permits.validityPeriod.${row.validity.unit}`, { count: row.validity.value }),
+            date: fmtLongDate(row.start_date, i18n.language),
+          })}
         </span>
         {remaining && <span className="ms-2 not-italic">· {remaining}</span>}
       </TableCell>
@@ -421,7 +432,7 @@ function PermitPrintView({
 }
 
 function PermitPrintCard({ permit }: { permit: PermitRead }): React.JSX.Element {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   const people = permit.people.filter((p) => p.removed_at === null)
   const vehicles = permit.vehicles.filter((v) => v.removed_at === null)
   return (
@@ -430,11 +441,13 @@ function PermitPrintCard({ permit }: { permit: PermitRead }): React.JSX.Element 
       <div className="flex flex-wrap items-baseline gap-x-3 gap-y-0.5 border-b border-neutral-400 bg-neutral-100 px-2 py-1 text-[10px]">
         <span className="font-mono text-[11px] font-bold">{permit.permit_no ?? `#${permit.id}`}</span>
         <span className="text-[11px] font-semibold" dir="auto">{permit.company}</span>
-        <span>{permit.zones.map((z) => t(`permits.zone.${z}Short`)).join(' + ')}</span>
-        <span className="font-mono" dir="ltr">
-          {fmtDate(permit.start_date)} → {fmtDate(permit.end_date)}
+        <PermitAccessBadge accessAreas={permit.access_areas} zones={permit.zones} square />
+        <span className="font-mono">
+          {t('permits.validityFrom', {
+            period: t(`permits.validityPeriod.${permit.validity.unit}`, { count: permit.validity.value }),
+            date: fmtLongDate(permit.start_date, i18n.language),
+          })}
         </span>
-        <span>{t('permits.duration', { count: permit.duration_days })}</span>
         <span className="font-semibold">{t(`permits.status.${permit.derived_status}`)}</span>
         {permit.purpose && (
           <span className="text-neutral-600" dir="auto">

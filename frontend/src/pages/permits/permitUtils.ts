@@ -5,7 +5,7 @@
  */
 import type { PermitDerivedStatus, PermitZone } from '@/lib/api'
 
-type Tone = 'neutral' | 'active' | 'warning' | 'danger' | 'info' | 'outline'
+export type Tone = 'neutral' | 'active' | 'warning' | 'danger' | 'info' | 'outline'
 
 export function statusTone(status: PermitDerivedStatus): Tone {
   switch (status) {

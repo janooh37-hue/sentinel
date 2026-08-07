@@ -2,16 +2,18 @@
 
 from __future__ import annotations
 
+import json
 from datetime import date, timedelta
 
 import pytest
 
 from app.api.errors import NotFoundError, ValidationFailedError
-from app.db.models import AuditLog, BookCategory
+from app.db.models import AuditLog, BookCategory, Permit
 from app.schemas.permit import (
     PermitCreate,
     PermitPersonCreate,
     PermitUpdate,
+    PermitValidityPeriod,
     PermitVehicleCreate,
     PermitVehicleUpdate,
     PermitVisitCreate,
@@ -38,16 +40,25 @@ def _permit_docgen(db_session, tmp_path, monkeypatch):
 
 
 def _person(name, uae_id="784-1000-1000000-1", **kw):
-    return PermitPersonCreate(name=name, uae_id=uae_id, **kw)
+    return PermitPersonCreate(name=name, uae_id=uae_id, role=kw.pop("role", "Electrician"), **kw)
 
 
 def _mk(db, **over):
     # A permit requires ≥1 person (with a UAE ID), so default to one.
+    start = over.pop("start_date", TODAY)
+    end = over.pop("end_date", None)
+    validity = over.pop("validity", None)
+    if validity is None:
+        end = end or start + timedelta(days=30)
+        validity = {"value": (end - start).days + 1, "unit": "day"}
     payload = PermitCreate(
         company=over.pop("company", "Acme Contracting"),
-        zones=over.pop("zones", ["green"]),
-        start_date=over.pop("start_date", TODAY),
-        end_date=over.pop("end_date", TODAY + timedelta(days=30)),
+        access_areas=over.pop(
+            "access_areas",
+            {"al_wathba_1": ["green"], "al_wathba_2": [], "work_residence": False},
+        ),
+        start_date=start,
+        validity=validity,
         purpose=over.pop("purpose", None),
         people=over.pop("people", [_person("Worker")]),
     )
@@ -64,15 +75,69 @@ def test_create_stamps_permit_no_and_defaults(db_session):
     assert read.people_count == 1  # the default person
 
 
+def test_create_persists_access_and_derives_zone_union(db_session):
+    row = _mk(
+        db_session,
+        access_areas={
+            "al_wathba_1": ["green", "red"],
+            "al_wathba_2": ["green"],
+            "work_residence": True,
+        },
+    )
+    read = svc.to_read(row)
+    assert read.access_areas is not None
+    assert read.access_areas.al_wathba_1 == ["green", "red"]
+    assert read.access_areas.al_wathba_2 == ["green"]
+    assert read.zones == ["green", "red", "work_residence"]
+
+
+def test_update_replaces_access_and_recomputes_union(db_session):
+    row = _mk(db_session)
+    updated = svc.update_permit(
+        db_session,
+        row.id,
+        PermitUpdate(
+            access_areas={
+                "al_wathba_1": [],
+                "al_wathba_2": ["red"],
+                "work_residence": False,
+            }
+        ),
+    )
+    assert updated.access_areas == {
+        "al_wathba_1": [],
+        "al_wathba_2": ["red"],
+        "work_residence": False,
+    }
+    assert updated.zones == ["red"]
+
+
+def test_legacy_permit_keeps_flat_zones_and_null_access(db_session):
+    row = Permit(
+        company="Legacy",
+        zones=["green", "work_residence"],
+        access_areas=None,
+        start_date=TODAY,
+        validity_value=11,
+        validity_unit="day",
+        end_date=TODAY + timedelta(days=10),
+    )
+    db_session.add(row)
+    db_session.commit()
+    read = svc.to_read(row)
+    assert read.access_areas is None
+    assert read.zones == ["green", "work_residence"]
+
+
 def test_create_requires_at_least_one_person(db_session):
     with pytest.raises(ValidationFailedError):
         svc.create_permit(
             db_session,
             PermitCreate(
                 company="X",
-                zones=["green"],
+                access_areas={"al_wathba_1": ["green"], "al_wathba_2": [], "work_residence": False},
                 start_date=TODAY,
-                end_date=TODAY + timedelta(days=5),
+                validity={"value": 6, "unit": "day"},
                 people=[],
             ),
         )
@@ -93,27 +158,42 @@ def test_person_requires_uae_id():
         PermitPersonCreate(name="No Id")
 
 
-def test_permit_requires_at_least_one_zone():
+def test_permit_requires_at_least_one_access_area():
     from pydantic import ValidationError
 
     with pytest.raises(ValidationError):
         PermitCreate(
             company="X",
-            zones=[],
+            access_areas={"al_wathba_1": [], "al_wathba_2": [], "work_residence": False},
             start_date=TODAY,
-            end_date=TODAY + timedelta(days=3),
+            validity={"value": 4, "unit": "day"},
             people=[_person("A")],
         )
 
 
 def test_zones_are_multi_and_deduped(db_session):
-    row = _mk(db_session, zones=["green", "red", "green", "work_residence"])
+    row = _mk(
+        db_session,
+        access_areas={
+            "al_wathba_1": ["green", "red", "green"],
+            "al_wathba_2": [],
+            "work_residence": True,
+        },
+    )
     assert svc.to_read(row).zones == ["green", "red", "work_residence"]
 
 
 def test_work_residence_filter_and_summary(db_session):
-    _mk(db_session, zones=["work_residence"], people=[_person("A"), _person("B")])
-    _mk(db_session, zones=["green"], people=[_person("C")])
+    _mk(
+        db_session,
+        access_areas={"al_wathba_1": [], "al_wathba_2": [], "work_residence": True},
+        people=[_person("A"), _person("B")],
+    )
+    _mk(
+        db_session,
+        access_areas={"al_wathba_1": ["green"], "al_wathba_2": [], "work_residence": False},
+        people=[_person("C")],
+    )
     _, total = svc.list_permits(db_session, zone="work_residence")
     assert total == 1
     s = svc.summary(db_session)
@@ -134,16 +214,16 @@ def test_create_with_people_counts_active(db_session):
     assert {p.name for p in read.people} == {"Ali", "Bilal"}
 
 
-def test_bad_window_rejected(db_session):
-    with pytest.raises(ValidationFailedError):
-        svc.create_permit(
-            db_session,
-            PermitCreate(
-                company="X",
-                zones=["red"],
-                start_date=TODAY,
-                end_date=TODAY - timedelta(days=1),
-            ),
+def test_invalid_validity_rejected():
+    from pydantic import ValidationError
+
+    with pytest.raises(ValidationError):
+        PermitCreate(
+            company="X",
+            access_areas={"al_wathba_1": [], "al_wathba_2": ["red"], "work_residence": False},
+            start_date=TODAY,
+            validity={"value": 0, "unit": "day"},
+            people=[_person("A")],
         )
 
 
@@ -156,12 +236,156 @@ def test_derived_status_expiring_and_expired(db_session):
     assert svc.to_list_item(expired).derived_status == "expired"
 
 
-def test_renew_extends_and_rejects_backwards(db_session):
-    row = _mk(db_session, end_date=TODAY + timedelta(days=10))
-    renewed = svc.renew_permit(db_session, row.id, new_end_date=TODAY + timedelta(days=40))
-    assert renewed.end_date == TODAY + timedelta(days=40)
+def test_renew_extends_by_period(db_session):
+    row = _mk(db_session, start_date=TODAY, validity={"value": 11, "unit": "day"})
+    old_end = row.end_date
+    renewed = svc.renew_permit(
+        db_session, row.id, validity=PermitValidityPeriod(value=1, unit="month")
+    )
+    assert renewed.start_date == old_end + timedelta(days=1)
+    assert renewed.end_date > renewed.start_date
+
+
+def test_create_persists_validity_and_derives_end(db_session) -> None:
+    row = _mk(
+        db_session,
+        start_date=date(2026, 7, 1),
+        validity={"value": 1, "unit": "month"},
+    )
+    assert row.validity_value == 1
+    assert row.validity_unit == "month"
+    assert row.end_date == date(2026, 7, 31)
+
+
+def test_update_start_or_validity_recomputes_end(db_session) -> None:
+    row = _mk(db_session)
+    updated = svc.update_permit(
+        db_session,
+        row.id,
+        PermitUpdate(
+            start_date=date(2026, 8, 6),
+            validity={"value": 6, "unit": "month"},
+        ),
+    )
+    assert updated.start_date == date(2026, 8, 6)
+    assert updated.validity_value == 6
+    assert updated.validity_unit == "month"
+    assert updated.end_date == date(2027, 2, 5)
+
+
+def _legacy_permit(db_session) -> Permit:
+    row = Permit(
+        company="Legacy",
+        zones=["green"],
+        access_areas={"al_wathba_1": ["green"], "al_wathba_2": [], "work_residence": False},
+        start_date=date(2016, 1, 1),
+        validity_value=3653,
+        validity_unit="day",
+        end_date=date(2025, 12, 31),
+    )
+    db_session.add(row)
+    db_session.commit()
+    return row
+
+
+def test_legacy_permit_read_to_update_round_trip_preserves_dates(db_session) -> None:
+    row = _legacy_permit(db_session)
+    read = svc.to_read(row)
+    payload = PermitUpdate.model_validate(
+        read.model_dump(
+            include={"company", "access_areas", "start_date", "validity", "purpose", "notes"}
+        )
+    )
+
+    updated = svc.update_permit(db_session, row.id, payload)
+
+    assert updated.start_date == date(2016, 1, 1)
+    assert updated.end_date == date(2025, 12, 31)
+    assert updated.validity_value == 3653
+    assert updated.validity_unit == "day"
+
+
+def test_legacy_permit_rejects_changed_over_limit_update(db_session) -> None:
+    row = _legacy_permit(db_session)
+
     with pytest.raises(ValidationFailedError):
-        svc.renew_permit(db_session, row.id, new_end_date=TODAY)
+        svc.update_permit(
+            db_session,
+            row.id,
+            PermitUpdate(validity={"value": 3651, "unit": "day"}),
+        )
+    assert row.start_date == date(2016, 1, 1)
+    assert row.end_date == date(2025, 12, 31)
+    assert row.validity_value == 3653
+
+
+def test_renew_active_starts_after_current_end(db_session, monkeypatch) -> None:
+    monkeypatch.setattr(svc, "_today", lambda: date(2026, 8, 6))
+    row = _mk(
+        db_session,
+        start_date=date(2026, 8, 1),
+        validity={"value": 31, "unit": "day"},
+    )
+    renewed = svc.renew_permit(
+        db_session, row.id, validity=PermitValidityPeriod(value=1, unit="month")
+    )
+    assert renewed.start_date == date(2026, 9, 1)
+    assert renewed.end_date == date(2026, 9, 30)
+
+
+def test_renew_audit_records_complete_previous_and_current_windows(db_session, monkeypatch) -> None:
+    monkeypatch.setattr(svc, "_today", lambda: date(2026, 8, 6))
+    row = _mk(
+        db_session,
+        start_date=date(2026, 8, 1),
+        validity={"value": 31, "unit": "day"},
+    )
+
+    renewed = svc.renew_permit(
+        db_session,
+        row.id,
+        validity=PermitValidityPeriod(value=1, unit="week"),
+        reason="contract extension",
+    )
+
+    audit = (
+        db_session.query(AuditLog)
+        .filter_by(action="permit.renewed", entity_id=str(row.id))
+        .order_by(AuditLog.id.desc())
+        .first()
+    )
+    assert audit is not None
+    assert json.loads(audit.payload) == {
+        "previous": {
+            "start_date": "2026-08-01",
+            "end_date": "2026-08-31",
+            "validity_value": 31,
+            "validity_unit": "day",
+        },
+        "current": {
+            "start_date": "2026-09-01",
+            "end_date": "2026-09-07",
+            "validity_value": 1,
+            "validity_unit": "week",
+        },
+        "reason": "contract extension",
+    }
+    assert renewed.start_date == date(2026, 9, 1)
+    assert renewed.end_date == date(2026, 9, 7)
+
+
+def test_renew_expired_starts_today(db_session, monkeypatch) -> None:
+    monkeypatch.setattr(svc, "_today", lambda: date(2026, 8, 6))
+    row = _mk(
+        db_session,
+        start_date=date(2026, 1, 1),
+        validity={"value": 31, "unit": "day"},
+    )
+    renewed = svc.renew_permit(
+        db_session, row.id, validity=PermitValidityPeriod(value=1, unit="week")
+    )
+    assert renewed.start_date == date(2026, 8, 6)
+    assert renewed.end_date == date(2026, 8, 12)
 
 
 def test_revoke_then_blocks_edits(db_session):
@@ -193,8 +417,16 @@ def test_remove_missing_person_404(db_session):
 
 
 def test_list_filters_by_state_and_zone(db_session):
-    _mk(db_session, zones=["red"], end_date=TODAY + timedelta(days=30))
-    _mk(db_session, zones=["green"], end_date=TODAY + timedelta(days=2))  # expiring
+    _mk(
+        db_session,
+        access_areas={"al_wathba_1": [], "al_wathba_2": ["red"], "work_residence": False},
+        end_date=TODAY + timedelta(days=30),
+    )
+    _mk(
+        db_session,
+        access_areas={"al_wathba_1": ["green"], "al_wathba_2": [], "work_residence": False},
+        end_date=TODAY + timedelta(days=2),
+    )  # expiring
     rows, total = svc.list_permits(db_session, state="expiring")
     assert total == 1
     rows, total = svc.list_permits(db_session, zone="red")
@@ -210,14 +442,28 @@ def test_soft_delete_hides_from_list(db_session):
         svc.get_permit(db_session, row.id)
 
 
-def test_summary_headcount_by_zone(db_session):
-    _mk(db_session, zones=["green", "red"], people=[_person("A"), _person("B")])
-    _mk(db_session, zones=["red"], people=[_person("C")])
-    s = svc.summary(db_session)
-    assert s["active"] == 2
-    assert s["people_active"] == 3
-    assert s["people_green"] == 2  # only the 'both' permit hits green
-    assert s["people_red"] == 3  # both + red
+def test_summary_headcount_by_derived_zone_union(db_session):
+    _mk(
+        db_session,
+        access_areas={
+            "al_wathba_1": ["green"],
+            "al_wathba_2": ["green", "red"],
+            "work_residence": False,
+        },
+        people=[_person("A"), _person("B")],
+    )
+    _mk(
+        db_session,
+        access_areas={
+            "al_wathba_1": [],
+            "al_wathba_2": ["red"],
+            "work_residence": False,
+        },
+        people=[_person("C")],
+    )
+    summary = svc.summary(db_session)
+    assert summary["people_green"] == 2
+    assert summary["people_red"] == 3
 
 
 def test_record_visit_hook(db_session):
@@ -264,9 +510,13 @@ def test_create_with_vehicles_counts_active(db_session):
         db_session,
         PermitCreate(
             company="X",
-            zones=["green", "red"],
+            access_areas={
+                "al_wathba_1": ["green", "red"],
+                "al_wathba_2": [],
+                "work_residence": False,
+            },
             start_date=TODAY,
-            end_date=TODAY + timedelta(days=10),
+            validity={"value": 11, "unit": "day"},
             people=[_person("Driver")],
             vehicles=[
                 PermitVehicleCreate(
@@ -318,9 +568,9 @@ def test_attach_person_and_vehicle_documents(db_session, tmp_path, monkeypatch):
         db_session,
         PermitCreate(
             company="X",
-            zones=["red"],
+            access_areas={"al_wathba_1": [], "al_wathba_2": ["red"], "work_residence": False},
             start_date=TODAY,
-            end_date=TODAY + timedelta(days=10),
+            validity={"value": 11, "unit": "day"},
             people=[_person("Ali")],
             vehicles=[PermitVehicleCreate(plate_no="A 1")],
         ),
@@ -348,7 +598,30 @@ def test_safe_filename_strips_traversal_and_bidi():
 
 def test_mutations_write_audit_rows(db_session):
     row = _mk(db_session)
-    svc.renew_permit(db_session, row.id, new_end_date=TODAY + timedelta(days=99))
+    svc.renew_permit(db_session, row.id, validity=PermitValidityPeriod(value=3, unit="month"))
     actions = {a.action for a in db_session.query(AuditLog).all()}
     assert "permit.created" in actions
     assert "permit.renewed" in actions
+
+
+def test_access_update_audit_lists_access_areas_field(db_session):
+    row = _mk(db_session)
+    svc.update_permit(
+        db_session,
+        row.id,
+        PermitUpdate(
+            access_areas={
+                "al_wathba_1": [],
+                "al_wathba_2": ["red"],
+                "work_residence": False,
+            }
+        ),
+    )
+    audit = (
+        db_session.query(AuditLog)
+        .filter_by(action="permit.updated", entity_id=str(row.id))
+        .order_by(AuditLog.id.desc())
+        .first()
+    )
+    assert audit is not None
+    assert json.loads(audit.payload)["fields"] == ["access_areas"]

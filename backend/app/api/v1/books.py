@@ -30,7 +30,7 @@ from app.api._responses import maybe_base64
 from app.api.deps import get_current_user, require_capability
 from app.core import form_policy
 from app.core.classifications import CLASSIFICATIONS
-from app.db.models import Book, BookEditSession, BookVersion, User
+from app.db.models import Book, BookEditSession, BookVersion, Document, User
 from app.db.session import get_db
 from app.schemas.book import (
     ApproverOptionRead,
@@ -534,7 +534,9 @@ def _build_versions(db: Session, row: Book) -> list[BookVersionRead]:
         if v.document_id is not None:
             base = f"/api/v1/documents/{v.document_id}/download"
             docx_url = f"{base}?format=docx"
-            pdf_url = f"{base}?format=pdf"
+            document = db.get(Document, v.document_id)
+            if document is not None and document.pdf_path is not None:
+                pdf_url = f"{base}?format=pdf"
         created_by = (
             book_service.resolve_user_name_by_id(db, v.created_by_user_id)
             if v.created_by_user_id is not None

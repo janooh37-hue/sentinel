@@ -1,6 +1,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { render, screen, waitFor } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
+import i18n from '@/lib/i18n'
 
 import { statusTone, zoneTone, fmtDate } from './permitUtils'
 import { PermitsPage } from './PermitsPage'
@@ -22,22 +23,58 @@ vi.mock('@/lib/api', async (importOriginal) => {
       listPermits: vi.fn().mockResolvedValue({
         items: [
           {
-            id: 1, permit_no: 'PMT-0001', company: 'Acme Contracting', zones: ['red'],
-            start_date: '2026-07-01', end_date: '2026-07-30', status: 'active',
+            id: 1, permit_no: 'PMT-0001', company: 'Acme Contracting', zones: ['green', 'red'],
+            access_areas: { al_wathba_1: ['green'], al_wathba_2: ['red'], work_residence: false },
+            start_date: '2026-07-01', validity: { value: 1, unit: 'month' }, end_date: '2026-07-30', status: 'active',
             created_at: '2026-07-01T00:00:00', derived_status: 'active',
             duration_days: 30, days_remaining: 9, people_count: 4, vehicle_count: 2,
             has_document: true,
           },
           {
             id: 2, permit_no: 'PMT-0002', company: 'Descon Engineering', zones: ['green', 'work_residence'],
-            start_date: '2026-07-21', end_date: '2026-08-21', status: 'active',
+            access_areas: null,
+            start_date: '2026-07-21', validity: { value: 2, unit: 'month' }, end_date: '2026-08-21', status: 'active',
             created_at: '2026-07-21T00:00:00', derived_status: 'active',
             duration_days: 32, days_remaining: 31, people_count: 5, vehicle_count: 3,
             has_document: false,
           },
+          {
+            id: 3, permit_no: 'PMT-0003', company: 'Falcon Works', zones: ['red'],
+            access_areas: { al_wathba_1: [], al_wathba_2: ['red'], work_residence: false },
+            start_date: '2026-07-22', validity: { value: 6, unit: 'month' }, end_date: '2026-08-22', status: 'active',
+            created_at: '2026-07-22T00:00:00', derived_status: 'active',
+            duration_days: 31, days_remaining: 32, people_count: 2, vehicle_count: 1,
+            has_document: false,
+          },
         ],
-        total: 2, limit: 500, offset: 0,
+        total: 3, limit: 500, offset: 0,
       }),
+      listPermitsDetailed: vi.fn().mockResolvedValue([
+        {
+          id: 1, permit_no: 'PMT-0001', company: 'Acme Contracting', zones: ['green', 'red'],
+          access_areas: { al_wathba_1: ['green'], al_wathba_2: ['red'], work_residence: false },
+          start_date: '2026-07-01', validity: { value: 6, unit: 'month' }, end_date: '2026-07-30', status: 'active',
+          created_at: '2026-07-01T00:00:00', derived_status: 'active',
+          duration_days: 30, days_remaining: 9, people_count: 0, vehicle_count: 0,
+          people: [], vehicles: [],
+        },
+        {
+          id: 2, permit_no: 'PMT-0002', company: 'Descon Engineering', zones: ['green', 'work_residence'],
+          access_areas: null,
+          start_date: '2026-07-21', validity: { value: 2, unit: 'month' }, end_date: '2026-08-21', status: 'active',
+          created_at: '2026-07-21T00:00:00', derived_status: 'active',
+          duration_days: 32, days_remaining: 31, people_count: 0, vehicle_count: 0,
+          people: [], vehicles: [],
+        },
+        {
+          id: 3, permit_no: 'PMT-0003', company: 'Falcon Works', zones: ['red'],
+          access_areas: { al_wathba_1: [], al_wathba_2: ['red'], work_residence: false },
+          start_date: '2026-07-22', validity: { value: 1, unit: 'month' }, end_date: '2026-08-22', status: 'active',
+          created_at: '2026-07-22T00:00:00', derived_status: 'active',
+          duration_days: 31, days_remaining: 32, people_count: 0, vehicle_count: 0,
+          people: [], vehicles: [],
+        },
+      ]),
     },
   }
 })
@@ -77,6 +114,15 @@ describe('PermitsPage', () => {
     expect(screen.getByText('PMT-0001')).toBeInTheDocument()
     // Manager sees the "New permit" action.
     expect(screen.getByRole('button', { name: /new permit/i })).toBeInTheDocument()
+    expect(screen.getByRole('columnheader', { name: /access areas/i })).toBeInTheDocument()
+  })
+
+  it('renders exact structured pairings and honest legacy location labels', async () => {
+    renderPage()
+    await waitFor(() => expect(screen.getByText('Acme Contracting')).toBeInTheDocument())
+    expect(screen.getAllByText(/W1 · Green/i).length).toBeGreaterThan(0)
+    expect(screen.getAllByText(/W2 · Red/i).length).toBeGreaterThan(0)
+    expect(screen.getAllByText(/Unspecified · Green/i).length).toBeGreaterThan(0)
   })
 
   it('renders multi-zone chips (incl. work residence) and a clip for attached papers', async () => {
@@ -95,7 +141,7 @@ describe('PermitsPage', () => {
     await waitFor(() => expect(screen.getByText('Acme Contracting')).toBeInTheDocument())
     // Row click is mouse-only; the explicit View button is what keyboard/SR
     // users reach — one per row.
-    expect(screen.getAllByRole('button', { name: /^view$/i })).toHaveLength(2)
+    expect(screen.getAllByRole('button', { name: /^view$/i })).toHaveLength(3)
   })
 
   it('selecting a row switches Print to the selected-count label', async () => {
@@ -105,4 +151,59 @@ describe('PermitsPage', () => {
     rowCheckbox.click()
     expect(screen.getByRole('button', { name: /print 1/i })).toBeInTheDocument()
   })
+  it('renders start and validity from server fields while retaining server status text', async () => {
+    renderPage()
+    await waitFor(() => expect(screen.getByText('Acme Contracting')).toBeInTheDocument())
+    expect(screen.getByText('6 months from 22 Jul 2026')).toBeInTheDocument()
+    expect(screen.getByText(/9 days left/)).toBeInTheDocument()
+    expect(screen.queryByText(/2026-07-30/)).not.toBeInTheDocument()
+  })
+
+  it('prints start and validity without printing the visible end date', async () => {
+    let printed = ''
+    const printSpy = vi.spyOn(window, 'print').mockImplementation(() => {
+      printed = document.body.textContent ?? ''
+    })
+    renderPage()
+    await waitFor(() => expect(screen.getByText('Acme Contracting')).toBeInTheDocument())
+    await screen.getByRole('button', { name: /^print$/i }).click()
+    await waitFor(() => expect(printSpy).toHaveBeenCalled())
+    expect(printed).toContain('6 months from 01 Jul 2026')
+    expect(printed).not.toContain('2026-07-30')
+    printSpy.mockRestore()
+  })
+
+  it('renders Arabic whole periods, localized dates, and RTL direction', async () => {
+    await i18n.changeLanguage('ar')
+    try {
+      renderPage()
+      await waitFor(() => expect(screen.getByText('Acme Contracting')).toBeInTheDocument())
+      expect(screen.getAllByText(/شهر واحد من/).length).toBeGreaterThan(0)
+      expect(screen.getAllByText(/شهران من/).length).toBeGreaterThan(0)
+      expect(screen.getAllByText(/6 أشهر من/).length).toBeGreaterThan(0)
+      expect(screen.queryByText(/month from/i)).not.toBeInTheDocument()
+    } finally {
+      await i18n.changeLanguage('en')
+    }
+  })
 })
+
+  it('prints Arabic one-, two-, and six-month periods', async () => {
+    await i18n.changeLanguage('ar')
+    let printed = ''
+    const printSpy = vi.spyOn(window, 'print').mockImplementation(() => {
+      printed = document.body.textContent ?? ''
+    })
+    try {
+      renderPage()
+      await waitFor(() => expect(screen.getByText('Acme Contracting')).toBeInTheDocument())
+      await screen.getByRole('button', { name: /طباعة/ }).click()
+      await waitFor(() => expect(printSpy).toHaveBeenCalled())
+      expect(printed).toMatch(/6 أشهر من/)
+      expect(printed).toMatch(/شهران من/)
+      expect(printed).toMatch(/شهر واحد من/)
+    } finally {
+      printSpy.mockRestore()
+      await i18n.changeLanguage('en')
+    }
+  })
