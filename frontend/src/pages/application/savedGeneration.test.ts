@@ -49,7 +49,7 @@ describe('savedGenerationFromJob', () => {
   it('rejects a primary document without an id', () => {
     const malformedJob = {
       ...completedJob,
-      documents: completedJob.documents?.map(({ document_id: _documentId, ...document }) => document),
+      documents: completedJob.documents?.map((document) => ({ ...document, document_id: undefined })),
     } as unknown as JobStatusResponse
     expect(savedGenerationFromJob(malformedJob)).toBeNull()
   })

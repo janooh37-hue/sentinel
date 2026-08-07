@@ -15,7 +15,7 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from app.api.deps import get_current_user
 from app.db import session as session_mod
-from app.db.models import Base, BookCategory, User
+from app.db.models import Base, Book, BookCategory, BookVersion, Document, User
 from app.db.session import attach_sqlite_pragmas, get_db
 from app.main import create_app
 from app.services import perm_service
@@ -231,6 +231,51 @@ def test_book_read_draft_fields(api_db, monkeypatch, tmp_path):
     assert detail["edit_session"] is not None
     assert detail["edit_session"]["user_id"] == user.id
     assert detail["edit_session"]["state"] == "active"
+
+
+def test_book_version_omits_pdf_url_when_document_has_no_pdf(api_db, monkeypatch, tmp_path):
+    _seed_gs(api_db)
+    book = Book(category_id="GS", ref_number="GS-NO-PDF", subject="DOCX only")
+    document = Document(
+        template_id="general-book",
+        ref_number=book.ref_number,
+        docx_path="documents/only.docx",
+        pdf_path=None,
+        submission_id="no-pdf",
+    )
+    api_db.add_all([book, document])
+    api_db.flush()
+    book_version = BookVersion(
+        book_id=book.id,
+        version_no=1,
+        document_id=document.id,
+        template_id=document.template_id,
+    )
+    api_db.add(book_version)
+    api_db.commit()
+
+    admin_user = _make_user(api_db, role="admin", email="admin_no_pdf@test.ae")
+    client = _client(api_db, admin_user, monkeypatch, tmp_path)
+    response = client.get(f"/api/v1/books/{book.id}")
+
+    assert response.status_code == 200, response.text
+    version = response.json()["versions"][-1]
+    assert version["docx_url"] is not None
+    assert version["pdf_url"] is None
+
+    book.approval_state = "approved"
+    book_version.status = "approved"
+    book_version.signed_pdf_path = "book_attachments/signed-v1.pdf"
+    api_db.commit()
+    signed_pdf_version = client.get(f"/api/v1/books/{book.id}").json()["versions"][-1]
+    assert signed_pdf_version["pdf_url"] is None
+    assert signed_pdf_version["signed_pdf_url"] is not None
+
+    book_version.signed_pdf_path = "documents/signed-v1.docx"
+    api_db.commit()
+    signed_docx_version = client.get(f"/api/v1/books/{book.id}").json()["versions"][-1]
+    assert signed_docx_version["pdf_url"] is None
+    assert signed_docx_version["signed_pdf_url"] is None
 
 
 def test_list_books_batches_edit_sessions(api_db, monkeypatch, tmp_path):

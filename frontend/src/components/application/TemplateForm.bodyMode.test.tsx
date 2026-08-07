@@ -316,8 +316,8 @@ describe('TemplateForm M4d-4 — TableGridField wiring + picker grouping', () =>
       { name: 'صيانة.docx', modified_at: '2026-07-19T00:00:00', kind: 'custom' },
     ])
     const { container } = render(<HostForTableGrid templateName={null} />)
-    // Both options must appear in the picker
-    expect(await screen.findByText('نص')).toBeInTheDocument()
+    // Base templates use the fixed product label; custom templates use their filename.
+    expect(await screen.findByText('الكتاب العام — جدول')).toBeInTheDocument()
     expect(await screen.findByText('صيانة')).toBeInTheDocument()
     // Groups (optgroup labels are attributes, not text nodes — query via DOM)
     expect(container.querySelector('optgroup[label="ابدأ من"]')).not.toBeNull()

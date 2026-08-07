@@ -19,7 +19,11 @@ describe('DocPdfCanvas readiness', () => {
   })
 
   it('calls onReady once after every page finishes painting', async () => {
-    const onReady = vi.fn()
+    let root: HTMLElement | null = null
+    let spinnerPresentAtReady: boolean | null = null
+    const onReady = vi.fn(() => {
+      spinnerPresentAtReady = root?.querySelector('.animate-spin') !== null
+    })
     const renderPage = vi.fn(() => ({ promise: Promise.resolve() }))
     getDocumentMock.mockReturnValue({
       promise: Promise.resolve({
@@ -34,10 +38,35 @@ describe('DocPdfCanvas readiness', () => {
     vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue({} as CanvasRenderingContext2D)
 
     const view = render(<DocPdfCanvas pdfUrl="/document.pdf" onReady={onReady} />)
+    root = view.container
 
     await waitFor(() => expect(view.container.querySelector('canvas')).not.toBeNull())
     expect(renderPage).toHaveBeenCalledTimes(1)
-    expect(onReady).toHaveBeenCalledTimes(1)
+    await waitFor(() => expect(onReady).toHaveBeenCalledTimes(1))
+    expect(spinnerPresentAtReady).toBe(false)
+  })
+
+  it('calls onReady again after a changed PDF URL finishes painting', async () => {
+    const onReady = vi.fn()
+    const renderPage = vi.fn(() => ({ promise: Promise.resolve() }))
+    getDocumentMock.mockReturnValue({
+      promise: Promise.resolve({
+        numPages: 1,
+        getPage: vi.fn().mockResolvedValue({
+          getViewport: vi.fn(() => ({ width: 100, height: 100 })),
+          render: renderPage,
+        }),
+      }),
+    })
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, text: async () => 'AQ==' }))
+    vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue({} as CanvasRenderingContext2D)
+
+    const view = render(<DocPdfCanvas pdfUrl="/first.pdf" onReady={onReady} />)
+    await waitFor(() => expect(onReady).toHaveBeenCalledTimes(1))
+
+    view.rerender(<DocPdfCanvas pdfUrl="/second.pdf" onReady={onReady} />)
+    await waitFor(() => expect(onReady).toHaveBeenCalledTimes(2))
+    expect(renderPage).toHaveBeenCalledTimes(2)
   })
 
   it('does not call onReady when the PDF request fails', async () => {

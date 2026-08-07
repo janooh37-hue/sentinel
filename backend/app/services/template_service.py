@@ -17,7 +17,6 @@ from app.core import form_policy
 from app.core.constants import COMPANION_TEMPLATE_IDS, TEMPLATE_FILES
 from app.core.docx_engine import template_has_code
 from app.core.form_policy import SigningPath
-
 from app.services import notify_format
 from app.services.document_service import load_fields_meta
 

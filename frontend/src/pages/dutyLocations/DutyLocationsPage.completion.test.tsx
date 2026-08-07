@@ -3,6 +3,9 @@ import userEvent from '@testing-library/user-event'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { MemoryRouter } from 'react-router-dom'
+import i18n from 'i18next'
+
+import ar from '@/locales/ar.json'
 
 import { api } from '@/lib/api'
 import type { DutyTransferResult } from '@/lib/api'
@@ -13,6 +16,10 @@ const DOCUMENT_RESULT = {
   ref: '1/12/GSSG/106',
   document_id: 9,
   moved: ['G3309'],
+}
+const TWO_PERSON_DOCUMENT_RESULT = {
+  ...DOCUMENT_RESULT,
+  moved: ['G3309', 'G3310'],
 }
 const NO_BOOK_RESULT = {
   book_id: null,
@@ -58,6 +65,9 @@ vi.mock('./TransferDialog', () => ({
         <button type="button" onClick={() => onTransferred(DOCUMENT_RESULT)}>
           Complete document transfer
         </button>
+        <button type="button" onClick={() => onTransferred(TWO_PERSON_DOCUMENT_RESULT)}>
+          Complete two-person transfer
+        </button>
         <button type="button" onClick={() => onTransferred(NO_BOOK_RESULT)}>
           Complete no-book transfer
         </button>
@@ -74,10 +84,17 @@ vi.mock('@/components/books/SavedRecordActions', () => ({
   SavedRecordActions: ({
     bookId,
     refNumber,
+    detail,
   }: {
     bookId: number
     refNumber: string
-  }) => <div data-testid="saved-actions">saved:{bookId}:{refNumber}</div>,
+    detail?: string
+  }) => (
+    <div data-testid="saved-actions">
+      saved:{bookId}:{refNumber}
+      {detail && <span data-testid="saved-detail">{detail}</span>}
+    </div>
+  ),
 }))
 
 const mockedApi = vi.mocked(api)
@@ -96,10 +113,12 @@ function renderPage(): void {
 async function openTransfer(): Promise<void> {
   const user = userEvent.setup()
   await user.click(await screen.findByRole('button', { name: 'Select employee' }))
-  await user.click(screen.getByRole('button', { name: /^Transfer selected/ }))
+  await user.click(screen.getByRole('button', { name: /^(Transfer selected|نقل المحدد)/ }))
 }
 
-beforeEach(() => {
+beforeEach(async () => {
+  await i18n.addResourceBundle('ar', 'translation', ar, true, true)
+  await i18n.changeLanguage('en')
   mockedApi.listEmployees.mockResolvedValue({
     items: [{ id: 'G3309', name_en: 'Employee One', name_ar: null, duty_unit: 'GSSG', duty_post: null }],
     total: 1,
@@ -109,6 +128,7 @@ beforeEach(() => {
 afterEach(() => {
   cleanup()
   vi.clearAllMocks()
+  void i18n.changeLanguage('en')
 })
 
 describe('DutyLocationsPage transfer completion', () => {
@@ -149,4 +169,14 @@ describe('DutyLocationsPage transfer completion', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Cancel transfer' }))
     expect(screen.getByTestId('saved-actions')).toHaveTextContent('saved:84:2/13/GSSG/107')
   })
+  it('renders the Arabic dual completion detail for a two-person transfer', async () => {
+    await i18n.changeLanguage('ar')
+    renderPage()
+    await openTransfer()
+
+    await userEvent.click(screen.getByRole('button', { name: 'Complete two-person transfer' }))
+
+    expect(screen.getByTestId('saved-detail')).toHaveTextContent('تم نقل موظفين اثنين')
+  })
+
 })

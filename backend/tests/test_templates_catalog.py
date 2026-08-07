@@ -4,7 +4,6 @@ internally accessible (they still auto-generate with their primary)."""
 from __future__ import annotations
 
 from app.core.constants import COMPANION_TEMPLATE_IDS, TEMPLATE_FILES
-
 from app.services import notify_format, template_service
 
 
@@ -110,6 +109,7 @@ def test_non_notifying_word_templates_publish_false():
 
 
 def test_auto_notify_capability_is_union_of_mapped_and_special_routes():
-    assert notify_format.AUTO_NOTIFY_TEMPLATE_IDS == frozenset(
-        set(notify_format.TEMPLATE_EVENTS) | set(notify_format.SPECIAL_TEMPLATE_ROUTES)
+    assert (
+        frozenset(set(notify_format.TEMPLATE_EVENTS) | set(notify_format.SPECIAL_TEMPLATE_ROUTES))
+        == notify_format.AUTO_NOTIFY_TEMPLATE_IDS
     )

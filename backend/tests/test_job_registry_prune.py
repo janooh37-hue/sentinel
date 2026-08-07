@@ -26,7 +26,6 @@ def test_registry_never_evicts_in_flight_jobs(monkeypatch):
     assert all(job_registry.get_job(j) is not None for j in running)
 
 
-
 def test_completed_job_keeps_book_id():
     jid = job_registry.submit_job()
     job_registry.set_done(jid, book_id=42, submission_id="sub", documents=[])

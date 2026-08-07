@@ -35,12 +35,7 @@ export interface PageBox {
 }
 
 
-export default function DocPdfCanvas({
-  pdfUrl,
-  docxUrl,
-  renderOverlay,
-  onReady,
-}: {
+interface DocPdfCanvasProps {
   /** Inline PDF download URL, e.g. `/api/v1/documents/{id}/download?format=pdf`. */
   pdfUrl: string
   /**
@@ -58,7 +53,18 @@ export default function DocPdfCanvas({
   renderOverlay?: (pages: PageBox[]) => React.ReactNode
   /** Called once after all PDF pages have finished painting. */
   onReady?: () => void
-}): React.JSX.Element {
+}
+
+export default function DocPdfCanvas(props: DocPdfCanvasProps): React.JSX.Element {
+  return <DocPdfCanvasRenderer key={props.pdfUrl} {...props} />
+}
+
+function DocPdfCanvasRenderer({
+  pdfUrl,
+  docxUrl,
+  renderOverlay,
+  onReady,
+}: DocPdfCanvasProps): React.JSX.Element {
   const { t } = useTranslation()
   const containerRef = useRef<HTMLDivElement | null>(null)
   const wrapperRef = useRef<HTMLDivElement | null>(null)
@@ -141,7 +147,6 @@ export default function DocPdfCanvas({
         if (!cancelled) {
           setStatus('ready')
           measure()
-          onReadyRef.current?.()
         }
       } catch (err) {
         if (!cancelled) {
@@ -156,6 +161,10 @@ export default function DocPdfCanvas({
       controller.abort()
     }
   }, [pdfUrl, measure])
+
+  useEffect(() => {
+    if (status === 'ready') onReadyRef.current?.()
+  }, [status])
 
   // Keep page boxes in sync as the responsive canvases reflow (only when an
   // overlay consumer is attached).

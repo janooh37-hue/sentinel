@@ -78,7 +78,10 @@ describe('SavedRecordActions', () => {
     renderActions({ detail: 'Generated from Word' })
 
     expect(await screen.findByText('تم الحفظ في السجلات')).toBeVisible()
-    expect(screen.getByText('المرجع REF-42')).toBeVisible()
+    const reference = screen.getByText(
+      (_, element) => element?.tagName === 'P' && element.textContent?.includes('REF-42') === true,
+    )
+    expect(reference.textContent).toBe('المرجع \u2068REF-42\u2069')
     expect(screen.getByText('Generated from Word')).toBeVisible()
     await waitFor(() => expect(screen.getByRole('button', { name: 'طباعة' })).toBeEnabled())
     expect(screen.getByRole('button', { name: 'طباعة' })).toBeVisible()
@@ -129,6 +132,24 @@ describe('SavedRecordActions', () => {
 
     expect(await screen.findByRole('button', { name: 'طباعة' })).toBeDisabled()
     expect(await screen.findByText('ملف PDF غير متاح — افتح السجل لاستخدام ملف DOCX البديل.')).toBeVisible()
+  })
+
+  it('enables Print when an approved version has only a signed PDF', async () => {
+    vi.mocked(api.getBook).mockResolvedValue(
+      makeBook({
+        approval_state: 'approved',
+        versions: [
+          {
+            status: 'approved',
+            pdf_url: null,
+            signed_pdf_url: '/signed.pdf',
+          } as BookRead['versions'][number],
+        ],
+      }),
+    )
+    renderActions()
+
+    await waitFor(() => expect(screen.getByRole('button', { name: 'طباعة' })).toBeEnabled())
   })
   it('does not claim PDF unavailability when the book query rejects', async () => {
     let rejectQuery!: (reason: Error) => void

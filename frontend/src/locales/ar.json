@@ -2940,7 +2940,11 @@
       "movedNoBook_other": "تم نقل {{count}} من الموظفين"
     },
     "completion": {
+      "detail_zero": "لم يتم نقل أي موظف",
       "detail_one": "تم نقل موظف واحد",
+      "detail_two": "تم نقل موظفين اثنين",
+      "detail_few": "تم نقل {{count}} موظفين",
+      "detail_many": "تم نقل {{count}} موظفًا",
       "detail_other": "تم نقل {{count}} من الموظفين"
     }
   },
