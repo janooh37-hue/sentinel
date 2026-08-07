@@ -24,6 +24,7 @@ from fastapi import (
     status,
 )
 from fastapi.responses import FileResponse
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api._responses import maybe_base64
@@ -76,8 +77,12 @@ def _signed_source_of(v: BookVersion) -> Literal["in_app", "scan"] | None:
     )
 
 
+def _is_pdf_path(path: str | None) -> bool:
+    return path is not None and path.casefold().endswith(".pdf")
+
+
 def _signed_pdf_url_of(v: BookVersion) -> str | None:
-    if v.status == "approved" and v.signed_pdf_path and v.document_id is not None:
+    if v.status == "approved" and _is_pdf_path(v.signed_pdf_path) and v.document_id is not None:
         return f"/api/v1/documents/{v.document_id}/download?format=pdf"
     return None
 
@@ -528,14 +533,24 @@ def list_reviewer_candidates(
 
 
 def _build_versions(db: Session, row: Book) -> list[BookVersionRead]:
+    document_ids = {v.document_id for v in row.versions if v.document_id is not None}
+    documents_by_id = (
+        {
+            document.id: document
+            for document in db.scalars(select(Document).where(Document.id.in_(document_ids)))
+        }
+        if document_ids
+        else {}
+    )
     out: list[BookVersionRead] = []
     for v in sorted(row.versions, key=lambda x: x.version_no):
         docx_url = pdf_url = None
-        if v.document_id is not None:
-            base = f"/api/v1/documents/{v.document_id}/download"
+        document = documents_by_id.get(v.document_id) if v.document_id is not None else None
+        if document is not None:
+            base = f"/api/v1/documents/{document.id}/download"
             docx_url = f"{base}?format=docx"
-            document = db.get(Document, v.document_id)
-            if document is not None and document.pdf_path is not None:
+            signed_path = v.signed_pdf_path if v.status == "approved" else None
+            if document.pdf_path is not None and (signed_path is None or _is_pdf_path(signed_path)):
                 pdf_url = f"{base}?format=pdf"
         created_by = (
             book_service.resolve_user_name_by_id(db, v.created_by_user_id)

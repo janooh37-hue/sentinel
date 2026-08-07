@@ -9,7 +9,7 @@ def test_registry_prunes_oldest_terminal_jobs_over_cap(monkeypatch):
     ids = []
     for _ in range(6):
         jid = job_registry.submit_job()
-        job_registry.set_done(jid, submission_id="s", documents=[])
+        job_registry.set_done(jid, book_id=None, submission_id="s", documents=[])
         ids.append(jid)
     assert len(job_registry._jobs) <= 3
     assert job_registry.get_job(ids[-1]) is not None  # newest survives
@@ -24,3 +24,11 @@ def test_registry_never_evicts_in_flight_jobs(monkeypatch):
         job_registry.set_running(jid)
     # nothing terminal to evict → all four running jobs stay, even over cap
     assert all(job_registry.get_job(j) is not None for j in running)
+
+
+def test_completed_job_keeps_book_id():
+    jid = job_registry.submit_job()
+    job_registry.set_done(jid, book_id=42, submission_id="sub", documents=[])
+    job = job_registry.get_job(jid)
+    assert job is not None
+    assert job.book_id == 42

@@ -31,22 +31,22 @@ vi.mock('react-i18next', () => ({
 
 vi.mock('@/lib/api', () => ({ api: { listTemplates: vi.fn() } }))
 
-// Extra TemplateMeta fields (form_number/category/signing_path/has_code) are
-// irrelevant to serviceLabels but required for api.listTemplates' real return
+// Extra TemplateMeta fields (form_number/category/signing_path/has_code/notifies_employee)
+// are irrelevant to serviceLabels but required for api.listTemplates' real return
 // type, since this fixture now also backs a typed mockResolvedValue below.
-function tpl(id: string, name_en: string, name_ar: string) {
-  return { id, name_en, name_ar, form_number: '', category: 'personnel' as const, signing_path: 'auto' as const, has_code: false }
+function tpl(id: string, name_en: string, name_ar: string, notifies_employee: boolean) {
+  return { id, name_en, name_ar, form_number: '', category: 'personnel' as const, signing_path: 'auto' as const, has_code: false, notifies_employee }
 }
 
 const TEMPLATES = {
   items: [
-    tpl('Report', 'Report', 'تقرير'),
-    tpl('Warning Form', 'Warning Form', 'إنذار'),
+    tpl('Report', 'Report', 'تقرير', false),
+    tpl('Warning Form', 'Warning Form', 'إنذار', true),
     // Latent leak fixture: a real, known template whose Arabic name is
     // unset. id deliberately differs from name_en so a fallback to either
     // one is distinguishable in assertions below. Must not fall back to
     // the English name under lng=ar.
-    tpl('blank-ar-id', 'Blank AR Form (EN)', ''),
+    tpl('blank-ar-id', 'Blank AR Form (EN)', '', false),
   ],
 }
 

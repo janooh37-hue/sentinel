@@ -61,6 +61,7 @@ class JobDocumentItem:
 class _Job:
     job_id: str
     status: JobStatus = "queued"
+    book_id: int | None = None
     # P04-J: list of generated document items (primary + companions).
     submission_id: str | None = None
     documents: list[JobDocumentItem] = field(default_factory=list)
@@ -100,6 +101,7 @@ def set_running(job_id: str) -> None:
 def set_done(
     job_id: str,
     *,
+    book_id: int | None,
     submission_id: str,
     documents: list[JobDocumentItem],
 ) -> None:
@@ -107,6 +109,7 @@ def set_done(
         job = _jobs.get(job_id)
         if job is not None:
             job.status = "done"
+            job.book_id = book_id
             job.submission_id = submission_id
             job.documents = documents
 

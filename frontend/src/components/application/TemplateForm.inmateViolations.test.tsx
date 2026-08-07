@@ -120,6 +120,7 @@ const SCHEMA: TemplateDetailResponse = {
     category: 'admin',
     signing_path: 'auto',
     has_code: true,
+    notifies_employee: false,
   },
   needs_manager: true,
   needs_submitter: false,

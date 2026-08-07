@@ -986,6 +986,14 @@
       "created": "Book entry created",
       "deleted": "Draft discarded"
     },
+    "completion": {
+      "savedToRecords": "Saved to Records",
+      "reference": "Reference {{ref}}",
+      "notificationEnabled": "Employee notification enabled for this save.",
+      "notificationSkipped": "Saved without notifying the employee.",
+      "pendingApproval": "Pending approval",
+      "printUnavailable": "PDF unavailable — open the record for the DOCX fallback."
+    },
     "emptyUnfiltered": "No book entries yet",
     "approval": {
       "awaitingTitle": "Books · awaiting your approval",
@@ -2135,7 +2143,10 @@
       "saveBook": "Save book",
       "waitingForPreview": "Waiting for preview…",
       "saved": "Saved",
-      "generate": "Generate document"
+      "generate": "Generate document",
+      "readyToSave": "Ready to save to Records",
+      "saveToRecords": "Save to Records",
+      "notificationChannel": "WhatsApp, then SMS fallback"
     },
     "previewFirstHint": "Preview first — Save appears once the document renders.",
     "saveBookHint": "Generating preview…",
@@ -2775,6 +2786,10 @@
       "viewRecord": "View record",
       "movedNoBook_one": "Moved 1 employee",
       "movedNoBook_other": "Moved {{count}} employees"
+    },
+    "completion": {
+      "detail_one": "1 employee transferred",
+      "detail_other": "{{count}} employees transferred"
     }
   },
   "scanBack": {

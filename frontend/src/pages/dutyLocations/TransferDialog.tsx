@@ -5,17 +5,16 @@
  * Shows the employees being moved (G# · name · current unit·post), asks for
  * destination unit + post (free-form comboboxes), recipient, signing manager,
  * and optional CC. On confirm it POSTs `/duty/transfer`; on success it toasts
- * with a "View record" action that opens `/books/:id`.
+ * a short confirmation and reports the complete transfer result before closing.
  */
 
 import { useId, useMemo, useState } from 'react'
 import { FormProvider, useForm } from 'react-hook-form'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
-import { useNavigate } from 'react-router-dom'
 import { toast } from 'sonner'
 
-import { api, type EmployeeListItem, apiErrorMessage } from '@/lib/api'
+import { api, apiErrorMessage, type DutyTransferResult, type EmployeeListItem } from '@/lib/api'
 import { unitOptions, postsForUnit } from '@/lib/dutyUnits'
 import { buildTransferRequest } from './transferRequest'
 import { loadTransferDefaults, saveTransferDefaults } from './transferDefaults'
@@ -41,8 +40,8 @@ export interface TransferDialogProps {
   /** All roster employees — used to derive destination suggestions. */
   allEmployees: readonly EmployeeListItem[]
   onOpenChange: (open: boolean) => void
-  /** Called after a successful transfer (clears the selection). */
-  onTransferred: () => void
+  /** Called after a successful transfer with its complete result. */
+  onTransferred: (result: DutyTransferResult) => void
 }
 
 export function TransferDialog({
@@ -54,7 +53,6 @@ export function TransferDialog({
 }: TransferDialogProps): React.JSX.Element {
   const { t, i18n } = useTranslation()
   const qc = useQueryClient()
-  const navigate = useNavigate()
   const unitListId = useId()
   const postListId = useId()
 
@@ -93,14 +91,9 @@ export function TransferDialog({
       if (result.book_id == null) {
         toast.success(t('dutyLocations.transfer.movedNoBook', { count: result.moved.length }))
       } else {
-        toast.success(t('dutyLocations.transfer.success', { ref: result.ref }), {
-          action: {
-            label: t('dutyLocations.transfer.viewRecord'),
-            onClick: () => navigate(`/books/${result.book_id}`),
-          },
-        })
+        toast.success(t('dutyLocations.transfer.success', { ref: result.ref }))
       }
-      onTransferred()
+      onTransferred(result)
       onOpenChange(false)
     },
     onError: (err) => toast.error(apiErrorMessage(err)),

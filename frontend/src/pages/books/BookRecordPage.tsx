@@ -66,6 +66,7 @@ import { sealDescriptor, signedSourceOf, type SealTone } from './bookStateLabel'
 import { useAddScan } from './useAddScan'
 import { useManagePaper } from './useManagePaper'
 import type { Paper } from './recordPapers'
+import { useRecordPrintMode } from './useRecordPrintMode'
 
 const DocPdfCanvas = lazy(() => import('@/pages/application/DocPdfCanvas'))
 
@@ -253,6 +254,7 @@ export function BookRecordPage(): React.JSX.Element {
   const isAr = i18n.language.startsWith('ar')
   const isMobile = useIsMobile()
   const bookId = Number(id)
+  const onPdfReady = useRecordPrintMode()
 
   const qc = useQueryClient()
   const { user } = useAuth()
@@ -761,6 +763,7 @@ export function BookRecordPage(): React.JSX.Element {
               <Suspense fallback={<DeskLoading />}>
                 <DocPdfCanvas
                   pdfUrl={pdfUrl}
+                  onReady={onPdfReady}
                   renderOverlay={
                     annotatable
                       ? (pages) => (

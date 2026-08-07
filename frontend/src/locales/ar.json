@@ -1074,6 +1074,14 @@
       "created": "تم إنشاء إدخال الدفتر",
       "deleted": "تم حذف المسودة"
     },
+    "completion": {
+      "savedToRecords": "تم الحفظ في السجلات",
+      "reference": "المرجع {{ref}}",
+      "notificationEnabled": "تم الحفظ مع تفعيل إشعار الموظف.",
+      "notificationSkipped": "تم الحفظ دون إشعار الموظف.",
+      "pendingApproval": "بانتظار الاعتماد",
+      "printUnavailable": "ملف PDF غير متاح — افتح السجل لاستخدام ملف DOCX البديل."
+    },
     "emptyUnfiltered": "لا توجد إدخالات بعد",
     "approval": {
       "awaitingTitle": "الدفاتر · في انتظار موافقتك",
@@ -2294,7 +2302,10 @@
       "saveBook": "حفظ الكتاب",
       "waitingForPreview": "بانتظار المعاينة…",
       "saved": "تم الحفظ",
-      "generate": "إنشاء المستند"
+      "generate": "إنشاء المستند",
+      "readyToSave": "جاهز للحفظ في السجلات",
+      "saveToRecords": "حفظ في السجلات",
+      "notificationChannel": "واتساب، ثم الرسائل النصية كخيار بديل"
     },
     "previewFirstHint": "اعرض المعاينة أولًا — يظهر زر الحفظ بعد إنشاء المستند.",
     "saveBookHint": "جارٍ إنشاء المعاينة…",
@@ -2994,6 +3005,14 @@
       "viewRecord": "عرض السجل",
       "movedNoBook_one": "تم نقل موظف واحد",
       "movedNoBook_other": "تم نقل {{count}} من الموظفين"
+    },
+    "completion": {
+      "detail_zero": "لم يتم نقل أي موظف",
+      "detail_one": "تم نقل موظف واحد",
+      "detail_two": "تم نقل موظفين اثنين",
+      "detail_few": "تم نقل {{count}} موظفين",
+      "detail_many": "تم نقل {{count}} موظفًا",
+      "detail_other": "تم نقل {{count}} من الموظفين"
     }
   },
   "scanBack": {

@@ -22584,6 +22584,17 @@
             ],
             "title": "Status"
           },
+          "book_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Book Id"
+          },
           "submission_id": {
             "anyOf": [
               {
@@ -27710,7 +27721,9 @@
               "violation_checkboxes",
               "violation_combo",
               "recipient_picker",
-              "recipient_multi_picker"
+              "recipient_multi_picker",
+              "inmates_table",
+              "time"
             ],
             "title": "Type"
           },
@@ -27828,6 +27841,10 @@
           "has_code": {
             "type": "boolean",
             "title": "Has Code"
+          },
+          "notifies_employee": {
+            "type": "boolean",
+            "title": "Notifies Employee"
           }
         },
         "type": "object",
@@ -27838,7 +27855,8 @@
           "form_number",
           "category",
           "signing_path",
-          "has_code"
+          "has_code",
+          "notifies_employee"
         ],
         "title": "TemplateMeta"
       },

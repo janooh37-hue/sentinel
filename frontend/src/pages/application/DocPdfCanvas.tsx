@@ -35,11 +35,7 @@ export interface PageBox {
 }
 
 
-export default function DocPdfCanvas({
-  pdfUrl,
-  docxUrl,
-  renderOverlay,
-}: {
+interface DocPdfCanvasProps {
   /** Inline PDF download URL, e.g. `/api/v1/documents/{id}/download?format=pdf`. */
   pdfUrl: string
   /**
@@ -55,10 +51,27 @@ export default function DocPdfCanvas({
    * it scrolls with the pages. Absent → behavior is unchanged.
    */
   renderOverlay?: (pages: PageBox[]) => React.ReactNode
-}): React.JSX.Element {
+  /** Called once after all PDF pages have finished painting. */
+  onReady?: () => void
+}
+
+export default function DocPdfCanvas(props: DocPdfCanvasProps): React.JSX.Element {
+  return <DocPdfCanvasRenderer key={props.pdfUrl} {...props} />
+}
+
+function DocPdfCanvasRenderer({
+  pdfUrl,
+  docxUrl,
+  renderOverlay,
+  onReady,
+}: DocPdfCanvasProps): React.JSX.Element {
   const { t } = useTranslation()
   const containerRef = useRef<HTMLDivElement | null>(null)
   const wrapperRef = useRef<HTMLDivElement | null>(null)
+  const onReadyRef = useRef(onReady)
+  useEffect(() => {
+    onReadyRef.current = onReady
+  }, [onReady])
   const [status, setStatus] = useState<'loading' | 'ready' | 'error'>('loading')
   // 'missing' = the PDF was never generated (backend 404 / PDF_NOT_AVAILABLE);
   // 'render' = the bytes came back but pdf.js (or the worker asset) couldn't
@@ -122,7 +135,7 @@ export default function DocPdfCanvas({
           canvas.style.width = `${Math.floor(viewport.width)}px`
           canvas.className = 'mb-3 h-auto max-w-full rounded-lg bg-white shadow-lg'
           const ctx = canvas.getContext('2d')
-          if (!ctx) continue
+          if (!ctx) throw new Error('Canvas 2D context unavailable')
           container.appendChild(canvas)
           await page.render({
             canvas,
@@ -148,6 +161,10 @@ export default function DocPdfCanvas({
       controller.abort()
     }
   }, [pdfUrl, measure])
+
+  useEffect(() => {
+    if (status === 'ready') onReadyRef.current?.()
+  }, [status])
 
   // Keep page boxes in sync as the responsive canvases reflow (only when an
   // overlay consumer is attached).
