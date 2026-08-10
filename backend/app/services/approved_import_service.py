@@ -7,14 +7,33 @@ import logging
 import re
 import shutil
 import uuid
+from contextlib import suppress
 from dataclasses import dataclass
 from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 
+from sqlalchemy.orm import Session
+
 from app.config import get_settings
-from app.core.approved_pdf import ApprovedPdfError, normalize_upload_to_pdf
+from app.core.approved_pdf import (
+    ApprovedPdfError,
+    normalize_upload_to_pdf,
+    stamp_approved_pdf,
+)
+from app.core.book_text import build_search_text
+from app.core.constants import STAMP_STYLE_HEADER
 from app.core.extraction.dates import parse_date
 from app.core.extraction.ocr import OcrUnavailableError, text_from_pdf
+from app.db.models import (
+    AuditLog,
+    Book,
+    BookCategory,
+    BookVersion,
+    Document,
+    User,
+)
+from app.db.repos.refs_repo import allocate_ref_with_retry
+from app.services import correspondence_service
 from app.services.book_service import MAX_ATTACHMENT_BYTES
 
 log = logging.getLogger(__name__)
@@ -61,6 +80,7 @@ class ClaimedApprovedImport:
     source_pdf: Path
     owner_user_id: int
     filename: str
+    ocr_text: str
 
 
 def _staging_root() -> Path:
@@ -189,6 +209,7 @@ def inspect_upload(
                     "owner_user_id": owner_user_id,
                     "filename": safe_filename,
                     "created_at": current.isoformat(),
+                    "ocr_text": extracted_text,
                 }
             ),
             encoding="utf-8",
@@ -265,6 +286,7 @@ def claim_staged(
         source_pdf=claimed / "source.pdf",
         owner_user_id=owner_user_id,
         filename=str(metadata.get("filename") or "approved.pdf"),
+        ocr_text=str(metadata.get("ocr_text") or ""),
     )
 
 
@@ -282,12 +304,175 @@ def consume_claim(claim: ClaimedApprovedImport) -> None:
     shutil.rmtree(claim.path, ignore_errors=True)
 
 
+@dataclass(frozen=True)
+class ApprovedImportResult:
+    book_id: int
+    doc_id: int
+    ref_number: str
+
+
+def commit_approved_import(
+    db: Session,
+    *,
+    owner: User,
+    token: str,
+    report_date: date,
+    inmate_names: list[str],
+    subject: str,
+) -> ApprovedImportResult:
+    """File one staged report as an approved, versioned NAT record."""
+    cleaned_subject = subject.strip()
+    cleaned_names = [name.strip() for name in inmate_names if name.strip()]
+    if not cleaned_subject or not cleaned_names:
+        raise StagedApprovedImportError(
+            "APPROVED_IMPORT_METADATA_REQUIRED",
+            "Report date, inmate names, and subject are required",
+        )
+
+    claim = claim_staged(token, owner_user_id=owner.id)
+    final_path: Path | None = None
+    temporary_path: Path | None = None
+    try:
+        if db.get(BookCategory, "NAT") is None:
+            raise StagedApprovedImportError(
+                "APPROVED_IMPORT_CATEGORY_MISSING",
+                "The NAT Records category is not configured",
+            )
+        source_pdf = claim.source_pdf.read_bytes()
+        ref_number = allocate_ref_with_retry(db, "NAT")
+        stamped_pdf = stamp_approved_pdf(source_pdf, ref_number)
+        created_at = datetime.now(UTC).replace(tzinfo=None)
+        relative_pdf = Path("book_attachments")
+
+        book = Book(
+            category_id="NAT",
+            ref_number=ref_number,
+            subject=cleaned_subject,
+            direction="outgoing",
+            stamp_style=STAMP_STYLE_HEADER,
+            employee_id=None,
+            employee_name_snapshot=None,
+            notes=None,
+            created_at=created_at,
+            deleted_at=None,
+            approval_state="approved",
+            submitted_by_user_id=owner.id,
+            search_text=build_search_text(
+                subject=cleaned_subject,
+                ref=ref_number,
+                body=claim.ocr_text,
+            ),
+        )
+        db.add(book)
+        db.flush()
+
+        relative_pdf /= str(book.id)
+        relative_pdf /= "approved-v1.pdf"
+        final_path = get_settings().data_dir / relative_pdf
+        final_path.parent.mkdir(parents=True, exist_ok=True)
+        temporary_path = final_path.with_name(f".{token}.tmp")
+        temporary_path.write_bytes(stamped_pdf)
+        if final_path.exists():
+            raise StagedApprovedImportError(
+                "APPROVED_IMPORT_FILE_EXISTS",
+                "The approved record file already exists",
+            )
+        temporary_path.rename(final_path)
+        temporary_path = None
+
+        document = Document(
+            employee_id=None,
+            template_id="Inmate Conduct Violations",
+            ref_number=ref_number,
+            docx_path=None,
+            pdf_path=relative_pdf.as_posix(),
+            created_at=created_at,
+            submission_id=str(uuid.uuid4()),
+            role="primary",
+        )
+        db.add(document)
+        db.flush()
+        fields: dict[str, object] = {
+            "report_date": report_date.isoformat(),
+            "inmate_names": cleaned_names,
+            "subject": cleaned_subject,
+            "imported_approved": True,
+        }
+        db.add(
+            BookVersion(
+                book_id=book.id,
+                version_no=1,
+                document_id=document.id,
+                template_id="Inmate Conduct Violations",
+                fields=fields,
+                trigger="initial",
+                status="approved",
+                created_by_user_id=owner.id,
+                created_at=created_at,
+                signed_pdf_path=relative_pdf.as_posix(),
+                manager_sig_embedded=False,
+                signed_by_user_id=owner.id,
+                signed_at=created_at,
+            )
+        )
+        book.doc_path = relative_pdf.as_posix()
+        correspondence_service.log_event(
+            db,
+            trigger="document_generated",
+            source_kind="generated_doc",
+            source_book_id=book.id,
+            subject=cleaned_subject,
+            employee_id=None,
+            submitter=owner.display_name or owner.email,
+            entry_date=report_date,
+            condition_fields={"category": "NAT"},
+        )
+        db.add(
+            AuditLog(
+                actor=owner.email,
+                action="approved_violation_imported",
+                entity_type="book",
+                entity_id=str(book.id),
+                payload=json.dumps(
+                    {
+                        "book_id": book.id,
+                        "document_id": document.id,
+                        "ref_number": ref_number,
+                        "source_filename": claim.filename,
+                    }
+                ),
+                ts=created_at,
+            )
+        )
+        db.commit()
+        result = ApprovedImportResult(
+            book_id=book.id,
+            doc_id=document.id,
+            ref_number=ref_number,
+        )
+    except Exception:
+        db.rollback()
+        if temporary_path is not None:
+            temporary_path.unlink(missing_ok=True)
+        if final_path is not None:
+            final_path.unlink(missing_ok=True)
+            with suppress(OSError):
+                final_path.parent.rmdir()
+        release_claim(claim)
+        raise
+
+    consume_claim(claim)
+    return result
+
+
 __all__ = [
     "ApprovedImportInspection",
+    "ApprovedImportResult",
     "ClaimedApprovedImport",
     "ExtractedInmateName",
     "StagedApprovedImportError",
     "claim_staged",
+    "commit_approved_import",
     "consume_claim",
     "inspect_upload",
     "release_claim",

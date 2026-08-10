@@ -51,6 +51,9 @@ def test_inspect_stages_normalized_pdf_and_extracts_editable_metadata(
     assert [item.name for item in result.inmate_names] == ["Ali Hassan", "Omar Saleh"]
     assert result.proposed_subject == "Inmate Conduct Violations - Ali Hassan, Omar Saleh"
     assert result.warnings == []
+    claim = approved_import_service.claim_staged(result.token, owner_user_id=17)
+    assert claim.ocr_text.endswith("Violation details")
+    approved_import_service.release_claim(claim)
 
 
 def test_staged_import_is_scoped_to_uploading_user(
