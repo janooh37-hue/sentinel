@@ -144,4 +144,97 @@ describe('ViolationsTab deep-link targeting', () => {
     expect(screen.getByTestId('violation-row-41')).toHaveAttribute('data-highlighted', 'false')
     expect(screen.getByTestId('violation-row-42')).toHaveAttribute('data-highlighted', 'false')
   })
+  it('refreshes cached full rows before consuming an absent target', async () => {
+    const onConsumed = vi.fn()
+    vi.mocked(api.listViolations)
+      .mockClear()
+      .mockResolvedValueOnce([fullRows[0]])
+      .mockResolvedValueOnce(fullRows)
+    wrap(
+      <ViolationsTab
+        employeeId="G100"
+        violations={snapshotRows}
+        openId={42}
+        onOpenConsumed={onConsumed}
+      />,
+    )
+    const row = await screen.findByTestId('violation-row-42')
+    await waitFor(() => expect(api.listViolations).toHaveBeenCalledTimes(2))
+    expect(row).toHaveAttribute('data-highlighted', 'true')
+    expect(onConsumed).toHaveBeenCalledOnce()
+  })
+
+  it('does not suppress a target when an effect cleanup cancels its frame', async () => {
+    const callbacks = new Map<number, FrameRequestCallback>()
+    let nextFrame = 0
+    globalThis.requestAnimationFrame = (callback: FrameRequestCallback) => {
+      const frame = ++nextFrame
+      callbacks.set(frame, callback)
+      return frame
+    }
+    globalThis.cancelAnimationFrame = (frame: number) => {
+      callbacks.delete(frame)
+    }
+    const onFirstConsumed = vi.fn()
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    const view = render(
+      <QueryClientProvider client={client}>
+        <ViolationsTab
+          employeeId="G100"
+          violations={snapshotRows}
+          openId={42}
+          onOpenConsumed={onFirstConsumed}
+        />
+      </QueryClientProvider>,
+    )
+    await screen.findByTestId('violation-row-42')
+    await waitFor(() => expect(callbacks.size).toBe(1))
+
+    const onRetriedConsumed = vi.fn()
+    view.rerender(
+      <QueryClientProvider client={client}>
+        <ViolationsTab
+          employeeId="G100"
+          violations={snapshotRows}
+          openId={42}
+          onOpenConsumed={onRetriedConsumed}
+        />
+      </QueryClientProvider>,
+    )
+    await waitFor(() => expect(callbacks.size).toBe(1))
+    const callback = [...callbacks.values()][0]
+    callback?.(0)
+    expect(onFirstConsumed).not.toHaveBeenCalled()
+    expect(onRetriedConsumed).toHaveBeenCalledOnce()
+  })
+
+  it('clears an old highlight when a subsequent target is absent', async () => {
+    const onConsumed = vi.fn()
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    const view = render(
+      <QueryClientProvider client={client}>
+        <ViolationsTab
+          employeeId="G100"
+          violations={snapshotRows}
+          openId={42}
+          onOpenConsumed={onConsumed}
+        />
+      </QueryClientProvider>,
+    )
+    const row = await screen.findByTestId('violation-row-42')
+    await waitFor(() => expect(row).toHaveAttribute('data-highlighted', 'true'))
+
+    view.rerender(
+      <QueryClientProvider client={client}>
+        <ViolationsTab
+          employeeId="G100"
+          violations={snapshotRows}
+          openId={999}
+          onOpenConsumed={onConsumed}
+        />
+      </QueryClientProvider>,
+    )
+    await waitFor(() => expect(onConsumed).toHaveBeenCalledTimes(2))
+    expect(row).toHaveAttribute('data-highlighted', 'false')
+  })
 })

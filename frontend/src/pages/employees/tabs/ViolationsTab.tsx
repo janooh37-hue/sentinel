@@ -6,7 +6,7 @@
  */
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 
@@ -33,35 +33,65 @@ function useViolationTarget({
   openId,
   rowIds,
   ready,
+  refresh,
   onConsumed,
 }: {
   openId?: number | null
   rowIds: readonly number[]
   ready: boolean
+  refresh?: () => Promise<readonly { id: number }[] | undefined>
   onConsumed?: () => void
 }): number | null {
   const [highlightedId, setHighlightedId] = useState<number | null>(null)
   const lastHandled = useRef<number | null>(null)
+  const pendingId = useRef<number | null>(null)
 
   useEffect(() => {
     if (openId == null) {
       lastHandled.current = null
+      pendingId.current = null
       return
     }
-    if (!ready || lastHandled.current === openId) return
-    lastHandled.current = openId
+    if (!ready || lastHandled.current === openId || pendingId.current === openId) return
+
+    let active = true
+    let frame: number | null = null
+    const schedule = (found: boolean) => {
+      if (!active) return
+      pendingId.current = openId
+      frame = requestAnimationFrame(() => {
+        if (!active) return
+        lastHandled.current = openId
+        pendingId.current = null
+        if (found) {
+          setHighlightedId(openId)
+          document
+            .querySelector<HTMLElement>(`[data-violation-row-id="${openId}"]`)
+            ?.scrollIntoView({ block: 'center' })
+        } else {
+          setHighlightedId(null)
+        }
+        onConsumed?.()
+      })
+    }
+
     const found = rowIds.includes(openId)
-    const frame = requestAnimationFrame(() => {
-      if (found) {
-        setHighlightedId(openId)
-        document
-          .querySelector<HTMLElement>(`[data-violation-row-id="${openId}"]`)
-          ?.scrollIntoView({ block: 'center' })
-      }
-      onConsumed?.()
-    })
-    return () => cancelAnimationFrame(frame)
-  }, [openId, onConsumed, ready, rowIds])
+    if (!found && refresh) {
+      pendingId.current = openId
+      void refresh().then((refreshedRows) => {
+        if (!active || refreshedRows === undefined) return
+        schedule(refreshedRows.some((row) => row.id === openId))
+      })
+    } else {
+      schedule(found)
+    }
+
+    return () => {
+      active = false
+      if (frame !== null) cancelAnimationFrame(frame)
+      if (pendingId.current === openId) pendingId.current = null
+    }
+  }, [openId, onConsumed, ready, refresh, rowIds])
 
   useEffect(() => {
     if (highlightedId == null) return
@@ -71,7 +101,6 @@ function useViolationTarget({
 
   return highlightedId
 }
-
 function ViolationsReadOnly({
   violations,
   totalCount,
@@ -210,6 +239,7 @@ export function ViolationsTab({
     queryFn: () => api.listViolations(employeeId),
     enabled: shouldLoadFull,
   })
+  const refreshFull = useCallback(async () => (await fullQuery.refetch()).data, [fullQuery.refetch])
   const rows = fullQuery.data ?? violations
   const manageRows = fullQuery.data ?? []
   const targetReady =
@@ -221,6 +251,7 @@ export function ViolationsTab({
     openId,
     rowIds,
     ready: targetReady,
+    refresh: shouldLoadFull ? refreshFull : undefined,
     onConsumed: onOpenConsumed,
   })
 
