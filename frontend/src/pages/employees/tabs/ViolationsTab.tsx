@@ -239,13 +239,20 @@ export function ViolationsTab({
     queryFn: () => api.listViolations(employeeId),
     enabled: shouldLoadFull,
   })
-  const refreshFull = useCallback(async () => (await fullQuery.refetch()).data, [fullQuery.refetch])
+  const refreshFull = useCallback(async () => {
+    try {
+      const result = await fullQuery.refetch()
+      return result.isError ? undefined : result.data
+    } catch {
+      return undefined
+    }
+  }, [fullQuery.refetch])
   const rows = fullQuery.data ?? violations
   const manageRows = fullQuery.data ?? []
   const targetReady =
     !shouldLoadFull ||
-    fullQuery.data !== undefined ||
-    (!fullQuery.isPending && !fullQuery.isError)
+    (!fullQuery.isError &&
+      (fullQuery.data !== undefined || (!fullQuery.isPending && !fullQuery.isError)))
   const rowIds = useMemo(() => rows.map((row) => row.id), [rows])
   const highlightedId = useViolationTarget({
     openId,
@@ -255,7 +262,7 @@ export function ViolationsTab({
     onConsumed: onOpenConsumed,
   })
 
-  if (shouldLoadFull && fullQuery.isError && fullQuery.data === undefined) {
+  if (shouldLoadFull && fullQuery.isError) {
     return (
       <div className="space-y-3 rounded-2xl border border-destructive/30 bg-surface p-6 text-destructive">
         <p role="alert">{apiErrorMessage(fullQuery.error)}</p>

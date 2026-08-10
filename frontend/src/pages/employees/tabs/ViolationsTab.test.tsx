@@ -27,6 +27,7 @@ vi.mock('@/lib/api', () => ({
   },
   getNotifyStatus: vi.fn().mockResolvedValue({ enabled: false, last: null }),
   sendNotify: vi.fn(),
+  apiErrorMessage: (error: unknown) => String(error),
 }))
 
 import { api } from '@/lib/api'
@@ -162,6 +163,26 @@ describe('ViolationsTab deep-link targeting', () => {
     await waitFor(() => expect(api.listViolations).toHaveBeenCalledTimes(2))
     expect(row).toHaveAttribute('data-highlighted', 'true')
     expect(onConsumed).toHaveBeenCalledOnce()
+  })
+  it('retains the target and shows refresh failure with cached rows', async () => {
+    const onConsumed = vi.fn()
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    client.setQueryData(['violations', 'G100'], [fullRows[0]])
+    vi.mocked(api.listViolations).mockRejectedValue(new Error('refresh failed'))
+    render(
+      <QueryClientProvider client={client}>
+        <ViolationsTab
+          employeeId="G100"
+          violations={snapshotRows}
+          openId={42}
+          onOpenConsumed={onConsumed}
+        />
+      </QueryClientProvider>,
+    )
+    expect(await screen.findByTestId('violation-row-41')).toBeInTheDocument()
+    expect(await screen.findByRole('alert')).toHaveTextContent('refresh failed')
+    expect(onConsumed).not.toHaveBeenCalled()
+    expect(screen.getByText('Retry')).toBeInTheDocument()
   })
 
   it('does not suppress a target when an effect cleanup cancels its frame', async () => {
