@@ -64,6 +64,9 @@ const BASE_BOOK: BookRead = {
   versions: [],
   doc_manager_has_signature: false,
   current_template_id: null,
+  included_papers_revision: 0,
+  included_papers_fixed_page_count: 0,
+  included_papers_total_page_count: 0,
 }
 
 const ACTIVE_SESSION_BOOK: BookRead = {

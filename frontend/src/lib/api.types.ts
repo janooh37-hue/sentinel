@@ -1710,6 +1710,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/books/{book_id}/included-papers/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Preview Included Papers */
+        post: operations["preview_included_papers_api_v1_books__book_id__included_papers_preview_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/books/{book_id}/included-papers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Save Included Papers */
+        put: operations["save_included_papers_api_v1_books__book_id__included_papers_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/books/{book_id}": {
         parameters: {
             query?: never;
@@ -4391,6 +4425,27 @@ export interface components {
             attachment_paths?: string[];
             /** Versions */
             versions?: components["schemas"]["BookVersionRead"][];
+            /** Original Creator User Id */
+            original_creator_user_id?: number | null;
+            /**
+             * Included Papers Revision
+             * @default 0
+             */
+            included_papers_revision: number;
+            /**
+             * Included Papers Fixed Page Count
+             * @default 0
+             */
+            included_papers_fixed_page_count: number;
+            /**
+             * Included Papers Total Page Count
+             * @default 0
+             */
+            included_papers_total_page_count: number;
+            /** Included Papers */
+            included_papers?: components["schemas"]["IncludedPaperRead"][];
+            /** Included Papers History */
+            included_papers_history?: components["schemas"]["IncludedPapersHistoryRead"][];
             /** Sms */
             sms?: components["schemas"]["NotifyMessageRead"][];
             /** Search Snippet */
@@ -5838,6 +5893,8 @@ export interface components {
             source: "staged" | "record_document" | "record_attachment";
             /** Staged Token */
             staged_token?: string | null;
+            /** Original Name */
+            original_name?: string | null;
             /** Book Id */
             book_id?: number | null;
             /** Attachment Index */
@@ -5935,6 +5992,103 @@ export interface components {
             filename: string;
             /** Format */
             format: string;
+        };
+        /** IncludedPaperProposal */
+        IncludedPaperProposal: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Staged Token */
+            staged_token?: string | null;
+            /** Original Name */
+            original_name?: string | null;
+        };
+        /** IncludedPaperRead */
+        IncludedPaperRead: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Original Name */
+            original_name: string;
+            /** Slot Key */
+            slot_key?: string | null;
+            /** Media Type */
+            media_type: string;
+            /** Size */
+            size: number;
+            /** Page Count */
+            page_count: number;
+            /** Added By User Id */
+            added_by_user_id?: number | null;
+            /**
+             * Added At
+             * Format: date-time
+             */
+            added_at: string;
+            /** Page Start */
+            page_start?: number | null;
+            /** Page End */
+            page_end?: number | null;
+            /**
+             * Embedded In Signed Base
+             * @default false
+             */
+            embedded_in_signed_base: boolean;
+        };
+        /** IncludedPaperReplacementRead */
+        IncludedPaperReplacementRead: {
+            /** From Name */
+            from_name: string;
+            /** To Name */
+            to_name: string;
+        };
+        /** IncludedPapersHistoryRead */
+        IncludedPapersHistoryRead: {
+            /** Actor User Id */
+            actor_user_id?: number | null;
+            /** Actor Name */
+            actor_name: string;
+            /** Revision Before */
+            revision_before: number;
+            /** Revision After */
+            revision_after: number;
+            /** Added */
+            added?: string[];
+            /** Removed */
+            removed?: string[];
+            /** Replaced */
+            replaced?: components["schemas"]["IncludedPaperReplacementRead"][];
+            /** Reordered */
+            reordered?: string[];
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+        };
+        /** IncludedPapersPreviewRead */
+        IncludedPapersPreviewRead: {
+            /** Revision */
+            revision: number;
+            /** Fixed Page Count */
+            fixed_page_count: number;
+            /** Total Page Count */
+            total_page_count: number;
+            /** Papers */
+            papers: components["schemas"]["IncludedPaperRead"][];
+            /** Pdf Base64 */
+            pdf_base64: string;
+        };
+        /** IncludedPapersRequest */
+        IncludedPapersRequest: {
+            /** Revision */
+            revision: number;
+            /** Items */
+            items: components["schemas"]["IncludedPaperProposal"][];
         };
         /**
          * JobDocumentItem
@@ -11774,6 +11928,80 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ApproverOptionRead"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    preview_included_papers_api_v1_books__book_id__included_papers_preview_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                book_id: number;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["IncludedPapersRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IncludedPapersPreviewRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    save_included_papers_api_v1_books__book_id__included_papers_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                book_id: number;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["IncludedPapersRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BookRead"];
                 };
             };
             /** @description Validation Error */

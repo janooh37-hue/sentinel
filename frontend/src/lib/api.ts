@@ -630,6 +630,12 @@ export type BookRead = components['schemas']['BookRead'] & {
   doc_manager_has_signature?: boolean
   imported_doc?: ImportedDocRead | null
 }
+export type IncludedPaperProposal = components['schemas']['IncludedPaperProposal']
+export type IncludedPaperRead = components['schemas']['IncludedPaperRead']
+export type IncludedPaperReplacementRead = components['schemas']['IncludedPaperReplacementRead']
+export type IncludedPapersHistoryRead = components['schemas']['IncludedPapersHistoryRead']
+export type IncludedPapersPreviewRead = components['schemas']['IncludedPapersPreviewRead']
+export type IncludedPapersRequest = components['schemas']['IncludedPapersRequest']
 export type BookFacetsResponse = components['schemas']['BookFacetsResponse']
 export type ServiceFacetRead = components['schemas']['ServiceFacetRead']
 
@@ -1501,6 +1507,16 @@ export const api = {
    * record's approval state. books.manage. */
   unfileSignedCopy: (bookId: number) =>
     request<BookRead>('DELETE', `/books/${bookId}/signed-copy`),
+  /** Build a side-effect-free preview of the proposed fixed-base-first package. */
+  previewIncludedPapers: (bookId: number, body: IncludedPapersRequest) =>
+    request<IncludedPapersPreviewRead>(
+      'POST',
+      `/books/${bookId}/included-papers/preview`,
+      body,
+    ),
+  /** Atomically publish the proposed package at the supplied revision. */
+  saveIncludedPapers: (bookId: number, body: IncludedPapersRequest) =>
+    request<BookRead>('PUT', `/books/${bookId}/included-papers`, body),
 
   // --- scan inbox ---
   /** List scan-inbox items, optionally filtered by `state`. */
