@@ -11,6 +11,7 @@ import {
   applyPackagePreview,
   createIncludedPapersState,
   includedPapersRequest,
+  isIncludedPapersOwner,
   isPreviewCurrent,
   moveIncludedPaper,
   removeIncludedPaper,
@@ -108,5 +109,12 @@ describe('includedPapersState', () => {
 
     state = moveIncludedPaper(state, staged.token, -1)
     expect(isPreviewCurrent(state)).toBe(false)
+  })
+
+  it('allows package management only for the record creator', () => {
+    expect(isIncludedPapersOwner({ original_creator_user_id: 12 }, 12)).toBe(true)
+    expect(isIncludedPapersOwner({ original_creator_user_id: 12 }, 13)).toBe(false)
+    expect(isIncludedPapersOwner({ original_creator_user_id: null }, 12)).toBe(false)
+    expect(isIncludedPapersOwner({ original_creator_user_id: 12 }, undefined)).toBe(false)
   })
 })

@@ -6,10 +6,11 @@
  */
 import { Suspense, lazy, useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { FileText, Loader2, Mail, Plus } from 'lucide-react'
+import { FileStack, FileText, Loader2, Mail, Plus } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
+import { useQuery } from '@tanstack/react-query'
 
-import type { BookRead } from '@/lib/api'
+import { api, type BookRead } from '@/lib/api'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -22,6 +23,8 @@ import {
 } from '@/components/ui/alert-dialog'
 import { Button } from '@/components/ui/button'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
+import { useAuth } from '@/lib/authContext'
+import { currentBookDocId } from '@/lib/bookDocument'
 import { useCapabilities } from '@/lib/useCapabilities'
 import { useFocusTrap } from '@/lib/useFocusTrap'
 import { bidi } from '@/lib/bidi'
@@ -32,6 +35,8 @@ import { canFileSignedCopy, canSendForApproval } from '@/components/books/book-d
 import { BookStatusChips } from '@/components/books/BookStatusChips'
 import { BookWordActions } from '@/components/books/BookWordActions'
 import { signedSourceOf } from './bookStateLabel'
+import { IncludedPapersDialog } from './IncludedPapersDialog'
+import { isIncludedPapersOwner } from './includedPapersState'
 import { subjectEmployeePart } from './formKind'
 import { papersOf, type Paper } from './recordPapers'
 import { serviceGlyph, useServiceLabel } from './serviceLabels'
@@ -70,6 +75,14 @@ export function RecordPane({
   const manage = useManagePaper(book?.id ?? null)
   const [deleteTarget, setDeleteTarget] = useState<Paper | null>(null)
   const [replaceTarget, setReplaceTarget] = useState<Paper | null>(null)
+  const { user } = useAuth()
+  const [includedPapersOpen, setIncludedPapersOpen] = useState(false)
+  const includedBookId = book?.id ?? null
+  const includedDetail = useQuery({
+    queryKey: ['books', 'detail', includedBookId],
+    queryFn: () => api.getBook(includedBookId!),
+    enabled: includedPapersOpen && includedBookId !== null,
+  })
 
   const papers = useMemo(() => (book ? papersOf(book) : []), [book])
 
@@ -96,6 +109,7 @@ export function RecordPane({
     setPrevBookKey(bookKey)
     setPaperIndex(initialPaperIndex)
     setFullOpen(false)
+    setIncludedPapersOpen(false)
   }
 
   useEffect(() => {
@@ -133,6 +147,11 @@ export function RecordPane({
   // Send for approval (digital route): submit a draft or re-route a pending
   // request — offered next to Scan signed copy so both routes are available.
   const showSendForApproval = canSendForApproval(state, { canManage })
+  const canManageIncludedPapers =
+    book.current_template_id != null && isIncludedPapersOwner(book, user?.id)
+  const includedDocumentId = includedDetail.data
+    ? currentBookDocId(includedDetail.data)
+    : undefined
 
   const addScanSlot = canScan ? (
     <button
@@ -214,6 +233,19 @@ export function RecordPane({
       <div className="flex shrink-0 flex-wrap gap-2 border-t border-hairline px-3.5 py-2.5">
         {/* Word session actions (Finish / Discard) — desktop, not mobile */}
         <BookWordActions book={book} />
+        {canManageIncludedPapers && (
+          <PaneBtn
+            disabled={includedDetail.isFetching}
+            onClick={() => setIncludedPapersOpen(true)}
+          >
+            {includedDetail.isFetching ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />
+            ) : (
+              <FileStack className="h-3.5 w-3.5" aria-hidden />
+            )}
+            {t('books.includedPapers.addToPdf', { defaultValue: 'Add to PDF' })}
+          </PaneBtn>
+        )}
         {state === 'none' && !isWordBook && (
           <PaneBtn primary onClick={() => onContinueDraft(book.id)}>{t('books.pane.continueDraft')}</PaneBtn>
         )}
@@ -251,6 +283,15 @@ export function RecordPane({
           </PaneBtn>
         )}
       </div>
+
+      {includedDetail.data && includedDocumentId !== undefined && (
+        <IncludedPapersDialog
+          open={includedPapersOpen}
+          onOpenChange={setIncludedPapersOpen}
+          book={includedDetail.data}
+          currentPdfUrl={api.documentDownloadUrl(includedDocumentId, 'pdf')}
+        />
+      )}
 
       <input
         ref={fileRef}

@@ -7,6 +7,13 @@ import type {
 
 export type EditableIncludedPaper = IncludedPaperRead & { staged_token?: string }
 
+export function isIncludedPapersOwner(
+  book: { original_creator_user_id?: number | null },
+  userId: number | undefined,
+): boolean {
+  return userId !== undefined && book.original_creator_user_id === userId
+}
+
 export interface IncludedPapersState {
   revision: number
   items: EditableIncludedPaper[]

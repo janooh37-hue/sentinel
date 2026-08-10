@@ -11,8 +11,11 @@ import { IncludedPapersDialog } from './IncludedPapersDialog'
 
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
-    t: (key: string, options?: { defaultValue?: string; count?: number }) =>
-      options?.defaultValue ?? key,
+    t: (key: string, options?: Record<string, unknown> & { defaultValue?: string }) =>
+      (options?.defaultValue ?? key).replace(
+        /\{\{(\w+)\}\}/g,
+        (_, name: string) => String(options?.[name] ?? `{{${name}}}`),
+      ),
     i18n: { language: 'en' },
   }),
 }))
@@ -44,6 +47,19 @@ const book = {
   approval_state: 'approved',
   included_papers_revision: 3,
   included_papers_fixed_page_count: 2,
+  included_papers_history: [
+    {
+      actor_user_id: 2,
+      actor_name: 'Records manager',
+      revision_before: 2,
+      revision_after: 3,
+      added: ['required.pdf'],
+      removed: ['old.pdf'],
+      replaced: [{ from_name: 'before.pdf', to_name: 'after.pdf' }],
+      reordered: ['required.pdf', 'after.pdf'],
+      created_at: '2026-08-10T09:00:00Z',
+    },
+  ],
   included_papers_total_page_count: 4,
   included_papers: [embedded],
 }
@@ -107,6 +123,11 @@ describe('IncludedPapersDialog', () => {
     expect(screen.getByText('Generated form')).toBeVisible()
     expect(screen.getByText('required.pdf')).toBeVisible()
     expect(screen.getByText('Fixed in signed PDF')).toBeVisible()
+    expect(screen.getByText('Records manager')).toBeVisible()
+    expect(screen.getByText('Added: required.pdf')).toBeVisible()
+    expect(screen.getByText('Removed: old.pdf')).toBeVisible()
+    expect(screen.getByText('Replaced: before.pdf → after.pdf')).toBeVisible()
+    expect(screen.getByText('Reordered: required.pdf, after.pdf')).toBeVisible()
     expect(screen.queryByRole('button', { name: 'Remove required.pdf' })).not.toBeInTheDocument()
 
     await user.upload(screen.getByLabelText('Add PDF or images'), late)

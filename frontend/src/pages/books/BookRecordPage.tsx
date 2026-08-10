@@ -20,6 +20,7 @@ import {
   Clock,
   CornerUpLeft,
   FileText,
+  FileStack,
   Loader2,
   PenLine,
   Printer,
@@ -55,8 +56,10 @@ import { cn } from '@/lib/utils'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import { BookStatusChips } from '@/components/books/BookStatusChips'
 import { BookWordActions } from '@/components/books/BookWordActions'
+import { IncludedPapersDialog } from './IncludedPapersDialog'
 import { QueueNav } from './QueueNav'
 import { MarkToggle } from './MarkToggle'
+import { isIncludedPapersOwner } from './includedPapersState'
 import { HeaderBtn } from './HeaderBtn'
 import { nextAfterDecision, useAwaitingQueue } from './useAwaitingQueue'
 
@@ -271,6 +274,7 @@ export function BookRecordPage(): React.JSX.Element {
   const fileSignedRef = useRef<HTMLInputElement | null>(null)
   const replaceSignedRef = useRef<HTMLInputElement | null>(null)
   const [unfileOpen, setUnfileOpen] = useState(false)
+  const [includedPapersOpen, setIncludedPapersOpen] = useState(false)
 
   const [submitOpen, setSubmitOpen] = useState(false)
   // Inline reason panel for return/reject (backend requires a non-empty reason).
@@ -306,6 +310,10 @@ export function BookRecordPage(): React.JSX.Element {
         current.signed_pdf_url ? '&rev=signed' : ''
       }`
     : (book?.imported_doc?.pdf_url ?? null)
+  const canManageIncludedPapers =
+    book !== undefined &&
+    current?.document_id != null &&
+    isIncludedPapersOwner(book, user?.id)
 
   const submitter = book?.submitted_by_name ?? '—'
   const state = book?.approval_state ?? 'none'
@@ -517,6 +525,13 @@ export function BookRecordPage(): React.JSX.Element {
             label={t('books.record.print')}
             onClick={() => window.print()}
           />
+          {canManageIncludedPapers && (
+            <HeaderBtn
+              icon={<FileStack className="h-3.5 w-3.5" />}
+              label={t('books.includedPapers.addToPdf', { defaultValue: 'Add to PDF' })}
+              onClick={() => setIncludedPapersOpen(true)}
+            />
+          )}
           {canMark && (
             <MarkToggle armed={armed} onToggle={() => setArmedFor(armed ? null : bookId)} />
           )}
@@ -657,6 +672,15 @@ export function BookRecordPage(): React.JSX.Element {
           )}
         </div>
       </header>
+
+      {book && pdfUrl && canManageIncludedPapers && (
+        <IncludedPapersDialog
+          open={includedPapersOpen}
+          onOpenChange={setIncludedPapersOpen}
+          book={book}
+          currentPdfUrl={pdfUrl}
+        />
+      )}
 
       <ConfirmDialog
         open={unfileOpen}

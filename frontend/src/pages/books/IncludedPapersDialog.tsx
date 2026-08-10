@@ -10,6 +10,7 @@ import {
   Info,
   Loader2,
   LockKeyhole,
+  History,
   Plus,
   RefreshCw,
   Save,
@@ -26,7 +27,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { apiErrorMessage } from '@/lib/api'
-import type { IncludedPaperRead } from '@/lib/api'
+import type { IncludedPaperRead, IncludedPapersHistoryRead } from '@/lib/api'
 import { formatBytes } from '@/lib/fileTypes'
 import { cn } from '@/lib/utils'
 
@@ -42,6 +43,7 @@ export interface IncludedPapersDialogBook {
   approval_state: string
   included_papers_revision: number
   included_papers_fixed_page_count: number
+  included_papers_history?: IncludedPapersHistoryRead[]
   included_papers_total_page_count: number
   included_papers?: IncludedPaperRead[]
 }
@@ -85,7 +87,7 @@ function IncludedPapersWorkspace({
   onCancel: () => void
   onSaved: () => void
 }): React.JSX.Element {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   const editor = useIncludedPapersEditor(book)
   const [mobileTab, setMobileTab] = useState<'preview' | 'order'>('preview')
   const addInputRef = useRef<HTMLInputElement | null>(null)
@@ -367,6 +369,7 @@ function IncludedPapersWorkspace({
             <button
               type="button"
               onClick={() => addInputRef.current?.click()}
+
               className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl border border-dashed border-primary/30 bg-primary-soft/40 px-3 py-3 text-xs font-semibold text-primary transition-colors hover:bg-primary-soft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
               <Plus className="h-3.5 w-3.5" strokeWidth={1.8} aria-hidden />
@@ -387,6 +390,71 @@ function IncludedPapersWorkspace({
                       'Saving keeps the approval and sends one summary notification to all approving managers. The change is recorded in history.',
                   })}
                 </p>
+              </div>
+            )}
+            {(book.included_papers_history?.length ?? 0) > 0 && (
+              <div className="mt-5 border-t border-hairline pt-4">
+                <h4 className="flex items-center gap-2 text-xs font-bold text-foreground">
+                  <History className="h-3.5 w-3.5 text-primary" strokeWidth={1.8} aria-hidden />
+                  {t('books.includedPapers.history', { defaultValue: 'Recent changes' })}
+                </h4>
+                <ol className="mt-2 space-y-2">
+                  {book.included_papers_history?.slice(0, 3).map((entry) => (
+                    <li
+                      key={`${entry.revision_after}-${entry.created_at}`}
+                      className="rounded-lg border border-hairline bg-surface-tinted/35 px-3 py-2.5"
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <strong className="truncate text-[0.72em] text-foreground" dir="auto">
+                          {entry.actor_name}
+                        </strong>
+                        <time
+                          dateTime={entry.created_at}
+                          className="shrink-0 font-mono text-[0.62em] text-faint"
+                          dir="ltr"
+                        >
+                          {new Date(entry.created_at).toLocaleDateString(i18n.language)}
+                        </time>
+                      </div>
+                      <p className="mt-1 flex min-w-0 flex-wrap gap-x-2 text-[0.68em] text-muted-foreground">
+                        {entry.added.length > 0 && (
+                          <span dir="auto">
+                            {t('books.includedPapers.historyAdded', {
+                              names: entry.added.join(', '),
+                              defaultValue: 'Added: {{names}}',
+                            })}
+                          </span>
+                        )}
+                        {entry.removed.length > 0 && (
+                          <span dir="auto">
+                            {t('books.includedPapers.historyRemoved', {
+                              names: entry.removed.join(', '),
+                              defaultValue: 'Removed: {{names}}',
+                            })}
+                          </span>
+                        )}
+                        {entry.replaced.length > 0 && (
+                          <span dir="auto">
+                            {t('books.includedPapers.historyReplaced', {
+                              names: entry.replaced
+                                .map((item) => `${item.from_name} → ${item.to_name}`)
+                                .join(', '),
+                              defaultValue: 'Replaced: {{names}}',
+                            })}
+                          </span>
+                        )}
+                        {entry.reordered.length > 0 && (
+                          <span dir="auto">
+                            {t('books.includedPapers.historyReordered', {
+                              names: entry.reordered.join(', '),
+                              defaultValue: 'Reordered: {{names}}',
+                            })}
+                          </span>
+                        )}
+                      </p>
+                    </li>
+                  ))}
+                </ol>
               </div>
             )}
           </div>
