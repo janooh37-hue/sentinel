@@ -1,7 +1,7 @@
 # Record Included Papers — Managed Combined PDF
 
 **Date:** 2026-08-10  
-**Status:** Approved design; awaiting written-spec review  
+**Status:** Approved
 **Area:** Records, generated documents, PDF packaging, record history, Web Push
 
 ## 1. Problem
