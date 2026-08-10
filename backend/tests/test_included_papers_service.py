@@ -1,0 +1,261 @@
+from __future__ import annotations
+
+import importlib
+from pathlib import Path
+
+import fitz
+import pytest
+from sqlalchemy.orm import Session
+
+from app.api.errors import AppError
+from app.config import get_settings
+from app.db.models import Book, BookCategory, BookVersion, Document, User
+from app.services import document_service
+
+
+def _service():
+    return importlib.import_module("app.services.included_papers_service")
+
+
+def _pdf(path: Path, labels: list[str]) -> Path:
+    doc = fitz.open()
+    try:
+        for label in labels:
+            page = doc.new_page(width=300, height=400)
+            page.insert_text((40, 80), label)
+        doc.save(path)
+    finally:
+        doc.close()
+    return path
+
+
+def _texts(data: bytes) -> list[str]:
+    with fitz.open("pdf", data) as doc:
+        return [page.get_text().strip() for page in doc]
+
+
+def _record(
+    db: Session,
+    tmp_path: Path,
+    *,
+    base: Path | None,
+    published: Path,
+    paper: Path,
+    state: str = "none",
+) -> tuple[Book, BookVersion, Document, User, User]:
+    creator = User(
+        email="creator@example.ae",
+        password_hash="x",
+        role="operator",
+        status="active",
+        display_name="Record creator",
+    )
+    other = User(
+        email="manager@example.ae",
+        password_hash="x",
+        role="manager",
+        status="active",
+        display_name="Records manager",
+    )
+    db.add_all([creator, other, BookCategory(id="HR", prefix="HR")])
+    db.flush()
+    document = Document(
+        employee_id=None,
+        template_id="General Book",
+        ref_number="HR-1",
+        docx_path="source.docx",
+        pdf_path=published.relative_to(tmp_path).as_posix(),
+        base_pdf_path=base.relative_to(tmp_path).as_posix() if base else None,
+        submission_id="submission-1",
+        role="primary",
+    )
+    db.add(document)
+    db.flush()
+    book = Book(
+        category_id="HR",
+        ref_number="HR-1",
+        subject="Test record",
+        approval_state=state,
+        merged_attachment_paths=[
+            {
+                "path": paper.relative_to(tmp_path).as_posix(),
+                "slot_key": "medical_certificate",
+            }
+        ],
+    )
+    db.add(book)
+    db.flush()
+    version = BookVersion(
+        book_id=book.id,
+        version_no=1,
+        document_id=document.id,
+        template_id="General Book",
+        fields={"subject": "Test record"},
+        status=state,
+        created_by_user_id=creator.id,
+    )
+    db.add(version)
+    db.commit()
+    db.refresh(book)
+    db.refresh(version)
+    return book, version, document, creator, other
+
+
+def test_legacy_metadata_is_deterministic_side_effect_free_and_creator_only(
+    db_session: Session, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    monkeypatch.setenv("GSSG_DATA_DIR", str(tmp_path))
+    get_settings.cache_clear()
+    base = _pdf(tmp_path / "base.pdf", ["FORM"])
+    paper = _pdf(tmp_path / "medical.pdf", ["PAPER-1", "PAPER-2"])
+    published = _pdf(tmp_path / "published.pdf", ["FORM", "PAPER-1", "PAPER-2"])
+    book, _version, _document, creator, other = _record(
+        db_session, tmp_path, base=base, published=published, paper=paper
+    )
+    before = [dict(item) for item in book.merged_attachment_paths]
+    service = _service()
+
+    first = service.get_package(db_session, book.id, user_id=creator.id)
+    second = service.get_package(db_session, book.id, user_id=creator.id)
+
+    assert first.revision == 0
+    assert _texts(first.pdf_bytes) == _texts(second.pdf_bytes)
+    assert first.papers[0].id == second.papers[0].id
+    assert first.papers[0].original_name == "medical.pdf"
+    assert first.papers[0].slot_key == "medical_certificate"
+    assert first.papers[0].page_count == 2
+    assert (first.papers[0].page_start, first.papers[0].page_end) == (2, 3)
+    assert _texts(first.pdf_bytes) == ["FORM", "PAPER-1", "PAPER-2"]
+    assert book.merged_attachment_paths == before
+    assert book.included_papers_revision == 0
+
+    with pytest.raises(AppError) as forbidden:
+        service.get_package(db_session, book.id, user_id=other.id)
+    assert forbidden.value.http_status == 403
+    assert forbidden.value.code == "INCLUDED_PAPERS_CREATOR_ONLY"
+    get_settings.cache_clear()
+
+
+def test_existing_flattened_scan_projects_current_papers_as_embedded(
+    db_session: Session, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    monkeypatch.setenv("GSSG_DATA_DIR", str(tmp_path))
+    get_settings.cache_clear()
+    base = _pdf(tmp_path / "base.pdf", ["FORM"])
+    paper = _pdf(tmp_path / "paper.pdf", ["PAPER"])
+    published = _pdf(tmp_path / "published.pdf", ["FORM", "PAPER"])
+    book, version, _document, creator, _other = _record(
+        db_session,
+        tmp_path,
+        base=base,
+        published=published,
+        paper=paper,
+        state="approved",
+    )
+    signed_dir = tmp_path / "book_attachments" / str(book.id)
+    signed_dir.mkdir(parents=True)
+    signed_scan = _pdf(signed_dir / "signed.pdf", ["SIGNED-FORM", "PAPER"])
+    version.signed_pdf_path = signed_scan.relative_to(tmp_path).as_posix()
+    version.signed_base_pdf_path = None
+    version.signed_embedded_paper_ids = []
+    db_session.commit()
+    service = _service()
+
+    package = service.get_package(db_session, book.id, user_id=creator.id)
+
+    assert package.base_page_count == 2
+    assert package.total_page_count == 2
+    assert _texts(package.pdf_bytes) == ["SIGNED-FORM", "PAPER"]
+    assert package.papers[0].embedded_in_signed_base
+    assert package.papers[0].page_start is None
+    assert package.papers[0].page_end is None
+    assert version.signed_embedded_paper_ids == []
+    get_settings.cache_clear()
+
+
+def test_existing_generated_package_reconstructs_form_and_companion_before_papers(
+    db_session: Session, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    monkeypatch.setenv("GSSG_DATA_DIR", str(tmp_path))
+    get_settings.cache_clear()
+    form = _pdf(tmp_path / "reconstructed.pdf", ["FORM"])
+    paper = _pdf(tmp_path / "paper.pdf", ["PAPER"])
+    published = _pdf(tmp_path / "published.pdf", ["FORM", "PAPER"])
+    book, _version, document, creator, _other = _record(
+        db_session, tmp_path, base=None, published=published, paper=paper
+    )
+    (tmp_path / "source.docx").write_bytes(b"docx placeholder")
+    companion = _pdf(tmp_path / "companion.pdf", ["COMPANION"])
+    db_session.add(
+        Document(
+            employee_id=None,
+            template_id="Leave Undertaking",
+            ref_number="HR-1",
+            docx_path="companion.docx",
+            pdf_path=companion.relative_to(tmp_path).as_posix(),
+            submission_id=document.submission_id,
+            role="companion",
+        )
+    )
+    db_session.commit()
+    monkeypatch.setattr(document_service, "convert_docx_to_pdf", lambda _path: form)
+    service = _service()
+
+    package = service.get_package(db_session, book.id, user_id=creator.id)
+
+    assert package.base_page_count == 2
+    assert _texts(package.pdf_bytes) == ["FORM", "COMPANION", "PAPER"]
+    db_session.refresh(document)
+    assert document.base_pdf_path is None
+    assert book.merged_attachment_paths[0] == {
+        "path": paper.relative_to(tmp_path).as_posix(),
+        "slot_key": "medical_certificate",
+    }
+    get_settings.cache_clear()
+
+
+def test_existing_in_app_signature_is_rebuilt_without_old_included_tail(
+    db_session: Session, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    monkeypatch.setenv("GSSG_DATA_DIR", str(tmp_path))
+    get_settings.cache_clear()
+    generated = _pdf(tmp_path / "generated-base.pdf", ["FORM"])
+    paper = _pdf(tmp_path / "paper.pdf", ["PAPER"])
+    published = _pdf(tmp_path / "published.pdf", ["FORM", "PAPER"])
+    book, version, _document, creator, signer = _record(
+        db_session,
+        tmp_path,
+        base=generated,
+        published=published,
+        paper=paper,
+        state="approved",
+    )
+    signed_published = _pdf(tmp_path / "signed-published.pdf", ["SIGNED-FORM", "PAPER"])
+    signed_form = _pdf(tmp_path / "signed-form.pdf", ["SIGNED-FORM"])
+    signature = tmp_path / "signature.png"
+    signature.write_bytes(b"signature")
+    signer.signature_path = str(signature)
+    version.signed_pdf_path = signed_published.relative_to(tmp_path).as_posix()
+    version.signed_base_pdf_path = None
+    version.signed_by_user_id = signer.id
+    db_session.commit()
+    calls: list[dict[str, object]] = []
+
+    def fake_render(*_args, **kwargs):
+        calls.append(kwargs)
+        output = Path(kwargs["output_dir"]) / "rebuilt-signed.pdf"
+        output.write_bytes(signed_form.read_bytes())
+        return str(output)
+
+    monkeypatch.setattr(document_service, "render_signed_pdf", fake_render)
+    service = _service()
+
+    package = service.get_package(db_session, book.id, user_id=creator.id)
+
+    assert _texts(package.pdf_bytes) == ["SIGNED-FORM", "PAPER"]
+    assert len(calls) == 1
+    assert calls[0]["merge_included_papers"] is False
+    assert Path(calls[0]["output_dir"]).name.startswith("included-base-")
+    db_session.refresh(version)
+    assert version.signed_base_pdf_path is None
+    get_settings.cache_clear()

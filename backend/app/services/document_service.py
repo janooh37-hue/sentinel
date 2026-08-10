@@ -1931,6 +1931,8 @@ def _sign_authored_docx(
     source: Path,
     signer_signature_path: str,
     signer_names: Sequence[str] = (),
+    output_dir: Path | None = None,
+    merge_included_papers: bool = True,
 ) -> str:
     """Signed artifact for a Word-authored book: copy docx → stamp signature →
     convert. The paper already carries ref/date/footer/Aztec from its own
@@ -1941,7 +1943,8 @@ def _sign_authored_docx(
     from app.services import settings_service
 
     book = version.book
-    out_dir = _output_dir_for_admin("General Book")
+    out_dir = output_dir or _output_dir_for_admin("General Book")
+    out_dir.mkdir(parents=True, exist_ok=True)
     ts = datetime.now()
     docx_name = _build_docx_filename("General Book", book.ref_number.replace("/", "-"), ts)
     docx_path = Vault.collision_safe_name(out_dir, docx_name.replace(".docx", "_signed.docx"))
@@ -1990,7 +1993,7 @@ def _sign_authored_docx(
         log.error("Signed PDF conversion crashed for %s", docx_path, exc_info=True)
     if pdf_path is None:
         log.warning("Signed PDF unavailable for %s — returning signed DOCX", docx_path)
-    if pdf_path is not None:
+    if pdf_path is not None and merge_included_papers:
         _merge_book_attachments(db, book, pdf_path)
 
     settings = get_settings()
@@ -2012,6 +2015,8 @@ def render_signed_pdf(
     version: BookVersion,
     signer_signature_path: str,
     signer_names: Sequence[str] = (),
+    output_dir: Path | None = None,
+    merge_included_papers: bool = True,
 ) -> str:
     """Re-render ``version``'s document with the signer's signature embedded in
     the manager slot (``sig1_path``); return the signed PDF path relative to
@@ -2044,6 +2049,8 @@ def render_signed_pdf(
             source=authored,
             signer_signature_path=signer_signature_path,
             signer_names=signer_names,
+            output_dir=output_dir,
+            merge_included_papers=merge_included_papers,
         )
     template_id = version.template_id or ""
     if template_id not in TEMPLATE_FILES:
@@ -2089,7 +2096,8 @@ def render_signed_pdf(
         if resolved:
             data["recipient_name"] = resolved
 
-    out_dir = _output_dir_for_admin(template_id)
+    out_dir = output_dir or _output_dir_for_admin(template_id)
+    out_dir.mkdir(parents=True, exist_ok=True)
     ts = datetime.now()
     docx_name = _build_docx_filename(
         template_id, (employee.name_en if employee is not None else "signed") or "signed", ts
@@ -2119,9 +2127,9 @@ def render_signed_pdf(
     if pdf_path is None:
         log.warning("Signed PDF unavailable for %s — conversion returned no file", docx_path)
 
-    # Re-merge the book's combined-PDF attachments (spec §6): the generated
-    # PDF carried them, so the signed artifact must too.
-    if pdf_path is not None:
+    # Legacy signing callers still append the existing merged set. Package
+    # reconstruction requests the pristine signed form instead.
+    if pdf_path is not None and merge_included_papers:
         _merge_book_attachments(db, book, pdf_path)
 
     settings = get_settings()

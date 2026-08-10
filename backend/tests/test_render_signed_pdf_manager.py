@@ -63,12 +63,17 @@ def test_signed_copy_keeps_doc_manager_name(db_session, tmp_path, monkeypatch):
     )
     db_session.add(version)
     db_session.flush()
+    private_output = tmp_path / "private-signed-base"
 
     rel = document_service.render_signed_pdf(
-        db_session, version=version, signer_signature_path=str(sig)
+        db_session,
+        version=version,
+        signer_signature_path=str(sig),
+        output_dir=private_output,
+        merge_included_papers=False,
     )
 
-    docx = next((tmp_path / "output").rglob("*_signed.docx"))
+    docx = next(private_output.glob("*_signed.docx"))
     text = _docx_text(docx)
     assert "SAEED RASHED" in text, "signed copy dropped the manager name"
     assert rel  # a path was returned
