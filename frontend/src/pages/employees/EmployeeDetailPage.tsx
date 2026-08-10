@@ -13,7 +13,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { useLocation, useNavigate, useParams } from 'react-router-dom'
+import { useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { toast } from 'sonner'
 
 import { api } from '@/lib/api'
@@ -35,12 +35,53 @@ import { MessagesTab } from './tabs/MessagesTab'
 import { ProfileTab } from './tabs/ProfileTab'
 import { ViolationsTab } from './tabs/ViolationsTab'
 
+const VALID_TABS = new Set<Tab>([
+  'profile',
+  'documents',
+  'leaves',
+  'messages',
+  'activity',
+  'violations',
+])
+
+function tabFromSearch(params: URLSearchParams): Tab {
+  const value = params.get('tab')
+  return value && VALID_TABS.has(value as Tab) ? (value as Tab) : 'profile'
+}
 export function EmployeeDetailPage(): React.JSX.Element {
+
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
   const location = useLocation()
+  const [searchParams, setSearchParams] = useSearchParams()
   const { i18n, t } = useTranslation()
-  const [tab, setTab] = useState<Tab>('profile')
+  const tab = tabFromSearch(searchParams)
+  const rawOpenId = searchParams.get('open')
+  const parsedOpenId = rawOpenId && /^\d+$/.test(rawOpenId) ? Number(rawOpenId) : null
+  const violationOpenId =
+    tab === 'violations' && Number.isSafeInteger(parsedOpenId) && (parsedOpenId ?? 0) > 0
+      ? parsedOpenId
+      : null
+  const handleTabChange = useCallback(
+    (nextTab: Tab) => {
+      setSearchParams((previous) => {
+        const next = new URLSearchParams(previous)
+        if (nextTab === 'profile') next.delete('tab')
+        else next.set('tab', nextTab)
+        next.delete('open')
+        return next
+      })
+    },
+    [setSearchParams],
+  )
+  const consumeViolationOpen = useCallback(() => {
+    setSearchParams((previous) => {
+      const next = new URLSearchParams(previous)
+      next.set('tab', 'violations')
+      next.delete('open')
+      return next
+    }, { replace: true })
+  }, [setSearchParams])
   const [editing, setEditing] = useState(false)
   const [statusOpen, setStatusOpen] = useState(false)
   // Gaps-card → ProfileTab handoff: which field to open an inline editor for.
@@ -225,7 +266,7 @@ export function EmployeeDetailPage(): React.JSX.Element {
                 if (field) {
                   // Per-field: switch to the profile tab and open that row's
                   // inline editor in place.
-                  setTab('profile')
+                  handleTabChange('profile')
                   setFixField(field)
                 } else {
                   // «أكمل البيانات الآن» — bulk path keeps the full edit form.
@@ -247,7 +288,7 @@ export function EmployeeDetailPage(): React.JSX.Element {
                 messages: data.recent_sms.length,
                 profileGaps: data.missing_fields.length,
               }}
-              onChange={setTab}
+              onChange={handleTabChange}
             />
             {tab === 'profile' && (
               <ProfileTab
@@ -272,6 +313,8 @@ export function EmployeeDetailPage(): React.JSX.Element {
                 employeeId={data.employee.id}
                 violations={data.recent_violations}
                 totalCount={data.stats.violations}
+                openId={violationOpenId}
+                onOpenConsumed={consumeViolationOpen}
               />
             )}
             {tab === 'activity' && <ActivityTab activity={data.recent_activity} />}

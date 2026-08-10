@@ -6,27 +6,80 @@
  */
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useMemo } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 
 import { ViolationsTable } from '@/components/employees/ViolationsTable'
 import { api, apiErrorMessage } from '@/lib/api'
-import type { RecentViolationRead, ViolationCreate, ViolationUpdate } from '@/lib/api'
+import type {
+  RecentViolationRead,
+  ViolationCreate,
+  ViolationRead,
+  ViolationUpdate,
+} from '@/lib/api'
 import { useCapabilities } from '@/lib/useCapabilities'
+import { cn } from '@/lib/utils'
 
 interface Props {
   employeeId: string
   violations: RecentViolationRead[]
   totalCount?: number
+  openId?: number | null
+  onOpenConsumed?: () => void
+}
+
+function useViolationTarget({
+  openId,
+  rowIds,
+  ready,
+  onConsumed,
+}: {
+  openId?: number | null
+  rowIds: readonly number[]
+  ready: boolean
+  onConsumed?: () => void
+}): number | null {
+  const [highlightedId, setHighlightedId] = useState<number | null>(null)
+  const lastHandled = useRef<number | null>(null)
+
+  useEffect(() => {
+    if (openId == null) {
+      lastHandled.current = null
+      return
+    }
+    if (!ready || lastHandled.current === openId) return
+    lastHandled.current = openId
+    const found = rowIds.includes(openId)
+    const frame = requestAnimationFrame(() => {
+      if (found) {
+        setHighlightedId(openId)
+        document
+          .querySelector<HTMLElement>(`[data-violation-row-id="${openId}"]`)
+          ?.scrollIntoView({ block: 'center' })
+      }
+      onConsumed?.()
+    })
+    return () => cancelAnimationFrame(frame)
+  }, [openId, onConsumed, ready, rowIds])
+
+  useEffect(() => {
+    if (highlightedId == null) return
+    const timer = window.setTimeout(() => setHighlightedId(null), 1800)
+    return () => window.clearTimeout(timer)
+  }, [highlightedId])
+
+  return highlightedId
 }
 
 function ViolationsReadOnly({
   violations,
   totalCount,
+  highlightedId,
 }: {
   violations: RecentViolationRead[]
   totalCount?: number
+  highlightedId: number | null
 }): React.JSX.Element {
   const { t, i18n } = useTranslation()
   const dateFmt = useMemo(
@@ -53,7 +106,13 @@ function ViolationsReadOnly({
         {violations.map((v) => (
           <div
             key={v.id}
-            className="grid grid-cols-[120px_140px_1fr_100px] items-center gap-4 border-b border-hairline px-4 py-2.5 last:border-b-0"
+            data-testid={`violation-row-${v.id}`}
+            data-violation-row-id={v.id}
+            data-highlighted={highlightedId === v.id ? 'true' : 'false'}
+            className={cn(
+              'grid grid-cols-[120px_140px_1fr_100px] items-center gap-4 border-b border-hairline px-4 py-2.5 last:border-b-0',
+              highlightedId === v.id && 'bg-primary-soft ring-1 ring-inset ring-primary/30',
+            )}
           >
             <div className="font-mono text-[0.86em] text-muted-foreground">
               {dateFmt.format(new Date(v.date))}
@@ -81,17 +140,18 @@ function ViolationsReadOnly({
   )
 }
 
-function ViolationsManage({ employeeId }: { employeeId: string }): React.JSX.Element {
+function ViolationsManage({
+  employeeId,
+  rows,
+  highlightedId,
+}: {
+  employeeId: string
+  rows: ViolationRead[]
+  highlightedId: number | null
+}): React.JSX.Element {
   const { t } = useTranslation()
   const qc = useQueryClient()
-
-  const { data: rows = [] } = useQuery({
-    queryKey: ['violations', employeeId],
-    queryFn: () => api.listViolations(employeeId),
-  })
-
   const invalidate = () => qc.invalidateQueries({ queryKey: ['violations', employeeId] })
-
   const createMut = useMutation({
     mutationFn: (v: ViolationCreate) => api.createViolation(employeeId, v),
     onSuccess: () => {
@@ -123,6 +183,7 @@ function ViolationsManage({ employeeId }: { employeeId: string }): React.JSX.Ele
   return (
     <ViolationsTable
       rows={rows}
+      highlightedId={highlightedId}
       employeeId={employeeId}
       onCreate={async (v) => {
         await createMut.mutateAsync(v)
@@ -134,11 +195,60 @@ function ViolationsManage({ employeeId }: { employeeId: string }): React.JSX.Ele
     />
   )
 }
-
-export function ViolationsTab({ employeeId, violations, totalCount }: Props): React.JSX.Element {
+export function ViolationsTab({
+  employeeId,
+  violations,
+  totalCount,
+  openId,
+  onOpenConsumed,
+}: Props): React.JSX.Element {
   const { has } = useCapabilities()
-  if (has('violations.manage')) {
-    return <ViolationsManage employeeId={employeeId} />
+  const canManage = has('violations.manage')
+  const shouldLoadFull = canManage || openId != null
+  const fullQuery = useQuery({
+    queryKey: ['violations', employeeId],
+    queryFn: () => api.listViolations(employeeId),
+    enabled: shouldLoadFull,
+  })
+  const rows = fullQuery.data ?? violations
+  const manageRows = fullQuery.data ?? []
+  const targetReady =
+    !shouldLoadFull ||
+    fullQuery.data !== undefined ||
+    (!fullQuery.isPending && !fullQuery.isError)
+  const rowIds = useMemo(() => rows.map((row) => row.id), [rows])
+  const highlightedId = useViolationTarget({
+    openId,
+    rowIds,
+    ready: targetReady,
+    onConsumed: onOpenConsumed,
+  })
+
+  if (shouldLoadFull && fullQuery.isError && fullQuery.data === undefined) {
+    return (
+      <div className="space-y-3 rounded-2xl border border-destructive/30 bg-surface p-6 text-destructive">
+        <p role="alert">{apiErrorMessage(fullQuery.error)}</p>
+        <button type="button" className="underline" onClick={() => void fullQuery.refetch()}>
+          Retry
+        </button>
+      </div>
+    )
   }
-  return <ViolationsReadOnly violations={violations} totalCount={totalCount} />
+
+  if (canManage) {
+    return (
+      <ViolationsManage
+        employeeId={employeeId}
+        rows={manageRows}
+        highlightedId={highlightedId}
+      />
+    )
+  }
+  return (
+    <ViolationsReadOnly
+      violations={rows}
+      totalCount={totalCount}
+      highlightedId={highlightedId}
+    />
+  )
 }

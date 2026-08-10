@@ -32,11 +32,12 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import type { ViolationCreate, ViolationRead, ViolationUpdate } from '@/lib/api'
+import { cn } from '@/lib/utils'
 import { SendButton } from '@/components/notify/SendButton'
-
 interface Props {
   rows: ViolationRead[]
   employeeId: string
+  highlightedId?: number | null
   onCreate: (v: ViolationCreate) => Promise<void>
   onUpdate: (id: number, v: ViolationUpdate) => Promise<void>
   onDelete: (id: number) => Promise<void>
@@ -45,6 +46,7 @@ interface Props {
 export function ViolationsTable({
   rows,
   employeeId,
+  highlightedId,
   onCreate,
   onUpdate,
   onDelete,
@@ -112,7 +114,15 @@ export function ViolationsTable({
                     </TableCell>
                   </TableRow>
                 ) : (
-                  <TableRow key={row.id}>
+                  <TableRow
+                    key={row.id}
+                    data-testid={`violation-row-${row.id}`}
+                    data-violation-row-id={row.id}
+                    data-highlighted={highlightedId === row.id ? 'true' : 'false'}
+                    className={cn(
+                      highlightedId === row.id && 'bg-primary-soft ring-1 ring-inset ring-primary/30',
+                    )}
+                  >
                     <TableCell className="max-w-[260px]">
                       <div className="truncate font-medium text-foreground" title={row.violation_type}>
                         {row.violation_type}
