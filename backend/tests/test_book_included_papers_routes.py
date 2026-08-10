@@ -13,10 +13,18 @@ from sqlalchemy.orm import Session, sessionmaker
 from app.api.deps import get_current_user
 from app.config import get_settings
 from app.db import session as session_mod
-from app.db.models import Base, Book, BookCategory, BookVersion, Document, User
+from app.db.models import (
+    Base,
+    Book,
+    BookApprovalStep,
+    BookCategory,
+    BookVersion,
+    Document,
+    User,
+)
 from app.db.session import attach_sqlite_pragmas, get_db
 from app.main import create_app
-from app.services import perm_service, staging_service
+from app.services import included_papers_service, perm_service, staging_service
 
 
 @pytest.fixture()
@@ -258,3 +266,51 @@ def test_preview_save_and_download_use_one_package_without_duplicate_companion(
         "LATE-2",
     ]
     get_settings.cache_clear()
+
+
+def test_save_notifies_each_approver_after_an_approved_package_change(
+    api_db: Session, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    book, version, _document, creator, manager = _record(api_db, tmp_path)
+    book.approval_state = "approved"
+    version.status = "approved"
+    api_db.add(
+        BookApprovalStep(
+            book_id=book.id,
+            version_id=version.id,
+            step_order=1,
+            stage_label="Manager approval",
+            assignee_user_id=manager.id,
+            kind="approver",
+            state="approved",
+        )
+    )
+    api_db.commit()
+    client = _client(api_db, creator)
+    existing = client.get(f"/api/v1/books/{book.id}").json()["included_papers"][0]
+    late = _pdf(tmp_path / "late-notification.pdf", ["LATE"])
+    staged = staging_service.stage(late.read_bytes(), late.name)
+    sent: list[int] = []
+    monkeypatch.setattr(
+        included_papers_service.push_service,
+        "send_to_user",
+        lambda _db, user_id, _messages, url: sent.append(user_id),
+    )
+
+    response = client.put(
+        f"/api/v1/books/{book.id}/included-papers",
+        json={
+            "revision": 0,
+            "items": [
+                {"id": existing["id"]},
+                {
+                    "id": str(uuid.uuid4()),
+                    "staged_token": staged.token,
+                    "original_name": late.name,
+                },
+            ],
+        },
+    )
+
+    assert response.status_code == 200, response.text
+    assert sent == [manager.id]

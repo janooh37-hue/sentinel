@@ -11,7 +11,15 @@ from sqlalchemy.orm import Session
 
 from app.api.errors import AppError, ConflictError
 from app.config import get_settings
-from app.db.models import AuditLog, Book, BookCategory, BookVersion, Document, User
+from app.db.models import (
+    AuditLog,
+    Book,
+    BookApprovalStep,
+    BookCategory,
+    BookVersion,
+    Document,
+    User,
+)
 from app.services import document_service, staging_service
 
 
@@ -261,6 +269,107 @@ def test_existing_in_app_signature_is_rebuilt_without_old_included_tail(
     db_session.refresh(version)
     assert version.signed_base_pdf_path is None
     get_settings.cache_clear()
+
+
+def test_approved_package_change_pushes_one_localized_summary_per_approver(
+    db_session: Session, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    base = _pdf(tmp_path / "base.pdf", ["FORM"])
+    published = _pdf(tmp_path / "published.pdf", ["FORM", "PAPER"])
+    paper = _pdf(tmp_path / "paper.pdf", ["PAPER"])
+    book, version, _document, creator, manager = _record(
+        db_session,
+        tmp_path,
+        base=base,
+        published=published,
+        paper=paper,
+        state="approved",
+    )
+    db_session.add_all(
+        [
+            BookApprovalStep(
+                book_id=book.id,
+                version_id=version.id,
+                step_order=1,
+                stage_label="Manager approval",
+                assignee_user_id=manager.id,
+                kind="approver",
+                state="approved",
+            ),
+            BookApprovalStep(
+                book_id=book.id,
+                version_id=version.id,
+                step_order=2,
+                stage_label="Duplicate manager approval",
+                assignee_user_id=manager.id,
+                kind="approver",
+                state="approved",
+            ),
+            BookApprovalStep(
+                book_id=book.id,
+                version_id=version.id,
+                step_order=3,
+                stage_label="Advisory review",
+                assignee_user_id=creator.id,
+                kind="reviewer",
+                state="approved",
+            ),
+        ]
+    )
+    db_session.commit()
+    sent: list[tuple[int, dict[str, tuple[str, str]], str]] = []
+    service = _service()
+    monkeypatch.setattr(
+        service.push_service,
+        "send_to_user",
+        lambda _db, user_id, messages, url: sent.append((user_id, messages, url)),
+    )
+
+    service.notify_approvers(
+        db_session,
+        book,
+        version,
+        creator,
+        {
+            "added": ["invoice.pdf"],
+            "removed": ["old.pdf"],
+            "replaced": [{"from": "scan-1.pdf", "to": "scan-2.pdf"}],
+            "reordered": ["scan-2.pdf", "invoice.pdf"],
+        },
+    )
+
+    assert len(sent) == 1
+    recipient_id, messages, url = sent[0]
+    assert recipient_id == manager.id
+    assert url == f"/books/{book.id}"
+    assert messages["en"] == (
+        "GSSG Manager",
+        "Included papers updated. Record creator updated HR-1. "
+        "Added (1): invoice.pdf; Removed (1): old.pdf; "
+        "Replaced (1): scan-1.pdf → scan-2.pdf; Changed paper order",
+    )
+    assert messages["ar"] == (
+        "GSSG Manager",
+        "تم تحديث السجل \u2068HR-1\u2069 بواسطة \u2068Record creator\u2069. "
+        "تمت الإضافة (1): \u2068invoice.pdf\u2069؛ "
+        "تمت الإزالة (1): \u2068old.pdf\u2069؛ "
+        "تم الاستبدال (1): \u2068scan-2.pdf\u2069 بدلًا من "
+        "\u2068scan-1.pdf\u2069؛ تم تغيير ترتيب الأوراق",
+    )
+    long_name = f"{'x' * 100}.pdf"
+    bounded = service._package_change_messages(
+        creator,
+        book,
+        {
+            "added": [long_name, "second.pdf"],
+            "removed": [],
+            "replaced": [],
+            "reordered": [],
+        },
+    )
+    shortened = f"{'x' * 35}….pdf"
+    assert f"Added (2): {shortened}, … (+1)" in bounded["en"][1]
+    assert f"تمت الإضافة (2): \u2068{shortened}\u2069، … (+1)" in bounded["ar"][1]
 
 
 def test_preview_is_side_effect_free_and_save_is_revisioned_atomic_and_audited(

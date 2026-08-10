@@ -707,7 +707,7 @@ def save_included_papers(
     db: Annotated[Session, Depends(get_db)],
     user: Annotated[User, Depends(require_capability("books.view"))],
 ) -> BookRead:
-    included_papers_service.save_package(
+    package = included_papers_service.save_package(
         db,
         book_id,
         user_id=user.id,
@@ -715,6 +715,14 @@ def save_included_papers(
         proposal=_package_proposal(request),
     )
     row = book_service.get_book_detail(db, book_id)
+    version = max(row.versions, key=lambda item: item.version_no)
+    included_papers_service.notify_approvers(
+        db,
+        row,
+        version,
+        user,
+        package.change_summary or {},
+    )
     return _build_book_detail(db, row)
 
 

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import contextlib
 import json
+import logging
 import shutil
 import tempfile
 import uuid
@@ -23,7 +24,9 @@ from app.config import get_settings
 from app.core.constants import ALLOWED_DOC_EXTS
 from app.core.pdf_merge import PdfPackageSourceError, build_pdf_package
 from app.db.models import AuditLog, Book, BookVersion, Document, Employee, User
-from app.services import book_service, document_service, staging_service
+from app.services import book_service, document_service, push_service, staging_service
+
+log = logging.getLogger(__name__)
 
 _IMAGE_EXTS = {".png", ".jpg", ".jpeg"}
 _MIME_TYPES = {
@@ -1037,6 +1040,128 @@ def save_package(
     )
 
 
+def _ellipsize(value: str, limit: int = 40) -> str:
+    value = value.strip()
+    return value if len(value) <= limit else f"{value[: limit - 1]}…"
+
+
+def _ellipsize_filename(value: str, limit: int = 40) -> str:
+    value = value.strip()
+    if len(value) <= limit:
+        return value
+    suffix = Path(value).suffix
+    if suffix and len(suffix) <= 10 and len(suffix) < limit - 1:
+        return f"{value[: limit - len(suffix) - 1]}…{suffix}"
+    return _ellipsize(value, limit)
+
+
+def _bidi_isolate(value: str) -> str:
+    return f"\u2068{value}\u2069"
+
+
+def _listed_names(values: Sequence[str], *, lang: str) -> str:
+    name = _ellipsize_filename(values[0])
+    shown = _bidi_isolate(name) if lang == "ar" else name
+    if len(values) > 1:
+        separator = "، " if lang == "ar" else ", "
+        shown += f"{separator}… (+{len(values) - 1})"
+    return shown
+
+
+def _listed_replacements(values: Sequence[dict[str, Any]], *, lang: str) -> str:
+    first = values[0]
+    old_name = _ellipsize_filename(str(first["from"]))
+    new_name = _ellipsize_filename(str(first["to"]))
+    shown = (
+        f"{_bidi_isolate(new_name)} بدلًا من {_bidi_isolate(old_name)}"
+        if lang == "ar"
+        else f"{old_name} → {new_name}"
+    )
+    if len(values) > 1:
+        separator = "، " if lang == "ar" else ", "
+        shown += f"{separator}… (+{len(values) - 1})"
+    return shown
+
+
+def _package_change_messages(
+    actor: User, book: Book, summary: dict[str, Any]
+) -> dict[str, tuple[str, str]]:
+    actor_name = _ellipsize(actor.display_name or actor.email)
+    added = [str(name) for name in summary.get("added") or []]
+    removed = [str(name) for name in summary.get("removed") or []]
+    replaced = list(summary.get("replaced") or [])
+    en_parts: list[str] = []
+    ar_parts: list[str] = []
+    if added:
+        en_parts.append(f"Added ({len(added)}): {_listed_names(added, lang='en')}")
+        ar_parts.append(f"تمت الإضافة ({len(added)}): {_listed_names(added, lang='ar')}")
+    if removed:
+        en_parts.append(
+            f"Removed ({len(removed)}): {_listed_names(removed, lang='en')}"
+        )
+        ar_parts.append(
+            f"تمت الإزالة ({len(removed)}): {_listed_names(removed, lang='ar')}"
+        )
+    if replaced:
+        en_parts.append(
+            f"Replaced ({len(replaced)}): "
+            f"{_listed_replacements(replaced, lang='en')}"
+        )
+        ar_parts.append(
+            f"تم الاستبدال ({len(replaced)}): "
+            f"{_listed_replacements(replaced, lang='ar')}"
+        )
+    if summary.get("reordered"):
+        en_parts.append("Changed paper order")
+        ar_parts.append("تم تغيير ترتيب الأوراق")
+    return {
+        "en": (
+            "GSSG Manager",
+            f"Included papers updated. {actor_name} updated {book.ref_number}. "
+            f"{'; '.join(en_parts)}",
+        ),
+        "ar": (
+            "GSSG Manager",
+            f"تم تحديث السجل {_bidi_isolate(book.ref_number)} بواسطة "
+            f"{_bidi_isolate(actor_name)}. {'؛ '.join(ar_parts)}",
+        ),
+    }
+
+
+def notify_approvers(
+    db: Session,
+    book: Book,
+    version: BookVersion,
+    actor: User,
+    change_summary: dict[str, Any],
+) -> None:
+    """Push one localized post-save summary to each approving manager."""
+    if version.status != "approved" or not any(change_summary.values()):
+        return
+    recipient_ids = {
+        step.assignee_user_id
+        for step in version.approval_steps
+        if step.kind == "approver"
+        and step.state == "approved"
+        and step.assignee_user_id is not None
+    }
+    messages = _package_change_messages(actor, book, change_summary)
+    for recipient_id in recipient_ids:
+        try:
+            push_service.send_to_user(
+                db,
+                recipient_id,
+                messages,
+                url=f"/books/{book.id}",
+            )
+        except Exception:
+            log.exception(
+                "included papers push failed: book=%d recipient=%d",
+                book.id,
+                recipient_id,
+            )
+
+
 __all__ = [
     "PackageHistory",
     "PackageResult",
@@ -1046,6 +1171,7 @@ __all__ = [
     "describe_package",
     "get_package",
     "inspect_paper",
+    "notify_approvers",
     "original_creator_user_id",
     "preview_package",
     "publish_signed_package",
