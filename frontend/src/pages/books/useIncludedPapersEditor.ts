@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 
 import { api } from '@/lib/api'
-import type { BookRead, IncludedPaperRead } from '@/lib/api'
+import type { IncludedPaperRead } from '@/lib/api'
 
 import {
   addStagedPaper,
@@ -32,7 +32,7 @@ export interface IncludedPapersEditor {
   removePaper: (id: string) => void
   movePaper: (id: string, offset: -1 | 1) => void
   previewPackage: () => Promise<void>
-  savePackage: () => Promise<BookRead>
+  savePackage: () => Promise<void>
 }
 
 export function useIncludedPapersEditor(book: IncludedPapersBook): IncludedPapersEditor {
@@ -90,20 +90,13 @@ export function useIncludedPapersEditor(book: IncludedPapersBook): IncludedPaper
     }
   }
 
-  const savePackage = async (): Promise<BookRead> => {
+  const savePackage = async (): Promise<void> => {
     if (!isPreviewCurrent(state)) throw new Error('INCLUDED_PAPERS_PREVIEW_REQUIRED')
     setBusy(true)
     setError(null)
     try {
-      const saved = await api.saveIncludedPapers(book.id, includedPapersRequest(state))
-      setState(
-        createIncludedPapersState(
-          saved.included_papers_revision,
-          saved.included_papers ?? [],
-        ),
-      )
+      await api.saveIncludedPapers(book.id, includedPapersRequest(state))
       await queryClient.invalidateQueries({ queryKey: ['books'] })
-      return saved
     } catch (caught) {
       setError(caught)
       throw caught
