@@ -3,23 +3,25 @@
 from __future__ import annotations
 
 import contextlib
+import json
 import shutil
 import tempfile
 import uuid
+from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Sequence
+from typing import Any
 
 import fitz
 from fastapi import status
 from sqlalchemy.orm import Session
 
-from app.api.errors import AppError, NotFoundError, ValidationFailedError
+from app.api.errors import AppError, ConflictError, NotFoundError, ValidationFailedError
 from app.config import get_settings
 from app.core.constants import ALLOWED_DOC_EXTS
 from app.core.pdf_merge import PdfPackageSourceError, build_pdf_package
-from app.db.models import Book, BookVersion, Document, Employee, User
+from app.db.models import AuditLog, Book, BookVersion, Document, Employee, User
 from app.services import book_service, document_service, staging_service
 
 _IMAGE_EXTS = {".png", ".jpg", ".jpeg"}
@@ -73,6 +75,7 @@ class _ResolvedPaper:
     page_count: int
     source: Path
     stored_path: str
+    staged_token: str | None
     embedded: bool
     added_by_user_id: int | None
     added_at: str
@@ -87,6 +90,9 @@ def _absolute_data_path(raw: str | None) -> Path | None:
     if candidate != data_dir and data_dir not in candidate.parents:
         return None
     return candidate if candidate.is_file() else None
+
+def _relative_data_path(path: Path) -> str:
+    return path.resolve().relative_to(get_settings().data_dir.resolve()).as_posix()
 
 
 def _current_version(book: Book) -> BookVersion:
@@ -280,6 +286,7 @@ def _resolve_existing(metadata: Sequence[dict[str, Any]]) -> list[_ResolvedPaper
                 page_count=int(item["page_count"]),
                 source=source,
                 stored_path=stored_path,
+                staged_token=None,
                 embedded=bool(item.get("embedded")),
                 added_by_user_id=(
                     int(item["added_by_user_id"])
@@ -477,6 +484,353 @@ def get_package(db: Session, book_id: int, *, user_id: int) -> PackageResult:
     return _build_result(book.included_papers_revision, base, papers)
 
 
+def _check_revision(book: Book, revision: int) -> None:
+    if book.included_papers_revision != revision:
+        raise ConflictError(
+            "INCLUDED_PAPERS_STALE_REVISION",
+            "Included papers changed after this workspace was opened; reload the latest version",
+            current_revision=book.included_papers_revision,
+        )
+
+
+def _validate_proposal_id(value: str) -> str:
+    try:
+        parsed = str(uuid.UUID(value))
+    except (ValueError, AttributeError) as exc:
+        raise ValidationFailedError(
+            "INCLUDED_PAPERS_INVALID_ID", "Included paper IDs must be UUIDs"
+        ) from exc
+    if parsed != value.lower():
+        raise ValidationFailedError(
+            "INCLUDED_PAPERS_INVALID_ID", "Included paper IDs must use canonical UUID form"
+        )
+    return parsed
+
+
+def _resolve_proposal(
+    book: Book,
+    version: BookVersion,
+    proposal: Sequence[PaperProposal],
+    *,
+    user_id: int,
+) -> tuple[list[dict[str, Any]], list[_ResolvedPaper]]:
+    old_metadata = _effective_metadata(book, version)
+    old_resolved = {paper.id: paper for paper in _resolve_existing(old_metadata)}
+    seen_ids: set[str] = set()
+    seen_tokens: set[str] = set()
+    resolved: list[_ResolvedPaper] = []
+    now = datetime.now(UTC).isoformat()
+    for item in proposal:
+        paper_id = _validate_proposal_id(item.id)
+        if paper_id in seen_ids:
+            raise ValidationFailedError(
+                "INCLUDED_PAPERS_DUPLICATE_ID",
+                "An included paper appears more than once",
+                paper_id=paper_id,
+            )
+        seen_ids.add(paper_id)
+        existing = old_resolved.get(paper_id)
+        if item.staged_token is None:
+            if existing is None:
+                raise ValidationFailedError(
+                    "INCLUDED_PAPERS_UNKNOWN_ID",
+                    "An included paper no longer exists",
+                    paper_id=paper_id,
+                )
+            resolved.append(existing)
+            continue
+        if item.staged_token in seen_tokens:
+            raise ValidationFailedError(
+                "INCLUDED_PAPERS_DUPLICATE_STAGE",
+                "A staged upload appears more than once",
+            )
+        seen_tokens.add(item.staged_token)
+        if existing is not None and existing.embedded:
+            raise ValidationFailedError(
+                "INCLUDED_PAPERS_EMBEDDED",
+                "Replace the signed scan before changing papers already flattened into it",
+                paper_id=paper_id,
+            )
+        source = staging_service.resolve(item.staged_token)
+        if source is None:
+            raise NotFoundError(
+                "INCLUDED_PAPERS_STAGE_MISSING",
+                "A staged paper has expired or is missing; add that file again",
+                token=item.staged_token,
+            )
+        original_name = Path(item.original_name or "").name
+        if (
+            not item.original_name
+            or original_name != item.original_name
+            or original_name in {".", ".."}
+            or Path(original_name).suffix.lower() != source.suffix.lower()
+        ):
+            raise ValidationFailedError(
+                "INCLUDED_PAPERS_INVALID_NAME",
+                "A staged paper requires its original safe filename",
+                paper_id=paper_id,
+            )
+        media_type, page_count = inspect_paper(source, display_name=original_name)
+        resolved.append(
+            _ResolvedPaper(
+                id=paper_id,
+                original_name=original_name,
+                slot_key=existing.slot_key if existing is not None else None,
+                media_type=media_type,
+                size=source.stat().st_size,
+                page_count=page_count,
+                source=source,
+                stored_path="",
+                staged_token=item.staged_token,
+                embedded=False,
+                added_by_user_id=user_id,
+                added_at=now,
+            )
+        )
+    old_embedded = [
+        str(item["id"]) for item in old_metadata if bool(item.get("embedded"))
+    ]
+    proposed_embedded = [paper.id for paper in resolved if paper.embedded]
+    if old_embedded != proposed_embedded or (
+        old_embedded
+        and [paper.id for paper in resolved[: len(old_embedded)]] != old_embedded
+    ):
+        raise ValidationFailedError(
+            "INCLUDED_PAPERS_EMBEDDED",
+            "Replace the signed scan before removing or reordering papers already flattened into it",
+        )
+    return old_metadata, resolved
+
+
+def preview_package(
+    db: Session,
+    book_id: int,
+    *,
+    user_id: int,
+    revision: int,
+    proposal: Sequence[PaperProposal],
+) -> PackageResult:
+    book, version, document = _editable_context(db, book_id, user_id)
+    _check_revision(book, revision)
+    old_metadata, papers = _resolve_proposal(
+        book, version, proposal, user_id=user_id
+    )
+    with tempfile.TemporaryDirectory(prefix="included-base-") as raw_temp:
+        base = _fixed_base_bytes(
+            db, version, document, old_metadata, Path(raw_temp)
+        )
+    return _build_result(revision, base, papers)
+
+
+def _change_summary(
+    old: Sequence[dict[str, Any]], new: Sequence[_ResolvedPaper]
+) -> dict[str, Any]:
+    old_by_id = {str(item["id"]): item for item in old}
+    new_by_id = {item.id: item for item in new}
+    added = [item.original_name for item in new if item.id not in old_by_id]
+    removed = [
+        str(item["original_name"])
+        for item in old
+        if str(item["id"]) not in new_by_id
+    ]
+    replaced = [
+        {
+            "from": str(old_by_id[item.id]["original_name"]),
+            "to": item.original_name,
+        }
+        for item in new
+        if item.id in old_by_id and item.staged_token is not None
+    ]
+    old_common = [str(item["id"]) for item in old if str(item["id"]) in new_by_id]
+    new_common = [item.id for item in new if item.id in old_by_id]
+    reordered = [item.original_name for item in new] if old_common != new_common else []
+    return {
+        "added": added,
+        "removed": removed,
+        "replaced": replaced,
+        "reordered": reordered,
+    }
+
+
+def _persisted_metadata(papers: Sequence[_ResolvedPaper]) -> list[dict[str, Any]]:
+    return [
+        {
+            "id": paper.id,
+            "path": paper.stored_path,
+            "original_name": paper.original_name,
+            "slot_key": paper.slot_key,
+            "media_type": paper.media_type,
+            "size": paper.size,
+            "page_count": paper.page_count,
+            "added_by_user_id": paper.added_by_user_id,
+            "added_at": paper.added_at,
+        }
+        for paper in papers
+    ]
+
+
+def save_package(
+    db: Session,
+    book_id: int,
+    *,
+    user_id: int,
+    revision: int,
+    proposal: Sequence[PaperProposal],
+) -> PackageResult:
+    book, version, document = _editable_context(db, book_id, user_id)
+    _check_revision(book, revision)
+    old_metadata, proposed = _resolve_proposal(
+        book, version, proposal, user_id=user_id
+    )
+    with tempfile.TemporaryDirectory(prefix="included-base-") as raw_temp:
+        base_bytes = _fixed_base_bytes(
+            db, version, document, old_metadata, Path(raw_temp)
+        )
+
+    data_dir = get_settings().data_dir.resolve()
+    attachment_dir = data_dir / "book_attachments" / str(book.id)
+    package_dir = data_dir / "book_packages" / str(book.id)
+    attachment_dir.mkdir(parents=True, exist_ok=True)
+    package_dir.mkdir(parents=True, exist_ok=True)
+    created: list[Path] = []
+    consumed_staged: list[Path] = []
+    persisted: list[_ResolvedPaper] = []
+    active_signed = bool(version.status == "approved" and version.signed_pdf_path)
+    old_published = _absolute_data_path(
+        version.signed_pdf_path if active_signed else document.pdf_path
+    )
+    try:
+        for paper in proposed:
+            if paper.staged_token is None:
+                persisted.append(paper)
+                continue
+            destination = attachment_dir / (
+                f"included-{paper.id}{paper.source.suffix.lower()}"
+            )
+            if destination.exists():
+                destination = attachment_dir / (
+                    f"included-{paper.id}-{uuid.uuid4().hex[:8]}"
+                    f"{paper.source.suffix.lower()}"
+                )
+            shutil.copyfile(paper.source, destination)
+            created.append(destination)
+            consumed_staged.append(paper.source)
+            persisted.append(
+                _ResolvedPaper(
+                    id=paper.id,
+                    original_name=paper.original_name,
+                    slot_key=paper.slot_key,
+                    media_type=paper.media_type,
+                    size=paper.size,
+                    page_count=paper.page_count,
+                    source=destination,
+                    stored_path=_relative_data_path(destination),
+                    staged_token=paper.staged_token,
+                    embedded=False,
+                    added_by_user_id=paper.added_by_user_id,
+                    added_at=paper.added_at,
+                )
+            )
+
+        built = _build_result(revision + 1, base_bytes, persisted)
+        output = package_dir / (
+            f"v{version.version_no}-package-r{revision + 1}-"
+            f"{uuid.uuid4().hex[:10]}.pdf"
+        )
+        output.write_bytes(built.pdf_bytes)
+        created.append(output)
+        output_rel = _relative_data_path(output)
+
+        if active_signed:
+            if not version.signed_base_pdf_path:
+                base_output = package_dir / (
+                    f"v{version.version_no}-signed-base-{uuid.uuid4().hex[:10]}.pdf"
+                )
+                base_output.write_bytes(base_bytes)
+                created.append(base_output)
+                version.signed_base_pdf_path = _relative_data_path(base_output)
+            version.signed_pdf_path = output_rel
+            version.signed_embedded_paper_ids = [
+                paper.id for paper in persisted if paper.embedded
+            ]
+        else:
+            if not document.base_pdf_path:
+                base_output = package_dir / (
+                    f"v{version.version_no}-generated-base-{uuid.uuid4().hex[:10]}.pdf"
+                )
+                base_output.write_bytes(base_bytes)
+                created.append(base_output)
+                document.base_pdf_path = _relative_data_path(base_output)
+            document.pdf_path = output_rel
+
+        summary = _change_summary(old_metadata, persisted)
+        book.merged_attachment_paths = _persisted_metadata(persisted)
+        book.included_papers_revision = revision + 1
+        actor = db.get(User, user_id)
+        db.add(
+            AuditLog(
+                actor=(actor.display_name or actor.email) if actor else str(user_id),
+                action="update_included_papers",
+                entity_type="book",
+                entity_id=str(book.id),
+                payload=json.dumps(
+                    {
+                        "actor_user_id": user_id,
+                        "actor_name": (
+                            (actor.display_name or actor.email) if actor else str(user_id)
+                        ),
+                        "revision_before": revision,
+                        "revision_after": revision + 1,
+                        **summary,
+                    },
+                    ensure_ascii=False,
+                ),
+            )
+        )
+        db.commit()
+    except Exception:
+        db.rollback()
+        for path in created:
+            with contextlib.suppress(OSError):
+                path.unlink()
+        raise
+
+    referenced = {paper.source.resolve() for paper in persisted}
+    for item in old_metadata:
+        source = _absolute_data_path(str(item.get("path") or ""))
+        if (
+            source is not None
+            and attachment_dir in source.parents
+            and source.resolve() not in referenced
+        ):
+            with contextlib.suppress(OSError):
+                source.unlink()
+    if old_published is not None and old_published.resolve() != output.resolve():
+        fixed = {
+            path.resolve()
+            for path in (
+                _absolute_data_path(document.base_pdf_path),
+                _absolute_data_path(version.signed_base_pdf_path),
+            )
+            if path is not None
+        }
+        if old_published.resolve() not in fixed:
+            with contextlib.suppress(OSError):
+                old_published.unlink()
+    for path in consumed_staged:
+        with contextlib.suppress(OSError):
+            path.unlink()
+
+    return PackageResult(
+        revision=built.revision,
+        base_page_count=built.base_page_count,
+        total_page_count=built.total_page_count,
+        papers=built.papers,
+        pdf_bytes=built.pdf_bytes,
+        change_summary=summary,
+    )
+
+
 __all__ = [
     "PackageResult",
     "PaperProposal",
@@ -484,5 +838,7 @@ __all__ = [
     "get_package",
     "inspect_paper",
     "original_creator_user_id",
+    "preview_package",
+    "save_package",
     "stage_paper",
 ]

@@ -1,16 +1,18 @@
 from __future__ import annotations
 
 import importlib
+import json
+import uuid
 from pathlib import Path
 
 import fitz
 import pytest
 from sqlalchemy.orm import Session
 
-from app.api.errors import AppError
+from app.api.errors import AppError, ConflictError
 from app.config import get_settings
-from app.db.models import Book, BookCategory, BookVersion, Document, User
-from app.services import document_service
+from app.db.models import AuditLog, Book, BookCategory, BookVersion, Document, User
+from app.services import document_service, staging_service
 
 
 def _service():
@@ -258,4 +260,215 @@ def test_existing_in_app_signature_is_rebuilt_without_old_included_tail(
     assert Path(calls[0]["output_dir"]).name.startswith("included-base-")
     db_session.refresh(version)
     assert version.signed_base_pdf_path is None
+    get_settings.cache_clear()
+
+
+def test_preview_is_side_effect_free_and_save_is_revisioned_atomic_and_audited(
+    db_session: Session, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    monkeypatch.setenv("GSSG_DATA_DIR", str(tmp_path))
+    get_settings.cache_clear()
+    base = _pdf(tmp_path / "base.pdf", ["FORM"])
+    original = _pdf(tmp_path / "original.pdf", ["ORIGINAL"])
+    published = _pdf(tmp_path / "published.pdf", ["FORM", "ORIGINAL"])
+    book, _version, document, creator, _other = _record(
+        db_session, tmp_path, base=base, published=published, paper=original
+    )
+    service = _service()
+    opened = service.get_package(db_session, book.id, user_id=creator.id)
+    late = _pdf(tmp_path / "late.pdf", ["LATE-1", "LATE-2"])
+    staged = staging_service.stage(late.read_bytes(), "late paper.pdf")
+    new_id = str(uuid.uuid4())
+    proposal = [
+        service.PaperProposal(id=opened.papers[0].id),
+        service.PaperProposal(
+            id=new_id,
+            staged_token=staged.token,
+            original_name="late paper.pdf",
+        ),
+    ]
+
+    preview = service.preview_package(
+        db_session,
+        book.id,
+        user_id=creator.id,
+        revision=0,
+        proposal=proposal,
+    )
+
+    assert _texts(preview.pdf_bytes) == ["FORM", "ORIGINAL", "LATE-1", "LATE-2"]
+    assert book.included_papers_revision == 0
+    assert book.merged_attachment_paths == [
+        {
+            "path": original.relative_to(tmp_path).as_posix(),
+            "slot_key": "medical_certificate",
+        }
+    ]
+    assert staging_service.resolve(staged.token) is not None
+    assert db_session.query(AuditLog).count() == 0
+
+    saved = service.save_package(
+        db_session,
+        book.id,
+        user_id=creator.id,
+        revision=0,
+        proposal=proposal,
+    )
+
+    db_session.refresh(book)
+    db_session.refresh(document)
+    assert saved.revision == 1
+    assert book.included_papers_revision == 1
+    assert [item["id"] for item in book.merged_attachment_paths] == [
+        opened.papers[0].id,
+        new_id,
+    ]
+    assert [item["original_name"] for item in book.merged_attachment_paths] == [
+        "original.pdf",
+        "late paper.pdf",
+    ]
+    assert all(item["page_count"] for item in book.merged_attachment_paths)
+    assert document.base_pdf_path == "base.pdf"
+    assert document.pdf_path != "published.pdf"
+    assert _texts((tmp_path / str(document.pdf_path)).read_bytes()) == [
+        "FORM",
+        "ORIGINAL",
+        "LATE-1",
+        "LATE-2",
+    ]
+    assert staging_service.resolve(staged.token) is None
+    event = db_session.query(AuditLog).one()
+    payload = json.loads(event.payload or "{}")
+    assert event.action == "update_included_papers"
+    assert payload["revision_before"] == 0
+    assert payload["revision_after"] == 1
+    assert payload["added"] == ["late paper.pdf"]
+
+    current_path = document.pdf_path
+    current_bytes = (tmp_path / str(current_path)).read_bytes()
+    with pytest.raises(ConflictError) as stale:
+        service.save_package(
+            db_session,
+            book.id,
+            user_id=creator.id,
+            revision=0,
+            proposal=proposal,
+        )
+    assert stale.value.code == "INCLUDED_PAPERS_STALE_REVISION"
+    db_session.refresh(document)
+    assert document.pdf_path == current_path
+    assert (tmp_path / str(current_path)).read_bytes() == current_bytes
+    assert db_session.query(AuditLog).count() == 1
+    get_settings.cache_clear()
+
+
+def test_save_replaces_removes_and_reorders_whole_files(
+    db_session: Session, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    monkeypatch.setenv("GSSG_DATA_DIR", str(tmp_path))
+    get_settings.cache_clear()
+    base = _pdf(tmp_path / "base.pdf", ["FORM"])
+    first = _pdf(tmp_path / "first.pdf", ["FIRST"])
+    published = _pdf(tmp_path / "published.pdf", ["FORM", "FIRST"])
+    book, _version, _document, creator, _other = _record(
+        db_session, tmp_path, base=base, published=published, paper=first
+    )
+    service = _service()
+    opened = service.get_package(db_session, book.id, user_id=creator.id)
+    second = _pdf(tmp_path / "second.pdf", ["SECOND"])
+    third = _pdf(tmp_path / "third.pdf", ["THIRD"])
+    staged_second = staging_service.stage(second.read_bytes(), "second.pdf")
+    staged_third = staging_service.stage(third.read_bytes(), "third.pdf")
+    second_id = str(uuid.uuid4())
+    third_id = str(uuid.uuid4())
+    service.save_package(
+        db_session,
+        book.id,
+        user_id=creator.id,
+        revision=0,
+        proposal=[
+            service.PaperProposal(id=opened.papers[0].id),
+            service.PaperProposal(second_id, staged_second.token, "second.pdf"),
+            service.PaperProposal(third_id, staged_third.token, "third.pdf"),
+        ],
+    )
+    replacement = _pdf(tmp_path / "replacement.pdf", ["REPLACED-FIRST"])
+    staged_replacement = staging_service.stage(
+        replacement.read_bytes(), "replacement.pdf"
+    )
+
+    saved = service.save_package(
+        db_session,
+        book.id,
+        user_id=creator.id,
+        revision=1,
+        proposal=[
+            service.PaperProposal(id=third_id),
+            service.PaperProposal(
+                id=opened.papers[0].id,
+                staged_token=staged_replacement.token,
+                original_name="replacement.pdf",
+            ),
+        ],
+    )
+
+    assert _texts(saved.pdf_bytes) == ["FORM", "THIRD", "REPLACED-FIRST"]
+    assert [paper.id for paper in saved.papers] == [third_id, opened.papers[0].id]
+    assert saved.change_summary == {
+        "added": [],
+        "removed": ["second.pdf"],
+        "replaced": [{"from": "first.pdf", "to": "replacement.pdf"}],
+        "reordered": ["third.pdf", "replacement.pdf"],
+    }
+    get_settings.cache_clear()
+
+
+def test_commit_failure_preserves_previous_package_and_staged_upload(
+    db_session: Session, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    monkeypatch.setenv("GSSG_DATA_DIR", str(tmp_path))
+    get_settings.cache_clear()
+    base = _pdf(tmp_path / "base.pdf", ["FORM"])
+    original = _pdf(tmp_path / "original.pdf", ["ORIGINAL"])
+    published = _pdf(tmp_path / "published.pdf", ["FORM", "ORIGINAL"])
+    book, _version, document, creator, _other = _record(
+        db_session, tmp_path, base=base, published=published, paper=original
+    )
+    service = _service()
+    opened = service.get_package(db_session, book.id, user_id=creator.id)
+    late = _pdf(tmp_path / "late.pdf", ["LATE"])
+    staged = staging_service.stage(late.read_bytes(), "late.pdf")
+    old_metadata = [dict(item) for item in book.merged_attachment_paths]
+    old_path = document.pdf_path
+    old_bytes = (tmp_path / str(old_path)).read_bytes()
+    real_commit = db_session.commit
+
+    def fail_commit() -> None:
+        raise RuntimeError("commit failed")
+
+    monkeypatch.setattr(db_session, "commit", fail_commit)
+    with pytest.raises(RuntimeError, match="commit failed"):
+        service.save_package(
+            db_session,
+            book.id,
+            user_id=creator.id,
+            revision=0,
+            proposal=[
+                service.PaperProposal(id=opened.papers[0].id),
+                service.PaperProposal(str(uuid.uuid4()), staged.token, "late.pdf"),
+            ],
+        )
+    monkeypatch.setattr(db_session, "commit", real_commit)
+    db_session.expire_all()
+    persisted_book = db_session.get(Book, book.id)
+    persisted_document = db_session.get(Document, document.id)
+    assert persisted_book is not None
+    assert persisted_document is not None
+    assert persisted_book.included_papers_revision == 0
+    assert persisted_book.merged_attachment_paths == old_metadata
+    assert persisted_document.pdf_path == old_path
+    assert (tmp_path / str(old_path)).read_bytes() == old_bytes
+    assert staging_service.resolve(staged.token) is not None
+    package_dir = tmp_path / "book_packages" / str(book.id)
+    assert not package_dir.exists() or not any(package_dir.iterdir())
     get_settings.cache_clear()
