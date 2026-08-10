@@ -89,7 +89,7 @@ export function EmployeeSearchHero({
         {/* ── Search wrap — position:relative anchors the dropdown ─── */}
         <div className="relative mt-[22px] text-start">
           {/* Pill searchbox */}
-          <div className="flex h-14 items-center gap-3 rounded-full bg-white px-5 shadow-[0_18px_44px_-18px_rgba(0,0,0,.5)]">
+          <div className="flex h-14 items-center gap-3 rounded-full bg-white px-5 shadow-[0_18px_44px_-18px_rgba(0,0,0,.5)] transition-shadow focus-within:ring-2 focus-within:ring-white/70 focus-within:ring-offset-2 focus-within:ring-offset-primary">
             {/* Search icon */}
             <svg
               aria-hidden
@@ -108,6 +108,7 @@ export function EmployeeSearchHero({
 
             {/* Input — type="search" gives implicit role="searchbox" */}
             <input
+              data-employee-hero-search-input
               type="search"
               value={q}
               onChange={(e) => setQ(e.target.value)}

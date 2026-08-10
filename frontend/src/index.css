@@ -376,6 +376,10 @@ body {
   outline: 2px solid var(--primary);
   outline-offset: 2px;
 }
+/* The Employee hero exposes focus on its complete white search pill. */
+[data-employee-hero-search-input]:focus-visible {
+  outline: none;
+}
 
 /* ─── AaSlider thumb (TopNav font-scale picker) ─── */
 .aa-slider::-webkit-slider-thumb {
