@@ -141,6 +141,12 @@ export function LedgerOutlookShell({ onNavigate }: LedgerOutlookShellProps = {})
 
   const isDrafts = activeView.kind === 'folder' && activeView.folder === 'drafts'
   const isSearching = search.trim().length > 0
+  const requestedOpenId = (() => {
+    const raw = new URLSearchParams(location.search).get('open')
+    if (raw == null || !/^\d+$/.test(raw)) return null
+    const id = Number(raw)
+    return Number.isSafeInteger(id) && id > 0 ? id : null
+  })()
   // Suggestions only need surfacing on a normal folder view (not inside a smart
   // folder, not mid-search). Fetched once; drives the rail pill + list banner.
   const smartSuggestions = useQuery({
@@ -172,6 +178,11 @@ export function LedgerOutlookShell({ onNavigate }: LedgerOutlookShellProps = {})
     filters,
     contextEmployeeId,
   )
+  const requestedEntryQuery = useQuery({
+    queryKey: ['ledger-entry', requestedOpenId],
+    queryFn: () => api.getLedgerEntry(requestedOpenId!),
+    enabled: requestedOpenId != null && !isSearching,
+  })
   const ledgerQuery = useQuery({
     queryKey: ['ledger', ledgerParams, scope],
     queryFn: () => api.listLedger({ ...ledgerParams, limit: 500, scope }),
@@ -216,15 +227,17 @@ export function LedgerOutlookShell({ onNavigate }: LedgerOutlookShellProps = {})
     ? searchItems
     : (ledgerQuery.data?.items ?? [])
   useEffect(() => {
-    const openParam = new URLSearchParams(location.search).get('open')
-    if (openParam == null || isSearching || ledgerQuery.isPending || ledgerQuery.isError) return
-    const targetId = Number(openParam)
-    if (!Number.isInteger(targetId)) return
-    const target = mailItems.find((item) => item.id === targetId)
-    if (target == null || consumedOpen.current === openParam) return
+    if (
+      requestedOpenId == null ||
+      isSearching ||
+      requestedEntryQuery.isPending ||
+      requestedEntryQuery.isError ||
+      requestedEntryQuery.data == null ||
+      consumedOpen.current === String(requestedOpenId)
+    ) return
 
-    consumedOpen.current = openParam
-    setSelectedId(target.id)
+    consumedOpen.current = String(requestedOpenId)
+    setSelectedId(requestedOpenId)
     const nextParams = new URLSearchParams(location.search)
     nextParams.delete('open')
     navigate(
@@ -235,7 +248,7 @@ export function LedgerOutlookShell({ onNavigate }: LedgerOutlookShellProps = {})
       },
       { replace: true, state: location.state },
     )
-  }, [isSearching, ledgerQuery.isError, ledgerQuery.isPending, location, mailItems, navigate])
+  }, [isSearching, location, navigate, requestedEntryQuery.data, requestedEntryQuery.isError, requestedEntryQuery.isPending, requestedOpenId])
 
   const isLoading = isSearching ? searchPending : ledgerQuery.isPending
 

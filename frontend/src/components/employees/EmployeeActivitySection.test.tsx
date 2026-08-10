@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -220,5 +220,12 @@ describe('EmployeeActivitySection', () => {
     })
     wrap(<EmployeeActivitySection onOpenProfile={() => {}} />)
     expect(await screen.findByText('شهادة العمل')).toBeInTheDocument()
+  })
+  it('keeps type, reference, destination, and date as six aligned row cells', async () => {
+    wrap(<EmployeeActivitySection onOpenProfile={() => {}} />)
+    const row = await screen.findByRole('link', { name: /open document/i })
+    expect(row.firstElementChild?.children).toHaveLength(6)
+    expect(within(row).getByText('Documents')).toBeInTheDocument()
+    expect(within(row).getByText('#11')).toHaveAttribute('dir', 'auto')
   })
 })

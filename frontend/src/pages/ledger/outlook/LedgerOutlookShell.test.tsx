@@ -2,7 +2,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { render, screen, waitFor } from '@testing-library/react'
 import { MemoryRouter, useLocation } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { LedgerListItem } from '@/lib/api'
+import type { LedgerEntryRead, LedgerListItem } from '@/lib/api'
 import { api } from '@/lib/api'
 import { LedgerOutlookShell } from './LedgerOutlookShell'
 
@@ -13,6 +13,7 @@ vi.mock('@/lib/api', async (orig) => {
     api: {
       ...real.api,
       listLedger: vi.fn(),
+      getLedgerEntry: vi.fn(),
       getSmartFolderSuggestions: vi.fn().mockResolvedValue([]),
     },
   }
@@ -77,19 +78,31 @@ describe('LedgerOutlookShell activity deep links', () => {
   beforeEach(() => {
     vi.mocked(api.listLedger).mockReset()
     vi.mocked(api.getSmartFolderSuggestions).mockResolvedValue([])
+    vi.mocked(api.getLedgerEntry).mockReset()
   })
 
   it('opens the exact ledger entry, preserves unrelated params, and consumes open', async () => {
     vi.mocked(api.listLedger).mockResolvedValue({ items: [entry(42), entry(7)], total: 2, limit: 500, offset: 0 })
+    vi.mocked(api.getLedgerEntry).mockResolvedValue(entry(42) as unknown as LedgerEntryRead)
     renderShell('/ledger?open=42&keep=1')
     await waitFor(() => expect(screen.getByTestId('reading-pane')).toHaveTextContent('42'))
     expect(screen.getByTestId('location')).toHaveTextContent('?keep=1')
   })
 
-  it('does not consume a missing target or select a fallback row', async () => {
+  it('hydrates an off-list outgoing target independently of the current list', async () => {
     vi.mocked(api.listLedger).mockResolvedValue({ items: [entry(7)], total: 1, limit: 500, offset: 0 })
+    vi.mocked(api.getLedgerEntry).mockResolvedValue(entry(42) as unknown as LedgerEntryRead)
     renderShell('/ledger?open=42&keep=1')
-    await waitFor(() => expect(screen.getByTestId('message-list')).toBeInTheDocument())
+    await waitFor(() => expect(screen.getByTestId('reading-pane')).toHaveTextContent('42'))
+    expect(api.getLedgerEntry).toHaveBeenCalledWith(42)
+    expect(screen.getByTestId('location')).toHaveTextContent('?keep=1')
+  })
+
+  it('keeps open and selection unchanged when exact target hydration fails', async () => {
+    vi.mocked(api.listLedger).mockResolvedValue({ items: [entry(7)], total: 1, limit: 500, offset: 0 })
+    vi.mocked(api.getLedgerEntry).mockRejectedValue(new Error('not found'))
+    renderShell('/ledger?open=42&keep=1')
+    await waitFor(() => expect(api.getLedgerEntry).toHaveBeenCalledWith(42))
     expect(screen.getByTestId('reading-pane')).toHaveTextContent('none')
     expect(screen.getByTestId('location')).toHaveTextContent('?open=42&keep=1')
   })

@@ -241,6 +241,7 @@ function ActivityRow({ item, lang, dayFormatter, dateTimeFormatter, t }: Activit
           <p dir="auto" className="mt-1 truncate text-xs text-muted-foreground">{action}</p>
           {item.detail && <p dir="auto" className="mt-1 truncate text-xs text-muted-foreground">{item.detail}</p>}
         </div>
+        <div className="mt-3 text-xs text-muted-foreground md:mt-0">{t(`employees.activity.${item.kind}`)}</div>
         <div dir="auto" className="mt-3 font-mono tabular-nums text-xs text-muted-foreground md:mt-0">{item.reference}</div>
         <div className="mt-3 text-sm font-semibold text-primary md:mt-0">{t(destinationKey)}</div>
         <div className="mt-3 text-xs text-muted-foreground md:mt-0">
