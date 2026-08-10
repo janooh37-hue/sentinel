@@ -80,12 +80,12 @@ categories_router = APIRouter(prefix="/book-categories", tags=["books"])
 
 
 def _signed_source_of(v: BookVersion) -> Literal["in_app", "scan"] | None:
-    """Derived: a signed copy filed under ``book_attachments/`` is a scan-back;
-    anything else (sign_book output dirs) was signed in-app."""
+    """Classify by the preserved base; packaged scan outputs live elsewhere."""
     if not v.signed_pdf_path:
         return None
+    source = v.signed_base_pdf_path or v.signed_pdf_path
     return (
-        "scan" if v.signed_pdf_path.replace("\\", "/").startswith("book_attachments/") else "in_app"
+        "scan" if source.replace("\\", "/").startswith("book_attachments/") else "in_app"
     )
 
 

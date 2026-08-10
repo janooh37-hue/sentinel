@@ -256,7 +256,7 @@ def test_existing_in_app_signature_is_rebuilt_without_old_included_tail(
 
     assert _texts(package.pdf_bytes) == ["SIGNED-FORM", "PAPER"]
     assert len(calls) == 1
-    assert calls[0]["merge_included_papers"] is False
+    assert "merge_included_papers" not in calls[0]
     assert Path(calls[0]["output_dir"]).name.startswith("included-base-")
     db_session.refresh(version)
     assert version.signed_base_pdf_path is None

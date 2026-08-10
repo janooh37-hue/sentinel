@@ -176,6 +176,7 @@ def test_replace_signed_copy_route(api_db, tmp_path) -> None:
     )
     assert resp.status_code == 200, resp.text
     assert resp.json()["approval_state"] == "approved"
+    assert resp.json()["versions"][-1]["signed_source"] == "scan"
 
 
 # ---------------------------------------------------------------------------

@@ -1954,28 +1954,6 @@ def _authored_docx_of(db: Session, version: BookVersion) -> Path | None:
     return p if p.exists() else None
 
 
-def _merge_book_attachments(db: Session, book: Book, pdf_path: Path) -> None:
-    """Re-merge the book's combined-PDF attachments into *pdf_path* (spec §6):
-    the generated PDF carried them, so any signed artifact must too."""
-    merged_items = list(book.merged_attachment_paths or [])
-    if not merged_items:
-        return
-    from app.services import book_service
-
-    merge_sources: list[Path] = []
-    for item in merged_items:
-        rel_path = item.get("path")
-        src_path = book_service.resolve_attachment_path(rel_path) if rel_path else None
-        if src_path is None:
-            log.warning(
-                "merged attachment %s missing for book %s — skipped in signed artifact",
-                rel_path,
-                book.id,
-            )
-            continue
-        merge_sources.append(src_path)
-    if merge_sources:
-        merge_attachments_into_pdf(pdf_path, merge_sources)
 
 
 def _sign_authored_docx(
@@ -1986,7 +1964,6 @@ def _sign_authored_docx(
     signer_signature_path: str,
     signer_names: Sequence[str] = (),
     output_dir: Path | None = None,
-    merge_included_papers: bool = True,
 ) -> str:
     """Signed artifact for a Word-authored book: copy docx → stamp signature →
     convert. The paper already carries ref/date/footer/Aztec from its own
@@ -2047,8 +2024,6 @@ def _sign_authored_docx(
         log.error("Signed PDF conversion crashed for %s", docx_path, exc_info=True)
     if pdf_path is None:
         log.warning("Signed PDF unavailable for %s — returning signed DOCX", docx_path)
-    if pdf_path is not None and merge_included_papers:
-        _merge_book_attachments(db, book, pdf_path)
 
     settings = get_settings()
 
@@ -2070,7 +2045,6 @@ def render_signed_pdf(
     signer_signature_path: str,
     signer_names: Sequence[str] = (),
     output_dir: Path | None = None,
-    merge_included_papers: bool = True,
 ) -> str:
     """Re-render ``version``'s document with the signer's signature embedded in
     the manager slot (``sig1_path``); return the signed PDF path relative to
@@ -2104,7 +2078,6 @@ def render_signed_pdf(
             signer_signature_path=signer_signature_path,
             signer_names=signer_names,
             output_dir=output_dir,
-            merge_included_papers=merge_included_papers,
         )
     template_id = version.template_id or ""
     if template_id not in TEMPLATE_FILES:
@@ -2181,10 +2154,6 @@ def render_signed_pdf(
     if pdf_path is None:
         log.warning("Signed PDF unavailable for %s — conversion returned no file", docx_path)
 
-    # Legacy signing callers still append the existing merged set. Package
-    # reconstruction requests the pristine signed form instead.
-    if pdf_path is not None and merge_included_papers:
-        _merge_book_attachments(db, book, pdf_path)
 
     settings = get_settings()
 

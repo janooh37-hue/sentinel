@@ -406,7 +406,6 @@ def _reconstruct_signed_base(
         signer_signature_path=str(signature),
         signer_names=signer_names,
         output_dir=temp_dir,
-        merge_included_papers=False,
     )
     primary = Path(rendered)
     if not primary.is_absolute():
@@ -607,6 +606,88 @@ def describe_package(db: Session, book: Book) -> PackageState:
         papers=_paper_views(papers, fixed_pages),
         history=_history_for_book(db, book.id),
     )
+
+
+def _write_bytes_atomic(path: Path, data: bytes) -> None:
+    temp = path.with_name(f".{path.name}.{uuid.uuid4().hex}.tmp")
+    try:
+        temp.write_bytes(data)
+        temp.replace(path)
+    finally:
+        with contextlib.suppress(OSError):
+            temp.unlink()
+
+
+def publish_signed_package(
+    db: Session,
+    book: Book,
+    version: BookVersion,
+    signed_primary: Path,
+    *,
+    physical_scan: bool,
+) -> str:
+    """Preserve a signed fixed base, append current papers, and update paths."""
+    if not signed_primary.is_file() or signed_primary.suffix.lower() != ".pdf":
+        raise ValidationFailedError(
+            "INCLUDED_PAPERS_SIGNED_BASE_UNREADABLE",
+            "The signed form is not a readable PDF",
+        )
+    try:
+        with fitz.open(signed_primary) as pdf:
+            if pdf.page_count < 1:
+                raise ValueError("PDF has no pages")
+    except Exception as exc:
+        raise ValidationFailedError(
+            "INCLUDED_PAPERS_SIGNED_BASE_UNREADABLE",
+            "The signed form is not a readable PDF",
+        ) from exc
+    if version.document_id is None:
+        raise ValidationFailedError(
+            "INCLUDED_PAPERS_UNAVAILABLE",
+            "Included papers are available only for generated records",
+        )
+    document = db.get(Document, version.document_id)
+    if document is None:
+        raise NotFoundError(
+            "INCLUDED_PAPERS_PDF_MISSING", "The record PDF is not available"
+        )
+    metadata = [
+        {**item, "embedded": False}
+        for item in _effective_metadata(book, version)
+    ]
+    papers = _resolve_existing(metadata)
+    base_bytes = (
+        signed_primary.read_bytes()
+        if physical_scan
+        else _fixed_from_primary(db, document, signed_primary)
+    )
+    built = _build_result(book.included_papers_revision, base_bytes, papers)
+    package_dir = get_settings().data_dir.resolve() / "book_packages" / str(book.id)
+    package_dir.mkdir(parents=True, exist_ok=True)
+    output = package_dir / (
+        f"v{version.version_no}-signed-package-{uuid.uuid4().hex[:10]}.pdf"
+    )
+    base_path = signed_primary
+    created_base = False
+    try:
+        if not physical_scan:
+            base_path = package_dir / (
+                f"v{version.version_no}-signed-base-{uuid.uuid4().hex[:10]}.pdf"
+            )
+            _write_bytes_atomic(base_path, base_bytes)
+            created_base = True
+        _write_bytes_atomic(output, built.pdf_bytes)
+    except Exception:
+        with contextlib.suppress(OSError):
+            output.unlink()
+        if created_base:
+            with contextlib.suppress(OSError):
+                base_path.unlink()
+        raise
+    version.signed_base_pdf_path = _relative_data_path(base_path)
+    version.signed_pdf_path = _relative_data_path(output)
+    version.signed_embedded_paper_ids = []
+    return version.signed_pdf_path
 
 
 def _check_revision(book: Book, revision: int) -> None:
@@ -967,6 +1048,7 @@ __all__ = [
     "inspect_paper",
     "original_creator_user_id",
     "preview_package",
+    "publish_signed_package",
     "save_package",
     "stage_paper",
 ]

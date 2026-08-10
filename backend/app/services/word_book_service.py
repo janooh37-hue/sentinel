@@ -429,7 +429,7 @@ def finish_word_session(db: Session, *, user: User, book_id: int) -> Book:
 
     if is_report:
         from app.db.models import Employee
-        from app.services import document_service, report_service
+        from app.services import document_service, included_papers_service, report_service
 
         signed = False
         if session.sign_on_finish and session.signer_employee_id:
@@ -444,6 +444,17 @@ def finish_word_session(db: Session, *, user: User, book_id: int) -> Book:
                 signed_rel = document_service.render_signed_pdf(
                     db, version=version, signer_signature_path=sig, signer_names=names
                 )
+                signed_primary = Path(signed_rel)
+                if not signed_primary.is_absolute():
+                    signed_primary = get_settings().data_dir / signed_primary
+                if signed_primary.suffix.lower() == ".pdf":
+                    signed_rel = included_papers_service.publish_signed_package(
+                        db,
+                        book,
+                        version,
+                        signed_primary,
+                        physical_scan=False,
+                    )
                 version.signed_pdf_path = signed_rel
                 version.signed_by_user_id = user.id
                 version.signed_at = now

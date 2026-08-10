@@ -70,7 +70,6 @@ def test_signed_copy_keeps_doc_manager_name(db_session, tmp_path, monkeypatch):
         version=version,
         signer_signature_path=str(sig),
         output_dir=private_output,
-        merge_included_papers=False,
     )
 
     docx = next(private_output.glob("*_signed.docx"))
