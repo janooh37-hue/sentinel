@@ -139,9 +139,9 @@ describe('EmployeeActivityLookup', () => {
     vi.mocked(api.listEmployees).mockResolvedValueOnce(deferred.promise as never)
     wrap(lookup())
     await userEvent.type(screen.getByRole('searchbox'), 'A')
-    expect(await screen.findByText(/loading recent activity/i)).toBeInTheDocument()
+    expect(await screen.findByText(/searching employees/i)).toBeInTheDocument()
     deferred.resolve({ items: [], total: 0 })
-    expect(await screen.findByText(/no activity matches this employee/i)).toBeInTheDocument()
+    expect(await screen.findByText(/no matching employees/i)).toBeInTheDocument()
 
     vi.mocked(api.listEmployees).mockRejectedValueOnce(new Error('network'))
     const input = screen.getByRole('searchbox')

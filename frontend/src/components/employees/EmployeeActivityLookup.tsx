@@ -146,7 +146,7 @@ export function EmployeeActivityLookup({
         >
           {isPending && (
             <li className="px-4 py-3 text-sm text-muted-foreground" role="status">
-              {t('employees.activity.loading')}
+              {t('employees.activity.lookupLoading')}
             </li>
           )}
           {isError && (
@@ -156,7 +156,7 @@ export function EmployeeActivityLookup({
           )}
           {!isPending && !isError && items.length === 0 && (
             <li className="px-4 py-3 text-sm text-muted-foreground">
-              {t('employees.activity.emptyFiltered')}
+              {t('employees.activity.lookupEmpty')}
             </li>
           )}
           {!isPending && !isError && items.map((employee, index) => {

@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next'
 import { Link } from 'react-router-dom'
 import { EmployeeActivityLookup } from './EmployeeActivityLookup'
 import { api, type EmployeeActivityItemRead, type EmployeeActivityKind, type EmployeeListItem } from '@/lib/api'
+import { pickEmployeeName } from '@/lib/employeeName'
 
 const PAGE_SIZE = 25
 
@@ -60,7 +61,30 @@ export function EmployeeActivitySection({ onOpenProfile }: EmployeeActivitySecti
   const total = activityQuery.data?.pages[0]?.total ?? 0
   const filtered = employee != null || kind !== 'all'
 
+  function removeDestinationCache(employeeId: string | null, nextKind: EmployeeActivityKind | 'all'): void {
+    queryClient.removeQueries({
+      queryKey: ['employee-activity', employeeId, nextKind],
+      exact: true,
+    })
+  }
+
+  function handleEmployeeSelect(nextEmployee: EmployeeListItem): void {
+    removeDestinationCache(nextEmployee.id, kind)
+    setEmployee(nextEmployee)
+  }
+
+  function handleClearEmployee(): void {
+    removeDestinationCache(null, kind)
+    setEmployee(null)
+  }
+
+  function handleKindChange(nextKind: EmployeeActivityKind | 'all'): void {
+    removeDestinationCache(employee?.id ?? null, nextKind)
+    setKind(nextKind)
+  }
+
   function clearFilters(): void {
+    removeDestinationCache(null, 'all')
     setEmployee(null)
     setKind('all')
   }
@@ -86,11 +110,8 @@ export function EmployeeActivitySection({ onOpenProfile }: EmployeeActivitySecti
             <p className="mb-2 text-sm font-semibold text-foreground">{t('employees.activity.lookupLabel')}</p>
             <EmployeeActivityLookup
               selected={employee}
-              onSelect={setEmployee}
-              onClear={() => {
-                queryClient.removeQueries({ queryKey: ['employee-activity', null, 'all'] })
-                setEmployee(null)
-              }}
+              onSelect={handleEmployeeSelect}
+              onClear={handleClearEmployee}
               onOpenProfile={onOpenProfile}
             />
           </div>
@@ -100,9 +121,8 @@ export function EmployeeActivitySection({ onOpenProfile }: EmployeeActivitySecti
             </label>
             <select
               id="employee-activity-type"
-              aria-label={t('employees.activity.typeLabel')}
+              onChange={(event) => handleKindChange(event.target.value as EmployeeActivityKind | 'all')}
               value={kind}
-              onChange={(event) => setKind(event.target.value as EmployeeActivityKind | 'all')}
               className="w-full rounded-xl border border-border bg-surface px-3 py-3 text-sm text-foreground outline-none focus-visible:ring-2 focus-visible:ring-primary"
             >
               <option value="all">{t('employees.activity.all')}</option>
@@ -162,7 +182,7 @@ export function EmployeeActivitySection({ onOpenProfile }: EmployeeActivitySecti
                 <span>{t('employees.activity.destination')}</span>
                 <span>{t('employees.activity.dateTime')}</span>
               </div>
-              {items.map((item) => <ActivityRow key={`${item.kind}-${item.source_id}`} item={item} dayFormatter={dayFormatter} dateTimeFormatter={dateTimeFormatter} t={t} />)}
+              {items.map((item) => <ActivityRow key={`${item.kind}-${item.source_id}`} item={item} lang={lang} dayFormatter={dayFormatter} dateTimeFormatter={dateTimeFormatter} t={t} />)}
             </div>
             
             {activityQuery.hasNextPage && (
@@ -184,12 +204,17 @@ export function EmployeeActivitySection({ onOpenProfile }: EmployeeActivitySecti
 
 interface ActivityRowProps {
   item: EmployeeActivityItemRead
+  lang: 'en' | 'ar'
   dayFormatter: Intl.DateTimeFormat
   dateTimeFormatter: Intl.DateTimeFormat
   t: (key: string, options?: Record<string, unknown>) => string
 }
 
-function ActivityRow({ item, dayFormatter, dateTimeFormatter, t }: ActivityRowProps): React.JSX.Element {
+function ActivityRow({ item, lang, dayFormatter, dateTimeFormatter, t }: ActivityRowProps): React.JSX.Element {
+  const employeeName = pickEmployeeName(
+    { name_en: item.employee_name_en, name_ar: item.employee_name_ar },
+    lang,
+  )
   const date = new Date(item.occurred_at)
   const actionKey = `employees.activity.actions.${item.kind}`
   const actionOptions = item.kind === 'leave' ? { title: item.title, days: item.days ?? 0 } : { title: item.title }
@@ -208,7 +233,7 @@ function ActivityRow({ item, dayFormatter, dateTimeFormatter, t }: ActivityRowPr
     >
       <div className="md:grid md:grid-cols-[minmax(160px,1fr)_minmax(180px,1.2fr)_minmax(150px,1fr)_minmax(130px,1fr)_minmax(160px,1fr)_minmax(150px,1fr)] md:items-center md:gap-4">
         <div className="min-w-0">
-          <p dir="auto" className="truncate text-sm font-semibold text-foreground">{item.employee_name_en || item.employee_id}</p>
+          <p dir="auto" className="truncate text-sm font-semibold text-foreground">{employeeName}</p>
           <p dir="auto" className="mt-1 font-mono tabular-nums text-xs text-muted-foreground">{item.employee_id}</p>
         </div>
         <div className="mt-3 min-w-0 md:mt-0">
@@ -216,7 +241,7 @@ function ActivityRow({ item, dayFormatter, dateTimeFormatter, t }: ActivityRowPr
           <p dir="auto" className="mt-1 truncate text-xs text-muted-foreground">{action}</p>
           {item.detail && <p dir="auto" className="mt-1 truncate text-xs text-muted-foreground">{item.detail}</p>}
         </div>
-        <div className="mt-3 text-xs text-muted-foreground md:mt-0">{t(`employees.activity.${item.kind}`)}</div>
+        <div dir="auto" className="mt-3 font-mono tabular-nums text-xs text-muted-foreground md:mt-0">{item.reference}</div>
         <div className="mt-3 text-sm font-semibold text-primary md:mt-0">{t(destinationKey)}</div>
         <div className="mt-3 text-xs text-muted-foreground md:mt-0">
           <span className="sr-only">{dayFormatter.format(date)} · </span>{dateTimeFormatter.format(date)}

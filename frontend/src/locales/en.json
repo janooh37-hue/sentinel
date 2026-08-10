@@ -335,6 +335,8 @@
       "subtitle": "Review recent record activity across all employees or find one employee.",
       "resultCount": "{{count}} recent entries",
       "lookupLabel": "Quick activity lookup",
+      "lookupLoading": "Searching employees…",
+      "lookupEmpty": "No matching employees.",
       "lookupPlaceholder": "Search by employee name or G-number",
       "matches": "Matching employees",
       "showActivity": "Show activity",

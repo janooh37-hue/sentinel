@@ -12,6 +12,7 @@ vi.mock('@/lib/api', async (orig) => {
   return { ...real, api: { ...real.api, listEmployeeActivity: vi.fn() } }
 })
 
+const testLanguage = vi.hoisted(() => ({ value: 'en' }))
 vi.mock('./EmployeeActivityLookup', () => ({
   EmployeeActivityLookup: ({
     onSelect,
@@ -60,7 +61,7 @@ const items: EmployeeActivityItemRead[] = ([
 
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
-    i18n: { language: 'en' },
+    i18n: { language: testLanguage.value },
     t: (key: string, options?: { count?: number; shown?: number; total?: number; title?: string; days?: number }) => {
       const values: Record<string, string> = {
         'employees.activity.openDocument': 'Open document',
@@ -100,6 +101,7 @@ function wrap(ui: React.ReactElement) {
 
 describe('EmployeeActivitySection', () => {
   beforeEach(() => {
+    testLanguage.value = 'en'
     vi.mocked(api.listEmployeeActivity).mockReset()
     vi.mocked(api.listEmployeeActivity).mockResolvedValue({ items, total: items.length, limit: 25, offset: 0 })
   })
@@ -173,5 +175,50 @@ describe('EmployeeActivitySection', () => {
     expect(onOpenProfile).toHaveBeenCalledOnce()
     await userEvent.click(await screen.findByRole('link', { name: /open document/i }))
     expect(onOpenProfile).toHaveBeenCalledOnce()
+  })
+  it('revisiting a cached employee filter starts again at offset zero', async () => {
+    const pageOne = Array.from({ length: 25 }, (_, index) => ({
+      ...items[0],
+      source_id: index + 1,
+      target_id: index + 1,
+      title: `Document ${index + 1}`,
+    }))
+    const finalItem = { ...items[0], source_id: 26, target_id: 26, title: 'Document 26' }
+    vi.mocked(api.listEmployeeActivity).mockImplementation(({ offset = 0 }) =>
+      Promise.resolve({
+        items: offset === 0 ? pageOne : [finalItem],
+        total: 26,
+        limit: 25,
+        offset,
+      }),
+    )
+    wrap(<EmployeeActivitySection onOpenProfile={() => {}} />)
+    await screen.findByText('Document 1')
+    await userEvent.click(screen.getByRole('button', { name: 'mock-select-G3190' }))
+    await screen.findByText('Document 1')
+    await userEvent.click(screen.getByRole('button', { name: /load more activity/i }))
+    await screen.findByText('Document 26')
+    await userEvent.click(screen.getByRole('button', { name: 'mock-clear-employee' }))
+    await waitFor(() => expect(api.listEmployeeActivity).toHaveBeenLastCalledWith({ limit: 25, offset: 0 }))
+    await userEvent.click(screen.getByRole('button', { name: 'mock-select-G3190' }))
+    await waitFor(() => expect(api.listEmployeeActivity).toHaveBeenLastCalledWith({ employee_id: 'G3190', limit: 25, offset: 0 }))
+  })
+
+  it('renders every stored reference with automatic text direction', async () => {
+    wrap(<EmployeeActivitySection onOpenProfile={() => {}} />)
+    const reference = await screen.findByText('#11')
+    expect(reference).toHaveAttribute('dir', 'auto')
+  })
+
+  it('uses the Arabic employee name when the interface is Arabic', async () => {
+    testLanguage.value = 'ar'
+    vi.mocked(api.listEmployeeActivity).mockResolvedValue({
+      items: [{ ...items[0], employee_name_ar: 'شهادة العمل' }],
+      total: 1,
+      limit: 25,
+      offset: 0,
+    })
+    wrap(<EmployeeActivitySection onOpenProfile={() => {}} />)
+    expect(await screen.findByText('شهادة العمل')).toBeInTheDocument()
   })
 })

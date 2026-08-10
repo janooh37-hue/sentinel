@@ -118,6 +118,7 @@ export function LedgerOutlookShell({ onNavigate }: LedgerOutlookShellProps = {})
   // Phase 2 (D1) — quick-filter chips (reset when the folder/view changes).
   const [filters, setFilters] = useState<QuickFilters>(EMPTY_QUICK_FILTERS)
   const [selectedId, setSelectedId] = useState<number | null>(null)
+  const consumedOpen = useRef<string | null>(null)
   const [compose, setCompose] = useState<ComposeState | null>(null)
   const [search, setSearch] = useState('')
   const [searchResponse, setSearchResponse] = useState<LedgerSearchResponse | null>(null)
@@ -214,6 +215,27 @@ export function LedgerOutlookShell({ onNavigate }: LedgerOutlookShellProps = {})
   const mailItems: LedgerListItem[] = isSearching
     ? searchItems
     : (ledgerQuery.data?.items ?? [])
+  useEffect(() => {
+    const openParam = new URLSearchParams(location.search).get('open')
+    if (openParam == null || isSearching || ledgerQuery.isPending || ledgerQuery.isError) return
+    const targetId = Number(openParam)
+    if (!Number.isInteger(targetId)) return
+    const target = mailItems.find((item) => item.id === targetId)
+    if (target == null || consumedOpen.current === openParam) return
+
+    consumedOpen.current = openParam
+    setSelectedId(target.id)
+    const nextParams = new URLSearchParams(location.search)
+    nextParams.delete('open')
+    navigate(
+      {
+        pathname: location.pathname,
+        search: nextParams.toString() ? `?${nextParams.toString()}` : '',
+        hash: location.hash,
+      },
+      { replace: true, state: location.state },
+    )
+  }, [isSearching, ledgerQuery.isError, ledgerQuery.isPending, location, mailItems, navigate])
 
   const isLoading = isSearching ? searchPending : ledgerQuery.isPending
 
