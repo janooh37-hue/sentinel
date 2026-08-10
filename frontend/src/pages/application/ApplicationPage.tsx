@@ -36,9 +36,17 @@ import { toast } from 'sonner'
 import { shouldShowNotifyToggle } from './notifyToggle'
 import { GeneratedSaveActions } from './GeneratedSaveActions'
 import { savedGenerationFromJob, type SavedGeneration } from './savedGeneration'
+import { ApprovedViolationUpload } from './ApprovedViolationUpload'
 import { SavedRecordActions, type NotificationChoice } from '@/components/books/SavedRecordActions'
 import { api, apiErrorMessage } from '@/lib/api'
-import type { DocumentGenerateRequest, JobStatusResponse, StagedAttachmentRead, TemplateMeta, WordSessionRead } from '@/lib/api'
+import type {
+  ApprovedViolationImportRead,
+  DocumentGenerateRequest,
+  JobStatusResponse,
+  StagedAttachmentRead,
+  TemplateMeta,
+  WordSessionRead,
+} from '@/lib/api'
 import type { ExtractionResponse } from '@/lib/extraction'
 import type { TemplateDetailResponse, TemplateField } from '@/components/application/types'
 import { buildZodSchema } from '@/lib/applicationFormSchema'
@@ -75,6 +83,7 @@ import {
 import { WordHandoffDialog } from '@/pages/books/WordHandoffDialog'
 
 type TabValue = 'fields' | 'preview'
+type InmateEntryMode = 'create' | 'upload'
 
 // Adapter: translate the api response into the shape TemplateForm expects
 function adaptSchema(raw: Awaited<ReturnType<typeof api.getTemplateFields>>): TemplateDetailResponse {
@@ -197,6 +206,13 @@ export function ApplicationPage(): React.JSX.Element {
   const [lastSaved, setLastSaved] = useState<
     (SavedGeneration & { notification?: NotificationChoice }) | null
   >(null)
+  const [inmateEntryMode, setInmateEntryMode] = useState<InmateEntryMode>('create')
+  const [approvedImport, setApprovedImport] = useState<ApprovedViolationImportRead | null>(null)
+  const approvedImportSuccessRef = useRef<HTMLDivElement | null>(null)
+
+  useEffect(() => {
+    if (approvedImport?.book_id) approvedImportSuccessRef.current?.focus()
+  }, [approvedImport?.book_id])
 
   // Invalidate the Books ('Records') list once the generation job completes —
   // every generated form is now also a Book row (see document_service step 11b),
@@ -291,6 +307,7 @@ export function ApplicationPage(): React.JSX.Element {
   // the backend allows employee_id=null for them, so we hide the picker entirely
   // and don't gate Generate on a selection. See document_service.generate_document.
   const isAdminCategory = selectedMeta?.category === 'admin'
+  const isInmateService = selectedTemplate === 'Inmate Conduct Violations'
   // General Book — the only form carrying the rich Arabic body editor. Its
   // classification picker is REQUIRED: every book (rich-editor or Word) takes
   // its ref from the classified register (1/{tab}/GSSG/{serial}).
@@ -623,6 +640,8 @@ export function ApplicationPage(): React.JSX.Element {
     setActiveJobId(null)
     setPreviewJobStatus(null)
     setLastSaved(null)
+    setInmateEntryMode('create')
+    setApprovedImport(null)
     pendingNotificationRef.current = undefined
     // Per-book notify switch is not remembered — each newly-picked form starts On.
     setNotifyEmployee(true)
@@ -762,6 +781,8 @@ export function ApplicationPage(): React.JSX.Element {
     setActiveJobId(null)
     setPreviewJobStatus(null)
     setLastSaved(null)
+    setInmateEntryMode('create')
+    setApprovedImport(null)
     pendingNotificationRef.current = undefined
     // Per-book notify switch is not remembered — reset to On when clearing.
     setNotifyEmployee(true)
@@ -930,7 +951,65 @@ export function ApplicationPage(): React.JSX.Element {
               </div>
             </header>
 
-            <section className="rounded-2xl bg-surface px-4 py-6 sm:px-7">
+            {isInmateService && (
+              <div className="mb-4 inline-flex rounded-xl border border-border bg-surface-tinted p-1">
+                <Button
+                  type="button"
+                  size="sm"
+                  variant={inmateEntryMode === 'create' ? 'default' : 'ghost'}
+                  aria-pressed={inmateEntryMode === 'create'}
+                  onClick={() => {
+                    setInmateEntryMode('create')
+                    setApprovedImport(null)
+                  }}
+                >
+                  {t('application.approvedViolation.createForm')}
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant={inmateEntryMode === 'upload' ? 'default' : 'ghost'}
+                  aria-pressed={inmateEntryMode === 'upload'}
+                  onClick={() => {
+                    setInmateEntryMode('upload')
+                    setApprovedImport(null)
+                  }}
+                >
+                  {t('application.approvedViolation.uploadApproved')}
+                </Button>
+              </div>
+            )}
+
+            {isInmateService && inmateEntryMode === 'upload' ? (
+              <section className="rounded-2xl bg-surface px-4 py-6 sm:px-7">
+                {approvedImport ? (
+                  <div
+                    ref={approvedImportSuccessRef}
+                    data-testid="approved-import-success"
+                    tabIndex={-1}
+                    className="space-y-4 focus-visible:outline-none"
+                  >
+                    <SavedRecordActions
+                      bookId={approvedImport.book_id}
+                      refNumber={approvedImport.ref_number}
+                      detail={t('application.approvedViolation.approvedCopyFiled')}
+                    />
+                    <div className="flex justify-end">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() => setApprovedImport(null)}
+                      >
+                        {t('application.approvedViolation.newUpload')}
+                      </Button>
+                    </div>
+                  </div>
+                ) : (
+                  <ApprovedViolationUpload onSaved={setApprovedImport} />
+                )}
+              </section>
+            ) : (
+              <section className="rounded-2xl bg-surface px-4 py-6 sm:px-7">
               {/* Tab strip — Fields / Preview */}
               <div className="mb-5 flex items-center gap-1 border-b border-hairline pb-4">
                 <TabButton
@@ -1205,7 +1284,8 @@ export function ApplicationPage(): React.JSX.Element {
                   )}
                 </div>
               )}
-            </section>
+              </section>
+            )}
           </div>
         )}
       </div>
