@@ -12,8 +12,10 @@ from dataclasses import dataclass
 from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 
+from fastapi import status
 from sqlalchemy.orm import Session
 
+from app.api.errors import AppError
 from app.config import get_settings
 from app.core.approved_pdf import (
     ApprovedPdfError,
@@ -49,10 +51,15 @@ _NAME_RE = re.compile(
 _ARABIC_DIGITS = str.maketrans("٠١٢٣٤٥٦٧٨٩", "0123456789")
 
 
-class StagedApprovedImportError(ValueError):
+class StagedApprovedImportError(AppError):
     def __init__(self, code: str, message: str) -> None:
-        super().__init__(message)
-        self.code = code
+        http_status = {
+            "APPROVED_IMPORT_TOKEN_NOT_FOUND": status.HTTP_404_NOT_FOUND,
+            "APPROVED_IMPORT_TOKEN_EXPIRED": status.HTTP_410_GONE,
+            "APPROVED_IMPORT_TOKEN_FORBIDDEN": status.HTTP_403_FORBIDDEN,
+            "APPROVED_IMPORT_TOKEN_IN_USE": status.HTTP_409_CONFLICT,
+        }.get(code, status.HTTP_422_UNPROCESSABLE_ENTITY)
+        super().__init__(code, message, http_status=http_status)
 
 
 @dataclass(frozen=True)
@@ -96,11 +103,11 @@ def _metadata(path: Path) -> dict[str, object]:
         value = json.loads((path / "metadata.json").read_text(encoding="utf-8"))
     except (OSError, ValueError, TypeError) as exc:
         raise StagedApprovedImportError(
-            "STAGED_IMPORT_NOT_FOUND", "Staged approved import not found"
+            "APPROVED_IMPORT_TOKEN_NOT_FOUND", "Staged approved import not found"
         ) from exc
     if not isinstance(value, dict):
         raise StagedApprovedImportError(
-            "STAGED_IMPORT_NOT_FOUND", "Staged approved import not found"
+            "APPROVED_IMPORT_TOKEN_NOT_FOUND", "Staged approved import not found"
         )
     return value
 
@@ -110,7 +117,7 @@ def _created_at(metadata: dict[str, object]) -> datetime:
         parsed = datetime.fromisoformat(str(metadata["created_at"]))
     except (KeyError, ValueError) as exc:
         raise StagedApprovedImportError(
-            "STAGED_IMPORT_NOT_FOUND", "Staged approved import not found"
+            "APPROVED_IMPORT_TOKEN_NOT_FOUND", "Staged approved import not found"
         ) from exc
     return parsed if parsed.tzinfo is not None else parsed.replace(tzinfo=UTC)
 
@@ -162,15 +169,17 @@ def inspect_upload(
     now: datetime | None = None,
 ) -> ApprovedImportInspection:
     """Normalize, OCR, and stage an approved report without creating DB rows."""
+    if not data:
+        raise StagedApprovedImportError("APPROVED_IMPORT_FILE_EMPTY", "The uploaded file is empty")
     if len(data) > MAX_ATTACHMENT_BYTES:
         raise StagedApprovedImportError(
-            "APPROVED_IMPORT_TOO_LARGE",
+            "APPROVED_IMPORT_FILE_TOO_LARGE",
             f"File exceeds {MAX_ATTACHMENT_BYTES} bytes",
         )
     try:
         pdf_bytes = normalize_upload_to_pdf(data)
     except ApprovedPdfError as exc:
-        raise StagedApprovedImportError("APPROVED_IMPORT_INVALID_FILE", str(exc)) from exc
+        raise StagedApprovedImportError("APPROVED_IMPORT_BAD_FILE", str(exc)) from exc
 
     warnings: list[str] = []
     try:
@@ -187,7 +196,7 @@ def inspect_upload(
         warnings.append("Confirm at least one inmate name before saving.")
     subject = "Inmate Conduct Violations"
     if inmate_names:
-        subject += " - " + ", ".join(item.name for item in inmate_names)
+        subject += " — " + ", ".join(item.name for item in inmate_names)
 
     current = now or _utcnow()
     if current.tzinfo is None:
@@ -242,16 +251,26 @@ def claim_staged(
     """Atomically claim one staged report for a single commit attempt."""
     if not _TOKEN_RE.fullmatch(token):
         raise StagedApprovedImportError(
-            "STAGED_IMPORT_NOT_FOUND", "Staged approved import not found"
+            "APPROVED_IMPORT_TOKEN_NOT_FOUND", "Staged approved import not found"
         )
     current = now or _utcnow()
     if current.tzinfo is None:
         current = current.replace(tzinfo=UTC)
     root = _staging_root().resolve()
     candidate = (root / token).resolve()
-    if root not in candidate.parents or not candidate.is_dir():
+    claimed = (root / f"{token}.claimed").resolve()
+    if root not in candidate.parents:
         raise StagedApprovedImportError(
-            "STAGED_IMPORT_NOT_FOUND", "Staged approved import not found"
+            "APPROVED_IMPORT_TOKEN_NOT_FOUND", "Staged approved import not found"
+        )
+    if not candidate.is_dir():
+        if root in claimed.parents and claimed.is_dir():
+            raise StagedApprovedImportError(
+                "APPROVED_IMPORT_TOKEN_IN_USE",
+                "The staged approved import is already being saved",
+            )
+        raise StagedApprovedImportError(
+            "APPROVED_IMPORT_TOKEN_NOT_FOUND", "Staged approved import not found"
         )
     metadata = _metadata(candidate)
     try:
@@ -260,26 +279,30 @@ def claim_staged(
         owner_matches = False
     if not owner_matches:
         raise StagedApprovedImportError(
-            "STAGED_IMPORT_NOT_FOUND", "Staged approved import not found"
+            "APPROVED_IMPORT_TOKEN_FORBIDDEN",
+            "The staged approved import belongs to another user",
         )
     if current - _created_at(metadata) >= timedelta(seconds=TTL_SECONDS):
         shutil.rmtree(candidate, ignore_errors=True)
         raise StagedApprovedImportError(
-            "STAGED_IMPORT_EXPIRED", "The staged approved import has expired"
+            "APPROVED_IMPORT_TOKEN_EXPIRED", "The staged approved import has expired"
         )
     source = candidate / "source.pdf"
     if not source.is_file():
         raise StagedApprovedImportError(
-            "STAGED_IMPORT_NOT_FOUND", "Staged approved import not found"
+            "APPROVED_IMPORT_TOKEN_NOT_FOUND", "Staged approved import not found"
         )
 
     claimed = root / f"{token}.claimed"
     try:
         candidate.rename(claimed)
     except OSError as exc:
-        raise StagedApprovedImportError(
-            "STAGED_IMPORT_NOT_FOUND", "Staged approved import not found"
-        ) from exc
+        code = (
+            "APPROVED_IMPORT_TOKEN_IN_USE"
+            if claimed.is_dir()
+            else "APPROVED_IMPORT_TOKEN_NOT_FOUND"
+        )
+        raise StagedApprovedImportError(code, "Staged approved import is unavailable") from exc
     return ClaimedApprovedImport(
         token=token,
         path=claimed,

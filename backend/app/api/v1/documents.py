@@ -17,7 +17,7 @@ background tasks synchronously after response delivery, so tests can poll
 from __future__ import annotations
 
 import logging
-from datetime import datetime
+from datetime import date, datetime
 from typing import Annotated, Any, Literal
 from urllib.parse import quote
 
@@ -31,7 +31,7 @@ from fastapi import (
     status,
 )
 from fastapi.responses import FileResponse, Response
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, StringConstraints
 from sqlalchemy.orm import Session
 
 from app.api._responses import maybe_base64
@@ -43,6 +43,7 @@ from app.db.models import Document, User
 from app.db.session import SessionLocal, get_db
 from app.schemas._base import ORMBase
 from app.services import (
+    approved_import_service,
     book_service,
     document_service,
     notify_dispatch,
@@ -192,6 +193,46 @@ class DocumentRead(ORMBase):
     role: Literal["primary", "companion"]
 
 
+class ApprovedViolationNameRead(BaseModel):
+    name: str
+    confidence: float
+
+
+class ApprovedViolationInspectionRead(BaseModel):
+    token: str
+    filename: str
+    size: int
+    expires_at: datetime
+    report_date: date | None = None
+    inmate_names: list[ApprovedViolationNameRead]
+    proposed_subject: str
+    warnings: list[str]
+
+
+ConfirmedInmateName = Annotated[
+    str,
+    StringConstraints(strip_whitespace=True, min_length=1, max_length=256),
+]
+ConfirmedSubject = Annotated[
+    str,
+    StringConstraints(strip_whitespace=True, min_length=1, max_length=512),
+]
+
+
+class ApprovedViolationImportRequest(BaseModel):
+    token: str = Field(min_length=32, max_length=32, pattern=r"^[0-9a-f]{32}$")
+    report_date: date
+    inmate_names: list[ConfirmedInmateName] = Field(default_factory=list, max_length=100)
+    subject: ConfirmedSubject
+
+
+class ApprovedViolationImportRead(BaseModel):
+    book_id: int
+    document_id: int
+    ref_number: str
+    approval_state: Literal["approved"] = "approved"
+
+
 # ---------------------------------------------------------------------------
 # Background task
 # ---------------------------------------------------------------------------
@@ -309,6 +350,60 @@ async def stage_attachment(
     data = await upload.read()
     staged = staging_service.stage(data, upload.filename or "")
     return StagedAttachmentRead(token=staged.token, filename=staged.filename, size=staged.size)
+
+
+@documents_router.post(
+    "/inmate-violations/approved-imports/inspect",
+    response_model=ApprovedViolationInspectionRead,
+)
+async def inspect_approved_violation(
+    upload: Annotated[UploadFile, File(alias="file")],
+    user: Annotated[User, Depends(require_capability("documents.generate"))],
+) -> ApprovedViolationInspectionRead:
+    data = await upload.read(book_service.MAX_ATTACHMENT_BYTES + 1)
+    inspected = approved_import_service.inspect_upload(
+        owner_user_id=user.id,
+        filename=upload.filename or "",
+        data=data,
+    )
+    return ApprovedViolationInspectionRead(
+        token=inspected.token,
+        filename=inspected.filename,
+        size=inspected.size,
+        expires_at=inspected.expires_at,
+        report_date=inspected.report_date,
+        inmate_names=[
+            ApprovedViolationNameRead(name=item.name, confidence=item.confidence)
+            for item in inspected.inmate_names
+        ],
+        proposed_subject=inspected.proposed_subject,
+        warnings=inspected.warnings,
+    )
+
+
+@documents_router.post(
+    "/inmate-violations/approved-imports",
+    response_model=ApprovedViolationImportRead,
+    status_code=status.HTTP_201_CREATED,
+)
+def commit_approved_violation(
+    payload: ApprovedViolationImportRequest,
+    db: Annotated[Session, Depends(get_db)],
+    user: Annotated[User, Depends(require_capability("documents.generate"))],
+) -> ApprovedViolationImportRead:
+    result = approved_import_service.commit_approved_import(
+        db,
+        owner=user,
+        token=payload.token,
+        report_date=payload.report_date,
+        inmate_names=payload.inmate_names,
+        subject=payload.subject,
+    )
+    return ApprovedViolationImportRead(
+        book_id=result.book_id,
+        document_id=result.doc_id,
+        ref_number=result.ref_number,
+    )
 
 
 @jobs_router.get("/{job_id}", response_model=JobStatusResponse)

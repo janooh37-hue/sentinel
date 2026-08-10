@@ -49,7 +49,7 @@ def test_inspect_stages_normalized_pdf_and_extracts_editable_metadata(
     assert result.filename == "approved.png"
     assert result.report_date.isoformat() == "2026-08-10"
     assert [item.name for item in result.inmate_names] == ["Ali Hassan", "Omar Saleh"]
-    assert result.proposed_subject == "Inmate Conduct Violations - Ali Hassan, Omar Saleh"
+    assert result.proposed_subject == "Inmate Conduct Violations — Ali Hassan, Omar Saleh"
     assert result.warnings == []
     claim = approved_import_service.claim_staged(result.token, owner_user_id=17)
     assert claim.ocr_text.endswith("Violation details")
@@ -71,7 +71,7 @@ def test_staged_import_is_scoped_to_uploading_user(
     with pytest.raises(approved_import_service.StagedApprovedImportError) as exc:
         approved_import_service.claim_staged(inspected.token, owner_user_id=18)
 
-    assert exc.value.code == "STAGED_IMPORT_NOT_FOUND"
+    assert exc.value.code == "APPROVED_IMPORT_TOKEN_FORBIDDEN"
     assert (tmp_path / "staged_approved_imports" / inspected.token).is_dir()
 
 
@@ -99,7 +99,7 @@ def test_staged_import_expiry_removes_only_owned_token_directory(
             now=now + timedelta(hours=25),
         )
 
-    assert exc.value.code == "STAGED_IMPORT_EXPIRED"
+    assert exc.value.code == "APPROVED_IMPORT_TOKEN_EXPIRED"
     assert not (staging_root / inspected.token).exists()
     assert unrelated.is_dir()
 
@@ -117,12 +117,14 @@ def test_claim_is_atomic_releasable_and_consumed_once(
     )
 
     claim = approved_import_service.claim_staged(inspected.token, owner_user_id=17)
-    with pytest.raises(approved_import_service.StagedApprovedImportError):
+    with pytest.raises(approved_import_service.StagedApprovedImportError) as in_use:
         approved_import_service.claim_staged(inspected.token, owner_user_id=17)
+    assert in_use.value.code == "APPROVED_IMPORT_TOKEN_IN_USE"
 
     approved_import_service.release_claim(claim)
     retried = approved_import_service.claim_staged(inspected.token, owner_user_id=17)
     approved_import_service.consume_claim(retried)
 
-    with pytest.raises(approved_import_service.StagedApprovedImportError):
+    with pytest.raises(approved_import_service.StagedApprovedImportError) as consumed:
         approved_import_service.claim_staged(inspected.token, owner_user_id=17)
+    assert consumed.value.code == "APPROVED_IMPORT_TOKEN_NOT_FOUND"
