@@ -32,6 +32,7 @@ from app.core.employee_completeness import TRACKED_FIELDS, missing_fields
 from app.core.vault_manager import Vault
 from app.db.models import Employee, User, VaultFile
 from app.db.session import get_db
+from app.schemas import employee_activity as activity_schemas
 from app.schemas import employee_detail as detail_schemas
 from app.schemas.employee import (
     EmployeeCreate,
@@ -45,6 +46,7 @@ from app.schemas.leave import LeaveBalanceRead, LeaveRead
 from app.schemas.vault_file import VaultEntry, VaultTree
 from app.schemas.violation import ViolationCreate, ViolationRead, ViolationUpdate
 from app.services import (
+    employee_activity_service,
     employee_detail_service,
     employee_service,
     leave_service,
@@ -150,6 +152,29 @@ def employees_completeness(
         tracked=len(TRACKED_FIELDS),
         top_missing=[MissingFieldCount(field=f, count=c) for f, c in counter.most_common(3)],
         first_incomplete_id=worst[1] if worst else None,
+    )
+
+
+@router.get("/activity", response_model=activity_schemas.EmployeeActivityListRead)
+def list_employee_activity(
+    db: Annotated[Session, Depends(get_db)],
+    current_user: Annotated[User, Depends(require_capability("employees.view"))],
+    employee_id: str | None = None,
+    kind: activity_schemas.EmployeeActivityKind | None = None,
+    limit: int = Query(
+        employee_activity_service.DEFAULT_LIMIT,
+        ge=1,
+        le=employee_activity_service.MAX_LIMIT,
+    ),
+    offset: int = Query(0, ge=0),
+) -> activity_schemas.EmployeeActivityListRead:
+    return employee_activity_service.list_employee_activity(
+        db,
+        owner_user_id=current_user.id,
+        employee_id=employee_id,
+        kind=kind,
+        limit=limit,
+        offset=offset,
     )
 
 
