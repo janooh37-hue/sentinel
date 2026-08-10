@@ -22,6 +22,13 @@ const abdulla: EmployeeListItem = {
   position_ar: 'ضابط',
   has_photo: false,
 } as EmployeeListItem
+function createDeferred<T>(): { promise: Promise<T>; resolve: (value: T | PromiseLike<T>) => void } {
+  let resolve!: (value: T | PromiseLike<T>) => void
+  const promise = new Promise<T>((resolvePromise) => {
+    resolve = resolvePromise
+  })
+  return { promise, resolve }
+}
 
 function wrap(ui: React.ReactElement) {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
@@ -68,7 +75,11 @@ describe('EmployeeActivityLookup', () => {
     await userEvent.click(await screen.findByRole('button', { name: /open profile/i }))
     expect(onOpenProfile).toHaveBeenCalledWith('G3190')
     expect(onSelect).not.toHaveBeenCalled()
+    await userEvent.keyboard('{Escape}')
+    expect(screen.queryByRole('list')).not.toBeInTheDocument()
+    expect(screen.getByRole('searchbox')).toHaveFocus()
   })
+
 
   it('clears a selected employee back to all activity', async () => {
     const onClear = vi.fn()
@@ -114,7 +125,7 @@ describe('EmployeeActivityLookup', () => {
   })
 
   it('shows loading, empty, and error states', async () => {
-    const deferred = Promise.withResolvers<{ items: EmployeeListItem[]; total: number }>()
+    const deferred = createDeferred<{ items: EmployeeListItem[]; total: number }>()
     vi.mocked(api.listEmployees).mockResolvedValueOnce(deferred.promise as never)
     wrap(lookup())
     await userEvent.type(screen.getByRole('searchbox'), 'A')

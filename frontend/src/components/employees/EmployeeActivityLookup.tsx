@@ -68,6 +68,13 @@ export function EmployeeActivityLookup({
     }
   }
 
+  function handlePopupActionKeyDown(event: React.KeyboardEvent<HTMLButtonElement>): void {
+    if (event.key === 'Escape') {
+      event.preventDefault()
+      closePopup()
+    }
+  }
+
   function selectEmployee(employee: EmployeeListItem): void {
     setQuery('')
     setPopupOpen(false)
@@ -113,7 +120,7 @@ export function EmployeeActivityLookup({
   return (
     <div className="relative text-start">
       <label htmlFor="employee-activity-lookup" className="sr-only">
-        {t('employees.activityLookup.label', { defaultValue: 'Search employees' })}
+        {t('common.search')}
       </label>
       <input
         ref={inputRef}
@@ -123,7 +130,7 @@ export function EmployeeActivityLookup({
         value={query}
         onChange={(event) => setQuery(event.target.value)}
         onKeyDown={handleInputKeyDown}
-        placeholder={t('employees.activityLookup.placeholder', { defaultValue: 'Search by employee name or G-number' })}
+        placeholder={t('employees.lookup.placeholder')}
         aria-expanded={popupOpen}
         aria-controls="employee-activity-lookup-results"
         autoComplete="off"
@@ -176,6 +183,7 @@ export function EmployeeActivityLookup({
                   <button
                     type="button"
                     onClick={() => onOpenProfile(employee.id)}
+                    onKeyDown={handlePopupActionKeyDown}
                     className="rounded-lg border border-border px-3 py-2 text-xs font-semibold hover:bg-surface-raised focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
                   >
                     {t('employees.activityLookup.openProfile', { defaultValue: 'Open profile' })}
