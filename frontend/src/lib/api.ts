@@ -125,6 +125,9 @@ export type EmployeeStatus = EmployeeRead['status']
 export type NotifyMessageRead = components['schemas']['NotifyMessageRead']
 export type EmployeeDetailRead = components['schemas']['EmployeeDetailRead']
 export type EmployeeStatsRead = components['schemas']['EmployeeStatsRead']
+export type EmployeeActivityItemRead = components['schemas']['EmployeeActivityItemRead']
+export type EmployeeActivityListRead = components['schemas']['EmployeeActivityListRead']
+export type EmployeeActivityKind = EmployeeActivityItemRead['kind']
 export type RecentDocumentRead = components['schemas']['RecentDocumentRead']
 export type RecentLeaveRead = components['schemas']['RecentLeaveRead']
 export type RecentViolationRead = components['schemas']['RecentViolationRead']
@@ -902,6 +905,12 @@ export interface ListEmployeesParams {
   limit?: number
   offset?: number
 }
+export interface ListEmployeeActivityParams {
+  employee_id?: string
+  kind?: EmployeeActivityKind
+  limit?: number
+  offset?: number
+}
 
 function qs(params: Record<string, unknown>): string {
   const usp = new URLSearchParams()
@@ -919,6 +928,8 @@ export const api = {
   // --- employees ---
   listEmployees: (params: ListEmployeesParams = {}) =>
     request<EmployeeListResponse>('GET', `/employees${qs({ ...params })}`),
+  listEmployeeActivity: (params: ListEmployeeActivityParams = {}) =>
+    request<EmployeeActivityListRead>('GET', `/employees/activity${qs({ ...params })}`),
   getEmployee: (id: string) => request<EmployeeRead>('GET', `/employees/${encodeURIComponent(id)}`),
   getEmployeeDetail: (id: string) =>
     request<EmployeeDetailRead>('GET', `/employees/${encodeURIComponent(id)}/detail`),
