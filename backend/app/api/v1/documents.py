@@ -183,7 +183,7 @@ class DocumentRead(ORMBase):
     employee_id: str | None = None
     template_id: str
     ref_number: str
-    docx_path: str
+    docx_path: str | None = None
     pdf_path: str | None = None
     created_at: datetime
     leave_id: int | None = None
@@ -526,6 +526,12 @@ def download_document(
         raise NotFoundError(
             "PDF_NOT_AVAILABLE",
             f"No PDF rendition exists for document {document_id}",
+            id=document_id,
+        )
+    elif not row.docx_path:
+        raise NotFoundError(
+            "DOCX_NOT_AVAILABLE",
+            f"No editable DOCX exists for document {document_id}",
             id=document_id,
         )
     else:
