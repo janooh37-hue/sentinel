@@ -100,6 +100,7 @@ class GenerateAttachmentSpec(BaseModel):
     slot_key: str | None = None
     source: Literal["staged", "record_document", "record_attachment"]
     staged_token: str | None = None
+    original_name: str | None = None
     book_id: int | None = None
     attachment_index: int | None = None
 

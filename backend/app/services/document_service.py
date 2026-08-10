@@ -28,7 +28,7 @@ import shutil
 import uuid
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
-from datetime import date, datetime
+from datetime import UTC, date, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -1638,19 +1638,49 @@ def generate_document(
     # all carry the combined PDF with zero further changes. Consumed staged
     # files are unlinked only after the commit (alongside the B1 loop).
     # ------------------------------------------------------------------
+    merge_sources: list[Path] = []
     if commit and _logged_book is not None and pdf_path is not None:
-        merge_sources: list[Path] = []
         if resolved_attachments:
+            from app.services import included_papers_service
+
             att_dir = settings.data_dir / "book_attachments" / str(_logged_book.id)
             att_dir.mkdir(parents=True, exist_ok=True)
-            persisted: list[dict[str, str | None]] = []
+            persisted: list[dict[str, Any]] = []
+            added_at = datetime.now(UTC).isoformat()
             for spec, src in _ordered_attachment_specs(resolved_attachments, slots):
-                dest = Vault.collision_safe_name(att_dir, f"{spec.slot_key or 'extra'}_{src.name}")
+                original_name = Path(spec.original_name or src.name).name
+                if (
+                    spec.original_name
+                    and (
+                        original_name != spec.original_name
+                        or Path(original_name).suffix.lower() != src.suffix.lower()
+                    )
+                ):
+                    raise ValidationFailedError(
+                        "INVALID_ATTACHMENT_NAME",
+                        "An attachment requires its original safe filename",
+                        filename=spec.original_name,
+                    )
+                dest = Vault.collision_safe_name(
+                    att_dir, f"{spec.slot_key or 'extra'}_{original_name}"
+                )
                 shutil.copyfile(src, dest)
+                media_type, page_count = included_papers_service.inspect_paper(
+                    dest, display_name=original_name
+                )
                 persisted.append(
                     {
+                        "id": str(uuid.uuid4()),
                         "path": dest.relative_to(settings.data_dir).as_posix(),
+                        "original_name": original_name,
                         "slot_key": spec.slot_key,
+                        "media_type": media_type,
+                        "size": dest.stat().st_size,
+                        "page_count": page_count,
+                        "added_by_user_id": (
+                            current_user.id if current_user is not None else None
+                        ),
+                        "added_at": added_at,
                     }
                 )
                 merge_sources.append(dest)
@@ -1679,8 +1709,6 @@ def generate_document(
                     )
                     continue
                 merge_sources.append(src_path)
-        if merge_sources:
-            merge_attachments_into_pdf(pdf_path, merge_sources)
         db.flush()
 
     # ------------------------------------------------------------------
@@ -1821,6 +1849,32 @@ def generate_document(
                     pdf_path=comp_pdf_path,
                 )
             )
+
+    # Publish one fixed-base-first package for every newly generated record.
+    # The preserved base includes automatic companion forms, but never user-
+    # managed papers; Document.pdf_path remains the normal combined download.
+    if commit and _logged_book is not None and pdf_path is not None:
+        package_dir = settings.data_dir / "book_packages" / str(_logged_book.id)
+        package_dir.mkdir(parents=True, exist_ok=True)
+        base_path = Vault.collision_safe_name(
+            package_dir,
+            f"v{_state_version.version_no if _state_version is not None else 1}"
+            f"-generated-base-{uuid.uuid4().hex[:10]}.pdf",
+        )
+        shutil.copyfile(pdf_path, base_path)
+        companion_pdfs = [
+            item.pdf_path
+            for item in doc_results[1:]
+            if item.pdf_path is not None and item.pdf_path.is_file()
+        ]
+        if companion_pdfs:
+            merge_attachments_into_pdf(base_path, companion_pdfs)
+        shutil.copyfile(base_path, pdf_path)
+        if merge_sources:
+            merge_attachments_into_pdf(pdf_path, merge_sources)
+        doc_row.base_pdf_path = _rel(base_path)
+        doc_row.pdf_path = _rel(pdf_path)
+        db.flush()
 
     # ------------------------------------------------------------------
     # 15. Commit
