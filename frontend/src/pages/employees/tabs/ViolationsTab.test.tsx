@@ -185,6 +185,22 @@ describe('ViolationsTab deep-link targeting', () => {
     expect(screen.getByText('Retry')).toBeInTheDocument()
   })
 
+  it('keeps cached manage rows and controls after a background refresh error', async () => {
+    capabilityState.canManage = true
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    client.setQueryData(['violations', 'G100'], fullRows)
+    vi.mocked(api.listViolations).mockClear().mockRejectedValue(new Error('background failed'))
+    render(
+      <QueryClientProvider client={client}>
+        <ViolationsTab employeeId="G100" violations={snapshotRows} />
+      </QueryClientProvider>,
+    )
+    await waitFor(() => expect(api.listViolations).toHaveBeenCalledOnce())
+    await waitFor(() => expect(client.getQueryState(['violations', 'G100'])?.status).toBe('error'))
+    expect(screen.getByTestId('violation-row-42')).toBeInTheDocument()
+    expect(screen.getAllByText('common.edit')).toHaveLength(2)
+  })
+
   it('does not suppress a target when an effect cleanup cancels its frame', async () => {
     const callbacks = new Map<number, FrameRequestCallback>()
     let nextFrame = 0

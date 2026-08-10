@@ -262,7 +262,7 @@ export function ViolationsTab({
     onConsumed: onOpenConsumed,
   })
 
-  if (shouldLoadFull && fullQuery.isError) {
+  if (shouldLoadFull && fullQuery.isError && (openId != null || fullQuery.data === undefined)) {
     return (
       <div className="space-y-3 rounded-2xl border border-destructive/30 bg-surface p-6 text-destructive">
         <p role="alert">{apiErrorMessage(fullQuery.error)}</p>
