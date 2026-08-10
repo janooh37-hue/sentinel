@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from datetime import datetime
 from typing import ClassVar, Literal
+from uuid import UUID
 
 from pydantic import BaseModel, Field, computed_field
 
@@ -227,6 +228,56 @@ class RenameTemplateRequest(BaseModel):
     new_name: str
 
 
+class IncludedPaperProposal(BaseModel):
+    id: UUID
+    staged_token: str | None = None
+    original_name: str | None = None
+
+
+class IncludedPapersRequest(BaseModel):
+    revision: int = Field(ge=0)
+    items: list[IncludedPaperProposal]
+
+
+class IncludedPaperRead(BaseModel):
+    id: UUID
+    original_name: str
+    slot_key: str | None = None
+    media_type: str
+    size: int
+    page_count: int
+    added_by_user_id: int | None = None
+    added_at: datetime
+    page_start: int | None = None
+    page_end: int | None = None
+    embedded_in_signed_base: bool = False
+
+
+class IncludedPaperReplacementRead(BaseModel):
+    from_name: str
+    to_name: str
+
+
+class IncludedPapersHistoryRead(BaseModel):
+    actor_user_id: int | None = None
+    actor_name: str
+    revision_before: int
+    revision_after: int
+    added: list[str] = Field(default_factory=list)
+    removed: list[str] = Field(default_factory=list)
+    replaced: list[IncludedPaperReplacementRead] = Field(default_factory=list)
+    reordered: list[str] = Field(default_factory=list)
+    created_at: datetime
+
+
+class IncludedPapersPreviewRead(BaseModel):
+    revision: int
+    fixed_page_count: int
+    total_page_count: int
+    papers: list[IncludedPaperRead]
+    pdf_base64: str
+
+
 class BookRead(ORMBase):
     id: int
     ref_number: str
@@ -281,6 +332,12 @@ class BookRead(ORMBase):
     approval_steps: list[BookApprovalStepRead] = Field(default_factory=list)
     attachment_paths: list[str] = Field(default_factory=list)
     versions: list[BookVersionRead] = Field(default_factory=list)
+    original_creator_user_id: int | None = None
+    included_papers_revision: int = 0
+    included_papers_fixed_page_count: int = 0
+    included_papers_total_page_count: int = 0
+    included_papers: list[IncludedPaperRead] = Field(default_factory=list)
+    included_papers_history: list[IncludedPapersHistoryRead] = Field(default_factory=list)
 
     # document_service stamps Book.created_at with datetime.now() — local, not
     # UTC. ``deleted_at`` / ``voided_at`` on this model ARE naive UTC and are

@@ -517,7 +517,9 @@ def download_document(
         file_path = settings.data_dir / row.pdf_path
         media_type = "application/pdf"
         ext = ".pdf"
-        merge_companions = True
+        # Managed record packages already contain automatic companions in their
+        # fixed base. Appending them again would duplicate those pages.
+        merge_companions = not bool(row.base_pdf_path)
     elif format == "pdf":
         # PDF explicitly requested but conversion never produced one (e.g. a
         # DRAFT preview on a host without Word). Return a clean signal instead

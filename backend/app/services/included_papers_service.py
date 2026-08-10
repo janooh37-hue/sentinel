@@ -15,6 +15,7 @@ from typing import Any
 
 import fitz
 from fastapi import status
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.errors import AppError, ConflictError, NotFoundError, ValidationFailedError
@@ -63,6 +64,33 @@ class PackageResult:
     papers: list[PaperView]
     pdf_bytes: bytes
     change_summary: dict[str, Any] | None = None
+
+@dataclass(frozen=True)
+class PackageReplacement:
+    from_name: str
+    to_name: str
+
+
+@dataclass(frozen=True)
+class PackageHistory:
+    actor_user_id: int | None
+    actor_name: str
+    revision_before: int
+    revision_after: int
+    added: list[str]
+    removed: list[str]
+    replaced: list[PackageReplacement]
+    reordered: list[str]
+    created_at: datetime
+
+
+@dataclass(frozen=True)
+class PackageState:
+    revision: int
+    fixed_page_count: int
+    total_page_count: int
+    papers: list[PaperView]
+    history: list[PackageHistory]
 
 
 @dataclass(frozen=True)
@@ -483,6 +511,103 @@ def get_package(db: Session, book_id: int, *, user_id: int) -> PackageResult:
         base = _fixed_base_bytes(db, version, document, metadata, Path(raw_temp))
     return _build_result(book.included_papers_revision, base, papers)
 
+def _history_for_book(db: Session, book_id: int) -> list[PackageHistory]:
+    events = db.scalars(
+        select(AuditLog)
+        .where(
+            AuditLog.action == "update_included_papers",
+            AuditLog.entity_type == "book",
+            AuditLog.entity_id == str(book_id),
+        )
+        .order_by(AuditLog.id.desc())
+    ).all()
+    history: list[PackageHistory] = []
+    for event in events:
+        try:
+            payload = json.loads(event.payload or "{}")
+        except (TypeError, json.JSONDecodeError):
+            continue
+        if not isinstance(payload, dict):
+            continue
+        replacements = [
+            PackageReplacement(
+                from_name=str(item.get("from") or ""),
+                to_name=str(item.get("to") or ""),
+            )
+            for item in payload.get("replaced", [])
+            if isinstance(item, dict)
+        ]
+        history.append(
+            PackageHistory(
+                actor_user_id=(
+                    int(payload["actor_user_id"])
+                    if payload.get("actor_user_id") is not None
+                    else None
+                ),
+                actor_name=str(payload.get("actor_name") or event.actor or ""),
+                revision_before=int(payload.get("revision_before") or 0),
+                revision_after=int(payload.get("revision_after") or 0),
+                added=[str(value) for value in payload.get("added", [])],
+                removed=[str(value) for value in payload.get("removed", [])],
+                replaced=replacements,
+                reordered=[str(value) for value in payload.get("reordered", [])],
+                created_at=event.ts,
+            )
+        )
+    return history
+
+
+def describe_package(db: Session, book: Book) -> PackageState:
+    """Describe the published package without rebuilding or mutating it."""
+    version = _current_version(book)
+    if version.document_id is None:
+        raise ValidationFailedError(
+            "INCLUDED_PAPERS_UNAVAILABLE",
+            "Included papers are available only for generated records",
+        )
+    document = db.get(Document, version.document_id)
+    if document is None:
+        raise NotFoundError(
+            "INCLUDED_PAPERS_PDF_MISSING", "The record PDF is not available"
+        )
+    metadata = _effective_metadata(book, version)
+    papers = _resolve_existing(metadata)
+    published = None
+    if (
+        version.status == "approved"
+        and version.signed_pdf_path
+        and version.signed_pdf_path.lower().endswith(".pdf")
+    ):
+        published = _absolute_data_path(version.signed_pdf_path)
+    if published is None:
+        published = _absolute_data_path(document.pdf_path)
+    if published is None:
+        raise NotFoundError(
+            "INCLUDED_PAPERS_PDF_MISSING", "The record PDF is not available"
+        )
+    try:
+        with fitz.open(published) as pdf:
+            total_pages = pdf.page_count
+    except Exception as exc:
+        raise ValidationFailedError(
+            "INCLUDED_PAPERS_BASE_UNREADABLE",
+            "The record PDF could not be read",
+        ) from exc
+    editable_pages = sum(paper.page_count for paper in papers if not paper.embedded)
+    fixed_pages = total_pages - editable_pages
+    if fixed_pages < 1:
+        raise ValidationFailedError(
+            "INCLUDED_PAPERS_BASE_UNREADABLE",
+            "The record PDF page structure is inconsistent",
+        )
+    return PackageState(
+        revision=book.included_papers_revision,
+        fixed_page_count=fixed_pages,
+        total_page_count=total_pages,
+        papers=_paper_views(papers, fixed_pages),
+        history=_history_for_book(db, book.id),
+    )
+
 
 def _check_revision(book: Book, revision: int) -> None:
     if book.included_papers_revision != revision:
@@ -832,9 +957,12 @@ def save_package(
 
 
 __all__ = [
+    "PackageHistory",
     "PackageResult",
+    "PackageState",
     "PaperProposal",
     "PaperView",
+    "describe_package",
     "get_package",
     "inspect_paper",
     "original_creator_user_id",
