@@ -3,6 +3,7 @@ import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, beforeEach, afterEach, vi } from 'vitest'
 import i18n from 'i18next'
+import ar from '@/locales/ar.json'
 import { api, type EmployeeListItem } from '@/lib/api'
 import { EmployeeActivityLookup } from './EmployeeActivityLookup'
 
@@ -51,9 +52,9 @@ describe('EmployeeActivityLookup', () => {
   beforeEach(() => {
     vi.mocked(api.listEmployees).mockResolvedValue({ items: [abdulla], total: 1 } as never)
   })
-
   afterEach(async () => {
     await i18n.changeLanguage('en')
+    i18n.removeResourceBundle('ar', 'translation')
     vi.clearAllMocks()
   })
 
@@ -94,6 +95,15 @@ describe('EmployeeActivityLookup', () => {
     expect(screen.getByText('عبدالله العبري')).toBeInTheDocument()
     expect(screen.getByText('ضابط')).toBeInTheDocument()
     expect(screen.getByText('G3190')).toBeInTheDocument()
+  })
+
+  it('renders Arabic label and placeholder from the real locale resource', async () => {
+    i18n.addResourceBundle('ar', 'translation', ar, true, true)
+    await i18n.changeLanguage('ar')
+    wrap(lookup())
+    const input = screen.getByRole('searchbox')
+    expect(input).toHaveAccessibleName('بحث')
+    expect(input).toHaveAttribute('placeholder', 'اكتب الاسم أو الرقم الوظيفي…')
   })
 
   it('supports keyboard entry and Escape without nested interactive options', async () => {
