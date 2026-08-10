@@ -75,6 +75,15 @@ vi.mock('@/components/employees/EmployeeForm', () => ({
     </div>
   ),
 }))
+vi.mock('@/components/employees/EmployeeActivitySection', () => ({
+  EmployeeActivitySection: ({ onOpenProfile }: { onOpenProfile: (employeeId: string) => void }) => (
+    <div data-testid="employee-activity">
+      <button type="button" onClick={() => onOpenProfile('G3190')}>
+        activity-open-G3190
+      </button>
+    </div>
+  ),
+}))
 
 // Silence i18n
 vi.mock('react-i18next', () => ({
@@ -159,5 +168,11 @@ describe('EmployeeLookupPage', () => {
   it('renders LookupHeroCards inside the hero band', () => {
     setup()
     expect(screen.getByTestId('hero-cards')).toBeInTheDocument()
+  })
+  it('renders full-width activity below the hero and opens profiles explicitly', async () => {
+    setup()
+    expect(screen.getByTestId('employee-activity')).toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', { name: 'activity-open-G3190' }))
+    expect(await screen.findByTestId('profile-stub')).toBeInTheDocument()
   })
 })

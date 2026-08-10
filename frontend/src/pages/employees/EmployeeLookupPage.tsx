@@ -19,6 +19,7 @@ import { useLocation, useNavigate } from 'react-router-dom'
 import { toast } from 'sonner'
 
 import { EmployeeForm } from '@/components/employees/EmployeeForm'
+import { EmployeeActivitySection } from '@/components/employees/EmployeeActivitySection'
 import { EmployeeSearchHero } from '@/components/employees/EmployeeSearchHero'
 import { LookupHeroCards } from '@/components/employees/LookupHeroCards'
 import type { EmployeeFormOutput } from '@/components/employees/schema'
@@ -130,7 +131,11 @@ export function EmployeeLookupPage(): React.JSX.Element {
         <LookupHeroCards onOpen={handleSelect} />
       </EmployeeSearchHero>
 
-      {/* ───── Below-band area ───── */}
+      <EmployeeActivitySection
+        onOpenProfile={(employeeId) =>
+          navigate(`/employees/${encodeURIComponent(employeeId)}`)
+        }
+      />
       {creating && (
         <div className="mx-auto w-full max-w-[1180px] flex-1 px-4 pb-10 pt-6 md:px-8">
           <div className="rounded-2xl border border-hairline bg-surface p-6">

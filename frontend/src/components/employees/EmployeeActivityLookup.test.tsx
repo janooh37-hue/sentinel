@@ -102,8 +102,8 @@ describe('EmployeeActivityLookup', () => {
     await i18n.changeLanguage('ar')
     wrap(lookup())
     const input = screen.getByRole('searchbox')
-    expect(input).toHaveAccessibleName('بحث')
-    expect(input).toHaveAttribute('placeholder', 'اكتب الاسم أو الرقم الوظيفي…')
+    expect(input).toHaveAccessibleName('بحث سريع في النشاط')
+    expect(input).toHaveAttribute('placeholder', 'ابحث باسم الموظف أو الرقم الوظيفي')
   })
 
   it('supports keyboard entry and Escape without nested interactive options', async () => {
@@ -139,15 +139,15 @@ describe('EmployeeActivityLookup', () => {
     vi.mocked(api.listEmployees).mockResolvedValueOnce(deferred.promise as never)
     wrap(lookup())
     await userEvent.type(screen.getByRole('searchbox'), 'A')
-    expect(await screen.findByText(/searching employees/i)).toBeInTheDocument()
+    expect(await screen.findByText(/loading recent activity/i)).toBeInTheDocument()
     deferred.resolve({ items: [], total: 0 })
-    expect(await screen.findByText(/no employees found/i)).toBeInTheDocument()
+    expect(await screen.findByText(/no activity matches this employee/i)).toBeInTheDocument()
 
     vi.mocked(api.listEmployees).mockRejectedValueOnce(new Error('network'))
     const input = screen.getByRole('searchbox')
     await userEvent.clear(input)
     await userEvent.type(input, 'B')
-    expect(await screen.findByText(/could not load employees/i)).toBeInTheDocument()
+    expect(await screen.findByText(/employees could not be searched/i)).toBeInTheDocument()
   })
 
   it('debounces and trims lookup queries', async () => {

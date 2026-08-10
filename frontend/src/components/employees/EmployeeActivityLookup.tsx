@@ -84,11 +84,11 @@ export function EmployeeActivityLookup({
   if (selected != null) {
     const selectedPosition = pickPosition(selected, lang)
     return (
-      <section aria-label={t('employees.activityLookup.selectedLabel', { defaultValue: 'Employee activity filter' })} className="rounded-2xl border border-border bg-surface p-4 text-foreground">
+      <section aria-label={t('employees.activity.lookupLabel')} className="rounded-2xl border border-border bg-surface p-4 text-foreground">
         <div className="flex flex-wrap items-center gap-3">
           <div className="min-w-0 flex-1">
             <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-              {t('employees.activityLookup.selectedLabel', { defaultValue: 'Showing activity for' })}
+              {t('employees.activity.lookupLabel')}
             </p>
             <p dir="auto" className="mt-1 truncate font-semibold">{pickEmployeeName(selected, lang)}</p>
             <p className="mt-0.5 flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
@@ -102,14 +102,14 @@ export function EmployeeActivityLookup({
               onClick={() => onOpenProfile(selected.id)}
               className="rounded-lg border border-border px-3 py-2 text-sm font-semibold hover:bg-surface-raised focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
             >
-              {t('employees.activityLookup.openProfile', { defaultValue: 'Open profile' })}
+              {t('employees.activity.openProfile')}
             </button>
             <button
               type="button"
               onClick={onClear}
               className="rounded-lg border border-border px-3 py-2 text-sm font-semibold hover:bg-surface-raised focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
             >
-              {t('employees.activityLookup.clear', { defaultValue: 'Clear employee filter' })}
+              {t('employees.activity.clearEmployee')}
             </button>
           </div>
         </div>
@@ -120,7 +120,7 @@ export function EmployeeActivityLookup({
   return (
     <div className="relative text-start">
       <label htmlFor="employee-activity-lookup" className="sr-only">
-        {t('common.search')}
+        {t('employees.activity.lookupLabel')}
       </label>
       <input
         ref={inputRef}
@@ -130,7 +130,7 @@ export function EmployeeActivityLookup({
         value={query}
         onChange={(event) => setQuery(event.target.value)}
         onKeyDown={handleInputKeyDown}
-        placeholder={t('employees.lookup.placeholder')}
+        placeholder={t('employees.activity.lookupPlaceholder')}
         aria-expanded={popupOpen}
         aria-controls="employee-activity-lookup-results"
         autoComplete="off"
@@ -141,22 +141,22 @@ export function EmployeeActivityLookup({
         <ul
           id="employee-activity-lookup-results"
           role="list"
-          aria-label={t('employees.activityLookup.results', { defaultValue: 'Employee search results' })}
+          aria-label={t('employees.activity.matches')}
           className="absolute inset-x-0 top-[calc(100%+8px)] z-20 max-h-[min(55vh,480px)] overflow-y-auto rounded-xl border border-border bg-surface text-foreground shadow-lg"
         >
           {isPending && (
             <li className="px-4 py-3 text-sm text-muted-foreground" role="status">
-              {t('employees.activityLookup.loading', { defaultValue: 'Searching employees…' })}
+              {t('employees.activity.loading')}
             </li>
           )}
           {isError && (
             <li className="px-4 py-3 text-sm text-destructive" role="alert">
-              {t('employees.activityLookup.error', { defaultValue: 'Could not load employees. Try again.' })}
+              {t('employees.activity.lookupError')}
             </li>
           )}
           {!isPending && !isError && items.length === 0 && (
             <li className="px-4 py-3 text-sm text-muted-foreground">
-              {t('employees.activityLookup.empty', { defaultValue: 'No employees found.' })}
+              {t('employees.activity.emptyFiltered')}
             </li>
           )}
           {!isPending && !isError && items.map((employee, index) => {
@@ -178,7 +178,7 @@ export function EmployeeActivityLookup({
                     onKeyDown={(event) => handleShowKeyDown(event, index)}
                     className="rounded-lg bg-primary px-3 py-2 text-xs font-semibold text-white hover:bg-primary-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
                   >
-                    {t('employees.activityLookup.showActivity', { defaultValue: 'Show activity' })}
+                    {t('employees.activity.showActivity')}
                   </button>
                   <button
                     type="button"
@@ -186,7 +186,7 @@ export function EmployeeActivityLookup({
                     onKeyDown={handlePopupActionKeyDown}
                     className="rounded-lg border border-border px-3 py-2 text-xs font-semibold hover:bg-surface-raised focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
                   >
-                    {t('employees.activityLookup.openProfile', { defaultValue: 'Open profile' })}
+                    {t('employees.activity.openProfile')}
                   </button>
                 </div>
               </li>
