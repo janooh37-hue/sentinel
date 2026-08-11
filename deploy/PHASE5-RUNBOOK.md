@@ -200,7 +200,10 @@ LAN devices ──HTTPS──> Caddy :443 (gssg.lan / gssgit.local, internal CA)
 ### Phase 6 gate status (as of go-live)
 
 1. bcrypt truncation — resolved: explicit 72-byte cap in `core/security.py`.
-2. Session cap / revoke-all — **still open**; 14-day sessions, accepted risk.
+2. Sessions — largely resolved since this gate was written: sessions are
+   server-side and revocable; lock/disable and password-reset kill live
+   sessions; login has a per-account 5-strike/15-min lockout. Residual:
+   14-day absolute TTL, no idle timeout, no one-click "sign out everywhere".
 3. Register throttle — resolved: 5/min/IP limiter on `POST /auth/register`;
    admin pre-seed moot (production DB already has admin accounts).
 4. XFF behind proxy — resolved (see proxy trust above).
