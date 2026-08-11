@@ -21,6 +21,7 @@ from datetime import date, datetime
 from typing import Annotated, Any, Literal
 from urllib.parse import quote
 
+import anyio
 from fastapi import (
     APIRouter,
     BackgroundTasks,
@@ -361,10 +362,12 @@ async def inspect_approved_violation(
     user: Annotated[User, Depends(require_capability("documents.generate"))],
 ) -> ApprovedViolationInspectionRead:
     data = await upload.read(book_service.MAX_ATTACHMENT_BYTES + 1)
-    inspected = approved_import_service.inspect_upload(
-        owner_user_id=user.id,
-        filename=upload.filename or "",
-        data=data,
+    inspected = await anyio.to_thread.run_sync(
+        lambda: approved_import_service.inspect_upload(
+            owner_user_id=user.id,
+            filename=upload.filename or "",
+            data=data,
+        )
     )
     return ApprovedViolationInspectionRead(
         token=inspected.token,
@@ -574,6 +577,14 @@ def download_document(
             content_disposition_type="inline",
         )
 
+    docx_path = row.docx_path
+    if format == "docx" and not docx_path:
+        raise NotFoundError(
+            "DOCX_NOT_AVAILABLE",
+            f"No editable DOCX exists for document {document_id}",
+            id=document_id,
+        )
+
     # Once a version is SIGNED, the editable DOCX is locked: deny it, and serve
     # the signed artifact for any other format. The signed artifact may be a
     # .pdf (normal) or a .docx fallback (when PDF conversion is unavailable), so
@@ -623,14 +634,9 @@ def download_document(
             f"No PDF rendition exists for document {document_id}",
             id=document_id,
         )
-    elif not row.docx_path:
-        raise NotFoundError(
-            "DOCX_NOT_AVAILABLE",
-            f"No editable DOCX exists for document {document_id}",
-            id=document_id,
-        )
     else:
-        file_path = settings.data_dir / row.docx_path
+        assert docx_path is not None
+        file_path = settings.data_dir / docx_path
         media_type = _DOCX_MEDIA_TYPE
         ext = ".docx"
 

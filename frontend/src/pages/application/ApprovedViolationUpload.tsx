@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react'
+import { lazy, Suspense, useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import {
@@ -13,13 +13,12 @@ import {
 
 import { Button } from '@/components/ui/button'
 import {
+  ApiError,
   api,
-  apiErrorMessage,
   type ApprovedViolationImportRead,
   type ApprovedViolationInspectionRead,
 } from '@/lib/api'
 import { cn } from '@/lib/utils'
-import { ApprovedViolationPreview } from './ApprovedViolationPreview'
 
 const MAX_BYTES = 25 * 1024 * 1024
 const ACCEPT = 'application/pdf,image/png,image/jpeg,.pdf,.png,.jpg,.jpeg'
@@ -28,9 +27,29 @@ const ALLOWED_TYPE: Record<string, true> = {
   'image/png': true,
   'image/jpeg': true,
 }
+const WARNING_KEYS: Record<string, string> = {
+  APPROVED_IMPORT_WARNING_OCR_UNAVAILABLE:
+    'application.approvedViolation.warnings.ocrUnavailable',
+  APPROVED_IMPORT_WARNING_CONFIRM_DATE: 'application.approvedViolation.warnings.confirmDate',
+  APPROVED_IMPORT_WARNING_CONFIRM_NAMES: 'application.approvedViolation.warnings.confirmNames',
+}
+const ERROR_KEYS: Record<string, string> = {
+  APPROVED_IMPORT_FILE_EMPTY: 'application.approvedViolation.errors.empty',
+  APPROVED_IMPORT_FILE_TOO_LARGE: 'application.approvedViolation.errors.tooLarge',
+  APPROVED_IMPORT_BAD_FILE: 'application.approvedViolation.errors.invalidFile',
+  APPROVED_IMPORT_TOKEN_NOT_FOUND: 'application.approvedViolation.errors.expired',
+  APPROVED_IMPORT_TOKEN_EXPIRED: 'application.approvedViolation.errors.expired',
+  APPROVED_IMPORT_METADATA_REQUIRED: 'application.approvedViolation.errors.metadataRequired',
+}
+const ApprovedViolationPreview = lazy(() =>
+  import('./ApprovedViolationPreview').then((module) => ({
+    default: module.ApprovedViolationPreview,
+  })),
+)
 
 interface ApprovedViolationUploadProps {
   onSaved: (result: ApprovedViolationImportRead) => void
+  onSaveBusyChange?: (busy: boolean) => void
 }
 
 interface FieldErrors {
@@ -42,14 +61,19 @@ interface FieldErrors {
 
 export function ApprovedViolationUpload({
   onSaved,
+  onSaveBusyChange,
 }: ApprovedViolationUploadProps): React.JSX.Element {
   const { t } = useTranslation()
   const queryClient = useQueryClient()
   const inputRef = useRef<HTMLInputElement | null>(null)
+  const dropzoneRef = useRef<HTMLDivElement | null>(null)
+  const fileStatusRef = useRef<HTMLParagraphElement | null>(null)
   const dateRef = useRef<HTMLInputElement | null>(null)
   const nameRefs = useRef<Array<HTMLInputElement | null>>([])
   const subjectRef = useRef<HTMLInputElement | null>(null)
   const requestId = useRef(0)
+  const commitBusyRef = useRef(false)
+  const pendingNameFocusRef = useRef<number | null>(null)
   const [file, setFile] = useState<File | null>(null)
   const [inspection, setInspection] = useState<ApprovedViolationInspectionRead | null>(null)
   const [reportDate, setReportDate] = useState('')
@@ -58,6 +82,22 @@ export function ApprovedViolationUpload({
   const [error, setError] = useState<string | null>(null)
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({})
   const [dragging, setDragging] = useState(false)
+
+  useEffect(() => {
+    if (file) fileStatusRef.current?.focus()
+    else dropzoneRef.current?.focus()
+  }, [file])
+
+  useEffect(() => {
+    const index = pendingNameFocusRef.current
+    if (index === null) return
+    pendingNameFocusRef.current = null
+    nameRefs.current[index]?.focus()
+  }, [inmateNames.length])
+  function setCommitBusy(busy: boolean): void {
+    commitBusyRef.current = busy
+    onSaveBusyChange?.(busy)
+  }
 
   const inspectMutation = useMutation({
     mutationFn: ({ selected }: { selected: File; id: number }) =>
@@ -70,9 +110,13 @@ export function ApprovedViolationUpload({
         result.inmate_names.length > 0 ? result.inmate_names.map((item) => item.name) : [''],
       )
       setSubject(result.proposed_subject)
+      fileStatusRef.current?.focus()
     },
     onError: (mutationError, variables) => {
-      if (variables.id === requestId.current) setError(apiErrorMessage(mutationError))
+      if (variables.id !== requestId.current) return
+      const key = mutationError instanceof ApiError ? ERROR_KEYS[mutationError.code] : undefined
+      setError(t(key ?? 'application.approvedViolation.errors.inspectFailed'))
+      fileStatusRef.current?.focus()
     },
   })
 
@@ -85,14 +129,20 @@ export function ApprovedViolationUpload({
         subject: subject.trim(),
       }),
     onSuccess: (result) => {
+      setCommitBusy(false)
       void queryClient.invalidateQueries({ queryKey: ['books'] })
       void queryClient.invalidateQueries({ queryKey: ['books', 'facets'] })
       onSaved(result)
     },
-    onError: (mutationError) => setError(apiErrorMessage(mutationError)),
+    onError: (mutationError) => {
+      setCommitBusy(false)
+      const key = mutationError instanceof ApiError ? ERROR_KEYS[mutationError.code] : undefined
+      setError(t(key ?? 'application.approvedViolation.errors.saveFailed'))
+    },
   })
 
   function clearSelection(): void {
+    if (commitBusyRef.current || commitMutation.isPending) return
     requestId.current += 1
     setFile(null)
     setInspection(null)
@@ -106,11 +156,24 @@ export function ApprovedViolationUpload({
     if (inputRef.current) inputRef.current.value = ''
   }
 
+  function openFilePicker(): void {
+    if (commitBusyRef.current || commitMutation.isPending) return
+    const input = inputRef.current
+    if (!input) return
+    input.value = ''
+    input.click()
+  }
+
   function selectFile(selected: File): void {
+    if (commitBusyRef.current || commitMutation.isPending) return
     setError(null)
     setFieldErrors({})
     if (!(ALLOWED_TYPE[selected.type] || /\.(pdf|png|jpe?g)$/i.test(selected.name))) {
       setError(t('application.approvedViolation.errors.unsupported'))
+      return
+    }
+    if (selected.size === 0) {
+      setError(t('application.approvedViolation.errors.empty'))
       return
     }
     if (selected.size > MAX_BYTES) {
@@ -128,6 +191,7 @@ export function ApprovedViolationUpload({
     inspectMutation.mutate({ selected, id })
   }
 
+
   function validate(): boolean {
     const errors: FieldErrors = {}
     if (!reportDate) errors.reportDate = t('application.approvedViolation.errors.reportDate')
@@ -142,17 +206,16 @@ export function ApprovedViolationUpload({
     return Object.keys(errors).length === 0
   }
 
-  const complete =
-    Boolean(reportDate) && inmateNames.some((name) => name.trim()) && Boolean(subject.trim())
-  const saveDisabled =
-    !inspection || !complete || inspectMutation.isPending || commitMutation.isPending
+  const saveDisabled = !inspection || inspectMutation.isPending || commitMutation.isPending
 
   return (
     <div data-testid="approved-violation-upload" className="space-y-4">
       <input
+        disabled={commitMutation.isPending}
         ref={inputRef}
         type="file"
         accept={ACCEPT}
+        tabIndex={-1}
         className="sr-only"
         aria-label={t('application.approvedViolation.dropzone')}
         onChange={(event) => {
@@ -163,14 +226,15 @@ export function ApprovedViolationUpload({
 
       {!file ? (
         <div
+          ref={dropzoneRef}
           role="button"
           tabIndex={0}
           aria-label={t('application.approvedViolation.dropHint')}
-          onClick={() => inputRef.current?.click()}
+          onClick={openFilePicker}
           onKeyDown={(event) => {
             if (event.key === 'Enter' || event.key === ' ') {
               event.preventDefault()
-              inputRef.current?.click()
+              openFilePicker()
             }
           }}
           onDragOver={(event) => {
@@ -211,10 +275,17 @@ export function ApprovedViolationUpload({
             <p className="truncate text-sm font-semibold text-foreground" dir="ltr">
               {file.name}
             </p>
-            <p className="font-mono text-xs text-muted-foreground">
-              {inspectMutation.isPending
-                ? t('application.approvedViolation.inspecting')
-                : t('application.approvedViolation.ready')}{' '}
+            <p
+              ref={fileStatusRef}
+              role="status"
+              tabIndex={-1}
+              className="rounded-sm font-mono text-xs text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring"
+            >
+              {inspection
+                ? t('application.approvedViolation.ready')
+                : inspectMutation.isError
+                  ? t('application.approvedViolation.inspectionFailed')
+                  : t('application.approvedViolation.inspecting')}{' '}
               ·{' '}
               <bdi>
                 {file.size >= 1_048_576
@@ -223,10 +294,22 @@ export function ApprovedViolationUpload({
               </bdi>
             </p>
           </div>
-          <Button type="button" variant="outline" size="sm" onClick={() => inputRef.current?.click()}>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={openFilePicker}
+            disabled={commitMutation.isPending}
+          >
             {t('application.approvedViolation.replaceFile')}
           </Button>
-          <Button type="button" variant="ghost" size="sm" onClick={clearSelection}>
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            onClick={clearSelection}
+            disabled={commitMutation.isPending}
+          >
             {t('application.approvedViolation.removeFile')}
           </Button>
         </div>
@@ -244,7 +327,24 @@ export function ApprovedViolationUpload({
 
       {file && (
         <div className="grid items-start gap-4 xl:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
-          <ApprovedViolationPreview file={file} />
+          <Suspense
+            fallback={
+              <div
+                role="status"
+                className="grid min-h-72 place-items-center rounded-2xl border border-border bg-surface-tinted text-sm text-muted-foreground"
+              >
+                <span className="flex items-center gap-2">
+                  <Loader2
+                    className="h-4 w-4 animate-spin motion-reduce:animate-none"
+                    aria-hidden
+                  />
+                  {t('application.approvedViolation.previewLoading')}
+                </span>
+              </div>
+            }
+          >
+            <ApprovedViolationPreview file={file} />
+          </Suspense>
 
           {inspection && (
             <form
@@ -252,8 +352,12 @@ export function ApprovedViolationUpload({
               className="space-y-4 rounded-2xl border border-border bg-surface p-4 sm:p-5"
               onSubmit={(event) => {
                 event.preventDefault()
+                if (commitBusyRef.current || commitMutation.isPending) return
                 setError(null)
-                if (validate()) commitMutation.mutate()
+                if (validate()) {
+                  setCommitBusy(true)
+                  commitMutation.mutate()
+                }
               }}
             >
               <div className="border-s-4 border-s-primary ps-3">
@@ -270,7 +374,12 @@ export function ApprovedViolationUpload({
                   </p>
                   <ul className="mt-1 list-disc space-y-1 ps-5 text-xs text-muted-foreground">
                     {inspection.warnings.map((warning) => (
-                      <li key={warning}>{warning}</li>
+                      <li key={warning}>
+                        {t(
+                          WARNING_KEYS[warning] ??
+                            'application.approvedViolation.warnings.reviewExtracted',
+                        )}
+                      </li>
                     ))}
                   </ul>
                 </div>
@@ -289,6 +398,9 @@ export function ApprovedViolationUpload({
                   type="date"
                   value={reportDate}
                   aria-invalid={Boolean(fieldErrors.reportDate)}
+                  aria-describedby={
+                    fieldErrors.reportDate ? 'approved-violation-report-date-error' : undefined
+                  }
                   onChange={(event) => {
                     setReportDate(event.target.value)
                     setFieldErrors((current) => ({ ...current, reportDate: undefined }))
@@ -296,11 +408,18 @@ export function ApprovedViolationUpload({
                   className="h-10 w-full rounded-lg border border-input bg-background px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring"
                 />
                 {fieldErrors.reportDate && (
-                  <p className="text-xs text-accent">{fieldErrors.reportDate}</p>
+                  <p id="approved-violation-report-date-error" className="text-xs text-accent">
+                    {fieldErrors.reportDate}
+                  </p>
                 )}
               </div>
 
-              <fieldset className="space-y-2">
+              <fieldset
+                className="space-y-2"
+                aria-describedby={
+                  fieldErrors.inmateNames ? 'approved-violation-inmate-names-error' : undefined
+                }
+              >
                 <legend className="text-sm font-medium text-foreground">
                   {t('application.approvedViolation.inmateNames')}
                 </legend>
@@ -319,6 +438,11 @@ export function ApprovedViolationUpload({
                         value={name}
                         placeholder={t('application.approvedViolation.namePlaceholder')}
                         aria-invalid={Boolean(fieldErrors.inmateNames)}
+                        aria-describedby={
+                          fieldErrors.inmateNames
+                            ? 'approved-violation-inmate-names-error'
+                            : undefined
+                        }
                         onChange={(event) => {
                           const next = [...inmateNames]
                           next[index] = event.target.value
@@ -337,7 +461,9 @@ export function ApprovedViolationUpload({
                       })}
                       onClick={() => {
                         const next = inmateNames.filter((_, itemIndex) => itemIndex !== index)
-                        setInmateNames(next.length > 0 ? next : [''])
+                        const names = next.length > 0 ? next : ['']
+                        pendingNameFocusRef.current = Math.min(index, names.length - 1)
+                        setInmateNames(names)
                       }}
                     >
                       <Trash2 className="h-4 w-4" aria-hidden />
@@ -345,13 +471,18 @@ export function ApprovedViolationUpload({
                   </div>
                 ))}
                 {fieldErrors.inmateNames && (
-                  <p className="text-xs text-accent">{fieldErrors.inmateNames}</p>
+                  <p id="approved-violation-inmate-names-error" className="text-xs text-accent">
+                    {fieldErrors.inmateNames}
+                  </p>
                 )}
                 <Button
                   type="button"
                   variant="outline"
                   size="sm"
-                  onClick={() => setInmateNames((current) => [...current, ''])}
+                  onClick={() => {
+                    pendingNameFocusRef.current = inmateNames.length
+                    setInmateNames((current) => [...current, ''])
+                  }}
                 >
                   <Plus className="me-1.5 h-4 w-4" aria-hidden />
                   {t('application.approvedViolation.addName')}
@@ -370,6 +501,9 @@ export function ApprovedViolationUpload({
                   ref={subjectRef}
                   value={subject}
                   aria-invalid={Boolean(fieldErrors.subject)}
+                  aria-describedby={
+                    fieldErrors.subject ? 'approved-violation-subject-error' : undefined
+                  }
                   onChange={(event) => {
                     setSubject(event.target.value)
                     setFieldErrors((current) => ({ ...current, subject: undefined }))
@@ -377,7 +511,9 @@ export function ApprovedViolationUpload({
                   className="h-10 w-full rounded-lg border border-input bg-background px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring"
                 />
                 {fieldErrors.subject && (
-                  <p className="text-xs text-accent">{fieldErrors.subject}</p>
+                  <p id="approved-violation-subject-error" className="text-xs text-accent">
+                    {fieldErrors.subject}
+                  </p>
                 )}
               </div>
 

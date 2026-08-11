@@ -32,6 +32,7 @@ from app.db.models import (
     BookApprovalStep,
     BookCategory,
     BookVersion,
+    Document,
     Employee,
     Manager,
     OutboundMessage,
@@ -808,19 +809,25 @@ def sign_book(db: Session, book_id: int, *, user_id: int) -> Book:
 
 
 def is_document_signed_locked(db: Session, document_id: int) -> tuple[bool, str | None]:
-    """Return ``(locked, signed_pdf_rel)`` if ``document_id`` belongs to a signed version.
+    """Return ``(locked, canonical_pdf_rel)`` for a finalized document.
 
-    A document is locked once its linked ``BookVersion`` is ``approved`` (signed)
-    and carries a ``signed_pdf_path``. Callers use this to deny DOCX download and
-    serve the signed artifact instead. Returns ``(False, None)`` otherwise.
+    Normal signed versions use ``signed_pdf_path``. Approved imports are already
+    finalized paper: their stamped ``Document.pdf_path`` is canonical even though
+    no removable signed-copy row exists. Returns ``(False, None)`` otherwise.
     """
     version = (
         db.execute(select(BookVersion).where(BookVersion.document_id == document_id))
         .scalars()
         .first()
     )
-    if version is not None and version.status == "approved" and version.signed_pdf_path:
+    if version is None or version.status != "approved":
+        return False, None
+    if version.signed_pdf_path:
         return True, version.signed_pdf_path
+    if isinstance(version.fields, dict) and version.fields.get("imported_approved") is True:
+        document = db.get(Document, document_id)
+        if document is not None and document.pdf_path:
+            return True, document.pdf_path
     return False, None
 
 

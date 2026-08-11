@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+import threading
 from datetime import datetime
 from pathlib import Path
 
@@ -103,6 +104,35 @@ def test_inspect_serializes_extracted_metadata(api_db: Session) -> None:
     assert body["warnings"] == []
 
 
+def test_inspect_offloads_sync_staging_from_event_loop(
+    api_db: Session,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    user = _user(api_db, email="thread@example.ae")
+    caller_thread = threading.get_ident()
+    observed: dict[str, int] = {}
+
+    def fake_inspect(**_kwargs: object) -> approved_import_service.ApprovedImportInspection:
+        observed["thread"] = threading.get_ident()
+        return approved_import_service.ApprovedImportInspection(
+            token="a" * 32,
+            filename="approved.pdf",
+            size=1,
+            expires_at=datetime(2026, 8, 12),
+            report_date=None,
+            inmate_names=[],
+            proposed_subject="Inmate Conduct Violations",
+            warnings=[],
+        )
+
+    monkeypatch.setattr(approved_import_service, "inspect_upload", fake_inspect)
+
+    response = _inspect(_client(api_db, user), _pdf_bytes())
+
+    assert response.status_code == 200
+    assert observed["thread"] != caller_thread
+
+
 def test_commit_returns_approved_records_handoff(api_db: Session) -> None:
     user = _user(api_db, email="admin@example.ae")
     client = _client(api_db, user)
@@ -125,6 +155,17 @@ def test_commit_returns_approved_records_handoff(api_db: Session) -> None:
         "ref_number": "NAT-0001",
         "approval_state": "approved",
     }
+
+    book_response = client.get("/api/v1/books/1")
+    assert book_response.status_code == 200
+    version = book_response.json()["versions"][-1]
+    assert version["docx_url"] is None
+    assert version["pdf_url"] is not None
+    assert version["signed_pdf_url"] is None
+
+    docx_response = client.get("/api/v1/documents/1/download?format=docx")
+    assert docx_response.status_code == 404
+    assert docx_response.json()["error"]["code"] == "DOCX_NOT_AVAILABLE"
 
 
 def test_routes_require_documents_generate(api_db: Session) -> None:

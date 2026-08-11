@@ -5,16 +5,20 @@ import math
 import os
 import shutil
 import threading
+from collections.abc import Iterator
 from dataclasses import dataclass
 
 from PIL import Image, UnidentifiedImageError
 
 _LANGS = "ara+eng"
 _PSM = "--psm 4"  # single column of variable-size blocks — suits ID cards, letters, gov certs
-_MIN_WIDTH = 1600  # upscale small scans so Tesseract's layout analysis works on dense bilingual docs
+_MIN_WIDTH = (
+    1600  # upscale small scans so Tesseract's layout analysis works on dense bilingual docs
+)
 # Decompression-bomb guard: cap decoded pixels (≈178 MP — generous for scans,
 # rejects crafted images that would blow up memory). Mirrors PIL's own default.
 _MAX_PIXELS = 178_956_970
+_MAX_RASTER_AXIS = math.isqrt(_MAX_PIXELS) - 1
 
 # Single global cap on concurrent OCR runs — CPU-heavy on the shared single-host
 # server. Imported by every OCR path (extractions, intake, scan-inbox drain) so
@@ -108,31 +112,37 @@ def extract_text(image: Image.Image) -> OcrResult:
     return OcrResult(text=text, confidence=confidence)
 
 
-def pdf_to_images(pdf_bytes: bytes, *, dpi: int = 200) -> list[Image.Image]:
-    """Rasterise each PDF page to a PIL image via PyMuPDF (fitz).
-
-    A corrupt or 0-byte PDF makes ``fitz.open`` raise PyMuPDF's
-    ``FileDataError`` / ``EmptyFileError`` — re-raised as
-    :class:`InvalidImageError` (mirrors the image path) so the API maps it to a
-    clean 422 instead of an unhandled 500.
-    """
+def pdf_to_images(pdf_bytes: bytes, *, dpi: int = 200) -> Iterator[Image.Image]:
+    """Yield bounded PDF page rasters via PyMuPDF without retaining prior pages."""
     import fitz
 
-    images: list[Image.Image] = []
+    if dpi <= 0:
+        raise InvalidImageError("PDF raster DPI must be positive.")
+
+    total_pixels = 0
+    scale = dpi / 72.0
     try:
         with fitz.open(stream=pdf_bytes, filetype="pdf") as doc:
             for page in doc:
-                # alpha=False guarantees a 3-channel (RGB) pixmap so
-                # Image.frombytes("RGB", …) below never trips over a 4-byte
-                # (RGBA/CMYK) sample buffer. Mirrors vault_service's rasteriser.
+                width = math.ceil(page.rect.width * scale)
+                height = math.ceil(page.rect.height * scale)
+                pixels = width * height
+                if (
+                    width <= 0
+                    or height <= 0
+                    or width > _MAX_RASTER_AXIS
+                    or height > _MAX_RASTER_AXIS
+                    or pixels > _MAX_PIXELS
+                    or total_pixels > _MAX_PIXELS - pixels
+                ):
+                    raise InvalidImageError("The uploaded PDF is too large to rasterize safely.")
+                total_pixels += pixels
                 pix = page.get_pixmap(dpi=dpi, alpha=False)
-                images.append(Image.frombytes("RGB", (pix.width, pix.height), pix.samples))
-    except (fitz.FileDataError, fitz.EmptyFileError) as exc:
+                yield Image.frombytes("RGB", (pix.width, pix.height), pix.samples)
+    except InvalidImageError:
+        raise
+    except (fitz.FileDataError, fitz.EmptyFileError, RuntimeError) as exc:
         raise InvalidImageError("The uploaded PDF is not readable.") from exc
-    except RuntimeError as exc:
-        # PyMuPDF raises bare RuntimeError for some malformed streams.
-        raise InvalidImageError("The uploaded PDF is not readable.") from exc
-    return images
 
 
 # A PDF text layer with at least this many alphanumeric characters is treated as
@@ -170,7 +180,13 @@ def text_from_pdf(pdf_bytes: bytes) -> str:
     layer = pdf_text_layer(pdf_bytes)
     if sum(c.isalnum() for c in layer) >= _TEXT_LAYER_MIN_ALNUM:
         return layer
-    return "\n".join(extract_text(img).text for img in pdf_to_images(pdf_bytes))
+    texts: list[str] = []
+    for image in pdf_to_images(pdf_bytes):
+        try:
+            texts.append(extract_text(image).text)
+        finally:
+            image.close()
+    return "\n".join(texts)
 
 
 def ocr_bytes_to_text(raw: bytes) -> str:
@@ -193,19 +209,18 @@ def qr_refs_from_bytes(raw: bytes) -> list[str]:
     """
     from app.core.qr import decode_qr_refs
 
-    try:
-        images = pdf_to_images(raw) if raw.startswith(b"%PDF") else [load_image(raw)]
-    except InvalidImageError:
-        return []
-
     refs: list[str] = []
     seen: set[str] = set()
     try:
-        for img in images:
-            for ref in decode_qr_refs(img):
-                if ref not in seen:
-                    seen.add(ref)
-                    refs.append(ref)
+        images = pdf_to_images(raw) if raw.startswith(b"%PDF") else iter((load_image(raw),))
+        for image in images:
+            try:
+                for ref in decode_qr_refs(image):
+                    if ref not in seen:
+                        seen.add(ref)
+                        refs.append(ref)
+            finally:
+                image.close()
     except Exception:
         return refs
     return refs
@@ -216,9 +231,7 @@ def load_image(data: bytes) -> Image.Image:
         img = Image.open(io.BytesIO(data))
         w, h = img.size
         if w * h > _MAX_PIXELS:
-            raise InvalidImageError(
-                f"Image is too large to process ({w}x{h} pixels)."
-            )
+            raise InvalidImageError(f"Image is too large to process ({w}x{h} pixels).")
         return img.convert("RGB")
     except (UnidentifiedImageError, OSError) as exc:
         raise InvalidImageError("The uploaded file is not a readable image.") from exc

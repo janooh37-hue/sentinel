@@ -95,7 +95,10 @@ function PdfPage({ file }: { file: File }): React.JSX.Element {
         }`}
       />
       {status === 'loading' && (
-        <div className="absolute inset-0 grid place-items-center text-sm text-muted-foreground">
+        <div
+          role="status"
+          className="absolute inset-0 grid place-items-center text-sm text-muted-foreground"
+        >
           <span className="flex items-center gap-2">
             <Loader2 className="h-4 w-4 animate-spin motion-reduce:animate-none" aria-hidden />
             {t('application.approvedViolation.previewLoading')}
@@ -103,7 +106,10 @@ function PdfPage({ file }: { file: File }): React.JSX.Element {
         </div>
       )}
       {status === 'error' && (
-        <div className="absolute inset-0 grid place-items-center px-6 text-center text-sm text-accent">
+        <div
+          role="alert"
+          className="absolute inset-0 grid place-items-center px-6 text-center text-sm text-accent"
+        >
           <span className="flex items-center gap-2">
             <AlertCircle className="h-4 w-4" aria-hidden />
             {t('application.approvedViolation.previewError')}

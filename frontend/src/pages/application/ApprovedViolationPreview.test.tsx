@@ -51,6 +51,7 @@ describe('ApprovedViolationPreview', () => {
     })
 
     const view = render(<ApprovedViolationPreview file={file} />)
+    expect(screen.getByRole('status')).toHaveTextContent('Preparing preview…')
 
     await waitFor(() => expect(renderPage).toHaveBeenCalledTimes(1))
     expect(getPage).toHaveBeenCalledWith(1)
@@ -74,6 +75,6 @@ describe('ApprovedViolationPreview', () => {
 
     render(<ApprovedViolationPreview file={file} />)
 
-    expect(await screen.findByText("Couldn't preview this file.")).toBeVisible()
+    expect(await screen.findByRole('alert')).toHaveTextContent("Couldn't preview this file.")
   })
 })

@@ -25,7 +25,12 @@ from app.core.approved_pdf import (
 from app.core.book_text import build_search_text
 from app.core.constants import STAMP_STYLE_HEADER
 from app.core.extraction.dates import parse_date
-from app.core.extraction.ocr import OcrUnavailableError, text_from_pdf
+from app.core.extraction.ocr import (
+    OCR_GATE,
+    InvalidImageError,
+    OcrUnavailableError,
+    text_from_pdf,
+)
 from app.db.models import (
     AuditLog,
     Book,
@@ -43,7 +48,16 @@ log = logging.getLogger(__name__)
 STAGED_DIR_NAME = "staged_approved_imports"
 TTL_SECONDS = 24 * 3600
 _TOKEN_RE = re.compile(r"^[0-9a-f]{32}$")
+_STAGING_DIR_RE = re.compile(r"^(?:[0-9a-f]{32}(?:\.claimed)?|\.[0-9a-f]{32}\.tmp)$")
 _DATE_RE = re.compile(r"\b(\d{1,4}[./-]\d{1,2}[./-]\d{1,4})\b")
+_TABLE_HEADER_RE = re.compile(
+    r"(?:inmate\s+name|(?:إ|ا)?سم\s+النزيل)",  # noqa: RUF001 — intentional Arabic OCR variants
+    re.IGNORECASE,
+)
+_NUMBERED_ROW_RE = re.compile(
+    r"^\s*[0-9٠-٩]+[.)\-]?\s+(.+?)\s*$"  # noqa: RUF001 — intentional Arabic-Indic digits
+)
+_TABLE_TRAILING_FIELDS_RE = re.compile(r"^(?P<name>.+?)\s+\S+\s+\S+\s+\d+\s+\d+$")
 _NAME_RE = re.compile(
     r"^(?:inmate\s+name|name|اسم\s+(?:النزيل|السجين))\s*[:-]\s*(.+)$",
     re.IGNORECASE,
@@ -125,12 +139,16 @@ def _created_at(metadata: dict[str, object]) -> datetime:
 def _purge_stale(root: Path, *, now: datetime) -> None:
     cutoff = now - timedelta(seconds=TTL_SECONDS)
     for path in root.iterdir():
-        if not path.is_dir() or not _TOKEN_RE.fullmatch(path.name):
+        if not path.is_dir() or not _STAGING_DIR_RE.fullmatch(path.name):
             continue
         try:
-            if _created_at(_metadata(path)) < cutoff:
+            try:
+                created_at = _created_at(_metadata(path))
+            except StagedApprovedImportError:
+                created_at = datetime.fromtimestamp(path.stat().st_mtime, tz=UTC)
+            if created_at < cutoff:
                 shutil.rmtree(path)
-        except (OSError, StagedApprovedImportError):
+        except OSError:
             log.warning("could not purge staged approved import %s", path, exc_info=True)
 
 
@@ -149,15 +167,41 @@ def _report_date(text: str) -> date | None:
 def _inmate_names(text: str) -> list[ExtractedInmateName]:
     result: list[ExtractedInmateName] = []
     seen: set[str] = set()
-    for raw_line in text.splitlines():
-        match = _NAME_RE.match(raw_line.strip())
-        if match is None:
-            continue
-        name = " ".join(match.group(1).split()).strip(" ,;:-")
+    table_mode = False
+
+    def add_candidate(raw_name: str) -> None:
+        name = " ".join(raw_name.split()).strip(" ,;:-")[:256].strip()
         folded = name.casefold()
-        if name and folded not in seen:
+        if name and folded not in seen and len(result) < 100:
             seen.add(folded)
             result.append(ExtractedInmateName(name=name, confidence=0.9))
+
+    for raw_line in text.splitlines():
+        line = raw_line.strip()
+        if _TABLE_HEADER_RE.search(line) and not re.search(r"[:：]", line):  # noqa: RUF001
+            table_mode = True
+            continue
+        if table_mode:
+            row_match = _NUMBERED_ROW_RE.match(line)
+            if row_match is not None:
+                row_text = row_match.group(1)
+                cells = re.split(r"\t+|\s{2,}|\|", row_text)
+                candidate = cells[0]
+                if len(cells) == 1:
+                    suffix = _TABLE_TRAILING_FIELDS_RE.match(row_text)
+                    if suffix is not None:
+                        candidate = suffix.group("name")
+                add_candidate(candidate)
+                if len(result) >= 100:
+                    break
+                continue
+            if line:
+                table_mode = False
+        match = _NAME_RE.match(line)
+        if match is not None:
+            add_candidate(match.group(1))
+            if len(result) >= 100:
+                break
     return result
 
 
@@ -183,20 +227,24 @@ def inspect_upload(
 
     warnings: list[str] = []
     try:
-        extracted_text = text_from_pdf(pdf_bytes)
+        with OCR_GATE:
+            extracted_text = text_from_pdf(pdf_bytes)
+    except InvalidImageError as exc:
+        raise StagedApprovedImportError("APPROVED_IMPORT_BAD_FILE", str(exc)) from exc
     except OcrUnavailableError:
         extracted_text = ""
-        warnings.append("OCR is unavailable; enter the report date and inmate names.")
+        warnings.append("APPROVED_IMPORT_WARNING_OCR_UNAVAILABLE")
 
     report_date = _report_date(extracted_text)
     inmate_names = _inmate_names(extracted_text)
     if report_date is None:
-        warnings.append("Confirm the report date before saving.")
+        warnings.append("APPROVED_IMPORT_WARNING_CONFIRM_DATE")
     if not inmate_names:
-        warnings.append("Confirm at least one inmate name before saving.")
+        warnings.append("APPROVED_IMPORT_WARNING_CONFIRM_NAMES")
     subject = "Inmate Conduct Violations"
     if inmate_names:
         subject += " — " + ", ".join(item.name for item in inmate_names)
+    subject = subject[:512].rstrip()
 
     current = now or _utcnow()
     if current.tzinfo is None:
@@ -274,8 +322,9 @@ def claim_staged(
         )
     metadata = _metadata(candidate)
     try:
-        owner_matches = int(metadata["owner_user_id"]) == owner_user_id
-    except (KeyError, TypeError, ValueError):
+        raw_owner = metadata["owner_user_id"]
+        owner_matches = isinstance(raw_owner, int | str) and int(raw_owner) == owner_user_id
+    except (KeyError, ValueError):
         owner_matches = False
     if not owner_matches:
         raise StagedApprovedImportError(
@@ -354,6 +403,7 @@ def commit_approved_import(
 
     claim = claim_staged(token, owner_user_id=owner.id)
     final_path: Path | None = None
+    final_path_created = False
     temporary_path: Path | None = None
     try:
         if db.get(BookCategory, "NAT") is None:
@@ -378,12 +428,12 @@ def commit_approved_import(
             notes=None,
             created_at=created_at,
             deleted_at=None,
-            approval_state="approved",
             submitted_by_user_id=owner.id,
+            approval_state="approved",
             search_text=build_search_text(
                 subject=cleaned_subject,
                 ref=ref_number,
-                body=claim.ocr_text,
+                body="\n".join([report_date.isoformat(), *cleaned_names, claim.ocr_text]),
             ),
         )
         db.add(book)
@@ -401,6 +451,7 @@ def commit_approved_import(
                 "The approved record file already exists",
             )
         temporary_path.rename(final_path)
+        final_path_created = True
         temporary_path = None
 
         document = Document(
@@ -432,10 +483,7 @@ def commit_approved_import(
                 status="approved",
                 created_by_user_id=owner.id,
                 created_at=created_at,
-                signed_pdf_path=relative_pdf.as_posix(),
                 manager_sig_embedded=False,
-                signed_by_user_id=owner.id,
-                signed_at=created_at,
             )
         )
         book.doc_path = relative_pdf.as_posix()
@@ -448,7 +496,10 @@ def commit_approved_import(
             employee_id=None,
             submitter=owner.display_name or owner.email,
             entry_date=report_date,
-            condition_fields={"category": "NAT"},
+            condition_fields={
+                "category": "NAT",
+                "template_id": "Inmate Conduct Violations",
+            },
         )
         db.add(
             AuditLog(
@@ -477,7 +528,7 @@ def commit_approved_import(
         db.rollback()
         if temporary_path is not None:
             temporary_path.unlink(missing_ok=True)
-        if final_path is not None:
+        if final_path_created and final_path is not None:
             final_path.unlink(missing_ok=True)
             with suppress(OSError):
                 final_path.parent.rmdir()

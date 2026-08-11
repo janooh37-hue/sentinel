@@ -208,7 +208,8 @@ export function ApplicationPage(): React.JSX.Element {
   >(null)
   const [inmateEntryMode, setInmateEntryMode] = useState<InmateEntryMode>('create')
   const [approvedImport, setApprovedImport] = useState<ApprovedViolationImportRead | null>(null)
-  const approvedImportSuccessRef = useRef<HTMLDivElement | null>(null)
+  const [approvedImportBusy, setApprovedImportBusy] = useState(false)
+  const approvedImportSuccessRef = useRef<HTMLHeadingElement | null>(null)
 
   useEffect(() => {
     if (approvedImport?.book_id) approvedImportSuccessRef.current?.focus()
@@ -774,6 +775,7 @@ export function ApplicationPage(): React.JSX.Element {
   // Clear the picked form and return to the gallery. Shared by the back
   // button and the Ctrl+N "new form" shortcut so the two paths can't drift.
   const resetToGallery = useCallback(() => {
+    if (approvedImportBusy) return
     form.reset({})
     setSelectedTemplate(null)
     attachmentsDirtyRef.current = false
@@ -784,7 +786,7 @@ export function ApplicationPage(): React.JSX.Element {
     setInmateEntryMode('create')
     setApprovedImport(null)
     pendingNotificationRef.current = undefined
-    // Per-book notify switch is not remembered — reset to On when clearing.
+    // Per-book notify switch is not remembered — each newly-picked form starts On.
     setNotifyEmployee(true)
     setActiveTab('fields')
     setSubmitError(null)
@@ -793,7 +795,7 @@ export function ApplicationPage(): React.JSX.Element {
     setBodyMode('word')
     setTemplateName(null)
     setPendingWordSession(null)
-  }, [form])
+  }, [approvedImportBusy, form])
 
   // Ctrl+N — clear and pick again from the gallery.
   useShortcutAction('newItem', resetToGallery)
@@ -924,6 +926,7 @@ export function ApplicationPage(): React.JSX.Element {
               <button
                 type="button"
                 onClick={resetToGallery}
+                disabled={approvedImportBusy}
                 className="mb-2.5 inline-flex items-center gap-1.5 text-[0.86em] font-medium text-primary transition-colors hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
               >
                 {isAr ? (
@@ -958,7 +961,9 @@ export function ApplicationPage(): React.JSX.Element {
                   size="sm"
                   variant={inmateEntryMode === 'create' ? 'default' : 'ghost'}
                   aria-pressed={inmateEntryMode === 'create'}
+                  disabled={approvedImportBusy}
                   onClick={() => {
+                    if (approvedImportBusy) return
                     setInmateEntryMode('create')
                     setApprovedImport(null)
                   }}
@@ -970,7 +975,9 @@ export function ApplicationPage(): React.JSX.Element {
                   size="sm"
                   variant={inmateEntryMode === 'upload' ? 'default' : 'ghost'}
                   aria-pressed={inmateEntryMode === 'upload'}
+                  disabled={approvedImportBusy}
                   onClick={() => {
+                    if (approvedImportBusy) return
                     setInmateEntryMode('upload')
                     setApprovedImport(null)
                   }}
@@ -980,15 +987,17 @@ export function ApplicationPage(): React.JSX.Element {
               </div>
             )}
 
-            {isInmateService && inmateEntryMode === 'upload' ? (
+            {isInmateService && inmateEntryMode === 'upload' && (
               <section className="rounded-2xl bg-surface px-4 py-6 sm:px-7">
                 {approvedImport ? (
-                  <div
-                    ref={approvedImportSuccessRef}
-                    data-testid="approved-import-success"
-                    tabIndex={-1}
-                    className="space-y-4 focus-visible:outline-none"
-                  >
+                  <div data-testid="approved-import-success" className="space-y-4">
+                    <h3
+                      ref={approvedImportSuccessRef}
+                      tabIndex={-1}
+                      className="rounded-sm text-base font-semibold text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring"
+                    >
+                      {t('application.approvedViolation.successTitle')}
+                    </h3>
                     <SavedRecordActions
                       bookId={approvedImport.book_id}
                       refNumber={approvedImport.ref_number}
@@ -1005,11 +1014,17 @@ export function ApplicationPage(): React.JSX.Element {
                     </div>
                   </div>
                 ) : (
-                  <ApprovedViolationUpload onSaved={setApprovedImport} />
+                  <ApprovedViolationUpload
+                    onSaved={setApprovedImport}
+                    onSaveBusyChange={setApprovedImportBusy}
+                  />
                 )}
               </section>
-            ) : (
-              <section className="rounded-2xl bg-surface px-4 py-6 sm:px-7">
+            )}
+            <section
+              hidden={isInmateService && inmateEntryMode === 'upload'}
+              className="rounded-2xl bg-surface px-4 py-6 sm:px-7"
+            >
               {/* Tab strip — Fields / Preview */}
               <div className="mb-5 flex items-center gap-1 border-b border-hairline pb-4">
                 <TabButton
@@ -1284,8 +1299,7 @@ export function ApplicationPage(): React.JSX.Element {
                   )}
                 </div>
               )}
-              </section>
-            )}
+            </section>
           </div>
         )}
       </div>

@@ -18,6 +18,7 @@ from __future__ import annotations
 import logging
 from collections.abc import Iterator
 from dataclasses import dataclass
+from itertools import islice
 
 from PIL import Image
 
@@ -61,8 +62,9 @@ def pages_from_bytes(raw: bytes) -> list[Image.Image]:
     loaded as a single image. Capped to :data:`MAX_PAGES`. Corrupt input raises
     :class:`InvalidImageError` (the caller degrades to a review result).
     """
-    images = pdf_to_images(raw, dpi=PASSPORT_DPI) if raw.startswith(b"%PDF") else [load_image(raw)]
-    return images[:MAX_PAGES]
+    if raw.startswith(b"%PDF"):
+        return list(islice(pdf_to_images(raw, dpi=PASSPORT_DPI), MAX_PAGES))
+    return [load_image(raw)]
 
 
 def ocr_mrz_pass(image: Image.Image) -> str:

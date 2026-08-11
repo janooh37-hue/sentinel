@@ -2196,6 +2196,7 @@
       "previewLoading": "Preparing preview…",
       "previewError": "Couldn't preview this file.",
       "ready": "Ready to review",
+      "inspectionFailed": "Inspection failed",
       "reportDate": "Report date",
       "inmateNames": "Inmate names",
       "inmateNameLabel": "Inmate name {{number}}",
@@ -2210,13 +2211,26 @@
       "replaceFile": "Replace file",
       "removeFile": "Remove file",
       "approvedCopyFiled": "Approved copy filed",
+      "successTitle": "Approved record saved",
       "newUpload": "New upload",
+      "warnings": {
+        "ocrUnavailable": "OCR is unavailable; enter the report date and inmate names.",
+        "confirmDate": "Confirm the report date before saving.",
+        "confirmNames": "Confirm at least one inmate name before saving.",
+        "reviewExtracted": "Review the extracted details before saving."
+      },
       "errors": {
         "unsupported": "Use a PDF, PNG, JPG, or JPEG file.",
         "tooLarge": "File must be 25 MB or smaller.",
         "reportDate": "Enter the report date.",
         "inmateNames": "Enter at least one inmate name.",
-        "subject": "Enter the Record subject."
+        "subject": "Enter the Record subject.",
+        "empty": "Choose a file that is not empty.",
+        "invalidFile": "This PDF or image is unreadable. Choose a valid file.",
+        "inspectFailed": "Could not read this approved copy. Try another file.",
+        "saveFailed": "Could not save the approved record. Try again.",
+        "expired": "This upload expired. Choose the file again.",
+        "metadataRequired": "Confirm the report date, at least one inmate name, and the Record subject."
       }
     },
     "formCard": {

@@ -18,15 +18,41 @@ def test_document_docx_nullable_migration_round_trip(tmp_path: Path) -> None:
     command.upgrade(config, "0067")
     engine = create_engine(url)
 
-    with engine.connect() as connection:
+    with engine.begin() as connection:
         before = {column["name"]: column for column in inspect(connection).get_columns("documents")}
         assert before["docx_path"]["nullable"] is False
-
+        connection.execute(
+            text(
+                "INSERT INTO documents "
+                "(template_id, ref_number, docx_path, pdf_path, submission_id, role) "
+                "VALUES ('Leave Application Form', 'HR-0001', "
+                "'generated/HR-0001.docx', 'generated/HR-0001.pdf', "
+                "'existing-submission', 'primary')"
+            )
+        )
     command.upgrade(config, "0068")
 
     with engine.begin() as connection:
         after = {column["name"]: column for column in inspect(connection).get_columns("documents")}
         assert after["docx_path"]["nullable"] is True
+        preserved = (
+            connection.execute(
+                text(
+                    "SELECT template_id, ref_number, docx_path, pdf_path, submission_id, role "
+                    "FROM documents WHERE ref_number = 'HR-0001'"
+                )
+            )
+            .mappings()
+            .one()
+        )
+        assert dict(preserved) == {
+            "template_id": "Leave Application Form",
+            "ref_number": "HR-0001",
+            "docx_path": "generated/HR-0001.docx",
+            "pdf_path": "generated/HR-0001.pdf",
+            "submission_id": "existing-submission",
+            "role": "primary",
+        }
         connection.execute(
             text(
                 "INSERT INTO documents "
@@ -49,3 +75,21 @@ def test_document_docx_nullable_migration_round_trip(tmp_path: Path) -> None:
             column["name"]: column for column in inspect(connection).get_columns("documents")
         }
         assert downgraded["docx_path"]["nullable"] is False
+        preserved = (
+            connection.execute(
+                text(
+                    "SELECT template_id, ref_number, docx_path, pdf_path, submission_id, role "
+                    "FROM documents WHERE ref_number = 'HR-0001'"
+                )
+            )
+            .mappings()
+            .one()
+        )
+        assert dict(preserved) == {
+            "template_id": "Leave Application Form",
+            "ref_number": "HR-0001",
+            "docx_path": "generated/HR-0001.docx",
+            "pdf_path": "generated/HR-0001.pdf",
+            "submission_id": "existing-submission",
+            "role": "primary",
+        }

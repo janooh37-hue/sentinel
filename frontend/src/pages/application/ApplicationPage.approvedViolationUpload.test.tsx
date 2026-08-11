@@ -1,4 +1,4 @@
-import { cleanup, render, screen, waitFor } from '@testing-library/react'
+import { cleanup, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -69,6 +69,7 @@ vi.mock('./notifyToggle', () => ({
 vi.mock('./ApprovedViolationUpload', () => ({
   ApprovedViolationUpload: ({
     onSaved,
+    onSaveBusyChange,
   }: {
     onSaved: (result: {
       book_id: number
@@ -77,8 +78,15 @@ vi.mock('./ApprovedViolationUpload', () => ({
       approval_state: string
       signed_pdf_url: string
     }) => void
+    onSaveBusyChange?: (busy: boolean) => void
   }) => (
     <div data-testid="approved-violation-upload">
+      <button type="button" onClick={() => onSaveBusyChange?.(true)}>
+        Begin approved save
+      </button>
+      <button type="button" onClick={() => onSaveBusyChange?.(false)}>
+        Finish approved save
+      </button>
       <button
         type="button"
         onClick={() =>
@@ -157,11 +165,13 @@ describe('ApplicationPage approved violation entry mode', () => {
 
     await user.click(screen.getByRole('button', { name: 'Upload approved copy' }))
     expect(screen.getByTestId('approved-violation-upload')).toBeVisible()
-    expect(screen.queryByTestId('template-form')).not.toBeInTheDocument()
+    expect(screen.getByTestId('template-form')).not.toBeVisible()
 
     await user.click(screen.getByRole('button', { name: 'Complete approved upload' }))
     const success = await screen.findByTestId('approved-import-success')
-    await waitFor(() => expect(success).toHaveFocus())
+    await waitFor(() =>
+      expect(within(success).getByRole('heading', { name: 'Approved record saved' })).toHaveFocus(),
+    )
     expect(screen.getByTestId('saved-actions')).toHaveTextContent(
       '42:NAT-0042:Approved copy filed',
     )
@@ -169,6 +179,28 @@ describe('ApplicationPage approved violation entry mode', () => {
     await user.click(screen.getByRole('button', { name: 'New upload' }))
     expect(screen.getByTestId('approved-violation-upload')).toBeVisible()
     expect(screen.queryByTestId('approved-import-success')).not.toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'Create form' }))
+    expect(screen.getByTestId('template-form')).toBeVisible()
+    expect(screen.queryByTestId('approved-violation-upload')).not.toBeInTheDocument()
+  })
+
+  it('locks mode switching and Services navigation while an approved save is pending', async () => {
+    const user = userEvent.setup()
+    renderPage('inmate_conduct_violations')
+
+    await user.click(await screen.findByRole('button', { name: 'Upload approved copy' }))
+    await user.click(screen.getByRole('button', { name: 'Begin approved save' }))
+
+    expect(screen.getByRole('button', { name: 'Create form' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Upload approved copy' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Services' })).toBeDisabled()
+    expect(screen.getByTestId('approved-violation-upload')).toBeVisible()
+
+    await user.click(screen.getByRole('button', { name: 'Finish approved save' }))
+    expect(screen.getByRole('button', { name: 'Create form' })).toBeEnabled()
+    expect(screen.getByRole('button', { name: 'Upload approved copy' })).toBeEnabled()
+    expect(screen.getByRole('button', { name: 'Services' })).toBeEnabled()
   })
 
   it('keeps other services on the existing form path', async () => {
