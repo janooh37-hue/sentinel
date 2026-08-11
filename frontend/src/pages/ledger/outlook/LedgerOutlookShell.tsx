@@ -118,6 +118,7 @@ export function LedgerOutlookShell({ onNavigate }: LedgerOutlookShellProps = {})
   // Phase 2 (D1) — quick-filter chips (reset when the folder/view changes).
   const [filters, setFilters] = useState<QuickFilters>(EMPTY_QUICK_FILTERS)
   const [selectedId, setSelectedId] = useState<number | null>(null)
+  const consumedOpen = useRef<string | null>(null)
   const [compose, setCompose] = useState<ComposeState | null>(null)
   const [search, setSearch] = useState('')
   const [searchResponse, setSearchResponse] = useState<LedgerSearchResponse | null>(null)
@@ -140,6 +141,12 @@ export function LedgerOutlookShell({ onNavigate }: LedgerOutlookShellProps = {})
 
   const isDrafts = activeView.kind === 'folder' && activeView.folder === 'drafts'
   const isSearching = search.trim().length > 0
+  const requestedOpenId = (() => {
+    const raw = new URLSearchParams(location.search).get('open')
+    if (raw == null || !/^\d+$/.test(raw)) return null
+    const id = Number(raw)
+    return Number.isSafeInteger(id) && id > 0 ? id : null
+  })()
   // Suggestions only need surfacing on a normal folder view (not inside a smart
   // folder, not mid-search). Fetched once; drives the rail pill + list banner.
   const smartSuggestions = useQuery({
@@ -171,6 +178,11 @@ export function LedgerOutlookShell({ onNavigate }: LedgerOutlookShellProps = {})
     filters,
     contextEmployeeId,
   )
+  const requestedEntryQuery = useQuery({
+    queryKey: ['ledger-entry', requestedOpenId],
+    queryFn: () => api.getLedgerEntry(requestedOpenId!),
+    enabled: requestedOpenId != null && !isSearching,
+  })
   const ledgerQuery = useQuery({
     queryKey: ['ledger', ledgerParams, scope],
     queryFn: () => api.listLedger({ ...ledgerParams, limit: 500, scope }),
@@ -214,6 +226,29 @@ export function LedgerOutlookShell({ onNavigate }: LedgerOutlookShellProps = {})
   const mailItems: LedgerListItem[] = isSearching
     ? searchItems
     : (ledgerQuery.data?.items ?? [])
+  useEffect(() => {
+    if (
+      requestedOpenId == null ||
+      isSearching ||
+      requestedEntryQuery.isPending ||
+      requestedEntryQuery.isError ||
+      requestedEntryQuery.data == null ||
+      consumedOpen.current === String(requestedOpenId)
+    ) return
+
+    consumedOpen.current = String(requestedOpenId)
+    setSelectedId(requestedOpenId)
+    const nextParams = new URLSearchParams(location.search)
+    nextParams.delete('open')
+    navigate(
+      {
+        pathname: location.pathname,
+        search: nextParams.toString() ? `?${nextParams.toString()}` : '',
+        hash: location.hash,
+      },
+      { replace: true, state: location.state },
+    )
+  }, [isSearching, location, navigate, requestedEntryQuery.data, requestedEntryQuery.isError, requestedEntryQuery.isPending, requestedOpenId])
 
   const isLoading = isSearching ? searchPending : ledgerQuery.isPending
 
@@ -537,6 +572,31 @@ export function LedgerOutlookShell({ onNavigate }: LedgerOutlookShellProps = {})
   // drawer opened from a "Folders" header button (the prior Ledger mobile
   // pattern — a dominant list, secondary nav behind a sheet). The reading-pane
   // slot is hidden (Phase 5 makes the selected row full-screen). ─────────────
+  if (requestedEntryQuery.isError) {
+    return (
+      <div
+        data-ledger-chrome
+        dir="ltr"
+        className="flex flex-1 items-center justify-center bg-background p-6"
+      >
+        <div
+          dir="auto"
+          role="alert"
+          className="flex max-w-md flex-col items-center gap-4 rounded-2xl border border-destructive/30 bg-surface p-6 text-center"
+        >
+          <p className="text-sm font-medium text-foreground">{t('common.loadError')}</p>
+          <button
+            type="button"
+            onClick={() => void requestedEntryQuery.refetch()}
+            className="rounded-full bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
+          >
+            {t('common.retry')}
+          </button>
+        </div>
+      </div>
+    )
+  }
+
   if (isMobile) {
     // ── Mobile full-screen pane: selecting a row covers the list with the
     // reading-pane / record view; a Back button clears the selection and

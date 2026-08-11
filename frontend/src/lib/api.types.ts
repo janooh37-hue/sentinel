@@ -648,6 +648,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/employees/activity": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Employee Activity */
+        get: operations["list_employee_activity_api_v1_employees_activity_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/employees/{employee_id}": {
         parameters: {
             query?: never;
@@ -5450,6 +5467,54 @@ export interface components {
             /** Interval Minutes */
             interval_minutes: number;
         };
+        /** EmployeeActivityItemRead */
+        EmployeeActivityItemRead: {
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "document" | "leave" | "violation" | "ledger";
+            /** Source Id */
+            source_id: number;
+            /** Target Id */
+            target_id: number;
+            /**
+             * Occurred At
+             * Format: date-time
+             */
+            occurred_at: string;
+            /** Employee Id */
+            employee_id: string;
+            /** Employee Name En */
+            employee_name_en: string;
+            /** Employee Name Ar */
+            employee_name_ar?: string | null;
+            /** Title */
+            title: string;
+            /** Detail */
+            detail?: string | null;
+            /** Status */
+            status?: string | null;
+            /** Days */
+            days?: number | null;
+            /** Direction */
+            direction?: string | null;
+            /** Channel */
+            channel?: string | null;
+            /** Reference */
+            reference: string;
+        };
+        /** EmployeeActivityListRead */
+        EmployeeActivityListRead: {
+            /** Items */
+            items: components["schemas"]["EmployeeActivityItemRead"][];
+            /** Total */
+            total: number;
+            /** Limit */
+            limit: number;
+            /** Offset */
+            offset: number;
+        };
         /** EmployeeCandidate */
         EmployeeCandidate: {
             /** Employee Id */
@@ -9442,6 +9507,42 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CompletenessSummaryOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_employee_activity_api_v1_employees_activity_get: {
+        parameters: {
+            query?: {
+                employee_id?: string | null;
+                kind?: ("document" | "leave" | "violation" | "ledger") | null;
+                limit?: number;
+                offset?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EmployeeActivityListRead"];
                 };
             };
             /** @description Validation Error */

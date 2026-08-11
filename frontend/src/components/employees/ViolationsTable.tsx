@@ -32,11 +32,13 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import type { ViolationCreate, ViolationRead, ViolationUpdate } from '@/lib/api'
+import { cn } from '@/lib/utils'
 import { SendButton } from '@/components/notify/SendButton'
-
 interface Props {
   rows: ViolationRead[]
   employeeId: string
+  highlightedId?: number | null
+  targetNotFound: boolean
   onCreate: (v: ViolationCreate) => Promise<void>
   onUpdate: (id: number, v: ViolationUpdate) => Promise<void>
   onDelete: (id: number) => Promise<void>
@@ -45,6 +47,8 @@ interface Props {
 export function ViolationsTable({
   rows,
   employeeId,
+  highlightedId,
+  targetNotFound,
   onCreate,
   onUpdate,
   onDelete,
@@ -53,6 +57,13 @@ export function ViolationsTable({
   const [adding, setAdding] = useState(false)
   const [editingId, setEditingId] = useState<number | null>(null)
   const [deletingId, setDeletingId] = useState<number | null>(null)
+  if (targetNotFound) {
+    return (
+      <div role="alert" className="rounded-2xl border border-destructive/30 bg-surface p-4 text-destructive">
+        {t('employee.violations.targetNotFound')}
+      </div>
+    )
+  }
 
   return (
     <Card>
@@ -112,7 +123,15 @@ export function ViolationsTable({
                     </TableCell>
                   </TableRow>
                 ) : (
-                  <TableRow key={row.id}>
+                  <TableRow
+                    key={row.id}
+                    data-testid={`violation-row-${row.id}`}
+                    data-violation-row-id={row.id}
+                    data-highlighted={highlightedId === row.id ? 'true' : 'false'}
+                    className={cn(
+                      highlightedId === row.id && 'bg-primary-soft ring-2 ring-inset ring-primary',
+                    )}
+                  >
                     <TableCell className="max-w-[260px]">
                       <div className="truncate font-medium text-foreground" title={row.violation_type}>
                         {row.violation_type}

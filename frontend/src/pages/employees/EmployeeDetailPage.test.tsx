@@ -46,7 +46,19 @@ vi.mock('./EmployeeTabChips', () => ({
 vi.mock('./tabs/DocumentsTab', () => ({ DocumentsTab: () => null }))
 vi.mock('./tabs/ProfileTab', () => ({ ProfileTab: () => null }))
 vi.mock('./tabs/LeavesTab', () => ({ LeavesTab: () => null }))
-vi.mock('./tabs/ViolationsTab', () => ({ ViolationsTab: () => null }))
+vi.mock('./tabs/ViolationsTab', () => ({
+  ViolationsTab: ({
+    openId,
+    onOpenConsumed,
+  }: {
+    openId?: number | null
+    onOpenConsumed?: () => void
+  }) => (
+    <button data-testid="violations-tab" data-open-id={openId ?? ''} onClick={onOpenConsumed}>
+      violation-target
+    </button>
+  ),
+}))
 vi.mock('./tabs/ActivityTab', () => ({ ActivityTab: () => null }))
 vi.mock('./tabs/MessagesTab', () => ({ MessagesTab: () => null }))
 vi.mock('@/components/employees/EmployeeForm', () => ({
@@ -69,10 +81,10 @@ const detail = {
   completeness: { filled: 10, tracked: 14 },
 }
 
-function renderPage() {
+function renderPage(initialEntry = '/employees/G100') {
   return render(
     <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
-      <MemoryRouter initialEntries={['/employees/G100']}>
+      <MemoryRouter initialEntries={[initialEntry]}>
         <Routes>
           <Route path="/employees/:id" element={<EmployeeDetailPage />} />
           <Route path="/employees" element={<div>lookup-page</div>} />
@@ -114,4 +126,11 @@ test('gaps card lists missing_fields labels', async () => {
   } as never)
   renderPage()
   expect(await screen.findByText('employee.field.nationality')).toBeInTheDocument()
+})
+
+test('violation deep link activates the tab and forwards the exact row id', async () => {
+  vi.mocked(api.getEmployeeDetail).mockResolvedValue(detail as never)
+  renderPage('/employees/G100?tab=violations&open=42')
+  expect(await screen.findByTestId('tab-chips')).toHaveAttribute('data-active', 'violations')
+  expect(screen.getByTestId('violations-tab')).toHaveAttribute('data-open-id', '42')
 })
