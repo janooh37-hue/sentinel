@@ -7,6 +7,7 @@ import fitz
 import pytest
 from sqlalchemy.orm import Session
 
+from app.api.errors import ValidationFailedError
 from app.config import get_settings
 from app.db.models import (
     Book,
@@ -41,9 +42,7 @@ def _texts(path: Path) -> list[str]:
         return [page.get_text().strip() for page in doc]
 
 
-def _record(
-    db: Session, tmp_path: Path
-) -> tuple[Book, BookVersion, Document, User, Path]:
+def _record(db: Session, tmp_path: Path) -> tuple[Book, BookVersion, Document, User, Path]:
     creator = User(
         email="creator@example.ae",
         password_hash="x",
@@ -130,13 +129,16 @@ def test_in_app_signing_preserves_signed_base_then_appends_current_papers(
     get_settings.cache_clear()
 
 
-def test_physical_scan_becomes_fixed_base_and_current_papers_remain_separate(
+def test_first_physical_scan_snapshots_current_papers_as_embedded(
     db_session: Session, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     monkeypatch.setenv("GSSG_DATA_DIR", str(tmp_path))
     get_settings.cache_clear()
     book, version, _document, _creator, _paper = _record(db_session, tmp_path)
-    scan = _pdf(tmp_path / "book_attachments" / str(book.id) / "signed-v1.pdf", ["SCAN"])
+    scan = _pdf(
+        tmp_path / "book_attachments" / str(book.id) / "signed-v1.pdf",
+        ["SCAN", "PAPER"],
+    )
 
     published = _service().publish_signed_package(
         db_session,
@@ -148,8 +150,9 @@ def test_physical_scan_becomes_fixed_base_and_current_papers_remain_separate(
 
     assert version.signed_base_pdf_path == scan.relative_to(tmp_path).as_posix()
     assert version.signed_pdf_path == published
-    assert version.signed_embedded_paper_ids == []
+    assert len(version.signed_embedded_paper_ids) == 1
     assert _texts(tmp_path / version.signed_pdf_path) == ["SCAN", "PAPER"]
+    assert book.included_papers_revision == 1
     get_settings.cache_clear()
 
 
@@ -159,7 +162,7 @@ def test_scan_filing_and_replacement_republish_current_papers(
     monkeypatch.setenv("GSSG_DATA_DIR", str(tmp_path))
     get_settings.cache_clear()
     book, version, _document, creator, _paper = _record(db_session, tmp_path)
-    first_scan = _pdf(tmp_path / "first-scan.pdf", ["SCAN-1"])
+    first_scan = _pdf(tmp_path / "first-scan.pdf", ["SCAN-1", "PAPER"])
 
     book_service.add_attachment(
         db_session,
@@ -174,7 +177,7 @@ def test_scan_filing_and_replacement_republish_current_papers(
         tmp_path / str(version.signed_base_pdf_path),
         tmp_path / str(version.signed_pdf_path),
     }
-    assert _texts(tmp_path / str(version.signed_base_pdf_path)) == ["SCAN-1"]
+    assert _texts(tmp_path / str(version.signed_base_pdf_path)) == ["SCAN-1", "PAPER"]
     assert _texts(tmp_path / str(version.signed_pdf_path)) == ["SCAN-1", "PAPER"]
 
     replacement = _pdf(tmp_path / "replacement.pdf", ["SCAN-2"])
@@ -190,6 +193,7 @@ def test_scan_filing_and_replacement_republish_current_papers(
     assert _texts(tmp_path / str(version.signed_base_pdf_path)) == ["SCAN-2"]
     assert _texts(tmp_path / str(version.signed_pdf_path)) == ["SCAN-2", "PAPER"]
     assert all(not path.exists() for path in first_paths)
+    assert book.included_papers_revision == 2
     get_settings.cache_clear()
 
 
@@ -245,4 +249,52 @@ def test_in_app_sign_book_publishes_signed_base_and_current_papers(
         "COMPANION",
         "PAPER",
     ]
+    assert signed.included_papers_revision == 1
+    get_settings.cache_clear()
+
+
+def test_in_app_signing_refuses_docx_fallback_when_papers_are_included(
+    db_session: Session, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    monkeypatch.setenv("GSSG_DATA_DIR", str(tmp_path))
+    get_settings.cache_clear()
+    book, version, _document, _creator, _paper = _record(db_session, tmp_path)
+    signature = tmp_path / "signature.png"
+    signature.write_bytes(b"signature")
+    signer = User(
+        email="fallback-signer@example.ae",
+        password_hash="x",
+        role="manager",
+        status="active",
+        signature_path=str(signature),
+    )
+    db_session.add(signer)
+    db_session.flush()
+    step = BookApprovalStep(
+        book_id=book.id,
+        version_id=version.id,
+        step_order=1,
+        stage_label="Signature",
+        assignee_user_id=signer.id,
+        kind="approver",
+        state="pending",
+    )
+    db_session.add(step)
+    db_session.commit()
+    signed_docx = tmp_path / "signed-fallback.docx"
+    signed_docx.write_bytes(b"docx")
+    monkeypatch.setattr(
+        document_service,
+        "render_signed_pdf",
+        lambda *_args, **_kwargs: str(signed_docx),
+    )
+
+    with pytest.raises(ValidationFailedError) as error:
+        book_service.sign_book(db_session, book.id, user_id=signer.id)
+
+    assert error.value.code == "INCLUDED_PAPERS_SIGNED_PDF_REQUIRED"
+    assert not signed_docx.exists()
+    assert version.status == "pending"
+    assert step.state == "pending"
+    assert book.included_papers_revision == 0
     get_settings.cache_clear()

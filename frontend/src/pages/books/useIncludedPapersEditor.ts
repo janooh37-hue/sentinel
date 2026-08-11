@@ -27,6 +27,7 @@ export interface IncludedPapersEditor {
   busy: boolean
   error: unknown
   canSave: boolean
+  dirty: boolean
   addFiles: (files: File[]) => Promise<void>
   replacePaper: (id: string, file: File) => Promise<void>
   removePaper: (id: string) => void
@@ -50,7 +51,7 @@ export function useIncludedPapersEditor(book: IncludedPapersBook): IncludedPaper
     try {
       for (const file of files) {
         const staged = await api.stageAttachment(file)
-        setState((current) => addStagedPaper(current, staged, staged.token))
+        setState((current) => addStagedPaper(current, staged, crypto.randomUUID()))
       }
     } catch (caught) {
       setError(caught)
@@ -105,11 +106,20 @@ export function useIncludedPapersEditor(book: IncludedPapersBook): IncludedPaper
     }
   }
 
+  const initialPapers = book.included_papers ?? []
+  const dirty =
+    state.items.length !== initialPapers.length ||
+    state.items.some(
+      (paper, index) =>
+        paper.staged_token !== undefined || paper.id !== initialPapers[index]?.id,
+    )
+
   return {
     state,
     busy,
     error,
     canSave: !busy && isPreviewCurrent(state),
+    dirty,
     addFiles,
     replacePaper,
     removePaper: (id) => setState((current) => removeIncludedPaper(current, id)),

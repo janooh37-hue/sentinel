@@ -2,17 +2,20 @@ from __future__ import annotations
 
 import importlib
 import json
+import threading
 import uuid
 from pathlib import Path
 
 import fitz
 import pytest
-from sqlalchemy.orm import Session
+from sqlalchemy import create_engine
+from sqlalchemy.orm import Session, sessionmaker
 
 from app.api.errors import AppError, ConflictError
 from app.config import get_settings
 from app.db.models import (
     AuditLog,
+    Base,
     Book,
     BookApprovalStep,
     BookCategory,
@@ -20,6 +23,7 @@ from app.db.models import (
     Document,
     User,
 )
+from app.db.session import attach_sqlite_pragmas
 from app.services import document_service, staging_service
 
 
@@ -224,7 +228,7 @@ def test_existing_generated_package_reconstructs_form_and_companion_before_paper
     get_settings.cache_clear()
 
 
-def test_existing_in_app_signature_is_rebuilt_without_old_included_tail(
+def test_existing_in_app_signature_becomes_immutable_legacy_snapshot(
     db_session: Session, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     monkeypatch.setenv("GSSG_DATA_DIR", str(tmp_path))
@@ -241,31 +245,22 @@ def test_existing_in_app_signature_is_rebuilt_without_old_included_tail(
         state="approved",
     )
     signed_published = _pdf(tmp_path / "signed-published.pdf", ["SIGNED-FORM", "PAPER"])
-    signed_form = _pdf(tmp_path / "signed-form.pdf", ["SIGNED-FORM"])
-    signature = tmp_path / "signature.png"
-    signature.write_bytes(b"signature")
-    signer.signature_path = str(signature)
     version.signed_pdf_path = signed_published.relative_to(tmp_path).as_posix()
     version.signed_base_pdf_path = None
     version.signed_by_user_id = signer.id
     db_session.commit()
-    calls: list[dict[str, object]] = []
-
-    def fake_render(*_args, **kwargs):
-        calls.append(kwargs)
-        output = Path(kwargs["output_dir"]) / "rebuilt-signed.pdf"
-        output.write_bytes(signed_form.read_bytes())
-        return str(output)
-
-    monkeypatch.setattr(document_service, "render_signed_pdf", fake_render)
+    monkeypatch.setattr(
+        document_service,
+        "render_signed_pdf",
+        lambda *_args, **_kwargs: pytest.fail("legacy signed PDF must not be regenerated"),
+    )
     service = _service()
 
     package = service.get_package(db_session, book.id, user_id=creator.id)
 
     assert _texts(package.pdf_bytes) == ["SIGNED-FORM", "PAPER"]
-    assert len(calls) == 1
-    assert "merge_included_papers" not in calls[0]
-    assert Path(calls[0]["output_dir"]).name.startswith("included-base-")
+    assert package.papers[0].embedded_in_signed_base
+    assert package.papers[0].page_start is None
     db_session.refresh(version)
     assert version.signed_base_pdf_path is None
     get_settings.cache_clear()
@@ -344,16 +339,17 @@ def test_approved_package_change_pushes_one_localized_summary_per_approver(
     assert url == f"/books/{book.id}"
     assert messages["en"] == (
         "GSSG Manager",
-        "Included papers updated. Record creator updated HR-1. "
+        "Included papers in record HR-1 were updated by Record creator. "
         "Added (1): invoice.pdf; Removed (1): old.pdf; "
         "Replaced (1): scan-1.pdf → scan-2.pdf; Changed paper order",
     )
     assert messages["ar"] == (
         "GSSG Manager",
-        "تم تحديث السجل \u2068HR-1\u2069 بواسطة \u2068Record creator\u2069. "
-        "تمت الإضافة (1): \u2068invoice.pdf\u2069؛ "
-        "تمت الإزالة (1): \u2068old.pdf\u2069؛ "
-        "تم الاستبدال (1): \u2068scan-2.pdf\u2069 بدلًا من "
+        "تم تحديث الأوراق المدرجة في السجل \u2068HR-1\u2069 بواسطة "
+        "\u2068Record creator\u2069. "
+        "تمت الإضافة (\u20681\u2069): \u2068invoice.pdf\u2069؛ "
+        "تمت الإزالة (\u20681\u2069): \u2068old.pdf\u2069؛ "
+        "تم الاستبدال (\u20681\u2069): \u2068scan-2.pdf\u2069 بدلًا من "
         "\u2068scan-1.pdf\u2069؛ تم تغيير ترتيب الأوراق",
     )
     long_name = f"{'x' * 100}.pdf"
@@ -369,7 +365,23 @@ def test_approved_package_change_pushes_one_localized_summary_per_approver(
     )
     shortened = f"{'x' * 35}….pdf"
     assert f"Added (2): {shortened}, … (+1)" in bounded["en"][1]
-    assert f"تمت الإضافة (2): \u2068{shortened}\u2069، … (+1)" in bounded["ar"][1]
+    assert (
+        f"تمت الإضافة (\u20682\u2069): \u2068{shortened}\u2069، … (المتبقي: \u20681\u2069)"
+    ) in bounded["ar"][1]
+    creator.display_name = "م" * 1000
+    book.ref_number = "R" * 1000
+    overflow = service._package_change_messages(
+        creator,
+        book,
+        {
+            "added": [long_name],
+            "removed": [long_name],
+            "replaced": [{"from": long_name, "to": long_name}],
+            "reordered": [long_name],
+        },
+    )
+    assert all(len(body.encode("utf-8")) <= 512 for _title, body in overflow.values())
+    assert overflow["ar"][1].endswith("افتح السجل للاطلاع على التفاصيل.")
 
 
 def test_preview_is_side_effect_free_and_save_is_revisioned_atomic_and_audited(
@@ -471,6 +483,96 @@ def test_preview_is_side_effect_free_and_save_is_revisioned_atomic_and_audited(
     get_settings.cache_clear()
 
 
+def test_concurrent_saves_commit_exactly_one_revision(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("GSSG_DATA_DIR", str(tmp_path))
+    get_settings.cache_clear()
+    engine = create_engine(
+        f"sqlite:///{tmp_path / 'concurrent.db'}",
+        future=True,
+        connect_args={"check_same_thread": False},
+    )
+    attach_sqlite_pragmas(engine, wal=True)
+    Base.metadata.create_all(engine)
+    session_factory = sessionmaker(
+        bind=engine,
+        autoflush=False,
+        expire_on_commit=False,
+        future=True,
+    )
+    base = _pdf(tmp_path / "base.pdf", ["FORM"])
+    original = _pdf(tmp_path / "original.pdf", ["ORIGINAL"])
+    published = _pdf(tmp_path / "published.pdf", ["FORM", "ORIGINAL"])
+    with session_factory() as setup:
+        book, _version, _document, creator, _other = _record(
+            setup,
+            tmp_path,
+            base=base,
+            published=published,
+            paper=original,
+        )
+        book_id = book.id
+        creator_id = creator.id
+        paper_id = _service().get_package(setup, book.id, user_id=creator.id).papers[0].id
+
+    service = _service()
+    first = _pdf(tmp_path / "first-late.pdf", ["FIRST-LATE"])
+    second = _pdf(tmp_path / "second-late.pdf", ["SECOND-LATE"])
+    staged = [
+        staging_service.stage(first.read_bytes(), first.name),
+        staging_service.stage(second.read_bytes(), second.name),
+    ]
+    barrier = threading.Barrier(2)
+    original_build = service._build_result
+
+    def synchronized_build(*args, **kwargs):
+        barrier.wait(timeout=10)
+        return original_build(*args, **kwargs)
+
+    monkeypatch.setattr(service, "_build_result", synchronized_build)
+    outcomes: list[object] = []
+
+    def save(index: int) -> None:
+        try:
+            with session_factory() as worker:
+                outcomes.append(
+                    service.save_package(
+                        worker,
+                        book_id,
+                        user_id=creator_id,
+                        revision=0,
+                        proposal=[
+                            service.PaperProposal(id=paper_id),
+                            service.PaperProposal(
+                                str(uuid.uuid4()),
+                                staged[index].token,
+                                staged[index].filename,
+                            ),
+                        ],
+                    )
+                )
+        except Exception as error:
+            outcomes.append(error)
+
+    threads = [threading.Thread(target=save, args=(index,)) for index in range(2)]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join(timeout=20)
+
+    assert all(not thread.is_alive() for thread in threads)
+    assert len(outcomes) == 2
+    assert sum(isinstance(outcome, ConflictError) for outcome in outcomes) == 1
+    with session_factory() as check:
+        persisted = check.get(Book, book_id)
+        assert persisted is not None
+        assert persisted.included_papers_revision == 1
+        assert len(persisted.merged_attachment_paths) == 2
+    engine.dispose()
+    get_settings.cache_clear()
+
+
 def test_save_replaces_removes_and_reorders_whole_files(
     db_session: Session, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
@@ -479,6 +581,7 @@ def test_save_replaces_removes_and_reorders_whole_files(
     base = _pdf(tmp_path / "base.pdf", ["FORM"])
     first = _pdf(tmp_path / "first.pdf", ["FIRST"])
     published = _pdf(tmp_path / "published.pdf", ["FORM", "FIRST"])
+
     book, _version, _document, creator, _other = _record(
         db_session, tmp_path, base=base, published=published, paper=first
     )
@@ -502,9 +605,7 @@ def test_save_replaces_removes_and_reorders_whole_files(
         ],
     )
     replacement = _pdf(tmp_path / "replacement.pdf", ["REPLACED-FIRST"])
-    staged_replacement = staging_service.stage(
-        replacement.read_bytes(), "replacement.pdf"
-    )
+    staged_replacement = staging_service.stage(replacement.read_bytes(), "replacement.pdf")
 
     saved = service.save_package(
         db_session,
@@ -529,6 +630,58 @@ def test_save_replaces_removes_and_reorders_whole_files(
         "replaced": [{"from": "first.pdf", "to": "replacement.pdf"}],
         "reordered": ["third.pdf", "replacement.pdf"],
     }
+    get_settings.cache_clear()
+
+
+def test_signed_save_keeps_generated_and_signed_packages_in_sync(
+    db_session: Session, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    monkeypatch.setenv("GSSG_DATA_DIR", str(tmp_path))
+    get_settings.cache_clear()
+    base = _pdf(tmp_path / "base.pdf", ["FORM"])
+    original = _pdf(tmp_path / "original.pdf", ["ORIGINAL"])
+    generated = _pdf(tmp_path / "generated.pdf", ["FORM", "ORIGINAL"])
+    book, version, document, creator, _other = _record(
+        db_session,
+        tmp_path,
+        base=base,
+        published=generated,
+        paper=original,
+        state="approved",
+    )
+    signed_base = _pdf(tmp_path / "signed-base.pdf", ["SIGNED-FORM"])
+    signed_package = _pdf(tmp_path / "signed-package.pdf", ["SIGNED-FORM", "ORIGINAL"])
+    version.signed_base_pdf_path = signed_base.relative_to(tmp_path).as_posix()
+    version.signed_pdf_path = signed_package.relative_to(tmp_path).as_posix()
+    db_session.commit()
+    late = _pdf(tmp_path / "late.pdf", ["LATE"])
+    staged = staging_service.stage(late.read_bytes(), "late.pdf")
+    service = _service()
+    opened = service.get_package(db_session, book.id, user_id=creator.id)
+
+    service.save_package(
+        db_session,
+        book.id,
+        user_id=creator.id,
+        revision=0,
+        proposal=[
+            service.PaperProposal(id=opened.papers[0].id),
+            service.PaperProposal(str(uuid.uuid4()), staged.token, "late.pdf"),
+        ],
+    )
+
+    db_session.refresh(version)
+    db_session.refresh(document)
+    assert _texts((tmp_path / str(version.signed_pdf_path)).read_bytes()) == [
+        "SIGNED-FORM",
+        "ORIGINAL",
+        "LATE",
+    ]
+    assert _texts((tmp_path / str(document.pdf_path)).read_bytes()) == [
+        "FORM",
+        "ORIGINAL",
+        "LATE",
+    ]
     get_settings.cache_clear()
 
 

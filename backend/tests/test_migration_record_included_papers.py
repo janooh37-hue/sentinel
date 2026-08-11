@@ -34,9 +34,29 @@ def test_record_included_papers_migration_upgrades_and_downgrades(tmp_path: Path
             """
             CREATE TABLE books (
                 id INTEGER PRIMARY KEY,
-                merged_attachment_paths JSON NOT NULL DEFAULT '[]'
+                merged_attachment_paths JSON NOT NULL DEFAULT '[]',
+                search_text TEXT
             )
             """
+        )
+        connection.exec_driver_sql(
+            "CREATE VIRTUAL TABLE books_fts USING fts5("
+            "search_text, content='books', content_rowid='id')"
+        )
+        connection.exec_driver_sql(
+            "CREATE TRIGGER books_ai AFTER INSERT ON books BEGIN "
+            "INSERT INTO books_fts(rowid, search_text) VALUES (new.id, ''); END"
+        )
+        connection.exec_driver_sql(
+            "CREATE TRIGGER books_ad AFTER DELETE ON books BEGIN "
+            "INSERT INTO books_fts(books_fts, rowid, search_text) "
+            "VALUES ('delete', old.id, ''); END"
+        )
+        connection.exec_driver_sql(
+            "CREATE TRIGGER books_au AFTER UPDATE ON books BEGIN "
+            "INSERT INTO books_fts(books_fts, rowid, search_text) "
+            "VALUES ('delete', old.id, ''); "
+            "INSERT INTO books_fts(rowid, search_text) VALUES (new.id, ''); END"
         )
         connection.exec_driver_sql(
             """
@@ -46,14 +66,16 @@ def test_record_included_papers_migration_upgrades_and_downgrades(tmp_path: Path
             )
             """
         )
-        connection.execute(text("INSERT INTO documents (id, pdf_path) VALUES (1, 'generated/a.pdf')"))
+        connection.execute(
+            text("INSERT INTO documents (id, pdf_path) VALUES (1, 'generated/a.pdf')")
+        )
         connection.execute(
             text("INSERT INTO book_versions (id, signed_pdf_path) VALUES (1, 'signed/a.pdf')")
         )
         connection.execute(
             text(
                 "INSERT INTO books (id, merged_attachment_paths) "
-                "VALUES (1, '[{\"path\":\"book_attachments/1/a.pdf\",\"slot_key\":\"extra\"}]')"
+                'VALUES (1, \'[{"path":"book_attachments/1/a.pdf","slot_key":"extra"}]\')'
             )
         )
         connection.exec_driver_sql(
@@ -69,9 +91,7 @@ def test_record_included_papers_migration_upgrades_and_downgrades(tmp_path: Path
         document_columns = {
             column["name"] for column in inspect(connection).get_columns("documents")
         }
-        book_columns = {
-            column["name"] for column in inspect(connection).get_columns("books")
-        }
+        book_columns = {column["name"] for column in inspect(connection).get_columns("books")}
         version_columns = {
             column["name"] for column in inspect(connection).get_columns("book_versions")
         }
@@ -88,6 +108,14 @@ def test_record_included_papers_migration_upgrades_and_downgrades(tmp_path: Path
             '[{"path":"book_attachments/1/a.pdf","slot_key":"extra"}]',
             0,
         )
+        assert {
+            row[0]
+            for row in connection.execute(
+                text(
+                    "SELECT name FROM sqlite_master WHERE type = 'trigger' AND name LIKE 'books_a_'"
+                )
+            )
+        } == {"books_ai", "books_ad", "books_au"}
         version_row = connection.execute(
             text(
                 "SELECT signed_pdf_path, signed_base_pdf_path, "
@@ -102,9 +130,7 @@ def test_record_included_papers_migration_upgrades_and_downgrades(tmp_path: Path
         document_columns = {
             column["name"] for column in inspect(connection).get_columns("documents")
         }
-        book_columns = {
-            column["name"] for column in inspect(connection).get_columns("books")
-        }
+        book_columns = {column["name"] for column in inspect(connection).get_columns("books")}
         version_columns = {
             column["name"] for column in inspect(connection).get_columns("book_versions")
         }
@@ -112,12 +138,27 @@ def test_record_included_papers_migration_upgrades_and_downgrades(tmp_path: Path
         assert "included_papers_revision" not in book_columns
         assert "signed_base_pdf_path" not in version_columns
         assert "signed_embedded_paper_ids" not in version_columns
-        assert connection.execute(
-            text("SELECT pdf_path FROM documents WHERE id = 1")
-        ).scalar_one() == "generated/a.pdf"
-        assert connection.execute(
-            text("SELECT merged_attachment_paths FROM books WHERE id = 1")
-        ).scalar_one() == '[{"path":"book_attachments/1/a.pdf","slot_key":"extra"}]'
-        assert connection.execute(
-            text("SELECT signed_pdf_path FROM book_versions WHERE id = 1")
-        ).scalar_one() == "signed/a.pdf"
+        assert (
+            connection.execute(text("SELECT pdf_path FROM documents WHERE id = 1")).scalar_one()
+            == "generated/a.pdf"
+        )
+        assert (
+            connection.execute(
+                text("SELECT merged_attachment_paths FROM books WHERE id = 1")
+            ).scalar_one()
+            == '[{"path":"book_attachments/1/a.pdf","slot_key":"extra"}]'
+        )
+        assert (
+            connection.execute(
+                text("SELECT signed_pdf_path FROM book_versions WHERE id = 1")
+            ).scalar_one()
+            == "signed/a.pdf"
+        )
+        assert {
+            row[0]
+            for row in connection.execute(
+                text(
+                    "SELECT name FROM sqlite_master WHERE type = 'trigger' AND name LIKE 'books_a_'"
+                )
+            )
+        } == {"books_ai", "books_ad", "books_au"}

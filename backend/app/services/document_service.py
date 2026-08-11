@@ -45,7 +45,6 @@ from app.core.constants import STAMP_STYLE_HEADER, TEMPLATE_FILES
 from app.core.dateutils import excel_date_to_datetime
 from app.core.docx_engine import DocxEngine, aztec_corner_for
 from app.core.docx_render import _arabic_clock, _arabic_weekday
-from app.core.pdf_merge import merge_attachments_into_pdf
 from app.core.vault_manager import Vault
 from app.db.models import (
     AuditLog,
@@ -64,7 +63,7 @@ from app.db.models import (
 from app.db.repos.classified_refs_repo import allocate_classified_serial
 from app.db.repos.refs_repo import allocate_ref_with_retry
 from app.schemas.employee import EMPLOYEE_STATUS_ACTIVE, EMPLOYEE_STATUS_RESIGNED
-from app.services._pdf_executor import convert_docx_to_pdf
+from app.services._pdf_executor import convert_docx_to_pdf as convert_docx_to_pdf
 
 if TYPE_CHECKING:
     # Type-only: app.api.v1.documents imports this module at runtime, so a
@@ -1205,7 +1204,7 @@ def generate_document(
             )
     # Revise with attachments=None reuses the book's stored merged set —
     # required slots were satisfied when the book was first committed.
-    reuse_merged: list[dict[str, str | None]] = []
+    reuse_merged: list[dict[str, Any]] = []
     if revise_book is not None and attachments is None:
         reuse_merged = list(revise_book.merged_attachment_paths or [])
     elif commit:
@@ -1649,12 +1648,9 @@ def generate_document(
             added_at = datetime.now(UTC).isoformat()
             for spec, src in _ordered_attachment_specs(resolved_attachments, slots):
                 original_name = Path(spec.original_name or src.name).name
-                if (
-                    spec.original_name
-                    and (
-                        original_name != spec.original_name
-                        or Path(original_name).suffix.lower() != src.suffix.lower()
-                    )
+                if spec.original_name and (
+                    original_name != spec.original_name
+                    or Path(original_name).suffix.lower() != src.suffix.lower()
                 ):
                     raise ValidationFailedError(
                         "INVALID_ATTACHMENT_NAME",
@@ -1677,9 +1673,7 @@ def generate_document(
                         "media_type": media_type,
                         "size": dest.stat().st_size,
                         "page_count": page_count,
-                        "added_by_user_id": (
-                            current_user.id if current_user is not None else None
-                        ),
+                        "added_by_user_id": (current_user.id if current_user is not None else None),
                         "added_at": added_at,
                     }
                 )
@@ -1853,27 +1847,19 @@ def generate_document(
     # Publish one fixed-base-first package for every newly generated record.
     # The preserved base includes automatic companion forms, but never user-
     # managed papers; Document.pdf_path remains the normal combined download.
-    if commit and _logged_book is not None and pdf_path is not None:
-        package_dir = settings.data_dir / "book_packages" / str(_logged_book.id)
-        package_dir.mkdir(parents=True, exist_ok=True)
-        base_path = Vault.collision_safe_name(
-            package_dir,
-            f"v{_state_version.version_no if _state_version is not None else 1}"
-            f"-generated-base-{uuid.uuid4().hex[:10]}.pdf",
+    if commit and _logged_book is not None and pdf_path is not None and pdf_path.is_file():
+        from app.services import included_papers_service
+
+        assert _state_version is not None
+        included_papers_service.publish_generated_package(
+            db,
+            _logged_book,
+            _state_version,
+            doc_row,
+            pdf_path,
+            invalidate_revision=revise_book is not None,
+            data_dir=settings.data_dir,
         )
-        shutil.copyfile(pdf_path, base_path)
-        companion_pdfs = [
-            item.pdf_path
-            for item in doc_results[1:]
-            if item.pdf_path is not None and item.pdf_path.is_file()
-        ]
-        if companion_pdfs:
-            merge_attachments_into_pdf(base_path, companion_pdfs)
-        shutil.copyfile(base_path, pdf_path)
-        if merge_sources:
-            merge_attachments_into_pdf(pdf_path, merge_sources)
-        doc_row.base_pdf_path = _rel(base_path)
-        doc_row.pdf_path = _rel(pdf_path)
         db.flush()
 
     # ------------------------------------------------------------------
@@ -1952,8 +1938,6 @@ def _authored_docx_of(db: Session, version: BookVersion) -> Path | None:
     if not p.is_absolute():
         p = get_settings().data_dir / p
     return p if p.exists() else None
-
-
 
 
 def _sign_authored_docx(
@@ -2153,7 +2137,6 @@ def render_signed_pdf(
         log.error("Signed PDF conversion crashed for %s", docx_path, exc_info=True)
     if pdf_path is None:
         log.warning("Signed PDF unavailable for %s — conversion returned no file", docx_path)
-
 
     settings = get_settings()
 

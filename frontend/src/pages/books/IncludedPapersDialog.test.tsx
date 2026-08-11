@@ -59,6 +59,14 @@ const book = {
       reordered: ['required.pdf', 'after.pdf'],
       created_at: '2026-08-10T09:00:00Z',
     },
+    {
+      actor_user_id: 3,
+      actor_name: 'Minimal manager',
+      revision_before: 1,
+      revision_after: 2,
+      removed: ['legacy.pdf'],
+      created_at: '2026-08-09T09:00:00Z',
+    },
   ],
   included_papers_total_page_count: 4,
   included_papers: [embedded],
@@ -76,6 +84,8 @@ afterEach(() => vi.restoreAllMocks())
 
 describe('IncludedPapersDialog', () => {
   it('keeps the form and embedded paper fixed, then reviews and saves one ordered package', async () => {
+    const paperId = '33333333-3333-4333-8333-333333333333'
+    vi.spyOn(crypto, 'randomUUID').mockReturnValue(paperId)
     const user = userEvent.setup()
     const late = new File(['image'], 'passport.jpg', { type: 'image/jpeg' })
     const staged = {
@@ -91,7 +101,7 @@ describe('IncludedPapersDialog', () => {
         embedded,
         {
           ...embedded,
-          id: staged.token,
+          id: paperId,
           original_name: staged.filename,
           slot_key: null,
           media_type: late.type,
@@ -121,17 +131,29 @@ describe('IncludedPapersDialog', () => {
     )
 
     expect(screen.getByText('Generated form')).toBeVisible()
-    expect(screen.getByText('required.pdf')).toBeVisible()
+    expect(screen.getAllByText('required.pdf').length).toBeGreaterThan(0)
     expect(screen.getByText('Fixed in signed PDF')).toBeVisible()
     expect(screen.getByText('Records manager')).toBeVisible()
-    expect(screen.getByText('Added: required.pdf')).toBeVisible()
-    expect(screen.getByText('Removed: old.pdf')).toBeVisible()
-    expect(screen.getByText('Replaced: before.pdf → after.pdf')).toBeVisible()
-    expect(screen.getByText('Reordered: required.pdf, after.pdf')).toBeVisible()
+    expect(screen.getByText('Minimal manager')).toBeVisible()
+    expect(screen.getByText('Added:')).toBeVisible()
+    expect(screen.getAllByText('Removed:')).toHaveLength(2)
+    expect(screen.getByText('Replaced:')).toBeVisible()
+    expect(screen.getByText('with')).toHaveClass('sr-only')
+    expect(screen.getByText('→')).toHaveAttribute('aria-hidden', 'true')
+    expect(screen.getByText('Reordered:')).toBeVisible()
+    expect(screen.getByText('Reordered:').parentElement).toHaveTextContent(
+      'Reordered: required.pdf, after.pdf',
+    )
     expect(screen.queryByRole('button', { name: 'Remove required.pdf' })).not.toBeInTheDocument()
 
     await user.upload(screen.getByLabelText('Add PDF or images'), late)
     expect(await screen.findByText('passport.jpg')).toBeVisible()
+    await user.click(screen.getByRole('button', { name: 'Cancel' }))
+    expect(screen.getByText('Discard unsaved changes?')).toBeVisible()
+    expect(screen.getByText('Your changes have not been saved.')).toBeVisible()
+    expect(onOpenChange).not.toHaveBeenCalled()
+    await user.click(screen.getByRole('button', { name: 'common.cancel' }))
+    expect(screen.queryByText('Discard unsaved changes?')).not.toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Save combined PDF' })).toBeDisabled()
 
     await user.click(screen.getByRole('button', { name: 'Review PDF' }))
@@ -143,7 +165,7 @@ describe('IncludedPapersDialog', () => {
       revision: 3,
       items: [
         { id: embedded.id },
-        { id: staged.token, staged_token: staged.token, original_name: staged.filename },
+        { id: paperId, staged_token: staged.token, original_name: staged.filename },
       ],
     })
     expect(onOpenChange).toHaveBeenCalledWith(false)

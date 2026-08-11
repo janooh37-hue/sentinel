@@ -8,6 +8,7 @@ from __future__ import annotations
 import secrets
 from pathlib import Path
 
+import fitz
 import pytest
 
 from app.db.models import Book, BookCategory, BookEditSession, BookVersion, Document, User
@@ -35,6 +36,16 @@ def _settings(tmp_path):
     from app.config import Settings
 
     return Settings(data_dir=tmp_path / "data", templates_dir=tmp_path / "templates")
+
+
+def _pdf(path: Path) -> Path:
+    document = fitz.open()
+    try:
+        document.new_page()
+        document.save(path)
+    finally:
+        document.close()
+    return path
 
 
 def _make_book_with_session(
@@ -117,8 +128,7 @@ def test_finish_after_put_creates_version_and_document(db_session, tmp_path, mon
 
     from app.services import word_book_service
 
-    _dummy_pdf = tmp_path / "dummy.pdf"
-    _dummy_pdf.write_bytes(b"%PDF fake")
+    _dummy_pdf = _pdf(tmp_path / "dummy.pdf")
     monkeypatch.setattr(word_book_service, "get_settings", lambda: _settings(tmp_path))
     monkeypatch.setattr(
         "app.services.word_book_service.convert_docx_to_pdf",
@@ -166,14 +176,40 @@ def test_finish_after_put_creates_version_and_document(db_session, tmp_path, mon
     assert result.approval_state == "none"
 
 
+def test_finish_keeps_session_when_managed_papers_cannot_be_republished(
+    db_session, tmp_path, monkeypatch
+):
+    """A PDF conversion failure must not replace a managed package with DOCX only."""
+    from datetime import UTC, datetime
+
+    from app.api.errors import AppError
+    from app.services import word_book_service
+
+    monkeypatch.setattr(word_book_service, "get_settings", lambda: _settings(tmp_path))
+    monkeypatch.setattr(word_book_service, "convert_docx_to_pdf", lambda _path: None)
+    user = _user(db_session)
+    book, session = _make_book_with_session(db_session, user, tmp_path)
+    book.merged_attachment_paths = [{"path": "book_attachments/paper.pdf"}]
+    session.last_put_at = datetime.now(UTC).replace(tzinfo=None)
+    db_session.commit()
+    working_path = Path(session.working_path)
+
+    with pytest.raises(AppError) as error:
+        word_book_service.finish_word_session(db_session, user=user, book_id=book.id)
+
+    assert error.value.code == "INCLUDED_PAPERS_PDF_REQUIRED"
+    assert working_path.is_file()
+    assert session.state == "active"
+    assert db_session.query(BookVersion).filter_by(book_id=book.id).count() == 0
+
+
 def test_finish_second_session_gives_version_2_revision(db_session, tmp_path, monkeypatch):
     """After an existing version, finishing another session → version_no=2, trigger=revision."""
     from datetime import UTC, datetime
 
     from app.services import word_book_service
 
-    _dummy_pdf = tmp_path / "dummy.pdf"
-    _dummy_pdf.write_bytes(b"%PDF fake")
+    _dummy_pdf = _pdf(tmp_path / "dummy.pdf")
     monkeypatch.setattr(word_book_service, "get_settings", lambda: _settings(tmp_path))
     monkeypatch.setattr(
         "app.services.word_book_service.convert_docx_to_pdf",
@@ -368,8 +404,7 @@ def test_finish_classified_book_slashed_ref_no_nested_dirs(db_session, tmp_path,
     from app.db.models import BookCategory
     from app.services import word_book_service
 
-    _dummy_pdf = tmp_path / "dummy.pdf"
-    _dummy_pdf.write_bytes(b"%PDF fake")
+    _dummy_pdf = _pdf(tmp_path / "dummy.pdf")
     monkeypatch.setattr(word_book_service, "get_settings", lambda: _settings(tmp_path))
     monkeypatch.setattr(
         "app.services.word_book_service.convert_docx_to_pdf",

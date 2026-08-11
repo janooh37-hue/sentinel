@@ -7,6 +7,7 @@ The chosen manager is stored on ``Book.doc_manager_id`` (not in
 ``manager_id=None``, which blanked the ``{{ manager_name }}`` cell in the
 signed copy (SC-0425). It must resolve the book's ``doc_manager_id`` instead.
 """
+
 from __future__ import annotations
 
 import zipfile

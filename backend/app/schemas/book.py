@@ -239,7 +239,7 @@ class IncludedPapersRequest(BaseModel):
     items: list[IncludedPaperProposal]
 
 
-class IncludedPaperRead(BaseModel):
+class IncludedPaperRead(ORMBase):
     id: UUID
     original_name: str
     slot_key: str | None = None
@@ -258,7 +258,7 @@ class IncludedPaperReplacementRead(BaseModel):
     to_name: str
 
 
-class IncludedPapersHistoryRead(BaseModel):
+class IncludedPapersHistoryRead(ORMBase):
     actor_user_id: int | None = None
     actor_name: str
     revision_before: int

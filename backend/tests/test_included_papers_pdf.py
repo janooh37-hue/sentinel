@@ -60,7 +60,7 @@ def test_build_pdf_package_keeps_fixed_base_first_and_source_order(tmp_path: Pat
 
 def test_build_pdf_package_rejects_missing_requested_source(tmp_path: Path) -> None:
     base = _pdf(tmp_path / "base.pdf", ["FORM"])
-    with pytest.raises(FileNotFoundError, match="Missing paper.pdf"):
+    with pytest.raises(FileNotFoundError, match=r"Missing paper\.pdf"):
         pdf_merge.build_pdf_package(base, [(tmp_path / "gone.pdf", "Missing paper.pdf")])
 
 

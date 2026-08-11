@@ -10,6 +10,7 @@ import fitz  # PyMuPDF
 
 _IMAGE_EXTS = {".png", ".jpg", ".jpeg"}
 
+
 @dataclass(frozen=True)
 class PdfPackageResult:
     pdf_bytes: bytes

@@ -52,7 +52,6 @@ def api_db(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> Session:
         get_settings.cache_clear()
 
 
-
 def _pdf(path: Path, labels: list[str]) -> Path:
     doc = fitz.open()
     try:
@@ -77,9 +76,7 @@ def _client(db: Session, user: User) -> TestClient:
     return TestClient(app, raise_server_exceptions=True)
 
 
-def _record(
-    db: Session, tmp_path: Path
-) -> tuple[Book, BookVersion, Document, User, User]:
+def _record(db: Session, tmp_path: Path) -> tuple[Book, BookVersion, Document, User, User]:
     creator = User(
         email="creator@example.ae",
         password_hash="x",
@@ -213,9 +210,7 @@ def test_preview_save_and_download_use_one_package_without_duplicate_companion(
     assert forbidden.status_code == 403
     assert forbidden.json()["error"]["code"] == "INCLUDED_PAPERS_CREATOR_ONLY"
 
-    preview = creator_client.post(
-        f"/api/v1/books/{book.id}/included-papers/preview", json=proposal
-    )
+    preview = creator_client.post(f"/api/v1/books/{book.id}/included-papers/preview", json=proposal)
     assert preview.status_code == 200, preview.text
     preview_body = preview.json()
     assert _texts(base64.b64decode(preview_body["pdf_base64"])) == [
@@ -228,15 +223,11 @@ def test_preview_save_and_download_use_one_package_without_duplicate_companion(
     assert preview_body["fixed_page_count"] == 2
     assert preview_body["total_page_count"] == 5
 
-    before_download = creator_client.get(
-        f"/api/v1/documents/{document.id}/download?format=pdf"
-    )
+    before_download = creator_client.get(f"/api/v1/documents/{document.id}/download?format=pdf")
     assert before_download.status_code == 200
     before_disposition = before_download.headers["content-disposition"]
 
-    saved = creator_client.put(
-        f"/api/v1/books/{book.id}/included-papers", json=proposal
-    )
+    saved = creator_client.put(f"/api/v1/books/{book.id}/included-papers", json=proposal)
     assert saved.status_code == 200, saved.text
     saved_body = saved.json()
     assert saved_body["included_papers_revision"] == 1
@@ -247,15 +238,11 @@ def test_preview_save_and_download_use_one_package_without_duplicate_companion(
     assert len(saved_body["included_papers_history"]) == 1
     assert saved_body["included_papers_history"][0]["revision_after"] == 1
 
-    stale = creator_client.put(
-        f"/api/v1/books/{book.id}/included-papers", json=proposal
-    )
+    stale = creator_client.put(f"/api/v1/books/{book.id}/included-papers", json=proposal)
     assert stale.status_code == 409
     assert stale.json()["error"]["code"] == "INCLUDED_PAPERS_STALE_REVISION"
 
-    after_download = creator_client.get(
-        f"/api/v1/documents/{document.id}/download?format=pdf"
-    )
+    after_download = creator_client.get(f"/api/v1/documents/{document.id}/download?format=pdf")
     assert after_download.status_code == 200
     assert after_download.headers["content-disposition"] == before_disposition
     assert _texts(after_download.content) == [

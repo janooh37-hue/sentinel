@@ -40,6 +40,8 @@ afterEach(() => vi.restoreAllMocks())
 
 describe('useIncludedPapersEditor', () => {
   it('stages selected files in order and previews the exact ordered proposal', async () => {
+    const paperId = '33333333-3333-4333-8333-333333333333'
+    vi.spyOn(crypto, 'randomUUID').mockReturnValue(paperId)
     const late = new File(['image'], 'late.png', { type: 'image/png' })
     const staged = {
       token: '22222222-2222-2222-2222-222222222222',
@@ -54,7 +56,7 @@ describe('useIncludedPapersEditor', () => {
         paper,
         {
           ...paper,
-          id: staged.token,
+          id: paperId,
           original_name: staged.filename,
           media_type: late.type,
           size: staged.size,
@@ -82,7 +84,7 @@ describe('useIncludedPapersEditor', () => {
       revision: 3,
       items: [
         { id: paper.id },
-        { id: staged.token, staged_token: staged.token, original_name: 'late.png' },
+        { id: paperId, staged_token: staged.token, original_name: 'late.png' },
       ],
     })
     expect(result.current.state.preview?.total_page_count).toBe(3)

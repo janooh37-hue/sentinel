@@ -19,6 +19,7 @@ import {
 import { toast } from 'sonner'
 
 import { Button } from '@/components/ui/button'
+import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import {
   DialogContent,
   DialogDescription,
@@ -89,7 +90,9 @@ function IncludedPapersWorkspace({
 }): React.JSX.Element {
   const { t, i18n } = useTranslation()
   const editor = useIncludedPapersEditor(book)
+  const listSeparator = i18n.language.startsWith('ar') ? '، ' : ', '
   const [mobileTab, setMobileTab] = useState<'preview' | 'order'>('preview')
+  const [discardOpen, setDiscardOpen] = useState(false)
   const addInputRef = useRef<HTMLInputElement | null>(null)
   const replaceInputRef = useRef<HTMLInputElement | null>(null)
   const replaceIdRef = useRef<string | null>(null)
@@ -139,10 +142,26 @@ function IncludedPapersWorkspace({
       toast.error(apiErrorMessage(error))
     }
   }
+  const close = (): void => {
+    if (editor.dirty) {
+      setDiscardOpen(true)
+    } else {
+      onCancel()
+    }
+  }
+
 
   return (
     <DialogContent
       hideClose
+      onEscapeKeyDown={(event) => {
+        event.preventDefault()
+        close()
+      }}
+      onPointerDownOutside={(event) => {
+        event.preventDefault()
+        close()
+      }}
       className="h-[100dvh] max-h-none max-w-none rounded-none border-0 sm:h-[min(90vh,860px)] sm:max-h-[calc(100vh-2rem)] sm:w-[min(96vw,1440px)] sm:rounded-2xl sm:border"
     >
       <DialogHeader className="relative min-h-[72px] flex-row items-center gap-3 border-b border-hairline px-4 py-3 pe-12 sm:px-5">
@@ -218,8 +237,11 @@ function IncludedPapersWorkspace({
                 defaultValue: 'Combined PDF preview',
               })}
             </span>
-            <span className="font-mono text-[0.7em] text-muted-foreground" dir="ltr">
-              {totalPages} {t('books.includedPapers.pageShort', { defaultValue: 'pages' })}
+            <span className="font-mono text-[0.7em] text-muted-foreground">
+              {t('books.includedPapers.pages', {
+                count: totalPages,
+                defaultValue: '{{count}} pages',
+              })}
             </span>
           </div>
           <div className="relative min-h-0 flex-1 p-2 sm:p-3">
@@ -319,12 +341,14 @@ function IncludedPapersWorkspace({
                   <strong className="block truncate text-xs text-foreground">
                     {t('books.includedPapers.generatedForm', { defaultValue: 'Generated form' })}
                   </strong>
-                  <span className="text-[0.7em] text-muted-foreground">
-                    {t('books.includedPapers.fixedPageRange', {
+                  <span className="flex flex-wrap items-center gap-1 text-[0.7em] text-muted-foreground">
+                    {t('books.includedPapers.pages', {
                       count: fixedPages,
-                      end: fixedPages,
-                      defaultValue: '{{count}} pages · pages 1–{{end}}',
+                      defaultValue: '{{count}} pages',
                     })}
+                    <span aria-hidden>·</span>
+                    {t('books.includedPapers.pageRangeLabel', { defaultValue: 'pages' })}
+                    <bdi dir="ltr">1–{fixedPages}</bdi>
                   </span>
                 </span>
                 <span className="rounded-md border border-hairline bg-surface px-2 py-1 text-[0.62em] font-bold uppercase tracking-[0.08em] text-muted-foreground">
@@ -416,39 +440,63 @@ function IncludedPapersWorkspace({
                           {new Date(entry.created_at).toLocaleDateString(i18n.language)}
                         </time>
                       </div>
-                      <p className="mt-1 flex min-w-0 flex-wrap gap-x-2 text-[0.68em] text-muted-foreground">
-                        {entry.added.length > 0 && (
-                          <span dir="auto">
-                            {t('books.includedPapers.historyAdded', {
-                              names: entry.added.join(', '),
-                              defaultValue: 'Added: {{names}}',
-                            })}
+                      <p className="mt-1 flex min-w-0 flex-wrap gap-x-3 gap-y-1 text-[0.68em] text-muted-foreground">
+                        {(entry.added?.length ?? 0) > 0 && (
+                          <span className="inline-flex flex-wrap gap-1">
+                            {t('books.includedPapers.historyAdded', { defaultValue: 'Added:' })}
+                            {entry.added?.map((name, index) => (
+                              <span key={`${name}-${index}`} className="text-foreground">
+                                {index === 0 ? ' ' : listSeparator}
+                                <bdi dir="auto">{name}</bdi>
+                              </span>
+                            ))}
                           </span>
                         )}
-                        {entry.removed.length > 0 && (
-                          <span dir="auto">
-                            {t('books.includedPapers.historyRemoved', {
-                              names: entry.removed.join(', '),
-                              defaultValue: 'Removed: {{names}}',
-                            })}
+                        {(entry.removed?.length ?? 0) > 0 && (
+                          <span className="inline-flex flex-wrap gap-1">
+                            {t('books.includedPapers.historyRemoved', { defaultValue: 'Removed:' })}
+                            {entry.removed?.map((name, index) => (
+                              <span key={`${name}-${index}`} className="text-foreground">
+                                {index === 0 ? ' ' : listSeparator}
+                                <bdi dir="auto">{name}</bdi>
+                              </span>
+                            ))}
                           </span>
                         )}
-                        {entry.replaced.length > 0 && (
-                          <span dir="auto">
-                            {t('books.includedPapers.historyReplaced', {
-                              names: entry.replaced
-                                .map((item) => `${item.from_name} → ${item.to_name}`)
-                                .join(', '),
-                              defaultValue: 'Replaced: {{names}}',
-                            })}
+                        {(entry.replaced?.length ?? 0) > 0 && (
+                          <span className="inline-flex flex-wrap gap-1">
+                            {t('books.includedPapers.historyReplaced', { defaultValue: 'Replaced:' })}
+                            {entry.replaced?.map((item, index) => (
+                              <span
+                                key={`${item.from_name}-${item.to_name}-${index}`}
+                                className="inline-flex items-center gap-1 text-foreground"
+                              >
+                                {index === 0 ? ' ' : listSeparator}
+                                <bdi dir="auto">{item.from_name}</bdi>
+                                <span aria-hidden className="inline-block rtl:rotate-180">
+                                  →
+                                </span>
+                                <span className="sr-only">
+                                  {` ${t('books.includedPapers.replacementWith', {
+                                    defaultValue: 'with',
+                                  })} `}
+                                </span>
+                                <bdi dir="auto">{item.to_name}</bdi>
+                              </span>
+                            ))}
                           </span>
                         )}
-                        {entry.reordered.length > 0 && (
-                          <span dir="auto">
+                        {(entry.reordered?.length ?? 0) > 0 && (
+                          <span className="inline-flex flex-wrap gap-1">
                             {t('books.includedPapers.historyReordered', {
-                              names: entry.reordered.join(', '),
-                              defaultValue: 'Reordered: {{names}}',
+                              defaultValue: 'Reordered:',
                             })}
+                            {entry.reordered?.map((name, index) => (
+                              <span key={`${name}-${index}`} className="text-foreground">
+                                {index === 0 ? ' ' : listSeparator}
+                                <bdi dir="auto">{name}</bdi>
+                              </span>
+                            ))}
                           </span>
                         )}
                       </p>
@@ -472,7 +520,7 @@ function IncludedPapersWorkspace({
               </strong>
             </div>
             <div className="grid grid-cols-[auto_1fr_1fr] gap-2">
-              <Button type="button" variant="ghost" onClick={onCancel} disabled={editor.busy}>
+              <Button type="button" variant="ghost" onClick={close} disabled={editor.busy}>
                 {t('common.cancel', { defaultValue: 'Cancel' })}
               </Button>
               <Button type="button" variant="outline" onClick={() => void review()} disabled={editor.busy}>
@@ -496,6 +544,21 @@ function IncludedPapersWorkspace({
           </footer>
         </section>
       </div>
+      <ConfirmDialog
+        open={discardOpen}
+        onOpenChange={setDiscardOpen}
+        title={t('books.includedPapers.discardTitle', {
+          defaultValue: 'Discard unsaved changes?',
+        })}
+        description={t('books.includedPapers.discardConfirm', {
+          defaultValue: 'Your changes have not been saved.',
+        })}
+        confirmLabel={t('books.includedPapers.discard', {
+          defaultValue: 'Discard changes',
+        })}
+        onConfirm={onCancel}
+        destructive
+      />
     </DialogContent>
   )
 }
@@ -523,18 +586,22 @@ function PaperOrderRow({
   const embedded = paper.embedded_in_signed_base
   const extension = paper.original_name.split('.').pop()?.toUpperCase() || 'FILE'
   const pageRange =
-    paper.page_start && paper.page_end
-      ? paper.page_start === paper.page_end
-        ? t('books.includedPapers.singlePage', {
-            page: paper.page_start,
-            defaultValue: 'page {{page}}',
-          })
-        : t('books.includedPapers.pageRange', {
-            start: paper.page_start,
-            end: paper.page_end,
-            defaultValue: 'pages {{start}}–{{end}}',
-          })
-      : t('books.includedPapers.notReviewed', { defaultValue: 'Not reviewed yet' })
+    paper.page_start != null && paper.page_end != null ? (
+      <>
+        {t(
+          paper.page_start === paper.page_end
+            ? 'books.includedPapers.singlePageLabel'
+            : 'books.includedPapers.pageRangeLabel',
+          { defaultValue: paper.page_start === paper.page_end ? 'page' : 'pages' },
+        )}{' '}
+        <bdi dir="ltr">
+          {paper.page_start}
+          {paper.page_start === paper.page_end ? '' : `–${paper.page_end}`}
+        </bdi>
+      </>
+    ) : (
+      t('books.includedPapers.notReviewed', { defaultValue: 'Not reviewed yet' })
+    )
 
   return (
     <div className="group flex items-center gap-2.5 bg-surface px-3 py-3 transition-colors hover:bg-surface-tinted/45">

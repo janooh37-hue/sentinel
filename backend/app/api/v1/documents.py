@@ -463,7 +463,7 @@ def download_document(
         # Annual-leave / resignation forms file a companion (Leave Undertaking,
         # etc.) as a separate doc sharing this submission. Append its pages so the
         # record serves ONE merged PDF, not separate papers. Non-destructive.
-        comp_paths = document_service.companion_pdf_paths(db, row)
+        comp_paths = [] if row.base_pdf_path else document_service.companion_pdf_paths(db, row)
         if comp_paths:
             merged = merge_pdfs_to_bytes(orig_path, comp_paths)
             if (b64 := maybe_base64(merged, encoding)) is not None:

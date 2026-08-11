@@ -84,9 +84,7 @@ def _signed_source_of(v: BookVersion) -> Literal["in_app", "scan"] | None:
     if not v.signed_pdf_path:
         return None
     source = v.signed_base_pdf_path or v.signed_pdf_path
-    return (
-        "scan" if source.replace("\\", "/").startswith("book_attachments/") else "in_app"
-    )
+    return "scan" if source.replace("\\", "/").startswith("book_attachments/") else "in_app"
 
 
 def _is_pdf_path(path: str | None) -> bool:
@@ -607,8 +605,7 @@ def _populate_included_papers(item: BookRead, row: Book, db: Session) -> None:
     item.included_papers_fixed_page_count = package.fixed_page_count
     item.included_papers_total_page_count = package.total_page_count
     item.included_papers = [
-        IncludedPaperRead.model_validate(paper, from_attributes=True)
-        for paper in package.papers
+        IncludedPaperRead.model_validate(paper, from_attributes=True) for paper in package.papers
     ]
     item.included_papers_history = [
         IncludedPapersHistoryRead(

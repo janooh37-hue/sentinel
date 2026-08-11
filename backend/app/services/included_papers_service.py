@@ -9,15 +9,17 @@ import shutil
 import tempfile
 import uuid
 from collections.abc import Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 import fitz
 from fastapi import status
-from sqlalchemy import select
+from sqlalchemy import select, update
+from sqlalchemy.engine import CursorResult
 from sqlalchemy.orm import Session
+from sqlalchemy.orm.attributes import set_committed_value
 
 from app.api.errors import AppError, ConflictError, NotFoundError, ValidationFailedError
 from app.config import get_settings
@@ -67,6 +69,7 @@ class PackageResult:
     papers: list[PaperView]
     pdf_bytes: bytes
     change_summary: dict[str, Any] | None = None
+
 
 @dataclass(frozen=True)
 class PackageReplacement:
@@ -122,6 +125,7 @@ def _absolute_data_path(raw: str | None) -> Path | None:
         return None
     return candidate if candidate.is_file() else None
 
+
 def _relative_data_path(path: Path) -> str:
     return path.resolve().relative_to(get_settings().data_dir.resolve()).as_posix()
 
@@ -146,9 +150,7 @@ def _editable_context(
 ) -> tuple[Book, BookVersion, Document]:
     book = book_service.get_book(db, book_id)
     if book.deleted_at is not None or book.voided_at is not None:
-        raise ValidationFailedError(
-            "INCLUDED_PAPERS_UNAVAILABLE", "This record cannot be edited"
-        )
+        raise ValidationFailedError("INCLUDED_PAPERS_UNAVAILABLE", "This record cannot be edited")
     creator_id = original_creator_user_id(book)
     if creator_id is None or creator_id != user_id:
         raise AppError(
@@ -164,9 +166,7 @@ def _editable_context(
         )
     document = db.get(Document, version.document_id)
     if document is None or not document.pdf_path:
-        raise NotFoundError(
-            "INCLUDED_PAPERS_PDF_MISSING", "The record PDF is not available"
-        )
+        raise NotFoundError("INCLUDED_PAPERS_PDF_MISSING", "The record PDF is not available")
     return book, version, document
 
 
@@ -228,9 +228,7 @@ def stage_paper(data: bytes, filename: str) -> tuple[staging_service.StagedFile,
     staged = staging_service.stage(data, filename)
     path = staging_service.resolve(staged.token)
     if path is None:
-        raise NotFoundError(
-            "INCLUDED_PAPERS_STAGE_MISSING", "The staged paper could not be stored"
-        )
+        raise NotFoundError("INCLUDED_PAPERS_STAGE_MISSING", "The staged paper could not be stored")
     try:
         media_type, pages = inspect_paper(path, display_name=staged.filename)
     except Exception:
@@ -252,11 +250,7 @@ def _physical_signed_scan(version: BookVersion) -> bool:
 def _effective_metadata(book: Book, version: BookVersion) -> list[dict[str, Any]]:
     """Return full metadata without mutating legacy JSON."""
     entries: list[dict[str, Any]] = []
-    legacy_embedded = (
-        bool(version.signed_pdf_path)
-        and version.signed_base_pdf_path is None
-        and _physical_signed_scan(version)
-    )
+    legacy_embedded = bool(version.signed_pdf_path and version.signed_base_pdf_path is None)
     explicit_embedded = set(version.signed_embedded_paper_ids or [])
     creator_id = original_creator_user_id(book)
     for position, raw in enumerate(book.merged_attachment_paths or []):
@@ -377,9 +371,7 @@ def _generated_fixed_base(
         return _fixed_from_primary(db, document, primary)
     published = _absolute_data_path(document.pdf_path)
     if published is None:
-        raise NotFoundError(
-            "INCLUDED_PAPERS_BASE_MISSING", "The record's fixed PDF is missing"
-        )
+        raise NotFoundError("INCLUDED_PAPERS_BASE_MISSING", "The record's fixed PDF is missing")
     return _fixed_from_primary(db, document, published)
 
 
@@ -390,9 +382,7 @@ def _reconstruct_signed_base(
     temp_dir: Path,
 ) -> bytes:
     signer = db.get(User, version.signed_by_user_id) if version.signed_by_user_id else None
-    signature = (
-        book_service._resolve_signer_signature(db, signer) if signer is not None else None
-    )
+    signature = book_service._resolve_signer_signature(db, signer) if signer is not None else None
     if signer is None or signature is None:
         raise ValidationFailedError(
             "INCLUDED_PAPERS_SIGNER_UNAVAILABLE",
@@ -429,15 +419,18 @@ def _fixed_base_bytes(
     temp_dir: Path,
 ) -> bytes:
     if version.signed_pdf_path and version.status == "approved":
+        if version.signed_base_pdf_path is None:
+            published = _absolute_data_path(version.signed_pdf_path)
+            if published is None:
+                raise NotFoundError("INCLUDED_PAPERS_BASE_MISSING", "The signed PDF is missing")
+            return published.read_bytes()
         preserved = _absolute_data_path(version.signed_base_pdf_path)
         if preserved is not None:
             return preserved.read_bytes()
         if _physical_signed_scan(version):
             scan = _absolute_data_path(version.signed_pdf_path)
             if scan is None:
-                raise NotFoundError(
-                    "INCLUDED_PAPERS_BASE_MISSING", "The signed scan is missing"
-                )
+                raise NotFoundError("INCLUDED_PAPERS_BASE_MISSING", "The signed scan is missing")
             return scan.read_bytes()
         return _reconstruct_signed_base(db, version, document, temp_dir)
     return _generated_fixed_base(db, document, metadata, temp_dir)
@@ -513,6 +506,7 @@ def get_package(db: Session, book_id: int, *, user_id: int) -> PackageResult:
         base = _fixed_base_bytes(db, version, document, metadata, Path(raw_temp))
     return _build_result(book.included_papers_revision, base, papers)
 
+
 def _history_for_book(db: Session, book_id: int) -> list[PackageHistory]:
     events = db.scalars(
         select(AuditLog)
@@ -569,9 +563,7 @@ def describe_package(db: Session, book: Book) -> PackageState:
         )
     document = db.get(Document, version.document_id)
     if document is None:
-        raise NotFoundError(
-            "INCLUDED_PAPERS_PDF_MISSING", "The record PDF is not available"
-        )
+        raise NotFoundError("INCLUDED_PAPERS_PDF_MISSING", "The record PDF is not available")
     metadata = _effective_metadata(book, version)
     papers = _resolve_existing(metadata)
     published = None
@@ -584,9 +576,7 @@ def describe_package(db: Session, book: Book) -> PackageState:
     if published is None:
         published = _absolute_data_path(document.pdf_path)
     if published is None:
-        raise NotFoundError(
-            "INCLUDED_PAPERS_PDF_MISSING", "The record PDF is not available"
-        )
+        raise NotFoundError("INCLUDED_PAPERS_PDF_MISSING", "The record PDF is not available")
     try:
         with fitz.open(published) as pdf:
             total_pages = pdf.page_count
@@ -621,6 +611,50 @@ def _write_bytes_atomic(path: Path, data: bytes) -> None:
             temp.unlink()
 
 
+def publish_generated_package(
+    db: Session,
+    book: Book,
+    version: BookVersion,
+    document: Document,
+    generated_primary: Path,
+    *,
+    invalidate_revision: bool,
+    data_dir: Path | None = None,
+) -> str:
+    """Preserve a generated fixed base and publish it with current papers."""
+    if invalidate_revision:
+        advance_package_revision(db, book)
+    metadata = [{**item, "embedded": False} for item in _effective_metadata(book, version)]
+    papers = _resolve_existing(metadata)
+    base_bytes = _fixed_from_primary(db, document, generated_primary)
+    built = _build_result(book.included_papers_revision, base_bytes, papers)
+    data_root = (data_dir or get_settings().data_dir).resolve()
+    package_dir = data_root / "book_packages" / str(book.id)
+    package_dir.mkdir(parents=True, exist_ok=True)
+    base_path = package_dir / (f"v{version.version_no}-generated-base-{uuid.uuid4().hex[:10]}.pdf")
+    try:
+        generated_primary.resolve().relative_to(data_root)
+        output = generated_primary
+    except ValueError:
+        output = package_dir / (
+            f"v{version.version_no}-package-r{book.included_papers_revision}-"
+            f"{uuid.uuid4().hex[:10]}.pdf"
+        )
+    try:
+        _write_bytes_atomic(base_path, base_bytes)
+        _write_bytes_atomic(output, built.pdf_bytes)
+    except Exception:
+        with contextlib.suppress(OSError):
+            base_path.unlink()
+        if output != generated_primary:
+            with contextlib.suppress(OSError):
+                output.unlink()
+        raise
+    document.base_pdf_path = base_path.resolve().relative_to(data_root).as_posix()
+    document.pdf_path = output.resolve().relative_to(data_root).as_posix()
+    return document.pdf_path
+
+
 def publish_signed_package(
     db: Session,
     book: Book,
@@ -628,6 +662,7 @@ def publish_signed_package(
     signed_primary: Path,
     *,
     physical_scan: bool,
+    data_dir: Path | None = None,
 ) -> str:
     """Preserve a signed fixed base, append current papers, and update paths."""
     if not signed_primary.is_file() or signed_primary.suffix.lower() != ".pdf":
@@ -651,12 +686,11 @@ def publish_signed_package(
         )
     document = db.get(Document, version.document_id)
     if document is None:
-        raise NotFoundError(
-            "INCLUDED_PAPERS_PDF_MISSING", "The record PDF is not available"
-        )
+        raise NotFoundError("INCLUDED_PAPERS_PDF_MISSING", "The record PDF is not available")
+    advance_package_revision(db, book)
+    first_physical_scan = physical_scan and not version.signed_pdf_path
     metadata = [
-        {**item, "embedded": False}
-        for item in _effective_metadata(book, version)
+        {**item, "embedded": first_physical_scan} for item in _effective_metadata(book, version)
     ]
     papers = _resolve_existing(metadata)
     base_bytes = (
@@ -665,11 +699,10 @@ def publish_signed_package(
         else _fixed_from_primary(db, document, signed_primary)
     )
     built = _build_result(book.included_papers_revision, base_bytes, papers)
-    package_dir = get_settings().data_dir.resolve() / "book_packages" / str(book.id)
+    data_root = (data_dir or get_settings().data_dir).resolve()
+    package_dir = data_root / "book_packages" / str(book.id)
     package_dir.mkdir(parents=True, exist_ok=True)
-    output = package_dir / (
-        f"v{version.version_no}-signed-package-{uuid.uuid4().hex[:10]}.pdf"
-    )
+    output = package_dir / (f"v{version.version_no}-signed-package-{uuid.uuid4().hex[:10]}.pdf")
     base_path = signed_primary
     created_base = False
     try:
@@ -687,10 +720,25 @@ def publish_signed_package(
             with contextlib.suppress(OSError):
                 base_path.unlink()
         raise
-    version.signed_base_pdf_path = _relative_data_path(base_path)
-    version.signed_pdf_path = _relative_data_path(output)
-    version.signed_embedded_paper_ids = []
+    version.signed_base_pdf_path = base_path.resolve().relative_to(data_root).as_posix()
+    version.signed_pdf_path = output.resolve().relative_to(data_root).as_posix()
+    version.signed_embedded_paper_ids = [paper.id for paper in papers if paper.embedded]
     return version.signed_pdf_path
+
+
+def advance_package_revision(db: Session, book: Book) -> int:
+    revision = db.scalar(
+        update(Book)
+        .where(Book.id == book.id)
+        .values(included_papers_revision=Book.included_papers_revision + 1)
+        .returning(Book.included_papers_revision)
+        .execution_options(synchronize_session=False)
+    )
+    if revision is None:
+        raise NotFoundError("BOOK_NOT_FOUND", f"Book {book.id} not found")
+    set_committed_value(book, "included_papers_revision", revision)
+    db.refresh(book, attribute_names=["merged_attachment_paths"])
+    return revision
 
 
 def _check_revision(book: Book, revision: int) -> None:
@@ -796,13 +844,10 @@ def _resolve_proposal(
                 added_at=now,
             )
         )
-    old_embedded = [
-        str(item["id"]) for item in old_metadata if bool(item.get("embedded"))
-    ]
+    old_embedded = [str(item["id"]) for item in old_metadata if bool(item.get("embedded"))]
     proposed_embedded = [paper.id for paper in resolved if paper.embedded]
     if old_embedded != proposed_embedded or (
-        old_embedded
-        and [paper.id for paper in resolved[: len(old_embedded)]] != old_embedded
+        old_embedded and [paper.id for paper in resolved[: len(old_embedded)]] != old_embedded
     ):
         raise ValidationFailedError(
             "INCLUDED_PAPERS_EMBEDDED",
@@ -821,27 +866,17 @@ def preview_package(
 ) -> PackageResult:
     book, version, document = _editable_context(db, book_id, user_id)
     _check_revision(book, revision)
-    old_metadata, papers = _resolve_proposal(
-        book, version, proposal, user_id=user_id
-    )
+    old_metadata, papers = _resolve_proposal(book, version, proposal, user_id=user_id)
     with tempfile.TemporaryDirectory(prefix="included-base-") as raw_temp:
-        base = _fixed_base_bytes(
-            db, version, document, old_metadata, Path(raw_temp)
-        )
+        base = _fixed_base_bytes(db, version, document, old_metadata, Path(raw_temp))
     return _build_result(revision, base, papers)
 
 
-def _change_summary(
-    old: Sequence[dict[str, Any]], new: Sequence[_ResolvedPaper]
-) -> dict[str, Any]:
+def _change_summary(old: Sequence[dict[str, Any]], new: Sequence[_ResolvedPaper]) -> dict[str, Any]:
     old_by_id = {str(item["id"]): item for item in old}
     new_by_id = {item.id: item for item in new}
     added = [item.original_name for item in new if item.id not in old_by_id]
-    removed = [
-        str(item["original_name"])
-        for item in old
-        if str(item["id"]) not in new_by_id
-    ]
+    removed = [str(item["original_name"]) for item in old if str(item["id"]) not in new_by_id]
     replaced = [
         {
             "from": str(old_by_id[item.id]["original_name"]),
@@ -888,13 +923,9 @@ def save_package(
 ) -> PackageResult:
     book, version, document = _editable_context(db, book_id, user_id)
     _check_revision(book, revision)
-    old_metadata, proposed = _resolve_proposal(
-        book, version, proposal, user_id=user_id
-    )
+    old_metadata, proposed = _resolve_proposal(book, version, proposal, user_id=user_id)
     with tempfile.TemporaryDirectory(prefix="included-base-") as raw_temp:
-        base_bytes = _fixed_base_bytes(
-            db, version, document, old_metadata, Path(raw_temp)
-        )
+        base_bytes = _fixed_base_bytes(db, version, document, old_metadata, Path(raw_temp))
 
     data_dir = get_settings().data_dir.resolve()
     attachment_dir = data_dir / "book_attachments" / str(book.id)
@@ -905,21 +936,27 @@ def save_package(
     consumed_staged: list[Path] = []
     persisted: list[_ResolvedPaper] = []
     active_signed = bool(version.status == "approved" and version.signed_pdf_path)
-    old_published = _absolute_data_path(
-        version.signed_pdf_path if active_signed else document.pdf_path
-    )
+    generated_base_bytes: bytes | None = None
+    if active_signed:
+        with tempfile.TemporaryDirectory(prefix="included-generated-base-") as raw_temp:
+            generated_base_bytes = _generated_fixed_base(db, document, old_metadata, Path(raw_temp))
+    old_published = {
+        path.resolve()
+        for path in (
+            _absolute_data_path(document.pdf_path),
+            _absolute_data_path(version.signed_pdf_path),
+        )
+        if path is not None
+    }
     try:
         for paper in proposed:
             if paper.staged_token is None:
                 persisted.append(paper)
                 continue
-            destination = attachment_dir / (
-                f"included-{paper.id}{paper.source.suffix.lower()}"
-            )
+            destination = attachment_dir / (f"included-{paper.id}{paper.source.suffix.lower()}")
             if destination.exists():
                 destination = attachment_dir / (
-                    f"included-{paper.id}-{uuid.uuid4().hex[:8]}"
-                    f"{paper.source.suffix.lower()}"
+                    f"included-{paper.id}-{uuid.uuid4().hex[:8]}{paper.source.suffix.lower()}"
                 )
             shutil.copyfile(paper.source, destination)
             created.append(destination)
@@ -943,12 +980,47 @@ def save_package(
 
         built = _build_result(revision + 1, base_bytes, persisted)
         output = package_dir / (
-            f"v{version.version_no}-package-r{revision + 1}-"
-            f"{uuid.uuid4().hex[:10]}.pdf"
+            f"v{version.version_no}-package-r{revision + 1}-{uuid.uuid4().hex[:10]}.pdf"
         )
         output.write_bytes(built.pdf_bytes)
         created.append(output)
         output_rel = _relative_data_path(output)
+        generated_output: Path | None = None
+        if generated_base_bytes is not None:
+            generated_built = _build_result(
+                revision + 1,
+                generated_base_bytes,
+                [replace(paper, embedded=False) for paper in persisted],
+            )
+            generated_output = package_dir / (
+                f"v{version.version_no}-generated-package-r{revision + 1}-"
+                f"{uuid.uuid4().hex[:10]}.pdf"
+            )
+            generated_output.write_bytes(generated_built.pdf_bytes)
+            created.append(generated_output)
+
+        revision_update = cast(
+            CursorResult[Any],
+            db.execute(
+                update(Book)
+                .where(
+                    Book.id == book.id,
+                    Book.included_papers_revision == revision,
+                )
+                .values(included_papers_revision=revision + 1)
+                .execution_options(synchronize_session="fetch")
+            ),
+        )
+        if revision_update.rowcount != 1:
+            current_revision = db.scalar(
+                select(Book.included_papers_revision).where(Book.id == book.id)
+            )
+            raise ConflictError(
+                "INCLUDED_PAPERS_STALE_REVISION",
+                "Included papers changed after this workspace was opened; reload the latest version",
+                current_revision=current_revision,
+            )
+        set_committed_value(book, "included_papers_revision", revision + 1)
 
         if active_signed:
             if not version.signed_base_pdf_path:
@@ -959,9 +1031,17 @@ def save_package(
                 created.append(base_output)
                 version.signed_base_pdf_path = _relative_data_path(base_output)
             version.signed_pdf_path = output_rel
-            version.signed_embedded_paper_ids = [
-                paper.id for paper in persisted if paper.embedded
-            ]
+            version.signed_embedded_paper_ids = [paper.id for paper in persisted if paper.embedded]
+            assert generated_base_bytes is not None
+            if not document.base_pdf_path:
+                generated_base_output = package_dir / (
+                    f"v{version.version_no}-generated-base-{uuid.uuid4().hex[:10]}.pdf"
+                )
+                generated_base_output.write_bytes(generated_base_bytes)
+                created.append(generated_base_output)
+                document.base_pdf_path = _relative_data_path(generated_base_output)
+            assert generated_output is not None
+            document.pdf_path = _relative_data_path(generated_output)
         else:
             if not document.base_pdf_path:
                 base_output = package_dir / (
@@ -974,7 +1054,6 @@ def save_package(
 
         summary = _change_summary(old_metadata, persisted)
         book.merged_attachment_paths = _persisted_metadata(persisted)
-        book.included_papers_revision = revision + 1
         actor = db.get(User, user_id)
         db.add(
             AuditLog(
@@ -1014,18 +1093,20 @@ def save_package(
         ):
             with contextlib.suppress(OSError):
                 source.unlink()
-    if old_published is not None and old_published.resolve() != output.resolve():
-        fixed = {
-            path.resolve()
-            for path in (
-                _absolute_data_path(document.base_pdf_path),
-                _absolute_data_path(version.signed_base_pdf_path),
-            )
-            if path is not None
-        }
-        if old_published.resolve() not in fixed:
-            with contextlib.suppress(OSError):
-                old_published.unlink()
+    new_outputs = {output.resolve()}
+    if generated_output is not None:
+        new_outputs.add(generated_output.resolve())
+    fixed = {
+        path.resolve()
+        for path in (
+            _absolute_data_path(document.base_pdf_path),
+            _absolute_data_path(version.signed_base_pdf_path),
+        )
+        if path is not None
+    }
+    for old_path in old_published - new_outputs - fixed:
+        with contextlib.suppress(OSError):
+            old_path.unlink()
     for path in consumed_staged:
         with contextlib.suppress(OSError):
             path.unlink()
@@ -1063,8 +1144,10 @@ def _listed_names(values: Sequence[str], *, lang: str) -> str:
     name = _ellipsize_filename(values[0])
     shown = _bidi_isolate(name) if lang == "ar" else name
     if len(values) > 1:
-        separator = "، " if lang == "ar" else ", "
-        shown += f"{separator}… (+{len(values) - 1})"
+        if lang == "ar":
+            shown += f"، … (المتبقي: {_bidi_isolate(str(len(values) - 1))})"
+        else:
+            shown += f", … (+{len(values) - 1})"
     return shown
 
 
@@ -1078,8 +1161,10 @@ def _listed_replacements(values: Sequence[dict[str, Any]], *, lang: str) -> str:
         else f"{old_name} → {new_name}"
     )
     if len(values) > 1:
-        separator = "، " if lang == "ar" else ", "
-        shown += f"{separator}… (+{len(values) - 1})"
+        if lang == "ar":
+            shown += f"، … (المتبقي: {_bidi_isolate(str(len(values) - 1))})"
+        else:
+            shown += f", … (+{len(values) - 1})"
     return shown
 
 
@@ -1087,6 +1172,7 @@ def _package_change_messages(
     actor: User, book: Book, summary: dict[str, Any]
 ) -> dict[str, tuple[str, str]]:
     actor_name = _ellipsize(actor.display_name or actor.email)
+    ref_number = _ellipsize(book.ref_number, 80)
     added = [str(name) for name in summary.get("added") or []]
     removed = [str(name) for name in summary.get("removed") or []]
     replaced = list(summary.get("replaced") or [])
@@ -1094,37 +1180,48 @@ def _package_change_messages(
     ar_parts: list[str] = []
     if added:
         en_parts.append(f"Added ({len(added)}): {_listed_names(added, lang='en')}")
-        ar_parts.append(f"تمت الإضافة ({len(added)}): {_listed_names(added, lang='ar')}")
-    if removed:
-        en_parts.append(
-            f"Removed ({len(removed)}): {_listed_names(removed, lang='en')}"
-        )
         ar_parts.append(
-            f"تمت الإزالة ({len(removed)}): {_listed_names(removed, lang='ar')}"
+            f"تمت الإضافة ({_bidi_isolate(str(len(added)))}): {_listed_names(added, lang='ar')}"
+        )
+    if removed:
+        en_parts.append(f"Removed ({len(removed)}): {_listed_names(removed, lang='en')}")
+        ar_parts.append(
+            f"تمت الإزالة ({_bidi_isolate(str(len(removed)))}): {_listed_names(removed, lang='ar')}"
         )
     if replaced:
-        en_parts.append(
-            f"Replaced ({len(replaced)}): "
-            f"{_listed_replacements(replaced, lang='en')}"
-        )
+        en_parts.append(f"Replaced ({len(replaced)}): {_listed_replacements(replaced, lang='en')}")
         ar_parts.append(
-            f"تم الاستبدال ({len(replaced)}): "
+            f"تم الاستبدال ({_bidi_isolate(str(len(replaced)))}): "
             f"{_listed_replacements(replaced, lang='ar')}"
         )
     if summary.get("reordered"):
         en_parts.append("Changed paper order")
         ar_parts.append("تم تغيير ترتيب الأوراق")
+    en_body = (
+        f"Included papers in record {ref_number} were updated by {actor_name}. "
+        f"{'; '.join(en_parts)}"
+    )
+    ar_body = (
+        f"تم تحديث الأوراق المدرجة في السجل {_bidi_isolate(ref_number)} بواسطة "
+        f"{_bidi_isolate(actor_name)}. {'؛ '.join(ar_parts)}"
+    )
+    if len(en_body.encode("utf-8")) > 512:
+        en_body = (
+            f"Included papers in record {ref_number} were updated by {actor_name}. "
+            "Open the record for details."
+        )
+    if len(ar_body.encode("utf-8")) > 512:
+        ar_body = (
+            f"تم تحديث الأوراق المدرجة في السجل {_bidi_isolate(ref_number)} بواسطة "
+            f"{_bidi_isolate(actor_name)}. افتح السجل للاطلاع على التفاصيل."
+        )
+    if len(en_body.encode("utf-8")) > 512:
+        en_body = "Included papers updated. Open the record for details."
+    if len(ar_body.encode("utf-8")) > 512:
+        ar_body = "تم تحديث الأوراق المدرجة. افتح السجل للاطلاع على التفاصيل."
     return {
-        "en": (
-            "GSSG Manager",
-            f"Included papers updated. {actor_name} updated {book.ref_number}. "
-            f"{'; '.join(en_parts)}",
-        ),
-        "ar": (
-            "GSSG Manager",
-            f"تم تحديث السجل {_bidi_isolate(book.ref_number)} بواسطة "
-            f"{_bidi_isolate(actor_name)}. {'؛ '.join(ar_parts)}",
-        ),
+        "en": ("GSSG Manager", en_body),
+        "ar": ("GSSG Manager", ar_body),
     }
 
 

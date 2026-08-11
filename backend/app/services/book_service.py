@@ -782,6 +782,13 @@ def sign_book(db: Session, book_id: int, *, user_id: int) -> Book:
     signed_primary = Path(signed_rel)
     if not signed_primary.is_absolute():
         signed_primary = get_settings().data_dir / signed_primary
+    if signed_primary.suffix.lower() != ".pdf" and book.merged_attachment_paths:
+        with contextlib.suppress(OSError):
+            signed_primary.unlink()
+        raise ValidationFailedError(
+            "INCLUDED_PAPERS_SIGNED_PDF_REQUIRED",
+            "The signed PDF could not be created; the record was not approved",
+        )
     if signed_primary.suffix.lower() == ".pdf":
         signed_rel = included_papers_service.publish_signed_package(
             db,
@@ -1507,6 +1514,7 @@ def add_attachment(
         # Preserve the uploaded scan as the fixed signed base, then publish the
         # current included papers after it.
         from app.services import included_papers_service
+
         version = flip_version
 
         if version.document_id is not None:
@@ -1526,6 +1534,7 @@ def add_attachment(
             version.signed_base_pdf_path = rel_path
             version.signed_pdf_path = rel_path
             version.signed_embedded_paper_ids = []
+            included_papers_service.advance_package_revision(db, book)
         version.signed_by_user_id = user.id if user is not None else None
         version.signed_at = datetime.now(UTC).replace(tzinfo=None)
         # The scan IS the manager's signature → finalize the pending APPROVER
@@ -1686,9 +1695,7 @@ def replace_signed_copy(
     old_paths = {
         path.resolve()
         for path in (
-            resolve_attachment_path(version.signed_pdf_path)
-            if version.signed_pdf_path
-            else None,
+            resolve_attachment_path(version.signed_pdf_path) if version.signed_pdf_path else None,
             resolve_attachment_path(version.signed_base_pdf_path)
             if version.signed_base_pdf_path
             else None,
@@ -1711,10 +1718,9 @@ def replace_signed_copy(
             version.signed_base_pdf_path = rel_path
             version.signed_pdf_path = rel_path
             version.signed_embedded_paper_ids = []
+            included_papers_service.advance_package_revision(db, book)
         new_output = (
-            resolve_attachment_path(version.signed_pdf_path)
-            if version.signed_pdf_path
-            else None
+            resolve_attachment_path(version.signed_pdf_path) if version.signed_pdf_path else None
         )
         if new_output is not None:
             new_paths.add(new_output.resolve())
@@ -1743,6 +1749,7 @@ def unfile_signed_copy(db: Session, book_id: int, *, user: User | None = None) -
     ``unfile_signed_copy`` AuditLog row (the original scan-back sign entry is left
     in place — an audit trail of what happened)."""
     from app.core import form_policy
+    from app.services import included_papers_service
 
     book = get_book(db, book_id)
     version = _current_version(book)
@@ -1752,9 +1759,7 @@ def unfile_signed_copy(db: Session, book_id: int, *, user: User | None = None) -
     old_paths = {
         path.resolve()
         for path in (
-            resolve_attachment_path(version.signed_pdf_path)
-            if version.signed_pdf_path
-            else None,
+            resolve_attachment_path(version.signed_pdf_path) if version.signed_pdf_path else None,
             resolve_attachment_path(version.signed_base_pdf_path)
             if version.signed_base_pdf_path
             else None,
@@ -1766,6 +1771,7 @@ def unfile_signed_copy(db: Session, book_id: int, *, user: User | None = None) -
     version.signed_embedded_paper_ids = []
     version.signed_by_user_id = None
     version.signed_at = None
+    included_papers_service.advance_package_revision(db, book)
     if form_policy.signing_path_of(version.template_id) == "scan":
         # scan-path forms carry no approver steps (the scan IS the signature).
         version.status = "awaiting_scan"
