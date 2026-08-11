@@ -34,7 +34,10 @@ log = logging.getLogger(__name__)
 
 MAX_FAILED_ATTEMPTS = 5
 LOCKOUT_MINUTES = 15
-SESSION_TTL = timedelta(days=14)
+# 7 days: shortened from 14 when gssg.app went public — bounds how long a
+# stolen cookie stays valid on a lost/unattended device (cookie max-age in
+# api/v1/auth.py derives from this).
+SESSION_TTL = timedelta(days=7)
 # Refresh ``last_seen_at`` at most this often to avoid a commit on every request.
 SESSION_TOUCH_INTERVAL = timedelta(seconds=60)
 _VALID_ROLES = (OPERATOR_ROLE, MANAGER_ROLE, ADMIN_ROLE)
@@ -72,11 +75,7 @@ def count_active_admins(db: Session) -> int:
 
 def _is_last_active_admin(db: Session, user: User) -> bool:
     """True if ``user`` is currently the only active admin."""
-    return (
-        user.role == ADMIN_ROLE
-        and user.status == "active"
-        and count_active_admins(db) <= 1
-    )
+    return user.role == ADMIN_ROLE and user.status == "active" and count_active_admins(db) <= 1
 
 
 # ─── Register / approve ─────────────────────────────────────────────────────────
@@ -178,9 +177,7 @@ def link_self(db: Session, user: User, *, employee_id: str | None) -> User:
         )
 
     if target is not None and db.get(Employee, target) is None:
-        raise AppError(
-            "EMPLOYEE_NOT_FOUND", f"Employee {target} not found", http_status=404
-        )
+        raise AppError("EMPLOYEE_NOT_FOUND", f"Employee {target} not found", http_status=404)
 
     user.employee_id = target
     # Keep the display_name useful when the account had none (e.g. bootstrap
@@ -228,17 +225,14 @@ def set_role(db: Session, user_id: int, role: str, *, actor: str | None = None) 
     return user
 
 
-def set_status(
-    db: Session, user_id: int, status: str, *, actor: str | None = None
-) -> User:
+def set_status(db: Session, user_id: int, status: str, *, actor: str | None = None) -> User:
     if status not in ("active", "locked", "disabled", "pending", "rejected"):
         raise AppError("INVALID_STATUS", f"Unknown status {status!r}")
     user = _require_user(db, user_id)
     if status != "active" and _is_last_active_admin(db, user):
         raise AppError(
             "LAST_ADMIN",
-            "Cannot lock or disable the last active admin. "
-            "Promote another admin first.",
+            "Cannot lock or disable the last active admin. Promote another admin first.",
             http_status=409,
         )
     was_locked = user.status == "locked"
@@ -248,8 +242,10 @@ def set_status(
         user.locked_at = None
     elif status == "locked":
         user.locked_at = _utcnow()
-    action = "unlock" if (status == "active" and was_locked) else (
-        "lock" if status == "locked" else "set_status"
+    action = (
+        "unlock"
+        if (status == "active" and was_locked)
+        else ("lock" if status == "locked" else "set_status")
     )
     _audit(db, actor, action, user, {"status": status})
     db.commit()
@@ -281,9 +277,7 @@ def set_default_manager(
                 "Needs an active account, books.approve and an uploaded signature.",
             )
         db.execute(
-            update(User)
-            .where(User.is_default_manager.is_(True))
-            .values(is_default_manager=False)
+            update(User).where(User.is_default_manager.is_(True)).values(is_default_manager=False)
         )
         user.is_default_manager = True
     else:
@@ -344,9 +338,7 @@ def _register_failed_attempt(db: Session, user: User) -> int:
     count. Locks the account on the configured threshold.
     """
     db.execute(
-        update(User)
-        .where(User.id == user.id)
-        .values(failed_attempts=User.failed_attempts + 1)
+        update(User).where(User.id == user.id).values(failed_attempts=User.failed_attempts + 1)
     )
     db.refresh(user)
     if user.failed_attempts >= MAX_FAILED_ATTEMPTS and user.status == "active":
@@ -410,9 +402,7 @@ def authenticate(db: Session, email: str, password: str) -> User:
     if user.status == "disabled":
         raise AppError("ACCOUNT_DISABLED", "This account is disabled.", http_status=403)
     if user.status == "locked":
-        raise AppError(
-            "ACCOUNT_LOCKED", "Account locked. Contact IT to unlock.", http_status=403
-        )
+        raise AppError("ACCOUNT_LOCKED", "Account locked. Contact IT to unlock.", http_status=403)
 
     user.failed_attempts = 0
     user.last_login_at = _utcnow()
@@ -429,9 +419,7 @@ def verify_password_for(db: Session, user: User, password: str) -> None:
     Raises ``AppError`` on a locked account or a wrong password.
     """
     if user.status == "locked" and not _maybe_auto_unlock(db, user):
-        raise AppError(
-            "ACCOUNT_LOCKED", "Account locked. Contact IT to unlock.", http_status=403
-        )
+        raise AppError("ACCOUNT_LOCKED", "Account locked. Contact IT to unlock.", http_status=403)
     if not security.verify_password(password, user.password_hash):
         _register_failed_attempt(db, user)
         if user.status == "locked":
@@ -531,9 +519,7 @@ def to_session_user(db: Session, user: User) -> SessionUser:
         name_ar=employee.name_ar if employee else None,
         position=employee.position if employee else None,
         department=employee.department if employee else None,
-        photo_url=(
-            identity_service.photo_url_for(db, employee.id) if employee else None
-        ),
+        photo_url=(identity_service.photo_url_for(db, employee.id) if employee else None),
         role=user.role,
         status=user.status,
         is_admin=user.role == ADMIN_ROLE,
