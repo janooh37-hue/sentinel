@@ -212,11 +212,14 @@ class Book(Base):
     attachment_paths: Mapped[list[str]] = mapped_column(
         JSON, nullable=False, default=list, server_default="[]"
     )
-    # Attachment sources merged into the combined PDF (migration 0034):
-    # [{"path": <rel path>, "slot_key": <form_policy slot key | None>}].
+    # Ordered sources merged into the official PDF package. Legacy entries are
+    # ``{path, slot_key}``; package-managed entries add stable metadata.
     # Distinct from attachment_paths (the film-strip scan papers).
-    merged_attachment_paths: Mapped[list[dict[str, str | None]]] = mapped_column(
-        JSON, default=list, server_default="[]"
+    merged_attachment_paths: Mapped[list[dict[str, object]]] = mapped_column(
+        JSON, nullable=False, default=list, server_default="[]"
+    )
+    included_papers_revision: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=0, server_default="0"
     )
     # Normalised search corpus (migration 0057) — populated by Task 15.
     # FTS5 external-content table books_fts indexes this column.
@@ -310,6 +313,13 @@ class BookVersion(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
     # Signing (approval == signing). Populated by book_service.sign_book.
     signed_pdf_path: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Private immutable signed form used to rebuild the downloadable package.
+    # Never served directly.
+    signed_base_pdf_path: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Stable included-paper IDs already flattened into a physical signed scan.
+    signed_embedded_paper_ids: Mapped[list[str]] = mapped_column(
+        JSON, nullable=False, default=list, server_default="[]"
+    )
     # Whether the manager signature was baked into the form at generation time
     # (then it can't be submitted for approval — nothing left to sign).
     manager_sig_embedded: Mapped[bool] = mapped_column(
@@ -827,6 +837,9 @@ class Document(Base):
     ref_number: Mapped[str] = mapped_column(String(32))
     docx_path: Mapped[str] = mapped_column(String(512))
     pdf_path: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    # Private immutable generated form used to rebuild Included papers packages.
+    # The normal ``pdf_path`` remains the published combined output.
+    base_pdf_path: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
     leave_id: Mapped[int | None] = mapped_column(
         ForeignKey("leaves.id", ondelete="SET NULL"), nullable=True

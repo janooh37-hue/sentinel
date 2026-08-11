@@ -115,6 +115,23 @@ def test_original_pdf_merges_companion_pages(api_db, tmp_path) -> None:
     assert merged.page_count == 3  # 2 primary + 1 companion
 
 
+def test_managed_original_pdf_does_not_append_companion_twice(api_db, tmp_path) -> None:
+    primary, _companion = _primary_with_companion(api_db, tmp_path, comp_pages=1)
+    package = tmp_path / "documents" / "managed-package.pdf"
+    base = tmp_path / "documents" / "managed-base.pdf"
+    _pdf(package, 3)
+    _pdf(base, 3)
+    primary.pdf_path = "documents/managed-package.pdf"
+    primary.base_pdf_path = "documents/managed-base.pdf"
+    api_db.commit()
+    c = _client(api_db, _user(api_db))
+
+    resp = c.get(f"/api/v1/documents/{primary.id}/download?format=pdf&original=true")
+
+    assert resp.status_code == 200
+    assert fitz.open("pdf", resp.content).page_count == 3
+
+
 def test_companion_download_is_not_recursive(api_db, tmp_path) -> None:
     """Downloading the companion itself serves only its own page(s)."""
     _primary, companion = _primary_with_companion(api_db, tmp_path, comp_pages=1)

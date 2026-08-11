@@ -6780,6 +6780,142 @@
         }
       }
     },
+    "/api/v1/books/{book_id}/included-papers/preview": {
+      "post": {
+        "tags": [
+          "books"
+        ],
+        "summary": "Preview Included Papers",
+        "operationId": "preview_included_papers_api_v1_books__book_id__included_papers_preview_post",
+        "parameters": [
+          {
+            "name": "book_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Book Id"
+            }
+          },
+          {
+            "name": "gssg_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Gssg Session"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/IncludedPapersRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IncludedPapersPreviewRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/books/{book_id}/included-papers": {
+      "put": {
+        "tags": [
+          "books"
+        ],
+        "summary": "Save Included Papers",
+        "operationId": "save_included_papers_api_v1_books__book_id__included_papers_put",
+        "parameters": [
+          {
+            "name": "book_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Book Id"
+            }
+          },
+          {
+            "name": "gssg_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Gssg Session"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/IncludedPapersRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BookRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/books/{book_id}": {
       "get": {
         "tags": [
@@ -17947,6 +18083,46 @@
             "type": "array",
             "title": "Versions"
           },
+          "original_creator_user_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Original Creator User Id"
+          },
+          "included_papers_revision": {
+            "type": "integer",
+            "title": "Included Papers Revision",
+            "default": 0
+          },
+          "included_papers_fixed_page_count": {
+            "type": "integer",
+            "title": "Included Papers Fixed Page Count",
+            "default": 0
+          },
+          "included_papers_total_page_count": {
+            "type": "integer",
+            "title": "Included Papers Total Page Count",
+            "default": 0
+          },
+          "included_papers": {
+            "items": {
+              "$ref": "#/components/schemas/IncludedPaperRead"
+            },
+            "type": "array",
+            "title": "Included Papers"
+          },
+          "included_papers_history": {
+            "items": {
+              "$ref": "#/components/schemas/IncludedPapersHistoryRead"
+            },
+            "type": "array",
+            "title": "Included Papers History"
+          },
           "sms": {
             "items": {
               "$ref": "#/components/schemas/NotifyMessageRead"
@@ -22260,6 +22436,17 @@
             ],
             "title": "Staged Token"
           },
+          "original_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Original Name"
+          },
           "book_id": {
             "anyOf": [
               {
@@ -22518,6 +22705,275 @@
         ],
         "title": "ImportedDocRead",
         "description": "The local vault file backing a v3-imported record.\n\nImported books store a stale absolute ``doc_path`` (the old pre-migration\nlocation) and have no generated Document/BookVersion, so the normal\n``/documents/{id}/download`` route can't reach their file. The backend\nresolves ``doc_path`` to the copy already sitting in the employee's vault\nand exposes it here so the client can view / download it."
+      },
+      "IncludedPaperProposal": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "staged_token": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Staged Token"
+          },
+          "original_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Original Name"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id"
+        ],
+        "title": "IncludedPaperProposal"
+      },
+      "IncludedPaperRead": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "original_name": {
+            "type": "string",
+            "title": "Original Name"
+          },
+          "slot_key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Slot Key"
+          },
+          "media_type": {
+            "type": "string",
+            "title": "Media Type"
+          },
+          "size": {
+            "type": "integer",
+            "title": "Size"
+          },
+          "page_count": {
+            "type": "integer",
+            "title": "Page Count"
+          },
+          "added_by_user_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Added By User Id"
+          },
+          "added_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Added At"
+          },
+          "page_start": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Page Start"
+          },
+          "page_end": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Page End"
+          },
+          "embedded_in_signed_base": {
+            "type": "boolean",
+            "title": "Embedded In Signed Base",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "original_name",
+          "media_type",
+          "size",
+          "page_count",
+          "added_at"
+        ],
+        "title": "IncludedPaperRead"
+      },
+      "IncludedPaperReplacementRead": {
+        "properties": {
+          "from_name": {
+            "type": "string",
+            "title": "From Name"
+          },
+          "to_name": {
+            "type": "string",
+            "title": "To Name"
+          }
+        },
+        "type": "object",
+        "required": [
+          "from_name",
+          "to_name"
+        ],
+        "title": "IncludedPaperReplacementRead"
+      },
+      "IncludedPapersHistoryRead": {
+        "properties": {
+          "actor_user_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Actor User Id"
+          },
+          "actor_name": {
+            "type": "string",
+            "title": "Actor Name"
+          },
+          "revision_before": {
+            "type": "integer",
+            "title": "Revision Before"
+          },
+          "revision_after": {
+            "type": "integer",
+            "title": "Revision After"
+          },
+          "added": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Added"
+          },
+          "removed": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Removed"
+          },
+          "replaced": {
+            "items": {
+              "$ref": "#/components/schemas/IncludedPaperReplacementRead"
+            },
+            "type": "array",
+            "title": "Replaced"
+          },
+          "reordered": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Reordered"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "actor_name",
+          "revision_before",
+          "revision_after",
+          "created_at"
+        ],
+        "title": "IncludedPapersHistoryRead"
+      },
+      "IncludedPapersPreviewRead": {
+        "properties": {
+          "revision": {
+            "type": "integer",
+            "title": "Revision"
+          },
+          "fixed_page_count": {
+            "type": "integer",
+            "title": "Fixed Page Count"
+          },
+          "total_page_count": {
+            "type": "integer",
+            "title": "Total Page Count"
+          },
+          "papers": {
+            "items": {
+              "$ref": "#/components/schemas/IncludedPaperRead"
+            },
+            "type": "array",
+            "title": "Papers"
+          },
+          "pdf_base64": {
+            "type": "string",
+            "title": "Pdf Base64"
+          }
+        },
+        "type": "object",
+        "required": [
+          "revision",
+          "fixed_page_count",
+          "total_page_count",
+          "papers",
+          "pdf_base64"
+        ],
+        "title": "IncludedPapersPreviewRead"
+      },
+      "IncludedPapersRequest": {
+        "properties": {
+          "revision": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Revision"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/IncludedPaperProposal"
+            },
+            "type": "array",
+            "title": "Items"
+          }
+        },
+        "type": "object",
+        "required": [
+          "revision",
+          "items"
+        ],
+        "title": "IncludedPapersRequest"
       },
       "JobDocumentItem": {
         "properties": {

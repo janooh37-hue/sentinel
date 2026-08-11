@@ -1,12 +1,13 @@
 import { describe, it, expect } from 'vitest'
 import type { AttachmentSlotRead } from '@/lib/api'
 import {
+  attachmentsWithSeed,
   visibleAttachmentSlots,
   filterStateToSlots,
   emptyAttachmentsState,
   SICK_ONLY_SLOT_KEY,
   seedStagedSlot,
-  attachmentsWithSeed,
+  toGenerateSpecs,
 } from './attachmentsState'
 
 const slot = (key: string): AttachmentSlotRead => ({
@@ -41,6 +42,25 @@ describe('filterStateToSlots', () => {
     expect(out.extras).toEqual(state.extras)
   })
 })
+
+describe('toGenerateSpecs', () => {
+  it('keeps the original upload filename for record package history', () => {
+    expect(
+      toGenerateSpecs({
+        slots: { evidence: { ...staged, filename: 'Medical Certificate.pdf' } },
+        extras: [],
+      }),
+    ).toEqual([
+      {
+        slot_key: 'evidence',
+        source: 'staged',
+        staged_token: 't',
+        original_name: 'Medical Certificate.pdf',
+      },
+    ])
+  })
+})
+
 
 describe('seedStagedSlot', () => {
   it('sets a staged value on the given slot', () => {

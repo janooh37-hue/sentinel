@@ -7,6 +7,7 @@ for listing BookCategory rows.  Ref-number allocation is atomic via SQLite's
 
 from __future__ import annotations
 
+import contextlib
 import json
 import logging
 import re
@@ -740,7 +741,7 @@ def sign_book(db: Session, book_id: int, *, user_id: int) -> Book:
     merely advancing the step it physically signs: ``render_signed_pdf``
     re-renders the version's document with the signer's signature injected.
     """
-    from app.services import document_service
+    from app.services import document_service, included_papers_service
 
     book = _get_book_with_versions(db, book_id)
     current = _current_pending_step(book)
@@ -778,6 +779,24 @@ def sign_book(db: Session, book_id: int, *, user_id: int) -> Book:
         signer_signature_path=str(abs_sig),
         signer_names=signer_names,
     )
+    signed_primary = Path(signed_rel)
+    if not signed_primary.is_absolute():
+        signed_primary = get_settings().data_dir / signed_primary
+    if signed_primary.suffix.lower() != ".pdf" and book.merged_attachment_paths:
+        with contextlib.suppress(OSError):
+            signed_primary.unlink()
+        raise ValidationFailedError(
+            "INCLUDED_PAPERS_SIGNED_PDF_REQUIRED",
+            "The signed PDF could not be created; the record was not approved",
+        )
+    if signed_primary.suffix.lower() == ".pdf":
+        signed_rel = included_papers_service.publish_signed_package(
+            db,
+            book,
+            version,
+            signed_primary,
+            physical_scan=False,
+        )
     version.signed_pdf_path = signed_rel
     version.signed_by_user_id = user_id
     version.signed_at = datetime.now(UTC).replace(tzinfo=None)
@@ -1486,17 +1505,36 @@ def add_attachment(
             "Resolved attachment path escaped the data directory",
             http_status=500,
         )
-
     dest.write_bytes(data)
     log.info("book attachment: book=%d -> %s (%d bytes)", book_id, dest.name, len(data))
 
     rel_path = dest_resolved.relative_to(data_dir).as_posix()
 
     if flip_version is not None:
-        # ── Scan-back flip: the scan IS the signed artifact (one paper, no
-        # duplicate in attachment_paths). Mirrors sign_book's bookkeeping.
+        # Preserve the uploaded scan as the fixed signed base, then publish the
+        # current included papers after it.
+        from app.services import included_papers_service
+
         version = flip_version
-        version.signed_pdf_path = rel_path
+
+        if version.document_id is not None:
+            try:
+                included_papers_service.publish_signed_package(
+                    db,
+                    book,
+                    version,
+                    dest_resolved,
+                    physical_scan=True,
+                )
+            except Exception:
+                with contextlib.suppress(OSError):
+                    dest_resolved.unlink()
+                raise
+        else:
+            version.signed_base_pdf_path = rel_path
+            version.signed_pdf_path = rel_path
+            version.signed_embedded_paper_ids = []
+            included_papers_service.advance_package_revision(db, book)
         version.signed_by_user_id = user.id if user is not None else None
         version.signed_at = datetime.now(UTC).replace(tzinfo=None)
         # The scan IS the manager's signature → finalize the pending APPROVER
@@ -1652,18 +1690,53 @@ def replace_signed_copy(
             "Resolved attachment path escaped the data directory",
             http_status=500,
         )
-    dest.write_bytes(data)
-    old_abs = resolve_attachment_path(version.signed_pdf_path)
-    version.signed_pdf_path = dest_resolved.relative_to(data_dir).as_posix()
-    if user is not None:
-        version.signed_by_user_id = user.id
-    version.signed_at = datetime.now(UTC).replace(tzinfo=None)
-    if old_abs is not None:
-        try:
-            old_abs.unlink()
-        except OSError:
-            log.warning("replace_signed_copy: could not unlink %s", old_abs)
-    db.commit()
+    from app.services import included_papers_service
+
+    old_paths = {
+        path.resolve()
+        for path in (
+            resolve_attachment_path(version.signed_pdf_path) if version.signed_pdf_path else None,
+            resolve_attachment_path(version.signed_base_pdf_path)
+            if version.signed_base_pdf_path
+            else None,
+        )
+        if path is not None
+    }
+    new_paths = {dest_resolved}
+    try:
+        dest.write_bytes(data)
+        if version.document_id is not None:
+            included_papers_service.publish_signed_package(
+                db,
+                book,
+                version,
+                dest_resolved,
+                physical_scan=True,
+            )
+        else:
+            rel_path = dest_resolved.relative_to(data_dir).as_posix()
+            version.signed_base_pdf_path = rel_path
+            version.signed_pdf_path = rel_path
+            version.signed_embedded_paper_ids = []
+            included_papers_service.advance_package_revision(db, book)
+        new_output = (
+            resolve_attachment_path(version.signed_pdf_path) if version.signed_pdf_path else None
+        )
+        if new_output is not None:
+            new_paths.add(new_output.resolve())
+        if user is not None:
+            version.signed_by_user_id = user.id
+        version.signed_at = datetime.now(UTC).replace(tzinfo=None)
+        db.commit()
+    except Exception:
+        db.rollback()
+        for path in new_paths:
+            with contextlib.suppress(OSError):
+                path.unlink()
+        raise
+    for path in old_paths - new_paths:
+        with contextlib.suppress(OSError):
+            path.unlink()
     db.refresh(book)
     return book
 
@@ -1676,16 +1749,29 @@ def unfile_signed_copy(db: Session, book_id: int, *, user: User | None = None) -
     ``unfile_signed_copy`` AuditLog row (the original scan-back sign entry is left
     in place — an audit trail of what happened)."""
     from app.core import form_policy
+    from app.services import included_papers_service
 
     book = get_book(db, book_id)
     version = _current_version(book)
     if version is None or not version.signed_pdf_path:
         raise ValidationFailedError("NO_SIGNED_COPY", "This record has no signed copy to unfile")
     flip_at = version.signed_at
-    old_abs = resolve_attachment_path(version.signed_pdf_path)
+    old_paths = {
+        path.resolve()
+        for path in (
+            resolve_attachment_path(version.signed_pdf_path) if version.signed_pdf_path else None,
+            resolve_attachment_path(version.signed_base_pdf_path)
+            if version.signed_base_pdf_path
+            else None,
+        )
+        if path is not None
+    }
     version.signed_pdf_path = None
+    version.signed_base_pdf_path = None
+    version.signed_embedded_paper_ids = []
     version.signed_by_user_id = None
     version.signed_at = None
+    included_papers_service.advance_package_revision(db, book)
     if form_policy.signing_path_of(version.template_id) == "scan":
         # scan-path forms carry no approver steps (the scan IS the signature).
         version.status = "awaiting_scan"
@@ -1698,11 +1784,6 @@ def unfile_signed_copy(db: Session, book_id: int, *, user: User | None = None) -
                 step.state = "pending"
                 step.decided_at = None
         _recompute_approval_state(book)
-    if old_abs is not None:
-        try:
-            old_abs.unlink()
-        except OSError:
-            log.warning("unfile_signed_copy: could not unlink %s", old_abs)
     db.add(
         AuditLog(
             actor=(user.employee_id if user is not None else None),
@@ -1713,6 +1794,9 @@ def unfile_signed_copy(db: Session, book_id: int, *, user: User | None = None) -
         )
     )
     db.commit()
+    for path in old_paths:
+        with contextlib.suppress(OSError):
+            path.unlink()
     db.refresh(book)
     return book
 

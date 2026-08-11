@@ -92,7 +92,7 @@ def resolve_book_pdf(db: Session, book_id: int) -> tuple[str, bytes]:
         file_path: Path = settings.data_dir / signed_rel
     elif row.pdf_path:
         file_path = settings.data_dir / row.pdf_path
-        merge_companions = True
+        merge_companions = not bool(row.base_pdf_path)
     else:
         raise BookPdfError(f"Book {book_id} document {document_id} has no PDF rendition")
 

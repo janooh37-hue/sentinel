@@ -46,6 +46,32 @@ describe('DocPdfCanvas readiness', () => {
     expect(spinnerPresentAtReady).toBe(false)
   })
 
+  it('renders supplied base64 PDF bytes without making a download request', async () => {
+    const fetchMock = vi.fn()
+    vi.stubGlobal('fetch', fetchMock)
+    getDocumentMock.mockReturnValue({
+      promise: Promise.resolve({
+        numPages: 1,
+        getPage: vi.fn().mockResolvedValue({
+          getViewport: vi.fn(() => ({ width: 100, height: 100 })),
+          render: vi.fn(() => ({ promise: Promise.resolve() })),
+        }),
+      }),
+    })
+    vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue(
+      {} as CanvasRenderingContext2D,
+    )
+
+    const view = render(<DocPdfCanvas pdfBase64="AQ==" sourceKey="preview-1" />)
+
+    await waitFor(() => expect(view.container.querySelector('canvas')).not.toBeNull())
+    expect(fetchMock).not.toHaveBeenCalled()
+    expect(getDocumentMock).toHaveBeenCalledWith({
+      data: new Uint8Array([1]),
+      disableFontFace: true,
+    })
+  })
+
   it('calls onReady again after a changed PDF URL finishes painting', async () => {
     const onReady = vi.fn()
     const renderPage = vi.fn(() => ({ promise: Promise.resolve() }))

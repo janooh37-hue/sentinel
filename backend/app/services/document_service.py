@@ -28,7 +28,7 @@ import shutil
 import uuid
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
-from datetime import date, datetime
+from datetime import UTC, date, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -45,7 +45,6 @@ from app.core.constants import STAMP_STYLE_HEADER, TEMPLATE_FILES
 from app.core.dateutils import excel_date_to_datetime
 from app.core.docx_engine import DocxEngine, aztec_corner_for
 from app.core.docx_render import _arabic_clock, _arabic_weekday
-from app.core.pdf_merge import merge_attachments_into_pdf
 from app.core.vault_manager import Vault
 from app.db.models import (
     AuditLog,
@@ -64,7 +63,7 @@ from app.db.models import (
 from app.db.repos.classified_refs_repo import allocate_classified_serial
 from app.db.repos.refs_repo import allocate_ref_with_retry
 from app.schemas.employee import EMPLOYEE_STATUS_ACTIVE, EMPLOYEE_STATUS_RESIGNED
-from app.services._pdf_executor import convert_docx_to_pdf
+from app.services._pdf_executor import convert_docx_to_pdf as convert_docx_to_pdf
 
 if TYPE_CHECKING:
     # Type-only: app.api.v1.documents imports this module at runtime, so a
@@ -1205,7 +1204,7 @@ def generate_document(
             )
     # Revise with attachments=None reuses the book's stored merged set —
     # required slots were satisfied when the book was first committed.
-    reuse_merged: list[dict[str, str | None]] = []
+    reuse_merged: list[dict[str, Any]] = []
     if revise_book is not None and attachments is None:
         reuse_merged = list(revise_book.merged_attachment_paths or [])
     elif commit:
@@ -1638,19 +1637,44 @@ def generate_document(
     # all carry the combined PDF with zero further changes. Consumed staged
     # files are unlinked only after the commit (alongside the B1 loop).
     # ------------------------------------------------------------------
+    merge_sources: list[Path] = []
     if commit and _logged_book is not None and pdf_path is not None:
-        merge_sources: list[Path] = []
         if resolved_attachments:
+            from app.services import included_papers_service
+
             att_dir = settings.data_dir / "book_attachments" / str(_logged_book.id)
             att_dir.mkdir(parents=True, exist_ok=True)
-            persisted: list[dict[str, str | None]] = []
+            persisted: list[dict[str, Any]] = []
+            added_at = datetime.now(UTC).isoformat()
             for spec, src in _ordered_attachment_specs(resolved_attachments, slots):
-                dest = Vault.collision_safe_name(att_dir, f"{spec.slot_key or 'extra'}_{src.name}")
+                original_name = Path(spec.original_name or src.name).name
+                if spec.original_name and (
+                    original_name != spec.original_name
+                    or Path(original_name).suffix.lower() != src.suffix.lower()
+                ):
+                    raise ValidationFailedError(
+                        "INVALID_ATTACHMENT_NAME",
+                        "An attachment requires its original safe filename",
+                        filename=spec.original_name,
+                    )
+                dest = Vault.collision_safe_name(
+                    att_dir, f"{spec.slot_key or 'extra'}_{original_name}"
+                )
                 shutil.copyfile(src, dest)
+                media_type, page_count = included_papers_service.inspect_paper(
+                    dest, display_name=original_name
+                )
                 persisted.append(
                     {
+                        "id": str(uuid.uuid4()),
                         "path": dest.relative_to(settings.data_dir).as_posix(),
+                        "original_name": original_name,
                         "slot_key": spec.slot_key,
+                        "media_type": media_type,
+                        "size": dest.stat().st_size,
+                        "page_count": page_count,
+                        "added_by_user_id": (current_user.id if current_user is not None else None),
+                        "added_at": added_at,
                     }
                 )
                 merge_sources.append(dest)
@@ -1679,8 +1703,6 @@ def generate_document(
                     )
                     continue
                 merge_sources.append(src_path)
-        if merge_sources:
-            merge_attachments_into_pdf(pdf_path, merge_sources)
         db.flush()
 
     # ------------------------------------------------------------------
@@ -1822,6 +1844,24 @@ def generate_document(
                 )
             )
 
+    # Publish one fixed-base-first package for every newly generated record.
+    # The preserved base includes automatic companion forms, but never user-
+    # managed papers; Document.pdf_path remains the normal combined download.
+    if commit and _logged_book is not None and pdf_path is not None and pdf_path.is_file():
+        from app.services import included_papers_service
+
+        assert _state_version is not None
+        included_papers_service.publish_generated_package(
+            db,
+            _logged_book,
+            _state_version,
+            doc_row,
+            pdf_path,
+            invalidate_revision=revise_book is not None,
+            data_dir=settings.data_dir,
+        )
+        db.flush()
+
     # ------------------------------------------------------------------
     # 15. Commit
     # ------------------------------------------------------------------
@@ -1900,30 +1940,6 @@ def _authored_docx_of(db: Session, version: BookVersion) -> Path | None:
     return p if p.exists() else None
 
 
-def _merge_book_attachments(db: Session, book: Book, pdf_path: Path) -> None:
-    """Re-merge the book's combined-PDF attachments into *pdf_path* (spec §6):
-    the generated PDF carried them, so any signed artifact must too."""
-    merged_items = list(book.merged_attachment_paths or [])
-    if not merged_items:
-        return
-    from app.services import book_service
-
-    merge_sources: list[Path] = []
-    for item in merged_items:
-        rel_path = item.get("path")
-        src_path = book_service.resolve_attachment_path(rel_path) if rel_path else None
-        if src_path is None:
-            log.warning(
-                "merged attachment %s missing for book %s — skipped in signed artifact",
-                rel_path,
-                book.id,
-            )
-            continue
-        merge_sources.append(src_path)
-    if merge_sources:
-        merge_attachments_into_pdf(pdf_path, merge_sources)
-
-
 def _sign_authored_docx(
     db: Session,
     *,
@@ -1931,6 +1947,7 @@ def _sign_authored_docx(
     source: Path,
     signer_signature_path: str,
     signer_names: Sequence[str] = (),
+    output_dir: Path | None = None,
 ) -> str:
     """Signed artifact for a Word-authored book: copy docx → stamp signature →
     convert. The paper already carries ref/date/footer/Aztec from its own
@@ -1941,7 +1958,8 @@ def _sign_authored_docx(
     from app.services import settings_service
 
     book = version.book
-    out_dir = _output_dir_for_admin("General Book")
+    out_dir = output_dir or _output_dir_for_admin("General Book")
+    out_dir.mkdir(parents=True, exist_ok=True)
     ts = datetime.now()
     docx_name = _build_docx_filename("General Book", book.ref_number.replace("/", "-"), ts)
     docx_path = Vault.collision_safe_name(out_dir, docx_name.replace(".docx", "_signed.docx"))
@@ -1990,8 +2008,6 @@ def _sign_authored_docx(
         log.error("Signed PDF conversion crashed for %s", docx_path, exc_info=True)
     if pdf_path is None:
         log.warning("Signed PDF unavailable for %s — returning signed DOCX", docx_path)
-    if pdf_path is not None:
-        _merge_book_attachments(db, book, pdf_path)
 
     settings = get_settings()
 
@@ -2012,6 +2028,7 @@ def render_signed_pdf(
     version: BookVersion,
     signer_signature_path: str,
     signer_names: Sequence[str] = (),
+    output_dir: Path | None = None,
 ) -> str:
     """Re-render ``version``'s document with the signer's signature embedded in
     the manager slot (``sig1_path``); return the signed PDF path relative to
@@ -2044,6 +2061,7 @@ def render_signed_pdf(
             source=authored,
             signer_signature_path=signer_signature_path,
             signer_names=signer_names,
+            output_dir=output_dir,
         )
     template_id = version.template_id or ""
     if template_id not in TEMPLATE_FILES:
@@ -2089,7 +2107,8 @@ def render_signed_pdf(
         if resolved:
             data["recipient_name"] = resolved
 
-    out_dir = _output_dir_for_admin(template_id)
+    out_dir = output_dir or _output_dir_for_admin(template_id)
+    out_dir.mkdir(parents=True, exist_ok=True)
     ts = datetime.now()
     docx_name = _build_docx_filename(
         template_id, (employee.name_en if employee is not None else "signed") or "signed", ts
@@ -2118,11 +2137,6 @@ def render_signed_pdf(
         log.error("Signed PDF conversion crashed for %s", docx_path, exc_info=True)
     if pdf_path is None:
         log.warning("Signed PDF unavailable for %s — conversion returned no file", docx_path)
-
-    # Re-merge the book's combined-PDF attachments (spec §6): the generated
-    # PDF carried them, so the signed artifact must too.
-    if pdf_path is not None:
-        _merge_book_attachments(db, book, pdf_path)
 
     settings = get_settings()
 

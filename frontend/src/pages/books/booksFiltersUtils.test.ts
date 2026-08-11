@@ -47,6 +47,9 @@ function makeBook(overrides: Partial<BookRead>): BookRead {
     employee_id: null,
     employee_name_snapshot: null,
     current_template_id: null,
+    included_papers_revision: 0,
+    included_papers_fixed_page_count: 0,
+    included_papers_total_page_count: 0,
     ...overrides,
   }
 }

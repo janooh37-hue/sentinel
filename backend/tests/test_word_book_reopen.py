@@ -9,6 +9,7 @@ import secrets
 from datetime import UTC, datetime
 from pathlib import Path
 
+import fitz
 import pytest
 
 from app.db.models import Book, BookCategory, BookEditSession, BookVersion, Document, User
@@ -16,6 +17,16 @@ from app.db.models import Book, BookCategory, BookEditSession, BookVersion, Docu
 # ---------------------------------------------------------------------------
 # Helpers (mirrors test_word_book_finish.py)
 # ---------------------------------------------------------------------------
+
+
+def _pdf(path: Path) -> Path:
+    document = fitz.open()
+    try:
+        document.new_page()
+        document.save(path)
+    finally:
+        document.close()
+    return path
 
 
 def _seed_gs(db):
@@ -184,8 +195,7 @@ def test_reopen_then_finish_gives_version_2_revision(db_session, tmp_path, monke
     """Reopen a v1 book, finish → version_no=2, trigger=revision; v1 Document untouched."""
     from app.services import word_book_service
 
-    _dummy_pdf = tmp_path / "dummy.pdf"
-    _dummy_pdf.write_bytes(b"%PDF fake")
+    _dummy_pdf = _pdf(tmp_path / "dummy.pdf")
     monkeypatch.setattr(word_book_service, "get_settings", lambda: _settings(tmp_path))
     monkeypatch.setattr(
         "app.services.word_book_service.convert_docx_to_pdf",

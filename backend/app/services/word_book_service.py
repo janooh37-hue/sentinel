@@ -381,13 +381,23 @@ def finish_word_session(db: Session, *, user: User, book_id: int) -> Book:
         dest = out_dir / (Path(filename).stem + f"_{suffix}.docx")
 
     src = Path(session.working_path)
-    shutil.move(str(src), str(dest))
-    _cleanup_preview_files(src.parent)
+    shutil.copy2(src, dest)
 
     # ------------------------------------------------------------------
     # 2. PDF conversion (lenient — None is fine)
     # ------------------------------------------------------------------
     pdf_path: Path | None = convert_docx_to_pdf(dest)
+    if pdf_path is None and book.merged_attachment_paths:
+        with contextlib.suppress(OSError):
+            dest.unlink()
+        raise AppError(
+            "INCLUDED_PAPERS_PDF_REQUIRED",
+            "The PDF could not be created; the Word editing session remains open",
+            http_status=409,
+        )
+    with contextlib.suppress(OSError):
+        src.unlink()
+    _cleanup_preview_files(src.parent)
 
     # ------------------------------------------------------------------
     # 3. Create Document row
@@ -426,12 +436,12 @@ def finish_word_session(db: Session, *, user: User, book_id: int) -> Book:
         created_at=now,
     )
     db.add(version)
+    signed = False
 
     if is_report:
         from app.db.models import Employee
-        from app.services import document_service, report_service
+        from app.services import document_service, included_papers_service, report_service
 
-        signed = False
         if session.sign_on_finish and session.signer_employee_id:
             _n, _t, sig = report_service._resolve_signer(db, session.signer_employee_id)
             if sig is not None:
@@ -444,20 +454,46 @@ def finish_word_session(db: Session, *, user: User, book_id: int) -> Book:
                 signed_rel = document_service.render_signed_pdf(
                     db, version=version, signer_signature_path=sig, signer_names=names
                 )
-                version.signed_pdf_path = signed_rel
-                version.signed_by_user_id = user.id
-                version.signed_at = now
-                version.manager_sig_embedded = True
-                # "approved" is the canonical signed marker every serve gate reads
-                # (is_document_signed_locked, _signed_pdf_url_of). Without it the
-                # embedded signature is orphaned — the unsigned PDF keeps serving,
-                # so the sign toggle looked like it did nothing.
-                version.status = "approved"
-                signed = True
+                signed_primary = Path(signed_rel)
+                if not signed_primary.is_absolute():
+                    signed_primary = get_settings().data_dir / signed_primary
+                if signed_primary.suffix.lower() != ".pdf" and book.merged_attachment_paths:
+                    with contextlib.suppress(OSError):
+                        signed_primary.unlink()
+                else:
+                    if signed_primary.suffix.lower() == ".pdf":
+                        signed_rel = included_papers_service.publish_signed_package(
+                            db,
+                            book,
+                            version,
+                            signed_primary,
+                            physical_scan=False,
+                            data_dir=get_settings().data_dir,
+                        )
+                    version.signed_pdf_path = signed_rel
+                    version.signed_by_user_id = user.id
+                    version.signed_at = now
+                    version.manager_sig_embedded = True
+                    # "approved" is the canonical signed marker every serve gate reads.
+                    version.status = "approved"
+                    signed = True
         version.fields = {
             "signer_employee_id": session.signer_employee_id,
             "signed": signed,
         }
+    if pdf_path is not None and pdf_path.is_file():
+        from app.services import included_papers_service
+
+        db.flush()
+        included_papers_service.publish_generated_package(
+            db,
+            book,
+            version,
+            doc,
+            pdf_path,
+            invalidate_revision=max_version_no > 0 and not signed,
+            data_dir=get_settings().data_dir,
+        )
 
     # ------------------------------------------------------------------
     # 5. Populate search_text from the finished docx (before commit so the

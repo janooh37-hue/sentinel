@@ -39,7 +39,12 @@ function specFor(
 ): GenerateAttachmentSpec {
   switch (value.kind) {
     case 'staged':
-      return { slot_key: slotKey, source: 'staged', staged_token: value.token }
+      return {
+        slot_key: slotKey,
+        source: 'staged',
+        staged_token: value.token,
+        original_name: value.filename,
+      }
     case 'record_document':
       return { slot_key: slotKey, source: 'record_document', book_id: value.bookId }
     case 'record_attachment':

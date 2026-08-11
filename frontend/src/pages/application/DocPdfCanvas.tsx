@@ -35,32 +35,46 @@ export interface PageBox {
 }
 
 
-interface DocPdfCanvasProps {
-  /** Inline PDF download URL, e.g. `/api/v1/documents/{id}/download?format=pdf`. */
-  pdfUrl: string
+interface DocPdfCanvasCommonProps {
   /**
    * Optional DOCX download URL. When the PDF fails to render (e.g. the pdf.js
    * worker asset 404s in the packaged build), the error state offers this as a
-   * download so the operator isn't dead-ended — the same escape hatch the
-   * "PDF unavailable" state provides.
+   * download so the operator isn't dead-ended.
    */
   docxUrl?: string
   /**
    * Optional overlay slot. Receives the rendered page boxes (CSS px, relative to
-   * the scroll content) and is painted absolutely inside the scroll container so
-   * it scrolls with the pages. Absent → behavior is unchanged.
+   * the scroll content).
    */
   renderOverlay?: (pages: PageBox[]) => React.ReactNode
   /** Called once after all PDF pages have finished painting. */
   onReady?: () => void
 }
 
+type DocPdfCanvasProps = DocPdfCanvasCommonProps &
+  (
+    | {
+        /** Inline PDF download URL, e.g. `/api/v1/documents/{id}/download?format=pdf`. */
+        pdfUrl: string
+        pdfBase64?: never
+        sourceKey?: never
+      }
+    | {
+        /** Already-loaded base64 PDF, such as an included-papers preview response. */
+        pdfBase64: string
+        /** Small identity that changes whenever the supplied PDF bytes change. */
+        sourceKey: string
+        pdfUrl?: never
+      }
+  )
+
 export default function DocPdfCanvas(props: DocPdfCanvasProps): React.JSX.Element {
-  return <DocPdfCanvasRenderer key={props.pdfUrl} {...props} />
+  return <DocPdfCanvasRenderer key={props.pdfUrl ?? props.sourceKey} {...props} />
 }
 
 function DocPdfCanvasRenderer({
   pdfUrl,
+  pdfBase64,
   docxUrl,
   renderOverlay,
   onReady,
@@ -102,20 +116,23 @@ function DocPdfCanvasRenderer({
 
     void (async () => {
       try {
-        // Fetch base64 (text/plain) so neither IDM nor Chrome's built-in PDF
-        // viewer can sniff the response and intercept it (returning empty 204).
-        const res = await fetch(toBase64Url(pdfUrl), {
-          credentials: 'same-origin',
-          signal: controller.signal,
-        })
-        if (!res.ok) {
-          // 404 here means the backend has no PDF on disk for this doc
-          // (PDF_NOT_AVAILABLE / FILE_NOT_FOUND) — i.e. DOCX→PDF conversion
-          // produced nothing. Flag it so the error state says so plainly.
-          if (!cancelled) setErrorKind(res.status === 404 ? 'missing' : 'render')
-          throw new Error(`HTTP ${res.status}`)
+        let data: Uint8Array
+        if (pdfBase64 !== undefined) {
+          data = base64ToBytes(pdfBase64)
+        } else {
+          // Fetch base64 (text/plain) so neither IDM nor Chrome's built-in PDF
+          // viewer can sniff the response and intercept it (returning empty 204).
+          const res = await fetch(toBase64Url(pdfUrl), {
+            credentials: 'same-origin',
+            signal: controller.signal,
+          })
+          if (!res.ok) {
+            // 404 means the backend has no PDF on disk for this document.
+            if (!cancelled) setErrorKind(res.status === 404 ? 'missing' : 'render')
+            throw new Error(`HTTP ${res.status}`)
+          }
+          data = base64ToBytes(await res.text())
         }
-        const data = base64ToBytes(await res.text())
         if (cancelled) return
         // `disableFontFace`: draw glyph outlines directly rather than via the
         // browser FontFace API — deterministic across Brave fingerprint
@@ -160,7 +177,7 @@ function DocPdfCanvasRenderer({
       cancelled = true
       controller.abort()
     }
-  }, [pdfUrl, measure])
+  }, [pdfUrl, pdfBase64, measure])
 
   useEffect(() => {
     if (status === 'ready') onReadyRef.current?.()

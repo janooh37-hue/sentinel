@@ -100,6 +100,7 @@ class GenerateAttachmentSpec(BaseModel):
     slot_key: str | None = None
     source: Literal["staged", "record_document", "record_attachment"]
     staged_token: str | None = None
+    original_name: str | None = None
     book_id: int | None = None
     attachment_index: int | None = None
 
@@ -462,7 +463,7 @@ def download_document(
         # Annual-leave / resignation forms file a companion (Leave Undertaking,
         # etc.) as a separate doc sharing this submission. Append its pages so the
         # record serves ONE merged PDF, not separate papers. Non-destructive.
-        comp_paths = document_service.companion_pdf_paths(db, row)
+        comp_paths = [] if row.base_pdf_path else document_service.companion_pdf_paths(db, row)
         if comp_paths:
             merged = merge_pdfs_to_bytes(orig_path, comp_paths)
             if (b64 := maybe_base64(merged, encoding)) is not None:
@@ -517,7 +518,9 @@ def download_document(
         file_path = settings.data_dir / row.pdf_path
         media_type = "application/pdf"
         ext = ".pdf"
-        merge_companions = True
+        # Managed record packages already contain automatic companions in their
+        # fixed base. Appending them again would duplicate those pages.
+        merge_companions = not bool(row.base_pdf_path)
     elif format == "pdf":
         # PDF explicitly requested but conversion never produced one (e.g. a
         # DRAFT preview on a host without Word). Return a clean signal instead

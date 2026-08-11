@@ -9,6 +9,7 @@ Both are wired into ``main.py`` under ``/api/v1``.
 
 from __future__ import annotations
 
+import base64
 from datetime import date, datetime
 from typing import Annotated, Literal
 
@@ -29,6 +30,7 @@ from sqlalchemy.orm import Session
 
 from app.api._responses import maybe_base64
 from app.api.deps import get_current_user, require_capability
+from app.api.errors import AppError
 from app.core import form_policy
 from app.core.classifications import CLASSIFICATIONS
 from app.db.models import Book, BookEditSession, BookVersion, Document, User
@@ -49,6 +51,11 @@ from app.schemas.book import (
     BookVersionRead,
     ClassificationListResponse,
     ClassificationRead,
+    IncludedPaperRead,
+    IncludedPaperReplacementRead,
+    IncludedPapersHistoryRead,
+    IncludedPapersPreviewRead,
+    IncludedPapersRequest,
     RenameTemplateRequest,
     ReviewersAddRequest,
     ReviewRequest,
@@ -60,7 +67,12 @@ from app.schemas.book import (
     WordTemplateTableRead,
 )
 from app.schemas.notify import NotifyMessageRead as NotifyMessageRead
-from app.services import book_service, book_template_service, word_book_service
+from app.services import (
+    book_service,
+    book_template_service,
+    included_papers_service,
+    word_book_service,
+)
 from app.services.book_service import LIST_DEFAULT_LIMIT, LIST_MAX_LIMIT
 
 router = APIRouter(prefix="/books", tags=["books"])
@@ -68,13 +80,11 @@ categories_router = APIRouter(prefix="/book-categories", tags=["books"])
 
 
 def _signed_source_of(v: BookVersion) -> Literal["in_app", "scan"] | None:
-    """Derived: a signed copy filed under ``book_attachments/`` is a scan-back;
-    anything else (sign_book output dirs) was signed in-app."""
+    """Classify by the preserved base; packaged scan outputs live elsewhere."""
     if not v.signed_pdf_path:
         return None
-    return (
-        "scan" if v.signed_pdf_path.replace("\\", "/").startswith("book_attachments/") else "in_app"
-    )
+    source = v.signed_base_pdf_path or v.signed_pdf_path
+    return "scan" if source.replace("\\", "/").startswith("book_attachments/") else "in_app"
 
 
 def _is_pdf_path(path: str | None) -> bool:
@@ -435,6 +445,8 @@ def _enrich_path_fields(
     # v3-imported records: surface the file copied into the employee vault so
     # it's viewable/downloadable (no generated Document on these books).
     item.imported_doc = book_service.imported_document_of(row)
+    item.original_creator_user_id = included_papers_service.original_creator_user_id(row)
+    item.included_papers_revision = row.included_papers_revision
     _fill_draft_fields(item, row, db, by_book=by_book)
     return item
 
@@ -583,27 +595,49 @@ def _build_versions(db: Session, row: Book) -> list[BookVersionRead]:
     return out
 
 
-@router.get("/{book_id}", response_model=BookRead)
-def get_book(
-    book_id: int,
-    db: Annotated[Session, Depends(get_db)],
-    _user: Annotated[User, Depends(require_capability("books.view"))],
-    include_deleted: bool = False,
-) -> BookRead:
-    row = book_service.get_book_detail(db, book_id, include_deleted=include_deleted)
+def _populate_included_papers(item: BookRead, row: Book, db: Session) -> None:
+    item.original_creator_user_id = included_papers_service.original_creator_user_id(row)
+    item.included_papers_revision = row.included_papers_revision
+    try:
+        package = included_papers_service.describe_package(db, row)
+    except AppError:
+        return
+    item.included_papers_fixed_page_count = package.fixed_page_count
+    item.included_papers_total_page_count = package.total_page_count
+    item.included_papers = [
+        IncludedPaperRead.model_validate(paper, from_attributes=True) for paper in package.papers
+    ]
+    item.included_papers_history = [
+        IncludedPapersHistoryRead(
+            actor_user_id=event.actor_user_id,
+            actor_name=event.actor_name,
+            revision_before=event.revision_before,
+            revision_after=event.revision_after,
+            added=event.added,
+            removed=event.removed,
+            replaced=[
+                IncludedPaperReplacementRead(
+                    from_name=replacement.from_name,
+                    to_name=replacement.to_name,
+                )
+                for replacement in event.replaced
+            ],
+            reordered=event.reordered,
+            created_at=event.created_at,
+        )
+        for event in package.history
+    ]
+
+
+def _build_book_detail(db: Session, row: Book) -> BookRead:
     item = BookRead.model_validate(row)
     item.subject = book_service.derive_subject(row)
     item.submitted_by_name = book_service.submitter_name(db, row)
     item.submitted_by_g = book_service.submitter_g_number(db, row)
-    # Resolve the doc's named manager to a login account (auto-route target).
     item.doc_manager_user_id, item.doc_manager_name, item.doc_manager_has_signature = (
         book_service.resolve_doc_manager_user(db, row)
     )
-    # Override auto-validated versions with the enriched payload (computed
-    # docx_url/pdf_url/has_fields/created_by_name that aren't ORM attributes).
     item.versions = _build_versions(db, row)
-    # Per-form signing path from the current (highest-numbered) version's
-    # template; None for legacy/imported books without a template_id.
     current = row.versions[-1] if row.versions else None
     item.signing_path = form_policy.signing_path_of(
         current.template_id if current is not None else None
@@ -613,10 +647,91 @@ def get_book(
     )
     item.imported_doc = book_service.imported_document_of(row)
     item.sms = [
-        NotifyMessageRead.model_validate(m) for m in book_service.messages_for_book(db, row)
+        NotifyMessageRead.model_validate(message)
+        for message in book_service.messages_for_book(db, row)
     ]
+    _populate_included_papers(item, row, db)
     _fill_draft_fields(item, row, db)
     return item
+
+
+def _package_proposal(
+    request: IncludedPapersRequest,
+) -> list[included_papers_service.PaperProposal]:
+    return [
+        included_papers_service.PaperProposal(
+            id=str(item.id),
+            staged_token=item.staged_token,
+            original_name=item.original_name,
+        )
+        for item in request.items
+    ]
+
+
+@router.post(
+    "/{book_id}/included-papers/preview",
+    response_model=IncludedPapersPreviewRead,
+)
+def preview_included_papers(
+    book_id: int,
+    request: IncludedPapersRequest,
+    db: Annotated[Session, Depends(get_db)],
+    user: Annotated[User, Depends(require_capability("books.view"))],
+) -> IncludedPapersPreviewRead:
+    package = included_papers_service.preview_package(
+        db,
+        book_id,
+        user_id=user.id,
+        revision=request.revision,
+        proposal=_package_proposal(request),
+    )
+    return IncludedPapersPreviewRead(
+        revision=package.revision,
+        fixed_page_count=package.base_page_count,
+        total_page_count=package.total_page_count,
+        papers=[
+            IncludedPaperRead.model_validate(paper, from_attributes=True)
+            for paper in package.papers
+        ],
+        pdf_base64=base64.b64encode(package.pdf_bytes).decode("ascii"),
+    )
+
+
+@router.put("/{book_id}/included-papers", response_model=BookRead)
+def save_included_papers(
+    book_id: int,
+    request: IncludedPapersRequest,
+    db: Annotated[Session, Depends(get_db)],
+    user: Annotated[User, Depends(require_capability("books.view"))],
+) -> BookRead:
+    package = included_papers_service.save_package(
+        db,
+        book_id,
+        user_id=user.id,
+        revision=request.revision,
+        proposal=_package_proposal(request),
+    )
+    row = book_service.get_book_detail(db, book_id)
+    version = max(row.versions, key=lambda item: item.version_no)
+    included_papers_service.notify_approvers(
+        db,
+        row,
+        version,
+        user,
+        package.change_summary or {},
+    )
+    return _build_book_detail(db, row)
+
+
+@router.get("/{book_id}", response_model=BookRead)
+def get_book(
+    book_id: int,
+    db: Annotated[Session, Depends(get_db)],
+    _user: Annotated[User, Depends(require_capability("books.view"))],
+    include_deleted: bool = False,
+) -> BookRead:
+    row = book_service.get_book_detail(db, book_id, include_deleted=include_deleted)
+    return _build_book_detail(db, row)
 
 
 @router.get("/{book_id}/versions/{version_id}/fields")
