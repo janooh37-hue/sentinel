@@ -35,8 +35,8 @@ const embedded: IncludedPaperRead = {
   page_count: 2,
   added_by_user_id: 1,
   added_at: '2026-08-10T08:00:00Z',
-  page_start: 3,
-  page_end: 4,
+  page_start: null,
+  page_end: null,
   embedded_in_signed_base: true,
 }
 
@@ -145,6 +145,7 @@ describe('IncludedPapersDialog', () => {
       'Reordered: required.pdf, after.pdf',
     )
     expect(screen.queryByRole('button', { name: 'Remove required.pdf' })).not.toBeInTheDocument()
+    expect(screen.queryByText('Not reviewed yet')).not.toBeInTheDocument()
 
     await user.upload(screen.getByLabelText('Add PDF or images'), late)
     expect(await screen.findByText('passport.jpg')).toBeVisible()

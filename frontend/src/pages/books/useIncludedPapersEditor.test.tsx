@@ -89,4 +89,20 @@ describe('useIncludedPapersEditor', () => {
     })
     expect(result.current.state.preview?.total_page_count).toBe(3)
   })
+
+  it('does not enable save after previewing an unchanged package', async () => {
+    vi.spyOn(api, 'previewIncludedPapers').mockResolvedValue({
+      revision: 3,
+      fixed_page_count: 1,
+      total_page_count: 2,
+      papers: [paper],
+      pdf_base64: 'JVBERi0=',
+    })
+    const { result } = renderHook(() => useIncludedPapersEditor(book), { wrapper })
+
+    await act(() => result.current.previewPackage())
+
+    expect(result.current.dirty).toBe(false)
+    expect(result.current.canSave).toBe(false)
+  })
 })

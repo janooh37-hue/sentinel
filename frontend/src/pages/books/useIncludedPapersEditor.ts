@@ -118,7 +118,7 @@ export function useIncludedPapersEditor(book: IncludedPapersBook): IncludedPaper
     state,
     busy,
     error,
-    canSave: !busy && isPreviewCurrent(state),
+    canSave: !busy && dirty && isPreviewCurrent(state),
     dirty,
     addFiles,
     replacePaper,

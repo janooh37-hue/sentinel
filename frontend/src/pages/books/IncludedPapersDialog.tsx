@@ -6,7 +6,6 @@ import {
   Eye,
   FileStack,
   FileText,
-  GripVertical,
   Info,
   Loader2,
   LockKeyhole,
@@ -296,6 +295,7 @@ function IncludedPapersWorkspace({
                 type="button"
                 size="sm"
                 variant="outline"
+                className="hover:!bg-surface-tinted"
                 onClick={() => addInputRef.current?.click()}
               >
                 <Plus className="h-3.5 w-3.5" strokeWidth={1.8} aria-hidden />
@@ -435,7 +435,7 @@ function IncludedPapersWorkspace({
                         <time
                           dateTime={entry.created_at}
                           className="shrink-0 font-mono text-[0.62em] text-faint"
-                          dir="ltr"
+                          dir={i18n.language.startsWith('ar') ? 'rtl' : 'ltr'}
                         >
                           {new Date(entry.created_at).toLocaleDateString(i18n.language)}
                         </time>
@@ -520,10 +520,22 @@ function IncludedPapersWorkspace({
               </strong>
             </div>
             <div className="grid grid-cols-[auto_1fr_1fr] gap-2">
-              <Button type="button" variant="ghost" onClick={close} disabled={editor.busy}>
+              <Button
+                type="button"
+                variant="ghost"
+                className="hover:!bg-surface-tinted"
+                onClick={close}
+                disabled={editor.busy}
+              >
                 {t('common.cancel', { defaultValue: 'Cancel' })}
               </Button>
-              <Button type="button" variant="outline" onClick={() => void review()} disabled={editor.busy}>
+              <Button
+                type="button"
+                variant="outline"
+                className="hover:!bg-surface-tinted"
+                onClick={() => void review()}
+                disabled={editor.busy || !editor.dirty}
+              >
                 {editor.busy ? (
                   <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
                 ) : (
@@ -585,6 +597,7 @@ function PaperOrderRow({
   const { t } = useTranslation()
   const embedded = paper.embedded_in_signed_base
   const extension = paper.original_name.split('.').pop()?.toUpperCase() || 'FILE'
+  const sizeLabel = formatBytes(paper.size)
   const pageRange =
     paper.page_start != null && paper.page_end != null ? (
       <>
@@ -599,17 +612,10 @@ function PaperOrderRow({
           {paper.page_start === paper.page_end ? '' : `–${paper.page_end}`}
         </bdi>
       </>
-    ) : (
-      t('books.includedPapers.notReviewed', { defaultValue: 'Not reviewed yet' })
-    )
+    ) : null
 
   return (
     <div className="group flex items-center gap-2.5 bg-surface px-3 py-3 transition-colors hover:bg-surface-tinted/45">
-      <GripVertical
-        className={cn('h-4 w-4 shrink-0', embedded ? 'text-faint' : 'text-muted-foreground')}
-        strokeWidth={1.6}
-        aria-hidden
-      />
       <span className="grid h-7 w-7 shrink-0 place-items-center rounded-lg border border-hairline bg-surface-tinted text-xs font-bold text-foreground">
         {number}
       </span>
@@ -624,12 +630,14 @@ function PaperOrderRow({
                   count: paper.page_count,
                   defaultValue: '{{count}} pages',
                 })
-              : pageRange}
+              : t('books.includedPapers.notReviewed', {
+                  defaultValue: 'Not reviewed yet',
+                })}
           </span>
-          {paper.page_count > 0 && <span aria-hidden>·</span>}
-          {paper.page_count > 0 && <span>{pageRange}</span>}
-          {formatBytes(paper.size) && <span aria-hidden>·</span>}
-          {formatBytes(paper.size) && <span dir="ltr">{formatBytes(paper.size)}</span>}
+          {paper.page_count > 0 && pageRange && <span aria-hidden>·</span>}
+          {paper.page_count > 0 && pageRange && <span>{pageRange}</span>}
+          {sizeLabel && <span aria-hidden>·</span>}
+          {sizeLabel && <span dir="ltr">{sizeLabel}</span>}
           <span className="rounded bg-surface-tinted px-1.5 py-0.5 font-mono text-[0.9em] font-semibold text-faint">
             {extension}
           </span>
