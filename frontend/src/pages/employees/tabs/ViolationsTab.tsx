@@ -29,20 +29,26 @@ interface Props {
   onOpenConsumed?: () => void
 }
 
+type ViolationTargetState = {
+  highlightedId: number | null
+  targetNotFoundId: number | null
+}
+
 function useViolationTarget({
   openId,
-  rowIds,
+  targetPresent,
   ready,
   refresh,
   onConsumed,
 }: {
   openId?: number | null
-  rowIds: readonly number[]
+  targetPresent: boolean
   ready: boolean
   refresh?: () => Promise<readonly { id: number }[] | undefined>
   onConsumed?: () => void
-}): number | null {
+}): ViolationTargetState {
   const [highlightedId, setHighlightedId] = useState<number | null>(null)
+  const [targetNotFoundId, setTargetNotFoundId] = useState<number | null>(null)
   const lastHandled = useRef<number | null>(null)
   const pendingId = useRef<number | null>(null)
 
@@ -65,17 +71,19 @@ function useViolationTarget({
         pendingId.current = null
         if (found) {
           setHighlightedId(openId)
+          setTargetNotFoundId(null)
           document
             .querySelector<HTMLElement>(`[data-violation-row-id="${openId}"]`)
             ?.scrollIntoView({ block: 'center' })
+          onConsumed?.()
         } else {
           setHighlightedId(null)
+          setTargetNotFoundId(openId)
         }
-        onConsumed?.()
       })
     }
 
-    const found = rowIds.includes(openId)
+    const found = targetPresent
     if (!found && refresh) {
       pendingId.current = openId
       void refresh().then((refreshedRows) => {
@@ -91,7 +99,7 @@ function useViolationTarget({
       if (frame !== null) cancelAnimationFrame(frame)
       if (pendingId.current === openId) pendingId.current = null
     }
-  }, [openId, onConsumed, ready, refresh, rowIds])
+  }, [openId, onConsumed, ready, refresh, targetPresent])
 
   useEffect(() => {
     if (highlightedId == null) return
@@ -99,16 +107,18 @@ function useViolationTarget({
     return () => window.clearTimeout(timer)
   }, [highlightedId])
 
-  return highlightedId
+  return { highlightedId, targetNotFoundId }
 }
 function ViolationsReadOnly({
   violations,
   totalCount,
   highlightedId,
+  targetNotFound,
 }: {
   violations: RecentViolationRead[]
   totalCount?: number
   highlightedId: number | null
+  targetNotFound: boolean
 }): React.JSX.Element {
   const { t, i18n } = useTranslation()
   const dateFmt = useMemo(
@@ -122,6 +132,13 @@ function ViolationsReadOnly({
   )
   const isPartial = totalCount !== undefined && violations.length < totalCount
 
+  if (targetNotFound) {
+    return (
+      <div role="alert" className="rounded-2xl border border-destructive/30 bg-surface p-4 text-destructive">
+        {t('employee.violations.targetNotFound')}
+      </div>
+    )
+  }
   if (violations.length === 0) {
     return (
       <div className="rounded-2xl bg-surface p-12 text-center text-muted-foreground">
@@ -140,7 +157,7 @@ function ViolationsReadOnly({
             data-highlighted={highlightedId === v.id ? 'true' : 'false'}
             className={cn(
               'grid grid-cols-[120px_140px_1fr_100px] items-center gap-4 border-b border-hairline px-4 py-2.5 last:border-b-0',
-              highlightedId === v.id && 'bg-primary-soft ring-1 ring-inset ring-primary/30',
+              highlightedId === v.id && 'bg-primary-soft ring-2 ring-inset ring-primary',
             )}
           >
             <div className="font-mono text-[0.86em] text-muted-foreground">
@@ -173,10 +190,12 @@ function ViolationsManage({
   employeeId,
   rows,
   highlightedId,
+  targetNotFound,
 }: {
   employeeId: string
   rows: ViolationRead[]
   highlightedId: number | null
+  targetNotFound: boolean
 }): React.JSX.Element {
   const { t } = useTranslation()
   const qc = useQueryClient()
@@ -213,6 +232,7 @@ function ViolationsManage({
     <ViolationsTable
       rows={rows}
       highlightedId={highlightedId}
+      targetNotFound={targetNotFound}
       employeeId={employeeId}
       onCreate={async (v) => {
         await createMut.mutateAsync(v)
@@ -232,6 +252,7 @@ export function ViolationsTab({
   onOpenConsumed,
 }: Props): React.JSX.Element {
   const { has } = useCapabilities()
+  const { t } = useTranslation()
   const canManage = has('violations.manage')
   const shouldLoadFull = canManage || openId != null
   const fullQuery = useQuery({
@@ -239,35 +260,37 @@ export function ViolationsTab({
     queryFn: () => api.listViolations(employeeId),
     enabled: shouldLoadFull,
   })
+  const { refetch: refetchFull } = fullQuery
   const refreshFull = useCallback(async () => {
     try {
-      const result = await fullQuery.refetch()
+      const result = await refetchFull()
       return result.isError ? undefined : result.data
     } catch {
       return undefined
     }
-  }, [fullQuery.refetch])
+  }, [refetchFull])
   const rows = fullQuery.data ?? violations
   const manageRows = fullQuery.data ?? []
   const targetReady =
     !shouldLoadFull ||
     (!fullQuery.isError &&
       (fullQuery.data !== undefined || (!fullQuery.isPending && !fullQuery.isError)))
-  const rowIds = useMemo(() => rows.map((row) => row.id), [rows])
-  const highlightedId = useViolationTarget({
+  const targetPresent = openId != null && rows.some((row) => row.id === openId)
+  const { highlightedId, targetNotFoundId } = useViolationTarget({
     openId,
-    rowIds,
+    targetPresent,
     ready: targetReady,
     refresh: shouldLoadFull ? refreshFull : undefined,
     onConsumed: onOpenConsumed,
   })
+  const targetNotFound = openId != null && targetNotFoundId === openId
 
   if (shouldLoadFull && fullQuery.isError && (openId != null || fullQuery.data === undefined)) {
     return (
       <div className="space-y-3 rounded-2xl border border-destructive/30 bg-surface p-6 text-destructive">
         <p role="alert">{apiErrorMessage(fullQuery.error)}</p>
         <button type="button" className="underline" onClick={() => void fullQuery.refetch()}>
-          Retry
+          {t('common.retry')}
         </button>
       </div>
     )
@@ -279,6 +302,7 @@ export function ViolationsTab({
         employeeId={employeeId}
         rows={manageRows}
         highlightedId={highlightedId}
+        targetNotFound={targetNotFound}
       />
     )
   }
@@ -287,6 +311,7 @@ export function ViolationsTab({
       violations={rows}
       totalCount={totalCount}
       highlightedId={highlightedId}
+      targetNotFound={targetNotFound}
     />
   )
 }

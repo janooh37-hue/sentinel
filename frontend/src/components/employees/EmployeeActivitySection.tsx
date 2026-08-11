@@ -8,7 +8,7 @@ import { pickEmployeeName } from '@/lib/employeeName'
 
 const PAGE_SIZE = 25
 
-export function activityHref(item: EmployeeActivityItemRead): string {
+function activityHref(item: EmployeeActivityItemRead): string {
   switch (item.kind) {
     case 'document':
       return `/books?open=${item.target_id}`
@@ -57,9 +57,23 @@ export function EmployeeActivitySection({ onOpenProfile }: EmployeeActivitySecti
     () => new Intl.DateTimeFormat(lang, { dateStyle: 'medium', timeStyle: 'short' }),
     [lang],
   )
-  const items = activityQuery.data?.pages.flatMap((page) => page.items) ?? []
-  const total = activityQuery.data?.pages[0]?.total ?? 0
+  const pages = activityQuery.data?.pages
+  const items = useMemo(() => pages?.flatMap((page) => page.items) ?? [], [pages])
+  const total = pages?.[0]?.total ?? 0
   const filtered = employee != null || kind !== 'all'
+  const dayGroups = useMemo(() => {
+    const groups: Array<{ day: string; items: EmployeeActivityItemRead[] }> = []
+    for (const item of items) {
+      const day = dayFormatter.format(new Date(item.occurred_at))
+      const last = groups[groups.length - 1]
+      if (last?.day === day) {
+        last.items.push(item)
+      } else {
+        groups.push({ day, items: [item] })
+      }
+    }
+    return groups
+  }, [dayFormatter, items])
 
   function removeDestinationCache(employeeId: string | null, nextKind: EmployeeActivityKind | 'all'): void {
     queryClient.removeQueries({
@@ -147,7 +161,7 @@ export function EmployeeActivitySection({ onOpenProfile }: EmployeeActivitySecti
             <button
               type="button"
               onClick={() => void activityQuery.refetch()}
-              className="mt-4 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-white hover:bg-primary-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+              className="mt-4 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground hover:bg-primary-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
             >
               {t('employees.activity.retry')}
             </button>
@@ -174,27 +188,35 @@ export function EmployeeActivitySection({ onOpenProfile }: EmployeeActivitySecti
         {!activityQuery.isPending && !activityQuery.isError && items.length > 0 && (
           <>
             <div className="overflow-hidden rounded-2xl border border-border bg-surface">
-              <div className="hidden grid-cols-[minmax(160px,1fr)_minmax(180px,1.2fr)_minmax(150px,1fr)_minmax(130px,1fr)_minmax(160px,1fr)_minmax(150px,1fr)] gap-4 border-b border-hairline px-5 py-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground md:grid">
+              <div className="hidden grid-cols-[minmax(160px,1fr)_minmax(180px,1.2fr)_minmax(150px,1fr)_minmax(130px,1fr)_minmax(150px,1fr)_minmax(160px,1fr)] gap-4 border-b border-hairline px-5 py-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground xl:grid">
                 <span>{t('employees.activity.employee')}</span>
                 <span>{t('employees.activity.activity')}</span>
                 <span>{t('employees.activity.type')}</span>
                 <span>{t('employees.activity.reference')}</span>
-                <span>{t('employees.activity.destination')}</span>
                 <span>{t('employees.activity.dateTime')}</span>
+                <span>{t('employees.activity.destination')}</span>
               </div>
-              {items.map((item) => <ActivityRow key={`${item.kind}-${item.source_id}`} item={item} lang={lang} dayFormatter={dayFormatter} dateTimeFormatter={dateTimeFormatter} t={t} />)}
+              {dayGroups.map((group) => (
+                <div key={group.day}>
+                  <h3 className="border-b border-hairline bg-surface-raised px-5 py-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                    {group.day}
+                  </h3>
+                  {group.items.map((item) => (
+                    <ActivityRow key={`${item.kind}-${item.source_id}`} item={item} lang={lang} dayFormatter={dayFormatter} dateTimeFormatter={dateTimeFormatter} t={t} />
+                  ))}
+                </div>
+              ))}
+              {activityQuery.hasNextPage && (
+                <button
+                  type="button"
+                  onClick={() => void activityQuery.fetchNextPage()}
+                  disabled={activityQuery.isFetchingNextPage}
+                  className="mx-auto mt-6 block w-full rounded-lg border border-border px-4 py-2 text-sm font-semibold text-foreground hover:bg-surface-raised focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary disabled:cursor-wait disabled:opacity-60 md:w-auto"
+                >
+                  {t('employees.activity.loadMore')}
+                </button>
+              )}
             </div>
-            
-            {activityQuery.hasNextPage && (
-              <button
-                type="button"
-                onClick={() => void activityQuery.fetchNextPage()}
-                disabled={activityQuery.isFetchingNextPage}
-                className="mx-auto mt-6 block rounded-lg border border-border px-4 py-2 text-sm font-semibold text-foreground hover:bg-surface-raised focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:cursor-wait disabled:opacity-60"
-              >
-                {t('employees.activity.loadMore')}
-              </button>
-            )}
           </>
         )}
       </div>
@@ -231,22 +253,22 @@ function ActivityRow({ item, lang, dayFormatter, dateTimeFormatter, t }: Activit
       to={activityHref(item)}
       className="group block border-b border-hairline px-5 py-4 last:border-b-0 hover:bg-surface-raised focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary"
     >
-      <div className="md:grid md:grid-cols-[minmax(160px,1fr)_minmax(180px,1.2fr)_minmax(150px,1fr)_minmax(130px,1fr)_minmax(160px,1fr)_minmax(150px,1fr)] md:items-center md:gap-4">
-        <div className="min-w-0">
+      <div className="grid grid-cols-2 gap-x-4 gap-y-3 xl:grid-cols-[minmax(160px,1fr)_minmax(180px,1.2fr)_minmax(150px,1fr)_minmax(130px,1fr)_minmax(150px,1fr)_minmax(160px,1fr)] xl:items-center xl:gap-4">
+        <div className="order-1 min-w-0 xl:order-1 xl:col-span-1">
           <p dir="auto" className="truncate text-sm font-semibold text-foreground">{employeeName}</p>
           <p dir="auto" className="mt-1 font-mono tabular-nums text-xs text-muted-foreground">{item.employee_id}</p>
         </div>
-        <div className="mt-3 min-w-0 md:mt-0">
+        <div className="order-2 col-start-2 row-start-1 min-w-0 text-xs text-muted-foreground xl:order-5 xl:col-start-auto xl:row-start-auto">
+          <span className="sr-only">{dayFormatter.format(date)} · </span>{dateTimeFormatter.format(date)}
+        </div>
+        <div className="order-3 col-span-2 min-w-0 xl:order-2 xl:col-span-1">
           <p dir="auto" className="truncate text-sm font-semibold text-foreground">{item.title}</p>
           <p dir="auto" className="mt-1 truncate text-xs text-muted-foreground">{action}</p>
           {item.detail && <p dir="auto" className="mt-1 truncate text-xs text-muted-foreground">{item.detail}</p>}
         </div>
-        <div className="mt-3 text-xs text-muted-foreground md:mt-0">{t(`employees.activity.${item.kind}`)}</div>
-        <div dir="auto" className="mt-3 font-mono tabular-nums text-xs text-muted-foreground md:mt-0">{item.reference}</div>
-        <div className="mt-3 text-sm font-semibold text-primary md:mt-0">{t(destinationKey)}</div>
-        <div className="mt-3 text-xs text-muted-foreground md:mt-0">
-          <span className="sr-only">{dayFormatter.format(date)} · </span>{dateTimeFormatter.format(date)}
-        </div>
+        <div className="order-4 col-span-2 text-xs text-muted-foreground xl:order-3 xl:col-span-1">{t(`employees.activity.${item.kind}`)}</div>
+        <div dir="auto" className="order-5 col-span-2 font-mono tabular-nums text-xs text-muted-foreground xl:order-4 xl:col-span-1">{item.reference}</div>
+        <div className="order-6 col-span-2 text-sm font-semibold text-primary-on-soft xl:order-6 xl:col-span-1">{t(destinationKey)}</div>
       </div>
     </Link>
   )

@@ -4,9 +4,16 @@ import type { ReactNode } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const capabilityState = vi.hoisted(() => ({ canManage: false }))
+const translationState = vi.hoisted(() => ({ language: 'en' }))
 
 vi.mock('react-i18next', () => ({
-  useTranslation: () => ({ t: (key: string) => key, i18n: { language: 'en' } }),
+  useTranslation: () => ({
+    t: (key: string) => {
+      if (key === 'common.retry') return translationState.language === 'ar' ? 'إعادة المحاولة' : 'Retry'
+      return key
+    },
+    i18n: { language: translationState.language },
+  }),
 }))
 vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }))
 vi.mock('@/lib/useCapabilities', () => ({
@@ -79,7 +86,9 @@ function wrap(ui: ReactNode) {
 }
 
 beforeEach(() => {
+  vi.clearAllMocks()
   capabilityState.canManage = false
+  translationState.language = 'en'
   vi.mocked(api.listViolations).mockResolvedValue(fullRows)
   globalThis.requestAnimationFrame = (callback: FrameRequestCallback) => {
     callback(0)
@@ -111,6 +120,8 @@ describe('ViolationsTab deep-link targeting', () => {
     const row = await screen.findByTestId('violation-row-42')
     await waitFor(() => expect(row.scrollIntoView).toHaveBeenCalled())
     expect(row).toHaveAttribute('data-highlighted', 'true')
+    expect(row).toHaveClass('ring-2', 'ring-inset', 'ring-primary')
+    expect(row).not.toHaveClass('ring-1', 'ring-primary/30')
     expect(onConsumed).toHaveBeenCalledOnce()
   })
 
@@ -130,7 +141,7 @@ describe('ViolationsTab deep-link targeting', () => {
     expect(onConsumed).toHaveBeenCalledOnce()
   })
 
-  it('consumes a missing id only after rows are ready without targeting another row', async () => {
+  it('shows localized not-found treatment for a missing target after refresh without consuming or falling back', async () => {
     const onConsumed = vi.fn()
     wrap(
       <ViolationsTab
@@ -140,10 +151,11 @@ describe('ViolationsTab deep-link targeting', () => {
         onOpenConsumed={onConsumed}
       />,
     )
-    await screen.findByTestId('violation-row-42')
-    await waitFor(() => expect(onConsumed).toHaveBeenCalledOnce())
-    expect(screen.getByTestId('violation-row-41')).toHaveAttribute('data-highlighted', 'false')
-    expect(screen.getByTestId('violation-row-42')).toHaveAttribute('data-highlighted', 'false')
+    await waitFor(() => expect(api.listViolations).toHaveBeenCalledTimes(2))
+    expect(await screen.findByText('employee.violations.targetNotFound')).toBeInTheDocument()
+    expect(screen.queryByTestId('violation-row-41')).not.toBeInTheDocument()
+    expect(screen.queryByTestId('violation-row-42')).not.toBeInTheDocument()
+    expect(onConsumed).not.toHaveBeenCalled()
   })
   it('refreshes cached full rows before consuming an absent target', async () => {
     const onConsumed = vi.fn()
@@ -183,6 +195,17 @@ describe('ViolationsTab deep-link targeting', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent('refresh failed')
     expect(onConsumed).not.toHaveBeenCalled()
     expect(screen.getByText('Retry')).toBeInTheDocument()
+  })
+  it('renders the Arabic common.retry label for a load-error action', async () => {
+    translationState.language = 'ar'
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    vi.mocked(api.listViolations).mockRejectedValue(new Error('load failed'))
+    render(
+      <QueryClientProvider client={client}>
+        <ViolationsTab employeeId="G100" violations={snapshotRows} openId={42} />
+      </QueryClientProvider>,
+    )
+    expect(await screen.findByRole('button', { name: 'إعادة المحاولة' })).toBeInTheDocument()
   })
 
   it('keeps cached manage rows and controls after a background refresh error', async () => {
@@ -245,7 +268,7 @@ describe('ViolationsTab deep-link targeting', () => {
     expect(onRetriedConsumed).toHaveBeenCalledOnce()
   })
 
-  it('clears an old highlight when a subsequent target is absent', async () => {
+  it('clears an old highlight when a subsequent target is absent without consuming it', async () => {
     const onConsumed = vi.fn()
     const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
     const view = render(
@@ -260,6 +283,7 @@ describe('ViolationsTab deep-link targeting', () => {
     )
     const row = await screen.findByTestId('violation-row-42')
     await waitFor(() => expect(row).toHaveAttribute('data-highlighted', 'true'))
+    await waitFor(() => expect(onConsumed).toHaveBeenCalledOnce())
 
     view.rerender(
       <QueryClientProvider client={client}>
@@ -271,7 +295,8 @@ describe('ViolationsTab deep-link targeting', () => {
         />
       </QueryClientProvider>,
     )
-    await waitFor(() => expect(onConsumed).toHaveBeenCalledTimes(2))
-    expect(row).toHaveAttribute('data-highlighted', 'false')
+    expect(await screen.findByText('employee.violations.targetNotFound')).toBeInTheDocument()
+    expect(onConsumed).toHaveBeenCalledOnce()
+    expect(screen.queryByTestId('violation-row-42')).not.toBeInTheDocument()
   })
 })

@@ -1,5 +1,6 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { render, screen, waitFor } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { MemoryRouter, useLocation } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { LedgerEntryRead, LedgerListItem } from '@/lib/api'
@@ -98,12 +99,17 @@ describe('LedgerOutlookShell activity deep links', () => {
     expect(screen.getByTestId('location')).toHaveTextContent('?keep=1')
   })
 
-  it('keeps open and selection unchanged when exact target hydration fails', async () => {
+  it('renders an exact-target error and retries without consuming open', async () => {
     vi.mocked(api.listLedger).mockResolvedValue({ items: [entry(7)], total: 1, limit: 500, offset: 0 })
-    vi.mocked(api.getLedgerEntry).mockRejectedValue(new Error('not found'))
+    vi.mocked(api.getLedgerEntry)
+      .mockRejectedValueOnce(new Error('not found'))
+      .mockResolvedValueOnce(entry(42) as unknown as LedgerEntryRead)
     renderShell('/ledger?open=42&keep=1')
-    await waitFor(() => expect(api.getLedgerEntry).toHaveBeenCalledWith(42))
-    expect(screen.getByTestId('reading-pane')).toHaveTextContent('none')
+    const retry = await screen.findByRole('button', { name: 'common.retry' })
+    expect(screen.getByRole('alert')).toHaveTextContent('common.loadError')
     expect(screen.getByTestId('location')).toHaveTextContent('?open=42&keep=1')
+    await userEvent.click(retry)
+    await waitFor(() => expect(screen.getByTestId('reading-pane')).toHaveTextContent('42'))
+    expect(screen.getByTestId('location')).toHaveTextContent('?keep=1')
   })
 })

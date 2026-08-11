@@ -12,6 +12,8 @@ import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi, beforeEach } from 'vitest'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 
+const scrollIntoView = vi.fn()
+
 // ─── Mocks ───────────────────────────────────────────────────────────────────
 
 // Mock the api module so nothing calls the real backend.
@@ -66,13 +68,13 @@ vi.mock('@/components/employees/LookupHeroCards', () => ({
   ),
 }))
 
-// Mock EmployeeForm to keep the test light — just render a marker div.
+// Mock EmployeeForm to keep the test light while preserving its first focus target.
 vi.mock('@/components/employees/EmployeeForm', () => ({
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  EmployeeForm: ({ mode }: { mode: string; [k: string]: any }) => (
-    <div data-testid="employee-form" data-mode={mode}>
-      employee-form
-    </div>
+  EmployeeForm: ({ mode }: { mode: string }) => (
+    <form data-testid="employee-form" data-mode={mode}>
+      <label htmlFor="first-create-field">First create field</label>
+      <input id="first-create-field" />
+    </form>
   ),
 }))
 vi.mock('@/components/employees/EmployeeActivitySection', () => ({
@@ -134,6 +136,8 @@ function setup(
 describe('EmployeeLookupPage', () => {
   beforeEach(() => {
     localStorage.clear()
+    scrollIntoView.mockClear()
+    Element.prototype.scrollIntoView = scrollIntoView
   })
 
   it('navigates to the employee profile when a search result is selected', async () => {
@@ -145,15 +149,14 @@ describe('EmployeeLookupPage', () => {
     })
   })
 
-  it('renders the create form when location.state has openCreate: true', async () => {
+  it('keeps activity before the create form and scrolls the form into view', async () => {
     setup('/employees', { openCreate: true })
-    // The EmployeeForm mock renders a div with data-testid="employee-form"
-    await waitFor(() => {
-      expect(screen.getByTestId('employee-form')).toBeInTheDocument()
-    })
-    expect(screen.getByTestId('employee-form').getAttribute('data-mode')).toBe(
-      'create',
-    )
+    const form = await screen.findByTestId('employee-form')
+    const activity = screen.getByTestId('employee-activity')
+    expect(form).toHaveAttribute('data-mode', 'create')
+    expect(activity.compareDocumentPosition(form) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    await waitFor(() => expect(scrollIntoView).toHaveBeenCalledWith({ block: 'start' }))
+    expect(screen.getByRole('textbox', { name: 'First create field' })).toHaveFocus()
   })
 
   it('replace-navigates to the profile and clears localStorage when gssg.employees.openId is set', async () => {

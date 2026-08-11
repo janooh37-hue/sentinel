@@ -362,16 +362,16 @@
       "loading": "Loading recent activity",
       "showing": "Showing {{shown}} of {{total}} recent entries",
       "empty": "No recent employee activity.",
-      "emptyFiltered": "No activity matches this employee and activity type.",
+      "emptyFiltered": "No activity matches the current filters.",
       "clearFilters": "Clear filters",
       "loadError": "Recent activity could not be loaded.",
       "lookupError": "Employees could not be searched.",
       "retry": "Retry",
       "actions": {
-        "document": "Generated {{title}}",
-        "leave": "{{title}} · {{days}} days",
-        "violation": "Recorded {{title}}",
-        "ledger": "{{title}}"
+        "document": "Generated document",
+        "leave": "Leave record · {{days}} days",
+        "violation": "Recorded violation",
+        "ledger": "Recorded correspondence"
       }
     }
   },
@@ -392,6 +392,7 @@
     },
     "confirmDelete": "Delete this violation?",
     "empty": "No violations recorded",
+    "targetNotFound": "Violation record not found.",
     "toast": {
       "created": "Violation logged",
       "updated": "Violation updated",

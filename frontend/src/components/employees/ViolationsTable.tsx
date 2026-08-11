@@ -38,6 +38,7 @@ interface Props {
   rows: ViolationRead[]
   employeeId: string
   highlightedId?: number | null
+  targetNotFound: boolean
   onCreate: (v: ViolationCreate) => Promise<void>
   onUpdate: (id: number, v: ViolationUpdate) => Promise<void>
   onDelete: (id: number) => Promise<void>
@@ -47,6 +48,7 @@ export function ViolationsTable({
   rows,
   employeeId,
   highlightedId,
+  targetNotFound,
   onCreate,
   onUpdate,
   onDelete,
@@ -55,6 +57,13 @@ export function ViolationsTable({
   const [adding, setAdding] = useState(false)
   const [editingId, setEditingId] = useState<number | null>(null)
   const [deletingId, setDeletingId] = useState<number | null>(null)
+  if (targetNotFound) {
+    return (
+      <div role="alert" className="rounded-2xl border border-destructive/30 bg-surface p-4 text-destructive">
+        {t('employee.violations.targetNotFound')}
+      </div>
+    )
+  }
 
   return (
     <Card>
@@ -120,7 +129,7 @@ export function ViolationsTable({
                     data-violation-row-id={row.id}
                     data-highlighted={highlightedId === row.id ? 'true' : 'false'}
                     className={cn(
-                      highlightedId === row.id && 'bg-primary-soft ring-1 ring-inset ring-primary/30',
+                      highlightedId === row.id && 'bg-primary-soft ring-2 ring-inset ring-primary',
                     )}
                   >
                     <TableCell className="max-w-[260px]">

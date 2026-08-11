@@ -3,7 +3,7 @@
  *
  * State A composition:
  *   • EmployeeSearchHero (navy band) with LookupHeroCards as children
- *   • When creating, an inline EmployeeForm card renders below the band.
+ *   • Recent activity, followed by the inline EmployeeForm card when creating.
  *
  * Cross-page handoffs (both ported verbatim from the old EmployeesPage):
  *   • Smart-link: Ledger stashes a G-number at `gssg.employees.openId` → on
@@ -13,7 +13,7 @@
  */
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { toast } from 'sonner'
@@ -48,6 +48,17 @@ export function EmployeeLookupPage(): React.JSX.Element {
   const [createInjection, setCreateInjection] = useState<
     ExtractionResponse | undefined
   >(() => intakeState?.injectedExtraction)
+  const createFormRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (!creating || !createFormRef.current) return
+    createFormRef.current.scrollIntoView({ block: 'start' })
+    createFormRef.current
+      .querySelector<HTMLElement>(
+        'input:not([type="hidden"]):not([disabled]), select:not([disabled]), textarea:not([disabled]), button:not([disabled])',
+      )
+      ?.focus({ preventScroll: true })
+  }, [creating])
 
   // Clear history state once on mount so refresh doesn't re-trigger.
   useEffect(() => {
@@ -136,8 +147,9 @@ export function EmployeeLookupPage(): React.JSX.Element {
           navigate(`/employees/${encodeURIComponent(employeeId)}`)
         }
       />
+
       {creating && (
-        <div className="mx-auto w-full max-w-[1180px] flex-1 px-4 pb-10 pt-6 md:px-8">
+        <div ref={createFormRef} className="mx-auto w-full max-w-[1180px] flex-1 px-4 pb-10 pt-6 md:px-8">
           <div className="rounded-2xl border border-hairline bg-surface p-6">
             {createError && (
               <div

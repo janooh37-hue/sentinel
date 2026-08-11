@@ -1,6 +1,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import { useState } from 'react'
 import { describe, expect, it, beforeEach, afterEach, vi } from 'vitest'
 import i18n from 'i18next'
 import ar from '@/locales/ar.json'
@@ -47,6 +48,20 @@ function lookup(overrides: Partial<React.ComponentProps<typeof EmployeeActivityL
     />
   )
 }
+function statefulLookup(initialSelected: EmployeeListItem | null = null) {
+  function StatefulLookup(): React.JSX.Element {
+    const [selected, setSelected] = useState<EmployeeListItem | null>(initialSelected)
+    return (
+      <EmployeeActivityLookup
+        selected={selected}
+        onSelect={setSelected}
+        onClear={() => setSelected(null)}
+        onOpenProfile={() => {}}
+      />
+    )
+  }
+  return <StatefulLookup />
+}
 
 describe('EmployeeActivityLookup', () => {
   beforeEach(() => {
@@ -88,13 +103,65 @@ describe('EmployeeActivityLookup', () => {
     await userEvent.click(screen.getByRole('button', { name: /clear employee filter/i }))
     expect(onClear).toHaveBeenCalledOnce()
   })
-
   it('renders localized selected identity and position', async () => {
+    i18n.addResourceBundle('ar', 'translation', ar, true, true)
     await i18n.changeLanguage('ar')
     wrap(lookup({ selected: abdulla }))
     expect(screen.getByText('عبدالله العبري')).toBeInTheDocument()
     expect(screen.getByText('ضابط')).toBeInTheDocument()
     expect(screen.getByText('G3190')).toBeInTheDocument()
+  })
+  it('localizes match name, position, and StatusPill for ar-AE', async () => {
+    i18n.addResourceBundle('ar', 'translation', ar, true, true)
+    await i18n.changeLanguage('ar-AE')
+    wrap(lookup())
+    await userEvent.type(screen.getByRole('searchbox'), 'Abdulla')
+    const list = await screen.findByRole('list')
+    expect(await within(list).findByText('عبدالله العبري')).toBeInTheDocument()
+    expect(await within(list).findByText('ضابط')).toBeInTheDocument()
+    const status = await within(list).findByText('نشط')
+    expect(status).toHaveClass('bg-success-soft', 'text-success')
+  })
+
+  it('keeps the lookup input operable after Show activity and returns focus to it', async () => {
+    wrap(statefulLookup())
+    await userEvent.type(screen.getByRole('searchbox'), 'Abdulla')
+    await userEvent.click(await screen.findByRole('button', { name: /show activity/i }))
+    expect(screen.queryByRole('list')).not.toBeInTheDocument()
+    const input = await screen.findByRole('searchbox')
+    expect(input).toHaveFocus()
+    expect(input).toHaveValue('')
+  })
+
+  it('starts a fresh full-query lookup when typing after selection', async () => {
+    wrap(statefulLookup())
+    await userEvent.type(screen.getByRole('searchbox'), 'Abdulla')
+    await userEvent.click(await screen.findByRole('button', { name: /show activity/i }))
+    const input = await screen.findByRole('searchbox')
+    vi.mocked(api.listEmployees).mockClear()
+    await userEvent.type(input, 'G3190')
+    await waitFor(() => {
+      expect(api.listEmployees).toHaveBeenLastCalledWith({ q: 'G3190', limit: 8 })
+    })
+    expect(vi.mocked(api.listEmployees).mock.calls.map(([params]) => params.q)).toEqual(['G3190'])
+  })
+
+  it('clears the selected employee, restores all activity, and focuses the input', async () => {
+    wrap(statefulLookup(abdulla))
+    await userEvent.click(screen.getByRole('button', { name: /clear employee filter/i }))
+    const input = await screen.findByRole('searchbox')
+    expect(input).toHaveFocus()
+    expect(input).toHaveValue('')
+  })
+  it('removes stale lookup results immediately when Clear follows a new lookup', async () => {
+    wrap(statefulLookup())
+    await userEvent.type(screen.getByRole('searchbox'), 'Abdulla')
+    await userEvent.click(await screen.findByRole('button', { name: /show activity/i }))
+    const input = await screen.findByRole('searchbox')
+    await userEvent.type(input, 'G3190')
+    await screen.findByRole('list')
+    await userEvent.click(screen.getByRole('button', { name: /clear employee filter/i }))
+    expect(screen.queryByRole('list')).not.toBeInTheDocument()
   })
 
   it('renders Arabic label and placeholder from the real locale resource', async () => {

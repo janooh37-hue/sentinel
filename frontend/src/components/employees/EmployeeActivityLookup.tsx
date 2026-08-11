@@ -1,8 +1,9 @@
-import { useEffect, useRef, useState } from 'react'
+import { useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useQuery } from '@tanstack/react-query'
 import { api, type EmployeeListItem } from '@/lib/api'
 import { pickEmployeeName } from '@/lib/employeeName'
+import { StatusPill } from './StatusPill'
 import { pickPosition } from '@/lib/employeePosition'
 import { useDebouncedValue } from '@/lib/useDebouncedValue'
 
@@ -20,28 +21,25 @@ export function EmployeeActivityLookup({
   onOpenProfile,
 }: Props): React.JSX.Element {
   const { t, i18n } = useTranslation()
-  const lang = i18n.language
+  const lang = i18n.language.startsWith('ar') ? 'ar' : 'en'
   const [query, setQuery] = useState('')
+  const normalizedQuery = query.trim()
   const debounced = useDebouncedValue(query, 250).trim()
-  const [popupOpen, setPopupOpen] = useState(false)
+  const [dismissedQuery, setDismissedQuery] = useState<string | null>(null)
   const inputRef = useRef<HTMLInputElement>(null)
   const showRefs = useRef<Array<HTMLButtonElement | null>>([])
 
   const { data, isPending, isError } = useQuery({
     queryKey: ['employee-activity-lookup', debounced],
     queryFn: () => api.listEmployees({ q: debounced, limit: 8 }),
-    enabled: selected == null && debounced.length > 0,
+    enabled: debounced.length > 0,
     staleTime: 30_000,
   })
-
   const items = data?.items ?? []
-
-  useEffect(() => {
-    setPopupOpen(selected == null && debounced.length > 0)
-  }, [debounced, selected])
+  const popupOpen = normalizedQuery.length > 0 && normalizedQuery === debounced && dismissedQuery !== debounced
 
   function closePopup(): void {
-    setPopupOpen(false)
+    setDismissedQuery(debounced)
     inputRef.current?.focus()
   }
 
@@ -77,15 +75,24 @@ export function EmployeeActivityLookup({
 
   function selectEmployee(employee: EmployeeListItem): void {
     setQuery('')
-    setPopupOpen(false)
+    setDismissedQuery(debounced)
     onSelect(employee)
+    inputRef.current?.focus()
   }
 
-  if (selected != null) {
-    const selectedPosition = pickPosition(selected, lang)
-    return (
-      <section aria-label={t('employees.activity.lookupLabel')} className="rounded-2xl border border-border bg-surface p-4 text-foreground">
-        <div className="flex flex-wrap items-center gap-3">
+  function clearEmployee(): void {
+    setQuery('')
+    setDismissedQuery(debounced)
+    onClear()
+    inputRef.current?.focus()
+  }
+
+  const selectedPosition = selected == null ? null : pickPosition(selected, lang)
+
+  return (
+    <section aria-label={t('employees.activity.lookupLabel')} className="rounded-2xl border border-border bg-surface p-4 text-foreground">
+      {selected != null && (
+        <div className="mb-3 flex flex-wrap items-center gap-3">
           <div className="min-w-0 flex-1">
             <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
               {t('employees.activity.lookupLabel')}
@@ -106,94 +113,96 @@ export function EmployeeActivityLookup({
             </button>
             <button
               type="button"
-              onClick={onClear}
+              onClick={clearEmployee}
               className="rounded-lg border border-border px-3 py-2 text-sm font-semibold hover:bg-surface-raised focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
             >
               {t('employees.activity.clearEmployee')}
             </button>
           </div>
         </div>
-      </section>
-    )
-  }
-
-  return (
-    <div className="relative text-start">
-      <label htmlFor="employee-activity-lookup" className="sr-only">
-        {t('employees.activity.lookupLabel')}
-      </label>
-      <input
-        ref={inputRef}
-        id="employee-activity-lookup"
-        type="search"
-        role="searchbox"
-        value={query}
-        onChange={(event) => setQuery(event.target.value)}
-        onKeyDown={handleInputKeyDown}
-        placeholder={t('employees.activity.lookupPlaceholder')}
-        aria-expanded={popupOpen}
-        aria-controls="employee-activity-lookup-results"
-        autoComplete="off"
-        className="w-full rounded-xl border border-border bg-surface px-4 py-3 text-sm text-foreground outline-none placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-primary"
-      />
-
-      {popupOpen && (
-        <ul
-          id="employee-activity-lookup-results"
-          role="list"
-          aria-label={t('employees.activity.matches')}
-          className="absolute inset-x-0 top-[calc(100%+8px)] z-20 max-h-[min(55vh,480px)] overflow-y-auto rounded-xl border border-border bg-surface text-foreground shadow-lg"
-        >
-          {isPending && (
-            <li className="px-4 py-3 text-sm text-muted-foreground" role="status">
-              {t('employees.activity.lookupLoading')}
-            </li>
-          )}
-          {isError && (
-            <li className="px-4 py-3 text-sm text-destructive" role="alert">
-              {t('employees.activity.lookupError')}
-            </li>
-          )}
-          {!isPending && !isError && items.length === 0 && (
-            <li className="px-4 py-3 text-sm text-muted-foreground">
-              {t('employees.activity.lookupEmpty')}
-            </li>
-          )}
-          {!isPending && !isError && items.map((employee, index) => {
-            const position = pickPosition(employee, lang)
-            return (
-              <li key={employee.id} className="flex items-center gap-3 border-b border-hairline px-4 py-3 last:border-b-0">
-                <div className="min-w-0 flex-1">
-                  <p dir="auto" className="truncate text-sm font-semibold">{pickEmployeeName(employee, lang)}</p>
-                  <p className="mt-0.5 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-                    <span dir="auto" className="font-mono">{employee.id}</span>
-                    {position && <span dir="auto">{position}</span>}
-                  </p>
-                </div>
-                <div className="flex shrink-0 gap-2">
-                  <button
-                    ref={(button) => { showRefs.current[index] = button }}
-                    type="button"
-                    onClick={() => selectEmployee(employee)}
-                    onKeyDown={(event) => handleShowKeyDown(event, index)}
-                    className="rounded-lg bg-primary px-3 py-2 text-xs font-semibold text-white hover:bg-primary-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-                  >
-                    {t('employees.activity.showActivity')}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => onOpenProfile(employee.id)}
-                    onKeyDown={handlePopupActionKeyDown}
-                    className="rounded-lg border border-border px-3 py-2 text-xs font-semibold hover:bg-surface-raised focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-                  >
-                    {t('employees.activity.openProfile')}
-                  </button>
-                </div>
-              </li>
-            )
-          })}
-        </ul>
       )}
-    </div>
+
+      <div className="relative text-start">
+        <label htmlFor="employee-activity-lookup" className="sr-only">
+          {t('employees.activity.lookupLabel')}
+        </label>
+        <input
+          ref={inputRef}
+          id="employee-activity-lookup"
+          type="search"
+          role="searchbox"
+          value={query}
+          onChange={(event) => {
+            setQuery(event.target.value)
+            setDismissedQuery(null)
+          }}
+          onKeyDown={handleInputKeyDown}
+          placeholder={t('employees.activity.lookupPlaceholder')}
+          aria-expanded={popupOpen}
+          aria-controls="employee-activity-lookup-results"
+          autoComplete="off"
+          className="w-full rounded-xl border border-border bg-background px-4 py-3 text-sm text-foreground outline-none placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-primary"
+        />
+
+        {popupOpen && (
+          <ul
+            id="employee-activity-lookup-results"
+            role="list"
+            aria-label={t('employees.activity.matches')}
+            className="absolute inset-x-0 top-[calc(100%+8px)] z-20 max-h-[min(55vh,480px)] overflow-y-auto rounded-xl border border-border bg-surface text-foreground shadow-lg"
+          >
+            {isPending && (
+              <li className="px-4 py-3 text-sm text-muted-foreground" role="status">
+                {t('employees.activity.lookupLoading')}
+              </li>
+            )}
+            {isError && (
+              <li className="px-4 py-3 text-sm text-destructive" role="alert">
+                {t('employees.activity.lookupError')}
+              </li>
+            )}
+            {!isPending && !isError && items.length === 0 && (
+              <li className="px-4 py-3 text-sm text-muted-foreground">
+                {t('employees.activity.lookupEmpty')}
+              </li>
+            )}
+            {!isPending && !isError && items.map((employee, index) => {
+              const position = pickPosition(employee, lang)
+              return (
+                <li key={employee.id} className="flex items-center gap-3 border-b border-hairline px-4 py-3 last:border-b-0">
+                  <div className="min-w-0 flex-1">
+                    <p dir="auto" className="truncate text-sm font-semibold">{pickEmployeeName(employee, lang)}</p>
+                    <p className="mt-0.5 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                      <span dir="auto" className="font-mono">{employee.id}</span>
+                      {position && <span dir="auto">{position}</span>}
+                      <StatusPill status={employee.status} />
+                    </p>
+                  </div>
+                  <div className="flex shrink-0 gap-2">
+                    <button
+                      ref={(button) => { showRefs.current[index] = button }}
+                      type="button"
+                      onClick={() => selectEmployee(employee)}
+                      onKeyDown={(event) => handleShowKeyDown(event, index)}
+                      className="rounded-lg bg-primary px-3 py-2 text-xs font-semibold text-primary-foreground hover:bg-primary-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                    >
+                      {t('employees.activity.showActivity')}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => onOpenProfile(employee.id)}
+                      onKeyDown={handlePopupActionKeyDown}
+                      className="rounded-lg border border-border px-3 py-2 text-xs font-semibold hover:bg-surface-raised focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                    >
+                      {t('employees.activity.openProfile')}
+                    </button>
+                  </div>
+                </li>
+              )
+            })}
+          </ul>
+        )}
+      </div>
+    </section>
   )
 }

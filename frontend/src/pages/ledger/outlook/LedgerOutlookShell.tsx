@@ -572,6 +572,31 @@ export function LedgerOutlookShell({ onNavigate }: LedgerOutlookShellProps = {})
   // drawer opened from a "Folders" header button (the prior Ledger mobile
   // pattern — a dominant list, secondary nav behind a sheet). The reading-pane
   // slot is hidden (Phase 5 makes the selected row full-screen). ─────────────
+  if (requestedEntryQuery.isError) {
+    return (
+      <div
+        data-ledger-chrome
+        dir="ltr"
+        className="flex flex-1 items-center justify-center bg-background p-6"
+      >
+        <div
+          dir="auto"
+          role="alert"
+          className="flex max-w-md flex-col items-center gap-4 rounded-2xl border border-destructive/30 bg-surface p-6 text-center"
+        >
+          <p className="text-sm font-medium text-foreground">{t('common.loadError')}</p>
+          <button
+            type="button"
+            onClick={() => void requestedEntryQuery.refetch()}
+            className="rounded-full bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
+          >
+            {t('common.retry')}
+          </button>
+        </div>
+      </div>
+    )
+  }
+
   if (isMobile) {
     // ── Mobile full-screen pane: selecting a row covers the list with the
     // reading-pane / record view; a Back button clears the selection and

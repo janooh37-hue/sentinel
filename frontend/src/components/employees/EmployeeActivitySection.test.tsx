@@ -3,6 +3,8 @@ import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import en from '@/locales/en.json'
+import ar from '@/locales/ar.json'
 import type { EmployeeActivityItemRead, EmployeeListItem } from '@/lib/api'
 import { api } from '@/lib/api'
 import { EmployeeActivitySection } from './EmployeeActivitySection'
@@ -70,7 +72,7 @@ vi.mock('react-i18next', () => ({
         'employees.activity.openLedger': 'Open correspondence',
         'employees.activity.loading': 'Loading recent activity',
         'employees.activity.empty': 'No recent employee activity.',
-        'employees.activity.emptyFiltered': 'No activity matches this employee and activity type.',
+        'employees.activity.emptyFiltered': 'No activity matches the current filters.',
         'employees.activity.retry': 'Retry',
         'employees.activity.loadMore': 'Load more activity',
         'employees.activity.typeLabel': 'Activity type',
@@ -79,12 +81,18 @@ vi.mock('react-i18next', () => ({
         'employees.activity.leave': 'Leave',
         'employees.activity.violation': 'Violations',
         'employees.activity.ledger': 'Correspondence',
+        'employees.activity.employee': 'Employee',
+        'employees.activity.activity': 'Activity',
+        'employees.activity.type': 'Type',
+        'employees.activity.reference': 'Reference',
+        'employees.activity.dateTime': 'Date and time',
+        'employees.activity.destination': 'Destination',
       }
       if (key === 'employees.activity.showing') return `Showing ${options?.shown} of ${options?.total} recent entries`
-      if (key === 'employees.activity.actions.document') return `Generated ${options?.title}`
-      if (key === 'employees.activity.actions.leave') return `${options?.title} · ${options?.days} days`
-      if (key === 'employees.activity.actions.violation') return `Recorded ${options?.title}`
-      if (key === 'employees.activity.actions.ledger') return options?.title ?? ''
+      if (key === 'employees.activity.actions.document') return 'Generated document'
+      if (key === 'employees.activity.actions.leave') return `Leave record · ${options?.days} days`
+      if (key === 'employees.activity.actions.violation') return 'Recorded violation'
+      if (key === 'employees.activity.actions.ledger') return 'Recorded correspondence'
       return values[key] ?? key
     },
   }),
@@ -134,13 +142,16 @@ describe('EmployeeActivitySection', () => {
     await waitFor(() => expect(api.listEmployeeActivity).toHaveBeenLastCalledWith({ limit: 25, offset: 0 }))
   })
 
-  it('appends the next 25 and hides Load more at total', async () => {
+  it('appends the next 25, keeps Load more full-width on phone, and hides it at total', async () => {
     const pageOne = Array.from({ length: 25 }, (_, index) => ({ ...items[0], source_id: index + 1, target_id: index + 1, title: `Document ${index + 1}` }))
     const finalItem = { ...items[0], source_id: 26, target_id: 26, title: 'Document 26' }
     vi.mocked(api.listEmployeeActivity).mockImplementation(({ offset = 0 }) => Promise.resolve({ items: offset === 0 ? pageOne : [finalItem], total: 26, limit: 25, offset }))
     wrap(<EmployeeActivitySection onOpenProfile={() => {}} />)
     await screen.findByText('Document 1')
-    await userEvent.click(screen.getByRole('button', { name: /load more activity/i }))
+    const loadMore = screen.getByRole('button', { name: /load more activity/i })
+    expect(loadMore).toHaveClass('w-full')
+    expect(loadMore).toHaveClass('focus-visible:ring-inset')
+    await userEvent.click(loadMore)
     expect(await screen.findByText('Document 26')).toBeInTheDocument()
     expect(screen.getByText('Document 1')).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: /load more activity/i })).not.toBeInTheDocument()
@@ -152,12 +163,22 @@ describe('EmployeeActivitySection', () => {
     expect(screen.getByRole('status', { name: /loading recent activity/i })).toBeInTheDocument()
   })
 
-  it('distinguishes all-empty from filtered-empty', async () => {
+  it('distinguishes all-empty from truthful single-filter empty copy', async () => {
     vi.mocked(api.listEmployeeActivity).mockResolvedValue({ items: [], total: 0, limit: 25, offset: 0 })
     wrap(<EmployeeActivitySection onOpenProfile={() => {}} />)
     expect(await screen.findByText(/no recent employee activity/i)).toBeInTheDocument()
     await userEvent.click(screen.getByRole('button', { name: 'mock-select-G3190' }))
-    expect(await screen.findByText(/no activity matches this employee/i)).toBeInTheDocument()
+    const filtered = await screen.findByText(/no activity matches the current filters/i)
+    expect(filtered).not.toHaveTextContent(/activity type/i)
+  })
+
+  it('does not name an unselected employee in type-only empty copy', async () => {
+    vi.mocked(api.listEmployeeActivity).mockResolvedValue({ items: [], total: 0, limit: 25, offset: 0 })
+    wrap(<EmployeeActivitySection onOpenProfile={() => {}} />)
+    await screen.findByText(/no recent employee activity/i)
+    await userEvent.selectOptions(screen.getByRole('combobox', { name: /activity type/i }), 'leave')
+    const filtered = await screen.findByText(/no activity matches the current filters/i)
+    expect(filtered).not.toHaveTextContent(/employee/i)
   })
 
   it('renders an error with a working retry action', async () => {
@@ -209,6 +230,76 @@ describe('EmployeeActivitySection', () => {
     const reference = await screen.findByText('#11')
     expect(reference).toHaveAttribute('dir', 'auto')
   })
+  it('renders each source title once while keeping the localized structural action', async () => {
+    wrap(<EmployeeActivitySection onOpenProfile={() => {}} />)
+    for (const title of items.map((item) => item.title)) {
+      const row = await screen.findByRole('link', { name: new RegExp(title, 'i') })
+      expect((row.textContent ?? '').split(title).length - 1).toBe(1)
+    }
+    expect(screen.getByText('Generated document')).toBeInTheDocument()
+    expect(screen.getByText('Recorded violation')).toBeInTheDocument()
+  })
+  it('defines non-repeating localized actions and generic current-filter copy in both locales', () => {
+    expect(en.employees.activity.emptyFiltered).toBe('No activity matches the current filters.')
+    expect(en.employees.activity.actions).toEqual({
+      document: 'Generated document',
+      leave: 'Leave record · {{days}} days',
+      violation: 'Recorded violation',
+      ledger: 'Recorded correspondence',
+    })
+    expect(ar.employees.activity.emptyFiltered).toBe('لا توجد أنشطة مطابقة لعوامل التصفية الحالية.')
+    expect(ar.employees.activity.actions).toEqual({
+      document: 'تم إنشاء المستند',
+      leave: 'سجل الإجازة · {{days}} يومًا',
+      violation: 'تم تسجيل المخالفة',
+      ledger: 'تم تسجيل المراسلة',
+    })
+  })
+
+  it('groups activity rows under visible localized calendar-day headings', async () => {
+    const firstDay = new Date('2026-08-10T09:04:00')
+    const secondDay = new Date('2026-08-09T09:04:00')
+    vi.mocked(api.listEmployeeActivity).mockResolvedValue({
+      items: [
+        { ...items[0], occurred_at: firstDay.toISOString() },
+        { ...items[1], occurred_at: secondDay.toISOString() },
+      ],
+      total: 2,
+      limit: 25,
+      offset: 0,
+    })
+    wrap(<EmployeeActivitySection onOpenProfile={() => {}} />)
+    const formatDay = new Intl.DateTimeFormat('en', { dateStyle: 'medium' })
+    expect(await screen.findByRole('heading', { name: formatDay.format(firstDay) })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: formatDay.format(secondDay) })).toBeInTheDocument()
+  })
+
+  it('keeps employee and time first, followed by activity details in phone reading order', async () => {
+    wrap(<EmployeeActivitySection onOpenProfile={() => {}} />)
+    const row = await screen.findByRole('link', { name: /open document/i })
+    const cells = Array.from(row.firstElementChild?.children ?? [])
+    expect(cells).toHaveLength(6)
+    expect(cells[0]).toHaveTextContent('EMPLOYEE 0')
+    expect(cells[1]).toHaveTextContent(/2026/)
+    expect(cells[2]).toHaveTextContent('Employment Certificate')
+    expect(cells[3]).toHaveTextContent('Documents')
+    expect(cells[4]).toHaveTextContent('#11')
+    expect(cells[5]).toHaveTextContent('Open document')
+  })
+
+  it('uses desktop headers in Employee, Activity, Type, Reference, Date, Destination order', async () => {
+    wrap(<EmployeeActivitySection onOpenProfile={() => {}} />)
+    await screen.findByText('Employment Certificate')
+    const header = screen.getByText('Employee', { exact: true }).parentElement
+    expect(Array.from(header?.children ?? []).map((cell) => cell.textContent)).toEqual([
+      'Employee',
+      'Activity',
+      'Type',
+      'Reference',
+      'Date and time',
+      'Destination',
+    ])
+  })
 
   it('uses the Arabic employee name when the interface is Arabic', async () => {
     testLanguage.value = 'ar'
@@ -227,5 +318,14 @@ describe('EmployeeActivitySection', () => {
     expect(row.firstElementChild?.children).toHaveLength(6)
     expect(within(row).getByText('Documents')).toBeInTheDocument()
     expect(within(row).getByText('#11')).toHaveAttribute('dir', 'auto')
+  })
+
+  it('keeps compact cards through tablet widths so the destination stays visible', async () => {
+    wrap(<EmployeeActivitySection onOpenProfile={() => {}} />)
+    const destination = await screen.findByText('Open document')
+    const rowGrid = destination.parentElement
+    const header = screen.getByText('Employee', { exact: true }).parentElement
+    expect(rowGrid).toHaveClass('grid-cols-2', 'xl:grid-cols-[minmax(160px,1fr)_minmax(180px,1.2fr)_minmax(150px,1fr)_minmax(130px,1fr)_minmax(150px,1fr)_minmax(160px,1fr)]')
+    expect(header).toHaveClass('hidden', 'xl:grid')
   })
 })

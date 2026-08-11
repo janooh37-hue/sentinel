@@ -5,10 +5,12 @@ from typing import Literal
 
 from pydantic import BaseModel
 
+from app.schemas._base import ORMBase
+
 EmployeeActivityKind = Literal["document", "leave", "violation", "ledger"]
 
 
-class EmployeeActivityItemRead(BaseModel):
+class EmployeeActivityItemRead(ORMBase):
     kind: EmployeeActivityKind
     source_id: int
     target_id: int
