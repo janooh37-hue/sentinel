@@ -6,10 +6,10 @@ import {
   applyPackagePreview,
   createIncludedPapersState,
   includedPapersRequest,
-  previewIsCurrent,
-  removePaper,
-  reorderPaper,
-  replacePaper,
+  isPreviewCurrent,
+  moveIncludedPaper,
+  removeIncludedPaper,
+  replaceIncludedPaper,
 } from './includedPapersState'
 
 const existing: IncludedPaperRead = {
@@ -76,8 +76,8 @@ describe('includedPapersState', () => {
 
   it('replaces an editable paper in place but leaves signed-base papers locked', () => {
     const initial = createIncludedPapersState(1, [existing, embedded])
-    const replaced = replacePaper(initial, existing.id, firstUpload)
-    const locked = replacePaper(replaced, embedded.id, secondUpload)
+    const replaced = replaceIncludedPaper(initial, existing.id, firstUpload)
+    const locked = replaceIncludedPaper(replaced, embedded.id, secondUpload)
 
     expect(replaced.items[0]).toMatchObject({
       id: existing.id,
@@ -91,19 +91,25 @@ describe('includedPapersState', () => {
 
   it('removes and reorders only editable papers', () => {
     let state = createIncludedPapersState(2, [embedded, existing])
-    state = removePaper(state, embedded.id)
+    state = removeIncludedPaper(state, embedded.id)
     expect(state.items).toHaveLength(2)
 
     state = addStagedPaper(state, firstUpload, '33333333-3333-4333-8333-333333333333')
-    state = reorderPaper(state, 2, 0)
+    state = moveIncludedPaper(state, '33333333-3333-4333-8333-333333333333', -1)
     expect(state.items.map((paper) => paper.original_name)).toEqual([
-      'first.pdf',
       'approved.pdf',
+      'first.pdf',
       'existing.pdf',
     ])
+    const cannotCrossSignedBase = moveIncludedPaper(
+      state,
+      '33333333-3333-4333-8333-333333333333',
+      -1,
+    )
+    expect(cannotCrossSignedBase).toBe(state)
 
-    state = removePaper(state, existing.id)
-    expect(state.items.map((paper) => paper.original_name)).toEqual(['first.pdf', 'approved.pdf'])
+    state = removeIncludedPaper(state, existing.id)
+    expect(state.items.map((paper) => paper.original_name)).toEqual(['approved.pdf', 'first.pdf'])
   })
 
   it('marks a preview current only until the next edit', () => {
@@ -132,11 +138,15 @@ describe('includedPapersState', () => {
     }
 
     const reviewed = applyPackagePreview(initial, preview)
-    expect(previewIsCurrent(reviewed)).toBe(true)
+    expect(isPreviewCurrent(reviewed)).toBe(true)
     expect(reviewed.items[1]).toMatchObject({ staged_token: 'stage-one', page_count: 1 })
 
-    const changed = reorderPaper(reviewed, 1, 0)
-    expect(previewIsCurrent(changed)).toBe(false)
+    const changed = moveIncludedPaper(
+      reviewed,
+      '33333333-3333-4333-8333-333333333333',
+      -1,
+    )
+    expect(isPreviewCurrent(changed)).toBe(false)
     expect(changed.preview).toBeNull()
   })
 })
