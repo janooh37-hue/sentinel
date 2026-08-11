@@ -36,9 +36,17 @@ import { toast } from 'sonner'
 import { shouldShowNotifyToggle } from './notifyToggle'
 import { GeneratedSaveActions } from './GeneratedSaveActions'
 import { savedGenerationFromJob, type SavedGeneration } from './savedGeneration'
+import { ApprovedViolationUpload } from './ApprovedViolationUpload'
 import { SavedRecordActions, type NotificationChoice } from '@/components/books/SavedRecordActions'
 import { api, apiErrorMessage } from '@/lib/api'
-import type { DocumentGenerateRequest, JobStatusResponse, StagedAttachmentRead, TemplateMeta, WordSessionRead } from '@/lib/api'
+import type {
+  ApprovedViolationImportRead,
+  DocumentGenerateRequest,
+  JobStatusResponse,
+  StagedAttachmentRead,
+  TemplateMeta,
+  WordSessionRead,
+} from '@/lib/api'
 import type { ExtractionResponse } from '@/lib/extraction'
 import type { TemplateDetailResponse, TemplateField } from '@/components/application/types'
 import { buildZodSchema } from '@/lib/applicationFormSchema'
@@ -75,6 +83,7 @@ import {
 import { WordHandoffDialog } from '@/pages/books/WordHandoffDialog'
 
 type TabValue = 'fields' | 'preview'
+type InmateEntryMode = 'create' | 'upload'
 
 // Adapter: translate the api response into the shape TemplateForm expects
 function adaptSchema(raw: Awaited<ReturnType<typeof api.getTemplateFields>>): TemplateDetailResponse {
@@ -197,6 +206,14 @@ export function ApplicationPage(): React.JSX.Element {
   const [lastSaved, setLastSaved] = useState<
     (SavedGeneration & { notification?: NotificationChoice }) | null
   >(null)
+  const [inmateEntryMode, setInmateEntryMode] = useState<InmateEntryMode>('create')
+  const [approvedImport, setApprovedImport] = useState<ApprovedViolationImportRead | null>(null)
+  const [approvedImportBusy, setApprovedImportBusy] = useState(false)
+  const approvedImportSuccessRef = useRef<HTMLHeadingElement | null>(null)
+
+  useEffect(() => {
+    if (approvedImport?.book_id) approvedImportSuccessRef.current?.focus()
+  }, [approvedImport?.book_id])
 
   // Invalidate the Books ('Records') list once the generation job completes —
   // every generated form is now also a Book row (see document_service step 11b),
@@ -291,6 +308,7 @@ export function ApplicationPage(): React.JSX.Element {
   // the backend allows employee_id=null for them, so we hide the picker entirely
   // and don't gate Generate on a selection. See document_service.generate_document.
   const isAdminCategory = selectedMeta?.category === 'admin'
+  const isInmateService = selectedTemplate === 'Inmate Conduct Violations'
   // General Book — the only form carrying the rich Arabic body editor. Its
   // classification picker is REQUIRED: every book (rich-editor or Word) takes
   // its ref from the classified register (1/{tab}/GSSG/{serial}).
@@ -623,6 +641,8 @@ export function ApplicationPage(): React.JSX.Element {
     setActiveJobId(null)
     setPreviewJobStatus(null)
     setLastSaved(null)
+    setInmateEntryMode('create')
+    setApprovedImport(null)
     pendingNotificationRef.current = undefined
     // Per-book notify switch is not remembered — each newly-picked form starts On.
     setNotifyEmployee(true)
@@ -755,6 +775,7 @@ export function ApplicationPage(): React.JSX.Element {
   // Clear the picked form and return to the gallery. Shared by the back
   // button and the Ctrl+N "new form" shortcut so the two paths can't drift.
   const resetToGallery = useCallback(() => {
+    if (approvedImportBusy) return
     form.reset({})
     setSelectedTemplate(null)
     attachmentsDirtyRef.current = false
@@ -762,8 +783,10 @@ export function ApplicationPage(): React.JSX.Element {
     setActiveJobId(null)
     setPreviewJobStatus(null)
     setLastSaved(null)
+    setInmateEntryMode('create')
+    setApprovedImport(null)
     pendingNotificationRef.current = undefined
-    // Per-book notify switch is not remembered — reset to On when clearing.
+    // Per-book notify switch is not remembered — each newly-picked form starts On.
     setNotifyEmployee(true)
     setActiveTab('fields')
     setSubmitError(null)
@@ -772,7 +795,7 @@ export function ApplicationPage(): React.JSX.Element {
     setBodyMode('word')
     setTemplateName(null)
     setPendingWordSession(null)
-  }, [form])
+  }, [approvedImportBusy, form])
 
   // Ctrl+N — clear and pick again from the gallery.
   useShortcutAction('newItem', resetToGallery)
@@ -903,6 +926,7 @@ export function ApplicationPage(): React.JSX.Element {
               <button
                 type="button"
                 onClick={resetToGallery}
+                disabled={approvedImportBusy}
                 className="mb-2.5 inline-flex items-center gap-1.5 text-[0.86em] font-medium text-primary transition-colors hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
               >
                 {isAr ? (
@@ -930,7 +954,77 @@ export function ApplicationPage(): React.JSX.Element {
               </div>
             </header>
 
-            <section className="rounded-2xl bg-surface px-4 py-6 sm:px-7">
+            {isInmateService && (
+              <div className="mb-4 inline-flex rounded-xl border border-border bg-surface-tinted p-1">
+                <Button
+                  type="button"
+                  size="sm"
+                  variant={inmateEntryMode === 'create' ? 'default' : 'ghost'}
+                  aria-pressed={inmateEntryMode === 'create'}
+                  disabled={approvedImportBusy}
+                  onClick={() => {
+                    if (approvedImportBusy) return
+                    setInmateEntryMode('create')
+                    setApprovedImport(null)
+                  }}
+                >
+                  {t('application.approvedViolation.createForm')}
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant={inmateEntryMode === 'upload' ? 'default' : 'ghost'}
+                  aria-pressed={inmateEntryMode === 'upload'}
+                  disabled={approvedImportBusy}
+                  onClick={() => {
+                    if (approvedImportBusy) return
+                    setInmateEntryMode('upload')
+                    setApprovedImport(null)
+                  }}
+                >
+                  {t('application.approvedViolation.uploadApproved')}
+                </Button>
+              </div>
+            )}
+
+            {isInmateService && inmateEntryMode === 'upload' && (
+              <section className="rounded-2xl bg-surface px-4 py-6 sm:px-7">
+                {approvedImport ? (
+                  <div data-testid="approved-import-success" className="space-y-4">
+                    <h3
+                      ref={approvedImportSuccessRef}
+                      tabIndex={-1}
+                      className="rounded-sm text-base font-semibold text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring"
+                    >
+                      {t('application.approvedViolation.successTitle')}
+                    </h3>
+                    <SavedRecordActions
+                      bookId={approvedImport.book_id}
+                      refNumber={approvedImport.ref_number}
+                      detail={t('application.approvedViolation.approvedCopyFiled')}
+                    />
+                    <div className="flex justify-end">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() => setApprovedImport(null)}
+                      >
+                        {t('application.approvedViolation.newUpload')}
+                      </Button>
+                    </div>
+                  </div>
+                ) : (
+                  <ApprovedViolationUpload
+                    onSaved={setApprovedImport}
+                    onSaveBusyChange={setApprovedImportBusy}
+                  />
+                )}
+              </section>
+            )}
+            <section
+              hidden={isInmateService && inmateEntryMode === 'upload'}
+              className="rounded-2xl bg-surface px-4 py-6 sm:px-7"
+            >
               {/* Tab strip — Fields / Preview */}
               <div className="mb-5 flex items-center gap-1 border-b border-hairline pb-4">
                 <TabButton

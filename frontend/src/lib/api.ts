@@ -715,6 +715,11 @@ export type DocumentGenerateRequest = components['schemas']['DocumentGenerateReq
 export type DocumentGenerateResponse = components['schemas']['DocumentGenerateResponse']
 export type JobDocumentItem = components['schemas']['JobDocumentItem']
 export type JobStatusResponse = components['schemas']['JobStatusResponse']
+export type ApprovedViolationInspectionRead =
+  components['schemas']['ApprovedViolationInspectionRead']
+export type ApprovedViolationImportRequest =
+  components['schemas']['ApprovedViolationImportRequest']
+export type ApprovedViolationImportRead = components['schemas']['ApprovedViolationImportRead']
 
 // Forms signing paths & required attachments (2026-06-11). `signing_path` +
 // `attachment_slots` ride on the templates list/detail responses;
@@ -1923,6 +1928,20 @@ export const api = {
     form.append('file', file)
     return multipart<StagedAttachmentRead>('/documents/attachments/stage', form)
   },
+  inspectApprovedViolation: (file: File) => {
+    const form = new FormData()
+    form.append('file', file)
+    return multipart<ApprovedViolationInspectionRead>(
+      '/documents/inmate-violations/approved-imports/inspect',
+      form,
+    )
+  },
+  commitApprovedViolation: (body: ApprovedViolationImportRequest) =>
+    request<ApprovedViolationImportRead>(
+      'POST',
+      '/documents/inmate-violations/approved-imports',
+      body,
+    ),
 
   // --- notifications (Phase 4 LAN) ---
   /** JSON safety-poll fallback; used when EventSource is unavailable. */

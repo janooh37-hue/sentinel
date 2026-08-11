@@ -4455,6 +4455,124 @@
         }
       }
     },
+    "/api/v1/documents/inmate-violations/approved-imports/inspect": {
+      "post": {
+        "tags": [
+          "documents"
+        ],
+        "summary": "Inspect Approved Violation",
+        "operationId": "inspect_approved_violation_api_v1_documents_inmate_violations_approved_imports_inspect_post",
+        "parameters": [
+          {
+            "name": "gssg_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Gssg Session"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_inspect_approved_violation_api_v1_documents_inmate_violations_approved_imports_inspect_post"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApprovedViolationInspectionRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/documents/inmate-violations/approved-imports": {
+      "post": {
+        "tags": [
+          "documents"
+        ],
+        "summary": "Commit Approved Violation",
+        "operationId": "commit_approved_violation_api_v1_documents_inmate_violations_approved_imports_post",
+        "parameters": [
+          {
+            "name": "gssg_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Gssg Session"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ApprovedViolationImportRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApprovedViolationImportRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/documents/{document_id}": {
       "get": {
         "tags": [
@@ -16923,6 +17041,154 @@
         "type": "object",
         "title": "ApproveRequest"
       },
+      "ApprovedViolationImportRead": {
+        "properties": {
+          "book_id": {
+            "type": "integer",
+            "title": "Book Id"
+          },
+          "document_id": {
+            "type": "integer",
+            "title": "Document Id"
+          },
+          "ref_number": {
+            "type": "string",
+            "title": "Ref Number"
+          },
+          "approval_state": {
+            "type": "string",
+            "const": "approved",
+            "title": "Approval State",
+            "default": "approved"
+          }
+        },
+        "type": "object",
+        "required": [
+          "book_id",
+          "document_id",
+          "ref_number"
+        ],
+        "title": "ApprovedViolationImportRead"
+      },
+      "ApprovedViolationImportRequest": {
+        "properties": {
+          "token": {
+            "type": "string",
+            "maxLength": 32,
+            "minLength": 32,
+            "pattern": "^[0-9a-f]{32}$",
+            "title": "Token"
+          },
+          "report_date": {
+            "type": "string",
+            "format": "date",
+            "title": "Report Date"
+          },
+          "inmate_names": {
+            "items": {
+              "type": "string",
+              "maxLength": 256,
+              "minLength": 1
+            },
+            "type": "array",
+            "maxItems": 100,
+            "title": "Inmate Names"
+          },
+          "subject": {
+            "type": "string",
+            "maxLength": 512,
+            "minLength": 1,
+            "title": "Subject"
+          }
+        },
+        "type": "object",
+        "required": [
+          "token",
+          "report_date",
+          "subject"
+        ],
+        "title": "ApprovedViolationImportRequest"
+      },
+      "ApprovedViolationInspectionRead": {
+        "properties": {
+          "token": {
+            "type": "string",
+            "title": "Token"
+          },
+          "filename": {
+            "type": "string",
+            "title": "Filename"
+          },
+          "size": {
+            "type": "integer",
+            "title": "Size"
+          },
+          "expires_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Expires At"
+          },
+          "report_date": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Report Date"
+          },
+          "inmate_names": {
+            "items": {
+              "$ref": "#/components/schemas/ApprovedViolationNameRead"
+            },
+            "type": "array",
+            "title": "Inmate Names"
+          },
+          "proposed_subject": {
+            "type": "string",
+            "title": "Proposed Subject"
+          },
+          "warnings": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Warnings"
+          }
+        },
+        "type": "object",
+        "required": [
+          "token",
+          "filename",
+          "size",
+          "expires_at",
+          "inmate_names",
+          "proposed_subject",
+          "warnings"
+        ],
+        "title": "ApprovedViolationInspectionRead"
+      },
+      "ApprovedViolationNameRead": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "confidence": {
+            "type": "number",
+            "title": "Confidence"
+          }
+        },
+        "type": "object",
+        "required": [
+          "name",
+          "confidence"
+        ],
+        "title": "ApprovedViolationNameRead"
+      },
       "ApproverOptionRead": {
         "properties": {
           "id": {
@@ -17122,6 +17388,20 @@
           "file"
         ],
         "title": "Body_create_extraction_api_v1_extractions_post"
+      },
+      "Body_inspect_approved_violation_api_v1_documents_inmate_violations_approved_imports_inspect_post": {
+        "properties": {
+          "upload": {
+            "type": "string",
+            "format": "binary",
+            "title": "Upload"
+          }
+        },
+        "type": "object",
+        "required": [
+          "upload"
+        ],
+        "title": "Body_inspect_approved_violation_api_v1_documents_inmate_violations_approved_imports_inspect_post"
       },
       "Body_intake_document_api_v1_intake_post": {
         "properties": {
@@ -20127,7 +20407,14 @@
             "title": "Ref Number"
           },
           "docx_path": {
-            "type": "string",
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Docx Path"
           },
           "pdf_path": {
@@ -20186,7 +20473,6 @@
           "id",
           "template_id",
           "ref_number",
-          "docx_path",
           "created_at",
           "submission_id",
           "role"

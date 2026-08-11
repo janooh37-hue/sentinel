@@ -560,7 +560,7 @@ def _build_versions(db: Session, row: Book) -> list[BookVersionRead]:
         document = documents_by_id.get(v.document_id) if v.document_id is not None else None
         if document is not None:
             base = f"/api/v1/documents/{document.id}/download"
-            docx_url = f"{base}?format=docx"
+            docx_url = f"{base}?format=docx" if document.docx_path is not None else None
             signed_path = v.signed_pdf_path if v.status == "approved" else None
             if document.pdf_path is not None and (signed_path is None or _is_pdf_path(signed_path)):
                 pdf_url = f"{base}?format=pdf"

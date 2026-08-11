@@ -835,7 +835,7 @@ class Document(Base):
     )
     template_id: Mapped[str] = mapped_column(String(64))
     ref_number: Mapped[str] = mapped_column(String(32))
-    docx_path: Mapped[str] = mapped_column(String(512))
+    docx_path: Mapped[str | None] = mapped_column(String(512), nullable=True)
     pdf_path: Mapped[str | None] = mapped_column(String(512), nullable=True)
     # Private immutable generated form used to rebuild Included papers packages.
     # The normal ``pdf_path`` remains the published combined output.

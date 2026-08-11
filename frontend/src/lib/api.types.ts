@@ -1109,6 +1109,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/documents/inmate-violations/approved-imports/inspect": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Inspect Approved Violation */
+        post: operations["inspect_approved_violation_api_v1_documents_inmate_violations_approved_imports_inspect_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/documents/inmate-violations/approved-imports": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Commit Approved Violation */
+        post: operations["commit_approved_violation_api_v1_documents_inmate_violations_approved_imports_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/documents/{document_id}": {
         parameters: {
             query?: never;
@@ -3950,6 +3984,64 @@ export interface components {
             /** Employee Id */
             employee_id?: string | null;
         };
+        /** ApprovedViolationImportRead */
+        ApprovedViolationImportRead: {
+            /** Book Id */
+            book_id: number;
+            /** Document Id */
+            document_id: number;
+            /** Ref Number */
+            ref_number: string;
+            /**
+             * Approval State
+             * @default approved
+             * @constant
+             */
+            approval_state: "approved";
+        };
+        /** ApprovedViolationImportRequest */
+        ApprovedViolationImportRequest: {
+            /** Token */
+            token: string;
+            /**
+             * Report Date
+             * Format: date
+             */
+            report_date: string;
+            /** Inmate Names */
+            inmate_names?: string[];
+            /** Subject */
+            subject: string;
+        };
+        /** ApprovedViolationInspectionRead */
+        ApprovedViolationInspectionRead: {
+            /** Token */
+            token: string;
+            /** Filename */
+            filename: string;
+            /** Size */
+            size: number;
+            /**
+             * Expires At
+             * Format: date-time
+             */
+            expires_at: string;
+            /** Report Date */
+            report_date?: string | null;
+            /** Inmate Names */
+            inmate_names: components["schemas"]["ApprovedViolationNameRead"][];
+            /** Proposed Subject */
+            proposed_subject: string;
+            /** Warnings */
+            warnings: string[];
+        };
+        /** ApprovedViolationNameRead */
+        ApprovedViolationNameRead: {
+            /** Name */
+            name: string;
+            /** Confidence */
+            confidence: number;
+        };
         /**
          * ApproverOptionRead
          * @description Minimal user info for the submit-for-approval approver picker.
@@ -4041,6 +4133,14 @@ export interface components {
              * Format: binary
              */
             file: string;
+        };
+        /** Body_inspect_approved_violation_api_v1_documents_inmate_violations_approved_imports_inspect_post */
+        Body_inspect_approved_violation_api_v1_documents_inmate_violations_approved_imports_inspect_post: {
+            /**
+             * Upload
+             * Format: binary
+             */
+            upload: string;
         };
         /** Body_intake_document_api_v1_intake_post */
         Body_intake_document_api_v1_intake_post: {
@@ -5142,7 +5242,7 @@ export interface components {
             /** Ref Number */
             ref_number: string;
             /** Docx Path */
-            docx_path: string;
+            docx_path?: string | null;
             /** Pdf Path */
             pdf_path?: string | null;
             /**
@@ -10723,6 +10823,76 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["StagedAttachmentRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    inspect_approved_violation_api_v1_documents_inmate_violations_approved_imports_inspect_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_inspect_approved_violation_api_v1_documents_inmate_violations_approved_imports_inspect_post"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApprovedViolationInspectionRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    commit_approved_violation_api_v1_documents_inmate_violations_approved_imports_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ApprovedViolationImportRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApprovedViolationImportRead"];
                 };
             };
             /** @description Validation Error */
