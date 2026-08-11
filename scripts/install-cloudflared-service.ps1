@@ -38,6 +38,14 @@ $root   = Split-Path -Parent $PSScriptRoot
 $cfg    = Join-Path $root 'deploy\cloudflared\config.yml'
 $logDir = Join-Path $root 'data\logs'
 
+# nssm writes its status lines to stderr. When this script's output is
+# captured (transcript, redirection, remote/automated runs), Windows
+# PowerShell 5.1 materializes native stderr as error records — which, under
+# $ErrorActionPreference = 'Stop', silently kills the script on nssm's FIRST
+# status line before the service is created. Relax EAP for the nssm calls;
+# guard `throw`s above are explicit and unaffected.
+$ErrorActionPreference = 'Continue'
+
 if ($Uninstall) {
     Write-Host "Stopping + removing service $ServiceName ..." -ForegroundColor Cyan
     & $Nssm stop   $ServiceName
