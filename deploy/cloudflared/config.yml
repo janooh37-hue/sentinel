@@ -1,0 +1,19 @@
+# GSSG Manager — Cloudflare Tunnel (public https://gssg.app).
+#
+# cloudflared makes OUTBOUND-ONLY connections to Cloudflare's edge; no inbound
+# ports, no router changes. Public TLS terminates at Cloudflare; between edge
+# and this host runs the tunnel's own encryption; edge sets X-Forwarded-For /
+# X-Forwarded-Proto, which uvicorn trusts from loopback (backend/serve.py).
+#
+# Runs as a Windows service via scripts/install-cloudflared-service.ps1 (NSSM).
+# The LAN path (Caddy -> https://gssg.lan / gssgit.local) is independent and
+# keeps working if the internet is down.
+#
+# The credentials JSON below is a SECRET and lives outside the repo.
+tunnel: 561c7c0f-32f1-435a-8cc7-bcbe780704fa
+credentials-file: C:\Users\Admin\.cloudflared\561c7c0f-32f1-435a-8cc7-bcbe780704fa.json
+
+ingress:
+  - hostname: gssg.app
+    service: http://127.0.0.1:8765
+  - service: http_status:404
