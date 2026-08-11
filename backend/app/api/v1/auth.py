@@ -1,18 +1,18 @@
 """Multi-user authentication endpoints.
 
-  POST /auth/register          → request access (or bootstrap the first admin)
-  POST /auth/login             → verify + set the gssg_session cookie
-  POST /auth/logout            → revoke session + clear cookie
-  GET  /auth/me                → the signed-in user (401 if not signed in)
-  POST /auth/verify-password   → re-auth for the lock screen
+POST /auth/register          → request access (or bootstrap the first admin)
+POST /auth/login             → verify + set the gssg_session cookie
+POST /auth/logout            → revoke session + clear cookie
+GET  /auth/me                → the signed-in user (401 if not signed in)
+POST /auth/verify-password   → re-auth for the lock screen
 
-  Admin (require_admin):
-  GET   /auth/users
-  POST  /auth/users/{id}/approve
-  POST  /auth/users/{id}/reset-password
-  PATCH /auth/users/{id}/role
-  POST  /auth/users/{id}/lock | /unlock
-  POST  /auth/users/{id}/default-manager
+Admin (require_admin):
+GET   /auth/users
+POST  /auth/users/{id}/approve
+POST  /auth/users/{id}/reset-password
+PATCH /auth/users/{id}/role
+POST  /auth/users/{id}/lock | /unlock
+POST  /auth/users/{id}/default-manager
 """
 
 from __future__ import annotations
@@ -76,9 +76,14 @@ def _set_session_cookie(response: Response, token: str) -> None:
 @router.post("/register", response_model=RegisterResult)
 def register(
     payload: RegisterRequest,
+    request: Request,
     response: Response,
     db: Annotated[Session, Depends(get_db)],
 ) -> RegisterResult:
+    # Throttle anonymous account creation (internet-reachable via gssg.app):
+    # every attempt costs a password hash, and unbounded signups would flood
+    # the pending-approval queue — companion to the login limiter (AUTH-03).
+    ratelimit.enforce(ratelimit.register_limiter, request)
     user, is_first = auth_service.register(
         db,
         email=payload.email,
@@ -109,9 +114,7 @@ def login(
     # across many accounts) — AUTH-03.
     ratelimit.enforce(ratelimit.login_limiter, request)
     user = auth_service.authenticate(db, payload.email, payload.password)
-    token = auth_service.start_session(
-        db, user, user_agent=request.headers.get("user-agent")
-    )
+    token = auth_service.start_session(db, user, user_agent=request.headers.get("user-agent"))
     _set_session_cookie(response, token)
     return auth_service.to_session_user(db, user)
 
@@ -237,9 +240,7 @@ def reject_user(
     admin: Annotated[User, Depends(require_admin)],
     db: Annotated[Session, Depends(get_db)],
 ) -> AdminUserRead:
-    user = auth_service.reject_user(
-        db, user_id, reason=body.reason, actor=_actor(admin)
-    )
+    user = auth_service.reject_user(db, user_id, reason=body.reason, actor=_actor(admin))
     return auth_service.admin_read(db, user)
 
 
@@ -298,9 +299,7 @@ def set_default_manager(
     signature, else 422 ``NOT_ELIGIBLE``. Any previous holder is cleared in
     the same transaction (single-holder invariant).
     """
-    user = auth_service.set_default_manager(
-        db, user_id, enabled=body.enabled, actor=_actor(admin)
-    )
+    user = auth_service.set_default_manager(db, user_id, enabled=body.enabled, actor=_actor(admin))
     return auth_service.admin_read(db, user)
 
 
@@ -318,9 +317,7 @@ def list_capabilities(
             domain=cap.domain,
             label=cap.label,
             description=cap.description,
-            default_roles=[
-                role for role, caps in ROLE_DEFAULTS.items() if cap.id in caps
-            ],
+            default_roles=[role for role, caps in ROLE_DEFAULTS.items() if cap.id in caps],
         )
         for cap in CAPABILITIES
     ]
@@ -353,7 +350,9 @@ def set_user_permission(
 ) -> UserPermissionRead:
     """Set or clear one per-user capability override (grant/deny/null)."""
     user = auth_service.require_user(db, user_id)
-    perm_service.set_user_override(db, user.id, body.capability, body.effect, actor=admin, expires_at=body.expires_at)
+    perm_service.set_user_override(
+        db, user.id, body.capability, body.effect, actor=admin, expires_at=body.expires_at
+    )
     auth_service.audit_permission_change(
         db, actor=_actor(admin), user=user, capability=body.capability, effect=body.effect
     )

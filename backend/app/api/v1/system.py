@@ -67,7 +67,9 @@ def system_info(
 
 
 @router.get("/update-check", response_model=UpdateCheckResult)
-def update_check() -> UpdateCheckResult:
+def update_check(
+    _user: Annotated[User, Depends(get_current_user)],
+) -> UpdateCheckResult:
     settings = get_settings()
     return system_service.check_for_updates(settings)
 
@@ -103,7 +105,10 @@ def post_crash_report(
 
 
 @router.get("/migration-status", response_model=MigrationStatus)
-def get_migration_status(db: Annotated[Session, Depends(get_db)]) -> MigrationStatus:
+def get_migration_status(
+    _user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[Session, Depends(get_db)],
+) -> MigrationStatus:
     """Return current migration status (has_db, has_data, detected v3 dir, last run)."""
     settings = get_settings()
     return migration_service.get_migration_status(db, settings)

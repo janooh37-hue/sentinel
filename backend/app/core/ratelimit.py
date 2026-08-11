@@ -25,6 +25,8 @@ LOGIN_MAX_HITS = 10
 LOGIN_WINDOW_SECONDS = 60
 EMAIL_VERIFY_MAX_HITS = 5
 EMAIL_VERIFY_WINDOW_SECONDS = 60
+REGISTER_MAX_HITS = 5
+REGISTER_WINDOW_SECONDS = 60
 
 
 class RateLimiter:
@@ -71,12 +73,11 @@ def enforce(limiter: RateLimiter, request: Request) -> None:
 
 
 # Shared singletons applied at the route layer.
-login_limiter = RateLimiter(
-    max_hits=LOGIN_MAX_HITS, window_seconds=LOGIN_WINDOW_SECONDS
-)
+login_limiter = RateLimiter(max_hits=LOGIN_MAX_HITS, window_seconds=LOGIN_WINDOW_SECONDS)
 email_verify_limiter = RateLimiter(
     max_hits=EMAIL_VERIFY_MAX_HITS, window_seconds=EMAIL_VERIFY_WINDOW_SECONDS
 )
+register_limiter = RateLimiter(max_hits=REGISTER_MAX_HITS, window_seconds=REGISTER_WINDOW_SECONDS)
 
 
 __all__ = [
@@ -84,8 +85,11 @@ __all__ = [
     "EMAIL_VERIFY_WINDOW_SECONDS",
     "LOGIN_MAX_HITS",
     "LOGIN_WINDOW_SECONDS",
+    "REGISTER_MAX_HITS",
+    "REGISTER_WINDOW_SECONDS",
     "RateLimiter",
     "email_verify_limiter",
     "enforce",
     "login_limiter",
+    "register_limiter",
 ]

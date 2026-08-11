@@ -8456,7 +8456,9 @@ export interface operations {
             query?: never;
             header?: never;
             path?: never;
-            cookie?: never;
+            cookie?: {
+                gssg_session?: string | null;
+            };
         };
         requestBody?: never;
         responses: {
@@ -8467,6 +8469,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["UpdateCheckResult"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -8546,7 +8557,9 @@ export interface operations {
             query?: never;
             header?: never;
             path?: never;
-            cookie?: never;
+            cookie?: {
+                gssg_session?: string | null;
+            };
         };
         requestBody?: never;
         responses: {
@@ -8557,6 +8570,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["MigrationStatus"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

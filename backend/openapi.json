@@ -82,6 +82,24 @@
         ],
         "summary": "Update Check",
         "operationId": "update_check_api_v1_system_update_check_get",
+        "parameters": [
+          {
+            "name": "gssg_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Gssg Session"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "Successful Response",
@@ -89,6 +107,16 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/UpdateCheckResult"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
                 }
               }
             }
@@ -223,6 +251,24 @@
         "summary": "Get Migration Status",
         "description": "Return current migration status (has_db, has_data, detected v3 dir, last run).",
         "operationId": "get_migration_status_api_v1_system_migration_status_get",
+        "parameters": [
+          {
+            "name": "gssg_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Gssg Session"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "Successful Response",
@@ -230,6 +276,16 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/MigrationStatus"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
                 }
               }
             }

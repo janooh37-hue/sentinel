@@ -55,6 +55,13 @@ def build_config() -> uvicorn.Config:
         log_level=settings.log_level.lower(),
         access_log=False,
         lifespan="on",
+        # Trust X-Forwarded-For/-Proto ONLY from loopback proxies (Caddy on the
+        # LAN, cloudflared for https://gssg.app). These are uvicorn's defaults,
+        # pinned because they are load-bearing: the per-IP rate limiter and the
+        # Secure session cookie need request.client.host / url.scheme to be the
+        # real client's, not the local proxy's.
+        proxy_headers=True,
+        forwarded_allow_ips="127.0.0.1",
     )
 
 
