@@ -105,6 +105,7 @@ def _signed_pdf_url_of(v: BookVersion) -> str | None:
 @categories_router.get("", response_model=list[BookCategoryRead])
 def list_book_categories(
     db: Annotated[Session, Depends(get_db)],
+    _user: Annotated[User, Depends(require_capability("books.view"))],
 ) -> list[BookCategoryRead]:
     rows = book_service.list_book_categories(db)
     return [BookCategoryRead.model_validate(r) for r in rows]
@@ -117,9 +118,11 @@ def list_book_categories(
 
 @router.get("/classifications", response_model=ClassificationListResponse)
 def list_classifications(
-    _user: Annotated[User, Depends(get_current_user)],
+    _user: Annotated[User, Depends(require_capability("books.view"))],
 ) -> ClassificationListResponse:
-    """Return the full government classification list (any authenticated user)."""
+    """Return the full government classification list. Gated on ``books.view``
+    like the rest of the register: an operator default, so every role holds it,
+    but a per-user deny must actually deny."""
     return ClassificationListResponse(
         items=[
             ClassificationRead(
@@ -137,7 +140,7 @@ def list_classifications(
 @router.get("/facets", response_model=BookFacetsResponse)
 def book_facets(
     db: Annotated[Session, Depends(get_db)],
-    _user: Annotated[User, Depends(get_current_user)],
+    _user: Annotated[User, Depends(require_capability("books.view"))],
 ) -> BookFacetsResponse:
     """Per-service counts for the Records rail + per-service approval-state
     counts for the status spine. Global, unpaginated."""
@@ -367,6 +370,7 @@ def _fill_draft_fields(
 @router.get("", response_model=BookListResponse)
 def list_books(
     db: Annotated[Session, Depends(get_db)],
+    _user: Annotated[User, Depends(require_capability("books.view"))],
     category_id: str | None = None,
     service_id: str | None = None,
     direction: str | None = None,

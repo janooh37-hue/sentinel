@@ -1418,7 +1418,9 @@ export interface paths {
         };
         /**
          * List Classifications
-         * @description Return the full government classification list (any authenticated user).
+         * @description Return the full government classification list. Gated on ``books.view``
+         *     like the rest of the register: an operator default, so every role holds it,
+         *     but a per-user deny must actually deny.
          */
         get: operations["list_classifications_api_v1_books_classifications_get"];
         put?: never;

@@ -5821,7 +5821,7 @@
           "books"
         ],
         "summary": "List Classifications",
-        "description": "Return the full government classification list (any authenticated user).",
+        "description": "Return the full government classification list. Gated on ``books.view``\nlike the rest of the register: an operator default, so every role holds it,\nbut a per-user deny must actually deny.",
         "operationId": "list_classifications_api_v1_books_classifications_get",
         "parameters": [
           {
