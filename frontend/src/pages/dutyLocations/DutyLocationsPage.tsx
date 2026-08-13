@@ -15,7 +15,7 @@
 import { useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
-import { Search, X } from 'lucide-react'
+import { Search } from 'lucide-react'
 
 import { api, type DutyTransferResult, type EmployeeListItem } from '@/lib/api'
 import {
@@ -29,6 +29,7 @@ import { UnitRail, type UnitRailItem } from './UnitRail'
 import { RosterTable } from './RosterTable'
 import { AssignPopover } from './AssignPopover'
 import { TransferDialog } from './TransferDialog'
+import { SelectionTray } from './SelectionTray'
 import { SavedRecordActions } from '@/components/books/SavedRecordActions'
 import { SupervisorDesignations } from './SupervisorDesignations'
 import { LeaveDigestPanel } from './LeaveDigestPanel'
@@ -48,7 +49,7 @@ export function DutyLocationsPage(): React.JSX.Element {
 
   const grouped = useMemo(() => groupByUnit(employees), [employees])
 
-  // Selection (employee ids) — multi-select across posts within a unit.
+  // Selection (employee ids) — a transfer basket that spans units.
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [search, setSearch] = useState('')
 
@@ -141,9 +142,10 @@ export function DutyLocationsPage(): React.JSX.Element {
     })
   }
 
+  // The selection is a transfer basket, NOT a view filter: it deliberately
+  // survives rail navigation so one letter can gather people from several units.
   function selectUnit(key: string): void {
     setActiveKey(key)
-    setSelected(new Set()) // selection is scoped to a unit
   }
 
   return (
@@ -246,31 +248,14 @@ export function DutyLocationsPage(): React.JSX.Element {
         )}
       </div>
 
-      {/* Sticky selection bar */}
+      {/* Sticky selection bar + cross-unit review tray */}
       {selected.size > 0 && (
-        <div className="fixed inset-x-0 bottom-0 z-40 border-t border-primary/40 bg-primary px-4 py-3 text-primary-foreground shadow-lg sm:px-6">
-          <div className="mx-auto flex w-full max-w-[1240px] flex-wrap items-center gap-3">
-            <span className="font-semibold">
-              {t('dutyLocations.selection.count', { count: selected.size })}
-            </span>
-            <button
-              type="button"
-              onClick={() => setSelected(new Set())}
-              className="inline-flex items-center gap-1 rounded-md border border-white/40 px-3 py-1.5 text-sm font-medium hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/50"
-            >
-              <X className="h-3.5 w-3.5" aria-hidden />
-              {t('dutyLocations.selection.clear')}
-            </button>
-            <div className="ms-auto" />
-            <button
-              type="button"
-              onClick={() => setTransferOpen(true)}
-              className="rounded-md bg-white px-4 py-1.5 text-sm font-semibold text-primary hover:bg-white/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/50"
-            >
-              {t('dutyLocations.selection.transfer')}
-            </button>
-          </div>
-        </div>
+        <SelectionTray
+          employees={selectedEmployees}
+          onRemove={(id) => toggle(id, false)}
+          onClear={() => setSelected(new Set())}
+          onTransfer={() => setTransferOpen(true)}
+        />
       )}
 
       {/* Assign / edit a single employee */}

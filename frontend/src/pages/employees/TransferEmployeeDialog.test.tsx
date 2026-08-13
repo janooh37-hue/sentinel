@@ -59,8 +59,7 @@ test('checkbox on (default): confirms via POST /duty/transfer', async () => {
   fireEvent.click(screen.getByRole('button', { name: 'dutyLocations.transfer.generate' }))
   await waitFor(() => expect(api.transferDuty).toHaveBeenCalled())
   expect(vi.mocked(api.transferDuty).mock.calls[0][0]).toMatchObject({
-    employee_ids: ['G100'],
-    to_unit: 'السرية الثانية',
+    moves: [{ employee_id: 'G100', to_unit: 'السرية الثانية' }],
   })
   expect(api.updateEmployee).not.toHaveBeenCalled()
 })

@@ -73,9 +73,7 @@ export function TransferEmployeeDialog({ open, employee, onOpenChange }: Props):
       const v = methods.getValues()
       return api.transferDuty(
         buildTransferRequest({
-          employeeIds: [employee.id],
-          toUnit: unit,
-          toPost: post,
+          moves: [{ employeeId: employee.id, toUnit: unit, toPost: post }],
           recipientId: v.recipient_id,
           managerId: v.manager_id,
           cc: v.cc,
