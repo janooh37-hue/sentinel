@@ -372,6 +372,10 @@
         "leave": "Leave record · {{days}} days",
         "violation": "Recorded violation",
         "ledger": "Recorded correspondence"
+      },
+      "badge": {
+        "company": "GSSG Security",
+        "role": "Employee identification"
       }
     }
   },
