@@ -18,17 +18,23 @@ const testLanguage = vi.hoisted(() => ({ value: 'en' }))
 vi.mock('./EmployeeActivityLookup', () => ({
   EmployeeActivityLookup: ({
     onSelect,
-    onClear,
     onOpenProfile,
   }: {
     onSelect: (employee: EmployeeListItem) => void
-    onClear: () => void
     onOpenProfile: (employeeId: string) => void
   }) => (
     <div>
       <button type="button" onClick={() => onSelect(abdulla)}>mock-select-G3190</button>
-      <button type="button" onClick={onClear}>mock-clear-employee</button>
       <button type="button" onClick={() => onOpenProfile('G3190')}>mock-open-profile-G3190</button>
+    </div>
+  ),
+}))
+
+vi.mock('./EmployeeBadgeCard', () => ({
+  EmployeeBadgeCard: ({ employee, onClear }: { employee: EmployeeListItem; onClear: () => void }) => (
+    <div data-testid="badge-card">
+      <span>badge:{employee.id}</span>
+      <button type="button" onClick={onClear}>mock-clear-employee</button>
     </div>
   ),
 }))
@@ -129,7 +135,7 @@ describe('EmployeeActivitySection', () => {
     wrap(<EmployeeActivitySection onOpenProfile={() => {}} />)
     await screen.findByText('Employment Certificate')
     await userEvent.click(screen.getByRole('button', { name: 'mock-select-G3190' }))
-    await userEvent.selectOptions(screen.getByRole('combobox', { name: /activity type/i }), 'leave')
+    await userEvent.click(within(screen.getByRole('group', { name: /activity type/i })).getByRole('button', { name: 'Leave' }))
     await waitFor(() => expect(api.listEmployeeActivity).toHaveBeenLastCalledWith({ employee_id: 'G3190', kind: 'leave', limit: 25, offset: 0 }))
   })
 
@@ -176,7 +182,7 @@ describe('EmployeeActivitySection', () => {
     vi.mocked(api.listEmployeeActivity).mockResolvedValue({ items: [], total: 0, limit: 25, offset: 0 })
     wrap(<EmployeeActivitySection onOpenProfile={() => {}} />)
     await screen.findByText(/no recent employee activity/i)
-    await userEvent.selectOptions(screen.getByRole('combobox', { name: /activity type/i }), 'leave')
+    await userEvent.click(within(screen.getByRole('group', { name: /activity type/i })).getByRole('button', { name: 'Leave' }))
     const filtered = await screen.findByText(/no activity matches the current filters/i)
     expect(filtered).not.toHaveTextContent(/employee/i)
   })
@@ -274,31 +280,24 @@ describe('EmployeeActivitySection', () => {
     expect(screen.getByRole('heading', { name: formatDay.format(secondDay) })).toBeInTheDocument()
   })
 
-  it('keeps employee and time first, followed by activity details in phone reading order', async () => {
+  it('shows the employee identity on rows only when browsing all employees', async () => {
     wrap(<EmployeeActivitySection onOpenProfile={() => {}} />)
     const row = await screen.findByRole('link', { name: /open document/i })
-    const cells = Array.from(row.firstElementChild?.children ?? [])
-    expect(cells).toHaveLength(6)
-    expect(cells[0]).toHaveTextContent('EMPLOYEE 0')
-    expect(cells[1]).toHaveTextContent(/2026/)
-    expect(cells[2]).toHaveTextContent('Employment Certificate')
-    expect(cells[3]).toHaveTextContent('Documents')
-    expect(cells[4]).toHaveTextContent('#11')
-    expect(cells[5]).toHaveTextContent('Open document')
+    expect(within(row).getByText('EMPLOYEE 0')).toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', { name: 'mock-select-G3190' }))
+    await screen.findByTestId('badge-card')
+    const rows = await screen.findAllByRole('link', { name: /open/i })
+    for (const r of rows) expect(within(r).queryByText(/^EMPLOYEE/)).not.toBeInTheDocument()
   })
 
-  it('uses desktop headers in Employee, Activity, Type, Reference, Date, Destination order', async () => {
+  it('mounts the badge card only while an employee is selected', async () => {
     wrap(<EmployeeActivitySection onOpenProfile={() => {}} />)
     await screen.findByText('Employment Certificate')
-    const header = screen.getByText('Employee', { exact: true }).parentElement
-    expect(Array.from(header?.children ?? []).map((cell) => cell.textContent)).toEqual([
-      'Employee',
-      'Activity',
-      'Type',
-      'Reference',
-      'Date and time',
-      'Destination',
-    ])
+    expect(screen.queryByTestId('badge-card')).not.toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', { name: 'mock-select-G3190' }))
+    expect(await screen.findByTestId('badge-card')).toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', { name: 'mock-clear-employee' }))
+    await waitFor(() => expect(screen.queryByTestId('badge-card')).not.toBeInTheDocument())
   })
 
   it('uses the Arabic employee name when the interface is Arabic', async () => {
@@ -312,20 +311,15 @@ describe('EmployeeActivitySection', () => {
     wrap(<EmployeeActivitySection onOpenProfile={() => {}} />)
     expect(await screen.findByText('شهادة العمل')).toBeInTheDocument()
   })
-  it('keeps type, reference, destination, and date as six aligned row cells', async () => {
+  it('keeps references automatic-direction mono text and destinations accessible', async () => {
     wrap(<EmployeeActivitySection onOpenProfile={() => {}} />)
     const row = await screen.findByRole('link', { name: /open document/i })
-    expect(row.firstElementChild?.children).toHaveLength(6)
-    expect(within(row).getByText('Documents')).toBeInTheDocument()
     expect(within(row).getByText('#11')).toHaveAttribute('dir', 'auto')
   })
 
-  it('keeps compact cards through tablet widths so the destination stays visible', async () => {
+  it('uses the compact F3 flex row layout', async () => {
     wrap(<EmployeeActivitySection onOpenProfile={() => {}} />)
-    const destination = await screen.findByText('Open document')
-    const rowGrid = destination.parentElement
-    const header = screen.getByText('Employee', { exact: true }).parentElement
-    expect(rowGrid).toHaveClass('grid-cols-2', 'xl:grid-cols-[minmax(160px,1fr)_minmax(180px,1.2fr)_minmax(150px,1fr)_minmax(130px,1fr)_minmax(150px,1fr)_minmax(160px,1fr)]')
-    expect(header).toHaveClass('hidden', 'xl:grid')
+    const row = await screen.findByRole('link', { name: /open document/i })
+    expect(row).toHaveClass('flex', 'items-center', 'border-b')
   })
 })

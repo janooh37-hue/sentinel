@@ -8,16 +8,12 @@ import { pickPosition } from '@/lib/employeePosition'
 import { useDebouncedValue } from '@/lib/useDebouncedValue'
 
 interface Props {
-  selected: EmployeeListItem | null
   onSelect: (employee: EmployeeListItem) => void
-  onClear: () => void
   onOpenProfile: (employeeId: string) => void
 }
 
 export function EmployeeActivityLookup({
-  selected,
   onSelect,
-  onClear,
   onOpenProfile,
 }: Props): React.JSX.Element {
   const { t, i18n } = useTranslation()
@@ -80,129 +76,91 @@ export function EmployeeActivityLookup({
     inputRef.current?.focus()
   }
 
-  function clearEmployee(): void {
-    setQuery('')
-    setDismissedQuery(debounced)
-    onClear()
-    inputRef.current?.focus()
-  }
-
-  const selectedPosition = selected == null ? null : pickPosition(selected, lang)
 
   return (
-    <section aria-label={t('employees.activity.lookupLabel')} className="rounded-2xl border border-border bg-surface p-4 text-foreground">
-      {selected != null && (
-        <div className="mb-3 flex flex-wrap items-center gap-3">
-          <div className="min-w-0 flex-1">
-            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-              {t('employees.activity.lookupLabel')}
-            </p>
-            <p dir="auto" className="mt-1 truncate font-semibold">{pickEmployeeName(selected, lang)}</p>
-            <p className="mt-0.5 flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
-              <span dir="auto" className="font-mono">{selected.id}</span>
-              {selectedPosition && <span dir="auto">{selectedPosition}</span>}
-            </p>
-          </div>
-          <div className="flex shrink-0 gap-2">
-            <button
-              type="button"
-              onClick={() => onOpenProfile(selected.id)}
-              className="rounded-lg border border-border px-3 py-2 text-sm font-semibold hover:bg-surface-raised focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-            >
-              {t('employees.activity.openProfile')}
-            </button>
-            <button
-              type="button"
-              onClick={clearEmployee}
-              className="rounded-lg border border-border px-3 py-2 text-sm font-semibold hover:bg-surface-raised focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-            >
-              {t('employees.activity.clearEmployee')}
-            </button>
-          </div>
-        </div>
-      )}
-
-      <div className="relative text-start">
-        <label htmlFor="employee-activity-lookup" className="sr-only">
-          {t('employees.activity.lookupLabel')}
-        </label>
+    <div className="relative min-w-0 flex-1 text-start">
+      <label htmlFor="employee-activity-lookup" className="sr-only">
+        {t('employees.activity.lookupLabel')}
+      </label>
+      <div className="flex items-center gap-2.5 rounded-xl border border-border bg-surface px-3.5 py-0 focus-within:ring-2 focus-within:ring-primary">
+        <svg aria-hidden width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" className="shrink-0 text-faint">
+          <circle cx="11" cy="11" r="7" />
+          <path d="m20 20-3.3-3.3" />
+        </svg>
         <input
           ref={inputRef}
           id="employee-activity-lookup"
           type="search"
           role="searchbox"
           value={query}
-          onChange={(event) => {
-            setQuery(event.target.value)
-            setDismissedQuery(null)
-          }}
+          onChange={(event) => { setQuery(event.target.value); setDismissedQuery(null) }}
           onKeyDown={handleInputKeyDown}
           placeholder={t('employees.activity.lookupPlaceholder')}
           aria-expanded={popupOpen}
           aria-controls="employee-activity-lookup-results"
           autoComplete="off"
-          className="w-full rounded-xl border border-border bg-background px-4 py-3 text-sm text-foreground outline-none placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-primary"
+          className="w-full min-w-0 border-0 bg-transparent py-3 text-sm text-foreground outline-none placeholder:text-muted-foreground [&::-webkit-search-cancel-button]:hidden"
         />
-
-        {popupOpen && (
-          <ul
-            id="employee-activity-lookup-results"
-            role="list"
-            aria-label={t('employees.activity.matches')}
-            className="absolute inset-x-0 top-[calc(100%+8px)] z-20 max-h-[min(55vh,480px)] overflow-y-auto rounded-xl border border-border bg-surface text-foreground shadow-lg"
-          >
-            {isPending && (
-              <li className="px-4 py-3 text-sm text-muted-foreground" role="status">
-                {t('employees.activity.lookupLoading')}
-              </li>
-            )}
-            {isError && (
-              <li className="px-4 py-3 text-sm text-destructive" role="alert">
-                {t('employees.activity.lookupError')}
-              </li>
-            )}
-            {!isPending && !isError && items.length === 0 && (
-              <li className="px-4 py-3 text-sm text-muted-foreground">
-                {t('employees.activity.lookupEmpty')}
-              </li>
-            )}
-            {!isPending && !isError && items.map((employee, index) => {
-              const position = pickPosition(employee, lang)
-              return (
-                <li key={employee.id} className="flex items-center gap-3 border-b border-hairline px-4 py-3 last:border-b-0">
-                  <div className="min-w-0 flex-1">
-                    <p dir="auto" className="truncate text-sm font-semibold">{pickEmployeeName(employee, lang)}</p>
-                    <p className="mt-0.5 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-                      <span dir="auto" className="font-mono">{employee.id}</span>
-                      {position && <span dir="auto">{position}</span>}
-                      <StatusPill status={employee.status} />
-                    </p>
-                  </div>
-                  <div className="flex shrink-0 gap-2">
-                    <button
-                      ref={(button) => { showRefs.current[index] = button }}
-                      type="button"
-                      onClick={() => selectEmployee(employee)}
-                      onKeyDown={(event) => handleShowKeyDown(event, index)}
-                      className="rounded-lg bg-primary px-3 py-2 text-xs font-semibold text-primary-foreground hover:bg-primary-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-                    >
-                      {t('employees.activity.showActivity')}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => onOpenProfile(employee.id)}
-                      onKeyDown={handlePopupActionKeyDown}
-                      className="rounded-lg border border-border px-3 py-2 text-xs font-semibold hover:bg-surface-raised focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-                    >
-                      {t('employees.activity.openProfile')}
-                    </button>
-                  </div>
-                </li>
-              )
-            })}
-          </ul>
-        )}
       </div>
-    </section>
+
+      {popupOpen && (
+        <ul
+          id="employee-activity-lookup-results"
+          role="list"
+          aria-label={t('employees.activity.matches')}
+          className="absolute inset-x-0 top-[calc(100%+8px)] z-20 max-h-[min(55vh,480px)] overflow-y-auto rounded-xl border border-border bg-surface text-foreground shadow-lg"
+        >
+          {isPending && (
+            <li className="px-4 py-3 text-sm text-muted-foreground" role="status">
+              {t('employees.activity.lookupLoading')}
+            </li>
+          )}
+          {isError && (
+            <li className="px-4 py-3 text-sm text-destructive" role="alert">
+              {t('employees.activity.lookupError')}
+            </li>
+          )}
+          {!isPending && !isError && items.length === 0 && (
+            <li className="px-4 py-3 text-sm text-muted-foreground">
+              {t('employees.activity.lookupEmpty')}
+            </li>
+          )}
+          {!isPending && !isError && items.map((employee, index) => {
+            const position = pickPosition(employee, lang)
+            return (
+              <li key={employee.id} className="flex items-center gap-3 border-b border-hairline px-4 py-3 last:border-b-0">
+                <div className="min-w-0 flex-1">
+                  <p dir="auto" className="truncate text-sm font-semibold">{pickEmployeeName(employee, lang)}</p>
+                  <p className="mt-0.5 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                    <span dir="auto" className="font-mono">{employee.id}</span>
+                    {position && <span dir="auto">{position}</span>}
+                    <StatusPill status={employee.status} />
+                  </p>
+                </div>
+                <div className="flex shrink-0 gap-2">
+                  <button
+                    ref={(button) => { showRefs.current[index] = button }}
+                    type="button"
+                    onClick={() => selectEmployee(employee)}
+                    onKeyDown={(event) => handleShowKeyDown(event, index)}
+                    className="rounded-lg bg-primary px-3 py-2 text-xs font-semibold text-primary-foreground hover:bg-primary-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                  >
+                    {t('employees.activity.showActivity')}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => onOpenProfile(employee.id)}
+                    onKeyDown={handlePopupActionKeyDown}
+                    className="rounded-lg border border-border px-3 py-2 text-xs font-semibold hover:bg-surface-raised focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                  >
+                    {t('employees.activity.openProfile')}
+                  </button>
+                </div>
+              </li>
+            )
+          })}
+        </ul>
+      )}
+    </div>
   )
 }
