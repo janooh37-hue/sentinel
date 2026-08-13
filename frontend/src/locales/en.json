@@ -1127,6 +1127,21 @@
     "executedCopy": {
       "title": "Executed copy"
     },
+    "stateOverride": {
+      "trigger": "State",
+      "title": "Force record state",
+      "blurb": "Bypasses the approval flow and is written to the audit log.",
+      "pickState": "New state",
+      "currentBadge": "Current",
+      "reasonLabel": "Reason",
+      "reasonHint": "Required when forcing Returned or Rejected.",
+      "reasonPlaceholder": "Why is this record's state being changed?",
+      "confirm": "Force state",
+      "done": "Record set to {{state}}",
+      "warnApproved": "This approves the record without a signature; no signed copy is added.",
+      "warnVoided": "This marks the record a discarded draft. Its reference stays reserved in the register.",
+      "warnLeaveApproved": "The signed copy stays on file, but stops being served for view or download while the state isn't Approved."
+    },
     "record": {
       "submittedBy": "Submitted by",
       "loading": "Loading…",
@@ -3234,6 +3249,7 @@
         "books.view": "View books",
         "books.manage": "Create / edit / delete books",
         "books.approve": "Approve / reject books",
+        "books.override_state": "Force a record's state",
         "ledger.view": "View ledger",
         "ledger.edit": "Edit ledger entries + drafts",
         "ledger.send": "Send email from the ledger",

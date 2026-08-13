@@ -15,7 +15,7 @@ built on top of this model see
 
 `backend/app/core/permissions.py`
 
-- `CAPABILITIES` — the catalog: 26 `Capability(id, group, label, description)` tuples.
+- `CAPABILITIES` — the catalog: 27 `Capability(id, group, label, description)` tuples.
   The `description` is user-facing (it drives the admin permission editor and the
   request UI).
 - `CAPABILITY_IDS` / `ALL_CAPABILITIES` — the id set; `ALL_CAPABILITIES` is what the
@@ -26,7 +26,13 @@ built on top of this model see
 | --- | --- | --- |
 | `operator` | 13 caps | read-only across the app + the two daily-work write surfaces: `documents.generate`, `ledger.edit`/`ledger.send`, plus `email.manage` for the user's own mailbox |
 | `manager` | 22 caps | operator preset plus the management writes: `employees.edit`, `employees.notify`, `leaves.edit`, `violations.manage`, `books.manage`, `books.approve`, `permits.manage`, `submitters.manage`, `editor_templates.manage`. The literal `frozenset` lists 10 additions, but `ledger.send` is already an operator default, so the union is 22 not 23 |
-| `admin` | all 26 | `ALL_CAPABILITIES` |
+| `admin` | all 27 | `ALL_CAPABILITIES` |
+
+**Admin-only by default, but delegable.** `books.override_state` (added 2026-08-14) is
+in no preset except `admin`'s `ALL_CAPABILITIES`, so only an admin holds it out of the
+box — yet it is deliberately *not* in `_SENSITIVE_CAPS`, so an admin can grant it to a
+specific manager. Contrast `users.manage` / `system.admin`, which no override can hand
+out. See §6.
 
 `default_caps_for_role()` falls back to the **operator** preset for an unknown role —
 fail-soft, not fail-closed. Worth remembering if a new role is ever added.
@@ -66,10 +72,10 @@ everyone else    -> role_defaults + grants - denies
 
 ## 3. The four enforcement tiers on a request
 
-Measured over all 256 `/api/v1` routes:
+Measured over all 257 `/api/v1` routes:
 
 ```
-dependency-gated (require_capability / require_admin): 220
+dependency-gated (require_capability / require_admin): 221
 in-handler gated (perm_service.has_capability):          2
 authenticated-only (login, but no capability):          30
 anonymous (no session required at all):                  4
@@ -158,3 +164,45 @@ places (the router's `dependencies=`, the decorator's `dependencies=`, the handl
 signature), separately detects in-handler `has_capability` calls, and cross-references
 `main.py`'s `include_router` calls to tell "anonymous" apart from "authenticated but
 uncapability-gated". Report only — always exits 0.
+
+## 6. `books.override_state` — the record-state escape hatch
+
+**Added 2026-08-14.** `PUT /api/v1/books/{book_id}/state` sets a record to any state the
+register can show, bypassing the approval chain. It exists because the normal flow can
+strand a record with no legitimate way out: the assigned signer left the organisation, a
+paper scan will never arrive, a form was approved against the wrong record, a draft was
+discarded by mistake.
+
+**Why its own capability, not `books.approve`.** Approving is "I decide this document";
+overriding is "I rewrite what the register says was decided, and by whom". A manager who
+can sign should not silently also be able to mark someone else's rejection approved. Hence
+admin-only by default, granted per-user when a specific manager genuinely needs it.
+
+**Seven states, two columns.** The picker covers the six `Book.approval_state` values plus
+`voided` — `Book.voided_at`, a discarded draft whose reference stays reserved in the
+register. Voided lives on a separate column but reads as a state on every records surface,
+so leaving it out would have made "un-discard this draft" unreachable. The pseudo-state is
+stored as `approval_state="none"` + `voided_at`; `book_service.displayed_state()` and the
+frontend's `recordStateOf()` are the two mirrored definitions of "which state is this".
+
+**Chain alignment is the non-obvious part.** `BookApprovalStep` rows *are* the audit trail,
+and different readers derive from either them or the aggregate — so a raw column write
+would leave the record telling two stories. `_align_chain_to()` re-points the current
+version's chain at the target: draft / awaiting-scan / voided drop it (neither state has a
+chain in the normal flow), `pending` reopens it (building one for the doc's linked manager,
+else the acting admin, when none exists), `approved` settles it, and the negative verdicts
+settle the step that was in play with the reason.
+
+**Three things it deliberately does not do:** fabricate a signature (forcing `approved`
+never writes `signed_pdf_path` or embeds a signature image); delete artifacts (a filed
+signed PDF survives the flip and merely stops being served, since serving keys on
+`status == "approved"` — `unfile_signed_copy` is still the way to remove it); notify or
+re-file in the Correspondence Log.
+
+**Audit:** every call writes an `audit_log` row, `action="book_state_override"`,
+`entity_type="book"`, with `{ref_number, from, to, reason, actor_user_id}`. `reason` is
+required for `returned` / `rejected`, mirroring `decide_step`.
+
+**Tests:** `backend/tests/test_books_state_override.py` (24 cases — the gate incl.
+delegation, reachability of every state, chain alignment, artifact survival, the refusals,
+the audit row) and `frontend/src/components/books/RecordStateOverrideDialog.test.tsx`.

@@ -46,6 +46,7 @@ from app.schemas.book import (
     BookFacetsResponse,
     BookListResponse,
     BookRead,
+    BookStateOverrideRequest,
     BookSubmitRequest,
     BookUpdate,
     BookVersionRead,
@@ -928,6 +929,26 @@ def add_note(
 ) -> BookRead:
     row = book_service.add_note(db, book_id, user_id=user.id, note=payload.note)
     return BookRead.model_validate(row)
+
+
+@router.put("/{book_id}/state", response_model=BookRead)
+def override_book_state(
+    book_id: int,
+    payload: BookStateOverrideRequest,
+    db: Annotated[Session, Depends(get_db)],
+    user: Annotated[User, Depends(require_capability("books.override_state"))],
+) -> BookRead:
+    """Force this record's state, bypassing the approval chain (admin repair).
+
+    Returns the full detail shape (not the bare row) because the flip moves the
+    state pill, the chips, the timeline, and whether the signed PDF is served —
+    the record screen re-renders off this response.
+    """
+    book_service.override_state(
+        db, book_id, target_state=payload.state, actor=user, reason=payload.reason
+    )
+    row = book_service.get_book_detail(db, book_id)
+    return _build_book_detail(db, row)
 
 
 @router.post("/{book_id}/review", response_model=BookRead)

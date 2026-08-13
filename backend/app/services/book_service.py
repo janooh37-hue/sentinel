@@ -16,7 +16,7 @@ from collections.abc import Sequence
 from datetime import UTC, date, datetime, timedelta
 from functools import lru_cache
 from pathlib import Path, PurePath
-from typing import Any, NamedTuple
+from typing import Any, Final, NamedTuple
 
 from sqlalchemy import Integer, and_, false, func, not_, or_, select, text
 from sqlalchemy.orm import Session, selectinload
@@ -710,6 +710,187 @@ def decide_step(
     current.note = note
     current.decided_at = datetime.now(UTC).replace(tzinfo=None)
     _recompute_approval_state(book)
+    db.commit()
+    db.refresh(book)
+    return book
+
+
+# ─── Administrative state override ────────────────────────────────────────────
+# Record states an override can force. `voided` is the one pseudo-state: it is
+# stored as approval_state="none" + Book.voided_at, because "discarded draft" is
+# a separate column but reads as a state on every records surface (chips, rows,
+# the state pill). Keeping it in this list is what makes the control cover the
+# whole of "what state is this record in".
+VOIDED_STATE: Final[str] = "voided"
+OVERRIDABLE_STATES: Final[tuple[str, ...]] = (
+    "none",
+    "pending",
+    "awaiting_scan",
+    "approved",
+    "returned",
+    "rejected",
+    VOIDED_STATE,
+)
+
+
+def displayed_state(book: Book) -> str:
+    """The state the records surfaces show for ``book`` — the override's unit of
+    work. Voided wins over the approval state: a discarded draft reads "voided",
+    never "draft"."""
+    return VOIDED_STATE if book.voided_at is not None else book.approval_state
+
+
+def _override_approver_id(db: Session, book: Book, actor: User) -> int:
+    """Assignee for a chain an override has to build from nothing.
+
+    The doc's linked signing manager (the resolution ``submit_for_approval``
+    uses), else the acting admin — ``assignee_user_id`` is NOT NULL, and parking
+    the step on whoever forced the state is both visible on the record and
+    re-routable afterwards via Send for approval.
+    """
+    if book.doc_manager_id is not None:
+        mgr = db.get(Manager, book.doc_manager_id)
+        if mgr is not None and mgr.user_id is not None:
+            candidate = db.get(User, mgr.user_id)
+            if candidate is not None and candidate.status == "active":
+                return candidate.id
+    return actor.id
+
+
+def _align_chain_to(
+    db: Session,
+    book: Book,
+    version: BookVersion,
+    target_state: str,
+    *,
+    actor: User,
+    note: str | None,
+    now: datetime,
+) -> None:
+    """Re-point the current version's approval chain at ``target_state``.
+
+    The chain IS the audit trail, and readers derive from either it or the
+    aggregate — so an override that moved only the aggregate would leave the
+    record telling two different stories about who decided what.
+    """
+    if target_state in ("none", "awaiting_scan", VOIDED_STATE):
+        # Neither a draft nor a scan-path record carries an in-app chain.
+        version.approval_steps.clear()
+        return
+    if target_state == "pending":
+        steps = _approver_steps(version)
+        if not steps:
+            version.approval_steps.append(
+                BookApprovalStep(
+                    book_id=book.id,
+                    step_order=0,
+                    stage_label="Approve",
+                    assignee_user_id=_override_approver_id(db, book, actor),
+                    kind="approver",
+                    state="pending",
+                )
+            )
+            return
+        for step in steps:
+            step.state = "pending"
+            step.note = None
+            step.decided_at = None
+        return
+    if target_state == "approved":
+        # Administrative approval — the steps stop contradicting the state; no
+        # signature is fabricated (see override_state's docstring).
+        for step in _approver_steps(version):
+            if step.state != "approved":
+                step.state = "approved"
+                step.note = note
+                step.decided_at = now
+        return
+    # returned | rejected — settle the step that was in play (else the last one).
+    ordered = sorted(_approver_steps(version), key=lambda s: s.step_order)
+    settling = next((s for s in ordered if s.state == "pending"), ordered[-1] if ordered else None)
+    if settling is not None:
+        settling.state = target_state
+        settling.note = note
+        settling.decided_at = now
+
+
+def override_state(
+    db: Session,
+    book_id: int,
+    *,
+    target_state: str,
+    actor: User,
+    reason: str | None = None,
+) -> Book:
+    """Force a record to ``target_state``, bypassing the approval flow.
+
+    The escape hatch for records the normal flow has stranded: the assigned
+    signer left, a paper scan that will never arrive, a form approved on the
+    wrong record, a draft discarded by mistake. Gated on
+    ``books.override_state`` — admin-only by default.
+
+    Both axes of "state" are covered — the six ``approval_state`` values plus
+    the ``voided`` marker (``OVERRIDABLE_STATES``) — and the current version's
+    chain is re-aligned to match (``_align_chain_to``).
+
+    What it deliberately does NOT do:
+      - fabricate a signature. Forcing ``approved`` settles the steps and names
+        the acting admin in the audit row; it never embeds a signature image or
+        writes ``signed_pdf_path``.
+      - delete artifacts. Flipping away from ``approved`` leaves a filed signed
+        PDF in place (it just stops being served, since serving keys on
+        ``status == "approved"``); ``unfile_signed_copy`` is how you remove it.
+      - notify, or re-file in the Correspondence Log. This is a repair tool,
+        not a signing path.
+
+    Writes a ``book_state_override`` AuditLog row with the before/after pair
+    and the reason.
+    """
+    if target_state not in OVERRIDABLE_STATES:
+        raise ValidationFailedError(
+            "BAD_STATE",
+            f"{target_state!r} is not a record state",
+            allowed=list(OVERRIDABLE_STATES),
+        )
+    book = _get_book_with_versions(db, book_id)
+    previous = displayed_state(book)
+    if previous == target_state:
+        raise ValidationFailedError(
+            "STATE_UNCHANGED", "This record is already in that state", state=previous
+        )
+    note = (reason or "").strip() or None
+    if target_state in ("returned", "rejected") and note is None:
+        # Same contract as decide_step: a negative verdict carries its reason.
+        raise ValidationFailedError(
+            "REASON_REQUIRED",
+            "A reason is required to force a record to returned or rejected",
+        )
+    now = datetime.now(UTC).replace(tzinfo=None)
+    version = _current_version(book)
+    stored_state = "none" if target_state == VOIDED_STATE else target_state
+    if version is not None:
+        _align_chain_to(db, book, version, target_state, actor=actor, note=note, now=now)
+        version.status = stored_state
+    book.approval_state = stored_state
+    book.voided_at = now if target_state == VOIDED_STATE else None
+    db.add(
+        AuditLog(
+            actor=actor.employee_id,
+            action="book_state_override",
+            entity_type="book",
+            entity_id=str(book.id),
+            payload=json.dumps(
+                {
+                    "ref_number": book.ref_number,
+                    "from": previous,
+                    "to": target_state,
+                    "reason": note,
+                    "actor_user_id": actor.id,
+                },
+                ensure_ascii=False,
+            ),
+        )
+    )
     db.commit()
     db.refresh(book)
     return book

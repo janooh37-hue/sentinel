@@ -13,7 +13,9 @@
  * (a11y contract).
  */
 import type { ComponentType } from 'react'
-import { ArrowLeftRight, Check, Clock, Eye, Pencil, PenLine, Printer, X } from 'lucide-react'
+import { ArrowLeftRight, Ban, Check, Clock, Eye, Pencil, PenLine, Printer, X } from 'lucide-react'
+
+import type { BookOverridableState } from '@/lib/api'
 
 export type SealTone = 'neutral' | 'warning' | 'info' | 'success' | 'accent'
 
@@ -49,6 +51,39 @@ const BASE: Record<string, SealDescriptor> = {
   approved: make('books.approval.stateApproved', Check, 'success'),
   returned: make('books.approval.stateReturned', ArrowLeftRight, 'info'),
   rejected: make('books.approval.stateRejected', X, 'accent'),
+  // Not an approval_state: `voided` is Book.voided_at (a discarded draft whose
+  // ref stays in the register). It only reaches sealDescriptor through the admin
+  // state-override picker, which treats both axes as one list of record states.
+  voided: make('books.word.voided', Ban, 'accent'),
+}
+
+/** Every state the admin override can force, in flow order.
+ *
+ * The `Record<BookOverridableState, …>` key set is exhaustive-checked by TS, so
+ * a state added to the API schema breaks the build here instead of silently
+ * going missing from the picker. */
+const STATE_ORDER: Record<BookOverridableState, number> = {
+  none: 0,
+  pending: 1,
+  awaiting_scan: 2,
+  approved: 3,
+  returned: 4,
+  rejected: 5,
+  voided: 6,
+}
+
+export const RECORD_STATES: readonly BookOverridableState[] = (
+  Object.keys(STATE_ORDER) as BookOverridableState[]
+).sort((a, b) => STATE_ORDER[a] - STATE_ORDER[b])
+
+/** The state a records surface shows — mirrors ``book_service.displayed_state``:
+ * a voided record reads "voided", never "draft". */
+export function recordStateOf(book: {
+  approval_state?: string | null
+  voided_at?: string | null
+}): BookOverridableState {
+  if (book.voided_at) return 'voided'
+  return (book.approval_state ?? 'none') as BookOverridableState
 }
 
 export function sealDescriptor(

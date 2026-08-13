@@ -26,6 +26,7 @@ import {
   Printer,
   RefreshCw,
   Send,
+  ShieldAlert,
   Trash2,
   Upload,
   X,
@@ -48,6 +49,7 @@ import {
 import { ReviewerList } from '@/components/books/ReviewerList'
 import { ReviewerActions } from '@/components/books/ReviewerActions'
 import { SubmitForApprovalDialog } from '@/components/books/SubmitForApprovalDialog'
+import { RecordStateOverrideDialog } from '@/components/books/RecordStateOverrideDialog'
 import { BookAnnotationLayer } from '@/components/books/BookAnnotationLayer'
 import { useBookApprovalActions } from '@/components/books/useBookApprovalActions'
 import { hasCommentBearingMark } from '@/components/books/annotation-utils'
@@ -270,6 +272,8 @@ export function BookRecordPage(): React.JSX.Element {
   // Revise regenerates via POST /documents/generate, which requires this cap;
   // without it the committed Save would 403.
   const canGenerate = has('documents.generate')
+  // Admin-grade: rewrite the record's state outside the approval flow.
+  const canOverrideState = has('books.override_state')
 
   const fileSignedRef = useRef<HTMLInputElement | null>(null)
   const replaceSignedRef = useRef<HTMLInputElement | null>(null)
@@ -277,6 +281,7 @@ export function BookRecordPage(): React.JSX.Element {
   const [includedPapersOpen, setIncludedPapersOpen] = useState(false)
 
   const [submitOpen, setSubmitOpen] = useState(false)
+  const [stateOverrideOpen, setStateOverrideOpen] = useState(false)
   // Inline reason panel for return/reject (backend requires a non-empty reason).
   const [decision, setDecision] = useState<'return' | 'reject' | null>(null)
   const [reason, setReason] = useState('')
@@ -469,8 +474,13 @@ export function BookRecordPage(): React.JSX.Element {
         @media (prefers-reduced-motion:reduce){.rec-live-node,.rec-live-rail{animation:none}}
       `}</style>
 
-      {/* header — wraps on phone-width so the action cluster flows onto its own
-          row instead of overflowing the viewport (mobile is the approval surface). */}
+      {/* header — three rows at phone width, one row from lg.
+          `basis-full` on the chips and the action cluster is what forces the
+          split: without it they ride on row 1 and squeeze the identity block
+          (which is `flex-1`, so it shrinks to a sliver) until a long Latin name
+          in an RTL layout wraps into a five-line column. The `lg:min-w`
+          floor keeps that from happening on desktop too, where a crowded action
+          cluster used to eat the same space — it wraps instead. */}
       <header className="flex flex-wrap items-center gap-x-3.5 gap-y-2.5 border-b border-hairline bg-gradient-to-b from-surface to-surface-tinted/40 px-4 py-3 sm:px-5 sm:py-3.5">
         <button
           type="button"
@@ -492,25 +502,37 @@ export function BookRecordPage(): React.JSX.Element {
             if (queue.nextId != null) navigate(`/books/${queue.nextId}`)
           }}
         />
-        <div className="min-w-0 flex-1">
+        <div className="min-w-0 flex-1 lg:min-w-[18rem]">
           <div className="font-mono text-[0.72em] font-semibold tracking-wide text-primary">
             {book?.ref_number ?? '—'}
           </div>
           <h1 className="truncate text-[1.05em] font-bold tracking-tight text-foreground">
             {book?.subject ?? (isPending ? t('books.record.loading') : t('books.record.untitled'))}
           </h1>
-          <div className="mt-0.5 text-[0.72em] text-muted-foreground">
-            {t('books.record.submittedBy')}{' '}
-            <span className="font-semibold text-foreground">{submitter}</span>
+          {/* One line, and the G number wins the space fight: the label and the
+              G stay whole (`shrink-0`) while the name — the only unbounded part,
+              and long in practice ("SAEED ASHED SANAD KHALFAN ALYAHYAEE") —
+              truncates. Truncating the whole line instead would drop the G,
+              which is the identifier people actually search on.
+              The name is its own `dir="ltr"` bdi so the ellipsis lands at the
+              END of the Latin run ("SAEED ASHED SANAD…"); left to inherit RTL,
+              the browser clips the run's head instead and it reads as gibberish. */}
+          <div
+            className="mt-0.5 flex items-baseline gap-1 text-[0.72em] text-muted-foreground"
+            title={submitter}
+          >
+            <span className="shrink-0">{t('books.record.submittedBy')}</span>
+            <bdi dir="ltr" className="min-w-0 truncate font-semibold text-foreground">
+              {submitter}
+            </bdi>
             {book?.submitted_by_g && (
-              <>
-                {' · '}
-                <span className="font-mono text-primary">{book.submitted_by_g}</span>
-              </>
+              <span className="shrink-0 font-mono text-primary">
+                · <bdi dir="ltr">{book.submitted_by_g}</bdi>
+              </span>
             )}
           </div>
         </div>
-        <div className="ms-1 flex flex-wrap items-center gap-1.5">
+        <div className="flex basis-full flex-wrap items-center gap-1.5 lg:ms-1 lg:basis-auto">
           {book && (
             <StatePill state={state} signingPath={book.signing_path} signedSource={signedSource} />
           )}
@@ -519,12 +541,23 @@ export function BookRecordPage(): React.JSX.Element {
             <BookStatusChips book={book} />
           )}
         </div>
-        <div className="ms-auto flex flex-wrap items-center justify-end gap-2">
+        <div className="flex basis-full flex-wrap items-center justify-end gap-2 lg:ms-auto lg:basis-auto">
           <HeaderBtn
             icon={<Printer className="h-3.5 w-3.5" />}
             label={t('books.record.print')}
             onClick={() => window.print()}
           />
+          {/* Admin state override — deliberately first in the cluster and next
+              to the state chips it rewrites, ahead of the normal-flow actions. */}
+          {canOverrideState && book && (
+            <HeaderBtn
+              icon={<ShieldAlert className="h-3.5 w-3.5" />}
+              label={t('books.stateOverride.trigger')}
+              tone="red"
+              testId="state-override-trigger"
+              onClick={() => setStateOverrideOpen(true)}
+            />
+          )}
           {canManageIncludedPapers && (
             <HeaderBtn
               icon={<FileStack className="h-3.5 w-3.5" />}
@@ -905,6 +938,10 @@ export function BookRecordPage(): React.JSX.Element {
 
       {submitOpen && book && (
         <SubmitForApprovalDialog bookId={book.id} onClose={() => setSubmitOpen(false)} />
+      )}
+
+      {stateOverrideOpen && book && canOverrideState && (
+        <RecordStateOverrideDialog book={book} onClose={() => setStateOverrideOpen(false)} />
       )}
     </div>
   )

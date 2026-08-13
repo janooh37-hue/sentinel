@@ -84,6 +84,19 @@ class BookDecisionRequest(BaseModel):
     note: str | None = Field(default=None, max_length=2000)
 
 
+class BookStateOverrideRequest(BaseModel):
+    """Admin state override (``books.override_state``). ``state`` spans the six
+    approval states plus ``voided`` — the discarded-draft marker, which reads as
+    a state on every records surface. ``reason`` is required for the negative
+    verdicts, mirroring the normal return/reject contract."""
+
+    state: Literal[
+        "none", "pending", "awaiting_scan", "approved", "returned", "rejected", "voided"
+    ]
+    reason: str | None = Field(default=None, max_length=2000)
+
+
+
 class BookApprovalStepRead(ORMBase):
     id: int
     step_order: int

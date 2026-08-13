@@ -7999,6 +7999,75 @@
         }
       }
     },
+    "/api/v1/books/{book_id}/state": {
+      "put": {
+        "tags": [
+          "books"
+        ],
+        "summary": "Override Book State",
+        "description": "Force this record's state, bypassing the approval chain (admin repair).\n\nReturns the full detail shape (not the bare row) because the flip moves the\nstate pill, the chips, the timeline, and whether the signed PDF is served —\nthe record screen re-renders off this response.",
+        "operationId": "override_book_state_api_v1_books__book_id__state_put",
+        "parameters": [
+          {
+            "name": "book_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Book Id"
+            }
+          },
+          {
+            "name": "gssg_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Gssg Session"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BookStateOverrideRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BookRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/books/{book_id}/review": {
       "post": {
         "tags": [
@@ -18623,6 +18692,41 @@
           "service_id"
         ],
         "title": "BookRead"
+      },
+      "BookStateOverrideRequest": {
+        "properties": {
+          "state": {
+            "type": "string",
+            "enum": [
+              "none",
+              "pending",
+              "awaiting_scan",
+              "approved",
+              "returned",
+              "rejected",
+              "voided"
+            ],
+            "title": "State"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 2000
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          }
+        },
+        "type": "object",
+        "required": [
+          "state"
+        ],
+        "title": "BookStateOverrideRequest",
+        "description": "Admin state override (``books.override_state``). ``state`` spans the six\napproval states plus ``voided`` — the discarded-draft marker, which reads as\na state on every records surface. ``reason`` is required for the negative\nverdicts, mirroring the normal return/reject contract."
       },
       "BookSubmitRequest": {
         "properties": {

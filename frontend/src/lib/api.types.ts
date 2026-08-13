@@ -1966,6 +1966,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/books/{book_id}/state": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Override Book State
+         * @description Force this record's state, bypassing the approval chain (admin repair).
+         *
+         *     Returns the full detail shape (not the bare row) because the flip moves the
+         *     state pill, the chips, the timeline, and whether the signed PDF is served —
+         *     the record screen re-renders off this response.
+         */
+        put: operations["override_book_state_api_v1_books__book_id__state_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/books/{book_id}/review": {
         parameters: {
             query?: never;
@@ -4583,6 +4607,22 @@ export interface components {
              *     v3-imported records, which is exactly when the subject fallback applies.
              */
             readonly service_id: string;
+        };
+        /**
+         * BookStateOverrideRequest
+         * @description Admin state override (``books.override_state``). ``state`` spans the six
+         *     approval states plus ``voided`` — the discarded-draft marker, which reads as
+         *     a state on every records surface. ``reason`` is required for the negative
+         *     verdicts, mirroring the normal return/reject contract.
+         */
+        BookStateOverrideRequest: {
+            /**
+             * State
+             * @enum {string}
+             */
+            state: "none" | "pending" | "awaiting_scan" | "approved" | "returned" | "rejected" | "voided";
+            /** Reason */
+            reason?: string | null;
         };
         /** BookSubmitRequest */
         BookSubmitRequest: {
@@ -12720,6 +12760,43 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["BookDecisionRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BookRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    override_book_state_api_v1_books__book_id__state_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                book_id: number;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BookStateOverrideRequest"];
             };
         };
         responses: {

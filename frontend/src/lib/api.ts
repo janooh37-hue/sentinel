@@ -673,6 +673,11 @@ export interface BookSubmitRequest {
 export type BookDecideAction = 'reject' | 'return' | 'note'
 // Reviewer decision — `reviewed` = approved as reviewer; `changes_requested` = reviewer asks for changes.
 export type BookReviewDecision = 'reviewed' | 'changes_requested'
+// Admin state override (`books.override_state`). `voided` is a pseudo-state:
+// the backend stores it as approval_state="none" + voided_at, because a
+// discarded draft reads as a state on every records surface.
+export type BookOverridableState =
+  components['schemas']['BookStateOverrideRequest']['state']
 
 // General-book recipients (forms-fix) — hand-mirrored until gen:api picks up the new schema.
 export interface RecipientRead {
@@ -1453,6 +1458,11 @@ export const api = {
    * `changes_requested`) with an optional note. */
   reviewBook: (id: number, decision: BookReviewDecision, note?: string | null) =>
     request<BookRead>('POST', `/books/${id}/review`, { decision, note: note ?? null }),
+  /** PUT /books/{id}/state — force the record's state, bypassing the approval
+   * chain. Needs `books.override_state` (admin by default). `reason` is required
+   * for `returned` / `rejected`. Error codes: STATE_UNCHANGED, REASON_REQUIRED. */
+  overrideBookState: (id: number, state: BookOverridableState, reason?: string | null) =>
+    request<BookRead>('PUT', `/books/${id}/state`, { state, reason: reason ?? null }),
   /** POST /books/{id}/seen — mark the book as seen by the current user (idempotent). */
   markBookSeen: (id: number) => request<void>('POST', `/books/${id}/seen`),
   /** GET /books/reviewer-candidates — list users eligible to be added as reviewers. */

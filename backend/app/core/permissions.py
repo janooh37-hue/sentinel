@@ -92,6 +92,14 @@ CAPABILITIES: Final[tuple[Capability, ...]] = (
         "Approve, sign, or reject documents in the approval queue.",
     ),
     Capability(
+        "books.override_state",
+        "books",
+        "Force a record's state",
+        "Set any record to any state — draft, awaiting signature, awaiting scan, "
+        "approved, returned, rejected, or voided — bypassing the approval chain. "
+        "Admin-grade: it overrides who signed what.",
+    ),
+    Capability(
         "permits.view",
         "permits",
         "View security permits",
