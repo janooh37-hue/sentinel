@@ -1,7 +1,6 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { useState } from 'react'
 import { describe, expect, it, beforeEach, afterEach, vi } from 'vitest'
 import i18n from 'i18next'
 import ar from '@/locales/ar.json'

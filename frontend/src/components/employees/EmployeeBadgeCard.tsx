@@ -54,7 +54,7 @@ export function EmployeeBadgeCard({
       {/* Retractable badge reel — purely decorative */}
       <div aria-hidden data-testid="badge-reel" className="relative z-[2] flex flex-col items-center">
         <div
-          className="grid h-[118px] w-[118px] place-items-center rounded-full"
+          className="relative grid h-[118px] w-[118px] place-items-center rounded-full"
           style={{
             background: 'radial-gradient(circle at 35% 28%,#ffffff 0%,#f4f4f2 55%,#e3e3df 100%)',
             boxShadow:

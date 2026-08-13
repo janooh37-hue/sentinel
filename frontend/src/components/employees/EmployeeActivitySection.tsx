@@ -77,8 +77,8 @@ export function EmployeeActivitySection({ onOpenProfile }: EmployeeActivitySecti
     () => new Intl.DateTimeFormat(lang, { dateStyle: 'medium' }),
     [lang],
   )
-  const dateTimeFormatter = useMemo(
-    () => new Intl.DateTimeFormat(lang, { dateStyle: 'medium', timeStyle: 'short' }),
+  const timeFormatter = useMemo(
+    () => new Intl.DateTimeFormat(lang, { timeStyle: 'short' }),
     [lang],
   )
   const pages = activityQuery.data?.pages
@@ -219,7 +219,7 @@ export function EmployeeActivitySection({ onOpenProfile }: EmployeeActivitySecti
                         item={item}
                         lang={lang}
                         dayFormatter={dayFormatter}
-                        dateTimeFormatter={dateTimeFormatter}
+                        timeFormatter={timeFormatter}
                         showEmployee={employee == null}
                         t={t}
                       />
@@ -249,7 +249,7 @@ interface ActivityRowProps {
   item: EmployeeActivityItemRead
   lang: 'en' | 'ar'
   dayFormatter: Intl.DateTimeFormat
-  dateTimeFormatter: Intl.DateTimeFormat
+  timeFormatter: Intl.DateTimeFormat
   showEmployee: boolean
   t: (key: string, options?: Record<string, unknown>) => string
 }
@@ -258,7 +258,7 @@ function ActivityRow({
   item,
   lang,
   dayFormatter,
-  dateTimeFormatter,
+  timeFormatter,
   showEmployee,
   t,
 }: ActivityRowProps): React.JSX.Element {
@@ -307,8 +307,8 @@ function ActivityRow({
         </span>
       )}
       <span dir="auto" className="hidden shrink-0 font-mono text-xs tabular-nums text-muted-foreground sm:block">{item.reference}</span>
-      <span className="w-[74px] shrink-0 text-end text-xs tabular-nums text-muted-foreground">
-        <span className="sr-only">{dayFormatter.format(date)} · </span>{dateTimeFormatter.format(date)}
+      <span className="w-[84px] shrink-0 text-end text-xs tabular-nums text-muted-foreground">
+        <span className="sr-only">{dayFormatter.format(date)} · </span>{timeFormatter.format(date)}
       </span>
       <span className="sr-only">{t(destinationKey)}</span>
     </Link>
