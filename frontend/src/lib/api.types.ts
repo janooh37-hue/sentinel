@@ -5321,14 +5321,22 @@ export interface components {
              */
             created_at: string;
         };
-        /** DutyTransferRequest */
-        DutyTransferRequest: {
-            /** Employee Ids */
-            employee_ids: string[];
+        /**
+         * DutyTransferMove
+         * @description One employee's destination. ``to_post`` is optional (unit-only moves).
+         */
+        DutyTransferMove: {
+            /** Employee Id */
+            employee_id: string;
             /** To Unit */
             to_unit: string;
             /** To Post */
             to_post?: string | null;
+        };
+        /** DutyTransferRequest */
+        DutyTransferRequest: {
+            /** Moves */
+            moves: components["schemas"]["DutyTransferMove"][];
             /** Recipient Id */
             recipient_id?: number | null;
             /** Manager Id */

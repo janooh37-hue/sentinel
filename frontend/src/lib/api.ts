@@ -200,11 +200,16 @@ export interface LeaveReturnBody {
 }
 
 // Duty Locations & Internal Transfers — frozen API contract (backend in
-// parallel; hand-mirrored until `gen:api`).
-export interface DutyTransferRequest {
-  employee_ids: string[]
+// parallel; hand-mirrored until `gen:api`). One transfer letter carries one
+// move per employee, so a round can span source units and even swap two people.
+export interface DutyTransferMove {
+  employee_id: string
   to_unit: string
   to_post: string | null
+}
+
+export interface DutyTransferRequest {
+  moves: DutyTransferMove[]
   recipient_id: number | null
   manager_id: number | null
   cc: string[] | null

@@ -3,20 +3,22 @@ import { describe, expect, it } from 'vitest'
 import { buildTransferRequest } from './transferRequest'
 
 describe('buildTransferRequest', () => {
-  it('builds the new request shape and normalizes empties', () => {
+  it('keeps one destination per employee and normalizes empties', () => {
     expect(
       buildTransferRequest({
-        employeeIds: ['G1', 'G2'],
-        toUnit: '  السرية الثانية  ',
-        toPost: '  ',
+        moves: [
+          { employeeId: 'G1', toUnit: '  السرية الثانية  ', toPost: '  ' },
+          { employeeId: 'G2', toUnit: 'السرية الأولى', toPost: ' ليوان ' },
+        ],
         recipientId: 3,
         managerId: null,
         cc: ['مدراء الأفرع'],
       }),
     ).toEqual({
-      employee_ids: ['G1', 'G2'],
-      to_unit: 'السرية الثانية',
-      to_post: null,
+      moves: [
+        { employee_id: 'G1', to_unit: 'السرية الثانية', to_post: null },
+        { employee_id: 'G2', to_unit: 'السرية الأولى', to_post: 'ليوان' },
+      ],
       recipient_id: 3,
       manager_id: null,
       cc: ['مدراء الأفرع'],
@@ -25,7 +27,7 @@ describe('buildTransferRequest', () => {
 
   it('sends null cc when the list is empty', () => {
     const req = buildTransferRequest({
-      employeeIds: ['G1'], toUnit: 'X', toPost: 'Y',
+      moves: [{ employeeId: 'G1', toUnit: 'X', toPost: 'Y' }],
       recipientId: null, managerId: null, cc: [],
     })
     expect(req.cc).toBeNull()
