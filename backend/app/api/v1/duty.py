@@ -1,8 +1,8 @@
 """Duty-location internal-transfer endpoint.
 
-``POST /api/v1/duty/transfer`` — move employee(s) to a destination unit/post and
-mint a General Book transfer letter. Gated on ``documents.generate`` (the action
-produces a document).
+``POST /api/v1/duty/transfer`` — move employee(s), each to its own destination
+unit/post, and mint one General Book transfer letter. Gated on
+``documents.generate`` (the action produces a document).
 """
 
 from __future__ import annotations
@@ -29,9 +29,7 @@ def transfer(
 ) -> DutyTransferResult:
     return duty_service.transfer(
         db,
-        employee_ids=payload.employee_ids,
-        to_unit=payload.to_unit,
-        to_post=payload.to_post,
+        moves=payload.moves,
         recipient_id=payload.recipient_id,
         manager_id=payload.manager_id,
         cc=payload.cc,

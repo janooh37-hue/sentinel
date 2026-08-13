@@ -1,12 +1,16 @@
 """Internal-transfer service.
 
-``transfer`` moves one or more employees to a destination duty unit/post and
-mints an official **General Book** transfer letter as the audit record. The
-letter body is server-built HTML — a formal Arabic intro paragraph, a red-header
-5-column ``<table>`` (الرقم الوظيفي · المسمى الوظيفي · الاسم · من · إلى) with
-one row per moved employee, and two closing lines — which the General Book
-renderer (``core/arabic_rtl.html_to_docx`` via ``_pp_general_book``) turns into
-a real, variable-length RTL Word table. Subject constant: ``النقل``.
+``transfer`` moves one or more employees, each to its OWN destination duty
+unit/post, and mints an official **General Book** transfer letter as the audit
+record. One letter therefore covers a whole transfer round: the selected
+employees may come from different units and each row carries its own
+destination, which is exactly what the letter's fixed intro promises (إلى
+الجهات المبينة بجانب أسمائهم) — a straight swap is expressible. The letter body
+is server-built HTML — a formal Arabic intro paragraph, a red-header 5-column
+``<table>`` (الرقم الوظيفي · المسمى الوظيفي · الاسم · من · إلى) with one row per
+moved employee, and two closing lines — which the General Book renderer
+(``core/arabic_rtl.html_to_docx`` via ``_pp_general_book``) turns into a real,
+variable-length RTL Word table. Subject constant: ``النقل``.
 
 When every selected employee is currently unassigned, the move is initial placement and no book/email is produced.
 ``recipient_id``, ``manager_id``, and ``cc`` are forwarded into the General Book
@@ -24,12 +28,13 @@ General Book.
 from __future__ import annotations
 
 import html
+from typing import Any
 
 from sqlalchemy.orm import Session
 
 from app.api.errors import ValidationFailedError
 from app.db.models import Employee, User
-from app.schemas.duty import DutyTransferResult
+from app.schemas.duty import DutyTransferMove, DutyTransferResult
 from app.services import document_service
 
 _UNSPECIFIED = "غير محدد"
@@ -68,27 +73,28 @@ def _employee_display_name(emp: Employee) -> str:
     return (emp.name_ar or emp.name_en or emp.id or "").strip()
 
 
-def _build_body_html(employees: list[Employee], *, to_unit: str, to_post: str | None) -> str:
+def _build_body_html(rows: list[tuple[Employee, str, str | None]]) -> str:
     """Formal intro + a red-header from→to ``<table>`` + the two closing lines.
 
-    The ``من`` column reads each employee's CURRENT unit/post, so callers must
-    build the body BEFORE staging the move. No effective date or reason is
-    rendered — the letter uses ``إعتباراً من تاريخه`` verbatim (see the spec).
+    Each row is ``(employee, to_unit, to_post)``. The ``من`` column reads the
+    employee's CURRENT unit/post, so callers must build the body BEFORE staging
+    the move; ``إلى`` is that row's OWN destination, which is what lets one
+    letter cover several source units and even a swap. No effective date or
+    reason is rendered — the letter uses ``إعتباراً من تاريخه`` verbatim (see
+    the spec).
     """
-    to_label = _location_label(to_unit, to_post)
-
     head = "".join(f'<th style="{_TH}">{html.escape(c)}</th>' for c in _COLS)
-    rows = [f"<tr>{head}</tr>"]
-    for emp in employees:
+    out = [f"<tr>{head}</tr>"]
+    for emp, to_unit, to_post in rows:
         cells = [
             html.escape(emp.id),
             html.escape((emp.position_ar or "").strip()),
             html.escape(_employee_display_name(emp)),
             html.escape(_location_label(emp.duty_unit, emp.duty_post)),
-            html.escape(to_label),
+            html.escape(_location_label(to_unit, to_post)),
         ]
-        rows.append("<tr>" + "".join(f'<td style="{_TD}">{c}</td>' for c in cells) + "</tr>")
-    table = '<table dir="rtl" style="border-collapse:collapse">' + "".join(rows) + "</table>"
+        out.append("<tr>" + "".join(f'<td style="{_TD}">{c}</td>' for c in cells) + "</tr>")
+    table = '<table dir="rtl" style="border-collapse:collapse">' + "".join(out) + "</table>"
 
     intro = f"<p>{html.escape(_INTRO)}</p>"
     closing = f"<p>{html.escape(_CLOSING_1)}</p><p>{html.escape(_CLOSING_2)}</p>"
@@ -98,66 +104,67 @@ def _build_body_html(employees: list[Employee], *, to_unit: str, to_post: str | 
 def transfer(
     db: Session,
     *,
-    employee_ids: list[str],
-    to_unit: str,
-    to_post: str | None,
+    moves: list[DutyTransferMove],
     recipient_id: int | None = None,
     manager_id: int | None = None,
     cc: list[str] | None = None,
     current_user: User | None = None,
 ) -> DutyTransferResult:
-    """Move employees to ``to_unit``/``to_post`` and mint the transfer letter.
+    """Move each employee to its own ``to_unit``/``to_post`` and mint the letter.
 
-    Raises ``ValidationFailedError`` (422) on an empty id list, a blank
-    ``to_unit``, or any unknown employee id.
+    Raises ``ValidationFailedError`` (422) on an empty move list, a blank
+    ``to_unit``, a repeated employee, or an unknown employee id.
     """
-    if not employee_ids:
+    if not moves:
         raise ValidationFailedError("DUTY_NO_EMPLOYEES", "At least one employee is required")
-    if not (to_unit or "").strip():
-        raise ValidationFailedError("DUTY_NO_UNIT", "Destination unit is required")
-    to_unit = to_unit.strip()
-    to_post = to_post.strip() if to_post and to_post.strip() else None
 
-    # Load in the requested order, validating every id exists. De-dup the input
-    # while preserving order so a repeated id doesn't double-row the table.
+    # Resolve every move in request order (which is the letter's row order):
+    # normalise the destination, refuse a repeated employee (two destinations for
+    # one person is ambiguous — the operator, not us, decides), and load the row
+    # so an unknown id fails before anything is written.
+    rows: list[tuple[Employee, str, str | None]] = []
     seen: set[str] = set()
-    ordered_ids: list[str] = []
-    for emp_id in employee_ids:
-        if emp_id not in seen:
-            seen.add(emp_id)
-            ordered_ids.append(emp_id)
-    employees: list[Employee] = []
-    for emp_id in ordered_ids:
-        emp = db.get(Employee, emp_id)
+    for move in moves:
+        to_unit = (move.to_unit or "").strip()
+        if not to_unit:
+            raise ValidationFailedError("DUTY_NO_UNIT", "Destination unit is required")
+        to_post = move.to_post.strip() if move.to_post and move.to_post.strip() else None
+        if move.employee_id in seen:
+            raise ValidationFailedError(
+                "DUTY_DUPLICATE_EMPLOYEE",
+                f"Employee {move.employee_id!r} appears more than once",
+                id=move.employee_id,
+            )
+        seen.add(move.employee_id)
+        emp = db.get(Employee, move.employee_id)
         if emp is None:
             raise ValidationFailedError(
                 "DUTY_EMPLOYEE_NOT_FOUND",
-                f"Employee {emp_id!r} does not exist",
-                id=emp_id,
+                f"Employee {move.employee_id!r} does not exist",
+                id=move.employee_id,
             )
-        employees.append(emp)
+        rows.append((emp, to_unit, to_post))
 
     # No-book path: when EVERY selected employee is currently unassigned, this is
     # initial placement, not a transfer needing a formal letter — just move them.
-    all_unassigned = all(not (e.duty_unit or "").strip() for e in employees)
-    if all_unassigned:
-        for emp in employees:
+    if all(not (emp.duty_unit or "").strip() for emp, _, _ in rows):
+        for emp, to_unit, to_post in rows:
             emp.duty_unit = to_unit
             emp.duty_post = to_post
         db.commit()
-        return DutyTransferResult(moved=[emp.id for emp in employees])
+        return DutyTransferResult(moved=[emp.id for emp, _, _ in rows])
 
     # Otherwise mint the transfer letter. Build the body from CURRENT (FROM)
     # locations BEFORE mutating.
-    body_html = _build_body_html(employees, to_unit=to_unit, to_post=to_post)
+    body_html = _build_body_html(rows)
 
     # Stage the moves on this session; generate_document's single commit
     # persists them together with the doc/Book rows.
-    for emp in employees:
+    for emp, to_unit, to_post in rows:
         emp.duty_unit = to_unit
         emp.duty_post = to_post
 
-    fields: dict = {"subject": _SUBJECT, "body": body_html}
+    fields: dict[str, Any] = {"subject": _SUBJECT, "body": body_html}
     if recipient_id is not None:
         fields["recipient_id"] = recipient_id
     if manager_id is not None:
@@ -182,5 +189,5 @@ def transfer(
         book_id=result.book_id,
         ref=result.ref_number,
         document_id=result.document_id,
-        moved=[emp.id for emp in employees],
+        moved=[emp.id for emp, _, _ in rows],
     )

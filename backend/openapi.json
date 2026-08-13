@@ -20644,16 +20644,13 @@
         ],
         "title": "DutySupervisorRead"
       },
-      "DutyTransferRequest": {
+      "DutyTransferMove": {
         "properties": {
-          "employee_ids": {
-            "items": {
-              "type": "string"
-            },
-            "type": "array",
-            "maxItems": 500,
-            "minItems": 1,
-            "title": "Employee Ids"
+          "employee_id": {
+            "type": "string",
+            "maxLength": 16,
+            "minLength": 1,
+            "title": "Employee Id"
           },
           "to_unit": {
             "type": "string",
@@ -20672,6 +20669,26 @@
               }
             ],
             "title": "To Post"
+          }
+        },
+        "type": "object",
+        "required": [
+          "employee_id",
+          "to_unit"
+        ],
+        "title": "DutyTransferMove",
+        "description": "One employee's destination. ``to_post`` is optional (unit-only moves)."
+      },
+      "DutyTransferRequest": {
+        "properties": {
+          "moves": {
+            "items": {
+              "$ref": "#/components/schemas/DutyTransferMove"
+            },
+            "type": "array",
+            "maxItems": 500,
+            "minItems": 1,
+            "title": "Moves"
           },
           "recipient_id": {
             "anyOf": [
@@ -20713,8 +20730,7 @@
         },
         "type": "object",
         "required": [
-          "employee_ids",
-          "to_unit"
+          "moves"
         ],
         "title": "DutyTransferRequest"
       },
