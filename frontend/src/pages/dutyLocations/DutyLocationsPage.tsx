@@ -248,8 +248,11 @@ export function DutyLocationsPage(): React.JSX.Element {
         )}
       </div>
 
-      {/* Sticky selection bar + cross-unit review tray */}
-      {selected.size > 0 && (
+      {/* Sticky selection bar + cross-unit review tray. Gated on the RESOLVED
+          selection, not the raw id set: a refetch can drop an id from the
+          roster window (deleted elsewhere, or pushed past limit:500), and a bar
+          reading "0 selected" over a dead Transfer button is worse than none. */}
+      {selectedEmployees.length > 0 && (
         <SelectionTray
           employees={selectedEmployees}
           onRemove={(id) => toggle(id, false)}

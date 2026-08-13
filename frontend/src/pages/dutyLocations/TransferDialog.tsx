@@ -198,11 +198,16 @@ export function TransferDialog({
                       <span className="font-mono font-semibold text-primary">{e.id}</span>
                       <span dir="auto">{name}</span>
                     </div>
-                    <div className="text-xs text-muted-foreground" dir="auto">
+                    {/* The label is translated, so it decides what dir="auto"
+                        resolves to — scope the isolation to the location value
+                        itself, the way AssignPopover and SelectionTray do. */}
+                    <div className="text-xs text-muted-foreground">
                       {t('dutyLocations.transfer.rowFrom')}:{' '}
-                      {e.duty_unit
-                        ? `${e.duty_unit}${e.duty_post ? ` - ${e.duty_post}` : ''}`
-                        : t('dutyLocations.unassigned')}
+                      <span dir="auto">
+                        {e.duty_unit
+                          ? `${e.duty_unit}${e.duty_post ? ` - ${e.duty_post}` : ''}`
+                          : t('dutyLocations.unassigned')}
+                      </span>
                     </div>
                     <input
                       list={unitListId}

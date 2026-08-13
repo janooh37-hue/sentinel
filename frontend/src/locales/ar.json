@@ -3122,6 +3122,7 @@
       "count_many": "{{count}} محددًا",
       "count_other": "{{count}} محدد",
       "clear": "مسح",
+      "units_zero": "لا توجد وحدات",
       "units_one": "وحدة واحدة",
       "units_two": "وحدتان",
       "units_few": "{{count}} وحدات",
