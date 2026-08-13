@@ -2,11 +2,35 @@ import { useInfiniteQuery, useQueryClient } from '@tanstack/react-query'
 import { useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Link } from 'react-router-dom'
+import { EmployeeBadgeCard } from './EmployeeBadgeCard'
 import { EmployeeActivityLookup } from './EmployeeActivityLookup'
 import { api, type EmployeeActivityItemRead, type EmployeeActivityKind, type EmployeeListItem } from '@/lib/api'
 import { pickEmployeeName } from '@/lib/employeeName'
 
 const PAGE_SIZE = 25
+
+const KIND_STYLES: Record<EmployeeActivityKind, { soft: string; color: string; icon: React.JSX.Element }> = {
+  document: {
+    soft: '#e6f0f6',
+    color: '#0d5c8a',
+    icon: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M6 2h7l5 5v13a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2zm7 1.5V8h4.5" /></svg>,
+  },
+  leave: {
+    soft: '#e5f3ee',
+    color: '#047857',
+    icon: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M8 2v3M16 2v3M3.5 9.5h17M5 4.5h14a1.5 1.5 0 0 1 1.5 1.5v13A1.5 1.5 0 0 1 19 20.5H5A1.5 1.5 0 0 1 3.5 19V6A1.5 1.5 0 0 1 5 4.5z" /></svg>,
+  },
+  violation: {
+    soft: '#f9ede4',
+    color: '#b3541e',
+    icon: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M12 3 2.5 20h19L12 3zm0 6v5m0 3v.5" /></svg>,
+  },
+  ledger: {
+    soft: '#f1eef8',
+    color: '#6b4fb0',
+    icon: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M3.5 5.5h17v13h-17zM3.5 6.5 12 13l8.5-6.5" /></svg>,
+  },
+}
 
 function activityHref(item: EmployeeActivityItemRead): string {
   switch (item.kind) {
@@ -119,106 +143,103 @@ export function EmployeeActivitySection({ onOpenProfile }: EmployeeActivitySecti
           )}
         </header>
 
-        <div className="mb-6 grid gap-3 md:grid-cols-[minmax(0,1fr)_220px] md:items-end">
-          <div>
-            <p className="mb-2 text-sm font-semibold text-foreground">{t('employees.activity.lookupLabel')}</p>
-            <EmployeeActivityLookup
-              selected={employee}
-              onSelect={handleEmployeeSelect}
-              onClear={handleClearEmployee}
-              onOpenProfile={onOpenProfile}
-            />
-          </div>
-          <div>
-            <label htmlFor="employee-activity-type" className="mb-2 block text-sm font-semibold text-foreground">
-              {t('employees.activity.typeLabel')}
-            </label>
-            <select
-              id="employee-activity-type"
-              onChange={(event) => handleKindChange(event.target.value as EmployeeActivityKind | 'all')}
-              value={kind}
-              className="w-full rounded-xl border border-border bg-surface px-3 py-3 text-sm text-foreground outline-none focus-visible:ring-2 focus-visible:ring-primary"
-            >
-              <option value="all">{t('employees.activity.all')}</option>
-              <option value="document">{t('employees.activity.document')}</option>
-              <option value="leave">{t('employees.activity.leave')}</option>
-              <option value="violation">{t('employees.activity.violation')}</option>
-              <option value="ledger">{t('employees.activity.ledger')}</option>
-            </select>
-          </div>
-        </div>
-
-        {activityQuery.isPending && (
-          <div role="status" aria-label={t('employees.activity.loading')} className="space-y-3">
-            <div className="h-16 animate-pulse rounded-xl bg-surface-raised" />
-            <div className="h-16 animate-pulse rounded-xl bg-surface-raised" />
-          </div>
-        )}
-
-        {activityQuery.isError && (
-          <div className="rounded-2xl border border-destructive/30 bg-surface p-6 text-center">
-            <p className="text-sm text-destructive">{t('employees.activity.loadError')}</p>
-            <button
-              type="button"
-              onClick={() => void activityQuery.refetch()}
-              className="mt-4 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground hover:bg-primary-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-            >
-              {t('employees.activity.retry')}
-            </button>
-          </div>
-        )}
-
-        {!activityQuery.isPending && !activityQuery.isError && items.length === 0 && (
-          <div className="rounded-2xl border border-border bg-surface p-8 text-center">
-            <p className="text-sm text-muted-foreground">
-              {t(filtered ? 'employees.activity.emptyFiltered' : 'employees.activity.empty')}
-            </p>
-            {filtered && (
-              <button
-                type="button"
-                onClick={clearFilters}
-                className="mt-4 rounded-lg border border-border px-4 py-2 text-sm font-semibold text-foreground hover:bg-surface-raised focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-              >
-                {t('employees.activity.clearFilters')}
-              </button>
-            )}
-          </div>
-        )}
-
-        {!activityQuery.isPending && !activityQuery.isError && items.length > 0 && (
-          <>
-            <div className="overflow-hidden rounded-2xl border border-border bg-surface">
-              <div className="hidden grid-cols-[minmax(160px,1fr)_minmax(180px,1.2fr)_minmax(150px,1fr)_minmax(130px,1fr)_minmax(150px,1fr)_minmax(160px,1fr)] gap-4 border-b border-hairline px-5 py-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground xl:grid">
-                <span>{t('employees.activity.employee')}</span>
-                <span>{t('employees.activity.activity')}</span>
-                <span>{t('employees.activity.type')}</span>
-                <span>{t('employees.activity.reference')}</span>
-                <span>{t('employees.activity.dateTime')}</span>
-                <span>{t('employees.activity.destination')}</span>
+        <div className={employee ? 'grid gap-8 lg:grid-cols-[340px_minmax(0,1fr)] lg:items-start' : ''}>
+          {employee && (
+            <EmployeeBadgeCard employee={employee} onOpenProfile={onOpenProfile} onClear={handleClearEmployee} />
+          )}
+          <div className="min-w-0">
+            <div className="mb-6 flex flex-wrap items-center gap-2.5">
+              <EmployeeActivityLookup onSelect={handleEmployeeSelect} onOpenProfile={onOpenProfile} />
+              <div role="group" aria-label={t('employees.activity.typeLabel')} className="flex flex-wrap gap-1.5">
+                {(['all', 'document', 'leave', 'violation', 'ledger'] as const).map((value) => (
+                  <button
+                    key={value}
+                    type="button"
+                    aria-pressed={kind === value}
+                    onClick={() => handleKindChange(value)}
+                    className={
+                      kind === value
+                        ? 'rounded-full bg-primary px-4 py-2.5 text-[12.5px] font-bold text-primary-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2'
+                        : 'rounded-full border border-border bg-surface px-4 py-2.5 text-[12.5px] font-bold text-muted-foreground hover:bg-surface-raised focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary'
+                    }
+                  >
+                    {t(value === 'all' ? 'employees.activity.all' : `employees.activity.${value}`)}
+                  </button>
+                ))}
               </div>
-              {dayGroups.map((group) => (
-                <div key={group.day}>
-                  <h3 className="border-b border-hairline bg-surface-raised px-5 py-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                    {group.day}
-                  </h3>
-                  {group.items.map((item) => (
-                    <ActivityRow key={`${item.kind}-${item.source_id}`} item={item} lang={lang} dayFormatter={dayFormatter} dateTimeFormatter={dateTimeFormatter} t={t} />
-                  ))}
-                </div>
-              ))}
-              {activityQuery.hasNextPage && (
+            </div>
+
+            {activityQuery.isPending && (
+              <div role="status" aria-label={t('employees.activity.loading')} className="space-y-3">
+                <div className="h-16 animate-pulse rounded-xl bg-surface-raised" />
+                <div className="h-16 animate-pulse rounded-xl bg-surface-raised" />
+              </div>
+            )}
+
+            {activityQuery.isError && (
+              <div className="rounded-2xl border border-destructive/30 bg-surface p-6 text-center">
+                <p className="text-sm text-destructive">{t('employees.activity.loadError')}</p>
                 <button
                   type="button"
-                  onClick={() => void activityQuery.fetchNextPage()}
-                  disabled={activityQuery.isFetchingNextPage}
-                  className="mx-auto mt-6 block w-full rounded-lg border border-border px-4 py-2 text-sm font-semibold text-foreground hover:bg-surface-raised focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary disabled:cursor-wait disabled:opacity-60 md:w-auto"
+                  onClick={() => void activityQuery.refetch()}
+                  className="mt-4 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground hover:bg-primary-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
                 >
-                  {t('employees.activity.loadMore')}
+                  {t('employees.activity.retry')}
                 </button>
-              )}
-            </div>
-          </>
-        )}
+              </div>
+            )}
+
+            {!activityQuery.isPending && !activityQuery.isError && items.length === 0 && (
+              <div className="rounded-2xl border border-border bg-surface p-8 text-center">
+                <p className="text-sm text-muted-foreground">
+                  {t(filtered ? 'employees.activity.emptyFiltered' : 'employees.activity.empty')}
+                </p>
+                {filtered && (
+                  <button
+                    type="button"
+                    onClick={clearFilters}
+                    className="mt-4 rounded-lg border border-border px-4 py-2 text-sm font-semibold text-foreground hover:bg-surface-raised focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                  >
+                    {t('employees.activity.clearFilters')}
+                  </button>
+                )}
+              </div>
+            )}
+
+            {!activityQuery.isPending && !activityQuery.isError && items.length > 0 && (
+              <div className="overflow-hidden rounded-2xl border border-border bg-surface">
+                {dayGroups.map((group) => (
+                  <div key={group.day}>
+                    <h3 className="border-b border-hairline bg-surface-raised px-5 py-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                      {group.day}
+                    </h3>
+                    {group.items.map((item) => (
+                      <ActivityRow
+                        key={`${item.kind}-${item.source_id}`}
+                        item={item}
+                        lang={lang}
+                        dayFormatter={dayFormatter}
+                        dateTimeFormatter={dateTimeFormatter}
+                        showEmployee={employee == null}
+                        t={t}
+                      />
+                    ))}
+                  </div>
+                ))}
+                {activityQuery.hasNextPage && (
+                  <button
+                    type="button"
+                    onClick={() => void activityQuery.fetchNextPage()}
+                    disabled={activityQuery.isFetchingNextPage}
+                    className="mx-auto mt-6 block w-full rounded-lg border border-border px-4 py-2 text-sm font-semibold text-foreground hover:bg-surface-raised focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary disabled:cursor-wait disabled:opacity-60 md:w-auto"
+                  >
+                    {t('employees.activity.loadMore')}
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
       </div>
     </section>
   )
@@ -229,14 +250,29 @@ interface ActivityRowProps {
   lang: 'en' | 'ar'
   dayFormatter: Intl.DateTimeFormat
   dateTimeFormatter: Intl.DateTimeFormat
+  showEmployee: boolean
   t: (key: string, options?: Record<string, unknown>) => string
 }
 
-function ActivityRow({ item, lang, dayFormatter, dateTimeFormatter, t }: ActivityRowProps): React.JSX.Element {
+function ActivityRow({
+  item,
+  lang,
+  dayFormatter,
+  dateTimeFormatter,
+  showEmployee,
+  t,
+}: ActivityRowProps): React.JSX.Element {
   const employeeName = pickEmployeeName(
     { name_en: item.employee_name_en, name_ar: item.employee_name_ar },
     lang,
   )
+  const initials = employeeName
+    .split(' ')
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((word) => word[0])
+    .join('')
+    .toUpperCase()
   const date = new Date(item.occurred_at)
   const actionKey = `employees.activity.actions.${item.kind}`
   const actionOptions = item.kind === 'leave' ? { title: item.title, days: item.days ?? 0 } : { title: item.title }
@@ -247,29 +283,34 @@ function ActivityRow({ item, lang, dayFormatter, dateTimeFormatter, t }: Activit
     violation: 'employees.activity.openViolation',
     ledger: 'employees.activity.openLedger',
   }[item.kind]
+  const kindStyle = KIND_STYLES[item.kind]
 
   return (
     <Link
       to={activityHref(item)}
-      className="group block border-b border-hairline px-5 py-4 last:border-b-0 hover:bg-surface-raised focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary"
+      className="group flex items-center gap-3.5 border-b border-hairline px-5 py-3.5 last:border-b-0 hover:bg-surface-raised focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary"
     >
-      <div className="grid grid-cols-2 gap-x-4 gap-y-3 xl:grid-cols-[minmax(160px,1fr)_minmax(180px,1.2fr)_minmax(150px,1fr)_minmax(130px,1fr)_minmax(150px,1fr)_minmax(160px,1fr)] xl:items-center xl:gap-4">
-        <div className="order-1 min-w-0 xl:order-1 xl:col-span-1">
-          <p dir="auto" className="truncate text-sm font-semibold text-foreground">{employeeName}</p>
-          <p dir="auto" className="mt-1 font-mono tabular-nums text-xs text-muted-foreground">{item.employee_id}</p>
-        </div>
-        <div className="order-2 col-start-2 row-start-1 min-w-0 text-xs text-muted-foreground xl:order-5 xl:col-start-auto xl:row-start-auto">
-          <span className="sr-only">{dayFormatter.format(date)} · </span>{dateTimeFormatter.format(date)}
-        </div>
-        <div className="order-3 col-span-2 min-w-0 xl:order-2 xl:col-span-1">
-          <p dir="auto" className="truncate text-sm font-semibold text-foreground">{item.title}</p>
-          <p dir="auto" className="mt-1 truncate text-xs text-muted-foreground">{action}</p>
-          {item.detail && <p dir="auto" className="mt-1 truncate text-xs text-muted-foreground">{item.detail}</p>}
-        </div>
-        <div className="order-4 col-span-2 text-xs text-muted-foreground xl:order-3 xl:col-span-1">{t(`employees.activity.${item.kind}`)}</div>
-        <div dir="auto" className="order-5 col-span-2 font-mono tabular-nums text-xs text-muted-foreground xl:order-4 xl:col-span-1">{item.reference}</div>
-        <div className="order-6 col-span-2 text-sm font-semibold text-primary-on-soft xl:order-6 xl:col-span-1">{t(destinationKey)}</div>
-      </div>
+      <span aria-hidden className="grid h-9 w-9 shrink-0 place-items-center rounded-[11px]" style={{ background: kindStyle.soft, color: kindStyle.color }}>
+        {kindStyle.icon}
+      </span>
+      <span className="min-w-0 flex-1">
+        <span dir="auto" className="block truncate text-sm font-semibold text-foreground">{item.title}</span>
+        <span dir="auto" className="mt-0.5 block truncate text-xs text-muted-foreground">{action}{item.detail ? ` · ${item.detail}` : ''}</span>
+      </span>
+      {showEmployee && (
+        <span className="hidden w-[210px] shrink-0 items-center gap-2.5 md:flex">
+          <span aria-hidden className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-primary-soft text-[10.5px] font-bold text-primary-on-soft">{initials}</span>
+          <span className="min-w-0">
+            <span dir="auto" className="block truncate text-[13px] font-semibold text-foreground">{employeeName}</span>
+            <span dir="auto" className="block font-mono text-[11px] text-faint">{item.employee_id}</span>
+          </span>
+        </span>
+      )}
+      <span dir="auto" className="hidden shrink-0 font-mono text-xs tabular-nums text-muted-foreground sm:block">{item.reference}</span>
+      <span className="w-[74px] shrink-0 text-end text-xs tabular-nums text-muted-foreground">
+        <span className="sr-only">{dayFormatter.format(date)} · </span>{dateTimeFormatter.format(date)}
+      </span>
+      <span className="sr-only">{t(destinationKey)}</span>
     </Link>
   )
 }
