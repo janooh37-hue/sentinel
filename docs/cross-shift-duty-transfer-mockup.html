@@ -1,0 +1,500 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>النقل الداخلي بين عدة وحدات — مخطط للمراجعة · Cross-shift duty transfer mockup</title>
+<style>
+  /* GSSG tokens, light theme (DESIGN.md §1.1) */
+  :root{
+    --bg:#f5f4f1; --surface:#fff; --surface-raised:#fafaf6; --surface-tinted:#f0eee8;
+    --primary:#0d2845; --primary-hover:#1d3a5e; --primary-soft:#e8edf3; --on-primary:#fff;
+    --accent:#c8102e; --accent-soft:#fbe5e8; --success:#047857; --warning:#b45309;
+    --warning-soft:#fbedd8;
+    --text:#1c1f24; --text-muted:#5a6068; --text-faint:#8b9098;
+    --border:#e6e4dd; --border-strong:#d4d1c8; --hairline:#efece5;
+    --mono:"IBM Plex Mono",ui-monospace,Consolas,monospace;
+    --ar:"Noto Sans Arabic","Segoe UI",Tahoma,system-ui,sans-serif;
+    --shadow:0 1px 2px rgba(16,24,40,.05),0 8px 24px rgba(16,24,40,.06);
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--text);font-family:var(--ar);
+    line-height:1.55;-webkit-font-smoothing:antialiased;font-size:15px}
+  .mono{font-family:var(--mono);font-variant-numeric:tabular-nums}
+
+  /* review chrome (not part of the app) */
+  .review{display:flex;align-items:center;gap:12px;padding:10px 20px;background:#111827;color:#e5e7eb;
+    font-size:12.5px;position:sticky;top:0;z-index:60}
+  .review b{color:#fff}
+  .review .sp{margin-inline-start:auto;display:flex;gap:8px}
+  .review button{font:inherit;font-size:12px;font-weight:600;border:1px solid #374151;background:#1f2937;
+    color:#e5e7eb;border-radius:8px;padding:5px 11px;cursor:pointer}
+  .review button:hover{background:#374151}
+
+  .page{max-width:1240px;margin:0 auto;padding:24px 20px 140px}
+  header.pg h1{font-size:1.7em;font-weight:700;letter-spacing:-.3px;margin:.2em 0 .1em}
+  header.pg .cat{font-size:.75em;font-weight:500;text-transform:uppercase;letter-spacing:.18em;color:var(--text-muted)}
+  header.pg p{font-size:.86em;color:var(--text-muted);margin:.2em 0 0}
+
+  .shell{margin-top:20px;border:1px solid var(--border);border-radius:16px;background:var(--surface);
+    box-shadow:var(--shadow);overflow:hidden;display:grid;grid-template-columns:268px minmax(0,1fr)}
+  @media(max-width:820px){.shell{grid-template-columns:1fr}}
+
+  /* unit rail */
+  .rail{background:var(--surface-raised);border-inline-end:1px solid var(--hairline);padding:14px 0}
+  .rail .lab{padding:0 18px 8px;font-size:.72em;font-weight:600;text-transform:uppercase;
+    letter-spacing:.12em;color:var(--text-muted)}
+  .rail .tot{padding:0 18px 12px;font-size:.78em;color:var(--text-muted)}
+  .rail button{display:flex;width:100%;align-items:center;gap:10px;border:0;background:transparent;
+    font:inherit;text-align:start;padding:9px 18px;cursor:pointer;color:var(--text);
+    border-inline-start:3px solid transparent}
+  .rail button:hover{background:var(--surface-tinted)}
+  .rail button.on{background:var(--primary-soft);border-inline-start-color:var(--primary);font-weight:600}
+  .rail .n{margin-inline-start:auto;font-size:.78em;color:var(--text-muted)}
+  .rail .pick{display:inline-flex;min-width:20px;height:18px;padding:0 5px;border-radius:999px;
+    background:var(--primary);color:var(--on-primary);font-size:.66em;font-weight:700;
+    align-items:center;justify-content:center}
+
+  /* roster */
+  .detail{display:flex;flex-direction:column;min-height:440px}
+  .dhead{display:flex;flex-wrap:wrap;align-items:center;gap:12px;padding:14px 20px;
+    border-bottom:1px solid var(--hairline)}
+  .dhead .t{font-size:1.05em;font-weight:700}
+  .dhead .s{font-size:.78em;color:var(--text-muted)}
+  .dhead input{margin-inline-start:auto;height:36px;width:220px;border:1px solid var(--border);
+    border-radius:999px;padding:0 14px;font:inherit;font-size:.85em;background:var(--surface)}
+  .postgrp{padding:6px 0}
+  .postgrp .ph{padding:10px 20px 4px;font-size:.74em;font-weight:700;color:var(--text-muted);
+    text-transform:uppercase;letter-spacing:.08em}
+  table.roster{width:100%;border-collapse:collapse;font-size:.88em}
+  table.roster th{font-size:.8em;font-weight:600;color:var(--text-muted);text-align:start;
+    padding:6px 20px;border-bottom:1px solid var(--hairline)}
+  table.roster td{padding:8px 20px;border-bottom:1px solid var(--hairline)}
+  table.roster tr:hover td{background:var(--surface-tinted)}
+  table.roster tr.sel td{background:var(--primary-soft)}
+  table.roster td.chk{width:34px;padding-inline-end:0}
+  input[type=checkbox]{width:16px;height:16px;accent-color:var(--primary);cursor:pointer}
+
+  /* sticky selection bar + tray */
+  .traywrap{position:fixed;inset-inline:0;bottom:0;z-index:40}
+  .tray{background:var(--surface);border-top:1px solid var(--border);box-shadow:0 -8px 24px rgba(16,24,40,.08);
+    max-height:45vh;overflow-y:auto}
+  .tray .th{display:flex;align-items:center;gap:8px;padding:10px 20px;font-size:.8em;font-weight:700;
+    color:var(--text-muted);text-transform:uppercase;letter-spacing:.08em;
+    position:sticky;top:0;background:var(--surface);border-bottom:1px solid var(--hairline)}
+  .tray .grp{padding:4px 0}
+  .tray .gh{padding:8px 20px 2px;font-size:.78em;font-weight:700;color:var(--primary)}
+  .tray .row{display:flex;align-items:center;gap:10px;padding:6px 20px;font-size:.86em}
+  .tray .row:hover{background:var(--surface-tinted)}
+  .tray .row .x{margin-inline-start:auto;border:0;background:transparent;color:var(--text-faint);
+    cursor:pointer;font-size:1.05em;line-height:1;padding:2px 6px;border-radius:6px}
+  .tray .row .x:hover{color:var(--accent);background:var(--accent-soft)}
+  .bar{display:flex;flex-wrap:wrap;align-items:center;gap:12px;padding:12px 20px;
+    background:var(--primary);color:var(--on-primary);border-top:1px solid rgba(255,255,255,.25)}
+  .bar .cnt{display:inline-flex;align-items:center;gap:8px;border:1px solid rgba(255,255,255,.4);
+    background:transparent;color:inherit;font:inherit;font-weight:600;border-radius:8px;
+    padding:6px 12px;cursor:pointer}
+  .bar .cnt:hover{background:rgba(255,255,255,.12)}
+  .bar .cnt .cv{font-size:.78em;opacity:.85;font-weight:500}
+  .bar .ghost{border:1px solid rgba(255,255,255,.4);background:transparent;color:inherit;font:inherit;
+    font-size:.86em;font-weight:500;border-radius:8px;padding:6px 12px;cursor:pointer}
+  .bar .ghost:hover{background:rgba(255,255,255,.12)}
+  .bar .go{margin-inline-start:auto;border:0;background:#fff;color:var(--primary);font:inherit;
+    font-size:.9em;font-weight:700;border-radius:8px;padding:7px 16px;cursor:pointer}
+  .bar .go:hover{background:rgba(255,255,255,.9)}
+  .chev{transition:transform .15s ease}
+  .chev.up{transform:rotate(180deg)}
+
+  /* dialog */
+  .scrim{position:fixed;inset:0;background:rgba(10,14,24,.45);z-index:50;display:flex;
+    align-items:center;justify-content:center;padding:18px}
+  .dlg{background:var(--surface);border-radius:16px;box-shadow:0 24px 60px rgba(16,24,40,.28);
+    width:100%;max-width:820px;max-height:92vh;display:flex;flex-direction:column}
+  .dlg .h{padding:16px 20px 12px;border-bottom:1px solid var(--hairline)}
+  .dlg .h h2{margin:0;font-size:1.05em;font-weight:700}
+  .dlg .h p{margin:.25em 0 0;font-size:.82em;color:var(--text-muted)}
+  .dlg .b{padding:16px 20px;overflow-y:auto;display:flex;flex-direction:column;gap:16px}
+  .dlg .f{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:8px;align-items:center;
+    padding:12px 20px;border-top:1px solid var(--border)}
+  .dlg .f .hint{margin-inline-end:auto;font-size:.78em;color:var(--warning)}
+  .fieldlab{font-size:.74em;font-weight:600;color:var(--text-muted);margin-bottom:5px;display:block}
+  input.txt,select.txt{width:100%;height:36px;border:1px solid var(--border-strong);border-radius:9px;
+    padding:0 10px;font:inherit;font-size:.86em;background:var(--surface);color:var(--text)}
+  input.txt:focus,select.txt:focus{outline:2px solid var(--primary-soft);border-color:var(--primary)}
+  .bulk{background:var(--surface-raised);border:1px solid var(--border);border-radius:12px;padding:12px 14px}
+  .bulk .bg{display:grid;grid-template-columns:1fr 1fr auto;gap:10px;align-items:end}
+  @media(max-width:640px){.bulk .bg{grid-template-columns:1fr}}
+  .btn{font:inherit;font-size:.85em;font-weight:600;border-radius:9px;padding:8px 14px;cursor:pointer;
+    border:1px solid var(--border-strong);background:var(--surface);color:var(--text)}
+  .btn:hover{background:var(--surface-tinted)}
+  .btn.pri{background:var(--primary);border-color:var(--primary);color:var(--on-primary)}
+  .btn.pri:hover{background:var(--primary-hover)}
+  .btn.ghost{border-color:transparent;background:transparent;color:var(--text-muted)}
+  .btn[disabled]{opacity:.45;cursor:not-allowed}
+  .rows{border:1px solid var(--border);border-radius:12px;max-height:40vh;overflow-y:auto}
+  .rw{display:grid;grid-template-columns:minmax(140px,1fr) minmax(165px,1.2fr) 14px minmax(120px,.95fr) minmax(120px,.95fr);
+    gap:10px;align-items:center;padding:10px 12px;border-bottom:1px solid var(--hairline)}
+  .rw:last-child{border-bottom:0}
+  .rw.bad{background:var(--warning-soft)}
+  @media(max-width:720px){
+    .rw{grid-template-columns:1fr 1fr;gap:8px}
+    .rw .who{grid-column:1/-1}
+    .rw .arrow{display:none}
+    .rw .from{grid-column:1/-1}
+  }
+  .rw .who{display:flex;flex-wrap:wrap;align-items:baseline;gap:8px;font-size:.88em}
+  .rw .from{font-size:.8em;color:var(--text-muted)}
+  .rw .arrow{color:var(--text-faint);text-align:center}
+  .meta{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  @media(max-width:640px){.meta{grid-template-columns:1fr}}
+
+  /* letter preview */
+  .paper{background:#fff;border:1px solid var(--border);border-radius:8px;padding:26px 30px;
+    font-size:.86em;line-height:1.9}
+  .paper table{width:100%;border-collapse:collapse;margin:14px 0;font-size:.95em}
+  .paper th{background:#C00000;color:#fff;border:1px solid #000;padding:4px 9px;text-align:center;font-weight:700}
+  .paper td{border:1px solid #000;padding:4px 9px;text-align:center}
+  .paper .hd{display:flex;justify-content:space-between;border-bottom:2px solid #9a7b3f;
+    padding-bottom:8px;margin-bottom:12px;font-size:.9em;color:#5a5030}
+  .note{font-size:.78em;color:var(--text-muted);margin-top:10px}
+  .pill{display:inline-block;font-size:.7em;font-weight:700;padding:2px 8px;border-radius:999px;
+    background:var(--primary-soft);color:var(--primary)}
+</style>
+</head>
+<body>
+
+<div class="review">
+  <b>مخطط للمراجعة · Review mockup</b>
+  <span id="rv-note">لا يتصل بالخادم — لا يُنشئ كتاباً ولا ينقل موظفاً.</span>
+  <span class="sp">
+    <button id="rv-lang" type="button">English / عربي</button>
+    <button id="rv-reset" type="button">تصفير · Reset</button>
+  </span>
+</div>
+
+<div class="page">
+  <header class="pg">
+    <div class="cat" id="ui-cat"></div>
+    <h1 id="ui-title"></h1>
+    <p id="ui-sub"></p>
+  </header>
+
+  <div class="shell">
+    <nav class="rail" id="rail"></nav>
+    <section class="detail">
+      <div class="dhead">
+        <div>
+          <div class="t" id="ui-unit" dir="auto"></div>
+          <div class="s" id="ui-count"></div>
+        </div>
+        <input type="search" id="ui-search" />
+      </div>
+      <div id="roster"></div>
+    </section>
+  </div>
+</div>
+
+<div class="traywrap" id="traywrap" hidden></div>
+<div id="modal"></div>
+
+<script>
+const L = {
+  ar: {
+    cat:'شؤون الموظفين', title:'أماكن العمل والنقل الداخلي',
+    sub:'حدّد موظفين من أكثر من وحدة — يبقى التحديد محفوظاً وأنت تتنقل بين الوحدات.',
+    railLab:'الوحدات', total:(a,t)=>`المُوزّعون: ${a} / ${t}`, unassigned:'غير محدد',
+    search:'بحث بالاسم أو الرقم…', noPost:'بدون نقطة محددة',
+    colId:'الرقم', colName:'الاسم', colPos:'المسمى الوظيفي',
+    summary:(e,p)=>`${e} موظف · ${p} نقطة`, empty:'لا يوجد موظفون في هذه الوحدة.',
+    sel:n=>n===1?'محدد واحد':n===2?'محددان':n<11?`${n} محددين`:`${n} محدداً`,
+    units:n=>n===1?'وحدة واحدة':n===2?'وحدتان':`${n} وحدات`,
+    clear:'مسح', transfer:'نقل المحدد ←', trayTitle:'الموظفون المحددون',
+    remove:n=>`إزالة ${n} من التحديد`,
+    dlgTitle:'نقل داخلي', dlgSub:n=>`نقل ${n} من الموظفين`,
+    bulkLabel:'وجهة واحدة للجميع', applyAll:'تطبيق على الجميع',
+    destUnit:'إلى الوحدة', destPost:'إلى النقطة', from:'من',
+    rowUnit:n=>`الوحدة الجديدة لـ ${n}`, rowPost:n=>`النقطة الجديدة لـ ${n}`,
+    missing:'اختر وحدة جديدة لكل موظف.',
+    recipient:'إلى (المستلم)', manager:'المدير الموقع', cc:'نسخة إلى (اختياري)',
+    cancel:'إلغاء', generate:'إنشاء كتاب النقل ←',
+    letterTitle:'معاينة كتاب النقل', close:'إغلاق',
+    reviewNote:'لا يتصل بالخادم — لا يُنشئ كتاباً ولا ينقل موظفاً.',
+    subject:'الموضوع: النقل',
+    letterNote:'هذه هي الصورة التي سيصدرها الخادم فعلياً: عمود «من» من مكان كل موظف الحالي، وعمود «إلى» من اختياره في الجدول أعلاه.'
+  },
+  en: {
+    cat:'Employee affairs', title:'Duty locations & internal transfer',
+    sub:'Pick employees from more than one unit — the selection survives while you move around the rail.',
+    railLab:'Units', total:(a,t)=>`Assigned: ${a} / ${t}`, unassigned:'Unassigned',
+    search:'Search by name or number…', noPost:'No post set',
+    colId:'No.', colName:'Name', colPos:'Designation',
+    summary:(e,p)=>`${e} employees · ${p} posts`, empty:'No employees in this unit.',
+    sel:n=>n===1?'1 selected':`${n} selected`,
+    units:n=>n===1?'1 unit':`${n} units`,
+    clear:'Clear', transfer:'Transfer selected →', trayTitle:'Selected employees',
+    remove:n=>`Remove ${n} from the selection`,
+    dlgTitle:'Internal transfer', dlgSub:n=>n===1?'Moving 1 employee':`Moving ${n} employees`,
+    bulkLabel:'Same destination for everyone', applyAll:'Apply to all',
+    destUnit:'To unit', destPost:'To post', from:'From',
+    rowUnit:n=>`Destination unit for ${n}`, rowPost:n=>`Destination post for ${n}`,
+    missing:'Choose a destination unit for every employee.',
+    recipient:'To (Recipient)', manager:'Signing manager', cc:'CC (optional)',
+    cancel:'Cancel', generate:'Generate transfer book →',
+    letterTitle:'Transfer letter preview', close:'Close',
+    reviewNote:'Not wired to the server — nothing is minted and nobody is moved.',
+    subject:'Subject: النقل',
+    letterNote:'This is what the server actually emits: the من column from each employee\u2019s current location, the إلى column from the row you set above.'
+  }
+}
+
+const UNITS = ['الدوام الرسمي','السرية الأولى','السرية الثانية','السرية الثالثة','السرية الرابعة','السرية الخامسة']
+const POSTS = {
+  'الدوام الرسمي':['الديوان','شؤون الموظفين'],
+  'السرية الأولى':['البوابة الرئيسية','برج المراقبة'],
+  'السرية الثانية':['التفتيش','البوابة الخلفية'],
+  'السرية الثالثة':['المستودعات'],
+  'السرية الرابعة':['البوابة الرئيسية'],
+  'السرية الخامسة':[]
+}
+const E = [
+  ['G3082','عبدالله سالم المرزوقي','Abdullah Salem','رقيب','الدوام الرسمي','الديوان'],
+  ['G3105','خالد يوسف الحمادي','Khalid Yousef','كاتب','الدوام الرسمي','شؤون الموظفين'],
+  ['G3309','محمد سعيد الكعبي','Mohammed Saeed','حارس أمن','السرية الأولى','البوابة الرئيسية'],
+  ['G3312','سلطان راشد النعيمي','Sultan Rashid','حارس أمن','السرية الأولى','البوابة الرئيسية'],
+  ['G3318','عمر عبدالرحمن','Omar Abdulrahman','عريف','السرية الأولى','برج المراقبة'],
+  ['G4017','أحمد ناصر البلوشي','Ahmed Nasser','حارس أمن','السرية الثانية','التفتيش'],
+  ['G4022','يوسف إبراهيم','Yousef Ibrahim','حارس أمن','السرية الثانية','التفتيش'],
+  ['G4030','سيف مبارك الظاهري','Saif Mubarak','رقيب','السرية الثانية','البوابة الخلفية'],
+  ['G4511','ماجد حسن','Majed Hassan','حارس أمن','السرية الثالثة','المستودعات'],
+  ['G4519','طارق علي','Tariq Ali','حارس أمن','السرية الثالثة','المستودعات'],
+  ['G4602','بدر خميس','Badr Khamis','حارس أمن','السرية الرابعة','البوابة الرئيسية'],
+  ['G4777','راشد سعيد','Rashid Saeed','حارس أمن','',''],
+  ['G4781','حمد عبدالله','Hamad Abdullah','حارس أمن','','']
+].map(([id,ar,en,pos,unit,post])=>({id,ar,en,pos,unit,post}))
+
+const S = { lang:'ar', active:'السرية الأولى', q:'', sel:new Set(), tray:false,
+            dlg:false, letter:false, dest:{}, bulk:{unit:'',post:''} }
+const t = () => L[S.lang]
+const esc = s => String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]))
+const nameOf = e => S.lang==='ar' ? e.ar : e.en
+const unitLabel = u => u || t().unassigned
+const locLabel = (u,p) => u ? (p ? `${u} - ${p}` : u) : 'غير محدد'
+const railKeys = () => [...UNITS, ...(E.some(e=>!e.unit) ? [''] : [])]
+
+function render(){
+  const T = t()
+  document.documentElement.lang = S.lang
+  document.documentElement.dir = S.lang==='ar' ? 'rtl' : 'ltr'
+  document.getElementById('rv-note').textContent = T.reviewNote
+  document.getElementById('ui-cat').textContent = T.cat
+  document.getElementById('ui-title').textContent = T.title
+  document.getElementById('ui-sub').textContent = T.sub
+  const search = document.getElementById('ui-search')
+  search.placeholder = T.search
+  search.value = S.q
+
+  // rail
+  const assigned = E.filter(e=>e.unit).length
+  let rail = `<div class="lab">${T.railLab}</div><div class="tot">${T.total(assigned,E.length)}</div>`
+  for (const key of railKeys()){
+    const list = E.filter(e=>e.unit===key)
+    const picked = list.filter(e=>S.sel.has(e.id)).length
+    rail += `<button type="button" data-unit="${esc(key)}" class="${key===S.active?'on':''}">
+      <span dir="auto">${esc(unitLabel(key))}</span>
+      ${picked?`<span class="pick mono">${picked}</span>`:''}
+      <span class="n mono">${list.length}</span></button>`
+  }
+  document.getElementById('rail').innerHTML = rail
+
+  // roster head
+  const inUnit = E.filter(e=>e.unit===S.active)
+  const posts = [...new Set(inUnit.map(e=>e.post))]
+  document.getElementById('ui-unit').textContent = unitLabel(S.active)
+  document.getElementById('ui-count').textContent = T.summary(inUnit.length, posts.filter(Boolean).length)
+
+  // roster body
+  const q = S.q.trim().toLowerCase()
+  const match = e => !q || e.id.toLowerCase().includes(q) || e.ar.includes(S.q.trim()) || e.en.toLowerCase().includes(q)
+  let body = ''
+  for (const post of posts){
+    const rows = inUnit.filter(e=>e.post===post && match(e))
+    if (!rows.length) continue
+    body += `<div class="postgrp"><div class="ph" dir="auto">${esc(post||T.noPost)}</div>
+      <table class="roster"><thead><tr><th></th><th>${T.colId}</th><th>${T.colName}</th><th>${T.colPos}</th></tr></thead><tbody>`
+    for (const e of rows){
+      const on = S.sel.has(e.id)
+      body += `<tr class="${on?'sel':''}">
+        <td class="chk"><input type="checkbox" data-pick="${e.id}" ${on?'checked':''} aria-label="${esc(nameOf(e))}" /></td>
+        <td class="mono">${e.id}</td><td dir="auto">${esc(nameOf(e))}</td><td dir="auto">${esc(e.pos)}</td></tr>`
+    }
+    body += `</tbody></table></div>`
+  }
+  document.getElementById('roster').innerHTML = body || `<p style="padding:48px 20px;text-align:center;color:var(--text-muted);font-size:.88em">${T.empty}</p>`
+
+  renderTray()
+  renderModal()
+}
+
+function selectedList(){ return E.filter(e=>S.sel.has(e.id)) }
+
+function renderTray(){
+  const T = t(), wrap = document.getElementById('traywrap'), list = selectedList()
+  wrap.hidden = list.length === 0
+  if (!list.length){ S.tray = false; wrap.innerHTML = ''; return }
+  const unitCount = new Set(list.map(e=>e.unit)).size
+  let panel = ''
+  if (S.tray){
+    let groups = ''
+    for (const key of railKeys()){
+      const rows = list.filter(e=>e.unit===key)
+      if (!rows.length) continue
+      groups += `<div class="grp"><div class="gh" dir="auto">${esc(unitLabel(key))}</div>` +
+        rows.map(e=>`<div class="row">
+          <span class="mono" style="font-weight:600;color:var(--primary)">${e.id}</span>
+          <span dir="auto">${esc(nameOf(e))}</span>
+          <span style="font-size:.85em;color:var(--text-faint)" dir="auto">${esc(e.post||T.noPost)}</span>
+          <button class="x" type="button" data-drop="${e.id}" title="${esc(T.remove(nameOf(e)))}"
+            aria-label="${esc(T.remove(nameOf(e)))}">✕</button></div>`).join('') + `</div>`
+    }
+    panel = `<div class="tray" id="tray-panel"><div class="th">${T.trayTitle}</div>${groups}</div>`
+  }
+  wrap.innerHTML = panel + `<div class="bar">
+    <button class="cnt" type="button" id="tray-toggle" aria-expanded="${S.tray}" aria-controls="tray-panel">
+      <span class="chev ${S.tray?'up':''}">▲</span>
+      <span>${T.sel(list.length)}</span>
+      <span class="cv">· ${T.units(unitCount)}</span>
+    </button>
+    <button class="ghost" type="button" id="tray-clear">✕ ${T.clear}</button>
+    <button class="go" type="button" id="tray-go">${T.transfer}</button>
+  </div>`
+}
+
+function destOf(id){ return S.dest[id] || (S.dest[id] = {unit:'',post:''}) }
+const unitOpts = sel => UNITS.map(u=>`<option value="${esc(u)}" ${u===sel?'selected':''}>${esc(u)}</option>`).join('')
+const postOpts = (unit,sel) => (POSTS[unit]||[]).map(p=>`<option value="${esc(p)}" ${p===sel?'selected':''}>${esc(p)}</option>`).join('')
+
+function renderModal(){
+  const T = t(), host = document.getElementById('modal')
+  if (S.letter){ host.innerHTML = letterHtml(); return }
+  if (!S.dlg){ host.innerHTML = ''; return }
+  const list = selectedList()
+  const blanks = list.filter(e=>!destOf(e.id).unit.trim()).length
+  const rows = list.map(e=>{
+    const d = destOf(e.id)
+    return `<div class="rw ${d.unit?'':'bad'}">
+      <div class="who"><span class="mono" style="font-weight:600;color:var(--primary)">${e.id}</span>
+        <span dir="auto">${esc(nameOf(e))}</span></div>
+      <div class="from" dir="auto">${T.from}: ${esc(locLabel(e.unit,e.post))}</div>
+      <div class="arrow">→</div>
+      <div><select class="txt" data-unit-for="${e.id}" aria-label="${esc(T.rowUnit(nameOf(e)))}">
+        <option value="">— ${esc(T.destUnit)} —</option>${unitOpts(d.unit)}</select></div>
+      <div><select class="txt" data-post-for="${e.id}" aria-label="${esc(T.rowPost(nameOf(e)))}"
+        ${(POSTS[d.unit]||[]).length?'':'disabled'}>
+        <option value="">— ${esc(T.destPost)} —</option>${postOpts(d.unit,d.post)}</select></div>
+    </div>`
+  }).join('')
+  host.innerHTML = `<div class="scrim"><div class="dlg" role="dialog" aria-modal="true">
+    <div class="h"><h2>${T.dlgTitle}</h2><p>${T.dlgSub(list.length)}</p></div>
+    <div class="b">
+      <div class="bulk">
+        <span class="fieldlab">${T.bulkLabel}</span>
+        <div class="bg">
+          <div><select class="txt" id="bulk-unit" aria-label="${esc(T.destUnit)}">
+            <option value="">— ${esc(T.destUnit)} —</option>${unitOpts(S.bulk.unit)}</select></div>
+          <div><select class="txt" id="bulk-post" aria-label="${esc(T.destPost)}"
+            ${(POSTS[S.bulk.unit]||[]).length?'':'disabled'}>
+            <option value="">— ${esc(T.destPost)} —</option>${postOpts(S.bulk.unit,S.bulk.post)}</select></div>
+          <button class="btn" type="button" id="bulk-apply" ${S.bulk.unit?'':'disabled'}>${T.applyAll}</button>
+        </div>
+      </div>
+      <div class="rows">${rows}</div>
+      <div class="meta">
+        <div><span class="fieldlab">${T.recipient}</span>
+          <select class="txt"><option>مدير إدارة العمليات</option><option>مدير شؤون الموظفين</option></select></div>
+        <div><span class="fieldlab">${T.manager}</span>
+          <select class="txt"><option>العقيد / مدير الإدارة</option></select></div>
+        <div style="grid-column:1/-1"><span class="fieldlab">${T.cc}</span>
+          <select class="txt"><option>مدراء الأفرع</option></select></div>
+      </div>
+    </div>
+    <div class="f">
+      ${blanks?`<span class="hint">${T.missing}</span>`:''}
+      <button class="btn ghost" type="button" id="dlg-cancel">${T.cancel}</button>
+      <button class="btn pri" type="button" id="dlg-go" ${blanks?'disabled':''}>${T.generate}</button>
+    </div>
+  </div></div>`
+}
+
+function letterHtml(){
+  const T = t(), list = selectedList()
+  const rows = list.map(e=>{
+    const d = destOf(e.id)
+    return `<tr><td class="mono">${e.id}</td><td>${esc(e.pos)}</td><td>${esc(e.ar)}</td>
+      <td>${esc(locLabel(e.unit,e.post))}</td><td>${esc(locLabel(d.unit,d.post))}</td></tr>`
+  }).join('')
+  return `<div class="scrim"><div class="dlg" role="dialog" aria-modal="true" style="max-width:900px">
+    <div class="h"><h2>${T.letterTitle}</h2><p>${T.subject}</p></div>
+    <div class="b"><div class="paper" dir="rtl">
+      <div class="hd"><span>الحرس الأمني الخاص</span><span class="mono">الرقم: 12/1/2026/٠٠٤٧</span></div>
+      <p>يطيب لنا أن نتقدم لسيادتكم بخالص التحية و التقدير , يرجى العلم أنه ولغايات تنظيمية في العمل
+         تم نقل المذكورين بالجدول المرفق إلى الجهات المبينة بجانب أسمائهم إعتباراً من تاريخه .</p>
+      <p>&nbsp;</p>
+      <table><thead><tr><th>الرقم الوظيفي</th><th>المسمى الوظيفي</th><th>الاسم</th><th>من</th><th>إلى</th></tr></thead>
+        <tbody>${rows}</tbody></table>
+      <p>&nbsp;</p>
+      <p>للتفضل بالعلم وأمركم حول تعديل الكشوفات لديكم ولإجراءاتكم لطفاً.</p>
+      <p>هذا وتفضلوا بقبول فائق الإحترام والتقدير.</p>
+    </div>
+    <p class="note">${T.letterNote}</p></div>
+    <div class="f"><button class="btn pri" type="button" id="letter-close">${T.close}</button></div>
+  </div></div>`
+}
+
+document.addEventListener('click', ev => {
+  const el = ev.target.closest('[data-unit],[data-drop],#tray-toggle,#tray-clear,#tray-go,#bulk-apply,#dlg-cancel,#dlg-go,#letter-close,#rv-lang,#rv-reset')
+  if (!el) return
+  if (el.dataset.unit !== undefined){ S.active = el.dataset.unit; render(); return }   // selection survives
+  if (el.dataset.drop){ S.sel.delete(el.dataset.drop); render(); return }
+  switch (el.id){
+    case 'tray-toggle': S.tray = !S.tray; break
+    case 'tray-clear':  S.sel.clear(); S.tray = false; break
+    case 'tray-go':     S.dlg = true; break
+    case 'bulk-apply':  for (const e of selectedList()) S.dest[e.id] = {...S.bulk}; break
+    case 'dlg-cancel':  S.dlg = false; break
+    case 'dlg-go':      S.letter = true; break
+    case 'letter-close':S.letter = false; S.dlg = false; break
+    case 'rv-lang':     S.lang = S.lang==='ar' ? 'en' : 'ar'; break
+    case 'rv-reset':    S.sel.clear(); S.dest = {}; S.bulk = {unit:'',post:''}
+                        S.tray = S.dlg = S.letter = false; S.q = ''; S.active = 'السرية الأولى'; break
+  }
+  render()
+})
+
+document.addEventListener('change', ev => {
+  const el = ev.target
+  if (el.dataset && el.dataset.pick){
+    el.checked ? S.sel.add(el.dataset.pick) : S.sel.delete(el.dataset.pick)
+    return render()
+  }
+  if (el.dataset && el.dataset.unitFor){
+    const d = destOf(el.dataset.unitFor); d.unit = el.value; d.post = ''; return render()
+  }
+  if (el.dataset && el.dataset.postFor){ destOf(el.dataset.postFor).post = el.value; return render() }
+  if (el.id === 'bulk-unit'){ S.bulk = {unit:el.value, post:''}; return render() }
+  if (el.id === 'bulk-post'){ S.bulk.post = el.value; return render() }
+})
+
+document.addEventListener('input', ev => {
+  if (ev.target.id === 'ui-search'){ S.q = ev.target.value; render() }
+})
+
+document.addEventListener('keydown', ev => {
+  if (ev.key !== 'Escape') return
+  if (S.letter){ S.letter = false } else if (S.dlg){ S.dlg = false } else if (S.tray){ S.tray = false } else return
+  render()
+})
+
+render()
+</script>
+</body>
+</html>
