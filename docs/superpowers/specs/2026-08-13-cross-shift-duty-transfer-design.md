@@ -178,7 +178,6 @@ New keys in both `en.json` and `ar.json`; Arabic entries use the
 | `dutyLocations.transfer.bulkLabel` | `Same destination for everyone` | `وجهة واحدة للجميع` |
 | `dutyLocations.transfer.applyToAll` | `Apply to all` | `تطبيق على الجميع` |
 | `dutyLocations.transfer.rowFrom` | `From` | `من` |
-| `dutyLocations.transfer.rowTo` | `To` | `إلى` |
 | `dutyLocations.transfer.rowUnitAria` | `Destination unit for {{name}}` | `الوحدة الجديدة لـ {{name}}` |
 | `dutyLocations.transfer.rowPostAria` | `Destination post for {{name}}` | `النقطة الجديدة لـ {{name}}` |
 | `dutyLocations.transfer.missingUnit` | `Choose a destination unit for every employee.` | `اختر وحدة جديدة لكل موظف.` |
