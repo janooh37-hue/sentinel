@@ -81,6 +81,7 @@ _TODAY_FMT = "%d/%m/%Y"
 _AZTEC_TOP_RIGHT: frozenset[str] = frozenset(
     {
         "General Book",
+        "Security Permit",
         "Warning Form",
         "Administrative Leave Form",
         "Leave Permit Form",
@@ -889,6 +890,10 @@ _FORM_REGISTRY: dict[str, dict[str, Any]] = {
     "Passport Release Form": {"adapter": _adapt_common, "post_process": None},
     "Duty Resumption Form": {"adapter": _adapt_common, "post_process": None},
     "General Book": {"adapter": _adapt_general_book, "post_process": _pp_general_book},
+    # Security Permit: the 1/5 permit letter. Same General Book adapter and
+    # post-process (body + footer pipeline); only the .docx underneath differs,
+    # so the permit paper can be edited without touching every other letter.
+    "Security Permit": {"adapter": _adapt_general_book, "post_process": _pp_general_book},
     "Leave Permit Form": {"adapter": _adapt_common, "post_process": _pp_leave_permit},
     "Administrative Leave Form": {
         "adapter": _adapt_admin_leave,

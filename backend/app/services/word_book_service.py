@@ -369,7 +369,15 @@ def finish_word_session(db: Session, *, user: User, book_id: int) -> Book:
     # 1. Move working docx → stable output dir
     # ------------------------------------------------------------------
     is_report = book.ref_number.startswith("REPORT-")
-    template_id = "Report" if is_report else _TEMPLATE_ID
+    # A Word round-trip keeps the paper the book was minted on: a permit letter
+    # reopened in Word must not come back relabelled a General Book. Only a
+    # first finish has no prior version, and then the ref prefix decides.
+    prior = book.versions[-1] if book.versions else None
+    template_id = (
+        prior.template_id
+        if prior is not None and prior.template_id
+        else ("Report" if is_report else _TEMPLATE_ID)
+    )
     now = datetime.now() if is_report else datetime.now(UTC).replace(tzinfo=None)
     out_dir = _output_dir_for_admin(template_id)
     filename = _build_docx_filename(template_id, book.ref_number.replace("/", "-"), now)

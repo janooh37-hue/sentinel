@@ -16,6 +16,7 @@ from app.api.errors import NotFoundError
 from app.core import form_policy
 from app.core.constants import COMPANION_TEMPLATE_IDS, TEMPLATE_FILES
 from app.core.docx_engine import template_has_code
+from app.core.form_kind import SERVICE_ALIASES
 from app.core.form_policy import SigningPath
 from app.services import notify_format
 from app.services.document_service import load_fields_meta
@@ -114,15 +115,17 @@ def _build_meta(template_id: str, entry: dict[str, Any]) -> TemplateMeta:
 
 
 def list_templates() -> TemplateListResponse:
-    """Return metadata for every non-companion registered template.
+    """Return metadata for every registered template that is its own service.
 
     Companion forms (COMPANION_TEMPLATE_IDS) are excluded — they only exist as
-    a companion of their primary, never as a standalone service.
+    a companion of their primary, never as a standalone service. Aliased forms
+    (form_kind.SERVICE_ALIASES) are excluded too — they are minted by their own
+    feature, never picked from the gallery, and report as their target service.
     """
     meta_map = load_fields_meta()
     items: list[TemplateMeta] = []
     for template_id in TEMPLATE_FILES:
-        if template_id in COMPANION_TEMPLATE_IDS:
+        if template_id in COMPANION_TEMPLATE_IDS or template_id in SERVICE_ALIASES:
             continue
         entry = meta_map.get(template_id, {})
         items.append(_build_meta(template_id, entry))

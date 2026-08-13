@@ -8,17 +8,35 @@ from app.core.constants import COMPANION_TEMPLATE_IDS, TEMPLATE_FILES
 from app.core.form_kind import (
     LEGACY_SUBJECT_ALIASES,
     OTHER_SERVICE_ID,
+    SERVICE_ALIASES,
     SERVICE_IDS,
     resolve_service,
+    service_template_ids,
     subject_prefixes,
 )
 
 
-def test_service_ids_are_templates_minus_companions() -> None:
-    assert set(SERVICE_IDS) == set(TEMPLATE_FILES) - set(COMPANION_TEMPLATE_IDS)
+def test_service_ids_are_templates_minus_companions_and_aliases() -> None:
+    hidden = set(COMPANION_TEMPLATE_IDS) | set(SERVICE_ALIASES)
+    assert set(SERVICE_IDS) == set(TEMPLATE_FILES) - hidden
     assert len(SERVICE_IDS) == 18
     # TEMPLATE_FILES order is preserved (drives rail order).
-    assert list(SERVICE_IDS) == [t for t in TEMPLATE_FILES if t not in COMPANION_TEMPLATE_IDS]
+    assert list(SERVICE_IDS) == [t for t in TEMPLATE_FILES if t not in hidden]
+
+
+def test_aliased_template_reports_as_its_target_service() -> None:
+    """The permit letter is a General Book on its own paper: it must never own
+    a rail entry, and its books must stay in the General Book bucket."""
+    assert SERVICE_ALIASES["Security Permit"] == "General Book"
+    assert "Security Permit" not in SERVICE_IDS
+    assert resolve_service(None, "Security Permit", versioned=True) == "General Book"
+
+
+def test_service_template_ids_covers_the_alias() -> None:
+    """The SQL filter and the Python rule must claim the same rows."""
+    assert set(service_template_ids("General Book")) == {"General Book", "Security Permit"}
+    # A service with no alias is just itself.
+    assert service_template_ids("Warning Form") == ("Warning Form",)
 
 
 @pytest.mark.parametrize("service_id", list(SERVICE_IDS))

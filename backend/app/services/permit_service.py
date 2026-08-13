@@ -441,7 +441,12 @@ def regenerate_permit_book(
     result = document_service.generate_document(
         db,
         employee_id=None,
-        template_id="General Book",
+        # The permit's own paper — a General Book clone on a separate .docx, so
+        # the permit form can be edited without touching every other 1/x letter.
+        # It renders through the identical pipeline (see
+        # document_service.CLASSIFIED_BOOK_FORMS) and files under the General
+        # Book rail (form_kind.SERVICE_ALIASES).
+        template_id="Security Permit",
         fields={"subject": subject, "body": body, "recipient_name": PERMIT_RECIPIENT},
         classification_code="5/1",
         commit=True,

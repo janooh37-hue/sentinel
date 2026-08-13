@@ -41,7 +41,7 @@ from app.core import form_policy, leave_lifecycle
 from app.core import signature as signature_core
 from app.core.book_text import build_search_text, html_to_text
 from app.core.classifications import classified_ref, get_classification
-from app.core.constants import STAMP_STYLE_HEADER, TEMPLATE_FILES
+from app.core.constants import CLASSIFIED_BOOK_FORMS, STAMP_STYLE_HEADER, TEMPLATE_FILES
 from app.core.dateutils import excel_date_to_datetime
 from app.core.docx_engine import DocxEngine, aztec_corner_for
 from app.core.docx_render import _arabic_clock, _arabic_weekday
@@ -89,6 +89,7 @@ _FORM_CATEGORY: dict[str, str] = {
     "Passport Release Form": "HR",
     "Duty Resumption Form": "HR",
     "General Book": "GS",
+    "Security Permit": "GS",
     "HR Request Form": "HR",
     "Resignation Declaration": "HR",
     "Resignation Letter": "HR",
@@ -127,6 +128,7 @@ _FORM_SHORT_NAME: dict[str, str] = {
     "Leave Permit Form": "LeavePermit",
     "Administrative Leave Form": "AdminLeave",
     "General Book": "GeneralBook",
+    "Security Permit": "SecurityPermit",
     "Passport Release List": "PassportReleaseList",
     "Inmate Conduct Violations": "InmateViolations",
 }
@@ -381,13 +383,13 @@ def _flatten_rich_fields(template_id: str, fields: dict[str, Any]) -> dict[str, 
     for key in rich_keys:
         val = out.get(key)
         if isinstance(val, str):
-            # General Book routes its WHOLE body through html_to_docx (narrative
-            # formatting + inline runs + real Word tables, in order). Thread the
-            # raw HTML as body_html and set the {{ body }} token to a
+            # The classified papers route their WHOLE body through html_to_docx
+            # (narrative formatting + inline runs + real Word tables, in order).
+            # Thread the raw HTML as body_html and set the {{ body }} token to a
             # content-independent sentinel so _pp_general_book can locate the
             # anchor paragraph and render the body there. Other templates /
             # other rich keys keep flattening to plain text.
-            if template_id == "General Book" and key == "body":
+            if template_id in CLASSIFIED_BOOK_FORMS and key == "body":
                 out["body_html"] = val
                 out[key] = GENERAL_BOOK_BODY_SENTINEL
             else:
@@ -755,9 +757,9 @@ def _build_template_data(
             # These forms render the manager as an Arabic signature block, so the
             # Arabic name reads correctly beside the Arabic designation.
             prefer_arabic=(
-                template_id
+                template_id in CLASSIFIED_BOOK_FORMS
+                or template_id
                 in (
-                    "General Book",
                     "Leave Permit Form",
                     "Administrative Leave Form",
                     "Inmate Conduct Violations",
@@ -771,15 +773,15 @@ def _build_template_data(
         data.pop("sig1_path", None)
 
     # ------------------------------------------------------------------
-    # 4b. Submitter G-number for the document footer — General Book and
-    # Inmate Conduct Violations footers consume `{{ submitter_g }}`. Scoped
+    # 4b. Submitter G-number for the document footer — the classified papers
+    # and Inmate Conduct Violations footers consume `{{ submitter_g }}`. Scoped
     # to these templates so other forms don't silently emit the caller's
     # G-number. Resolves to the authenticated caller's `employee_id`
     # (G-number); empty string when the user is unlinked or no auth context
     # was threaded through — the footer token is bare (no Jinja guard), so
     # that renders as a blank G-number, not a hidden line.
     # ------------------------------------------------------------------
-    if template_id in ("General Book", "Inmate Conduct Violations"):
+    if template_id in CLASSIFIED_BOOK_FORMS or template_id == "Inmate Conduct Violations":
         data["submitter_g"] = (current_user.employee_id or "") if current_user is not None else ""
 
     # ------------------------------------------------------------------
@@ -1239,12 +1241,12 @@ def generate_document(
     # counter is untouched, so concurrent previews don't burn ref numbers.
     # ------------------------------------------------------------------
     cat_code = _FORM_CATEGORY.get(template_id, "HR")
-    # General Book refs come exclusively from the classified register
-    # (1/{tab}/GSSG/{serial}) — the legacy GS-#### counter is retired for this
-    # form regardless of authoring surface (rich editor OR Word). Validate the
+    # Classified-paper refs come exclusively from the classified register
+    # (1/{tab}/GSSG/{serial}) — the legacy GS-#### counter is retired for these
+    # forms regardless of authoring surface (rich editor OR Word). Validate the
     # classification up-front so a bad code fails before any file is written.
     _classification = None
-    if template_id == "General Book":
+    if template_id in CLASSIFIED_BOOK_FORMS:
         if classification_code is not None:
             _classification = get_classification(classification_code)
             if _classification is None:
@@ -1255,7 +1257,7 @@ def generate_document(
         elif commit and revise_book is None:
             raise ValidationFailedError(
                 "CLASSIFICATION_REQUIRED",
-                "General Book requires a classification (التبويب) — every book "
+                f"{template_id} requires a classification (التبويب) — every book "
                 "takes its ref from the classified register",
             )
     if commit and revise_book is not None:
@@ -1291,10 +1293,10 @@ def generate_document(
         current_user=current_user,
     )
 
-    # General Book: the classified ref renders as the Arabic body line
-    # (الرقم: …) — commit-only, so previews stay serial-free. Replaces the
-    # English header stamp for this form.
-    if commit and template_id == "General Book":
+    # Classified papers: the ref renders as the Arabic body line (الرقم: …) —
+    # commit-only, so previews stay serial-free. Replaces the English header
+    # stamp for these forms.
+    if commit and template_id in CLASSIFIED_BOOK_FORMS:
         data["ref"] = raw_ref
 
     # Truthful embed flag: ``sig1_path`` survives _build_template_data only
@@ -1313,12 +1315,12 @@ def generate_document(
     filename = _build_docx_filename(template_id, primary_name, ts)
     docx_path = Vault.collision_safe_name(out_dir, filename)
 
-    # Pre-resolve General Book recipient_id → recipient_name here (where the db
-    # session is available). _adapt_general_book has a fallback for callers
-    # that go straight to DocxEngine.fill, but doing it here is the canonical
-    # path.
+    # Pre-resolve the classified papers' recipient_id → recipient_name here
+    # (where the db session is available). _adapt_general_book has a fallback
+    # for callers that go straight to DocxEngine.fill, but doing it here is the
+    # canonical path.
     if (
-        template_id == "General Book"
+        template_id in CLASSIFIED_BOOK_FORMS
         and data.get("recipient_id") is not None
         and not data.get("recipient_name")
     ):
@@ -1348,11 +1350,11 @@ def generate_document(
     engine.fill(template_id, primary_data, docx_path)
 
     # ------------------------------------------------------------------
-    # 8b. Round 2 — Fix D: sync General Book footer2.xml ← footer3.xml so
-    # the submitter G-number + letterhead appear on page 2+ as well as
+    # 8b. Round 2 — Fix D: sync the classified papers' footer2.xml ← footer3.xml
+    # so the submitter G-number + letterhead appear on page 2+ as well as
     # page 1. Operates on the saved file (zipfile can't edit in place).
     # ------------------------------------------------------------------
-    if template_id == "General Book":
+    if template_id in CLASSIFIED_BOOK_FORMS:
         from app.core.docx_engine import _postprocess_general_book_footer
 
         _postprocess_general_book_footer(docx_path)
@@ -1363,7 +1365,7 @@ def generate_document(
     # "DRAFT" string in the header (it would just be visual noise).
     # ------------------------------------------------------------------
     if commit:
-        if template_id != "General Book":
+        if template_id not in CLASSIFIED_BOOK_FORMS:
             DocxEngine.stamp_ref_number(docx_path, raw_ref, STAMP_STYLE_HEADER)
         DocxEngine.stamp_aztec_code(docx_path, raw_ref, corner=aztec_corner_for(template_id))
 
@@ -1958,10 +1960,15 @@ def _sign_authored_docx(
     from app.services import settings_service
 
     book = version.book
-    out_dir = output_dir or _output_dir_for_admin("General Book")
+    # The signed copy belongs beside its unsigned sibling, so it takes the
+    # version's own template id — not a hardcoded "General Book". A permit
+    # letter signed here would otherwise land in the General Book output dir
+    # under a GeneralBook_ filename.
+    template_id = version.template_id or "General Book"
+    out_dir = output_dir or _output_dir_for_admin(template_id)
     out_dir.mkdir(parents=True, exist_ok=True)
     ts = datetime.now()
-    docx_name = _build_docx_filename("General Book", book.ref_number.replace("/", "-"), ts)
+    docx_name = _build_docx_filename(template_id, book.ref_number.replace("/", "-"), ts)
     docx_path = Vault.collision_safe_name(out_dir, docx_name.replace(".docx", "_signed.docx"))
     shutil.copy2(source, docx_path)
 
@@ -2091,10 +2098,11 @@ def render_signed_pdf(
     # Inject the approver's signature into the manager signature slot.
     data["sig1_path"] = signer_signature_path
 
-    # Resolve General Book recipient_id → recipient_name on the REQUEST session
-    # (mirrors the generate path) so the adapter never opens a second session.
+    # Resolve the classified papers' recipient_id → recipient_name on the
+    # REQUEST session (mirrors the generate path) so the adapter never opens a
+    # second session.
     if (
-        template_id == "General Book"
+        template_id in CLASSIFIED_BOOK_FORMS
         and data.get("recipient_id") is not None
         and not data.get("recipient_name")
     ):
@@ -2115,18 +2123,18 @@ def render_signed_pdf(
     )
     docx_path = Vault.collision_safe_name(out_dir, docx_name.replace(".docx", "_signed.docx"))
     engine = DocxEngine(_TEMPLATES_DIR)
-    if template_id == "General Book":
+    if template_id in CLASSIFIED_BOOK_FORMS:
         data["ref"] = book.ref_number
     engine.fill(template_id, data, docx_path)
 
     # Mirror generate_document: sync the General Book page-2+ footer so the
     # signed artifact matches the original's multi-page footer.
-    if template_id == "General Book":
+    if template_id in CLASSIFIED_BOOK_FORMS:
         from app.core.docx_engine import _postprocess_general_book_footer
 
         _postprocess_general_book_footer(docx_path)
 
-    if template_id != "General Book":
+    if template_id not in CLASSIFIED_BOOK_FORMS:
         DocxEngine.stamp_ref_number(docx_path, book.ref_number, STAMP_STYLE_HEADER)
     DocxEngine.stamp_aztec_code(docx_path, book.ref_number, corner=aztec_corner_for(template_id))
 
@@ -2153,7 +2161,7 @@ def download_filename_for(row: Document, ext: str, *, db: Session | None = None)
     """Filename for a document download, per export-naming rules (spec 2026-07-01)."""
     from app.core.export_naming import book_download_filename, export_filename
 
-    if row.template_id == "General Book" and db is not None:
+    if row.template_id in CLASSIFIED_BOOK_FORMS and db is not None:
         book = (
             db.execute(
                 select(Book)

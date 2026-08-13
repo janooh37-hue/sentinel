@@ -24,6 +24,7 @@ from app.core.book_template_retokenize import (
     retokenize_general_book,
     validate_book_template,
 )
+from app.core.constants import CLASSIFIED_BOOK_FORMS
 from app.db.models import Book, BookVersion, Document, User
 from app.services.vault_service import _safe_filename
 
@@ -99,7 +100,7 @@ def _source_docx_of(db: Session, book: Book) -> Path:
     doc = db.get(Document, latest.document_id)
     if doc is None or not doc.docx_path:
         raise AppError("NO_SOURCE_DOCX", "ملف الكتاب غير موجود", http_status=409)
-    if doc.template_id != "General Book":
+    if doc.template_id not in CLASSIFIED_BOOK_FORMS:
         raise AppError("NOT_A_GENERAL_BOOK", "حفظ كقالب متاح لكتب عامة فقط", http_status=409)
     p = Path(doc.docx_path)
     if not p.is_absolute():  # rich path stores data_dir-relative

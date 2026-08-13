@@ -32,12 +32,31 @@ LEGACY_SUBJECT_ALIASES: Final[Mapping[str, str]] = MappingProxyType(
     }
 )
 
+#: Template ids that render their own paper but report as ANOTHER service in
+#: Records. "Security Permit" is the 1/5 permit letter: a General Book on a
+#: separate .docx so the permit form can be edited in isolation. It is minted
+#: only by the permits register, never authored by hand, so it owns no Services
+#: tile and no rail entry of its own — its books stay in the General Book
+#: bucket, exactly where they were before the paper was split out.
+SERVICE_ALIASES: Final[Mapping[str, str]] = MappingProxyType({"Security Permit": "General Book"})
+
 #: Every service that can own a rail entry: registered templates minus the two
-#: companions, which exist only attached to a primary. `TEMPLATE_FILES` order is
-#: preserved — it is the rail's display order.
+#: companions (which exist only attached to a primary) and the aliased ids
+#: (which report as their target). `TEMPLATE_FILES` order is preserved — it is
+#: the rail's display order.
 SERVICE_IDS: Final[tuple[str, ...]] = tuple(
-    t for t in TEMPLATE_FILES if t not in COMPANION_TEMPLATE_IDS
+    t for t in TEMPLATE_FILES if t not in COMPANION_TEMPLATE_IDS and t not in SERVICE_ALIASES
 )
+
+
+def service_template_ids(service_id: str) -> tuple[str, ...]:
+    """Every template id whose newest version puts a book in ``service_id``.
+
+    The service's own id plus any alias pointing at it. Shared with the SQL
+    filter in ``book_service.service_clause`` so the Python rule and the SQL
+    rule are generated from one table.
+    """
+    return (service_id, *(k for k, v in SERVICE_ALIASES.items() if v == service_id))
 
 
 def subject_prefixes(service_id: str) -> tuple[str, ...]:
@@ -74,7 +93,8 @@ def resolve_service(subject: str | None, template_id: str | None, *, versioned: 
     the subject.
     """
     if versioned:
-        return template_id if template_id in SERVICE_IDS else OTHER_SERVICE_ID
+        resolved = SERVICE_ALIASES.get(template_id or "", template_id)
+        return resolved if resolved in SERVICE_IDS else OTHER_SERVICE_ID
     s = (subject or "").strip().lower()
     if not s:
         return OTHER_SERVICE_ID

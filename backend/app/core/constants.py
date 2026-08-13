@@ -46,6 +46,13 @@ TEMPLATE_FILES: Final[Mapping[str, str]] = MappingProxyType(
         "Duty Resumption Form": "GSSG-HR_300-016_Duty_Resumption_Form.docx",
         "Material Request Form": "GSSG-NAT_300-004_Material_Request_Form__MRF__.docx",
         "General Book": "GSSG-GS_300-003_General_Book.docx",
+        # The security-permit letter (classification 5/1) is a General Book on
+        # its OWN paper: same tokens, same header/footer structure, separate
+        # file so edits to the permit form never touch every other 1/x letter.
+        # Rendered by permit_service, never authored by hand — form_kind
+        # .SERVICE_ALIASES keeps it out of the Services gallery and files its
+        # books under the General Book rail.
+        "Security Permit": "GSSG-GS_300-003_Security_Permit.docx",
         "HR Request Form": "GSSG-HR 300-014_HR Request Form.docx",
         "Resignation Declaration": "GSSG-HR_300-010_Employee_Resignation_Form_.docx",
         "Resignation Letter": "GSSG-HR_301-010_Employee_Resignation_Form_.docx",
@@ -61,6 +68,26 @@ TEMPLATE_FILES: Final[Mapping[str, str]] = MappingProxyType(
         "Inmate Conduct Violations": "GSSG-NAT_300-005_Inmate_Conduct_Violations.docx",
     }
 )
+
+# --- The classified Arabic letter papers -----------------------------------
+
+#: Template ids that render the classified Arabic letter. They share one whole
+#: pipeline: the ref is allocated from the classified register
+#: (``1/{tab}/GSSG/{serial}``) and printed into the body's «الرقم:» line instead
+#: of the English header stamp, the entire body is rendered from HTML by
+#: ``docx_engine._pp_general_book``, ``footer2`` is synced from ``footer3`` so
+#: page 2+ keeps the letterhead, and the signature block prefers the manager's
+#: Arabic name.
+#:
+#: ``Security Permit`` is the 1/5 permit letter: the same paper on its own
+#: ``.docx`` above, so the permit form can be edited without touching every
+#: other 1/x letter.
+#:
+#: Callers MUST test membership here, never equality with a single id. A miss
+#: is silent — it yields a plausible-looking letter with a legacy ``HR-####``
+#: ref, a plain-text body, no page-2 footer and a stray English ref stamp
+#: painted over the Arabic paper.
+CLASSIFIED_BOOK_FORMS: Final[frozenset[str]] = frozenset({"General Book", "Security Permit"})
 
 
 # --- Project / company strings ---------------------------------------------

@@ -581,6 +581,49 @@
       }
     ]
   },
+  "Security Permit": {
+    "category": "admin",
+    "name_en": "Security Permit",
+    "name_ar": "التصاريح الأمنية",
+    "form_number": "300-003",
+    "fields": [
+      {
+        "key": "recipient_id",
+        "type": "recipient_picker",
+        "label_en": "To (Recipient)",
+        "label_ar": "إلى (المستلم)",
+        "required": false
+      },
+      {
+        "key": "subject",
+        "type": "text",
+        "label_en": "Subject",
+        "label_ar": "الموضوع",
+        "required": true
+      },
+      {
+        "key": "body",
+        "type": "arabic_rich_full",
+        "label_en": "Body",
+        "label_ar": "نص الكتاب",
+        "required": true
+      },
+      {
+        "key": "cc",
+        "type": "recipient_multi_picker",
+        "label_en": "CC (optional)",
+        "label_ar": "نسخة إلى (اختياري)",
+        "required": false
+      },
+      {
+        "key": "manager_id",
+        "type": "manager_picker",
+        "label_en": "Signing Manager",
+        "label_ar": "المدير الموقع",
+        "required": false
+      }
+    ]
+  },
   "Acknowledgment Form": {
     "category": "admin",
     "name_en": "Acknowledgment Form",

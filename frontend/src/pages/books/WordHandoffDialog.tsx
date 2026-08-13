@@ -137,7 +137,10 @@ export function WordHandoffDialog({ session, open, onClose }: Props): React.JSX.
   if (finishedBook) {
     const versions = finishedBook.versions ?? []
     const latest = versions.length > 0 ? versions[versions.length - 1] : null
-    const canSaveAsTemplate = latest?.template_id === 'General Book'
+    // The permit letter is a General Book on its own paper — structurally
+    // identical, so it retokenizes into shared boilerplate just the same.
+    const canSaveAsTemplate =
+      latest?.template_id === 'General Book' || latest?.template_id === 'Security Permit'
     const pdfUrl = latest?.pdf_url ?? null
     const docxUrl = latest?.docx_url ?? undefined
     return (

@@ -25,7 +25,13 @@ from sqlalchemy.sql.elements import ColumnElement
 from app.api.errors import AppError, NotFoundError, ValidationFailedError
 from app.config import get_settings
 from app.core.constants import ALLOWED_DOC_EXTS, STAMP_STYLES
-from app.core.form_kind import OTHER_SERVICE_ID, SERVICE_IDS, resolve_service, subject_prefixes
+from app.core.form_kind import (
+    OTHER_SERVICE_ID,
+    SERVICE_IDS,
+    resolve_service,
+    service_template_ids,
+    subject_prefixes,
+)
 from app.db.models import (
     AuditLog,
     Book,
@@ -179,7 +185,10 @@ def service_clause(service_id: str) -> ColumnElement[bool]:
         .limit(1)
         .scalar_subquery()
     )
-    is_newest_version_of = and_(newest_template_id.is_not(None), newest_template_id == service_id)
+    is_newest_version_of = and_(
+        newest_template_id.is_not(None),
+        newest_template_id.in_(service_template_ids(service_id)),
+    )
     prefixes = subject_prefixes(service_id)
     return or_(
         is_newest_version_of,

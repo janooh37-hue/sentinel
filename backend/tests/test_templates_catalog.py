@@ -1,9 +1,11 @@
-"""Services catalog: companions are hidden from the gallery list but remain
-internally accessible (they still auto-generate with their primary)."""
+"""Services catalog: companions and aliased forms are hidden from the gallery
+list but remain internally accessible (companions auto-generate with their
+primary; aliased forms are minted by their own feature)."""
 
 from __future__ import annotations
 
 from app.core.constants import COMPANION_TEMPLATE_IDS, TEMPLATE_FILES
+from app.core.form_kind import SERVICE_ALIASES
 from app.services import notify_format, template_service
 
 
@@ -13,10 +15,23 @@ def test_companions_excluded_from_listing():
     assert "Resignation Declaration" not in ids
 
 
-def test_non_companions_all_listed():
+def test_non_companions_all_listed() -> None:
     ids = {m.id for m in template_service.list_templates().items}
-    expected = set(TEMPLATE_FILES) - set(COMPANION_TEMPLATE_IDS)
+    expected = set(TEMPLATE_FILES) - set(COMPANION_TEMPLATE_IDS) - set(SERVICE_ALIASES)
     assert ids == expected
+
+
+def test_aliased_template_is_hidden_but_still_generatable() -> None:
+    """Security Permit is minted only by the permits register, so it owns no
+    gallery tile — but its schema must stay reachable or generation breaks."""
+    ids = {m.id for m in template_service.list_templates().items}
+    assert "Security Permit" not in ids
+    detail = template_service.get_template_fields("Security Permit")
+    assert detail.meta.id == "Security Permit"
+    assert detail.meta.category == "admin"
+    assert detail.meta.signing_path == "chain"
+    # The rich body field is what routes the letter through html_to_docx.
+    assert {f.key: f.type for f in detail.fields}["body"] == "arabic_rich_full"
 
 
 def test_companion_schema_still_accessible():
