@@ -51,6 +51,10 @@ $LogDir      = Join-Path $Root 'data\logs'
 $StdoutLog   = Join-Path $LogDir 'service-stdout.log'
 $StderrLog   = Join-Path $LogDir 'service-stderr.log'
 
+# Free commit (MB) the frontend build needs. `tsc -b` peaks a few hundred MB and
+# `vite build` ~1 GB on this project; 1800 leaves margin for the service and OS.
+$MinBuildMB  = 1800
+
 # -- Small helpers ------------------------------------------------------------
 function Write-Row($label, $value, $color = 'White') {
     Write-Host ("  {0,-11}: " -f $label) -NoNewline -ForegroundColor Gray
@@ -77,6 +81,53 @@ function Format-Uptime([double] $seconds) {
 }
 
 function Format-MB([double] $bytes) { return ('{0:N1} MB' -f ($bytes / 1MB)) }
+
+function Get-Commit {
+    # Windows refuses new page commits once the system-wide commit charge reaches
+    # the commit limit (physical RAM + pagefile). On this 8 GB host that ceiling -
+    # not node's own 2 GB heap cap - is what kills the frontend build: V8 aborts
+    # inside its allocator and dumps a raw native stack trace with exit 134.
+    # Win32_OperatingSystem is used instead of Get-Counter because performance
+    # counter names are localized and would break on a non-English Windows.
+    $os      = Get-CimInstance Win32_OperatingSystem -ErrorAction Stop
+    $limitMB = [int] ($os.TotalVirtualMemorySize / 1KB)   # commit limit
+    $availMB = [int] ($os.FreeVirtualMemory      / 1KB)   # commit available
+    $usedPct = if ($limitMB -gt 0) { [math]::Round(100 * ($limitMB - $availMB) / $limitMB, 1) } else { 0 }
+    return [pscustomobject]@{ AvailableMB = $availMB; LimitMB = $limitMB; UsedPct = $usedPct }
+}
+
+function Get-TopCommitters([int] $count = 4) {
+    Get-CimInstance Win32_Process -ErrorAction SilentlyContinue |
+        Sort-Object PrivatePageCount -Descending | Select-Object -First $count |
+        ForEach-Object { '{0} (pid {1}) {2:N0} MB' -f $_.Name, $_.ProcessId, ($_.PrivatePageCount / 1MB) }
+}
+
+function Assert-BuildMemory {
+    $m = Get-Commit
+    if ($m.AvailableMB -ge $MinBuildMB) {
+        Write-Host ('  Memory OK - {0:N0} MB commit available.' -f $m.AvailableMB) -ForegroundColor DarkGray
+        return
+    }
+    Write-Host ('  Only {0:N0} MB commit available ({1}% of {2:N0} MB used); build needs ~{3:N0} MB.' -f
+        $m.AvailableMB, $m.UsedPct, $m.LimitMB, $MinBuildMB) -ForegroundColor Yellow
+
+    # An idle WSL VM is the largest reclaimable block on this host and is not part
+    # of the product (the app is Windows Python + Word COM). It restarts on next
+    # use, so releasing it costs nothing beyond an idle VM's in-memory state.
+    if (Get-Process -Name 'vmmemWSL', 'vmmem' -ErrorAction SilentlyContinue) {
+        Write-Host '  Releasing the idle WSL VM (wsl --shutdown) ...' -ForegroundColor Yellow
+        try { & wsl.exe --shutdown 2>&1 | Out-Null } catch { }
+        Start-Sleep -Seconds 3
+        $m = Get-Commit
+        Write-Host ('  Reclaimed - {0:N0} MB commit now available.' -f $m.AvailableMB) -ForegroundColor Yellow
+    }
+    if ($m.AvailableMB -ge $MinBuildMB) { return }
+
+    $msg = 'not enough memory to build: {0:N0} MB commit available, need ~{1:N0} MB. ' -f $m.AvailableMB, $MinBuildMB
+    $msg += 'Close what you can, then rerun: mng deploy. Largest consumers: '
+    $msg += (Get-TopCommitters) -join '; '
+    throw $msg
+}
 
 function Get-AppProcesses {
     # Every python process whose command line runs serve.py (the service's
@@ -210,6 +261,7 @@ function Invoke-Build {
     if (-not (Test-Path (Join-Path $FrontendDir 'node_modules\.bin'))) {
         throw "frontend\node_modules missing. Run 'pnpm install' in $FrontendDir first."
     }
+    Assert-BuildMemory
     Write-Host '  Building frontend (pnpm run build) ...' -ForegroundColor Cyan
     Push-Location $FrontendDir
     try {
@@ -225,6 +277,13 @@ function Invoke-Build {
             pnpm run build 2>&1 | ForEach-Object { Write-Host $_ }
         } finally {
             $ErrorActionPreference = $prevEAP
+        }
+        if ($LASTEXITCODE -eq 134) {
+            # SIGABRT - V8 aborted on a failed allocation. Report it as memory
+            # rather than letting the native stack trace above stand as the
+            # explanation, because the fix is freeing memory, not the code.
+            $m = Get-Commit
+            throw ('frontend build ran out of memory (node aborted, exit 134); {0:N0} MB commit available now. Free memory and rerun: mng deploy' -f $m.AvailableMB)
         }
         if ($LASTEXITCODE -ne 0) { throw "frontend build failed (exit $LASTEXITCODE)" }
     } finally {
@@ -296,8 +355,18 @@ function Invoke-Update {
         return
     }
     Write-Host ("  Updated {0} -> {1}. Deploying ..." -f $before.Substring(0, 7), $after.Substring(0, 7)) -ForegroundColor Cyan
-    Invoke-Build
-    Invoke-Migrate
+    try {
+        Invoke-Build
+        Invoke-Migrate
+    } catch {
+        # The pull already moved the checkout forward. If the build or migration
+        # fails the service keeps serving the PREVIOUS bundle, so the code on disk
+        # is newer than what users see - say so rather than leave a silent mismatch.
+        Write-Host ''
+        Write-Host ('  DEPLOY ABORTED - checkout is now {0} but the service still serves the bundle built from {1}.' -f $after.Substring(0, 7), $before.Substring(0, 7)) -ForegroundColor Red
+        Write-Host '  Nothing was restarted. Fix the error above, then run: mng deploy' -ForegroundColor Red
+        throw
+    }
     Restart-Service -Name $Service -Force
     Wait-Healthy
     Show-Status
