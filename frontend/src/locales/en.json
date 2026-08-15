@@ -73,6 +73,19 @@
     "records": "Records",
     "permits": "Permits",
     "settings": "Settings",
+    "customize": {
+      "title": "Customize navigation",
+      "hint": "Tap a slot, then tap what goes in it.",
+      "sections": "Sections",
+      "signals": "Waiting signals",
+      "done": "Done",
+      "reset": "Reset slot"
+    },
+    "signals": {
+      "approvals": "Approvals",
+      "scanback": "Scan-back",
+      "ledgerUnread": "Unread"
+    },
     "menu": "Menu",
     "sendToGroup": "Send to Group",
     "scanBack": "Scan-back",

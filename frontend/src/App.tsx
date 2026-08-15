@@ -206,7 +206,7 @@ function Shell(): React.JSX.Element {
             {/* Route-keyed entrance: remounting on pathname change replays the
                 shared fade-up so every page gets a consistent enter motion
                 (reduced-motion guarded in index.css). */}
-            <main id="main-content" tabIndex={-1} key={location.pathname} className="anim-fade-up flex flex-1 overflow-hidden pb-[calc(3.5rem+env(safe-area-inset-bottom))] md:pb-0">
+            <main id="main-content" tabIndex={-1} key={location.pathname} className="anim-fade-up flex flex-1 overflow-hidden pb-[calc(5rem+env(safe-area-inset-bottom))] md:pb-0">
             <Routes>
               <Route path="/" element={<DashboardRoute />} />
               <Route path="/employees" element={<EmployeeLookupPage />} />
