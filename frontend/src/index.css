@@ -1,7 +1,7 @@
 @import "tailwindcss";
 @plugin "tailwindcss-animate";
 
-/* --- Fonts (bundled offline via @fontsource) ------------------------------- */
+/* --- Fonts (bundled offline via @fontsource + local assets) ---------------- */
 @import "@fontsource-variable/inter/index.css";
 @import "@fontsource/ibm-plex-mono/400.css";
 @import "@fontsource/ibm-plex-mono/500.css";
@@ -12,6 +12,14 @@
 @import "@fontsource/noto-sans-arabic/400.css";
 @import "@fontsource/noto-sans-arabic/500.css";
 @import "@fontsource/noto-sans-arabic/700.css";
+
+@font-face {
+  font-family: "Lenos";
+  src: url("./assets/fonts/lenos-variable.woff2") format("woff2");
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+}
 
 /* --- Design tokens --------------------------------------------------------- */
 
@@ -65,12 +73,11 @@
   --radius-lg: 16px;
   --radius-pill: 99px;
   --font-sans: "Inter Variable", "Inter", ui-sans-serif, system-ui, sans-serif;
-  /* Noto Sans Arabic sits before the generic fallback: Plex Mono has no
-     Arabic glyphs, so Arabic words inside mono runs (figure captions, group
-     subheaders, totals) fall back to the app's Arabic face instead of a
-     random system font — the prototype's `[dir="rtl"] .mono` behavior. */
+  /* Keep Noto Sans Arabic as the mono fallback: Plex Mono has no Arabic
+     glyphs, while Lenos uses proportional Arabic-Indic digits. IDs, dates,
+     counts, and mixed Arabic captions therefore keep stable mono metrics. */
   --font-mono: "IBM Plex Mono", ui-monospace, "SF Mono", Consolas, "Noto Sans Arabic", monospace;
-  --font-arabic: "Noto Sans Arabic", "Inter Variable", system-ui, sans-serif;
+  --font-arabic: "Lenos", "Noto Sans Arabic", "Inter Variable", system-ui, sans-serif;
 }
 
 :root {
