@@ -264,43 +264,144 @@
 [data-font-scale="23"],
 [data-font-scale="24"] { font-size: 24px; }
 
-/* TopNav chrome at large content scales (UI-02). The nav is a dense row of
-   em-sized controls (logo, 5 links, then AaSlider + lang + theme + scan +
-   baskets + bell + settings + avatar). Left to inherit the 22/24px content
-   scale it blows past the viewport and the whole PAGE scrolls horizontally —
-   counterproductive for the low-vision audience the AaSlider serves.
-   Two-pronged, applied only at the upper scale stops so the default layout is
-   untouched:
-     1. Cap the header's OWN base font (chrome scales independently of content —
-        page headings/tables/forms still grow).
-     2. Let the header wrap and tighten its fixed gaps/padding, so when the row
-        still can't fit, the action cluster flows onto a second line instead of
-        forcing a horizontal scrollbar. Every icon/wayfinding cue is kept. */
-[data-font-scale="20"] [data-topnav],
-[data-font-scale="21"] [data-topnav],
-[data-font-scale="22"] [data-topnav],
-[data-font-scale="23"] [data-topnav],
-[data-font-scale="24"] [data-topnav] {
+/* TopNav adaptation (UI-02). The header is a dense single row: logo + brand
+   copy, up to 7 destinations, then AaSlider + language + theme + intake +
+   baskets + gateway + bell + settings + avatar. Measured on main before this
+   block existed, at the default 16px content scale: the row needs ~1530px, so
+   at 1440 the brand tagline wrapped onto four lines (header 71px -> 120px) and
+   from 1366 down the page itself overflowed horizontally (48px at 1366, 134px
+   at 1280, 390px at 1024) — which pushed the bell, settings and avatar off
+   screen where no amount of scrolling inside the header could reach them.
+
+   The row now NEVER wraps and NEVER overflows; it sheds decoration in tiers,
+   widest-first, and every control stays clickable:
+     Tier 1 (<1560px): the brand copy goes, the logo (still a labelled link to
+       the dashboard) stays; gaps and padding tighten.
+     Tier 2 (<1240px): destinations collapse to their icons — the icon lives in
+       the DOM at every width and is revealed here, with the accessible name
+       kept on the link — and the two widest utilities shed their extras (the
+       Aa range, whose ± buttons remain; the language word, whose globe
+       remains).
+   Large content scales (20-24) get Tier 2 at any width, and keep the old cap
+   on the header's OWN font so chrome stays usable while page content grows. */
+/* The link icon is decoration until a collapsed tier needs it as the only
+   label — declared first so the tier rules below can reveal it. */
+[data-topnav] .topnav-link-icon {
+  display: none;
+}
+
+@media (max-width: 1559px) {
+  [data-topnav] {
+    gap: 0.5rem;
+    padding-left: 1rem;
+    padding-right: 1rem;
+  }
+
+  [data-topnav] .topnav-brand-copy {
+    display: none;
+  }
+
+  [data-topnav] .topnav-destinations {
+    margin-inline-start: 0;
+    gap: 0.125rem;
+  }
+}
+
+@media (max-width: 1239px) {
+  [data-topnav] .topnav-link-label,
+  [data-topnav] [data-topnav-aa-range],
+  [data-topnav] [data-topnav-language-label] {
+    display: none;
+  }
+
+  [data-topnav] .topnav-link-icon {
+    display: block;
+  }
+
+  [data-topnav] .topnav-link {
+    min-width: 42px;
+    min-height: 42px;
+  }
+
+  [data-topnav] .topnav-utilities {
+    gap: 0.25rem;
+  }
+
+  [data-topnav] [data-topnav-aa] {
+    gap: 0.25rem;
+    padding-inline: 0.5rem;
+  }
+}
+
+:is(
+  [data-font-scale="20"],
+  [data-font-scale="21"],
+  [data-font-scale="22"],
+  [data-font-scale="23"],
+  [data-font-scale="24"]
+) [data-topnav] {
   font-size: 18px;
-  flex-wrap: wrap;
-  gap: 0.625rem 1.25rem;
-  padding-left: 1.25rem;
-  padding-right: 1.25rem;
+  gap: 0.5rem;
+  padding-left: 1rem;
+  padding-right: 1rem;
 }
-[data-font-scale="20"] [data-topnav] > nav,
-[data-font-scale="21"] [data-topnav] > nav,
-[data-font-scale="22"] [data-topnav] > nav,
-[data-font-scale="23"] [data-topnav] > nav,
-[data-font-scale="24"] [data-topnav] > nav {
-  margin-inline-start: 0.25rem;
-  flex: 1 1 auto;
+:is(
+  [data-font-scale="20"],
+  [data-font-scale="21"],
+  [data-font-scale="22"],
+  [data-font-scale="23"],
+  [data-font-scale="24"]
+) [data-topnav] .topnav-brand-copy,
+:is(
+  [data-font-scale="20"],
+  [data-font-scale="21"],
+  [data-font-scale="22"],
+  [data-font-scale="23"],
+  [data-font-scale="24"]
+) [data-topnav] .topnav-link-label,
+:is(
+  [data-font-scale="20"],
+  [data-font-scale="21"],
+  [data-font-scale="22"],
+  [data-font-scale="23"],
+  [data-font-scale="24"]
+) [data-topnav] [data-topnav-aa-range],
+:is(
+  [data-font-scale="20"],
+  [data-font-scale="21"],
+  [data-font-scale="22"],
+  [data-font-scale="23"],
+  [data-font-scale="24"]
+) [data-topnav] [data-topnav-language-label] {
+  display: none;
 }
-[data-font-scale="20"] [data-topnav] > .ms-auto,
-[data-font-scale="21"] [data-topnav] > .ms-auto,
-[data-font-scale="22"] [data-topnav] > .ms-auto,
-[data-font-scale="23"] [data-topnav] > .ms-auto,
-[data-font-scale="24"] [data-topnav] > .ms-auto {
-  gap: 0.875rem;
+:is(
+  [data-font-scale="20"],
+  [data-font-scale="21"],
+  [data-font-scale="22"],
+  [data-font-scale="23"],
+  [data-font-scale="24"]
+) [data-topnav] .topnav-link-icon {
+  display: block;
+}
+:is(
+  [data-font-scale="20"],
+  [data-font-scale="21"],
+  [data-font-scale="22"],
+  [data-font-scale="23"],
+  [data-font-scale="24"]
+) [data-topnav] .topnav-destinations {
+  margin-inline-start: 0;
+  gap: 0.125rem;
+}
+:is(
+  [data-font-scale="20"],
+  [data-font-scale="21"],
+  [data-font-scale="22"],
+  [data-font-scale="23"],
+  [data-font-scale="24"]
+) [data-topnav] .topnav-utilities {
+  gap: 0.25rem;
 }
 
 * {

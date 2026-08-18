@@ -22,7 +22,7 @@ export function LanguageToggle(): React.JSX.Element {
       aria-label={isAr ? 'Switch to English' : 'Switch to Arabic'}
     >
       <span aria-hidden>🌐</span>
-      <span>{isAr ? 'العربية' : 'English'}</span>
+      <span data-topnav-language-label>{isAr ? 'العربية' : 'English'}</span>
     </button>
   )
 }
