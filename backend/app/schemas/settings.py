@@ -18,9 +18,11 @@ from pydantic import BaseModel, Field
 #                            waiting_approvals, expiring_soon, recent_ledger,
 #                            pending_departures
 #
-# Quick-action IDs combine the original 4 service tiles with every template_id
-# from `app.core.constants.TEMPLATE_FILES` so an operator can pin a specific
-# template to the dashboard quick-launcher.
+# Quick-action IDs are services only: one entry per selectable ``template_id``
+# from `app.core.constants.TEMPLATE_FILES`, so every tile deep-links into a
+# pre-selected form. The section shortcuts (hr/violations/leaves/books) were
+# dropped — the nav owns wayfinding — and the tolerant read path prunes them
+# from layouts saved before the removal.
 DASHBOARD_WIDGET_IDS = (
     "pending",
     "workspace",
@@ -37,24 +39,24 @@ DASHBOARD_WIDGET_IDS = (
     "pending_departures",
 )
 DASHBOARD_QUICK_ACTION_IDS = (
-    "hr",
-    "violations",
-    "leaves",
-    "books",
+    "General Book",
     "Acknowledgment Form",
     "Salary Transfer Request",
-    "Salary Deduction Form",
-    "Violation Form",
-    "Employee Clearance Form",
-    "Leave Application Form",
-    "Passport Release Form",
-    "Duty Resumption Form",
-    "Material Request Form",
-    "General Book",
-    "HR Request Form",
-    "Resignation Letter",
     "Leave Permit Form",
+    "Violation Form",
+    "Leave Application Form",
+    "Duty Resumption Form",
+    "HR Request Form",
+    "Salary Deduction Form",
+    "Employee Clearance Form",
+    "Passport Release Form",
+    "Material Request Form",
+    "Resignation Letter",
     "Administrative Leave Form",
+    "Warning Form",
+    "Passport Release List",
+    "Report",
+    "Inmate Conduct Violations",
 )
 
 DashboardWidgetId = Literal[
@@ -73,24 +75,24 @@ DashboardWidgetId = Literal[
     "pending_departures",
 ]
 DashboardQuickActionId = Literal[
-    "hr",
-    "violations",
-    "leaves",
-    "books",
+    "General Book",
     "Acknowledgment Form",
     "Salary Transfer Request",
-    "Salary Deduction Form",
-    "Violation Form",
-    "Employee Clearance Form",
-    "Leave Application Form",
-    "Passport Release Form",
-    "Duty Resumption Form",
-    "Material Request Form",
-    "General Book",
-    "HR Request Form",
-    "Resignation Letter",
     "Leave Permit Form",
+    "Violation Form",
+    "Leave Application Form",
+    "Duty Resumption Form",
+    "HR Request Form",
+    "Salary Deduction Form",
+    "Employee Clearance Form",
+    "Passport Release Form",
+    "Material Request Form",
+    "Resignation Letter",
     "Administrative Leave Form",
+    "Warning Form",
+    "Passport Release List",
+    "Report",
+    "Inmate Conduct Violations",
 ]
 
 

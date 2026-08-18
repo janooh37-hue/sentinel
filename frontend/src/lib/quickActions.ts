@@ -1,16 +1,16 @@
 /**
- * Quick-action metadata — single source of truth for the 20 dashboard
- * quick-action tiles (4 section shortcuts + 16 service forms).
+ * Quick-action metadata — single source of truth for the 18 dashboard
+ * quick-action tiles (one tile per selectable service form).
  *
  * Each entry maps a {@link QuickActionId} to:
  *   - `emoji`  : the tile glyph rendered by `<ServiceTile>`
- *   - `href`   : navigation target. Section shortcuts hit a router path
- *                (`/employees`, `/leaves`, `/books`, `/application`);
- *                form tiles deep-link to `/application?form=<template_id>`
- *                so the picker pre-selects on mount (see ApplicationPage's
- *                `?form=` hydration via `resolveTemplateIdFromSlug`).
- *   - `intent` : `'new'` for form tiles (they open a fresh form),
- *                `'browse'` (or undefined) for section shortcuts.
+ *   - `href`   : navigation target. Every tile deep-links to
+ *                `/application?form=<slug>` so the picker pre-selects on
+ *                mount (see ApplicationPage's `?form=` hydration via
+ *                `resolveTemplateIdFromSlug`). Section shortcuts are gone —
+ *                the top nav already owns wayfinding, and a tile that only
+ *                browsed a list looked identical to one that opened a form.
+ *   - `intent` : always `'new'` — every tile opens a fresh form.
  *   - `slug`   : i18n + lookup-safe key for the ID. Template names contain
  *                spaces + capital letters which can't be used directly as
  *                JSON keys for i18next — slugify once here so all consumers
@@ -30,8 +30,8 @@ export interface QuickActionMeta {
   emoji: string
   /** Router path or `?form=`-deep-linked URL. */
   href: string
-  /** Form tiles always open a fresh form; section tiles browse. */
-  intent: 'new' | 'browse'
+  /** Every tile opens a fresh form. */
+  intent: 'new'
   /** Slug used as the i18n key suffix (matches `formEmoji.slugifyTemplate`). */
   slug: string
 }
@@ -68,17 +68,7 @@ function formHref(templateId: string): string {
 }
 
 export const QUICK_ACTION_META: Record<QuickActionId, QuickActionMeta> = {
-  // ── Section shortcuts (canonical default visible set) ────────────────
-  hr: { emoji: '📋', href: '/application', intent: 'browse', slug: 'hr' },
-  violations: {
-    emoji: '⚖️',
-    href: '/employees',
-    intent: 'browse',
-    slug: 'violations',
-  },
-  leaves: { emoji: '🏖️', href: '/leaves', intent: 'browse', slug: 'leaves' },
-  books: { emoji: '📚', href: '/books', intent: 'browse', slug: 'books' },
-  // ── Service forms (deep-link to /application?form=<id>) ──────────────
+  // ── Service forms (deep-link to /application?form=<slug>) ────────────
   'Acknowledgment Form': {
     emoji: '✍️',
     href: formHref('Acknowledgment Form'),
@@ -162,5 +152,29 @@ export const QUICK_ACTION_META: Record<QuickActionId, QuickActionMeta> = {
     href: formHref('Administrative Leave Form'),
     intent: 'new',
     slug: slugifyQuickActionId('Administrative Leave Form'),
+  },
+  'Warning Form': {
+    emoji: '⚠️',
+    href: formHref('Warning Form'),
+    intent: 'new',
+    slug: slugifyQuickActionId('Warning Form'),
+  },
+  'Passport Release List': {
+    emoji: '🛂',
+    href: formHref('Passport Release List'),
+    intent: 'new',
+    slug: slugifyQuickActionId('Passport Release List'),
+  },
+  Report: {
+    emoji: '📊',
+    href: formHref('Report'),
+    intent: 'new',
+    slug: slugifyQuickActionId('Report'),
+  },
+  'Inmate Conduct Violations': {
+    emoji: '⛓️',
+    href: formHref('Inmate Conduct Violations'),
+    intent: 'new',
+    slug: slugifyQuickActionId('Inmate Conduct Violations'),
   },
 }

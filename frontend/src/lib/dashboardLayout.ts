@@ -71,26 +71,31 @@ export const MAX_PER_LOWER_ZONE = 6
 /** Max quick-action tiles visible (unchanged — tiles keep their own editor). */
 export const MAX_VISIBLE_QUICK_ACTIONS = 8
 
-/** Mirror of the backend `DashboardQuickActionId` Literal — keep in sync. */
+/**
+ * Mirror of the backend `DashboardQuickActionId` Literal — keep in sync.
+ *
+ * Services only: one id per selectable form template, ordered most-used
+ * first because `DEFAULT_LAYOUT` makes the leading four visible.
+ */
 export const QUICK_ACTION_IDS = [
-  'hr',
-  'violations',
-  'leaves',
-  'books',
+  'General Book',
   'Acknowledgment Form',
   'Salary Transfer Request',
-  'Salary Deduction Form',
-  'Violation Form',
-  'Employee Clearance Form',
-  'Leave Application Form',
-  'Passport Release Form',
-  'Duty Resumption Form',
-  'Material Request Form',
-  'General Book',
-  'HR Request Form',
-  'Resignation Letter',
   'Leave Permit Form',
+  'Violation Form',
+  'Leave Application Form',
+  'Duty Resumption Form',
+  'HR Request Form',
+  'Salary Deduction Form',
+  'Employee Clearance Form',
+  'Passport Release Form',
+  'Material Request Form',
+  'Resignation Letter',
   'Administrative Leave Form',
+  'Warning Form',
+  'Passport Release List',
+  'Report',
+  'Inmate Conduct Violations',
 ] as const
 
 export type QuickActionId = (typeof QUICK_ACTION_IDS)[number]
@@ -113,7 +118,7 @@ function zoneOf(w: DashboardWidgetConfig): WidgetZone {
  *   • Top: pending + workspace (visible).
  *   • Under Workspace: violations, drafts, ledger (visible); the rest of the
  *     catalog present-but-hidden so the operator opts in via the editor.
- *   • Quick actions: first 4 (section tiles) visible.
+ *   • Quick actions: the first 4 service tiles visible.
  */
 export const DEFAULT_LAYOUT: DashboardLayout = {
   widgets: WIDGET_IDS.map((id, order) => {
