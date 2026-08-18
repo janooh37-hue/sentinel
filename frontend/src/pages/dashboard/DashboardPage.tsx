@@ -499,7 +499,7 @@ export function DashboardPage({ onNavigate }: DashboardPageProps): React.JSX.Ele
     <div className="flex flex-1 flex-col overflow-hidden bg-background">
       <div className="flex-1 min-h-0">
       <PullToRefresh>
-      <div className="mx-auto w-full max-w-[1180px] px-4 pb-12 pt-6 md:px-7">
+      <div className="mx-auto w-full px-4 pb-12 pt-6 md:px-7">
         {/* ============ HERO ============ */}
         <DashboardHero
           name={welcomeName}
