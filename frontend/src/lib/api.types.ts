@@ -4965,6 +4965,12 @@ export interface components {
             widgets?: components["schemas"]["DashboardWidgetConfig"][];
             /** Quick Actions */
             quick_actions?: components["schemas"]["DashboardQuickActionConfig"][];
+            /**
+             * Canvas Width
+             * @default compact
+             * @enum {string}
+             */
+            canvas_width: "compact" | "wide";
         };
         /** DashboardLeaveItem */
         DashboardLeaveItem: {

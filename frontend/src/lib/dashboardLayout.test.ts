@@ -1,7 +1,14 @@
 import { describe, expect, it } from 'vitest'
 
 import type { DashboardLayout } from './api'
-import { DEFAULT_LAYOUT, QUICK_ACTION_IDS, resolveLayout } from './dashboardLayout'
+import {
+  DEFAULT_LAYOUT,
+  QUICK_ACTION_IDS,
+  WIDGET_IDS,
+  WIDGET_SOURCE,
+  WIDGET_SOURCES,
+  resolveLayout,
+} from './dashboardLayout'
 
 describe('companion quick-actions are gone', () => {
   it('QUICK_ACTION_IDS excludes companion forms', () => {
@@ -40,5 +47,35 @@ describe('pending_departures widget is hidden by default', () => {
     const resolved = resolveLayout(saved)
     const widget = resolved.widgets.find((w) => w.id === 'pending_departures')
     expect(widget).toMatchObject({ visible: false })
+  })
+})
+
+describe('canvas width', () => {
+  it('defaults to the compact 1180px column', () => {
+    expect(DEFAULT_LAYOUT.canvas_width).toBe('compact')
+  })
+
+  it('keeps a layout saved before the field existed on compact', () => {
+    const saved = { widgets: [], quick_actions: [] } as unknown as DashboardLayout
+    expect(resolveLayout(saved).canvas_width).toBe('compact')
+  })
+
+  it('preserves an explicit wide canvas and rejects anything else', () => {
+    const of = (canvas_width: string): string | undefined =>
+      resolveLayout({ widgets: [], quick_actions: [], canvas_width } as unknown as DashboardLayout)
+        .canvas_width
+    expect(of('wide')).toBe('wide')
+    expect(of('full-bleed')).toBe('compact')
+  })
+})
+
+describe('widget source map', () => {
+  // The editor's source view renders `WIDGET_SOURCES` groups only, so a widget
+  // missing from the map — or filed under a group nobody renders — silently
+  // disappears from that view.
+  it('files every widget under a rendered source', () => {
+    for (const id of WIDGET_IDS) {
+      expect(WIDGET_SOURCES).toContain(WIDGET_SOURCE[id])
+    }
   })
 })

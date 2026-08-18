@@ -19733,6 +19733,15 @@
             },
             "type": "array",
             "title": "Quick Actions"
+          },
+          "canvas_width": {
+            "type": "string",
+            "enum": [
+              "compact",
+              "wide"
+            ],
+            "title": "Canvas Width",
+            "default": "compact"
           }
         },
         "type": "object",

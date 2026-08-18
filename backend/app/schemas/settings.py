@@ -97,6 +97,11 @@ DashboardQuickActionId = Literal[
 
 
 DashboardWidgetZone = Literal["top", "under_workspace", "under_quick_actions"]
+#: Dashboard canvas measure. ``compact`` keeps the 1180px column the rest of
+#: the app uses; ``wide`` lets the grid span the window. Compact is the
+#: default because it is what operators are used to, and a layout saved before
+#: this field existed must not silently change width on the next load.
+DashboardCanvasWidth = Literal["compact", "wide"]
 
 
 class DashboardWidgetConfig(BaseModel):
@@ -115,6 +120,7 @@ class DashboardQuickActionConfig(BaseModel):
 class DashboardLayout(BaseModel):
     widgets: list[DashboardWidgetConfig] = Field(default_factory=list)
     quick_actions: list[DashboardQuickActionConfig] = Field(default_factory=list)
+    canvas_width: DashboardCanvasWidth = "compact"
 
 
 class AppSettingsRead(BaseModel):

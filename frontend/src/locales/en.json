@@ -2563,7 +2563,7 @@
     "viewAll": "View All",
     "editWidgets": {
       "customizeTitle": "Customize Dashboard",
-      "customizeDescription": "Choose where each widget appears. Use the zone selector and arrows.",
+      "customizeDescription": "Group by placement to move and reorder widgets, or by source page to find one fast.",
       "zones": {
         "top": "Top (big cards)",
         "under_workspace": "Under Workspace",
@@ -2571,6 +2571,24 @@
         "hidden": "Hidden"
       },
       "zonePicker": "Move to zone",
+      "width": {
+        "label": "Width",
+        "compact": "Compact",
+        "wide": "Wide",
+        "compactHint": "A 1180px column, like the rest of the app.",
+        "wideHint": "The grid spans the whole window."
+      },
+      "groupBy": {
+        "label": "Group by",
+        "placement": "Placement",
+        "source": "Source page"
+      },
+      "sources": {
+        "employees": "From Employees",
+        "leaves": "From Leaves",
+        "records": "From Records",
+        "ledger": "From Ledger"
+      },
       "topFull": "Top zone is full (max {{count}})",
       "topOnlyBigCards": "Only big cards can go in the Top zone",
       "zoneFull": "This zone is full (max {{count}})",

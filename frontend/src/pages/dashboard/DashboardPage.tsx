@@ -56,6 +56,7 @@ import { ExpiringSoonWidget } from '@/pages/dashboard/widgets/ExpiringSoonWidget
 import { PendingDeparturesWidget } from '@/pages/dashboard/widgets/PendingDeparturesWidget'
 import { WaitingApprovalsCard } from '@/pages/dashboard/widgets/WaitingApprovalsCard'
 import {
+  DEFAULT_CANVAS_WIDTH,
   DEFAULT_LAYOUT,
   MAX_VISIBLE_QUICK_ACTIONS,
   QUICK_ACTION_IDS,
@@ -499,7 +500,12 @@ export function DashboardPage({ onNavigate }: DashboardPageProps): React.JSX.Ele
     <div className="flex flex-1 flex-col overflow-hidden bg-background">
       <div className="flex-1 min-h-0">
       <PullToRefresh>
-      <div className="mx-auto w-full px-4 pb-12 pt-6 md:px-7">
+      <div
+        data-canvas-width={layout.canvas_width}
+        className={`w-full px-4 pb-12 pt-6 md:px-7 ${
+          layout.canvas_width === 'wide' ? '' : 'mx-auto max-w-[1180px]'
+        }`}
+      >
         {/* ============ HERO ============ */}
         <DashboardHero
           name={welcomeName}
@@ -625,10 +631,17 @@ export function DashboardPage({ onNavigate }: DashboardPageProps): React.JSX.Ele
         onOpenChange={setWidgetDialogOpen}
         items={layout.widgets}
         labels={widgetLabels}
+        canvasWidth={layout.canvas_width ?? DEFAULT_CANVAS_WIDTH}
         isSaving={updateSettings.isPending}
-        onSave={(items) => {
+        onSave={(items, canvasWidth) => {
           updateSettings.mutate(
-            { dashboard_layout: { ...layout, widgets: widgetsForApi(items) } },
+            {
+              dashboard_layout: {
+                ...layout,
+                widgets: widgetsForApi(items),
+                canvas_width: canvasWidth,
+              },
+            },
             { onSuccess: () => setWidgetDialogOpen(false) },
           )
         }}

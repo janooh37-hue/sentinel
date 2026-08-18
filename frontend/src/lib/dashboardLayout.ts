@@ -22,6 +22,24 @@ import type {
 export type WidgetZone = 'top' | 'under_workspace' | 'under_quick_actions'
 export type WidgetSize = 'metric' | 'panel'
 
+/**
+ * Page measure. `compact` is the 1180px column every other page uses; `wide`
+ * lets the grid span the window. Compact is the default — it is the incumbent
+ * look, and a layout saved before the field existed must not change width.
+ */
+export type CanvasWidth = 'compact' | 'wide'
+export const CANVAS_WIDTHS = ['compact', 'wide'] as const
+export const DEFAULT_CANVAS_WIDTH: CanvasWidth = 'compact'
+
+/**
+ * Destination each widget reports on, so the editor can be grouped by origin
+ * ("which page does this come from?") instead of only by placement. Derived
+ * from where the widget's own action navigates — see DashboardPage's
+ * `renderWidget` and the widget components' links; keep in step with them.
+ */
+export type WidgetSource = 'employees' | 'leaves' | 'records' | 'ledger'
+export const WIDGET_SOURCES = ['employees', 'leaves', 'records', 'ledger'] as const
+
 /** All 13 canonical widget ids (order = catalog order in the editor). */
 export const WIDGET_IDS = [
   'pending',
@@ -62,6 +80,33 @@ export const WIDGET_SIZE: Record<WidgetId, WidgetSize> = {
   recent_docs: 'panel',
   recent_ledger: 'panel',
   pending_departures: 'panel',
+}
+
+/**
+ * Which destination a widget draws from — the editor groups by this so a
+ * widget can be found by the page it belongs to. Each entry follows the
+ * widget's own action target, not a guess:
+ *   • records  — pending/waiting_approvals/drafts all open `/books…`
+ *   • employees — workspace, violations, recent_docs, expiring_soon and
+ *                 pending_departures all open an employee or `/employees`
+ *   • leaves   — on_leave_today, upcoming_leave open a leave
+ *   • ledger   — ledger, recent_ledger open a ledger entry; email sync is the
+ *                inbound-mail feed behind the ledger inbox
+ */
+export const WIDGET_SOURCE: Record<WidgetId, WidgetSource> = {
+  pending: 'records',
+  workspace: 'employees',
+  waiting_approvals: 'records',
+  violations: 'employees',
+  drafts: 'records',
+  ledger: 'ledger',
+  email_sync_status: 'ledger',
+  expiring_soon: 'employees',
+  on_leave_today: 'leaves',
+  upcoming_leave: 'leaves',
+  recent_docs: 'employees',
+  recent_ledger: 'ledger',
+  pending_departures: 'employees',
 }
 
 export const LOWER_ZONES = ['under_workspace', 'under_quick_actions'] as const
@@ -119,6 +164,7 @@ function zoneOf(w: DashboardWidgetConfig): WidgetZone {
  *   • Under Workspace: violations, drafts, ledger (visible); the rest of the
  *     catalog present-but-hidden so the operator opts in via the editor.
  *   • Quick actions: the first 4 service tiles visible.
+ *   • Canvas: compact (1180px), the incumbent measure.
  */
 export const DEFAULT_LAYOUT: DashboardLayout = {
   widgets: WIDGET_IDS.map((id, order) => {
@@ -136,6 +182,7 @@ export const DEFAULT_LAYOUT: DashboardLayout = {
     visible: order < 4,
     order,
   })),
+  canvas_width: DEFAULT_CANVAS_WIDTH,
 }
 
 /**
@@ -187,7 +234,12 @@ export function resolveLayout(saved: DashboardLayout | null | undefined): Dashbo
   const widgets = normalizeWidgets(kept as DashboardWidgetConfig[])
 
   const quick_actions = mergeQuickActions(saved.quick_actions ?? [])
-  return { widgets, quick_actions }
+  return { widgets, quick_actions, canvas_width: resolveCanvasWidth(saved.canvas_width) }
+}
+
+/** Keep an unknown or absent measure on the incumbent compact column. */
+export function resolveCanvasWidth(saved: string | null | undefined): CanvasWidth {
+  return saved === 'wide' ? 'wide' : DEFAULT_CANVAS_WIDTH
 }
 
 function mergeQuickActions(

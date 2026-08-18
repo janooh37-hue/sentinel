@@ -37,6 +37,25 @@ def test_stale_quick_action_id_is_dropped(db_session):
     assert "Leave Application Form" in ids
 
 
+def test_layout_saved_before_canvas_width_reads_as_compact(db_session):
+    # The field was added after operators already had saved layouts; the read
+    # must not silently widen their dashboard.
+    _store_layout(db_session, {"widgets": [], "quick_actions": []})
+    settings = settings_service.get_settings(db_session)
+    assert settings.dashboard_layout is not None
+    assert settings.dashboard_layout.canvas_width == "compact"
+
+
+def test_wide_canvas_width_round_trips(db_session):
+    _store_layout(
+        db_session,
+        {"widgets": [], "quick_actions": [], "canvas_width": "wide"},
+    )
+    settings = settings_service.get_settings(db_session)
+    assert settings.dashboard_layout is not None
+    assert settings.dashboard_layout.canvas_width == "wide"
+
+
 def test_quick_action_ids_exclude_companions_but_keep_primary():
     from app.schemas.settings import DASHBOARD_QUICK_ACTION_IDS
 
