@@ -27047,7 +27047,7 @@
           "occurred_at"
         ],
         "title": "EmployeeAttendancePunchRead",
-        "description": "One provider event.\n\nDirection is omitted deliberately: this build reports ``punch_state 255``\nfor every row, so a client must not render an in/out pair."
+        "description": "One provider event.\n\nInherits ORMBase so `occurred_at` serializes UTC-tagged, like every other\ntimestamp in the API (pinned by test_schema_utc_serialization).\n\nDirection is omitted deliberately: this build reports ``punch_state 255``\nfor every row, so a client must not render an in/out pair."
       },
       "EmployeeAttendanceRangeRead": {
         "properties": {

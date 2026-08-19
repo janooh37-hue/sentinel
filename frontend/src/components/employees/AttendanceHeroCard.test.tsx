@@ -108,6 +108,32 @@ describe('AttendanceHeroCard', () => {
     expect(screen.queryByTestId('attendance-hero-count')).not.toBeInTheDocument()
   })
 
+  it('never claims a clean day while the punches are still loading', async () => {
+    // A card that prints "everyone has been seen" from an empty pre-payload
+    // state is indistinguishable from a verified all-clear, so the pending
+    // state must be visibly different and must not print confident zeros.
+    // `Promise.withResolvers` is the house style, but this project pins
+    // `lib: ES2023` (tsconfig.app.json), which predates it — hence the executor.
+    let release: (page: { items: unknown[]; next_cursor: null }) => void = () => {}
+    listAttendanceDay.mockReturnValue(
+      new Promise<{ items: unknown[]; next_cursor: null }>((resolve) => {
+        release = resolve
+      }),
+    )
+
+    renderCard()
+
+    expect(await screen.findByTestId('attendance-hero-pending')).toBeInTheDocument()
+    expect(screen.queryByTestId('attendance-hero-clean')).not.toBeInTheDocument()
+    expect(screen.getByTestId('attendance-hero-seen')).toHaveTextContent('—')
+
+    release({ items: [], next_cursor: null })
+
+    await waitFor(() => expect(screen.getByTestId('attendance-hero-clean')).toBeInTheDocument())
+    expect(screen.queryByTestId('attendance-hero-pending')).not.toBeInTheDocument()
+    expect(screen.getByTestId('attendance-hero-seen')).toHaveTextContent('0')
+  })
+
   it('renders nothing and never fetches without both capabilities', async () => {
     hasCapability.mockImplementation((cap) => cap !== 'workforce.attendance.review')
 

@@ -141,11 +141,16 @@ export function TimelineView({
                         style={{ left: `${pct(graceMinutes)}%` }}
                       />
 
-                      {postRows.map((row) => {
+                      {postRows.map((row, index) => {
                         const offset = arrivalOffsetMinutes(row)
                         if (offset === null) return null
                         const state = rowState(row, input)
                         const left = Math.min(100, Math.max(0, pct(offset)))
+                        // Coincident arrivals are common (a crew arrives on one
+                        // bus), and stacked dots hide each other. A deterministic
+                        // 3px vertical fan keeps every person visible without
+                        // implying a time difference that is not there.
+                        const fan = (index % 3) - 1
                         const name = pickEmployeeName(
                           { name_en: row.name_en, name_ar: row.name_ar ?? null },
                           i18n.language,
@@ -168,14 +173,14 @@ export function TimelineView({
                               data-state={state}
                               onClick={() => onOpenEmployee(row.employee_id)}
                               title={`${name} · ${siteTime(row.first_punch_at)} · ${t(`attendance.state.${state}`)}`}
-                              className={`absolute top-2 -ms-[5.5px] h-[11px] w-[11px] rounded-full ring-2 ring-surface ${
+                              className={`absolute -ms-[5.5px] h-[11px] w-[11px] rounded-full ring-2 ring-surface ${
                                 state === 'late'
                                   ? 'bg-warning'
                                   : state === 'single'
                                     ? 'bg-surface ring-[2.5px] ring-accent'
                                     : 'bg-success'
                               }`}
-                              style={{ left: `${left}%` }}
+                              style={{ left: `${left}%`, top: `${8 + fan * 3}px` }}
                             />
                           </span>
                         )

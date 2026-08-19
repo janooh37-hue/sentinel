@@ -77,6 +77,12 @@ Thumbs.db
 # Playwright MCP debug artifacts (console logs, page snapshots, screenshots)
 .playwright-mcp/
 
+# Playwright run output and review screenshots (heavy PNG evidence, regenerated
+# by `playwright test e2e/attendance-shots.spec.ts`; the verification record in
+# docs/ is what stays tracked - same policy as audit-report/screens below).
+frontend/test-results/
+frontend/e2e/__screenshots__/
+
 # Design handoff bundles (Claude Design exports — not source)
 GSSG Manager Design System-handoff/
 GSSG Manager Design System-handoff.zip

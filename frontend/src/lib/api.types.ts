@@ -6865,6 +6865,9 @@ export interface components {
          * EmployeeAttendancePunchRead
          * @description One provider event.
          *
+         *     Inherits ORMBase so `occurred_at` serializes UTC-tagged, like every other
+         *     timestamp in the API (pinned by test_schema_utc_serialization).
+         *
          *     Direction is omitted deliberately: this build reports ``punch_state 255``
          *     for every row, so a client must not render an in/out pair.
          */

@@ -16,6 +16,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom'
 import { EmployeesSectionTabs } from '@/components/employees/EmployeesSectionTabs'
 import { siteToday } from '@/components/employees/useAttendanceAttention'
 import { api } from '@/lib/api'
+import { useCapabilities } from '@/lib/useCapabilities'
 import { pickEmployeeName } from '@/lib/employeeName'
 
 import { AttentionQueue } from './AttentionQueue'
@@ -51,6 +52,8 @@ export function AttendancePage(): React.JSX.Element {
   const shiftCode = params.get('shift')
   const view: AttendanceView = isView(params.get('view')) ? (params.get('view') as AttendanceView) : 'register'
   const [search, setSearch] = useState('')
+  const { has } = useCapabilities()
+  const hasIntegrationView = has('workforce.integration.manage')
 
   const setParam = useCallback(
     (key: string, value: string | null) => {
@@ -66,6 +69,16 @@ export function AttendancePage(): React.JSX.Element {
     },
     [setParams],
   )
+
+  // Provenance for the register's source line: how far the mirror is trusted.
+  // Gated by its own capability, and a failure here must never hide the register.
+  const integrationQuery = useQuery({
+    queryKey: ['workforce-integration-status'] as const,
+    queryFn: () => api.getWorkforceIntegrationStatus(),
+    enabled: hasIntegrationView,
+    staleTime: 60_000,
+    retry: false,
+  })
 
   const dayQuery = useQuery({
     queryKey: ['attendance-day', operationalDate] as const,
@@ -183,6 +196,7 @@ export function AttendancePage(): React.JSX.Element {
       <RegisterView
         rows={rows}
         now={now}
+        freshThrough={integrationQuery.data?.streams?.punches?.fresh_through ?? null}
         onOpenEmployee={openEmployee}
       />
     )
@@ -190,8 +204,11 @@ export function AttendancePage(): React.JSX.Element {
 
   return (
     <div className="flex flex-1 flex-col overflow-auto bg-background">
+      {/* shrink-0: this is a flex item in a column whose sibling is tall, and
+          without it the band collapses to a few pixels and swallows the page
+          title, the Arabic label and the section tabs. */}
       <section
-        className="relative overflow-hidden pt-[18px] text-white"
+        className="relative shrink-0 overflow-hidden pt-[18px] text-white"
         style={{ background: 'var(--hero-grad)' }}
       >
         <div aria-hidden className="absolute -end-[60px] -top-[130px] h-[300px] w-[300px] rounded-full bg-white/[.05]" />

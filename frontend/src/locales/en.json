@@ -3598,7 +3598,8 @@
       "late": "late",
       "unpaired": "unpaired",
       "open": "Open attendance",
-      "clean": "Every scheduled person has been seen."
+      "clean": "Every scheduled person has been seen.",
+      "pending": "Reading today's punches…"
     },
     "tab": {
       "punctuality": "Punctuality",

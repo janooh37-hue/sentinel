@@ -94,7 +94,8 @@ export function AttendanceTab({
     staleTime: 60_000,
   })
 
-  const days = query.data?.days ?? []
+  // Memoized so the two derivations below do not recompute on every render.
+  const days = useMemo(() => query.data?.days ?? [], [query.data])
   const byDate = useMemo(() => {
     const map = new Map<string, EmployeeAttendanceDay[]>()
     for (const day of days) {

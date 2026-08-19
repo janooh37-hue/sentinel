@@ -148,7 +148,10 @@ export function EmployeeLookupPage(): React.JSX.Element {
           onOpen={handleSelect}
           extraCard={<AttendanceHeroCard onOpen={() => navigate('/employees/attendance')} />}
         />
-        <EmployeesSectionTabs attentionCount={attendance.attention} />
+        {/* The lookup band is centre-composed, so the strip sits on its axis. */}
+        <div className="mt-7 flex justify-center">
+          <EmployeesSectionTabs attentionCount={attendance.attention} />
+        </div>
       </EmployeeSearchHero>
 
       <EmployeeActivitySection

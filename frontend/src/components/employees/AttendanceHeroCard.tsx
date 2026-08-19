@@ -23,9 +23,15 @@ interface Props {
 
 export function AttendanceHeroCard({ onOpen }: Props): React.JSX.Element | null {
   const { t, i18n } = useTranslation()
-  const { allowed, attention, seen, late, unpaired, worst } = useAttendanceAttention()
+  const { allowed, isLoading, attention, seen, late, unpaired, worst } = useAttendanceAttention()
 
   if (!allowed) return null
+
+  // Before the first payload lands every count is zero, which would render as
+  // a verified clean day. Claiming "everyone has been seen" while the card
+  // still knows nothing is the exact lie this surface exists to prevent, so
+  // loading is shown as loading.
+  const pending = isLoading
 
   const total = attention ?? 0
 
@@ -74,7 +80,7 @@ export function AttendanceHeroCard({ onOpen }: Props): React.JSX.Element | null 
               data-testid={`attendance-hero-${key}`}
               className={`font-mono text-[15px] font-extrabold leading-tight ${tone}`}
             >
-              {value}
+              {pending ? '—' : value}
             </div>
             <div className="mt-0.5 text-[9.5px] uppercase tracking-[.06em] opacity-60">
               {t(`attendance.hero.${key}`)}
@@ -83,7 +89,11 @@ export function AttendanceHeroCard({ onOpen }: Props): React.JSX.Element | null 
         ))}
       </div>
 
-      {worst.length > 0 ? (
+      {pending ? (
+        <p data-testid="attendance-hero-pending" className="mt-2 text-[12px] leading-relaxed opacity-60">
+          {t('attendance.hero.pending')}
+        </p>
+      ) : worst.length > 0 ? (
         <div className="mt-2 flex flex-col gap-1.5">
           {worst.slice(0, 2).map((row) => {
             const name = pickEmployeeName(
