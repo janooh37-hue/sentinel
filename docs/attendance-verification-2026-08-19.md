@@ -114,6 +114,104 @@ same policy as `audit-report/screens/`).
 5. **The section tab strip floated left** under the Directory's centred hero,
    aligned to nothing. It now sits on the band's centre axis.
 
+## Round two — the G-number, and what a production roster does to the layout
+
+The register printed names with no G-number. Adding it is small; proving the
+layout survives it is not, because the seeded roster ("Factory Person 7") is far
+shorter than a real one. The preview roster was renamed to production shape —
+full names up to 40 characters (`Abdulrahman Mohammed Abdullah Al Shamsi`) and
+post names up to 32 (`بوابة الورشة الفنية والصيانة`) — and the review re-run.
+
+6. **Fixed column counts could not hold a real name.** `lg:columns-3` truncated
+   names at about 22 characters, cutting the family name — which is exactly the
+   discriminator in an Emirati name. The register now declares the width a row
+   needs (`columns-[23rem]`) and lets the browser pick the count: three columns
+   on a wide canvas, two beside the attention rail, one on a phone, name intact.
+   The attention queue and the hero card's worst rows, whose width is fixed,
+   wrap to a second line rather than clip.
+7. **Two assertions in the review spec were pinned to the old seed** — a fixed
+   timeline dot count and a click on the literal text "Factory Person". A
+   roster's names and punch spread are data, not contract; both now derive from
+   the payload and from roles.
+
+### A silent data-loss bug this branch introduced
+
+Testing the operator's post/unit re-do surfaced the worst defect of the whole
+exercise. `POST /api/v1/duty/transfer` returned `200 {"moved":["G-9001"]}` and
+produced transfer letter `1/12/3`, while the employee's unit and post were
+unchanged and no `duty_assignment_events` row existed. A success response with
+the write thrown away.
+
+Cause, established rather than guessed:
+
+1. This branch made the duty flow enqueue an attendance re-evaluation before
+   minting the letter, and that enqueue **flushes** — which opens the SQLite
+   write transaction.
+2. `generate_document` then allocates a ref number, whose allocator issues a raw
+   `BEGIN IMMEDIATE`. SQLite rejects it: *cannot start a transaction within a
+   transaction*.
+3. The bounded-retry handler answered by calling `session.rollback()`, throwing
+   away the caller's staged event **and** the employee mutation, then succeeded
+   on attempt 2 and committed the document alone.
+
+Confirmed as a regression rather than a pre-existing bug by running the same
+request against a `main` checkout on a *copy* of the same database (never the
+operator's data): there the employee moved, and `main`'s log carries no
+allocation-retry warning, because nothing flushes before the allocator on that
+branch.
+
+Fixed at the footgun instead of tiptoeing around it:
+`app/db/repos/_locking.begin_immediate_if_idle` takes the write lock only when no
+database transaction is open, and a failure raised while the *caller* holds the
+lock propagates instead of rolling back — when the caller holds the lock,
+contention is impossible, so there is nothing to retry. Both allocators
+(`refs_repo`, `classified_refs_repo`) now share that rule, so the enqueue stays
+atomic with the move as designed. The same trap sat in `refs_repo`, which every
+document allocation goes through, and is now closed too.
+
+`backend/tests/test_ref_allocation_preserves_caller_writes.py` stages a write,
+flushes, allocates, commits and asserts the write survived, over both
+allocators; it fails on the old code. End to end the request now returns the
+move, the assignment event with its `effective_at`, and the queued
+re-evaluation.
+
+### An SSE stream that pinned one pool connection per viewer
+
+Repeated browser runs kept dying on `POST /api/v1/auth/login` → 500,
+`QueuePool limit of size 5 overflow 10 reached`. `GET /notifications/stream` is
+an endless `StreamingResponse`, and FastAPI releases request-scoped dependencies
+only after a response completes — so its injected session stayed checked out for
+as long as a tab was open, and the sixteenth concurrent viewer broke unrelated
+requests. Pre-existing on `main`. The stream now closes that session once it has
+captured the engine and takes its first frame from a per-tick session like every
+later tick; `backend/tests/test_notification_stream_pool.py` pins the pool to one
+connection and fails on the old code with the same production error.
+
+### Re-doing posts and units after deployment
+
+What the operator asked about, answered with a run rather than an opinion.
+
+A case freezes `duty_unit_snapshot` / `duty_post_snapshot` when it is
+materialised, taken from the latest `DutyAssignmentEvent` effective at or before
+the shift start, else from the employee row
+(`attendance_evaluation_service.materialize_started_cases`). Consequences,
+measured on the preview database after moving `G-9006` through the real
+transfer endpoint and then generating and materialising the following week:
+
+* **Future days carry the new post.** `2026-08-23 noon`, `2026-08-24 morning`
+  and `2026-08-24 night` all snapshotted `البوابة الجنوبية الجديدة` with
+  `organization_snapshot_state = reconstructed` — i.e. derived from the
+  assignment event, not merely captured. (Those three days are also the rotation
+  proving itself: crew 2 works noon, then a morning **and** a night two days
+  later.)
+* **Already-materialised days keep the old post.** `2026-08-19` still reads
+  `البوابة الرئيسية`. That is correct: the register records where someone was
+  posted *that* day.
+* Therefore re-do posts through the **duty transfer flow**, not by editing the
+  employee row directly. The transfer writes the dated event the materialiser
+  reads, so history reconstructs; a direct edit leaves no event and silently
+  changes only what has not been materialised yet.
+
 ## Live BioTime read
 
 `backend/scripts/biotime_probe.py --window-days 0.25` against the installed
