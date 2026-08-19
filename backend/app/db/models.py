@@ -73,6 +73,12 @@ class Employee(Base):
     department: Mapped[str | None] = mapped_column(String(128), nullable=True)
     position: Mapped[str | None] = mapped_column(String(128), nullable=True)
     position_ar: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    # The printable time-sheet designation (migration 0070). Deliberately a
+    # plain integer, not a ForeignKey: adding the constraint would force a full
+    # employees-table rewrite in SQLite. `position`/`position_ar` above stay the
+    # HR job title — the sheet needs a finer split (control room, messengers,
+    # clinic, escort) that the HR title does not carry.
+    designation_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
     other: Mapped[str | None] = mapped_column(String(256), nullable=True)
     duty_unit: Mapped[str | None] = mapped_column(String(128), nullable=True)
     duty_post: Mapped[str | None] = mapped_column(String(128), nullable=True)
@@ -1514,8 +1520,158 @@ class SmartFolderDismissal(Base):
     )
 
 
+class TimesheetDesignation(Base):
+    """One printable designation for the monthly time sheet (migration 0070).
+
+    The catalog carries both languages because the two deliverables differ only
+    in this column: the HR attendance sheet prints ``name_en``, the client
+    statistics prints ``name_ar``. ``rank_order`` is the client-visible sort —
+    they asked for the roster grouped by rank — and ``sheet`` routes drivers to
+    their own workbook, which is how the site has always reported them.
+    """
+
+    __tablename__ = "timesheet_designations"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    name_en: Mapped[str] = mapped_column(String(128), nullable=False)
+    name_ar: Mapped[str] = mapped_column(String(128), nullable=False)
+    rank_order: Mapped[int] = mapped_column(Integer, nullable=False)
+    sheet: Mapped[str] = mapped_column(String(16), default="main", server_default="main")
+    active: Mapped[bool] = mapped_column(Boolean, default=True, server_default=text("1"))
+
+    __table_args__ = (
+        UniqueConstraint("name_en", name="uq_timesheet_designations_name_en"),
+        UniqueConstraint("rank_order", name="uq_timesheet_designations_rank"),
+        CheckConstraint("sheet IN ('main', 'drivers')", name="ck_timesheet_desig_sheet"),
+    )
+
+
+class Absence(Base):
+    """One day an employee was absent without leave (migration 0070).
+
+    Absence is the only time-sheet code with no other source in this database,
+    so it is recorded here as fact rather than as a sheet-local scribble: it
+    belongs on the employee's record. One row per day, because that is how it is
+    marked and un-marked in the grid. A leave covering the same day supersedes
+    the absence and the row is removed — the employee produced a certificate.
+    """
+
+    __tablename__ = "absences"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    employee_id: Mapped[str] = mapped_column(ForeignKey("employees.id"), nullable=False)
+    date: Mapped[date] = mapped_column(Date, nullable=False)
+    note: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_by: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, default=_utcnow, server_default=func.current_timestamp()
+    )
+
+    __table_args__ = (
+        UniqueConstraint("employee_id", "date", name="uq_absences_employee_date"),
+        Index("ix_absences_date", "date"),
+    )
+
+
+class TimesheetPeriod(Base):
+    """One time-sheet month (migration 0070).
+
+    ``post_count`` is the contracted number of manned posts and drives the
+    statistics split; it is per-month because contract amendments move it.
+    ``closed_at`` is set by the first download: the sheet goes to HQ HR and to
+    the client, so a later re-download must reproduce it rather than silently
+    absorb a leave recorded afterwards.
+    """
+
+    __tablename__ = "timesheet_periods"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    year: Mapped[int] = mapped_column(Integer, nullable=False)
+    month: Mapped[int] = mapped_column(Integer, nullable=False)
+    post_count: Mapped[int] = mapped_column(Integer, default=249, server_default="249")
+    closed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    closed_by: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    reopened_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    reopened_by: Mapped[int | None] = mapped_column(Integer, nullable=True)
+
+    snapshot_rows: Mapped[list[TimesheetSnapshotRow]] = relationship(
+        back_populates="period", cascade="all, delete-orphan"
+    )
+
+    __table_args__ = (
+        UniqueConstraint("year", "month", name="uq_timesheet_periods_year_month"),
+        CheckConstraint("month BETWEEN 1 AND 12", name="ck_timesheet_periods_month"),
+        CheckConstraint("post_count >= 0", name="ck_timesheet_periods_post_count"),
+    )
+
+
+class TimesheetOverride(Base):
+    """A manually forced cell in an open time-sheet month (migration 0070).
+
+    The escape hatch for the days the records get wrong — a leave whose end date
+    slipped, a reserve-duty stint nobody filed a form for. Absence is NOT stored
+    here; it gets a real :class:`Absence` row.
+    """
+
+    __tablename__ = "timesheet_overrides"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    year: Mapped[int] = mapped_column(Integer, nullable=False)
+    month: Mapped[int] = mapped_column(Integer, nullable=False)
+    day: Mapped[int] = mapped_column(Integer, nullable=False)
+    employee_id: Mapped[str] = mapped_column(ForeignKey("employees.id"), nullable=False)
+    code: Mapped[str] = mapped_column(String(4), nullable=False)
+    note: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_by: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, default=_utcnow, server_default=func.current_timestamp()
+    )
+
+    __table_args__ = (
+        UniqueConstraint("year", "month", "day", "employee_id", name="uq_timesheet_overrides_cell"),
+        CheckConstraint("month BETWEEN 1 AND 12", name="ck_timesheet_overrides_month"),
+        CheckConstraint("day BETWEEN 1 AND 31", name="ck_timesheet_overrides_day"),
+    )
+
+
+class TimesheetSnapshotRow(Base):
+    """One frozen printed row of a closed time-sheet month (migration 0070).
+
+    Names, nationality and both designations are resolved at close and stored,
+    so renaming a designation or correcting a spelling next year cannot alter a
+    sheet the client already holds. ``employee_id`` is deliberately not a
+    foreign key: the snapshot must outlive the employee record.
+    """
+
+    __tablename__ = "timesheet_snapshot_rows"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    period_id: Mapped[int] = mapped_column(
+        ForeignKey("timesheet_periods.id", ondelete="CASCADE"), nullable=False
+    )
+    employee_id: Mapped[str] = mapped_column(String(16), nullable=False)
+    row_no: Mapped[int] = mapped_column(Integer, nullable=False)
+    name_en: Mapped[str] = mapped_column(String(256), nullable=False)
+    nationality_en: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    designation_en: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    designation_ar: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    rank_order: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    sheet: Mapped[str] = mapped_column(String(16), default="main", server_default="main")
+    codes: Mapped[list[str | None]] = mapped_column(JSON, nullable=False)
+    stat_codes: Mapped[list[str | None]] = mapped_column(JSON, nullable=False)
+    stat_block: Mapped[int] = mapped_column(Integer, default=1, server_default="1")
+
+    period: Mapped[TimesheetPeriod] = relationship(back_populates="snapshot_rows")
+
+    __table_args__ = (
+        UniqueConstraint("period_id", "employee_id", "sheet", name="uq_timesheet_snapshot_row"),
+        Index("ix_timesheet_snapshot_period_sheet", "period_id", "sheet"),
+    )
+
+
 __all__ = [
     "REF_SEQUENCE_ID",
+    "Absence",
     "AppSetting",
     "AuditLog",
     "AuthSession",
@@ -1541,6 +1697,10 @@ __all__ = [
     "SmartFolder",
     "SmartFolderDismissal",
     "Submitter",
+    "TimesheetDesignation",
+    "TimesheetOverride",
+    "TimesheetPeriod",
+    "TimesheetSnapshotRow",
     "User",
     "UserPermission",
     "VaultFile",
