@@ -161,8 +161,8 @@ def downgrade() -> None:
     op.drop_index("ix_absences_date", table_name="absences")
     op.drop_table("absences")
 
-    # No FK to drop; batch recreation is still required because SQLite cannot
-    # DROP COLUMN in place on the versions this schema targets.
+    # No FK to drop. Batch mode anyway, matching 0037/0043 and keeping the
+    # downgrade valid on SQLite builds older than 3.35's DROP COLUMN.
     with op.batch_alter_table("employees") as batch:
         batch.drop_column("designation_id")
 

@@ -181,6 +181,13 @@ Seeded with the 16 designations recovered from the July pair (§ Appendix A).
 Backfilled for all 275 employees present in the July sheets. `position` and
 `position_ar` keep their current meaning as the HR title.
 
+The 16 seeded designations are reference data the feature cannot run without, so
+`DESIGNATION_SEED` lives in `app/core/constants.py` and an idempotent
+`timesheet_service.seed_designations(db)` upserts it — called at startup beside
+`perm_service.seed_role_defaults`, and from the test fixtures, because the test
+suite builds its schema from `Base.metadata.create_all` and never runs Alembic.
+Migration `0070` keeps its own frozen literal copy.
+
 **`absences`** — one row per absent day.
 
 | Column | Type | Notes |
@@ -227,6 +234,15 @@ Backfilled for all 275 employees present in the July sheets. `position` and
 | `codes` | JSON | list of 31 code strings, `null` past month end |
 | `stat_codes` | JSON | the statistics variant of the same row |
 | `stat_block` | int | 1 or 2 |
+
+**`timesheet_stat_fillers`** — the block-2 code assignments (migration 0071).
+
+| Column | Type | Notes |
+| --- | --- | --- |
+| `id` | int pk | |
+| `year`, `month` | int | unique with `employee_id` |
+| `employee_id` | FK employees | |
+| `code` | `String(4)` | the filler this row shows the client |
 
 Snapshotting the resolved names and designations is deliberate: renaming a
 designation next year must not alter a sheet the client already holds.
@@ -282,13 +298,18 @@ From the same `MonthGrid`:
 1. Split at `period.post_count` in sort order.
 2. Block 1: every cell becomes `P` except `NG` and `-`.
 3. Block 2: every cell becomes its assigned filler code except `NG`, `-` and
-   real `AB`. Filler defaults carry forward from the previous month for
-   employees who were in block 2 then, and default to `AL` for new members.
-   Editable per row before download.
+   real `AB`. Assignments live in `timesheet_stat_fillers` (migration 0071),
+   keyed by year, month and employee. A new member defaults to `AL`; thereafter
+   the previous month's assignment carries forward, so the June/July shape — a
+   first group of `SL`, a bulk of `AL`, a trailing group of `TR` — is set once by
+   hand and then persists. Editable per row before download.
 4. Column `E` renders `designation_ar`; column `A` numbers continuously across
    the two blank rows.
 5. The page shows total `P` days and the implied post count
-   (`P days ÷ days in month`) so a drift like July's +59 is visible.
+   (`P days ÷ days in month`) so a drift like July's +59 is visible. The figure
+   sits a little *below* the configured post count, because `NG` and `-` roster
+   edges subtract: June's reference is 7,351 ÷ 30 = 245.0 against 249 posts. A
+   reading *above* the configured count is the drift this readout exists to catch.
 
 ## Template and renderer
 
@@ -328,8 +349,10 @@ Filenames: `كشف حضور شهر <شهر>.xlsx`, `الاحصائية شهر <�
 
 `PUT .../cell` with code `AB` creates an `absences` row; any other code creates
 a `timesheet_overrides` row; clearing removes whichever exists. Creating a leave
-that covers an absence day deletes that absence row, inside the existing
-leave-create path.
+that covers an absence day deletes that absence row. The hook belongs in
+`document_service._make_leave_row`, which is where sick and annual rows are
+actually born; `leave_service.create_leave` rejects everything except National
+Service, so a hook there would be dead code.
 
 New capabilities `timesheet.view` and `timesheet.edit` (edit covers cell
 changes, post count, close and reopen). Operator gets view; manager and admin
@@ -433,8 +456,8 @@ The gate is reproduction, not coverage.
    column widths, row heights, fonts, fills, conditional formats, formulas and
    the presence of the logo.
 4. **Statistics** — block sizes, the two-row gap, continuous `A` numbering, block
-   1 all `P` apart from roster edges, and the implied post count landing on the
-   configured value.
+   1 all `P` apart from roster edges, and the implied post count at or below the
+   configured value (never above).
 5. Unit tests for code precedence, the per-day union, roster edges, 28/30/31-day
    months, the rank sort, and absence deletion on leave create.
 

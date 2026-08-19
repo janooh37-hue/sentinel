@@ -37,6 +37,8 @@ from dataclasses import dataclass
 from datetime import date
 from typing import Final
 
+from app.core.leave_lifecycle import english_part
+
 CODE_PRESENT: Final[str] = "P"
 CODE_ANNUAL: Final[str] = "AL"
 CODE_SICK: Final[str] = "SL "
@@ -64,18 +66,6 @@ LEAVE_TYPE_CODES: Final[Mapping[str, str]] = {
     "National Service": CODE_NATIONAL,
 }
 
-#: Leave kinds that do NOT change the day code — the employee stays present.
-PRESENT_LEAVE_TYPES: Final[frozenset[str]] = frozenset(
-    {
-        "Administrative Leave",
-        "Leave Permit",
-        "Duty Leave",
-        "Duty Resumption",
-        "Passport Release",
-        "Others",
-    }
-)
-
 #: Leave statuses that never reach the sheet.
 VOID_LEAVE_STATUSES: Final[tuple[str, ...]] = ("Cancelled", "Rejected")
 
@@ -99,21 +89,19 @@ class LeaveSpan:
     status: str = "Approved"
 
 
-def english_leave_type(leave_type: str) -> str:
-    """English half of a bilingual ``"English - عربي"`` leave type."""
-
-    return leave_type.split(" - ", 1)[0].strip()
-
-
 def leave_code(leave_type: str) -> str | None:
     """Day code for a leave type, or ``None`` when the day stays present.
 
     ``"Unknown"`` — a leave whose type was lost during form generation — is
     treated as annual leave, which is what every such row in the 2026 data
     turned out to be.
+
+    Bilingual labels are collapsed by :func:`app.core.leave_lifecycle.english_part`,
+    which handles both the ``" - "`` delimiter and the dash-less form
+    (``"Duty Resumption مباشرة عمل"``) that 81 live rows still carry.
     """
 
-    english = english_leave_type(leave_type)
+    english = english_part(leave_type)
     if english == "Unknown":
         return CODE_ANNUAL
     return LEAVE_TYPE_CODES.get(english)

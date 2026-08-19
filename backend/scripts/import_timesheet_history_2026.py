@@ -50,15 +50,16 @@ from sqlalchemy.orm import Session, sessionmaker
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))  # put backend/ on the path
 
+from app.core.leave_lifecycle import english_part
 from app.core.timesheet_codes import (
     CODE_ABSENT,
     CODE_ANNUAL,
     CODE_NATIONAL,
     CODE_SICK,
     LeaveSpan,
-    english_leave_type,
     in_roster,
     is_void,
+    leave_code,
     month_codes,
 )
 from app.db.session import _sqlite_url_for, attach_sqlite_pragmas
@@ -133,6 +134,17 @@ def _session_for(db_path: Path) -> Session:
     return sessionmaker(bind=eng, future=True, expire_on_commit=False)()
 
 
+def canonical_employee_id(employee_id: str) -> str:
+    """Map the known duplicate G-number onto the surviving record.
+
+    Applied at the readers so nothing downstream — leave runs, absence runs,
+    designation links — can be keyed to a record this run deletes.
+    """
+
+    drop, keep = DUPLICATE_EMPLOYEE
+    return keep if employee_id == drop else employee_id
+
+
 def read_series() -> dict[str, dict[date, str]]:
     """Load every 2026 workbook into ``{employee_id: {date: code}}``."""
 
@@ -151,7 +163,7 @@ def read_series() -> dict[str, dict[date, str]]:
                 raw_id = row[ID_COL - 1]
                 if raw_id is None or not str(raw_id).strip():
                     break
-                employee_id = str(raw_id).strip()
+                employee_id = canonical_employee_id(str(raw_id).strip())
                 for offset in range(days):
                     value = row[FIRST_DAY_COL - 1 + offset]
                     if value is None:
@@ -231,9 +243,7 @@ def covered_days(leaves: list[dict[str, object]], employee_id: str, code: str) -
     for row in leaves:
         if row["employee_id"] != employee_id or is_void(str(row["status"])):
             continue
-        english = english_leave_type(str(row["leave_type"]))
-        target = RUN_TYPES.get(code)
-        if english != target and not (code == CODE_ANNUAL and english == "Unknown"):
+        if leave_code(str(row["leave_type"])) != code:
             continue
         start, end = _as_date(row["start_date"]), _as_date(row["end_date"])
         if start is None or end is None:
@@ -267,7 +277,7 @@ def read_designations() -> dict[str, str]:
                 raw_id = row[ID_COL - 1]
                 if raw_id is None or not str(raw_id).strip():
                     break
-                employee_id = str(raw_id).strip()
+                employee_id = canonical_employee_id(str(raw_id).strip())
                 raw_name = row[DESIGNATION_COL - 1]
                 if employee_id in found or raw_name is None:
                     continue
@@ -292,8 +302,14 @@ def employee_tables(db: Session) -> list[str]:
             text("SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name")
         ).all()
     ]
+    # Frozen deliverables are excluded on purpose: a snapshot row reproduces a
+    # sheet the client already holds, G-number and all, and must not be rewritten
+    # by a later merge (see TimesheetSnapshotRow in app/db/models.py).
+    frozen = {"timesheet_snapshot_rows"}
     carriers = []
     for name in names:
+        if name in frozen:
+            continue
         columns = {str(row[1]) for row in db.execute(text(f'PRAGMA table_info("{name}")')).all()}
         if "employee_id" in columns:
             carriers.append(name)
@@ -313,11 +329,11 @@ def employee_reference_counts(db: Session, employee_id: str) -> dict[str, int]:
     return counts
 
 
-@dataclass
+@dataclass(frozen=True, slots=True)
 class Plan:
     new_leaves: list[Run]
     new_absences: list[Run]
-    corrections: list[tuple[int, str, str, str, str | None, str | None, str | None]]
+    corrections: list[tuple[int, str, str, str, str, str | None, str | None, str | None]]
     retypes: list[tuple[int, str, str, str]]
     deletions: list[tuple[int, str, str, str]]
     end_date_fixes: list[tuple[str, str, str | None]]
@@ -367,7 +383,7 @@ def build_plan(series: dict[str, dict[date, str]], db: Session) -> Plan:
     for row in leaves:
         key = (
             str(row["employee_id"]),
-            english_leave_type(str(row["leave_type"])),
+            english_part(str(row["leave_type"])),
             str(row["start_date"])[:10],
             str(row["end_date"])[:10],
         )
@@ -382,7 +398,7 @@ def build_plan(series: dict[str, dict[date, str]], db: Session) -> Plan:
     retypes: list[tuple[int, str, str, str]] = []
     deletions: list[tuple[int, str, str, str]] = []
     for row in leaves:
-        if english_leave_type(str(row["leave_type"])) != "Unknown":
+        if english_part(str(row["leave_type"])) != "Unknown":
             continue
         employee_id = str(row["employee_id"])
         start, end = str(row["start_date"])[:10], str(row["end_date"])[:10]
@@ -392,7 +408,7 @@ def build_plan(series: dict[str, dict[date, str]], db: Session) -> Plan:
             r
             for r in leaves
             if r["employee_id"] == employee_id
-            and english_leave_type(str(r["leave_type"])) == "Annual Leave"
+            and english_part(str(r["leave_type"])) == "Annual Leave"
             and _as_date(r["start_date"]) is not None
             and _as_date(r["start_date"]) <= _as_date(end)  # type: ignore[operator]
             and _as_date(r["end_date"]) >= _as_date(start)  # type: ignore[operator]
@@ -422,8 +438,6 @@ def build_plan(series: dict[str, dict[date, str]], db: Session) -> Plan:
     designations: list[tuple[str, int, str]] = []
     unmatched: dict[str, str] = {}
     for employee_id, name in read_designations().items():
-        if employee_id == drop:
-            employee_id = keep  # the duplicate's rows move to the surviving ID
         record = employees.get(employee_id)
         if record is None:
             continue
@@ -459,6 +473,17 @@ def print_plan(plan: Plan) -> None:
         print(
             f"             {run.employee_id:7} {RUN_TYPES[run.code]:16} {run.start} .. {run.end}  {run.days:3}d"
         )
+    outside = [r for r in plan.new_leaves if r.start < TARGET[0] or r.end > TARGET[1]]
+    if outside:
+        print(
+            f"[import] NOTE {len(outside)} runs extend outside {TARGET[0]}..{TARGET[1]}. "
+            f"They are written in full (a leave really does cross a month edge) but "
+            f"--verify only diffs June and July, so these tails are unverified:"
+        )
+        for run in outside:
+            print(
+                f"             {run.employee_id:7} {RUN_TYPES[run.code]:16} {run.start} .. {run.end}"
+            )
     print(
         f"[import] absence records to create: {len(plan.new_absences)} runs, "
         f"{sum(r.days for r in plan.new_absences)} days"
@@ -520,8 +545,9 @@ def apply_plan(db: Session, plan: Plan) -> None:
     for run in plan.new_leaves:
         db.execute(
             text(
-                "INSERT INTO leaves (employee_id, leave_type, start_date, end_date, days, "
-                "status, notes, created_at) VALUES (:e, :t, :s, :d, :n, 'Approved', :note, :now)"
+                "INSERT OR IGNORE INTO leaves (employee_id, leave_type, start_date, end_date, "
+                "days, status, notes, created_at) "
+                "VALUES (:e, :t, :s, :d, :n, 'Approved', :note, :now)"
             ),
             {
                 "e": run.employee_id,
@@ -598,7 +624,11 @@ def apply_plan(db: Session, plan: Plan) -> None:
         )
         # Re-point first: foreign_keys=ON, and the dropped record owns books,
         # violations and documents that must survive on the surviving ID.
-        for table in plan.duplicate_refs:
+        # Discovered here rather than read from plan.duplicate_refs: rows
+        # inserted earlier in this same run may have landed on `drop`, and the
+        # plan-time snapshot would not know about them — the DELETE below would
+        # then abort the whole apply on the RESTRICT foreign key.
+        for table in employee_tables(db):
             db.execute(
                 text(f'UPDATE "{table}" SET employee_id = :keep WHERE employee_id = :drop'),
                 {"keep": keep, "drop": drop},

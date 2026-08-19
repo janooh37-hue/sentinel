@@ -42,7 +42,7 @@ ENDING_SOON_DAYS = 3  # heads-up window before a returnable leave's end date
 _ARABIC = re.compile(r"[؀-ۿ]")
 
 
-def _english_part(value: str) -> str:
+def english_part(value: str) -> str:
     """Collapse bilingual labels to the English half.
 
     Handles both the ``' - '`` delimiter form (``'Pending - انتظار'``) and the
@@ -58,7 +58,7 @@ def _english_part(value: str) -> str:
 
 
 def classify_group(leave_type: str) -> LifecycleGroup:
-    v = _english_part(leave_type).lower()
+    v = english_part(leave_type).lower()
     if v == _SICK or v == "sick":  # v3 rows sometimes stored the bare word
         return "sick"
     if v == _NS:
@@ -70,7 +70,7 @@ def classify_group(leave_type: str) -> LifecycleGroup:
 
 def canonical_status(status: str) -> str:
     """English half of a stored status, with the legacy 'Generated' → 'Approved'."""
-    s = _english_part(status)
+    s = english_part(status)
     return "Approved" if s == "Generated" else s
 
 
@@ -121,7 +121,7 @@ def accepts_certificate(leave_type: str) -> bool:
 
 def is_annual(leave_type: str) -> bool:
     """True for Annual Leave (the digest's scope). Robust to bilingual labels."""
-    return _english_part(leave_type).lower() in _ANNUAL
+    return english_part(leave_type).lower() in _ANNUAL
 
 
 def is_returnable(leave_type: str) -> bool:
@@ -131,7 +131,7 @@ def is_returnable(leave_type: str) -> bool:
     (Compassionate, Duty, Emergency, Hajj, legacy 'Others') is terminal once
     Approved — no return form, no resumption document.
     """
-    if _english_part(leave_type).lower() in _ANNUAL:
+    if english_part(leave_type).lower() in _ANNUAL:
         return True
     return classify_group(leave_type) == "national_service"
 

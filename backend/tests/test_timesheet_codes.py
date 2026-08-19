@@ -15,6 +15,7 @@ from app.core.timesheet_codes import (
     CODE_OFF_ROSTER,
     CODE_PRESENT,
     CODE_SICK,
+    EMITTED_CODES,
     LeaveSpan,
     in_roster,
     leave_code,
@@ -109,6 +110,38 @@ class TestPrecedence:
     def test_an_absence_outside_the_month_is_ignored(self):
         codes = month_codes(2026, 7, absences=[date(2026, 6, 4)])
         assert CODE_ABSENT not in codes
+
+    def test_a_roster_edge_outranks_an_absence(self):
+        """The top of the precedence chain: not yet joined beats marked absent."""
+        codes = month_codes(2026, 6, doj=date(2026, 6, 5), absences=[date(2026, 6, 2)])
+        assert codes[1] == CODE_NEW
+
+    def test_an_override_past_the_month_end_is_dropped(self):
+        """February has 28 days; an override on the 29th must not invent a cell."""
+        codes = month_codes(2026, 2, overrides={29: CODE_ABSENT})
+        assert codes[28:] == [None, None, None]
+
+    def test_a_leave_entirely_outside_the_month_is_ignored(self):
+        codes = month_codes(
+            2026, 7, leaves=[LeaveSpan("Annual Leave", date(2026, 8, 1), date(2026, 8, 9))]
+        )
+        assert codes == [CODE_PRESENT] * 31
+
+    def test_every_emitted_code_is_reachable(self):
+        """Guards the legend: a code the engine emits must be one the sheet explains."""
+        codes = month_codes(
+            2026,
+            7,
+            doj=date(2026, 7, 2),
+            end_date=date(2026, 7, 28),
+            leaves=[
+                LeaveSpan("Annual Leave", date(2026, 7, 3), date(2026, 7, 4)),
+                LeaveSpan("Sick Leave", date(2026, 7, 5), date(2026, 7, 5)),
+                LeaveSpan("National Service", date(2026, 7, 6), date(2026, 7, 6)),
+            ],
+            absences=[date(2026, 7, 7)],
+        )
+        assert {c for c in codes if c is not None} == set(EMITTED_CODES)
 
 
 class TestRosterEdges:
