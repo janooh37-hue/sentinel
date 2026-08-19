@@ -33,12 +33,12 @@ from __future__ import annotations
 
 import logging
 
-from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError, OperationalError
 from sqlalchemy.orm import Session
 
 from app.core.refs import RefAllocator
 from app.db.models import REF_SEQUENCE_ID, BookRefSequence
+from app.db.repos._locking import begin_immediate_if_idle
 
 log = logging.getLogger(__name__)
 
@@ -89,18 +89,28 @@ def allocate_ref_with_retry(
 
     Does NOT commit — the caller owns the outer transaction boundary so the
     ref allocation stays atomic with the Book/Document insert.
+
+    When the caller has already written in this transaction it, not this
+    function, holds the write lock: the lock is not re-taken and a failure is
+    raised rather than retried, because a rollback here would throw away the
+    caller's staged rows. See :mod:`app.db.repos._locking`.
     """
     cat = (category or "").strip()
     last_exc: Exception | None = None
     for attempt in range(1, attempts + 1):
+        owns_transaction = False
         try:
-            session.execute(text("BEGIN IMMEDIATE"))
+            owns_transaction = begin_immediate_if_idle(session)
             allocator = load_ref_allocator(session)
             ref = allocator.next(cat)
             persist_ref_allocator(allocator, session)
             return ref
         except (OperationalError, IntegrityError) as exc:
             last_exc = exc
+            if not owns_transaction:
+                # The caller holds the write lock and its staged work is in this
+                # transaction; rolling back here would discard it silently.
+                raise
             session.rollback()
             if attempt >= attempts:
                 break
