@@ -172,11 +172,17 @@ const PersonIcon = (
 interface Props {
   /** Called when the user picks an employee (recent chip or gaps CTA). */
   onOpen: (id: string) => void
+  /**
+   * An optional fourth card (Attendance). Rendered first so the live signal
+   * leads; the grid widens to four columns only when one is supplied, so a user
+   * without the capability keeps the original three-column hero.
+   */
+  extraCard?: React.ReactNode
 }
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
-export function LookupHeroCards({ onOpen }: Props): React.JSX.Element {
+export function LookupHeroCards({ onOpen, extraCard }: Props): React.JSX.Element {
   const { t, i18n } = useTranslation()
   const lang = i18n.language
 
@@ -214,7 +220,12 @@ export function LookupHeroCards({ onOpen }: Props): React.JSX.Element {
 
   // ─────────────────────────────────────────────────────────────────────────
   return (
-    <div className="mt-[26px] grid grid-cols-1 gap-3.5 text-start md:grid-cols-3">
+    <div
+      className={`mt-[26px] grid grid-cols-1 gap-3.5 text-start md:grid-cols-2 ${
+        extraCard ? 'lg:grid-cols-4' : 'lg:grid-cols-3'
+      }`}
+    >
+      {extraCard}
       {/* ── Card 1: Recently-opened files ──────────────────────────────────
           Hidden entirely when localStorage has no recents. */}
       {recents.length > 0 && (

@@ -80,6 +80,13 @@
   --font-arabic: "Lenos", "Noto Sans Arabic", "Inter Variable", system-ui, sans-serif;
 }
 
+/* Any Arabic run rendered next to a number or a clock range must be isolated:
+   without this, "السرية الثانية · 05:00 – 13:00" renders as "13:00 – 05:00"
+   because the bidi algorithm reorders the trailing neutral run. */
+.isolate-bidi {
+  unicode-bidi: isolate;
+}
+
 :root {
   --bg: #f5f4f1;
   --surface: #ffffff;

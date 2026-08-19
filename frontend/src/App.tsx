@@ -56,6 +56,11 @@ const SettingsPage = lazy(() =>
 const DashboardPage = lazy(() =>
   import('@/pages/dashboard/DashboardPage').then((m) => ({ default: m.DashboardPage })),
 )
+const AttendancePage = lazy(() =>
+  import('@/pages/employees/attendance/AttendancePage').then((m) => ({
+    default: m.AttendancePage,
+  })),
+)
 const EmployeeDetailPage = lazy(() =>
   import('@/pages/employees/EmployeeDetailPage').then((m) => ({ default: m.EmployeeDetailPage })),
 )
@@ -210,6 +215,16 @@ function Shell(): React.JSX.Element {
             <Routes>
               <Route path="/" element={<DashboardRoute />} />
               <Route path="/employees" element={<EmployeeLookupPage />} />
+              {/* Static segment: react-router ranks it above /employees/:id
+                  regardless of order, and employee ids are G-numbers anyway. */}
+              <Route
+                path="/employees/attendance"
+                element={
+                  <RequireCapability cap="workforce.people.view">
+                    <AttendancePage />
+                  </RequireCapability>
+                }
+              />
               <Route path="/employees/:id" element={<EmployeeDetailPage />} />
               <Route path="/application" element={<ApplicationPage />} />
               <Route path="/books" element={<BooksPage />} />

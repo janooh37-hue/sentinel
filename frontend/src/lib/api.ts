@@ -24,6 +24,27 @@ export type PassportSuggestion = components['schemas']['PassportSuggestion']
 // Employee lookup completeness summary (Task 3).
 export type CompletenessSummaryOut = components['schemas']['CompletenessSummaryOut']
 
+// ─── Attendance (الحضور) ─────────────────────────────────────────────────────
+// `api.types.ts` exports only `paths` and `components`, so every named type here
+// is a local re-export, matching the convention above.
+export type AttendanceDayRow = components['schemas']['AttendanceDayRowRead']
+export type AttendanceDayPage = components['schemas']['CursorPage_AttendanceDayRowRead_']
+export type EmployeeAttendanceRange = components['schemas']['EmployeeAttendanceRangeRead']
+export type EmployeeAttendanceDay = components['schemas']['EmployeeAttendanceDayRead']
+export type WorkforceIntegrationStatus = components['schemas']['IntegrationStatusRead']
+
+export interface ListAttendanceDayParams {
+  operational_date: string
+  shift_code?: string
+  limit?: number
+  cursor?: string
+}
+
+export interface EmployeeAttendanceParams {
+  from_date: string
+  to_date: string
+}
+
 // Phase B — Expiry Dashboard + Alerts
 export interface ExpiryItem {
   employee_id: string
@@ -952,6 +973,15 @@ export const api = {
   listEmployeeActivity: (params: ListEmployeeActivityParams = {}) =>
     request<EmployeeActivityListRead>('GET', `/employees/activity${qs({ ...params })}`),
   getEmployee: (id: string) => request<EmployeeRead>('GET', `/employees/${encodeURIComponent(id)}`),
+  listAttendanceDay: (params: ListAttendanceDayParams) =>
+    request<AttendanceDayPage>('GET', `/workforce/attendance/day${qs({ ...params })}`),
+  getEmployeeAttendance: (employeeId: string, params: EmployeeAttendanceParams) =>
+    request<EmployeeAttendanceRange>(
+      'GET',
+      `/workforce/employees/${encodeURIComponent(employeeId)}/attendance${qs({ ...params })}`,
+    ),
+  getWorkforceIntegrationStatus: () =>
+    request<WorkforceIntegrationStatus>('GET', '/workforce/integration/status'),
   getEmployeeDetail: (id: string) =>
     request<EmployeeDetailRead>('GET', `/employees/${encodeURIComponent(id)}/detail`),
   getEmployeesCompleteness: () =>

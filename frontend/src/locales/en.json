@@ -390,6 +390,13 @@
         "company": "GSSG Security",
         "role": "Employee identification"
       }
+    },
+    "sectionTabs": {
+      "aria": "Employees sections",
+      "directory": "Directory",
+      "attendance": "Attendance",
+      "attendanceAr": "الحضور",
+      "dutyLocations": "Duty locations"
     }
   },
   "violations": {
@@ -2158,7 +2165,8 @@
       "violations": "Violations",
       "activity": "Activity",
       "messages": "Messages",
-      "showingRecent": "Showing {{shown}} of {{total}}"
+      "showingRecent": "Showing {{shown}} of {{total}}",
+      "attendance": "Attendance"
     },
     "stats": {
       "documents": "Documents",
@@ -3002,8 +3010,14 @@
     "drop": "Drop the scan here, or click to browse",
     "filed": "Filed — {{ref}} is closed",
     "uploadError": "Could not file that scan",
-    "scope": { "mine": "Mine", "all": "Everyone" },
-    "sort": { "oldest": "Oldest first", "newest": "Newest first" },
+    "scope": {
+      "mine": "Mine",
+      "all": "Everyone"
+    },
+    "sort": {
+      "oldest": "Oldest first",
+      "newest": "Newest first"
+    },
     "group": {
       "overMonth": "Over a month",
       "weeks": "Two to four weeks",
@@ -3509,5 +3523,97 @@
     "previewAlt": "Signer signature",
     "noSig": "No saved signature for this signer — the report will be created unsigned",
     "signingOff": "Signing is off — tick “Sign now” to stamp this signature"
+  },
+  "attendance": {
+    "title": "Attendance",
+    "titleAr": "الحضور",
+    "subtitle": "{{date}} · duty register by unit and post",
+    "views": {
+      "register": "Register",
+      "board": "Board",
+      "timeline": "Timeline"
+    },
+    "shift": {
+      "morning": "Morning",
+      "noon": "Noon",
+      "night": "Night",
+      "office_day": "Office"
+    },
+    "state": {
+      "verified": "Verified",
+      "late": "Late past grace",
+      "single": "Single punch",
+      "missing": "No punch",
+      "leave": "On leave",
+      "pending": "Not started"
+    },
+    "toolbar": {
+      "today": "Today",
+      "previousDay": "Previous day",
+      "nextDay": "Next day",
+      "search": "Name, G-number, or post…",
+      "print": "Print",
+      "export": "Export",
+      "keyboardDay": "change day",
+      "keyboardShift": "switch shift",
+      "keyboardSearch": "search",
+      "viewsHint": "Register, Board and Timeline are views of this same day"
+    },
+    "register": {
+      "masthead": "{{shift}} duty register · {{unit}}",
+      "assigned": "assigned",
+      "seen": "seen",
+      "late": "late",
+      "unpaired": "unpaired",
+      "leave": "leave",
+      "posts": "{{count}} posts",
+      "source": "Source: BioTime mirror · read-only · fresh through {{through}}",
+      "sourceUnknown": "Source: BioTime mirror · read-only · freshness unknown",
+      "noPunch": "no punch",
+      "onlyPunch": "{{time}} only",
+      "latePunch": "{{time}} +{{minutes}}m",
+      "duePunch": "due {{time}}"
+    },
+    "board": {
+      "seenOf": "{{seen}}/{{due}}",
+      "legend": "Colour marks only trouble"
+    },
+    "timeline": {
+      "grace": "grace {{time}}",
+      "start": "start {{time}}",
+      "closes": "closes {{time}}",
+      "missingGutter": "−{{count}}",
+      "median": "median arrival",
+      "glance": "One glance: is the cloud left of the amber line?"
+    },
+    "attention": {
+      "title": "Needs a decision",
+      "none": "Nothing needs a decision today.",
+      "reviewAll": "Review all",
+      "openFile": "Open attendance file"
+    },
+    "hero": {
+      "title": "ATTENDANCE TODAY",
+      "seen": "seen",
+      "late": "late",
+      "unpaired": "unpaired",
+      "open": "Open attendance",
+      "clean": "Every scheduled person has been seen."
+    },
+    "tab": {
+      "punctuality": "Punctuality",
+      "lateMinutes": "Late minutes",
+      "missingPunches": "Missing punches",
+      "shiftsWorked": "Shifts worked",
+      "monthOf": "{{month}}",
+      "restDay": "off",
+      "dayDetail": "{{date}} · {{shift}} {{window}}",
+      "noSchedule": "No scheduled attendance in this month.",
+      "punchesUnknownDirection": "{{count}} punches · direction unknown",
+      "grace": "grace {{minutes}}m"
+    },
+    "empty": "No attendance rows for this day yet.",
+    "notStartedHint": "This window has not opened yet, so nothing is missing.",
+    "loadFailed": "Attendance could not be loaded."
   }
 }
