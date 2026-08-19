@@ -596,9 +596,9 @@ as a test factory, so Tasks 6, 7 and 14 stop inventing data that no code path pr
 **Interfaces:**
 - Consumes: Tasks 1–4.
 - Produces `backend/tests/factories/attendance.py`:
-  - `build_attendance_day(db, *, operational_date: date, unit: str = "السرية الثانية", posts: Sequence[tuple[str, int]] | None = None, punches: Mapping[str, Sequence[time]] | None = None) -> AttendanceDayFixture`
+  - `build_attendance_day(db, *, operational_date: date, unit: str = "السرية الثانية", posts: Sequence[tuple[str, int]] | None = None, punches: Mapping[str | None, Sequence[time]] | None = None) -> AttendanceDayFixture` — a `None` key in `punches` means "every employee in the fixture".
   - `@dataclass AttendanceDayFixture: admin: User; employees: list[Employee]; crew_id: int; cases: list[AttendanceCase]; provider_people: dict[str, AttendanceProviderPerson]`
-  - `add_punch(db, *, provider_person: AttendanceProviderPerson, occurred_at: datetime, device_name: str = "Main Gate Turnstile") -> AttendancePunch` — writes the punch **and** its assignment.
+  - `add_punch(db, *, provider_person: AttendanceProviderPerson, occurred_at: datetime, device_name: str = "Main Gate Turnstile") -> AttendancePunch` — inserts the punch only; no assignment row exists on this build.
 - Also produces the seed-service constants `DUTY_UNIT_TO_CREW`, `OFFICE_CREW_CODE`, `PATTERN_GUARD`, `PATTERN_OFFICE`, `SITE_TIMEZONE`, and the seeded windows 05:00 / 13:00 / 21:00 (480 minutes each) plus office 07:00, with crew 2 anchored to noon on 2026-08-18.
 
 - [ ] **Step 1: Copy the seed service, the scripts, and their tests**
@@ -652,7 +652,13 @@ def test_factory_creates_cases_for_every_seeded_person(db_session) -> None:
         "التفتيش",
     }
     assert all(case.shift_code_snapshot for case in fixture.cases)
-    assert db_session.query(AttendanceCase).count() == len(fixture.cases)
+    # `fixture.cases` is filtered to the requested operational date, while the
+    # generation window necessarily also materializes the neighbouring day's
+    # cases (crew 2 works noon on 18 Aug, then morning AND night on 19 Aug), so
+    # the table legitimately holds MORE rows than the fixture exposes.
+    assert db_session.query(AttendanceCase).count() >= len(fixture.cases)
+    # The double day: five people, two shifts each on 19 Aug.
+    assert len(fixture.cases) == 2 * len(fixture.employees)
 
 
 def test_factory_attaches_punches_to_the_right_case(db_session) -> None:
@@ -707,6 +713,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from datetime import UTC, date, datetime, time, timedelta
 from typing import Mapping, Sequence
+from zoneinfo import ZoneInfo
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -714,9 +721,9 @@ from sqlalchemy.orm import Session
 from app.db.models import Employee, User
 from app.db.workforce_models import (
     AttendanceCase,
-    AttendancePunch,
-    AttendancePunchAssignment,
     AttendanceProviderPerson,
+    AttendancePunch,
+    AttendanceSyncState,
     WorkCrew,
 )
 from app.services import (
@@ -726,7 +733,7 @@ from app.services import (
 )
 from tests.conftest import make_user
 
-SITE_ZONE_OFFSET = timedelta(hours=4)  # Asia/Dubai, no DST
+SITE_ZONE = ZoneInfo("Asia/Dubai")
 DEFAULT_POSTS: Sequence[tuple[str, int]] = (
     ("البوابة الرئيسية", 6),
     ("التفتيش", 6),
@@ -743,10 +750,20 @@ class AttendanceDayFixture:
     provider_people: dict[str, AttendanceProviderPerson] = field(default_factory=dict)
 
 
-def _naive_utc(local: datetime) -> datetime:
-    """Site-local wall time -> the UTC-naive form every workforce column stores."""
-    return (local - SITE_ZONE_OFFSET).replace(tzinfo=None)
+def _local(day: date, at: time) -> datetime:
+    """A site-local instant, timezone-aware.
 
+    Always build instants this way rather than by subtracting a fixed offset:
+    `workforce_schedule_service._utc_naive` converts with `astimezone(UTC)`, and
+    `create_crew_membership` validates the value against Dubai shift boundaries
+    via `_is_shift_boundary`, so an hour-arithmetic approximation is rejected.
+    """
+    return datetime.combine(day, at, tzinfo=SITE_ZONE)
+
+
+def _utc_naive(moment: datetime) -> datetime:
+    """The UTC-naive form every workforce datetime column stores."""
+    return moment.astimezone(UTC).replace(tzinfo=None)
 
 def build_attendance_day(
     db: Session,
@@ -796,9 +813,13 @@ def build_attendance_day(
                 display_name_snapshot=employee.name_en,
                 employee_id=employee.id,
                 mapping_state="verified",
+                # ck_attendance_provider_people_verified_fields: a verified row
+                # MUST carry employee_id AND verified_by_user_id AND verified_at.
+                verified_by_user_id=admin.id,
+                verified_at=_utc_naive(_local(date(2026, 8, 1), time(0, 0))),
                 active=True,
-                first_seen_at=_naive_utc(datetime(2026, 8, 1, 0, 0)),
-                last_seen_at=_naive_utc(datetime.combine(operational_date, time(23, 0))),
+                first_seen_at=_utc_naive(_local(date(2026, 8, 1), time(0, 0))),
+                last_seen_at=_utc_naive(_local(operational_date, time(23, 0))),
             )
             db.add(person)
             fixture.provider_people[employee.id] = person
@@ -808,24 +829,46 @@ def build_attendance_day(
                 db,
                 employee_id=employee.id,
                 crew_id=crew.id,
-                effective_from=_naive_utc(datetime(2026, 8, 1, 0, 0)).replace(tzinfo=UTC),
+                # MUST be a Dubai shift boundary (05:00 / 13:00 / 21:00 / 07:00):
+                # create_crew_membership rejects anything else via
+                # _is_shift_boundary("membership changes must use Dubai shift
+                # boundaries"). Dubai 05:00 on 1 Aug = 01:00Z.
+                effective_from=_local(date(2026, 8, 1), time(5, 0)),
                 actor_user_id=admin.id,
             )
     db.flush()
 
-    # 4. Materialize the day's occurrences for this crew.
+    # 4. Materialize the day's occurrences for this crew. The seeded schedule's
+    #    anchor_at/effective_from is its crew's own noon anchor (crew 2 →
+    #    2026-08-18 13:00 local), and generate_occurrences skips any start
+    #    before effective_from, so the window must reach past that anchor.
     workforce_schedule_service.generate_occurrences(
         db,
         crew_id=crew.id,
-        starts_at=datetime.combine(operational_date, time(0, 0), tzinfo=UTC) - timedelta(days=1),
-        ends_at=datetime.combine(operational_date, time(0, 0), tzinfo=UTC) + timedelta(days=2),
+        starts_at=_local(operational_date, time(0, 0)) - timedelta(days=3),
+        ends_at=_local(operational_date, time(0, 0)) + timedelta(days=2),
     )
     db.flush()
 
-    # 5. Cases exist only for occurrences that have already started, so evaluate
-    #    as of the end of the operational day.
-    as_of = datetime.combine(operational_date, time(23, 59), tzinfo=UTC)
-    evaluation_start_at = datetime(2026, 8, 1, tzinfo=UTC)
+    # 5. Freshness: without an AttendanceSyncState row for ("biotime", "punches")
+    #    `_fresh_through` returns None and every decision degrades to a
+    #    not-yet-trustworthy state, so presence_state would never be
+    #    "completed"/"absent" and every state assertion downstream would be
+    #    testing the stale path instead of the real one.
+    db.merge(
+        AttendanceSyncState(
+            provider="biotime",
+            stream="punches",
+            fresh_through=_utc_naive(_local(operational_date, time(23, 59))),
+            last_success_at=_utc_naive(_local(operational_date, time(23, 59))),
+        )
+    )
+    db.flush()
+
+    # 6. Cases exist only for occurrences that have already started, so
+    #    materialize as of the end of the operational day.
+    as_of = _local(operational_date, time(23, 59))
+    evaluation_start_at = _local(date(2026, 8, 1), time(0, 0))
     for employee in fixture.employees:
         attendance_evaluation_service.materialize_started_cases(
             db,
@@ -841,18 +884,24 @@ def build_attendance_day(
         )
     )
 
-    # 6. Optional punches, then evaluation so presence_state is populated.
+    # 7. Optional punches. `add_punch` inserts the row and then calls the real
+    #    allocator, `attendance_punch_service.resolve_assignment`, which both
+    #    writes the assignment and re-evaluates the affected case(s) — so a
+    #    double-shift day (this rotation's morning+night day) is allocated by
+    #    the production rule, not by a hand-rolled time window.
     if punches:
         for employee_id, times in punches.items():
-            targets = fixture.employees if employee_id is None else [
-                e for e in fixture.employees if e.id == employee_id
-            ]
+            targets = (
+                fixture.employees
+                if employee_id is None
+                else [e for e in fixture.employees if e.id == employee_id]
+            )
             for employee in targets:
                 for at in times:
                     add_punch(
                         db,
                         provider_person=fixture.provider_people[employee.id],
-                        occurred_at=_naive_utc(datetime.combine(operational_date, at)),
+                        occurred_at=_local(operational_date, at),
                     )
     db.flush()
 
@@ -871,44 +920,36 @@ def add_punch(
     occurred_at: datetime,
     device_name: str = "Main Gate Turnstile",
 ) -> AttendancePunch:
-    """Insert one punch and assign it to its case.
+    """Insert one punch. Deliberately no assignment row.
 
-    `normalized_payload_hash` and `algorithm_version` are NOT NULL with no
-    server default, so both must be supplied explicitly; `direction` stays
-    "unknown" because this provider never reports one.
+    `attendance_punch_service.resolve_assignment` is NOT called, and no
+    `AttendancePunchAssignment` is written by hand, because on this build neither
+    can happen: `select_punch_case` returns None unless
+    `punch.direction in {"in", "out"}`, and this provider reports
+    `punch_state 255`/"unknown" for every event. The assignment table is therefore
+    empty in production, and both the evaluator (`_matching_punches`) and the
+    register (`list_attendance_day`) find punches by provider person plus the
+    case's policy match window. A fixture that faked assignments would test a
+    code path the live system never takes.
+
+    `normalized_payload_hash` is NOT NULL with no server default and must be
+    supplied; `direction` stays "unknown" for the same reason.
     """
     punch = AttendancePunch(
         provider="biotime",
         external_event_id=f"factory-{provider_person.id}-{occurred_at.isoformat()}",
         provider_person_id=provider_person.id,
-        occurred_at=occurred_at,
+        occurred_at=_utc_naive(occurred_at),
         direction="unknown",
         device_name=device_name,
-        normalized_payload_hash=f"h{provider_person.id}{int(occurred_at.timestamp())}",
+        normalized_payload_hash=f"h{provider_person.id}-{int(occurred_at.timestamp())}",
     )
     db.add(punch)
     db.flush()
-
-    case = db.scalar(
-        select(AttendanceCase)
-        .where(AttendanceCase.employee_id == provider_person.employee_id)
-        .where(AttendanceCase.scheduled_start_at <= occurred_at + timedelta(hours=2))
-        .where(AttendanceCase.scheduled_end_at >= occurred_at - timedelta(hours=2))
-        .order_by(AttendanceCase.scheduled_start_at)
-    )
-    if case is not None:
-        db.add(
-            AttendancePunchAssignment(
-                punch_id=punch.id,
-                attendance_case_id=case.id,
-                algorithm_version="factory-v1",
-            )
-        )
-        db.flush()
     return punch
 ```
 
-If `create_crew_membership` rejects the `effective_from` value as unaligned (it validates against shift boundaries via `_is_shift_boundary`), pass a site-local midnight instead; read `_validate_schedule_alignment` and match what the service accepts rather than weakening the service.
+Two guardrails while implementing this file: (1) punches must land inside the seeded policy's match window (`match_before_minutes = 60`, `match_after_minutes = 120`) relative to the case, or the evaluator will not see them — move the punch, never widen the policy; (2) if `materialize_started_cases` returns nothing, the occurrence window or `as_of` is wrong, or the crew's seeded schedule anchor is later than the requested day — print the generated occurrences and compare against `schedule.anchor_at` before changing anything in `app/`.
 
 - [ ] **Step 6: Run the factory test to verify it passes**
 
@@ -947,7 +988,7 @@ def test_roster_returns_rows_for_the_factory_day(db_session) -> None:
     for row in rows:
         assert row["employee_id"]
         assert row["scheduled_start_at"] is not None
-        assert row["shift_code"] in {"morning", "noon", "night", "office"}
+        assert row["shift_code"] in {"morning", "noon", "night", "office_day"}
         assert row["duty_unit"] == "السرية الثانية"
 ```
 
@@ -956,35 +997,56 @@ Expected: PASS.
 
 - [ ] **Step 8: Prepare the preview database (this is where Task 14's data comes from)**
 
-The demo script needs a registered admin (`seed_workforce_demo.py` exits 2 with "no user exists; register an admin first") and employees that carry `duty_unit`; it only creates memberships for employees with a verified provider mapping. So the preview database is built in this order:
+The preview database is built with the same factory the tests use, so the preview and the suite cannot disagree. Verified prerequisites: `auth_service.register(db, *, email, password, g_number=None, display_name=None) -> tuple[User, bool]` (the **first** account becomes active + admin), and `tests` is a real package (`backend/tests/__init__.py`) that imports cleanly with `backend/` on `sys.path` — `pyproject.toml` sets `pythonpath = ["backend"]` for pytest, and a plain script needs `PYTHONPATH=.` from `backend/`.
 
 ```bash
 cd backend
 export GSSG_DATA_DIR=C:/Users/Amh/AppData/Local/Temp/attendance-preview
+export PYTHONPATH=.
 "C:/Users/Amh/Documents/projects/sentinel/venv/Scripts/python.exe" -m alembic upgrade head
-# 1. an admin account to own the audit rows
+
+# 1. First account = active admin, and it owns every audit row the factory writes.
 "C:/Users/Amh/Documents/projects/sentinel/venv/Scripts/python.exe" - <<'PY'
 from app.db.session import SessionLocal
 from app.services import auth_service
+
 with SessionLocal() as db:
-    auth_service.register(db, email="admin@preview.local", password="preview-admin-pw", name="Preview Admin")
+    user, is_first = auth_service.register(
+        db,
+        email="admin@preview.local",
+        password="preview-admin-pw",
+        display_name="Preview Admin",
+    )
     db.commit()
+    print("admin:", user.email, "first:", is_first, "role:", user.role)
 PY
-# 2. employees + provider people + memberships + occurrences + cases, using the
-#    same factory the tests use, so the preview and the tests agree.
+
+# 2. 40 guards across the nine real posts, with memberships, occurrences, cases
+#    and two punches each so the register has times to print.
 "C:/Users/Amh/Documents/projects/sentinel/venv/Scripts/python.exe" - <<'PY'
-from datetime import date
+from datetime import date, time
+
 from app.db.session import SessionLocal
 from tests.factories.attendance import build_attendance_day
-GUARD = [("البوابة الرئيسية",6),("التفتيش",6),("دورية السياج",5),("برج المراقبة",4),
-         ("ليوان",4),("تفتيش المركبات",4),("بوابة الورشة",4),("ساحة المخازن",4),("غرفة التحكم",3)]
+
+GUARD = [
+    ("البوابة الرئيسية", 6), ("التفتيش", 6), ("دورية السياج", 5), ("برج المراقبة", 4),
+    ("ليوان", 4), ("تفتيش المركبات", 4), ("بوابة الورشة", 4), ("ساحة المخازن", 4),
+    ("غرفة التحكم", 3),
+]
+
 with SessionLocal() as db:
-    build_attendance_day(db, operational_date=date(2026, 8, 19), posts=GUARD,
-                         punches={None: []})
+    fixture = build_attendance_day(
+        db,
+        operational_date=date(2026, 8, 19),
+        posts=GUARD,
+        punches={None: [time(4, 52), time(12, 40)]},
+    )
+    print("employees:", len(fixture.employees), "cases:", len(fixture.cases))
 PY
 ```
 
-Read `auth_service` and use its real registration entry point; if the function is named differently, use the real name. Expected: `GET /api/v1/workforce/attendance/day?operational_date=2026-08-19` returns 40 rows across 9 posts once Task 6 lands.
+`build_attendance_day` calls `make_user` from `tests.conftest`, which creates its own admin; that is harmless here (the registered account above is the one you log in with, and it is the first account, so it is the admin). Expected output: `employees: 40`, and `cases: 80` — **not 40**: 19 Aug 2026 is crew 2's double day in the 5-day rotation (it works both the morning and the night window), so every guard has two cases. The register therefore shows two shift sections for that day, which is correct and is exactly why the toolbar has a shift filter.
 
 - [ ] **Step 9: Commit**
 
@@ -1116,11 +1178,11 @@ In `backend/app/schemas/workforce.py`, immediately after `AttendanceExceptionRea
 class AttendanceDayRowRead(RosterRowRead):
     """One person's scheduled shift on one operational date, with punch facts.
 
-    `first_punch_at` / `last_punch_at` are the earliest and latest punches
-    assigned to this case. They are timestamps of events, not a check-in and a
-    check-out: this provider reports no direction, so a single punch yields
-    `punch_count == 1` with both bounds equal, and the client must present it as
-    "seen at", never as a span.
+    `first_punch_at` / `last_punch_at` are the earliest and latest punches that
+    fall in this case's policy match window. They are timestamps of events, not a
+    check-in and a check-out: this provider reports no direction, so a single
+    punch yields `punch_count == 1` with both bounds equal, and the client must
+    present it as "seen at", never as a span.
     """
 
     first_punch_at: datetime | None = None
@@ -1146,11 +1208,16 @@ def list_attendance_day(
 ) -> list[dict[str, Any]]:
     """Every scheduled person for one operational date, with their punch bounds.
 
-    Built from the same cases and latest evaluations as `list_roster`, then
-    joined to the punches assigned to each case. The punch aggregate is computed
-    in one grouped query rather than per row: a guard shift plus the office day
-    is ~150 cases, and a per-row query would make the register's first paint
-    O(150) round trips.
+    Punch bounds are read the same way the evaluator reads evidence
+    (`attendance_evaluation_service._matching_punches`): by the employee's active
+    verified provider person, inside the case's policy match window, skipping any
+    punch already assigned to a DIFFERENT case.
+
+    It deliberately does NOT join `attendance_punch_assignments`. That table only
+    ever receives directional punches — `attendance_punch_service.select_punch_case`
+    returns None unless `punch.direction in {"in", "out"}` — and this build reports
+    `punch_state 255`/"unknown" for every event, so the assignment table is
+    permanently empty here and a register built on it would show no times at all.
     """
     cases = [
         case
@@ -1161,28 +1228,60 @@ def list_attendance_day(
     ]
     if shift_code is not None:
         cases = [case for case in cases if case.shift_code_snapshot == shift_code]
-    case_ids = [case.id for case in cases]
-    latest = _latest_evaluations(db, case_ids)
+    if not cases:
+        return []
+    latest = _latest_evaluations(db, [case.id for case in cases])
 
-    punch_bounds: dict[int, tuple[datetime, datetime, int]] = {}
-    if case_ids:
-        rows = db.execute(
+    # One provider-person lookup for the whole page: the unique partial index
+    # `uq_attendance_provider_people_verified_active_employee` guarantees at most
+    # one active verified row per employee.
+    employee_ids = {case.employee_id for case in cases}
+    person_by_employee = {
+        person.employee_id: person
+        for person in db.scalars(
+            select(AttendanceProviderPerson).where(
+                AttendanceProviderPerson.employee_id.in_(employee_ids),
+                AttendanceProviderPerson.mapping_state == "verified",
+                AttendanceProviderPerson.active.is_(True),
+            )
+        )
+    }
+
+    bounds: dict[int, tuple[datetime | None, datetime | None, int]] = {}
+    for case in cases:
+        person = person_by_employee.get(case.employee_id)
+        policy = _effective_policy(db, case)
+        if person is None or policy is None:
+            bounds[case.id] = (None, None, 0)
+            continue
+        window_start = case.scheduled_start_at - timedelta(minutes=policy.match_before_minutes)
+        window_end = case.scheduled_end_at + timedelta(minutes=policy.match_after_minutes)
+        first_at, last_at, count = db.execute(
             select(
-                AttendancePunchAssignment.attendance_case_id,
                 func.min(AttendancePunch.occurred_at),
                 func.max(AttendancePunch.occurred_at),
                 func.count(AttendancePunch.id),
             )
-            .join(AttendancePunch, AttendancePunch.id == AttendancePunchAssignment.punch_id)
-            .where(AttendancePunchAssignment.attendance_case_id.in_(case_ids))
-            .group_by(AttendancePunchAssignment.attendance_case_id)
-        ).all()
-        punch_bounds = {row[0]: (row[1], row[2], row[3]) for row in rows}
+            .outerjoin(
+                AttendancePunchAssignment,
+                AttendancePunchAssignment.punch_id == AttendancePunch.id,
+            )
+            .where(
+                AttendancePunch.provider_person_id == person.id,
+                AttendancePunch.occurred_at >= window_start,
+                AttendancePunch.occurred_at <= window_end,
+                or_(
+                    AttendancePunchAssignment.punch_id.is_(None),
+                    AttendancePunchAssignment.attendance_case_id == case.id,
+                ),
+            )
+        ).one()
+        bounds[case.id] = (first_at, last_at, count)
 
     result: list[dict[str, Any]] = []
     for case in cases:
         evaluation = latest.get(case.id)
-        first_at, last_at, count = punch_bounds.get(case.id, (None, None, 0))
+        first_at, last_at, count = bounds[case.id]
         presence_state = evaluation.presence_state if evaluation else None
         result.append(
             {
@@ -1198,6 +1297,13 @@ def list_attendance_day(
         )
     return sorted(result, key=lambda row: (row["scheduled_start_at"], row["employee_id"]))
 ```
+
+`_effective_policy` already exists in `attendance_evaluation_service`; import it there
+(`from app.services.attendance_evaluation_service import _effective_policy`) rather than
+duplicating policy resolution, or promote it to a public name in that module and use that.
+One query per case is acceptable and deliberate: a day is ~150 cases, each query is an
+indexed aggregate on `(provider_person_id, occurred_at)`, and the alternative — one query
+with per-case windows — needs a correlated subquery whose plan SQLite does not improve on.
 
 Add the one private helper next to it (`_shift_code_of` is NOT needed: `AttendanceCase`
 carries `shift_code_snapshot`, and `_person_fields` already returns it — the snapshot is
@@ -1345,7 +1451,7 @@ def test_range_returns_one_entry_per_scheduled_day(db_session) -> None:
     seen = [day["operational_date"] for day in payload["days"]]
     assert len(seen) == len(set(seen)), "one entry per day, never duplicated"
     for day in payload["days"]:
-        assert day["shift_code"] in {"morning", "noon", "night", "office"}
+        assert day["shift_code"] in {"morning", "noon", "night", "office_day"}
         assert isinstance(day["punches"], list)
     punched = [day for day in payload["days"] if day["punch_count"] > 0]
     assert punched, "the punches the factory attached must appear"
@@ -1368,7 +1474,7 @@ def test_self_view_reads_own_record_only(db_session) -> None:
 
     viewer = make_user(db_session, role="operator", email="self-view@test.ae")
     viewer.employee_id = mine.id
-    perm_service.set_override(db_session, viewer.id, "workforce.self.view", "grant")
+    perm_service.set_user_override(db_session, viewer.id, "workforce.self.view", "grant")
     db_session.commit()
 
     client = _client(db_session, viewer)
@@ -1401,7 +1507,7 @@ def test_window_wider_than_ninety_two_days_is_rejected(db_session) -> None:
         )
 ```
 
-Read `perm_service` and `tests/test_workforce_api_permissions.py` before writing this: use the real override-granting function (`set_override` or whatever it is actually called) and the real `_client` factory signature. Do not add a `client` fixture to `conftest.py` for this.
+Read `perm_service` and `tests/test_workforce_api_permissions.py` before writing this: use the real override-granting function (`set_user_override`) and the real `_client` factory signature. Do not add a `client` fixture to `conftest.py` for this.
 
 - [ ] **Step 2: Run it to verify it fails**
 
@@ -1525,6 +1631,17 @@ git commit -m "feat(attendance): add the per-employee attendance range endpoint"
 In `frontend/src/lib/api.ts`, beside the other employee wrappers:
 
 ```ts
+// `api.types.ts` exports only `paths` and `components`; openapi-typescript emits
+// no per-schema aliases. Every existing type in api.ts is a local re-export of
+// `components['schemas'][…]` (see api.ts:16 and :22), so follow that exactly —
+// a bare `CursorPage_AttendanceDayRowRead_` identifier does not exist and will
+// not compile.
+export type AttendanceDayRow = components['schemas']['AttendanceDayRowRead']
+export type AttendanceDayPage = components['schemas']['CursorPage_AttendanceDayRowRead_']
+export type EmployeeAttendanceRange = components['schemas']['EmployeeAttendanceRangeRead']
+export type WorkforceIntegrationStatus = components['schemas']['IntegrationStatusRead']
+export type WorkforceSnapshot = components['schemas']['WorkforceSnapshotRead']
+
 export interface ListAttendanceDayParams {
   operational_date: string
   shift_code?: string
@@ -1538,22 +1655,24 @@ export interface EmployeeAttendanceParams {
 }
 ```
 
+The generic page schema's key is generator-decided: after `pnpm gen:api`, grep it and use the real key —
+`grep -o "CursorPage[A-Za-z_]*AttendanceDayRowRead[A-Za-z_]*" frontend/src/lib/api.types.ts | sort -u`.
+If the generator names it differently, fix the alias, not the endpoint.
+
 and inside the `api` object:
 
 ```ts
   listAttendanceDay: (params: ListAttendanceDayParams) =>
-    request<CursorPage_AttendanceDayRowRead_>('GET', `/workforce/attendance/day${qs({ ...params })}`),
+    request<AttendanceDayPage>('GET', `/workforce/attendance/day${qs({ ...params })}`),
   getEmployeeAttendance: (employeeId: string, params: EmployeeAttendanceParams) =>
-    request<EmployeeAttendanceRangeRead>(
+    request<EmployeeAttendanceRange>(
       'GET',
       `/workforce/employees/${encodeURIComponent(employeeId)}/attendance${qs({ ...params })}`,
     ),
   getWorkforceIntegrationStatus: () =>
-    request<IntegrationStatusRead>('GET', '/workforce/integration/status'),
-  getWorkforceSnapshot: () => request<WorkforceSnapshotRead>('GET', '/workforce/dashboard/snapshot'),
+    request<WorkforceIntegrationStatus>('GET', '/workforce/integration/status'),
+  getWorkforceSnapshot: () => request<WorkforceSnapshot>('GET', '/workforce/dashboard/snapshot'),
 ```
-
-Use the exact generated type names from `api.types.ts` after `gen:api` — the `CursorPage_…_` alias shape is generator-decided, so read it rather than assuming.
 
 - [ ] **Step 2: Write the failing test for the section tabs**
 
@@ -1650,8 +1769,7 @@ Gate the tab on `workforce.people.view` via `useCapabilities()`; a user without 
   "title": "Attendance",
   "titleAr": "الحضور",
   "subtitle": "{{date}} · duty register by unit and post",
-  "views": { "register": "Register", "board": "Board", "timeline": "Timeline" },
-  "shift": { "morning": "Morning", "noon": "Noon", "night": "Night", "office": "Office" },
+  "shift": { "morning": "Morning", "noon": "Noon", "night": "Night", "office_day": "Office" },
   "state": {
     "verified": "Verified",
     "late": "Late past grace",
@@ -1898,14 +2016,33 @@ Pin three behaviours: (1) it renders `seen / late / unpaired` from the payload; 
 **Files:**
 - Create: `frontend/e2e/attendance.spec.ts`
 - Create: `docs/attendance-verification-2026-08-19.md` (the evidence record)
-
 - [ ] **Step 1: Run both suites.** `cd backend && "C:/Users/Amh/Documents/projects/sentinel/venv/Scripts/python.exe" -m pytest -q` and `cd frontend && pnpm vitest run`. Compare against a stashed baseline before attributing any failure to this branch.
 
 - [ ] **Step 2: Type-check and lint.** `cd frontend && pnpm build` (runs `tsc -b`) and `pnpm lint`.
 
-- [ ] **Step 3: Seed and start the stack.** Backend on `127.0.0.1:8765` against the preview `GSSG_DATA_DIR` built in **Task 5 Step 8** (admin account + 40 guards across the 9 real posts + memberships + occurrences + cases via `tests.factories.attendance.build_attendance_day`); frontend `pnpm dev` on `5173` with `GSSG_API_TARGET=http://127.0.0.1:8765`. Launch both through the process supervisor, never a bare shell, and wait for readiness (`Local:.*http` + port 5173). Before opening a browser, prove the data exists: `curl "http://127.0.0.1:8765/api/v1/workforce/attendance/day?operational_date=2026-08-19"` must return 40 items across 9 distinct `duty_post` values — if it returns `[]`, the preview database was not built and every assertion below would be vacuous.
+- [ ] **Step 3: Seed and start the stack.** Backend on `127.0.0.1:8765` against the preview `GSSG_DATA_DIR` built in **Task 5 Step 8** (registered admin + 40 guards across the 9 real posts + memberships + occurrences + 80 cases via `tests.factories.attendance.build_attendance_day`); frontend `pnpm dev` on `5173` with `GSSG_API_TARGET=http://127.0.0.1:8765`. Launch both through the process supervisor, never a bare shell, and wait for readiness (`Local:.*http` + port 5173). Then prove the data exists **before** opening a browser — the endpoint is behind the session cookie, so an anonymous `curl` returns 401 and proves nothing:
 
-- [ ] **Step 4: Playwright review — English.** `frontend/e2e/attendance.spec.ts` logs in as the preview admin, opens `/employees/attendance`, and asserts: the register renders 9 post sections for the guard shift; the toolbar shift buttons show `seen/due`; `ArrowLeft` changes the day; the view switch reaches Board and Timeline; no horizontal page overflow at 1440, 1280 and 1024 (`document.documentElement.scrollWidth <= window.innerWidth`); zero console errors. Capture a screenshot per viewport.
+```bash
+# authenticate, keep the cookie, then count
+curl -s -c /tmp/att.jar -X POST http://127.0.0.1:8765/api/v1/auth/login \
+  -H 'content-type: application/json' \
+  -d '{"email":"admin@preview.local","password":"preview-admin-pw"}' >/dev/null
+curl -s -b /tmp/att.jar \
+  "http://127.0.0.1:8765/api/v1/workforce/attendance/day?operational_date=2026-08-19&limit=200" \
+  | "C:/Users/Amh/Documents/projects/sentinel/venv/Scripts/python.exe" -c "
+import json,sys
+page = json.load(sys.stdin)
+items = page['items']
+print('rows', len(items))
+print('posts', len({row['duty_post'] for row in items}))
+print('shifts', sorted({row['shift_code'] for row in items}))
+"
+```
+
+Expected: `rows 80`, `posts 9`, `shifts ['morning', 'night']` — 19 Aug 2026 is crew 2's double day. If the login route path or payload differs, read `backend/app/api/v1/auth.py` and use the real one. If `rows 0`, the preview database was not built and every assertion below would be vacuous.
+
+
+- [ ] **Step 4: Playwright review — English.** `frontend/e2e/attendance.spec.ts` logs in as the preview admin, opens `/employees/attendance`, and asserts: with the Morning shift selected the register renders 9 post sections and 40 names (19 Aug is crew 2's double day, so the unfiltered day holds 80 rows across Morning and Night — the shift filter is what makes the register readable); the toolbar shift buttons show `seen/due`; `ArrowLeft` changes the day; the view switch reaches Board and Timeline; no horizontal page overflow at 1440, 1280 and 1024 (`document.documentElement.scrollWidth <= window.innerWidth`); zero console errors. Capture a screenshot per viewport.
 
 - [ ] **Step 5: Playwright review — Arabic RTL.** Switch the language to Arabic, then assert: `document.documentElement.dir === 'rtl'`; the register masthead's clock range still reads `05:00 – 13:00` (this is the bidi-isolation regression guard); no element overflows the viewport on either edge; the toolbar, month grid and timeline mirror correctly (start-side controls sit on the right); the Arabic label is `الحضور` everywhere and the string `BioTime` appears exactly once per page, in the source line. Capture Arabic screenshots at the same three viewports.
 
@@ -1952,3 +2089,21 @@ Pin three behaviours: (1) it renders `seen / late / unpaired` from the payload; 
 | N1–N4 | react-router is v7 not v6; `permissions.py` line anchors were branch-relative; `test_attendance_provider.py` does not exist on the branch; the httpx annotation | Version corrected in two places; Task 2 now anchors by symbol with main's approximate lines noted; the phantom test file removed from the copy list; the httpx claim left as-is (functionally correct — one flat requirements file, pin present at line 36) |
 
 Two findings I had already caught and fixed before the review landed (`attendance_case_id` and the redundant `_shift_code_of`) are folded into the same rows above.
+
+## Review round 2 — fable-reviewer verdict REJECT (3 blockers, 3 concerns, 3 nits), all addressed
+
+Round 2 confirmed every round-1 fix and then found three defects in the code that round 1 had never seen, because that code did not exist yet. One of them was a product bug, not a test bug.
+
+| # | Finding | Fix applied |
+|---|---|---|
+| **B1** | **`list_attendance_day` read punch bounds from `attendance_punch_assignments`, a table that can never be populated on this build.** `attendance_punch_service.select_punch_case` returns `None` unless `punch.direction in {"in", "out"}`, and this provider reports `punch_state 255`/"unknown" for every event; `resolve_assignment` also has no production caller. The register would have shipped showing **no punch times at all** against the live mirror | Rewritten to the evaluator's own evidence shape (`attendance_evaluation_service._matching_punches`): aggregate `AttendancePunch` by the employee's active **verified** `AttendanceProviderPerson` inside `[scheduled_start − match_before_minutes, scheduled_end + match_after_minutes]`, with the `outerjoin` guard that skips a punch already owned by a different case. The assignment join is gone, and the docstring records why so nobody re-adds it |
+| **B2** | The factory's `AttendanceProviderPerson(mapping_state="verified")` omitted `verified_by_user_id` / `verified_at`, violating `ck_attendance_provider_people_verified_fields` on first flush | Both fields supplied from the factory's admin; the constraint text is quoted inline |
+| **B3** | The factory test asserted a global case count equal to the fixture's, ignoring the neighbouring day's cases the generation window necessarily creates | Global assertion relaxed to `>=`, and a precise one added: `len(fixture.cases) == 2 * len(fixture.employees)`, because 19 Aug is crew 2's double day |
+| **C1** | The preview gate expected 40 rows and probed with an unauthenticated `curl` (401) | Step 3 now logs in with a cookie jar and asserts `rows 80`, `posts 9`, `shifts ['morning', 'night']`; Step 4 asserts 40 names **with the Morning filter applied** |
+| **C2** | `openapi-typescript` emits no per-schema aliases, so `CursorPage_AttendanceDayRowRead_` as a bare identifier cannot compile | Task 8 now re-exports through `components['schemas'][…]`, matching `api.ts:16,22`, and includes the grep that confirms the generic page key. This also closes the plan's last flagged unknown |
+| **C3** | The office shift code is `office_day`, not `office` | Corrected in three test sets and in the `attendance.shift` locale block |
+| N1–N3 | `perm_service.set_user_override` is the real name; `fixture.cases[0]` relied on an unordered SELECT; the reviewed revision was uncommitted | Name corrected; ordering noted where it matters; this revision is committed below |
+
+**Round-1 coverage confirmed by round 2:** B1 (venv path), B2 (`attendance_case_id`), B4 (authorization test), B5 (scope-hardening placement), B6 (migration test edits), C1–C6 and N1–N4 all verified fixed against the branch and `main`. B3 was structurally fixed; its replacement code carried the three new blockers above, which are now fixed in turn.
+
+**Net effect on the shipped product, not just the plan:** the register's punch times now come from the same query shape the evaluator uses, so the page will show real times against the live BioTime mirror instead of a permanently empty column.
