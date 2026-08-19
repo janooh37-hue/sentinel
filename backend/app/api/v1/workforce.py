@@ -31,6 +31,7 @@ from app.schemas.workforce import (
     AdjustmentRevokeWrite,
     AttendanceAdjustmentWrite,
     AttendanceCaseRead,
+    AttendanceDayRowRead,
     AttendanceExceptionRead,
     AttendancePolicyWrite,
     ConfigurationPatch,
@@ -43,6 +44,7 @@ from app.schemas.workforce import (
     CrewScheduleWrite,
     CursorPage,
     DutyAssignmentEventRead,
+    EmployeeAttendanceRangeRead,
     EvaluationQueueRead,
     IntegrationStatusRead,
     ProviderPersonMappingWrite,
@@ -388,6 +390,64 @@ def get_attendance_exceptions(user: Annotated[User, Depends(require_capability("
     rows = workforce_read_service.list_exceptions(db, scope=scope, operational_date=operational_date, presence=presence, exception=exception)
     items, next_cursor = _cursor_page(rows, endpoint="exceptions", scope=scope, filters={"operational_date": operational_date, "presence": presence, "exception": exception}, limit=limit, cursor=cursor)
     return {"items": items, "next_cursor": next_cursor}
+
+
+@router.get("/attendance/day", response_model=CursorPage[AttendanceDayRowRead])
+def get_attendance_day(
+    operational_date: date,
+    user: Annotated[User, Depends(require_capability("workforce.attendance.review"))],
+    people_user: Annotated[User, Depends(require_capability("workforce.people.view"))],
+    db: Annotated[Session, Depends(get_db)],
+    shift_code: Annotated[str | None, Query(pattern="^[a-z_]{1,32}$")] = None,
+    limit: Annotated[int, Query(ge=1, le=_MAX_LIMIT)] = 200,
+    cursor: str | None = None,
+) -> dict[str, Any]:
+    """The register payload: one row per person per scheduled shift, with punches."""
+    scope = _scope(db, user)
+    rows = workforce_read_service.list_attendance_day(
+        db, scope=scope, operational_date=operational_date, shift_code=shift_code
+    )
+    items, next_cursor = _cursor_page(
+        rows,
+        endpoint="attendance-day",
+        scope=scope,
+        filters={"operational_date": operational_date, "shift_code": shift_code},
+        limit=limit,
+        cursor=cursor,
+    )
+    return {"items": items, "next_cursor": next_cursor}
+
+
+@router.get("/employees/{employee_id}/attendance", response_model=EmployeeAttendanceRangeRead)
+def get_employee_attendance(
+    employee_id: str,
+    from_date: date,
+    to_date: date,
+    user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[Session, Depends(get_db)],
+) -> dict[str, Any]:
+    """One employee's attendance days.
+
+    Two separate doors: ``workforce.self.view`` opens only the caller's own linked
+    employee record, while a roster reader needs both ``workforce.people.view``
+    and ``workforce.attendance.review`` and stays inside their resolved scope.
+    """
+    own = bool(user.employee_id) and user.employee_id.strip() == employee_id
+    if not (own and perm_service.has_capability(db, user, "workforce.self.view")):
+        for capability in ("workforce.people.view", "workforce.attendance.review"):
+            if not perm_service.has_capability(db, user, capability):
+                raise AppError(
+                    "FORBIDDEN",
+                    "Capability required.",
+                    http_status=status.HTTP_403_FORBIDDEN,
+                )
+    return workforce_read_service.employee_attendance_range(
+        db,
+        scope=_scope(db, user),
+        employee_id=employee_id,
+        from_date=from_date,
+        to_date=to_date,
+    )
 
 
 @router.get("/attendance/cases/{case_id}", response_model=AttendanceCaseRead)

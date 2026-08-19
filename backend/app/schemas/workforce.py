@@ -350,6 +350,59 @@ class AttendanceExceptionRead(RosterRowRead):
     missing_checkout: bool | None = None
 
 
+class AttendanceDayRowRead(RosterRowRead):
+    """One person's scheduled shift on one operational date, with punch facts.
+
+    ``first_punch_at`` / ``last_punch_at`` are the earliest and latest punches
+    inside this case's policy match window. They are timestamps of events, not a
+    check-in and a check-out: this provider reports no direction, so a single
+    punch yields ``punch_count == 1`` with both bounds equal, and a client must
+    present it as "seen at", never as a span.
+    """
+
+    first_punch_at: datetime | None = None
+    last_punch_at: datetime | None = None
+    punch_count: int = Field(default=0, ge=0)
+    late_minutes: int | None = Field(default=None, ge=0)
+    on_leave: bool = False
+
+
+class EmployeeAttendancePunchRead(BaseModel):
+    """One provider event.
+
+    Direction is omitted deliberately: this build reports ``punch_state 255``
+    for every row, so a client must not render an in/out pair.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    occurred_at: datetime
+    device_name: str | None = None
+
+
+class EmployeeAttendanceDayRead(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    operational_date: date
+    shift_code: str | None = None
+    scheduled_start_at: datetime | None = None
+    scheduled_end_at: datetime | None = None
+    presence_state: PresenceState | None = None
+    reason_code: str | None = None
+    late_minutes: int | None = Field(default=None, ge=0)
+    punch_count: int = Field(default=0, ge=0)
+    punches: list[EmployeeAttendancePunchRead] = Field(default_factory=list)
+
+
+class EmployeeAttendanceRangeRead(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    employee_id: str
+    from_date: date
+    to_date: date
+    days: list[EmployeeAttendanceDayRead]
+
+
 class AttendanceAdjustmentWrite(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -785,6 +838,7 @@ __all__ = [
     "AssignmentKind",
     "AttendanceAdjustmentWrite",
     "AttendanceCaseRead",
+    "AttendanceDayRowRead",
     "AttendanceExceptionRead",
     "AttendancePolicyWrite",
     "ConfigurationPatch",
@@ -798,6 +852,9 @@ __all__ = [
     "CurrentShiftRead",
     "CursorPage",
     "DutyAssignmentEventRead",
+    "EmployeeAttendanceDayRead",
+    "EmployeeAttendancePunchRead",
+    "EmployeeAttendanceRangeRead",
     "EvaluationHealthRead",
     "EvaluationQueueRead",
     "HealthStreamRead",

@@ -6,10 +6,10 @@ from math import floor
 from typing import Any
 from zoneinfo import ZoneInfo
 
-from sqlalchemy import select
+from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
-from app.api.errors import NotFoundError
+from app.api.errors import NotFoundError, ValidationFailedError
 from app.db.models import Employee
 from app.db.workforce_models import (
     AttendanceAdjustment,
@@ -17,6 +17,8 @@ from app.db.workforce_models import (
     AttendanceEvaluation,
     AttendanceEvaluationQueue,
     AttendanceProviderPerson,
+    AttendancePunch,
+    AttendancePunchAssignment,
     AttendanceSyncState,
     DutyAssignmentEvent,
     WorkCrewMembership,
@@ -133,6 +135,222 @@ def list_exceptions(
             }
         )
     return sorted(result, key=lambda row: (row["scheduled_start_at"], row["employee_id"]))
+
+
+
+def _verified_people(db: Session, employee_ids: set[str]) -> dict[str, AttendanceProviderPerson]:
+    """The active verified provider person per employee.
+
+    One query for a whole page. The partial unique index
+    ``uq_attendance_provider_people_verified_active_employee`` guarantees at most
+    one such row per employee, so a dict is a faithful projection.
+    """
+    if not employee_ids:
+        return {}
+    rows = db.scalars(
+        select(AttendanceProviderPerson).where(
+            AttendanceProviderPerson.employee_id.in_(employee_ids),
+            AttendanceProviderPerson.mapping_state == "verified",
+            AttendanceProviderPerson.active.is_(True),
+        )
+    )
+    return {row.employee_id: row for row in rows if row.employee_id is not None}
+
+
+def _punch_window(case: AttendanceCase, policy: Any) -> tuple[datetime, datetime]:
+    """The instants inside which a punch counts as evidence for this case."""
+    return (
+        case.scheduled_start_at - timedelta(minutes=policy.match_before_minutes),
+        case.scheduled_end_at + timedelta(minutes=policy.match_after_minutes),
+    )
+
+
+def _punch_bounds(
+    db: Session, *, case: AttendanceCase, person: AttendanceProviderPerson | None
+) -> tuple[datetime | None, datetime | None, int]:
+    """First punch, last punch and count for one case.
+
+    Deliberately NOT a join on ``attendance_punch_assignments``. That table only
+    ever receives directional punches — ``attendance_punch_service.select_punch_case``
+    returns ``None`` unless ``punch.direction`` is ``"in"`` or ``"out"`` — and this
+    provider reports ``punch_state 255``/"unknown" for every event, so the table is
+    permanently empty here and a register built on it would show no times at all.
+    The evidence rule is the evaluator's own
+    (``attendance_evaluation_service._matching_punches``): the employee's active
+    verified provider person, inside the case's policy match window, skipping any
+    punch already owned by a different case.
+    """
+    from app.services.attendance_evaluation_service import _effective_policy
+
+    policy = _effective_policy(db, case)
+    if person is None or policy is None:
+        return (None, None, 0)
+    window_start, window_end = _punch_window(case, policy)
+    first_at, last_at, count = db.execute(
+        select(
+            func.min(AttendancePunch.occurred_at),
+            func.max(AttendancePunch.occurred_at),
+            func.count(AttendancePunch.id),
+        )
+        .outerjoin(
+            AttendancePunchAssignment,
+            AttendancePunchAssignment.punch_id == AttendancePunch.id,
+        )
+        .where(
+            AttendancePunch.provider_person_id == person.id,
+            AttendancePunch.occurred_at >= window_start,
+            AttendancePunch.occurred_at <= window_end,
+            or_(
+                AttendancePunchAssignment.punch_id.is_(None),
+                AttendancePunchAssignment.attendance_case_id == case.id,
+            ),
+        )
+    ).one()
+    return (first_at, last_at, count)
+
+
+def _late_minutes(case: AttendanceCase, first_punch_at: datetime | None) -> int | None:
+    """Whole minutes between the scheduled start and the first punch.
+
+    Grace is NOT applied here: the client needs the raw lateness so it can show
+    both "inside grace" and "+17m past grace" from one number, and the grace
+    value belongs to the policy, not to a read projection.
+    """
+    if first_punch_at is None:
+        return None
+    minutes = (first_punch_at - case.scheduled_start_at).total_seconds() // 60
+    return int(minutes) if minutes > 0 else 0
+
+
+def list_attendance_day(
+    db: Session,
+    *,
+    scope: Any,
+    operational_date: date,
+    shift_code: str | None = None,
+) -> list[dict[str, Any]]:
+    """Every scheduled person for one operational date, with their punch bounds.
+
+    The register, the board and the timeline are three projections of this one
+    payload, so it carries the punch facts ``list_roster`` deliberately omits.
+    """
+    cases = [
+        case
+        for case in db.scalars(
+            select(AttendanceCase).where(AttendanceCase.operational_date == operational_date)
+        )
+        if _case_allowed(case, scope)
+    ]
+    if shift_code is not None:
+        cases = [case for case in cases if case.shift_code_snapshot == shift_code]
+    if not cases:
+        return []
+
+    latest = _latest_evaluations(db, [case.id for case in cases])
+    people = _verified_people(db, {case.employee_id for case in cases})
+
+    result: list[dict[str, Any]] = []
+    for case in cases:
+        evaluation = latest.get(case.id)
+        presence_state = evaluation.presence_state if evaluation else None
+        first_at, last_at, count = _punch_bounds(
+            db, case=case, person=people.get(case.employee_id)
+        )
+        result.append(
+            {
+                **_person_fields(db, case),
+                "presence_state": presence_state,
+                "reason_code": evaluation.reason_code if evaluation else None,
+                "first_punch_at": first_at,
+                "last_punch_at": last_at,
+                "punch_count": count,
+                "late_minutes": _late_minutes(case, first_at),
+                "on_leave": presence_state == "excused_leave",
+            }
+        )
+    return sorted(result, key=lambda row: (row["scheduled_start_at"], row["employee_id"]))
+
+
+#: One request may not span more than a quarter of attendance history.
+MAX_ATTENDANCE_RANGE_DAYS = 92
+
+
+def employee_attendance_range(
+    db: Session,
+    *,
+    scope: Any,
+    employee_id: str,
+    from_date: date,
+    to_date: date,
+) -> dict[str, Any]:
+    """One employee's attendance days, each with its own punch list."""
+    if to_date < from_date:
+        raise ValidationFailedError(
+            "ATTENDANCE_RANGE_INVALID", "The attendance window ends before it starts."
+        )
+    if (to_date - from_date).days + 1 > MAX_ATTENDANCE_RANGE_DAYS:
+        raise ValidationFailedError(
+            "ATTENDANCE_RANGE_TOO_WIDE",
+            f"The attendance window may not exceed {MAX_ATTENDANCE_RANGE_DAYS} days.",
+        )
+
+    cases = [
+        case
+        for case in db.scalars(
+            select(AttendanceCase)
+            .where(
+                AttendanceCase.employee_id == employee_id,
+                AttendanceCase.operational_date >= from_date,
+                AttendanceCase.operational_date <= to_date,
+            )
+            .order_by(AttendanceCase.operational_date, AttendanceCase.scheduled_start_at)
+        )
+        if _case_allowed(case, scope)
+    ]
+    latest = _latest_evaluations(db, [case.id for case in cases])
+    person = _verified_people(db, {employee_id}).get(employee_id)
+
+    from app.services.attendance_evaluation_service import _effective_policy
+
+    days: list[dict[str, Any]] = []
+    for case in cases:
+        evaluation = latest.get(case.id)
+        first_at, _last_at, count = _punch_bounds(db, case=case, person=person)
+        punches: list[dict[str, Any]] = []
+        policy = _effective_policy(db, case)
+        if person is not None and policy is not None:
+            window_start, window_end = _punch_window(case, policy)
+            punches = [
+                {"occurred_at": punch.occurred_at, "device_name": punch.device_name}
+                for punch in db.scalars(
+                    select(AttendancePunch)
+                    .where(
+                        AttendancePunch.provider_person_id == person.id,
+                        AttendancePunch.occurred_at >= window_start,
+                        AttendancePunch.occurred_at <= window_end,
+                    )
+                    .order_by(AttendancePunch.occurred_at, AttendancePunch.id)
+                )
+            ]
+        days.append(
+            {
+                "operational_date": case.operational_date,
+                "shift_code": case.shift_code_snapshot,
+                "scheduled_start_at": case.scheduled_start_at,
+                "scheduled_end_at": case.scheduled_end_at,
+                "presence_state": evaluation.presence_state if evaluation else None,
+                "reason_code": evaluation.reason_code if evaluation else None,
+                "late_minutes": _late_minutes(case, first_at),
+                "punch_count": count,
+                "punches": punches,
+            }
+        )
+    return {
+        "employee_id": employee_id,
+        "from_date": from_date,
+        "to_date": to_date,
+        "days": days,
+    }
 
 
 def _evaluation_read(row: AttendanceEvaluation) -> dict[str, Any]:

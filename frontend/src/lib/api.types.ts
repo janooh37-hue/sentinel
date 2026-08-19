@@ -3946,6 +3946,50 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/workforce/attendance/day": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Attendance Day
+         * @description The register payload: one row per person per scheduled shift, with punches.
+         */
+        get: operations["get_attendance_day_api_v1_workforce_attendance_day_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workforce/employees/{employee_id}/attendance": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Employee Attendance
+         * @description One employee's attendance days.
+         *
+         *     Two separate doors: ``workforce.self.view`` opens only the caller's own linked
+         *     employee record, while a roster reader needs both ``workforce.people.view``
+         *     and ``workforce.attendance.review`` and stays inside their resolved scope.
+         */
+        get: operations["get_employee_attendance_api_v1_workforce_employees__employee_id__attendance_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/workforce/attendance/cases/{case_id}": {
         parameters: {
             query?: never;
@@ -4809,6 +4853,58 @@ export interface components {
             adjustments: {
                 [key: string]: unknown;
             }[];
+        };
+        /**
+         * AttendanceDayRowRead
+         * @description One person's scheduled shift on one operational date, with punch facts.
+         *
+         *     ``first_punch_at`` / ``last_punch_at`` are the earliest and latest punches
+         *     inside this case's policy match window. They are timestamps of events, not a
+         *     check-in and a check-out: this provider reports no direction, so a single
+         *     punch yields ``punch_count == 1`` with both bounds equal, and a client must
+         *     present it as "seen at", never as a span.
+         */
+        AttendanceDayRowRead: {
+            /** Employee Id */
+            employee_id: string;
+            /** Name En */
+            name_en: string;
+            /** Name Ar */
+            name_ar?: string | null;
+            /** Department */
+            department?: string | null;
+            /** Duty Unit */
+            duty_unit?: string | null;
+            /** Duty Post */
+            duty_post?: string | null;
+            /** Crew Code */
+            crew_code?: string | null;
+            /** Shift Code */
+            shift_code?: string | null;
+            /** Presence State */
+            presence_state?: ("scheduled" | "on_duty" | "completed" | "absent" | "excused_leave" | "off" | "unknown") | null;
+            /** Reason Code */
+            reason_code?: string | null;
+            /** Scheduled Start At */
+            scheduled_start_at?: string | null;
+            /** Scheduled End At */
+            scheduled_end_at?: string | null;
+            /** First Punch At */
+            first_punch_at?: string | null;
+            /** Last Punch At */
+            last_punch_at?: string | null;
+            /**
+             * Punch Count
+             * @default 0
+             */
+            punch_count: number;
+            /** Late Minutes */
+            late_minutes?: number | null;
+            /**
+             * On Leave
+             * @default false
+             */
+            on_leave: boolean;
         };
         /** AttendanceExceptionRead */
         AttendanceExceptionRead: {
@@ -5912,6 +6008,13 @@ export interface components {
             /** Staffing Status */
             staffing_status?: ("adequate" | "deficient" | "indeterminate") | null;
         };
+        /** CursorPage[AttendanceDayRowRead] */
+        CursorPage_AttendanceDayRowRead_: {
+            /** Items */
+            items: components["schemas"]["AttendanceDayRowRead"][];
+            /** Next Cursor */
+            next_cursor?: string | null;
+        };
         /** CursorPage[AttendanceExceptionRead] */
         CursorPage_AttendanceExceptionRead_: {
             /** Items */
@@ -6730,6 +6833,66 @@ export interface components {
             limit: number;
             /** Offset */
             offset: number;
+        };
+        /** EmployeeAttendanceDayRead */
+        EmployeeAttendanceDayRead: {
+            /**
+             * Operational Date
+             * Format: date
+             */
+            operational_date: string;
+            /** Shift Code */
+            shift_code?: string | null;
+            /** Scheduled Start At */
+            scheduled_start_at?: string | null;
+            /** Scheduled End At */
+            scheduled_end_at?: string | null;
+            /** Presence State */
+            presence_state?: ("scheduled" | "on_duty" | "completed" | "absent" | "excused_leave" | "off" | "unknown") | null;
+            /** Reason Code */
+            reason_code?: string | null;
+            /** Late Minutes */
+            late_minutes?: number | null;
+            /**
+             * Punch Count
+             * @default 0
+             */
+            punch_count: number;
+            /** Punches */
+            punches?: components["schemas"]["EmployeeAttendancePunchRead"][];
+        };
+        /**
+         * EmployeeAttendancePunchRead
+         * @description One provider event.
+         *
+         *     Direction is omitted deliberately: this build reports ``punch_state 255``
+         *     for every row, so a client must not render an in/out pair.
+         */
+        EmployeeAttendancePunchRead: {
+            /**
+             * Occurred At
+             * Format: date-time
+             */
+            occurred_at: string;
+            /** Device Name */
+            device_name?: string | null;
+        };
+        /** EmployeeAttendanceRangeRead */
+        EmployeeAttendanceRangeRead: {
+            /** Employee Id */
+            employee_id: string;
+            /**
+             * From Date
+             * Format: date
+             */
+            from_date: string;
+            /**
+             * To Date
+             * Format: date
+             */
+            to_date: string;
+            /** Days */
+            days: components["schemas"]["EmployeeAttendanceDayRead"][];
         };
         /** EmployeeCandidate */
         EmployeeCandidate: {
@@ -19220,6 +19383,78 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CursorPage_AttendanceExceptionRead_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_attendance_day_api_v1_workforce_attendance_day_get: {
+        parameters: {
+            query: {
+                operational_date: string;
+                shift_code?: string | null;
+                limit?: number;
+                cursor?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CursorPage_AttendanceDayRowRead_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_employee_attendance_api_v1_workforce_employees__employee_id__attendance_get: {
+        parameters: {
+            query: {
+                from_date: string;
+                to_date: string;
+            };
+            header?: never;
+            path: {
+                employee_id: string;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EmployeeAttendanceRangeRead"];
                 };
             };
             /** @description Validation Error */

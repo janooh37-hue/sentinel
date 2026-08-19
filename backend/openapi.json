@@ -17222,6 +17222,190 @@
         }
       }
     },
+    "/api/v1/workforce/attendance/day": {
+      "get": {
+        "tags": [
+          "workforce"
+        ],
+        "summary": "Get Attendance Day",
+        "description": "The register payload: one row per person per scheduled shift, with punches.",
+        "operationId": "get_attendance_day_api_v1_workforce_attendance_day_get",
+        "parameters": [
+          {
+            "name": "operational_date",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "date",
+              "title": "Operational Date"
+            }
+          },
+          {
+            "name": "shift_code",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "pattern": "^[a-z_]{1,32}$"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Shift Code"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 500,
+              "minimum": 1,
+              "default": 200,
+              "title": "Limit"
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Cursor"
+            }
+          },
+          {
+            "name": "gssg_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Gssg Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CursorPage_AttendanceDayRowRead_"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/workforce/employees/{employee_id}/attendance": {
+      "get": {
+        "tags": [
+          "workforce"
+        ],
+        "summary": "Get Employee Attendance",
+        "description": "One employee's attendance days.\n\nTwo separate doors: ``workforce.self.view`` opens only the caller's own linked\nemployee record, while a roster reader needs both ``workforce.people.view``\nand ``workforce.attendance.review`` and stays inside their resolved scope.",
+        "operationId": "get_employee_attendance_api_v1_workforce_employees__employee_id__attendance_get",
+        "parameters": [
+          {
+            "name": "employee_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Employee Id"
+            }
+          },
+          {
+            "name": "from_date",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "date",
+              "title": "From Date"
+            }
+          },
+          {
+            "name": "to_date",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "date",
+              "title": "To Date"
+            }
+          },
+          {
+            "name": "gssg_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Gssg Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EmployeeAttendanceRangeRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/workforce/attendance/cases/{case_id}": {
       "get": {
         "tags": [
@@ -21037,6 +21221,194 @@
         ],
         "title": "AttendanceCaseRead"
       },
+      "AttendanceDayRowRead": {
+        "properties": {
+          "employee_id": {
+            "type": "string",
+            "title": "Employee Id"
+          },
+          "name_en": {
+            "type": "string",
+            "title": "Name En"
+          },
+          "name_ar": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name Ar"
+          },
+          "department": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Department"
+          },
+          "duty_unit": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Duty Unit"
+          },
+          "duty_post": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Duty Post"
+          },
+          "crew_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Crew Code"
+          },
+          "shift_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Shift Code"
+          },
+          "presence_state": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "scheduled",
+                  "on_duty",
+                  "completed",
+                  "absent",
+                  "excused_leave",
+                  "off",
+                  "unknown"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Presence State"
+          },
+          "reason_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason Code"
+          },
+          "scheduled_start_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Scheduled Start At"
+          },
+          "scheduled_end_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Scheduled End At"
+          },
+          "first_punch_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "First Punch At"
+          },
+          "last_punch_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Punch At"
+          },
+          "punch_count": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Punch Count",
+            "default": 0
+          },
+          "late_minutes": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Late Minutes"
+          },
+          "on_leave": {
+            "type": "boolean",
+            "title": "On Leave",
+            "default": false
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "employee_id",
+          "name_en"
+        ],
+        "title": "AttendanceDayRowRead",
+        "description": "One person's scheduled shift on one operational date, with punch facts.\n\n``first_punch_at`` / ``last_punch_at`` are the earliest and latest punches\ninside this case's policy match window. They are timestamps of events, not a\ncheck-in and a check-out: this provider reports no direction, so a single\npunch yields ``punch_count == 1`` with both bounds equal, and a client must\npresent it as \"seen at\", never as a span."
+      },
       "AttendanceExceptionRead": {
         "properties": {
           "employee_id": {
@@ -24246,6 +24618,34 @@
         ],
         "title": "CurrentShiftRead"
       },
+      "CursorPage_AttendanceDayRowRead_": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/AttendanceDayRowRead"
+            },
+            "type": "array",
+            "title": "Items"
+          },
+          "next_cursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Cursor"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "items"
+        ],
+        "title": "CursorPage[AttendanceDayRowRead]"
+      },
       "CursorPage_AttendanceExceptionRead_": {
         "properties": {
           "items": {
@@ -26515,6 +26915,173 @@
           "offset"
         ],
         "title": "EmployeeActivityListRead"
+      },
+      "EmployeeAttendanceDayRead": {
+        "properties": {
+          "operational_date": {
+            "type": "string",
+            "format": "date",
+            "title": "Operational Date"
+          },
+          "shift_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Shift Code"
+          },
+          "scheduled_start_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Scheduled Start At"
+          },
+          "scheduled_end_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Scheduled End At"
+          },
+          "presence_state": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "scheduled",
+                  "on_duty",
+                  "completed",
+                  "absent",
+                  "excused_leave",
+                  "off",
+                  "unknown"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Presence State"
+          },
+          "reason_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason Code"
+          },
+          "late_minutes": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Late Minutes"
+          },
+          "punch_count": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Punch Count",
+            "default": 0
+          },
+          "punches": {
+            "items": {
+              "$ref": "#/components/schemas/EmployeeAttendancePunchRead"
+            },
+            "type": "array",
+            "title": "Punches"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "operational_date"
+        ],
+        "title": "EmployeeAttendanceDayRead"
+      },
+      "EmployeeAttendancePunchRead": {
+        "properties": {
+          "occurred_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Occurred At"
+          },
+          "device_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Device Name"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "occurred_at"
+        ],
+        "title": "EmployeeAttendancePunchRead",
+        "description": "One provider event.\n\nDirection is omitted deliberately: this build reports ``punch_state 255``\nfor every row, so a client must not render an in/out pair."
+      },
+      "EmployeeAttendanceRangeRead": {
+        "properties": {
+          "employee_id": {
+            "type": "string",
+            "title": "Employee Id"
+          },
+          "from_date": {
+            "type": "string",
+            "format": "date",
+            "title": "From Date"
+          },
+          "to_date": {
+            "type": "string",
+            "format": "date",
+            "title": "To Date"
+          },
+          "days": {
+            "items": {
+              "$ref": "#/components/schemas/EmployeeAttendanceDayRead"
+            },
+            "type": "array",
+            "title": "Days"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "employee_id",
+          "from_date",
+          "to_date",
+          "days"
+        ],
+        "title": "EmployeeAttendanceRangeRead"
       },
       "EmployeeCandidate": {
         "properties": {
