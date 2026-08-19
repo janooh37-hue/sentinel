@@ -1,0 +1,468 @@
+"""RED contracts for the scoped workforce dashboard HTTP API.
+
+These tests deliberately exercise the real SQLite metadata, service layer, and mounted
+FastAPI routes.  A dashboard request must only read Sentinel's persisted attendance
+projection; it must not call an attendance provider on the request path.
+"""
+
+from __future__ import annotations
+
+import json
+from collections.abc import Iterator
+from contextlib import contextmanager
+from datetime import UTC, datetime, time, timedelta
+from typing import Any
+from zoneinfo import ZoneInfo
+
+import pytest
+from fastapi.testclient import TestClient
+from sqlalchemy import create_engine
+from sqlalchemy.orm import Session, sessionmaker
+from sqlalchemy.pool import StaticPool
+
+from app.api.deps import get_current_user
+from app.db.session import attach_sqlite_pragmas, get_db
+from app.main import app
+from app.services import perm_service
+
+# The snapshot route derives its operational date from the real clock, so the
+# fixture anchors to "now" instead of a fixed calendar day. A hardcoded date
+# silently stops matching the moment the suite runs on a later day.
+NOW = datetime.now(UTC).replace(tzinfo=None)
+TODAY = datetime.now(UTC).astimezone(ZoneInfo("Asia/Dubai")).date()
+
+
+@pytest.fixture()
+def workforce_api_db() -> Iterator[Session]:
+    """Create the actual complete SQLite schema, including workforce metadata."""
+    # Importing this module is part of the red contract: its models must register
+    # before Base.metadata.create_all() just like production's model re-export.
+    from app.db import workforce_models  # noqa: F401
+    from app.db.models import Base
+
+    engine = create_engine(
+        "sqlite://",
+        connect_args={"check_same_thread": False},
+        poolclass=StaticPool,
+        future=True,
+    )
+    attach_sqlite_pragmas(engine, wal=False)
+    Base.metadata.create_all(engine)
+    TestSession = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False, future=True)
+    db = TestSession()
+    perm_service.seed_role_defaults(db)
+    try:
+        yield db
+    finally:
+        db.close()
+        engine.dispose()
+
+
+@contextmanager
+def _client_for(db: Session, user: Any) -> Iterator[TestClient]:
+    app.dependency_overrides[get_db] = lambda: db
+    app.dependency_overrides[get_current_user] = lambda: user
+    try:
+        with TestClient(app, raise_server_exceptions=True) as client:
+            yield client
+    finally:
+        app.dependency_overrides.clear()
+
+
+def _create_user(
+    db: Session,
+    *,
+    email: str,
+    role: str = "operator",
+    employee_id: str | None = None,
+):
+    from app.db.models import User
+
+    user = User(
+        email=email,
+        password_hash="x",
+        role=role,
+        status="active",
+        employee_id=employee_id,
+    )
+    db.add(user)
+    db.commit()
+    db.refresh(user)
+    return user
+
+
+def _grant(db: Session, user: Any, capability: str) -> None:
+    from app.db.models import UserPermission
+
+    db.add(UserPermission(user_id=user.id, capability=capability, effect="grant"))
+    db.commit()
+
+
+def _add_employee(
+    db: Session,
+    employee_id: str,
+    *,
+    name: str,
+    department: str = "Operations",
+    duty_unit: str | None = None,
+    nationality: str | None = None,
+    status: str = "Active",
+):
+    from app.db.models import Employee
+
+    employee = Employee(
+        id=employee_id,
+        name_en=name,
+        status=status,
+        department=department,
+        duty_unit=duty_unit,
+        nationality=nationality,
+    )
+    db.add(employee)
+    db.flush()
+    return employee
+
+
+def _seed_coverage_cases(db: Session, admin: Any) -> None:
+    """Persist two evaluated children under one department through real ORM rows."""
+    from app.db.workforce_models import (
+        AttendanceCase,
+        AttendanceEvaluation,
+        AttendanceSyncState,
+        WorkCrew,
+        WorkCrewMembership,
+        WorkCrewSchedule,
+        WorkRotationPattern,
+        WorkShiftDefinition,
+        WorkShiftOccurrence,
+    )
+
+    morning = WorkShiftDefinition(
+        code="morning",
+        start_local_time=time(4),
+        duration_minutes=480,
+    )
+    pattern = WorkRotationPattern(
+        code="canonical_120h",
+        name="Canonical 120-hour rotation",
+        cycle_minutes=7200,
+        timezone="Asia/Dubai",
+    )
+    crew = WorkCrew(code="alpha", name_en="Alpha")
+    db.add_all([morning, pattern, crew])
+    db.flush()
+
+    schedule = WorkCrewSchedule(
+        crew_id=crew.id,
+        pattern_id=pattern.id,
+        anchor_at=NOW - timedelta(days=5),
+        effective_from=NOW - timedelta(days=5),
+        version=1,
+        created_by_user_id=admin.id,
+    )
+    db.add(schedule)
+    db.flush()
+
+    occurrence = WorkShiftOccurrence(
+        crew_id=crew.id,
+        crew_schedule_id=schedule.id,
+        shift_definition_id=morning.id,
+        starts_at=NOW - timedelta(hours=4),
+        ends_at=NOW + timedelta(hours=4),
+        operational_date=TODAY,
+        pattern_code_snapshot=pattern.code,
+        crew_schedule_version_snapshot=schedule.version,
+        source_anchor_at=schedule.anchor_at,
+    )
+    db.add(occurrence)
+    db.flush()
+
+    employees = [
+        _add_employee(
+            db,
+            "G-COVERAGE-A",
+            name="Coverage A",
+            duty_unit="Gate A",
+            nationality="United Arab Emirates",
+        ),
+        _add_employee(
+            db,
+            "G-COVERAGE-B",
+            name="Coverage B",
+            duty_unit="Gate B",
+            nationality="United Arab Emirates",
+        ),
+    ]
+    for index, employee in enumerate(employees, start=1):
+        membership = WorkCrewMembership(
+            crew_id=crew.id,
+            employee_id=employee.id,
+            effective_from=NOW - timedelta(days=5),
+            created_by_user_id=admin.id,
+            updated_by_user_id=admin.id,
+        )
+        db.add(membership)
+        db.flush()
+        case = AttendanceCase(
+            employee_id=employee.id,
+            shift_occurrence_id=occurrence.id,
+            employee_status_snapshot="Active",
+            crew_code_snapshot=crew.code,
+            crew_name_snapshot=crew.name_en,
+            shift_code_snapshot=morning.code,
+            department_snapshot=employee.department,
+            duty_unit_snapshot=employee.duty_unit,
+            duty_post_snapshot=None,
+            scheduled_start_at=occurrence.starts_at,
+            scheduled_end_at=occurrence.ends_at,
+            operational_date=TODAY,
+            organization_snapshot_state="captured",
+        )
+        db.add(case)
+        db.flush()
+        db.add(
+            AttendanceEvaluation(
+                attendance_case_id=case.id,
+                revision=1,
+                presence_state="on_duty",
+                reason_code="PUNCH_IN_ACTIVE",
+                missing_checkout=False,
+                sync_fresh_through=NOW + timedelta(hours=1),
+                algorithm_version="v1",
+                input_fingerprint=f"coverage-{index}",
+                evaluated_at=NOW,
+            )
+        )
+    db.add(
+        AttendanceSyncState(
+            provider="biotime",
+            stream="punches",
+            fresh_through=NOW + timedelta(hours=1),
+            last_success_at=NOW,
+            consecutive_failures=0,
+            last_import_count=2,
+        )
+    )
+    db.commit()
+
+
+def _contains_value(value: Any, needle: str) -> bool:
+    if isinstance(value, str):
+        return value == needle
+    if isinstance(value, dict):
+        return any(_contains_value(item, needle) for item in value.values())
+    if isinstance(value, list):
+        return any(_contains_value(item, needle) for item in value)
+    return False
+
+
+# NOTE: `test_dashboard_totals_rename_false_presence_and_count_lifecycle_live_leave`
+# is deliberately not ported. It asserts `DashboardTotals.active_not_on_current_leave`,
+# a field belonging to the rejected dashboard rework (schemas/dashboard.py +
+# dashboard_service.py), which this branch excludes. Its subject is the dashboard
+# totals rename, not workforce attendance; every workforce assertion in this file
+# is kept below.
+
+
+def test_snapshot_keeps_self_data_but_omits_aggregate_without_dashboard_capability(
+    workforce_api_db: Session,
+) -> None:
+    employee = _add_employee(workforce_api_db, "G-SELF", name="Self employee")
+    user = _create_user(
+        workforce_api_db,
+        email="self-only@test.ae",
+        employee_id=employee.id,
+    )
+    _grant(workforce_api_db, user, "workforce.self.view")
+
+    with _client_for(workforce_api_db, user) as client:
+        response = client.get("/api/v1/workforce/dashboard/snapshot")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["self"]["employee_id"] == employee.id
+    assert "aggregate" not in payload
+    assert not _contains_value(payload, "Self employee")
+
+
+def test_aggregate_dashboard_routes_require_dashboard_capability(
+    workforce_api_db: Session,
+) -> None:
+    user = _create_user(workforce_api_db, email="not-a-manager@test.ae")
+
+    with _client_for(workforce_api_db, user) as client:
+        analytics = client.get("/api/v1/workforce/dashboard/analytics")
+        coverage = client.get(
+            "/api/v1/workforce/dashboard/coverage",
+            params={"operational_date": TODAY.isoformat(), "parent_kind": "department"},
+        )
+
+    assert analytics.status_code == 403
+    assert coverage.status_code == 403
+
+
+def test_dashboard_scope_filters_can_narrow_but_never_widen_a_manager_scope(
+    workforce_api_db: Session,
+) -> None:
+    from app.db.workforce_models import UserWorkforceScope
+
+    manager = _create_user(workforce_api_db, email="scoped-manager@test.ae", role="manager")
+    _grant(workforce_api_db, manager, "workforce.dashboard.view")
+    workforce_api_db.add(
+        UserWorkforceScope(
+            user_id=manager.id,
+            scope_kind="department",
+            department="Operations",
+            created_by_user_id=manager.id,
+        )
+    )
+    workforce_api_db.commit()
+
+    with _client_for(workforce_api_db, manager) as client:
+        response = client.get(
+            "/api/v1/workforce/dashboard/coverage",
+            params={
+                "operational_date": TODAY.isoformat(),
+                "parent_kind": "department",
+                "department": "Personnel",
+            },
+        )
+
+    assert response.status_code == 403
+
+
+def test_coverage_children_are_bounded_paginated_and_never_person_records(
+    workforce_api_db: Session,
+) -> None:
+    admin = _create_user(workforce_api_db, email="coverage-admin@test.ae", role="admin")
+    _seed_coverage_cases(workforce_api_db, admin)
+
+    with _client_for(workforce_api_db, admin) as client:
+        rejected_limit = client.get(
+            "/api/v1/workforce/dashboard/coverage",
+            params={
+                "operational_date": TODAY.isoformat(),
+                "parent_kind": "department",
+                "department": "Operations",
+                "limit": 501,
+            },
+        )
+        first = client.get(
+            "/api/v1/workforce/dashboard/coverage",
+            params={
+                "operational_date": TODAY.isoformat(),
+                "parent_kind": "department",
+                "department": "Operations",
+                "limit": 1,
+            },
+        )
+
+        assert first.status_code == 200
+        first_page = first.json()
+        second = client.get(
+            "/api/v1/workforce/dashboard/coverage",
+            params={
+                "operational_date": TODAY.isoformat(),
+                "parent_kind": "department",
+                "department": "Operations",
+                "limit": 1,
+                "cursor": first_page["next_cursor"],
+            },
+        )
+
+    assert rejected_limit.status_code == 422
+    assert set(first_page) == {"items", "next_cursor"}
+    assert len(first_page["items"]) == 1
+    assert first_page["next_cursor"]
+    assert second.status_code == 200
+    assert len(second.json()["items"]) == 1
+    assert second.json()["next_cursor"] is None
+    rendered = json.dumps([first_page, second.json()])
+    assert "G-COVERAGE-A" not in rendered
+    assert "G-COVERAGE-B" not in rendered
+    assert "Coverage A" not in rendered
+    assert "Coverage B" not in rendered
+
+
+def test_analytics_folds_small_nationality_groups_without_person_leakage(
+    workforce_api_db: Session,
+) -> None:
+    from app.db.models import AppSetting
+
+    admin = _create_user(workforce_api_db, email="analytics-admin@test.ae", role="admin")
+    _add_employee(
+        workforce_api_db,
+        "G-NAT-1",
+        name="UAE one",
+        nationality="United Arab Emirates",
+    )
+    _add_employee(
+        workforce_api_db,
+        "G-NAT-2",
+        name="UAE two",
+        nationality="United Arab Emirates",
+    )
+    _add_employee(workforce_api_db, "G-NAT-3", name="Small group", nationality="Canada")
+    _add_employee(workforce_api_db, "G-NAT-4", name="Missing nationality", nationality=None)
+    workforce_api_db.add(
+        AppSetting(key="workforce.nationality_fold_min_count", value=json.dumps(2))
+    )
+    workforce_api_db.commit()
+
+    with _client_for(workforce_api_db, admin) as client:
+        response = client.get("/api/v1/workforce/dashboard/analytics")
+
+    assert response.status_code == 200
+    payload = response.json()
+    # With a floor of 2, the single Canadian cannot be published as "Other: 1" —
+    # that bucket is itself below the threshold and identifies one person, so it
+    # is suppressed. The disclosable UAE group is kept intact.
+    assert payload["nationality_distribution"] == [
+        {"nationality": "United Arab Emirates", "count": 2},
+        {"nationality": "Not recorded", "count": 1},
+    ]
+    rendered = json.dumps(payload)
+    assert "Canada" not in rendered
+    assert "Small group" not in rendered
+    assert "G-NAT-3" not in rendered
+
+
+def test_stale_source_and_queued_recalculation_suppress_attendance_judgments(
+    workforce_api_db: Session,
+) -> None:
+    from app.db.models import AppSetting
+    from app.db.workforce_models import AttendanceEvaluationQueue, AttendanceSyncState
+
+    admin = _create_user(workforce_api_db, email="health-admin@test.ae", role="admin")
+    _seed_coverage_cases(workforce_api_db, admin)
+    workforce_api_db.add(
+        AppSetting(key="workforce.stale_after_minutes", value=json.dumps(30))
+    )
+    punches = workforce_api_db.get(AttendanceSyncState, {"provider": "biotime", "stream": "punches"})
+    assert punches is not None
+    punches.fresh_through = NOW - timedelta(hours=1)
+    workforce_api_db.add(
+        AttendanceEvaluationQueue(
+            employee_id="G-COVERAGE-A",
+            window_start_at=NOW - timedelta(hours=1),
+            window_end_at=NOW + timedelta(hours=1),
+            reason_codes=["PUNCH_IMPORTED"],
+            available_at=NOW,
+            attempts=0,
+        )
+    )
+    workforce_api_db.commit()
+
+    with _client_for(workforce_api_db, admin) as client:
+        response = client.get("/api/v1/workforce/dashboard/snapshot")
+
+    assert response.status_code == 200
+    current_shift = response.json()["current_shift"]
+    assert current_shift["scheduled"] == 2
+    assert current_shift["evaluated_count"] == 0
+    assert current_shift["pending_or_error_excluded_count"] == 1
+    assert current_shift["working"] is None
+    assert current_shift["verified_roster_gap"] is None
+    assert current_shift["verified_coverage_percent"] is None
+    assert current_shift["staffing_status"] is None
+    assert response.json()["sync_health"]["punches"]["state"] == "stale"

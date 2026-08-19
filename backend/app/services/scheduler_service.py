@@ -18,7 +18,7 @@ from __future__ import annotations
 import logging
 import os
 import sys
-from datetime import UTC, date, datetime
+from datetime import UTC, date, datetime, timedelta
 from threading import Lock
 from typing import Final
 
@@ -26,16 +26,21 @@ from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
 from apscheduler.triggers.interval import IntervalTrigger
 from sqlalchemy import select
+from sqlalchemy.orm import Session
 
 from app.config import get_settings
 from app.db.models import User
 from app.db.session import SessionLocal
+from app.db.workforce_models import WorkCrewSchedule
 from app.schemas.employee import (
     EMPLOYEE_STATUS_RESIGNED,
     EMPLOYEE_STATUS_TERMINATED,
 )
+from app.schemas.workforce import WorkforceConfiguration
 from app.services import (
     admin_notify,
+    attendance_queue_service,
+    attendance_sync_service,
     digest_service,
     email_service,
     employee_service,
@@ -45,7 +50,11 @@ from app.services import (
     perm_service,
     push_service,
     scan_inbox_service,
+    settings_service,
+    workforce_retention_service,
+    workforce_schedule_service,
 )
+from app.services.attendance_provider import AttendanceProvider
 
 log = logging.getLogger(__name__)
 
@@ -65,9 +74,18 @@ _OPENWA_HEALTH_INTERVAL_MINUTES = 5
 _DIGEST_JOB_ID = "monthly_leave_digest"
 _LEAVE_ENDING_JOB_ID = "leave-ending-reminder"
 _DEPARTURE_FLIP_JOB_ID = "pending-departure-flip"
+_WORKFORCE_OCCURRENCE_JOB_ID = "workforce-occurrence-generation"
+_WORKFORCE_ATTENDANCE_SYNC_JOB_ID = "workforce-attendance-sync"
+_WORKFORCE_QUEUE_DRAIN_JOB_ID = "workforce-evaluation-queue-drain"
+_WORKFORCE_RETENTION_JOB_ID = "workforce-retention"
+_WORKFORCE_OCCURRENCE_INTERVAL_MINUTES = 15
+_WORKFORCE_QUEUE_DRAIN_INTERVAL_MINUTES = 1
+_WORKFORCE_OCCURRENCE_HISTORY = timedelta(days=7)
+_WORKFORCE_OCCURRENCE_LOOK_AHEAD = timedelta(days=28)
 
 _scheduler: BackgroundScheduler | None = None
 _lock = Lock()
+_attendance_sync_lock = Lock()
 
 
 def _run_email_sync() -> None:
@@ -114,6 +132,182 @@ def _run_scan_drain() -> None:
     n = run_drain_once()
     if n:
         log.info("scheduler: scan-inbox drained %d item(s)", n)
+
+
+def _resolve_verified_attendance_provider() -> AttendanceProvider | None:
+    """Return the installed BioTime adapter when the environment configures one.
+
+    The adapter's transport, envelope, cursor, timezone, and direction handling
+    were verified against the installed build before it was written, so an
+    enabled configuration no longer risks manufacturing attendance facts from
+    guessed semantics. An unset environment still resolves to ``None``, which
+    the API reports as `not_configured` rather than silently choosing a fake.
+    """
+    from app.config import get_settings
+    from app.services.attendance_biotime_provider import build_provider_from_settings
+
+    try:
+        return build_provider_from_settings(get_settings())
+    except Exception:
+        # A malformed URL or timezone must disable sync, never crash the
+        # scheduler thread that also runs email and scan-inbox jobs.
+        log.exception("scheduler: attendance provider configuration is unusable")
+        return None
+
+
+def _load_workforce_configuration(session: Session) -> WorkforceConfiguration | None:
+    """Read the complete validated configuration, treating absent/incomplete as disabled."""
+    try:
+        return settings_service.get_workforce_configuration(session)
+    except ValueError as exc:
+        log.warning("scheduler: workforce jobs skipped (invalid configuration: %s)", exc)
+        return None
+
+
+def _run_workforce_occurrence_generation() -> None:
+    """Materialize a small UTC history/look-ahead window for every scheduled crew."""
+    now = datetime.now(UTC)
+    starts_at = now - _WORKFORCE_OCCURRENCE_HISTORY
+    ends_at = now + _WORKFORCE_OCCURRENCE_LOOK_AHEAD
+    session = SessionLocal()
+    try:
+        crew_ids = session.scalars(select(WorkCrewSchedule.crew_id).distinct()).all()
+        generated = sum(
+            len(
+                workforce_schedule_service.generate_occurrences(
+                    session,
+                    crew_id=crew_id,
+                    starts_at=starts_at,
+                    ends_at=ends_at,
+                )
+            )
+            for crew_id in crew_ids
+        )
+        session.commit()
+        if generated:
+            log.info("scheduler: generated %d workforce shift occurrence(s)", generated)
+    except Exception:
+        session.rollback()
+        log.exception("scheduler: workforce occurrence generation failed")
+    finally:
+        session.close()
+
+
+def run_workforce_evaluation_queue_drain_once() -> int:
+    """Drain one durable evaluation batch and commit its atomic queue mutation."""
+    session = SessionLocal()
+    try:
+        result = attendance_queue_service.drain_evaluation_queue(
+            session, now=datetime.now(UTC)
+        )
+        session.commit()
+        return result.completed
+    except Exception:
+        session.rollback()
+        log.exception("scheduler: workforce evaluation queue drain failed")
+        return 0
+    finally:
+        session.close()
+
+
+def _run_workforce_evaluation_queue_drain() -> None:
+    completed = run_workforce_evaluation_queue_drain_once()
+    if completed:
+        log.info("scheduler: evaluated %d workforce queue item(s)", completed)
+
+
+def _run_workforce_retention() -> None:
+    """Purge one FK-safe retention batch only with complete validated policy."""
+    session = SessionLocal()
+    try:
+        configuration = _load_workforce_configuration(session)
+        if configuration is None:
+            log.info("scheduler: workforce retention skipped (configuration unavailable)")
+            return
+        result = workforce_retention_service.purge_expired_workforce_data(
+            session,
+            configuration=configuration,
+            now=datetime.now(UTC),
+        )
+        session.commit()
+        if any(vars(result).values()):
+            log.info("scheduler: workforce retention %s", result)
+    except Exception:
+        session.rollback()
+        log.exception("scheduler: workforce retention failed")
+    finally:
+        session.close()
+
+
+def _sync_attendance_stream(
+    provider: AttendanceProvider, *, stream: str, now: datetime
+) -> int | None:
+    """Sync exactly one provider page in its own transaction.
+
+    The sync service records its safe failure state outside its nested import
+    savepoint, so failure handling commits that state while a commit failure
+    rolls the short transaction back.
+    """
+    session = SessionLocal()
+    try:
+        imported = (
+            attendance_sync_service.sync_people(session, provider=provider, now=now)
+            if stream == "people"
+            else attendance_sync_service.sync_punches(session, provider=provider, now=now)
+        )
+        session.commit()
+        return imported
+    except attendance_sync_service.ProviderSyncFailedError as exc:
+        try:
+            session.commit()
+        except Exception:
+            session.rollback()
+        # Stable code only: a provider traceback can carry the endpoint URL or
+        # response body, which must never reach the application log.
+        log.error("scheduler: workforce attendance %s sync failed (%s)", stream, exc.code)
+        return None
+    except Exception:
+        try:
+            session.commit()
+        except Exception:
+            session.rollback()
+        log.exception("scheduler: workforce attendance %s sync failed", stream)
+        return None
+    finally:
+        session.close()
+
+
+def _run_workforce_attendance_sync() -> None:
+    """Run at most one people and punch page without waiting on another sync."""
+    if not _attendance_sync_lock.acquire(blocking=False):
+        log.info("scheduler: workforce attendance sync skipped (already running)")
+        return
+    try:
+        session = SessionLocal()
+        try:
+            configuration = _load_workforce_configuration(session)
+        finally:
+            session.close()
+        if configuration is None or not configuration.integration_enabled:
+            log.info("scheduler: workforce attendance sync skipped (not configured)")
+            return
+        provider = _resolve_verified_attendance_provider()
+        if provider is None:
+            log.info("scheduler: workforce attendance sync skipped (provider unavailable)")
+            return
+        now = datetime.now(UTC)
+        people = _sync_attendance_stream(provider, stream="people", now=now)
+        punches = _sync_attendance_stream(provider, stream="punches", now=now)
+        if people is not None or punches is not None:
+            log.info(
+                "scheduler: workforce attendance sync people=%s punches=%s",
+                people,
+                punches,
+            )
+    except Exception:
+        log.exception("scheduler: workforce attendance sync failed")
+    finally:
+        _attendance_sync_lock.release()
 
 
 def _run_grant_sweep() -> None:
@@ -469,9 +663,7 @@ def _disabled_in_environment() -> bool:
     """
     if "pytest" in sys.modules:
         return True
-    if os.environ.get("GSSG_DISABLE_SCHEDULER") == "1":
-        return True
-    return False
+    return os.environ.get("GSSG_DISABLE_SCHEDULER") == "1"
 
 
 def start() -> None:
@@ -493,6 +685,33 @@ def start() -> None:
     reschedule_email_sync()
     with _lock:
         if _scheduler is not None and _scheduler.running:
+            _scheduler.add_job(
+                _run_workforce_occurrence_generation,
+                trigger=IntervalTrigger(minutes=_WORKFORCE_OCCURRENCE_INTERVAL_MINUTES),
+                id=_WORKFORCE_OCCURRENCE_JOB_ID,
+                replace_existing=True,
+            )
+            log.info(
+                "scheduler: workforce occurrence generation every %d min",
+                _WORKFORCE_OCCURRENCE_INTERVAL_MINUTES,
+            )
+            _scheduler.add_job(
+                _run_workforce_evaluation_queue_drain,
+                trigger=IntervalTrigger(minutes=_WORKFORCE_QUEUE_DRAIN_INTERVAL_MINUTES),
+                id=_WORKFORCE_QUEUE_DRAIN_JOB_ID,
+                replace_existing=True,
+            )
+            log.info(
+                "scheduler: workforce evaluation queue drain every %d min",
+                _WORKFORCE_QUEUE_DRAIN_INTERVAL_MINUTES,
+            )
+            _scheduler.add_job(
+                _run_workforce_retention,
+                trigger=CronTrigger(hour=3, minute=0, timezone="Asia/Dubai"),
+                id=_WORKFORCE_RETENTION_JOB_ID,
+                replace_existing=True,
+            )
+            log.info("scheduler: workforce retention daily at 03:00 Asia/Dubai")
             _scheduler.add_job(
                 _run_scan_drain,
                 trigger=IntervalTrigger(minutes=_SCAN_DRAIN_INTERVAL_MINUTES),
@@ -559,6 +778,7 @@ def start() -> None:
                 replace_existing=True,
             )
             log.info("scheduler: pending-departure flip daily at 09:05 Asia/Dubai")
+    reschedule_workforce_sync()
 
 
 def shutdown() -> None:
@@ -615,6 +835,45 @@ def reschedule_email_sync() -> None:
         log.info("scheduler: email sync every %d min", interval_minutes)
 
 
+def reschedule_workforce_sync() -> None:
+    """Apply the validated workforce integration cadence without guessing a provider."""
+    with _lock:
+        if _scheduler is None or not _scheduler.running:
+            return
+
+        configuration = None
+        session = SessionLocal()
+        try:
+            configuration = _load_workforce_configuration(session)
+        except Exception:
+            log.exception("scheduler: workforce sync configuration lookup failed")
+        finally:
+            session.close()
+
+        existing = _scheduler.get_job(_WORKFORCE_ATTENDANCE_SYNC_JOB_ID)
+        if existing is not None:
+            _scheduler.remove_job(_WORKFORCE_ATTENDANCE_SYNC_JOB_ID)
+
+        if configuration is None or not configuration.integration_enabled:
+            log.info("scheduler: workforce attendance sync disabled (not configured)")
+            return
+        if _resolve_verified_attendance_provider() is None:
+            log.info("scheduler: workforce attendance sync disabled (provider unavailable)")
+            return
+
+        _scheduler.add_job(
+            _run_workforce_attendance_sync,
+            trigger=IntervalTrigger(minutes=configuration.sync_interval_minutes),
+            id=_WORKFORCE_ATTENDANCE_SYNC_JOB_ID,
+            replace_existing=True,
+            next_run_time=datetime.now(UTC),
+        )
+        log.info(
+            "scheduler: workforce attendance sync every %d min",
+            configuration.sync_interval_minutes,
+        )
+
+
 __all__ = [
     "_run_leave_ending_reminder",
     "_run_monthly_digest",
@@ -624,7 +883,9 @@ __all__ = [
     "_run_pending_departure_flip",
     "_run_push_notifier",
     "reschedule_email_sync",
+    "reschedule_workforce_sync",
     "run_drain_once",
+    "run_workforce_evaluation_queue_drain_once",
     "shutdown",
     "start",
 ]

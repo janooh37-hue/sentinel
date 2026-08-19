@@ -10,9 +10,10 @@ import json
 import logging
 import re
 import time
-from datetime import date, datetime
+from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 from typing import Any
+from zoneinfo import ZoneInfo
 
 from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session, joinedload
@@ -25,6 +26,8 @@ from app.db.models import AuditLog, Document, Employee, Leave, User
 from app.schemas.leave import LeaveBalanceRead, LeaveCreate, LeaveStatus, LeaveUpdate
 
 # ---------------------------------------------------------------------------
+_WORKFORCE_TIMEZONE = ZoneInfo("Asia/Dubai")
+
 # Simple TTL cache for balance results
 # key → (value, expires_at_monotonic)
 # ---------------------------------------------------------------------------
@@ -250,7 +253,7 @@ def update_leave(
 ) -> Leave:
     """Apply a PATCH payload with per-kind lifecycle enforcement."""
     row = get_leave(db, leave_id)
-
+    before = _workforce_leave_snapshot(row)
     status_changed = False
     if payload.status is not None:
         old_status = row.status
@@ -267,6 +270,7 @@ def update_leave(
         status_changed = True
         _audit(db, "leave.status_changed", leave_id, actor, {"from": old_status, "to": new_status})
 
+    dates_changed = False
     if payload.start_date is not None or payload.end_date is not None:
         if not leave_lifecycle.can_edit_dates(row.leave_type, row.status):
             raise ValidationFailedError(
@@ -285,6 +289,7 @@ def update_leave(
         row.start_date = new_start
         row.end_date = new_end
         row.days = (new_end - new_start).days + 1
+        dates_changed = True
         _audit(
             db,
             "leave.dates_changed",
@@ -297,6 +302,17 @@ def update_leave(
         row.notes = payload.notes
 
     row.updated_at = _utcnow()
+    if status_changed or dates_changed:
+        _enqueue_leave_reevaluation(
+            db,
+            before=before,
+            after=row,
+            reason_code=(
+                _leave_transition_reason(row.status)
+                if status_changed and not dates_changed
+                else "LEAVE_DATES_AMENDED"
+            ),
+        )
     db.commit()
     db.refresh(row)
     _cache_invalidate_employee(row.employee_id)
@@ -321,6 +337,7 @@ def amend_approved_leave(
     (start fixed), reason required. Notifies the employee (best-effort) with
     old vs new duration and the reason. Spec 2026-07-15."""
     row = get_leave(db, leave_id)
+    before = _workforce_leave_snapshot(row)
     if not leave_lifecycle.can_amend(row.leave_type, row.status):
         raise ValidationFailedError(
             "LEAVE_AMEND_FORBIDDEN",
@@ -343,6 +360,12 @@ def amend_approved_leave(
         leave_id,
         actor,
         {"from": old, "to": {"end": str(end_date), "days": row.days}, "reason": reason},
+    )
+    _enqueue_leave_reevaluation(
+        db,
+        before=before,
+        after=row,
+        reason_code="LEAVE_AMENDED",
     )
     db.commit()
     db.refresh(row)
@@ -388,9 +411,16 @@ def create_leave(db: Session, payload: LeaveCreate, *, actor: str | None = None)
         request_date=_utcnow().date(),
     )
     db.add(row)
+    db.flush()
+    _audit(db, "leave.created", row.id, actor, {"leave_type": row.leave_type})
+    _enqueue_leave_reevaluation(
+        db,
+        before=None,
+        after=row,
+        reason_code="LEAVE_CREATED",
+    )
     db.commit()
     db.refresh(row)
-    _audit(db, "leave.created", row.id, actor, {"leave_type": row.leave_type})
     _cache_invalidate_employee(row.employee_id)
     return row
 
@@ -519,6 +549,7 @@ def file_return(
 
     # generate_document already linked the doc + committed. Now complete the leave.
     db.refresh(row)
+    before = _workforce_leave_snapshot(row)
     old = row.status
     row.return_date = resumption_date
     last_doc = (
@@ -538,6 +569,12 @@ def file_return(
         leave_id,
         actor,
         {"resumption_date": str(resumption_date)},
+    )
+    _enqueue_leave_reevaluation(
+        db,
+        before=before,
+        after=row,
+        reason_code="LEAVE_COMPLETED",
     )
     db.commit()
     db.refresh(row)
@@ -563,10 +600,17 @@ def get_certificate_file(db: Session, leave_id: int) -> Path:
 
 def soft_delete_leave(db: Session, leave_id: int, *, actor: str | None = None) -> None:
     row = get_leave(db, leave_id)
+    before = _workforce_leave_snapshot(row)
     row.deleted_at = _utcnow()
     row.updated_at = _utcnow()
-    db.commit()
     _audit(db, "leave.deleted", leave_id, actor, {})
+    _enqueue_leave_reevaluation(
+        db,
+        before=before,
+        after=row,
+        reason_code="LEAVE_DELETED",
+    )
+    db.commit()
     _cache_invalidate_employee(row.employee_id)
 
 
@@ -627,6 +671,53 @@ def _utcnow() -> datetime:
 
     return datetime.now(UTC).replace(tzinfo=None)
 
+def _workforce_leave_snapshot(row: Leave) -> Leave:
+    """Capture the fields that determine an attendance leave decision pre-mutation."""
+    return Leave(
+        id=row.id,
+        employee_id=row.employee_id,
+        leave_type=row.leave_type,
+        start_date=row.start_date,
+        end_date=row.end_date,
+        status=row.status,
+        days=row.days,
+        deleted_at=row.deleted_at,
+    )
+
+
+def _leave_transition_reason(status: str) -> str:
+    canonical = leave_lifecycle.canonical_status(status).upper()
+    return f"LEAVE_{canonical}"
+
+
+def _enqueue_leave_reevaluation(
+    db: Session,
+    *,
+    before: Leave | None,
+    after: Leave | None,
+    reason_code: str,
+) -> None:
+    """Enqueue every affected attendance date before the caller commits."""
+    from app.services.attendance_queue_service import enqueue_evaluation
+    from app.services.workforce_leave import affected_reevaluation_windows
+
+    now = datetime.now(UTC)
+    for window in affected_reevaluation_windows(before=before, after=after):
+        enqueue_evaluation(
+            db,
+            employee_id=window.employee_id,
+            window_start_at=datetime.combine(
+                window.start_date, datetime.min.time(), tzinfo=_WORKFORCE_TIMEZONE
+            ).astimezone(UTC),
+            window_end_at=datetime.combine(
+                window.end_date + timedelta(days=1),
+                datetime.min.time(),
+                tzinfo=_WORKFORCE_TIMEZONE,
+            ).astimezone(UTC),
+            reason_code=reason_code,
+            now=now,
+        )
+
 
 def _audit(
     db: Session,
@@ -643,7 +734,6 @@ def _audit(
         payload=json.dumps(payload),
     )
     db.add(log)
-    db.commit()
 
 
 def list_annual_overlapping(
