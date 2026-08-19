@@ -122,6 +122,21 @@ describe('AttendancePage', () => {
     expect(screen.getAllByTestId('attendance-register-unit')).toHaveLength(2)
   })
 
+  it('prints the G-number beside every name it lists', async () => {
+    // Two guards on one post can share a first and a family name; the G-number
+    // is what a supervisor reads out on the radio and types into a report, so
+    // it travels with the name wherever the name is printed.
+    renderPage()
+
+    await waitFor(() =>
+      expect(screen.getAllByTestId('attendance-register-post').length).toBeGreaterThan(0),
+    )
+    const [morning] = screen.getAllByTestId('attendance-register-unit')
+    const row = within(morning).getByText('Ahmed Ali').closest('button')
+    expect(row).not.toBeNull()
+    expect(row).toHaveTextContent('G-9001')
+  })
+
   it('filters to one shift and keeps the request count at one', async () => {
     const user = userEvent.setup()
     renderPage()

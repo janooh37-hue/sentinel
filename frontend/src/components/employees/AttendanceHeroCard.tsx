@@ -103,9 +103,11 @@ export function AttendanceHeroCard({ onOpen }: Props): React.JSX.Element | null 
             return (
               <div
                 key={`${row.employee_id}-${row.shift_code}`}
-                className="flex w-full items-center gap-[9px] rounded-xl border border-white/[.1] bg-white/[.06] px-2.5 py-1.5"
+                className="flex w-full items-start gap-[9px] rounded-xl border border-white/[.1] bg-white/[.06] px-2.5 py-1.5"
               >
-                <span className="min-w-0 flex-1 truncate text-[12px] font-semibold">{name}</span>
+                {/* Wraps rather than clips: the family name is the discriminator. */}
+                <span className="min-w-0 flex-1 text-[12px] font-semibold leading-snug">{name}</span>
+                <span className="shrink-0 font-mono text-[10.5px] opacity-60">{row.employee_id}</span>
                 <span className="shrink-0 text-[10.5px] font-bold text-rose-300">
                   {row.punch_count === 0
                     ? t('attendance.state.missing')

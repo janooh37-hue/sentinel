@@ -67,7 +67,11 @@ export function AttentionQueue({
                     }`}
                   />
                   <span className="min-w-0 flex-1">
-                    <span className="block truncate text-[0.8em] font-semibold">{name}</span>
+                    {/* Wrap, never truncate: an Emirati name carries its
+                      * discriminator last ("… Al Nuaimi"), so clipping the tail
+                      * removes exactly what tells two brothers apart. Ten rows
+                      * can afford a second line; a wrong identification cannot. */}
+                    <span className="block text-[0.8em] font-semibold leading-snug">{name}</span>
                     <span className="block truncate text-[0.68em] text-faint">
                       {row.duty_post} · {t(`attendance.shift.${row.shift_code}`, row.shift_code ?? '')} ·{' '}
                       {row.employee_id}

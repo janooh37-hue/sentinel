@@ -105,8 +105,18 @@ test.describe('Attendance register', () => {
     await page.getByRole('button', { name: 'Timeline', exact: true }).click()
     await expect(page.getByTestId('attendance-timeline-unit').first()).toBeVisible()
     await expect(page.getByTestId('attendance-timeline-grace-line').first()).toBeVisible()
-    // Dots only exist for people who punched: 40 of the 80 rows.
-    await expect(page.getByTestId('attendance-timeline-dot')).toHaveCount(40)
+    // One dot per person who punched. Derived from the payload rather than
+    // hardcoded: the preview roster's punch spread is data, not contract, and a
+    // fixed number here breaks the moment the seed changes.
+    const punched = await page.evaluate(async () => {
+      const response = await fetch(
+        '/api/v1/workforce/attendance/day?operational_date=2026-08-19&limit=500',
+      )
+      const page_ = (await response.json()) as { items: { punch_count: number }[] }
+      return page_.items.filter((row) => row.punch_count > 0).length
+    })
+    expect(punched, 'the preview day must contain punches to plot').toBeGreaterThan(0)
+    await expect(page.getByTestId('attendance-timeline-dot')).toHaveCount(punched)
   })
 
   test('arrow keys change the day', async ({ page }) => {
@@ -122,7 +132,9 @@ test.describe('Attendance register', () => {
     await login(page)
     await gotoAttendance(page)
 
-    await page.getByTestId('attendance-register-unit').first().getByText(/Factory Person/).first().click()
+    // Click the first person row by role, not by name: real rosters get renamed
+    // and the contract under test is the deep link, not any particular person.
+    await page.getByTestId('attendance-register-post').first().getByRole('button').first().click()
 
     await expect(page).toHaveURL(/\/employees\/G-\d+\?tab=attendance/)
     await expect(page.getByTestId('attendance-month-grid')).toBeVisible({ timeout: 15_000 })

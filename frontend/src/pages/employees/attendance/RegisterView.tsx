@@ -75,7 +75,6 @@ export function RegisterView({
           const diff = postSummary(b[1], input).exceptions - postSummary(a[1], input).exceptions
           return diff !== 0 ? diff : b[1].length - a[1].length
         })
-        const wide = unitRows.length > 50
 
         return (
           <section
@@ -114,7 +113,15 @@ export function RegisterView({
               </dl>
             </header>
 
-            <div className={wide ? 'columns-1 md:columns-2 lg:columns-4' : 'columns-1 md:columns-2 lg:columns-3'}>
+            {/* Column COUNT is the browser's to choose; the constraint we own is
+              * the minimum width a row needs. A real roster line is a full
+              * Emirati name plus a G-number plus a time — around 23rem — and
+              * fixed `lg:columns-3` truncated names to about 22 characters,
+              * cutting exactly the family name that distinguishes two brothers
+              * on the same post. Declaring the width instead means the register
+              * shows three columns on a wide canvas, two beside the attention
+              * rail, and one on a phone, always with the name intact. */}
+            <div className="columns-[23rem] gap-0">
               {ordered.map(([post, postRows]) => {
                 const postStats = postSummary(postRows, input)
                 return (
@@ -128,9 +135,11 @@ export function RegisterView({
                         postStats.exceptions > 0 ? 'border-accent' : 'border-border'
                       }`}
                     >
-                      <b className="text-[0.78em] font-extrabold">{post}</b>
+                      {/* Production post names run long ("بوابة الورشة الشمالية"),
+                        * so the name truncates and the count never does. */}
+                      <b className="min-w-0 flex-1 truncate text-[0.78em] font-extrabold">{post}</b>
                       <span
-                        className={`ms-auto font-mono text-[0.72em] ${
+                        className={`shrink-0 font-mono text-[0.72em] ${
                           postStats.exceptions > 0 ? 'font-bold text-accent' : 'text-muted-foreground'
                         }`}
                       >
@@ -156,7 +165,16 @@ export function RegisterView({
                           }`}
                         >
                           <i aria-hidden className={`h-2 w-2 shrink-0 rounded-full ${BEAD[state]}`} />
-                          <span className="min-w-0 flex-1 truncate">{name}</span>
+                          <span className="min-w-0 flex-1 truncate" title={name}>
+                            {name}
+                          </span>
+                          {/* The identifier a supervisor reads out and types into
+                            * a report, so it never shrinks or truncates: a partial
+                            * G-number is worse than none. Real names are long, so
+                            * the name yields space first. */}
+                          <span className="shrink-0 font-mono text-[0.86em] text-faint">
+                            {row.employee_id}
+                          </span>
                           <span
                             className={`shrink-0 font-mono text-[0.92em] ${
                               state === 'missing' || state === 'single'
