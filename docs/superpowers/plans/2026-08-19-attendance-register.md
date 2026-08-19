@@ -258,7 +258,7 @@ Then insert those same 22 names into the existing `__all__` list, preserving its
 
 - [ ] **Step 5: Run the migration and model tests**
 
-Run: `cd backend && "C:/Users/Amh/Documents/projects/sentinel/venv/Scripts/python.exe" -m pytest tests/test_workforce_migration.py tests/test_workforce_models.py -q`
+Run: `"C:/Users/Amh/Documents/projects/sentinel/venv/Scripts/python.exe" -m pytest backend/tests/test_workforce_migration.py tests/test_workforce_models.py -q`
 Expected: all pass **after the edits this step authorizes.** `test_workforce_migration.py` is coupled to the excluded dashboard cutover in three places, and all three must be fixed here:
 
 1. `WORKFORCE_PREDECESSOR = "0070_user_preferences"` (line 15, asserted at 80–81) → change to `"0069_merge"`.
@@ -269,10 +269,10 @@ Keep everything else: the table-existence, trigger, index and seed assertions ar
 
 - [ ] **Step 6: Prove the head is single and applies to a fresh database**
 
-Run: `cd backend && "C:/Users/Amh/Documents/projects/sentinel/venv/Scripts/python.exe" -m alembic heads`
+Run: `"C:/Users/Amh/Documents/projects/sentinel/venv/Scripts/python.exe" -m alembic heads`
 Expected: exactly one head, `0071_workforce_attendance`.
 
-Run: `cd backend && GSSG_DATA_DIR=$(mktemp -d) "C:/Users/Amh/Documents/projects/sentinel/venv/Scripts/python.exe" -m alembic upgrade head`
+Run: `GSSG_DATA_DIR=$(mktemp -d) "C:/Users/Amh/Documents/projects/sentinel/venv/Scripts/python.exe" -m alembic upgrade head`
 Expected: exit 0, no error about a missing `user_preferences` table.
 
 - [ ] **Step 7: Commit**
@@ -424,12 +424,12 @@ and inside `Settings`, after the OpenWA block, the 11 fields and 4 properties ex
 
 - [ ] **Step 5: Run the salvaged scope tests**
 
-Run: `cd backend && "C:/Users/Amh/Documents/projects/sentinel/venv/Scripts/python.exe" -m pytest tests/test_workforce_scope_algebra.py -q`
+Run: `"C:/Users/Amh/Documents/projects/sentinel/venv/Scripts/python.exe" -m pytest backend/tests/test_workforce_scope_algebra.py -q`
 Expected: 3 passed. No API route is exercised here by design — the router does not exist until Task 4.
 
 - [ ] **Step 6: Prove no capability regression for existing roles**
 
-Run: `cd backend && "C:/Users/Amh/Documents/projects/sentinel/venv/Scripts/python.exe" -m pytest tests/ -q -k "permission or capabilit"`
+Run: `"C:/Users/Amh/Documents/projects/sentinel/venv/Scripts/python.exe" -m pytest backend/tests/ -q -k "permission or capabilit"`
 Expected: all pass. In particular the admin preset resolves to all capabilities (now 35) and the manager preset contains no `workforce.*` id.
 
 - [ ] **Step 7: Commit**
@@ -477,7 +477,7 @@ Expected: no output. (Verified on the branch; this step catches a bad copy.)
 
 - [ ] **Step 3: Run the ingest and evaluation suites**
 
-Run: `cd backend && "C:/Users/Amh/Documents/projects/sentinel/venv/Scripts/python.exe" -m pytest tests/test_attendance_*.py -q`
+Run: `"C:/Users/Amh/Documents/projects/sentinel/venv/Scripts/python.exe" -m pytest backend/tests/test_attendance_*.py -q`
 Expected: all pass. These are the tests that pin the measured provider contract: JWT auth, plural-route-only, HTML-200-is-a-denial, device-local wall time, oldest-first pages, and `punch_state 255` meaning direction is unknown.
 
 - [ ] **Step 4: Commit**
@@ -556,12 +556,12 @@ Expected: `frontend/src/lib/api.types.ts` gains the workforce schemas. Do not ha
 
 - [ ] **Step 7: Run the workforce API suites**
 
-Run: `cd backend && "C:/Users/Amh/Documents/projects/sentinel/venv/Scripts/python.exe" -m pytest tests/test_workforce_*.py -q`
+Run: `"C:/Users/Amh/Documents/projects/sentinel/venv/Scripts/python.exe" -m pytest backend/tests/test_workforce_*.py -q`
 Expected: all pass.
 
 - [ ] **Step 8: Prove the rest of the backend is unharmed**
 
-Run: `cd backend && "C:/Users/Amh/Documents/projects/sentinel/venv/Scripts/python.exe" -m pytest -q`
+Run: `"C:/Users/Amh/Documents/projects/sentinel/venv/Scripts/python.exe" -m pytest -q`
 Expected: no new failures versus the pre-task baseline. Record the baseline first with `git stash` if unsure — a pre-existing failure must not be attributed to this task.
 
 - [ ] **Step 9: Commit**
@@ -614,7 +614,7 @@ git show dashboard/additive-baseline:backend/tests/test_workforce_operational_sm
 
 - [ ] **Step 2: Run the ported seed tests**
 
-Run: `cd backend && "C:/Users/Amh/Documents/projects/sentinel/venv/Scripts/python.exe" -m pytest tests/test_workforce_seed_service.py tests/test_workforce_operational_smoke.py -q`
+Run: `"C:/Users/Amh/Documents/projects/sentinel/venv/Scripts/python.exe" -m pytest backend/tests/test_workforce_seed_service.py tests/test_workforce_operational_smoke.py -q`
 Expected: all pass. They pin the corrected windows (05/13/21, not 04/12/20) and the 5-day cycle in which a crew works noon on day 1 then morning **and** night on day 2.
 
 - [ ] **Step 3: Write the failing factory test**
@@ -691,7 +691,7 @@ def test_factory_attaches_punches_to_the_right_case(db_session) -> None:
 
 - [ ] **Step 4: Run it to verify it fails**
 
-Run: `cd backend && "C:/Users/Amh/Documents/projects/sentinel/venv/Scripts/python.exe" -m pytest tests/test_attendance_factory.py -q`
+Run: `"C:/Users/Amh/Documents/projects/sentinel/venv/Scripts/python.exe" -m pytest backend/tests/test_attendance_factory.py -q`
 Expected: FAIL — `ModuleNotFoundError: No module named 'tests.factories'`.
 
 - [ ] **Step 5: Implement the factory**
@@ -953,7 +953,7 @@ Two guardrails while implementing this file: (1) punches must land inside the se
 
 - [ ] **Step 6: Run the factory test to verify it passes**
 
-Run: `cd backend && "C:/Users/Amh/Documents/projects/sentinel/venv/Scripts/python.exe" -m pytest tests/test_attendance_factory.py -q`
+Run: `"C:/Users/Amh/Documents/projects/sentinel/venv/Scripts/python.exe" -m pytest backend/tests/test_attendance_factory.py -q`
 Expected: 2 passed. If `materialize_started_cases` returns nothing, the occurrence window or `as_of` is wrong — fix the factory, never the service.
 
 - [ ] **Step 7: Prove the ported reads answer with factory data**
@@ -992,7 +992,7 @@ def test_roster_returns_rows_for_the_factory_day(db_session) -> None:
         assert row["duty_unit"] == "السرية الثانية"
 ```
 
-Run: `cd backend && "C:/Users/Amh/Documents/projects/sentinel/venv/Scripts/python.exe" -m pytest tests/test_attendance_seeded_reads.py -q`
+Run: `"C:/Users/Amh/Documents/projects/sentinel/venv/Scripts/python.exe" -m pytest backend/tests/test_attendance_seeded_reads.py -q`
 Expected: PASS.
 
 - [ ] **Step 8: Prepare the preview database (this is where Task 14's data comes from)**
@@ -1167,7 +1167,7 @@ def test_shift_code_filter_narrows_the_day(db_session) -> None:
 
 - [ ] **Step 2: Run it to verify it fails**
 
-Run: `cd backend && "C:/Users/Amh/Documents/projects/sentinel/venv/Scripts/python.exe" -m pytest tests/test_attendance_day_endpoint.py -q`
+Run: `"C:/Users/Amh/Documents/projects/sentinel/venv/Scripts/python.exe" -m pytest backend/tests/test_attendance_day_endpoint.py -q`
 Expected: FAIL with `AttributeError: module 'app.services.workforce_read_service' has no attribute 'list_attendance_day'`.
 
 - [ ] **Step 3: Add the response schema**
@@ -1329,7 +1329,7 @@ Extend the module's imports with `func` from `sqlalchemy` and `AttendancePunch`,
 
 - [ ] **Step 5: Run the test to verify it passes**
 
-Run: `cd backend && "C:/Users/Amh/Documents/projects/sentinel/venv/Scripts/python.exe" -m pytest tests/test_attendance_day_endpoint.py -q`
+Run: `"C:/Users/Amh/Documents/projects/sentinel/venv/Scripts/python.exe" -m pytest backend/tests/test_attendance_day_endpoint.py -q`
 Expected: 3 passed.
 
 - [ ] **Step 6: Add the route**
@@ -1369,7 +1369,7 @@ Add `AttendanceDayRowRead` to the schema imports at the top of the module.
 
 Append to `backend/tests/test_attendance_day_endpoint.py` a test that mirrors the existing style in `backend/tests/test_workforce_api_permissions.py`: a user with `workforce.people.view` but **without** `workforce.attendance.review` receives 403 from `/api/v1/workforce/attendance/day`, and an admin receives 200 with `items` present. Copy the client construction and capability-granting helper from that file verbatim rather than inventing one.
 
-Run: `cd backend && "C:/Users/Amh/Documents/projects/sentinel/venv/Scripts/python.exe" -m pytest tests/test_attendance_day_endpoint.py tests/test_workforce_api_permissions.py -q`
+Run: `"C:/Users/Amh/Documents/projects/sentinel/venv/Scripts/python.exe" -m pytest backend/tests/test_attendance_day_endpoint.py tests/test_workforce_api_permissions.py -q`
 Expected: all pass.
 
 - [ ] **Step 8: Regenerate the client and commit**
@@ -1511,7 +1511,7 @@ Read `perm_service` and `tests/test_workforce_api_permissions.py` before writing
 
 - [ ] **Step 2: Run it to verify it fails**
 
-Run: `cd backend && "C:/Users/Amh/Documents/projects/sentinel/venv/Scripts/python.exe" -m pytest tests/test_employee_attendance_endpoint.py -q`
+Run: `"C:/Users/Amh/Documents/projects/sentinel/venv/Scripts/python.exe" -m pytest backend/tests/test_employee_attendance_endpoint.py -q`
 Expected: FAIL — `employee_attendance_range` does not exist.
 
 - [ ] **Step 3: Add the schemas**
@@ -1556,7 +1556,7 @@ Bound the window at 92 days and raise `ValidationFailedError("ATTENDANCE_RANGE_T
 
 - [ ] **Step 5: Run the tests to verify they pass**
 
-Run: `cd backend && "C:/Users/Amh/Documents/projects/sentinel/venv/Scripts/python.exe" -m pytest tests/test_employee_attendance_endpoint.py -q`
+Run: `"C:/Users/Amh/Documents/projects/sentinel/venv/Scripts/python.exe" -m pytest backend/tests/test_employee_attendance_endpoint.py -q`
 Expected: 3 passed.
 
 - [ ] **Step 6: Add the route with the self-access rule**
@@ -2016,7 +2016,7 @@ Pin three behaviours: (1) it renders `seen / late / unpaired` from the payload; 
 **Files:**
 - Create: `frontend/e2e/attendance.spec.ts`
 - Create: `docs/attendance-verification-2026-08-19.md` (the evidence record)
-- [ ] **Step 1: Run both suites.** `cd backend && "C:/Users/Amh/Documents/projects/sentinel/venv/Scripts/python.exe" -m pytest -q` and `cd frontend && pnpm vitest run`. Compare against a stashed baseline before attributing any failure to this branch.
+- [ ] **Step 1: Run both suites.** `"C:/Users/Amh/Documents/projects/sentinel/venv/Scripts/python.exe" -m pytest -q` and `cd frontend && pnpm vitest run`. Compare against a stashed baseline before attributing any failure to this branch.
 
 - [ ] **Step 2: Type-check and lint.** `cd frontend && pnpm build` (runs `tsc -b`) and `pnpm lint`.
 
