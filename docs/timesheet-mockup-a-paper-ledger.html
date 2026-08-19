@@ -1,0 +1,462 @@
+<!doctype html>
+<html lang="en" dir="ltr" data-theme="light" data-density="default">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Monthly time sheet — direction A · Paper Ledger</title>
+<link rel="stylesheet" href="timesheet-mockups.css" />
+<style>
+  /* ---- direction A only: the quoted document header and the release strip ---- */
+
+  /* The signature element. The card that holds the grid wears the workbook's own
+     header block, quoted verbatim in mono — misspellings and spacing included —
+     so the operator can see that this screen IS the deliverable. Quoted text is
+     never re-worded; the app's own labels below it are spelled correctly. */
+  .docmast {
+    display: grid;
+    grid-template-columns: 58px minmax(0, 1fr) auto;
+    gap: 14px;
+    align-items: start;
+    padding: 13px 16px;
+    border-block-end: 1px solid var(--hairline);
+    background: var(--surface-raised);
+  }
+
+  .docmast .crest {
+    display: grid;
+    place-items: center;
+    inline-size: 58px;
+    block-size: 44px;
+    border: 1px solid var(--border-strong);
+    border-radius: 4px;
+    background: var(--surface);
+    font-family: var(--font-mono);
+    font-size: 10px;
+    font-weight: 700;
+    color: var(--primary);
+    letter-spacing: 0.08em;
+  }
+
+  .docmast .quote {
+    font-family: var(--font-mono);
+    font-size: 11.5px;
+    line-height: 1.65;
+    color: var(--text-muted);
+    /* A verbatim quotation must not be re-wrapped — its spacing is part of what
+       is being quoted — so on a narrow viewport the quote scrolls rather than
+       pushing the document into horizontal scroll. */
+    white-space: pre;
+    overflow-x: auto;
+  }
+
+  .docmast .quote b { color: var(--text); font-weight: 600; }
+  .docmast .quote .var { color: var(--primary); font-weight: 600; }
+
+  .docmast .stamp {
+    display: grid;
+    gap: 3px;
+    text-align: end;
+    font-size: 10px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--text-faint);
+  }
+
+  .docmast .stamp span { border: 1px dashed var(--border-strong); border-radius: 4px; padding: 3px 8px; }
+
+  .quotelbl {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--text-faint);
+    margin-block-end: 6px;
+  }
+
+  .quotelbl::before {
+    content: "";
+    inline-size: 14px;
+    block-size: 1px;
+    background: var(--border-strong);
+  }
+
+  .ribbonrow {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 12px;
+    margin-block: 14px 12px;
+  }
+
+  .release {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 12px;
+    margin-block-start: 14px;
+    padding: 14px 16px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-card);
+    box-shadow: var(--shadow-sm);
+  }
+
+  .release .why { font-size: 12px; color: var(--text-muted); max-inline-size: 46ch; }
+  .release .files { display: grid; gap: 2px; font-size: 11.5px; color: var(--text-faint); }
+  .release .files code { font-family: var(--font-mono); font-size: 11px; }
+
+  /* the two download buttons plus the reopen confirm — must wrap, or the group
+     alone pushes the page into horizontal scroll on a narrow viewport */
+  .releaseacts { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+
+  .mastblock { display: flex; flex-direction: column; align-items: flex-end; gap: 8px; }
+  .mastchips { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+  .editmeta { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+
+  .paperlegend { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 9px 12px; }
+  .paperlegend .swatchmini {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 11px;
+    color: #1c1f24;
+  }
+  .paperlegend .trailing { margin-inline-start: auto; color: #6b7280; }
+  .paperlegend .glyph {
+    display: grid;
+    place-items: center;
+    inline-size: 26px;
+    block-size: 18px;
+    border: 1px solid #c9c9c9;
+    border-radius: 3px;
+    font-family: var(--font-mono);
+    font-size: 10px;
+    font-weight: 600;
+  }
+  .paperlegend .cap {
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: #6b7280;
+    margin-inline-end: 4px;
+  }
+
+  .statpanel { display: flex; flex-wrap: wrap; align-items: center; gap: 18px; }
+  .statpanel .explain { font-size: 12px; color: var(--text-muted); max-inline-size: 52ch; }
+
+  .confirm { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--accent); }
+
+  @media (max-width: 900px) {
+    .docmast { grid-template-columns: 1fr; }
+    .docmast .stamp { text-align: start; grid-auto-flow: column; justify-content: start; }
+  }
+</style>
+</head>
+<body>
+<div id="review"></div>
+<header id="chrome"></header>
+
+<main class="page">
+  <div class="masthead">
+    <div>
+      <div class="eyebrow" id="eyebrow"></div>
+      <h1 id="title"></h1>
+      <p id="lede"></p>
+    </div>
+    <div class="spread" id="mastright"></div>
+  </div>
+
+  <div class="bar" id="controls"></div>
+
+  <div class="ribbonrow">
+    <div class="ribbon" id="ribbon"></div>
+    <div class="spread" id="editmeta"></div>
+  </div>
+
+  <section class="card" id="pfcard" hidden>
+    <header>
+      <h2 id="pftitle"></h2>
+      <p id="pfsub"></p>
+    </header>
+    <div class="body"><div class="pf" id="pflist"></div></div>
+  </section>
+
+  <section class="card" style="margin-block-start:14px">
+    <div class="docmast" id="docmast"></div>
+    <div class="sheetwrap" id="sheet"></div>
+  </section>
+
+  <section class="card" id="statcard" hidden style="margin-block-start:14px">
+    <header><h2 id="stattitle"></h2></header>
+    <div class="body statpanel" id="statbody"></div>
+  </section>
+
+  <div class="release" id="release"></div>
+
+  <div class="paper paperlegend" id="paperlegend" style="margin-block-start:14px"></div>
+
+  <p class="footnote" id="footnote"></p>
+</main>
+
+<script src="timesheet-mockups.js"></script>
+<script>
+  const L = (en, ar) => (TS.state.lang === 'ar' ? ar : en)
+  const el = (id) => document.getElementById(id)
+  let confirming = false
+
+  /* The workbook header, quoted. Only the month line varies (cell D4). */
+  function docmast() {
+    const m = TS.monthLabel()
+    const monthStamp = `${['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'][TS.state.month - 1]}-${TS.state.year}`
+    el('docmast').innerHTML =
+      `<div class="crest">GSSG</div>` +
+      `<div><span class="quotelbl">${L('Header as it prints', 'الترويسة كما تُطبع')}</span>` +
+      `<div class="quote"><b>Global Security Service Group- MONTHLY  TIME SHEET</b>\n` +
+      `Client : JUDICIAL DEPARTMENT        Site Name :   JD 908\n` +
+      `Clent Code : P0331_JD_PRN_908EXT    GSSG-HR\n` +
+      `For the Month of :<span class="var">${monthStamp}</span></div></div>` +
+      `<div class="stamp"><span>Date Of Issued</span><span>Issue No</span><span>Révision</span></div>`
+  }
+
+  function mastright() {
+    const m = TS.monthLabel()
+    const blocking = TS.blocking().length
+    const warnings = TS.warnings().length
+    const chip = blocking
+      ? `<span class="chip stop"><span class="num">${blocking}</span> ${L('to fix', 'للإصلاح')}</span>`
+      : warnings
+        ? `<span class="chip warn"><span class="num">${warnings}</span> ${L('to review', 'للمراجعة')}</span>`
+        : `<span class="chip ok">${L('All checks passed', 'اجتازت الفحوصات')}</span>`
+    el('mastright').innerHTML =
+      `<div class="mastblock">` +
+      `<div class="monthmark"><span class="num">${m.stamp}</span><small>${m.ar}</small></div>` +
+      `<div class="mastchips">${chip}` +
+      (TS.state.closed
+        ? `<span class="chip info">${TS.t('closed')}</span>`
+        : `<span class="chip">${TS.t('open')} · <span class="num">${m.days}</span> ${L('days', 'يوماً')}</span>`) +
+      `</div></div>`
+  }
+
+  function controls() {
+    const m = TS.monthLabel()
+    el('controls').innerHTML =
+      `<button type="button" class="icobtn" data-act="prev" aria-label="${TS.t('prevMonth')}">‹</button>` +
+      `<b class="mono" style="font-size:13px">${TS.state.lang === 'ar' ? m.ar : m.en}</b>` +
+      `<button type="button" class="icobtn" data-act="next" aria-label="${TS.t('nextMonth')}">›</button>` +
+      `<span class="rule"></span>` +
+      `<div class="seg" role="group" aria-label="${L('Roster', 'الكشف')}">` +
+      `<button type="button" data-sheet="main" aria-pressed="${TS.state.sheet === 'main'}">${TS.t('main')}</button>` +
+      `<button type="button" data-sheet="drivers" aria-pressed="${TS.state.sheet === 'drivers'}">${TS.t('drivers')}</button></div>` +
+      `<div class="seg" role="group" aria-label="${L('Deliverable', 'المخرج')}">` +
+      `<button type="button" data-variant="attendance" aria-pressed="${TS.state.variant === 'attendance'}">${TS.t('attendance')}</button>` +
+      `<button type="button" data-variant="statistics" aria-pressed="${TS.state.variant === 'statistics'}">${TS.t('statistics')}</button></div>` +
+      `<span class="rule"></span>` +
+      `<span class="field">${TS.t('density')}` +
+      `<span class="seg" role="group" aria-label="${TS.t('density')}">` +
+      ['compact', 'default', 'roomy']
+        .map(
+          (d, i) =>
+            `<button type="button" data-density="${d}" aria-pressed="${TS.state.density === d}" aria-label="${
+              [L('Compact', 'مضغوط'), L('Default', 'افتراضي'), L('Roomy', 'مريح')][i]
+            }">${['S', 'M', 'L'][i]}</button>`,
+        )
+        .join('') +
+      `</span></span>`
+
+    el('controls').querySelector('[data-act="prev"]').onclick = () => TS.setMonth(-1)
+    el('controls').querySelector('[data-act="next"]').onclick = () => TS.setMonth(1)
+    el('controls').querySelectorAll('[data-sheet]').forEach((b) => (b.onclick = () => TS.setSheet(b.dataset.sheet)))
+    el('controls').querySelectorAll('[data-variant]').forEach((b) => (b.onclick = () => TS.setVariant(b.dataset.variant)))
+    el('controls').querySelectorAll('[data-density]').forEach((b) => (b.onclick = () => TS.setDensity(b.dataset.density)))
+  }
+
+  function editmeta() {
+    const n = TS.editCount()
+    const host = el('editmeta')
+    host.className = 'spread editmeta'
+    if (TS.state.closed) {
+      host.innerHTML = `<span class="chip info">${TS.t('closedNote')}</span>`
+      return
+    }
+    host.innerHTML =
+      `<span class="chip"><span class="num">${n}</span> ${TS.t('edited')}</span>` +
+      `<button type="button" class="linkbtn" data-act="undo"${
+        n ? '' : ' disabled aria-disabled="true"'
+      }>↩ ${TS.t('undo')}</button>`
+    const undo = host.querySelector('[data-act="undo"]')
+    if (n) undo.onclick = () => TS.undo()
+  }
+
+  /* Blocking checks stay open — they are the reason the download is disabled.
+     Warnings collapse behind a count so the grid stays above the fold; the
+     operator opts into reading them. */
+  let showWarnings = false
+
+  function preflight() {
+    const stops = TS.blocking()
+    const warns = TS.warnings()
+    el('pfcard').hidden = false
+    el('pftitle').textContent = TS.t('issues')
+    el('pfsub').textContent = stops.length
+      ? `${stops.length} ${TS.t('blocking')} · ${warns.length} ${TS.t('warning')}`
+      : warns.length
+        ? `${TS.t('allClear')} · ${warns.length} ${TS.t('warning')}`
+        : TS.t('allClear')
+
+    const host = el('pflist')
+    host.textContent = ''
+    if (!stops.length) {
+      const line = document.createElement('p')
+      line.style.cssText = 'margin:0;font-size:12.5px;color:var(--success)'
+      line.textContent = `✓ ${TS.t('allClear')}`
+      host.append(line)
+    }
+
+    const item = (entry) => {
+      const row = document.createElement('button')
+      row.type = 'button'
+      row.className = `item ${entry.level}`
+      row.innerHTML =
+        `<span class="chip ${entry.level === 'stop' ? 'stop' : 'warn'}">${
+          entry.level === 'stop' ? TS.t('blocking') : TS.t('warning')
+        }</span>` +
+        `<span class="who">${entry.who}</span><span>${TS.state.lang === 'ar' ? entry.ar : entry.en}</span>` +
+        `<span class="go">${L('Open employee', 'فتح ملف الموظف')}</span>`
+      row.onclick = () => {
+        TS.resolve(entry)
+        TS.toast(`${entry.who} — ${TS.t('resolved')}`)
+      }
+      return row
+    }
+
+    stops.forEach((entry) => host.append(item(entry)))
+
+    if (warns.length) {
+      const toggle = document.createElement('button')
+      toggle.type = 'button'
+      toggle.className = 'linkbtn'
+      toggle.setAttribute('aria-expanded', String(showWarnings))
+      toggle.style.marginBlockStart = '4px'
+      toggle.textContent = `${showWarnings ? '▾' : '▸'} ${warns.length} ${TS.t('warning')}`
+      toggle.onclick = () => ((showWarnings = !showWarnings), TS.emit())
+      host.append(toggle)
+      if (showWarnings) warns.forEach((entry) => host.append(item(entry)))
+    }
+  }
+
+  function statpanel() {
+    const stats = TS.state.variant === 'statistics'
+    el('statcard').hidden = !stats
+    if (!stats) return
+    const implied = TS.impliedPosts()
+    const drift = implied > TS.state.postCount
+    el('stattitle').textContent = TS.t('statistics')
+    el('statbody').innerHTML =
+      `<span class="field"><label for="posts">${TS.t('posts')}</label>` +
+      `<input id="posts" type="number" min="0" max="26" value="${TS.state.postCount}"></span>` +
+      `<span class="readout"><span class="big">${implied.toFixed(1)}</span>` +
+      `<span class="cap">${TS.t('impliedPosts')}<br>${drift ? TS.t('impliedDrift') : TS.t('impliedOk')}</span></span>` +
+      `<span class="chip num ${drift ? 'stop' : 'ok'}">${drift ? '▲' : '✓'} ${implied.toFixed(1)} / ${TS.state.postCount}</span>` +
+      `<span class="explain">${L(
+        'Block 1 is the contracted posts and prints as manned; block 2 is surplus headcount and takes its filler code. Two blank rows separate them and the row numbers run straight through.',
+        'الكتلة 1 هي النقاط التعاقدية وتُطبع مشغولة؛ الكتلة 2 عدد زائد ويأخذ رمزه التعويضي. يفصل بينهما صفان فارغان وترقيم الصفوف متصل.',
+      )}</span>`
+    el('statbody').querySelector('#posts').onchange = (e) => TS.setPostCount(e.target.value)
+  }
+
+  function release() {
+    const m = TS.monthLabel()
+    const blocked = TS.blocking().length > 0 && !TS.state.closed
+    const host = el('release')
+    host.innerHTML =
+      (TS.state.closed
+        ? `<span class="seal"><span class="ring">✓</span>${TS.t('closed')} · ${TS.state.lang === 'ar' ? m.ar : m.en}</span>`
+        : '') +
+      `<div class="files"><code>${m.file}</code><code>${m.fileStats}</code></div>` +
+      `<span class="why">${
+        TS.state.closed
+          ? TS.t('closedNote')
+          : blocked
+            ? L(
+                'Two checks must be fixed before either workbook can be produced.',
+                'يجب إصلاح فحصين قبل إنتاج أي من الملفين.',
+              )
+            : TS.t('firstDownload')
+      }</span>` +
+      `<span class="spread releaseacts">` +
+      `<button type="button" class="btn btn-primary" data-act="dl-att" ${blocked ? 'disabled' : ''}>↓ ${TS.t('downloadAttendance')}</button>` +
+      `<button type="button" class="btn btn-outline" data-act="dl-stat" ${blocked ? 'disabled' : ''}>↓ ${TS.t('downloadStatistics')}</button>` +
+      (TS.state.closed
+        ? confirming
+          ? `<span class="confirm">${L('Reopen and supersede the sent file?', 'إعادة الفتح وإلغاء الملف المُرسل؟')}` +
+            `<button type="button" class="btn btn-danger btn-sm" data-act="reopen-yes">${TS.t('reopen')}</button>` +
+            `<button type="button" class="btn btn-outline btn-sm" data-act="reopen-no">${TS.t('cancel')}</button></span>`
+          : `<button type="button" class="btn btn-danger btn-sm" data-act="reopen">${TS.t('reopen')}</button>`
+        : '') +
+      `</span>`
+
+    host.querySelector('[data-act="dl-att"]').onclick = () => TS.download('attendance')
+    host.querySelector('[data-act="dl-stat"]').onclick = () => TS.download('statistics')
+    const ask = host.querySelector('[data-act="reopen"]')
+    if (ask) ask.onclick = () => ((confirming = true), TS.emit())
+    const yes = host.querySelector('[data-act="reopen-yes"]')
+    if (yes) yes.onclick = () => ((confirming = false), TS.reopenMonth())
+    const no = host.querySelector('[data-act="reopen-no"]')
+    if (no) no.onclick = () => ((confirming = false), TS.emit())
+  }
+
+  function paperlegend() {
+    el('paperlegend').innerHTML =
+      `<span class="cap">${L('As printed', 'كما تُطبع')}</span>` +
+      TS.CODES.map(
+        (c) =>
+          `<span class="swatchmini"><span class="glyph" data-code="${c.slug}">${
+            c.slug === '-' ? '–' : c.slug
+          }</span>${TS.state.lang === 'ar' ? c.ar : c.en}</span>`,
+      ).join('') +
+      `<span class="swatchmini trailing">SL␣ ${L(
+        'carries a trailing space — the client sheet totals it with COUNTIF($AO$5)',
+        'ينتهي بمسافة — تحتسبه ورقة العميل بدالة COUNTIF($AO$5)',
+      )}</span>`
+  }
+
+  function footnote() {
+    el('footnote').innerHTML = L(
+      'Sample data: 26 invented rows against 24 contracted posts, the live ratio (275 rows, 249 posts) at a scale that fits one screen. The header block above the grid is a verbatim quotation of the workbook, misspellings included; the app\'s own column labels are spelled correctly. Step back to June for the closed month and the blank day-31 column; step to August and open Client statistics to see the implied post count read above contract.',
+      'بيانات نموذجية: 26 صفاً مُفترضاً مقابل 24 نقطة تعاقدية، وهي نسبة النظام الفعلي (275 صفاً و249 نقطة) بمقياس يظهر في شاشة واحدة. كتلة الترويسة أعلى الشبكة نقل حرفي من الملف بما فيها الأخطاء الإملائية؛ أما تسميات أعمدة التطبيق فمكتوبة بشكل صحيح. ارجع إلى يونيو لرؤية الشهر المغلق وعمود اليوم 31 الفارغ، وانتقل إلى أغسطس ثم افتح إحصائية العميل لترى النقاط المحتسبة تقرأ أعلى من التعاقد.',
+    )
+  }
+
+  function paint() {
+    TS.renderChrome(el('chrome'))
+    el('eyebrow').textContent = TS.t('eyebrow')
+    el('title').textContent = TS.t('title')
+    el('lede').textContent = TS.t('lede')
+    mastright()
+    controls()
+    TS.renderRibbon(el('ribbon'), { keys: !TS.state.closed && TS.state.variant === 'attendance' })
+    editmeta()
+    preflight()
+    docmast()
+    TS.renderSheet(el('sheet'), {})
+    statpanel()
+    release()
+    paperlegend()
+    footnote()
+  }
+
+  TS.renderReview(
+    el('review'),
+    'a',
+    'The screen is the deliverable: the workbook, one column per day, corrected in place.',
+  )
+  TS.on('render', paint)
+  TS.on('change', paint)
+  paint()
+</script>
+</body>
+</html>

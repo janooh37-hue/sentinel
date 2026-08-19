@@ -1,0 +1,5 @@
+interface:
+  display_name: "Deploy GSSG Manager"
+  short_description: "Commit, push, deploy, and verify production"
+policy:
+  allow_implicit_invocation: false

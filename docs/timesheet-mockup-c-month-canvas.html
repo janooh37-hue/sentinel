@@ -1,0 +1,1237 @@
+<!doctype html>
+<html lang="en" dir="ltr" data-theme="light" data-density="default">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Monthly time sheet — direction C · Month Canvas</title>
+<link rel="stylesheet" href="timesheet-mockups.css" />
+<style>
+  /* ---- direction C only: the month canvas, the lens, the headcount curve ----
+
+     The premise: 275 rows × 31 columns of letters is a thing you read one cell
+     at a time, which is how "the July file overshot by 59 P days" survived a
+     hand check. So the month is drawn first as a field of colour, whole, at one
+     glance — and correcting a day is a second, deliberate act inside a lens that
+     opens under it. Nothing on the canvas edits anything: the canvas is evidence.
+
+     Every chromatic value comes from the kernel's [data-code] fills. The one
+     addition is a BODY for P: the kernel leaves P transparent because the
+     sheet's own letter carries it, and at 15×10px there is no letter — so the
+     baseline working day is painted with --surface-tinted and every real code
+     reads as an event against it. */
+
+  .mc-split {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 286px;
+    gap: 14px;
+    align-items: start;
+    margin-block-start: 14px;
+  }
+
+  .mc-side { display: grid; gap: 12px; }
+
+  @media (max-width: 1150px) {
+    .mc-split { grid-template-columns: minmax(0, 1fr); }
+  }
+
+  /* ------------------------------------------------------------ the canvas */
+  .mc-canvasbody { padding: 12px 16px 14px; }
+  .mc-scroll { overflow: auto; padding-block-end: 2px; }
+
+  /* One grid, three kinds of occupant: the day axis, the roster rows, and the
+     headcount curve. All three lay their 31 columns out with the SAME template,
+     so axis, field and curve stay in register — in both directions, because
+     grid flows along the inline axis and nothing here is anchored to a side. */
+  .mc-board {
+    --mc-w: calc(var(--cell) * 0.58);
+    --mc-h: calc(var(--cell) * 0.385);
+    --mc-gap: 1px;
+    --mc-plot: 42px;
+    --mc-label: 76px;
+    display: grid;
+    grid-template-columns: var(--mc-label) max-content;
+    column-gap: 10px;
+    row-gap: var(--mc-gap);
+    align-items: center;
+    inline-size: max-content;
+  }
+
+  .mc-strip {
+    display: grid;
+    grid-template-columns: repeat(31, var(--mc-w));
+    column-gap: var(--mc-gap);
+  }
+
+  /* the day axis */
+  .mc-axis { grid-column: 2; align-items: end; }
+
+  .mc-day {
+    display: grid;
+    justify-items: center;
+    gap: 1px;
+    padding-block-end: 3px;
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
+    font-size: 9px;
+    line-height: 1.1;
+    color: var(--text-muted);
+    overflow: hidden;
+  }
+
+  .mc-day small { font-size: 8px; color: var(--text-faint); }
+  .mc-day[data-blank="1"] { visibility: hidden; }
+
+  .mc-axislbl {
+    grid-column: 1;
+    align-self: end;
+    padding-block-end: 4px;
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--text-faint);
+    text-align: start;
+  }
+
+  /* the rank / block separator — the paper's sort order, kept in the canvas */
+  .mc-group {
+    grid-column: 1 / -1;
+    margin-block-start: 5px;
+    padding-block-end: 3px;
+    border-block-end: 1px solid var(--hairline);
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--text-faint);
+  }
+
+  /* The statistics two-block split: block 2 drops by exactly two rows, the two
+     blank rows the workbook itself prints between the blocks. */
+  .mc-group[data-block="2"] { margin-block-start: calc(2 * (var(--mc-h) + var(--mc-gap)) + 5px); }
+
+  /* Keyed on :lang(ar), not html[lang="ar"], because the attendance canvas
+     labels its groups with the PRINTED English designation whatever the
+     interface language — the column follows the deliverable. Each group carries
+     its own `lang`, exactly as the kernel's sheet headings do. */
+  .mc-axislbl:lang(ar),
+  .mc-group:lang(ar) { letter-spacing: 0; text-transform: none; }
+
+  /* the row label, and the row */
+  .mc-rowlabel {
+    grid-column: 1;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-block-size: var(--mc-h);
+    padding-inline-start: 5px;
+    border-inline-start: 2px solid transparent;
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
+    font-size: 10px;
+    color: var(--text-faint);
+    white-space: nowrap;
+  }
+
+  .mc-rowlabel b { font-weight: 500; color: var(--text-muted); }
+  .mc-rowlabel[data-band="in"] { border-inline-start-color: var(--border-strong); }
+  .mc-rowlabel[data-band="anchor"] { border-inline-start-color: var(--primary); }
+  .mc-rowlabel[data-band="anchor"] b { color: var(--primary); font-weight: 600; }
+
+  .mc-row {
+    grid-column: 2;
+    display: block;
+    inline-size: max-content;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    background: none;
+    font: inherit;
+    color: inherit;
+    cursor: pointer;
+  }
+
+  .mc-row > .mc-strip {
+    border-radius: 2px;
+    transition: box-shadow var(--motion-fast) linear;
+  }
+
+  .mc-row:hover > .mc-strip { box-shadow: 0 0 0 1px var(--border-strong); }
+  .mc-row[data-band="anchor"] > .mc-strip { box-shadow: 0 0 0 1px var(--primary); }
+
+  /* ------------------------------------------------------------- the blocks */
+  .mc-blk { block-size: var(--mc-h); border-radius: 1px; }
+
+  /* P — see the file header. The canvas has no letters at this size, so the
+     baseline working day needs a body of its own: the neutral border token,
+     quiet enough that every real code reads as an event against it and solid
+     enough that the month reads as a field rather than a set of stripes. */
+  .mc-board .mc-blk[data-code="P"] { background: var(--border); }
+
+  /* day 31 of a 30-day month: not a day, so not a mark at all */
+  .mc-board .mc-blk[data-code=""] { background: none; }
+
+  /* Off roster is a hole in the roster, not a hue: an empty outlined box against
+     the filled field. It separates from a working day with no reliance on colour,
+     and from a day the month does not have, which carries no mark. */
+  .mc-board .mc-blk[data-code="-"] {
+    background: var(--surface);
+    box-shadow: inset 0 0 0 1px var(--border-strong);
+  }
+
+  /* The two codes that demand an answer are outlined as well as filled, so they
+     read as events in greyscale and for colour-blind eyes. currentColor here is
+     the kernel's own ink for that code. */
+  .mc-board .mc-blk[data-code="AB"],
+  .mc-board .mc-blk[data-code="NG"] { box-shadow: inset 0 0 0 1px currentColor; }
+
+  /* a correction made this month, marked the way the sheet marks it */
+  .mc-board .mc-blk[data-edited="1"] { box-shadow: inset 0 0 0 1px var(--primary); }
+
+  /* ------------------------------------------------------- headcount curve */
+  .mc-sparklbl {
+    grid-column: 1;
+    display: grid;
+    gap: 2px;
+    align-self: end;
+    padding-block-end: 2px;
+    font-size: 10px;
+    color: var(--text-muted);
+    text-align: start;
+  }
+
+  .mc-sparklbl .key {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
+    font-size: 9.5px;
+    color: var(--text-faint);
+  }
+
+  .mc-sparklbl .key i {
+    inline-size: 14px;
+    block-size: 0;
+    border-block-start: 1px dashed var(--border-strong);
+  }
+
+  .mc-spark {
+    grid-column: 2;
+    position: relative;
+    align-items: end;
+    margin-block-start: 6px;
+  }
+
+  .mc-sp {
+    display: grid;
+    grid-template-rows: 11px var(--mc-plot);
+    block-size: calc(11px + var(--mc-plot));
+    margin: 0;
+    padding: 0;
+    border: 0;
+    background: none;
+    font: inherit;
+    cursor: pointer;
+    border-radius: 2px;
+  }
+
+  .mc-sp-n {
+    grid-row: 1;
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
+    font-size: 9px;
+    line-height: 11px;
+    text-align: center;
+    color: var(--accent);
+  }
+
+  /* The bars are one quiet neutral, because the reading is the SHAPE of the
+     curve against the contract line — colouring 17 of 31 days red would flag
+     the whole month and flag nothing. A day under contract is marked instead:
+     an accent cap on the bar, and its headcount printed above it. */
+  .mc-sp-b {
+    grid-row: 2;
+    align-self: end;
+    inline-size: 100%;
+    min-block-size: 2px;
+    background: var(--text-faint);
+  }
+
+  .mc-sp[data-low="1"] .mc-sp-b { border-block-start: 2px solid var(--accent); }
+  .mc-sp[data-blank="1"] { visibility: hidden; }
+  .mc-sp:hover .mc-sp-b { background: var(--primary-hover); }
+  .mc-sp[aria-pressed="true"] { background: var(--primary-soft); }
+  .mc-sp[aria-pressed="true"] .mc-sp-b { box-shadow: 0 0 0 1px var(--primary); }
+
+  /* The contracted post count, drawn ACROSS the curve in the primary ink so it
+     reads as the reference the bars are measured against: under the line is
+     short-staffed, and the capped bars name which days. */
+  .mc-base {
+    position: absolute;
+    inset-inline: 0;
+    block-size: 0;
+    border-block-start: 1px dashed var(--primary);
+    pointer-events: none;
+  }
+
+  /* --------------------------------------------------------- the side panel */
+  .mc-implied {
+    display: grid;
+    gap: 8px;
+    padding: 12px 14px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    background: var(--surface-raised);
+  }
+
+  .mc-implied[data-hi="1"] { border-color: var(--primary); box-shadow: 0 0 0 1px var(--primary); }
+  .mc-implied .rule { margin: 0; font-size: 11.5px; line-height: 1.45; color: var(--text-muted); }
+  .mc-implied .rule b { color: var(--text); font-weight: 600; }
+
+  .mc-tally { display: grid; gap: 5px; }
+
+  .mc-trow {
+    display: grid;
+    grid-template-columns: 24px minmax(0, 1fr) 34px 72px;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .mc-trow .glyph {
+    display: grid;
+    place-items: center;
+    inline-size: 24px;
+    block-size: 16px;
+    border: 1px solid color-mix(in oklab, var(--text) 14%, transparent);
+    border-radius: 3px;
+    font-family: var(--font-mono);
+    font-size: 9.5px;
+    font-weight: 600;
+  }
+
+  .mc-trow .nm {
+    font-size: 11.5px;
+    color: var(--text-muted);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .mc-trow .n {
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
+    font-size: 11.5px;
+    text-align: end;
+    color: var(--text);
+  }
+
+  /* `.share`, never `.bar` — the kernel already owns `.bar` for the toolbar pill,
+     and inheriting its padding silently shrank every share. The bar is a
+     QUANTITY, so it takes one neutral fill: the code's identity is already
+     carried by the glyph and letter beside it, and P and off-roster have no fill
+     of their own to lend it. */
+  .mc-trow .share { display: block; block-size: 8px; border-radius: 2px; background: var(--hairline); }
+
+  .mc-trow .share i {
+    display: block;
+    block-size: 100%;
+    min-inline-size: 2px;
+    border-radius: 2px;
+    background: var(--text-faint);
+  }
+
+  .mc-stack { display: grid; gap: 7px; justify-items: start; }
+  .mc-stack .cap { font-size: 11.5px; line-height: 1.5; color: var(--text-muted); }
+  .mc-stack .cap b { font-family: var(--font-mono); font-weight: 600; color: var(--text); }
+  .mc-stack .good { font-size: 12px; font-weight: 600; color: var(--success); }
+
+  /* -------------------------------------------------------------- the lens */
+  .mc-lens { margin-block-start: 14px; }
+  .mc-lens > header { flex-wrap: wrap; }
+  .mc-lens .acts { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+
+  .mc-lenstop {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 12px;
+    padding: 11px 16px;
+    border-block-end: 1px solid var(--hairline);
+    background: var(--surface-raised);
+  }
+
+  .mc-lenstop .hint { font-size: 11.5px; line-height: 1.5; color: var(--text-muted); max-inline-size: 54ch; }
+
+  .mc-lenstop .hint kbd {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    padding: 1px 4px;
+    border-radius: 3px;
+    background: var(--surface-tinted);
+    color: var(--text-muted);
+  }
+
+  .mc-lens .sheetwrap {
+    border: 0;
+    border-start-start-radius: 0;
+    border-start-end-radius: 0;
+    max-block-size: 46vh;
+  }
+
+  .mc-lenshint {
+    display: grid;
+    justify-items: start;
+    gap: 9px;
+    padding: 15px 16px 18px;
+    font-size: 12.5px;
+    line-height: 1.55;
+    color: var(--text-muted);
+    max-inline-size: 78ch;
+  }
+
+  .mc-lens[data-open="0"] .sheetwrap,
+  .mc-lens[data-open="0"] .mc-lenstop { display: none; }
+  .mc-lens[data-open="1"] .mc-lenshint { display: none; }
+
+  .mc-mastcol { display: flex; flex-direction: column; align-items: flex-end; gap: 9px; }
+  .mc-mastrow { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 8px; }
+
+  .swatch[disabled] { cursor: default; }
+  .swatch[disabled]:hover { box-shadow: none; }
+</style>
+</head>
+<body>
+<div id="review"></div>
+<header id="chrome"></header>
+
+<main class="page">
+  <div class="masthead">
+    <div>
+      <div class="eyebrow" id="eyebrow"></div>
+      <h1 id="title"></h1>
+      <p id="lede"></p>
+    </div>
+    <div class="spread mc-mastcol" id="mastright"></div>
+  </div>
+
+  <div class="bar" id="controls"></div>
+
+  <div class="mc-split">
+    <section class="card">
+      <header>
+        <div>
+          <h2 id="canvtitle"></h2>
+          <p id="canvsub"></p>
+        </div>
+        <div class="spread mc-mastrow" id="canvmeta"></div>
+      </header>
+      <div class="mc-canvasbody">
+        <span class="vh" role="img" id="canvalt" aria-label=""></span>
+        <p class="vh" id="canvtotals"></p>
+        <div class="mc-scroll">
+          <div class="mc-board" id="board" role="group" aria-describedby="canvtotals"></div>
+        </div>
+      </div>
+    </section>
+
+    <aside class="mc-side" id="side"></aside>
+  </div>
+
+  <section class="card mc-lens" id="lenscard" data-open="0">
+    <header>
+      <div>
+        <h2 id="lenstitle"></h2>
+        <p id="lenssub"></p>
+      </div>
+      <div class="spread acts" id="lensacts"></div>
+    </header>
+    <div class="mc-lenstop">
+      <div class="ribbon" id="lensribbon"></div>
+      <span class="hint spread" id="lenshint"></span>
+    </div>
+    <div class="mc-lenshint" id="lensempty"></div>
+    <div class="sheetwrap" id="lenssheet"></div>
+  </section>
+
+  <p class="footnote" id="footnote"></p>
+</main>
+
+<script src="timesheet-mockups.js"></script>
+<script>
+  const L = (en, ar) => (TS.state.lang === 'ar' ? ar : en)
+  const el = (id) => document.getElementById(id)
+  const HOT = new Set(['AB', 'NG', '-'])
+
+  /* The lens has exactly one anchor at a time: either a band of rows or one
+     day's exceptions. `pinned` is what makes it usable — while it is false the
+     lens follows the pointer across the canvas, and the moment you commit to a
+     row it stops moving, so the pointer can travel down into the grid to edit
+     without the band sliding out from under it. */
+  const ui = { open: false, pinned: false, band: null, day: null, anom: -1 }
+
+  const readOnly = () => TS.state.closed || TS.state.variant === 'statistics'
+
+  const codeName = (slug) => {
+    const code = TS.CODES.find((c) => c.slug === slug)
+    return code ? (TS.state.lang === 'ar' ? code.ar : code.en) : slug
+  }
+
+  const readOnlyWhy = () =>
+    TS.state.closed
+      ? TS.t('closedNote')
+      : L(
+          'Client statistics is generated from attendance. Switch to Attendance to correct a day.',
+          'تُولَّد إحصائية العميل من كشف الحضور. انتقل إلى كشف الحضور لتصحيح أي يوم.',
+        )
+
+  /* The attendance workbook carries its own name per sheet (drivers takes the
+     للسائقين suffix); the statistics workbook does not split. */
+  const files = () => {
+    const m = TS.monthLabel()
+    return TS.state.sheet === 'drivers'
+      ? [m.file.replace('.xlsx', ' للسائقين.xlsx'), m.fileStats]
+      : [m.file, m.fileStats]
+  }
+
+  /* --------------------------------------------------------- 1. readings */
+  /* One pass over the month yields every reading the page needs: per-row code
+     counts for the row labels and the spoken alternative, and the month tally
+     for the side panel. */
+  function scan() {
+    const days = TS.monthLabel().days
+    const perCode = {}
+    const perRow = new Map()
+    let total = 0
+    TS.CODES.forEach((c) => (perCode[c.slug] = 0))
+    TS.rows.forEach((row) => {
+      const counts = {}
+      for (let d = 1; d <= days; d += 1) {
+        const code = TS.codeOf(row, d)
+        if (code === null) continue
+        const slug = TS.slugOf(code)
+        counts[slug] = (counts[slug] || 0) + 1
+        perCode[slug] += 1
+        total += 1
+      }
+      perRow.set(row.id, counts)
+    })
+    return { perCode, perRow, total, days }
+  }
+
+  /* Every run of AB, NG or off-roster, in row order then day order — the walk
+     `Next` follows, and the number it counts. */
+  function anomalies() {
+    const days = TS.monthLabel().days
+    const out = []
+    TS.rows.forEach((row, index) => {
+      let d = 1
+      while (d <= days) {
+        const slug = TS.slugOf(TS.codeOf(row, d))
+        if (!HOT.has(slug)) {
+          d += 1
+          continue
+        }
+        let end = d
+        while (end < days && TS.slugOf(TS.codeOf(row, end + 1)) === slug) end += 1
+        out.push({ rowId: row.id, no: row.no, index, from: d, to: end, slug })
+        d = end + 1
+      }
+    })
+    return out
+  }
+
+  /* A five-row slab, clamped to the roster so the lens keeps one height. */
+  function band(rowId) {
+    const list = TS.rows
+    const i = list.findIndex((r) => r.id === rowId)
+    if (i < 0) return []
+    let start = Math.max(0, i - 2)
+    if (start + 5 > list.length) start = Math.max(0, list.length - 5)
+    return list.slice(start, start + 5)
+  }
+
+  const notOnPost = (day) =>
+    TS.rows.filter((row) => {
+      const code = TS.codeOf(row, day)
+      return code !== null && TS.slugOf(code) !== 'P'
+    })
+
+  const lensRows = () => (ui.day ? notOnPost(ui.day) : ui.band ? band(ui.band) : [])
+
+  /* ---------------------------------------------------- 2. lens transitions */
+  function preview(rowId) {
+    if (ui.pinned || ui.day) return
+    if (el('lenssheet').contains(document.activeElement)) return
+    ui.band = rowId
+    ui.open = true
+    paintLens()
+  }
+
+  function pin(rowId) {
+    ui.band = rowId
+    ui.day = null
+    ui.pinned = true
+    ui.open = true
+    paintLens()
+  }
+
+  function filterDay(day) {
+    if (ui.day === day) return closeLens()
+    ui.day = day
+    ui.band = null
+    ui.pinned = true
+    ui.open = true
+    paintLens()
+  }
+
+  function closeLens() {
+    ui.open = false
+    ui.pinned = false
+    ui.band = null
+    ui.day = null
+    paintLens()
+  }
+
+  function nextAnomaly() {
+    const runs = anomalies()
+    if (!runs.length) return
+    ui.anom = (ui.anom + 1) % runs.length
+    const run = runs[ui.anom]
+    pin(run.rowId)
+    side(scan())
+    TS.focusCell(run.rowId, run.from)
+  }
+
+  /* ------------------------------------------------------------ 3. the bar */
+  /* Built once per language, then only synced — so the month stepper and the
+     post-count field keep their focus, and typing in the field is never fought
+     by a repaint. */
+  let barLang = null
+
+  function controls() {
+    const host = el('controls')
+    if (barLang !== TS.state.lang) {
+      barLang = TS.state.lang
+      host.innerHTML =
+        `<button type="button" class="icobtn" data-act="prev" aria-label="${TS.t('prevMonth')}">‹</button>` +
+        `<b class="mono" data-out="month" style="font-size:13px;min-inline-size:10ch;text-align:center"></b>` +
+        `<button type="button" class="icobtn" data-act="next" aria-label="${TS.t('nextMonth')}">›</button>` +
+        `<span class="rule"></span>` +
+        `<div class="seg" role="group" aria-label="${L('Workbook', 'الملف')}">` +
+        `<button type="button" data-sheet="main">${TS.t('main')}</button>` +
+        `<button type="button" data-sheet="drivers">${TS.t('drivers')}</button></div>` +
+        `<span class="rule"></span>` +
+        `<span class="field"><label for="posts">${TS.t('posts')}</label>` +
+        `<input id="posts" type="number" min="0" step="1"></span>` +
+        `<span class="field" data-out="implied"></span>` +
+        `<span class="rule spread"></span>` +
+        `<span class="field">${TS.t('density')}` +
+        `<span class="seg" role="group" aria-label="${TS.t('density')}">` +
+        ['compact', 'default', 'roomy']
+          .map(
+            (d, i) =>
+              `<button type="button" data-density="${d}" aria-label="${
+                [L('Compact', 'مضغوط'), L('Default', 'افتراضي'), L('Roomy', 'مريح')][i]
+              }">${['S', 'M', 'L'][i]}</button>`,
+          )
+          .join('') +
+        `</span></span>`
+
+      host.querySelector('[data-act="prev"]').onclick = () => TS.setMonth(-1)
+      host.querySelector('[data-act="next"]').onclick = () => TS.setMonth(1)
+      host.querySelectorAll('[data-sheet]').forEach((b) => (b.onclick = () => TS.setSheet(b.dataset.sheet)))
+      host.querySelectorAll('[data-density]').forEach((b) => (b.onclick = () => TS.setDensity(b.dataset.density)))
+      host.querySelector('#posts').onchange = (e) => TS.setPostCount(e.target.value)
+    }
+
+    const m = TS.monthLabel()
+    host.querySelector('[data-out="month"]').textContent = TS.state.lang === 'ar' ? m.ar : m.en
+    host.querySelectorAll('[data-sheet]').forEach((b) =>
+      b.setAttribute('aria-pressed', String(TS.state.sheet === b.dataset.sheet)),
+    )
+    host.querySelectorAll('[data-density]').forEach((b) =>
+      b.setAttribute('aria-pressed', String(TS.state.density === b.dataset.density)),
+    )
+    const posts = host.querySelector('#posts')
+    posts.max = TS.rows.length
+    posts.disabled = TS.state.closed
+    if (document.activeElement !== posts) posts.value = TS.state.postCount
+    host.querySelector('[data-out="implied"]').innerHTML =
+      `→ ${TS.t('impliedPosts')} <b class="mono">${TS.impliedPosts().toFixed(1)}</b>`
+  }
+
+  /* --------------------------------------------------------- 4. the canvas */
+  /* The board is rebuilt only when its SHAPE changes — month, language, variant,
+     post count, workbook. Every other repaint writes attributes into the blocks
+     that are already there, so an edit never destroys hover or focus and never
+     costs 800 elements. */
+  let shape = null
+  const index = { rows: [], spark: [], base: null, contract: null }
+
+  const boardShape = () =>
+    [TS.state.month, TS.state.lang, TS.state.variant, TS.state.postCount, TS.state.sheet].join('|')
+
+  function buildBoard() {
+    const board = el('board')
+    const days = TS.monthLabel().days
+    const stats = TS.state.variant === 'statistics'
+    board.textContent = ''
+    index.rows = []
+    index.spark = []
+    index.base = null
+    index.contract = null
+
+    let line = 1
+    const at = (node, column) => {
+      node.style.gridRow = String(line)
+      node.style.gridColumn = column
+      board.append(node)
+    }
+    const strip = (cls) => {
+      const node = document.createElement('div')
+      node.className = cls ? `mc-strip ${cls}` : 'mc-strip'
+      return node
+    }
+
+    /* the day axis */
+    const axisLabel = document.createElement('div')
+    axisLabel.className = 'mc-axislbl'
+    axisLabel.textContent = TS.t('day')
+    at(axisLabel, '1')
+    const axis = strip('mc-axis')
+    for (let d = 1; d <= 31; d += 1) {
+      const head = document.createElement('div')
+      head.className = 'mc-day'
+      head.innerHTML = `${d}<small>${TS.dayLabel(d)}</small>`
+      if (d > days) head.dataset.blank = '1'
+      axis.append(head)
+    }
+    at(axis, '2')
+    line += 1
+
+    /* the roster, with a separator wherever the paper's sort order breaks */
+    let lastRank = null
+    let lastBlock = null
+    TS.rows.forEach((row) => {
+      if (stats ? row.block !== lastBlock : row.rank !== lastRank) {
+        lastBlock = row.block
+        lastRank = row.rank
+        const group = document.createElement('div')
+        group.className = 'mc-group'
+        if (stats) group.dataset.block = String(row.block)
+        /* The heading is the PRINTED designation, so its language follows the
+           deliverable, not the interface — English on the attendance sheet even
+           in an Arabic session, exactly as the kernel's sheet headings do. The
+           block labels are the app's own copy, so those do follow the session. */
+        group.textContent = stats
+          ? row.block === 1
+            ? TS.t('block1')
+            : TS.t('block2')
+          : row.desig.en
+        group.lang = stats ? TS.state.lang : 'en'
+        at(group, '1 / -1')
+        line += 1
+      }
+
+      const label = document.createElement('div')
+      label.className = 'mc-rowlabel'
+      label.dataset.row = row.id
+      label.innerHTML = `${row.no}<b>${row.id}</b>`
+      at(label, '1')
+
+      const button = document.createElement('button')
+      button.type = 'button'
+      button.className = 'mc-row'
+      button.dataset.row = row.id
+      button.setAttribute('aria-controls', 'lenscard')
+      button.setAttribute('aria-expanded', 'false')
+      const cells = strip('')
+      const blocks = []
+      for (let d = 1; d <= 31; d += 1) {
+        const blk = document.createElement('span')
+        blk.className = 'mc-blk'
+        cells.append(blk)
+        blocks.push(blk)
+      }
+      button.append(cells)
+      button.addEventListener('pointerenter', () => preview(row.id))
+      button.addEventListener('focus', () => preview(row.id))
+      button.addEventListener('click', () => pin(row.id))
+      button.addEventListener('keydown', (e) => {
+        if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+          e.preventDefault()
+          const all = [...board.querySelectorAll('.mc-row')]
+          all[all.indexOf(button) + (e.key === 'ArrowDown' ? 1 : -1)]?.focus()
+          return
+        }
+        /* Enter drops out of the canvas and into the lens, on the first day of
+           this row that is not an ordinary working day. */
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault()
+          pin(row.id)
+          let first = 1
+          for (let d = 1; d <= days; d += 1) {
+            if (TS.slugOf(TS.codeOf(row, d)) !== 'P') {
+              first = d
+              break
+            }
+          }
+          TS.focusCell(row.id, first)
+        }
+      })
+      at(button, '2')
+      index.rows.push({ row, label, button, blocks })
+      line += 1
+    })
+
+    /* the headcount curve, on the same 31 columns */
+    const sparkLabel = document.createElement('div')
+    sparkLabel.className = 'mc-sparklbl'
+    sparkLabel.innerHTML =
+      `<span>${TS.t('headcount')}</span><span class="key"><i></i><b class="num" data-out="contract"></b></span>`
+    at(sparkLabel, '1')
+    const spark = strip('mc-spark')
+    for (let d = 1; d <= 31; d += 1) {
+      const column = document.createElement('button')
+      column.type = 'button'
+      column.className = 'mc-sp'
+      column.dataset.day = String(d)
+      column.innerHTML = '<span class="mc-sp-n mono"></span><span class="mc-sp-b"></span>'
+      column.addEventListener('click', () => filterDay(d))
+      spark.append(column)
+      index.spark.push(column)
+    }
+    const base = document.createElement('span')
+    base.className = 'mc-base'
+    base.setAttribute('aria-hidden', 'true')
+    spark.append(base)
+    index.base = base
+    index.contract = sparkLabel.querySelector('[data-out="contract"]')
+    at(spark, '2')
+  }
+
+  /* Values only: attribute writes into an existing board, no DOM churn. */
+  function syncBoard(readings) {
+    const days = readings.days
+    const total = TS.rows.length || 1
+    const stats = TS.state.variant === 'statistics'
+
+    index.rows.forEach(({ row, label, button, blocks }) => {
+      const counts = readings.perRow.get(row.id) || {}
+      for (let d = 1; d <= 31; d += 1) {
+        const blk = blocks[d - 1]
+        const slug = d > days ? '' : TS.slugOf(TS.codeOf(row, d))
+        blk.dataset.code = slug
+        if (!stats && row.edited.has(d)) blk.dataset.edited = '1'
+        else blk.removeAttribute('data-edited')
+        if (slug && slug !== 'P') blk.title = `${TS.t('day')} ${d} · ${codeName(slug)}`
+        else blk.removeAttribute('title')
+      }
+      const spoken = TS.CODES.filter((c) => counts[c.slug])
+        .map((c) => `${counts[c.slug]} ${TS.state.lang === 'ar' ? c.ar : c.en}`)
+        .join(' · ')
+      button.setAttribute(
+        'aria-label',
+        `${TS.t('row')} ${row.no} · ${row.id} · ${row.name} — ${spoken} · ${L(
+          'open the lens on this row',
+          'فتح العدسة على هذا الصف',
+        )}`,
+      )
+      label.title = `${row.id} · ${row.name}`
+    })
+
+    const contract = Math.min(1, TS.state.postCount / total)
+    index.base.style.insetBlockEnd = `calc(${contract} * var(--mc-plot))`
+    index.contract.textContent = TS.state.postCount
+    index.spark.forEach((column, i) => {
+      const day = i + 1
+      const blank = day > days
+      const n = blank ? 0 : TS.dayCount(day)
+      const low = !blank && n < TS.state.postCount
+      column.dataset.blank = blank ? '1' : '0'
+      column.dataset.low = low ? '1' : '0'
+      column.disabled = blank
+      column.querySelector('.mc-sp-b').style.blockSize = `calc(${n / total} * var(--mc-plot))`
+      column.querySelector('.mc-sp-n').textContent = low ? n : ''
+      column.title = blank ? '' : `${TS.t('day')} ${day} · ${n} ${TS.t('headcount')}`
+      column.setAttribute(
+        'aria-label',
+        blank
+          ? ''
+          : `${TS.t('day')} ${day} · ${n} ${TS.t('headcount')}${
+              low ? ` · ${L('below', 'أقل من')} ${TS.state.postCount}` : ''
+            } · ${L('show the rows not on post', 'عرض الصفوف غير الموجودة على النقاط')}`,
+      )
+    })
+  }
+
+  /* Which rows the lens is holding, marked in the margin of the canvas. */
+  function markBand() {
+    const inBand = new Set(lensRows().map((r) => r.id))
+    index.rows.forEach(({ row, label, button }) => {
+      const anchor = ui.open && !ui.day && ui.band === row.id
+      const state = anchor ? 'anchor' : ui.open && inBand.has(row.id) ? 'in' : 'out'
+      label.dataset.band = state
+      button.dataset.band = state
+      button.setAttribute('aria-expanded', String(anchor))
+    })
+    index.spark.forEach((column) =>
+      column.setAttribute('aria-pressed', String(ui.day === Number(column.dataset.day))),
+    )
+  }
+
+  function canvasHead(readings) {
+    const m = TS.monthLabel()
+    const n = TS.rows.length
+    el('canvtitle').textContent = L('Month canvas', 'لوحة الشهر')
+    el('canvsub').textContent = L(
+      `${n} rows × ${m.days} days · one block per day, read the field for drift`,
+      `${n} صفاً × ${m.days} يوماً · مربع واحد لكل يوم · اقرأ الحقل بحثاً عن الانحراف`,
+    )
+
+    el('canvmeta').innerHTML =
+      `<span class="chip">${TS.state.variant === 'attendance' ? TS.t('attendance') : TS.t('statistics')}</span>` +
+      (TS.state.closed
+        ? `<span class="chip info">${TS.t('closed')}</span>`
+        : `<span class="chip">${TS.editCount()} ${TS.t('edited')}</span>` +
+          `<button type="button" class="linkbtn" data-act="undo"${TS.editCount() ? '' : ' disabled'}>↩ ${TS.t('undo')}</button>`)
+    const undo = el('canvmeta').querySelector('[data-act="undo"]')
+    if (undo && !undo.disabled) undo.onclick = () => TS.undo()
+
+    /* The picture, in words. The overview must not be colour-only. */
+    const spoken = TS.CODES.filter((c) => readings.perCode[c.slug])
+      .map((c) => `${TS.state.lang === 'ar' ? c.ar : c.en} ${readings.perCode[c.slug]}`)
+      .join(' · ')
+    const summary = L(
+      `Canvas of ${m.en}: ${n} roster rows by ${m.days} days, one block per employee-day.`,
+      `لوحة ${m.ar}: ${n} صفاً في الكشف × ${m.days} يوماً، مربع واحد لكل يوم لكل فرد.`,
+    )
+    el('canvalt').setAttribute('aria-label', summary)
+    el('board').setAttribute('aria-label', summary)
+    el('canvtotals').textContent = `${L('Cells by code', 'الخلايا حسب الرمز')}: ${spoken}.`
+  }
+
+  /* ----------------------------------------------------- 5. the side panel */
+  function side(readings) {
+    const host = el('side')
+    const implied = TS.impliedPosts()
+    const drift = implied > TS.state.postCount + 0.05
+    const stats = TS.state.variant === 'statistics'
+    const runs = anomalies()
+    const stops = TS.blocking()
+    const warns = TS.warnings()
+    const at = ui.anom >= 0 && ui.anom < runs.length ? runs[ui.anom] : null
+
+    host.innerHTML =
+      /* the number the whole feature exists to protect */
+      `<section class="card"><header><h2>${TS.t('impliedPosts')}</h2></header><div class="body">` +
+      `<div class="mc-implied" data-hi="${stats ? '1' : '0'}">` +
+      `<span class="readout"><span class="big">${implied.toFixed(1)}</span>` +
+      `<span class="cap">${drift ? TS.t('impliedDrift') : TS.t('impliedOk')}</span></span>` +
+      /* `23.5 / 24` is two number runs around a neutral slash, so an Arabic
+         paragraph would reorder it into `24 / 23.5`. The kernel's `.num` leaf
+         isolates it — same for the row-id pair in the lens subtitle. */
+      `<span class="chip ${drift ? 'stop' : 'ok'}">${drift ? '▲' : '✓'} ` +
+      `<span class="num">${implied.toFixed(1)} / ${TS.state.postCount}</span></span>` +
+      `<p class="rule">${L(
+        `At or below <b>${TS.state.postCount}</b> is correct. Above it means block-2 rows are still P.`,
+        `المطابق أو الأقل من <b>${TS.state.postCount}</b> صحيح، وما فوقه يعني أن صفوف الكتلة 2 ما زالت P.`,
+      )}</p>` +
+      `<p class="rule">${L(
+        `Read off ${stats ? 'client statistics' : 'attendance'} · P days ÷ ${readings.days} days.`,
+        `مقروءة من ${stats ? 'إحصائية العميل' : 'كشف الحضور'} · أيام P مقسومة على ${readings.days} يوماً.`,
+      )}</p></div></div></section>` +
+
+      /* the tally: the legend, keyed to the field, with the month's arithmetic */
+      `<section class="card"><header><h2>${L('Cells by code', 'الخلايا حسب الرمز')}</h2>` +
+      `<p>${readings.total} ${L('cells this month', 'خلية هذا الشهر')}</p></header>` +
+      `<div class="body"><div class="mc-tally">` +
+      TS.CODES.map((c) => {
+        const n = readings.perCode[c.slug]
+        const share = readings.total ? (n / readings.total) * 100 : 0
+        return (
+          `<div class="mc-trow" title="${share.toFixed(1)}% ${L('of the month', 'من الشهر')}">` +
+          `<span class="glyph" data-code="${c.slug}">${c.slug === '-' ? '–' : c.slug}</span>` +
+          `<span class="nm">${TS.state.lang === 'ar' ? c.ar : c.en}</span>` +
+          `<span class="n num">${n}</span>` +
+          `<span class="share"><i style="inline-size:${share.toFixed(2)}%"></i></span></div>`
+        )
+      }).join('') +
+      `</div></div></section>` +
+
+      /* the walk through everything that needs an answer */
+      `<section class="card"><header><h2>${L('Anomalies', 'الحالات الشاذة')}</h2></header>` +
+      `<div class="body"><div class="mc-stack">` +
+      (runs.length
+        ? `<button type="button" class="btn btn-outline btn-sm" data-act="anom" aria-label="${L(
+            `Next anomaly of ${runs.length} — open it in the lens`,
+            `الحالة الشاذة التالية من ${runs.length} — فتحها في العدسة`,
+          )}">↧ ${L(`Next of ${runs.length}`, `التالي من ${runs.length}`)}</button>` +
+          `<span class="cap">${
+            at
+              ? L(
+                  `Now at ${ui.anom + 1} of ${runs.length} · <b class="num">${at.rowId}</b> · ${at.slug} · ${
+                    at.from === at.to
+                      ? `day <span class="num">${at.from}</span>`
+                      : `days <span class="num">${at.from}–${at.to}</span>`
+                  }`,
+                  `الحالة ${ui.anom + 1} من ${runs.length} · <b class="num">${at.rowId}</b> · ${at.slug} · ${
+                    at.from === at.to
+                      ? `يوم <span class="num">${at.from}</span>`
+                      : `الأيام <span class="num">${at.from}–${at.to}</span>`
+                  }`,
+                )
+              : L(
+                  'Every run of AB, NG or off-roster, in the order the sheet prints them.',
+                  'كل تتابع من AB أو NG أو خارج الكشف، بالترتيب الذي يطبعه الكشف.',
+                )
+          }</span>`
+        : `<span class="cap">${L(
+            'Nothing to answer for: no absence, no pending joiner and no departure in this workbook this month.',
+            'لا شيء يستدعي المراجعة: لا غياب ولا مباشرة معلّقة ولا خروج من الكشف في هذا الملف هذا الشهر.',
+          )}</span>`) +
+      `</div></div></section>` +
+
+      /* preflight, per workbook */
+      `<section class="card"><header><h2>${TS.t('issues')}</h2>` +
+      `<p>${
+        stops.length
+          ? `${stops.length} ${TS.t('blocking')} · ${warns.length} ${TS.t('warning')}`
+          : warns.length
+            ? `${warns.length} ${TS.t('warning')}`
+            : `${TS.state.sheet === 'drivers' ? TS.t('drivers') : TS.t('main')} · ${TS.monthLabel().stamp}`
+      }</p></header><div class="body"><div class="pf" id="pflist"></div></div></section>`
+
+    const anom = host.querySelector('[data-act="anom"]')
+    if (anom) anom.onclick = nextAnomaly
+
+    const pf = host.querySelector('#pflist')
+    if (!stops.length && !warns.length) {
+      /* The all-clear is a real state, not a fallback: say what passed and what
+         happens next. The drivers workbook lands here in every fixture month. */
+      const clear = document.createElement('div')
+      clear.className = 'mc-stack'
+      clear.innerHTML =
+        `<span class="good">✓ ${TS.t('allClear')}</span>` +
+        `<span class="cap">${
+          TS.state.closed
+            ? TS.t('closedNote')
+            : L(
+                `Nothing blocks the release. ${TS.t('firstDownload')}`,
+                `لا شيء يعيق الإصدار. ${TS.t('firstDownload')}`,
+              )
+        }</span>` +
+        `<span class="cap"><b class="iso">${files()[0]}</b></span>`
+      pf.append(clear)
+    }
+    ;[...stops, ...warns].forEach((entry) => {
+      const item = document.createElement('button')
+      item.type = 'button'
+      item.className = `item ${entry.level}`
+      item.style.flexWrap = 'wrap'
+      item.innerHTML =
+        `<span class="chip ${entry.level === 'stop' ? 'stop' : 'warn'}">${
+          entry.level === 'stop' ? TS.t('blocking') : TS.t('warning')
+        }</span><span class="who">${entry.who}</span>` +
+        `<span style="flex-basis:100%">${TS.state.lang === 'ar' ? entry.ar : entry.en}</span>` +
+        `<span class="go">${TS.t('resolve')}</span>`
+      item.onclick = () => {
+        if (TS.rows.some((r) => r.id === entry.who)) pin(entry.who)
+        TS.resolve(entry)
+        TS.toast(`${entry.who} — ${TS.t('resolved')}`)
+      }
+      pf.append(item)
+    })
+  }
+
+  /* ----------------------------------------------------------- 6. the lens */
+  function paintLens() {
+    const card = el('lenscard')
+    const rows = lensRows()
+    const open = ui.open && rows.length > 0
+    card.dataset.open = open ? '1' : '0'
+
+    if (!open) {
+      el('lenstitle').textContent = L('Lens', 'العدسة')
+      el('lenssub').textContent = L('Closed', 'مغلقة')
+      el('lensacts').textContent = ''
+      el('lenssheet').textContent = ''
+      el('lensempty').innerHTML =
+        `<span>${L(
+          'The canvas is for reading. Hover a row — or Tab to it and press Enter — and the lens opens here on that row and its two neighbours, as an editable slab of the sheet.',
+          'اللوحة للقراءة. مرّر المؤشر على صف — أو انتقل إليه بمفتاح Tab واضغط Enter — فتُفتح العدسة هنا على ذلك الصف وجاريه، كشريحة قابلة للتعديل من الكشف.',
+        )}</span>` +
+        `<span>${L(
+          'Clicking a bar in the headcount curve opens the lens on the rows that were not on post that day.',
+          'والضغط على عمود في منحنى العاملين يفتح العدسة على الصفوف التي لم تكن على النقاط في ذلك اليوم.',
+        )}</span>` +
+        (anomalies().length
+          ? `<button type="button" class="btn btn-primary btn-sm" data-act="first">↧ ${L(
+              'Open the first anomaly',
+              'فتح أول حالة شاذة',
+            )}</button>`
+          : '')
+      const first = el('lensempty').querySelector('[data-act="first"]')
+      if (first) first.onclick = () => ((ui.anom = -1), nextAnomaly())
+      markBand()
+      return
+    }
+
+    const m = TS.monthLabel()
+    const head = rows[0]
+    const tail = rows[rows.length - 1]
+    if (ui.day) {
+      el('lenstitle').innerHTML =
+        `${L('Lens', 'العدسة')} · ${TS.t('day')} <span class="num">${ui.day}</span>`
+      el('lenssub').innerHTML = L(
+        `<span class="num">${rows.length}</span> rows not on post on <span class="num">${ui.day}</span> ${m.en} · <span class="num">${TS.dayCount(ui.day)}</span> of <span class="num">${TS.rows.length}</span> were`,
+        `<span class="num">${rows.length}</span> صفاً ليست على النقاط في <span class="num">${ui.day}</span> ${m.ar} · و<span class="num">${TS.dayCount(ui.day)}</span> من <span class="num">${TS.rows.length}</span> كانت عليها`,
+      )
+    } else {
+      el('lenstitle').innerHTML = `${L('Lens', 'العدسة')} · ${L(
+        `rows <span class="num">${head.no}–${tail.no}</span>`,
+        `الصفوف <span class="num">${head.no}–${tail.no}</span>`,
+      )}`
+      el('lenssub').innerHTML =
+        `<span class="num">${head.id} … ${tail.id}</span> · <span class="num">${rows.length}</span> ${L('rows', 'صفوف')}`
+    }
+
+    el('lensacts').innerHTML =
+      `<span class="chip${ui.pinned ? ' info' : ''}">${
+        ui.pinned ? L('Pinned', 'مثبَّتة') : L('Following the pointer', 'تتبع المؤشر')
+      }</span>` +
+      (ui.pinned
+        ? `<button type="button" class="linkbtn" data-act="unpin" aria-pressed="true">${L('Unpin', 'إلغاء التثبيت')}</button>`
+        : '') +
+      `<button type="button" class="icobtn" data-act="close" aria-label="${L('Close the lens', 'إغلاق العدسة')}">✕</button>`
+    const unpin = el('lensacts').querySelector('[data-act="unpin"]')
+    if (unpin) unpin.onclick = () => ((ui.pinned = false), (ui.day = null), paintLens())
+    el('lensacts').querySelector('[data-act="close"]').onclick = closeLens
+
+    /* Read-only lens: the ribbon reverts from palette to legend, and says so. */
+    const legend = readOnly()
+    TS.renderRibbon(el('lensribbon'), { label: legend ? TS.t('legend') : TS.t('codes'), keys: !legend })
+    if (legend) {
+      el('lensribbon')
+        .querySelectorAll('.swatch')
+        .forEach((swatch) => {
+          swatch.disabled = true
+          swatch.setAttribute('aria-pressed', 'false')
+        })
+    }
+
+    el('lenshint').innerHTML = legend
+      ? readOnlyWhy()
+      : L(
+          'Click a code to arm it, then click a day to paint. <kbd>Shift</kbd>-click paints from the last painted day to the clicked one on the same row. On a focused cell, press the code\'s own letter.',
+          'اضغط رمزاً لتحضيره، ثم اضغط يوماً لتلوينه. والضغط مع <kbd>Shift</kbd> يلوّن من آخر يوم لُوِّن إلى اليوم المضغوط في الصف نفسه. وعلى خلية محددة، اضغط حرف الرمز.',
+        )
+
+    TS.renderSheet(el('lenssheet'), { rows, footer: false })
+    markBand()
+  }
+
+  /* -------------------------------------------------------- 7. page chrome */
+  function mastright() {
+    const m = TS.monthLabel()
+    const stops = TS.blocking().length
+    const warns = TS.warnings().length
+    const blocked = stops > 0 && !TS.state.closed
+    const stats = TS.state.variant === 'statistics'
+    const chip = stops
+      ? `<span class="chip stop">${stops} ${L('to fix', 'للإصلاح')}</span>`
+      : warns
+        ? `<span class="chip warn">${warns} ${L('to review', 'للمراجعة')}</span>`
+        : `<span class="chip ok">✓ ${L('Checks passed', 'اجتازت الفحوصات')}</span>`
+
+    el('mastright').innerHTML =
+      `<div class="monthmark">${m.stamp}<small>${m.ar}</small></div>` +
+      `<div class="mc-mastrow">${chip}` +
+      `<div class="seg" role="group" aria-label="${L('Deliverable', 'المخرج')}">` +
+      `<button type="button" data-variant="attendance" aria-pressed="${!stats}">${TS.t('attendance')}</button>` +
+      `<button type="button" data-variant="statistics" aria-pressed="${stats}">${TS.t('statistics')}</button>` +
+      `</div></div><div class="mc-mastrow">` +
+      (TS.state.closed
+        ? `<span class="seal"><span class="ring">✓</span>${TS.t('closed')} · ${TS.state.lang === 'ar' ? m.ar : m.en}</span>`
+        : '') +
+      `<button type="button" class="btn ${stats ? 'btn-outline' : 'btn-primary'}" data-act="dl-att"${
+        blocked ? ' disabled' : ''
+      }>↓ ${TS.t('downloadAttendance')}</button>` +
+      `<button type="button" class="btn ${stats ? 'btn-primary' : 'btn-outline'}" data-act="dl-stat"${
+        blocked ? ' disabled' : ''
+      }>↓ ${TS.t('downloadStatistics')}</button>` +
+      (TS.state.closed
+        ? `<button type="button" class="btn btn-danger btn-sm" data-act="reopen">${TS.t('reopen')}</button>`
+        : '') +
+      `</div>`
+
+    el('mastright')
+      .querySelectorAll('[data-variant]')
+      .forEach((b) => (b.onclick = () => TS.setVariant(b.dataset.variant)))
+    el('mastright').querySelector('[data-act="dl-att"]').onclick = () => TS.download('attendance')
+    el('mastright').querySelector('[data-act="dl-stat"]').onclick = () => TS.download('statistics')
+    const reopen = el('mastright').querySelector('[data-act="reopen"]')
+    if (reopen) reopen.onclick = () => TS.reopenMonth()
+  }
+
+  function footnote() {
+    const [attendance, statistics] = files()
+    el('footnote').innerHTML = L(
+      `Sample data: ${TS.rows.length} rows and ${TS.state.postCount} contracted posts on this workbook, scaled from the live 275 rows and 249 posts. Releases <code class="iso">${attendance}</code> and <code class="iso">${statistics}</code>. The canvas is read-only by design — corrections happen in the lens, which uses the same cells, picker and brush as every other direction. Client statistics is generated, so its lens is a legend rather than a palette. Step back to June for the closed month and for the blank 31st column of a 30-day month.`,
+      `بيانات نموذجية: ${TS.rows.length} صفاً و${TS.state.postCount} نقطة تعاقدية في هذا الملف، مُصغّرة عن 275 صفاً و249 نقطة في النظام الفعلي. يُصدر الملفان <code class="iso">${attendance}</code> و<code class="iso">${statistics}</code>. اللوحة للقراءة فقط بحكم التصميم — والتصحيح يجري في العدسة، وهي تستخدم الخلايا نفسها ومنتقي الرموز والفرشاة في جميع الاتجاهات. إحصائية العميل مُولَّدة، فعدستها مفتاح رموز لا لوحة تلوين. ارجع إلى يونيو لرؤية الشهر المغلق وعمود اليوم 31 الفارغ في الأشهر ذات الثلاثين يوماً.`,
+    )
+  }
+
+  function paint() {
+    TS.renderChrome(el('chrome'))
+    el('eyebrow').textContent = TS.t('eyebrow')
+    el('title').textContent = TS.t('title')
+    el('lede').textContent = TS.t('lede')
+    mastright()
+    controls()
+
+    const next = boardShape()
+    if (next !== shape) {
+      shape = next
+      ui.anom = -1
+      buildBoard()
+    }
+
+    /* A row the lens was holding can leave the view when the workbook changes. */
+    if (ui.band && !TS.rows.some((r) => r.id === ui.band)) {
+      ui.open = false
+      ui.pinned = false
+      ui.band = null
+      ui.day = null
+    }
+
+    const readings = scan()
+    canvasHead(readings)
+    syncBoard(readings)
+    side(readings)
+    paintLens()
+    footnote()
+  }
+
+  /* Client statistics is a generated view and a closed month is frozen. Refuse
+     the cell in the capture phase, ahead of the kernel's own click handler, so
+     the cell stays focusable for arrow-key reading and for the anomaly walk. */
+  el('lenssheet').addEventListener(
+    'click',
+    (e) => {
+      if (!readOnly() || !e.target.closest('button.cell')) return
+      e.preventDefault()
+      e.stopPropagation()
+      TS.toast(readOnlyWhy(), 'warn')
+    },
+    true,
+  )
+
+  TS.renderReview(el('review'), 'c', 'Whole month as one canvas, with a lens that opens for editing.')
+  TS.on('render', paint)
+  TS.on('change', paint)
+  paint()
+</script>
+</body>
+</html>

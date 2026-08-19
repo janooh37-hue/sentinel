@@ -1,0 +1,1216 @@
+/* ============================================================================
+   GSSG Manager — Monthly Time Sheet: shared mockup kernel (styles)
+   ----------------------------------------------------------------------------
+   Loaded by docs/timesheet-mockup-{a,b,c,d}-*.html. Every direction shares
+   these tokens, chrome, buttons, fills and grid primitives so the four
+   mockups differ only in LAYOUT and INTERACTION MODEL, never in look-and-feel.
+
+   Tokens are copied verbatim from frontend/src/index.css (DESIGN.md §1.1).
+   Buttons follow DESIGN.md §2 exactly; the two additions this feature needs
+   (segmented control, cell-as-button) are marked "EXTENSION" and are argued
+   for in docs/superpowers/specs/2026-08-19-monthly-timesheet-ui-design.md.
+
+   Rules honoured here: logical CSS properties only (AGENTS.md), no hardcoded
+   code colours in markup (fills come from [data-code]), reduced-motion guards
+   on every animation, never state by colour alone (PRODUCT.md).
+   ========================================================================= */
+
+/* ---------------------------------------------------------------- 1. tokens */
+:root {
+  --bg: #f5f4f1;
+  --surface: #ffffff;
+  --surface-raised: #fafaf6;
+  --surface-tinted: #f0eee8;
+  --primary: #0d2845;
+  --primary-hover: #1d3a5e;
+  --primary-soft: #e8edf3;
+  --on-primary: #ffffff;
+  --accent: #c8102e;
+  --accent-hover: #a30d24;
+  --accent-soft: #fbe5e8;
+  --success: #047857;
+  --success-soft: #d6f0e4;
+  --warning: #92400e;
+  --warning-soft: #fbedd8;
+  --info: #1d4ed8;
+  --info-soft: #e0e8f8;
+  --text: #1c1f24;
+  --text-muted: #5a6068;
+  --text-faint: #8b9098;
+  --border: #e6e4dd;
+  --border-strong: #d4d1c8;
+  --hairline: #efece5;
+
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-card: 16px; /* the project's de-facto rounded-2xl card radius */
+  --radius-pill: 99px;
+
+  --font-sans: Inter, "Inter Variable", "Segoe UI", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, Consolas, "Noto Sans Arabic", monospace;
+  --font-arabic: "Noto Sans Arabic", "Segoe UI", Tahoma, system-ui, sans-serif;
+
+  --motion-fast: 120ms;
+  --motion-base: 200ms;
+  --motion-entrance: 220ms;
+  --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-spring: cubic-bezier(0.34, 1.35, 0.64, 1);
+
+  --shadow-sm: 0 1px 2px rgba(16, 24, 40, 0.05);
+  --shadow-md: 0 1px 2px rgba(16, 24, 40, 0.05), 0 8px 24px rgba(16, 24, 40, 0.06);
+  --shadow-lg: 0 18px 50px rgba(13, 40, 69, 0.14);
+
+  /* Sheet metrics. The grid deliberately opts OUT of the em-relative scale
+     (DESIGN.md §1.2): 31 columns is a fixed count, so the cell is sized in px
+     and the operator changes density with the sheet-zoom control instead. */
+  --cell: 26px;
+  --cell-font: 11px;
+  --row: 28px;
+}
+
+[data-theme="dark"] {
+  --bg: #0a0e18;
+  --surface: #131826;
+  --surface-raised: #1a2034;
+  --surface-tinted: #1f263b;
+  --primary: #5778cf;
+  --primary-hover: #7491db;
+  --primary-soft: #1c2849;
+  --on-primary: #0a0e18;
+  --accent: #ef4858;
+  --accent-hover: #f56b78;
+  --accent-soft: #3a1820;
+  --success: #34d399;
+  --success-soft: #142d23;
+  --warning: #fbbf24;
+  --warning-soft: #3a2a10;
+  --info: #60a5fa;
+  --info-soft: #1c2940;
+  --text: #e6e9f2;
+  --text-muted: #8a93a7;
+  --text-faint: #5f6678;
+  --border: #2a3148;
+  --border-strong: #3a4360;
+  --hairline: #1f263b;
+  --shadow-lg: 0 18px 50px rgba(0, 0, 0, 0.5);
+}
+
+html[data-density="compact"] { --cell: 22px; --cell-font: 10px; --row: 24px; }
+html[data-density="roomy"]   { --cell: 34px; --cell-font: 13px; --row: 36px; }
+
+/* ------------------------------------------------- 2. code fills (the data) */
+/* The only chromatic content on the page. Light theme uses the workbook's own
+   conditional-format hex so screen and paper agree; dark theme mixes the same
+   hue into the surface and lifts the ink, because a #FFC7CE cell on #131826
+   would be a flashbang. `.paper` always uses the exact hex — it represents
+   the printed artefact, not a UI surface. */
+:root {
+  --code-fill-P: transparent;        --code-ink-P: var(--text);
+  --code-fill-AL: #bdd7ee;           --code-ink-AL: #10243a;
+  --code-fill-SL: #c6e0b4;           --code-ink-SL: #17300f;
+  --code-fill-AB: #ffc7ce;           --code-ink-AB: #9c0006;
+  --code-fill-TR: #cc99ff;           --code-ink-TR: #2e0b52;
+  --code-fill-NG: #ff9900;           --code-ink-NG: #3a2200;
+  --code-fill-OFFROSTER: transparent; --code-ink-OFFROSTER: var(--text-faint);
+  /* The manual red block. #990033 is already in the client's legend (it is the
+     termination fill), so the block reads as "struck out, do not bill" to
+     someone who has been reading these sheets for years — no new hue invented. */
+  --code-fill-X: #990033;            --code-ink-X: #ffffff;
+}
+
+[data-theme="dark"] {
+  --code-fill-AL: color-mix(in oklab, #bdd7ee 24%, var(--surface));  --code-ink-AL: #bdd7ee;
+  --code-fill-SL: color-mix(in oklab, #c6e0b4 24%, var(--surface));  --code-ink-SL: #c6e0b4;
+  --code-fill-AB: color-mix(in oklab, #ffc7ce 26%, var(--surface));  --code-ink-AB: #ff9aa6;
+  --code-fill-TR: color-mix(in oklab, #cc99ff 26%, var(--surface));  --code-ink-TR: #d9b3ff;
+  --code-fill-NG: color-mix(in oklab, #ff9900 34%, var(--surface));  --code-ink-NG: #ffbb55;
+  --code-fill-X: color-mix(in oklab, #990033 66%, var(--surface));   --code-ink-X: #ffd7de;
+}
+
+[data-code="P"]  { background: var(--code-fill-P);  color: var(--code-ink-P); }
+[data-code="AL"] { background: var(--code-fill-AL); color: var(--code-ink-AL); }
+[data-code="SL"] { background: var(--code-fill-SL); color: var(--code-ink-SL); }
+[data-code="AB"] { background: var(--code-fill-AB); color: var(--code-ink-AB); font-weight: 600; }
+[data-code="TR"] { background: var(--code-fill-TR); color: var(--code-ink-TR); }
+[data-code="NG"] { background: var(--code-fill-NG); color: var(--code-ink-NG); font-weight: 600; }
+[data-code="-"]  { background: var(--code-fill-OFFROSTER); color: var(--code-ink-OFFROSTER); }
+[data-code="X"]  { background: var(--code-fill-X); color: var(--code-ink-X); font-weight: 600; }
+[data-code=""]   { background: transparent; color: transparent; } /* day 31 of a 30-day month */
+
+.paper [data-code="AL"] { background: #bdd7ee; color: #10243a; }
+.paper [data-code="SL"] { background: #c6e0b4; color: #17300f; }
+.paper [data-code="AB"] { background: #ffc7ce; color: #9c0006; }
+.paper [data-code="TR"] { background: #cc99ff; color: #2e0b52; }
+.paper [data-code="NG"] { background: #ff9900; color: #3a2200; }
+.paper [data-code="X"]  { background: #990033; color: #fff; }
+
+/* `.paper` is a slab that stands for the printed workbook, not a UI surface:
+   it stays white with the exact conditional-format fills in both themes so an
+   operator can confirm what the client will actually receive. */
+.paper {
+  background: #ffffff;
+  color: #1c1f24;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-md);
+}
+
+/* ----------------------------------------------------------- 3. page basics */
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-sans);
+  font-size: 15px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+html[lang="ar"] body { font-family: var(--font-arabic); }
+
+.mono,
+.tabular {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Latin-and-digit runs inside an Arabic paragraph must be isolated, or the bidi
+   algorithm reorders them and changes the meaning: "23.5 / 24" reads as
+   "24 / 23.5" and an id pair reverses.
+
+   Two different treatments, deliberately:
+   - pure digit / id / code leaves get `direction: ltr` too, because their
+     internal order is Latin and must not follow the paragraph;
+   - mixed strings (an Arabic filename with a .xlsx extension) get isolation
+     ONLY, so the extension stays attached to the name without forcing the
+     Arabic part to lay out left-to-right.
+   Never put `direction: ltr` on a container whose children are laid out with
+   flex — it silently mirrors their order back. */
+.num,
+.mono,
+.tabular,
+.readout .big,
+button.cell,
+table.sheet .c-no,
+table.sheet .c-id,
+table.sheet .tot,
+table.sheet thead th.day,
+table.sheet tfoot td,
+.swatch .glyph,
+.menu .glyph,
+.flag {
+  direction: ltr;
+  unicode-bidi: isolate;
+}
+
+/* A quoted filename gets an LTR base on purpose. The names are Arabic with a
+   Latin extension (`كشف حضور شهر يوليو.xlsx`); under an auto or RTL base the
+   `.xlsx` jumps to the left end and reads as `xlsx.<name>`, which is not what
+   the operator will see in the download bar or in Excel's title bar. LTR base
+   keeps the Arabic run internally RTL with the extension trailing it. */
+.filename,
+.files code {
+  direction: ltr;
+  unicode-bidi: isolate;
+}
+
+.iso {
+  unicode-bidi: isolate;
+}
+
+:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+.vh {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* -------------------------------------------- 4. review chrome (not the app) */
+.review {
+  position: sticky;
+  inset-block-start: 0;
+  z-index: 80;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 18px;
+  background: #111827;
+  color: #e5e7eb;
+  font-family: var(--font-sans);
+  font-size: 12.5px;
+}
+
+.review b { color: #fff; }
+.review .sp { margin-inline-start: auto; display: flex; gap: 6px; }
+
+.review a,
+.review button {
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  border: 1px solid #374151;
+  background: #1f2937;
+  color: #e5e7eb;
+  border-radius: var(--radius-sm);
+  padding: 5px 10px;
+  cursor: pointer;
+  text-decoration: none;
+}
+
+.review a:hover,
+.review button:hover { background: #374151; }
+.review a[aria-current="page"] { background: #e5e7eb; color: #111827; border-color: #e5e7eb; }
+
+/* --------------------------------------------------- 5. app chrome (TopNav) */
+.appbar {
+  display: flex;
+  align-items: center;
+  /* wraps rather than pushing the page into horizontal scroll: the nav row is
+     seven nowrap links and overflows the chrome below ~800px */
+  flex-wrap: wrap;
+  gap: 12px 22px;
+  padding: 10px 22px;
+  background: var(--surface);
+  border-block-end: 1px solid var(--border);
+}
+
+.appbar .brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-weight: 700;
+  font-size: 15px;
+  letter-spacing: -0.2px;
+}
+
+.appbar .crest {
+  display: grid;
+  place-items: center;
+  inline-size: 30px;
+  block-size: 30px;
+  border-radius: var(--radius-sm);
+  background: var(--primary);
+  color: var(--on-primary);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+/* the nav line is seven nowrap links; it must wrap too, or it alone pushes the
+   document into horizontal scroll below ~600px */
+.appbar nav { display: flex; flex-wrap: wrap; gap: 2px; font-size: 13px; }
+
+.appbar nav span {
+  padding: 7px 11px;
+  border-radius: var(--radius-lg);
+  color: var(--text);
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.appbar nav span[aria-current] {
+  position: relative;
+  color: var(--primary);
+  font-weight: 600;
+}
+
+.appbar nav span[aria-current]::after {
+  content: "";
+  position: absolute;
+  inset-block-end: -14px;
+  inset-inline: 0;
+  block-size: 3px;
+  border-radius: 4px;
+  background: var(--primary);
+}
+
+.appbar .tools {
+  margin-inline-start: auto;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 12.5px;
+  color: var(--text-muted);
+}
+
+.appbar .avatar {
+  display: grid;
+  place-items: center;
+  inline-size: 30px;
+  block-size: 30px;
+  border-radius: var(--radius-pill);
+  background: var(--primary-soft);
+  color: var(--primary);
+  font-size: 11.5px;
+  font-weight: 700;
+}
+
+/* ------------------------------------------------------------- 6. page shell */
+.page {
+  max-inline-size: 1320px;
+  margin: 0 auto;
+  padding: 22px 26px 90px;
+}
+
+.eyebrow {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+/* Tracking and uppercase are Latin devices: Arabic letters join, so
+   letter-spacing tears words apart, and there is no uppercase to apply.
+   Keyed on :lang(ar) rather than html[lang="ar"] so a Latin string inside an
+   Arabic page — the attendance sheet's English designations, which print in
+   English whatever the interface language — keeps its tracking. Set `lang` on
+   any element whose content does not follow the page language. */
+.eyebrow:lang(ar),
+.chip:lang(ar),
+.quotelbl:lang(ar),
+.ribbon > .lbl:lang(ar),
+table.sheet tr.group th:lang(ar),
+table.sheet thead th:lang(ar) {
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.masthead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 18px;
+  padding-block-end: 14px;
+}
+
+.masthead h1 {
+  margin: 2px 0 0;
+  font-size: 26px;
+  font-weight: 700;
+  letter-spacing: -0.4px;
+}
+
+.masthead p {
+  margin: 4px 0 0;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+/* The month is the page's subject, so it is set as a datum, not a heading:
+   mono, tight, with the Arabic month name as its caption. */
+.monthmark {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  font-family: var(--font-mono);
+  font-size: 30px;
+  font-weight: 600;
+  letter-spacing: -1px;
+  line-height: 1;
+}
+
+.monthmark small {
+  font-family: var(--font-arabic);
+  font-size: 14px;
+  font-weight: 500;
+  letter-spacing: 0;
+  color: var(--text-muted);
+}
+
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-sm);
+}
+
+.card > header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 13px 16px;
+  border-block-end: 1px solid var(--hairline);
+}
+
+.card > header h2 {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: -0.1px;
+}
+
+.card > header p {
+  margin: 2px 0 0;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.card .body { padding: 14px 16px; }
+.spread { margin-inline-start: auto; }
+
+/* --------------------------------------------------------- 7. button system */
+/* DESIGN.md §2.1 base + §2.5b pills + §2.7 icon-buttons + §2.8 disabled. */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  white-space: nowrap;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1;
+  padding: 9px 16px;
+  border-radius: var(--radius-pill);
+  border: 1px solid transparent;
+  cursor: pointer;
+  transition: background-color var(--motion-fast) linear, color var(--motion-fast) linear,
+    box-shadow var(--motion-base) var(--ease-out-expo);
+}
+
+.btn:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--bg), 0 0 0 4px var(--primary);
+}
+
+.btn-primary { background: var(--primary); color: var(--on-primary); box-shadow: var(--shadow-sm); }
+.btn-primary:hover { background: var(--primary-hover); }
+
+.btn-outline {
+  background: var(--surface);
+  border-color: var(--border-strong);
+  color: var(--text-muted);
+  font-weight: 500;
+}
+
+.btn-outline:hover { background: var(--surface-tinted); color: var(--text); }
+
+.btn-danger {
+  background: var(--surface);
+  border-color: color-mix(in oklab, var(--accent) 40%, var(--border));
+  color: var(--accent);
+}
+
+.btn-danger:hover { background: var(--accent-soft); }
+
+.btn[disabled] {
+  pointer-events: none;
+  opacity: 0.5;
+}
+
+.btn-sm { font-size: 12px; padding: 7px 12px; }
+
+.icobtn {
+  display: inline-grid;
+  place-items: center;
+  inline-size: 30px;
+  block-size: 30px;
+  font: inherit;
+  font-size: 14px;
+  border: 0;
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: background-color var(--motion-fast) linear;
+}
+
+.icobtn:hover { background: var(--surface-tinted); color: var(--text); }
+.icobtn[disabled] { opacity: 0.4; cursor: not-allowed; }
+
+.linkbtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 500;
+  border: 0;
+  background: none;
+  padding: 0;
+  color: var(--primary);
+  cursor: pointer;
+}
+
+.linkbtn:hover { text-decoration: underline; }
+
+/* DESIGN.md §2.8: opacity-40 is the "soft" disabled idiom — the action exists
+   and will come back (there is simply nothing to undo yet). */
+.linkbtn[disabled] { opacity: 0.4; cursor: not-allowed; text-decoration: none; }
+
+/* EXTENSION — segmented control. Built from the AaSlider's tinted-pill track
+   (DESIGN.md §2.7b) so it inherits an existing idiom instead of adding a
+   second convention. `aria-pressed` carries the state, never colour alone. */
+.seg {
+  display: inline-flex;
+  gap: 2px;
+  padding: 3px;
+  background: var(--surface-tinted);
+  border-radius: var(--radius-pill);
+}
+
+.seg button {
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 500;
+  border: 0;
+  background: none;
+  color: var(--text-muted);
+  padding: 6px 13px;
+  border-radius: var(--radius-pill);
+  cursor: pointer;
+  transition: background-color var(--motion-fast) linear, color var(--motion-fast) linear;
+}
+
+.seg button:hover { color: var(--text); }
+
+.seg button[aria-pressed="true"] {
+  background: var(--surface);
+  color: var(--primary);
+  font-weight: 600;
+  box-shadow: var(--shadow-sm);
+}
+
+.seg button:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--surface-tinted), 0 0 0 4px var(--primary);
+}
+
+.bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-pill);
+  box-shadow: var(--shadow-sm);
+}
+
+.bar .rule { inline-size: 1px; block-size: 22px; background: var(--border); }
+
+.field {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12.5px;
+  color: var(--text-muted);
+}
+
+.field input {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-size: 13px;
+  inline-size: 74px;
+  padding: 6px 9px;
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: var(--radius-pill);
+  font-size: 11.5px;
+  font-weight: 600;
+  background: var(--surface-tinted);
+  color: var(--text-muted);
+}
+
+.chip.ok { background: var(--success-soft); color: var(--success); }
+.chip.warn { background: var(--warning-soft); color: var(--warning); }
+.chip.stop { background: var(--accent-soft); color: var(--accent); }
+.chip.info { background: var(--primary-soft); color: var(--primary); }
+
+/* --------------------------------------------------- 8. the code ribbon */
+/* The workbook's legend, turned into the tool: read it to learn the codes,
+   click it to arm a brush. Same object serves the novice and the expert. */
+.ribbon {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.ribbon > .lbl {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+  margin-inline-end: 2px;
+}
+
+.swatch {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 5px 10px 5px 6px;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-pill);
+  cursor: pointer;
+  transition: box-shadow var(--motion-base) var(--ease-out-expo),
+    transform var(--motion-base) var(--ease-out-expo);
+}
+
+.swatch:hover { box-shadow: var(--shadow-md); }
+.swatch[aria-pressed="true"] { border-color: var(--primary); box-shadow: 0 0 0 1px var(--primary); }
+
+.swatch .glyph {
+  display: grid;
+  place-items: center;
+  inline-size: 24px;
+  block-size: 20px;
+  border-radius: 4px;
+  border: 1px solid color-mix(in oklab, var(--text) 14%, transparent);
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  font-weight: 600;
+}
+
+.swatch kbd {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  padding: 2px 5px;
+  border-radius: 5px;
+  background: var(--surface-tinted);
+  color: var(--text-muted);
+  border: 1px solid var(--border);
+}
+
+/* ------------------------------------------------------------ 9. the sheet */
+.sheetwrap {
+  overflow: auto;
+  max-block-size: 62vh;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-card);
+}
+
+table.sheet {
+  /* Fixed layout: every column width is declared on its header, so the sheet
+     never reflows because one name is long, and 31 columns lay out in one pass. */
+  table-layout: fixed;
+  /* max-content, so fixed layout uses the declared column widths instead of
+     squeezing them into the viewport — the wrapper scrolls instead. */
+  inline-size: max-content;
+  border-collapse: separate;
+  border-spacing: 0;
+  font-size: 12px;
+}
+
+table.sheet th,
+table.sheet td {
+  padding: 0;
+  border-block-end: 1px solid var(--hairline);
+  border-inline-end: 1px solid var(--hairline);
+  background: var(--surface);
+}
+
+table.sheet thead th {
+  position: sticky;
+  inset-block-start: 0;
+  z-index: 3;
+  background: var(--surface-raised);
+  font-weight: 600;
+  font-size: 10.5px;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+  block-size: 34px;
+  white-space: nowrap;
+}
+
+table.sheet thead th.day {
+  inline-size: var(--cell);
+  min-inline-size: var(--cell);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text);
+  text-align: center;
+}
+
+table.sheet thead th.day small {
+  display: block;
+  font-family: var(--font-sans);
+  font-size: 8.5px;
+  font-weight: 500;
+  letter-spacing: 0.06em;
+  color: var(--text-faint);
+}
+
+table.sheet thead th.day[data-today="1"] { background: var(--primary-soft); color: var(--primary); }
+
+/* frozen identity columns — the paper's A..E block */
+table.sheet .stick {
+  position: sticky;
+  z-index: 4;
+  background: var(--surface);
+}
+
+table.sheet thead .stick { z-index: 5; background: var(--surface-raised); }
+
+/* a day the month does not have: column kept, cells blank, header quiet */
+table.sheet thead th.day[data-out="1"] { color: var(--text-faint); background: var(--bg); }
+.tile[data-out="1"] { opacity: 0.4; }
+table.sheet .c-no   { inset-inline-start: 0;     inline-size: 38px;  text-align: center; }
+table.sheet .c-id   { inset-inline-start: 38px;  inline-size: 74px; }
+table.sheet .c-name { inset-inline-start: 112px; inline-size: 196px; }
+table.sheet .c-desig{ inline-size: 168px; }
+table.sheet .c-nat  { inline-size: 82px; }
+
+table.sheet tbody tr:hover .stick { background: var(--surface-tinted); }
+table.sheet tbody tr.armed .stick { background: var(--primary-soft); }
+
+table.sheet .c-no,
+table.sheet .c-id { font-family: var(--font-mono); font-size: 11px; color: var(--text-muted); }
+
+table.sheet .c-name b { font-weight: 600; font-size: 12px; }
+table.sheet .c-name,
+table.sheet .c-desig,
+table.sheet .c-nat { padding-inline: 9px; text-align: start; }
+table.sheet .c-desig,
+table.sheet .c-nat { color: var(--text-muted); font-size: 11.5px; }
+
+/* A ledger row is one line high, always. Long names and designations clip with
+   an ellipsis and keep the full text in `title`: a wrapping name would make
+   neighbouring rows different heights and destroy the scan down a day column,
+   which is the whole point of the grid. */
+table.sheet .c-name,
+table.sheet .c-desig,
+table.sheet .c-nat {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+table.sheet tbody tr { block-size: var(--row); }
+
+/* the blocking-check marker inside an identity column: a shape plus a title,
+   never a bare colour, and narrow enough not to widen the column */
+.flag {
+  display: inline-grid;
+  place-items: center;
+  inline-size: 15px;
+  block-size: 15px;
+  margin-inline-start: 5px;
+  border-radius: var(--radius-pill);
+  background: var(--accent);
+  color: #fff;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 700;
+  vertical-align: text-bottom;
+}
+
+/* rank-group separator: the paper's sort order made visible */
+table.sheet tr.group th {
+  position: sticky;
+  inset-inline-start: 0;
+  background: var(--surface-raised);
+  text-align: start;
+  padding: 5px 10px;
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+}
+
+/* the statistics blank gap: two printed rows, drawn as one quiet band */
+table.sheet tr.blankgap td {
+  block-size: calc(var(--row) * 2);
+  background: var(--bg);
+  border-inline-end: 0;
+}
+
+/* EXTENSION — cell-as-button. Dense sibling of DESIGN.md §2.3 row-as-button:
+   3px radius, no lift, and an INSET focus ring because an outset ring is
+   clipped by the neighbouring cells. The letter is the label; the fill is
+   redundant encoding (PRODUCT.md: never colour alone). */
+button.cell {
+  display: block;
+  inline-size: 100%;
+  block-size: var(--row);
+  font-family: var(--font-mono);
+  font-size: var(--cell-font);
+  font-weight: 500;
+  line-height: 1;
+  text-align: center;
+  border: 0;
+  border-radius: 3px;
+  cursor: pointer;
+  transition: box-shadow var(--motion-fast) linear, transform var(--motion-fast) linear;
+}
+
+button.cell:hover { box-shadow: inset 0 0 0 2px var(--primary); }
+
+button.cell:focus-visible {
+  outline: none;
+  box-shadow: inset 0 0 0 2px var(--primary), inset 0 0 0 4px var(--surface);
+}
+
+button.cell[data-edited="1"] {
+  box-shadow: inset 0 0 0 1px var(--primary);
+}
+
+button.cell[data-edited="1"]::after {
+  content: "";
+  position: absolute;
+  inset-block-start: 2px;
+  inset-inline-end: 2px;
+  inline-size: 4px;
+  block-size: 4px;
+  border-radius: var(--radius-pill);
+  background: var(--primary);
+}
+
+td.cellcell { position: relative; inline-size: var(--cell); min-inline-size: var(--cell); }
+
+html[data-locked="1"] button.cell { cursor: default; }
+html[data-locked="1"] button.cell:hover { box-shadow: none; }
+
+@keyframes cell-commit {
+  from { transform: scale(0.82); }
+  to { transform: scale(1); }
+}
+
+button.cell[data-commit="1"] { animation: cell-commit var(--motion-fast) var(--ease-spring); }
+
+/* --- drag to fill -------------------------------------------------------- */
+/* While a drag is live the sheet must not commit anything: cells in the swept
+   rectangle are previewed with a ring and a wash, and one setCell per cell runs
+   on release. Committing per pointermove would repaint the grid mid-gesture and
+   tear the node out from under the pointer. */
+button.cell[data-preview="1"] {
+  box-shadow: inset 0 0 0 2px var(--primary);
+}
+
+button.cell[data-preview="1"]::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 3px;
+  background: var(--primary);
+  opacity: 0.16;
+}
+
+html[data-dragging="1"] {
+  cursor: crosshair;
+  user-select: none;
+}
+
+html[data-dragging="1"] table.sheet tbody tr:hover .stick { background: var(--surface); }
+
+/* the live count that follows the pointer while sweeping */
+.dragtag {
+  position: fixed;
+  z-index: 75;
+  padding: 4px 9px;
+  border-radius: var(--radius-pill);
+  background: var(--primary);
+  color: var(--on-primary);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 600;
+  pointer-events: none;
+  box-shadow: var(--shadow-md);
+}
+
+/* --- per-row code tally (hover / focus) ---------------------------------- */
+/* Replaces the printed AK..AP totals block on screen: the columns come off the
+   grid, and the same six numbers arrive for the row under the pointer. */
+.rowtally {
+  position: fixed;
+  z-index: 72;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 11px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-pill);
+  box-shadow: var(--shadow-lg);
+  font-size: 12px;
+  pointer-events: none;
+  animation: tally-in var(--motion-fast) var(--ease-out-expo);
+}
+
+@keyframes tally-in {
+  from { opacity: 0; transform: translateY(3px); }
+  to { opacity: 1; transform: none; }
+}
+
+.rowtally .who { font-family: var(--font-mono); font-size: 11px; color: var(--text-muted); }
+.rowtally .who b { color: var(--text); font-weight: 600; }
+
+.rowtally .pair {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  direction: ltr;
+  unicode-bidi: isolate;
+}
+
+.rowtally .pair .glyph {
+  display: grid;
+  place-items: center;
+  inline-size: 22px;
+  block-size: 17px;
+  border-radius: 3px;
+  border: 1px solid color-mix(in oklab, var(--text) 14%, transparent);
+  font-size: 10px;
+  font-weight: 600;
+}
+
+.rowtally .pair.zero { opacity: 0.35; }
+
+/* per-row totals — the paper's AK..AP block */
+table.sheet .tot {
+  inline-size: 36px;
+  min-inline-size: 36px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  text-align: center;
+  color: var(--text-muted);
+  background: var(--surface-raised);
+}
+
+table.sheet .tot.lead { border-inline-start: 2px solid var(--border); }
+table.sheet .tot b { color: var(--text); font-weight: 600; }
+
+/* column footer: headcount per day, the drift detector */
+table.sheet tfoot th,
+table.sheet tfoot td {
+  position: sticky;
+  inset-block-end: 0;
+  z-index: 3;
+  background: var(--surface-raised);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  text-align: center;
+  color: var(--text-muted);
+  block-size: 26px;
+}
+
+table.sheet tfoot th.stick { z-index: 5; text-align: start; padding-inline: 9px; font-family: var(--font-sans); font-size: 11px; }
+table.sheet tfoot td.low { color: var(--accent); font-weight: 700; }
+
+/* ------------------------------------------------- 10. code picker (menu) */
+.menu {
+  position: fixed;
+  z-index: 70;
+  min-inline-size: 208px;
+  padding: 6px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-lg);
+  animation: menu-in var(--motion-fast) var(--ease-out-expo);
+}
+
+@keyframes menu-in {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: none; }
+}
+
+.menu .head {
+  padding: 5px 8px 7px;
+  font-size: 11px;
+  color: var(--text-muted);
+  border-block-end: 1px solid var(--hairline);
+  margin-block-end: 4px;
+}
+
+.menu .head b { font-family: var(--font-mono); color: var(--text); }
+
+.menu button.item {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  inline-size: 100%;
+  font: inherit;
+  font-size: 12.5px;
+  text-align: start;
+  padding: 7px 8px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--text);
+  cursor: pointer;
+}
+
+.menu button.item:hover,
+.menu button.item:focus-visible { background: var(--surface-tinted); outline: none; }
+.menu button.item .glyph {
+  display: grid;
+  place-items: center;
+  inline-size: 26px;
+  block-size: 20px;
+  border-radius: 4px;
+  border: 1px solid color-mix(in oklab, var(--text) 14%, transparent);
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  font-weight: 600;
+}
+
+.menu button.item kbd {
+  margin-inline-start: auto;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--text-faint);
+}
+
+.menu .note { padding: 7px 8px 4px; border-block-start: 1px solid var(--hairline); margin-block-start: 4px; }
+.menu .note label { display: block; font-size: 11px; color: var(--text-muted); margin-block-end: 5px; }
+.menu .note input {
+  inline-size: 100%;
+  font: inherit;
+  font-size: 12.5px;
+  padding: 6px 8px;
+  color: var(--text);
+  background: var(--surface-raised);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+}
+
+.menu .note .row { display: flex; gap: 6px; margin-block-start: 7px; }
+
+/* --------------------------------------------- 11. preflight, lock, toast */
+.pf { display: grid; gap: 7px; }
+
+.pf .item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  inline-size: 100%;
+  font: inherit;
+  font-size: 12.5px;
+  text-align: start;
+  padding: 9px 11px;
+  border: 1px solid var(--border);
+  border-inline-start: 3px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--surface-raised);
+  color: var(--text);
+  cursor: pointer;
+  transition: background-color var(--motion-fast) linear;
+}
+
+.pf .item:hover { background: var(--surface-tinted); }
+.pf .item.stop { border-inline-start-color: var(--accent); background: color-mix(in oklab, var(--accent-soft) 55%, var(--surface)); }
+.pf .item.warn { border-inline-start-color: var(--warning); background: color-mix(in oklab, var(--warning-soft) 55%, var(--surface)); }
+.pf .item .who { font-family: var(--font-mono); font-size: 11.5px; color: var(--text-muted); }
+.pf .item .go { margin-inline-start: auto; color: var(--primary); font-weight: 600; font-size: 12px; }
+.pf .item .go::after { content: " ›"; }
+
+.readout {
+  display: flex;
+  align-items: baseline;
+  gap: 9px;
+  font-family: var(--font-mono);
+}
+
+.readout .big { font-size: 22px; font-weight: 600; letter-spacing: -0.5px; }
+.readout .cap { font-family: var(--font-sans); font-size: 11.5px; color: var(--text-muted); }
+
+/* the closed-month seal: the page's one piece of ceremony, earned once a month */
+.seal {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 15px;
+  border: 1px solid color-mix(in oklab, var(--success) 40%, var(--border));
+  border-radius: var(--radius-pill);
+  background: var(--success-soft);
+  color: var(--success);
+  font-size: 12.5px;
+  font-weight: 600;
+}
+
+.seal .ring {
+  display: grid;
+  place-items: center;
+  inline-size: 24px;
+  block-size: 24px;
+  border-radius: var(--radius-pill);
+  border: 2px solid currentColor;
+  font-size: 12px;
+}
+
+.toasts {
+  position: fixed;
+  inset-block-end: 20px;
+  inset-inline-end: 20px;
+  z-index: 90;
+  display: grid;
+  gap: 8px;
+  justify-items: end;
+}
+
+.toast {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 10px 14px;
+  background: var(--primary);
+  color: var(--on-primary);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-lg);
+  font-size: 12.5px;
+  animation: toast-in var(--motion-entrance) var(--ease-out-expo);
+}
+
+@keyframes toast-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: none; }
+}
+
+.footnote {
+  margin-block-start: 14px;
+  font-size: 11.5px;
+  color: var(--text-faint);
+}
+
+.footnote code {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  padding: 1px 4px;
+  border-radius: 4px;
+  background: var(--surface-tinted);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation: none !important;
+    transition: none !important;
+  }
+}
