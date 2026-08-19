@@ -444,7 +444,7 @@ git commit -m "feat(workforce): port capabilities, scope resolution, and provide
 ### Task 3: Port the attendance ingest and evaluation services
 
 **Files:**
-- Create: `backend/app/services/attendance_provider.py`, `attendance_biotime_provider.py`, `attendance_identity_service.py`, `attendance_punch_service.py`, `attendance_evaluation_service.py`, `attendance_queue_service.py`, `attendance_sync_service.py` (copy from branch)
+- Create: `backend/app/services/attendance_provider.py`, `attendance_biotime_provider.py`, `attendance_identity_service.py`, `attendance_punch_service.py`, `attendance_evaluation_service.py`, `attendance_queue_service.py`, `attendance_sync_service.py`, `workforce_leave.py` (copy from branch). **`workforce_leave.py` belongs to this task, not Task 4:** `attendance_evaluation_service` imports it at module level (`resolve_excusing_leave`), so without it every test in this task fails to collect with `ModuleNotFoundError: No module named 'app.services.workforce_leave'`. It is a leaf — its only app imports are `app.core.leave_lifecycle` and `app.db.models`.
 - Create: `backend/tests/fakes/__init__.py`, `backend/tests/fakes/attendance_provider.py`
 - Test: `backend/tests/test_attendance_biotime_provider.py`, `test_attendance_identity_service.py`, `test_attendance_punch_allocation.py`, `test_attendance_evaluation_service.py`, `test_attendance_queue_service.py`, `test_attendance_sync_service.py` (copy from branch)
 
@@ -457,7 +457,7 @@ git commit -m "feat(workforce): port capabilities, scope resolution, and provide
 ```bash
 for f in attendance_provider attendance_biotime_provider attendance_identity_service \
          attendance_punch_service attendance_evaluation_service attendance_queue_service \
-         attendance_sync_service; do
+         attendance_sync_service workforce_leave; do
   git show dashboard/additive-baseline:backend/app/services/$f.py > backend/app/services/$f.py
 done
 mkdir -p backend/tests/fakes
@@ -492,7 +492,7 @@ git commit -m "feat(workforce): port BioTime ingest, identity matching, and atte
 ### Task 4: Port the workforce read/admin/schedule services, the API router, and the scheduler jobs
 
 **Files:**
-- Create: `backend/app/schemas/workforce.py`, `backend/app/api/v1/workforce.py`, `backend/app/services/workforce_read_service.py`, `workforce_admin_service.py`, `workforce_schedule_service.py`, `workforce_dashboard_service.py`, `workforce_leave.py`, `workforce_retention_service.py` (copy from branch)
+- Create: `backend/app/schemas/workforce.py`, `backend/app/api/v1/workforce.py`, `backend/app/services/workforce_read_service.py`, `workforce_admin_service.py`, `workforce_schedule_service.py`, `workforce_dashboard_service.py`, `workforce_retention_service.py` (copy from branch; `workforce_leave.py` already landed in Task 3)
 - Modify: `backend/app/main.py:208` (router registration only), `backend/app/services/settings_service.py` (workforce configuration block only), `backend/app/services/scheduler_service.py` (four jobs), `backend/app/services/leave_service.py` (re-evaluation hook), `backend/app/services/duty_service.py` (duty event write)
 - Test: `backend/tests/test_workforce_schedule.py`, `test_workforce_api_permissions.py`, `test_workforce_dashboard_api.py`, `test_workforce_leave_precedence.py`, `test_workforce_retention.py`, `test_workforce_scope_hardening.py` (copy from branch). The last one belongs here, not in Task 2: it drives `TestClient(app)` against `/api/v1/workforce/overrides`, `/configuration`, `/integration/people`, `/dashboard/snapshot`, `/dashboard/analytics` and `/access/me`, all of which 404 until this task registers the router and grafts `workforce_admin_service` + the `settings_service` configuration block.
 
@@ -506,7 +506,7 @@ git commit -m "feat(workforce): port BioTime ingest, identity matching, and atte
 git show dashboard/additive-baseline:backend/app/schemas/workforce.py > backend/app/schemas/workforce.py
 git show dashboard/additive-baseline:backend/app/api/v1/workforce.py > backend/app/api/v1/workforce.py
 for f in workforce_read_service workforce_admin_service workforce_schedule_service \
-         workforce_dashboard_service workforce_leave workforce_retention_service; do
+         workforce_dashboard_service workforce_retention_service; do
   git show dashboard/additive-baseline:backend/app/services/$f.py > backend/app/services/$f.py
 done
 for t in test_workforce_schedule test_workforce_api_permissions test_workforce_dashboard_api \
