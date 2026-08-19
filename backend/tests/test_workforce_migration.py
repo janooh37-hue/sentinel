@@ -10,7 +10,7 @@ from sqlalchemy.engine import Connection, Engine
 
 ROOT = Path(__file__).resolve().parents[2]
 WORKFORCE_REVISION = "0071_workforce_attendance"
-WORKFORCE_PREDECESSOR = "0069_merge"
+WORKFORCE_PREDECESSOR = "0070_timesheet"
 WORKFORCE_TABLES = {
     "work_shift_definitions",
     "work_rotation_patterns",

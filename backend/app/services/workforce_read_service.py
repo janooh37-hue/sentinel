@@ -796,12 +796,14 @@ def integration_status(db: Session) -> dict[str, Any]:
         configuration = None
     provider = scheduler_service._resolve_verified_attendance_provider()
     enabled = bool(configuration and configuration.integration_enabled)
+    # A resolvable adapter that the operator has switched off is "disabled", which
+    # is a different fact from having no adapter at all.
     if provider is None:
         provider_state = "not_configured"
+    elif enabled:
+        provider_state = "ready"
     else:
-        # A resolvable adapter that the operator has switched off is "disabled",
-        # which is a different fact from having no adapter at all.
-        provider_state = "ready" if enabled else "disabled"
+        provider_state = "disabled"
     return {
         "enabled": enabled,
         "provider_state": provider_state,

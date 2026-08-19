@@ -2,41 +2,15 @@
 
 from __future__ import annotations
 
-from collections.abc import Iterator
 from typing import Any
 
-import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import create_engine
-from sqlalchemy.orm import Session, sessionmaker
+from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user
-from app.db import session as session_mod
-from app.db.models import Base, Employee, User, UserWorkforceScope
-from app.db.session import attach_sqlite_pragmas, get_db
+from app.db.models import Employee, User, UserWorkforceScope
+from app.db.session import get_db
 from app.main import create_app
-from app.services import perm_service
-
-
-@pytest.fixture()
-def api_db(monkeypatch, tmp_path) -> Iterator[Session]:
-    """A file-backed SQLite database shared by API handlers and test setup."""
-    engine = create_engine(
-        f"sqlite:///{tmp_path / 'workforce_permissions.db'}",
-        future=True,
-        connect_args={"check_same_thread": False},
-    )
-    attach_sqlite_pragmas(engine, wal=False)
-    Base.metadata.create_all(engine)
-    test_session = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False, future=True)
-    monkeypatch.setattr(session_mod, "engine", engine)
-    monkeypatch.setattr(session_mod, "SessionLocal", test_session)
-    db = test_session()
-    perm_service.seed_role_defaults(db)
-    try:
-        yield db
-    finally:
-        db.close()
 
 
 def _employee(employee_id: str, *, department: str, duty_unit: str, name: str) -> Employee:

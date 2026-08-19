@@ -1,7 +1,7 @@
 """workforce attendance persistence foundation.
 
 Revision ID: 0071_workforce_attendance
-Revises: 0069_merge
+Revises: 0070_timesheet
 Create Date: 2026-08-17
 """
 
@@ -14,7 +14,7 @@ import sqlalchemy as sa
 from alembic import op
 
 revision: str = "0071_workforce_attendance"
-down_revision: str | Sequence[str] | None = "0069_merge"
+down_revision: str | Sequence[str] | None = "0070_timesheet"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 

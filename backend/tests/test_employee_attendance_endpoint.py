@@ -26,7 +26,7 @@ from tests.factories.attendance import build_attendance_day
 # monkeypatched SessionLocal, which is what lets TestClient's worker thread
 # share the test's database. A conftest `db_session` cannot: SQLite objects are
 # thread-affine, so API calls would raise ProgrammingError.
-from tests.test_workforce_api_permissions import _client, api_db  # noqa: F401
+from tests.test_workforce_api_permissions import _client
 
 DAY = date(2026, 8, 19)
 
