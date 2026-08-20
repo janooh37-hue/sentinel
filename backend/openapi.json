@@ -27113,6 +27113,53 @@
         ],
         "title": "EmployeeAttendanceDayRead"
       },
+      "EmployeeAttendanceHabitRead": {
+        "properties": {
+          "shift_code": {
+            "type": "string",
+            "title": "Shift Code"
+          },
+          "sample_days": {
+            "type": "integer",
+            "title": "Sample Days"
+          },
+          "arrival_typical_offset": {
+            "type": "integer",
+            "title": "Arrival Typical Offset"
+          },
+          "departure_typical_offset": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Departure Typical Offset"
+          },
+          "suggested_shift_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Suggested Shift Code"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "shift_code",
+          "sample_days",
+          "arrival_typical_offset"
+        ],
+        "title": "EmployeeAttendanceHabitRead",
+        "description": "What this person's own punches say about one shift they work.\n\nOffsets are signed minutes: arrivals against the shift's start, departures\nagainst its end, so -20 reads as \"twenty minutes early\". A\n``suggested_shift_code`` means the punches fit a different shift than the one\nthe roster assigns, which is a rostering question rather than a punch one."
+      },
       "EmployeeAttendanceHistoryDayRead": {
         "properties": {
           "operational_date": {
@@ -27263,6 +27310,13 @@
             },
             "type": "array",
             "title": "Days"
+          },
+          "habits": {
+            "items": {
+              "$ref": "#/components/schemas/EmployeeAttendanceHabitRead"
+            },
+            "type": "array",
+            "title": "Habits"
           }
         },
         "additionalProperties": false,

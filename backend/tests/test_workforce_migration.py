@@ -54,17 +54,23 @@ def _alembic_config(database: Path) -> Config:
 
 
 def _resolve_workforce_revisions(config: Config) -> tuple[str, str]:
+    """Pin the workforce revision itself, not whichever revision is currently last.
+
+    Later migrations stack on top of this one, so the head moves. What must not
+    change is that there is exactly one head, that the workforce revision is on
+    the way to it, and that it still sits directly on its predecessor.
+    """
     script = ScriptDirectory.from_config(config)
     heads = script.get_heads()
 
     assert len(heads) == 1
-    revision = heads[0]
-    assert revision == WORKFORCE_REVISION
+    ancestry = {revision.revision for revision in script.walk_revisions("base", heads[0])}
+    assert WORKFORCE_REVISION in ancestry
 
-    predecessor = script.get_revision(revision).down_revision
+    predecessor = script.get_revision(WORKFORCE_REVISION).down_revision
     assert predecessor == WORKFORCE_PREDECESSOR
     assert isinstance(predecessor, str)
-    return revision, predecessor
+    return WORKFORCE_REVISION, predecessor
 
 
 def _seed_predecessor_data(engine: Engine) -> None:

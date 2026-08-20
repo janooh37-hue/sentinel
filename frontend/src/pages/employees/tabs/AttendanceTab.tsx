@@ -58,6 +58,13 @@ const CELL: Record<DayOutcome, string> = {
   off: 'border-dashed border-border-strong bg-transparent text-faint',
 }
 
+/**
+ * The device record is read from the start of the year, not from the roster's
+ * install date: the point of the whole-record band is to show the months the
+ * roster never covered, so they can be checked against the device itself.
+ */
+const RECORD_FROM = `${new Date().getUTCFullYear()}-01-01`
+
 /** First and last day of the month containing `iso`, as ISO dates. */
 function monthBounds(iso: string): { from: string; to: string; year: number; month: number } {
   const [year, month] = iso.split('-').map(Number)
@@ -115,6 +122,18 @@ export function AttendanceTab({
     retry: false,
   })
 
+  // The whole record, from the first day of the year the punches reach back to.
+  // Judged days only exist where a roster did, so this is the band that can be
+  // checked against the device's own dashboard: every month it saw this person.
+  const record = useQuery({
+    queryKey: ['employee-attendance-record', employeeId, RECORD_FROM, bounds.to] as const,
+    queryFn: () =>
+      api.getEmployeeAttendanceHistory(employeeId, { from_date: RECORD_FROM, to_date: bounds.to }),
+    enabled: allowed,
+    staleTime: 300_000,
+    retry: false,
+  })
+
   // Memoized so the two derivations below do not recompute on every render.
   const days = useMemo(() => query.data?.days ?? [], [query.data])
   const byDate = useMemo(() => {
@@ -124,6 +143,43 @@ export function AttendanceTab({
     }
     return map
   }, [days])
+
+  // One entry per month the device saw this person: the band that can be read
+  // beside the provider's own dashboard without opening it.
+  const recordMonths = useMemo(() => {
+    const counts = new Map<string, number>()
+    for (const day of record.data?.days ?? []) {
+      const iso = day.operational_date.slice(0, 7)
+      counts.set(iso, (counts.get(iso) ?? 0) + 1)
+    }
+    return [...counts.entries()]
+      .sort(([left], [right]) => left.localeCompare(right))
+      .map(([iso, days]) => ({
+        iso,
+        days,
+        label: new Date(`${iso}-01T00:00:00Z`).toLocaleDateString(i18n.language, {
+          month: 'short',
+          timeZone: 'UTC',
+        }),
+      }))
+  }, [record.data, i18n.language])
+
+  const habits = useMemo(() => query.data?.habits ?? [], [query.data])
+  const rosterMismatch =
+    habits.find((habit) => habit.suggested_shift_code)?.suggested_shift_code ?? null
+
+  /** A signed offset as words, because a bare sign reads badly right-to-left. */
+  const edgePhrase = (offset: number, edge: 'start' | 'end'): string => {
+    const minutes = Math.abs(offset)
+    if (edge === 'start') {
+      return offset <= 0
+        ? t('attendance.tab.beforeStart', { minutes })
+        : t('attendance.tab.afterStart', { minutes })
+    }
+    return offset <= 0
+      ? t('attendance.tab.beforeEnd', { minutes })
+      : t('attendance.tab.afterEnd', { minutes })
+  }
 
   const sightings = useMemo(() => {
     const map = new Map<string, EmployeeAttendanceHistoryDay>()
@@ -176,6 +232,66 @@ export function AttendanceTab({
         <Kpi label={t('attendance.tab.missingPunches')} value={String(kpis.missing)} tone="text-accent" />
         <Kpi label={t('attendance.tab.shiftsWorked')} value={String(kpis.scheduled)} />
       </div>
+
+      {recordMonths.length > 0 && (
+        <section className="rounded-2xl border border-hairline bg-surface px-4 py-3">
+          <header className="flex flex-wrap items-baseline gap-2">
+            <h3 className="text-[0.85em] font-bold">{t('attendance.tab.wholeRecord')}</h3>
+            <p className="text-[0.72em] text-muted-foreground">
+              {t('attendance.tab.wholeRecordHint')}
+            </p>
+          </header>
+          <ul className="mt-2 flex flex-wrap gap-1.5" data-testid="attendance-record-band">
+            {recordMonths.map((entry) => (
+              <li key={entry.iso}>
+                <button
+                  type="button"
+                  onClick={() => setMonth(`${entry.iso}-01`)}
+                  aria-current={entry.iso === month.slice(0, 7) ? 'true' : undefined}
+                  className={`rounded-lg border px-2 py-1 text-[0.72em] ${
+                    entry.iso === month.slice(0, 7)
+                      ? 'border-primary bg-primary-soft text-primary'
+                      : 'border-border text-muted-foreground hover:bg-surface-muted'
+                  }`}
+                >
+                  <span className="font-bold">{entry.label}</span>
+                  <span className="ms-1.5 font-mono">{entry.days}</span>
+                </button>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+
+      {habits.length > 0 && (
+        <section className="rounded-2xl border border-hairline bg-surface px-4 py-3">
+          <h3 className="text-[0.85em] font-bold">{t('attendance.tab.habit')}</h3>
+          <ul className="mt-1.5 grid gap-1" data-testid="attendance-habits">
+            {habits.map((habit) => (
+              <li key={habit.shift_code} className="text-[0.78em] text-muted-foreground">
+                <span className="font-bold text-primary">
+                  {t(`attendance.shift.${habit.shift_code}`, habit.shift_code)}
+                </span>{' '}
+                {edgePhrase(habit.arrival_typical_offset, 'start')}
+                {' · '}
+                {edgePhrase(habit.departure_typical_offset ?? 0, 'end')}
+                {' · '}
+                {t('attendance.tab.sampleDays', { count: habit.sample_days })}
+              </li>
+            ))}
+          </ul>
+          {rosterMismatch && (
+            <p
+              role="status"
+              className="mt-2 rounded-lg bg-warning-soft px-2.5 py-1.5 text-[0.75em] text-warning"
+            >
+              {t('attendance.tab.rosterMismatch', {
+                shift: t(`attendance.shift.${rosterMismatch}`, rosterMismatch),
+              })}
+            </p>
+          )}
+        </section>
+      )}
 
       <section className="rounded-2xl border border-hairline bg-surface">
         <header className="flex flex-wrap items-center gap-2.5 border-b border-hairline px-4 py-3">

@@ -3619,7 +3619,17 @@
       "lastSeen": "Last seen",
       "punchCount": "Punches",
       "devices": "Device",
-      "unenrolled": "Not enrolled on any attendance device."
+      "unenrolled": "Not enrolled on any attendance device.",
+      "wholeRecord": "Whole record",
+      "wholeRecordHint": "Days the device saw, by month",
+      "habit": "Punch habit",
+      "beforeStart": "in {{minutes}}m before start",
+      "afterStart": "in {{minutes}}m after start",
+      "beforeEnd": "out {{minutes}}m before end",
+      "afterEnd": "out {{minutes}}m after end",
+      "sampleDays_one": "{{count}} day observed",
+      "sampleDays_other": "{{count}} days observed",
+      "rosterMismatch": "These punches fit the {{shift}} shift, not the rostered one."
     },
     "empty": "No attendance rows for this day yet.",
     "notStartedHint": "This window has not opened yet, so nothing is missing.",

@@ -407,6 +407,24 @@ class EmployeeAttendanceDayRead(ORMBase):
     punches: list[EmployeeAttendancePunchRead] = Field(default_factory=list)
 
 
+class EmployeeAttendanceHabitRead(BaseModel):
+    """What this person's own punches say about one shift they work.
+
+    Offsets are signed minutes: arrivals against the shift's start, departures
+    against its end, so -20 reads as "twenty minutes early". A
+    ``suggested_shift_code`` means the punches fit a different shift than the one
+    the roster assigns, which is a rostering question rather than a punch one.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    shift_code: str
+    sample_days: int
+    arrival_typical_offset: int
+    departure_typical_offset: int | None = None
+    suggested_shift_code: str | None = None
+
+
 class EmployeeAttendanceRangeRead(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -414,6 +432,7 @@ class EmployeeAttendanceRangeRead(BaseModel):
     from_date: date
     to_date: date
     days: list[EmployeeAttendanceDayRead]
+    habits: list[EmployeeAttendanceHabitRead] = Field(default_factory=list)
 
 
 class EmployeeAttendanceHistoryDayRead(ORMBase):

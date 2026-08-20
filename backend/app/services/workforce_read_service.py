@@ -19,6 +19,7 @@ from app.db.workforce_models import (
     AttendanceProviderPerson,
     AttendancePunch,
     AttendancePunchAssignment,
+    AttendancePunchProfile,
     AttendanceSyncState,
     DutyAssignmentEvent,
     WorkCrewMembership,
@@ -27,6 +28,7 @@ from app.db.workforce_models import (
     WorkRotationStep,
     WorkShiftDefinition,
 )
+from app.services import attendance_profile_service
 from app.services.attendance_evaluation_service import effective_policy
 from app.services.workforce_scope_service import scope_allows
 
@@ -158,11 +160,19 @@ def _verified_people(db: Session, employee_ids: set[str]) -> dict[str, Attendanc
     return {row.employee_id: row for row in rows if row.employee_id is not None}
 
 
-def _punch_window(case: AttendanceCase, policy: Any) -> tuple[datetime, datetime]:
-    """The instants inside which a punch counts as evidence for this case."""
-    return (
-        case.scheduled_start_at - timedelta(minutes=policy.match_before_minutes),
-        case.scheduled_end_at + timedelta(minutes=policy.match_after_minutes),
+def _punch_window(
+    db: Session, case: AttendanceCase, policy: Any
+) -> tuple[datetime, datetime]:
+    """The instants inside which a punch counts as evidence for this case.
+
+    Delegated so the register cannot drift from the evaluator: both widen the
+    policy window by the same learned habit, under the same caps.
+    """
+    profile = attendance_profile_service.profile_for(
+        db, employee_id=case.employee_id, shift_code=case.shift_code_snapshot
+    )
+    return attendance_profile_service.evidence_window(
+        db, case=case, policy=policy, profile=profile
     )
 
 
@@ -195,7 +205,7 @@ def _punch_bounds(
     """
     if person is None or policy is None:
         return (None, None, 0)
-    window_start, window_end = _punch_window(case, policy)
+    window_start, window_end = _punch_window(db, case, policy)
     first_at, last_at, count = db.execute(
         select(
             func.min(AttendancePunch.occurred_at),
@@ -329,7 +339,7 @@ def employee_attendance_range(
         first_at, _last_at, count = _punch_bounds(db, case=case, person=person, policy=policy)
         punches: list[dict[str, Any]] = []
         if person is not None and policy is not None:
-            window_start, window_end = _punch_window(case, policy)
+            window_start, window_end = _punch_window(db, case, policy)
             punches = [
                 {"occurred_at": punch.occurred_at, "device_name": punch.device_name}
                 for punch in db.scalars(
@@ -355,11 +365,26 @@ def employee_attendance_range(
                 "punches": punches,
             }
         )
+    habits = [
+        {
+            "shift_code": profile.shift_code,
+            "sample_days": profile.sample_days,
+            "arrival_typical_offset": profile.arrival_typical_offset,
+            "departure_typical_offset": profile.departure_typical_offset,
+            "suggested_shift_code": profile.suggested_shift_code,
+        }
+        for profile in db.scalars(
+            select(AttendancePunchProfile)
+            .where(AttendancePunchProfile.employee_id == employee_id)
+            .order_by(AttendancePunchProfile.sample_days.desc())
+        )
+    ]
     return {
         "employee_id": employee_id,
         "from_date": from_date,
         "to_date": to_date,
         "days": days,
+        "habits": habits,
     }
 
 

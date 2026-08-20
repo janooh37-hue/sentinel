@@ -458,6 +458,49 @@ class AttendancePunchAssignment(Base):
     __table_args__ = (Index("ix_attendance_punch_assignments_case", "attendance_case_id"),)
 
 
+class AttendancePunchProfile(Base):
+    """One person's learned punch habit for one shift, as offsets from its edges.
+
+    Offsets are signed minutes: arrivals relative to the shift's local start,
+    departures relative to its local end. A rotation crossing midnight therefore
+    needs no special handling, and moving a shift's start does not invalidate the
+    sample. Learned from paired punches alone, so no roster history is required.
+    """
+
+    __tablename__ = "attendance_punch_profiles"
+
+    employee_id: Mapped[str] = mapped_column(ForeignKey("employees.id"), primary_key=True)
+    shift_code: Mapped[str] = mapped_column(String(32), primary_key=True)
+    sample_days: Mapped[int] = mapped_column(Integer, nullable=False)
+    arrival_early_offset: Mapped[int] = mapped_column(Integer, nullable=False)
+    arrival_typical_offset: Mapped[int] = mapped_column(Integer, nullable=False)
+    departure_typical_offset: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    departure_late_offset: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    suggested_shift_code: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    window_days: Mapped[int] = mapped_column(Integer, nullable=False)
+    computed_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=_utcnow)
+
+    __table_args__ = (
+        CheckConstraint(
+            "sample_days > 0", name="ck_attendance_punch_profiles_sample_positive"
+        ),
+        CheckConstraint("window_days > 0", name="ck_attendance_punch_profiles_window_positive"),
+        CheckConstraint(
+            "arrival_early_offset <= arrival_typical_offset",
+            name="ck_attendance_punch_profiles_arrival_order",
+        ),
+        CheckConstraint(
+            "(departure_typical_offset IS NULL) = (departure_late_offset IS NULL)",
+            name="ck_attendance_punch_profiles_departure_pair",
+        ),
+        CheckConstraint(
+            "departure_late_offset IS NULL "
+            "OR departure_typical_offset <= departure_late_offset",
+            name="ck_attendance_punch_profiles_departure_order",
+        ),
+    )
+
+
 class AttendanceSyncState(Base):
     __tablename__ = "attendance_sync_state"
 
@@ -859,6 +902,7 @@ __all__ = [
     "AttendanceProviderPerson",
     "AttendancePunch",
     "AttendancePunchAssignment",
+    "AttendancePunchProfile",
     "AttendanceSyncState",
     "DutyAssignmentEvent",
     "UserWorkforceScope",

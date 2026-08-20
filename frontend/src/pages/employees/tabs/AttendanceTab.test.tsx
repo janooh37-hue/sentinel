@@ -11,10 +11,12 @@
  *   4. Months the roster never covered still show the device's own sightings,
  *      and selecting one states first/last seen without judging it.
  *   5. A month with neither a schedule nor a sighting renders the empty state.
- *   6. Without the capabilities nothing is fetched.
+ *   6. The whole device record is banded by month, and a band selects its month.
+ *   7. The learned habit is stated, and a roster that disagrees is flagged.
+ *   8. Without the capabilities nothing is fetched.
  */
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -50,6 +52,16 @@ function day(overrides: Record<string, unknown> = {}) {
       { occurred_at: '2026-08-19T09:06:00', device_name: 'Main Gate Turnstile' },
     ],
     ...overrides,
+  }
+}
+
+function sighting(operationalDate: string) {
+  return {
+    operational_date: operationalDate,
+    first_seen_at: `${operationalDate}T00:52:00`,
+    last_seen_at: `${operationalDate}T09:06:00`,
+    punch_count: 2,
+    devices: ['Al Watbha Prison 2'],
   }
 }
 
@@ -230,6 +242,74 @@ describe('AttendanceTab', () => {
     await waitFor(() =>
       expect(screen.getByText(/No scheduled attendance/i)).toBeInTheDocument(),
     )
+  })
+
+  it('bands the whole device record by month, and each band selects its month', async () => {
+    // The provider holds months the roster never covered. Those months are the
+    // whole point of the band: they are what gets checked against the device.
+    getEmployeeAttendanceHistory.mockImplementation(
+      async (_employeeId: string, params: { from_date: string; to_date: string }) => ({
+        employee_id: 'G-9001',
+        provider_code: 'biotime',
+        external_employee_code: '9001',
+        from_date: params.from_date,
+        to_date: params.to_date,
+        linked: true,
+        truncated: false,
+        days:
+          params.from_date === '2026-01-01'
+            ? [
+                sighting('2026-02-13'),
+                sighting('2026-02-14'),
+                sighting('2026-03-02'),
+                sighting('2026-08-19'),
+              ]
+            : [],
+      }),
+    )
+
+    renderTab()
+
+    const band = await screen.findByTestId('attendance-record-band')
+    const months = within(band).getAllByRole('button')
+    expect(months).toHaveLength(3)
+    expect(months[0]).toHaveTextContent('2')
+    expect(months[1]).toHaveTextContent('1')
+
+    await userEvent.click(months[0])
+
+    await waitFor(() =>
+      expect(getEmployeeAttendance).toHaveBeenCalledWith('G-9001', {
+        from_date: '2026-02-01',
+        to_date: '2026-02-28',
+      }),
+    )
+  })
+
+  it('states the learned habit and flags a roster that disagrees with it', async () => {
+    getEmployeeAttendance.mockResolvedValue({
+      employee_id: 'G-9001',
+      from_date: '2026-08-01',
+      to_date: '2026-08-31',
+      days: [day()],
+      habits: [
+        {
+          shift_code: 'morning',
+          sample_days: 25,
+          arrival_typical_offset: -20,
+          departure_typical_offset: 10,
+          suggested_shift_code: 'morning',
+        },
+      ],
+    })
+
+    renderTab()
+
+    const habits = await screen.findByTestId('attendance-habits')
+    expect(habits).toHaveTextContent('20m before start')
+    expect(habits).toHaveTextContent('10m after end')
+    expect(habits).toHaveTextContent('25 days observed')
+    expect(await screen.findByText(/fit the morning shift/i)).toBeInTheDocument()
   })
 
   it('never fetches without the capabilities', async () => {

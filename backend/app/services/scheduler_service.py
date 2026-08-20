@@ -41,6 +41,7 @@ from app.schemas.workforce import WorkforceConfiguration
 from app.services import (
     admin_notify,
     attendance_evaluation_service,
+    attendance_profile_service,
     attendance_queue_service,
     attendance_sync_service,
     digest_service,
@@ -81,6 +82,7 @@ _WORKFORCE_OCCURRENCE_JOB_ID = "workforce-occurrence-generation"
 _WORKFORCE_ATTENDANCE_SYNC_JOB_ID = "workforce-attendance-sync"
 _WORKFORCE_QUEUE_DRAIN_JOB_ID = "workforce-evaluation-queue-drain"
 _WORKFORCE_RETENTION_JOB_ID = "workforce-retention"
+_WORKFORCE_PROFILE_JOB_ID = "workforce-punch-profiles"
 _WORKFORCE_OCCURRENCE_INTERVAL_MINUTES = 15
 _WORKFORCE_QUEUE_DRAIN_INTERVAL_MINUTES = 1
 _WORKFORCE_OCCURRENCE_HISTORY = timedelta(days=7)
@@ -293,6 +295,36 @@ def _run_workforce_retention() -> None:
     except Exception:
         session.rollback()
         log.exception("scheduler: workforce retention failed")
+    finally:
+        session.close()
+
+
+def _run_workforce_profile_rebuild() -> None:
+    """Relearn every punch habit from the rolling window of stored punches.
+
+    The habits only sharpen as the punch record grows, so this is the loop that
+    makes attribution and direction improve without anyone tuning a constant.
+    """
+    session = SessionLocal()
+    try:
+        result = attendance_profile_service.rebuild_profiles(session, now=datetime.now(UTC))
+        session.commit()
+        log.info(
+            "scheduler: workforce punch profiles %d for %d employee(s) from %d pair(s)",
+            result.profiles,
+            result.employees,
+            result.pairs,
+        )
+        for employee_id, rostered, observed in result.mismatches:
+            log.warning(
+                "scheduler: %s is rostered %s but punches like %s",
+                employee_id,
+                rostered,
+                observed,
+            )
+    except Exception:
+        session.rollback()
+        log.exception("scheduler: workforce punch profile rebuild failed")
     finally:
         session.close()
 
@@ -781,6 +813,13 @@ def start() -> None:
                 replace_existing=True,
             )
             log.info("scheduler: workforce retention daily at 03:00 Asia/Dubai")
+            _scheduler.add_job(
+                _run_workforce_profile_rebuild,
+                trigger=CronTrigger(hour=3, minute=20, timezone="Asia/Dubai"),
+                id=_WORKFORCE_PROFILE_JOB_ID,
+                replace_existing=True,
+            )
+            log.info("scheduler: workforce punch profiles daily at 03:20 Asia/Dubai")
             _scheduler.add_job(
                 _run_scan_drain,
                 trigger=IntervalTrigger(minutes=_SCAN_DRAIN_INTERVAL_MINUTES),

@@ -30,6 +30,7 @@ from app.db.workforce_models import (
     AttendanceProviderPerson,
     AttendancePunch,
     AttendancePunchAssignment,
+    AttendancePunchProfile,
     AttendanceSyncState,
     DutyAssignmentEvent,
     WorkAttendancePolicy,
@@ -38,6 +39,7 @@ from app.db.workforce_models import (
     WorkShiftDefinition,
     WorkShiftOccurrence,
 )
+from app.services import attendance_profile_service
 from app.services.workforce_leave import resolve_excusing_leave
 
 # v2 judges a case only once its match window has closed, and reads punch order
@@ -146,16 +148,16 @@ def _matching_punches(
     case: AttendanceCase,
     provider_person_id: int | None,
     policy: WorkAttendancePolicy | None,
+    profile: AttendancePunchProfile | None,
 ) -> list[AttendancePunch]:
-    """Get canonical evidence in the policy window without stealing assigned punches."""
+    """Get canonical evidence in the evidence window without stealing assigned punches."""
     if provider_person_id is None or policy is None:
         return []
-    window_start = _as_db_utc(
-        _as_utc(case.scheduled_start_at) - timedelta(minutes=policy.match_before_minutes)
+    start, end = attendance_profile_service.evidence_window(
+        db, case=case, policy=policy, profile=profile
     )
-    window_end = _as_db_utc(
-        _as_utc(case.scheduled_end_at) + timedelta(minutes=policy.match_after_minutes)
-    )
+    window_start = _as_db_utc(_as_utc(start))
+    window_end = _as_db_utc(_as_utc(end))
     punches = db.scalars(
         select(AttendancePunch)
         .outerjoin(AttendancePunchAssignment, AttendancePunchAssignment.punch_id == AttendancePunch.id)
@@ -245,6 +247,7 @@ def _derive_result(
     evaluated_at: datetime,
     leave_reason: str | None,
     punches: list[AttendancePunch],
+    profile: AttendancePunchProfile | None = None,
 ) -> dict[str, Any]:
     """Apply precedence first, then use timing only when source completeness permits it."""
     scheduled_start = _as_utc(case.scheduled_start_at)
@@ -348,6 +351,23 @@ def _derive_result(
         if not fresh_for_checkout:
             result.update(presence_state="unknown", reason_code="SYNC_STALE")
             return result
+        if last is first and (
+            attendance_profile_service.infer_direction(
+                case=case, punch_at=_as_utc(first.occurred_at), profile=profile
+            )
+            == "out"
+        ):
+            # The lone punch sits where this person habitually leaves, so what
+            # went unrecorded is the arrival. Timing it as one would invent hours
+            # of lateness out of a missing punch.
+            result["first_in_at"] = None
+            result["latest_in_at"] = None
+            result["final_out_at"] = _as_db_utc(first.occurred_at)
+            result["early_exit_minutes"] = _ceil_positive_minutes(
+                early_boundary - _as_utc(first.occurred_at)
+            )
+            result.update(presence_state="completed", reason_code="PUNCH_OUT_ONLY_INFERRED")
+            return result
         result["late_minutes"] = _ceil_positive_minutes(_as_utc(first.occurred_at) - grace_boundary)
         if last is not first:
             result["final_out_at"] = _as_db_utc(last.occurred_at)
@@ -437,11 +457,15 @@ def evaluate_case(
     primary_leave_id = _primary_leave_id(
         db, source_leave_ids=leave_ids, reason_code=leave_reason
     )
+    profile = attendance_profile_service.profile_for(
+        db, employee_id=case.employee_id, shift_code=case.shift_code_snapshot
+    )
     punches = _matching_punches(
         db,
         case=case,
         provider_person_id=mapping.id if mapping is not None else None,
         policy=policy,
+        profile=profile,
     )
     result = _derive_result(
         case=case,
@@ -452,6 +476,7 @@ def evaluate_case(
         evaluated_at=_as_utc(evaluated_at),
         leave_reason=leave_reason,
         punches=punches,
+        profile=profile,
     )
     fingerprint = _decision_fingerprint(
         case=case,

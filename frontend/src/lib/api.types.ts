@@ -6899,6 +6899,27 @@ export interface components {
             punches?: components["schemas"]["EmployeeAttendancePunchRead"][];
         };
         /**
+         * EmployeeAttendanceHabitRead
+         * @description What this person's own punches say about one shift they work.
+         *
+         *     Offsets are signed minutes: arrivals against the shift's start, departures
+         *     against its end, so -20 reads as "twenty minutes early". A
+         *     ``suggested_shift_code`` means the punches fit a different shift than the one
+         *     the roster assigns, which is a rostering question rather than a punch one.
+         */
+        EmployeeAttendanceHabitRead: {
+            /** Shift Code */
+            shift_code: string;
+            /** Sample Days */
+            sample_days: number;
+            /** Arrival Typical Offset */
+            arrival_typical_offset: number;
+            /** Departure Typical Offset */
+            departure_typical_offset?: number | null;
+            /** Suggested Shift Code */
+            suggested_shift_code?: string | null;
+        };
+        /**
          * EmployeeAttendanceHistoryDayRead
          * @description One local calendar day of provider punches, with no verdict attached.
          *
@@ -6994,6 +7015,8 @@ export interface components {
             to_date: string;
             /** Days */
             days: components["schemas"]["EmployeeAttendanceDayRead"][];
+            /** Habits */
+            habits?: components["schemas"]["EmployeeAttendanceHabitRead"][];
         };
         /** EmployeeCandidate */
         EmployeeCandidate: {
