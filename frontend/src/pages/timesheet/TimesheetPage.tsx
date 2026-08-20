@@ -204,6 +204,23 @@ export function TimesheetPage(): React.JSX.Element {
     [codeAt, setCell, t],
   )
 
+  /**
+   * `useCallback`, not an inline arrow at the call site, because `GridRow` is
+   * `memo`ised and every other prop it takes is already stable: `codes` is the
+   * query's own array, `strings` is a `useMemo` on `t`, `editedDays` is
+   * `undefined` for an untouched row. So one fresh function identity per render
+   * is enough to re-render all 275 rows — 8,525 `cellLabel` interpolations and
+   * ~17k element diffs — and the always-visible employee search calls `setUi`
+   * on every keystroke, so typing a G-number repainted the whole sheet once per
+   * character. That is the exact hazard the delegated handlers and the row memo
+   * exist to avoid (`TimesheetGrid.tsx`'s header note), undone one level up.
+   *
+   * The setter form takes no dependency, so this identity never changes.
+   */
+  const onSelectRow = useCallback((selected: string | null) => {
+    setUi((prev) => ({ ...prev, selected }))
+  }, [])
+
   /** Every cell corrected in this session, for the grid's structural mark. */
   const edited = useMemo(
     () => new Set(corrections.map((c) => `${c.employeeId}|${c.day}`)),
@@ -451,7 +468,7 @@ export function TimesheetPage(): React.JSX.Element {
                 postCount={grid.postCount}
                 onSetCell={onSetCell}
                 onFill={onFill}
-                onSelect={(selected) => setUi((prev) => ({ ...prev, selected }))}
+                onSelect={onSelectRow}
               />
             )}
           </div>
