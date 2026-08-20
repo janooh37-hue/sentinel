@@ -79,7 +79,8 @@ Footer, anchored to the last data row `L`:
 | `L+4 .. L+6` | blank |
 | `L+7` | `A:B` `S.no`, `C` `STATE`, `D` `CODE` |
 | `L+8 .. L+17` | `A:B` merged `Total `; ten rows: Sick Leave/`SL `, Annual Leave/`AL`, Abcent/`AB`, National Service/`TR`, New Gard/`NG`, Termination/`-`, Resignation/`R`, Suspention/`S `, P/`P`, OFF/`OFF` |
-| `L+18` | `A:D` merged `Total Days`, `E` = `SUM(E{L+8}:E{L+17})` |
+| `L+18` | `C` `Not billed`, `D` `X` — the manual red block; borrows the `OFF` row's styling |
+| `L+19` | `A:D` merged `Total Days`, `E` = `SUM(E{L+8}:E{L+18})` |
 
 `E` on the ten code rows points at the `L+3` totals (`=AO{L+3}` etc.) except
 `NG`, `-`, `R` and `S`, which are `COUNTIF` over the whole grid.
@@ -102,8 +103,10 @@ Footer, anchored to the last data row `L`:
 | `OFF` | weekly off | none | default |
 
 `OFF` is never used — these are 7-day posts. `R`, `S` and `T` are in the legend
-but unused in 2026; departures are written as `-`. The renderer emits only
-`P`, `AL`, `SL `, `AB`, `TR`, `NG` and `-`.
+but unused in 2026; departures are written as `-`. The rule engine derives only
+seven codes: `P`, `AL`, `SL `, `AB`, `TR`, `NG` and `-`. `X` is the eighth and
+is never derived — it exists only as a manual override (the red block: a roster
+day outside the billing window).
 
 The day-31 column stays **empty** in 30-day months (verified: June has exactly
 one blank per row, in `AJ`).
