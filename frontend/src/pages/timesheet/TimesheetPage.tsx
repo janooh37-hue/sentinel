@@ -24,19 +24,21 @@
  * all (a disabled control still answers Enter and Space — UI spec §14).
  */
 
-import { useCallback, useState } from 'react'
+import { useCallback, useMemo, useState } from 'react'
 import { CalendarClock } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
+import { toast } from 'sonner'
 
 import { EmptyState } from '@/components/ui/empty-state'
-import type { TimesheetSheet, TimesheetVariant } from '@/lib/api'
+import { apiErrorMessage, type TimesheetSheet, type TimesheetVariant } from '@/lib/api'
 import { useCapabilities } from '@/lib/useCapabilities'
 import { cn } from '@/lib/utils'
 
 import { CodeRibbon } from './CodeRibbon'
+import { TimesheetGrid, TimesheetMasthead, type FillCell } from './TimesheetGrid'
 import { TimesheetNotice } from './TimesheetNotice'
 import { MonthStepper, TimesheetToolbar, type TimesheetDensity } from './TimesheetToolbar'
-import type { Code } from './codes'
+import { type Code, isCode, slugOf } from './codes'
 import { useSetCell, useTimesheetGrid } from './useTimesheet'
 
 export interface TimesheetUiState {
@@ -113,6 +115,100 @@ export function TimesheetPage(): React.JSX.Element {
     setCorrections((stack) => stack.slice(0, -1))
     setCell.mutate({ employeeId: last.employeeId, day: last.day, code: last.previous })
   }, [corrections, setCell])
+
+  /** The code a cell holds right now — the value a later Undo has to restore. */
+  const codeAt = useCallback(
+    (employeeId: string, day: number): Code | null => {
+      const row = grid.rows.find((r) => r.employee_id === employeeId)
+      const held = row?.codes[day - 1] ?? null
+      return held !== null && isCode(held) ? held : null
+    },
+    [grid.rows],
+  )
+
+  /**
+   * One cell, from a click on the picker or a code letter on the keyboard.
+   *
+   * The input object is built HERE and handed straight to `mutate`. It is never
+   * reused, copied or spread between calls: `useSetCell`'s `onSettled`
+   * recognises the write that is settling by reference identity on
+   * `state.variables`, and two writes sharing one object would each be mistaken
+   * for the other's sibling — which drops the baseline early and costs a
+   * refused cell its last server-confirmed value (Task 7, locked rule 7).
+   */
+  const onSetCell = useCallback(
+    (employeeId: string, day: number, code: Code | null, note?: string) => {
+      setCorrections((stack) => [
+        ...stack,
+        { employeeId, day, previous: codeAt(employeeId, day) },
+      ])
+      setCell.mutate({ employeeId, day, code, note })
+    },
+    [codeAt, setCell],
+  )
+
+  /**
+   * A swept rectangle or a shift-clicked run, committed once as one write per
+   * cell — because `set_cell` is one cell, and it REFUSES per cell: a day
+   * outside the roster window comes back 422 `TIMESHEET_OFF_ROSTER` while its
+   * neighbours are taken. So a fill degrades instead of failing: the accepted
+   * cells stay, each refused cell rolls back to its last server-confirmed
+   * value, and the operator is told ONCE.
+   *
+   * `quiet` is what makes it once. Every write still reverts itself, but the
+   * per-write toast is suppressed and the refusals are counted here, so a
+   * twelve-day sweep across a roster edge is one line and not nine.
+   *
+   * Each cell gets its own freshly built input for the identity reason spelled
+   * out on `onSetCell` above.
+   */
+  const onFill = useCallback(
+    (cells: FillCell[], code: Code) => {
+      if (cells.length === 0) return
+      setCorrections((stack) => [
+        ...stack,
+        ...cells.map((cell) => ({
+          employeeId: cell.employeeId,
+          day: cell.day,
+          previous: codeAt(cell.employeeId, cell.day),
+        })),
+      ])
+      void (async () => {
+        const settled = await Promise.allSettled(
+          cells.map((cell) =>
+            setCell.mutateAsync({
+              employeeId: cell.employeeId,
+              day: cell.day,
+              code,
+              quiet: true,
+            }),
+          ),
+        )
+        const refused = settled.filter(
+          (result): result is PromiseRejectedResult => result.status === 'rejected',
+        )
+        if (refused.length === 0) {
+          toast.success(t('timesheet.filled', { count: cells.length, code: slugOf(code) }))
+          return
+        }
+        // The server's own sentence, once. Every refusal in one gesture has the
+        // same cause — the roster window — so the first one speaks for all.
+        toast.error(
+          t('timesheet.fillRefused', {
+            count: refused.length,
+            reason: apiErrorMessage(refused[0].reason),
+          }),
+        )
+      })()
+    },
+    [codeAt, setCell, t],
+  )
+
+  /** Every cell corrected in this session, for the grid's structural mark. */
+  const edited = useMemo(
+    () => new Set(corrections.map((c) => `${c.employeeId}|${c.day}`)),
+    [corrections],
+  )
 
   const monthStamp = `${String(params.month).padStart(2, '0')} · ${params.year}`
   const arabicMonth = new Intl.DateTimeFormat('ar', { month: 'long' }).format(
@@ -259,8 +355,18 @@ export function TimesheetPage(): React.JSX.Element {
 
       <div className="flex min-h-0 flex-1 flex-col px-4 md:px-6">
         <section className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-t-2xl border border-b-0 border-hairline bg-surface">
-          {/* THE ONLY SCROLL REGION ON THE PAGE. The grid itself is Task 8; the
-              loading and empty states are designed states and live here. */}
+          {/* The quoted workbook header, INSIDE the card and above the scroll
+              region (UI spec §16.1's shell diagram, and `.docmast` inside
+              `.card` in the A3 mockup). Fixed furniture: it names the document
+              the card is showing, so it must not scroll away with the roster.
+              Rendered in every state — a band that appears only once the month
+              lands is a band that shifts the sheet down as it arrives. */}
+          <TimesheetMasthead year={params.year} month={params.month} />
+
+          {/* THE ONLY SCROLL REGION ON THE PAGE. The grid owns its own
+              `<table>` in here rather than the shared `Table` primitive, which
+              wraps itself in `w-full overflow-x-auto` and would be a second
+              scroller. */}
           <div data-testid="timesheet-scroll" className="min-h-0 flex-1 overflow-auto">
             {grid.isPending ? (
               <>
@@ -314,7 +420,25 @@ export function TimesheetPage(): React.JSX.Element {
                 />
                 <MonthStepper year={params.year} month={params.month} onStep={stepMonth} />
               </div>
-            ) : null}
+            ) : (
+              <TimesheetGrid
+                rows={grid.rows}
+                year={params.year}
+                month={params.month}
+                daysInMonth={grid.daysInMonth}
+                variant={ui.variant}
+                closed={grid.closed}
+                canEdit={canEdit}
+                brush={ui.brush}
+                selected={ui.selected}
+                edited={edited}
+                blocking={grid.blocking}
+                postCount={grid.postCount}
+                onSetCell={onSetCell}
+                onFill={onFill}
+                onSelect={(selected) => setUi((prev) => ({ ...prev, selected }))}
+              />
+            )}
           </div>
         </section>
       </div>

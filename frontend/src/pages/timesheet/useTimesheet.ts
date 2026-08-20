@@ -125,6 +125,19 @@ const cellIdOf = (p: TimesheetParams, cell: { employeeId: string; day: number })
 export interface SetCellInput extends CellWrite {
   /** `null` clears the override and lets the derived value show through. */
   code: Code | null
+  /**
+   * Suppress THIS write's own error toast. Never sent on the wire.
+   *
+   * A fill is one write per cell because `set_cell` is one cell, and the server
+   * refuses per cell: a day outside the roster window comes back 422
+   * `TIMESHEET_OFF_ROSTER` while its neighbours are taken. Left alone that is
+   * one toast per refused day, so the caller that issued the fill collects the
+   * refusals and says it once instead.
+   *
+   * Only the TELLING moves. The rollback to the last server-confirmed value
+   * happens either way, before this flag is read.
+   */
+  quiet?: boolean
 }
 
 const EMPTY_ROWS: TimesheetRow[] = []
@@ -353,7 +366,9 @@ export function useSetCell(params: TimesheetParams) {
       const confirmed = baselinesFor(qc).get(cellIdOf(params, input))
       const current = qc.getQueryData<TimesheetGridResponse>(key)
       if (current && confirmed) qc.setQueryData(key, paintCell(current, confirmed))
-      toast.error(apiErrorMessage(err))
+      // The revert above is unconditional; only the telling is opt-out, so a
+      // fill can report its refused days in one line instead of one per day.
+      if (!input.quiet) toast.error(apiErrorMessage(err))
     },
     onSuccess: (grid, input) => {
       // This cell is now confirmed, so anything still queued for it inherits

@@ -9,6 +9,11 @@
  * declared inline on the header row (UI spec §5, `table-layout: fixed`) instead
  * of hidden in a stylesheet the test cannot see.
  */
+/// <reference types="node" />
+// Node's own typings, for THIS file only. `tsconfig.app.json` pins
+// `types: ["vite/client"]` so application code cannot reach `process` or `fs`
+// by accident, and that guard is worth keeping — a reference directive opts one
+// file in without widening it for the other 300.
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 
