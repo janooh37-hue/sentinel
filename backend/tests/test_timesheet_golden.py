@@ -1,11 +1,29 @@
-"""Reproduce the hand-kept June and July 2026 sheets cell for cell.
+"""Reproduce the day codes on the hand-kept June and July 2026 sheets.
 
 Skipped unless the finance share and the live DB are both reachable — this is a
-site-specific acceptance gate, not a portable unit test. It is also the only
-thing in the repo that regression-guards these numbers: the import script's
-``--verify`` mode merely *prints* a cell diff and asserts nothing, so this
-module is what turns that print into a guard over the template, the code rules,
-the grid service, the renderer and the API all at once.
+site-specific acceptance gate, not a portable unit test. It is the only thing in
+the repo that regression-guards these numbers: the import script's ``--verify``
+mode merely *prints* a cell diff and asserts nothing, so this module is what
+turns that print into a guard.
+
+**What is compared.** The day-code band of each hand workbook — every employee
+row, every day column — keyed by employee ID, against
+:func:`app.services.timesheet_service.build_month`. That covers the roster rules
+(who is on which sheet for the month), the day-code rules in
+:mod:`app.core.timesheet_codes` resolved against the live leaves, absences and
+roster edges, the two statistics blocks' row split, and the preflight's
+``blocking`` verdict. Those are the parts a wrong answer would silently misprice
+on the client's invoice.
+
+**What is not compared.** Row *order*: the comparison is keyed by ID and is
+order-insensitive by design, because the engine sorts by ``rank_order`` then
+numeric ID and deliberately does not reproduce the paper's guard-tier order
+(``design.md:151, :295, :507-509``) — only 36 of July's 275 row positions
+coincide. Nor the names, nationalities or designation labels beside the band;
+nor the rendered ``.xlsx``, the template or the API, none of which this module
+imports — its only production imports are :func:`attach_sqlite_pragmas`,
+``CODE_ABSENT`` and ``timesheet_service``. "0 differing cells of 8,525" means
+zero wrong day codes per man, not a page that overlays the paper.
 
 The baseline, counted off the paper the client already holds:
 
@@ -92,16 +110,24 @@ STAT_BLOCKS = {6: (249, 34), 7: (249, 26)}
 
 DRIVER_IDS = ("G5566", "G5567")
 
-#: The drivers workbook's one divergence, pinned rather than tolerated. G5567's
-#: doj is 2026-07-01, so the paper writes ``NG`` on the joining day itself; the
-#: engine reserves ``NG`` for the days *before* doj (``month_codes``), bills day 1
-#: as worked and flags the joiner through ``GridRow.joined_day`` instead. He is
-#: the only employee who joined in July, so this convention cannot reach the
-#: 0-of-8,525 above — and if the rule ever moves, this list says so.
+#: The drivers workbook's one divergence, and it is the *paper* that is wrong —
+#: a one-cell slip of the same class as June's 49, not a rival convention. G5567
+#: joined 2026-07-01 and the drivers sheet writes ``NG`` on his joining day;
+#: ``month_codes`` writes ``NG`` strictly *before* doj and ``P`` on the day the
+#: man actually starts. The paper's own main sheet says the same thing five times
+#: over — every June joiner on it reads ``NG`` up to the day before and ``P`` on
+#: the day: ``G5524`` (doj 06-02) one ``NG`` then ``P``; ``G5530`` and ``G5558``
+#: (doj 06-08) seven then ``P``; ``G5260`` and ``G5677`` (doj 06-09) eight then
+#: ``P``. Those five joining-day ``P``\ s are inside the June band this module
+#: compares, so "fixing" ``month_codes`` to stamp ``NG`` on a joining day would
+#: put five new differences into June and break ``DIFFS_BY_EMPLOYEE[6]``.
+#: Pinned, not tolerated: if the rule ever moves, this list says so.
 DRIVER_DIFFS = [("G5567", 1, "P", "NG")]
 
+#: Every path the module opens, not just two of them: on a partially synced share
+#: this must skip, never error.
 pytestmark = pytest.mark.skipif(
-    not LIVE_DB.exists() or not SHEETS[7].exists(),
+    not LIVE_DB.exists() or not all(path.exists() for path in (*SHEETS.values(), DRIVER_SHEET)),
     reason="needs the live DB and the finance share",
 )
 
@@ -192,11 +218,18 @@ def test_the_live_session_refuses_to_write(live_session: Session) -> None:
     ``build_month`` runs here against the real production file. A session that
     could write is one refactor away from stamping a ``TimesheetPeriod`` row into
     it, so the connection is checked to be incapable of it.
+
+    The one deliberate write attempt in this module runs inside a savepoint, so
+    that if the read-only guarantee ever *did* break, the ``CREATE TABLE`` would
+    succeed, ``pytest.raises`` would fail the test, and the savepoint would still
+    undo it on the way out — containment stated by the test rather than inherited
+    from fixture teardown.
     """
 
-    with pytest.raises(OperationalError, match="readonly database"):
-        live_session.execute(text("CREATE TABLE _golden_probe (x INTEGER)"))
-    live_session.rollback()
+    with live_session.begin_nested() as savepoint:
+        with pytest.raises(OperationalError, match="readonly database"):
+            live_session.execute(text("CREATE TABLE _golden_probe (x INTEGER)"))
+        savepoint.rollback()
     assert live_session.execute(text("PRAGMA foreign_keys")).scalar() == 1
 
 
