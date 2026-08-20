@@ -244,9 +244,14 @@ describe('TimesheetPage shell', () => {
 describe('useSetCell', () => {
   const params = { year: 2026, month: 7, sheet: 'main' } as const
 
+  /**
+   * Returns the client as well as the hook. The hook's rendered value lags the
+   * cache by a render, so an end-state assertion that must not be satisfied by
+   * a stale paint reads the cache directly.
+   */
   function renderCellHook() {
     const qc = makeQc()
-    return renderHook(
+    const rendered = renderHook(
       () => ({ read: useTimesheetGrid(params), write: useSetCell(params) }),
       {
         wrapper: ({ children }) => (
@@ -254,6 +259,10 @@ describe('useSetCell', () => {
         ),
       },
     )
+    const cachedCode = (day: number) =>
+      qc.getQueryData<TimesheetGridResponse>(['timesheet', 2026, 7, 'main'])?.rows[0]
+        .codes[day - 1]
+    return { ...rendered, qc, cachedCode }
   }
 
   it('paints the cell before the server answers and keeps the server grid', async () => {
@@ -367,5 +376,99 @@ describe('useSetCell', () => {
     expect(result.current.read.postCount).toBe(250)
     expect(result.current.read.blocking).toHaveLength(1)
     expect(toast.error).toHaveBeenCalledWith('Day 4 is outside the month.')
+  })
+
+  /**
+   * Two writes to ONE cell, both refused. Reachable from the shipped Undo
+   * button, which re-issues the same cell, and from any second click on a cell
+   * whose first write has not answered — and both refusals are the ordinary
+   * case once the month is sealed or an `edit` grant has gone stale.
+   */
+  it('leaves the last confirmed code, not the first refusal\u2019s, when both writes fail', async () => {
+    getTimesheet.mockResolvedValue({ ...EMPTY_MONTH, rows: [ROW] })
+    const inFlight: { reject: (err: Error) => void }[] = []
+    setTimesheetCell.mockImplementation(
+      () => new Promise<TimesheetGridResponse>((_resolve, reject) => { inFlight.push({ reject }) }),
+    )
+
+    const { result, cachedCode } = renderCellHook()
+    await waitFor(() => expect(result.current.read.rows).toHaveLength(1))
+
+    // Two ticks, one cell — the shipped Undo route, and any second click on a
+    // cell whose first write has not answered. The first write's paint is
+    // already in the cache when the second reads it.
+    act(() => {
+      result.current.write.mutate({ employeeId: 'G1001', day: 3, code: 'AL' })
+    })
+    await waitFor(() => expect(result.current.read.rows[0].codes[2]).toBe('AL'))
+    act(() => {
+      result.current.write.mutate({ employeeId: 'G1001', day: 3, code: 'SL ' })
+    })
+    await waitFor(() => expect(result.current.read.rows[0].codes[2]).toBe('SL '))
+    await act(async () => {
+      inFlight[0].reject(new Error('The month is closed.'))
+    })
+    await waitFor(() => expect(inFlight).toHaveLength(2))
+    await act(async () => {
+      inFlight[1].reject(new Error('The month is closed.'))
+    })
+
+    // 'P' is the last thing the server confirmed. 'AL' would be the first
+    // refusal's code — refused twice, and still on screen.
+    //
+    // Read from the CACHE, and only once both refusals have been reported. The
+    // cell legitimately passes through 'P' after the first refusal, and the
+    // hook's rendered value lags the cache by a render, so polling the rendered
+    // value for 'P' passes on that stale paint even when the second refusal
+    // ends on 'AL'. `onError` writes the cache before it toasts, so two toasts
+    // means the second revert has already landed.
+    await waitFor(() => expect(toast.error).toHaveBeenCalledTimes(2))
+    expect(cachedCode(3)).toBe('P')
+  })
+
+  it('rolls a refused write back to an accepted one, not to what preceded it', async () => {
+    getTimesheet.mockResolvedValue({ ...EMPTY_MONTH, rows: [ROW] })
+    // The first write is ACCEPTED, so 'AL' is confirmed for day 3.
+    const servedFirst: TimesheetGridResponse = {
+      ...EMPTY_MONTH,
+      rows: [{ ...ROW, codes: ROW.codes.map((c, i) => (i === 2 ? 'AL' : c)) }],
+    }
+    const inFlight: {
+      resolve: (grid: TimesheetGridResponse) => void
+      reject: (err: Error) => void
+    }[] = []
+    setTimesheetCell.mockImplementation(
+      () =>
+        new Promise<TimesheetGridResponse>((resolve, reject) => {
+          inFlight.push({ resolve, reject })
+        }),
+    )
+
+    const { result, cachedCode } = renderCellHook()
+    await waitFor(() => expect(result.current.read.rows).toHaveLength(1))
+
+    act(() => {
+      result.current.write.mutate({ employeeId: 'G1001', day: 3, code: 'AL' })
+    })
+    await waitFor(() => expect(result.current.read.rows[0].codes[2]).toBe('AL'))
+    act(() => {
+      result.current.write.mutate({ employeeId: 'G1001', day: 3, code: 'SL ' })
+    })
+    await waitFor(() => expect(result.current.read.rows[0].codes[2]).toBe('SL '))
+
+    await act(async () => {
+      inFlight[0].resolve(servedFirst)
+    })
+    await waitFor(() => expect(inFlight).toHaveLength(2))
+    await act(async () => {
+      inFlight[1].reject(new Error('Sick leave needs a note.'))
+    })
+
+    // Back to the ACCEPTED 'AL'. Rolling back to 'P' would discard a correction
+    // the server had already taken — which is what a baseline inherited at
+    // mutate time says, so the accepted answer has to overwrite it.
+    await waitFor(() => expect(toast.error).toHaveBeenCalledTimes(1))
+    expect(cachedCode(3)).toBe('AL')
+    expect(toast.error).toHaveBeenCalledWith('Sick leave needs a note.')
   })
 })

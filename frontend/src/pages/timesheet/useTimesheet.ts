@@ -70,6 +70,58 @@ interface CellWrite {
   note?: string | null
 }
 
+/**
+ * The last SERVER-CONFIRMED value of every cell that has an unanswered write.
+ *
+ * The query cache cannot answer this. Once a write has painted, the cache holds
+ * the PAINT; a second write to the same cell that reads it captures an
+ * unconfirmed value, and two refusals then leave the first refusal's code on
+ * screen:
+ *
+ *   cell 'P'; A paints 'AL' (baseline 'P'); B paints 'SL' (baseline 'AL')
+ *   A refused -> 'P';  B refused -> 'AL', which the server had just rejected
+ *
+ * That is the failure locked rule 7 forbids, and it is reachable from the Undo
+ * button and from any second click on an unanswered cell. So the baseline is
+ * recorded once per cell, inherited by later writes, and REPLACED by the
+ * server's own value the moment a write to that cell is answered — which is
+ * what keeps an accepted-then-refused pair from rolling the accepted value out.
+ *
+ * `Mutation.state.context` — which holds whatever `onMutate` returned — is not
+ * enough on its own, for two reasons.
+ *
+ * The first is why this is a registry and not a snapshot: a baseline captured
+ * at mutate time goes STALE the moment an earlier write to the same cell is
+ * ACCEPTED. `cell 'P'; A 'AL' accepted; B 'SL' refused` must land on 'AL', and
+ * a context captured before A answered says 'P'. Only `onSuccess` knows the
+ * confirmed value, and it cannot write into another mutation's context — so the
+ * baseline lives somewhere both handlers can reach.
+ *
+ * The second is a timing detail worth knowing: `Mutation.execute()` assigns the
+ * context only after `await options.onMutate(...)` resolves, so two writes to
+ * one cell issued in the SAME tick both enter `onMutate` before either resolves
+ * and the second would read `undefined`. That case happens to be safe either
+ * way — neither write has painted yet, so the cache is still confirmed — but it
+ * means context is not readable when the inheritance is decided.
+ *
+ * Keyed by `QueryClient`, so it dies with the client and cannot leak between
+ * tests or between two clients in one process.
+ */
+const BASELINES = new WeakMap<QueryClient, Map<string, CellWrite>>()
+
+function baselinesFor(qc: QueryClient): Map<string, CellWrite> {
+  const existing = BASELINES.get(qc)
+  if (existing) return existing
+  const fresh = new Map<string, CellWrite>()
+  BASELINES.set(qc, fresh)
+  return fresh
+}
+
+/** The registry key. Both writers must spell it identically or a baseline is
+ *  silently orphaned, so it is computed in exactly one place. */
+const cellIdOf = (p: TimesheetParams, cell: { employeeId: string; day: number }): string =>
+  `${p.year}-${p.month}-${p.sheet}|${cell.employeeId}|${cell.day}`
+
 export interface SetCellInput extends CellWrite {
   /** `null` clears the override and lets the derived value show through. */
   code: Code | null
@@ -243,12 +295,21 @@ function queuedCellWrites(
  * the one failure mode this page cannot have. The server's own message is what
  * the operator is told, not a generic apology.
  *
- * Both halves reconcile ONE cell against the cache as it stands at that moment,
- * never a whole snapshot. With two writes in flight — a drag across days, a
- * shift-clicked range — a wholesale restore would re-seat the optimistic grid
- * captured before the earlier write answered, silently discarding the server's
- * recomputed `blocking`, `warnings`, `stat_codes` and `post_count`. The operator
- * makes the release decision from those counts.
+ * Nothing here ever restores a whole snapshot. With two writes in flight — a
+ * drag across days, a shift-clicked range — a wholesale restore would re-seat
+ * the optimistic grid captured before the earlier write answered, silently
+ * discarding the server's recomputed `blocking`, `warnings`, `stat_codes` and
+ * `post_count`. The operator makes the release decision from those counts.
+ *
+ * Where a refused cell goes back to is `BASELINES`, never the cache: the cache
+ * holds paint, and a second write to the same cell must not inherit an
+ * unconfirmed value. The three handlers keep one invariant between them — while
+ * a cell has an unanswered write, `BASELINES` holds that cell's last
+ * server-confirmed value:
+ *
+ *   onMutate   seeds it, or inherits the entry an earlier write left
+ *   onSuccess  replaces it with the server's own value for that cell
+ *   onSettled  drops it once no write for that cell is left unanswered
  */
 export function useSetCell(params: TimesheetParams) {
   const qc = useQueryClient()
@@ -265,30 +326,65 @@ export function useSetCell(params: TimesheetParams) {
         note: input.note ?? null,
       }),
     onMutate: async (input) => {
+      // Recorded BEFORE the await. Two writes to one cell in the same tick both
+      // reach this line before either paints, so the inheritance has to be
+      // settled here and not after a suspension point.
+      const baselines = baselinesFor(qc)
+      const cellId = cellIdOf(params, input)
+      if (!baselines.has(cellId)) {
+        const row = qc
+          .getQueryData<TimesheetGridResponse>(key)
+          ?.rows.find((r) => r.employee_id === input.employeeId)
+        baselines.set(cellId, {
+          employeeId: input.employeeId,
+          day: input.day,
+          code: row?.codes[input.day - 1] ?? null,
+          // Notes serialise with STRING keys.
+          note: row?.notes[String(input.day)] ?? null,
+        })
+      }
+
       // A refetch landing mid-flight would overwrite the optimistic fill.
       await qc.cancelQueries({ queryKey: key })
       const grid = qc.getQueryData<TimesheetGridResponse>(key)
-      const row = grid?.rows.find((r) => r.employee_id === input.employeeId)
-      // Captured per CELL, not per grid, so the rollback survives another
-      // write's response landing before this one fails.
-      const rollback: CellWrite = {
-        employeeId: input.employeeId,
-        day: input.day,
-        code: row?.codes[input.day - 1] ?? null,
-        note:
-          input.note === undefined ? undefined : (row?.notes[String(input.day)] ?? null),
-      }
       if (grid) qc.setQueryData(key, paintCell(grid, input))
-      return { rollback }
     },
-    onError: (err, _input, context) => {
+    onError: (err, input) => {
+      const confirmed = baselinesFor(qc).get(cellIdOf(params, input))
       const current = qc.getQueryData<TimesheetGridResponse>(key)
-      if (current && context) qc.setQueryData(key, paintCell(current, context.rollback))
+      if (current && confirmed) qc.setQueryData(key, paintCell(current, confirmed))
       toast.error(apiErrorMessage(err))
     },
     onSuccess: (grid, input) => {
+      // This cell is now confirmed, so anything still queued for it inherits
+      // the SERVER's value — not what the cell held before this write. Without
+      // this an accepted write followed by a refused one to the same cell would
+      // roll the accepted value straight back out.
+      const row = grid.rows.find((r) => r.employee_id === input.employeeId)
+      if (row) {
+        baselinesFor(qc).set(cellIdOf(params, input), {
+          employeeId: input.employeeId,
+          day: input.day,
+          code: row.codes[input.day - 1] ?? null,
+          note: row.notes[String(input.day)] ?? null,
+        })
+      }
       const queued = queuedCellWrites(qc, cellKey, input)
       qc.setQueryData(key, queued.reduce((next, write) => paintCell(next, write), grid))
+    },
+    onSettled: (_grid, _err, input) => {
+      // Held while another write to the same cell is still unanswered — that
+      // write's rollback is this entry. `onSettled` runs before react-query
+      // dispatches this mutation's terminal state, so exclude ourselves.
+      const stillQueued = qc
+        .getMutationCache()
+        .findAll({ mutationKey: cellKey, exact: true, status: 'pending' })
+        .some((mutation) => {
+          const vars = mutation.state.variables as SetCellInput | undefined
+          if (!vars || vars === input) return false
+          return vars.employeeId === input.employeeId && vars.day === input.day
+        })
+      if (!stillQueued) baselinesFor(qc).delete(cellIdOf(params, input))
     },
   })
 }

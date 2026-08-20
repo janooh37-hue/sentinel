@@ -958,10 +958,11 @@ function filenameFrom(header: string | null): string | null {
       // Malformed percent-escapes: fall through to the plain form.
     }
   }
-  // `(?!\*)` is load-bearing: without it this matches the `filename` PREFIX of
-  // `filename*=UTF-8''…`, the optional quote matches empty, and the capture
-  // becomes `*=UTF-8''%D9%83…` — a workbook saved under a garbage name instead
-  // of falling through to the caller's fallback.
+  // The `=` is a mandatory literal, so this pattern never saw `filename*=` in
+  // the first place — the RFC 5987 header already falls through to the caller's
+  // fallback. `(?!\*)` is a cheap guard, not a fix: it rejects a plain form
+  // whose VALUE starts with `*`, so a header like `filename=*=UTF-8''…` stays on
+  // the fallback path, and so does anything else if the `=` is ever loosened.
   const plain = /filename=(?!\*)"?([^";]+)"?/i.exec(header)
   return plain ? plain[1].trim() : null
 }
