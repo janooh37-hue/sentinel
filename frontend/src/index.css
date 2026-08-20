@@ -171,6 +171,35 @@
   --wa-mention: #027eb5;
   --wa-meta: #667781;
   --wa-doc-wash: rgba(0, 0, 0, 0.05);
+
+  /* Monthly time sheet — the workbook's own conditional-format fills. Light is
+     the paper hex so screen and print agree; dark mixes the hue into the
+     surface, because #FFC7CE at full strength on #131826 is a flashbang.
+     Semantic — never hardcode these hex in components: a cell renders
+     `data-code="AL"` and the rules below resolve the pair.
+     The token segment is the SLUG, never the code: `SL ` carries a trailing
+     space on the wire (the workbook's $AO$5 COUNTIF matches it) which a CSS
+     identifier cannot, and `-` is spelled OFFROSTER. */
+  --code-P-fill: transparent;         --code-P-ink: var(--text);
+  --code-AL-fill: #bdd7ee;            --code-AL-ink: #10243a;
+  --code-SL-fill: #c6e0b4;            --code-SL-ink: #17300f;
+  --code-AB-fill: #ffc7ce;            --code-AB-ink: #9c0006;
+  --code-TR-fill: #cc99ff;            --code-TR-ink: #2e0b52;
+  --code-NG-fill: #ff9900;            --code-NG-ink: #3a2200;
+  --code-OFFROSTER-fill: transparent; --code-OFFROSTER-ink: var(--text-faint);
+  --code-X-fill: #990033;             --code-X-ink: #ffffff;
+
+  /* Sheet metrics. The grid deliberately opts out of the em-relative scale
+     (UI spec §3.3): 31 columns is a fixed count, so the sheet gets its own
+     three-stop zoom instead of tracking the Aa slider. 600px is the frozen
+     identity block (568px) plus the gutters; the rest divides by 31, so all
+     31 columns land on screen from ~1560px up. Never under 26px (unreadable)
+     or over 46px (the row stops scanning as one line).
+     Declared on `:root` — a pseudo-class (0,1,0) that outranks `html`
+     (0,0,1) whatever the source order (UI spec §14). */
+  --cell: clamp(26px, calc((100vw - 600px) / 31), 46px);
+  --row: 28px;
+  --cell-font: 11px;
 }
 
 [data-theme="dark"] {
@@ -245,6 +274,71 @@
   --wa-mention: #53bdeb;
   --wa-meta: #8696a0;
   --wa-doc-wash: rgba(255, 255, 255, 0.06);
+
+  /* Monthly time sheet — same hue, mixed into the dark surface with the ink
+     lifted. `P` and `-` stay transparent, so they inherit the theme's text.
+     The `X` pair is the only one the UI spec does not tabulate (§3.2 predates
+     the red block and §15 gives only the print value), derived here by §3.2's
+     own mix-into-surface rule. */
+  --code-AL-fill: color-mix(in oklab, #bdd7ee 24%, var(--surface));  --code-AL-ink: #bdd7ee;
+  --code-SL-fill: color-mix(in oklab, #c6e0b4 24%, var(--surface));  --code-SL-ink: #c6e0b4;
+  --code-AB-fill: color-mix(in oklab, #ffc7ce 26%, var(--surface));  --code-AB-ink: #ff9aa6;
+  --code-TR-fill: color-mix(in oklab, #cc99ff 26%, var(--surface));  --code-TR-ink: #d9b3ff;
+  --code-NG-fill: color-mix(in oklab, #ff9900 34%, var(--surface));  --code-NG-ink: #ffbb55;
+  --code-X-fill: color-mix(in oklab, #990033 66%, var(--surface));   --code-X-ink: #ffd7de;
+}
+
+/* The code fills, resolved once. `index.css` has no `@layer`, so these bare
+   attribute selectors sit unlayered and outrank a Tailwind utility on the same
+   element — which is what a cell wants. `AB` and `NG` carry weight as well as
+   colour: the two codes that mean "something went wrong" are the two the eye
+   should catch first (UI spec §3.2). Every fill is paired with its letter, so
+   nothing here is signalled by colour alone. */
+[data-code='P'] { background: var(--code-P-fill); color: var(--code-P-ink); }
+[data-code='AL'] { background: var(--code-AL-fill); color: var(--code-AL-ink); }
+[data-code='SL'] { background: var(--code-SL-fill); color: var(--code-SL-ink); }
+[data-code='AB'] { background: var(--code-AB-fill); color: var(--code-AB-ink); font-weight: 600; }
+[data-code='TR'] { background: var(--code-TR-fill); color: var(--code-TR-ink); }
+[data-code='NG'] { background: var(--code-NG-fill); color: var(--code-NG-ink); font-weight: 600; }
+[data-code='-'] { background: var(--code-OFFROSTER-fill); color: var(--code-OFFROSTER-ink); }
+[data-code='X'] { background: var(--code-X-fill); color: var(--code-X-ink); font-weight: 600; }
+/* A day the month does not have: the column stays so the grid never reflows
+   between months, but it holds nothing (UI spec §5). */
+[data-code=''] { background: transparent; color: transparent; }
+
+/* The sheet's three zoom stops. Scoped to the shell, not `html`, because the
+   zoom is page state, not an app setting. */
+[data-ts-density='compact'] {
+  --cell: clamp(22px, calc((100vw - 600px) / 31), 34px);
+  --row: 24px;
+  --cell-font: 10px;
+}
+[data-ts-density='roomy'] {
+  --cell: clamp(34px, calc((100vw - 600px) / 31), 58px);
+  --row: 38px;
+  --cell-font: 13px;
+}
+
+/* Loading is a designed state (UI spec §9): 31 columns at the real pitch, so
+   the grid does not resize when the month lands. One element per row instead of
+   31 — a skeleton is not worth 400 nodes. */
+.ts-skeleton-cells {
+  background-image: repeating-linear-gradient(
+    90deg,
+    var(--surface-tinted) 0 calc(var(--cell) - 2px),
+    transparent calc(var(--cell) - 2px) var(--cell)
+  );
+  inline-size: calc(var(--cell) * var(--ts-days));
+  block-size: calc(var(--row) - 6px);
+}
+
+/* UI spec §14: letter-spacing plus uppercase tears joined Arabic letters apart
+   and there is no uppercase to apply. Neutralised on `:lang(ar)` — never on
+   `html[lang="ar"]`, because the sheet's designations are English inside an
+   Arabic page. */
+[data-ts-caps]:lang(ar) {
+  letter-spacing: 0;
+  text-transform: none;
 }
 
 /* Discrete font-scale stops. The AaSlider snaps to one of these four
