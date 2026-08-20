@@ -155,6 +155,10 @@ export function TimesheetPage(): React.JSX.Element {
    * cells stay, each refused cell rolls back to its last server-confirmed
    * value, and the operator is told ONCE.
    *
+   * A refused cell also leaves no correction behind: the record has to match
+   * what the server actually took, or the chip counts writes that never landed
+   * and Undo starts by trying to reverse them.
+   *
    * `quiet` is what makes it once. Every write still reverts itself, but the
    * per-write toast is suppressed and the refusals are counted here, so a
    * twelve-day sweep across a roster edge is one line and not nine.
@@ -165,14 +169,17 @@ export function TimesheetPage(): React.JSX.Element {
   const onFill = useCallback(
     (cells: FillCell[], code: Code) => {
       if (cells.length === 0) return
-      setCorrections((stack) => [
-        ...stack,
-        ...cells.map((cell) => ({
-          employeeId: cell.employeeId,
-          day: cell.day,
-          previous: codeAt(cell.employeeId, cell.day),
-        })),
-      ])
+      // Built once, pushed optimistically so the edited ring appears while the
+      // writes are in flight, and pruned below by OBJECT IDENTITY. Identity
+      // rather than employee+day because a click can land mid-flight and append
+      // its own correction after these; matching on the value would take the
+      // wrong entry off the stack.
+      const entries: Correction[] = cells.map((cell) => ({
+        employeeId: cell.employeeId,
+        day: cell.day,
+        previous: codeAt(cell.employeeId, cell.day),
+      }))
+      setCorrections((stack) => [...stack, ...entries])
       void (async () => {
         const settled = await Promise.allSettled(
           cells.map((cell) =>
@@ -187,8 +194,39 @@ export function TimesheetPage(): React.JSX.Element {
         const refused = settled.filter(
           (result): result is PromiseRejectedResult => result.status === 'rejected',
         )
+        // A refused cell was never corrected, so it must not stay on the stack.
+        // Left there, the chip over-counts — `4 corrections` for a sweep where
+        // two landed — and `Undo last change` pops the refused ones FIRST,
+        // re-issuing `set_cell` for a day the roster edge owns. That write is
+        // refused again and NOT quiet, so the operator collects an error toast
+        // for undoing something that never happened, once per refusal, before
+        // the corrections that did land are even reachable.
+        const dropped = new Set(entries.filter((_, i) => settled[i].status === 'rejected'))
+        if (dropped.size > 0) {
+          setCorrections((stack) => stack.filter((entry) => !dropped.has(entry)))
+        }
         if (refused.length === 0) {
-          toast.success(t('timesheet.filled', { count: cells.length, code: slugOf(code) }))
+          // UI spec §8 wants a run to announce itself as `G7057 · day 6–17 —
+          // AL`, which only says something true for ONE employee's contiguous
+          // run. A multi-row rectangle, or a run the roster edge punched holes
+          // in, is reported as a count instead — `rangePainted` would name a
+          // span it did not paint.
+          const first = cells[0]
+          const last = cells[cells.length - 1]
+          const oneRun =
+            cells.length > 1 &&
+            cells.every((cell) => cell.employeeId === first.employeeId) &&
+            last.day - first.day + 1 === cells.length
+          toast.success(
+            oneRun
+              ? t('timesheet.rangePainted', {
+                  id: first.employeeId,
+                  from: first.day,
+                  to: last.day,
+                  code: slugOf(code),
+                })
+              : t('timesheet.filled', { count: cells.length, code: slugOf(code) }),
+          )
           return
         }
         // The server's own sentence, once. Every refusal in one gesture has the

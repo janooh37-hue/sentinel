@@ -82,11 +82,18 @@ const mockCapabilities = vi.mocked(useCapabilities)
  */
 let month: TimesheetGridResponse = MONTH
 
-const accept = (day: number, code: string | null): TimesheetGridResponse => {
-  const row = month.rows[0]
+const accept = (
+  employeeId: string,
+  day: number,
+  code: string | null,
+): TimesheetGridResponse => {
   month = {
     ...month,
-    rows: [{ ...row, codes: row.codes.map((c, i) => (i === day - 1 ? code : c)) }],
+    rows: month.rows.map((row) =>
+      row.employee_id === employeeId
+        ? { ...row, codes: row.codes.map((c, i) => (i === day - 1 ? code : c)) }
+        : row,
+    ),
   }
   return month
 }
@@ -124,7 +131,7 @@ beforeEach(() => {
 describe('drag to fill, through the page', () => {
   it('commits one write per swept cell and confirms the run once', async () => {
     setTimesheetCell.mockImplementation((_p, body) =>
-      Promise.resolve(accept(body.day, body.code)),
+      Promise.resolve(accept(body.employee_id, body.day, body.code)),
     )
     renderPage()
     await screen.findByRole('table')
@@ -143,7 +150,32 @@ describe('drag to fill, through the page', () => {
     // Nothing was armed, so the sweep spread the anchor's own code.
     expect(new Set(setTimesheetCell.mock.calls.map((c) => c[1].code))).toEqual(new Set(['P']))
     await waitFor(() => expect(toast.success).toHaveBeenCalledTimes(1))
+    // UI spec §8's range line, which `timesheet.rangePainted` has carried in
+    // both locales since the copy landed and nothing rendered. One employee,
+    // one contiguous run, so it can name the span instead of counting cells.
+    expect(toast.success).toHaveBeenCalledWith('G1001 · day 3–6 — P')
     expect(toast.error).not.toHaveBeenCalled()
+  })
+
+  it('counts the cells instead of naming a span when the run is not one', async () => {
+    // Two rows, so the rectangle is not one employee's run: `G1001 · day 3–4`
+    // would name a span that only half the writes belong to.
+    month = { ...MONTH, rows: [ROW, { ...ROW, employee_id: 'G1002', row_no: 2 }] }
+    setTimesheetCell.mockImplementation((_p, body) =>
+      Promise.resolve(accept(body.employee_id, body.day, body.code)),
+    )
+    renderPage()
+    await screen.findByRole('table')
+
+    await userEvent.pointer([
+      { keys: '[MouseLeft>]', target: cellOf(3) },
+      { target: screen.getByRole('button', { name: /G1002 day 4 /i }) },
+      { keys: '[/MouseLeft]' },
+    ])
+
+    await waitFor(() => expect(setTimesheetCell).toHaveBeenCalledTimes(4))
+    await waitFor(() => expect(toast.success).toHaveBeenCalledTimes(1))
+    expect(toast.success).toHaveBeenCalledWith('4 cells — P')
   })
 
   /**
@@ -156,7 +188,7 @@ describe('drag to fill, through the page', () => {
     setTimesheetCell.mockImplementation((_p, body) =>
       body.day <= 4
         ? Promise.reject(new Error(OFF_ROSTER))
-        : Promise.resolve(accept(body.day, body.code)),
+        : Promise.resolve(accept(body.employee_id, body.day, body.code)),
     )
     renderPage()
     await screen.findByRole('table')
@@ -186,6 +218,24 @@ describe('drag to fill, through the page', () => {
     expect(cellOf(6)).toHaveAttribute('data-code', 'AL')
     expect(cellOf(3)).toHaveAttribute('data-code', 'P')
     expect(cellOf(4)).toHaveAttribute('data-code', 'P')
+
+    // The record has to match what the server took. With all four left on the
+    // stack the chip read `4 corrections` for two landed writes, and `Undo
+    // last change` popped the REFUSED ones first — re-issuing `set_cell` for a
+    // day the roster edge owns, non-quiet, so the operator collected an error
+    // toast for undoing something that never happened, twice, before either
+    // real correction was reachable.
+    expect(screen.getByText('2 corrections')).toBeInTheDocument()
+    setTimesheetCell.mockClear()
+    vi.mocked(toast.error).mockClear()
+    await userEvent.click(screen.getByRole('button', { name: /undo last change/i }))
+    // Day 6 — the last cell the server accepted — restored to what it held
+    // before the fill. Not day 4: that write was refused and is not a
+    // correction.
+    await waitFor(() => expect(setTimesheetCell).toHaveBeenCalledTimes(1))
+    expect(setTimesheetCell.mock.calls[0][1]).toMatchObject({ day: 6, code: 'P' })
+    expect(screen.getByText('1 correction')).toBeInTheDocument()
+    expect(toast.error).not.toHaveBeenCalled()
   })
 
   it('reports a wholly refused sweep once as well', async () => {
