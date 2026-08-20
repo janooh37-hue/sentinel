@@ -333,16 +333,56 @@ describe('TimesheetGrid', () => {
     )
   })
 
+  it('flags the sweep where the stylesheet looks for it', async () => {
+    // One `userEvent.setup()` instance, like the shift-click below: the direct
+    // API builds a fresh one per call, and a button pressed in one call is not
+    // held into the next — `[/MouseLeft]` on a fresh instance releases nothing
+    // and dispatches no `pointerup`, so the press and the release have to share
+    // an instance for the sweep to end at all.
+    const user = userEvent.setup()
+    render(<TimesheetGrid {...props} brush="AL" />)
+    await user.pointer([
+      { keys: '[MouseLeft>]', target: cell('G1001', 3) },
+      { target: cell('G1001', 5) },
+    ])
+    const sheet = screen.getByRole('table')
+    // The component holds ONE ref — the wrapper `<div>` that carries the
+    // capture-phase handlers — so `data-dragging` lands on an ancestor of the
+    // table and never on the table itself.
+    expect(sheet.hasAttribute('data-dragging')).toBe(false)
+    expect(sheet.closest('[data-dragging="1"]')).not.toBeNull()
+    // So the rule that suppresses the row tint mid-sweep has to key the
+    // ancestor. Written `.ts-sheet[data-dragging='1']` it matched nothing, and
+    // a sweep tinted every row it crossed: measured in Chromium mid-sweep, the
+    // crossed row's identity cells resolved `--surface-tinted` (#f0eee8) —
+    // indistinguishable from a plain hover. jsdom loads no stylesheet, so this
+    // pins the two halves to each other, not the resolved colour.
+    expect(indexCss).toContain(
+      "[data-dragging='1'] .ts-sheet tbody tr:hover .ts-stick { background: var(--surface); }",
+    )
+    await user.pointer([{ keys: '[/MouseLeft]' }])
+    expect(sheet.closest('[data-dragging="1"]')).toBeNull()
+  })
+
   it('cancels the sweep on Escape without filling anything', async () => {
     const onFill = vi.fn()
+    // One instance across the press, the Escape and the release. Strengthened
+    // under the standing precedent: with the direct API the release lands on a
+    // fresh instance that has nothing pressed, dispatches no `pointerup`, and
+    // `onFill` then goes uncalled whether Escape cancelled the sweep or not —
+    // an assertion that could not fail. Held on one instance the release is
+    // real, so this now proves what it says: Escape ended the sweep, and the
+    // `pointerup` that follows it commits nothing.
+    const user = userEvent.setup()
     render(<TimesheetGrid {...props} brush="AL" onFill={onFill} />)
-    await userEvent.pointer([
+    await user.pointer([
       { keys: '[MouseLeft>]', target: cell('G1001', 3) },
       { target: cell('G1001', 8) },
     ])
-    await userEvent.keyboard('{Escape}')
-    await userEvent.pointer([{ keys: '[/MouseLeft]' }])
+    await user.keyboard('{Escape}')
+    await user.pointer([{ keys: '[/MouseLeft]' }])
     expect(onFill).not.toHaveBeenCalled()
+    expect(screen.getByRole('table').closest('[data-dragging="1"]')).toBeNull()
   })
 
   it('shift-clicks the inclusive run from the last painted day', async () => {

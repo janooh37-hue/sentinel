@@ -490,8 +490,17 @@
 
 .ts-sheet tbody tr:hover .ts-stick { background: var(--surface-tinted); }
 .ts-sheet tbody tr[data-selected='1'] .ts-stick { background: var(--primary-soft); }
-/* A sweep in progress must not also light up whatever row the pointer crosses. */
-.ts-sheet[data-dragging='1'] tbody tr:hover .ts-stick { background: var(--surface); }
+/* A sweep in progress must not also light up whatever row the pointer crosses.
+   The attribute is on the grid's WRAPPER, not on the table: `TimesheetGrid`
+   holds one ref, the outer `<div>` that carries the capture-phase handlers, and
+   `onPointerDown` sets `data-dragging` there. Written `.ts-sheet[data-dragging]`
+   this rule could never match, and a sweep tinted every row it crossed —
+   measured in Chromium mid-sweep: the crossed row's identity cells resolved
+   `--surface-tinted` (#f0eee8), the same as a plain hover. Descendant, so it
+   keys the element that actually carries the flag; still one attribute more
+   specific than the hover and selected rules above, which is what makes it
+   win. */
+[data-dragging='1'] .ts-sheet tbody tr:hover .ts-stick { background: var(--surface); }
 
 /* The rank-group separator: the paper's sort order, made visible. */
 .ts-sheet tr.ts-group th {
