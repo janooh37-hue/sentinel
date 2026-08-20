@@ -22,10 +22,13 @@ from app.db.models import (
     Absence,
     Base,
     Employee,
+    Leave,
     TimesheetDesignation,
     TimesheetPeriod,
     TimesheetStartAck,
+    TimesheetStatFiller,
     User,
+    UserPermission,
 )
 from app.db.session import attach_sqlite_pragmas, get_db
 from app.main import create_app
@@ -269,6 +272,27 @@ def test_patch_sets_the_post_count_and_a_filler(client, db_session):
     assert row["stat_codes"][0] == "SL "
 
 
+def test_a_patch_whose_filler_fails_changes_nothing(client, db_session):
+    """One unit of work: both writers commit on their own by default."""
+
+    _guard(db_session)
+    response = client.patch(
+        "/api/v1/timesheet/2026/7",
+        json={
+            "post_count": 240,
+            "fillers": [
+                {"employee_id": "G1001", "code": "SL "},
+                {"employee_id": "G9998", "code": "AL"},  # no such employee
+            ],
+        },
+    )
+    assert response.status_code == 404
+    db_session.rollback()  # the route's failed transaction, seen from the test session
+    assert db_session.query(TimesheetPeriod).count() == 0
+    assert db_session.query(TimesheetStatFiller).count() == 0
+    assert client.get("/api/v1/timesheet/2026/7").json()["post_count"] == 249
+
+
 def test_a_closed_month_rejects_a_cell_edit(client, db_session):
     _guard(db_session)
     client.get("/api/v1/timesheet/2026/7/export")
@@ -348,7 +372,7 @@ def test_start_ack_is_allowed_on_a_closed_month(client, db_session):
     assert db_session.query(TimesheetStartAck).count() == 1
 
 
-def test_start_ack_for_someone_off_the_roster_is_a_404(client, db_session):
+def test_start_ack_for_an_unknown_employee_is_a_404(client, db_session):
     _guard(db_session)
     response = client.post("/api/v1/timesheet/2026/7/start-ack", json={"employee_id": "G9999"})
     assert response.status_code == 404
@@ -356,6 +380,37 @@ def test_start_ack_for_someone_off_the_roster_is_a_404(client, db_session):
     # passes against a route that does not exist at all.
     assert response.json()["error"]["code"] == "EMPLOYEE_NOT_FOUND"
     assert db_session.query(TimesheetStartAck).count() == 0
+
+
+def test_start_ack_for_someone_off_the_roster_is_a_404(client, db_session):
+    """Stored, it would render ``start_confirmed`` over a start nobody accepted.
+
+    ``acknowledge_start`` only checks that the employee exists and
+    ``timesheet_start_acks`` has no foreign key, so the roster clause has to be
+    enforced on the way in.
+    """
+
+    designation = db_session.query(TimesheetDesignation).filter_by(name_en="Security Guard").one()
+    db_session.add(
+        Employee(
+            id="G3000",
+            name_en="FUTURE GUARD",
+            nationality="الإمارات",
+            doj=date(2026, 9, 1),  # exists, but not on July's roster
+            designation_id=designation.id,
+        )
+    )
+    db_session.commit()
+
+    response = client.post("/api/v1/timesheet/2026/7/start-ack", json={"employee_id": "G3000"})
+    assert response.status_code == 404
+    assert response.json()["error"]["code"] == "EMPLOYEE_NOT_ON_SHEET"
+    assert db_session.query(TimesheetStartAck).count() == 0
+    # …and he is accepted for the month he does join.
+    assert (
+        client.post("/api/v1/timesheet/2026/9/start-ack", json={"employee_id": "G3000"}).status_code
+        == 204
+    )
 
 
 # --------------------------------------------------------------------------- #
@@ -442,6 +497,57 @@ def test_two_months_step_back_over_the_december_boundary(client, db_session):
     assert workbook["JAN"]["D4"].value == "For the Month of :JAN-2027"
 
 
+def test_the_handover_span_of_someone_who_left_last_month(client, db_session):
+    """The case ``months=2`` exists for, asked from the month Task 10 is on.
+
+    He finished in June, so July has no row for him. ``render_single_span``
+    tolerates that by design, and the file takes the earlier month's name — an
+    eager ``filename_for_single`` on the later grid 404s the whole download.
+    """
+
+    designation = db_session.query(TimesheetDesignation).filter_by(name_en="Security Guard").one()
+    db_session.add(
+        Employee(
+            id="G4000",
+            name_en="LEFT GUARD",
+            nationality="الإمارات",
+            doj=date(2020, 1, 1),
+            end_date=date(2026, 6, 20),
+            designation_id=designation.id,
+        )
+    )
+    db_session.commit()
+
+    response = client.get("/api/v1/timesheet/employee/G4000/2026/7/export?months=2")
+    assert response.status_code == 200
+    workbook = load_workbook(io.BytesIO(response.content))
+    assert workbook.sheetnames == ["JUN", "JUL"]
+    assert workbook["JUN"]["B6"].value == "G4000"
+    assert workbook["JUL"]["B6"].value is None
+    assert (
+        quote(f"كشف حضور LEFT GUARD {ARABIC_MONTHS[5]}")
+        in (response.headers["content-disposition"])
+    )
+
+
+def test_a_span_that_misses_both_months_still_404s(client, db_session):
+    designation = db_session.query(TimesheetDesignation).filter_by(name_en="Security Guard").one()
+    db_session.add(
+        Employee(
+            id="G5000",
+            name_en="LATER GUARD",
+            nationality="الإمارات",
+            doj=date(2026, 10, 1),
+            designation_id=designation.id,
+        )
+    )
+    db_session.commit()
+
+    response = client.get("/api/v1/timesheet/employee/G5000/2026/7/export?months=2")
+    assert response.status_code == 404
+    assert response.json()["error"]["code"] == "EMPLOYEE_NOT_ON_SHEET"
+
+
 @pytest.mark.parametrize("months", [0, 3, 12])
 def test_months_outside_one_and_two_is_refused(client, db_session, months):
     _guard(db_session)
@@ -503,14 +609,20 @@ def test_designations_list_and_reorder(client):
     )
 
 
-def test_the_static_designation_routes_are_not_shadowed_by_the_month_route(client):
-    """Declared after ``/{year}/{month}`` they 422 on ``int("designations")``."""
+def test_the_static_designation_routes_are_declared_before_the_month_route():
+    """The order, not a status code.
 
-    listed = client.get("/api/v1/timesheet/designations")
-    assert listed.status_code == 200
-    assert isinstance(listed.json(), list)
-    ids = [d["id"] for d in listed.json()]
-    assert client.put("/api/v1/timesheet/designations/order", json={"ids": ids}).status_code == 200
+    Every declaration order answers the same today — ``/designations`` is one
+    segment against a two-segment regex, and the ``PUT`` gets ``Match.PARTIAL``
+    on the method mismatch and keeps scanning — so a status assertion proves
+    nothing. The order is what has to hold: it becomes load-bearing the moment a
+    two-segment static ``GET`` is added under this prefix.
+    """
+
+    paths = [getattr(route, "path", "") for route in create_app().routes]
+    month = paths.index("/api/v1/timesheet/{year}/{month}")
+    assert paths.index("/api/v1/timesheet/designations") < month
+    assert paths.index("/api/v1/timesheet/designations/order") < month
 
 
 # --------------------------------------------------------------------------- #
@@ -555,6 +667,33 @@ def test_view_only_reads_the_grid_and_takes_one_employee_home(viewer_client, db_
     assert viewer_client.get("/api/v1/timesheet/designations").status_code == 200
     assert viewer_client.get("/api/v1/timesheet/employee/G1001/2026/7/export").status_code == 200
     assert viewer_client.get("/api/v1/timesheet/2026/7").json()["closed_at"] is None
+
+
+@pytest.mark.parametrize(
+    "path",
+    [
+        "/api/v1/timesheet/2026/7",
+        "/api/v1/timesheet/designations",
+        "/api/v1/timesheet/employee/G1001/2026/7/export",
+    ],
+)
+def test_denying_view_closes_all_three_read_routes(viewer_client, db_session, path):
+    """A refusal, not an admission: a 200 for an operator also passes with the
+    ``require_capability("timesheet.view")`` dependency deleted.
+
+    ``require_capability`` keeps the capability in a closure cell with nothing to
+    introspect, so the gate is proven by taking the capability away —
+    ``perm_service`` resolves role defaults plus grants minus denies.
+    """
+
+    _guard(db_session)
+    db_session.add(
+        UserPermission(user_id=viewer_client.user_id, capability="timesheet.view", effect="deny")
+    )
+    db_session.commit()
+    response = viewer_client.get(path)
+    assert response.status_code == 403
+    assert response.json()["error"]["details"]["capability"] == "timesheet.view"
 
 
 # --------------------------------------------------------------------------- #
@@ -642,3 +781,48 @@ def test_a_leave_that_is_no_day_code_leaves_the_absence_alone(client, db_session
         commit=True,
     )
     assert db_session.query(Absence).count() == 1
+
+
+def test_a_failure_after_step_12_leaves_the_absences_intact(
+    client, db_session, generation_env, monkeypatch
+):
+    """The supersede is part of the document's unit of work, not its own commit.
+
+    An Annual Leave renders a ``Leave Undertaking`` companion in step 14, i.e.
+    after the hook. Failing there must take the leave row *and* the absence
+    cleanup back with it; with the hook committing on its own, the absence is
+    already gone and the operator is left with neither paper nor mark.
+    """
+
+    real_corner = generation_env.aztec_corner_for
+
+    def boom(template_id: str) -> str:
+        if template_id == "Leave Undertaking":
+            raise RuntimeError("post-step-12 failure")
+        return real_corner(template_id)
+
+    monkeypatch.setattr(generation_env, "aztec_corner_for", boom)
+
+    _guard(db_session)
+    client.put(
+        "/api/v1/timesheet/2026/7/cell", json={"employee_id": "G1001", "day": 9, "code": "AB"}
+    )
+    assert db_session.query(Absence).count() == 1
+
+    with pytest.raises(RuntimeError, match="post-step-12"):
+        generation_env.generate_document(
+            db_session,
+            employee_id="G1001",
+            template_id="Leave Application Form",
+            fields={
+                "leave_type": "Annual Leave",
+                "start_date": "2026-07-09",
+                "end_date": "2026-07-09",
+                "total_days": 1,
+            },
+            commit=True,
+        )
+    db_session.rollback()
+    assert db_session.query(Absence).count() == 1
+    assert db_session.query(Leave).count() == 0
+    assert client.get("/api/v1/timesheet/2026/7").json()["rows"][0]["codes"][8] == "AB"

@@ -1081,7 +1081,15 @@ export interface paths {
         delete?: never;
         options?: never;
         head?: never;
-        /** Patch Month */
+        /**
+         * Patch Month
+         * @description The post count and any filler choices, applied as one unit.
+         *
+         *     Both writers are handed ``commit=False`` and the transaction is closed once
+         *     here: each of them commits on its own by default, so a bad filler halfway
+         *     down the list would otherwise persist the post count and the fillers before
+         *     it and still answer with a failure.
+         */
         patch: operations["patch_month_api_v1_timesheet__year___month__patch"];
         trace?: never;
     };
@@ -1198,6 +1206,12 @@ export interface paths {
          *     month of departure and the one before it, earlier sheet first, named for the
          *     later month. ``render_single`` cannot produce a second sheet, so the span
          *     renderer takes both grids.
+         *
+         *     The span renderer tolerates a month he was not on the roster for, and the
+         *     name follows it: someone who finished in the **earlier** month is exactly the
+         *     handover this parameter exists for, so the later month's name is used
+         *     whenever it can be resolved and the earlier grid names the file otherwise.
+         *     A man on neither month still 404s, out of ``render_single_span``.
          */
         get: operations["export_employee_api_v1_timesheet_employee__employee_id___year___month__export_get"];
         put?: never;

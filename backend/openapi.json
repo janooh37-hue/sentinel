@@ -4285,6 +4285,830 @@
         }
       }
     },
+    "/api/v1/timesheet/designations": {
+      "get": {
+        "tags": [
+          "timesheet"
+        ],
+        "summary": "List Designations",
+        "operationId": "list_designations_api_v1_timesheet_designations_get",
+        "parameters": [
+          {
+            "name": "gssg_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Gssg Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/TimesheetDesignationRead"
+                  },
+                  "title": "Response List Designations Api V1 Timesheet Designations Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/timesheet/designations/order": {
+      "put": {
+        "tags": [
+          "timesheet"
+        ],
+        "summary": "Reorder Designations",
+        "operationId": "reorder_designations_api_v1_timesheet_designations_order_put",
+        "parameters": [
+          {
+            "name": "gssg_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Gssg Session"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TimesheetDesignationOrder"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/TimesheetDesignationRead"
+                  },
+                  "title": "Response Reorder Designations Api V1 Timesheet Designations Order Put"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/timesheet/{year}/{month}": {
+      "get": {
+        "tags": [
+          "timesheet"
+        ],
+        "summary": "Get Month",
+        "operationId": "get_month_api_v1_timesheet__year___month__get",
+        "parameters": [
+          {
+            "name": "year",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "maximum": 2100,
+              "minimum": 2000,
+              "title": "Year"
+            }
+          },
+          {
+            "name": "month",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "maximum": 12,
+              "minimum": 1,
+              "title": "Month"
+            }
+          },
+          {
+            "name": "sheet",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "enum": [
+                "main",
+                "drivers"
+              ],
+              "type": "string",
+              "default": "main",
+              "title": "Sheet"
+            }
+          },
+          {
+            "name": "gssg_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Gssg Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TimesheetGridResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "timesheet"
+        ],
+        "summary": "Patch Month",
+        "description": "The post count and any filler choices, applied as one unit.\n\nBoth writers are handed ``commit=False`` and the transaction is closed once\nhere: each of them commits on its own by default, so a bad filler halfway\ndown the list would otherwise persist the post count and the fillers before\nit and still answer with a failure.",
+        "operationId": "patch_month_api_v1_timesheet__year___month__patch",
+        "parameters": [
+          {
+            "name": "year",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "maximum": 2100,
+              "minimum": 2000,
+              "title": "Year"
+            }
+          },
+          {
+            "name": "month",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "maximum": 12,
+              "minimum": 1,
+              "title": "Month"
+            }
+          },
+          {
+            "name": "sheet",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "enum": [
+                "main",
+                "drivers"
+              ],
+              "type": "string",
+              "default": "main",
+              "title": "Sheet"
+            }
+          },
+          {
+            "name": "gssg_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Gssg Session"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TimesheetPeriodPatch"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TimesheetGridResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/timesheet/{year}/{month}/cell": {
+      "put": {
+        "tags": [
+          "timesheet"
+        ],
+        "summary": "Set Cell",
+        "operationId": "set_cell_api_v1_timesheet__year___month__cell_put",
+        "parameters": [
+          {
+            "name": "year",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "maximum": 2100,
+              "minimum": 2000,
+              "title": "Year"
+            }
+          },
+          {
+            "name": "month",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "maximum": 12,
+              "minimum": 1,
+              "title": "Month"
+            }
+          },
+          {
+            "name": "sheet",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "enum": [
+                "main",
+                "drivers"
+              ],
+              "type": "string",
+              "default": "main",
+              "title": "Sheet"
+            }
+          },
+          {
+            "name": "gssg_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Gssg Session"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TimesheetCellUpdate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TimesheetGridResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/timesheet/{year}/{month}/close": {
+      "post": {
+        "tags": [
+          "timesheet"
+        ],
+        "summary": "Close Month",
+        "operationId": "close_month_api_v1_timesheet__year___month__close_post",
+        "parameters": [
+          {
+            "name": "year",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "maximum": 2100,
+              "minimum": 2000,
+              "title": "Year"
+            }
+          },
+          {
+            "name": "month",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "maximum": 12,
+              "minimum": 1,
+              "title": "Month"
+            }
+          },
+          {
+            "name": "sheet",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "enum": [
+                "main",
+                "drivers"
+              ],
+              "type": "string",
+              "default": "main",
+              "title": "Sheet"
+            }
+          },
+          {
+            "name": "gssg_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Gssg Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TimesheetGridResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/timesheet/{year}/{month}/reopen": {
+      "post": {
+        "tags": [
+          "timesheet"
+        ],
+        "summary": "Reopen Month",
+        "operationId": "reopen_month_api_v1_timesheet__year___month__reopen_post",
+        "parameters": [
+          {
+            "name": "year",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "maximum": 2100,
+              "minimum": 2000,
+              "title": "Year"
+            }
+          },
+          {
+            "name": "month",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "maximum": 12,
+              "minimum": 1,
+              "title": "Month"
+            }
+          },
+          {
+            "name": "sheet",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "enum": [
+                "main",
+                "drivers"
+              ],
+              "type": "string",
+              "default": "main",
+              "title": "Sheet"
+            }
+          },
+          {
+            "name": "gssg_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Gssg Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TimesheetGridResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/timesheet/{year}/{month}/start-ack": {
+      "post": {
+        "tags": [
+          "timesheet"
+        ],
+        "summary": "Acknowledge Start",
+        "description": "Accept a mid-month joiner's starting point.\n\nIdempotent, and deliberately allowed on a closed month: it changes no cell,\nso refusing it after the seal would strand the flag forever.",
+        "operationId": "acknowledge_start_api_v1_timesheet__year___month__start_ack_post",
+        "parameters": [
+          {
+            "name": "year",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "maximum": 2100,
+              "minimum": 2000,
+              "title": "Year"
+            }
+          },
+          {
+            "name": "month",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "maximum": 12,
+              "minimum": 1,
+              "title": "Month"
+            }
+          },
+          {
+            "name": "gssg_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Gssg Session"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TimesheetStartAckRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/timesheet/{year}/{month}/export": {
+      "get": {
+        "tags": [
+          "timesheet"
+        ],
+        "summary": "Export Month",
+        "description": "Both deliverables come from here — and downloading one freezes the month.\n\nThe preflight runs before the seal, so a refused download freezes nothing.\nThe grid built for the check is the one rendered: ``close_month`` snapshots\nexactly it, so re-rendering after the seal would be the same bytes twice.",
+        "operationId": "export_month_api_v1_timesheet__year___month__export_get",
+        "parameters": [
+          {
+            "name": "year",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "maximum": 2100,
+              "minimum": 2000,
+              "title": "Year"
+            }
+          },
+          {
+            "name": "month",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "maximum": 12,
+              "minimum": 1,
+              "title": "Month"
+            }
+          },
+          {
+            "name": "sheet",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "enum": [
+                "main",
+                "drivers"
+              ],
+              "type": "string",
+              "default": "main",
+              "title": "Sheet"
+            }
+          },
+          {
+            "name": "variant",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "enum": [
+                "attendance",
+                "statistics"
+              ],
+              "type": "string",
+              "default": "attendance",
+              "title": "Variant"
+            }
+          },
+          {
+            "name": "gssg_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Gssg Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/timesheet/employee/{employee_id}/{year}/{month}/export": {
+      "get": {
+        "tags": [
+          "timesheet"
+        ],
+        "summary": "Export Employee",
+        "description": "One employee's own sheet. Freezes nothing, so ``timesheet.view`` is enough.\n\n``months=2`` is the resignation and termination handover HR asked for: the\nmonth of departure and the one before it, earlier sheet first, named for the\nlater month. ``render_single`` cannot produce a second sheet, so the span\nrenderer takes both grids.\n\nThe span renderer tolerates a month he was not on the roster for, and the\nname follows it: someone who finished in the **earlier** month is exactly the\nhandover this parameter exists for, so the later month's name is used\nwhenever it can be resolved and the earlier grid names the file otherwise.\nA man on neither month still 404s, out of ``render_single_span``.",
+        "operationId": "export_employee_api_v1_timesheet_employee__employee_id___year___month__export_get",
+        "parameters": [
+          {
+            "name": "employee_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Employee Id"
+            }
+          },
+          {
+            "name": "year",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "maximum": 2100,
+              "minimum": 2000,
+              "title": "Year"
+            }
+          },
+          {
+            "name": "month",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "maximum": 12,
+              "minimum": 1,
+              "title": "Month"
+            }
+          },
+          {
+            "name": "months",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 2,
+              "minimum": 1,
+              "default": 1,
+              "title": "Months"
+            }
+          },
+          {
+            "name": "gssg_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Gssg Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/templates": {
       "get": {
         "tags": [
@@ -29039,6 +29863,475 @@
           "notifies_employee"
         ],
         "title": "TemplateMeta"
+      },
+      "TimesheetCellUpdate": {
+        "properties": {
+          "employee_id": {
+            "type": "string",
+            "title": "Employee Id"
+          },
+          "day": {
+            "type": "integer",
+            "maximum": 31.0,
+            "minimum": 1.0,
+            "title": "Day"
+          },
+          "code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Code"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          }
+        },
+        "type": "object",
+        "required": [
+          "employee_id",
+          "day"
+        ],
+        "title": "TimesheetCellUpdate",
+        "description": "Force one cell. ``code: null`` clears it back to the derived value."
+      },
+      "TimesheetDesignationOrder": {
+        "properties": {
+          "ids": {
+            "items": {
+              "type": "integer"
+            },
+            "type": "array",
+            "title": "Ids"
+          }
+        },
+        "type": "object",
+        "required": [
+          "ids"
+        ],
+        "title": "TimesheetDesignationOrder",
+        "description": "The full designation catalog in its new order — every id, exactly once."
+      },
+      "TimesheetDesignationRead": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "name_en": {
+            "type": "string",
+            "title": "Name En"
+          },
+          "name_ar": {
+            "type": "string",
+            "title": "Name Ar"
+          },
+          "rank_order": {
+            "type": "integer",
+            "title": "Rank Order"
+          },
+          "sheet": {
+            "type": "string",
+            "title": "Sheet"
+          },
+          "active": {
+            "type": "boolean",
+            "title": "Active"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "name_en",
+          "name_ar",
+          "rank_order",
+          "sheet",
+          "active"
+        ],
+        "title": "TimesheetDesignationRead",
+        "description": "One printable designation from the catalog."
+      },
+      "TimesheetFillerUpdate": {
+        "properties": {
+          "employee_id": {
+            "type": "string",
+            "title": "Employee Id"
+          },
+          "code": {
+            "type": "string",
+            "title": "Code"
+          }
+        },
+        "type": "object",
+        "required": [
+          "employee_id",
+          "code"
+        ],
+        "title": "TimesheetFillerUpdate",
+        "description": "The code statistics block 2 prints for one employee."
+      },
+      "TimesheetGridResponse": {
+        "properties": {
+          "year": {
+            "type": "integer",
+            "title": "Year"
+          },
+          "month": {
+            "type": "integer",
+            "title": "Month"
+          },
+          "days_in_month": {
+            "type": "integer",
+            "title": "Days In Month"
+          },
+          "sheet": {
+            "type": "string",
+            "title": "Sheet"
+          },
+          "post_count": {
+            "type": "integer",
+            "title": "Post Count"
+          },
+          "rows": {
+            "items": {
+              "$ref": "#/components/schemas/TimesheetRow"
+            },
+            "type": "array",
+            "title": "Rows"
+          },
+          "blocking": {
+            "items": {
+              "$ref": "#/components/schemas/TimesheetIssue"
+            },
+            "type": "array",
+            "title": "Blocking"
+          },
+          "warnings": {
+            "items": {
+              "$ref": "#/components/schemas/TimesheetIssue"
+            },
+            "type": "array",
+            "title": "Warnings"
+          },
+          "removed": {
+            "items": {
+              "$ref": "#/components/schemas/TimesheetRemoved"
+            },
+            "type": "array",
+            "title": "Removed"
+          },
+          "closed_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Closed At"
+          },
+          "closed_by": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Closed By"
+          }
+        },
+        "type": "object",
+        "required": [
+          "year",
+          "month",
+          "days_in_month",
+          "sheet",
+          "post_count",
+          "rows",
+          "blocking",
+          "warnings",
+          "removed",
+          "closed_at",
+          "closed_by"
+        ],
+        "title": "TimesheetGridResponse",
+        "description": "One month of one workbook, live or sealed."
+      },
+      "TimesheetIssue": {
+        "properties": {
+          "employee_id": {
+            "type": "string",
+            "title": "Employee Id"
+          },
+          "kind": {
+            "type": "string",
+            "title": "Kind"
+          },
+          "detail": {
+            "type": "string",
+            "title": "Detail"
+          }
+        },
+        "type": "object",
+        "required": [
+          "employee_id",
+          "kind",
+          "detail"
+        ],
+        "title": "TimesheetIssue",
+        "description": "One preflight finding. Blocking stops a download; a warning never does.\n\nReported per employee, never nested inside a row: ``warnings`` is recomputed\nlive even on a closed month, so an ``employee_id`` here may name someone with\nno row in the same response (a departure, or someone hired after the seal)."
+      },
+      "TimesheetPeriodPatch": {
+        "properties": {
+          "post_count": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Post Count"
+          },
+          "fillers": {
+            "items": {
+              "$ref": "#/components/schemas/TimesheetFillerUpdate"
+            },
+            "type": "array",
+            "title": "Fillers"
+          }
+        },
+        "type": "object",
+        "title": "TimesheetPeriodPatch",
+        "description": "The month's contracted post count and any block-2 filler choices."
+      },
+      "TimesheetRemoved": {
+        "properties": {
+          "employee_id": {
+            "type": "string",
+            "title": "Employee Id"
+          },
+          "name_en": {
+            "type": "string",
+            "title": "Name En"
+          },
+          "end_date": {
+            "type": "string",
+            "format": "date",
+            "title": "End Date"
+          },
+          "last_day": {
+            "type": "integer",
+            "title": "Last Day"
+          },
+          "month": {
+            "type": "integer",
+            "title": "Month"
+          },
+          "year": {
+            "type": "integer",
+            "title": "Year"
+          }
+        },
+        "type": "object",
+        "required": [
+          "employee_id",
+          "name_en",
+          "end_date",
+          "last_day",
+          "month",
+          "year"
+        ],
+        "title": "TimesheetRemoved",
+        "description": "Someone who finished last month and is therefore off this roster."
+      },
+      "TimesheetRow": {
+        "properties": {
+          "employee_id": {
+            "type": "string",
+            "title": "Employee Id"
+          },
+          "row_no": {
+            "type": "integer",
+            "title": "Row No"
+          },
+          "name_en": {
+            "type": "string",
+            "title": "Name En"
+          },
+          "nationality_en": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Nationality En"
+          },
+          "designation_en": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Designation En"
+          },
+          "designation_ar": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Designation Ar"
+          },
+          "rank_order": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rank Order"
+          },
+          "codes": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "type": "array",
+            "title": "Codes"
+          },
+          "stat_codes": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "type": "array",
+            "title": "Stat Codes"
+          },
+          "stat_block": {
+            "type": "integer",
+            "title": "Stat Block"
+          },
+          "stat_filler": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Stat Filler"
+          },
+          "joined_day": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Joined Day"
+          },
+          "left_day": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Left Day"
+          },
+          "start_confirmed": {
+            "type": "boolean",
+            "title": "Start Confirmed"
+          },
+          "notes": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object",
+            "title": "Notes"
+          }
+        },
+        "type": "object",
+        "required": [
+          "employee_id",
+          "row_no",
+          "name_en",
+          "nationality_en",
+          "designation_en",
+          "designation_ar",
+          "rank_order",
+          "codes",
+          "stat_codes",
+          "stat_block",
+          "stat_filler",
+          "joined_day",
+          "left_day",
+          "start_confirmed",
+          "notes"
+        ],
+        "title": "TimesheetRow",
+        "description": "One printed row: the identity block, 31 cells, and both statistics."
+      },
+      "TimesheetStartAckRequest": {
+        "properties": {
+          "employee_id": {
+            "type": "string",
+            "title": "Employee Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "employee_id"
+        ],
+        "title": "TimesheetStartAckRequest",
+        "description": "Accept a mid-month joiner's starting point. Changes no cell."
       },
       "TransferAdminRequest": {
         "properties": {

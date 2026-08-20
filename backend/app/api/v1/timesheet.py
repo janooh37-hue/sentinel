@@ -114,6 +114,29 @@ def _sheet_of(db: Session, employee_id: str) -> str:
     return svc.SHEETS[0] if designation is None else designation.sheet
 
 
+def _require_on_roster(db: Session, year: int, month: int, employee_id: str) -> None:
+    """Refuse an acknowledgement for a month the employee is not on.
+
+    ``acknowledge_start`` only checks that the employee *exists*, and
+    ``timesheet_start_acks`` carries no foreign key, so without this an ack for
+    someone whose ``doj`` is months away is stored and answered 204. That is not
+    inert: ``start_confirmed`` is read live, so once he does reach the roster —
+    a corrected ``doj``, an extended ``end_date`` — his row would render
+    ``start_confirmed: true`` over a starting point nobody ever accepted.
+
+    Deliberately a roster check, not an open-month check: a closed month must
+    still accept the acknowledgement.
+    """
+
+    grid = svc.build_month(db, year, month, sheet=_sheet_of(db, employee_id))
+    if not any(row.employee_id == employee_id for row in grid.rows):
+        raise NotFoundError(
+            "EMPLOYEE_NOT_ON_SHEET",
+            f"{employee_id!r} is not on the {month}/{year} roster",
+            employee_id=employee_id,
+        )
+
+
 # --------------------------------------------------------------------------- #
 # the catalog — declared BEFORE /{year}/{month}, which would shadow it
 # --------------------------------------------------------------------------- #
@@ -184,10 +207,19 @@ def patch_month(
     _user: Annotated[User, Depends(require_capability("timesheet.edit"))],
     sheet: Sheet = "main",
 ) -> TimesheetGridResponse:
+    """The post count and any filler choices, applied as one unit.
+
+    Both writers are handed ``commit=False`` and the transaction is closed once
+    here: each of them commits on its own by default, so a bad filler halfway
+    down the list would otherwise persist the post count and the fillers before
+    it and still answer with a failure.
+    """
+
     if payload.post_count is not None:
-        svc.set_post_count(db, year, month, payload.post_count)
+        svc.set_post_count(db, year, month, payload.post_count, commit=False)
     for filler in payload.fillers:
-        svc.set_filler(db, year, month, filler.employee_id, filler.code)
+        svc.set_filler(db, year, month, filler.employee_id, filler.code, commit=False)
+    db.commit()
     return _grid(db, year, month, sheet)
 
 
@@ -229,6 +261,7 @@ def acknowledge_start(
     so refusing it after the seal would strand the flag forever.
     """
 
+    _require_on_roster(db, year, month, payload.employee_id)
     svc.acknowledge_start(db, year, month, payload.employee_id, user_id=user.id)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
@@ -286,16 +319,26 @@ def export_employee(
     month of departure and the one before it, earlier sheet first, named for the
     later month. ``render_single`` cannot produce a second sheet, so the span
     renderer takes both grids.
+
+    The span renderer tolerates a month he was not on the roster for, and the
+    name follows it: someone who finished in the **earlier** month is exactly the
+    handover this parameter exists for, so the later month's name is used
+    whenever it can be resolved and the earlier grid names the file otherwise.
+    A man on neither month still 404s, out of ``render_single_span``.
     """
 
     sheet = _sheet_of(db, employee_id)
     grid = svc.build_month(db, year, month, sheet=sheet)
-    filename = timesheet_xlsx.filename_for_single(grid, employee_id)
     if months == 1:
-        return _attachment(timesheet_xlsx.render_single(grid, employee_id), filename)
+        return _attachment(
+            timesheet_xlsx.render_single(grid, employee_id),
+            timesheet_xlsx.filename_for_single(grid, employee_id),
+        )
     earlier_year, earlier_month = (year - 1, 12) if month == 1 else (year, month - 1)
     earlier = svc.build_month(db, earlier_year, earlier_month, sheet=sheet)
-    return _attachment(timesheet_xlsx.render_single_span([earlier, grid], employee_id), filename)
+    payload = timesheet_xlsx.render_single_span([earlier, grid], employee_id)
+    named = grid if any(row.employee_id == employee_id for row in grid.rows) else earlier
+    return _attachment(payload, timesheet_xlsx.filename_for_single(named, employee_id))
 
 
 __all__ = ["router"]

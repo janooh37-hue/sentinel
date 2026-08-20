@@ -915,6 +915,21 @@ def _require_employee(db: Session, employee_id: str) -> Employee:
     return employee
 
 
+def _finish(db: Session, *, commit: bool) -> None:
+    """End a writer: own the transaction, or hand it back to the caller.
+
+    ``commit=False`` still flushes, so the write is visible to the rest of the
+    caller's transaction — a grid built immediately afterwards, or the document
+    pipeline's own later statements — while remaining a single unit of work that
+    one ``rollback`` undoes entirely.
+    """
+
+    if commit:
+        db.commit()
+    else:
+        db.flush()
+
+
 def set_cell(
     db: Session,
     year: int,
@@ -1006,7 +1021,9 @@ def set_cell(
     db.commit()
 
 
-def set_post_count(db: Session, year: int, month: int, post_count: int) -> None:
+def set_post_count(
+    db: Session, year: int, month: int, post_count: int, *, commit: bool = True
+) -> None:
     """Set the contracted post count that splits the statistics into two blocks.
 
     Refused on a closed month: every row's ``stat_block`` is frozen in the
@@ -1014,6 +1031,11 @@ def set_post_count(db: Session, year: int, month: int, post_count: int) -> None:
     afterwards would hand the page a ``post_count`` that disagrees with its own
     rows — and rule 8 promises a later re-download reproduces what the client
     already holds.
+
+    ``commit=False`` leaves the write in the caller's transaction — flushed, so a
+    grid built straight afterwards sees it — which is how the ``PATCH`` route
+    applies a post count and a set of fillers as one unit instead of committing
+    each and leaving a half-applied month behind on the first failure.
     """
 
     _require_open(db, year, month)
@@ -1022,10 +1044,12 @@ def set_post_count(db: Session, year: int, month: int, post_count: int) -> None:
         db.add(TimesheetPeriod(year=year, month=month, post_count=post_count))
     else:
         period.post_count = post_count
-    db.commit()
+    _finish(db, commit=commit)
 
 
-def set_filler(db: Session, year: int, month: int, employee_id: str, code: str) -> None:
+def set_filler(
+    db: Session, year: int, month: int, employee_id: str, code: str, *, commit: bool = True
+) -> None:
     """Choose the code block 2 prints for one employee, from this month forward.
 
     Validated against the same set :func:`set_cell` accepts: the filler is printed
@@ -1036,6 +1060,8 @@ def set_filler(db: Session, year: int, month: int, employee_id: str, code: str) 
     writers. Rule 8 reads ``stat_filler`` live after the seal because it is
     display-only there — ``stat_codes`` are already frozen — so the operator may
     still record the choice against a closed month.
+
+    ``commit=False``: see :func:`set_post_count`.
     """
 
     if code not in CELL_CODES:
@@ -1054,16 +1080,22 @@ def set_filler(db: Session, year: int, month: int, employee_id: str, code: str) 
         db.add(TimesheetStatFiller(year=year, month=month, employee_id=employee_id, code=code))
     else:
         row.code = code
-    db.commit()
+    _finish(db, commit=commit)
 
 
-def delete_absences_covered_by(db: Session, employee_id: str, start: date, end: date) -> int:
+def delete_absences_covered_by(
+    db: Session, employee_id: str, start: date, end: date, *, commit: bool = True
+) -> int:
     """Drop the absences a leave now covers, and say how many went.
 
     A sick certificate produced after the fact supersedes the absence it explains,
     so the row is removed rather than left to argue with the leave. Allowed on a
     closed month on purpose: the absence is the employee's record, while the sheet
     that went out is protected by its snapshot.
+
+    ``commit=False`` is what document generation passes: the supersede belongs to
+    the same unit of work as the leave row that caused it, so a later failure in
+    the generation pipeline takes both back.
     """
 
     rows = list(
@@ -1077,7 +1109,7 @@ def delete_absences_covered_by(db: Session, employee_id: str, start: date, end: 
     )
     for row in rows:
         db.delete(row)
-    db.commit()
+    _finish(db, commit=commit)
     return len(rows)
 
 

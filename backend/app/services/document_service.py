@@ -1780,8 +1780,10 @@ def generate_document(
             timesheet_codes.CODE_SICK,
             timesheet_codes.CODE_ANNUAL,
         ):
+            # ``commit=False``: this is part of the document's unit of work, so a
+            # failure in step 13 or later takes the supersede back with the rest.
             timesheet_service.delete_absences_covered_by(
-                db, employee_id, leave_row.start_date, leave_row.end_date
+                db, employee_id, leave_row.start_date, leave_row.end_date, commit=False
             )
 
     # ------------------------------------------------------------------
