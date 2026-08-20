@@ -9,15 +9,16 @@
  * declared inline on the header row (UI spec §5, `table-layout: fixed`) instead
  * of hidden in a stylesheet the test cannot see.
  */
-import { readFileSync } from 'node:fs'
-
-import { render, screen } from '@testing-library/react'
+import { render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 
 vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn(), warning: vi.fn() } }))
 
 import type { TimesheetRow } from '@/lib/api'
+// The stylesheet as text, so the token the geometry rests on can be asserted
+// from a test jsdom would otherwise be blind to.
+import indexCss from '@/index.css?raw'
 
 import { ID_COLUMNS, TimesheetGrid, TimesheetMasthead } from './TimesheetGrid'
 
@@ -205,7 +206,9 @@ describe('TimesheetGrid', () => {
     // makes the offset arithmetic instead of a rounding artefact.
     expect(table.style.inlineSize).toBe('calc(var(--id-block) + var(--cell) * 31)')
 
-    const headers = screen.getAllByRole('columnheader')
+    // Scoped to the header row: the group headings and the headcount label are
+    // `columnheader`s too, and they sit after the day columns in document order.
+    const headers = within(screen.getAllByRole('row')[0]).getAllByRole('columnheader')
     const identity = headers.slice(0, ID_COLUMNS.length)
     expect(identity.map((th) => th.style.inlineSize)).toEqual(
       ID_COLUMNS.map((token) => `var(${token})`),
@@ -223,7 +226,7 @@ describe('TimesheetGrid', () => {
     // The token is the ONE place the identity width lives, so the loading
     // skeleton (`w-[var(--id-block)]`) and this grid cannot drift apart. If a
     // column width moves, the token has to follow it in the same edit.
-    const css = readFileSync(new URL('../../index.css', import.meta.url), 'utf8')
+    const css = indexCss
     const sum = ID_COLUMNS.map((token) => `var(${token})`).join(' + ')
     expect(css).toContain(`--id-block: calc(${sum});`)
   })
@@ -288,7 +291,9 @@ describe('TimesheetGrid', () => {
     render(<TimesheetGrid {...props} brush="AL" onFill={onFill} onSetCell={onSetCell} />)
     await userEvent.click(cell('G1001', 6))
     expect(onSetCell).toHaveBeenCalledWith('G1001', 6, 'AL')
-    await userEvent.click(cell('G1001', 9), { shiftKey: true })
+    await userEvent.keyboard('{Shift>}')
+    await userEvent.click(cell('G1001', 9))
+    await userEvent.keyboard('{/Shift}')
     expect(onFill).toHaveBeenCalledWith(
       [at('G1001', 6), at('G1001', 7), at('G1001', 8), at('G1001', 9)],
       'AL',
@@ -445,8 +450,10 @@ describe('TimesheetMasthead', () => {
     render(<TimesheetMasthead year={2026} month={7} />)
     expect(screen.getByText(/as it prints/i)).toBeInTheDocument()
     const quote = screen.getByTestId('timesheet-masthead-quote')
-    expect(quote).toHaveTextContent('Global Security Service Group- MONTHLY  TIME SHEET')
-    expect(quote).toHaveTextContent('Site Name :   JD 908')
+    // `textContent`, not `toHaveTextContent`: the matcher normalises runs of
+    // whitespace, and the double spaces are the template's own.
+    expect(quote.textContent).toContain('Global Security Service Group- MONTHLY  TIME SHEET')
+    expect(quote.textContent).toContain('Site Name :   JD 908')
     // The one part that varies, and the reason the band is not a static image.
     expect(screen.getByText('JUL-2026')).toBeInTheDocument()
   })

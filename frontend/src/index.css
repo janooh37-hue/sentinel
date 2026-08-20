@@ -192,20 +192,34 @@
   /* Sheet metrics. The grid deliberately opts out of the em-relative scale
      (UI spec §3.3): 31 columns is a fixed count, so the sheet gets its own
      three-stop zoom instead of tracking the Aa slider. 600px is the frozen
-     identity block (568px) plus the gutters; the rest divides by 31, so all
-     31 columns land on screen from ~1560px up. Never under 26px (unreadable)
-     or over 46px (the row stops scanning as one line).
+     identity block (558px) plus the page gutters; the rest divides by 31, so
+     all 31 columns land on screen from ~1560px up. Never under 26px
+     (unreadable) or over 46px (the row stops scanning as one line).
      Declared on `:root` — a pseudo-class (0,1,0) that outranks `html`
      (0,0,1) whatever the source order (UI spec §14). */
   --cell: clamp(26px, calc((100vw - 600px) / 31), 46px);
   --row: 28px;
   --cell-font: 11px;
-  /* The frozen identity block: `#` 38 + ID 74 + name 196 + designation 168 +
-     nationality 82, plus borders. Declared once because the skeleton and the
-     real grid MUST agree on it — a day strip that starts anywhere else makes
-     the sheet jump sideways when the month lands (locked rule 6). Fixed across
-     the zoom stops, like the 600px in the `--cell` clamp above. */
-  --id-block: 568px;
+  /* The identity block, one column at a time — the paper's A..E band. Widths
+     are the locked mockup's own (`docs/timesheet-mockups.css:780-784`).
+     `--id-block` is their SUM rather than a second literal, because the
+     loading skeleton starts its day strip at `--id-block` and the grid starts
+     its first day column there too: a number in two places is a sheet that
+     jumps sideways when the month lands (locked rule 6). Move a column and the
+     token follows in the same edit.
+
+     568px was the earlier figure, taken from a comment in the A2 mockup that
+     added the borders twice. Measured in Chromium against the locked A3
+     mockup, the real offset of the first day column is 563px with `max-content`
+     sizing and 558px once the table declares its exact width — which the grid
+     does, so 558px is the honest sum. Fixed across the zoom stops, like the
+     600px in the `--cell` clamp above. */
+  --id-no: 38px;
+  --id-id: 74px;
+  --id-name: 196px;
+  --id-nat: 82px;
+  --id-desig: 168px;
+  --id-block: calc(var(--id-no) + var(--id-id) + var(--id-name) + var(--id-nat) + var(--id-desig));
 }
 
 [data-theme="dark"] {
@@ -342,6 +356,281 @@
   );
   inline-size: calc(var(--cell) * var(--ts-days));
   block-size: calc(var(--row) - 6px);
+}
+
+/* ------------------------------------------------------------- the sheet ---
+   806 cells on one screen, so the cell pattern is ONE rule here rather than
+   twenty utility classes repeated 806 times, and the fills stay where UI spec
+   §3.2 puts them: a cell renders `data-code={slug}` and nothing else.
+
+   Unlayered, like the `[data-code]` rules above, so a cell's own styling is
+   not fighting a Tailwind utility for specificity.
+
+   Column widths are declared INLINE on the header row (`table-layout: fixed`
+   takes them from there, UI spec §5), which is also the only form a jsdom test
+   can read back. What lives here is everything a per-element style cannot
+   carry: the sticky offsets, the hover and focus rings, the pseudo-element
+   markers, and the preview wash. */
+.ts-sheet {
+  table-layout: fixed;
+  border-collapse: separate;
+  border-spacing: 0;
+  font-size: 12px;
+}
+
+.ts-sheet th,
+.ts-sheet td {
+  padding: 0;
+  border-block-end: 1px solid var(--hairline);
+  border-inline-end: 1px solid var(--hairline);
+  background: var(--surface);
+}
+
+/* The day header is sticky at the top of the ONE scroll region; the identity
+   columns are sticky at its reading-start edge. Both stay put while 275 rows
+   pass under them, which is the only reason a vertical scan works. */
+.ts-sheet thead th {
+  position: sticky;
+  inset-block-start: 0;
+  z-index: 3;
+  background: var(--surface-raised);
+  font-weight: 600;
+  font-size: 10.5px;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+  block-size: 34px;
+  white-space: nowrap;
+}
+
+.ts-sheet thead th.ts-day {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text);
+  text-align: center;
+}
+
+.ts-sheet thead th.ts-day small {
+  display: block;
+  font-family: var(--font-sans);
+  font-size: 8.5px;
+  font-weight: 500;
+  letter-spacing: 0.06em;
+  color: var(--text-faint);
+}
+
+/* A day the month does not have: the column stays so the grid never reflows
+   between months, and the header says so quietly (UI spec §5). */
+.ts-sheet thead th.ts-day[data-out='1'] {
+  color: var(--text-faint);
+  background: var(--bg);
+}
+
+.ts-sheet .ts-stick {
+  position: sticky;
+  z-index: 4;
+  background: var(--surface);
+}
+
+.ts-sheet thead .ts-stick,
+.ts-sheet tfoot .ts-stick {
+  z-index: 5;
+  background: var(--surface-raised);
+}
+
+/* Offsets out of the same tokens `--id-block` is summed from, so a column
+   cannot move without the frozen block moving with it. */
+.ts-sheet .ts-c-no { inset-inline-start: 0; text-align: center; }
+.ts-sheet .ts-c-id { inset-inline-start: var(--id-no); }
+.ts-sheet .ts-c-name { inset-inline-start: calc(var(--id-no) + var(--id-id)); }
+
+.ts-sheet .ts-c-no,
+.ts-sheet .ts-c-id {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+/* A ledger row is one line high, ALWAYS. One long name that wraps makes its
+   neighbours a different height and destroys the scan down a day column, which
+   is the whole reason the grid exists — so the identity columns clip and keep
+   the full value in `title` (UI spec §5). */
+.ts-sheet .ts-c-name,
+.ts-sheet .ts-c-nat,
+.ts-sheet .ts-c-desig {
+  padding-inline: 9px;
+  text-align: start;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ts-sheet .ts-c-name b { font-weight: 600; font-size: 12px; }
+
+.ts-sheet .ts-c-nat,
+.ts-sheet .ts-c-desig {
+  color: var(--text-muted);
+  font-size: 11.5px;
+}
+
+.ts-sheet tbody tr:hover .ts-stick { background: var(--surface-tinted); }
+.ts-sheet tbody tr[data-selected='1'] .ts-stick { background: var(--primary-soft); }
+/* A sweep in progress must not also light up whatever row the pointer crosses. */
+.ts-sheet[data-dragging='1'] tbody tr:hover .ts-stick { background: var(--surface); }
+
+/* The rank-group separator: the paper's sort order, made visible. */
+.ts-sheet tr.ts-group th {
+  position: sticky;
+  inset-inline-start: 0;
+  background: var(--surface-raised);
+  text-align: start;
+  padding-inline: 10px;
+  font-size: 10.5px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+}
+
+/* The statistics gap: two printed blank rows, drawn as one quiet band — how
+   the client's eye finds the surplus-headcount block. Still a whole number of
+   row pitches, so the sheet stays on the grid Task 7 locked. */
+.ts-sheet tr.ts-gap td {
+  block-size: calc(var(--row) * 2);
+  background: var(--bg);
+  border-inline-end: 0;
+}
+
+/* The per-day headcount, sticky at the foot of the scroll region. Not on the
+   paper, and the cheapest drift detector there is: a day under the contracted
+   post count is the visible form of "the month overshot" (UI spec §5). */
+.ts-sheet tfoot th,
+.ts-sheet tfoot td {
+  position: sticky;
+  inset-block-end: 0;
+  z-index: 3;
+  background: var(--surface-raised);
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  text-align: center;
+  color: var(--text-muted);
+  block-size: 26px;
+}
+
+.ts-sheet tfoot th.ts-stick {
+  text-align: start;
+  padding-inline: 9px;
+  font-family: var(--font-sans);
+  font-size: 11px;
+}
+
+.ts-sheet tfoot td[data-low='1'] { color: var(--accent); font-weight: 700; }
+
+/* EXTENSION — cell-as-button (UI spec §7), the dense sibling of DESIGN.md
+   §2.3 row-as-button. The rings are INSET: an outset ring is clipped by the
+   neighbouring cells and reads as a smear across the row. No hover lift and no
+   shadow either — 806 lifting targets is nausea, so the ring is the whole
+   affordance. */
+.ts-cellcell { position: relative; }
+
+.ts-cell {
+  display: block;
+  inline-size: 100%;
+  block-size: var(--row);
+  font-family: var(--font-mono);
+  font-size: var(--cell-font);
+  font-weight: 500;
+  line-height: 1;
+  text-align: center;
+  border: 0;
+  border-radius: 3px;
+  cursor: pointer;
+  transition: box-shadow var(--motion-fast) linear;
+}
+
+.ts-cell:hover { box-shadow: inset 0 0 0 2px var(--primary); }
+
+.ts-cell:focus-visible {
+  outline: none;
+  box-shadow: inset 0 0 0 2px var(--primary), inset 0 0 0 4px var(--surface);
+}
+
+/* A corrected cell is marked STRUCTURALLY as well as by fill, so an override
+   still reads as an override in the statistics variant, where the fill has
+   been rewritten by the transform. */
+.ts-cell[data-edited='1'] { box-shadow: inset 0 0 0 1px var(--primary); }
+
+.ts-cell[data-edited='1']::after {
+  content: '';
+  position: absolute;
+  inset-block-start: 2px;
+  inset-inline-end: 2px;
+  inline-size: 4px;
+  block-size: 4px;
+  border-radius: var(--radius-pill);
+  background: var(--primary);
+}
+
+.ts-cell[data-locked='1'] { cursor: default; }
+.ts-cell[data-locked='1']:hover { box-shadow: none; }
+
+/* While a sweep is live nothing is committed: the swept cells are ringed and
+   washed by an attribute, never by React state. Committing per move would
+   repaint the grid and tear the cell out from under the pointer (UI spec §15
+   change 3). */
+.ts-cell[data-preview='1'] { box-shadow: inset 0 0 0 2px var(--primary); }
+
+.ts-cell[data-preview='1']::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 3px;
+  background: color-mix(in oklab, var(--primary) 18%, transparent);
+  pointer-events: none;
+}
+
+@keyframes ts-commit {
+  from { transform: scale(0.82); }
+  to { transform: none; }
+}
+
+/* The entire motion budget for editing (UI spec §7). */
+.ts-cell[data-commit='1'] { animation: ts-commit var(--motion-fast) var(--ease-spring); }
+
+@media (prefers-reduced-motion: reduce) {
+  .ts-cell[data-commit='1'] { animation: none; }
+}
+
+/* The three fixed overlays: the picker, the live sweep count, and the row
+   counts. All `fixed`, because each has to survive the scroll that focusing a
+   cell causes instead of being clipped by the region that scrolled.
+
+   Anchored at the flow origin and moved with `transform`, so nothing here
+   names `left` or `top`. The placement code converts a viewport coordinate
+   into a translation, and in RTL it subtracts the origin `inset-inline-start:
+   0` gives it — a pointer coordinate is physical, a transform is physical, and
+   the layout stays logical. */
+.ts-popover,
+.ts-dragtag,
+.ts-tally {
+  position: fixed;
+  inset-block-start: 0;
+  inset-inline-start: 0;
+  z-index: 72;
+}
+
+.ts-dragtag,
+.ts-tally {
+  pointer-events: none;
+  background: var(--surface-raised);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  box-shadow: 0 8px 24px -8px color-mix(in oklab, var(--text) 30%, transparent);
+}
+
+.ts-dragtag {
+  padding: 3px 8px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text);
 }
 
 /* UI spec §14: letter-spacing plus uppercase tears joined Arabic letters apart
