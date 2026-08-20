@@ -91,6 +91,15 @@ GSSG Manager Design System-handoff.zip
 # Audit verification screenshots (heavy PNG evidence — findings .md + index.html stay tracked)
 audit-report/screens/
 
+# Captures of the live app (real employee names, G-numbers, leave and medical
+# history). These are PII in a PUBLIC repository, so they never get committed -
+# not by hand and not by a broad `git add docs`. Same policy as the screenshot
+# directories above; regenerate them locally from docs/how-we-work/capture.mjs.
+docs/how-we-work/shots/
+docs/how-we-work/*.pdf
+docs/repro/*.png
+docs/org-chart/work/
+
 # Skill scratch dirs + one-off review/report artifacts (heavy, not source)
 .superpowers/brainstorm/
 *-report.html
