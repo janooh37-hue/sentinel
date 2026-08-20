@@ -3798,6 +3798,7 @@
     "title": "الحضور",
     "titleAr": "الحضور",
     "subtitle": "{{date}} · سجل الحضور حسب السرية والموقع",
+    "pastGrace": "+{{minutes}} د",
     "views": {
       "register": "السجل",
       "board": "اللوحة",
@@ -3810,10 +3811,11 @@
       "office_day": "الدوام الرسمي"
     },
     "state": {
-      "verified": "مؤكد",
+      "verified": "في الوقت",
+      "grace": "داخل مدة السماح",
       "late": "تأخر بعد السماح",
-      "single": "بصمة واحدة",
-      "missing": "لا بصمة",
+      "unpaired": "بصمة واحدة",
+      "absent": "غائب",
       "leave": "في إجازة",
       "pending": "لم تبدأ"
     },
@@ -3840,6 +3842,7 @@
       "source": "المصدر: مرآة BioTime · قراءة فقط · محدث حتى {{through}}",
       "sourceUnknown": "المصدر: مرآة BioTime · قراءة فقط · التحديث غير معروف",
       "noPunch": "لا بصمة",
+      "absent": "غائب",
       "onlyPunch": "{{time}} فقط",
       "latePunch": "{{time}} +{{minutes}} د",
       "duePunch": "الموعد {{time}}"
@@ -3866,6 +3869,7 @@
       "title": "حضور اليوم",
       "seen": "حاضر",
       "late": "متأخر",
+      "absent": "غائب",
       "unpaired": "غير مكتمل",
       "open": "فتح الحضور",
       "clean": "جميع المكلفين تم رصدهم.",
@@ -3876,6 +3880,7 @@
       "lateMinutes": "دقائق التأخير",
       "missingPunches": "بصمات ناقصة",
       "shiftsWorked": "ورديات العمل",
+      "absentDays": "أيام الغياب",
       "monthOf": "{{month}}",
       "restDay": "راحة",
       "dayDetail": "{{date}} · {{shift}} {{window}}",

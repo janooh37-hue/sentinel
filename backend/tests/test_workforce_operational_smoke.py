@@ -267,12 +267,13 @@ def test_late_arrival_records_minutes_without_changing_presence(seeded, db_sessi
     assert evaluation.late_minutes == late_by - GRACE_MINUTES
 
 
-def test_absence_waits_for_the_duty_window_to_close(seeded, db_session):
-    """A running duty is never an absence, however long nobody has punched.
+def test_absence_lands_at_the_boundary_and_a_later_punch_replaces_it(seeded, db_session):
+    """The site's rule: past the grace is late, twice the grace with no punch is absent.
 
-    The site's rule: judge the shift when it is over. Flagging a no-show an hour
-    into an eight-hour duty told a supervisor nothing they could act on and put
-    every late arrival in the exception queue before they walked through the gate.
+    The absence is asserted the moment the boundary passes rather than held until
+    the duty is over, so a supervisor sees the gap while the shift can still be
+    covered. It is provisional on purpose: the person who walks in afterwards is a
+    late arrival, and the newest revision says so.
     """
     employee = seeded["employee"]
     _import(db_session, people=[person("bio-smoke-1", employee_code=employee.id)], now=SHIFT_START)
@@ -280,8 +281,8 @@ def test_absence_waits_for_the_duty_window_to_close(seeded, db_session):
     # A completed, punch-free window keeps freshness trustworthy.
     _import(db_session, punches=[], now=SHIFT_START + timedelta(minutes=5))
 
-    def evaluate(at):
-        _import(db_session, punches=[], now=at)
+    def evaluate(at, punches=()):
+        _import(db_session, punches=list(punches), now=at)
         attendance_evaluation_service.evaluate_case(db_session, seeded["case"].id, evaluated_at=at)
         db_session.commit()
         return db_session.scalar(
@@ -296,15 +297,26 @@ def test_absence_waits_for_the_duty_window_to_close(seeded, db_session):
         "SCHEDULED_BEFORE_ABSENCE_BOUNDARY",
     )
 
-    # Past the absence boundary but mid-duty: visible as not-yet-arrived, not flagged.
-    waiting = evaluate(SHIFT_START + timedelta(minutes=ABSENCE_AFTER_MINUTES + 5))
-    assert (waiting.presence_state, waiting.reason_code) == ("scheduled", "AWAITING_ARRIVAL")
+    absent = evaluate(SHIFT_START + timedelta(minutes=ABSENCE_AFTER_MINUTES + 5))
+    assert (absent.presence_state, absent.reason_code) == ("absent", "NO_IN_AFTER_THRESHOLD")
 
-    # Still running at the scheduled end: the match window keeps the verdict open.
-    assert evaluate(SHIFT_END + timedelta(minutes=30)).presence_state == "scheduled"
-
-    settled = evaluate(SHIFT_END + timedelta(minutes=120))
-    assert (settled.presence_state, settled.reason_code) == ("absent", "NO_IN_AFTER_THRESHOLD")
+    # The same person walks in an hour after being called absent. The absence
+    # revision stays on the record; the effective verdict is a late arrival.
+    arrived_at = SHIFT_START + timedelta(minutes=ABSENCE_AFTER_MINUTES + 60)
+    late = evaluate(
+        arrived_at + timedelta(minutes=5),
+        punches=[
+            punch(
+                "evt-very-late-1",
+                external_person_id="bio-smoke-1",
+                occurred_at=arrived_at,
+                direction="in",
+            )
+        ],
+    )
+    assert late.presence_state == "on_duty"
+    assert late.late_minutes == ABSENCE_AFTER_MINUTES + 60 - GRACE_MINUTES
+    assert late.revision > absent.revision
 
 
 def test_stale_punch_freshness_suppresses_the_dashboard_judgment(seeded, db_session):

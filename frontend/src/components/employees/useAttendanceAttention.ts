@@ -14,6 +14,7 @@ import { api } from '@/lib/api'
 import type { AttendanceDayRow } from '@/lib/api'
 import { useCapabilities } from '@/lib/useCapabilities'
 import {
+  isUnpaired,
   needsDecision,
   orderByAttention,
   rowState,
@@ -36,8 +37,17 @@ export interface AttendanceAttention {
   attention: number | null
   seen: number
   late: number
+  absent: number
   unpaired: number
   worst: AttendanceDayRow[]
+  /**
+   * The instant these counts were judged against.
+   *
+   * Published so a caller that re-states one row (the hero card names the two
+   * worst) reads it with the same clock the counts used, instead of taking a
+   * second reading that can disagree.
+   */
+  judgedAt: Date
 }
 
 export function useAttendanceAttention(operationalDate = siteToday()): AttendanceAttention {
@@ -62,13 +72,17 @@ export function useAttendanceAttention(operationalDate = siteToday()): Attendanc
   const input = { now: new Date(query.dataUpdatedAt) }
 
   let late = 0
+  let absent = 0
   let unpaired = 0
   let seen = 0
   for (const row of rows) {
     const state = rowState(row, input)
     if (row.punch_count > 0) seen += 1
     if (state === 'late') late += 1
-    if (state === 'single' || state === 'missing') unpaired += 1
+    if (state === 'absent') absent += 1
+    // Pairing is a fact about the punches, not the row's headline state: a late
+    // arrival who never punched out belongs in both counts.
+    if (isUnpaired(row, input)) unpaired += 1
   }
   const worst = orderByAttention(rows, input).filter((row) => needsDecision(rowState(row, input)))
 
@@ -78,7 +92,9 @@ export function useAttendanceAttention(operationalDate = siteToday()): Attendanc
     attention: allowed && query.isSuccess ? worst.length : null,
     seen,
     late,
+    absent,
     unpaired,
     worst,
+    judgedAt: input.now,
   }
 }

@@ -125,9 +125,14 @@ _CREWS: tuple[_CrewSpec, ...] = (
 #: per employee, so this is the whole of the membership input.
 DUTY_UNIT_TO_CREW: dict[str, str] = {crew.name_ar: crew.code for crew in _CREWS}
 
+#: The site's rule: an arrival past the grace is late, and a start with no punch
+#: at all is an absence once twice the grace has gone by. Absence is provisional
+#: - a punch arriving later re-evaluates the case into a late arrival - so the
+#: boundary can sit an hour into the duty without condemning anyone permanently.
+_GRACE_MINUTES = 30
 _POLICY = {
-    "grace_minutes": 30,
-    "absence_after_minutes": 30,
+    "grace_minutes": _GRACE_MINUTES,
+    "absence_after_minutes": _GRACE_MINUTES * 2,
     "early_exit_grace_minutes": 30,
     "match_before_minutes": 60,
     "match_after_minutes": 120,

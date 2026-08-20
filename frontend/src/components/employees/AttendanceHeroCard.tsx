@@ -2,8 +2,8 @@
  * AttendanceHeroCard — today's attendance as a live signal in the Employees hero.
  *
  * The point of this card is that you learn whether attendance needs you WITHOUT
- * opening the page: it shows seen / late / unpaired and the two worst names, so
- * a clean day never costs a navigation.
+ * opening the page: it shows seen / late / absent / unpaired and the two worst
+ * names, so a clean day never costs a navigation.
  *
  * The query is capability-gated. `/workforce/attendance/day` requires
  * workforce.attendance.review AND workforce.people.view, and the role presets
@@ -14,6 +14,7 @@
 import { useTranslation } from 'react-i18next'
 
 import { pickEmployeeName } from '@/lib/employeeName'
+import { minutesPastGrace, rowState } from '@/pages/employees/attendance/attendanceModel'
 
 import { useAttendanceAttention } from './useAttendanceAttention'
 
@@ -23,7 +24,8 @@ interface Props {
 
 export function AttendanceHeroCard({ onOpen }: Props): React.JSX.Element | null {
   const { t, i18n } = useTranslation()
-  const { allowed, isLoading, attention, seen, late, unpaired, worst } = useAttendanceAttention()
+  const { allowed, isLoading, attention, seen, late, absent, unpaired, worst, judgedAt } =
+    useAttendanceAttention()
 
   if (!allowed) return null
 
@@ -67,15 +69,18 @@ export function AttendanceHeroCard({ onOpen }: Props): React.JSX.Element | null 
         )}
       </div>
 
-      <div className="flex gap-1.5">
+      {/* Two by two, not four across: this card lives in a ~286px hero column,
+        * where a fourth chip clipped its own label. */}
+      <div className="grid grid-cols-2 gap-1.5">
         {(
           [
             ['seen', seen, 'text-emerald-300'],
             ['late', late, 'text-amber-300'],
+            ['absent', absent, 'text-red-300'],
             ['unpaired', unpaired, 'text-rose-300'],
           ] as const
         ).map(([key, value, tone]) => (
-          <div key={key} className="flex-1 rounded-[9px] bg-white/[.07] px-2 py-1.5">
+          <div key={key} className="rounded-[9px] bg-white/[.07] px-2 py-1.5">
             <div
               data-testid={`attendance-hero-${key}`}
               className={`font-mono text-[15px] font-extrabold leading-tight ${tone}`}
@@ -108,12 +113,18 @@ export function AttendanceHeroCard({ onOpen }: Props): React.JSX.Element | null 
                 {/* Wraps rather than clips: the family name is the discriminator. */}
                 <span className="min-w-0 flex-1 text-[12px] font-semibold leading-snug">{name}</span>
                 <span className="shrink-0 font-mono text-[10.5px] opacity-60">{row.employee_id}</span>
-                <span className="shrink-0 text-[10.5px] font-bold text-rose-300">
-                  {row.punch_count === 0
-                    ? t('attendance.state.missing')
-                    : row.punch_count === 1
-                      ? t('attendance.state.single')
-                      : `+${row.late_minutes ?? 0}m`}
+                <span
+                  className={`shrink-0 text-[10.5px] font-bold ${
+                    rowState(row, { now: judgedAt }) === 'late' ? 'text-amber-300' : 'text-rose-300'
+                  }`}
+                >
+                  {/* The same ladder every other view uses, so this card cannot
+                    * drift into naming a state the model no longer has. */}
+                  {rowState(row, { now: judgedAt }) === 'absent'
+                    ? t('attendance.state.absent')
+                    : rowState(row, { now: judgedAt }) === 'unpaired'
+                      ? t('attendance.state.unpaired')
+                      : t('attendance.pastGrace', { minutes: minutesPastGrace(row) })}
                 </span>
               </div>
             )

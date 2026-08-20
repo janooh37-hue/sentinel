@@ -35,7 +35,9 @@ emit punch state 0/1 - was rejected as leaving attendance permanently mute.
 
 ### 1. A duty is judged when its own match window closes
 
-`ALGORITHM_VERSION` is now `workforce-attendance-v2`.
+`ALGORITHM_VERSION` was `workforce-attendance-v2`. **Superseded the same day by
+the arrival ladder below (v4); the table here is the v2 rule, kept because the
+reasoning about pairing still stands.**
 
 `settled = evaluated_at >= scheduled_end_at + policy.match_after_minutes`.
 
@@ -56,6 +58,47 @@ exception.
 The client had its own copy of this rule and was wrong in the same way, so the
 server now publishes `judgment_due_at` on every day row and `rowState` uses it.
 One boundary, one source; a row with no policy behind it is never judged at all.
+
+### 1b. The arrival ladder: grace, late, absent — and absence is provisional
+
+`ALGORITHM_VERSION` is now `workforce-attendance-v4`. Decision 1 held every
+verdict, arrival included, until the duty was over. The site's own rule is
+narrower, and it separates arrival from pairing:
+
+| arrival, against `scheduled_start_at` | verdict |
+| --- | --- |
+| at or before the start | on time |
+| after the start, within `grace_minutes` | inside the grace — noted, costs nothing |
+| past `grace_minutes` | **late**, by `arrival − (start + grace)` |
+| no punch, before `absence_after_minutes` | not here yet |
+| no punch, at/after `absence_after_minutes` (twice the grace) | **absent** |
+| a punch arriving after that boundary | **late**, never absent |
+
+`absence_after_minutes` is a policy column, not a constant; migration
+`0073_absence_after_twice_grace` moves the seeded default from 30 (equal to the
+grace, which is what produced the 08:00 mass-absence bug) to 60, and the seeder
+now derives it as `grace × 2`.
+
+Absence is asserted at the absence boundary rather than at the end of the duty,
+which is what decision 1 rejected. What makes it safe is that it is provisional
+by construction: the evaluation queue already re-runs a case at every freshness
+advance, so a punch landing after the boundary appends a new revision reading the
+day as a late arrival. The absence revision stays in the record; the effective
+verdict is the arrival. Freshness for this verdict is measured to the absence
+boundary, so a stalled mirror reads `unknown` / `SYNC_STALE` instead of
+manufacturing absences out of missing data.
+
+Pairing is untouched: a lone punch is only `unpaired` once `judgment_due_at`
+passes, because mid-duty that describes every person currently at their post.
+
+The client applies exactly these rules, from the server's own numbers: every day
+row and every day of an employee's month now carries `grace_minutes`,
+`absence_due_at` and `judgment_due_at`, and one `rowState` in
+`frontend/src/pages/employees/attendance/attendanceModel.ts` classifies both
+payloads. States: `verified`, `grace` (yellow, `--caution`), `late` (amber),
+`unpaired` (rose), `absent` (red), `leave`, `pending`. Lateness outranks pairing
+so a punch hours past the boundary reads as the very late arrival it is, and the
+registers count unpaired separately so both facts survive.
 
 ### 2. Cases cover the whole operational day
 

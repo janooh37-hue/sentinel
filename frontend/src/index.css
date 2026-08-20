@@ -42,6 +42,10 @@
   --color-warning: var(--warning);
   --color-warning-foreground: var(--warning-foreground);
   --color-warning-soft: var(--warning-soft);
+  /* Attendance's middle rung: arrived after the start but inside the grace.
+     Distinct from `--warning`, which is the amber of a real exception. */
+  --color-caution: var(--caution);
+  --color-caution-soft: var(--caution-soft);
   --color-info: var(--info);
   --color-info-soft: var(--info-soft);
   --color-destructive: var(--destructive);
@@ -110,6 +114,8 @@
   --warning: #92400e;
   --warning-foreground: #ffffff;
   --warning-soft: #fbedd8;
+  --caution: #ca8a04;
+  --caution-soft: #fef3c7;
   --info: #1d4ed8;
   --info-soft: #e0e8f8;
   --destructive: #dc2626;
@@ -201,6 +207,8 @@
   --warning: #fbbf24;
   --warning-foreground: #1c1f24;
   --warning-soft: #3a2a10;
+  --caution: #facc15;
+  --caution-soft: #3b2f11;
   --info: #60a5fa;
   --info-soft: #1c2940;
   --destructive: #f87171;

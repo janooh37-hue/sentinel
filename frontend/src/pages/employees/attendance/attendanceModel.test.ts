@@ -1,10 +1,12 @@
 /**
  * attendanceModel — the rules every Attendance view shares.
  *
- * Each test pins a rule that is wrong by default if nobody writes it down:
- * an unopened window is not an absence, one punch is not a verified span,
- * approved leave leaves the denominator, and the attention order is
- * no-punch → single-punch → late-descending.
+ * Each test pins a rule that is wrong by default if nobody writes it down: an
+ * arrival inside the grace is not late, a start with no punch is an absence only
+ * once twice the grace has passed, a punch after that boundary is a late arrival
+ * rather than an absence, one punch mid-duty is not a missing pair, approved
+ * leave leaves the denominator, and the attention order is
+ * absent → unpaired → late-descending.
  */
 import { describe, expect, it } from 'vitest'
 
@@ -13,6 +15,7 @@ import {
   arrivalOffsetMinutes,
   groupByUnitAndPost,
   isWindowOpen,
+  minutesPastGrace,
   needsDecision,
   orderByAttention,
   postSummary,
@@ -22,10 +25,14 @@ import {
   siteTime,
 } from './attendanceModel'
 
-// The morning duty runs 01:00Z-09:00Z and its verdict falls due at 11:00Z, two
-// hours past the end - the match window the server publishes on every row.
+// The morning duty runs 01:00Z-09:00Z with thirty minutes of grace, so the
+// absence boundary - twice the grace - falls at 02:00Z and the verdict on its
+// pairing falls due at 11:00Z. Every one of those numbers arrives from the
+// server on the row itself.
 const SETTLED = { now: new Date('2026-08-19T12:00:00Z') }
 const RUNNING = { now: new Date('2026-08-19T06:00:00Z') }
+const INSIDE_GRACE_WINDOW = { now: new Date('2026-08-19T01:20:00Z') }
+const BEFORE_ABSENCE = { now: new Date('2026-08-19T01:45:00Z') }
 const BEFORE_START = { now: new Date('2026-08-19T00:00:00Z') }
 
 function row(overrides: Partial<AttendanceRow> = {}): AttendanceRow {
@@ -46,6 +53,8 @@ function row(overrides: Partial<AttendanceRow> = {}): AttendanceRow {
     last_punch_at: '2026-08-19T09:06:00',
     punch_count: 2,
     late_minutes: 0,
+    grace_minutes: 30,
+    absence_due_at: '2026-08-19T02:00:00',
     judgment_due_at: '2026-08-19T11:00:00',
     on_leave: false,
     ...overrides,
@@ -57,52 +66,83 @@ describe('rowState', () => {
     expect(rowState(row(), SETTLED)).toBe('verified')
   })
 
-  it('reads a single punch as single once the duty is over', () => {
-    expect(rowState(row({ punch_count: 1, last_punch_at: null }), SETTLED)).toBe('single')
+  it('marks an arrival inside the grace without calling it late', () => {
+    // The whole point of a grace: 01:20 against an 01:00 start is noted in
+    // yellow and costs the person nothing.
+    const inGrace = row({ late_minutes: 20 })
+    expect(rowState(inGrace, SETTLED)).toBe('grace')
+    expect(needsDecision(rowState(inGrace, SETTLED))).toBe(false)
+    expect(minutesPastGrace(inGrace)).toBe(0)
   })
 
-  it('reads late only past the grace window', () => {
-    expect(rowState(row({ late_minutes: 20 }), SETTLED)).toBe('verified')
-    expect(rowState(row({ late_minutes: 44 }), SETTLED)).toBe('late')
+  it('reads late past the grace, and counts the minutes from the grace', () => {
+    const late = row({ late_minutes: 44 })
+    expect(rowState(late, SETTLED)).toBe('late')
+    expect(minutesPastGrace(late)).toBe(14)
   })
 
-  it('never flags a duty that is still running', () => {
-    // The site's rule: judge the shift when it is over. At 10:00 Dubai a morning
-    // guard who has not arrived is still expected, and one punch is an arrival,
-    // not a missing checkout. Both were flagged before this test existed.
+  it('calls a start with no punch absent once twice the grace has passed', () => {
     const noPunch = row({ punch_count: 0, first_punch_at: null, last_punch_at: null })
     expect(rowState(noPunch, BEFORE_START)).toBe('pending')
-    expect(rowState(noPunch, RUNNING)).toBe('pending')
-    expect(rowState(noPunch, SETTLED)).toBe('missing')
+    expect(rowState(noPunch, INSIDE_GRACE_WINDOW)).toBe('pending')
+    expect(rowState(noPunch, BEFORE_ABSENCE)).toBe('pending')
+    expect(rowState(noPunch, RUNNING)).toBe('absent')
+    expect(rowState(noPunch, SETTLED)).toBe('absent')
+  })
 
-    const arrivedOnly = row({ punch_count: 1, last_punch_at: null, late_minutes: 90 })
+  it('reads a punch after the absence boundary as late, never as absent', () => {
+    // Absence is provisional: the person who walks in three hours into the duty
+    // is a very late arrival, and calling that "unpaired" or "absent" would hide
+    // the hours behind the wrong word.
+    const veryLate = row({
+      punch_count: 1,
+      first_punch_at: '2026-08-19T04:00:00',
+      last_punch_at: null,
+      late_minutes: 180,
+    })
+    expect(rowState(veryLate, RUNNING)).toBe('late')
+    expect(rowState(veryLate, SETTLED)).toBe('late')
+    expect(minutesPastGrace(veryLate)).toBe(150)
+  })
+
+  it('holds pairing until the duty is over', () => {
+    // One punch mid-duty is an arrival, not a missing checkout: on this site
+    // that describes every person who is currently at their post.
+    const arrivedOnly = row({ punch_count: 1, last_punch_at: null })
     expect(rowState(arrivedOnly, RUNNING)).toBe('verified')
     expect(needsDecision(rowState(arrivedOnly, RUNNING))).toBe(false)
-    expect(rowState(arrivedOnly, SETTLED)).toBe('single')
+    expect(rowState(arrivedOnly, SETTLED)).toBe('unpaired')
   })
 
   it('judges each row against its OWN duty on the double day', () => {
     // The rotation's double day: the same company works morning and night. At
-    // 16:00 Dubai the morning verdict is due but the night duty has not even
-    // started. A whole-day flag would call the night crew absent.
+    // 16:00 Dubai the morning start went unanswered but the night duty has not
+    // even begun. A whole-day flag would call the night crew absent.
     const nowAt4pmDubai = { now: new Date('2026-08-19T12:00:00Z') }
     const morning = row({ punch_count: 0, first_punch_at: null, last_punch_at: null })
     const night = row({
       shift_code: 'night',
       scheduled_start_at: '2026-08-19T17:00:00',
       scheduled_end_at: '2026-08-20T01:00:00',
+      absence_due_at: '2026-08-19T18:00:00',
       judgment_due_at: '2026-08-20T03:00:00',
       punch_count: 0,
       first_punch_at: null,
       last_punch_at: null,
     })
 
-    expect(rowState(morning, nowAt4pmDubai)).toBe('missing')
+    expect(rowState(morning, nowAt4pmDubai)).toBe('absent')
     expect(rowState(night, nowAt4pmDubai)).toBe('pending')
   })
 
   it('never judges a row with no policy behind it', () => {
-    const noPolicy = row({ judgment_due_at: null, punch_count: 0, first_punch_at: null })
+    const noPolicy = row({
+      grace_minutes: null,
+      absence_due_at: null,
+      judgment_due_at: null,
+      punch_count: 0,
+      first_punch_at: null,
+    })
     expect(rowState(noPolicy, SETTLED)).toBe('pending')
   })
 
@@ -115,13 +155,15 @@ describe('rowState', () => {
 })
 
 describe('needsDecision', () => {
-  it('flags only the three states a human must resolve', () => {
-    expect(['missing', 'single', 'late'].map((s) => needsDecision(s as never))).toEqual([
+  it('flags only the states a human must resolve', () => {
+    expect(['absent', 'unpaired', 'late'].map((s) => needsDecision(s as never))).toEqual([
       true,
       true,
       true,
     ])
-    expect(['verified', 'leave', 'pending'].map((s) => needsDecision(s as never))).toEqual([
+    // Inside the grace is information, not work: it must never enter the queue.
+    expect(['verified', 'grace', 'leave', 'pending'].map((s) => needsDecision(s as never))).toEqual([
+      false,
       false,
       false,
       false,
@@ -154,19 +196,19 @@ describe('postSummary', () => {
 })
 
 describe('orderByAttention', () => {
-  it('sorts no punch, then single punch, then late by descending minutes', () => {
+  it('sorts absent, then unpaired, then late by descending minutes', () => {
     const rows = [
       row({ employee_id: 'ok' }),
       row({ employee_id: 'late-small', late_minutes: 35 }),
-      row({ employee_id: 'missing', punch_count: 0, first_punch_at: null }),
+      row({ employee_id: 'absent', punch_count: 0, first_punch_at: null }),
       row({ employee_id: 'late-big', late_minutes: 62 }),
-      row({ employee_id: 'single', punch_count: 1, last_punch_at: null }),
+      row({ employee_id: 'unpaired', punch_count: 1, last_punch_at: null }),
       row({ employee_id: 'leave', on_leave: true, punch_count: 0 }),
     ]
 
     expect(orderByAttention(rows, SETTLED).map((r) => r.employee_id)).toEqual([
-      'missing',
-      'single',
+      'absent',
+      'unpaired',
       'late-big',
       'late-small',
       'ok',

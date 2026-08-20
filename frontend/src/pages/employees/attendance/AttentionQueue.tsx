@@ -11,7 +11,14 @@ import { useTranslation } from 'react-i18next'
 import { pickEmployeeName } from '@/lib/employeeName'
 
 import type { AttendanceRow } from './attendanceModel'
-import { needsDecision, orderByAttention, rowState, siteTime } from './attendanceModel'
+import {
+  isUnpaired,
+  minutesPastGrace,
+  needsDecision,
+  orderByAttention,
+  rowState,
+  siteTime,
+} from './attendanceModel'
 
 interface Props {
   rows: readonly AttendanceRow[]
@@ -63,7 +70,11 @@ export function AttentionQueue({
                   <i
                     aria-hidden
                     className={`h-2.5 w-2.5 shrink-0 rounded-full ${
-                      state === 'late' ? 'bg-warning' : 'bg-accent'
+                      state === 'late'
+                        ? 'bg-warning'
+                        : state === 'unpaired'
+                          ? 'bg-destructive'
+                          : 'bg-accent'
                     }`}
                   />
                   <span className="min-w-0 flex-1">
@@ -77,12 +88,16 @@ export function AttentionQueue({
                       {row.employee_id}
                     </span>
                   </span>
-                  <span className="shrink-0 font-mono text-[0.72em] font-bold text-accent">
-                    {state === 'missing'
-                      ? t('attendance.state.missing')
-                      : state === 'single'
+                  <span
+                    className={`shrink-0 font-mono text-[0.72em] font-bold ${
+                      state === 'late' ? 'text-warning' : 'text-accent'
+                    }`}
+                  >
+                    {state === 'absent'
+                      ? t('attendance.state.absent')
+                      : isUnpaired(row, input) && state !== 'late'
                         ? siteTime(row.first_punch_at)
-                        : `+${row.late_minutes ?? 0}m`}
+                        : t('attendance.pastGrace', { minutes: minutesPastGrace(row, input) })}
                   </span>
                 </button>
               </li>

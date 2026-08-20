@@ -42,10 +42,13 @@ from app.db.workforce_models import (
 from app.services import attendance_profile_service
 from app.services.workforce_leave import resolve_excusing_leave
 
-# v3 widens the evidence window by each person's learned punch habit, and reads a
-# lone punch in a closed window as an arrival or a departure from that habit
-# rather than assuming an arrival and timing lateness against it.
-ALGORITHM_VERSION = "workforce-attendance-v3"
+# v4 asserts absence at the absence boundary - twice the grace - rather than
+# holding every no-show open until the shift's match window closes, and leans on
+# re-evaluation to replace that verdict with a late arrival when a punch lands
+# afterwards. v3 widened the evidence window by each person's learned punch
+# habit, and reads a lone punch in a closed window as an arrival or a departure
+# from that habit rather than assuming an arrival and timing lateness against it.
+ALGORITHM_VERSION = "workforce-attendance-v4"
 _ACTIVE_EMPLOYEE_STATUS = "active"
 _VALID_PRESENCE_STATES = frozenset(
     {"scheduled", "on_duty", "completed", "absent", "excused_leave", "off", "unknown"}
@@ -312,23 +315,25 @@ def _derive_result(
 
     absence_boundary = scheduled_start + timedelta(minutes=policy.absence_after_minutes)
     checkout_boundary = scheduled_end + timedelta(minutes=policy.match_after_minutes)
+    fresh_for_absence = fresh is not None and fresh >= absence_boundary
     fresh_for_checkout = fresh is not None and fresh >= checkout_boundary
-    # A duty in progress has no verdict to give. Judgment waits for the case's
-    # own match window to close, so a person who has not arrived yet is never an
-    # absence and an arrival without a departure is not yet a missing checkout.
+    # Pairing waits for the case's own match window to close: an arrival with no
+    # departure yet is not a missing checkout. Arrival does not wait, because the
+    # absence boundary is the site's own rule for when a no-show is a no-show.
     settled = evaluated_at >= checkout_boundary
 
     if not punches:
-        if not settled:
+        # Absence is asserted at the absence boundary - twice the grace - and it
+        # is provisional by construction: the queue re-evaluates this case every
+        # time the mirror advances, so a punch landing afterwards replaces this
+        # revision with a late arrival. Freshness is measured to the same
+        # boundary, so a stalled mirror reads unknown instead of manufacturing an
+        # absence out of missing data.
+        if evaluated_at < absence_boundary:
             result.update(
-                presence_state="scheduled",
-                reason_code=(
-                    "SCHEDULED_BEFORE_ABSENCE_BOUNDARY"
-                    if evaluated_at < absence_boundary
-                    else "AWAITING_ARRIVAL"
-                ),
+                presence_state="scheduled", reason_code="SCHEDULED_BEFORE_ABSENCE_BOUNDARY"
             )
-        elif not fresh_for_checkout:
+        elif not fresh_for_absence:
             result.update(presence_state="unknown", reason_code="SYNC_STALE")
         else:
             result.update(presence_state="absent", reason_code="NO_IN_AFTER_THRESHOLD")

@@ -230,7 +230,9 @@ def test_default_policy_is_seeded_approved_with_thirty_minute_grace(seeded):
 
     assert policy is not None
     assert policy.grace_minutes == 30
-    assert policy.absence_after_minutes == 30
+    # The site's ladder: past the grace is late, twice the grace with no punch at
+    # all is an absence.
+    assert policy.absence_after_minutes == 60
     assert policy.require_checkout is True
     # An unapproved policy leaves the evaluator with no values, which reads as
     # "unknown" for every employee rather than as a safe default.

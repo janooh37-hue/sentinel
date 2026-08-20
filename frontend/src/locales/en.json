@@ -3528,6 +3528,7 @@
     "title": "Attendance",
     "titleAr": "الحضور",
     "subtitle": "{{date}} · duty register by unit and post",
+    "pastGrace": "+{{minutes}}m",
     "views": {
       "register": "Register",
       "board": "Board",
@@ -3540,10 +3541,11 @@
       "office_day": "Office"
     },
     "state": {
-      "verified": "Verified",
+      "verified": "On time",
+      "grace": "Inside grace",
       "late": "Late past grace",
-      "single": "Single punch",
-      "missing": "No punch",
+      "unpaired": "Single punch",
+      "absent": "Absent",
       "leave": "On leave",
       "pending": "Not started"
     },
@@ -3570,6 +3572,7 @@
       "source": "Source: BioTime mirror · read-only · fresh through {{through}}",
       "sourceUnknown": "Source: BioTime mirror · read-only · freshness unknown",
       "noPunch": "no punch",
+      "absent": "absent",
       "onlyPunch": "{{time}} only",
       "latePunch": "{{time}} +{{minutes}}m",
       "duePunch": "due {{time}}"
@@ -3596,6 +3599,7 @@
       "title": "ATTENDANCE TODAY",
       "seen": "seen",
       "late": "late",
+      "absent": "absent",
       "unpaired": "unpaired",
       "open": "Open attendance",
       "clean": "Every scheduled person has been seen.",
@@ -3606,6 +3610,7 @@
       "lateMinutes": "Late minutes",
       "missingPunches": "Missing punches",
       "shiftsWorked": "Shifts worked",
+      "absentDays": "Absent days",
       "monthOf": "{{month}}",
       "restDay": "off",
       "dayDetail": "{{date}} · {{shift}} {{window}}",

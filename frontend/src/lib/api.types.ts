@@ -4895,9 +4895,12 @@ export interface components {
          *     punch yields ``punch_count == 1`` with both bounds equal, and a client must
          *     present it as "seen at", never as a span.
          *
-         *     ``judgment_due_at`` is when the duty stops running and the evaluator is
-         *     willing to call it: before that instant a missing punch is an arrival still
-         *     pending, not an exception, and a client must not flag it.
+         *     ``judgment_due_at`` is when the duty stops running and a lone punch may be
+         *     called unpaired: before that instant one punch is an arrival still waiting for
+         *     its departure, not an exception. ``absence_due_at`` is the earlier boundary,
+         *     twice the grace past the start, after which a case with no punch at all is an
+         *     absence. ``grace_minutes`` is the policy's own grace, published so a client
+         *     names the same arrival late as the evaluator does instead of guessing.
          */
         AttendanceDayRowRead: {
             /** Employee Id */
@@ -4942,6 +4945,10 @@ export interface components {
             on_leave: boolean;
             /** Judgment Due At */
             judgment_due_at?: string | null;
+            /** Absence Due At */
+            absence_due_at?: string | null;
+            /** Grace Minutes */
+            grace_minutes?: number | null;
         };
         /** AttendanceExceptionRead */
         AttendanceExceptionRead: {
@@ -6895,6 +6902,12 @@ export interface components {
              * @default 0
              */
             punch_count: number;
+            /** Absence Due At */
+            absence_due_at?: string | null;
+            /** Judgment Due At */
+            judgment_due_at?: string | null;
+            /** Grace Minutes */
+            grace_minutes?: number | null;
             /** Punches */
             punches?: components["schemas"]["EmployeeAttendancePunchRead"][];
         };

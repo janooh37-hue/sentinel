@@ -2,12 +2,14 @@
  * AttendanceTab — one employee's attendance inside their file.
  *
  * Behaviours pinned here:
- *   1. KPIs are computed from the month payload (punctuality = on-time ÷
- *      scheduled, late minutes summed, unpaired days counted).
- *   2. The month grid renders one cell per calendar day, the shift letters
- *      actually worked, and the outcome colour; rest days are disabled.
- *   3. Selecting a day renders its punch timeline with the grace band and one
- *      marker per punch.
+ *   1. The KPI widget is computed from the month payload by the shared ladder:
+ *      punctuality = on-time ÷ judged, late minutes counted PAST THE GRACE,
+ *      absences, unpaired days and shifts actually worked.
+ *   2. The month grid renders a weekday header, one cell per calendar day, the
+ *      shift letters actually worked, and the outcome colour; rest days are
+ *      disabled.
+ *   3. Selecting a day renders its punch timeline with the grace band, the
+ *      absence boundary and one marker per punch.
  *   4. Months the roster never covered still show the device's own sightings,
  *      and selecting one states first/last seen without judging it.
  *   5. A month with neither a schedule nor a sighting renders the empty state.
@@ -39,18 +41,24 @@ vi.mock('@/lib/useCapabilities', () => ({
 import { AttendanceTab } from './AttendanceTab'
 
 function day(overrides: Record<string, unknown> = {}) {
+  const date = (overrides.operational_date as string | undefined) ?? '2026-08-19'
   return {
-    operational_date: '2026-08-19',
+    operational_date: date,
     shift_code: 'morning',
-    scheduled_start_at: '2026-08-19T01:00:00',
-    scheduled_end_at: '2026-08-19T09:00:00',
+    scheduled_start_at: `${date}T01:00:00`,
+    scheduled_end_at: `${date}T09:00:00`,
     presence_state: 'completed',
     reason_code: null,
     late_minutes: 0,
     punch_count: 2,
+    // The policy the server judged this day by: thirty minutes of grace, so the
+    // absence boundary falls at twice that and pairing is called at 11:00Z.
+    grace_minutes: 30,
+    absence_due_at: `${date}T02:00:00`,
+    judgment_due_at: `${date}T11:00:00`,
     punches: [
-      { occurred_at: '2026-08-19T00:52:00', device_name: 'Main Gate Turnstile' },
-      { occurred_at: '2026-08-19T09:06:00', device_name: 'Main Gate Turnstile' },
+      { occurred_at: `${date}T00:52:00`, device_name: 'Main Gate Turnstile' },
+      { occurred_at: `${date}T09:06:00`, device_name: 'Main Gate Turnstile' },
     ],
     ...overrides,
   }
@@ -115,26 +123,38 @@ beforeEach(() => {
 })
 
 describe('AttendanceTab', () => {
-  it('computes punctuality, late minutes and unpaired days from the month', async () => {
+  it('computes the widget from the month by the shared ladder', async () => {
     renderTab()
 
     await waitFor(() => expect(screen.getByTestId('attendance-month-grid')).toBeInTheDocument())
-    // Scheduled = 3 (leave excluded); on time = 1; unpaired = 1; late = 47m.
-    expect(screen.getByText('33%')).toBeInTheDocument()
-    expect(screen.getByText('47')).toBeInTheDocument()
+    const kpi = (id: string): HTMLElement => screen.getByTestId(`attendance-kpi-${id}`)
+    // Judged = 3 (leave leaves the denominator); on time = 1; late = 1 day, and
+    // 47 minutes past the START is 17 past the GRACE; absent = 1; unpaired = 0;
+    // worked = the 2 days with punches.
+    expect(kpi('punctuality')).toHaveTextContent('33%')
+    expect(kpi('punctuality')).toHaveTextContent('1/3')
+    expect(kpi('late-minutes')).toHaveTextContent('17')
+    expect(kpi('absent')).toHaveTextContent('1')
+    expect(kpi('missing-punches')).toHaveTextContent('0')
+    expect(kpi('shifts-worked')).toHaveTextContent('2')
   })
 
-  it('renders one cell per calendar day with the shifts worked', async () => {
+  it('renders one cell per calendar day, under a weekday header', async () => {
     renderTab()
 
     await waitFor(() => expect(screen.getByTestId('attendance-month-grid')).toBeInTheDocument())
+    const weekdays = screen.getByTestId('attendance-month-weekdays')
+    // Seven columns, Sunday first, so the labels sit over the day they name.
+    expect(weekdays.children).toHaveLength(7)
+    expect(weekdays).toHaveTextContent(/^Sun/)
+
     const cells = screen.getAllByTestId('attendance-month-cell')
     expect(cells).toHaveLength(31)
 
     const worked = cells.filter((cell) => cell.dataset.outcome !== 'off')
     expect(worked).toHaveLength(4)
     expect(worked.map((cell) => cell.dataset.outcome)).toEqual(
-      expect.arrayContaining(['verified', 'late', 'exception', 'leave']),
+      expect.arrayContaining(['verified', 'late', 'absent', 'leave']),
     )
     // A rest day cannot be selected: there is nothing to show.
     const off = cells.find((cell) => cell.dataset.outcome === 'off')

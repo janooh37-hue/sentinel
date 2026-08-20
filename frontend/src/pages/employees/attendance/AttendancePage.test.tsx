@@ -35,11 +35,14 @@ import { AttendancePage } from './AttendancePage'
 
 const MORNING_START = '2026-08-19T01:00:00'
 const MORNING_END = '2026-08-19T09:00:00'
-// The verdict falls due when the case's match window closes, two hours past the
-// end: the register may not flag a duty before then.
+// Two boundaries arrive on every row. `absence_due_at` is twice the grace past
+// the start, when a start with no punch becomes an absence; `judgment_due_at` is
+// when the match window closes and a lone punch may be called unpaired.
+const MORNING_ABSENCE_DUE = '2026-08-19T02:00:00'
 const MORNING_DUE = '2026-08-19T11:00:00'
 const NIGHT_START = '2026-08-19T17:00:00'
 const NIGHT_END = '2026-08-20T01:00:00'
+const NIGHT_ABSENCE_DUE = '2026-08-19T18:00:00'
 const NIGHT_DUE = '2026-08-20T03:00:00'
 
 function row(overrides: Record<string, unknown> = {}) {
@@ -60,6 +63,8 @@ function row(overrides: Record<string, unknown> = {}) {
     last_punch_at: '2026-08-19T09:06:00',
     punch_count: 2,
     late_minutes: 0,
+    grace_minutes: 30,
+    absence_due_at: MORNING_ABSENCE_DUE,
     judgment_due_at: MORNING_DUE,
     on_leave: false,
     ...overrides,
@@ -84,6 +89,7 @@ const DAY_ROWS = [
     shift_code: 'night',
     scheduled_start_at: NIGHT_START,
     scheduled_end_at: NIGHT_END,
+    absence_due_at: NIGHT_ABSENCE_DUE,
     judgment_due_at: NIGHT_DUE,
     punch_count: 0,
     first_punch_at: null,

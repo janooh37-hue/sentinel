@@ -21489,6 +21489,30 @@
               }
             ],
             "title": "Judgment Due At"
+          },
+          "absence_due_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Absence Due At"
+          },
+          "grace_minutes": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Grace Minutes"
           }
         },
         "additionalProperties": false,
@@ -21498,7 +21522,7 @@
           "name_en"
         ],
         "title": "AttendanceDayRowRead",
-        "description": "One person's scheduled shift on one operational date, with punch facts.\n\n``first_punch_at`` / ``last_punch_at`` are the earliest and latest punches\ninside this case's policy match window. They are timestamps of events, not a\ncheck-in and a check-out: this provider reports no direction, so a single\npunch yields ``punch_count == 1`` with both bounds equal, and a client must\npresent it as \"seen at\", never as a span.\n\n``judgment_due_at`` is when the duty stops running and the evaluator is\nwilling to call it: before that instant a missing punch is an arrival still\npending, not an exception, and a client must not flag it."
+        "description": "One person's scheduled shift on one operational date, with punch facts.\n\n``first_punch_at`` / ``last_punch_at`` are the earliest and latest punches\ninside this case's policy match window. They are timestamps of events, not a\ncheck-in and a check-out: this provider reports no direction, so a single\npunch yields ``punch_count == 1`` with both bounds equal, and a client must\npresent it as \"seen at\", never as a span.\n\n``judgment_due_at`` is when the duty stops running and a lone punch may be\ncalled unpaired: before that instant one punch is an arrival still waiting for\nits departure, not an exception. ``absence_due_at`` is the earlier boundary,\ntwice the grace past the start, after which a case with no punch at all is an\nabsence. ``grace_minutes`` is the policy's own grace, published so a client\nnames the same arrival late as the evaluator does instead of guessing."
       },
       "AttendanceExceptionRead": {
         "properties": {
@@ -27097,6 +27121,42 @@
             "minimum": 0.0,
             "title": "Punch Count",
             "default": 0
+          },
+          "absence_due_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Absence Due At"
+          },
+          "judgment_due_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Judgment Due At"
+          },
+          "grace_minutes": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Grace Minutes"
           },
           "punches": {
             "items": {
