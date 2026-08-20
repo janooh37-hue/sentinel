@@ -215,6 +215,23 @@
      width moves the border and the cell in the same substitution instead of
      drifting them apart. */
   --ts-rule: 1px;
+  /* The two fixed bands the sheet is framed by, as block sizes: the sticky day
+     header and the sticky per-day headcount. Tokens for the same reason `--row`
+     is one — the loading skeleton has to hold the header band open, or the whole
+     roster drops by its height the moment the month lands, which is locked rule
+     6 again and 34px of it rather than one pixel per row.
+
+     Both are `border-box`, so the cell's hairline lives inside the number, and
+     both are FIXED across the three zoom stops because their type is: the day
+     number is 11px, its weekday letter 8.5px and the headcount 10.5px at every
+     stop, none of them `var(--cell-font)`. They used to be `max(34px, var(--row))`
+     and `max(26px, var(--row))` in effect, because the header and footer `<tr>`
+     each re-declared `block-size: var(--row)` and a row cannot be shorter than
+     its own declared height — so the header measured 34/34/38 and the footer
+     26/28/38 across compact/default/roomy, three heights nobody chose. The two
+     `<tr>`s no longer declare anything; these are the heights. */
+  --ts-head: 34px;
+  --ts-foot: 26px;
   --cell-font: 11px;
   /* The identity block, one column at a time — the paper's A..E band. Widths
      are the locked mockup's own (`docs/timesheet-mockups.css:780-784`).
@@ -414,7 +431,7 @@
   font-size: 10.5px;
   letter-spacing: 0.04em;
   color: var(--text-muted);
-  block-size: 34px;
+  block-size: var(--ts-head);
   white-space: nowrap;
 }
 
@@ -537,7 +554,7 @@
   font-size: 10.5px;
   text-align: center;
   color: var(--text-muted);
-  block-size: 26px;
+  block-size: var(--ts-foot);
 }
 
 .ts-sheet tfoot th.ts-stick {

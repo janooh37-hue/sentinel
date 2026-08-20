@@ -817,8 +817,14 @@ export function TimesheetGrid({
         // past `--id-block` — 5px out of step with the loading skeleton.
         style={{ inlineSize: 'calc(var(--id-block) + var(--cell) * 31)' }}
       >
+        {/* No `blockSize` on either the header or the footer row: their heights
+            are `--ts-head` and `--ts-foot`, declared once on the cells. A row
+            cannot be shorter than its own declared height, so `var(--row)` here
+            silently won at the roomy stop and made the header 38px — a band the
+            loading skeleton cannot hold open from a token, since the token said
+            34px. */}
         <thead>
-          <tr style={{ blockSize: 'var(--row)' }}>
+          <tr>
             <th
               scope="col"
               className="ts-stick ts-c-no"
@@ -909,7 +915,7 @@ export function TimesheetGrid({
           })}
         </tbody>
         <tfoot>
-          <tr style={{ blockSize: 'var(--row)' }}>
+          <tr>
             <th colSpan={ID_COLUMNS.length} className="ts-stick ts-c-no" scope="row">
               {t('timesheet.headcount')}
             </th>

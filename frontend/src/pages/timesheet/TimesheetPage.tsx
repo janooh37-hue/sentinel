@@ -373,6 +373,21 @@ export function TimesheetPage(): React.JSX.Element {
                 <span role="status" className="sr-only">
                   {t('timesheet.loading')}
                 </span>
+                {/* The day-header band, held open at the grid's own
+                    `--ts-head`. Without it the whole roster drops by the
+                    header's height the moment the month lands — 34px, which is
+                    locked rule 6 again and a bigger jump than any per-row
+                    drift. It is a SIBLING of the skeleton, never a child: the
+                    skeleton is one element per row and the test below pins that
+                    shape. Nothing pulses here, because the band is not content
+                    that arrives: all 31 columns exist in every month, so the
+                    header is known before the response is. */}
+                <div
+                  data-testid="timesheet-skeleton-head"
+                  aria-hidden
+                  style={{ blockSize: 'var(--ts-head)' }}
+                  className="border-b border-hairline bg-surface-raised"
+                />
                 {/* Skeleton on the grid's EXACT pitch: one row per `var(--row)`
                     with no container padding and no gaps, and the day strip
                     flush against the `--id-block` identity bar. Any leading

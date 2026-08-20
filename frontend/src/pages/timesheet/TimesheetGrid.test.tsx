@@ -291,6 +291,42 @@ describe('TimesheetGrid', () => {
     expect(cells).toContain('padding: 0;')
   })
 
+  it('takes the header and footer bands from tokens the skeleton can read', () => {
+    render(<TimesheetGrid {...props} />)
+    // The loading skeleton holds the header band open at `var(--ts-head)`
+    // (`TimesheetPage.tsx`, pinned by `TimesheetPage.test.tsx`), so the band's
+    // height has to live in exactly one place. It did not: the cells said 34px
+    // and both the header and the footer ROW re-declared `block-size:
+    // var(--row)`, which a row cannot be shorter than — so measured in Chromium
+    // the header was 34/34/38 and the footer 26/28/38 across
+    // compact/default/roomy. A token cannot describe three heights, and a
+    // derived one cannot help: `var()` inside a custom property is substituted
+    // where it is DECLARED, so `max(34px, var(--row))` on `:root` would freeze
+    // `--row` at 28px and be wrong at both other stops.
+    //
+    // Both bands are fixed instead, which matches their type — the day number
+    // is 11px, its weekday letter 8.5px and the headcount 10.5px at every stop,
+    // none of them `var(--cell-font)`. So the rows declare nothing and the
+    // cells carry the token. Measured after: header 34 and footer 26 at all
+    // three stops, skeleton band 34, first body line at the same 34px offset in
+    // both layouts.
+    expect(indexCss).toContain('--ts-head: 34px;')
+    expect(indexCss).toContain('--ts-foot: 26px;')
+    expect(ruleBody('.ts-sheet thead th')).toContain('block-size: var(--ts-head);')
+    expect(ruleBody('.ts-sheet tfoot th,\n.ts-sheet tfoot td')).toContain(
+      'block-size: var(--ts-foot);',
+    )
+    // Nothing may re-declare a competing height on the rows themselves, or the
+    // token stops being the number the band actually measures.
+    const table = screen.getByRole('table') as HTMLTableElement
+    expect(table.tHead?.rows[0].style.blockSize).toBe('')
+    expect(table.tFoot?.rows[0].style.blockSize).toBe('')
+    // The data rows still declare the pitch — that one is the contract.
+    for (const tr of screen.getAllByTestId('timesheet-row')) {
+      expect(tr.style.blockSize).toBe('var(--row)')
+    }
+  })
+
   // ------------------------------------------------------------- drag to fill
 
   it('commits a swept rectangle once, through onFill', async () => {

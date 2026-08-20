@@ -185,6 +185,16 @@ describe('TimesheetPage shell', () => {
       )
     }
 
+    // The day-header band, held open at the grid's own `--ts-head`. Without it
+    // the roster drops by the header's height as the month lands — measured in
+    // Chromium, 34px at every zoom stop, a bigger jump than any per-row drift.
+    // A SIBLING of the skeleton and never a child, so the one-element-per-row
+    // shape above still holds: 14 children, all rows.
+    const band = screen.getByTestId('timesheet-skeleton-head')
+    expect(band.style.blockSize).toBe('var(--ts-head)')
+    expect(rows).not.toContain(band)
+    expect(band.nextElementSibling).toBe(skeleton)
+
     act(() => release(EMPTY_MONTH))
     await waitFor(() =>
       expect(screen.queryByTestId('timesheet-skeleton')).not.toBeInTheDocument(),
