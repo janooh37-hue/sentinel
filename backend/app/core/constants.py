@@ -248,3 +248,79 @@ ADMIN_TYPES: Final[tuple[str, ...]] = (
     "Administrative Leave Form - طلب إجازة إدارية",
     "General Book - كتاب عام",
 )
+
+
+# --- Time-sheet display values ---------------------------------------------
+
+#: Arabic nationality → the English label column D of the time sheet prints.
+#: Variant spellings are all present in the live data (both `الإمارات` and
+#: `الامارات`; three spellings of Oman) so they are all mapped rather than
+#: normalised away.
+NATIONALITY_EN: Final[Mapping[str, str]] = MappingProxyType(
+    {
+        "الإمارات": "U.A.E",
+        "الامارات": "U.A.E",
+        "سلطنة عُمان": "Oman",
+        "سلطنة عمان": "Oman",
+        "عمان": "Oman",
+        "نيبال": "Nepal",
+        "السودان": "Sudan",
+        "الأردن": "Jordan",
+        "اليمن": "Yemen",
+        "جزر القمر": "Comoros",
+        "موريتانيا": "Mauritania",
+        "مصر": "Egypt",
+        "سوريا": "Syria",
+        "المغرب": "Morocco",
+        "الجزائر": "Algeria",
+    }
+)
+
+
+def nationality_en(value: str | None) -> str | None:
+    """English nationality label, or ``None`` when unmapped (preflight blocks)."""
+
+    if not value:
+        return None
+    return NATIONALITY_EN.get(value.strip())
+
+
+#: Arabic month names for the generated filenames; index 0 is January.
+ARABIC_MONTHS: Final[tuple[str, ...]] = (
+    "يناير",
+    "فبراير",
+    "مارس",
+    "أبريل",
+    "مايو",
+    "يونيو",
+    "يوليو",
+    "أغسطس",
+    "سبتمبر",
+    "أكتوبر",
+    "نوفمبر",
+    "ديسمبر",
+)
+
+#: The printable time-sheet designations: (rank_order, name_en, name_ar, sheet).
+#: Ranks 1-8 are the order the client already accepted; 9-15 group the guard tier
+#: by post. Reference data, so ``timesheet_service.seed_designations`` can upsert
+#: it at startup and in tests — the suite builds schema from ``metadata.create_all``
+#: and never runs the migration that first inserted these rows.
+DESIGNATION_SEED: Final[tuple[tuple[int, str, str, str], ...]] = (
+    (1, "Prisons Director", "مدير عام الحراسات الأمنية", "main"),
+    (2, "Ass. Director", "نائب عام مدير الحراسات الأمنية", "main"),
+    (3, "Project Manager", "مديرمركز الإصلاح والتأهيل", "main"),
+    (4, "Branche Manager", "مدير فرع", "main"),
+    (5, "Duty In charge", "مناوب عام", "main"),
+    (6, "Security Supervisor", "مشرف", "main"),
+    (7, "Armory Officer", "مسؤول قطعة سلاح", "main"),
+    (8, "assistant security supervisor", "مساعد مشرف", "main"),
+    (9, "Armory Keeper", "خازن سلاح", "main"),
+    (10, "Control room Security Guard", "حارس امن عرفة العمليات", "main"),
+    (11, "Clinic Security Guard", "حارس امن حرس العيادة", "main"),
+    (12, "Habilitation Security Guard", "حارس امن حرس التأهيل", "main"),
+    (13, "Escort Security Guard", "حارس امن تنويم مستشفيات", "main"),
+    (14, "Messengers", "حارس امن الارساليات", "main"),
+    (15, "Security Guard", "حارس امن", "main"),
+    (16, "Driver", "سائق", "drivers"),
+)
