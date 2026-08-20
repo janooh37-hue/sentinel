@@ -59,6 +59,11 @@ const DashboardPage = lazy(() =>
 const EmployeeDetailPage = lazy(() =>
   import('@/pages/employees/EmployeeDetailPage').then((m) => ({ default: m.EmployeeDetailPage })),
 )
+// The monthly time sheet is a subpage of Employees, not a top-nav entry, so it
+// is code-split here and routed beside the employee routes below.
+const TimesheetPage = lazy(() =>
+  import('@/pages/timesheet/TimesheetPage').then((m) => ({ default: m.TimesheetPage })),
+)
 const AccessRequestsPage = lazy(() =>
   import('@/pages/access/AccessRequestsPage').then((m) => ({ default: m.AccessRequestsPage })),
 )
@@ -210,6 +215,16 @@ function Shell(): React.JSX.Element {
             <Routes>
               <Route path="/" element={<DashboardRoute />} />
               <Route path="/employees" element={<EmployeeLookupPage />} />
+              {/* A static segment outranks a dynamic one in React Router's route
+                  ranking, so this is not swallowed by `/employees/:id`. */}
+              <Route
+                path="/employees/timesheet"
+                element={
+                  <RequireCapability cap="timesheet.view">
+                    <TimesheetPage />
+                  </RequireCapability>
+                }
+              />
               <Route path="/employees/:id" element={<EmployeeDetailPage />} />
               <Route path="/application" element={<ApplicationPage />} />
               <Route path="/books" element={<BooksPage />} />
