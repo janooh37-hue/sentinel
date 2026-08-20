@@ -1033,6 +1033,181 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/timesheet/designations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Designations */
+        get: operations["list_designations_api_v1_timesheet_designations_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/timesheet/designations/order": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Reorder Designations */
+        put: operations["reorder_designations_api_v1_timesheet_designations_order_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/timesheet/{year}/{month}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Month */
+        get: operations["get_month_api_v1_timesheet__year___month__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Patch Month */
+        patch: operations["patch_month_api_v1_timesheet__year___month__patch"];
+        trace?: never;
+    };
+    "/api/v1/timesheet/{year}/{month}/cell": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Set Cell */
+        put: operations["set_cell_api_v1_timesheet__year___month__cell_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/timesheet/{year}/{month}/close": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Close Month */
+        post: operations["close_month_api_v1_timesheet__year___month__close_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/timesheet/{year}/{month}/reopen": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Reopen Month */
+        post: operations["reopen_month_api_v1_timesheet__year___month__reopen_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/timesheet/{year}/{month}/start-ack": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Acknowledge Start
+         * @description Accept a mid-month joiner's starting point.
+         *
+         *     Idempotent, and deliberately allowed on a closed month: it changes no cell,
+         *     so refusing it after the seal would strand the flag forever.
+         */
+        post: operations["acknowledge_start_api_v1_timesheet__year___month__start_ack_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/timesheet/{year}/{month}/export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Export Month
+         * @description Both deliverables come from here — and downloading one freezes the month.
+         *
+         *     The preflight runs before the seal, so a refused download freezes nothing.
+         *     The grid built for the check is the one rendered: ``close_month`` snapshots
+         *     exactly it, so re-rendering after the seal would be the same bytes twice.
+         */
+        get: operations["export_month_api_v1_timesheet__year___month__export_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/timesheet/employee/{employee_id}/{year}/{month}/export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Export Employee
+         * @description One employee's own sheet. Freezes nothing, so ``timesheet.view`` is enough.
+         *
+         *     ``months=2`` is the resignation and termination handover HR asked for: the
+         *     month of departure and the one before it, earlier sheet first, named for the
+         *     later month. ``render_single`` cannot produce a second sheet, so the span
+         *     renderer takes both grids.
+         */
+        get: operations["export_employee_api_v1_timesheet_employee__employee_id___year___month__export_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/templates": {
         parameters: {
             query?: never;
@@ -8115,6 +8290,177 @@ export interface components {
             /** Notifies Employee */
             notifies_employee: boolean;
         };
+        /**
+         * TimesheetCellUpdate
+         * @description Force one cell. ``code: null`` clears it back to the derived value.
+         */
+        TimesheetCellUpdate: {
+            /** Employee Id */
+            employee_id: string;
+            /** Day */
+            day: number;
+            /** Code */
+            code?: string | null;
+            /** Note */
+            note?: string | null;
+        };
+        /**
+         * TimesheetDesignationOrder
+         * @description The full designation catalog in its new order — every id, exactly once.
+         */
+        TimesheetDesignationOrder: {
+            /** Ids */
+            ids: number[];
+        };
+        /**
+         * TimesheetDesignationRead
+         * @description One printable designation from the catalog.
+         */
+        TimesheetDesignationRead: {
+            /** Id */
+            id: number;
+            /** Name En */
+            name_en: string;
+            /** Name Ar */
+            name_ar: string;
+            /** Rank Order */
+            rank_order: number;
+            /** Sheet */
+            sheet: string;
+            /** Active */
+            active: boolean;
+        };
+        /**
+         * TimesheetFillerUpdate
+         * @description The code statistics block 2 prints for one employee.
+         */
+        TimesheetFillerUpdate: {
+            /** Employee Id */
+            employee_id: string;
+            /** Code */
+            code: string;
+        };
+        /**
+         * TimesheetGridResponse
+         * @description One month of one workbook, live or sealed.
+         */
+        TimesheetGridResponse: {
+            /** Year */
+            year: number;
+            /** Month */
+            month: number;
+            /** Days In Month */
+            days_in_month: number;
+            /** Sheet */
+            sheet: string;
+            /** Post Count */
+            post_count: number;
+            /** Rows */
+            rows: components["schemas"]["TimesheetRow"][];
+            /** Blocking */
+            blocking: components["schemas"]["TimesheetIssue"][];
+            /** Warnings */
+            warnings: components["schemas"]["TimesheetIssue"][];
+            /** Removed */
+            removed: components["schemas"]["TimesheetRemoved"][];
+            /** Closed At */
+            closed_at: string | null;
+            /** Closed By */
+            closed_by: string | null;
+        };
+        /**
+         * TimesheetIssue
+         * @description One preflight finding. Blocking stops a download; a warning never does.
+         *
+         *     Reported per employee, never nested inside a row: ``warnings`` is recomputed
+         *     live even on a closed month, so an ``employee_id`` here may name someone with
+         *     no row in the same response (a departure, or someone hired after the seal).
+         */
+        TimesheetIssue: {
+            /** Employee Id */
+            employee_id: string;
+            /** Kind */
+            kind: string;
+            /** Detail */
+            detail: string;
+        };
+        /**
+         * TimesheetPeriodPatch
+         * @description The month's contracted post count and any block-2 filler choices.
+         */
+        TimesheetPeriodPatch: {
+            /** Post Count */
+            post_count?: number | null;
+            /** Fillers */
+            fillers?: components["schemas"]["TimesheetFillerUpdate"][];
+        };
+        /**
+         * TimesheetRemoved
+         * @description Someone who finished last month and is therefore off this roster.
+         */
+        TimesheetRemoved: {
+            /** Employee Id */
+            employee_id: string;
+            /** Name En */
+            name_en: string;
+            /**
+             * End Date
+             * Format: date
+             */
+            end_date: string;
+            /** Last Day */
+            last_day: number;
+            /** Month */
+            month: number;
+            /** Year */
+            year: number;
+        };
+        /**
+         * TimesheetRow
+         * @description One printed row: the identity block, 31 cells, and both statistics.
+         */
+        TimesheetRow: {
+            /** Employee Id */
+            employee_id: string;
+            /** Row No */
+            row_no: number;
+            /** Name En */
+            name_en: string;
+            /** Nationality En */
+            nationality_en: string | null;
+            /** Designation En */
+            designation_en: string | null;
+            /** Designation Ar */
+            designation_ar: string | null;
+            /** Rank Order */
+            rank_order: number | null;
+            /** Codes */
+            codes: (string | null)[];
+            /** Stat Codes */
+            stat_codes: (string | null)[];
+            /** Stat Block */
+            stat_block: number;
+            /** Stat Filler */
+            stat_filler: string | null;
+            /** Joined Day */
+            joined_day: number | null;
+            /** Left Day */
+            left_day: number | null;
+            /** Start Confirmed */
+            start_confirmed: boolean;
+            /** Notes */
+            notes: {
+                [key: string]: string;
+            };
+        };
+        /**
+         * TimesheetStartAckRequest
+         * @description Accept a mid-month joiner's starting point. Changes no cell.
+         */
+        TimesheetStartAckRequest: {
+            /** Employee Id */
+            employee_id: string;
+        };
         /** TransferAdminRequest */
         TransferAdminRequest: {
             /** Employee Id */
@@ -10761,6 +11107,370 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["LeaveRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_designations_api_v1_timesheet_designations_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TimesheetDesignationRead"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    reorder_designations_api_v1_timesheet_designations_order_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TimesheetDesignationOrder"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TimesheetDesignationRead"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_month_api_v1_timesheet__year___month__get: {
+        parameters: {
+            query?: {
+                sheet?: "main" | "drivers";
+            };
+            header?: never;
+            path: {
+                year: number;
+                month: number;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TimesheetGridResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    patch_month_api_v1_timesheet__year___month__patch: {
+        parameters: {
+            query?: {
+                sheet?: "main" | "drivers";
+            };
+            header?: never;
+            path: {
+                year: number;
+                month: number;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TimesheetPeriodPatch"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TimesheetGridResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    set_cell_api_v1_timesheet__year___month__cell_put: {
+        parameters: {
+            query?: {
+                sheet?: "main" | "drivers";
+            };
+            header?: never;
+            path: {
+                year: number;
+                month: number;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TimesheetCellUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TimesheetGridResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    close_month_api_v1_timesheet__year___month__close_post: {
+        parameters: {
+            query?: {
+                sheet?: "main" | "drivers";
+            };
+            header?: never;
+            path: {
+                year: number;
+                month: number;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TimesheetGridResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    reopen_month_api_v1_timesheet__year___month__reopen_post: {
+        parameters: {
+            query?: {
+                sheet?: "main" | "drivers";
+            };
+            header?: never;
+            path: {
+                year: number;
+                month: number;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TimesheetGridResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    acknowledge_start_api_v1_timesheet__year___month__start_ack_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                year: number;
+                month: number;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TimesheetStartAckRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    export_month_api_v1_timesheet__year___month__export_get: {
+        parameters: {
+            query?: {
+                sheet?: "main" | "drivers";
+                variant?: "attendance" | "statistics";
+            };
+            header?: never;
+            path: {
+                year: number;
+                month: number;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    export_employee_api_v1_timesheet_employee__employee_id___year___month__export_get: {
+        parameters: {
+            query?: {
+                months?: number;
+            };
+            header?: never;
+            path: {
+                employee_id: string;
+                year: number;
+                month: number;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
                 };
             };
             /** @description Validation Error */

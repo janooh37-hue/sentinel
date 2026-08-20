@@ -1,0 +1,301 @@
+"""Monthly time-sheet endpoints — the grid, the corrections, and both workbooks.
+
+Routes:
+  GET    /timesheet/designations                              — the catalog
+  PUT    /timesheet/designations/order                        — re-rank it
+  GET    /timesheet/{year}/{month}                            — the grid
+  PUT    /timesheet/{year}/{month}/cell                       — force one cell
+  PATCH  /timesheet/{year}/{month}                            — posts + fillers
+  POST   /timesheet/{year}/{month}/close                      — seal it
+  POST   /timesheet/{year}/{month}/reopen                     — break the seal
+  POST   /timesheet/{year}/{month}/start-ack                  — accept a joiner
+  GET    /timesheet/{year}/{month}/export                     — the workbook
+  GET    /timesheet/employee/{id}/{year}/{month}/export        — one man's sheet
+
+Three things about this module are load-bearing:
+
+* **The two ``designations`` routes are declared first.** ``/{year}/{month}``
+  matches ``/designations/order`` too, so declaring it earlier makes the catalog
+  a 422 on ``int("designations")``.
+* **The month export freezes the month**, which is why it is gated on
+  ``timesheet.edit`` while the per-employee export — which freezes nothing —
+  needs only ``timesheet.view``. A read-only holder must not be able to seal a
+  month that only an editor can reopen.
+* **Every write passes the signed-in user down.** ``created_by``, ``closed_by``,
+  ``reopened_by`` and ``acked_by`` exist to answer "who did this", and a route
+  that drops the id leaves those columns NULL forever.
+
+The month writes answer with the refreshed grid, which is the state the page has
+to render next; the export answers with raw bytes and an RFC 5987
+``content-disposition``, because Starlette encodes headers as latin-1 and a bare
+``filename="كشف حضور…"`` raises mid-response.
+"""
+
+from __future__ import annotations
+
+from typing import Annotated
+from urllib.parse import quote
+
+from fastapi import APIRouter, Depends, Path, Query, status
+from fastapi.responses import Response
+from sqlalchemy.orm import Session
+
+from app.api.deps import require_capability
+from app.api.errors import NotFoundError, ValidationFailedError
+from app.core import timesheet_xlsx
+from app.db.models import Employee, TimesheetDesignation, User
+from app.db.session import get_db
+from app.schemas.timesheet import (
+    Sheet,
+    TimesheetCellUpdate,
+    TimesheetDesignationOrder,
+    TimesheetDesignationRead,
+    TimesheetGridResponse,
+    TimesheetPeriodPatch,
+    TimesheetStartAckRequest,
+    Variant,
+)
+from app.services import timesheet_service as svc
+
+router = APIRouter(prefix="/timesheet", tags=["timesheet"])
+
+XLSX_MEDIA_TYPE = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+
+#: Bounds on the path, so an impossible month answers 422 instead of a 500 out of
+#: ``calendar.monthrange``. The site's records start in the 2020s.
+_MIN_YEAR = 2000
+_MAX_YEAR = 2100
+
+Year = Annotated[int, Path(ge=_MIN_YEAR, le=_MAX_YEAR)]
+Month = Annotated[int, Path(ge=1, le=12)]
+
+
+def _grid(db: Session, year: int, month: int, sheet: str) -> TimesheetGridResponse:
+    return TimesheetGridResponse.model_validate(svc.build_month(db, year, month, sheet=sheet))
+
+
+def _attachment(payload: bytes, filename: str) -> Response:
+    """The workbook as a download named in Arabic.
+
+    ``filename*`` only: the percent-encoded form is the one every browser this
+    office runs reads, and the ASCII fallback of an Arabic name is punctuation.
+    """
+
+    return Response(
+        content=payload,
+        media_type=XLSX_MEDIA_TYPE,
+        headers={
+            "Content-Disposition": f"attachment; filename*=UTF-8''{quote(filename)}",
+            "X-Content-Type-Options": "nosniff",
+        },
+    )
+
+
+def _sheet_of(db: Session, employee_id: str) -> str:
+    """The workbook this employee is printed on — drivers report separately.
+
+    Resolved from his designation rather than by searching both grids: the
+    per-employee export is reached from the employee record, which knows nothing
+    about sheets, and a man off this month's roster still has to resolve to the
+    sheet his row would be on. Mirrors ``timesheet_service._lists_on``: no
+    designation means the main sheet, where he also raises a blocking issue.
+    """
+
+    employee = db.get(Employee, employee_id)
+    if employee is None:
+        raise NotFoundError(
+            "EMPLOYEE_NOT_FOUND", f"No employee {employee_id!r}", employee_id=employee_id
+        )
+    designation = (
+        db.get(TimesheetDesignation, employee.designation_id)
+        if employee.designation_id is not None
+        else None
+    )
+    return svc.SHEETS[0] if designation is None else designation.sheet
+
+
+# --------------------------------------------------------------------------- #
+# the catalog — declared BEFORE /{year}/{month}, which would shadow it
+# --------------------------------------------------------------------------- #
+
+
+@router.get("/designations", response_model=list[TimesheetDesignationRead])
+def list_designations(
+    db: Annotated[Session, Depends(get_db)],
+    _user: Annotated[User, Depends(require_capability("timesheet.view"))],
+) -> list[TimesheetDesignation]:
+    return svc.list_designations(db)
+
+
+@router.put("/designations/order", response_model=list[TimesheetDesignationRead])
+def reorder_designations(
+    payload: TimesheetDesignationOrder,
+    db: Annotated[Session, Depends(get_db)],
+    _user: Annotated[User, Depends(require_capability("timesheet.edit"))],
+) -> list[TimesheetDesignation]:
+    svc.reorder_designations(db, payload.ids)
+    return svc.list_designations(db)
+
+
+# --------------------------------------------------------------------------- #
+# the grid
+# --------------------------------------------------------------------------- #
+
+
+@router.get("/{year}/{month}", response_model=TimesheetGridResponse)
+def get_month(
+    year: Year,
+    month: Month,
+    db: Annotated[Session, Depends(get_db)],
+    _user: Annotated[User, Depends(require_capability("timesheet.view"))],
+    sheet: Sheet = "main",
+) -> TimesheetGridResponse:
+    return _grid(db, year, month, sheet)
+
+
+@router.put("/{year}/{month}/cell", response_model=TimesheetGridResponse)
+def set_cell(
+    year: Year,
+    month: Month,
+    payload: TimesheetCellUpdate,
+    db: Annotated[Session, Depends(get_db)],
+    user: Annotated[User, Depends(require_capability("timesheet.edit"))],
+    sheet: Sheet = "main",
+) -> TimesheetGridResponse:
+    svc.set_cell(
+        db,
+        year,
+        month,
+        payload.employee_id,
+        payload.day,
+        payload.code,
+        note=payload.note,
+        user_id=user.id,
+    )
+    return _grid(db, year, month, sheet)
+
+
+@router.patch("/{year}/{month}", response_model=TimesheetGridResponse)
+def patch_month(
+    year: Year,
+    month: Month,
+    payload: TimesheetPeriodPatch,
+    db: Annotated[Session, Depends(get_db)],
+    _user: Annotated[User, Depends(require_capability("timesheet.edit"))],
+    sheet: Sheet = "main",
+) -> TimesheetGridResponse:
+    if payload.post_count is not None:
+        svc.set_post_count(db, year, month, payload.post_count)
+    for filler in payload.fillers:
+        svc.set_filler(db, year, month, filler.employee_id, filler.code)
+    return _grid(db, year, month, sheet)
+
+
+@router.post("/{year}/{month}/close", response_model=TimesheetGridResponse)
+def close_month(
+    year: Year,
+    month: Month,
+    db: Annotated[Session, Depends(get_db)],
+    user: Annotated[User, Depends(require_capability("timesheet.edit"))],
+    sheet: Sheet = "main",
+) -> TimesheetGridResponse:
+    svc.close_month(db, year, month, user_id=user.id)
+    return _grid(db, year, month, sheet)
+
+
+@router.post("/{year}/{month}/reopen", response_model=TimesheetGridResponse)
+def reopen_month(
+    year: Year,
+    month: Month,
+    db: Annotated[Session, Depends(get_db)],
+    user: Annotated[User, Depends(require_capability("timesheet.edit"))],
+    sheet: Sheet = "main",
+) -> TimesheetGridResponse:
+    svc.reopen_month(db, year, month, user_id=user.id)
+    return _grid(db, year, month, sheet)
+
+
+@router.post("/{year}/{month}/start-ack", status_code=status.HTTP_204_NO_CONTENT)
+def acknowledge_start(
+    year: Year,
+    month: Month,
+    payload: TimesheetStartAckRequest,
+    db: Annotated[Session, Depends(get_db)],
+    user: Annotated[User, Depends(require_capability("timesheet.edit"))],
+) -> Response:
+    """Accept a mid-month joiner's starting point.
+
+    Idempotent, and deliberately allowed on a closed month: it changes no cell,
+    so refusing it after the seal would strand the flag forever.
+    """
+
+    svc.acknowledge_start(db, year, month, payload.employee_id, user_id=user.id)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+# --------------------------------------------------------------------------- #
+# the workbooks
+# --------------------------------------------------------------------------- #
+
+
+@router.get("/{year}/{month}/export")
+def export_month(
+    year: Year,
+    month: Month,
+    db: Annotated[Session, Depends(get_db)],
+    user: Annotated[User, Depends(require_capability("timesheet.edit"))],
+    sheet: Sheet = "main",
+    variant: Variant = "attendance",
+) -> Response:
+    """Both deliverables come from here — and downloading one freezes the month.
+
+    The preflight runs before the seal, so a refused download freezes nothing.
+    The grid built for the check is the one rendered: ``close_month`` snapshots
+    exactly it, so re-rendering after the seal would be the same bytes twice.
+    """
+
+    grid = svc.build_month(db, year, month, sheet=sheet)
+    if grid.blocking:
+        raise ValidationFailedError(
+            "TIMESHEET_BLOCKED",
+            "Fix the blocking issues before downloading the sheet.",
+            blocking=[
+                {"employee_id": issue.employee_id, "kind": issue.kind, "detail": issue.detail}
+                for issue in grid.blocking
+            ],
+        )
+    payload = timesheet_xlsx.render(grid, variant=variant)
+    svc.close_month(db, year, month, user_id=user.id)
+    return _attachment(payload, timesheet_xlsx.filename_for(grid, variant=variant))
+
+
+@router.get("/employee/{employee_id}/{year}/{month}/export")
+def export_employee(
+    employee_id: str,
+    year: Year,
+    month: Month,
+    db: Annotated[Session, Depends(get_db)],
+    _user: Annotated[User, Depends(require_capability("timesheet.view"))],
+    # A bounded int, not ``Literal[1, 2]``: pydantic does not coerce the query
+    # string "2" to the literal 2, so the two-month form would 422 on arrival.
+    months: Annotated[int, Query(ge=1, le=2)] = 1,
+) -> Response:
+    """One employee's own sheet. Freezes nothing, so ``timesheet.view`` is enough.
+
+    ``months=2`` is the resignation and termination handover HR asked for: the
+    month of departure and the one before it, earlier sheet first, named for the
+    later month. ``render_single`` cannot produce a second sheet, so the span
+    renderer takes both grids.
+    """
+
+    sheet = _sheet_of(db, employee_id)
+    grid = svc.build_month(db, year, month, sheet=sheet)
+    filename = timesheet_xlsx.filename_for_single(grid, employee_id)
+    if months == 1:
+        return _attachment(timesheet_xlsx.render_single(grid, employee_id), filename)
+    earlier_year, earlier_month = (year - 1, 12) if month == 1 else (year, month - 1)
+    earlier = svc.build_month(db, earlier_year, earlier_month, sheet=sheet)
+    return _attachment(timesheet_xlsx.render_single_span([earlier, grid], employee_id), filename)
+
+
+__all__ = ["router"]

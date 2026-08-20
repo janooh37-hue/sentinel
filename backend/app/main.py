@@ -47,6 +47,7 @@ from app.api.v1 import smart_folders as smart_folders_v1
 from app.api.v1 import submitters as submitters_v1
 from app.api.v1 import system as system_v1
 from app.api.v1 import templates as templates_v1
+from app.api.v1 import timesheet as timesheet_v1
 from app.config import get_settings
 from app.logging import configure_logging
 from app.services import scheduler_service
@@ -183,6 +184,7 @@ def create_app() -> FastAPI:
     app.include_router(employees_v1.router, prefix="/api/v1", dependencies=auth_gate)
     app.include_router(employees_v1.violations_router, prefix="/api/v1", dependencies=auth_gate)
     app.include_router(leaves_v1.router, prefix="/api/v1", dependencies=auth_gate)
+    app.include_router(timesheet_v1.router, prefix="/api/v1", dependencies=auth_gate)
     app.include_router(templates_v1.router, prefix="/api/v1", dependencies=auth_gate)
     app.include_router(documents_v1.documents_router, prefix="/api/v1", dependencies=auth_gate)
     app.include_router(documents_v1.jobs_router, prefix="/api/v1", dependencies=auth_gate)

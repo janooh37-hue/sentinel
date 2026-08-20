@@ -59,6 +59,18 @@ CAPABILITIES: Final[tuple[Capability, ...]] = (
     Capability(
         "leaves.edit", "leaves", "Edit / delete leaves", "Create, edit, and delete leave records."
     ),
+    Capability(
+        "timesheet.view",
+        "timesheet",
+        "View the time sheet",
+        "See the monthly attendance grid and download the sheets.",
+    ),
+    Capability(
+        "timesheet.edit",
+        "timesheet",
+        "Correct and close the time sheet",
+        "Mark absence, correct cells, set the post count, and close or reopen a month.",
+    ),
     Capability("violations.view", "violations", "View violations", "See recorded violations."),
     Capability(
         "violations.manage",
@@ -175,6 +187,7 @@ _OPERATOR_CAPS: Final[frozenset[str]] = frozenset(
         "app.access",
         "employees.view",
         "leaves.view",
+        "timesheet.view",
         "violations.view",
         "documents.generate",
         "documents.scan",
@@ -193,6 +206,7 @@ _MANAGER_CAPS: Final[frozenset[str]] = _OPERATOR_CAPS | frozenset(
         "employees.edit",
         "employees.notify",
         "leaves.edit",
+        "timesheet.edit",
         "violations.manage",
         "books.manage",
         "books.approve",
