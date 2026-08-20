@@ -5,11 +5,13 @@ from __future__ import annotations
 import pytest
 
 from app.db.models import Employee
+from app.db.workforce_models import AttendanceProviderPerson
 from app.services.attendance_identity_service import (
     EmployeeCodeIndex,
     canonical_code,
     digit_key,
     match_employee_code,
+    reconcile_provider_people,
 )
 
 
@@ -17,6 +19,143 @@ def _employee(db_session, employee_id: str, *, status: str = "Active") -> Employ
     row = Employee(id=employee_id, name_en=f"Employee {employee_id}", status=status)
     db_session.add(row)
     return row
+
+
+def _provider_person(
+    db_session,
+    *,
+    external_person_id: str,
+    external_employee_code: str | None,
+    display_name: str | None = None,
+) -> AttendanceProviderPerson:
+    row = AttendanceProviderPerson(
+        provider="biotime",
+        external_person_id=external_person_id,
+        external_employee_code=external_employee_code,
+        display_name_snapshot=display_name,
+        mapping_state="unmapped",
+    )
+    db_session.add(row)
+    return row
+
+
+def _operator(db_session):
+    from app.db.models import User
+
+    user = User(email="integration@test.ae", password_hash="x", role="admin", status="active")
+    db_session.add(user)
+    db_session.flush()
+    return user
+
+
+def test_reconciliation_binds_the_g_number_and_reports_the_name(db_session):
+    """The operator sees which employee a provider code resolved to."""
+    _employee(db_session, "G3082")
+    person = _provider_person(
+        db_session, external_person_id="p-1", external_employee_code="3082", display_name="AHMED"
+    )
+    operator = _operator(db_session)
+    db_session.flush()
+
+    outcomes = reconcile_provider_people(
+        db_session, provider="biotime", actor_user_id=operator.id, apply=True
+    )
+
+    assert len(outcomes) == 1
+    outcome = outcomes[0]
+    assert (outcome.state, outcome.employee_id, outcome.bound) == ("digits", "G3082", True)
+    assert outcome.employee_name_en == "Employee G3082"
+    assert outcome.display_name_snapshot == "AHMED"
+    assert person.mapping_state == "verified"
+    assert person.employee_id == "G3082"
+    assert person.verified_by_user_id == operator.id
+    assert person.verified_at is not None
+
+
+def test_reconciliation_dry_run_writes_nothing(db_session):
+    """A roster of this size is reviewed before it is bound."""
+    _employee(db_session, "G3082")
+    person = _provider_person(
+        db_session, external_person_id="p-1", external_employee_code="G3082"
+    )
+    operator = _operator(db_session)
+    db_session.flush()
+
+    outcomes = reconcile_provider_people(
+        db_session, provider="biotime", actor_user_id=operator.id, apply=False
+    )
+
+    assert [(item.state, item.employee_id, item.bound) for item in outcomes] == [
+        ("exact", "G3082", True)
+    ]
+    assert person.mapping_state == "unmapped"
+    assert person.employee_id is None
+    assert person.verified_at is None
+
+
+def test_reconciliation_records_ambiguity_as_conflict_without_binding(db_session):
+    """Two employees share the digits, so a human settles it."""
+    _employee(db_session, "G1234")
+    _employee(db_session, "A1234")
+    person = _provider_person(
+        db_session, external_person_id="p-1", external_employee_code="1234"
+    )
+    operator = _operator(db_session)
+    db_session.flush()
+
+    outcomes = reconcile_provider_people(
+        db_session, provider="biotime", actor_user_id=operator.id, apply=True
+    )
+
+    assert outcomes[0].state == "conflict"
+    assert outcomes[0].bound is False
+    assert set(outcomes[0].candidates) == {"A1234", "G1234"}
+    assert person.mapping_state == "conflict"
+    assert person.employee_id is None
+
+
+def test_reconciliation_never_binds_one_employee_to_two_provider_people(db_session):
+    """The verified-active mapping is unique per employee, so the second waits."""
+    _employee(db_session, "G3082")
+    first = _provider_person(
+        db_session, external_person_id="p-1", external_employee_code="G3082"
+    )
+    second = _provider_person(
+        db_session, external_person_id="p-2", external_employee_code="3082"
+    )
+    operator = _operator(db_session)
+    db_session.flush()
+
+    outcomes = reconcile_provider_people(
+        db_session, provider="biotime", actor_user_id=operator.id, apply=True
+    )
+    db_session.flush()
+
+    bound = [item for item in outcomes if item.bound]
+    skipped = [item for item in outcomes if item.skipped_reason]
+    assert len(bound) == 1
+    assert len(skipped) == 1
+    assert first.mapping_state == "verified"
+    assert second.mapping_state == "unmapped"
+    assert second.employee_id is None
+
+
+def test_reconciliation_leaves_an_unknown_code_alone(db_session):
+    """A code matching nobody stays unmapped so a later import can resolve it."""
+    _employee(db_session, "G3082")
+    person = _provider_person(
+        db_session, external_person_id="p-9", external_employee_code="9999"
+    )
+    operator = _operator(db_session)
+    db_session.flush()
+
+    outcomes = reconcile_provider_people(
+        db_session, provider="biotime", actor_user_id=operator.id, apply=True
+    )
+
+    assert outcomes[0].state == "none"
+    assert person.mapping_state == "unmapped"
+    assert person.employee_id is None
 
 
 @pytest.mark.parametrize(

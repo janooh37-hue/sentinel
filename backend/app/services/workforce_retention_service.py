@@ -163,10 +163,21 @@ def _purge_unreferenced_duty_events(db: Session, *, cutoff: datetime, batch_size
     return deleted
 
 
+#: Every audit action this domain writes is namespaced, and the purge below is
+#: the only automatic deleter of audit history in the product.  Without this
+#: filter a workforce retention window would delete leave, permit, and document
+#: audit rows that no workforce policy owns.
+_WORKFORCE_AUDIT_ACTION_PREFIX = "workforce."
+
+
 def _purge_expired_audits(db: Session, *, cutoff: datetime, batch_size: int) -> int:
+    """Delete only expired workforce audit rows, never unrelated audit history."""
     rows = db.scalars(
         select(AuditLog)
-        .where(AuditLog.ts < cutoff)
+        .where(
+            AuditLog.ts < cutoff,
+            AuditLog.action.startswith(_WORKFORCE_AUDIT_ACTION_PREFIX),
+        )
         .order_by(AuditLog.ts, AuditLog.id)
         .limit(batch_size)
     ).all()

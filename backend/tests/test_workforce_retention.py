@@ -171,3 +171,24 @@ def test_purge_audit_records_only_type_cutoff_and_counts_without_row_payloads(db
     assert all(isinstance(value, int) for value in payload["counts"].values())
     assert "event-ret-1" not in audits[0].payload
     assert "G-RET-1" not in audits[0].payload
+
+
+def test_purge_deletes_only_workforce_audit_history(db_session):
+    """Workforce retention owns workforce audits; leave and permit history is not its to delete."""
+    expired = NOW.replace(tzinfo=None) - timedelta(days=400)
+    db_session.add_all(
+        [
+            AuditLog(actor="a@test.ae", action="workforce.crew.created", entity_type="work_crew", ts=expired),
+            AuditLog(actor="a@test.ae", action="leave.status_changed", entity_type="leave", ts=expired),
+            AuditLog(actor="a@test.ae", action="permit.created", entity_type="permit", ts=expired),
+        ]
+    )
+    db_session.flush()
+
+    result = purge_expired_workforce_data(db_session, configuration=_configuration(), now=NOW)
+
+    assert result.deleted_audits == 1
+    remaining = set(
+        db_session.scalars(select(AuditLog.action).where(AuditLog.ts == expired))
+    )
+    assert remaining == {"leave.status_changed", "permit.created"}
