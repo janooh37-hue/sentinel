@@ -42,6 +42,19 @@ import { ID_COLUMNS, TimesheetGrid, TimesheetMasthead } from './TimesheetGrid'
  */
 const indexCss = readFileSync(resolve(process.cwd(), 'src/index.css'), 'utf8')
 
+/**
+ * The declarations of the first rule whose selector list is exactly
+ * `selector`, so a token can be checked against the rule that uses it rather
+ * than against the file at large. `index.css` is CRLF on disk, hence the
+ * normalisation — a multi-line selector list will not match otherwise.
+ */
+const ruleBody = (selector: string): string => {
+  const css = indexCss.replace(/\r\n/g, '\n')
+  const at = css.indexOf(`${selector} {`)
+  expect(at, `\`${selector} {\` is not in index.css`).toBeGreaterThan(-1)
+  return css.slice(at, css.indexOf('}', at))
+}
+
 const row: TimesheetRow = {
   employee_id: 'G1001',
   row_no: 1,
@@ -249,6 +262,33 @@ describe('TimesheetGrid', () => {
     const css = indexCss
     const sum = ID_COLUMNS.map((token) => `var(${token})`).join(' + ')
     expect(css).toContain(`--id-block: calc(${sum});`)
+  })
+
+  it('keeps the row pitch and its own hairline inside one declaration', () => {
+    // What this proves, and what it does not. jsdom has no layout and does not
+    // load the stylesheet, so it CANNOT be asked whether a row measures 28px —
+    // it would agree with a wrong number just as happily, which is how the
+    // defect below survived every other test in this file. What it can pin is
+    // the arithmetic a browser then resolves: `--row` is the PITCH, the cell's
+    // bottom rule is `--ts-rule` wide, and the cell is the pitch MINUS that
+    // rule — so a row's border box is exactly `var(--row)`, which is also what
+    // the loading skeleton's rows declare (`blockSize: 'var(--row)'` in
+    // `TimesheetPage.tsx`, pinned by `TimesheetPage.test.tsx`). One declaration,
+    // two consumers, like `--id-block` across the other axis.
+    //
+    // The defect: shipped as `block-size: var(--row)` with a 1px
+    // `border-block-end` under `border-collapse: separate`, the row measured
+    // 29px against a 28px skeleton row — 24px of drift over the skeleton's rows
+    // and 275px on a full roster. Measured in Chromium at 1600x900, before and
+    // after: grid pitch 29 -> 28, skeleton pitch 28 -> 28.
+    expect(indexCss).toContain('--ts-rule: 1px;')
+    // Without the token the `calc()` is invalid at computed-value time and the
+    // cell silently falls back to `auto`, i.e. its line box.
+    expect(ruleBody('.ts-cell')).toContain('block-size: calc(var(--row) - var(--ts-rule));')
+    const cells = ruleBody('.ts-sheet th,\n.ts-sheet td')
+    expect(cells).toContain('border-block-end: var(--ts-rule) solid var(--hairline);')
+    // Padding sits outside the subtraction and would put the drift straight back.
+    expect(cells).toContain('padding: 0;')
   })
 
   // ------------------------------------------------------------- drag to fill

@@ -199,6 +199,22 @@
      (0,0,1) whatever the source order (UI spec §14). */
   --cell: clamp(26px, calc((100vw - 600px) / 31), 46px);
   --row: 28px;
+  /* The sheet's hairline, as a WIDTH. It gets a token because the row PITCH has
+     to contain it: under `border-collapse: separate` with `box-sizing:
+     border-box`, a `td`'s bottom rule ADDS to the row box, so a cell sized
+     `var(--row)` makes the row `var(--row) + 1px`, and the sheet then walks
+     away from the loading skeleton — which is `var(--row)` exactly — at one
+     pixel per row: 24px across the skeleton's rows, 275px on a full roster.
+     That is precisely the jump locked rule 6 exists to prevent. Measured in
+     Chromium at 1600x900 before this token existed: `--row` 28px, row rect
+     29px, pitch 29px, against a 28px skeleton row.
+
+     So `--row` is the pitch, rule included, and the cell gives the pixel back
+     (`.ts-cell`, below). Both sheet axes are now arithmetic out of one
+     declaration each — `--id-block` across, `--row` down — and a change to this
+     width moves the border and the cell in the same substitution instead of
+     drifting them apart. */
+  --ts-rule: 1px;
   --cell-font: 11px;
   /* The identity block, one column at a time — the paper's A..E band. Widths
      are the locked mockup's own (`docs/timesheet-mockups.css:780-784`).
@@ -381,8 +397,8 @@
 .ts-sheet th,
 .ts-sheet td {
   padding: 0;
-  border-block-end: 1px solid var(--hairline);
-  border-inline-end: 1px solid var(--hairline);
+  border-block-end: var(--ts-rule) solid var(--hairline);
+  border-inline-end: var(--ts-rule) solid var(--hairline);
   background: var(--surface);
 }
 
@@ -534,7 +550,13 @@
 .ts-cell {
   display: block;
   inline-size: 100%;
-  block-size: var(--row);
+  /* The pitch minus its own hairline: the `td`'s bottom rule is a border, so it
+     adds to the row box, and the row has to measure `var(--row)` for the
+     loading skeleton to sit on the same grid (locked rule 6). Never
+     `var(--row)` — that is a 1px-per-row drift. The inline border is not
+     subtracted anywhere because `table-layout: fixed` takes the declared
+     border-box widths from the header row, so it already sits inside them. */
+  block-size: calc(var(--row) - var(--ts-rule));
   font-family: var(--font-mono);
   font-size: var(--cell-font);
   font-weight: 500;
