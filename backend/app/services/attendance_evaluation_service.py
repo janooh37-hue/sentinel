@@ -42,9 +42,10 @@ from app.db.workforce_models import (
 from app.services import attendance_profile_service
 from app.services.workforce_leave import resolve_excusing_leave
 
-# v2 judges a case only once its match window has closed, and reads punch order
-# as arrival/departure on installations whose terminals report no direction.
-ALGORITHM_VERSION = "workforce-attendance-v2"
+# v3 widens the evidence window by each person's learned punch habit, and reads a
+# lone punch in a closed window as an arrival or a departure from that habit
+# rather than assuming an arrival and timing lateness against it.
+ALGORITHM_VERSION = "workforce-attendance-v3"
 _ACTIVE_EMPLOYEE_STATUS = "active"
 _VALID_PRESENCE_STATES = frozenset(
     {"scheduled", "on_duty", "completed", "absent", "excused_leave", "off", "unknown"}
