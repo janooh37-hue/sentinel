@@ -126,11 +126,28 @@ Lateness is never computed from a learned value. It stays
 
 ### 6. Roster versus habit
 
-Where a person's learned profile fits a different shift than the one they are
-rostered on, the profile records the better-fitting shift. Reported with
-G-number, duty unit and post, this finds rostering errors — a person filed
-under `الدوام الرسمي` at 07:00 who punches 04:30 and 13:00 every day is
-mis-rostered, not mis-punching.
+A habit is filed under a shift the person is actually rostered on: candidate
+anchors are restricted to the shift codes their cases carry. What is then worth
+reporting is a habit that fits some *other* defined shift within 45 minutes
+while missing its own by more.
+
+**Corrected during implementation.** Nearest-start anchoring alone produced a
+confidently wrong claim about seven named employees. Six of them — the
+maintenance crew and two others — arrive 05:52 to 05:58 and leave at 14:00,
+which is 52 minutes after the `morning` start and 66 before the `office_day`
+one. Nearest-start therefore filed them under `morning` by a twelve-minute
+margin and reported them as mis-rostered, when what the data actually shows is a
+06:00-14:00 duty that no shift definition describes. Under the corrected rule
+they are filed under `office_day` with `arrival_typical_offset` of -62 to -68
+and `departure_typical_offset` of -60, no label attached, and the offsets say
+plainly what the pattern is. It also explains the original complaint exactly:
+68 minutes early against a 60-minute window is outside it.
+
+On live data the report is four people, each fitting another defined shift
+within 45 minutes of its start: `G3705` rostered `night` fits `morning`,
+`G3775` rostered `noon` fits `office_day`, `G4354` and `G5556` rostered
+`office_day` fit `morning`. A rotating crew is never reported, because every
+shift it works is one it is rostered on.
 
 ### 7. A year of evidence on the Attendance tab
 

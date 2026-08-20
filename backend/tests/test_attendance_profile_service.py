@@ -381,33 +381,40 @@ def test_the_shift_edges_answer_when_no_habit_exists(db_session, site) -> None:
     )
 
 
-def test_a_rotating_crew_is_not_reported_as_mis_rostered(db_session, site) -> None:
-    """Working every shift in turn is the rotation, not a rostering error."""
+def test_a_rotating_crew_keeps_one_habit_per_shift_and_no_complaint(db_session, site) -> None:
+    """Working every shift in turn is the rotation, not a rostering error.
+
+    The crew is rostered on all three, so all three are candidate anchors and
+    each turn is learned under its own shift.
+    """
     person, employee = site["person"], site["employee"]
-    starts = {"morning": 0, "noon": 8, "night": 16}
-    for index, hour in enumerate(starts.values()):
+    starts = {"morning": (0, 1), "noon": (8, 9), "night": (16, 17)}
+    for index, (punch_hour, case_hour) in enumerate(starts.values()):
         for offset in range(6):
             day = datetime(2026, 7, 1, tzinfo=UTC) + timedelta(days=index * 7 + offset)
-            arrival = day + timedelta(hours=hour, minutes=55)
+            arrival = day + timedelta(hours=punch_hour, minutes=55)
             _punch(db_session, person, arrival)
             _punch(db_session, person, arrival + timedelta(hours=8))
-    _case(
-        db_session,
-        employee,
-        operational_date=date(2026, 8, 19),
-        start=datetime(2026, 8, 19, 1, 0, tzinfo=UTC),
-        shift_code="morning",
-    )
+        _case(
+            db_session,
+            employee,
+            operational_date=date(2026, 8, 10 + index),
+            start=datetime(2026, 8, 10 + index, case_hour, 0, tzinfo=UTC),
+            shift_code=list(starts)[index],
+        )
     db_session.flush()
 
     result = profiles.rebuild_profiles(db_session, now=NOW)
 
-    assert len(db_session.scalars(select(AttendancePunchProfile)).all()) == 3
+    learned = db_session.scalars(select(AttendancePunchProfile)).all()
+    assert sorted(row.shift_code for row in learned) == ["morning", "night", "noon"]
     assert result.mismatches == ()
 
 
-def test_a_fixed_pattern_on_the_wrong_shift_is_reported(db_session, site) -> None:
-    """Punching one shift and only that shift, while rostered on another."""
+def test_a_habit_that_fits_another_shift_is_reported_against_its_own_row(
+    db_session, site
+) -> None:
+    """Rostered noon, punching 04:50 to 13:00 every day: the roster is the error."""
     person, employee = site["person"], site["employee"]
     for offset in range(12):
         day = datetime(2026, 8, 1, tzinfo=UTC) - timedelta(days=offset)
@@ -424,7 +431,44 @@ def test_a_fixed_pattern_on_the_wrong_shift_is_reported(db_session, site) -> Non
 
     result = profiles.rebuild_profiles(db_session, now=NOW)
 
+    # Filed under the rostered shift, with the better-fitting one named.
     assert result.mismatches == ((employee.id, "noon", "morning"),)
-    profile = db_session.get(AttendancePunchProfile, (employee.id, "morning"))
+    profile = db_session.get(AttendancePunchProfile, (employee.id, "noon"))
     assert profile is not None
     assert profile.suggested_shift_code == "morning"
+
+
+def test_a_duty_matching_no_defined_shift_is_not_given_a_label(db_session, site) -> None:
+    """The live case this rule exists for: a crew running 06:00 to 14:00.
+
+    Rostered office_day (07:00), arriving 05:52, leaving 14:00. It is 68 minutes
+    early for the office shift and 52 late for the morning one, so no defined
+    shift fits. Naming the nearer start would be a confident wrong answer; the
+    offsets are left to say what the pattern actually is.
+    """
+    person, employee = site["person"], site["employee"]
+    db_session.add(
+        WorkShiftDefinition(code="office_day", start_local_time=time(7, 0), duration_minutes=480)
+    )
+    db_session.flush()
+    for offset in range(14):
+        day = datetime(2026, 8, 1, tzinfo=UTC) - timedelta(days=offset)
+        _punch(db_session, person, day.replace(hour=1, minute=52))
+        _punch(db_session, person, day.replace(hour=10, minute=0))
+    _case(
+        db_session,
+        employee,
+        operational_date=date(2026, 8, 19),
+        start=datetime(2026, 8, 19, 3, 0, tzinfo=UTC),
+        shift_code="office_day",
+    )
+    db_session.flush()
+
+    result = profiles.rebuild_profiles(db_session, now=NOW)
+
+    assert result.mismatches == ()
+    profile = db_session.get(AttendancePunchProfile, (employee.id, "office_day"))
+    assert profile is not None
+    assert profile.suggested_shift_code is None
+    assert profile.arrival_typical_offset == -68
+    assert profile.departure_typical_offset == -60

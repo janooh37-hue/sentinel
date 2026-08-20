@@ -65,10 +65,10 @@ WIDEN_MARGIN_MINUTES = 15
 #: the duty than the other; inside this band the punch stays uninterpreted.
 DIRECTION_MARGIN_MINUTES = 45
 
-#: A rotating crew spreads its punches across every shift. Only a person whose
-#: punches sit almost entirely on one shift can be said to have a fixed pattern,
-#: and only then does a roster on a different shift mean the roster is wrong.
-FIXED_PATTERN_SHARE = 0.8
+#: A habit "fits" a shift when its arrival sits within this of that shift's
+#: start. Outside it on every defined shift, the pattern belongs to no shift the
+#: site has defined, which is a scheduling gap rather than a rostering error.
+ANCHOR_FIT_MINUTES = 45
 
 _ZONE = ZoneInfo(SITE_TIMEZONE)
 _DAY_MINUTES = 24 * 60
@@ -146,11 +146,23 @@ def _shifts(db: Session) -> list[_Shift]:
     return shifts
 
 
-def _anchor(shifts: Iterable[_Shift], arrival_minutes: int) -> _Shift | None:
-    """The shift whose start this arrival belongs to."""
+def _anchor(
+    shifts: Iterable[_Shift], arrival_minutes: int, *, prefer: frozenset[str] = frozenset()
+) -> _Shift | None:
+    """The shift this arrival belongs to, preferring ones the person is rostered on.
+
+    Nearest-start alone mislabels a duty that falls between two definitions: a
+    crew arriving 05:52 and leaving 14:00 is 54 minutes after the 05:00 start and
+    68 minutes before the 07:00 one, so the nearer start wins by twelve minutes
+    and the habit lands under a shift the person has never worked. Restricting
+    the candidates to shifts the roster actually assigns keeps the habit filed
+    where it will be read, and leaves the odd offset visible instead of hiding it
+    behind a confident wrong label.
+    """
+    candidates = [shift for shift in shifts if shift.code in prefer] or list(shifts)
     best: _Shift | None = None
     best_distance = _DAY_MINUTES
-    for shift in shifts:
+    for shift in candidates:
         distance = abs(_signed_offset(arrival_minutes, shift.start_minutes))
         if distance < best_distance:
             best, best_distance = shift, distance
@@ -188,13 +200,13 @@ def rebuild_profiles(
     for employee_id, occurred_at in rows:
         streams.setdefault(str(employee_id), []).append(occurred_at)
 
-    rostered: dict[str, str] = {}
+    rostered: dict[str, set[str]] = {}
     for employee_id, shift_code in db.execute(
         select(AttendanceCase.employee_id, AttendanceCase.shift_code_snapshot)
-        .where(AttendanceCase.operational_date >= (_naive_utc(now) - timedelta(days=7)).date())
-        .order_by(AttendanceCase.operational_date)
+        .where(AttendanceCase.operational_date >= (_naive_utc(now) - timedelta(days=30)).date())
+        .distinct()
     ).all():
-        rostered[str(employee_id)] = str(shift_code)
+        rostered.setdefault(str(employee_id), set()).add(str(shift_code))
 
     db.execute(delete(AttendancePunchProfile))
     computed_at = _naive_utc(now)
@@ -208,7 +220,9 @@ def rebuild_profiles(
         for arrival, departure in _pairs(moments):
             total_pairs += 1
             arrival_minutes = _local_minutes(arrival)
-            shift = _anchor(shifts, arrival_minutes)
+            shift = _anchor(
+                shifts, arrival_minutes, prefer=frozenset(rostered.get(employee_id, ()))
+            )
             if shift is None:
                 continue
             arrivals.setdefault(shift.code, []).append(
@@ -238,28 +252,44 @@ def rebuild_profiles(
             )
             written += 1
 
-        # A rotating crew works every shift in turn, so a dominant cluster that
-        # differs from today's roster is the rotation, not an error. Only a
-        # person who punches one shift and almost nothing else is mis-rostered.
-        dominant = max(arrivals, key=lambda code: len(arrivals[code]), default=None)
-        expected = rostered.get(employee_id)
-        if dominant is not None and expected is not None and dominant != expected:
-            observed = sum(len(offsets) for offsets in arrivals.values())
-            concentration = len(arrivals[dominant]) / observed
-            if len(arrivals[dominant]) >= MIN_SAMPLE_DAYS and concentration >= FIXED_PATTERN_SHARE:
-                mismatches.append((employee_id, expected, dominant))
+        # The habit is filed under a shift this person is rostered on, so what is
+        # worth reporting is a habit that fits some *other* defined shift much
+        # better than the one they are assigned. An offset that fits nothing -
+        # a crew running 06:00 to 14:00 when no such shift exists - is left to
+        # speak for itself through the offsets, because naming the nearest shift
+        # would be a confident wrong answer.
+        for shift_code, arrival_offsets in arrivals.items():
+            if len(arrival_offsets) < MIN_SAMPLE_DAYS:
+                continue
+            own = _percentile(arrival_offsets, 0.5)
+            if abs(own) <= ANCHOR_FIT_MINUTES:
+                continue
+            anchored = next((shift for shift in shifts if shift.code == shift_code), None)
+            if anchored is None:
+                continue
+            observed_minutes = (anchored.start_minutes + own) % _DAY_MINUTES
+            better = min(
+                (
+                    shift
+                    for shift in shifts
+                    if shift.code != shift_code
+                    and abs(_signed_offset(observed_minutes, shift.start_minutes))
+                    <= ANCHOR_FIT_MINUTES
+                ),
+                key=lambda shift: abs(_signed_offset(observed_minutes, shift.start_minutes)),
+                default=None,
+            )
+            if better is not None:
+                mismatches.append((employee_id, shift_code, better.code))
 
     db.flush()
-    if mismatches:
-        # Flushed first on purpose: the rows just added must be visible to this
-        # query whether or not the session autoflushes.
-        suggestions = {employee_id: dominant for employee_id, _, dominant in mismatches}
-        for profile in db.scalars(
-            select(AttendancePunchProfile).where(
-                AttendancePunchProfile.employee_id.in_(suggestions)
-            )
-        ):
-            profile.suggested_shift_code = suggestions[profile.employee_id]
+    # Keyed on the row that was flagged, not on the person: a rotating crew holds
+    # one profile per shift, and only the shift whose habit disagrees carries the
+    # suggestion.
+    for employee_id, shift_code, better in mismatches:
+        profile = db.get(AttendancePunchProfile, (employee_id, shift_code))
+        if profile is not None:
+            profile.suggested_shift_code = better
 
     db.flush()
     return ProfileRebuildResult(
