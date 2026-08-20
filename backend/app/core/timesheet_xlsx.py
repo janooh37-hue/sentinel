@@ -10,19 +10,26 @@ empty rows while column A keeps counting straight through.
 Nothing here reads a database. A :class:`MonthGrid` plus the committed template
 is the whole input, so the same grid always renders the same workbook.
 
-**Four footer formulas deliberately diverge from the June source, because June is
+**Five footer formulas deliberately diverge from the June source, because June is
 buggy.** June counts OFF as ``=COUNTIF(F7:AJ288,"OFF")`` — off by one row at both
 ends — and writes ``-``, ``R`` and ``S`` as ``=COUNTIF(F6:AJ287,D300)`` style cell
 references, with ``R`` and ``S`` stopping 24 rows short of the roster. All four are
 normalised here. Consequence, stated plainly because someone will compare: the
 OFF, R and S totals in a generated workbook will **not** match a hand file's for
 the same month, and it is the generated one that is right. Do not "fix" these
-back to match June.
+back to match June. The fifth is whitespace with no numeric effect: June's NG row
+is ``=COUNTIF(F6:AJ287, "NG")`` with a stray space after the comma, and the
+generated form has none — recorded so that someone diffing a generated file
+against a hand file can account for every textual difference.
 
-**The code data validation deliberately changes shape.** The source's three list
-validations point at ``$D$295:$D$304``, a reference into its own footer code rows
-that only resolves while the footer sits exactly there. The renderer emits one
-validation carrying the literal list instead, which openpyxl needs quoted.
+**The code data validation deliberately changes shape — its formula source, and
+nothing else.** The source's three list validations point at ``$D$295:$D$304``, a
+reference into its own footer code rows that only resolves while the footer sits
+exactly there. The renderer emits one validation carrying the literal list
+instead, which openpyxl needs quoted. Both message flags stay on, as the source
+carries them: openpyxl defaults them off, and with ``showErrorMessage`` off Excel
+shows the dropdown but silently accepts anything typed over it, which would drop
+the input guard the paper has today.
 
 Two openpyxl traps, both measured against the June workbook:
 
@@ -35,6 +42,14 @@ Two openpyxl traps, both measured against the June workbook:
   space, even though ``AO5`` and :data:`CODE_SICK` are ``"SL "`` *with* it — a
   latent bug that means the rule never fires on the hand file. The rebuilt rule
   uses ``"SL "``.
+
+``_parts`` carries **two** specimen data rows because the source's first data row
+is not typical: June row 6 draws a ``medium`` top border across AK-AP, the rule
+that separates the day-number header from the body, and June's other 281 rows do
+not. Output row 6 therefore takes specimen 1 and every row after it takes
+specimen 2 — a positional rule, so the header rule draws exactly once whatever
+occupies row 6: a data row, a statistics gap row, or the blank row an empty
+roster gets.
 """
 
 from __future__ import annotations
@@ -43,7 +58,7 @@ import io
 from collections.abc import Mapping, Sequence
 from copy import copy, deepcopy
 from pathlib import Path
-from typing import Any, Final
+from typing import Any, Final, NamedTuple
 
 from openpyxl import load_workbook
 from openpyxl.drawing.image import Image as XLImage
@@ -53,7 +68,7 @@ from openpyxl.styles.differential import DifferentialStyle
 from openpyxl.utils import get_column_letter
 from openpyxl.worksheet.datavalidation import DataValidation
 
-from app.api.errors import NotFoundError
+from app.api.errors import NotFoundError, ValidationFailedError
 from app.config import get_settings
 from app.core.constants import ARABIC_MONTHS
 from app.core.timesheet_codes import (
@@ -71,13 +86,14 @@ from app.services.timesheet_service import CODE_BLOCKED, GridRow, MonthGrid
 
 _TEMPLATE_NAME: Final[str] = "GSSG-HR_Monthly_Time_Sheet.xlsx"
 
-#: The visible sheet, and the hidden sheet that carries the styled specimen row
-#: and the footer block. ``_parts`` is deleted last, once everything is copied.
+#: The visible sheet, and the hidden sheet that carries the two specimen data
+#: rows and the footer block. ``_parts`` is deleted last, once all of it is copied.
 _SHEET: Final[str] = "Sheet1"
 _PARTS: Final[str] = "_parts"
 
-#: ``_parts`` row 1 is the specimen data row; rows 3-21 are the 19-row footer.
-_SPECIMEN_ROW: Final[int] = 1
+#: ``_parts`` row 1 models output row 6, which carries the rule under the
+#: day-number header; row 2 models every row after it. Rows 3-21 are the footer.
+_SPECIMEN_ROWS: Final[tuple[int, int]] = (1, 2)
 _FOOTER_ROWS: Final[range] = range(3, 22)
 
 _FIRST_DATA_ROW: Final[int] = 6
@@ -214,22 +230,41 @@ def _sheets(workbook: Any, template_sheet: Any, count: int) -> list[Any]:
 # --------------------------------------------------------------------------- #
 
 
-def _specimen(parts: Any) -> tuple[tuple[Any, ...], float | None]:
-    """The styled specimen row: its 42 cell styles and its height.
+class _Specimen(NamedTuple):
+    """One styled model row read off ``_parts``: 42 cell styles and a height."""
 
-    The height is read, never hardcoded, so the template and the renderer cannot
-    drift apart.
+    styles: tuple[Any, ...]
+    height: float | None
+
+
+def _specimens(parts: Any) -> tuple[_Specimen, _Specimen]:
+    """The first-data-row model and the subsequent-row model.
+
+    Both heights are read, never hardcoded, so the template and the renderer
+    cannot drift apart.
     """
 
-    styles = tuple(
-        parts.cell(_SPECIMEN_ROW, column)._style for column in range(1, _LAST_COLUMN + 1)
-    )
-    return styles, parts.row_dimensions[_SPECIMEN_ROW].height
+    def read(row: int) -> _Specimen:
+        return _Specimen(
+            tuple(parts.cell(row, column)._style for column in range(1, _LAST_COLUMN + 1)),
+            parts.row_dimensions[row].height,
+        )
+
+    return read(_SPECIMEN_ROWS[0]), read(_SPECIMEN_ROWS[1])
 
 
-def _style_row(sheet: Any, styles: tuple[Any, ...], row: int, height: float | None) -> None:
-    sheet.row_dimensions[row].height = height
-    for column, style in enumerate(styles, start=1):
+def _style_row(sheet: Any, specimens: tuple[_Specimen, _Specimen], row: int) -> None:
+    """Style one output row from the model that belongs at that position.
+
+    Positional, not per-caller: output row 6 sits under the day-number header and
+    carries the ``medium`` rule that separates it, and every row after it must not
+    repeat that rule. So the header rule draws exactly once whatever occupies row
+    6 — a data row, a statistics gap row, or an empty roster's blank row.
+    """
+
+    specimen = specimens[0] if row == _FIRST_DATA_ROW else specimens[1]
+    sheet.row_dimensions[row].height = specimen.height
+    for column, style in enumerate(specimen.styles, start=1):
         sheet.cell(row, column)._style = copy(style)
 
 
@@ -260,17 +295,17 @@ def _write_band(
     empty.
     """
 
-    styles, height = _specimen(parts)
+    specimens = _specimens(parts)
     target = _FIRST_DATA_ROW
     pending_gap = statistics
 
     for entry in rows:
         if pending_gap and entry.stat_block != 1:
             for _ in range(_GAP_ROWS):
-                _style_row(sheet, styles, target, height)
+                _style_row(sheet, specimens, target)
                 target += 1
             pending_gap = False
-        _style_row(sheet, styles, target, height)
+        _style_row(sheet, specimens, target)
         _write_row(sheet, target, entry, statistics=statistics, days=grid.days_in_month)
         target += 1
 
@@ -278,7 +313,7 @@ def _write_band(
         # Nobody on this roster. The band still gets one row, because the footer
         # ranges have to be well formed: `=SUM(AK6:AK5)` is a reversed reference
         # that folds the day-number header row into the total.
-        _style_row(sheet, styles, target, height)
+        _style_row(sheet, specimens, target)
         target += 1
     return target - 1
 
@@ -363,7 +398,16 @@ def _write_rules(sheet: Any, last_row: int) -> None:
             Rule(type="cellIs", operator="equal", formula=[f'"{code}"'], dxf=style),
         )
 
-    validation = DataValidation(type="list", formula1=_CODE_LIST, allow_blank=True)
+    # Both message flags on, as all three of the source's validations carry them:
+    # openpyxl defaults them off, and with `showErrorMessage` off Excel renders the
+    # dropdown but silently accepts anything typed over it.
+    validation = DataValidation(
+        type="list",
+        formula1=_CODE_LIST,
+        allow_blank=True,
+        showInputMessage=True,
+        showErrorMessage=True,
+    )
     sheet.add_data_validation(validation)
     validation.add(band)
 
@@ -375,7 +419,11 @@ def _write_rules(sheet: Any, last_row: int) -> None:
 
 def _require_variant(variant: str) -> None:
     if variant not in VARIANTS:
-        raise ValueError(f"unknown time-sheet variant: {variant!r}")
+        raise ValidationFailedError(
+            "INVALID_TIMESHEET_VARIANT",
+            f"variant {variant!r} is not a recognised time-sheet variant",
+            valid=sorted(VARIANTS),
+        )
 
 
 def _month(grid: MonthGrid) -> str:

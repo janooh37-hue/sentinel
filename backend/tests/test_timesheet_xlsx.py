@@ -22,7 +22,7 @@ from typing import Any
 import pytest
 from openpyxl import load_workbook
 
-from app.api.errors import NotFoundError
+from app.api.errors import NotFoundError, ValidationFailedError
 from app.config import get_settings
 from app.core import timesheet_xlsx
 from app.core.timesheet_codes import CODE_PRESENT, CODE_SICK
@@ -145,14 +145,40 @@ def test_a_thirty_day_month_leaves_day_31_empty() -> None:
 
 
 def test_row_heights_come_from_the_template() -> None:
-    specimen = load_workbook(_template())["_parts"].row_dimensions[1].height
+    parts = load_workbook(_template())["_parts"]
+    first, subsequent = parts.row_dimensions[1].height, parts.row_dimensions[2].height
     sheet = _sheet(timesheet_xlsx.render(_grid(_row(), _row("G1002", 2))))
-    assert sheet.row_dimensions[6].height == specimen
-    assert sheet.row_dimensions[7].height == specimen
+    assert sheet.row_dimensions[6].height == first
+    assert sheet.row_dimensions[7].height == subsequent
     # The footer's own heights ride along with the copied block.
     assert sheet.row_dimensions[14].height == 35.1  # the S.no header row
     assert sheet.row_dimensions[25].height == 35.1  # X / Not billed, a code row
     assert sheet.row_dimensions[26].height == 39.95  # Total Days
+
+
+def test_the_header_rule_is_drawn_once_under_the_day_numbers() -> None:
+    """``_parts`` row 1 models output row 6, row 2 every row after it.
+
+    June's first data row draws a ``medium`` top border across AK-AP — the line
+    below the day-number header — and its other 281 rows do not. One specimen for
+    the whole band repeats that rule above every row in the totals block.
+    """
+
+    sheet = _sheet(timesheet_xlsx.render(_grid(_row(), _row("G1002", 2), _row("G1003", 3))))
+    assert [sheet.cell(6, c).border.top.style for c in range(37, 43)] == ["medium"] * 6
+    assert [sheet.cell(7, c).border.top.style for c in range(37, 43)] == [
+        None,
+        None,
+        None,
+        None,
+        "thin",  # AO carries a thin top on the subsequent rows
+        None,
+    ]
+    assert [sheet.cell(8, c).border.top.style for c in range(37, 43)] == [
+        sheet.cell(7, c).border.top.style for c in range(37, 43)
+    ]
+    # ...and the rest of the row is the same model either way.
+    assert sheet.cell(6, 1)._style == sheet.cell(7, 1)._style
 
 
 # --------------------------------------------------------------------------- #
@@ -277,10 +303,13 @@ def test_conditional_format_fills_use_bgcolor_and_the_spaced_sick_code() -> None
     assert f'"{CODE_BLOCKED}"' in produced
 
 
-def test_the_code_validation_is_a_quoted_literal_list() -> None:
+def test_the_code_validation_is_a_quoted_literal_list_that_still_blocks() -> None:
     """The source points its three list validations at ``$D$295:$D$304``, a
-    reference into the footer code rows. The renderer replaces that with a
-    literal list, which openpyxl needs quoted."""
+    reference into the footer code rows. The renderer replaces that with a literal
+    list, which openpyxl needs quoted — and only that. All three of the source's
+    validations carry both message flags; openpyxl defaults them off, and with
+    ``showErrorMessage`` off Excel renders the dropdown but silently accepts
+    anything typed over it."""
 
     sheet = _sheet(timesheet_xlsx.render(_grid(_row(), _row("G1002", 2))))
     validations = sheet.data_validations.dataValidation
@@ -289,6 +318,8 @@ def test_the_code_validation_is_a_quoted_literal_list() -> None:
     assert validation.type == "list"
     assert validation.formula1 == '"P,AL,SL ,AB,TR,NG,-,X"'
     assert validation.allow_blank is True
+    assert validation.showErrorMessage is True
+    assert validation.showInputMessage is True
     assert str(validation.sqref) == "F6:AJ7"
 
 
@@ -323,6 +354,10 @@ def test_statistics_splits_blocks_with_two_blank_rows() -> None:
     assert sheet["AK8"].value == '=COUNTIF(F8:AJ8,"P")'
     assert sheet["AK7"].value is None  # the gap rows carry no formulas
     assert sheet["AK11"].value == "=SUM(AK6:AK8)"  # the sums span the gap
+    # The gap row that lands on output row 6 still draws the rule under the day
+    # numbers; the second gap row, being mid-table, does not.
+    assert sheet["AK6"].border.top.style == "medium"
+    assert sheet["AK7"].border.top.style is None
 
 
 def test_statistics_keeps_the_gap_between_the_two_blocks() -> None:
@@ -342,6 +377,8 @@ def test_statistics_keeps_the_gap_between_the_two_blocks() -> None:
     ]
     assert sheet["A10"].value == 3  # the roster position, not the sheet row
     assert sheet["A11"].value is not None and "Legend:" in str(sheet["A11"].value)
+    # Mid-table gap rows take the subsequent-row model, like every row after 6.
+    assert [sheet.cell(r, 37).border.top.style for r in (7, 8, 9, 10)] == [None] * 4
 
 
 def test_attendance_never_splits_the_roster() -> None:
@@ -351,11 +388,18 @@ def test_attendance_never_splits_the_roster() -> None:
     assert "Legend:" in str(sheet["A8"].value)
 
 
-def test_an_unknown_variant_is_rejected() -> None:
-    with pytest.raises(ValueError, match="variant"):
-        timesheet_xlsx.render(_grid(_row()), variant="statistcs")
-    with pytest.raises(ValueError, match="variant"):
-        timesheet_xlsx.filename_for(_grid(_row()), variant="nonsense")
+def test_an_unknown_variant_is_a_422_not_a_500() -> None:
+    """A bare ``ValueError`` reaches ``errors.py``'s catch-all and becomes a 500."""
+
+    for call in (
+        lambda: timesheet_xlsx.render(_grid(_row()), variant="statistcs"),
+        lambda: timesheet_xlsx.filename_for(_grid(_row()), variant="nonsense"),
+    ):
+        with pytest.raises(ValidationFailedError) as raised:
+            call()
+        assert raised.value.http_status == 422
+        assert raised.value.code == "INVALID_TIMESHEET_VARIANT"
+        assert raised.value.details["valid"] == ["attendance", "statistics"]
 
 
 # --------------------------------------------------------------------------- #
