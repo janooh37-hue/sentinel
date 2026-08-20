@@ -16,10 +16,17 @@
  * + `toast`), with one difference that matters: a month write answers with the
  * REFRESHED grid, so the response is written straight into the cache instead of
  * invalidating and fetching the same month twice.
+ *
+ * Cell writes are additionally SERIALISED by a mutation scope and reconciled a
+ * cell at a time. Dragging across days is the primary interaction, so two
+ * writes in flight is the normal case, not the edge: a wholesale snapshot
+ * restore would let a failed write hand back a grid the server never sent, and
+ * a wholesale response write would un-paint the cells still queued behind it.
  */
 
 import { useMemo } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import type { QueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 
 import { api, apiErrorMessage } from '@/lib/api'
@@ -49,12 +56,23 @@ export interface RosterEdge {
   confirmed: boolean
 }
 
-export interface SetCellInput {
+/**
+ * The cache-level shape of one cell write.
+ *
+ * `code` is the wire string rather than `Code` because a ROLLBACK carries back
+ * whatever the grid already held, and the response type does not narrow that.
+ */
+interface CellWrite {
   employeeId: string
   day: number
+  code: string | null
+  /** `undefined` leaves the note alone; `null` clears it. */
+  note?: string | null
+}
+
+export interface SetCellInput extends CellWrite {
   /** `null` clears the override and lets the derived value show through. */
   code: Code | null
-  note?: string | null
 }
 
 const EMPTY_ROWS: TimesheetRow[] = []
@@ -63,6 +81,25 @@ const EMPTY_REMOVED: TimesheetRemoved[] = []
 
 const keyOf = (p: TimesheetParams): readonly unknown[] => [
   'timesheet',
+  p.year,
+  p.month,
+  p.sheet,
+]
+
+/**
+ * Every cell write for one month shares this scope, so react-query runs them
+ * one at a time. `onMutate` still paints the instant the pointer moves — the
+ * scope only holds the REQUEST back until the previous one has answered, which
+ * is what makes a per-cell reconcile sound: when a response lands, the writes
+ * behind it have not been sent yet.
+ */
+const scopeOf = (p: TimesheetParams): string =>
+  `timesheet-cell:${p.year}-${p.month}-${p.sheet}`
+
+/** Identifies cell writes for ONE month in the mutation cache. */
+const cellKeyOf = (p: TimesheetParams): readonly unknown[] => [
+  'timesheet',
+  'cell',
   p.year,
   p.month,
   p.sheet,
@@ -144,13 +181,14 @@ function withNote(
   note: string | null,
 ): TimesheetRow['notes'] {
   const next = { ...notes }
-  if (note) next[day] = note
-  else delete next[day]
+  const key = String(day)
+  if (note) next[key] = note
+  else delete next[key]
   return next
 }
 
 /** Immutable single-cell write: only the touched row and its codes are copied. */
-function paintCell(grid: TimesheetGridResponse, input: SetCellInput): TimesheetGridResponse {
+function paintCell(grid: TimesheetGridResponse, input: CellWrite): TimesheetGridResponse {
   const index = grid.rows.findIndex((r) => r.employee_id === input.employeeId)
   if (index < 0) return grid
   const row = grid.rows[index]
@@ -167,17 +205,58 @@ function paintCell(grid: TimesheetGridResponse, input: SetCellInput): TimesheetG
 }
 
 /**
+ * The cell writes that are painted but not yet sent.
+ *
+ * Writes are serialised, so at most one is in flight and the rest sit paused
+ * with their optimistic fill already in the cache. When a response lands we
+ * take the server's grid WHOLE — it carries the recomputed `blocking`,
+ * `warnings`, `stat_codes` and `post_count` the release decision is made from —
+ * and then repaint these on top, so an answer never un-paints a drag that is
+ * still running.
+ *
+ * `settling` is excluded by REFERENCE identity: `state.variables` is the very
+ * object handed to `mutate`, so the write whose response we are applying can
+ * never repaint its own request over the server's answer.
+ */
+function queuedCellWrites(
+  qc: QueryClient,
+  mutationKey: readonly unknown[],
+  settling: SetCellInput,
+): SetCellInput[] {
+  const out: SetCellInput[] = []
+  for (const mutation of qc.getMutationCache().findAll({
+    mutationKey,
+    exact: true,
+    status: 'pending',
+  })) {
+    const variables = mutation.state.variables as SetCellInput | undefined
+    if (variables && variables !== settling) out.push(variables)
+  }
+  return out
+}
+
+/**
  * Correct one cell, optimistically.
  *
- * The fill changes before the request leaves, and the PREVIOUS grid is restored
- * if the server refuses — a failed correction that leaves the wrong code on
- * screen is the one failure mode this page cannot have. The server's own message
- * is what the operator is told, not a generic apology.
+ * The fill changes before the request leaves, and the CELL is put back if the
+ * server refuses — a failed correction that leaves the wrong code on screen is
+ * the one failure mode this page cannot have. The server's own message is what
+ * the operator is told, not a generic apology.
+ *
+ * Both halves reconcile ONE cell against the cache as it stands at that moment,
+ * never a whole snapshot. With two writes in flight — a drag across days, a
+ * shift-clicked range — a wholesale restore would re-seat the optimistic grid
+ * captured before the earlier write answered, silently discarding the server's
+ * recomputed `blocking`, `warnings`, `stat_codes` and `post_count`. The operator
+ * makes the release decision from those counts.
  */
 export function useSetCell(params: TimesheetParams) {
   const qc = useQueryClient()
   const key = keyOf(params)
+  const cellKey = cellKeyOf(params)
   return useMutation({
+    mutationKey: cellKey,
+    scope: { id: scopeOf(params) },
     mutationFn: (input: SetCellInput) =>
       api.setTimesheetCell(params, {
         employee_id: input.employeeId,
@@ -188,15 +267,29 @@ export function useSetCell(params: TimesheetParams) {
     onMutate: async (input) => {
       // A refetch landing mid-flight would overwrite the optimistic fill.
       await qc.cancelQueries({ queryKey: key })
-      const previous = qc.getQueryData<TimesheetGridResponse>(key)
-      if (previous) qc.setQueryData(key, paintCell(previous, input))
-      return { previous }
+      const grid = qc.getQueryData<TimesheetGridResponse>(key)
+      const row = grid?.rows.find((r) => r.employee_id === input.employeeId)
+      // Captured per CELL, not per grid, so the rollback survives another
+      // write's response landing before this one fails.
+      const rollback: CellWrite = {
+        employeeId: input.employeeId,
+        day: input.day,
+        code: row?.codes[input.day - 1] ?? null,
+        note:
+          input.note === undefined ? undefined : (row?.notes[String(input.day)] ?? null),
+      }
+      if (grid) qc.setQueryData(key, paintCell(grid, input))
+      return { rollback }
     },
     onError: (err, _input, context) => {
-      if (context?.previous) qc.setQueryData(key, context.previous)
+      const current = qc.getQueryData<TimesheetGridResponse>(key)
+      if (current && context) qc.setQueryData(key, paintCell(current, context.rollback))
       toast.error(apiErrorMessage(err))
     },
-    onSuccess: (grid) => qc.setQueryData(key, grid),
+    onSuccess: (grid, input) => {
+      const queued = queuedCellWrites(qc, cellKey, input)
+      qc.setQueryData(key, queued.reduce((next, write) => paintCell(next, write), grid))
+    },
   })
 }
 
@@ -267,10 +360,22 @@ function saveBlob(file: { blob: Blob; filename: string }): void {
   document.body.append(anchor)
   anchor.click()
   anchor.remove()
-  URL.revokeObjectURL(url)
+  // Deferred one task: Firefox CANCELS the download when the blob URL is
+  // revoked before the download's own fetch has begun, and the operator gets
+  // neither a file nor an error. Chrome tolerates the synchronous revoke, which
+  // is exactly why this would have shipped unnoticed.
+  setTimeout(() => URL.revokeObjectURL(url), 0)
 }
 
-/** Both workbooks for a month. The first one produced FREEZES the month. */
+/**
+ * Both workbooks for a month. The first one produced FREEZES the month.
+ *
+ * `download` NEVER rejects. `onError` has already shown the operator the
+ * server's own message, so rethrowing would only surface as an unhandled
+ * rejection at the natural call site — `onClick={() => void download(args)}`.
+ * The promise settles when the browser has the file, or when the attempt has
+ * been reported; callers that need to know may read `pending`.
+ */
 export function useTimesheetDownload(): {
   download: (args: {
     year: number
@@ -301,10 +406,19 @@ export function useTimesheetDownload(): {
     },
     onError: (err) => toast.error(apiErrorMessage(err)),
   })
-  return { download: async (args) => void (await mutation.mutateAsync(args)), pending: mutation.isPending }
+  return {
+    download: async (args) => {
+      await mutation.mutateAsync(args).catch(() => {})
+    },
+    pending: mutation.isPending,
+  }
 }
 
-/** One employee's sheet. `months: 2` = the month named plus the one before it. */
+/**
+ * One employee's sheet. `months: 2` = the month named plus the one before it.
+ *
+ * Same contract as `useTimesheetDownload`: `download` never rejects.
+ */
 export function useEmployeeSheetDownload(): {
   download: (args: {
     employeeId: string
@@ -323,5 +437,10 @@ export function useEmployeeSheetDownload(): {
     onSuccess: saveBlob,
     onError: (err) => toast.error(apiErrorMessage(err)),
   })
-  return { download: async (args) => void (await mutation.mutateAsync(args)), pending: mutation.isPending }
+  return {
+    download: async (args) => {
+      await mutation.mutateAsync(args).catch(() => {})
+    },
+    pending: mutation.isPending,
+  }
 }

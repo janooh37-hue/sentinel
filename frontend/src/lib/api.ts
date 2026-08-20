@@ -958,7 +958,11 @@ function filenameFrom(header: string | null): string | null {
       // Malformed percent-escapes: fall through to the plain form.
     }
   }
-  const plain = /filename="?([^";]+)"?/i.exec(header)
+  // `(?!\*)` is load-bearing: without it this matches the `filename` PREFIX of
+  // `filename*=UTF-8''…`, the optional quote matches empty, and the capture
+  // becomes `*=UTF-8''%D9%83…` — a workbook saved under a garbage name instead
+  // of falling through to the caller's fallback.
+  const plain = /filename=(?!\*)"?([^";]+)"?/i.exec(header)
   return plain ? plain[1].trim() : null
 }
 

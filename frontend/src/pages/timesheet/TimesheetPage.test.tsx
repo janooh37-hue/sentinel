@@ -24,13 +24,14 @@ vi.mock('@/lib/api', () => ({
   apiErrorMessage: (e: unknown) => (e instanceof Error ? e.message : String(e)),
 }))
 // `useCapabilities` reads AuthContext, which throws outside <AuthProvider> —
-// stub it as the house tests do (components/notify/SendButton.test.tsx:9).
-vi.mock('@/lib/useCapabilities', () => ({
-  useCapabilities: () => ({ has: () => true, isLoading: false }),
-}))
+// stub it as the house tests do (components/perms/CapabilityGate.test.tsx:18).
+// A `vi.fn()` rather than a fixed value, because amendment A3's read-only page
+// is only reachable by handing back `timesheet.view` WITHOUT `timesheet.edit`.
+vi.mock('@/lib/useCapabilities', () => ({ useCapabilities: vi.fn() }))
 
 import { api } from '@/lib/api'
-import type { TimesheetGridResponse, TimesheetRow } from '@/lib/api'
+import type { TimesheetGridResponse, TimesheetIssue, TimesheetRow } from '@/lib/api'
+import { useCapabilities } from '@/lib/useCapabilities'
 
 import { TimesheetPage } from './TimesheetPage'
 import { useSetCell, useTimesheetGrid } from './useTimesheet'
@@ -67,8 +68,25 @@ const ROW: TimesheetRow = {
   notes: {},
 }
 
+/** A recomputed blocking check — the kind of fact only the server can supply. */
+const ISSUE: TimesheetIssue = {
+  employee_id: 'G1001',
+  kind: 'unconfirmed_start',
+  detail: 'Starting point not accepted.',
+}
+
 const getTimesheet = vi.mocked(api.getTimesheet)
 const setTimesheetCell = vi.mocked(api.setTimesheetCell)
+const mockCapabilities = vi.mocked(useCapabilities)
+
+/** Everything, i.e. a manager: the default for every case but the A3 one. */
+function grantAll(): void {
+  mockCapabilities.mockReturnValue({
+    capabilities: new Set(['timesheet.view', 'timesheet.edit']),
+    isLoading: false,
+    has: () => true,
+  })
+}
 
 function makeQc(): QueryClient {
   return new QueryClient({
@@ -88,6 +106,7 @@ function renderPage() {
 
 beforeEach(() => {
   vi.clearAllMocks()
+  grantAll()
   getTimesheet.mockResolvedValue(EMPTY_MONTH)
 })
 
@@ -117,7 +136,10 @@ describe('TimesheetPage shell', () => {
     expect(
       await screen.findByRole('heading', { name: /monthly time sheet/i }),
     ).toBeInTheDocument()
-    expect(screen.getByText(/JD 908/)).toBeInTheDocument()
+    // Scoped to the head. `timesheet.emptyReason` also says "JD 908" and
+    // `EmptyState` renders it as a `<p>` with a direct text child, so a bare
+    // /JD 908/ is two candidates the moment the flush order shifts.
+    expect(screen.getByText(/monthly deliverables · site JD 908/i)).toBeInTheDocument()
   })
 
   it('renders at /employees/timesheet instead of the employee detail route', async () => {
@@ -147,6 +169,22 @@ describe('TimesheetPage shell', () => {
     // The identity block and the 31 day columns are already known, so the
     // skeleton is laid out on the same metrics the grid will use (UI spec §9).
     expect(skeleton.style.getPropertyValue('--ts-days')).toBe('31')
+    // The PITCH is the contract with Task 8's grid: no container padding, no
+    // gaps, each row exactly `var(--row)`, and the day strip flush against the
+    // identity block. A 6px row gap is 84px of drift over 14 rows, and the
+    // month visibly jumps into place when it lands (locked rule 6).
+    expect(skeleton.className).not.toMatch(/(?:^|\s)p-/)
+    expect(skeleton.className).not.toMatch(/(?:^|\s)gap-/)
+    const rows = Array.from(skeleton.children) as HTMLElement[]
+    expect(rows).toHaveLength(14)
+    for (const row of rows) {
+      expect(row.style.blockSize).toBe('var(--row)')
+      expect(row.className).not.toMatch(/(?:^|\s)gap-/)
+      expect((row.firstElementChild as HTMLElement).className).toContain(
+        'w-[var(--id-block)]',
+      )
+    }
+
     act(() => release(EMPTY_MONTH))
     await waitFor(() =>
       expect(screen.queryByTestId('timesheet-skeleton')).not.toBeInTheDocument(),
@@ -165,6 +203,41 @@ describe('TimesheetPage shell', () => {
     expect(stepper).toContainElement(
       screen.getAllByRole('button', { name: /previous month/i })[1],
     )
+  })
+
+  // Amendment A3: `timesheet.view` alone must still be a USABLE page, not a
+  // page of dead controls.
+  it('hands a view-only operator the legend, the reason, and no edit affordance', async () => {
+    mockCapabilities.mockReturnValue({
+      capabilities: new Set(['timesheet.view']),
+      isLoading: false,
+      has: (cap) => cap === 'timesheet.view',
+    })
+    renderPage()
+    await screen.findByTestId('timesheet-shell')
+
+    // The ribbon is the legend it looks like. Not a disabled button: a disabled
+    // control still answers Enter and Space (UI spec §14).
+    expect(screen.getByText('Annual leave')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /annual leave/i })).not.toBeInTheDocument()
+    // No <kbd> either: there is no shortcut to teach when there is no brush.
+    expect(document.querySelectorAll('kbd')).toHaveLength(0)
+
+    // The hint names the missing permission instead of leaving them to wonder.
+    expect(screen.getByText(/reading only/i)).toBeInTheDocument()
+    expect(screen.queryByText(/arm a code/i)).not.toBeInTheDocument()
+
+    // No edit-only furniture: a viewer can never push onto the stack, so the
+    // chip and its permanently dead undo are not rendered.
+    expect(screen.queryByText('No corrections yet')).not.toBeInTheDocument()
+    expect(
+      screen.queryByRole('button', { name: /undo last change/i }),
+    ).not.toBeInTheDocument()
+
+    // Still complete: the month stepper and both roster/deliverable controls.
+    expect(screen.getAllByRole('button', { name: /previous month/i }).length).toBeGreaterThan(0)
+    expect(screen.getByRole('group', { name: 'Roster' })).toBeInTheDocument()
+    expect(screen.getByRole('group', { name: 'Deliverable' })).toBeInTheDocument()
   })
 })
 
@@ -233,5 +306,66 @@ describe('useSetCell', () => {
     })
     await waitFor(() => expect(result.current.read.rows[0].codes[2]).toBe('P'))
     expect(toast.error).toHaveBeenCalledWith('The month is closed.')
+  })
+
+  // The load-bearing case for Task 8, whose whole job is drag-to-fill: two
+  // writes from one gesture, the second one refused.
+  it('keeps a succeeded write\u2019s server answer when a queued write then fails', async () => {
+    getTimesheet.mockResolvedValue({ ...EMPTY_MONTH, rows: [ROW] })
+    // The server's answer to the FIRST write. Its recomputed month facts are
+    // the ones the release decision is made from, and nothing local can
+    // reproduce them.
+    const servedFirst: TimesheetGridResponse = {
+      ...EMPTY_MONTH,
+      post_count: 250,
+      blocking: [ISSUE],
+      rows: [{ ...ROW, codes: ROW.codes.map((c, i) => (i === 2 ? 'AL' : c)) }],
+    }
+
+    const inFlight: {
+      resolve: (grid: TimesheetGridResponse) => void
+      reject: (err: Error) => void
+    }[] = []
+    setTimesheetCell.mockImplementation(
+      () =>
+        new Promise<TimesheetGridResponse>((resolve, reject) => {
+          inFlight.push({ resolve, reject })
+        }),
+    )
+
+    const { result } = renderCellHook()
+    await waitFor(() => expect(result.current.read.rows).toHaveLength(1))
+
+    act(() => {
+      result.current.write.mutate({ employeeId: 'G1001', day: 3, code: 'AL' })
+      result.current.write.mutate({ employeeId: 'G1001', day: 4, code: 'SL ' })
+    })
+    // Both cells paint at once — the scope holds the REQUEST back, not the fill.
+    await waitFor(() => {
+      expect(result.current.read.rows[0].codes[2]).toBe('AL')
+      expect(result.current.read.rows[0].codes[3]).toBe('SL ')
+    })
+    expect(setTimesheetCell).toHaveBeenCalledTimes(1)
+
+    await act(async () => {
+      inFlight[0].resolve(servedFirst)
+    })
+    // The server's counts landed, and the queued cell was NOT un-painted.
+    await waitFor(() => expect(result.current.read.postCount).toBe(250))
+    expect(result.current.read.blocking).toHaveLength(1)
+    expect(result.current.read.rows[0].codes[3]).toBe('SL ')
+    await waitFor(() => expect(inFlight).toHaveLength(2))
+
+    await act(async () => {
+      inFlight[1].reject(new Error('Day 4 is outside the month.'))
+    })
+    // ONE cell goes back. The first write's server answer survives it: a
+    // wholesale snapshot restore would put 249 and zero blocking checks back on
+    // screen, which is the release decision made from a grid nobody sent.
+    await waitFor(() => expect(result.current.read.rows[0].codes[3]).toBe('P'))
+    expect(result.current.read.rows[0].codes[2]).toBe('AL')
+    expect(result.current.read.postCount).toBe(250)
+    expect(result.current.read.blocking).toHaveLength(1)
+    expect(toast.error).toHaveBeenCalledWith('Day 4 is outside the month.')
   })
 })

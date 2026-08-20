@@ -200,6 +200,12 @@
   --cell: clamp(26px, calc((100vw - 600px) / 31), 46px);
   --row: 28px;
   --cell-font: 11px;
+  /* The frozen identity block: `#` 38 + ID 74 + name 196 + designation 168 +
+     nationality 82, plus borders. Declared once because the skeleton and the
+     real grid MUST agree on it — a day strip that starts anywhere else makes
+     the sheet jump sideways when the month lands (locked rule 6). Fixed across
+     the zoom stops, like the 600px in the `--cell` clamp above. */
+  --id-block: 568px;
 }
 
 [data-theme="dark"] {
@@ -321,7 +327,13 @@
 
 /* Loading is a designed state (UI spec §9): 31 columns at the real pitch, so
    the grid does not resize when the month lands. One element per row instead of
-   31 — a skeleton is not worth 400 nodes. */
+   31 — a skeleton is not worth 400 nodes.
+
+   The PITCH is the contract with Task 8's grid: one row per `var(--row)`, no
+   gap and no container padding, day columns starting at exactly `--id-block`.
+   `block-size` is 6px short of the row so the bars read as separate rows
+   without costing the row any height — the shrinkage is inside the pitch, not
+   added to it. */
 .ts-skeleton-cells {
   background-image: repeating-linear-gradient(
     90deg,

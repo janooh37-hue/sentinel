@@ -226,19 +226,25 @@ export function TimesheetPage(): React.JSX.Element {
             readOnly={!editable}
           />
           <span className="text-[0.75em] text-muted-foreground">{hint}</span>
-          <span className="ms-auto flex items-center gap-3">
-            <span className="inline-flex items-center gap-1.5 rounded-full bg-surface-tinted px-2.5 py-1 text-[0.72em] font-semibold text-muted-foreground">
-              {t('timesheet.corrections', { count: corrections.length })}
+          {/* Edit-only furniture. A `timesheet.view` operator can never push
+              onto this stack, so the chip would sit permanently at "No
+              corrections yet" with a permanently dead undo — immediately beside
+              the hint that has just explained they cannot edit. */}
+          {editable && (
+            <span className="ms-auto flex items-center gap-3">
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-surface-tinted px-2.5 py-1 text-[0.72em] font-semibold text-muted-foreground">
+                {t('timesheet.corrections', { count: corrections.length })}
+              </span>
+              <button
+                type="button"
+                onClick={undo}
+                disabled={corrections.length === 0}
+                className="text-[0.78em] font-medium text-primary hover:underline disabled:cursor-not-allowed disabled:no-underline disabled:opacity-40"
+              >
+                ↩ {t('timesheet.undo')}
+              </button>
             </span>
-            <button
-              type="button"
-              onClick={undo}
-              disabled={corrections.length === 0}
-              className="text-[0.78em] font-medium text-primary hover:underline disabled:cursor-not-allowed disabled:no-underline disabled:opacity-40"
-            >
-              ↩ {t('timesheet.undo')}
-            </button>
-          </span>
+          )}
         </div>
 
         <TimesheetNotice
@@ -261,22 +267,24 @@ export function TimesheetPage(): React.JSX.Element {
                 <span role="status" className="sr-only">
                   {t('timesheet.loading')}
                 </span>
-                {/* Skeleton at the real metrics: the identity block and the 31
-                    day columns are known before the month is, so the grid does
-                    not resize when the data lands (UI spec §9). */}
+                {/* Skeleton on the grid's EXACT pitch: one row per `var(--row)`
+                    with no container padding and no gaps, and the day strip
+                    flush against the `--id-block` identity bar. Any leading
+                    padding or row gap makes the month visibly jump into place
+                    when it lands, which is the whole point of locked rule 6. */}
                 <div
                   data-testid="timesheet-skeleton"
                   aria-hidden
                   style={{ '--ts-days': grid.daysInMonth } as React.CSSProperties}
-                  className="flex flex-col gap-1.5 p-3"
+                  className="flex flex-col"
                 >
                   {SKELETON_ROWS.map((n) => (
                     <div
                       key={n}
-                      className="flex items-center gap-2"
+                      className="flex items-center"
                       style={{ blockSize: 'var(--row)' }}
                     >
-                      <div className="h-3 w-[568px] shrink-0 animate-pulse rounded bg-surface-tinted" />
+                      <div className="h-3 w-[var(--id-block)] shrink-0 animate-pulse rounded bg-surface-tinted" />
                       <div className="ts-skeleton-cells shrink-0 animate-pulse rounded" />
                     </div>
                   ))}
