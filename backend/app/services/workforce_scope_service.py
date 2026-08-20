@@ -3,6 +3,12 @@
 Workforce capabilities answer *what* a principal may do.  This module answers
 *which employees* they may act on.  The resolved scope is immutable so callers
 can safely pass it through service layers without accidentally widening it.
+
+``department`` is an optional dimension: this roster is placed by duty unit, and
+only part of it carries a recorded department.  A grant therefore constrains
+exactly the dimensions it names - a ``duty_unit`` grant without a department
+covers that unit under any department, while one that names a department still
+pins both.
 """
 
 from __future__ import annotations
@@ -83,6 +89,8 @@ def normalize_scope_entry(
     The database constraint is the source of truth for persisted rows.  This
     validation is deliberately repeated at the service boundary because route
     payloads and legacy rows must not become implicit wildcard grants.
+    ``department`` is optional on a unit or post grant; the required levels are
+    the grant's own and, for a post, the unit that contains it.
     """
     normalized_kind = scope_kind.strip()
     normalized_department = _normalized_value(department)
@@ -96,11 +104,11 @@ def normalize_scope_entry(
         if normalized_department is None or normalized_unit is not None or normalized_post is not None:
             raise ValueError("department scope requires only department")
     elif normalized_kind == "duty_unit":
-        if normalized_department is None or normalized_unit is None or normalized_post is not None:
-            raise ValueError("duty_unit scope requires department and duty_unit")
+        if normalized_unit is None or normalized_post is not None:
+            raise ValueError("duty_unit scope requires duty_unit and no duty_post")
     elif normalized_kind == "duty_post":
-        if normalized_department is None or normalized_unit is None or normalized_post is None:
-            raise ValueError("duty_post scope requires department, duty_unit, and duty_post")
+        if normalized_unit is None or normalized_post is None:
+            raise ValueError("duty_post scope requires duty_unit and duty_post")
     else:
         raise ValueError(f"unknown workforce scope kind {scope_kind!r}")
 
@@ -176,9 +184,13 @@ class WorkforceScope:
     ) -> bool:
         """Return whether a fully identified employee is inside this scope.
 
-        Employee dimensions are normalized before comparison so accidental
-        surrounding whitespace in legacy employee data does not silently widen
-        an assigned hierarchy scope.
+        Each entry constrains only the dimensions it names, so a unit or post
+        grant with no department matches that unit under any department -
+        including the employees whose department was never recorded.  A
+        ``department`` grant still requires an exact department, so an employee
+        without one is inside no department grant.  Employee dimensions are
+        normalized before comparison so accidental surrounding whitespace in
+        legacy employee data does not silently widen an assigned scope.
         """
         normalized_employee_id = _normalized_value(employee_id)
         if normalized_employee_id is None:
@@ -204,7 +216,7 @@ class WorkforceScope:
                 if entry.employee_id == normalized_employee_id:
                     return True
                 continue
-            if entry.department != normalized_department:
+            if entry.department is not None and entry.department != normalized_department:
                 continue
             if entry.scope_kind == "department":
                 return True

@@ -10,12 +10,15 @@ still depends on. Only the scope and preset guarantees are kept here.
 
 from __future__ import annotations
 
+import pytest
+
 from app.core.permissions import ALL_CAPABILITIES, CAPABILITY_IDS, ROLE_DEFAULTS
 from app.db.models import Employee, User, UserWorkforceScope
 from app.services import perm_service
 from app.services.workforce_scope_service import (
     WorkforceScope,
     intersect_workforce_scope,
+    normalize_scope_entry,
     resolve_workforce_scope,
 )
 
@@ -31,13 +34,15 @@ WORKFORCE_CAPABILITIES = {
 }
 
 
-def _employee(employee_id: str, *, department: str, duty_unit: str) -> Employee:
+def _employee(
+    employee_id: str, *, department: str | None, duty_unit: str, duty_post: str = "Gate 1"
+) -> Employee:
     return Employee(
         id=employee_id,
         name_en=f"Employee {employee_id}",
         department=department,
         duty_unit=duty_unit,
-        duty_post="Gate 1",
+        duty_post=duty_post,
     )
 
 
@@ -141,3 +146,104 @@ def test_admin_effective_capabilities_still_resolve_explicit_organization_scope(
     assert perm_service.effective_caps(db_session, admin) >= WORKFORCE_CAPABILITIES
     assert scope.is_organization is True
     assert _allows(scope, employee)
+
+
+def test_unit_grant_without_a_department_covers_an_unrecorded_department(db_session) -> None:
+    """Most of this roster carries no department, so a unit grant must not need one."""
+    unrecorded = _employee("G-NODEPT", department=None, duty_unit="First Company")
+    recorded = _employee("G-DEPT", department="Internal Security", duty_unit="First Company")
+    other_unit = _employee("G-SUPPORT", department=None, duty_unit="Support Group")
+    db_session.add_all([unrecorded, recorded, other_unit])
+    db_session.commit()
+
+    user = _user(db_session, email="unit-grant@test.ae")
+    db_session.add(
+        UserWorkforceScope(
+            user_id=user.id,
+            scope_kind="duty_unit",
+            department=None,
+            duty_unit="First Company",
+            duty_post=None,
+            created_by_user_id=user.id,
+        )
+    )
+    db_session.commit()
+
+    scope = resolve_workforce_scope(db_session, user)
+    assert _allows(scope, unrecorded)
+    assert _allows(scope, recorded)
+    assert not _allows(scope, other_unit)
+
+
+def test_named_department_still_pins_both_levels_and_excludes_unrecorded_people(
+    db_session,
+) -> None:
+    """Naming a department keeps the grant narrow; an unrecorded department is outside it."""
+    unrecorded = _employee("G-NODEPT", department=None, duty_unit="First Company")
+    recorded = _employee("G-DEPT", department="Internal Security", duty_unit="First Company")
+    foreign = _employee("G-FOREIGN", department="General Services", duty_unit="First Company")
+    db_session.add_all([unrecorded, recorded, foreign])
+    db_session.commit()
+
+    unit_user = _user(db_session, email="named-unit@test.ae")
+    department_user = _user(db_session, email="named-department@test.ae")
+    db_session.add_all(
+        [
+            UserWorkforceScope(
+                user_id=unit_user.id,
+                scope_kind="duty_unit",
+                department="Internal Security",
+                duty_unit="First Company",
+                duty_post=None,
+                created_by_user_id=unit_user.id,
+            ),
+            UserWorkforceScope(
+                user_id=department_user.id,
+                scope_kind="department",
+                department="Internal Security",
+                duty_unit=None,
+                duty_post=None,
+                created_by_user_id=department_user.id,
+            ),
+        ]
+    )
+    db_session.commit()
+
+    unit_scope = resolve_workforce_scope(db_session, unit_user)
+    assert _allows(unit_scope, recorded)
+    assert not _allows(unit_scope, unrecorded)
+    assert not _allows(unit_scope, foreign)
+
+    department_scope = resolve_workforce_scope(db_session, department_user)
+    assert _allows(department_scope, recorded)
+    assert not _allows(department_scope, unrecorded)
+
+
+def test_normalized_grants_require_their_own_levels_only() -> None:
+    """A unit grant needs a unit, a post grant needs the unit that contains it."""
+    unit_entry = normalize_scope_entry(
+        scope_kind="duty_unit", department=None, duty_unit="First Company", duty_post=None
+    )
+    assert (unit_entry.department, unit_entry.duty_unit, unit_entry.duty_post) == (
+        None,
+        "First Company",
+        None,
+    )
+
+    post_entry = normalize_scope_entry(
+        scope_kind="duty_post", department=None, duty_unit="First Company", duty_post="Gate 1"
+    )
+    assert (post_entry.duty_unit, post_entry.duty_post) == ("First Company", "Gate 1")
+
+    with pytest.raises(ValueError, match="duty_post"):
+        normalize_scope_entry(
+            scope_kind="duty_post", department="Internal Security", duty_unit=None, duty_post="Gate 1"
+        )
+    with pytest.raises(ValueError, match="duty_unit"):
+        normalize_scope_entry(
+            scope_kind="duty_unit", department="Internal Security", duty_unit=None, duty_post=None
+        )
+    with pytest.raises(ValueError, match="department"):
+        normalize_scope_entry(
+            scope_kind="department", department=None, duty_unit=None, duty_post=None
+        )

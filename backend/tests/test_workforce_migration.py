@@ -2,11 +2,13 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
 from alembic import command
 from alembic.config import Config
 from alembic.script import ScriptDirectory
 from sqlalchemy import create_engine, inspect, text
 from sqlalchemy.engine import Connection, Engine
+from sqlalchemy.exc import IntegrityError
 
 ROOT = Path(__file__).resolve().parents[2]
 WORKFORCE_REVISION = "0071_workforce_attendance"
@@ -66,16 +68,35 @@ def _resolve_workforce_revisions(config: Config) -> tuple[str, str]:
 
 
 def _seed_predecessor_data(engine: Engine) -> None:
+    """Seed the four placement shapes this roster actually contains.
+
+    Most employees are placed by duty unit with no department recorded, and one
+    row carries a post with no unit at all, which is not a hierarchy path.
+    """
     with engine.begin() as connection:
-        connection.execute(
-            text(
-                "INSERT INTO employees "
-                "(id, name_en, name_ar, status, department, duty_unit, duty_post, "
-                "created_at, updated_at) "
-                "VALUES ('G9001', 'Migration Guard', 'حارس الترحيل', 'Active', "
-                "'Operations', 'North Unit', 'Gate 1', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)"
+        for employee_id, name_en, department, duty_unit, duty_post in (
+            ("G9001", "Migration Guard", "Operations", "North Unit", "Gate 1"),
+            ("G9002", "Company Guard", None, "السرية الأولى", "Gate 2"),
+            ("G9003", "Support Guard", None, "Support Group", None),
+            ("G9004", "Unplaced Guard", None, None, None),
+            ("G9005", "Orphan Post Guard", None, None, "Gate 5"),
+        ):
+            connection.execute(
+                text(
+                    "INSERT INTO employees "
+                    "(id, name_en, name_ar, status, department, duty_unit, duty_post, "
+                    "created_at, updated_at) "
+                    "VALUES (:id, :name_en, 'حارس الترحيل', 'Active', :department, "
+                    ":duty_unit, :duty_post, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)"
+                ),
+                {
+                    "id": employee_id,
+                    "name_en": name_en,
+                    "department": department,
+                    "duty_unit": duty_unit,
+                    "duty_post": duty_post,
+                },
             )
-        )
         connection.execute(
             text(
                 "INSERT INTO users (id, email, password_hash, role, status) "
@@ -83,6 +104,8 @@ def _seed_predecessor_data(engine: Engine) -> None:
                 "'operator', 'active')"
             )
         )
+
+
 def _assert_canonical_shift_seed(connection: Connection) -> None:
     shifts = {
         row.code: (str(row.start_local_time)[:5], row.duration_minutes)
@@ -137,21 +160,39 @@ def _assert_conservative_capability_seed(connection: Connection) -> None:
     assert "workforce.attendance.correct" not in caps_by_role.get("manager", set())
 
 
-def _assert_baseline_duty_event(connection: Connection) -> None:
-    baseline = connection.execute(
-        text(
-            "SELECT event_type, to_department, to_unit, to_post, actor_user_id, effective_at "
-            "FROM duty_assignment_events WHERE employee_id = 'G9001'"
+def _assert_baseline_duty_events(connection: Connection) -> None:
+    """Every employee gets one baseline holding their own recorded placement.
+
+    A missing department stays missing - inventing one would fabricate an
+    organization chart - and a post with no unit is dropped because it is not a
+    hierarchy path.
+    """
+    events = {
+        row.employee_id: (row.event_type, row.to_department, row.to_unit, row.to_post)
+        for row in connection.execute(
+            text(
+                "SELECT employee_id, event_type, to_department, to_unit, to_post "
+                "FROM duty_assignment_events"
+            )
         )
-    ).one()
-    assert baseline.event_type == "baseline"
-    assert (baseline.to_department, baseline.to_unit, baseline.to_post) == (
-        "Operations",
-        "North Unit",
-        "Gate 1",
+    }
+    assert events == {
+        "G9001": ("baseline", "Operations", "North Unit", "Gate 1"),
+        "G9002": ("baseline", None, "السرية الأولى", "Gate 2"),
+        "G9003": ("baseline", None, "Support Group", None),
+        "G9004": ("baseline", None, None, None),
+        "G9005": ("baseline", None, None, None),
+    }
+    assert (
+        connection.execute(
+            text(
+                "SELECT count(*) FROM duty_assignment_events WHERE effective_at IS NULL "
+                "OR actor_user_id IS NOT NULL OR from_department IS NOT NULL "
+                "OR from_unit IS NOT NULL OR from_post IS NOT NULL"
+            )
+        ).scalar_one()
+        == 0
     )
-    assert baseline.actor_user_id is None
-    assert baseline.effective_at is not None
 
 
 def test_workforce_migration_is_the_single_next_head_from_the_merge_head(tmp_path: Path) -> None:
@@ -183,7 +224,7 @@ def test_workforce_migration_round_trip_preserves_existing_data_and_seeds(tmp_pa
         ).one() == ("Migration Guard", "Operations", "North Unit", "Gate 1")
         _assert_canonical_shift_seed(connection)
         _assert_conservative_capability_seed(connection)
-        _assert_baseline_duty_event(connection)
+        _assert_baseline_duty_events(connection)
 
     command.downgrade(config, predecessor)
     with engine.connect() as connection:
@@ -211,6 +252,61 @@ def test_workforce_migration_round_trip_preserves_existing_data_and_seeds(tmp_pa
         )
         assert (
             connection.execute(text("SELECT count(*) FROM duty_assignment_events")).scalar_one()
-            == 1
+            == 5
         )
         _assert_canonical_shift_seed(connection)
+
+
+def test_workforce_placement_accepts_unit_rooted_paths_and_rejects_orphan_posts(
+    tmp_path: Path,
+) -> None:
+    """Placement needs a unit for a post, never a department for a unit."""
+    database = tmp_path / "workforce-unit-rooted.db"
+    engine = create_engine(f"sqlite:///{database}")
+    config = _alembic_config(database)
+    workforce_revision, predecessor = _resolve_workforce_revisions(config)
+
+    command.upgrade(config, predecessor)
+    _seed_predecessor_data(engine)
+    command.upgrade(config, workforce_revision)
+
+    with engine.begin() as connection:
+        connection.execute(
+            text(
+                "INSERT INTO duty_assignment_events "
+                "(employee_id, event_type, to_unit, to_post, effective_at, actor_user_id) "
+                "VALUES ('G9002', 'transfer', 'Support Group', 'Gate 7', "
+                "CURRENT_TIMESTAMP, 1)"
+            )
+        )
+        connection.execute(
+            text(
+                "INSERT INTO work_shift_overrides "
+                "(employee_id, assignment_kind, reason_kind, starts_at, ends_at, "
+                "duty_unit, duty_post, reason, created_by_user_id) "
+                "VALUES ('G9002', 'off', 'other', '2026-08-20 04:00:00', "
+                "'2026-08-20 12:00:00', 'Support Group', 'Gate 7', 'unit-rooted', 1)"
+            )
+        )
+
+    with engine.connect() as connection:
+        with pytest.raises(IntegrityError):
+            connection.execute(
+                text(
+                    "INSERT INTO duty_assignment_events "
+                    "(employee_id, event_type, to_post, effective_at, actor_user_id) "
+                    "VALUES ('G9002', 'transfer', 'Gate 9', CURRENT_TIMESTAMP, 1)"
+                )
+            )
+        connection.rollback()
+        with pytest.raises(IntegrityError):
+            connection.execute(
+                text(
+                    "INSERT INTO work_shift_overrides "
+                    "(employee_id, assignment_kind, reason_kind, starts_at, ends_at, "
+                    "duty_post, reason, created_by_user_id) "
+                    "VALUES ('G9002', 'off', 'other', '2026-08-21 04:00:00', "
+                    "'2026-08-21 12:00:00', 'Gate 9', 'orphan post', 1)"
+                )
+            )
+        connection.rollback()

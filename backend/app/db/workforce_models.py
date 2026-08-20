@@ -41,12 +41,11 @@ def _utcnow() -> datetime:
     return datetime.now(UTC).replace(tzinfo=None)
 
 
-_HIERARCHY_PREFIX_CHECK = """
-    (department IS NULL AND duty_unit IS NULL AND duty_post IS NULL)
-    OR (department IS NOT NULL AND duty_unit IS NULL AND duty_post IS NULL)
-    OR (department IS NOT NULL AND duty_unit IS NOT NULL AND duty_post IS NULL)
-    OR (department IS NOT NULL AND duty_unit IS NOT NULL AND duty_post IS NOT NULL)
-"""
+# This roster is organized by duty unit: the five companies, official hours, and
+# the support group.  ``department`` is an optional label recorded for only part
+# of the workforce, so it is never a required parent.  The single invariant a
+# hierarchy path must satisfy is that a post names the unit it belongs to.
+_HIERARCHY_PREFIX_CHECK = "duty_post IS NULL OR duty_unit IS NOT NULL"
 
 
 class WorkShiftDefinition(Base):
@@ -293,10 +292,8 @@ class WorkStaffingRequirement(Base):
         CheckConstraint(
             "(scope_kind = 'department' AND department IS NOT NULL AND duty_unit IS NULL "
             "AND duty_post IS NULL) OR "
-            "(scope_kind = 'duty_unit' AND department IS NOT NULL AND duty_unit IS NOT NULL "
-            "AND duty_post IS NULL) OR "
-            "(scope_kind = 'duty_post' AND department IS NOT NULL AND duty_unit IS NOT NULL "
-            "AND duty_post IS NOT NULL)",
+            "(scope_kind = 'duty_unit' AND duty_unit IS NOT NULL AND duty_post IS NULL) OR "
+            "(scope_kind = 'duty_post' AND duty_unit IS NOT NULL AND duty_post IS NOT NULL)",
             name="ck_work_staffing_requirements_hierarchy",
         ),
         CheckConstraint(
@@ -805,17 +802,11 @@ class DutyAssignmentEvent(Base):
             name="ck_duty_assignment_events_actor_required",
         ),
         CheckConstraint(
-            "(from_department IS NULL AND from_unit IS NULL AND from_post IS NULL) "
-            "OR (from_department IS NOT NULL AND from_unit IS NULL AND from_post IS NULL) "
-            "OR (from_department IS NOT NULL AND from_unit IS NOT NULL AND from_post IS NULL) "
-            "OR (from_department IS NOT NULL AND from_unit IS NOT NULL AND from_post IS NOT NULL)",
+            "from_post IS NULL OR from_unit IS NOT NULL",
             name="ck_duty_assignment_events_from_hierarchy_prefix",
         ),
         CheckConstraint(
-            "(to_department IS NULL AND to_unit IS NULL AND to_post IS NULL) "
-            "OR (to_department IS NOT NULL AND to_unit IS NULL AND to_post IS NULL) "
-            "OR (to_department IS NOT NULL AND to_unit IS NOT NULL AND to_post IS NULL) "
-            "OR (to_department IS NOT NULL AND to_unit IS NOT NULL AND to_post IS NOT NULL)",
+            "to_post IS NULL OR to_unit IS NOT NULL",
             name="ck_duty_assignment_events_to_hierarchy_prefix",
         ),
         Index("ix_duty_assignment_events_employee_effective", "employee_id", "effective_at"),
@@ -842,10 +833,8 @@ class UserWorkforceScope(Base):
             "AND duty_post IS NULL) OR "
             "(scope_kind = 'department' AND department IS NOT NULL AND duty_unit IS NULL "
             "AND duty_post IS NULL) OR "
-            "(scope_kind = 'duty_unit' AND department IS NOT NULL AND duty_unit IS NOT NULL "
-            "AND duty_post IS NULL) OR "
-            "(scope_kind = 'duty_post' AND department IS NOT NULL AND duty_unit IS NOT NULL "
-            "AND duty_post IS NOT NULL)",
+            "(scope_kind = 'duty_unit' AND duty_unit IS NOT NULL AND duty_post IS NULL) OR "
+            "(scope_kind = 'duty_post' AND duty_unit IS NOT NULL AND duty_post IS NOT NULL)",
             name="ck_user_workforce_scopes_hierarchy",
         ),
         Index(

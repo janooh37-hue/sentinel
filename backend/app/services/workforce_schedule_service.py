@@ -279,8 +279,6 @@ def _validate_shift_override(
     normalized_reason = reason.strip()
     if not normalized_reason:
         raise ValueError("override reason is required")
-    if (duty_unit is not None or duty_post is not None) and department is None:
-        raise ValueError("override hierarchy requires department prefix")
     if duty_post is not None and duty_unit is None:
         raise ValueError("override duty_post requires duty_unit prefix")
     if assignment_kind == "work":
@@ -914,10 +912,12 @@ def create_staffing_requirement(
         raise ValueError("minimum_headcount must be non-negative")
     if effective_to is not None and effective_to <= effective_from:
         raise ValueError("staffing effective window must be half-open and non-empty")
+    # A department target names a department; a unit or post target names its own
+    # levels and may leave the department unrecorded.
     expected_hierarchy = {
         "department": (department is not None, duty_unit is None, duty_post is None),
-        "duty_unit": (department is not None, duty_unit is not None, duty_post is None),
-        "duty_post": (department is not None, duty_unit is not None, duty_post is not None),
+        "duty_unit": (True, duty_unit is not None, duty_post is None),
+        "duty_post": (True, duty_unit is not None, duty_post is not None),
     }
     if scope_kind not in expected_hierarchy or not all(expected_hierarchy[scope_kind]):
         raise ValueError("staffing requirement hierarchy does not match scope_kind")

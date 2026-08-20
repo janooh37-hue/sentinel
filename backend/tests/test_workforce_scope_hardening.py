@@ -64,7 +64,9 @@ def _grant(db: Session, user: User, capability: str) -> None:
     db.commit()
 
 
-def _scoped_to(db: Session, user: User, *, department: str, duty_unit: str | None = None) -> None:
+def _scoped_to(
+    db: Session, user: User, *, department: str | None = None, duty_unit: str | None = None
+) -> None:
     db.add(
         UserWorkforceScope(
             user_id=user.id,
@@ -311,6 +313,36 @@ def test_scoped_manager_cannot_set_a_staffing_target_for_a_foreign_hierarchy(api
         )
 
     assert response.status_code == 403, response.text
+
+
+def test_unit_scoped_manager_sets_a_staffing_target_without_a_department(api_db):
+    """A unit with no recorded department is still a real target for its own manager."""
+    manager = _user(api_db, email="unit-target-manager@test.ae", role="manager")
+    _grant(api_db, manager, "workforce.policy.manage")
+    _scoped_to(api_db, manager, duty_unit="First Company")
+
+    with _client(api_db, manager) as client:
+        allowed = client.post(
+            "/api/v1/workforce/requirements",
+            json={
+                "scope_kind": "duty_unit",
+                "duty_unit": "First Company",
+                "minimum_headcount": 12,
+                "effective_from": NOW.date().isoformat(),
+            },
+        )
+        foreign = client.post(
+            "/api/v1/workforce/requirements",
+            json={
+                "scope_kind": "duty_unit",
+                "duty_unit": "Support Group",
+                "minimum_headcount": 3,
+                "effective_from": NOW.date().isoformat(),
+            },
+        )
+
+    assert allowed.status_code == 201, allowed.text
+    assert foreign.status_code == 403, foreign.text
 
 
 def test_access_me_reports_the_callers_own_tier_and_scopes(api_db):

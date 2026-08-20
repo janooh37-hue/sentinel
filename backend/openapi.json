@@ -14127,7 +14127,7 @@
           "notifications"
         ],
         "summary": "Stream",
-        "description": "Per-user SSE stream of notification counts.\n\nEmits an initial event immediately, then polls every POLL_SECONDS and\nemits only when the counts change. Sends a ``: heartbeat`` comment every\nHEARTBEAT_SECONDS to keep the connection alive.\n\n``max_events`` bounds the generator — after that many count-events it\nreturns. Pass ``?max_events=1`` in tests to get a finite response without\nhanging on the infinite poll loop. Production clients never pass it.\n\nClient-disconnect cancels the async generator (FastAPI / anyio propagates\nthe cancellation as GeneratorExit); the per-tick session is always closed\nin a finally block.\n\nPer-tick session: we do NOT hold the injected ``db`` open for the whole\nstream (would pin a SQLite connection). Instead each tick opens a new\nsession from the same engine that backed the injected ``db`` — this way\nthe test-fixture engine override also applies to the per-tick sessions.",
+        "description": "Per-user SSE stream of notification counts.\n\nEmits an initial event immediately, then polls every POLL_SECONDS and\nemits only when the counts change. Sends a ``: heartbeat`` comment every\nHEARTBEAT_SECONDS to keep the connection alive.\n\n``max_events`` bounds the generator — after that many count-events it\nreturns. Pass ``?max_events=1`` in tests to get a finite response without\nhanging on the infinite poll loop. Production clients never pass it.\n\nClient-disconnect cancels the async generator (FastAPI / anyio propagates\nthe cancellation as GeneratorExit); the per-tick session is always closed\nin a finally block.\n\nPer-tick session: we do NOT use the injected ``db`` beyond reading its bind.\nA ``StreamingResponse`` finishes only when the stream does, and FastAPI\ntears request-scoped dependencies down *after* the response completes — so\nan injected session on an endless stream stays checked out for the life of\nthe connection, pinning one pool connection per viewer. With the default\nQueuePool (5 + 10 overflow) the 16th concurrent viewer exhausted the pool\nand unrelated requests, login included, began failing with 500s. The\ninjected session is therefore closed immediately once its engine has been\ncaptured, and every tick — including the first — opens its own session from\nthat same engine, so test-fixture engine overrides still apply.",
         "operationId": "stream_api_v1_notifications_stream_get",
         "parameters": [
           {
@@ -35062,9 +35062,15 @@
             "title": "Scope Kind"
           },
           "department": {
-            "type": "string",
-            "maxLength": 128,
-            "minLength": 1,
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 128
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Department"
           },
           "duty_unit": {
@@ -35130,7 +35136,6 @@
         "type": "object",
         "required": [
           "scope_kind",
-          "department",
           "minimum_headcount",
           "effective_from"
         ],
@@ -37245,7 +37250,7 @@
           "scope_kind"
         ],
         "title": "WorkforceScopeWrite",
-        "description": "One normalized hierarchy grant; the router rejects duplicate grants."
+        "description": "One normalized hierarchy grant; the router rejects duplicate grants.\n\n``department`` is optional on a unit or post grant because this roster is\nplaced by duty unit and only part of it records a department."
       },
       "WorkforceShiftDefinitionRead": {
         "properties": {

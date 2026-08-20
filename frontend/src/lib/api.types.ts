@@ -3368,10 +3368,16 @@ export interface paths {
          *     the cancellation as GeneratorExit); the per-tick session is always closed
          *     in a finally block.
          *
-         *     Per-tick session: we do NOT hold the injected ``db`` open for the whole
-         *     stream (would pin a SQLite connection). Instead each tick opens a new
-         *     session from the same engine that backed the injected ``db`` — this way
-         *     the test-fixture engine override also applies to the per-tick sessions.
+         *     Per-tick session: we do NOT use the injected ``db`` beyond reading its bind.
+         *     A ``StreamingResponse`` finishes only when the stream does, and FastAPI
+         *     tears request-scoped dependencies down *after* the response completes — so
+         *     an injected session on an endless stream stays checked out for the life of
+         *     the connection, pinning one pool connection per viewer. With the default
+         *     QueuePool (5 + 10 overflow) the 16th concurrent viewer exhausted the pool
+         *     and unrelated requests, login included, began failing with 500s. The
+         *     injected session is therefore closed immediately once its engine has been
+         *     captured, and every tick — including the first — opens its own session from
+         *     that same engine, so test-fixture engine overrides still apply.
          */
         get: operations["stream_api_v1_notifications_stream_get"];
         put?: never;
@@ -9491,7 +9497,7 @@ export interface components {
              */
             scope_kind: "department" | "duty_unit" | "duty_post";
             /** Department */
-            department: string;
+            department?: string | null;
             /** Duty Unit */
             duty_unit?: string | null;
             /** Duty Post */
@@ -10235,6 +10241,9 @@ export interface components {
         /**
          * WorkforceScopeWrite
          * @description One normalized hierarchy grant; the router rejects duplicate grants.
+         *
+         *     ``department`` is optional on a unit or post grant because this roster is
+         *     placed by duty unit and only part of it records a department.
          */
         WorkforceScopeWrite: {
             /**

@@ -62,11 +62,15 @@ _SPACER = "<p>&nbsp;</p>"
 def _event_hierarchy(
     employee: Employee, unit: str | None, post: str | None
 ) -> tuple[str | None, str | None, str | None]:
-    """Return a hierarchy-prefix-safe snapshot for a duty event."""
+    """Return a hierarchy-prefix-safe snapshot for a duty event.
+
+    The department is recorded when the employee has one and left absent when
+    they do not: most of this roster is placed by duty unit alone, and the unit
+    and post are the placement worth keeping.  Only a post with no unit is
+    dropped, because that is not a hierarchy path.
+    """
 
     department = (employee.department or "").strip() or None
-    if department is None:
-        return None, None, None
     unit = (unit or "").strip() or None
     post = (post or "").strip() or None
     return department, unit, post if unit is not None else None

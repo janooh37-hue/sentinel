@@ -159,18 +159,23 @@ class WorkforceScopeRead(BaseModel):
 
 
 class WorkforceScopeWrite(WorkforceScopeRead):
-    """One normalized hierarchy grant; the router rejects duplicate grants."""
+    """One normalized hierarchy grant; the router rejects duplicate grants.
+
+    ``department`` is optional on a unit or post grant because this roster is
+    placed by duty unit and only part of it records a department.
+    """
 
     @model_validator(mode="after")
     def validate_hierarchy(self) -> WorkforceScopeWrite:
         values = (self.department, self.duty_unit, self.duty_post)
         normalized = tuple(value.strip() if isinstance(value, str) else None for value in values)
         self.department, self.duty_unit, self.duty_post = normalized
+        # "value" is required, "optional" may be absent, None must be absent.
         required = {
             "organization": (None, None, None),
             "department": ("value", None, None),
-            "duty_unit": ("value", "value", None),
-            "duty_post": ("value", "value", "value"),
+            "duty_unit": ("optional", "value", None),
+            "duty_post": ("optional", "value", "value"),
         }[self.scope_kind]
         for actual, expected in zip(normalized, required, strict=True):
             if expected == "value" and not actual:
@@ -707,7 +712,7 @@ class StaffingRequirementWrite(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     scope_kind: Literal["department", "duty_unit", "duty_post"]
-    department: str = Field(min_length=1, max_length=128)
+    department: str | None = Field(default=None, max_length=128)
     duty_unit: str | None = Field(default=None, max_length=128)
     duty_post: str | None = Field(default=None, max_length=128)
     shift_definition_id: int | None = Field(default=None, gt=0)
@@ -717,10 +722,14 @@ class StaffingRequirementWrite(BaseModel):
 
     @model_validator(mode="after")
     def validate_hierarchy(self) -> StaffingRequirementWrite:
+        # A department target names a department; a unit or post target names its
+        # own levels and may leave the department unrecorded.
         needs_unit = self.scope_kind in {"duty_unit", "duty_post"}
         needs_post = self.scope_kind == "duty_post"
         if bool(self.duty_unit) != needs_unit or bool(self.duty_post) != needs_post:
             raise ValueError("scope hierarchy must match scope_kind")
+        if self.scope_kind == "department" and not self.department:
+            raise ValueError("department is required for a department requirement")
         if self.effective_to is not None and self.effective_to <= self.effective_from:
             raise ValueError("effective_to must be after effective_from")
         return self

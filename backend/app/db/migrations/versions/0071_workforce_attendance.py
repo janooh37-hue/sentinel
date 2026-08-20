@@ -264,10 +264,7 @@ def _create_workforce_tables() -> None:
             name="ck_work_shift_overrides_swap_correlation_required",
         ),
         sa.CheckConstraint(
-            "(department IS NULL AND duty_unit IS NULL AND duty_post IS NULL) "
-            "OR (department IS NOT NULL AND duty_unit IS NULL AND duty_post IS NULL) "
-            "OR (department IS NOT NULL AND duty_unit IS NOT NULL AND duty_post IS NULL) "
-            "OR (department IS NOT NULL AND duty_unit IS NOT NULL AND duty_post IS NOT NULL)",
+            "duty_post IS NULL OR duty_unit IS NOT NULL",
             name="ck_work_shift_overrides_hierarchy_prefix",
         ),
     )
@@ -311,10 +308,8 @@ def _create_workforce_tables() -> None:
         sa.CheckConstraint(
             "(scope_kind = 'department' AND department IS NOT NULL AND duty_unit IS NULL "
             "AND duty_post IS NULL) OR "
-            "(scope_kind = 'duty_unit' AND department IS NOT NULL AND duty_unit IS NOT NULL "
-            "AND duty_post IS NULL) OR "
-            "(scope_kind = 'duty_post' AND department IS NOT NULL AND duty_unit IS NOT NULL "
-            "AND duty_post IS NOT NULL)",
+            "(scope_kind = 'duty_unit' AND duty_unit IS NOT NULL AND duty_post IS NULL) OR "
+            "(scope_kind = 'duty_post' AND duty_unit IS NOT NULL AND duty_post IS NOT NULL)",
             name="ck_work_staffing_requirements_hierarchy",
         ),
         sa.CheckConstraint(
@@ -577,17 +572,11 @@ def _create_workforce_tables() -> None:
             name="ck_duty_assignment_events_actor_required",
         ),
         sa.CheckConstraint(
-            "(from_department IS NULL AND from_unit IS NULL AND from_post IS NULL) "
-            "OR (from_department IS NOT NULL AND from_unit IS NULL AND from_post IS NULL) "
-            "OR (from_department IS NOT NULL AND from_unit IS NOT NULL AND from_post IS NULL) "
-            "OR (from_department IS NOT NULL AND from_unit IS NOT NULL AND from_post IS NOT NULL)",
+            "from_post IS NULL OR from_unit IS NOT NULL",
             name="ck_duty_assignment_events_from_hierarchy_prefix",
         ),
         sa.CheckConstraint(
-            "(to_department IS NULL AND to_unit IS NULL AND to_post IS NULL) "
-            "OR (to_department IS NOT NULL AND to_unit IS NULL AND to_post IS NULL) "
-            "OR (to_department IS NOT NULL AND to_unit IS NOT NULL AND to_post IS NULL) "
-            "OR (to_department IS NOT NULL AND to_unit IS NOT NULL AND to_post IS NOT NULL)",
+            "to_post IS NULL OR to_unit IS NOT NULL",
             name="ck_duty_assignment_events_to_hierarchy_prefix",
         ),
     )
@@ -844,10 +833,8 @@ def _create_workforce_tables() -> None:
             "AND duty_post IS NULL) OR "
             "(scope_kind = 'department' AND department IS NOT NULL AND duty_unit IS NULL "
             "AND duty_post IS NULL) OR "
-            "(scope_kind = 'duty_unit' AND department IS NOT NULL AND duty_unit IS NOT NULL "
-            "AND duty_post IS NULL) OR "
-            "(scope_kind = 'duty_post' AND department IS NOT NULL AND duty_unit IS NOT NULL "
-            "AND duty_post IS NOT NULL)",
+            "(scope_kind = 'duty_unit' AND duty_unit IS NOT NULL AND duty_post IS NULL) OR "
+            "(scope_kind = 'duty_post' AND duty_unit IS NOT NULL AND duty_post IS NOT NULL)",
             name="ck_user_workforce_scopes_hierarchy",
         ),
     )
@@ -907,13 +894,22 @@ def _seed_role_permissions() -> None:
 
 
 def _seed_baseline_duty_events() -> None:
-    """Snapshot every current employee's duty hierarchy without fabricating history."""
+    """Snapshot every current employee's duty hierarchy without fabricating history.
+
+    ``department`` is copied exactly as recorded, including NULL: most of this
+    roster is placed by duty unit alone and inventing a department here would
+    fabricate an organization chart.  A post is dropped when its unit is
+    missing, because a post that names no unit is not a hierarchy path - the
+    ``to``/``from`` prefix constraints reject it, and one malformed employee row
+    must not abort the upgrade for everyone else.
+    """
     op.get_bind().execute(
         sa.text(
             "INSERT INTO duty_assignment_events "
             "(employee_id, event_type, from_department, from_unit, from_post, "
             "to_department, to_unit, to_post, effective_at, actor_user_id, reason) "
-            "SELECT id, 'baseline', NULL, NULL, NULL, department, duty_unit, duty_post, "
+            "SELECT id, 'baseline', NULL, NULL, NULL, department, duty_unit, "
+            "CASE WHEN duty_unit IS NULL THEN NULL ELSE duty_post END, "
             "CURRENT_TIMESTAMP, NULL, NULL FROM employees"
         )
     )
