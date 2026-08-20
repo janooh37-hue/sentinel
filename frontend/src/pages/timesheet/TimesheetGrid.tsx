@@ -309,6 +309,12 @@ export interface TimesheetGridProps {
   onSetCell: (employeeId: string, day: number, code: Code | null, note?: string) => void
   onFill: (cells: FillCell[], code: Code) => void
   onSelect: (employeeId: string | null) => void
+  /**
+   * Ctrl+Z, from inside the sheet — UI spec §8's keyboard model ends with it.
+   * The session's correction log lives on the page, so the grid only reports
+   * the chord; it is the same `undo` the ribbon button calls.
+   */
+  onUndo: () => void
 }
 
 /** A heading, a drawn gap, or an employee — the sheet as one flat list. */
@@ -323,6 +329,13 @@ interface Drag {
   cells: FillCell[]
   painted: HTMLElement[]
   stop: AbortController
+  /**
+   * The employee `<tr>`s in document order — i.e. in `rows` order — captured
+   * once when the gesture starts, so the preview can index a cell positionally
+   * instead of asking the DOM for it. `preview` re-reads this on any mismatch,
+   * so a re-render under the pointer cannot leave it stale.
+   */
+  trs: HTMLTableRowElement[]
 }
 
 export function TimesheetGrid({
@@ -341,6 +354,7 @@ export function TimesheetGrid({
   onSetCell,
   onFill,
   onSelect,
+  onUndo,
 }: TimesheetGridProps): React.JSX.Element {
   const { t, i18n } = useTranslation()
   const root = useRef<HTMLDivElement | null>(null)
@@ -491,6 +505,23 @@ export function TimesheetGrid({
     [],
   )
 
+  /**
+   * The employee rows in document order, in ONE query. `preview` used to
+   * resolve every swept cell through `cellNode` above — a two-attribute
+   * selector against a ~10,000-node subtree, once per cell per pointer step, so
+   * a 100x20 rectangle cost 2,000 DOM queries per `pointerover` and a
+   * full-sheet sweep 8,525. The rest of the sweep machinery is careful about
+   * exactly this (no React state per cell, attributes written directly); this
+   * was the last O(cells) cost in the inner loop.
+   */
+  const rowNodes = useCallback(
+    (): HTMLTableRowElement[] =>
+      Array.from(
+        root.current?.querySelectorAll<HTMLTableRowElement>('tr[data-employee]') ?? [],
+      ),
+    [],
+  )
+
   const cellFrom = useCallback((target: EventTarget | null): FillCell | null => {
     const node = (target as HTMLElement | null)?.closest?.('.ts-cell') as HTMLElement | null
     const employeeId = node?.dataset.employee
@@ -544,8 +575,20 @@ export function TimesheetGrid({
       for (let index = firstRow; index <= lastRow; index += 1) {
         const row = rows[index]
         if (!row) continue
+        // Positional, not a selector: the day cells follow the five identity
+        // cells in every row, so day N is `cells[5 + N - 1]` and its button is
+        // that cell's only child. One string compare per row keeps it honest if
+        // the sheet re-rendered under the pointer and the cached list went
+        // stale — one query then, not one per cell.
+        let tr = state.trs[index]
+        if (tr?.dataset.employee !== row.employee_id) {
+          state.trs = rowNodes()
+          tr = state.trs[index]
+        }
+        if (!tr) continue
         for (const cell of runOf(row, state.anchor.day, to.day)) {
-          const node = cellNode(cell.employeeId, cell.day)
+          const node = tr.cells[ID_COLUMNS.length + cell.day - 1]
+            ?.firstElementChild as HTMLElement | null
           if (!node) continue
           node.setAttribute('data-preview', '1')
           state.painted.push(node)
@@ -556,7 +599,7 @@ export function TimesheetGrid({
       const node = tag.current
       if (node) node.textContent = `${cells.length} → ${slugOf(state.code)}`
     },
-    [cellNode, clearPreview, order, rows, runOf],
+    [clearPreview, order, rowNodes, rows, runOf],
   )
 
   const endDrag = useCallback(
@@ -616,7 +659,7 @@ export function TimesheetGrid({
       if (node.hasPointerCapture?.(event.pointerId)) node.releasePointerCapture(event.pointerId)
 
       const stop = new AbortController()
-      drag.current = { anchor: cell, code, cells: [], painted: [], stop }
+      drag.current = { anchor: cell, code, cells: [], painted: [], stop, trs: rowNodes() }
       root.current?.setAttribute('data-dragging', '1')
       setHover(null)
       tag.current?.removeAttribute('hidden')
@@ -640,7 +683,7 @@ export function TimesheetGrid({
         { signal: stop.signal },
       )
     },
-    [brush, byId, cellFrom, codesOf, editable, endDrag, preview, whyLocked],
+    [brush, byId, cellFrom, codesOf, editable, endDrag, preview, rowNodes, whyLocked],
   )
 
   /** Row counts follow the pointer AND the keyboard, so focus arrives here too. */
@@ -721,6 +764,24 @@ export function TimesheetGrid({
   const onKeyDownCapture = useCallback(
     (event: React.KeyboardEvent) => {
       const key = event.key
+      // UI spec §8's keyboard model ends `… Enter / Space opens the picker,
+      // Escape closes it, Ctrl+Z undoes.` Without this an operator working the
+      // sheet from the keyboard had to leave it and mouse to the ribbon.
+      // `metaKey` for parity. Both popovers are portals on `document.body`, so
+      // a Ctrl+Z inside the note field never reaches this handler and keeps the
+      // browser's own undo.
+      if ((event.ctrlKey || event.metaKey) && key.toLowerCase() === 'z') {
+        if (!editable) return
+        event.preventDefault()
+        onUndo()
+        return
+      }
+      // A code letter with a modifier held is a BROWSER command, not a paint.
+      // `s` is sick leave, so Ctrl+S marked sick leave and swallowed the save;
+      // `a`, `p` and `x` did the same to select-all, print and cut. Reported as
+      // a deviation — it was found while wiring Ctrl+Z, which would otherwise
+      // have been the ninth chord this handler answered by mistake.
+      if (event.ctrlKey || event.metaKey || event.altKey) return
       const activates =
         key === 'Enter' || key === ' ' || CODES.some((spec) => spec.key === key.toLowerCase())
       if (!activates) return
@@ -733,7 +794,7 @@ export function TimesheetGrid({
       event.stopPropagation()
       refuse(why)
     },
-    [byId, cellFrom, refuse, whyLocked],
+    [byId, cellFrom, editable, onUndo, refuse, whyLocked],
   )
 
   const paint = useCallback(
@@ -776,6 +837,10 @@ export function TimesheetGrid({
       const cell = cellFrom(event.target)
       const row = cell && byId.get(cell.employeeId)
       if (!cell || !row) return
+      // A chord belongs to the browser (or to `onKeyDownCapture`'s Ctrl+Z), not
+      // to the sheet: without this, Ctrl+S painted sick leave instead of
+      // saving.
+      if (event.ctrlKey || event.metaKey || event.altKey) return
       const key = event.key
       // Arrows follow the reading direction, so ArrowRight decrements the day
       // in RTL (UI spec §8, §10).

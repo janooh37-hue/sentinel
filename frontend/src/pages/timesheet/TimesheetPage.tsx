@@ -507,6 +507,7 @@ export function TimesheetPage(): React.JSX.Element {
                 onSetCell={onSetCell}
                 onFill={onFill}
                 onSelect={onSelectRow}
+                onUndo={undo}
               />
             )}
           </div>

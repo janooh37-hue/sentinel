@@ -89,6 +89,7 @@ const props = {
   onSetCell: vi.fn(),
   onFill: vi.fn(),
   onSelect: vi.fn(),
+  onUndo: vi.fn(),
 }
 
 const cell = (id: string, day: number): HTMLElement =>
@@ -158,6 +159,38 @@ describe('TimesheetGrid', () => {
     cell('G1001', 5).focus()
     await userEvent.keyboard('x')
     expect(onSetCell).toHaveBeenCalledWith('G1001', 5, 'X')
+  })
+
+  it('undoes from the keyboard, and leaves the browser its own chords', async () => {
+    const onUndo = vi.fn()
+    const onSetCell = vi.fn()
+    render(<TimesheetGrid {...props} onUndo={onUndo} onSetCell={onSetCell} />)
+    cell('G1001', 5).focus()
+    // UI spec §8's keyboard model ends with Ctrl+Z; `undo` was reachable only
+    // through the ribbon button, so a keyboard operator had to leave the sheet.
+    await userEvent.keyboard('{Control>}z{/Control}')
+    expect(onUndo).toHaveBeenCalledTimes(1)
+    await userEvent.keyboard('{Meta>}z{/Meta}')
+    expect(onUndo).toHaveBeenCalledTimes(2)
+    // And a code letter under a modifier is the BROWSER's command, not a paint:
+    // `s` is sick leave, so Ctrl+S marked sick leave and swallowed the save.
+    // `a`, `p` and `x` did the same to select-all, print and cut.
+    await userEvent.keyboard('{Control>}s{/Control}')
+    await userEvent.keyboard('{Control>}a{/Control}')
+    await userEvent.keyboard('{Control>}p{/Control}')
+    await userEvent.keyboard('{Control>}x{/Control}')
+    expect(onSetCell).not.toHaveBeenCalled()
+    // The letter alone still paints.
+    await userEvent.keyboard('s')
+    expect(onSetCell).toHaveBeenCalledWith('G1001', 5, 'SL ')
+  })
+
+  it('does not undo from the keyboard on a sealed month', async () => {
+    const onUndo = vi.fn()
+    render(<TimesheetGrid {...props} closed onUndo={onUndo} />)
+    cell('G1001', 5).focus()
+    await userEvent.keyboard('{Control>}z{/Control}')
+    expect(onUndo).not.toHaveBeenCalled()
   })
 
   it('returns focus to the cell when the picker is dismissed', async () => {
