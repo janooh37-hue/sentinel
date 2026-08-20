@@ -22,6 +22,13 @@ SOURCE = Path(
 DEST = Path(__file__).resolve().parents[1] / "templates" / "GSSG-HR_Monthly_Time_Sheet.xlsx"
 
 FIRST_DATA_ROW = 6
+# June row 6 is the only row carrying the header-boundary rule -- a medium top border
+# in AK..AP -- and row 5's bottom border is None there, so that rule is the only thing
+# drawing the line under the header in those six columns. Copied into every output row
+# it would draw ~280 times; dropped, the boundary is lost. Hence two specimens. Row 7 is
+# the representative body row: it differs from row 6 in exactly AK..AP and nowhere else,
+# and 100 of June's 282 data rows match its full 42-column style (row 6 matches only itself).
+SUBSEQUENT_DATA_ROW = 7
 LAST_DATA_ROW = 287  # June's last employee row; its footer starts at 288
 FOOTER_ROWS = 18  # legend .. Total Days
 LETTERS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
@@ -35,10 +42,15 @@ def main() -> None:
     parts = workbook.create_sheet("_parts")
     parts.sheet_state = "hidden"
 
-    # _parts row 1: the styled specimen data row, values stripped.
+    # _parts row 1: the first-data-row specimen (header boundary), values stripped.
     for column in range(1, 43):
         parts.cell(1, column)._style = sheet.cell(FIRST_DATA_ROW, column)._style
     parts.row_dimensions[1].height = sheet.row_dimensions[FIRST_DATA_ROW].height
+
+    # _parts row 2: the subsequent-row specimen, for every output row after the first.
+    for column in range(1, 43):
+        parts.cell(2, column)._style = sheet.cell(SUBSEQUENT_DATA_ROW, column)._style
+    parts.row_dimensions[2].height = sheet.row_dimensions[SUBSEQUENT_DATA_ROW].height
 
     # _parts rows 3..20: the footer block, styles and static text intact.
     footer_start = LAST_DATA_ROW + 1
@@ -108,7 +120,10 @@ def main() -> None:
     assert check["_parts"]["D20"].value == "X", "red block row missing"
     assert check["Sheet1"].auto_filter.ref is None, "June's autofilter survived"
     assert not list(check["Sheet1"].defined_names), "orphaned filter names survived"
-    print("[template] logo, strip, autofilter and 19-row footer verified")
+    specimens = check["_parts"]
+    differing = {c for c in range(1, 43) if specimens.cell(1, c)._style != specimens.cell(2, c)._style}
+    assert differing == set(range(37, 43)), f"specimens differ outside AK..AP: {sorted(differing)}"
+    print("[template] logo, strip, autofilter, two specimens and 19-row footer verified")
 
 
 if __name__ == "__main__":

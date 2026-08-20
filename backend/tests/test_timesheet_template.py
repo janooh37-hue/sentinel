@@ -5,6 +5,7 @@ from pathlib import Path
 
 import pytest
 from openpyxl import load_workbook
+from openpyxl.utils import get_column_letter
 
 TEMPLATE = Path(__file__).parents[1] / "templates" / "GSSG-HR_Monthly_Time_Sheet.xlsx"
 
@@ -108,3 +109,41 @@ def test_no_june_filter_artifacts_survive(workbook):
     # the four .wvu.FilterData names are sheet-local; the workbook collection is empty
     assert list(sheet.defined_names) == []
     assert list(workbook.defined_names) == []
+
+
+def test_parts_carries_two_specimen_rows(workbook):
+    """Row 2 is the body specimen; without it the header rule repeats on every row."""
+    parts = workbook["_parts"]
+    assert parts["A2"].font.name == "Arial"
+    assert parts.row_dimensions[2].height == parts.row_dimensions[1].height
+
+
+def test_the_two_specimens_differ_in_exactly_the_six_total_columns(workbook):
+    """Row 6 of June uniquely carries the header boundary; row 7 represents the body.
+
+    Fails if row 2 is a copy of row 1, and fails if row 2 came from a row that
+    differs anywhere outside AK..AP.
+    """
+    parts = workbook["_parts"]
+    differing = {
+        get_column_letter(c)
+        for c in range(1, 43)
+        if parts.cell(1, c)._style != parts.cell(2, c)._style
+    }
+    assert differing == {"AK", "AL", "AM", "AN", "AO", "AP"}
+
+
+def test_only_the_first_row_specimen_carries_the_header_boundary(workbook):
+    """Sheet1 row 5 has no bottom border in AK..AP, so this rule draws that line."""
+    parts = workbook["_parts"]
+    assert [parts.cell(1, c).border.top.style for c in range(37, 43)] == ["medium"] * 6
+    assert [parts.cell(2, c).border.top.style for c in range(37, 43)] == [
+        None,
+        None,
+        None,
+        None,
+        "thin",  # AO carries a thin rule on every body row
+        None,
+    ]
+    # the boundary is not redundant: row 5 does not draw it from above
+    assert [workbook["Sheet1"].cell(5, c).border.bottom.style for c in range(37, 43)] == [None] * 6
