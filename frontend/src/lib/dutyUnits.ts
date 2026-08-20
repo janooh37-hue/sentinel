@@ -108,3 +108,43 @@ export function unitOptions(emps: readonly DutyEmployee[]): string[] {
 export function postOptions(emps: readonly DutyEmployee[], unit: string): string[] {
   return postsForUnit(emps, unit)
 }
+
+/** One unit button in the rail: its key, its display label and its headcount. */
+export interface DutyUnitTally {
+  key: string
+  label: string
+  count: number
+}
+
+/**
+ * The unit rail, in the order every page shows it: all 6 seed units ALWAYS
+ * present (count 0 included — they convey the org structure and are valid
+ * transfer destinations), then extra units found in the data, then the
+ * Unassigned bucket last and only when non-empty.
+ *
+ * Shared because two pages render this same rail over the same roster (the
+ * duty roster and the ORG-tree), and a rail that ordered or counted units
+ * differently between them would read as two different organisations.
+ */
+export function unitTallies<T extends DutyEmployee>(
+  grouped: Map<string, Map<string, T[]>>,
+  unassignedLabel: string,
+): DutyUnitTally[] {
+  const countOf = (key: string): number => {
+    const posts = grouped.get(key)
+    return posts ? [...posts.values()].reduce((total, list) => total + list.length, 0) : 0
+  }
+
+  const items: DutyUnitTally[] = SEED_UNITS.map((unit) => ({
+    key: unit,
+    label: unit,
+    count: countOf(unit),
+  }))
+  for (const key of grouped.keys()) {
+    if (key === UNASSIGNED || SEED_UNITS.includes(key)) continue
+    items.push({ key, label: key, count: countOf(key) })
+  }
+  const unassigned = countOf(UNASSIGNED)
+  if (unassigned > 0) items.push({ key: UNASSIGNED, label: unassignedLabel, count: unassigned })
+  return items
+}

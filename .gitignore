@@ -117,3 +117,13 @@ backend/openapi.json
 
 # graphify knowledge-graph output (derived, ~28 MB; rebuild with /graphify)
 graphify-out/
+
+# swarm agent memory (binary tool state)
+.swarm/
+
+# design mockup screenshots and reference images (large binaries, local only)
+mockups/shots/
+mockups/refreance/
+
+# org-chart reverse-engineering evidence (third-party captures, local only)
+docs/org-chart/work/

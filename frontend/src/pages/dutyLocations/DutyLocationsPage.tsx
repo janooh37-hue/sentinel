@@ -7,6 +7,10 @@
  * (the route + the server). Fetches `listEmployees({ limit: 500 })` once and
  * groups client-side via `lib/dutyUnits`.
  *
+ * The supervisor hierarchy over this same rail is a separate page under
+ * Employees (`/employees/org-tree`): it is a fact about people rather than part
+ * of the transfer-letter workflow, and it needs no `documents.generate`.
+ *
  * Responsive (≤720px): the unit rail collapses to a horizontal chip-strip and
  * the layout stacks to a single column (UnitRail handles its own flex/scroll;
  * the grid drops to one column below md).
@@ -18,12 +22,7 @@ import { useTranslation } from 'react-i18next'
 import { Search } from 'lucide-react'
 
 import { api, type DutyTransferResult, type EmployeeListItem } from '@/lib/api'
-import {
-  UNASSIGNED,
-  SEED_UNITS,
-  groupByUnit,
-  postsForUnit,
-} from '@/lib/dutyUnits'
+import { UNASSIGNED, groupByUnit, postsForUnit, unitTallies } from '@/lib/dutyUnits'
 import { Skeleton } from '@/components/ui/skeleton'
 import { UnitRail, type UnitRailItem } from './UnitRail'
 import { RosterTable } from './RosterTable'
@@ -57,30 +56,10 @@ export function DutyLocationsPage(): React.JSX.Element {
   const [transferOpen, setTransferOpen] = useState(false)
   const [completedTransfer, setCompletedTransfer] = useState<DutyTransferResult | null>(null)
 
-  // Rail items: all 6 seed units ALWAYS shown (count 0 if none assigned yet —
-  // they convey the org structure and are valid transfer destinations), then any
-  // extra non-seed units present in the data, then the Unassigned bucket last
-  // (only when non-empty).
-  const railItems = useMemo<UnitRailItem[]>(() => {
-    const countOf = (key: string): number => {
-      const posts = grouped.get(key)
-      return posts ? [...posts.values()].reduce((a, l) => a + l.length, 0) : 0
-    }
-    const items: UnitRailItem[] = SEED_UNITS.map((u) => ({
-      key: u,
-      label: u,
-      count: countOf(u),
-    }))
-    for (const key of grouped.keys()) {
-      if (key === UNASSIGNED || SEED_UNITS.includes(key)) continue
-      items.push({ key, label: key, count: countOf(key) })
-    }
-    const un = countOf(UNASSIGNED)
-    if (un > 0) {
-      items.push({ key: UNASSIGNED, label: t('dutyLocations.unassigned'), count: un })
-    }
-    return items
-  }, [grouped, t])
+  const railItems = useMemo<UnitRailItem[]>(
+    () => unitTallies(grouped, t('dutyLocations.unassigned')),
+    [grouped, t],
+  )
 
   // The active unit key: any rail key is selectable (incl. empty seed units).
   // Default to the first unit that actually has employees (rail is seed-first,

@@ -1,0 +1,260 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>GSSG — big-card widgets + prominent quick actions</title>
+<style>
+:root{
+  --bg:#f5f4f1; --surface:#fff; --surface-raised:#fafaf6; --surface-tinted:#f0eee8;
+  --primary:#0d2845; --primary-soft:#e8edf3;
+  --accent:#c8102e; --accent-soft:#fbe5e8;
+  --success:#047857; --success-soft:#d6f0e4;
+  --warning:#92400e; --warning-soft:#fbedd8;
+  --info:#1d4ed8; --info-soft:#e0e8f8;
+  --smart:#6b4fb0;
+  --text:#1c1f24; --text-muted:#5a6068; --text-faint:#8b9098;
+  --border:#e6e4dd; --hairline:#efece5;
+  --hero-grad:linear-gradient(135deg,#0a1f3a 0%,#0d2845 50%,#1d3a5e 100%);
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:"Inter","Segoe UI",system-ui,sans-serif;background:var(--bg);color:var(--text);-webkit-font-smoothing:antialiased}
+.mono{font-family:"IBM Plex Mono",Consolas,monospace}
+.ar{font-family:"Noto Sans Arabic","Segoe UI",sans-serif}
+a{color:inherit;text-decoration:none} button{font:inherit;border:0;background:none;cursor:pointer;color:inherit}
+.variant{display:none}.variant.active{display:block}
+
+.topnav{display:flex;align-items:center;gap:26px;height:56px;padding:0 28px;background:var(--surface);border-bottom:1px solid var(--border)}
+.brand{display:flex;align-items:center;gap:10px}
+.brand img{width:34px;height:34px}
+.brand b{font-size:.95rem}
+.brand small{display:block;font-size:.58rem;color:var(--text-muted);line-height:1.1;max-width:130px}
+.topnav nav{display:flex;gap:20px;font-size:.85rem;font-weight:500;color:var(--text-muted)}
+.topnav nav .on{color:var(--text);font-weight:600;position:relative}
+.topnav nav .on::after{content:"";position:absolute;left:0;right:0;bottom:-17px;height:2px;background:var(--primary)}
+.spacer{flex:1}
+.chip-personal{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--border);border-radius:99px;padding:4px 10px;font-size:.7rem;font-weight:600;background:var(--surface-raised);color:var(--text-muted)}
+.chip-personal .dot{width:7px;height:7px;border-radius:50%;background:var(--success)}
+.avatar{width:30px;height:30px;border-radius:50%;background:var(--primary-soft);display:grid;place-items:center;font-size:.75rem;font-weight:700;color:var(--primary)}
+.page{padding:24px 28px 56px}
+.hero{position:relative;background:var(--hero-grad);border-radius:18px;color:#fff;padding:26px 30px 22px;overflow:hidden;margin-bottom:26px}
+.hero .eyebrow{font-size:.68rem;letter-spacing:.14em;font-weight:700;color:#f9d8dd;text-transform:uppercase}
+.hero h2{font-size:1.65rem;font-weight:700;margin:4px 0 10px}
+.hero .meta{display:flex;align-items:center;gap:10px;font-size:.78rem;color:#c7d2e2}
+.hero .meta .chip{display:inline-flex;gap:6px;align-items:center;background:rgba(255,255,255,.12);border-radius:99px;padding:3px 11px;color:#fff;font-weight:600}
+.hero .meta .chip b{color:#ffd7ac}
+.hero .line{margin-top:12px;font-size:.8rem;color:#aebcd2}
+.hero .globe{position:absolute;top:22px;inset-inline-end:30px;width:64px;height:64px;border-radius:50%;background:#fff;display:grid;place-items:center;box-shadow:0 6px 18px rgba(0,0,0,.35)}
+.hero .globe img{width:48px;height:48px}
+.sechead{display:flex;align-items:center;justify-content:space-between;margin:26px 2px 14px}
+.sechead:first-of-type{margin-top:0}
+.sechead h3{font-size:1.05rem;font-weight:650}
+.sechead .edit{font-size:.78rem;font-weight:600;color:var(--primary)}
+.sechead .edit span{color:var(--text-faint);font-weight:500;margin-inline-end:10px}
+
+/* ── THE big-card language (copied from the two top cards) ── */
+.cards{display:grid;grid-template-columns:repeat(4,1fr);gap:16px}
+.card{position:relative;background:var(--surface);border:1px solid var(--border);border-radius:18px;padding:20px 22px;min-height:172px;box-shadow:0 1px 2px rgba(13,40,69,.04);display:flex;flex-direction:column;text-align:start}
+.card:hover{border-color:var(--primary)}
+.card .h{font-size:.86rem;color:var(--text-muted);font-weight:550}
+.card .cur{font-size:.6rem;letter-spacing:.1em;color:var(--text-faint);font-weight:700;margin-top:2px}
+.card .numrow{display:flex;align-items:baseline;gap:8px}
+.card .num{font-size:2.5rem;font-weight:750;letter-spacing:-.02em}
+.card .unit{font-size:.95rem;color:var(--text-faint);font-weight:600}
+.card .rail{height:4px;border-radius:99px;background:var(--surface-tinted);margin:12px 0;overflow:hidden;display:flex}
+.card .rail i{display:block;height:100%}
+.card .foot{display:flex;align-items:center;gap:8px;font-size:.76rem;color:var(--text-muted);margin-top:auto}
+.card .cta{margin-inline-start:auto;background:var(--primary);color:#fff;border-radius:99px;padding:6px 16px;font-size:.76rem;font-weight:650;white-space:nowrap}
+.card .cta.red{background:var(--accent)}
+.card .chev{position:absolute;top:18px;inset-inline-end:18px;color:var(--text-faint)}
+.card .dots{display:flex;flex-wrap:wrap;gap:10px 14px;font-size:.76rem;color:var(--text-muted);margin-top:10px}
+.card .dots i{width:8px;height:8px;border-radius:50%;display:inline-block;margin-inline-end:6px;vertical-align:1px}
+.card .hint{font-size:.68rem;color:var(--text-faint);margin-top:6px}
+.card.span2{grid-column:span 2}
+
+/* quick actions — CURRENT tile design, made prominent */
+.qa{display:grid;grid-template-columns:repeat(4,1fr);gap:16px}
+.qa .t{background:var(--surface);border:1px solid var(--border);border-radius:18px;padding:20px 22px;display:flex;flex-direction:column;gap:8px;min-height:118px;box-shadow:0 1px 2px rgba(13,40,69,.04);text-align:start}
+.qa .t:hover{border-color:var(--primary)}
+.qa .t .e{font-size:1.7rem}
+.qa .t .tt{font-size:.95rem;font-weight:650}
+.qa .t .d{font-size:.74rem;color:var(--text-muted);line-height:1.4}
+.qa .t.more{border-style:dashed;justify-content:center;align-items:center;color:var(--text-muted)}
+.qa.rows2{grid-template-columns:repeat(4,1fr)}
+.note{margin-top:26px;font-size:.7rem;color:var(--text-faint);text-align:center}
+.picker{max-width:760px;margin:60px auto;padding:0 24px}
+.picker h1{font-size:1.5rem;margin-bottom:6px}
+.picker p{color:var(--text-muted);margin-bottom:24px}
+.picker a{display:flex;justify-content:space-between;align-items:center;border:1px solid var(--border);background:var(--surface);border-radius:14px;padding:17px 22px;margin-bottom:12px;font-weight:600}
+.picker a:hover{border-color:var(--primary)}
+.picker a small{color:var(--text-muted);font-weight:400}
+</style>
+</head>
+<body>
+
+<div id="picker" class="picker" style="display:none">
+  <h1>Big-card widgets + prominent quick actions</h1>
+  <p>Every widget copies the top-card design; quick actions keep today's tile look but get real estate. <span class="mono">?v=1</span> services first · <span class="mono">?v=2</span> widgets first.</p>
+  <a href="?v=1"><span>1 · Services up top</span><small>hero → top cards → Quick Actions (big tiles) → widgets</small></a>
+  <a href="?v=2"><span>2 · Widgets up top</span><small>hero → top cards → widgets → Quick Actions (big tiles)</small></a>
+</div>
+
+<script id="shell-template" type="text/template">
+  <div class="topnav">
+    <div class="brand"><img src="gssg-globe.png" alt=""><div><b>GSSG</b><small>Global Security Services Group</small></div></div>
+    <nav><span class="on">Dashboard</span><span>Employees</span><span>Ledger</span><span>Leaves</span><span>Services</span><span>Records</span><span>Permits</span></nav>
+    <div class="spacer"></div>
+    <span class="chip-personal"><span class="dot"></span>Personal · saved to your account</span>
+    <span class="avatar">A</span>
+  </div>
+  <div class="page">
+    <div class="hero">
+      <div class="eyebrow">Good evening</div>
+      <h2>Welcome back</h2>
+      <div class="meta">
+        <span>Sat, 15 Aug</span><span>·</span><span class="ar">٢ ربيع الأول ١٤٤٨ هـ</span>
+        <span class="chip"><b>2</b> on leave today</span>
+      </div>
+      <div class="line">Quiet day. 4 on site, nothing returning today. 1 returning later this week.</div>
+      <div class="globe"><img src="gssg-globe.png" alt=""></div>
+    </div>
+    <div class="slot"></div>
+    <div class="note"></div>
+  </div>
+</script>
+
+<!-- widget set (identical in both variants) -->
+<template id="tpl-widgets">
+  <div class="sechead"><h3>My Widgets</h3><span class="edit"><span>yours only</span>Edit My Widgets ✎</span></div>
+  <div class="cards">
+    <!-- the two originals, kept -->
+    <div class="card span2">
+      <div class="h">Documents This Month</div>
+      <div class="cur">DOCS</div>
+      <div class="numrow"><span class="num">14</span></div>
+      <div class="rail"><i style="width:56%;background:var(--accent)"></i></div>
+      <div class="foot"><span style="color:var(--accent)">●</span> 3 need my signature <button class="cta">Review</button></div>
+      <span class="chev">›</span>
+    </div>
+    <div class="card span2">
+      <div class="h">My Workspace</div>
+      <div class="cur">STAFF</div>
+      <div class="numrow"><span class="num">6</span></div>
+      <div class="dots"><span><i style="background:var(--success)"></i>4 active</span><span><i style="background:var(--warning)"></i>2 on leave</span><span><i style="background:var(--accent)"></i>1 leaving soon</span></div>
+      <div class="foot"><span class="hint">Tap a group to open the filtered staff list</span><button class="cta">Staff</button></div>
+      <span class="chev">›</span>
+    </div>
+
+    <!-- new useful widgets in the same clothes -->
+    <div class="card">
+      <div class="h">Awaiting My Signature</div>
+      <div class="cur">QUEUE</div>
+      <div class="numrow"><span class="num">3</span><span class="unit">books</span></div>
+      <div class="rail"><i style="width:34%;background:var(--accent)"></i><i style="width:66%;background:var(--warning-soft)"></i></div>
+      <div class="dots"><span><i style="background:var(--accent)"></i>1 high priority</span><span><i style="background:var(--warning)"></i>oldest 1 day</span></div>
+      <div class="foot">Newest: <span class="mono" style="color:var(--primary);font-weight:600">1-0006</span> gate access <button class="cta red">Sign now</button></div>
+      <span class="chev">›</span>
+    </div>
+    <div class="card">
+      <div class="h">Expiring Documents</div>
+      <div class="cur">90 DAYS</div>
+      <div class="numrow"><span class="num">3</span><span class="unit">IDs</span></div>
+      <div class="rail"><i style="width:33%;background:var(--accent)"></i><i style="width:33%;background:var(--warning)"></i><i style="width:34%;background:var(--info-soft)"></i></div>
+      <div class="dots"><span><i style="background:var(--accent)"></i>1 expired</span><span><i style="background:var(--warning)"></i>1 within 30d</span><span><i style="background:var(--info)"></i>1 within 90d</span></div>
+      <div class="foot">Worst: ALMANSOORI · EID −3d <button class="cta">Expiry</button></div>
+      <span class="chev">›</span>
+    </div>
+    <div class="card">
+      <div class="h">Inbox Unread</div>
+      <div class="cur">LEDGER</div>
+      <div class="numrow"><span class="num">3</span><span class="unit">letters</span></div>
+      <div class="rail"><i style="width:60%;background:var(--success)"></i><i style="width:20%;background:var(--accent)"></i><i style="width:20%;background:var(--primary)"></i></div>
+      <div class="dots"><span><i style="background:var(--success)"></i>2 incoming</span><span><i style="background:var(--primary)"></i>1 internal</span></div>
+      <div class="foot">Synced 6 min ago · ↻ Sync <button class="cta">Inbox</button></div>
+      <span class="chev">›</span>
+    </div>
+    <div class="card">
+      <div class="h">Leave Radar</div>
+      <div class="cur">7 DAYS</div>
+      <div class="numrow"><span class="num">2</span><span class="unit">out now</span></div>
+      <div class="rail"><i style="width:66%;background:var(--info)"></i><i style="width:34%;background:var(--success)"></i></div>
+      <div class="dots"><span><i style="background:var(--info)"></i>2 on leave</span><span><i style="background:var(--success)"></i>1 returns Sunday</span></div>
+      <div class="foot">ALSHAMSI needs duty resumption <button class="cta">Prepare</button></div>
+      <span class="chev">›</span>
+    </div>
+    <div class="card">
+      <div class="h">Register Drafts</div>
+      <div class="cur">UNSUBMITTED</div>
+      <div class="numrow"><span class="num">3</span><span class="unit">books</span></div>
+      <div class="rail"><i style="width:100%;background:var(--smart)"></i></div>
+      <div class="dots"><span><i style="background:var(--smart)"></i>oldest 3 days</span></div>
+      <div class="foot">Next ref: <span class="mono" style="color:var(--primary);font-weight:600">1-0001</span> duty roster <button class="cta">Resume</button></div>
+      <span class="chev">›</span>
+    </div>
+    <div class="card">
+      <div class="h">Departures &amp; Cases</div>
+      <div class="cur">WATCH</div>
+      <div class="numrow"><span class="num">2</span><span class="unit">files</span></div>
+      <div class="rail"><i style="width:50%;background:var(--warning)"></i><i style="width:50%;background:var(--accent)"></i></div>
+      <div class="dots"><span><i style="background:var(--warning)"></i>1 exit in 12d</span><span><i style="background:var(--accent)"></i>1 open violation</span></div>
+      <div class="foot">ALYAHYAEE clearance not started <button class="cta">Files</button></div>
+      <span class="chev">›</span>
+    </div>
+    <div class="card">
+      <div class="h">Awaiting Scan-Back</div>
+      <div class="cur">PAPER TRAIL</div>
+      <div class="numrow"><span class="num">1</span><span class="unit">signed copy</span></div>
+      <div class="rail"><i style="width:25%;background:var(--info)"></i></div>
+      <div class="dots"><span><i style="background:var(--info)"></i>approved, not scanned</span></div>
+      <div class="foot">Return the stamped paper to close <button class="cta">Scan</button></div>
+      <span class="chev">›</span>
+    </div>
+    <div class="card">
+      <div class="h">Open Violations</div>
+      <div class="cur">DISCIPLINE</div>
+      <div class="numrow"><span class="num">1</span><span class="unit">case</span></div>
+      <div class="rail"><i style="width:100%;background:var(--accent)"></i></div>
+      <div class="dots"><span><i style="background:var(--accent)"></i>ALMANSOORI · attendance</span></div>
+      <div class="foot">Filed 14 Aug · awaiting action <button class="cta red">Case</button></div>
+      <span class="chev">›</span>
+    </div>
+  </div>
+</template>
+
+<!-- quick actions (identical in both variants) — current tile look, big -->
+<template id="tpl-qa">
+  <div class="sechead"><h3>Quick Actions</h3><span class="edit"><span>services only · yours</span>Edit Quick Actions ✎</span></div>
+  <div class="qa">
+    <button class="t"><span class="e">📅</span><span class="tt">Leave Application</span><span class="d">Apply for an employee leave — routes to the signature queue.</span></button>
+    <button class="t"><span class="e">🔁</span><span class="tt">Duty Resumption</span><span class="d">Record a return to duty after leave.</span></button>
+    <button class="t"><span class="e">🚨</span><span class="tt">Violation</span><span class="d">File a new disciplinary violation.</span></button>
+    <button class="t"><span class="e">📓</span><span class="tt">General Book</span><span class="d">Draft a general letter with a register ref.</span></button>
+    <button class="t"><span class="e">✍️</span><span class="tt">Acknowledgment</span><span class="d">Record an employee acknowledgment.</span></button>
+    <button class="t"><span class="e">💰</span><span class="tt">Salary Transfer</span><span class="d">Request a salary account transfer.</span></button>
+    <button class="t"><span class="e">🎫</span><span class="tt">Leave Permit</span><span class="d">Hourly exit permit (8 hours).</span></button>
+    <button class="t more"><span class="e">⋯</span><span class="tt">All 18 services</span><span class="d">Open the full gallery — pin your favourites here.</span></button>
+  </div>
+</template>
+
+<section class="variant" id="v1" data-note="Option 1 — services get the prime slot right under the hero; widgets follow. Both sections full width, both per-user."></section>
+<section class="variant" id="v2" data-note="Option 2 — widgets stay first (closest to today), services follow at full size. Both sections full width, both per-user."></section>
+
+<script>
+const v = new URLSearchParams(location.search).get('v')
+const sec = v && document.getElementById('v' + v)
+if (sec) {
+  const host = document.createElement('div')
+  host.innerHTML = document.getElementById('shell-template').innerHTML
+  const slot = host.querySelector('.slot')
+  const w = document.getElementById('tpl-widgets').content.cloneNode(true)
+  const q = document.getElementById('tpl-qa').content.cloneNode(true)
+  if (v === '1') { slot.appendChild(q); slot.appendChild(w) } else { slot.appendChild(w); slot.appendChild(q) }
+  host.querySelector('.note').textContent = sec.dataset.note
+  sec.appendChild(host)
+  sec.classList.add('active')
+} else {
+  document.getElementById('picker').style.display = 'block'
+}
+</script>
+</body>
+</html>

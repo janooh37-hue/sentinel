@@ -80,6 +80,26 @@ describe('EmployeesSectionTabs', () => {
     expect(linkTo('/employees/attendance')).toBeUndefined()
   })
 
+  it('links ORG-tree and marks it active on its own route', () => {
+    renderTabs({}, '/employees/org-tree')
+
+    const orgTree = linkTo('/employees/org-tree')
+    expect(orgTree).toBeDefined()
+    expect(orgTree).toHaveAttribute('aria-current', 'page')
+    // Sibling sections stay reachable from it.
+    expect(linkTo('/employees')).toBeDefined()
+    expect(linkTo('/duty-locations')).toBeDefined()
+  })
+
+  it('hides ORG-tree without employees.view', () => {
+    hasCapability.mockImplementation((cap) => cap !== 'employees.view')
+
+    renderTabs({})
+
+    expect(linkTo('/employees/org-tree')).toBeUndefined()
+    expect(linkTo('/employees')).toBeDefined()
+  })
+
   it('isolates the Arabic label so adjacent numbers are not reordered', () => {
     renderTabs({ attentionCount: 20 }, '/employees/attendance')
 

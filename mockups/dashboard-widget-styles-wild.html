@@ -1,0 +1,626 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>GSSG — wild widget worlds (full width)</title>
+<style>
+:root{
+  --bg:#f5f4f1; --surface:#fff; --surface-raised:#fafaf6; --surface-tinted:#f0eee8;
+  --primary:#0d2845; --primary-soft:#e8edf3;
+  --accent:#c8102e; --accent-soft:#fbe5e8;
+  --success:#047857; --success-soft:#d6f0e4;
+  --warning:#92400e; --warning-soft:#fbedd8;
+  --info:#1d4ed8; --info-soft:#e0e8f8;
+  --text:#1c1f24; --text-muted:#5a6068; --text-faint:#8b9098;
+  --border:#e6e4dd; --hairline:#efece5;
+  --hero-grad:linear-gradient(135deg,#0a1f3a 0%,#0d2845 50%,#1d3a5e 100%);
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:"Inter","Segoe UI",system-ui,sans-serif;background:var(--bg);color:var(--text);-webkit-font-smoothing:antialiased}
+.mono{font-family:"IBM Plex Mono",Consolas,monospace}
+.ar{font-family:"Noto Sans Arabic","Segoe UI",sans-serif}
+a{color:inherit;text-decoration:none} button{font:inherit;border:0;background:none;cursor:pointer;color:inherit}
+.variant{display:none}.variant.active{display:block}
+
+/* shared chrome — identical everywhere */
+.topnav{display:flex;align-items:center;gap:26px;height:56px;padding:0 28px;background:var(--surface);border-bottom:1px solid var(--border)}
+.brand{display:flex;align-items:center;gap:10px}
+.brand img{width:34px;height:34px}
+.brand b{font-size:.95rem}
+.brand small{display:block;font-size:.58rem;color:var(--text-muted);line-height:1.1;max-width:130px}
+.topnav nav{display:flex;gap:20px;font-size:.85rem;font-weight:500;color:var(--text-muted)}
+.topnav nav .on{color:var(--text);font-weight:600;position:relative}
+.topnav nav .on::after{content:"";position:absolute;left:0;right:0;bottom:-17px;height:2px;background:var(--primary)}
+.spacer{flex:1}
+.chip-personal{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--border);border-radius:99px;padding:4px 10px;font-size:.7rem;font-weight:600;background:var(--surface-raised);color:var(--text-muted)}
+.chip-personal .dot{width:7px;height:7px;border-radius:50%;background:var(--success)}
+.avatar{width:30px;height:30px;border-radius:50%;background:var(--primary-soft);display:grid;place-items:center;font-size:.75rem;font-weight:700;color:var(--primary)}
+.page{padding:24px 28px 56px}
+.hero{position:relative;background:var(--hero-grad);border-radius:18px;color:#fff;padding:26px 30px 22px;overflow:hidden;margin-bottom:26px}
+.hero .eyebrow{font-size:.68rem;letter-spacing:.14em;font-weight:700;color:#f9d8dd;text-transform:uppercase}
+.hero h2{font-size:1.65rem;font-weight:700;margin:4px 0 10px}
+.hero .meta{display:flex;align-items:center;gap:10px;font-size:.78rem;color:#c7d2e2}
+.hero .meta .chip{display:inline-flex;gap:6px;align-items:center;background:rgba(255,255,255,.12);border-radius:99px;padding:3px 11px;color:#fff;font-weight:600}
+.hero .meta .chip b{color:#ffd7ac}
+.hero .line{margin-top:12px;font-size:.8rem;color:#aebcd2}
+.hero .globe{position:absolute;top:22px;inset-inline-end:30px;width:64px;height:64px;border-radius:50%;background:#fff;display:grid;place-items:center;box-shadow:0 6px 18px rgba(0,0,0,.35)}
+.hero .globe img{width:48px;height:48px}
+.sechead{display:flex;align-items:center;justify-content:space-between;margin:0 2px 14px}
+.sechead h3{font-size:1.05rem;font-weight:650}
+.sechead .edit{font-size:.78rem;font-weight:600;color:var(--primary)}
+.sechead .edit span{color:var(--text-faint);font-weight:500;margin-inline-end:10px}
+.topcards{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:24px}
+.bigcard{position:relative;background:var(--surface);border:1px solid var(--border);border-radius:18px;padding:20px 22px;min-height:150px;box-shadow:0 1px 2px rgba(13,40,69,.04)}
+.bigcard .h{font-size:.86rem;color:var(--text-muted);font-weight:550}
+.bigcard .cur{font-size:.6rem;letter-spacing:.1em;color:var(--text-faint);font-weight:700}
+.bigcard .num{font-size:2.5rem;font-weight:750}
+.bigcard .rail{height:4px;border-radius:99px;background:var(--surface-tinted);margin:12px 0;overflow:hidden}
+.bigcard .rail i{display:block;height:100%;width:56%;background:var(--accent);border-radius:99px}
+.bigcard .foot{display:flex;align-items:center;gap:8px;font-size:.76rem;color:var(--text-muted)}
+.bigcard .cta{margin-inline-start:auto;background:var(--primary);color:#fff;border-radius:99px;padding:6px 16px;font-size:.76rem;font-weight:650}
+.bigcard .chev{position:absolute;top:18px;inset-inline-end:18px;color:var(--text-faint)}
+.dots{display:flex;gap:14px;font-size:.76rem;color:var(--text-muted);margin-top:10px}
+.dots i{width:8px;height:8px;border-radius:50%;display:inline-block;margin-inline-end:6px;vertical-align:1px}
+.qa-head{margin:26px 2px 14px}
+.note{margin-top:26px;font-size:.7rem;color:var(--text-faint);text-align:center}
+
+/* ═════════ W1 · RADAR GLASS — dark ops glass inset w/ live radar ═════════ */
+.w1 .glass{position:relative;border-radius:22px;padding:22px;background:radial-gradient(1200px 500px at 20% 0%,#12203a 0%,#0a1426 55%,#081020 100%);box-shadow:inset 0 1px 0 rgba(255,255,255,.06),0 24px 60px rgba(10,20,40,.45);color:#e6e9f2;overflow:hidden}
+.w1 .glass::before{content:"";position:absolute;inset:0;background:
+  linear-gradient(transparent 96%,rgba(96,165,250,.07) 96%),
+  linear-gradient(90deg,transparent 96%,rgba(96,165,250,.07) 96%);
+  background-size:34px 34px;pointer-events:none}
+.w1 .cluster{display:grid;grid-template-columns:380px 1fr 1fr;gap:18px;position:relative}
+.w1 .radarbox{display:flex;flex-direction:column;align-items:center;gap:12px}
+.w1 .radar{position:relative;width:320px;height:320px;border-radius:50%;background:
+  radial-gradient(circle,rgba(96,165,250,.05) 0%,rgba(96,165,250,.02) 60%,transparent 61%),
+  repeating-radial-gradient(circle,transparent 0 52px,rgba(96,165,250,.18) 52px 53px);
+  border:1px solid rgba(96,165,250,.3);box-shadow:0 0 40px rgba(96,165,250,.12),inset 0 0 60px rgba(96,165,250,.06)}
+.w1 .radar::before{content:"";position:absolute;inset:0;border-radius:50%;background:conic-gradient(from 20deg,rgba(52,211,153,.5) 0deg,rgba(52,211,153,.12) 40deg,transparent 90deg);-webkit-mask:radial-gradient(circle,transparent 0 12%,#000 12.5%);mask:radial-gradient(circle,transparent 0 12%,#000 12.5%)}
+.w1 .radar::after{content:"";position:absolute;left:50%;top:50%;width:1px;height:1px}
+.w1 .radar .axis-h,.w1 .radar .axis-v{position:absolute;background:rgba(96,165,250,.18)}
+.w1 .radar .axis-h{left:6px;right:6px;top:50%;height:1px}
+.w1 .radar .axis-v{top:6px;bottom:6px;left:50%;width:1px}
+.w1 .radar .core{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:74px;height:74px;border-radius:50%;background:#0d1a30;border:1px solid rgba(96,165,250,.4);display:grid;place-items:center;text-align:center;z-index:2}
+.w1 .radar .core b{font-size:1.35rem;font-family:"IBM Plex Mono",monospace}
+.w1 .radar .core span{font-size:.5rem;letter-spacing:.12em;color:#8a93a7}
+.w1 .blip{position:absolute;width:12px;height:12px;border-radius:50%;display:grid;place-items:center;z-index:2}
+.w1 .blip i{width:8px;height:8px;border-radius:50%}
+.w1 .blip::before{content:"";position:absolute;width:22px;height:22px;border-radius:50%;border:1px solid currentColor;opacity:.4}
+.w1 .blip .tag{position:absolute;top:-20px;left:12px;font-size:.56rem;font-family:"IBM Plex Mono",monospace;white-space:nowrap;letter-spacing:.06em}
+.w1 .legend{display:flex;gap:16px;font-size:.62rem;color:#8a93a7;letter-spacing:.08em}
+.w1 .legend i{width:7px;height:7px;border-radius:50%;display:inline-block;margin-inline-end:5px}
+.w1 .stack{display:flex;flex-direction:column;gap:12px}
+.w1 .slab{background:rgba(19,26,44,.75);backdrop-filter:blur(6px);border:1px solid rgba(96,165,250,.22);border-radius:14px;padding:13px 15px;box-shadow:0 8px 20px rgba(5,10,22,.4)}
+.w1 .slab h4{display:flex;align-items:center;gap:8px;font-size:.68rem;letter-spacing:.12em;text-transform:uppercase;color:#8a93a7;margin-bottom:9px}
+.w1 .slab h4 .n{font-family:"IBM Plex Mono",monospace;color:#fbbf24}
+.w1 .slab h4 .go{margin-inline-start:auto;color:#60a5fa;letter-spacing:0;text-transform:none;font-size:.68rem;font-weight:650}
+.w1 .row{display:flex;align-items:center;gap:9px;padding:7px 0;border-top:1px solid rgba(96,165,250,.1);font-size:.78rem}
+.w1 .row .rf{font-family:"IBM Plex Mono",monospace;font-size:.66rem;color:#60a5fa}
+.w1 .row .grow{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.w1 .row .sm{font-size:.62rem;color:#5f6678}
+.w1 .gbtn{border-radius:8px;padding:4px 11px;font-size:.68rem;font-weight:700;letter-spacing:.02em}
+.w1 .gbtn.ok{background:rgba(52,211,153,.15);color:#34d399;box-shadow:0 0 12px rgba(52,211,153,.15)}
+.w1 .gbtn.no{background:rgba(239,72,88,.14);color:#ef4858}
+.w1 .runway{margin-top:18px;position:relative;border-radius:14px;border:1px solid rgba(96,165,250,.25);background:#0b1526;padding:14px 16px 12px;overflow:hidden}
+.w1 .runway::before{content:"";position:absolute;left:0;right:0;top:50%;height:2px;background:repeating-linear-gradient(90deg,rgba(251,191,36,.5) 0 26px,transparent 26px 52px)}
+.w1 .runway .lights{display:flex;gap:12px;justify-content:space-between;position:relative}
+.w1 .rw{display:flex;flex-direction:column;align-items:center;gap:7px;font-size:.62rem;color:#8a93a7;min-width:84px}
+.w1 .rw .pod{width:52px;height:52px;border-radius:14px;background:linear-gradient(180deg,#152240,#101a30);border:1px solid rgba(96,165,250,.3);display:grid;place-items:center;font-size:1.3rem;box-shadow:0 0 18px rgba(96,165,250,.14),inset 0 1px 0 rgba(255,255,255,.07)}
+.w1 .rw:hover .pod{box-shadow:0 0 26px rgba(251,191,36,.3);border-color:rgba(251,191,36,.5)}
+
+/* ═════════ W2 · BUREAU DESK — physical desk objects ═════════ */
+.w2 .desk{position:relative;border-radius:20px;padding:26px 24px 30px;background:
+  radial-gradient(900px 300px at 50% 0%,rgba(255,255,255,.16),transparent 60%),
+  linear-gradient(160deg,#8b6d4f 0%,#75573c 45%,#5f452e 100%);box-shadow:inset 0 2px 6px rgba(255,255,255,.18),inset 0 -14px 40px rgba(40,24,10,.4),0 18px 44px rgba(60,40,20,.35)}
+.w2 .desk::before{content:"";position:absolute;inset:14px;border:2px solid rgba(255,244,222,.14);border-radius:12px;pointer-events:none}
+.w2 .deskgrid{display:grid;grid-template-columns:1.15fr 1fr 1fr;gap:22px;position:relative}
+.w2 .traystack{display:flex;flex-direction:column;gap:0}
+.w2 .tray{position:relative;background:#20293b;border-radius:10px 10px 4px 4px;padding:12px 14px 14px;color:#e8ecf5;box-shadow:0 10px 22px rgba(20,12,4,.45),inset 0 1px 0 rgba(255,255,255,.12)}
+.w2 .tray+.tray{margin-top:14px}
+.w2 .tray .lip{position:absolute;left:-6px;right:-6px;bottom:-7px;height:12px;background:linear-gradient(180deg,#2c3850,#1a2233);border-radius:6px;box-shadow:0 4px 8px rgba(0,0,0,.4)}
+.w2 .tray h4{font-size:.64rem;letter-spacing:.16em;color:#9fb0cd;display:flex;justify-content:space-between;margin-bottom:8px}
+.w2 .tray h4 b{color:#fbd38d;font-family:"IBM Plex Mono",monospace}
+.w2 .paper{background:#fdfcf7;color:var(--text);border-radius:3px;padding:8px 11px;margin-top:7px;box-shadow:0 2px 5px rgba(0,0,0,.35);font-size:.76rem;position:relative}
+.w2 .paper .clip{position:absolute;top:-6px;inset-inline-start:14px;width:16px;height:26px;border:2.5px solid #9aa3b2;border-radius:8px 8px 3px 3px;border-bottom:0;transform:rotate(-3deg)}
+.w2 .paper .r1{display:flex;gap:8px;align-items:baseline}
+.w2 .paper .rf{font-family:"IBM Plex Mono",monospace;font-size:.64rem;font-weight:700;color:var(--primary)}
+.w2 .paper .sub{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-weight:600}
+.w2 .paper .meta{font-size:.62rem;color:var(--text-faint);margin-top:2px}
+.w2 .paper .sig{position:absolute;bottom:6px;inset-inline-end:10px;font-size:.6rem;font-weight:800;color:var(--success);border:1.5px solid var(--success);border-radius:3px;padding:1px 6px;transform:rotate(-4deg);opacity:.85}
+.w2 .folderpair{display:flex;flex-direction:column;gap:16px}
+.w2 .folder{position:relative;background:#e8c98d;border-radius:6px 12px 12px 12px;padding:34px 14px 12px;box-shadow:0 12px 26px rgba(20,12,4,.4),inset 0 1px 0 rgba(255,255,255,.5)}
+.w2 .folder::before{content:"";position:absolute;top:0;inset-inline-start:0;width:112px;height:26px;background:inherit;border-radius:8px 14px 0 0}
+.w2 .folder .tab{position:absolute;top:4px;inset-inline-start:12px;font-size:.6rem;font-weight:800;letter-spacing:.1em;color:#6b4f23;text-transform:uppercase}
+.w2 .folder .cnt{position:absolute;top:6px;inset-inline-end:12px;font-family:"IBM Plex Mono",monospace;font-size:.72rem;font-weight:700;color:#6b4f23}
+.w2 .sheet{background:#fffdf6;border-radius:3px;padding:8px 11px;margin-top:6px;box-shadow:0 2px 4px rgba(60,40,10,.25);font-size:.76rem;display:flex;gap:8px;align-items:center}
+.w2 .sheet .tg{font-family:"IBM Plex Mono",monospace;font-size:.58rem;font-weight:800;padding:2px 6px;border-radius:4px}
+.w2 .sheet .who{flex:1;min-width:0}
+.w2 .sheet .nm{font-weight:650;font-size:.74rem}
+.w2 .sheet .id{font-size:.6rem;color:var(--text-faint);font-family:"IBM Plex Mono",monospace}
+.w2 .stampblock{position:relative;background:linear-gradient(180deg,#1d2austin435,#141a29);border-radius:12px;padding:14px 16px;color:#dfe6f3;box-shadow:0 12px 26px rgba(20,12,4,.4)}
+.w2 .rolodex{margin-top:20px;position:relative;display:flex;gap:10px;justify-content:center;padding:18px 10px 8px}
+.w2 .rolo{position:relative;width:118px;background:#fffdf6;border:1px solid #d9d2bd;border-radius:8px 8px 10px 10px;padding:14px 8px 10px;display:flex;flex-direction:column;align-items:center;gap:5px;font-size:.64rem;font-weight:650;color:#42403a;box-shadow:0 8px 16px rgba(30,20,8,.35);transform-origin:bottom center}
+.w2 .rolo::before{content:"";position:absolute;top:5px;left:50%;transform:translateX(-50%);width:34px;height:6px;border-radius:99px;background:#e5decc;box-shadow:inset 0 1px 2px rgba(0,0,0,.15)}
+.w2 .rolo .e{font-size:1.3rem}
+.w2 .rolo .k{font-family:"IBM Plex Mono",monospace;font-size:.52rem;color:#9a927e;font-weight:500}
+.w2 .rolo:nth-child(1){transform:rotate(-5deg) translateY(6px)}
+.w2 .rolo:nth-child(2){transform:rotate(-2.5deg) translateY(2px)}
+.w2 .rolo:nth-child(4){transform:rotate(2.5deg) translateY(2px)}
+.w2 .rolo:nth-child(5){transform:rotate(5deg) translateY(6px)}
+.w2 .brassplate{margin:16px auto 0;width:max-content;background:linear-gradient(180deg,#d9b567,#b08c3f);color:#3a2c10;font-size:.6rem;font-weight:800;letter-spacing:.18em;padding:4px 18px;border-radius:4px;box-shadow:inset 0 1px 0 rgba(255,255,255,.5),0 2px 5px rgba(0,0,0,.35)}
+
+/* ═════════ W3 · DEPARTURE BOARD — split-flap terminal ═════════ */
+.w3 .term{border-radius:18px;background:#0c0d10;padding:22px;box-shadow:0 22px 54px rgba(0,0,0,.45);color:#e8e6df;position:relative;overflow:hidden}
+.w3 .term::after{content:"";position:absolute;inset:0;background:repeating-linear-gradient(0deg,transparent 0 3px,rgba(255,255,255,.012) 3px 4px);pointer-events:none}
+.w3 .bhead{display:flex;align-items:center;gap:14px;padding-bottom:14px;border-bottom:2px solid #1d1f26}
+.w3 .bhead .lamp{width:10px;height:10px;border-radius:50%;background:#f5c451;box-shadow:0 0 12px #f5c451}
+.w3 .bhead h4{font-family:"IBM Plex Mono",monospace;font-size:.85rem;letter-spacing:.3em;color:#f5c451}
+.w3 .bhead .clock{margin-inline-start:auto;font-family:"IBM Plex Mono",monospace;font-size:.85rem;color:#7ee2a0}
+.w3 .brow{display:grid;grid-template-columns:110px 1fr 190px 120px 110px;gap:2px;margin-top:10px;align-items:stretch}
+.w3 .cell{background:#17181d;border-radius:4px;padding:9px 11px;font-family:"IBM Plex Mono",monospace;font-size:.74rem;letter-spacing:.05em;display:flex;align-items:center;position:relative;overflow:hidden;text-transform:uppercase}
+.w3 .cell::before{content:"";position:absolute;left:0;right:0;top:50%;height:1px;background:rgba(0,0,0,.55)}
+.w3 .cell.k{color:#f5c451}
+.w3 .cell.g{color:#7ee2a0}
+.w3 .cell.r{color:#ff7a7a}
+.w3 .cell.b{color:#8ab8ff}
+.w3 .cell.dim{color:#6a6c75;font-size:.62rem;letter-spacing:.14em}
+.w3 .cell .blink{width:8px;height:8px;border-radius:50%;margin-inline-end:8px;box-shadow:0 0 10px currentColor;background:currentColor}
+.w3 .sectionlbl{margin:16px 0 4px;font-family:"IBM Plex Mono",monospace;font-size:.6rem;letter-spacing:.3em;color:#6a6c75}
+.w3 .btnf{background:#17181d;border:1px solid #24262e;border-radius:4px;color:#7ee2a0;font-family:"IBM Plex Mono",monospace;font-size:.6rem;letter-spacing:.1em;padding:5px 10px}
+.w3 .btnf.r{color:#ff7a7a}
+.w3 .passes{display:flex;gap:12px;flex-wrap:wrap;margin-top:6px}
+.w3 .pass{position:relative;display:flex;background:#f3efe4;color:#22242c;border-radius:10px;overflow:hidden;width:214px;box-shadow:0 8px 18px rgba(0,0,0,.4)}
+.w3 .pass .stub{width:54px;background:var(--primary);color:#fff;display:grid;place-items:center;font-size:1.15rem;position:relative}
+.w3 .pass .stub::after{content:"";position:absolute;top:0;bottom:0;inset-inline-end:-1px;width:2px;background:repeating-linear-gradient(0deg,transparent 0 5px,#f3efe4 5px 10px)}
+.w3 .pass .bd{padding:8px 10px;flex:1}
+.w3 .pass .bd .t{font-size:.7rem;font-weight:800;letter-spacing:.04em;text-transform:uppercase}
+.w3 .pass .bd .f{font-family:"IBM Plex Mono",monospace;font-size:.56rem;color:#8b8b83;margin-top:2px}
+.w3 .pass .bd .bar{margin-top:6px;height:10px;background:repeating-linear-gradient(90deg,#22242c 0 2px,transparent 2px 4px,#22242c 4px 5px,transparent 5px 8px)}
+.w3 .pass.gold .stub{background:#b08c3f}
+
+/* ═════════ W4 · AURORA GLASS — frosted cards over GSSG aurora ═════════ */
+.w4 .aurora{position:relative;border-radius:22px;padding:24px;overflow:hidden;background:#0e1526}
+.w4 .aurora .m1,.w4 .aurora .m2,.w4 .aurora .m3{position:absolute;border-radius:50%;filter:blur(70px);opacity:.75}
+.w4 .aurora .m1{width:700px;height:480px;background:#16346b;top:-160px;left:-120px}
+.w4 .aurora .m2{width:640px;height:460px;background:#7a1130;top:-60px;right:-140px}
+.w4 .aurora .m3{width:720px;height:400px;background:#28437c;bottom:-200px;left:30%}
+.w4 .aurora .ring{position:absolute;right:6%;top:-40px;width:420px;height:420px;border-radius:50%;border:54px solid rgba(255,255,255,.045)}
+.w4 .agrid{position:relative;display:grid;grid-template-columns:repeat(12,1fr);gap:14px}
+.w4 .gcard{backdrop-filter:blur(14px);background:rgba(255,255,255,.09);border:1px solid rgba(255,255,255,.18);border-radius:18px;padding:16px 18px;color:#f2f5fb;box-shadow:0 14px 34px rgba(5,10,25,.35)}
+.w4 .gcard h4{display:flex;align-items:center;gap:8px;font-size:.72rem;letter-spacing:.08em;text-transform:uppercase;color:rgba(242,245,251,.65);margin-bottom:8px}
+.w4 .gcard h4 .go{margin-inline-start:auto;font-size:.7rem;text-transform:none;letter-spacing:0;color:#ffd7ac;font-weight:650}
+.w4 .bignum{font-size:2.6rem;font-weight:800;letter-spacing:-.03em;background:linear-gradient(120deg,#fff 20%,#ffb3c0 60%,#ffd7ac);-webkit-background-clip:text;background-clip:text;color:transparent;line-height:1}
+.w4 .arow{display:flex;align-items:center;gap:9px;padding:7px 0;border-top:1px solid rgba(255,255,255,.1);font-size:.78rem}
+.w4 .arow .rf{font-family:"IBM Plex Mono",monospace;font-size:.64rem;color:#9ec1ff}
+.w4 .arow .grow{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.w4 .arow .sm{font-size:.6rem;color:rgba(242,245,251,.5)}
+.w4 .gel{border-radius:9px;padding:4px 11px;font-size:.66rem;font-weight:750;background:linear-gradient(180deg,rgba(52,211,153,.32),rgba(52,211,153,.14));color:#7ef7c6;border:1px solid rgba(52,211,153,.4);box-shadow:0 3px 10px rgba(52,211,153,.2)}
+.w4 .gel.red{background:linear-gradient(180deg,rgba(239,72,88,.32),rgba(239,72,88,.12));color:#ff9ba6;border-color:rgba(239,72,88,.4);box-shadow:0 3px 10px rgba(239,72,88,.18)}
+.w4 .tagw{font-family:"IBM Plex Mono",monospace;font-size:.58rem;font-weight:800;padding:2px 7px;border-radius:6px;border:1px solid}
+.w4 .qa-gel{display:flex;flex-wrap:wrap;gap:11px;position:relative}
+.w4 .gelbtn{display:flex;align-items:center;gap:9px;backdrop-filter:blur(10px);background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.22);border-radius:14px;padding:10px 16px;font-size:.78rem;font-weight:650;color:#f2f5fb;box-shadow:inset 0 1px 0 rgba(255,255,255,.25),0 6px 16px rgba(5,10,25,.3)}
+.w4 .gelbtn:hover{background:rgba(200,16,46,.28);border-color:rgba(255,140,160,.5)}
+
+/* ═════════ W5 · MAP TABLE — blueprint intel board w/ red yarn ═════════ */
+.w5 .maptable{position:relative;border-radius:20px;overflow:hidden;background:#123252;box-shadow:0 20px 50px rgba(10,30,50,.4);padding:24px}
+.w5 .maptable::before{content:"";position:absolute;inset:0;background:
+  linear-gradient(rgba(255,255,255,.05) 1px,transparent 1px),
+  linear-gradient(90deg,rgba(255,255,255,.05) 1px,transparent 1px),
+  linear-gradient(rgba(255,255,255,.03) 1px,transparent 1px),
+  linear-gradient(90deg,rgba(255,255,255,.03) 1px,transparent 1px);
+  background-size:120px 120px,120px 120px,24px 24px,24px 24px}
+.w5 .maptable::after{content:"AL WATHBA SITE PLAN — GSSG OPERATIONS";position:absolute;bottom:14px;inset-inline-end:20px;font-family:"IBM Plex Mono",monospace;font-size:.6rem;letter-spacing:.3em;color:rgba(255,255,255,.25)}
+.w5 svg.yarn{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
+.w5 .mgrid{position:relative;display:grid;grid-template-columns:repeat(3,1fr);gap:20px}
+.w5 .intel{position:relative;background:#f8f6ef;border-radius:6px;padding:14px 16px 12px;box-shadow:0 14px 30px rgba(5,15,30,.45);color:var(--text)}
+.w5 .intel::before{content:"";position:absolute;top:-8px;left:26px;width:16px;height:16px;border-radius:50%;background:radial-gradient(circle at 35% 30%,#ff6b7d,#a50d22 70%);box-shadow:0 3px 6px rgba(0,0,0,.4)}
+.w5 .intel.pin2::before{left:auto;right:30px}
+.w5 .intel h4{font-size:.66rem;letter-spacing:.14em;text-transform:uppercase;color:var(--text-faint);font-weight:800;display:flex;justify-content:space-between;margin-bottom:8px}
+.w5 .intel h4 .n{font-family:"IBM Plex Mono",monospace;color:var(--accent)}
+.w5 .irow{display:flex;gap:9px;align-items:center;padding:7px 0;border-top:1px solid #e7e2d2;font-size:.78rem}
+.w5 .irow .tg{font-family:"IBM Plex Mono",monospace;font-size:.58rem;font-weight:800;padding:2px 6px;border-radius:4px}
+.w5 .irow .who{flex:1;min-width:0}
+.w5 .irow .nm{font-weight:650;font-size:.76rem}
+.w5 .irow .id{font-family:"IBM Plex Mono",monospace;font-size:.58rem;color:var(--text-faint)}
+.w5 .irow .act{font-size:.62rem;font-weight:800;color:var(--success)}
+.w5 .classified{position:absolute;top:10px;inset-inline-end:12px;font-size:.54rem;font-weight:900;letter-spacing:.16em;color:rgba(200,16,46,.5);border:2px solid rgba(200,16,46,.4);padding:1px 6px;border-radius:3px;transform:rotate(4deg)}
+.w5 .kit{margin-top:22px;position:relative;background:#0d2438;border-radius:14px;padding:16px;display:flex;gap:12px;overflow-x:auto;border:1px solid rgba(255,255,255,.09)}
+.w5 .kit::before{content:"FIELD KIT — SERVICES";position:absolute;top:-9px;inset-inline-start:18px;background:#123252;padding:0 10px;font-family:"IBM Plex Mono",monospace;font-size:.56rem;letter-spacing:.24em;color:rgba(255,255,255,.5)}
+.w5 .tool{flex:none;display:flex;flex-direction:column;align-items:center;gap:7px;width:96px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.12);border-radius:11px;padding:12px 6px;font-size:.62rem;font-weight:650;color:#cfe0ef;text-align:center}
+.w5 .tool .e{font-size:1.3rem;filter:drop-shadow(0 3px 6px rgba(0,0,0,.4))}
+.w5 .tool:hover{border-color:#ff6b7d;color:#fff}
+
+.picker{max-width:800px;margin:60px auto;padding:0 24px}
+.picker h1{font-size:1.5rem;margin-bottom:6px}
+.picker p{color:var(--text-muted);margin-bottom:24px}
+.picker a{display:flex;justify-content:space-between;align-items:center;border:1px solid var(--border);background:var(--surface);border-radius:14px;padding:17px 22px;margin-bottom:12px;font-weight:600}
+.picker a:hover{border-color:var(--primary)}
+.picker a small{color:var(--text-muted);font-weight:400}
+</style>
+</head>
+<body>
+
+<div id="picker" class="picker" style="display:none">
+  <h1>Wild widget worlds — same dashboard, full width</h1>
+  <p>Hero + top cards untouched; the widget zone and quick actions go wild. <span class="mono">?v=1…5</span></p>
+  <a href="?v=1"><span>1 · Radar Glass</span><small>dark ops glass inset, live radar with real blips, runway service dock</small></a>
+  <a href="?v=2"><span>2 · Bureau Desk</span><small>walnut desk: paper trays, manila folders, stamped sheets, rolodex services</small></a>
+  <a href="?v=3"><span>3 · Departure Board</span><small>split-flap terminal board, LED rows, boarding-pass services</small></a>
+  <a href="?v=4"><span>4 · Aurora Glass</span><small>frosted cards over a navy-red aurora, gradient numerals, gel services</small></a>
+  <a href="?v=5"><span>5 · Map Table</span><small>blueprint site map, pinned intel cards, red yarn, field-kit services</small></a>
+</div>
+
+<script id="shell-template" type="text/template">
+  <div class="topnav">
+    <div class="brand"><img src="gssg-globe.png" alt=""><div><b>GSSG</b><small>Global Security Services Group</small></div></div>
+    <nav><span class="on">Dashboard</span><span>Employees</span><span>Ledger</span><span>Leaves</span><span>Services</span><span>Records</span><span>Permits</span></nav>
+    <div class="spacer"></div>
+    <span class="chip-personal"><span class="dot"></span>Personal · saved to your account</span>
+    <span class="avatar">A</span>
+  </div>
+  <div class="page">
+    <div class="hero">
+      <div class="eyebrow">Good evening</div>
+      <h2>Welcome back</h2>
+      <div class="meta">
+        <span>Sat, 15 Aug</span><span>·</span><span class="ar">٢ ربيع الأول ١٤٤٨ هـ</span>
+        <span class="chip"><b>2</b> on leave today</span>
+      </div>
+      <div class="line">Quiet day. 4 on site, nothing returning today. 1 returning later this week.</div>
+      <div class="globe"><img src="gssg-globe.png" alt=""></div>
+    </div>
+    <div class="sechead"><h3>My Widgets</h3><span class="edit"><span>yours only</span>Edit My Widgets ✎</span></div>
+    <div class="topcards">
+      <div class="bigcard">
+        <div class="h">Documents This Month</div>
+        <div class="cur">DOCS</div>
+        <div class="num">14</div>
+        <div class="rail"><i></i></div>
+        <div class="foot"><span style="color:var(--accent)">●</span> 3 need my signature <button class="cta">Review</button></div>
+        <span class="chev">›</span>
+      </div>
+      <div class="bigcard">
+        <div class="h">My Workspace</div>
+        <div class="cur">STAFF</div>
+        <div class="num">6</div>
+        <div class="dots"><span><i style="background:var(--success)"></i>4 active</span><span><i style="background:var(--warning)"></i>2 on leave</span><span><i style="background:var(--accent)"></i>1 leaving soon</span></div>
+        <span class="chev">›</span>
+      </div>
+    </div>
+    <div class="slot-widgets"></div>
+    <div class="sechead qa-head"><h3>Quick Actions</h3><span class="edit"><span>services only · yours</span>Edit Quick Actions ✎</span></div>
+    <div class="slot-qa"></div>
+    <div class="note"></div>
+  </div>
+</script>
+
+<!-- ═════════ W1 · RADAR GLASS ═════════ -->
+<section class="variant w1" id="v1" data-note="W1 · Radar Glass — a dark ops-glass inset in the light dashboard. The radar is real data: blips = expiring docs & departures, distance = days left. Services are a lit runway.">
+  <template class="widgets">
+    <div class="glass">
+      <div class="cluster">
+        <div class="radarbox">
+          <div class="radar">
+            <span class="axis-h"></span><span class="axis-v"></span>
+            <div class="core"><div><b>3</b><br><span>ALERTS</span></div></div>
+            <span class="blip" style="left:56%;top:26%;color:#ef4858"><i style="background:#ef4858"></i><span class="tag">ALMANSOORI · EID −3D</span></span>
+            <span class="blip" style="left:30%;top:58%;color:#fbbf24"><i style="background:#fbbf24"></i><span class="tag">ALKAABI · EID 18D</span></span>
+            <span class="blip" style="left:66%;top:70%;color:#fbbf24"><i style="background:#fbbf24"></i><span class="tag">ALYAHYAEE · EXIT 12D</span></span>
+            <span class="blip" style="left:78%;top:44%;color:#8ab8ff"><i style="background:#8ab8ff"></i><span class="tag">ALSHAMSI · PP 45D</span></span>
+          </div>
+          <div class="legend"><span><i style="background:#ef4858"></i>EXPIRED</span><span><i style="background:#fbbf24"></i>&lt;30 DAYS</span><span><i style="background:#8ab8ff"></i>&lt;90 DAYS</span></div>
+        </div>
+        <div class="stack">
+          <div class="slab">
+            <h4>Need my signature <span class="n">3</span><a class="go">queue →</a></h4>
+            <div class="row" style="border-top:0"><span class="rf">1-0006</span><span class="grow">Gate access request for contractor</span><button class="gbtn ok">SIGN</button><button class="gbtn no">✕</button></div>
+            <div class="row"><span class="rf">1-0004</span><span class="grow">Duty roster amendment — Al Wathba</span><button class="gbtn ok">SIGN</button><button class="gbtn no">✕</button></div>
+            <div class="row"><span class="rf">1-0002</span><span class="grow">Uniform issue authorization</span><button class="gbtn ok">SIGN</button><button class="gbtn no">✕</button></div>
+          </div>
+          <div class="slab">
+            <h4>Register drafts <span class="n" style="color:#8ab8ff">3</span><a class="go">resume →</a></h4>
+            <div class="row" style="border-top:0"><span class="rf">1-0001</span><span class="grow">Monthly duty roster</span><span class="sm">draft</span></div>
+            <div class="row"><span class="rf">1-0005</span><span class="grow">Night patrol summary</span><span class="sm">draft</span></div>
+          </div>
+        </div>
+        <div class="stack">
+          <div class="slab">
+            <h4>Inbox <span class="n" style="color:#8ab8ff">3 unread</span><a class="go">open · ↻ sync</a></h4>
+            <div class="row" style="border-top:0"><span class="gbtn ok" style="padding:2px 7px;font-size:.56rem">IN</span><span class="grow">Clearance circular 44/2026</span><span class="sm">18:22</span></div>
+            <div class="row"><span class="gbtn no" style="padding:2px 7px;font-size:.56rem">OUT</span><span class="grow">Inspection reply — MOI</span><span class="sm">THU</span></div>
+            <div class="row"><span class="gbtn" style="padding:2px 7px;font-size:.56rem;background:rgba(138,184,255,.14);color:#8ab8ff">INT</span><span class="grow">Uniform renewal memo — HR</span><span class="sm">WED</span></div>
+          </div>
+          <div class="slab">
+            <h4>Movements <span class="n" style="color:#34d399">2 out · 1 back</span><a class="go">/leaves →</a></h4>
+            <div class="row" style="border-top:0"><span class="grow">K. ALDHAHERI — until 15 Aug</span><span class="sm">OUT</span></div>
+            <div class="row"><span class="grow">S. ALSHAMSI — returns Sunday</span><button class="gbtn ok">PREP</button></div>
+            <div class="row"><span class="grow">H. ALMANSOORI — attendance case</span><button class="gbtn no">FILE</button></div>
+          </div>
+        </div>
+      </div>
+      <div class="runway">
+        <div class="lights">
+          <button class="rw"><span class="pod">📅</span>Leave App</button>
+          <button class="rw"><span class="pod">🎫</span>Permit</button>
+          <button class="rw"><span class="pod">🔁</span>Resumption</button>
+          <button class="rw"><span class="pod">🚨</span>Violation</button>
+          <button class="rw"><span class="pod">⚠️</span>Warning</button>
+          <button class="rw"><span class="pod">✍️</span>Acknowledge</button>
+          <button class="rw"><span class="pod">💰</span>Transfer</button>
+          <button class="rw"><span class="pod">📓</span>Gen. Book</button>
+          <button class="rw"><span class="pod">📊</span>Report</button>
+          <button class="rw"><span class="pod">⋯</span>All 18</button>
+        </div>
+      </div>
+    </div>
+  </template>
+  <template class="qa"><div></div></template>
+</section>
+
+<!-- ═════════ W2 · BUREAU DESK ═════════ -->
+<section class="variant w2" id="v2" data-note="W2 · Bureau Desk — your widgets as objects on the officer's desk: signature tray, manila radar folders, stamped papers; services as a rolodex fan.">
+  <template class="widgets">
+    <div class="desk">
+      <div class="deskgrid">
+        <div class="traystack">
+          <div class="tray">
+            <h4>SIGNATURE TRAY <b>3 WAITING</b></h4>
+            <div class="paper"><span class="clip"></span>
+              <div class="r1"><span class="rf">1-0006</span><span class="sub">Gate access request for contractor</span></div>
+              <div class="meta">Audit Admin · 4h ago — awaiting your signature</div>
+              <span class="sig">SIGN ✓</span>
+            </div>
+            <div class="paper">
+              <div class="r1"><span class="rf">1-0004</span><span class="sub">Duty roster amendment — Al Wathba</span></div>
+              <div class="meta">S. Alshamsi · 6h ago</div>
+              <span class="sig">SIGN ✓</span>
+            </div>
+            <div class="paper">
+              <div class="r1"><span class="rf">1-0002</span><span class="sub">Uniform issue authorization</span></div>
+              <div class="meta">K. Aldhaheri · 1d ago</div>
+              <span class="sig">SIGN ✓</span>
+            </div>
+            <span class="lip"></span>
+          </div>
+          <div class="tray">
+            <h4>IN — CORRESPONDENCE <b>3 UNREAD</b></h4>
+            <div class="paper"><div class="r1"><span class="rf" style="color:var(--success)">IN</span><span class="sub">Clearance circular 44/2026 — ADP HQ</span></div></div>
+            <div class="paper"><div class="r1"><span class="rf" style="color:var(--info)">INT</span><span class="sub">Uniform renewal memo — HR</span></div></div>
+            <span class="lip"></span>
+          </div>
+        </div>
+        <div class="folderpair">
+          <div class="folder">
+            <span class="tab">Expiry watch</span><span class="cnt">3</span>
+            <div class="sheet"><span class="tg" style="background:var(--accent-soft);color:var(--accent)">−3D</span><div class="who"><div class="nm">HAMDAN ALMANSOORI</div><div class="id">G-1005 · EMIRATES ID</div></div></div>
+            <div class="sheet"><span class="tg" style="background:var(--warning-soft);color:var(--warning)">18D</span><div class="who"><div class="nm">AHMED ALKAABI</div><div class="id">G-1001 · EMIRATES ID</div></div></div>
+            <div class="sheet"><span class="tg" style="background:var(--warning-soft);color:var(--warning)">45D</span><div class="who"><div class="nm">SALEM ALSHAMSI</div><div class="id">G-1002 · PASSPORT</div></div></div>
+          </div>
+          <div class="folder" style="background:#d9e6c3">
+            <span class="tab" style="color:#4a5c2c">Movements</span><span class="cnt" style="color:#4a5c2c">3</span>
+            <div class="sheet"><span class="tg" style="background:var(--info-soft);color:var(--info)">OUT</span><div class="who"><div class="nm">K. ALDHAHERI — until 15 Aug</div></div></div>
+            <div class="sheet"><span class="tg" style="background:var(--info-soft);color:var(--info)">OUT</span><div class="who"><div class="nm">S. ALSHAMSI — until 17 Aug</div></div></div>
+            <div class="sheet"><span class="tg" style="background:var(--success-soft);color:var(--success)">BACK</span><div class="who"><div class="nm">S. ALSHAMSI — Sunday · prep resumption</div></div></div>
+          </div>
+        </div>
+        <div class="folderpair">
+          <div class="folder" style="background:#e6b8b0">
+            <span class="tab" style="color:#7a2d20">Exits &amp; cases</span><span class="cnt" style="color:#7a2d20">2</span>
+            <div class="sheet"><span class="tg" style="background:var(--warning-soft);color:var(--warning)">12D</span><div class="who"><div class="nm">RASHED ALYAHYAEE — resignation</div><div class="id">CLEARANCE NOT STARTED</div></div></div>
+            <div class="sheet"><span class="tg" style="background:var(--accent-soft);color:var(--accent)">OPEN</span><div class="who"><div class="nm">HAMDAN ALMANSOORI — attendance</div><div class="id">FILED 14 AUG</div></div></div>
+          </div>
+          <div class="folder" style="background:#c7d4e8">
+            <span class="tab" style="color:#2c4262">Register drafts</span><span class="cnt" style="color:#2c4262">3</span>
+            <div class="sheet"><span class="tg" style="background:var(--primary-soft);color:var(--primary)">1-0001</span><div class="who"><div class="nm">Monthly duty roster</div></div></div>
+            <div class="sheet"><span class="tg" style="background:var(--primary-soft);color:var(--primary)">1-0003</span><div class="who"><div class="nm">Contractor NDA cover</div></div></div>
+            <div class="sheet"><span class="tg" style="background:var(--primary-soft);color:var(--primary)">1-0005</span><div class="who"><div class="nm">Night patrol summary</div></div></div>
+          </div>
+        </div>
+      </div>
+      <div class="rolodex">
+        <button class="rolo"><span class="e">📅</span>Leave Application<span class="k">HR 300-003</span></button>
+        <button class="rolo"><span class="e">🔁</span>Duty Resumption<span class="k">HR 300-016</span></button>
+        <button class="rolo" style="transform:translateY(0)"><span class="e">🚨</span>Violation<span class="k">NAT 300-004</span></button>
+        <button class="rolo"><span class="e">📓</span>General Book<span class="k">GS 300-003</span></button>
+        <button class="rolo"><span class="e">⋯</span>All 18 services<span class="k">GALLERY</span></button>
+      </div>
+      <div class="brassplate">DUTY OFFICER — YOUR DESK</div>
+    </div>
+  </template>
+  <template class="qa"><div></div></template>
+</section>
+
+<!-- ═════════ W3 · DEPARTURE BOARD ═════════ -->
+<section class="variant w3" id="v3" data-note="W3 · Departure Board — one split-flap terminal for everything due: signatures, expiries, returns, exits. Services print as boarding passes.">
+  <template class="widgets">
+    <div class="term">
+      <div class="bhead"><span class="lamp"></span><h4>GSSG OPERATIONS BOARD</h4><span class="clock">18:42:07</span></div>
+      <div class="sectionlbl">SIGNATURES — BOARDING NOW</div>
+      <div class="brow"><div class="cell k">1-0006</div><div class="cell">GATE ACCESS REQUEST — CONTRACTOR</div><div class="cell dim">AUDIT ADMIN · 4H</div><div class="cell g"><span class="blink"></span>SIGN NOW</div><div class="cell"><button class="btnf">SIGN</button><button class="btnf r" style="margin-inline-start:6px">RTN</button></div></div>
+      <div class="brow"><div class="cell k">1-0004</div><div class="cell">DUTY ROSTER AMENDMENT — AL WATHBA</div><div class="cell dim">S. ALSHAMSI · 6H</div><div class="cell g"><span class="blink"></span>SIGN NOW</div><div class="cell"><button class="btnf">SIGN</button><button class="btnf r" style="margin-inline-start:6px">RTN</button></div></div>
+      <div class="brow"><div class="cell k">1-0002</div><div class="cell">UNIFORM ISSUE AUTHORIZATION</div><div class="cell dim">K. ALDHAHERI · 1D</div><div class="cell r"><span class="blink"></span>DELAYED 1D</div><div class="cell"><button class="btnf">SIGN</button><button class="btnf r" style="margin-inline-start:6px">RTN</button></div></div>
+      <div class="sectionlbl">DOCUMENT EXPIRY — FINAL CALL</div>
+      <div class="brow"><div class="cell k">G-1005</div><div class="cell">ALMANSOORI, HAMDAN — EMIRATES ID</div><div class="cell dim">TRANSPORT</div><div class="cell r"><span class="blink"></span>EXPIRED −3D</div><div class="cell"><button class="btnf">RENEW</button></div></div>
+      <div class="brow"><div class="cell k">G-1001</div><div class="cell">ALKAABI, AHMED — EMIRATES ID</div><div class="cell dim">OPERATIONS</div><div class="cell k">T−18 DAYS</div><div class="cell"><button class="btnf">RENEW</button></div></div>
+      <div class="brow"><div class="cell k">G-1002</div><div class="cell">ALSHAMSI, SALEM — PASSPORT</div><div class="cell dim">OPERATIONS</div><div class="cell b">T−45 DAYS</div><div class="cell"><button class="btnf">RENEW</button></div></div>
+      <div class="sectionlbl">MOVEMENTS &amp; EXITS</div>
+      <div class="brow"><div class="cell k">LEAVE</div><div class="cell">ALDHAHERI, KHALED — ANNUAL</div><div class="cell dim">RETURN 15 AUG</div><div class="cell b">OUT</div><div class="cell dim">G-1003</div></div>
+      <div class="brow"><div class="cell k">RETURN</div><div class="cell">ALSHAMSI, SALEM — ARRIVING SUNDAY</div><div class="cell dim">RESUMPTION DUE</div><div class="cell g"><span class="blink"></span>PREPARE</div><div class="cell"><button class="btnf">FORM</button></div></div>
+      <div class="brow"><div class="cell k">EXIT</div><div class="cell">ALYAHYAEE, RASHED — RESIGNATION</div><div class="cell dim">LAST DAY 27 AUG</div><div class="cell k">T−12 DAYS</div><div class="cell"><button class="btnf">CLEAR</button></div></div>
+      <div class="brow"><div class="cell k">INBOX</div><div class="cell">3 UNREAD — CIRCULAR 44/2026 · MOI REPLY · HR MEMO</div><div class="cell dim">SYNCED 6M AGO</div><div class="cell g">OPEN</div><div class="cell"><button class="btnf">READ</button><button class="btnf" style="margin-inline-start:6px">SYNC</button></div></div>
+      <div class="sectionlbl">SERVICE DESK — TICKETS</div>
+      <div class="passes">
+        <button class="pass"><span class="stub">📅</span><span class="bd"><span class="t">Leave Application</span><span class="f">FORM HR 300-003</span><span class="bar"></span></span></button>
+        <button class="pass"><span class="stub">🔁</span><span class="bd"><span class="t">Duty Resumption</span><span class="f">FORM HR 300-016</span><span class="bar"></span></span></button>
+        <button class="pass"><span class="stub">🚨</span><span class="bd"><span class="t">Violation</span><span class="f">FORM NAT 300-004</span><span class="bar"></span></span></button>
+        <button class="pass"><span class="stub">📓</span><span class="bd"><span class="t">General Book</span><span class="f">FORM GS 300-003</span><span class="bar"></span></span></button>
+        <button class="pass"><span class="stub">💰</span><span class="bd"><span class="t">Salary Transfer</span><span class="f">FORM HR 300-024</span><span class="bar"></span></span></button>
+        <button class="pass gold"><span class="stub">⋯</span><span class="bd"><span class="t">All 18 Services</span><span class="f">OPEN GALLERY</span><span class="bar"></span></span></button>
+      </div>
+    </div>
+  </template>
+  <template class="qa"><div></div></template>
+</section>
+
+<!-- ═════════ W4 · AURORA GLASS ═════════ -->
+<section class="variant w4" id="v4" data-note="W4 · Aurora Glass — frosted widgets floating over a navy-to-GSSG-red aurora with the ring watermark; gradient numerals; services as gel keys.">
+  <template class="widgets">
+    <div class="aurora">
+      <span class="m1"></span><span class="m2"></span><span class="m3"></span><span class="ring"></span>
+      <div class="agrid">
+        <div class="gcard" style="grid-column:span 5">
+          <h4>Need my signature <a class="go">Open queue →</a></h4>
+          <div class="bignum">3</div>
+          <div style="margin-top:8px">
+            <div class="arow" style="border-top:0"><span class="rf">1-0006</span><span class="grow">Gate access request for contractor</span><button class="gel">SIGN</button><button class="gel red">✕</button></div>
+            <div class="arow"><span class="rf">1-0004</span><span class="grow">Duty roster amendment — Al Wathba</span><button class="gel">SIGN</button><button class="gel red">✕</button></div>
+            <div class="arow"><span class="rf">1-0002</span><span class="grow">Uniform issue authorization</span><button class="gel">SIGN</button><button class="gel red">✕</button></div>
+          </div>
+        </div>
+        <div class="gcard" style="grid-column:span 4">
+          <h4>Expiry radar <a class="go">/expiry →</a></h4>
+          <div class="bignum" style="background:linear-gradient(120deg,#fff,#ff9ba6 70%);-webkit-background-clip:text;background-clip:text">3</div>
+          <div style="margin-top:8px">
+            <div class="arow" style="border-top:0"><span class="tagw" style="color:#ff9ba6;border-color:rgba(255,155,166,.5)">−3D</span><span class="grow">H. ALMANSOORI · EID</span><span class="sm">G-1005</span></div>
+            <div class="arow"><span class="tagw" style="color:#ffd7ac;border-color:rgba(255,215,172,.5)">18D</span><span class="grow">A. ALKAABI · EID</span><span class="sm">G-1001</span></div>
+            <div class="arow"><span class="tagw" style="color:#ffd7ac;border-color:rgba(255,215,172,.5)">45D</span><span class="grow">S. ALSHAMSI · Passport</span><span class="sm">G-1002</span></div>
+          </div>
+        </div>
+        <div class="gcard" style="grid-column:span 3">
+          <h4>Inbox <a class="go">Open →</a></h4>
+          <div class="bignum" style="background:linear-gradient(120deg,#fff,#9ec1ff 70%);-webkit-background-clip:text;background-clip:text">3</div>
+          <div style="margin-top:8px">
+            <div class="arow" style="border-top:0"><span class="grow">Circular 44/2026</span><span class="sm">18:22</span></div>
+            <div class="arow"><span class="grow">MOI reply</span><span class="sm">Thu</span></div>
+            <div class="arow"><span class="grow">HR memo</span><span class="sm">Wed</span></div>
+          </div>
+        </div>
+        <div class="gcard" style="grid-column:span 4">
+          <h4>Leave radar <a class="go">/leaves →</a></h4>
+          <div class="arow" style="border-top:0"><span class="tagw" style="color:#9ec1ff;border-color:rgba(158,193,255,.5)">OUT</span><span class="grow">K. ALDHAHERI — until 15 Aug</span></div>
+          <div class="arow"><span class="tagw" style="color:#9ec1ff;border-color:rgba(158,193,255,.5)">OUT</span><span class="grow">S. ALSHAMSI — until 17 Aug</span></div>
+          <div class="arow"><span class="tagw" style="color:#7ef7c6;border-color:rgba(126,247,198,.5)">BACK</span><span class="grow">S. ALSHAMSI — Sunday</span><button class="gel">PREP</button></div>
+        </div>
+        <div class="gcard" style="grid-column:span 4">
+          <h4>Exits &amp; cases <a class="go">files →</a></h4>
+          <div class="arow" style="border-top:0"><span class="tagw" style="color:#ffd7ac;border-color:rgba(255,215,172,.5)">12D</span><span class="grow">R. ALYAHYAEE — resignation</span><button class="gel">CLEAR</button></div>
+          <div class="arow"><span class="tagw" style="color:#ff9ba6;border-color:rgba(255,155,166,.5)">VIOL</span><span class="grow">H. ALMANSOORI — attendance</span><button class="gel red">FILE</button></div>
+        </div>
+        <div class="gcard" style="grid-column:span 4">
+          <h4>Register drafts <a class="go">resume →</a></h4>
+          <div class="arow" style="border-top:0"><span class="rf">1-0001</span><span class="grow">Monthly duty roster</span></div>
+          <div class="arow"><span class="rf">1-0003</span><span class="grow">Contractor NDA cover</span></div>
+          <div class="arow"><span class="rf">1-0005</span><span class="grow">Night patrol summary</span></div>
+        </div>
+        <div style="grid-column:span 12">
+          <div class="qa-gel">
+            <button class="gelbtn">📅 Leave Application</button>
+            <button class="gelbtn">🎫 Leave Permit</button>
+            <button class="gelbtn">🔁 Duty Resumption</button>
+            <button class="gelbtn">🚨 Violation</button>
+            <button class="gelbtn">⚠️ Warning</button>
+            <button class="gelbtn">✍️ Acknowledgment</button>
+            <button class="gelbtn">💰 Salary Transfer</button>
+            <button class="gelbtn">📓 General Book</button>
+            <button class="gelbtn">📊 Report</button>
+            <button class="gelbtn">🧑‍💼 HR Request</button>
+            <button class="gelbtn" style="border-style:dashed">⋯ All 18</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </template>
+  <template class="qa"><div></div></template>
+</section>
+
+<!-- ═════════ W5 · MAP TABLE ═════════ -->
+<section class="variant w5" id="v5" data-note="W5 · Map Table — the day pinned to the site blueprint: intel cards tied by red yarn, CLASSIFIED stamps, services as the field kit.">
+  <template class="widgets">
+    <div class="maptable">
+      <svg class="yarn" preserveAspectRatio="none">
+        <path d="M 250 118 C 420 40, 560 60, 700 128" fill="none" stroke="rgba(255,80,100,.75)" stroke-width="2.5"/>
+        <path d="M 700 132 C 880 210, 1010 150, 1180 120" fill="none" stroke="rgba(255,80,100,.75)" stroke-width="2.5"/>
+        <path d="M 260 122 C 300 300, 520 330, 720 350" fill="none" stroke="rgba(255,80,100,.55)" stroke-width="2"/>
+      </svg>
+      <div class="mgrid">
+        <div class="intel">
+          <span class="classified">Priority</span>
+          <h4>Signature intel <span class="n">3</span></h4>
+          <div class="irow" style="border-top:0"><span class="tg" style="background:var(--primary-soft);color:var(--primary)">1-0006</span><div class="who"><div class="nm">Gate access — contractor</div><div class="id">4H AGO · AUDIT ADMIN</div></div><button class="act">SIGN ✓</button></div>
+          <div class="irow"><span class="tg" style="background:var(--primary-soft);color:var(--primary)">1-0004</span><div class="who"><div class="nm">Duty roster — Al Wathba</div><div class="id">6H AGO</div></div><button class="act">SIGN ✓</button></div>
+          <div class="irow"><span class="tg" style="background:var(--primary-soft);color:var(--primary)">1-0002</span><div class="who"><div class="nm">Uniform authorization</div><div class="id">1D AGO</div></div><button class="act">SIGN ✓</button></div>
+        </div>
+        <div class="intel pin2">
+          <h4>Expiry recon <span class="n">3</span></h4>
+          <div class="irow" style="border-top:0"><span class="tg" style="background:var(--accent-soft);color:var(--accent)">−3D</span><div class="who"><div class="nm">HAMDAN ALMANSOORI</div><div class="id">G-1005 · EMIRATES ID</div></div></div>
+          <div class="irow"><span class="tg" style="background:var(--warning-soft);color:var(--warning)">18D</span><div class="who"><div class="nm">AHMED ALKAABI</div><div class="id">G-1001 · EMIRATES ID</div></div></div>
+          <div class="irow"><span class="tg" style="background:var(--warning-soft);color:var(--warning)">45D</span><div class="who"><div class="nm">SALEM ALSHAMSI</div><div class="id">G-1002 · PASSPORT</div></div></div>
+        </div>
+        <div class="intel">
+          <span class="classified" style="color:rgba(4,120,87,.5);border-color:rgba(4,120,87,.4)">Synced 6m</span>
+          <h4>Signals — inbox <span class="n" style="color:var(--info)">3</span></h4>
+          <div class="irow" style="border-top:0"><span class="tg" style="background:var(--success-soft);color:var(--success)">IN</span><div class="who"><div class="nm">Clearance circular 44/2026</div><div class="id">ABU DHABI POLICE HQ · 18:22</div></div></div>
+          <div class="irow"><span class="tg" style="background:var(--accent-soft);color:var(--accent)">OUT</span><div class="who"><div class="nm">Inspection reply</div><div class="id">MINISTRY OF INTERIOR</div></div></div>
+          <div class="irow"><span class="tg" style="background:var(--info-soft);color:var(--info)">INT</span><div class="who"><div class="nm">Uniform renewal memo</div><div class="id">HR DEPARTMENT</div></div></div>
+        </div>
+        <div class="intel pin2">
+          <h4>Personnel movements</h4>
+          <div class="irow" style="border-top:0"><span class="tg" style="background:var(--info-soft);color:var(--info)">OUT</span><div class="who"><div class="nm">K. ALDHAHERI — until 15 Aug</div></div></div>
+          <div class="irow"><span class="tg" style="background:var(--info-soft);color:var(--info)">OUT</span><div class="who"><div class="nm">S. ALSHAMSI — until 17 Aug</div></div></div>
+          <div class="irow"><span class="tg" style="background:var(--success-soft);color:var(--success)">BACK</span><div class="who"><div class="nm">S. ALSHAMSI — Sunday</div><div class="id">RESUMPTION DUE</div></div><button class="act">PREP</button></div>
+        </div>
+        <div class="intel">
+          <span class="classified">Watch</span>
+          <h4>Exit &amp; discipline</h4>
+          <div class="irow" style="border-top:0"><span class="tg" style="background:var(--warning-soft);color:var(--warning)">12D</span><div class="who"><div class="nm">RASHED ALYAHYAEE — resignation</div><div class="id">LAST DAY 27 AUG · CLEARANCE PENDING</div></div></div>
+          <div class="irow"><span class="tg" style="background:var(--accent-soft);color:var(--accent)">VIOL</span><div class="who"><div class="nm">HAMDAN ALMANSOORI — attendance</div><div class="id">OPEN CASE · FILED 14 AUG</div></div></div>
+        </div>
+        <div class="intel pin2">
+          <h4>Register drafts <span class="n" style="color:var(--primary)">3</span></h4>
+          <div class="irow" style="border-top:0"><span class="tg" style="background:var(--primary-soft);color:var(--primary)">1-0001</span><div class="who"><div class="nm">Monthly duty roster</div></div><button class="act" style="color:var(--primary)">RESUME</button></div>
+          <div class="irow"><span class="tg" style="background:var(--primary-soft);color:var(--primary)">1-0003</span><div class="who"><div class="nm">Contractor NDA cover</div></div><button class="act" style="color:var(--primary)">RESUME</button></div>
+          <div class="irow"><span class="tg" style="background:var(--primary-soft);color:var(--primary)">1-0005</span><div class="who"><div class="nm">Night patrol summary</div></div><button class="act" style="color:var(--primary)">RESUME</button></div>
+        </div>
+      </div>
+      <div class="kit">
+        <button class="tool"><span class="e">📅</span>Leave Application</button>
+        <button class="tool"><span class="e">🎫</span>Leave Permit</button>
+        <button class="tool"><span class="e">🔁</span>Duty Resumption</button>
+        <button class="tool"><span class="e">🚨</span>Violation</button>
+        <button class="tool"><span class="e">⚠️</span>Warning</button>
+        <button class="tool"><span class="e">✍️</span>Acknowledgment</button>
+        <button class="tool"><span class="e">💰</span>Salary Transfer</button>
+        <button class="tool"><span class="e">📓</span>General Book</button>
+        <button class="tool"><span class="e">📊</span>Report</button>
+        <button class="tool"><span class="e">⋯</span>All 18</button>
+      </div>
+    </div>
+  </template>
+  <template class="qa"><div></div></template>
+</section>
+
+<script>
+const v = new URLSearchParams(location.search).get('v')
+const sec = v && document.getElementById('v' + v)
+if (sec) {
+  const shell = document.getElementById('shell-template').innerHTML
+  const host = document.createElement('div')
+  host.innerHTML = shell
+  host.querySelector('.slot-widgets').appendChild(sec.querySelector('template.widgets').content.cloneNode(true))
+  host.querySelector('.slot-qa').appendChild(sec.querySelector('template.qa').content.cloneNode(true))
+  // wild variants fold quick actions INTO the widget world — hide the empty QA section header
+  if (!host.querySelector('.slot-qa div').children.length) {
+    host.querySelector('.qa-head').remove()
+    host.querySelector('.slot-qa').remove()
+  }
+  host.querySelector('.note').textContent = sec.dataset.note + ' — full width, per-user layout & theme.'
+  sec.appendChild(host)
+  sec.classList.add('active')
+} else {
+  document.getElementById('picker').style.display = 'block'
+}
+</script>
+</body>
+</html>
