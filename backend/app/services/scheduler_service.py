@@ -31,7 +31,7 @@ from sqlalchemy.orm import Session
 from app.config import get_settings
 from app.db.models import User
 from app.db.session import SessionLocal
-from app.db.workforce_models import WorkCrewSchedule
+from app.db.workforce_models import WorkCrewMembership, WorkCrewSchedule
 from app.schemas.employee import (
     EMPLOYEE_STATUS_RESIGNED,
     EMPLOYEE_STATUS_TERMINATED,
@@ -39,6 +39,7 @@ from app.schemas.employee import (
 from app.schemas.workforce import WorkforceConfiguration
 from app.services import (
     admin_notify,
+    attendance_evaluation_service,
     attendance_queue_service,
     attendance_sync_service,
     digest_service,
@@ -164,8 +165,41 @@ def _load_workforce_configuration(session: Session) -> WorkforceConfiguration | 
         return None
 
 
+def _materialize_started_cases(session: Session, *, now: datetime) -> int:
+    """Create the cases whose shift has already started, then evaluate them.
+
+    Occurrences alone leave the register empty: the case is what carries one
+    person's scheduled shift, and nothing else in the product creates one for a
+    scheduled employee who has not punched - which is exactly the employee an
+    attendance register exists to show. Only rostered employees are considered,
+    and materialization is idempotent per employee and shift start.
+    """
+    configuration = _load_workforce_configuration(session)
+    if configuration is None:
+        return 0
+    created = 0
+    for employee_id in session.scalars(
+        select(WorkCrewMembership.employee_id).distinct()
+    ).all():
+        cases = attendance_evaluation_service.materialize_started_cases(
+            session,
+            employee_id=employee_id,
+            as_of=now,
+            evaluation_start_at=configuration.evaluation_start_at,
+        )
+        for case in cases:
+            attendance_evaluation_service.evaluate_case(
+                session,
+                case.id,
+                evaluated_at=now,
+                evaluation_start_at=configuration.evaluation_start_at,
+            )
+        created += len(cases)
+    return created
+
+
 def _run_workforce_occurrence_generation() -> None:
-    """Materialize a small UTC history/look-ahead window for every scheduled crew."""
+    """Materialize the schedule, then the cases whose shift has already started."""
     now = datetime.now(UTC)
     starts_at = now - _WORKFORCE_OCCURRENCE_HISTORY
     ends_at = now + _WORKFORCE_OCCURRENCE_LOOK_AHEAD
@@ -183,9 +217,16 @@ def _run_workforce_occurrence_generation() -> None:
             )
             for crew_id in crew_ids
         )
+        # Cases are materialized in the same run, after the occurrences they
+        # depend on exist, so the two can never be one interval out of step.
+        materialized = _materialize_started_cases(session, now=now)
         session.commit()
-        if generated:
-            log.info("scheduler: generated %d workforce shift occurrence(s)", generated)
+        if generated or materialized:
+            log.info(
+                "scheduler: generated %d workforce shift occurrence(s), materialized %d case(s)",
+                generated,
+                materialized,
+            )
     except Exception:
         session.rollback()
         log.exception("scheduler: workforce occurrence generation failed")

@@ -33,9 +33,12 @@ from app.db.workforce_models import (
     WorkShiftDefinition,
     WorkShiftOccurrence,
 )
+from app.schemas.workforce import WorkforceConfiguration
 from app.services import (
     attendance_evaluation_service,
     attendance_sync_service,
+    scheduler_service,
+    settings_service,
     workforce_dashboard_service,
     workforce_scope_service,
 )
@@ -422,3 +425,90 @@ def test_supervisor_scope_denies_an_employee_outside_the_assigned_unit(seeded, d
         )
         is True
     )
+
+
+def _configure(db_session, *, actor: User, evaluation_start_at: datetime) -> None:
+    settings_service.update_workforce_configuration(
+        db_session,
+        WorkforceConfiguration(
+            integration_enabled=True,
+            sync_interval_minutes=10,
+            stale_after_minutes=90,
+            initial_backfill_start_at=evaluation_start_at.replace(tzinfo=UTC),
+            evaluation_start_at=evaluation_start_at.replace(tzinfo=UTC),
+            nationality_fold_min_count=3,
+            excusing_record_kinds=["annual", "sick"],
+            provider_person_retention_days=3650,
+            punch_retention_days=3650,
+            attendance_retention_days=3650,
+            duty_event_retention_days=3650,
+            audit_retention_days=3650,
+        ),
+        actor=actor.email,
+    )
+
+
+def test_a_rostered_employee_who_never_punched_gets_a_case_and_an_absence(seeded, db_session):
+    """The register has to show the person who did not turn up, not just the ones who did."""
+    actor = seeded["actor"]
+    occurrence = seeded["occurrence"]
+    quiet = Employee(
+        id="G-SMOKE-2",
+        name_en="Quiet Officer",
+        name_ar="ضابط صامت",
+        status="Active",
+        department="Operations",
+        duty_unit="Gate A",
+    )
+    db_session.add(quiet)
+    db_session.flush()
+    db_session.add(
+        WorkCrewMembership(
+            crew_id=occurrence.crew_id,
+            employee_id=quiet.id,
+            effective_from=SHIFT_START - timedelta(days=7),
+            created_by_user_id=actor.id,
+            updated_by_user_id=actor.id,
+        )
+    )
+    _configure(db_session, actor=actor, evaluation_start_at=SHIFT_START - timedelta(days=1))
+    db_session.commit()
+
+    # Absence is only assertable against a verified identity and a punch stream
+    # that is fresh past the threshold, so both are established first.
+    _import(db_session, people=[person("bio-smoke-1", employee_code=quiet.id)], now=SHIFT_START)
+    _map_identity(db_session, quiet.id, actor=actor)
+    now = SHIFT_START + timedelta(minutes=ABSENCE_AFTER_MINUTES + 5)
+    _import(db_session, punches=[], now=now)
+
+    created = scheduler_service._materialize_started_cases(db_session, now=now)
+    db_session.commit()
+
+    assert created == 1
+    case = db_session.scalar(select(AttendanceCase).where(AttendanceCase.employee_id == quiet.id))
+    assert case is not None
+    assert case.scheduled_start_at == SHIFT_START
+    evaluation = db_session.scalar(
+        select(AttendanceEvaluation).where(AttendanceEvaluation.attendance_case_id == case.id)
+    )
+    assert evaluation is not None
+    assert evaluation.presence_state == "absent"
+    assert evaluation.reason_code == "NO_IN_AFTER_THRESHOLD"
+    # The already-materialized case of the punching employee is untouched.
+    assert (
+        len(
+            db_session.scalars(
+                select(AttendanceCase).where(
+                    AttendanceCase.employee_id == seeded["employee"].id
+                )
+            ).all()
+        )
+        == 1
+    )
+
+
+def test_materialization_is_dormant_until_a_configuration_exists(seeded, db_session):
+    """No configuration means no evaluation boundary, so nothing may be judged."""
+    assert scheduler_service._materialize_started_cases(
+        db_session, now=SHIFT_START + timedelta(hours=2)
+    ) == 0
