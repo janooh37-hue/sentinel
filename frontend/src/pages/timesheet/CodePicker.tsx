@@ -127,7 +127,7 @@ export function CodePicker({
 
   const head = (
     <div className="border-b border-hairline px-2 pb-1.5 pt-1 text-[0.7rem] text-muted-foreground">
-      <span className="font-mono text-foreground">{employeeId}</span> · {t('timesheet.colRow')}{' '}
+      <span className="font-mono text-foreground">{employeeId}</span> · {t('timesheet.colDay')}{' '}
       <b className="font-mono font-semibold text-foreground">{day}</b> — {name}
     </div>
   )

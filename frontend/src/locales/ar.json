@@ -3822,6 +3822,7 @@
     "cellLabel": "{{id}} يوم {{day}} — {{meaning}}",
     "note": "ملاحظة (اختياري)",
     "colRow": "م",
+    "colDay": "اليوم",
     "colId": "الرقم",
     "colName": "الاسم",
     "colNat": "الجنسية",

@@ -67,6 +67,7 @@ const KEYS = [
   'timesheet.cellLabel',
   'timesheet.note',
   'timesheet.colRow',
+  'timesheet.colDay',
   'timesheet.colId',
   'timesheet.colName',
   'timesheet.colNat',

@@ -948,7 +948,7 @@ export function TimesheetGrid({
                   key={day}
                   data-testid="timesheet-headcount"
                   data-low={postCount > 0 && count < postCount ? '1' : undefined}
-                  title={`${t('timesheet.colRow')} ${day}: ${count}`}
+                  title={`${t('timesheet.colDay')} ${day}: ${count}`}
                 >
                   {count}
                 </td>

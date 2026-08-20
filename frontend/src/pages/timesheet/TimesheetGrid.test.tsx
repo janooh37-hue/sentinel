@@ -502,6 +502,17 @@ describe('TimesheetGrid', () => {
     expect(cell('G1001', 4)).not.toHaveAttribute('data-edited')
   })
 
+  it('shows a note on the cell it belongs to, keyed the way the wire sends it', () => {
+    // `GridRow.notes` is `dict[int, str]` on the server and therefore STRING
+    // keys on the wire, so the cell reads `notes[String(day)]`. Written
+    // `notes[day]` it still type-checks — `notes` is a string-index record —
+    // renders `undefined` on every tooltip and loses every note on the sheet in
+    // silence. Nothing else in this file touches a cell's `title`.
+    render(<TimesheetGrid {...props} rows={[{ ...row, notes: { '14': 'called in' } }]} />)
+    expect(cell('G1001', 14)).toHaveAttribute('title', 'called in')
+    expect(cell('G1001', 15)).not.toHaveAttribute('title')
+  })
+
   it('reads stat_codes and draws the two blocks in the statistics variant', () => {
     render(
       <TimesheetGrid
@@ -548,6 +559,10 @@ describe('TimesheetGrid', () => {
     expect(footer[0]).not.toHaveAttribute('data-low')
     expect(footer[1]).toHaveTextContent('1')
     expect(footer[1]).toHaveAttribute('data-low', '1')
+    // `Day 2: 1`, not `Row 2: 1`. `timesheet.colRow` is the `#` serial
+    // column's own name — `"Row"` / `"م"` — and borrowing it here named the
+    // wrong axis in the operator's own language.
+    expect(footer[1]).toHaveAttribute('title', 'Day 2: 1')
   })
 
   it('flags the row a blocking check names, and ignores a check with no row', () => {

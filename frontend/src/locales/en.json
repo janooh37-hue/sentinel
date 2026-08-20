@@ -3552,6 +3552,7 @@
     "cellLabel": "{{id}} day {{day}} — {{meaning}}",
     "note": "Note (optional)",
     "colRow": "Row",
+    "colDay": "Day",
     "colId": "ID",
     "colName": "Name",
     "colNat": "Nat",
