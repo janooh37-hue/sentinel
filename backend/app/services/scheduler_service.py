@@ -18,9 +18,10 @@ from __future__ import annotations
 import logging
 import os
 import sys
-from datetime import UTC, date, datetime, timedelta
+from datetime import UTC, date, datetime, time, timedelta
 from threading import Lock
 from typing import Final
+from zoneinfo import ZoneInfo
 
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
@@ -54,6 +55,7 @@ from app.services import (
     settings_service,
     workforce_retention_service,
     workforce_schedule_service,
+    workforce_seed_service,
 )
 from app.services.attendance_provider import AttendanceProvider
 
@@ -165,8 +167,22 @@ def _load_workforce_configuration(session: Session) -> WorkforceConfiguration | 
         return None
 
 
-def _materialize_started_cases(session: Session, *, now: datetime) -> int:
-    """Create the cases whose shift has already started, then evaluate them.
+def _local_day_horizon(now: datetime) -> datetime:
+    """The last instant of ``now``'s site-local day, in UTC.
+
+    The register is read a day at a time, so the whole local day - not just the
+    part that has already happened - has to be materialized for every shift of
+    that day to appear.
+    """
+    zone = ZoneInfo(workforce_seed_service.SITE_TIMEZONE)
+    local_end = datetime.combine(
+        now.astimezone(zone).date(), time.max, tzinfo=zone
+    )
+    return local_end.astimezone(UTC)
+
+
+def _materialize_scheduled_cases(session: Session, *, now: datetime) -> int:
+    """Create every case scheduled for the site's current local day, then evaluate.
 
     Occurrences alone leave the register empty: the case is what carries one
     person's scheduled shift, and nothing else in the product creates one for a
@@ -177,14 +193,15 @@ def _materialize_started_cases(session: Session, *, now: datetime) -> int:
     configuration = _load_workforce_configuration(session)
     if configuration is None:
         return 0
+    horizon = _local_day_horizon(now)
     created = 0
     for employee_id in session.scalars(
         select(WorkCrewMembership.employee_id).distinct()
     ).all():
-        cases = attendance_evaluation_service.materialize_started_cases(
+        cases = attendance_evaluation_service.materialize_scheduled_cases(
             session,
             employee_id=employee_id,
-            as_of=now,
+            horizon=horizon,
             evaluation_start_at=configuration.evaluation_start_at,
         )
         for case in cases:
@@ -219,7 +236,7 @@ def _run_workforce_occurrence_generation() -> None:
         )
         # Cases are materialized in the same run, after the occurrences they
         # depend on exist, so the two can never be one interval out of step.
-        materialized = _materialize_started_cases(session, now=now)
+        materialized = _materialize_scheduled_cases(session, now=now)
         session.commit()
         if generated or materialized:
             log.info(

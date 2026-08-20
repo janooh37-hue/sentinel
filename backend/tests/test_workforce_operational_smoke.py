@@ -267,35 +267,44 @@ def test_late_arrival_records_minutes_without_changing_presence(seeded, db_sessi
     assert evaluation.late_minutes == late_by - GRACE_MINUTES
 
 
-def test_absence_is_withheld_before_the_threshold_and_only_asserted_after(seeded, db_session):
-    """No punch is 'scheduled' before the absence boundary and 'absent' only after it."""
+def test_absence_waits_for_the_duty_window_to_close(seeded, db_session):
+    """A running duty is never an absence, however long nobody has punched.
+
+    The site's rule: judge the shift when it is over. Flagging a no-show an hour
+    into an eight-hour duty told a supervisor nothing they could act on and put
+    every late arrival in the exception queue before they walked through the gate.
+    """
     employee = seeded["employee"]
     _import(db_session, people=[person("bio-smoke-1", employee_code=employee.id)], now=SHIFT_START)
     _map_identity(db_session, employee.id, actor=seeded["actor"])
     # A completed, punch-free window keeps freshness trustworthy.
     _import(db_session, punches=[], now=SHIFT_START + timedelta(minutes=5))
 
-    before = SHIFT_START + timedelta(minutes=ABSENCE_AFTER_MINUTES - 5)
-    attendance_evaluation_service.evaluate_case(db_session, seeded["case"].id, evaluated_at=before)
-    db_session.commit()
-    early = db_session.scalar(
-        select(AttendanceEvaluation)
-        .where(AttendanceEvaluation.attendance_case_id == seeded["case"].id)
-        .order_by(AttendanceEvaluation.revision.desc())
-    )
-    assert early.presence_state != "absent"
+    def evaluate(at):
+        _import(db_session, punches=[], now=at)
+        attendance_evaluation_service.evaluate_case(db_session, seeded["case"].id, evaluated_at=at)
+        db_session.commit()
+        return db_session.scalar(
+            select(AttendanceEvaluation)
+            .where(AttendanceEvaluation.attendance_case_id == seeded["case"].id)
+            .order_by(AttendanceEvaluation.revision.desc())
+        )
 
-    _import(db_session, punches=[], now=SHIFT_START + timedelta(minutes=ABSENCE_AFTER_MINUTES + 5))
-    after = SHIFT_START + timedelta(minutes=ABSENCE_AFTER_MINUTES + 5)
-    attendance_evaluation_service.evaluate_case(db_session, seeded["case"].id, evaluated_at=after)
-    db_session.commit()
-    late = db_session.scalar(
-        select(AttendanceEvaluation)
-        .where(AttendanceEvaluation.attendance_case_id == seeded["case"].id)
-        .order_by(AttendanceEvaluation.revision.desc())
+    early = evaluate(SHIFT_START + timedelta(minutes=ABSENCE_AFTER_MINUTES - 5))
+    assert (early.presence_state, early.reason_code) == (
+        "scheduled",
+        "SCHEDULED_BEFORE_ABSENCE_BOUNDARY",
     )
-    assert late.presence_state == "absent"
-    assert late.reason_code == "NO_IN_AFTER_THRESHOLD"
+
+    # Past the absence boundary but mid-duty: visible as not-yet-arrived, not flagged.
+    waiting = evaluate(SHIFT_START + timedelta(minutes=ABSENCE_AFTER_MINUTES + 5))
+    assert (waiting.presence_state, waiting.reason_code) == ("scheduled", "AWAITING_ARRIVAL")
+
+    # Still running at the scheduled end: the match window keeps the verdict open.
+    assert evaluate(SHIFT_END + timedelta(minutes=30)).presence_state == "scheduled"
+
+    settled = evaluate(SHIFT_END + timedelta(minutes=120))
+    assert (settled.presence_state, settled.reason_code) == ("absent", "NO_IN_AFTER_THRESHOLD")
 
 
 def test_stale_punch_freshness_suppresses_the_dashboard_judgment(seeded, db_session):
@@ -478,10 +487,10 @@ def test_a_rostered_employee_who_never_punched_gets_a_case_and_an_absence(seeded
     # that is fresh past the threshold, so both are established first.
     _import(db_session, people=[person("bio-smoke-1", employee_code=quiet.id)], now=SHIFT_START)
     _map_identity(db_session, quiet.id, actor=actor)
-    now = SHIFT_START + timedelta(minutes=ABSENCE_AFTER_MINUTES + 5)
+    now = SHIFT_END + timedelta(minutes=120)
     _import(db_session, punches=[], now=now)
 
-    created = scheduler_service._materialize_started_cases(db_session, now=now)
+    created = scheduler_service._materialize_scheduled_cases(db_session, now=now)
     db_session.commit()
 
     assert created == 1
@@ -509,6 +518,130 @@ def test_a_rostered_employee_who_never_punched_gets_a_case_and_an_absence(seeded
 
 def test_materialization_is_dormant_until_a_configuration_exists(seeded, db_session):
     """No configuration means no evaluation boundary, so nothing may be judged."""
-    assert scheduler_service._materialize_started_cases(
+    assert scheduler_service._materialize_scheduled_cases(
         db_session, now=SHIFT_START + timedelta(hours=2)
     ) == 0
+
+
+def test_directionless_punches_read_as_arrival_and_departure_once_the_duty_ends(
+    seeded, db_session
+):
+    """This site's terminals report no in/out, so punch order carries the day.
+
+    Mid-duty a single punch means the person is here and nothing more. When the
+    window closes the earliest punch is read as the arrival and the latest as the
+    departure, which is the only way late and early-exit minutes can exist on a
+    provider that stamps every event ``punch_state 255``.
+    """
+    employee = seeded["employee"]
+    late_by = GRACE_MINUTES + 20
+    _import(db_session, people=[person("bio-smoke-1", employee_code=employee.id)], now=SHIFT_START)
+    _map_identity(db_session, employee.id, actor=seeded["actor"])
+
+    arrival = SHIFT_START + timedelta(minutes=late_by)
+    mid_duty = SHIFT_START + timedelta(hours=4)
+    _import(
+        db_session,
+        punches=[
+            punch("evt-a", external_person_id="bio-smoke-1", occurred_at=arrival, direction=None)
+        ],
+        now=mid_duty,
+    )
+    running = attendance_evaluation_service.evaluate_case(
+        db_session, seeded["case"].id, evaluated_at=mid_duty
+    )
+    db_session.commit()
+    assert running is not None
+    assert running.presence_state == "on_duty"
+    assert running.reason_code == "PUNCH_RECORDED_DIRECTIONLESS"
+    # Nothing is attributed while the duty runs: no late minutes, no departure.
+    assert running.late_minutes is None
+    assert running.final_out_at is None
+
+    departure = SHIFT_END - timedelta(minutes=45)
+    settled_at = SHIFT_END + timedelta(minutes=120)
+    _import(
+        db_session,
+        punches=[
+            punch("evt-b", external_person_id="bio-smoke-1", occurred_at=departure, direction=None)
+        ],
+        now=settled_at,
+    )
+    settled = attendance_evaluation_service.evaluate_case(
+        db_session, seeded["case"].id, evaluated_at=settled_at
+    )
+    db_session.commit()
+
+    assert settled is not None
+    assert settled.presence_state == "completed"
+    assert settled.reason_code == "PUNCH_ORDER_INFERRED"
+    assert settled.late_minutes == late_by - GRACE_MINUTES
+    # Left 45 minutes early against a 10-minute early-exit grace.
+    assert settled.early_exit_minutes == 35
+    assert settled.missing_checkout is False
+    assert settled.last_direction is None
+
+
+def test_a_shift_that_has_not_started_is_on_the_register_without_a_verdict(seeded, db_session):
+    """Every shift of the day belongs on the register, including the next one.
+
+    Materializing only started shifts left a site running three rotations able to
+    see one of them at a time.
+    """
+    actor = seeded["actor"]
+    occurrence = seeded["occurrence"]
+    night = WorkShiftDefinition(
+        code="smoke-night", start_local_time=time(21, 0), duration_minutes=480
+    )
+    db_session.add(night)
+    db_session.flush()
+    db_session.add(
+        WorkShiftOccurrence(
+            crew_id=occurrence.crew_id,
+            crew_schedule_id=occurrence.crew_schedule_id,
+            shift_definition_id=night.id,
+            starts_at=SHIFT_START + timedelta(hours=13),
+            ends_at=SHIFT_START + timedelta(hours=21),
+            operational_date=OPERATIONAL_DATE,
+            pattern_code_snapshot=occurrence.pattern_code_snapshot,
+            crew_schedule_version_snapshot=occurrence.crew_schedule_version_snapshot,
+            source_anchor_at=occurrence.source_anchor_at,
+        )
+    )
+    _configure(db_session, actor=actor, evaluation_start_at=SHIFT_START - timedelta(days=1))
+    db_session.commit()
+    # A verified identity exists, so the reading is about timing and nothing else.
+    _import(
+        db_session,
+        people=[person("bio-smoke-1", employee_code=seeded["employee"].id)],
+        now=SHIFT_START,
+    )
+    _map_identity(db_session, seeded["employee"].id, actor=actor)
+
+    # Early in the morning shift, hours before the night shift opens.
+    scheduler_service._materialize_scheduled_cases(db_session, now=SHIFT_START + timedelta(hours=1))
+    db_session.commit()
+
+    codes = {
+        case.shift_code_snapshot
+        for case in db_session.scalars(
+            select(AttendanceCase).where(AttendanceCase.employee_id == seeded["employee"].id)
+        )
+    }
+    assert codes == {"smoke-morning", "smoke-night"}
+
+    upcoming = db_session.scalar(
+        select(AttendanceCase).where(
+            AttendanceCase.employee_id == seeded["employee"].id,
+            AttendanceCase.shift_code_snapshot == "smoke-night",
+        )
+    )
+    assert upcoming is not None
+    evaluation = db_session.scalar(
+        select(AttendanceEvaluation).where(
+            AttendanceEvaluation.attendance_case_id == upcoming.id
+        )
+    )
+    assert evaluation is not None
+    assert evaluation.presence_state == "scheduled"
+    assert evaluation.reason_code == "SCHEDULED_BEFORE_ABSENCE_BOUNDARY"

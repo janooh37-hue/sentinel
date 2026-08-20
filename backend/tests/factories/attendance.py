@@ -180,10 +180,10 @@ def build_attendance_day(
     as_of = local(operational_date, time(23, 59))
     evaluation_start_at = local(membership_start, time(0, 0))
     for employee in fixture.employees:
-        attendance_evaluation_service.materialize_started_cases(
+        attendance_evaluation_service.materialize_scheduled_cases(
             db,
             employee_id=employee.id,
-            as_of=as_of,
+            horizon=as_of,
             evaluation_start_at=evaluation_start_at,
         )
     db.flush()

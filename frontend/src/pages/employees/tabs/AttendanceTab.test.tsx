@@ -8,22 +8,25 @@
  *      actually worked, and the outcome colour; rest days are disabled.
  *   3. Selecting a day renders its punch timeline with the grace band and one
  *      marker per punch.
- *   4. A month with no scheduled attendance renders the empty state.
- *   5. Without the capabilities nothing is fetched.
+ *   4. Months the roster never covered still show the device's own sightings,
+ *      and selecting one states first/last seen without judging it.
+ *   5. A month with neither a schedule nor a sighting renders the empty state.
+ *   6. Without the capabilities nothing is fetched.
  */
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-const { getEmployeeAttendance, hasCapability } = vi.hoisted(() => ({
+const { getEmployeeAttendance, getEmployeeAttendanceHistory, hasCapability } = vi.hoisted(() => ({
   getEmployeeAttendance: vi.fn(),
+  getEmployeeAttendanceHistory: vi.fn(),
   hasCapability: vi.fn<(cap: string) => boolean>(),
 }))
 
 vi.mock('@/lib/api', async (orig) => {
   const real = await orig<typeof import('@/lib/api')>()
-  return { ...real, api: { ...real.api, getEmployeeAttendance } }
+  return { ...real, api: { ...real.api, getEmployeeAttendance, getEmployeeAttendanceHistory } }
 })
 
 vi.mock('@/lib/useCapabilities', () => ({
@@ -86,6 +89,16 @@ beforeEach(() => {
       }),
     ],
   })
+  getEmployeeAttendanceHistory.mockResolvedValue({
+    employee_id: 'G-9001',
+    provider_code: 'biotime',
+    external_employee_code: '9001',
+    from_date: '2026-08-01',
+    to_date: '2026-08-31',
+    linked: true,
+    truncated: false,
+    days: [],
+  })
 })
 
 describe('AttendanceTab', () => {
@@ -129,6 +142,79 @@ describe('AttendanceTab', () => {
     expect(screen.getByTestId('attendance-day-grace')).toBeInTheDocument()
     // Site wall time, not UTC: 00:52Z is 04:52 in Asia/Dubai.
     expect(screen.getByText('04:52')).toBeInTheDocument()
+  })
+
+  it('shows the device record for a month the roster never covered', async () => {
+    // January: no schedule existed, but BioTime holds the punches. The month must
+    // not read as an empty life, and nothing there may be called late or absent.
+    const user = userEvent.setup()
+    getEmployeeAttendance.mockResolvedValue({
+      employee_id: 'G-9001',
+      from_date: '2026-01-01',
+      to_date: '2026-01-31',
+      days: [],
+    })
+    getEmployeeAttendanceHistory.mockResolvedValue({
+      employee_id: 'G-9001',
+      provider_code: 'biotime',
+      external_employee_code: '9001',
+      from_date: '2026-01-01',
+      to_date: '2026-01-31',
+      linked: true,
+      truncated: false,
+      days: [
+        {
+          operational_date: '2026-01-05',
+          first_seen_at: '2026-01-05T02:34:00Z',
+          last_seen_at: '2026-01-05T11:12:00Z',
+          punch_count: 3,
+          devices: ['Main Gate'],
+        },
+      ],
+    })
+
+    render(
+      <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+        <AttendanceTab employeeId="G-9001" initialMonth="2026-01-05" />
+      </QueryClientProvider>,
+    )
+
+    await waitFor(() => expect(screen.getByTestId('attendance-month-grid')).toBeInTheDocument())
+    const cells = screen.getAllByTestId('attendance-month-cell')
+    const seen = cells.filter((cell) => cell.dataset.outcome === 'seen')
+    expect(seen).toHaveLength(1)
+
+    await user.click(seen[0])
+    const panel = await screen.findByTestId('attendance-seen-only-day')
+    // Site wall time: 02:34Z is 06:34 in Asia/Dubai.
+    expect(panel).toHaveTextContent('06:34')
+    expect(panel).toHaveTextContent('15:12')
+    expect(panel).toHaveTextContent('Main Gate')
+    // A sighting is never judged: no timeline, no lateness.
+    expect(screen.queryByTestId('attendance-day-timeline')).not.toBeInTheDocument()
+  })
+
+  it('says so when the person is on no attendance device', async () => {
+    getEmployeeAttendance.mockResolvedValue({
+      employee_id: 'G-9001',
+      from_date: '2026-08-01',
+      to_date: '2026-08-31',
+      days: [],
+    })
+    getEmployeeAttendanceHistory.mockResolvedValue({
+      employee_id: 'G-9001',
+      provider_code: 'biotime',
+      external_employee_code: null,
+      from_date: '2026-08-01',
+      to_date: '2026-08-31',
+      linked: false,
+      truncated: false,
+      days: [],
+    })
+
+    renderTab()
+
+    await waitFor(() => expect(screen.getByText(/Not enrolled on any/i)).toBeInTheDocument())
   })
 
   it('renders the empty state for a month with no scheduled attendance', async () => {

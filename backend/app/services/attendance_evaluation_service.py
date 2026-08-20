@@ -40,7 +40,9 @@ from app.db.workforce_models import (
 )
 from app.services.workforce_leave import resolve_excusing_leave
 
-ALGORITHM_VERSION = "workforce-attendance-v1"
+# v2 judges a case only once its match window has closed, and reads punch order
+# as arrival/departure on installations whose terminals report no direction.
+ALGORITHM_VERSION = "workforce-attendance-v2"
 _ACTIVE_EMPLOYEE_STATUS = "active"
 _VALID_PRESENCE_STATES = frozenset(
     {"scheduled", "on_duty", "completed", "absent", "excused_leave", "off", "unknown"}
@@ -78,7 +80,7 @@ def _ceil_positive_minutes(delta: timedelta) -> int:
     return max(0, math.ceil(max(0.0, delta.total_seconds()) / 60.0))
 
 
-def _effective_policy(db: Session, case: AttendanceCase) -> WorkAttendancePolicy | None:
+def effective_policy(db: Session, case: AttendanceCase) -> WorkAttendancePolicy | None:
     """Resolve the approved, most-specific policy effective for a fixed case."""
     occurrence_shift_id: int | None = None
     if case.shift_occurrence_id is not None:
@@ -300,44 +302,78 @@ def _derive_result(
     if mapping is None:
         result.update(presence_state="unknown", reason_code=mapping_reason)
         return result
-    if not directional and any(punch.direction == "unknown" for punch in punches):
-        result.update(presence_state="unknown", reason_code="PUNCH_DIRECTION_UNSUPPORTED")
-        return result
     if latest_in is None and any(punch.direction == "out" for punch in directional):
         result.update(presence_state="unknown", reason_code="PUNCH_SEQUENCE_INVALID")
         return result
 
     absence_boundary = scheduled_start + timedelta(minutes=policy.absence_after_minutes)
     checkout_boundary = scheduled_end + timedelta(minutes=policy.match_after_minutes)
-    fresh_for_absence = fresh is not None and fresh >= absence_boundary
     fresh_for_checkout = fresh is not None and fresh >= checkout_boundary
+    # A duty in progress has no verdict to give. Judgment waits for the case's
+    # own match window to close, so a person who has not arrived yet is never an
+    # absence and an arrival without a departure is not yet a missing checkout.
+    settled = evaluated_at >= checkout_boundary
 
-    if latest_in is None:
-        if evaluated_at < absence_boundary:
-            result.update(presence_state="scheduled", reason_code="SCHEDULED_BEFORE_ABSENCE_BOUNDARY")
-        elif not fresh_for_absence:
+    if not punches:
+        if not settled:
+            result.update(
+                presence_state="scheduled",
+                reason_code=(
+                    "SCHEDULED_BEFORE_ABSENCE_BOUNDARY"
+                    if evaluated_at < absence_boundary
+                    else "AWAITING_ARRIVAL"
+                ),
+            )
+        elif not fresh_for_checkout:
             result.update(presence_state="unknown", reason_code="SYNC_STALE")
         else:
             result.update(presence_state="absent", reason_code="NO_IN_AFTER_THRESHOLD")
         return result
 
-    assert first_in is not None
     grace_boundary = scheduled_start + timedelta(minutes=policy.grace_minutes)
+    early_boundary = scheduled_end - timedelta(minutes=policy.early_exit_grace_minutes)
+
+    if not directional:
+        # This site's terminals report punch_state 255 for every event, so order
+        # is the only evidence of direction: inside a closed window the earliest
+        # punch is the arrival and the latest is the departure. The inference is
+        # deliberately withheld until the window closes - mid-duty it would turn
+        # an ordinary arrival into a departure the moment nobody punched again.
+        first, last = punches[0], punches[-1]
+        result["first_in_at"] = _as_db_utc(first.occurred_at)
+        result["latest_in_at"] = _as_db_utc(first.occurred_at)
+        if not settled:
+            result.update(presence_state="on_duty", reason_code="PUNCH_RECORDED_DIRECTIONLESS")
+            return result
+        if not fresh_for_checkout:
+            result.update(presence_state="unknown", reason_code="SYNC_STALE")
+            return result
+        result["late_minutes"] = _ceil_positive_minutes(_as_utc(first.occurred_at) - grace_boundary)
+        if last is not first:
+            result["final_out_at"] = _as_db_utc(last.occurred_at)
+            result["early_exit_minutes"] = _ceil_positive_minutes(
+                early_boundary - _as_utc(last.occurred_at)
+            )
+        elif policy.require_checkout:
+            result["missing_checkout"] = True
+        result.update(presence_state="completed", reason_code="PUNCH_ORDER_INFERRED")
+        return result
+
+    assert first_in is not None
     result["late_minutes"] = _ceil_positive_minutes(_as_utc(first_in.occurred_at) - grace_boundary)
 
     if final_out is not None:
-        if evaluated_at >= checkout_boundary and not fresh_for_checkout:
+        if settled and not fresh_for_checkout:
             result.update(presence_state="unknown", reason_code="SYNC_STALE")
             return result
-        early_boundary = scheduled_end - timedelta(minutes=policy.early_exit_grace_minutes)
-        if evaluated_at >= checkout_boundary and fresh_for_checkout:
+        if settled:
             result["early_exit_minutes"] = _ceil_positive_minutes(
                 early_boundary - _as_utc(final_out.occurred_at)
             )
         result.update(presence_state="completed", reason_code="PUNCH_OUT_RECORDED")
         return result
 
-    if evaluated_at < scheduled_end:
+    if not settled:
         result.update(presence_state="on_duty", reason_code="PUNCH_IN_ACTIVE")
         return result
     if not fresh_for_checkout:
@@ -387,7 +423,7 @@ def evaluate_case(
     if evaluation_start_at is not None and _as_utc(case.scheduled_start_at) < _as_utc(evaluation_start_at):
         return None
 
-    policy = _effective_policy(db, case)
+    policy = effective_policy(db, case)
     mapping, mapping_reason, mapping_identity = _mapping_state(db, case.employee_id)
     fresh = _fresh_through(db, mapping.provider if mapping is not None else None)
     leave = resolve_excusing_leave(
@@ -490,22 +526,29 @@ def evaluate_case(
     raise AssertionError("unreachable")
 
 
-def materialize_started_cases(
+def materialize_scheduled_cases(
     db: Session,
     *,
     employee_id: str,
-    as_of: datetime,
+    horizon: datetime,
     evaluation_start_at: datetime | None = None,
 ) -> list[AttendanceCase]:
-    """Create only already-started occurrence cases and freeze their snapshots."""
+    """Create this employee's cases for every occurrence starting up to ``horizon``.
+
+    The horizon reaches past ``now`` on purpose: a register that only holds
+    started shifts cannot show the rest of the day, so a site running three
+    rotations would see one of them at a time. A case created before its shift
+    begins carries no verdict - the evaluator answers ``scheduled`` until the
+    window closes - so materializing early informs the roster without judging it.
+    """
     employee = db.get(Employee, employee_id)
     if employee is None or employee.status.lower() != _ACTIVE_EMPLOYEE_STATUS:
         return []
-    as_of_db = _as_db_utc(as_of)
+    horizon_db = _as_db_utc(horizon)
     cutoff = _as_db_utc(evaluation_start_at) if evaluation_start_at is not None else None
     occurrences = db.scalars(
         select(WorkShiftOccurrence)
-        .where(WorkShiftOccurrence.starts_at <= as_of_db)
+        .where(WorkShiftOccurrence.starts_at <= horizon_db)
         .order_by(WorkShiftOccurrence.starts_at, WorkShiftOccurrence.id)
     ).all()
     created: list[AttendanceCase] = []
@@ -847,9 +890,10 @@ __all__ = [
     "ALGORITHM_VERSION",
     "EffectiveAttendance",
     "apply_adjustment",
+    "effective_policy",
     "evaluate_case",
     "get_effective_attendance",
-    "materialize_started_cases",
+    "materialize_scheduled_cases",
     "resolve_assignment",
     "revoke_adjustment",
 ]

@@ -183,10 +183,10 @@ def _evaluate(db, *, as_of: datetime, evaluation_start_at: datetime) -> tuple[in
     created = 0
     for employee_id in db.scalars(select(Employee.id).where(Employee.status == "Active")):
         created += len(
-            attendance_evaluation_service.materialize_started_cases(
+            attendance_evaluation_service.materialize_scheduled_cases(
                 db,
                 employee_id=employee_id,
-                as_of=as_of,
+                horizon=as_of,
                 evaluation_start_at=evaluation_start_at,
             )
         )

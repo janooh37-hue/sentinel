@@ -3881,7 +3881,15 @@
       "dayDetail": "{{date}} · {{shift}} {{window}}",
       "noSchedule": "لا حضور مجدول في هذا الشهر.",
       "punchesUnknownDirection": "{{count}} بصمات · الاتجاه غير معروف",
-      "grace": "السماح {{minutes}} د"
+      "grace": "السماح {{minutes}} د",
+      "seenCount": "{{count}} بصمة",
+      "seenOnly": "دون جدول",
+      "fromDevice": "من سجل الجهاز",
+      "firstSeen": "أول ظهور",
+      "lastSeen": "آخر ظهور",
+      "punchCount": "عدد البصمات",
+      "devices": "الجهاز",
+      "unenrolled": "غير مسجَّل على أي جهاز حضور."
     },
     "empty": "لا سجلات حضور لهذا اليوم بعد.",
     "notStartedHint": "لم تبدأ هذه الوردية، فلا شيء ناقص.",

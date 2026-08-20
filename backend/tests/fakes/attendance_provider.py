@@ -51,6 +51,9 @@ class DeterministicAttendanceProvider:
     #: Recorded calls, so a test can assert cursor/window behaviour.
     people_calls: list[str | None] = field(default_factory=list)
     punch_calls: list[tuple[str | None, datetime | None, datetime]] = field(default_factory=list)
+    person_punch_calls: list[tuple[str, str | None, datetime, datetime]] = field(
+        default_factory=list
+    )
 
     def test_connection(self) -> ProviderHealth:
         return self.health
@@ -111,6 +114,41 @@ class DeterministicAttendanceProvider:
             exhausted=exhausted,
             # Only a completed window is trustworthy enough to advance freshness.
             fresh_through=upper if exhausted else None,
+        )
+
+    def list_person_punches(
+        self,
+        *,
+        external_employee_code: str,
+        since: datetime,
+        until: datetime,
+        cursor: str | None,
+    ) -> ProviderPage[ProviderPunch]:
+        """Mirror the vendor: filter by employee code, not by person identity.
+
+        The fake keeps the real hazard visible - two enrollments can share a code,
+        so a caller that trusts this filter as identity gets the wrong history.
+        """
+        self.person_punch_calls.append((external_employee_code, cursor, since, until))
+        lower, upper = _aware(since), _aware(until)
+        codes = {
+            row.external_person_id
+            for row in self.people
+            if row.external_employee_code == external_employee_code
+        }
+        selected = [
+            punch
+            for punch in self.punches
+            if punch.external_person_id in codes
+            and lower <= _aware(punch.occurred_at) < upper
+        ]
+        selected.sort(key=lambda punch: (_aware(punch.occurred_at), punch.external_event_id))
+        items, next_cursor, exhausted = self._page(selected, self._offset(cursor))
+        return ProviderPage(
+            items=items,
+            next_cursor=next_cursor,
+            exhausted=exhausted,
+            fresh_through=None,
         )
 
 

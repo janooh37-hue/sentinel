@@ -26,7 +26,7 @@ from app.services.attendance_evaluation_service import (
     apply_adjustment,
     evaluate_case,
     get_effective_attendance,
-    materialize_started_cases,
+    materialize_scheduled_cases,
     revoke_adjustment,
 )
 
@@ -226,7 +226,7 @@ def test_started_assignment_materialization_omits_future_occurrences_and_preserv
     db_session.add(future)
     db_session.flush()
 
-    materialize_started_cases(db_session, employee_id=case.employee_id, as_of=UTC_NOW)
+    materialize_scheduled_cases(db_session, employee_id=case.employee_id, horizon=UTC_NOW)
     cases = db_session.scalars(select(AttendanceCase).where(AttendanceCase.employee_id == case.employee_id)).all()
     assert [row.shift_occurrence_id for row in cases] == [case.shift_occurrence_id]
 
@@ -236,7 +236,7 @@ def test_started_assignment_materialization_omits_future_occurrences_and_preserv
     employee.department = "Changed after shift start"
     employee.duty_unit = "Changed unit"
     db_session.flush()
-    materialize_started_cases(db_session, employee_id=case.employee_id, as_of=UTC_NOW)
+    materialize_scheduled_cases(db_session, employee_id=case.employee_id, horizon=UTC_NOW)
     preserved = db_session.get(AttendanceCase, case.id)
     assert (preserved.crew_name_snapshot, preserved.department_snapshot, preserved.duty_unit_snapshot) == original_snapshot
 

@@ -6,8 +6,9 @@
  * row *means* lives here once, with no React and no i18n.
  *
  * Two rules are load-bearing and easy to get wrong:
- *   • a window that has not opened yet is `pending`, never `missing` — a night
- *     shift before 21:00 is not an absence;
+ *   • a duty is judged only after `judgment_due_at`, so a running shift is
+ *     `pending` or `verified`, never `missing` — a night shift before 21:00 is
+ *     not an absence, and neither is a morning shift at 08:00;
  *   • approved leave leaves the denominator, so a post of 4 with one person on
  *     leave is at full strength on 3 (`3/3 +1 leave`), never short-handed on 4.
  */
@@ -35,27 +36,27 @@ export interface StateInput {
   /**
    * The instant to judge against — normally `new Date()`.
    *
-   * Openness is decided PER ROW, never per day: on the rotation's double day a
+   * Judgment is decided PER ROW, never per day: on the rotation's double day a
    * company works the morning and the night window, so a whole-day flag would
-   * declare the not-yet-started night shift absent. That is the most damaging
+   * declare the not-yet-finished night shift absent. That is the most damaging
    * mistake this module can make, because it manufactures absences for people
-   * whose shift has not begun.
+   * whose duty is not over.
    */
   now: Date
   graceMinutes?: number
 }
 
-/** Whether this row's own scheduled window has started. */
-export function isRowWindowOpen(row: AttendanceRow, now: Date): boolean {
-  const start = parseInstant(row.scheduled_start_at)
-  return start !== null && start <= now.getTime()
-}
-
 export function rowState(row: AttendanceRow, { now, graceMinutes = DEFAULT_GRACE_MINUTES }: StateInput): RowState {
   if (row.on_leave || row.presence_state === 'excused_leave') return 'leave'
-  // Order matters: an unopened window must never read as an absence, even
-  // though it has no punches yet.
-  if (!isRowWindowOpen(row, now) && row.punch_count === 0) return 'pending'
+  // `judgment_due_at` is the server's own boundary - the case's match window
+  // close - so the register never flags a person the evaluator is still
+  // withholding judgment on. A duty in progress has no verdict: the guard who
+  // has not arrived yet is not an absence, and one punch is an arrival, not a
+  // missing checkout. A flag raised at 08:00 against a shift ending at 15:00 is
+  // noise a supervisor cannot act on, and a row with no boundary has no policy
+  // behind it and is never judged at all.
+  const due = parseInstant(row.judgment_due_at)
+  if (due === null || due > now.getTime()) return row.punch_count > 0 ? 'verified' : 'pending'
   if (row.punch_count === 0) return 'missing'
   if (row.punch_count === 1) return 'single'
   if ((row.late_minutes ?? 0) > graceMinutes) return 'late'
@@ -188,10 +189,14 @@ export function arrivalOffsetMinutes(row: AttendanceRow): number | null {
  * Whether ANY row's window has started.
  *
  * Only for page-level copy ("this window has not opened yet"). Never feed this
- * into `rowState`: openness is a per-row fact — see `isRowWindowOpen`.
+ * into `rowState`: whether a row may be judged is a per-row fact, and it turns
+ * on the end of the duty rather than its start.
  */
 export function isWindowOpen(rows: readonly AttendanceRow[], now: Date): boolean {
-  return rows.some((row) => isRowWindowOpen(row, now))
+  return rows.some((row) => {
+    const start = parseInstant(row.scheduled_start_at)
+    return start !== null && start <= now.getTime()
+  })
 }
 
 /** ISO date (`YYYY-MM-DD`) shifted by whole days, in local time. */

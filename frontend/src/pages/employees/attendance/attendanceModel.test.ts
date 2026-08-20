@@ -22,9 +22,11 @@ import {
   siteTime,
 } from './attendanceModel'
 
-// Morning starts 01:00Z (05:00 Dubai); judge from after it, and from before it.
-const OPEN = { now: new Date('2026-08-19T06:00:00Z') }
-const CLOSED = { now: new Date('2026-08-19T00:00:00Z') }
+// The morning duty runs 01:00Z-09:00Z and its verdict falls due at 11:00Z, two
+// hours past the end - the match window the server publishes on every row.
+const SETTLED = { now: new Date('2026-08-19T12:00:00Z') }
+const RUNNING = { now: new Date('2026-08-19T06:00:00Z') }
+const BEFORE_START = { now: new Date('2026-08-19T00:00:00Z') }
 
 function row(overrides: Partial<AttendanceRow> = {}): AttendanceRow {
   return {
@@ -44,6 +46,7 @@ function row(overrides: Partial<AttendanceRow> = {}): AttendanceRow {
     last_punch_at: '2026-08-19T09:06:00',
     punch_count: 2,
     late_minutes: 0,
+    judgment_due_at: '2026-08-19T11:00:00',
     on_leave: false,
     ...overrides,
   } as AttendanceRow
@@ -51,47 +54,62 @@ function row(overrides: Partial<AttendanceRow> = {}): AttendanceRow {
 
 describe('rowState', () => {
   it('reads a paired, on-time day as verified', () => {
-    expect(rowState(row(), OPEN)).toBe('verified')
+    expect(rowState(row(), SETTLED)).toBe('verified')
   })
 
-  it('reads a single punch as single, never as verified', () => {
-    expect(rowState(row({ punch_count: 1, last_punch_at: null }), OPEN)).toBe('single')
+  it('reads a single punch as single once the duty is over', () => {
+    expect(rowState(row({ punch_count: 1, last_punch_at: null }), SETTLED)).toBe('single')
   })
 
   it('reads late only past the grace window', () => {
-    expect(rowState(row({ late_minutes: 20 }), OPEN)).toBe('verified')
-    expect(rowState(row({ late_minutes: 44 }), OPEN)).toBe('late')
+    expect(rowState(row({ late_minutes: 20 }), SETTLED)).toBe('verified')
+    expect(rowState(row({ late_minutes: 44 }), SETTLED)).toBe('late')
   })
 
-  it('treats an unopened window as pending, not missing', () => {
-    const notStarted = row({ punch_count: 0, first_punch_at: null, last_punch_at: null })
-    expect(rowState(notStarted, CLOSED)).toBe('pending')
-    expect(rowState(notStarted, OPEN)).toBe('missing')
+  it('never flags a duty that is still running', () => {
+    // The site's rule: judge the shift when it is over. At 10:00 Dubai a morning
+    // guard who has not arrived is still expected, and one punch is an arrival,
+    // not a missing checkout. Both were flagged before this test existed.
+    const noPunch = row({ punch_count: 0, first_punch_at: null, last_punch_at: null })
+    expect(rowState(noPunch, BEFORE_START)).toBe('pending')
+    expect(rowState(noPunch, RUNNING)).toBe('pending')
+    expect(rowState(noPunch, SETTLED)).toBe('missing')
+
+    const arrivedOnly = row({ punch_count: 1, last_punch_at: null, late_minutes: 90 })
+    expect(rowState(arrivedOnly, RUNNING)).toBe('verified')
+    expect(needsDecision(rowState(arrivedOnly, RUNNING))).toBe(false)
+    expect(rowState(arrivedOnly, SETTLED)).toBe('single')
   })
 
-  it('judges each row against its OWN window on the double day', () => {
-    // The rotation's double day: the same company works morning and night, and
-    // at 06:00 Dubai the night window (21:00) has not opened. A whole-day flag
-    // would call the night crew absent — the bug this test exists to prevent.
-    const nowAt6amDubai = { now: new Date('2026-08-19T02:00:00Z') }
+  it('judges each row against its OWN duty on the double day', () => {
+    // The rotation's double day: the same company works morning and night. At
+    // 16:00 Dubai the morning verdict is due but the night duty has not even
+    // started. A whole-day flag would call the night crew absent.
+    const nowAt4pmDubai = { now: new Date('2026-08-19T12:00:00Z') }
     const morning = row({ punch_count: 0, first_punch_at: null, last_punch_at: null })
     const night = row({
       shift_code: 'night',
       scheduled_start_at: '2026-08-19T17:00:00',
       scheduled_end_at: '2026-08-20T01:00:00',
+      judgment_due_at: '2026-08-20T03:00:00',
       punch_count: 0,
       first_punch_at: null,
       last_punch_at: null,
     })
 
-    expect(rowState(morning, nowAt6amDubai)).toBe('missing')
-    expect(rowState(night, nowAt6amDubai)).toBe('pending')
+    expect(rowState(morning, nowAt4pmDubai)).toBe('missing')
+    expect(rowState(night, nowAt4pmDubai)).toBe('pending')
+  })
+
+  it('never judges a row with no policy behind it', () => {
+    const noPolicy = row({ judgment_due_at: null, punch_count: 0, first_punch_at: null })
+    expect(rowState(noPolicy, SETTLED)).toBe('pending')
   })
 
   it('reads approved leave as leave whichever way the flag arrives', () => {
-    expect(rowState(row({ on_leave: true, punch_count: 0 }), OPEN)).toBe('leave')
+    expect(rowState(row({ on_leave: true, punch_count: 0 }), SETTLED)).toBe('leave')
     expect(
-      rowState(row({ presence_state: 'excused_leave', punch_count: 0 }), OPEN),
+      rowState(row({ presence_state: 'excused_leave', punch_count: 0 }), SETTLED),
     ).toBe('leave')
   })
 })
@@ -120,7 +138,7 @@ describe('postSummary', () => {
       row({ employee_id: 'D', on_leave: true, punch_count: 0 }),
     ]
 
-    expect(postSummary(rows, OPEN)).toEqual({ due: 3, seen: 3, leave: 1, exceptions: 0 })
+    expect(postSummary(rows, SETTLED)).toEqual({ due: 3, seen: 3, leave: 1, exceptions: 0 })
   })
 
   it('counts each exception once', () => {
@@ -131,7 +149,7 @@ describe('postSummary', () => {
       row({ employee_id: 'D', late_minutes: 47 }),
     ]
 
-    expect(postSummary(rows, OPEN)).toMatchObject({ due: 4, exceptions: 3 })
+    expect(postSummary(rows, SETTLED)).toMatchObject({ due: 4, exceptions: 3 })
   })
 })
 
@@ -146,7 +164,7 @@ describe('orderByAttention', () => {
       row({ employee_id: 'leave', on_leave: true, punch_count: 0 }),
     ]
 
-    expect(orderByAttention(rows, OPEN).map((r) => r.employee_id)).toEqual([
+    expect(orderByAttention(rows, SETTLED).map((r) => r.employee_id)).toEqual([
       'missing',
       'single',
       'late-big',
@@ -188,7 +206,7 @@ describe('shiftCounts', () => {
       row({ employee_id: 'D', shift_code: 'night', on_leave: true, punch_count: 0 }),
     ]
 
-    expect(shiftCounts(rows, OPEN)).toEqual({
+    expect(shiftCounts(rows, SETTLED)).toEqual({
       morning: { seen: 1, due: 2 },
       night: { seen: 0, due: 1 },
     })

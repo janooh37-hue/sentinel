@@ -31,6 +31,9 @@ export type AttendanceDayRow = components['schemas']['AttendanceDayRowRead']
 export type AttendanceDayPage = components['schemas']['CursorPage_AttendanceDayRowRead_']
 export type EmployeeAttendanceRange = components['schemas']['EmployeeAttendanceRangeRead']
 export type EmployeeAttendanceDay = components['schemas']['EmployeeAttendanceDayRead']
+export type EmployeeAttendanceHistory = components['schemas']['EmployeeAttendanceHistoryRead']
+export type EmployeeAttendanceHistoryDay =
+  components['schemas']['EmployeeAttendanceHistoryDayRead']
 export type WorkforceIntegrationStatus = components['schemas']['IntegrationStatusRead']
 
 export interface ListAttendanceDayParams {
@@ -982,6 +985,11 @@ export const api = {
     ),
   getWorkforceIntegrationStatus: () =>
     request<WorkforceIntegrationStatus>('GET', '/workforce/integration/status'),
+  getEmployeeAttendanceHistory: (employeeId: string, params: EmployeeAttendanceParams) =>
+    request<EmployeeAttendanceHistory>(
+      'GET',
+      `/workforce/employees/${encodeURIComponent(employeeId)}/attendance/history${qs({ ...params })}`,
+    ),
   getEmployeeDetail: (id: string) =>
     request<EmployeeDetailRead>('GET', `/employees/${encodeURIComponent(id)}/detail`),
   getEmployeesCompleteness: () =>

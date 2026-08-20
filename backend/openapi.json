@@ -17406,6 +17406,85 @@
         }
       }
     },
+    "/api/v1/workforce/employees/{employee_id}/attendance/history": {
+      "get": {
+        "tags": [
+          "workforce"
+        ],
+        "summary": "Get Employee Attendance History",
+        "description": "One employee's punch history, read from the provider on request.\n\nThe provider owns years the roster does not cover, so this answers \"when was\nthis person seen\" without importing anything and without pretending the days\nbefore the schedule existed can be judged. Same two doors as\n``get_employee_attendance``, plus the caller's resolved scope.",
+        "operationId": "get_employee_attendance_history_api_v1_workforce_employees__employee_id__attendance_history_get",
+        "parameters": [
+          {
+            "name": "employee_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Employee Id"
+            }
+          },
+          {
+            "name": "from_date",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "date",
+              "title": "From Date"
+            }
+          },
+          {
+            "name": "to_date",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "date",
+              "title": "To Date"
+            }
+          },
+          {
+            "name": "gssg_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Gssg Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EmployeeAttendanceHistoryRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/workforce/attendance/cases/{case_id}": {
       "get": {
         "tags": [
@@ -21398,6 +21477,18 @@
             "type": "boolean",
             "title": "On Leave",
             "default": false
+          },
+          "judgment_due_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Judgment Due At"
           }
         },
         "additionalProperties": false,
@@ -21407,7 +21498,7 @@
           "name_en"
         ],
         "title": "AttendanceDayRowRead",
-        "description": "One person's scheduled shift on one operational date, with punch facts.\n\n``first_punch_at`` / ``last_punch_at`` are the earliest and latest punches\ninside this case's policy match window. They are timestamps of events, not a\ncheck-in and a check-out: this provider reports no direction, so a single\npunch yields ``punch_count == 1`` with both bounds equal, and a client must\npresent it as \"seen at\", never as a span."
+        "description": "One person's scheduled shift on one operational date, with punch facts.\n\n``first_punch_at`` / ``last_punch_at`` are the earliest and latest punches\ninside this case's policy match window. They are timestamps of events, not a\ncheck-in and a check-out: this provider reports no direction, so a single\npunch yields ``punch_count == 1`` with both bounds equal, and a client must\npresent it as \"seen at\", never as a span.\n\n``judgment_due_at`` is when the duty stops running and the evaluator is\nwilling to call it: before that instant a missing punch is an arrival still\npending, not an exception, and a client must not flag it."
       },
       "AttendanceExceptionRead": {
         "properties": {
@@ -27021,6 +27112,107 @@
           "operational_date"
         ],
         "title": "EmployeeAttendanceDayRead"
+      },
+      "EmployeeAttendanceHistoryDayRead": {
+        "properties": {
+          "operational_date": {
+            "type": "string",
+            "format": "date",
+            "title": "Operational Date"
+          },
+          "first_seen_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "First Seen At"
+          },
+          "last_seen_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Last Seen At"
+          },
+          "punch_count": {
+            "type": "integer",
+            "minimum": 1.0,
+            "title": "Punch Count"
+          },
+          "devices": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Devices"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "operational_date",
+          "first_seen_at",
+          "last_seen_at",
+          "punch_count"
+        ],
+        "title": "EmployeeAttendanceHistoryDayRead",
+        "description": "One local calendar day of provider punches, with no verdict attached.\n\n``first_seen_at`` and ``last_seen_at`` are sightings, not a check-in pair:\nthis build reports no punch direction, and days before the roster existed\nhave no shift to judge them against."
+      },
+      "EmployeeAttendanceHistoryRead": {
+        "properties": {
+          "employee_id": {
+            "type": "string",
+            "title": "Employee Id"
+          },
+          "provider_code": {
+            "type": "string",
+            "title": "Provider Code"
+          },
+          "external_employee_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "External Employee Code"
+          },
+          "from_date": {
+            "type": "string",
+            "format": "date",
+            "title": "From Date"
+          },
+          "to_date": {
+            "type": "string",
+            "format": "date",
+            "title": "To Date"
+          },
+          "linked": {
+            "type": "boolean",
+            "title": "Linked"
+          },
+          "truncated": {
+            "type": "boolean",
+            "title": "Truncated"
+          },
+          "days": {
+            "items": {
+              "$ref": "#/components/schemas/EmployeeAttendanceHistoryDayRead"
+            },
+            "type": "array",
+            "title": "Days"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "employee_id",
+          "provider_code",
+          "from_date",
+          "to_date",
+          "linked",
+          "truncated"
+        ],
+        "title": "EmployeeAttendanceHistoryRead",
+        "description": "Provider-held punch history, read on request and never stored here.\n\n``linked`` is false when the employee has no verified provider identity, in\nwhich case there is nothing to ask the provider for. ``truncated`` says the\nbounded read stopped before the range was exhausted."
       },
       "EmployeeAttendancePunchRead": {
         "properties": {

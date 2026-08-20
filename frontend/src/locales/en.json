@@ -3611,7 +3611,15 @@
       "dayDetail": "{{date}} · {{shift}} {{window}}",
       "noSchedule": "No scheduled attendance in this month.",
       "punchesUnknownDirection": "{{count}} punches · direction unknown",
-      "grace": "grace {{minutes}}m"
+      "grace": "grace {{minutes}}m",
+      "seenCount": "{{count}} seen",
+      "seenOnly": "Not rostered",
+      "fromDevice": "From the device record",
+      "firstSeen": "First seen",
+      "lastSeen": "Last seen",
+      "punchCount": "Punches",
+      "devices": "Device",
+      "unenrolled": "Not enrolled on any attendance device."
     },
     "empty": "No attendance rows for this day yet.",
     "notStartedHint": "This window has not opened yet, so nothing is missing.",

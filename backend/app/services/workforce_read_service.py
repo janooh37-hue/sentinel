@@ -27,6 +27,7 @@ from app.db.workforce_models import (
     WorkRotationStep,
     WorkShiftDefinition,
 )
+from app.services.attendance_evaluation_service import effective_policy
 from app.services.workforce_scope_service import scope_allows
 
 
@@ -165,8 +166,20 @@ def _punch_window(case: AttendanceCase, policy: Any) -> tuple[datetime, datetime
     )
 
 
+def _judgment_due_at(case: AttendanceCase, policy: Any) -> datetime | None:
+    """The instant this case stops being a running duty and becomes a verdict.
+
+    Published rather than recomputed by the client: the evaluator withholds its
+    judgment until the case's own match window closes, and a register that flagged
+    a person earlier than that would contradict the presence state beside it.
+    """
+    if policy is None:
+        return None
+    return case.scheduled_end_at + timedelta(minutes=policy.match_after_minutes)
+
+
 def _punch_bounds(
-    db: Session, *, case: AttendanceCase, person: AttendanceProviderPerson | None
+    db: Session, *, case: AttendanceCase, person: AttendanceProviderPerson | None, policy: Any
 ) -> tuple[datetime | None, datetime | None, int]:
     """First punch, last punch and count for one case.
 
@@ -180,9 +193,6 @@ def _punch_bounds(
     verified provider person, inside the case's policy match window, skipping any
     punch already owned by a different case.
     """
-    from app.services.attendance_evaluation_service import _effective_policy
-
-    policy = _effective_policy(db, case)
     if person is None or policy is None:
         return (None, None, 0)
     window_start, window_end = _punch_window(case, policy)
@@ -253,8 +263,9 @@ def list_attendance_day(
     for case in cases:
         evaluation = latest.get(case.id)
         presence_state = evaluation.presence_state if evaluation else None
+        policy = effective_policy(db, case)
         first_at, last_at, count = _punch_bounds(
-            db, case=case, person=people.get(case.employee_id)
+            db, case=case, person=people.get(case.employee_id), policy=policy
         )
         result.append(
             {
@@ -266,6 +277,7 @@ def list_attendance_day(
                 "punch_count": count,
                 "late_minutes": _late_minutes(case, first_at),
                 "on_leave": presence_state == "excused_leave",
+                "judgment_due_at": _judgment_due_at(case, policy),
             }
         )
     return sorted(result, key=lambda row: (row["scheduled_start_at"], row["employee_id"]))
@@ -310,14 +322,12 @@ def employee_attendance_range(
     latest = _latest_evaluations(db, [case.id for case in cases])
     person = _verified_people(db, {employee_id}).get(employee_id)
 
-    from app.services.attendance_evaluation_service import _effective_policy
-
     days: list[dict[str, Any]] = []
     for case in cases:
         evaluation = latest.get(case.id)
-        first_at, _last_at, count = _punch_bounds(db, case=case, person=person)
+        policy = effective_policy(db, case)
+        first_at, _last_at, count = _punch_bounds(db, case=case, person=person, policy=policy)
         punches: list[dict[str, Any]] = []
-        policy = _effective_policy(db, case)
         if person is not None and policy is not None:
             window_start, window_end = _punch_window(case, policy)
             punches = [

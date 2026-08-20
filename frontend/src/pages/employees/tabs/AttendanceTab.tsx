@@ -6,6 +6,12 @@
  * day's punch timeline showing the scheduled window, the grace band and every
  * event.
  *
+ * Two sources, deliberately distinct. Judged days come from this database and
+ * only exist where a roster does. Sightings come from the device record, read
+ * live for the displayed month and never stored: they are what lets the months
+ * before the schedule existed show when the person was actually at the gate,
+ * without pretending anything can be called late or absent there.
+ *
  * The register links here, so this is the drill-in for a name.
  */
 
@@ -14,7 +20,7 @@ import { useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { api } from '@/lib/api'
-import type { EmployeeAttendanceDay } from '@/lib/api'
+import type { EmployeeAttendanceDay, EmployeeAttendanceHistoryDay } from '@/lib/api'
 import { useCapabilities } from '@/lib/useCapabilities'
 import {
   DEFAULT_GRACE_MINUTES,
@@ -34,7 +40,7 @@ interface Props {
   initialMonth?: string
 }
 
-type DayOutcome = 'verified' | 'late' | 'exception' | 'leave' | 'off'
+type DayOutcome = 'verified' | 'late' | 'exception' | 'leave' | 'seen' | 'off'
 
 const SHIFT_LETTER: Record<string, string> = {
   morning: 'M',
@@ -48,6 +54,7 @@ const CELL: Record<DayOutcome, string> = {
   late: 'bg-warning-soft border-warning/25',
   exception: 'bg-accent-soft border-accent/25',
   leave: 'bg-info-soft border-info/25',
+  seen: 'border-dashed border-info/40 bg-info-soft/40',
   off: 'border-dashed border-border-strong bg-transparent text-faint',
 }
 
@@ -94,6 +101,20 @@ export function AttendanceTab({
     staleTime: 60_000,
   })
 
+  // The device record for the same month, read live. A provider outage must not
+  // blank the judged month, so this query fails quietly on its own.
+  const history = useQuery({
+    queryKey: ['employee-attendance-history', employeeId, bounds.from, bounds.to] as const,
+    queryFn: () =>
+      api.getEmployeeAttendanceHistory(employeeId, {
+        from_date: bounds.from,
+        to_date: bounds.to,
+      }),
+    enabled: allowed,
+    staleTime: 60_000,
+    retry: false,
+  })
+
   // Memoized so the two derivations below do not recompute on every render.
   const days = useMemo(() => query.data?.days ?? [], [query.data])
   const byDate = useMemo(() => {
@@ -103,6 +124,12 @@ export function AttendanceTab({
     }
     return map
   }, [days])
+
+  const sightings = useMemo(() => {
+    const map = new Map<string, EmployeeAttendanceHistoryDay>()
+    for (const day of history.data?.days ?? []) map.set(day.operational_date, day)
+    return map
+  }, [history.data])
 
   const kpis = useMemo(() => {
     let onTime = 0
@@ -180,9 +207,11 @@ export function AttendanceTab({
           <p role="status" className="px-4 py-6 text-center text-[0.82em] text-muted-foreground">
             {t('common.loading', 'Loading…')}
           </p>
-        ) : days.length === 0 ? (
+        ) : days.length === 0 && sightings.size === 0 ? (
           <p className="px-4 py-6 text-center text-[0.82em] text-muted-foreground">
-            {t('attendance.tab.noSchedule')}
+            {history.data?.linked === false
+              ? t('attendance.tab.unenrolled')
+              : t('attendance.tab.noSchedule')}
           </p>
         ) : (
           <div className="grid grid-cols-7 gap-1.5 p-3" data-testid="attendance-month-grid">
@@ -193,9 +222,12 @@ export function AttendanceTab({
               const dayNumber = index + 1
               const iso = `${bounds.from.slice(0, 8)}${String(dayNumber).padStart(2, '0')}`
               const entries = byDate.get(iso) ?? []
+              const seen = sightings.get(iso)
               const outcome: DayOutcome =
                 entries.length === 0
-                  ? 'off'
+                  ? seen
+                    ? 'seen'
+                    : 'off'
                   : entries.some((day) => dayOutcome(day, DEFAULT_GRACE_MINUTES) === 'exception')
                     ? 'exception'
                     : entries.some((day) => dayOutcome(day, DEFAULT_GRACE_MINUTES) === 'late')
@@ -210,7 +242,7 @@ export function AttendanceTab({
                   data-testid="attendance-month-cell"
                   data-outcome={outcome}
                   aria-pressed={selected === iso}
-                  disabled={entries.length === 0}
+                  disabled={entries.length === 0 && seen === undefined}
                   onClick={() => setSelected(iso)}
                   className={`min-h-[58px] rounded-xl border p-1.5 text-start ${CELL[outcome]} ${
                     selected === iso ? 'outline outline-2 outline-primary' : ''
@@ -218,11 +250,11 @@ export function AttendanceTab({
                 >
                   <span className="font-mono text-[0.72em] text-muted-foreground">{dayNumber}</span>
                   <span className="mt-1 block text-[0.68em] font-bold">
-                    {entries.length === 0
-                      ? t('attendance.tab.restDay')
-                      : entries
-                          .map((day) => SHIFT_LETTER[day.shift_code ?? ''] ?? '?')
-                          .join(' ')}
+                    {entries.length > 0
+                      ? entries.map((day) => SHIFT_LETTER[day.shift_code ?? ''] ?? '?').join(' ')
+                      : seen
+                        ? t('attendance.tab.seenCount', { count: seen.punch_count })
+                        : t('attendance.tab.restDay')}
                   </span>
                 </button>
               )
@@ -234,6 +266,10 @@ export function AttendanceTab({
       {selectedDays.map((day) => (
         <DayTimeline key={`${day.operational_date}-${day.shift_code}`} day={day} />
       ))}
+
+      {selectedDays.length === 0 && selected !== null && sightings.get(selected) ? (
+        <SeenOnlyDay day={sightings.get(selected)!} />
+      ) : null}
     </div>
   )
 }
@@ -257,6 +293,49 @@ function Kpi({
       </div>
       {detail && <div className="mt-0.5 text-[0.7em] text-faint">{detail}</div>}
     </div>
+  )
+}
+
+/**
+ * A day the device recorded but no roster covers.
+ *
+ * Sightings only: with no scheduled window there is nothing to be late for, and
+ * this provider reports no direction, so the first and last events are stated as
+ * what they are rather than dressed up as a check-in and a check-out.
+ */
+function SeenOnlyDay({ day }: { day: EmployeeAttendanceHistoryDay }): React.JSX.Element {
+  const { t } = useTranslation()
+  return (
+    <section
+      className="rounded-2xl border border-hairline bg-surface"
+      data-testid="attendance-seen-only-day"
+    >
+      <header className="flex flex-wrap items-center gap-2.5 border-b border-hairline px-4 py-3">
+        <h3 className="text-[0.85em] font-bold">{day.operational_date}</h3>
+        <span className="rounded-full bg-info-soft px-2 py-0.5 text-[0.7em] font-bold text-info">
+          {t('attendance.tab.seenOnly')}
+        </span>
+        <span className="ms-auto text-[0.72em] text-faint">{t('attendance.tab.fromDevice')}</span>
+      </header>
+      <dl className="grid grid-cols-2 gap-3 px-4 py-3 text-[0.8em] md:grid-cols-4">
+        <div>
+          <dt className="text-[0.85em] text-muted-foreground">{t('attendance.tab.firstSeen')}</dt>
+          <dd className="font-mono font-bold">{siteTime(day.first_seen_at)}</dd>
+        </div>
+        <div>
+          <dt className="text-[0.85em] text-muted-foreground">{t('attendance.tab.lastSeen')}</dt>
+          <dd className="font-mono font-bold">{siteTime(day.last_seen_at)}</dd>
+        </div>
+        <div>
+          <dt className="text-[0.85em] text-muted-foreground">{t('attendance.tab.punchCount')}</dt>
+          <dd className="font-mono font-bold">{day.punch_count}</dd>
+        </div>
+        <div>
+          <dt className="text-[0.85em] text-muted-foreground">{t('attendance.tab.devices')}</dt>
+          <dd className="font-bold">{day.devices.join(' · ') || '—'}</dd>
+        </div>
+      </dl>
+    </section>
   )
 }
 

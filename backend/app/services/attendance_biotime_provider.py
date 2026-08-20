@@ -339,6 +339,48 @@ class BioTimeAttendanceProvider:
             fresh_through=until if exhausted else None,
         )
 
+    def list_person_punches(
+        self,
+        *,
+        external_employee_code: str,
+        since: datetime,
+        until: datetime,
+        cursor: str | None,
+    ) -> ProviderPage[ProviderPunch]:
+        """One person's punches inside a window, filtered by the server.
+
+        The filter is ``emp_code`` because it is the only person field this
+        endpoint honours: ``emp``, the primary key the import path joins on, is
+        accepted and then silently ignored, so filtering by it would return the
+        whole site. A caller must therefore still check each row's
+        ``external_person_id`` before trusting it as one person's history.
+
+        Reading history never advances the import watermark, so this page carries
+        no ``fresh_through``.
+        """
+        rows, exhausted, next_cursor = self._read_page(
+            _PUNCH_PATH,
+            cursor=cursor,
+            extra={
+                "start_time": _format_wall_time(since, self._zone),
+                "end_time": _format_wall_time(until, self._zone),
+                "emp_code": external_employee_code,
+            },
+        )
+        punches = [
+            punch
+            for punch in (
+                self._punch(row) for row in rows if self._scope.accepts_punch(row)
+            )
+            if punch is not None
+        ]
+        return ProviderPage(
+            items=punches,
+            next_cursor=next_cursor,
+            exhausted=exhausted,
+            fresh_through=None,
+        )
+
     # -- normalization -----------------------------------------------------
 
     def _person(self, record: dict[str, Any]) -> ProviderPerson | None:

@@ -15,7 +15,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const { listAttendanceDay, hasCapability } = vi.hoisted(() => ({
   listAttendanceDay: vi.fn(),
@@ -35,8 +35,12 @@ import { AttendancePage } from './AttendancePage'
 
 const MORNING_START = '2026-08-19T01:00:00'
 const MORNING_END = '2026-08-19T09:00:00'
+// The verdict falls due when the case's match window closes, two hours past the
+// end: the register may not flag a duty before then.
+const MORNING_DUE = '2026-08-19T11:00:00'
 const NIGHT_START = '2026-08-19T17:00:00'
 const NIGHT_END = '2026-08-20T01:00:00'
+const NIGHT_DUE = '2026-08-20T03:00:00'
 
 function row(overrides: Record<string, unknown> = {}) {
   return {
@@ -56,6 +60,7 @@ function row(overrides: Record<string, unknown> = {}) {
     last_punch_at: '2026-08-19T09:06:00',
     punch_count: 2,
     late_minutes: 0,
+    judgment_due_at: MORNING_DUE,
     on_leave: false,
     ...overrides,
   }
@@ -79,6 +84,7 @@ const DAY_ROWS = [
     shift_code: 'night',
     scheduled_start_at: NIGHT_START,
     scheduled_end_at: NIGHT_END,
+    judgment_due_at: NIGHT_DUE,
     punch_count: 0,
     first_punch_at: null,
     last_punch_at: null,
@@ -101,9 +107,17 @@ function renderPage(initialEntry = '/employees/attendance') {
 }
 
 beforeEach(() => {
+  // 16:00 Dubai on the double day: the morning verdict is due, the night duty
+  // has not started. Without a pinned clock these rows change meaning daily.
+  vi.useFakeTimers({ toFake: ['Date'] })
+  vi.setSystemTime(new Date('2026-08-19T12:00:00Z'))
   vi.clearAllMocks()
   hasCapability.mockReturnValue(true)
   listAttendanceDay.mockResolvedValue({ items: DAY_ROWS, next_cursor: null })
+})
+
+afterEach(() => {
+  vi.useRealTimers()
 })
 
 describe('AttendancePage', () => {

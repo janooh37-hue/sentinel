@@ -10,7 +10,7 @@
  */
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { render, screen, waitFor } from '@testing-library/react'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const { hasCapability, listAttendanceDay } = vi.hoisted(() => ({
   hasCapability: vi.fn<(cap: string) => boolean>(),
@@ -30,6 +30,9 @@ import { AttendanceHeroCard } from './AttendanceHeroCard'
 
 const START = '2026-08-19T01:00:00'
 const END = '2026-08-19T09:00:00'
+// The verdict is due when the case's match window closes: the card counts
+// exceptions only for duties that are over.
+const DUE = '2026-08-19T11:00:00'
 
 function row(overrides: Record<string, unknown> = {}) {
   return {
@@ -49,6 +52,7 @@ function row(overrides: Record<string, unknown> = {}) {
     last_punch_at: '2026-08-19T09:06:00',
     punch_count: 2,
     late_minutes: 0,
+    judgment_due_at: DUE,
     on_leave: false,
     ...overrides,
   }
@@ -64,8 +68,14 @@ function renderCard() {
 }
 
 beforeEach(() => {
+  vi.useFakeTimers({ toFake: ['Date'] })
+  vi.setSystemTime(new Date('2026-08-19T12:00:00Z'))
   vi.clearAllMocks()
   hasCapability.mockReturnValue(true)
+})
+
+afterEach(() => {
+  vi.useRealTimers()
 })
 
 describe('AttendanceHeroCard', () => {

@@ -3996,6 +3996,31 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/workforce/employees/{employee_id}/attendance/history": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Employee Attendance History
+         * @description One employee's punch history, read from the provider on request.
+         *
+         *     The provider owns years the roster does not cover, so this answers "when was
+         *     this person seen" without importing anything and without pretending the days
+         *     before the schedule existed can be judged. Same two doors as
+         *     ``get_employee_attendance``, plus the caller's resolved scope.
+         */
+        get: operations["get_employee_attendance_history_api_v1_workforce_employees__employee_id__attendance_history_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/workforce/attendance/cases/{case_id}": {
         parameters: {
             query?: never;
@@ -4869,6 +4894,10 @@ export interface components {
          *     check-in and a check-out: this provider reports no direction, so a single
          *     punch yields ``punch_count == 1`` with both bounds equal, and a client must
          *     present it as "seen at", never as a span.
+         *
+         *     ``judgment_due_at`` is when the duty stops running and the evaluator is
+         *     willing to call it: before that instant a missing punch is an arrival still
+         *     pending, not an exception, and a client must not flag it.
          */
         AttendanceDayRowRead: {
             /** Employee Id */
@@ -4911,6 +4940,8 @@ export interface components {
              * @default false
              */
             on_leave: boolean;
+            /** Judgment Due At */
+            judgment_due_at?: string | null;
         };
         /** AttendanceExceptionRead */
         AttendanceExceptionRead: {
@@ -6866,6 +6897,67 @@ export interface components {
             punch_count: number;
             /** Punches */
             punches?: components["schemas"]["EmployeeAttendancePunchRead"][];
+        };
+        /**
+         * EmployeeAttendanceHistoryDayRead
+         * @description One local calendar day of provider punches, with no verdict attached.
+         *
+         *     ``first_seen_at`` and ``last_seen_at`` are sightings, not a check-in pair:
+         *     this build reports no punch direction, and days before the roster existed
+         *     have no shift to judge them against.
+         */
+        EmployeeAttendanceHistoryDayRead: {
+            /**
+             * Operational Date
+             * Format: date
+             */
+            operational_date: string;
+            /**
+             * First Seen At
+             * Format: date-time
+             */
+            first_seen_at: string;
+            /**
+             * Last Seen At
+             * Format: date-time
+             */
+            last_seen_at: string;
+            /** Punch Count */
+            punch_count: number;
+            /** Devices */
+            devices?: string[];
+        };
+        /**
+         * EmployeeAttendanceHistoryRead
+         * @description Provider-held punch history, read on request and never stored here.
+         *
+         *     ``linked`` is false when the employee has no verified provider identity, in
+         *     which case there is nothing to ask the provider for. ``truncated`` says the
+         *     bounded read stopped before the range was exhausted.
+         */
+        EmployeeAttendanceHistoryRead: {
+            /** Employee Id */
+            employee_id: string;
+            /** Provider Code */
+            provider_code: string;
+            /** External Employee Code */
+            external_employee_code?: string | null;
+            /**
+             * From Date
+             * Format: date
+             */
+            from_date: string;
+            /**
+             * To Date
+             * Format: date
+             */
+            to_date: string;
+            /** Linked */
+            linked: boolean;
+            /** Truncated */
+            truncated: boolean;
+            /** Days */
+            days?: components["schemas"]["EmployeeAttendanceHistoryDayRead"][];
         };
         /**
          * EmployeeAttendancePunchRead
@@ -19467,6 +19559,42 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["EmployeeAttendanceRangeRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_employee_attendance_history_api_v1_workforce_employees__employee_id__attendance_history_get: {
+        parameters: {
+            query: {
+                from_date: string;
+                to_date: string;
+            };
+            header?: never;
+            path: {
+                employee_id: string;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EmployeeAttendanceHistoryRead"];
                 };
             };
             /** @description Validation Error */

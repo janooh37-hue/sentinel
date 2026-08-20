@@ -363,6 +363,10 @@ class AttendanceDayRowRead(RosterRowRead):
     check-in and a check-out: this provider reports no direction, so a single
     punch yields ``punch_count == 1`` with both bounds equal, and a client must
     present it as "seen at", never as a span.
+
+    ``judgment_due_at`` is when the duty stops running and the evaluator is
+    willing to call it: before that instant a missing punch is an arrival still
+    pending, not an exception, and a client must not flag it.
     """
 
     first_punch_at: datetime | None = None
@@ -370,6 +374,7 @@ class AttendanceDayRowRead(RosterRowRead):
     punch_count: int = Field(default=0, ge=0)
     late_minutes: int | None = Field(default=None, ge=0)
     on_leave: bool = False
+    judgment_due_at: datetime | None = None
 
 
 class EmployeeAttendancePunchRead(ORMBase):
@@ -409,6 +414,43 @@ class EmployeeAttendanceRangeRead(BaseModel):
     from_date: date
     to_date: date
     days: list[EmployeeAttendanceDayRead]
+
+
+class EmployeeAttendanceHistoryDayRead(ORMBase):
+    """One local calendar day of provider punches, with no verdict attached.
+
+    ``first_seen_at`` and ``last_seen_at`` are sightings, not a check-in pair:
+    this build reports no punch direction, and days before the roster existed
+    have no shift to judge them against.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    operational_date: date
+    first_seen_at: datetime
+    last_seen_at: datetime
+    punch_count: int = Field(ge=1)
+    devices: list[str] = Field(default_factory=list)
+
+
+class EmployeeAttendanceHistoryRead(BaseModel):
+    """Provider-held punch history, read on request and never stored here.
+
+    ``linked`` is false when the employee has no verified provider identity, in
+    which case there is nothing to ask the provider for. ``truncated`` says the
+    bounded read stopped before the range was exhausted.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    employee_id: str
+    provider_code: str
+    external_employee_code: str | None = None
+    from_date: date
+    to_date: date
+    linked: bool
+    truncated: bool
+    days: list[EmployeeAttendanceHistoryDayRead] = Field(default_factory=list)
 
 
 class AttendanceAdjustmentWrite(BaseModel):

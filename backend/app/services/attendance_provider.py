@@ -72,3 +72,19 @@ class AttendanceProvider(Protocol):
         since: datetime | None,
         until: datetime,
     ) -> ProviderPage[ProviderPunch]: ...
+
+    def list_person_punches(
+        self,
+        *,
+        external_employee_code: str,
+        since: datetime,
+        until: datetime,
+        cursor: str | None,
+    ) -> ProviderPage[ProviderPunch]:
+        """Read one person's punches without importing them.
+
+        History is answered from the provider on demand instead of being copied
+        into this database: the years before the roster existed cannot be judged,
+        and storing them would only duplicate the source of truth.
+        """
+        ...

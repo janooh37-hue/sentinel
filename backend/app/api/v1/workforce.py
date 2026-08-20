@@ -5,6 +5,7 @@ import hashlib
 import json
 from datetime import UTC, date, datetime
 from typing import Annotated, Any, TypeVar
+from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Depends, Header, Query, Response, status
 from sqlalchemy import select
@@ -12,6 +13,7 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user, require_capability
 from app.api.errors import AppError, ConflictError, NotFoundError, ValidationFailedError
+from app.config import get_settings
 from app.db.models import AuditLog, Employee, User
 from app.db.session import get_db
 from app.db.workforce_models import (
@@ -44,6 +46,7 @@ from app.schemas.workforce import (
     CrewScheduleWrite,
     CursorPage,
     DutyAssignmentEventRead,
+    EmployeeAttendanceHistoryRead,
     EmployeeAttendanceRangeRead,
     EvaluationQueueRead,
     IntegrationStatusRead,
@@ -68,6 +71,7 @@ from app.schemas.workforce import (
     WorkforceSnapshotRead,
 )
 from app.services import (
+    attendance_history_service,
     attendance_sync_service,
     perm_service,
     scheduler_service,
@@ -77,6 +81,7 @@ from app.services import (
     workforce_read_service,
     workforce_schedule_service,
 )
+from app.services.attendance_provider import AttendanceProvider
 from app.services.attendance_queue_service import retry_evaluation_queue_item
 from app.services.workforce_scope_service import (
     WorkforceScope,
@@ -182,6 +187,12 @@ def _require_organization_workforce_scope(db: Session, user: User) -> None:
             "Organization workforce scope is required for this change.",
             http_status=403,
         )
+
+
+def _is_own_employee(user: User, employee_id: str) -> bool:
+    """Whether this caller is asking about their own linked employee record."""
+    linked = (user.employee_id or "").strip()
+    return bool(linked) and linked == employee_id
 
 
 def _require_employee_schedule_scope(db: Session, user: User, employee_id: str) -> Employee:
@@ -432,7 +443,7 @@ def get_employee_attendance(
     employee record, while a roster reader needs both ``workforce.people.view``
     and ``workforce.attendance.review`` and stays inside their resolved scope.
     """
-    own = bool(user.employee_id) and user.employee_id.strip() == employee_id
+    own = _is_own_employee(user, employee_id)
     if not (own and perm_service.has_capability(db, user, "workforce.self.view")):
         for capability in ("workforce.people.view", "workforce.attendance.review"):
             if not perm_service.has_capability(db, user, capability):
@@ -448,6 +459,84 @@ def get_employee_attendance(
         from_date=from_date,
         to_date=to_date,
     )
+
+
+def get_attendance_provider() -> AttendanceProvider:
+    """The configured provider, as an overridable dependency.
+
+    A route that resolved this itself would reach the vendor from a test run, and
+    a caller could not substitute a double. Injection keeps the network at the
+    edge where it can be replaced.
+    """
+    provider = scheduler_service._resolve_verified_attendance_provider()
+    if provider is None:
+        raise AppError(
+            "PROVIDER_UNAVAILABLE",
+            "Attendance provider is not configured.",
+            http_status=status.HTTP_503_SERVICE_UNAVAILABLE,
+        )
+    return provider
+
+
+@router.get(
+    "/employees/{employee_id}/attendance/history",
+    response_model=EmployeeAttendanceHistoryRead,
+)
+def get_employee_attendance_history(
+    employee_id: str,
+    from_date: date,
+    to_date: date,
+    user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[Session, Depends(get_db)],
+    provider: Annotated[AttendanceProvider, Depends(get_attendance_provider)],
+) -> dict[str, Any]:
+    """One employee's punch history, read from the provider on request.
+
+    The provider owns years the roster does not cover, so this answers "when was
+    this person seen" without importing anything and without pretending the days
+    before the schedule existed can be judged. Same two doors as
+    ``get_employee_attendance``, plus the caller's resolved scope.
+    """
+    if _is_own_employee(user, employee_id) and perm_service.has_capability(
+        db, user, "workforce.self.view"
+    ):
+        if db.get(Employee, employee_id) is None:
+            raise NotFoundError("WORKFORCE_EMPLOYEE_NOT_FOUND", "Employee was not found.")
+    else:
+        for capability in ("workforce.people.view", "workforce.attendance.review"):
+            if not perm_service.has_capability(db, user, capability):
+                raise AppError(
+                    "FORBIDDEN",
+                    "Capability required.",
+                    http_status=status.HTTP_403_FORBIDDEN,
+                )
+        _require_employee_schedule_scope(db, user, employee_id)
+    if to_date < from_date:
+        raise ValidationFailedError(
+            "WORKFORCE_HISTORY_RANGE_INVALID", "to_date must not precede from_date."
+        )
+    if (to_date - from_date).days + 1 > attendance_history_service.MAX_RANGE_DAYS:
+        raise ValidationFailedError(
+            "WORKFORCE_HISTORY_RANGE_INVALID",
+            f"Range must not exceed {attendance_history_service.MAX_RANGE_DAYS} days.",
+        )
+    try:
+        return attendance_history_service.employee_punch_history(
+            db,
+            employee_id=employee_id,
+            from_date=from_date,
+            to_date=to_date,
+            provider=provider,
+            zone=ZoneInfo(get_settings().biotime_time_zone),
+        )
+    except Exception as exc:
+        # Never surface vendor response text: it can carry personal data and the
+        # configured provider URL.
+        raise AppError(
+            "PROVIDER_UNAVAILABLE",
+            "The attendance provider could not be read.",
+            http_status=status.HTTP_502_BAD_GATEWAY,
+        ) from exc
 
 
 @router.get("/attendance/cases/{case_id}", response_model=AttendanceCaseRead)
@@ -1089,9 +1178,19 @@ def start_integration_sync(
         raise ValidationFailedError(
             "ATTENDANCE_PROVIDER_NOT_CONFIGURED", "Attendance provider is not configured."
         )
+    configuration = settings_service.get_workforce_configuration(db)
+    if configuration is None:
+        raise ValidationFailedError(
+            "WORKFORCE_NOT_CONFIGURED", "Workforce configuration is incomplete."
+        )
     now = datetime.now(UTC)
     people = attendance_sync_service.sync_people(db, provider=provider, now=now)
-    punches = attendance_sync_service.sync_punches(db, provider=provider, now=now)
+    punches = attendance_sync_service.sync_punches(
+        db,
+        provider=provider,
+        now=now,
+        backfill_start=configuration.initial_backfill_start_at,
+    )
     db.commit()
     return {"imported_people": people, "imported_punches": punches}
 
