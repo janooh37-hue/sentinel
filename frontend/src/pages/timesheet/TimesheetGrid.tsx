@@ -677,6 +677,26 @@ export function TimesheetGrid({
 
   // -------------------------------------------------------------- activation
 
+  /**
+   * The trailing click of a committed sweep must not also open the picker, so
+   * `endDrag` arms `swallow`. Clearing it in `onClickCapture` alone leaks:
+   * per UI Events, a `click` whose `pointerdown` and `pointerup` have different
+   * targets is dispatched at their **nearest common inclusive ancestor**, and a
+   * sweep released above the sheet or past the table's edge puts that ancestor
+   * outside this component — the page's scroll region, an ancestor of `root` —
+   * so the capture handler below is never on the path and the flag survives the
+   * gesture. The operator's next click anywhere in the grid was then consumed
+   * in silence: no picker, no paint, no selection, nothing said, and the click
+   * after it worked, so it read as a dropped input rather than a bug.
+   *
+   * A `pointerdown` always precedes the click it must not eat, so clearing at
+   * the start of every gesture is ordering-safe and the flag cannot outlive
+   * one.
+   */
+  const onPointerDownCapture = useCallback(() => {
+    swallow.current = false
+  }, [])
+
   /** UI spec §14: `pointer-events: none` stops the pointer, not `Enter`. */
   const onClickCapture = useCallback(
     (event: React.MouseEvent) => {
@@ -805,6 +825,7 @@ export function TimesheetGrid({
   return (
     <div
       ref={root}
+      onPointerDownCapture={onPointerDownCapture}
       onClickCapture={onClickCapture}
       onKeyDownCapture={onKeyDownCapture}
       onPointerLeave={() => setHover(null)}

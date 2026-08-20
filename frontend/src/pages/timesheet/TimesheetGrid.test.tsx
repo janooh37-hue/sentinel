@@ -421,6 +421,32 @@ describe('TimesheetGrid', () => {
     expect(screen.getByRole('table').closest('[data-dragging="1"]')).toBeNull()
   })
 
+  it('does not eat the next click when the sweep is released outside the grid', async () => {
+    const onFill = vi.fn()
+    const user = userEvent.setup()
+    // No brush: the sweep spreads the anchor's own code, and the click that
+    // follows opens the picker rather than painting — which is the affordance
+    // the leaked flag swallowed.
+    render(<TimesheetGrid {...props} onFill={onFill} />)
+    // Released off the sheet — what dragging toward row 1 out of the scroll
+    // region, or past the table's trailing edge, actually does. Per UI Events a
+    // `click` whose `pointerdown` and `pointerup` have different targets is
+    // dispatched at their nearest common inclusive ancestor, which is then
+    // OUTSIDE this component: the grid's own `onClickCapture` is not on the
+    // path, so it cannot be the only place the swallow flag is cleared.
+    await user.pointer([
+      { keys: '[MouseLeft>]', target: cell('G1001', 3) },
+      { target: cell('G1001', 6) },
+      { keys: '[/MouseLeft]', target: document.body },
+    ])
+    expect(onFill).toHaveBeenCalledTimes(1)
+    // The operator's very next click has to work. With the flag left armed it
+    // was consumed in silence — no picker, no paint, no selection, nothing
+    // said — and the click after that worked, so it read as a dropped input.
+    await user.click(cell('G1001', 9))
+    expect(await screen.findByRole('menu')).toBeInTheDocument()
+  })
+
   it('shift-clicks the inclusive run from the last painted day', async () => {
     const onFill = vi.fn()
     const onSetCell = vi.fn()
