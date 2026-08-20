@@ -60,6 +60,29 @@ const KEYS = [
   'timesheet.downloadStatistics',
   'timesheet.reopen',
   'timesheet.clearCell',
+  // The sheet itself (Task 8): the masthead label, the cell's accessible name,
+  // the five identity column headers, the roster badges and the two refusal
+  // reasons a cell can carry.
+  'timesheet.asPrinted',
+  'timesheet.cellLabel',
+  'timesheet.note',
+  'timesheet.colRow',
+  'timesheet.colId',
+  'timesheet.colName',
+  'timesheet.colNat',
+  'timesheet.colDesig',
+  'timesheet.headcount',
+  'timesheet.block1',
+  'timesheet.block2',
+  'timesheet.badgeNew',
+  'timesheet.badgeFrom',
+  'timesheet.badgeTo',
+  'timesheet.startedOn',
+  'timesheet.lastWorked',
+  'timesheet.rosterEdge',
+  'timesheet.frozen',
+  'timesheet.selectRow',
+  'timesheet.rangePainted',
   // All six CLDR forms for every counted phrase, not just `_one`/`_other`:
   // `TimesheetToolbar.tsx:175-177` and the head status chip render `_zero`,
   // `_two`, `_few` and `_many` under `ar`, so an untranslated variant is a
@@ -88,6 +111,18 @@ const KEYS = [
   'timesheet.corrections_few',
   'timesheet.corrections_many',
   'timesheet.corrections_other',
+  'timesheet.filled_zero',
+  'timesheet.filled_one',
+  'timesheet.filled_two',
+  'timesheet.filled_few',
+  'timesheet.filled_many',
+  'timesheet.filled_other',
+  'timesheet.fillRefused_zero',
+  'timesheet.fillRefused_one',
+  'timesheet.fillRefused_two',
+  'timesheet.fillRefused_few',
+  'timesheet.fillRefused_many',
+  'timesheet.fillRefused_other',
 ]
 
 describe('timesheet i18n parity', () => {
