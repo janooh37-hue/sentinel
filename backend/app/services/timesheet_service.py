@@ -77,6 +77,14 @@ SHEETS: Final[tuple[str, str]] = ("main", "drivers")
 #: *tuple*, so it is unpacked — ``EMITTED_CODES | {...}`` is a ``TypeError``.
 CELL_CODES: Final[frozenset[str]] = frozenset({*EMITTED_CODES, CODE_BLOCKED})
 
+#: The cells the statistics transform leaves alone. Both roster edges, because a
+#: day off the roster is not a manned post; and ``X`` in **both** blocks, because
+#: a red-blocked day is outside the billing window and forcing it to ``P`` would
+#: put it back on the client's invoice. Block 2 additionally keeps a real ``AB``:
+#: an absence is not the filler the operator chose.
+STAT_KEEP_BLOCK_1: Final[frozenset[str]] = frozenset({CODE_NEW, CODE_OFF_ROSTER, CODE_BLOCKED})
+STAT_KEEP_BLOCK_2: Final[frozenset[str]] = STAT_KEEP_BLOCK_1 | {CODE_ABSENT}
+
 #: The English leave-type half that means the type was lost in form generation.
 _UNKNOWN_LEAVE: Final[str] = "Unknown"
 
@@ -176,9 +184,7 @@ def _statistics_codes(codes: list[str | None], *, block: int, filler: str) -> li
     billing window, and forcing it to ``P`` puts it back on the client's invoice.
     """
 
-    keep = {CODE_NEW, CODE_OFF_ROSTER, CODE_BLOCKED}
-    if block == 2:
-        keep = keep | {CODE_ABSENT}
+    keep = STAT_KEEP_BLOCK_1 if block == 1 else STAT_KEEP_BLOCK_2
     replacement = CODE_PRESENT if block == 1 else filler
     return [None if c is None else (c if c in keep else replacement) for c in codes]
 
@@ -585,21 +591,21 @@ def _removed(
 # --------------------------------------------------------------------------- #
 
 
-def _live_rows(
+def _members(
     db: Session,
-    year: int,
-    month: int,
     *,
-    sheet: str,
+    month_start: date,
+    month_end: date,
     designations: Mapping[int, TimesheetDesignation],
-    post_count: int,
-    absences: Mapping[str, list[Absence]],
-    fillers: Mapping[str, str],
-    acks: set[str],
-) -> tuple[list[GridRow], list[Issue], list[Issue]]:
-    """Recompute the whole sheet from the live records."""
+    sheet: str,
+) -> list[tuple[Employee, TimesheetDesignation | None]]:
+    """The sheet's roster in printed order, each member with its designation.
 
-    _, month_start, month_end = _month_bounds(year, month)
+    Needed by both branches of :func:`build_month`: the live one turns it into
+    rows, and the sealed one still reports warnings off it, because a warning is
+    about the live records rather than about the workbook that went out.
+    """
+
     members = [
         (employee, designation)
         for employee, designation in (
@@ -609,8 +615,23 @@ def _live_rows(
         if _lists_on(designation, sheet)
     ]
     members.sort(key=lambda member: _row_sort_key(*member))
+    return members
 
-    leaves_by_employee = _leaves_by_employee(db, month_start, month_end)
+
+def _live_rows(
+    db: Session,
+    year: int,
+    month: int,
+    *,
+    members: Sequence[tuple[Employee, TimesheetDesignation | None]],
+    leaves_by_employee: Mapping[str, list[Leave]],
+    post_count: int,
+    absences: Mapping[str, list[Absence]],
+    fillers: Mapping[str, str],
+    acks: set[str],
+) -> list[GridRow]:
+    """Recompute the whole sheet from the live records."""
+
     overrides = _overrides_by_employee(db, year, month)
 
     rows: list[GridRow] = []
@@ -647,16 +668,7 @@ def _live_rows(
             )
         )
 
-    blocking = _blocking_issues(members)
-    warnings = _warning_issues(
-        db,
-        members,
-        leaves_by_employee=leaves_by_employee,
-        designations=designations,
-        month_start=month_start,
-        sheet=sheet,
-    )
-    return rows, blocking, warnings
+    return rows
 
 
 def _sealed_rows(
@@ -730,6 +742,12 @@ def _sealed_rows(
 def build_month(db: Session, year: int, month: int, *, sheet: str = "main") -> MonthGrid:
     """One month of one workbook, live or sealed.
 
+    ``warnings`` are recomputed live either way. They describe the live records,
+    never affect a code and never gate a download, so the same reasoning rule 8
+    applies to ``notes`` and ``stat_filler`` applies to them: display-only values
+    stay live. ``blocking`` is the one thing the seal freezes, precisely because it
+    *does* gate a download — see :func:`_sealed_issues`.
+
     Never writes: no ``TimesheetPeriod`` row is created for a month that has none,
     because this runs against the live database on every page load and on the
     golden-file test.
@@ -743,26 +761,43 @@ def build_month(db: Session, year: int, month: int, *, sheet: str = "main") -> M
     absences = _absences_by_employee(db, month_start, month_end)
     fillers = _fillers_by_employee(db, year, month)
     acks = _start_acks(db, year, month)
+    members = _members(
+        db,
+        month_start=month_start,
+        month_end=month_end,
+        designations=designations,
+        sheet=sheet,
+    )
+    leaves_by_employee = _leaves_by_employee(db, month_start, month_end)
 
     if period is not None and period.closed_at is not None:
         rows = _sealed_rows(db, period, sheet=sheet, absences=absences, fillers=fillers, acks=acks)
         blocking = _sealed_issues(rows)
-        warnings: list[Issue] = []
         closed_at: datetime | None = period.closed_at
         closed_by = _display_name(db, period.closed_by)
     else:
-        rows, blocking, warnings = _live_rows(
+        rows = _live_rows(
             db,
             year,
             month,
-            sheet=sheet,
-            designations=designations,
+            members=members,
+            leaves_by_employee=leaves_by_employee,
             post_count=post_count,
             absences=absences,
             fillers=fillers,
             acks=acks,
         )
+        blocking = _blocking_issues(members)
         closed_at, closed_by = None, None
+
+    warnings = _warning_issues(
+        db,
+        members,
+        leaves_by_employee=leaves_by_employee,
+        designations=designations,
+        month_start=month_start,
+        sheet=sheet,
+    )
 
     return MonthGrid(
         year=year,
@@ -863,6 +898,23 @@ def _require_open(db: Session, year: int, month: int) -> None:
         )
 
 
+def _require_employee(db: Session, employee_id: str) -> Employee:
+    """The employee every writer in this module edits on behalf of.
+
+    Shared by all three so they answer the same way: ``timesheet_stat_fillers``
+    has a foreign key and would otherwise surface an ``IntegrityError`` as a 500,
+    and ``timesheet_start_acks`` deliberately has none, so an unchecked write
+    there is a silent orphan row no grid will ever read.
+    """
+
+    employee = db.get(Employee, employee_id)
+    if employee is None:
+        raise NotFoundError(
+            "EMPLOYEE_NOT_FOUND", f"No employee {employee_id!r}", employee_id=employee_id
+        )
+    return employee
+
+
 def set_cell(
     db: Session,
     year: int,
@@ -905,11 +957,7 @@ def set_cell(
         raise ValidationFailedError(
             "TIMESHEET_BAD_CODE", f"{code!r} is not a time-sheet code.", day_code=code
         )
-    employee = db.get(Employee, employee_id)
-    if employee is None:
-        raise NotFoundError(
-            "EMPLOYEE_NOT_FOUND", f"No employee {employee_id!r}", employee_id=employee_id
-        )
+    employee = _require_employee(db, employee_id)
     _require_open(db, year, month)
 
     cell_date = date(year, month, day)
@@ -959,8 +1007,16 @@ def set_cell(
 
 
 def set_post_count(db: Session, year: int, month: int, post_count: int) -> None:
-    """Set the contracted post count that splits the statistics into two blocks."""
+    """Set the contracted post count that splits the statistics into two blocks.
 
+    Refused on a closed month: every row's ``stat_block`` is frozen in the
+    snapshot at the split computed when the seal went on, so moving the count
+    afterwards would hand the page a ``post_count`` that disagrees with its own
+    rows — and rule 8 promises a later re-download reproduces what the client
+    already holds.
+    """
+
+    _require_open(db, year, month)
     period = _period(db, year, month)
     if period is None:
         db.add(TimesheetPeriod(year=year, month=month, post_count=post_count))
@@ -975,12 +1031,18 @@ def set_filler(db: Session, year: int, month: int, employee_id: str, code: str) 
     Validated against the same set :func:`set_cell` accepts: the filler is printed
     into a day cell of the client's sheet, so it has to be a code the legend
     carries.
+
+    Deliberately **not** guarded by :func:`_require_open`, unlike the other two
+    writers. Rule 8 reads ``stat_filler`` live after the seal because it is
+    display-only there — ``stat_codes`` are already frozen — so the operator may
+    still record the choice against a closed month.
     """
 
     if code not in CELL_CODES:
         raise ValidationFailedError(
             "TIMESHEET_BAD_CODE", f"{code!r} is not a time-sheet code.", day_code=code
         )
+    _require_employee(db, employee_id)
     row = db.execute(
         select(TimesheetStatFiller).where(
             TimesheetStatFiller.year == year,
@@ -1019,15 +1081,23 @@ def delete_absences_covered_by(db: Session, employee_id: str, start: date, end: 
     return len(rows)
 
 
-def acknowledge_start(db: Session, year: int, month: int, employee_id: str) -> None:
+def acknowledge_start(
+    db: Session, year: int, month: int, employee_id: str, *, user_id: int | None = None
+) -> None:
     """Record that a mid-month joiner's starting point was seen and accepted.
 
     An acknowledgement, not a correction: it writes no override, changes no code,
     and is never required before a download. A wrong date of joining is fixed on
     the employee record instead. Idempotent, and allowed on a closed month —
     which is why the flag is read live rather than frozen into the snapshot.
+
+    ``user_id`` is keyword-only with a default, so the four-argument call the
+    Interfaces block mandates still works untouched; it exists so rule 15's
+    ``acked_by`` column records *who* accepted the starting point, which is the
+    only reason an acknowledgement is worth storing at all.
     """
 
+    _require_employee(db, employee_id)
     existing = db.execute(
         select(TimesheetStartAck).where(
             TimesheetStartAck.year == year,
@@ -1037,7 +1107,7 @@ def acknowledge_start(db: Session, year: int, month: int, employee_id: str) -> N
     ).scalar_one_or_none()
     if existing is not None:
         return
-    db.add(TimesheetStartAck(year=year, month=month, employee_id=employee_id))
+    db.add(TimesheetStartAck(year=year, month=month, employee_id=employee_id, acked_by=user_id))
     db.commit()
 
 

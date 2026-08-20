@@ -33,6 +33,7 @@ from app.db.models import (
     TimesheetPeriod,
     TimesheetSnapshotRow,
     TimesheetStartAck,
+    TimesheetStatFiller,
 )
 from app.services import timesheet_service as svc
 from tests.conftest import make_user
@@ -794,3 +795,66 @@ def test_build_month_does_not_query_once_per_row(db_session, guards, count_queri
     assert grid.rows[-1].stat_codes[0] == CODE_SICK  # the lookback really ran
     assert large.count == small.count
     assert large.count <= 12
+
+
+# --- fix round 1: the three writers agree, and the seal's two halves ---------
+
+
+def test_an_acknowledgement_records_the_actor_when_one_is_supplied(db_session):
+    """Rule 15 names ``acked_by``; the four-argument call must still work."""
+    _guard(db_session, "G8401", doj=date(2026, 7, 12))
+    _guard(db_session, "G8402", doj=date(2026, 7, 12))
+    user = make_user(db_session, role="operator", email="ack@test.ae")
+
+    svc.acknowledge_start(db_session, 2026, 7, "G8401", user_id=user.id)
+    svc.acknowledge_start(db_session, 2026, 7, "G8402")  # the mandated signature
+
+    acks = {a.employee_id: a for a in db_session.query(TimesheetStartAck).all()}
+    assert acks["G8401"].acked_by == user.id
+    assert acks["G8402"].acked_by is None
+    assert acks["G8401"].acked_at is not None
+    assert _row(db_session, 2026, 7, "G8401").start_confirmed is True
+    assert _row(db_session, 2026, 7, "G8402").start_confirmed is True
+
+
+def test_a_closed_month_refuses_a_post_count_change_but_not_a_filler(db_session, guards):
+    """post_count would disagree with the frozen stat_block; the filler is display-only."""
+    svc.set_post_count(db_session, 2026, 7, 2)
+    svc.close_month(db_session, 2026, 7)
+
+    with pytest.raises(ConflictError, match="closed"):
+        svc.set_post_count(db_session, 2026, 7, 200)
+    assert svc.build_month(db_session, 2026, 7).post_count == 2
+
+    svc.set_filler(db_session, 2026, 7, "G1002", CODE_SICK)  # still permitted
+    row = _row(db_session, 2026, 7, "G1002")
+    assert row.stat_filler == CODE_SICK
+    assert row.stat_codes[2] == CODE_ANNUAL  # ...and the sealed codes did not move
+
+
+def test_every_writer_refuses_an_employee_who_does_not_exist(db_session, guards):
+    from app.api.errors import NotFoundError
+
+    with pytest.raises(NotFoundError):
+        svc.set_cell(db_session, 2026, 7, "GHOST", 3, "AB")
+    with pytest.raises(NotFoundError):
+        svc.set_filler(db_session, 2026, 7, "GHOST", CODE_SICK)
+    with pytest.raises(NotFoundError):
+        svc.acknowledge_start(db_session, 2026, 7, "GHOST")
+    assert db_session.query(TimesheetStatFiller).count() == 0
+    assert db_session.query(TimesheetStartAck).count() == 0
+
+
+def test_a_closed_month_still_reports_live_warnings(db_session, guards):
+    """Warnings are display-only, so the seal does not silence them (rule 9)."""
+    svc.close_month(db_session, 2026, 7)
+    assert svc.build_month(db_session, 2026, 7).warnings == []
+
+    db_session.get(Employee, "G1001").doj = None  # no_doj, after the seal
+    db_session.get(Employee, "G1001").designation_id = None  # would-be no_designation
+    db_session.commit()
+
+    grid = svc.build_month(db_session, 2026, 7)
+    assert [(i.employee_id, i.kind) for i in grid.warnings] == [("G1001", "no_doj")]
+    assert grid.blocking == []  # ...while blocking still comes from the frozen row
+    assert next(r for r in grid.rows if r.employee_id == "G1001").designation_en == "Security Guard"

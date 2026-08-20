@@ -136,7 +136,7 @@ async def _lifespan(_app: FastAPI) -> AsyncIterator[None]:
             # feature, which must never lose a row the catalog needs.
             timesheet_service.seed_designations(_db)
     except Exception:
-        log.warning("role-default seeding at startup failed", exc_info=True)
+        log.warning("startup seeding failed", exc_info=True)
     scheduler_service.start()
     try:
         yield
