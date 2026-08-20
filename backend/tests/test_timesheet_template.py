@@ -70,5 +70,41 @@ def test_the_red_block_has_a_legend_entry_and_a_footer_row(workbook):
     assert "X- Not billed" in str(parts["A3"].value)
     assert parts["C20"].value == "Not billed"
     assert parts["D20"].value == "X"
-    # the new row borrows the OFF row's styling, so the block still reads as one table
-    assert parts["C20"].border.top.style == parts["C19"].border.top.style
+    # the new row borrows the OFF row's styling, so the block still reads as one table.
+    # `border.top.style` alone is None on both and cannot fail; pin the style index and
+    # a concrete border an unstyled cell would not have.
+    assert parts["C20"]._style == parts["C19"]._style
+    assert parts["C20"].border.bottom.style == "medium"
+
+
+def test_the_red_block_row_is_code_height_not_summary_height(workbook):
+    """At Total Days' height it reads as a second total rather than an eleventh code."""
+    parts = workbook["_parts"]
+    assert parts.row_dimensions[20].height == parts.row_dimensions[19].height
+    assert parts.row_dimensions[20].height != parts.row_dimensions[21].height
+
+
+def test_the_ten_code_rows_are_verbatim(workbook):
+    """The paper's typos and trailing spaces are load-bearing: 'SL ' drives the COUNTIF."""
+    parts = workbook["_parts"]
+    assert [(parts.cell(r, 3).value, parts.cell(r, 4).value) for r in range(10, 20)] == [
+        ("Sick Leave", "SL "),
+        ("Annual Leave", "AL"),
+        ("Abcent  ", "AB"),
+        ("National Service", "TR"),
+        ("New Gard", "NG"),
+        ("Termination", "-"),
+        ("Resignation", "R"),
+        ("Suspention", "S "),
+        ("P", "P"),
+        ("OFF", "OFF"),
+    ]
+
+
+def test_no_june_filter_artifacts_survive(workbook):
+    """June's autofilter is D5:E290 — a range over rows the strip deleted."""
+    sheet = workbook["Sheet1"]
+    assert sheet.auto_filter.ref is None
+    # the four .wvu.FilterData names are sheet-local; the workbook collection is empty
+    assert list(sheet.defined_names) == []
+    assert list(workbook.defined_names) == []

@@ -72,6 +72,14 @@ def main() -> None:
     sheet.conditional_formatting = ConditionalFormattingList()
     sheet.data_validations = DataValidationList()
 
+    # June's autofilter is "D5:E290" -- a range over rows the strip just deleted, so
+    # every rendered month would carry dropdowns frozen at June's extent. Its four
+    # `.wvu.FilterData` names are sheet-local on Sheet1 (the workbook-level
+    # collection is empty) and are orphans: openpyxl drops the customSheetViews they
+    # point at on save. Same class of June artifact as freeze_panes="A77".
+    sheet.auto_filter.ref = None
+    sheet.defined_names.clear()
+
     # The 19th footer row: the manual red block X, inserted after OFF (parts row
     # 19) and before Total Days, which moves from row 20 to 21. Copy downward
     # first or the Total Days values are overwritten.
@@ -81,6 +89,7 @@ def main() -> None:
         parts.cell(20, column)._style = parts.cell(19, column)._style
         parts.cell(20, column).value = None
     parts.row_dimensions[21].height = parts.row_dimensions[20].height
+    parts.row_dimensions[20].height = parts.row_dimensions[19].height  # OFF, not Total Days
     parts["C20"].value = "Not billed"
     parts["D20"].value = "X"
     parts["A3"].value = f"{parts['A3'].value}, X- Not billed"
@@ -97,7 +106,9 @@ def main() -> None:
     assert check["Sheet1"].max_row == 5, f"stray rows: max_row={check['Sheet1'].max_row}"
     assert check["_parts"]["A21"].value == "Total Days", "footer is not 19 rows"
     assert check["_parts"]["D20"].value == "X", "red block row missing"
-    print("[template] logo, strip and 19-row footer verified")
+    assert check["Sheet1"].auto_filter.ref is None, "June's autofilter survived"
+    assert not list(check["Sheet1"].defined_names), "orphaned filter names survived"
+    print("[template] logo, strip, autofilter and 19-row footer verified")
 
 
 if __name__ == "__main__":
