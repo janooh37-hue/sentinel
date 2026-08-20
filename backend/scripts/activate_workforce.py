@@ -23,8 +23,9 @@ from __future__ import annotations
 
 import argparse
 import sys
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
@@ -38,6 +39,7 @@ from app.db.workforce_models import (
     DutyAssignmentEvent,
     WorkCrew,
     WorkCrewMembership,
+    WorkShiftDefinition,
 )
 from app.schemas.workforce import WorkforceConfiguration
 from app.services import (
@@ -151,6 +153,27 @@ def _reconcile(db: Session, *, actor: User, apply: bool) -> str:
     return f"{verb} {len(bound)}, conflicts {len(conflicts)}, no match {len(unmatched)}, skipped {len(skipped)}"
 
 
+def _membership_start(db: Session) -> datetime:
+    """Return the most recent configured shift boundary, in UTC-naive form.
+
+    A roster change must land on a shift boundary, otherwise a crew would own
+    half of a shift nobody can evaluate. The latest boundary already passed is
+    the earliest start that cannot rewrite a shift in progress.
+    """
+    zone = ZoneInfo(workforce_seed_service.SITE_TIMEZONE)
+    boundaries = sorted(db.scalars(select(WorkShiftDefinition.start_local_time)))
+    if not boundaries:
+        raise SystemExit("no shift definitions: run the roster step first")
+    now_local = datetime.now(zone)
+    candidates = [
+        datetime.combine(now_local.date() - timedelta(days=offset), boundary, tzinfo=zone)
+        for offset in (1, 0)
+        for boundary in boundaries
+    ]
+    latest = max(moment for moment in candidates if moment <= now_local)
+    return latest.astimezone(UTC).replace(tzinfo=None)
+
+
 def _memberships(db: Session, *, actor: User, apply: bool) -> str:
     """Put every verified, unit-bearing active employee on their unit's crew."""
     crews = {row.code: row for row in db.scalars(select(WorkCrew))}
@@ -165,7 +188,7 @@ def _memberships(db: Session, *, actor: User, apply: bool) -> str:
             )
         )
     }
-    effective_from = datetime.now(UTC).replace(tzinfo=None)
+    effective_from = _membership_start(db)
 
     created = 0
     no_crew: dict[str, int] = {}

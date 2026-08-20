@@ -139,19 +139,27 @@ def seeded(db_session):
 def _import(db_session, *, punches=(), people=(), now, window_since=None):
     """Import one provider page through the real sync service.
 
-    An explicit frozen window mirrors a configured operator backfill. Without
-    one the service opens a deliberate one-microsecond interval, because
-    production sync stays disabled until configuration supplies a bound.
+    The window mirrors a configured operator backfill: the service opens the
+    first one at ``backfill_start`` and then resumes from its own freshness.
     """
     provider = DeterministicAttendanceProvider(people=people, punches=punches)
     if people:
         attendance_sync_service.sync_people(db_session, provider=provider, now=now)
+    backfill_start = window_since or (SHIFT_START - timedelta(hours=2))
+    if backfill_start.tzinfo is None:
+        backfill_start = backfill_start.replace(tzinfo=UTC)
+    # Each call imports one page in its own right, so the stream is returned to
+    # "never synced" first: freshness from an earlier call would otherwise move
+    # the window past the punches this call is handing over.
     state = attendance_sync_service._state(db_session, provider="biotime", stream="punches")
-    if state.window_since is None and state.window_until is None:
-        state.window_since = window_since or (SHIFT_START - timedelta(hours=2))
-        state.window_until = now.replace(tzinfo=None) if now.tzinfo else now
-        db_session.flush()
-    imported = attendance_sync_service.sync_punches(db_session, provider=provider, now=now)
+    state.cursor = None
+    state.window_since = None
+    state.window_until = None
+    state.fresh_through = None
+    db_session.flush()
+    imported = attendance_sync_service.sync_punches(
+        db_session, provider=provider, now=now, backfill_start=backfill_start
+    )
     db_session.commit()
     return imported
 

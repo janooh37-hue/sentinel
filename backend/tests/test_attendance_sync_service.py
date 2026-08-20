@@ -19,6 +19,7 @@ from app.db.workforce_models import (
 )
 from app.services.attendance_provider import ProviderPage, ProviderPerson, ProviderPunch
 from app.services.attendance_sync_service import (
+    MAX_PUNCH_WINDOW,
     ProviderContractDriftError,
     sync_people,
     sync_punches,
@@ -168,6 +169,69 @@ def _add_approved_policy(db_session, admin_user) -> None:
     db_session.commit()
 
 
+def test_first_punch_window_opens_at_the_configured_backfill_start(db_session):
+    """A never-synced stream must import history, not a moment of it."""
+    provider = _ScriptedAttendanceProvider(
+        punch_pages={
+            None: ProviderPage(items=[], next_cursor=None, exhausted=True, fresh_through=NOW)
+        }
+    )
+    backfill_start = NOW - timedelta(days=2)
+
+    sync_punches(db_session, provider=provider, now=NOW, backfill_start=backfill_start)
+
+    assert provider.punch_calls == [(None, backfill_start, NOW)]
+
+
+def test_next_punch_window_resumes_at_freshness_and_stays_bounded(db_session):
+    """Freshness is the resume point, and one window never spans the whole history."""
+    fresh = NOW - timedelta(days=30)
+    db_session.add(
+        AttendanceSyncState(
+            provider="biotime",
+            stream="punches",
+            cursor=None,
+            fresh_through=fresh.replace(tzinfo=None),
+        )
+    )
+    db_session.commit()
+    provider = _ScriptedAttendanceProvider(
+        punch_pages={
+            None: ProviderPage(items=[], next_cursor=None, exhausted=True, fresh_through=None)
+        }
+    )
+
+    sync_punches(
+        db_session, provider=provider, now=NOW, backfill_start=NOW - timedelta(days=365)
+    )
+
+    assert provider.punch_calls == [(None, fresh, fresh + MAX_PUNCH_WINDOW)]
+
+
+def test_a_stream_fresh_through_now_asks_the_provider_for_nothing(db_session):
+    """An empty window would break the persisted window invariant, so none opens."""
+    db_session.add(
+        AttendanceSyncState(
+            provider="biotime",
+            stream="punches",
+            cursor=None,
+            fresh_through=NOW.replace(tzinfo=None),
+        )
+    )
+    db_session.commit()
+    provider = _ScriptedAttendanceProvider(punch_pages={})
+
+    imported = sync_punches(
+        db_session, provider=provider, now=NOW, backfill_start=NOW - timedelta(days=1)
+    )
+
+    assert imported == 0
+    assert provider.punch_calls == []
+    state = _state(db_session, "punches")
+    assert state.window_since is None and state.window_until is None
+    assert state.last_error_code is None
+
+
 def test_people_and_punch_streams_keep_independent_cursors(db_session):
     db_session.add_all(
         [
@@ -196,7 +260,7 @@ def test_people_and_punch_streams_keep_independent_cursors(db_session):
     )
 
     sync_people(db_session, provider=provider, now=NOW)
-    sync_punches(db_session, provider=provider, now=NOW)
+    sync_punches(db_session, provider=provider, now=NOW, backfill_start=WINDOW_START)
 
     assert provider.people_calls == ["people-1"]
     assert provider.punch_calls == [("punch-1", WINDOW_START, WINDOW_END)]
@@ -236,8 +300,8 @@ def test_punch_sync_reuses_frozen_window_and_idempotently_replays_pages(db_sessi
         }
     )
 
-    sync_punches(db_session, provider=provider, now=NOW)
-    sync_punches(db_session, provider=provider, now=LATER)
+    sync_punches(db_session, provider=provider, now=NOW, backfill_start=WINDOW_START)
+    sync_punches(db_session, provider=provider, now=LATER, backfill_start=WINDOW_START)
 
     assert provider.punch_calls == [
         (None, WINDOW_START, WINDOW_END),
@@ -283,13 +347,13 @@ def test_hash_drift_rolls_back_the_entire_page_and_preserves_cursor(db_session):
         }
     )
 
-    sync_punches(db_session, provider=provider, now=NOW)
+    sync_punches(db_session, provider=provider, now=NOW, backfill_start=WINDOW_START)
     original = db_session.scalar(
         select(AttendancePunch).where(AttendancePunch.external_event_id == "immutable-event")
     )
     original_hash = original.normalized_payload_hash
     with pytest.raises(ProviderContractDriftError):
-        sync_punches(db_session, provider=provider, now=NOW)
+        sync_punches(db_session, provider=provider, now=NOW, backfill_start=WINDOW_START)
 
     db_session.expire_all()
     assert db_session.scalar(select(func.count()).select_from(AttendancePunch)) == 1
@@ -454,7 +518,7 @@ def test_completed_empty_punch_page_enqueues_each_crossed_freshness_boundary(
         }
     )
 
-    sync_punches(db_session, provider=provider, now=new_fresh)
+    sync_punches(db_session, provider=provider, now=new_fresh, backfill_start=old_fresh)
 
     queued = db_session.scalars(
         select(AttendanceEvaluationQueue).where(

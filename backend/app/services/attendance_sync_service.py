@@ -282,30 +282,64 @@ def sync_people(db: Session, *, provider: AttendanceProvider, now: datetime) -> 
     return len(page.items)
 
 
-def _open_or_resume_punch_window(state: AttendanceSyncState, *, now: datetime) -> tuple[datetime, datetime]:
+#: One window is paged to exhaustion before the next one opens, so an initial
+#: backfill of months walks forward in bounded steps instead of asking the
+#: provider for its whole history in a single frozen window.
+MAX_PUNCH_WINDOW = timedelta(days=7)
+
+
+def _open_or_resume_punch_window(
+    state: AttendanceSyncState, *, now: datetime, backfill_start: datetime
+) -> tuple[datetime, datetime] | None:
+    """Resume the frozen window, or open the next one; ``None`` when caught up.
+
+    A stream that has never been fresh starts at the configured initial backfill
+    bound. Afterwards it resumes exactly where freshness ended, so no interval is
+    ever skipped and none is imported twice.
+    """
     if (state.window_since is None) != (state.window_until is None):
         raise ValueError("Attendance punch sync state has an incomplete frozen window")
     if state.window_since is not None and state.window_until is not None:
         return _aware_utc(state.window_since), _aware_utc(state.window_until)
 
-    # No production path reaches this fallback: production sync stays disabled until configuration
-    # supplies an explicit initial backfill bound.  A one-microsecond fake-provider interval keeps
-    # the persistence invariant valid for deterministic local protocol exercises.
-    until = _aware_utc(now)
-    since = until - timedelta(microseconds=1)
+    since = (
+        _aware_utc(state.fresh_through)
+        if state.fresh_through is not None
+        else _aware_utc(backfill_start)
+    )
+    until = min(_aware_utc(now), since + MAX_PUNCH_WINDOW)
+    if until <= since:
+        return None
     state.window_since = _naive_utc(since)
     state.window_until = _naive_utc(until)
     return since, until
 
 
-def sync_punches(db: Session, *, provider: AttendanceProvider, now: datetime) -> int:
-    """Import one frozen punch page, retaining the cursor on immutable-contract drift."""
+def sync_punches(
+    db: Session,
+    *,
+    provider: AttendanceProvider,
+    now: datetime,
+    backfill_start: datetime,
+) -> int:
+    """Import one frozen punch page, retaining the cursor on immutable-contract drift.
+
+    ``backfill_start`` is the configured bound the very first window opens at; a
+    stream that is already fresh resumes from its own high-water mark instead.
+    """
 
     provider_code = provider.code
     persisted_now = _naive_utc(now)
     state = _state(db, provider=provider_code, stream="punches")
     state.last_attempt_at = persisted_now
-    since, until = _open_or_resume_punch_window(state, now=now)
+    window = _open_or_resume_punch_window(state, now=now, backfill_start=backfill_start)
+    if window is None:
+        # Freshness already reaches `now`: there is no interval to ask for, and
+        # opening an empty window would violate the persisted window invariant.
+        _finish_success(state, now=now, imported_count=0)
+        db.flush()
+        return 0
+    since, until = window
     cursor = state.cursor
     try:
         page = provider.list_punches(cursor=cursor, since=since, until=until)

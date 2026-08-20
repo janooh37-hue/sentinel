@@ -240,7 +240,11 @@ def _run_workforce_retention() -> None:
 
 
 def _sync_attendance_stream(
-    provider: AttendanceProvider, *, stream: str, now: datetime
+    provider: AttendanceProvider,
+    *,
+    stream: str,
+    now: datetime,
+    backfill_start: datetime,
 ) -> int | None:
     """Sync exactly one provider page in its own transaction.
 
@@ -253,7 +257,9 @@ def _sync_attendance_stream(
         imported = (
             attendance_sync_service.sync_people(session, provider=provider, now=now)
             if stream == "people"
-            else attendance_sync_service.sync_punches(session, provider=provider, now=now)
+            else attendance_sync_service.sync_punches(
+                session, provider=provider, now=now, backfill_start=backfill_start
+            )
         )
         session.commit()
         return imported
@@ -296,8 +302,13 @@ def _run_workforce_attendance_sync() -> None:
             log.info("scheduler: workforce attendance sync skipped (provider unavailable)")
             return
         now = datetime.now(UTC)
-        people = _sync_attendance_stream(provider, stream="people", now=now)
-        punches = _sync_attendance_stream(provider, stream="punches", now=now)
+        backfill_start = configuration.initial_backfill_start_at
+        people = _sync_attendance_stream(
+            provider, stream="people", now=now, backfill_start=backfill_start
+        )
+        punches = _sync_attendance_stream(
+            provider, stream="punches", now=now, backfill_start=backfill_start
+        )
         if people is not None or punches is not None:
             log.info(
                 "scheduler: workforce attendance sync people=%s punches=%s",
