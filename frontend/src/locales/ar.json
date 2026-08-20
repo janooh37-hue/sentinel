@@ -3903,7 +3903,8 @@
       "sampleDays_few": "{{count}} أيام مرصودة",
       "sampleDays_many": "{{count}} يومًا مرصودًا",
       "sampleDays_other": "{{count}} يوم مرصود",
-      "rosterMismatch": "هذه البصمات تطابق {{shift}}، لا الوردية المجدولة."
+      "rosterMismatch": "هذه البصمات تطابق {{shift}}، لا الوردية المجدولة.",
+      "deviceSawMore": "سجّل الجهاز {{device}} بصمات في هذا اليوم، احتُسب منها {{judged}} للوردية."
     },
     "empty": "لا سجلات حضور لهذا اليوم بعد.",
     "notStartedHint": "لم تبدأ هذه الوردية، فلا شيء ناقص.",

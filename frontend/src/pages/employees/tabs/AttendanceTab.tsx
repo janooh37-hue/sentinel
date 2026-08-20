@@ -217,6 +217,17 @@ export function AttendanceTab({
 
   const selectedDays = selected ? (byDate.get(selected) ?? []) : []
   const lastDay = new Date(bounds.year, bounds.month, 0).getDate()
+
+  // The audit line: the device saw punches this day's cases never claimed. Both
+  // counts come from the same day, one from the provider and one from our own
+  // attribution, so a gap is exactly the discrepancy worth investigating.
+  const unattributed = (() => {
+    if (selected === null || selectedDays.length === 0) return null
+    const seen = sightings.get(selected)
+    if (seen === undefined) return null
+    const judged = selectedDays.reduce((total, day) => total + day.punch_count, 0)
+    return seen.punch_count > judged ? { device: seen.punch_count, judged } : null
+  })()
   const firstWeekday = new Date(bounds.year, bounds.month - 1, 1).getDay()
 
   return (
@@ -382,6 +393,19 @@ export function AttendanceTab({
       {selectedDays.map((day) => (
         <DayTimeline key={`${day.operational_date}-${day.shift_code}`} day={day} />
       ))}
+
+      {unattributed !== null && (
+        <p
+          role="status"
+          data-testid="attendance-unattributed"
+          className="rounded-2xl border border-info/25 bg-info-soft px-4 py-2.5 text-[0.78em] text-info"
+        >
+          {t('attendance.tab.deviceSawMore', {
+            device: unattributed.device,
+            judged: unattributed.judged,
+          })}
+        </p>
+      )}
 
       {selectedDays.length === 0 && selected !== null && sightings.get(selected) ? (
         <SeenOnlyDay day={sightings.get(selected)!} />

@@ -13,7 +13,8 @@
  *   5. A month with neither a schedule nor a sighting renders the empty state.
  *   6. The whole device record is banded by month, and a band selects its month.
  *   7. The learned habit is stated, and a roster that disagrees is flagged.
- *   8. Without the capabilities nothing is fetched.
+ *   8. A device count above the counted punches is reported as a gap.
+ *   9. Without the capabilities nothing is fetched.
  */
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { render, screen, waitFor, within } from '@testing-library/react'
@@ -310,6 +311,32 @@ describe('AttendanceTab', () => {
     expect(habits).toHaveTextContent('10m after end')
     expect(habits).toHaveTextContent('25 days observed')
     expect(await screen.findByText(/fit the morning shift/i)).toBeInTheDocument()
+  })
+
+  it('says so when the device saw punches the duty never counted', async () => {
+    // The trust question in one line: the provider recorded four events, our
+    // attribution claimed two. The gap is what an operator needs to see.
+    getEmployeeAttendanceHistory.mockImplementation(
+      async (_employeeId: string, params: { from_date: string; to_date: string }) => ({
+        employee_id: 'G-9001',
+        provider_code: 'biotime',
+        external_employee_code: '9001',
+        from_date: params.from_date,
+        to_date: params.to_date,
+        linked: true,
+        truncated: false,
+        days: [{ ...sighting('2026-08-19'), punch_count: 4 }],
+      }),
+    )
+
+    renderTab()
+
+    const cells = await screen.findAllByTestId('attendance-month-cell')
+    await userEvent.click(cells[18])
+
+    const note = await screen.findByTestId('attendance-unattributed')
+    expect(note).toHaveTextContent('4 punches')
+    expect(note).toHaveTextContent('2 counted')
   })
 
   it('never fetches without the capabilities', async () => {

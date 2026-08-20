@@ -3629,7 +3629,8 @@
       "afterEnd": "out {{minutes}}m after end",
       "sampleDays_one": "{{count}} day observed",
       "sampleDays_other": "{{count}} days observed",
-      "rosterMismatch": "These punches fit the {{shift}} shift, not the rostered one."
+      "rosterMismatch": "These punches fit the {{shift}} shift, not the rostered one.",
+      "deviceSawMore": "The device recorded {{device}} punches this day; {{judged}} counted toward the duty."
     },
     "empty": "No attendance rows for this day yet.",
     "notStartedHint": "This window has not opened yet, so nothing is missing.",
