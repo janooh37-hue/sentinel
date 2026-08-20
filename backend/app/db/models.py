@@ -1669,6 +1669,58 @@ class TimesheetSnapshotRow(Base):
     )
 
 
+class TimesheetStatFiller(Base):
+    """The code block 2 shows for one employee in one month (migration 0071).
+
+    Block 2 is the surplus headcount above the contracted post count. Those rows
+    are not billed as manned posts, so the client statistics sheet prints the
+    code the operator assigned instead of ``P``. The assignment is per employee
+    per month and carries forward: a month with no row inherits the most recent
+    earlier one, so the operator sets the shape once rather than every month.
+    """
+
+    __tablename__ = "timesheet_stat_fillers"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    year: Mapped[int] = mapped_column(Integer, nullable=False)
+    month: Mapped[int] = mapped_column(Integer, nullable=False)
+    employee_id: Mapped[str] = mapped_column(ForeignKey("employees.id"), nullable=False)
+    code: Mapped[str] = mapped_column(String(4), nullable=False)
+
+    __table_args__ = (
+        UniqueConstraint("year", "month", "employee_id", name="uq_timesheet_stat_filler"),
+        CheckConstraint("month BETWEEN 1 AND 12", name="ck_timesheet_stat_filler_month"),
+    )
+
+
+class TimesheetStartAck(Base):
+    """An operator acknowledgement of a mid-month joiner's start (migration 0072).
+
+    The days before a date of joining are ``NG`` and stay derived; this row only
+    records that the flag was seen and accepted. It is deliberately not an
+    override — a wrong date of joining is fixed on the employee record — and
+    deliberately unconnected to :class:`TimesheetPeriod`, because the
+    acknowledgement is still allowed once the month is closed. That is why the
+    flag is recomputed from this table rather than frozen into the snapshot.
+    ``employee_id`` carries no foreign key, like :class:`TimesheetSnapshotRow`:
+    what the operator accepted must outlive the employee record.
+    """
+
+    __tablename__ = "timesheet_start_acks"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    year: Mapped[int] = mapped_column(Integer, nullable=False)
+    month: Mapped[int] = mapped_column(Integer, nullable=False)
+    employee_id: Mapped[str] = mapped_column(String(16), nullable=False)
+    acked_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow, nullable=False)
+    acked_by: Mapped[int | None] = mapped_column(Integer, nullable=True)
+
+    __table_args__ = (
+        UniqueConstraint("year", "month", "employee_id", name="uq_timesheet_start_ack"),
+        CheckConstraint("month BETWEEN 1 AND 12", name="ck_timesheet_start_ack_month"),
+    )
+
+
 __all__ = [
     "REF_SEQUENCE_ID",
     "Absence",
@@ -1701,6 +1753,8 @@ __all__ = [
     "TimesheetOverride",
     "TimesheetPeriod",
     "TimesheetSnapshotRow",
+    "TimesheetStartAck",
+    "TimesheetStatFiller",
     "User",
     "UserPermission",
     "VaultFile",
