@@ -39,19 +39,43 @@ def test_an_unmapped_nationality_returns_none_so_preflight_can_block():
 
 
 def test_arabic_months_are_twelve_and_ordered():
-    assert len(ARABIC_MONTHS) == 12
-    assert ARABIC_MONTHS[0] == "يناير"
-    assert ARABIC_MONTHS[6] == "يوليو"
-    assert ARABIC_MONTHS[11] == "ديسمبر"
+    # Pinned whole: sampling indices lets an adjacent transposition through, and the
+    # only symptom is a workbook titled with the wrong month.
+    assert ARABIC_MONTHS == (
+        "يناير",
+        "فبراير",
+        "مارس",
+        "أبريل",
+        "مايو",
+        "يونيو",
+        "يوليو",
+        "أغسطس",
+        "سبتمبر",
+        "أكتوبر",
+        "نوفمبر",
+        "ديسمبر",
+    )
 
 
 def test_designation_seed_is_the_16_ranks_in_order():
     assert len(DESIGNATION_SEED) == 16
     assert [row[0] for row in DESIGNATION_SEED] == list(range(1, 17))
-    assert DESIGNATION_SEED[0][1:] == (
-        "Prisons Director",
-        "مدير عام الحراسات الأمنية",
-        "main",
+    assert DESIGNATION_SEED == (
+        (1, "Prisons Director", "مدير عام الحراسات الأمنية", "main"),
+        (2, "Ass. Director", "نائب عام مدير الحراسات الأمنية", "main"),
+        (3, "Project Manager", "مديرمركز الإصلاح والتأهيل", "main"),
+        (4, "Branche Manager", "مدير فرع", "main"),
+        (5, "Duty In charge", "مناوب عام", "main"),
+        (6, "Security Supervisor", "مشرف", "main"),
+        (7, "Armory Officer", "مسؤول قطعة سلاح", "main"),
+        (8, "assistant security supervisor", "مساعد مشرف", "main"),
+        (9, "Armory Keeper", "خازن سلاح", "main"),
+        (10, "Control room Security Guard", "حارس امن عرفة العمليات", "main"),
+        (11, "Clinic Security Guard", "حارس امن حرس العيادة", "main"),
+        (12, "Habilitation Security Guard", "حارس امن حرس التأهيل", "main"),
+        (13, "Escort Security Guard", "حارس امن تنويم مستشفيات", "main"),
+        (14, "Messengers", "حارس امن الارساليات", "main"),
+        (15, "Security Guard", "حارس امن", "main"),
+        (16, "Driver", "سائق", "drivers"),
     )
-    assert DESIGNATION_SEED[-1][1:] == ("Driver", "سائق", "drivers")
     assert {row[3] for row in DESIGNATION_SEED} == {"main", "drivers"}

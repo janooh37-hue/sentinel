@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from datetime import date, datetime
 
-from app.core.constants import ARABIC_WEEKDAYS
+from app.core.constants import ARABIC_MONTHS, ARABIC_WEEKDAYS
 from app.db.models import Employee
 
 EVENT_LEAVE_REQUESTED = "leave_requested"
@@ -86,21 +86,8 @@ ENGLISH_WEEKDAYS: tuple[str, ...] = (
 HR_OFFICE_AR = "مكتب الموارد البشرية"
 ADMIN_OFFICE_AR = "مكتب الإدارة"
 
-# Gregorian month names, January at index 0 (UAE-standard Arabic transliterations).
-AR_MONTHS: tuple[str, ...] = (
-    "يناير",
-    "فبراير",
-    "مارس",
-    "أبريل",
-    "مايو",
-    "يونيو",
-    "يوليو",
-    "أغسطس",
-    "سبتمبر",
-    "أكتوبر",
-    "نوفمبر",
-    "ديسمبر",
-)
+# Gregorian month names, January at index 0; the Arabic table is
+# core.constants.ARABIC_MONTHS.
 EN_MONTHS: tuple[str, ...] = (
     "January",
     "February",
@@ -124,7 +111,7 @@ def salary_transfer_month(today: date, lang: str) -> str:
     bump = 1 if today.day <= 15 else 2
     m = today.month - 1 + bump  # 0-indexed target month, may exceed 11
     year = today.year + m // 12
-    table = AR_MONTHS if lang == "ar" else EN_MONTHS
+    table = ARABIC_MONTHS if lang == "ar" else EN_MONTHS
     return f"{table[m % 12]} {year}"
 
 

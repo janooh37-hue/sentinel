@@ -4,6 +4,9 @@ Anything that was a module-level literal in the .pyw lives here. Higher layers
 import from this module instead of hard-coding strings — keeps the wire format
 (category codes, form labels, status strings) byte-identical to v3 so the
 migration in Phase 09 is a no-op.
+
+Trivial lookups over those literals live here too, beside the map they read
+(`nationality_en`), rather than in a service of their own.
 """
 
 from __future__ import annotations
@@ -285,7 +288,9 @@ def nationality_en(value: str | None) -> str | None:
     return NATIONALITY_EN.get(value.strip())
 
 
-#: Arabic month names for the generated filenames; index 0 is January.
+#: Gregorian month names in Arabic (UAE-standard transliterations), January at
+#: index 0. The one table for every Arabic month label in the app: time-sheet
+#: titles, notification text, digests.
 ARABIC_MONTHS: Final[tuple[str, ...]] = (
     "يناير",
     "فبراير",
