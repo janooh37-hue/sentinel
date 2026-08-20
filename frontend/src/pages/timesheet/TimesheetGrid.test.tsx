@@ -429,6 +429,17 @@ describe('TimesheetGrid', () => {
     expect(indexCss).toContain(
       "[data-dragging='1'] .ts-sheet tbody tr:hover .ts-stick { background: var(--surface); }",
     )
+    // The preview marks EXACTLY the swept cells. `preview` no longer asks the
+    // DOM for each one — a `querySelector` per cell per pointer step was the
+    // last O(cells) cost in the inner loop — and reads
+    // `tr.cells[5 + day - 1].firstElementChild` instead, so an off-by-one in
+    // that arithmetic would ring the wrong column while `onFill` still reported
+    // the right days.
+    expect(
+      Array.from(sheet.querySelectorAll('.ts-cell[data-preview="1"]')).map(
+        (node) => node.getAttribute('data-day'),
+      ),
+    ).toEqual(['3', '4', '5'])
     await user.pointer([{ keys: '[/MouseLeft]' }])
     expect(sheet.closest('[data-dragging="1"]')).toBeNull()
   })
