@@ -62,41 +62,55 @@ export function RowTally({
   const [ready, setReady] = useState(false)
   const counts = tallyOf(codes, daysInMonth)
 
-  const place = useCallback(() => {
-    const node = box.current
-    if (!node) return
-    const rect = anchor.getBoundingClientRect()
-    // Gone past the sticky day header, or below the fold: the counts belong to
-    // a row nobody can see any more.
-    if (rect.bottom < 80 || rect.top > window.innerHeight - 20) {
-      onDismiss()
-      return
-    }
-    const size = node.getBoundingClientRect()
-    const rtl = document.documentElement.dir === 'rtl'
-    const raw = rtl ? rect.right - size.width : rect.left
-    const x = Math.max(8, Math.min(raw, window.innerWidth - size.width - 8))
-    const above = rect.top - size.height - 6
-    const y = above > 60 ? above : rect.bottom + 6
-    // A viewport coordinate is physical and so is a transform, so the box is
-    // anchored logically (`.ts-tally` sets `inset-inline-start: 0`) and moved
-    // by a translation — which in RTL starts from the far edge that anchor
-    // gives it. Nothing here names `left` or `top`.
-    const origin = rtl ? window.innerWidth - size.width : 0
-    node.style.transform = `translate3d(${x - origin}px, ${y}px, 0)`
-    setReady(true)
-  }, [anchor, onDismiss])
+  /**
+   * `track` separates the two jobs this does. Placing is unconditional; the
+   * visibility check belongs ONLY to a later scroll or resize. When the box
+   * first mounts the anchor is on screen by definition — it is the row the
+   * pointer is over, or the one that just took focus — so asking at mount
+   * answers a settled question, and answers it wrongly anywhere the first
+   * `getBoundingClientRect` reads zero before layout has run.
+   */
+  const place = useCallback(
+    (track: boolean) => {
+      const node = box.current
+      if (!node) return
+      const rect = anchor.getBoundingClientRect()
+      // Gone up under the sticky day header, or below the fold: the counts
+      // belong to a row nobody can see any more.
+      if (track && (rect.bottom < 80 || rect.top > window.innerHeight - 20)) {
+        onDismiss()
+        return
+      }
+      const size = node.getBoundingClientRect()
+      const rtl = document.documentElement.dir === 'rtl'
+      const raw = rtl ? rect.right - size.width : rect.left
+      const x = Math.max(8, Math.min(raw, window.innerWidth - size.width - 8))
+      const above = rect.top - size.height - 6
+      const y = above > 60 ? above : rect.bottom + 6
+      // A viewport coordinate is physical and so is a transform, so the box is
+      // anchored logically (`.ts-tally` sets `inset-inline-start: 0`) and moved
+      // by a translation — which in RTL starts from the far edge that anchor
+      // gives it. Nothing here names `left` or `top`.
+      const origin = rtl ? window.innerWidth - size.width : 0
+      node.style.transform = `translate3d(${x - origin}px, ${y}px, 0)`
+      setReady(true)
+    },
+    [anchor, onDismiss],
+  )
 
-  useLayoutEffect(place, [place])
+  useLayoutEffect(() => {
+    place(false)
+  }, [place])
 
   useEffect(() => {
+    const follow = (): void => place(true)
     // Capture phase: the sheet's own scroll container is the one that moves,
     // and a scroll event does not bubble.
-    window.addEventListener('scroll', place, true)
-    window.addEventListener('resize', place)
+    window.addEventListener('scroll', follow, true)
+    window.addEventListener('resize', follow)
     return () => {
-      window.removeEventListener('scroll', place, true)
-      window.removeEventListener('resize', place)
+      window.removeEventListener('scroll', follow, true)
+      window.removeEventListener('resize', follow)
     }
   }, [place])
 

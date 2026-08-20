@@ -584,11 +584,31 @@ export function TimesheetGrid({
       if (event.button !== 0 || !editable) return
       const cell = cellFrom(event.target)
       const row = cell && byId.get(cell.employeeId)
-      if (!cell || !row || whyLocked(row, cell.day) !== null) return
+      if (!cell || !row) return
+      // A roster-edge anchor still starts a sweep. The edge days are not
+      // paintable, but requiring the operator to START on a paintable one is
+      // the wrong contract: a mid-month joiner's row opens with NG, and
+      // dragging 1→8 to mark the leave they took is the natural gesture.
+      // `runOf` drops the days the edge owns, the preview ring shows exactly
+      // which cells will take the code, and the live count says how many — so
+      // the rectangle narrows visibly instead of being refused wholesale
+      // (UI spec §7; the same rule the module note above states).
+      //
+      // `whyLocked` is not consulted here at all. Inside an editable sheet the
+      // only cell it can refuse that `cellFrom` also resolves IS a roster
+      // edge: a day the month lacks carries no `data-employee`/`data-day`, so
+      // `cellFrom` already returned null for it above.
+      const locked = whyLocked(row, cell.day) !== null
       // With nothing armed the sweep spreads the anchor's own code — the
-      // spreadsheet reflex (UI spec §15 change 3).
+      // spreadsheet reflex (UI spec §15 change 3). A locked anchor has no code
+      // to offer: what it shows is the engine's own `NG`/`-`, and spreading
+      // that as an override is not what grabbing a greyed cell meant. So the
+      // edge starts a sweep only with a brush armed, which is the case that
+      // gesture exists for.
       const anchorCode = codesOf(row)[cell.day - 1]
-      const code = brush ?? (anchorCode !== null && isCode(anchorCode) ? anchorCode : null)
+      const code = locked
+        ? brush
+        : brush ?? (anchorCode !== null && isCode(anchorCode) ? anchorCode : null)
       if (!code) return
       // Touch pointers capture implicitly, which would send every later
       // `pointerover` to this one button and freeze the preview at one cell.

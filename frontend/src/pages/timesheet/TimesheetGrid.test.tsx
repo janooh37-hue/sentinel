@@ -9,6 +9,9 @@
  * declared inline on the header row (UI spec §5, `table-layout: fixed`) instead
  * of hidden in a stylesheet the test cannot see.
  */
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
+
 import { render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
@@ -16,11 +19,23 @@ import { describe, expect, it, vi } from 'vitest'
 vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn(), warning: vi.fn() } }))
 
 import type { TimesheetRow } from '@/lib/api'
-// The stylesheet as text, so the token the geometry rests on can be asserted
-// from a test jsdom would otherwise be blind to.
-import indexCss from '@/index.css?raw'
 
 import { ID_COLUMNS, TimesheetGrid, TimesheetMasthead } from './TimesheetGrid'
+
+/**
+ * The stylesheet as text, so the token the geometry rests on can be asserted
+ * from a test jsdom is otherwise blind to.
+ *
+ * Read off disk rather than imported: `vitest.config.ts` sets `css: false`,
+ * which stubs every CSS import — `?raw` included — to an empty string, so
+ * `import indexCss from '@/index.css?raw'` handed this test `''` and the
+ * `toContain` below could not fail no matter what the token said.
+ *
+ * Resolved from the Vitest root (the directory holding `vitest.config.ts`, so
+ * `frontend`) because `import.meta.url` here is the dev server's own URL, not a
+ * `file:` one — `fileURLToPath` rejects it.
+ */
+const indexCss = readFileSync(resolve(process.cwd(), 'src/index.css'), 'utf8')
 
 const row: TimesheetRow = {
   employee_id: 'G1001',
@@ -288,12 +303,18 @@ describe('TimesheetGrid', () => {
   it('shift-clicks the inclusive run from the last painted day', async () => {
     const onFill = vi.fn()
     const onSetCell = vi.fn()
+    // `userEvent.setup()`, not the direct API: held keys are per-instance, and
+    // the direct API builds a fresh one per call and releases what it pressed
+    // when the call ends. `userEvent.keyboard('{Shift>}')` followed by
+    // `userEvent.click(...)` therefore clicks with `shiftKey: false`, and this
+    // assertion could never pass however the component behaved.
+    const user = userEvent.setup()
     render(<TimesheetGrid {...props} brush="AL" onFill={onFill} onSetCell={onSetCell} />)
-    await userEvent.click(cell('G1001', 6))
+    await user.click(cell('G1001', 6))
     expect(onSetCell).toHaveBeenCalledWith('G1001', 6, 'AL')
-    await userEvent.keyboard('{Shift>}')
-    await userEvent.click(cell('G1001', 9))
-    await userEvent.keyboard('{/Shift}')
+    await user.keyboard('{Shift>}')
+    await user.click(cell('G1001', 9))
+    await user.keyboard('{/Shift}')
     expect(onFill).toHaveBeenCalledWith(
       [at('G1001', 6), at('G1001', 7), at('G1001', 8), at('G1001', 9)],
       'AL',
