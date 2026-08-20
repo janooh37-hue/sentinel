@@ -126,11 +126,15 @@ async def _lifespan(_app: FastAPI) -> AsyncIterator[None]:
     # reach already-deployed DBs without a manual migration.
     try:
         from app.db.session import SessionLocal
-        from app.services import correspondence_service, perm_service
+        from app.services import correspondence_service, perm_service, timesheet_service
 
         with SessionLocal() as _db:
             perm_service.seed_role_defaults(_db)
             correspondence_service.seed_defaults(_db)
+            # The printable time-sheet designations. Seeded by migration 0070, so
+            # this only matters to a DB that predates it — and to the reorder
+            # feature, which must never lose a row the catalog needs.
+            timesheet_service.seed_designations(_db)
     except Exception:
         log.warning("role-default seeding at startup failed", exc_info=True)
     scheduler_service.start()
