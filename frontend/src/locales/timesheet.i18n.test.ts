@@ -184,6 +184,26 @@ const KEYS = [
   'timesheet.release.close',
   'timesheet.release.closeNote',
   'timesheet.release.reopenConfirm',
+  // The action on the employee record. `record.action` interpolates a month
+  // NAME and `record.oneMonth` a month name plus its year: neither is
+  // isolated, and deliberately so. An isolate around Arabic-plus-digits would
+  // embed the whole value LTR and push the month name to the wrong end; the
+  // unisolated form is correct because there is no neutral trapped BETWEEN two
+  // number runs, which is the only configuration that reorders (see the range
+  // guard below). `record.actionTwo` uses the Arabic dual — no digit at all.
+  'timesheet.record.action',
+  'timesheet.record.actionTwo',
+  'timesheet.record.oneMonth',
+  // The printed rank order, reordered from Settings.
+  'timesheet.designations.title',
+  'timesheet.designations.description',
+  'timesheet.designations.moveUp',
+  'timesheet.designations.moveDown',
+  'timesheet.designations.save',
+  'timesheet.designations.revert',
+  'timesheet.designations.unsaved',
+  'timesheet.designations.saved',
+  'timesheet.designations.stale',
   // The route from a finding to the record that fixes it (UI spec §9), and
   // the pointer at the page that owns employee creation (locked rule 8).
   'timesheet.openRecord',

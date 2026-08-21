@@ -3663,6 +3663,22 @@
       "closeNote": "Sealing does the same as the first download, without producing a file.",
       "reopenConfirm": "Reopen"
     },
+    "record": {
+      "action": "Time sheet · {{month}}",
+      "actionTwo": "Time sheet · 2 months",
+      "oneMonth": "One workbook: {{month}} — the month that just ended."
+    },
+    "designations": {
+      "title": "Designation order",
+      "description": "The rank order both workbooks print. Every sheet groups its rows by designation in exactly this order.",
+      "moveUp": "Move {{name}} up",
+      "moveDown": "Move {{name}} down",
+      "save": "Save order",
+      "revert": "Revert",
+      "unsaved": "This order is not saved yet.",
+      "saved": "Designation order saved.",
+      "stale": "The catalog changed while you were reordering — it has been reloaded. Move the rows again."
+    },
     "openRecord": "Open record",
     "openLookup": "Add an employee on the Employees page"
   }
