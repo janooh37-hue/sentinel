@@ -176,10 +176,18 @@ export function TimesheetDock({
           <span dir="ltr" className={datum}>
             {grid.post_count} · {impliedPosts.toFixed(1)}
           </span>
+          {/* A compact flag, because a whole sentence in a 54px bar pushes the
+              other three groups off the line (UI spec §14's narrow-column
+              trap). The glyph is not the only channel: the words ride along in
+              the trigger's accessible name, and the panel states them in full
+              beside the number. */}
           <span
             className={cn(chip, drift ? 'bg-accent-soft text-accent' : 'bg-success-soft text-success')}
           >
-            {drift ? '▲' : '✓'}
+            <span aria-hidden>{drift ? '▲' : '✓'}</span>
+            <span className="sr-only">
+              {drift ? t('timesheet.impliedDrift') : t('timesheet.impliedOk')}
+            </span>
           </span>
           <span aria-hidden className="text-[0.6rem] text-faint">
             ▲

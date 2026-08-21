@@ -38,7 +38,7 @@
  * none` blocks the pointer and not `Enter` (UI spec §14).
  */
 
-import { memo, useCallback, useMemo, useRef, useState } from 'react'
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 
@@ -494,6 +494,24 @@ export function TimesheetGrid({
     }
     return counts
   }, [codesOf, daysInMonth, rows])
+
+  /**
+   * Selecting an employee scrolls his row into the CENTRE of the sheet (UI spec
+   * §16.3). Without it the dock's `Show in grid` and the checks panel's `Show
+   * row` highlight a row 200 rows below the fold and look like they did
+   * nothing — the highlight is off screen, which is the one place it cannot
+   * help.
+   *
+   * Keyed on `selected` alone, so a repaint of the same selection does not
+   * yank the sheet back while the operator is scrolling away from it. A
+   * selection naming somebody with no row simply finds nothing.
+   */
+  useEffect(() => {
+    if (selected === null) return
+    root.current
+      ?.querySelector(`tr[data-employee="${selected}"]`)
+      ?.scrollIntoView({ block: 'center', behavior: 'smooth' })
+  }, [selected])
 
   // --------------------------------------------------------------- utilities
 
