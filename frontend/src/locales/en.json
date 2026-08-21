@@ -3247,7 +3247,8 @@
         "submitters": "Submitters",
         "editor_templates": "Editor templates",
         "users": "Users",
-        "system": "System"
+        "system": "System",
+        "timesheet": "Time sheet"
       },
       "caps": {
         "app.access": "Access the app",
@@ -3272,7 +3273,9 @@
         "submitters.manage": "Manage submitters",
         "editor_templates.manage": "Manage editor templates",
         "users.manage": "Manage users + permissions",
-        "system.admin": "Admin key + v3 migration"
+        "system.admin": "Admin key + v3 migration",
+        "timesheet.view": "View the time sheet",
+        "timesheet.edit": "Correct and close the time sheet"
       }
     }
   },

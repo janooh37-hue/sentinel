@@ -4,8 +4,17 @@ import en from '@/locales/en.json'
 import ar from '@/locales/ar.json'
 
 type Rec = Record<string, unknown>
-function get(o: Rec, path: string): string {
-  return path.split('.').reduce<unknown>((c, k) => (c as Rec)?.[k], o) as string
+function get(o: Rec, path: string): string | undefined {
+  const parts = path.split('.')
+  let current: unknown = o
+  for (let index = 0; index < parts.length; index += 1) {
+    const record = current as Rec
+    const remainder = parts.slice(index).join('.')
+    if (remainder in record) return record[remainder] as string
+    current = record[parts[index]]
+    if (current === undefined) return undefined
+  }
+  return current as string | undefined
 }
 
 const KEYS = [
@@ -213,6 +222,9 @@ const KEYS = [
   // the pointer at the page that owns employee creation (locked rule 8).
   'timesheet.openRecord',
   'timesheet.openLookup',
+  'access.permissions.domains.timesheet',
+  'access.permissions.caps.timesheet.view',
+  'access.permissions.caps.timesheet.edit',
 ]
 
 describe('timesheet i18n parity', () => {
@@ -295,9 +307,17 @@ describe('timesheet i18n parity', () => {
       const closes = value.split(PDI).length - 1
       expect(opens, `${key} has no isolate opener`).toBeGreaterThan(0)
       expect(closes, `${key} isolate is unbalanced`).toBe(opens)
-      const isolated = value.match(/\u2066[^\u2066\u2069]*\u2069/)?.[0]
-      expect(isolated, `${key} has no isolated span`).toBeDefined()
-      expect(isolated, `${key} isolates something other than a bare range`).toMatch(RANGE)
+      const isolated = [...value.matchAll(/\u2066[^\u2066\u2069]*\u2069/g)].map(
+        ([span]) => span,
+      )
+      expect(isolated, `${key} has the wrong number of isolated spans`).toHaveLength(opens)
+      expect(
+        isolated.filter((span) => RANGE.test(span)),
+        `${key} must isolate exactly one bare range`,
+      ).toHaveLength(1)
+      for (const span of isolated) {
+        expect(span.slice(LRI.length, -PDI.length), `${key} has an empty isolate`).not.toBe('')
+      }
     }
   })
 

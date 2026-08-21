@@ -3494,7 +3494,8 @@
         "submitters": "مقدّمو الطلبات",
         "editor_templates": "قوالب المحرر",
         "users": "المستخدمون",
-        "system": "النظام"
+        "system": "النظام",
+        "timesheet": "كشف الحضور"
       },
       "caps": {
         "app.access": "الوصول إلى التطبيق",
@@ -3517,9 +3518,10 @@
         "settings.view": "عرض الإعدادات",
         "settings.edit": "تغيير الإعدادات",
         "submitters.manage": "إدارة مقدّمي الطلبات",
-        "editor_templates.manage": "إدارة قوالب المحرر",
         "users.manage": "إدارة المستخدمين + الصلاحيات",
-        "system.admin": "مفتاح المسؤول + ترحيل الإصدار الثالث"
+        "system.admin": "مفتاح المسؤول + ترحيل الإصدار الثالث",
+        "timesheet.view": "عرض كشف الحضور",
+        "timesheet.edit": "تصحيح وإغلاق كشف الحضور"
       }
     }
   },

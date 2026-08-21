@@ -17,7 +17,7 @@ import { ChecksPanel } from './ChecksPanel'
 function wrap(ui: React.ReactNode, qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })) {
   // The panels link to the employee record now (UI spec §9), so the wrapper
   // needs a router — the navigating-page pattern from
-  // pages/employees/EmployeeActivitySection.test.tsx:109-114.
+  // components/employees/EmployeeActivitySection.test.tsx:112-118.
   return (
     <MemoryRouter>
       <QueryClientProvider client={qc}>{ui}</QueryClientProvider>

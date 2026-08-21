@@ -4,7 +4,7 @@
  *
  * No shared helper exists. The panel links to the employee record (UI spec §9),
  * so the wrapper is `MemoryRouter` + `QueryClientProvider` — the navigating
- * pattern in `pages/employees/EmployeeActivitySection.test.tsx:109-114`, not the
+ * pattern in `components/employees/EmployeeActivitySection.test.tsx:112-118`, not the
  * provider-only one this file used before the record link existed.
  */
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
@@ -20,7 +20,7 @@ import { EmployeePanel } from './EmployeePanel'
 function wrap(ui: React.ReactNode, qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })) {
   // The panels link to the employee record now (UI spec §9), so the wrapper
   // needs a router — the navigating-page pattern from
-  // pages/employees/EmployeeActivitySection.test.tsx:109-114.
+  // components/employees/EmployeeActivitySection.test.tsx:112-118.
   return (
     <MemoryRouter>
       <QueryClientProvider client={qc}>{ui}</QueryClientProvider>
