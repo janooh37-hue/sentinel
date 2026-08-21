@@ -113,6 +113,15 @@ export function EmployeePanel({
     [at, found, rows, selected],
   )
 
+  // The billing day belongs to this preview, not to the panel lifetime. Re-seat
+  // the draft during the render that changes the employee, as PostsPanel does
+  // for its server value, so a stale number cannot arm a different row.
+  const [seenTarget, setSeenTarget] = useState(target?.employee_id ?? null)
+  if (seenTarget !== (target?.employee_id ?? null)) {
+    setSeenTarget(target?.employee_id ?? null)
+    setBillRaw('')
+  }
+
   const designationOf = (row: TimesheetRow): string =>
     (statistics ? row.designation_ar : row.designation_en) ?? ''
 

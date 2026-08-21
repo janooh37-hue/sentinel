@@ -243,11 +243,11 @@ export function ChecksPanel({
         </div>
       )}
 
-      {/* The month the movement is being read against, so `day 17 of June`
-          beside a July sheet is unambiguous. */}
-      <span className="text-[0.7em] text-faint [unicode-bidi:isolate]">
-        {monthName(month, year)} {year}
-      </span>
+      {year > 0 && (
+        <span className="text-[0.7em] text-faint [unicode-bidi:isolate]">
+          {monthName(month, year)} {year}
+        </span>
+      )}
     </div>
   )
 }

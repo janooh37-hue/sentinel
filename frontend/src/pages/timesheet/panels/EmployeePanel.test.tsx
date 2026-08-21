@@ -168,6 +168,18 @@ describe('EmployeePanel', () => {
     ])
   })
 
+  it('clears the billing-day draft when the selected employee changes', async () => {
+    const view = renderPanel(<EmployeePanel {...props} selected="G7141" />)
+    const field = await screen.findByLabelText(/bill starts on day/i)
+    await userEvent.type(field, '23')
+    expect(field).toHaveValue(23)
+
+    view.rerender(wrap(<EmployeePanel {...props} selected="G7057" />))
+    const nextField = screen.getByLabelText(/bill starts on day/i)
+    expect(nextField).toBe(field)
+    expect(nextField).toHaveValue(null)
+  })
+
   /**
    * The whole point of the helper: `set_cell` answers 422
    * `TIMESHEET_OFF_ROSTER` for a day outside the roster window, per cell. A

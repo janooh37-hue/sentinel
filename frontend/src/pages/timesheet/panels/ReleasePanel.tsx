@@ -48,7 +48,7 @@ export function ReleasePanel({
   const { t, i18n } = useTranslation()
   const [confirming, setConfirming] = useState(false)
   const blocked = blocking.length > 0 && !closed
-  const names = monthWorkbookNames(year, month)
+  const names = year > 0 ? monthWorkbookNames(year, month) : null
 
   return (
     <div className="flex flex-col gap-3">
@@ -73,26 +73,34 @@ export function ReleasePanel({
         </span>
       )}
 
-      <div className="flex flex-col gap-0.5">
-        <span
-          data-ts-caps
-          className="text-[0.6rem] font-semibold uppercase tracking-[0.14em] text-faint"
-        >
-          {t('timesheet.release.files')}
-        </span>
-        {/* The deliverables' own names, identical in both UI languages, so they
-            are not interface copy. A quoted filename needs `direction: ltr` AND
-            isolate: isolation alone inherits its base direction from the Arabic
-            around it and `.xlsx` jumps to the wrong end (UI spec §14). */}
-        <div data-testid="release-files" className="flex flex-col gap-0.5">
-          <span dir="ltr" className="truncate font-mono text-[0.7rem] text-faint [unicode-bidi:isolate]">
-            {names.attendance}
+      {names && (
+        <div className="flex flex-col gap-0.5">
+          <span
+            data-ts-caps
+            className="text-[0.6rem] font-semibold uppercase tracking-[0.14em] text-faint"
+          >
+            {t('timesheet.release.files')}
           </span>
-          <span dir="ltr" className="truncate font-mono text-[0.7rem] text-faint [unicode-bidi:isolate]">
-            {names.statistics}
-          </span>
+          {/* The deliverables' own names, identical in both UI languages, so they
+              are not interface copy. A quoted filename needs `direction: ltr` AND
+              isolate: isolation alone inherits its base direction from the Arabic
+              around it and `.xlsx` jumps to the wrong end (UI spec §14). */}
+          <div data-testid="release-files" className="flex flex-col gap-0.5">
+            <span
+              dir="ltr"
+              className="truncate font-mono text-[0.7rem] text-faint [unicode-bidi:isolate]"
+            >
+              {names.attendance}
+            </span>
+            <span
+              dir="ltr"
+              className="truncate font-mono text-[0.7rem] text-faint [unicode-bidi:isolate]"
+            >
+              {names.statistics}
+            </span>
+          </div>
         </div>
-      </div>
+      )}
 
       <p className="max-w-[74ch] text-[0.78em] text-muted-foreground">
         {closed

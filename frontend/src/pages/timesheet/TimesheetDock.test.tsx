@@ -66,17 +66,21 @@ function dockProps({
   closed = false,
   canEdit = true,
   rows = [],
+  year = 2026,
+  month = 7,
   onReopen = vi.fn(),
 }: {
   blocking?: number
   closed?: boolean
   canEdit?: boolean
   rows?: TimesheetRow[]
+  year?: number
+  month?: number
   onReopen?: () => void
 }): TimesheetDockProps {
   const grid: TimesheetGridResponse = {
-    year: 2026,
-    month: 7,
+    year,
+    month,
     days_in_month: 31,
     sheet: 'main',
     closed_at: closed ? '2026-08-01T06:00:00' : null,
@@ -266,6 +270,16 @@ describe('TimesheetDock', () => {
       expect(name.textContent).toMatch(/\.xlsx$/)
     }
     expect(files.children).toHaveLength(2)
+  })
+
+  it('does not print the sentinel month in release or checks', async () => {
+    const base = dockProps({ blocking: 0, year: 0, month: 1 })
+    const view = renderPanel(<TimesheetDock {...base} ui={{ ...base.ui, panel: 'release' }} />)
+    expect(screen.queryByTestId('release-files')).not.toBeInTheDocument()
+    expect(screen.queryByText(/January 0|يناير 0/)).not.toBeInTheDocument()
+
+    view.rerender(wrap(<TimesheetDock {...base} ui={{ ...base.ui, panel: 'checks' }} />))
+    expect(screen.queryByText(/January 0|يناير 0/)).not.toBeInTheDocument()
   })
 
   // Amendment A3: `timesheet.view` alone must still be a USABLE dock — the
