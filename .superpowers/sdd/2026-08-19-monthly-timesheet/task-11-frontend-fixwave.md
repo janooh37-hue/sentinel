@@ -9,6 +9,8 @@ Complete. All fourteen frontend findings were applied without touching backend c
 - `43a672a` — suppress sentinel-month filenames/footer text and reset the employee billing-day draft when the target changes.
 - `9ba22f0` — add Arabic/English `timesheet` permission labels, strengthen global Arabic isolate-span checks, and correct stale test precedent paths in tests and the plan.
 - `782ee60` — keep the row-index dependency lint-clean and complete the unmount-listener regression assertion.
+- `96b108f` — make the paint-path comment explicitly enumerate the capture-phase refusal branch.
+- `3335972` — this report.
 
 ## Verification
 
