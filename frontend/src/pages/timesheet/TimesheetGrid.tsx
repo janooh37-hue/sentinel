@@ -849,8 +849,9 @@ export function TimesheetGrid({
    * keyboard or activation path in this list before adding it:
    * - `onKeyDownCapture` Ctrl/Cmd+Z reaches `onUndo` only when it is inside
    *   this root, editable, not AltGr (`!altKey`), and not redo (`!shiftKey`);
-   * - the same capture handler's code-letter branch refuses locked cells and
-   *   bails on Ctrl/Cmd/Alt, so browser commands never paint;
+   * - the same capture handler's Enter/Space/code branch reaches `refuse` (a
+   *   toast, never a write) for locked cells and bails on Ctrl/Cmd/Alt, so
+   *   browser commands never paint;
    * - `<tbody>` `onKeyDown` paints bare arrows/letters/Enter/Space only after
    *   the same Ctrl/Cmd/Alt guard; its arrows move focus rather than paint;
    * - `onClick` paints, fills, or opens the picker and bails on Ctrl/Cmd/Alt;
