@@ -915,6 +915,42 @@ def _require_employee(db: Session, employee_id: str) -> Employee:
     return employee
 
 
+def _derived_cell_code(
+    db: Session,
+    year: int,
+    month: int,
+    employee: Employee,
+    day: int,
+) -> str | None:
+    """Resolve one employee-month without the override layer."""
+
+    _, month_start, month_end = _month_bounds(year, month)
+    leaves = db.execute(
+        select(Leave).where(
+            Leave.employee_id == employee.id,
+            Leave.deleted_at.is_(None),
+            Leave.start_date <= month_end,
+            Leave.end_date >= month_start,
+        )
+    ).scalars()
+    absences = db.execute(
+        select(Absence).where(
+            Absence.employee_id == employee.id,
+            Absence.date >= month_start,
+            Absence.date <= month_end,
+        )
+    ).scalars()
+    codes = month_codes(
+        year,
+        month,
+        doj=employee.doj,
+        end_date=employee.end_date,
+        leaves=_leave_spans(_live_leaves(leaves)),
+        absences=[row.date for row in absences],
+    )
+    return codes[day - 1]
+
+
 def _finish(db: Session, *, commit: bool) -> None:
     """End a writer: own the transaction, or hand it back to the caller.
 
@@ -1007,17 +1043,22 @@ def set_cell(
     if code == CODE_ABSENT:
         db.add(Absence(employee_id=employee_id, date=cell_date, note=note, created_by=user_id))
     elif code is not None:
-        db.add(
-            TimesheetOverride(
-                year=year,
-                month=month,
-                day=day,
-                employee_id=employee_id,
-                code=code,
-                note=note,
-                created_by=user_id,
+        derived_code = _derived_cell_code(db, year, month, employee, day)
+        # An override equal to the derived value is a silent pin that stops the
+        # cell tracking records; skip it because this is what Undo last change
+        # depends on when it restores a displayed derived code.
+        if derived_code != code:
+            db.add(
+                TimesheetOverride(
+                    year=year,
+                    month=month,
+                    day=day,
+                    employee_id=employee_id,
+                    code=code,
+                    note=note,
+                    created_by=user_id,
+                )
             )
-        )
     db.commit()
 
 

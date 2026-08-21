@@ -481,6 +481,74 @@ def test_switching_a_cell_never_leaves_two_records_fighting(db_session, guards):
     )
 
 
+def test_undoing_a_present_cell_does_not_leave_a_silent_override(db_session, guards):
+    """Undoing AB on a derived P cell must restore derivation, not pin P."""
+    employee_id = "G1001"
+    day = 5
+
+    svc.set_cell(db_session, 2026, 7, employee_id, day, CODE_ABSENT)
+    svc.set_cell(db_session, 2026, 7, employee_id, day, CODE_PRESENT)
+
+    assert (
+        db_session.query(TimesheetOverride)
+        .filter_by(year=2026, month=7, day=day, employee_id=employee_id)
+        .count()
+        == 0
+    )
+    assert _row(db_session, 2026, 7, employee_id).codes[day - 1] == CODE_PRESENT
+
+
+def test_undoing_a_present_cell_restores_a_preexisting_override(db_session, guards):
+    """Undoing AB must restore P when P was already an explicit override."""
+    employee_id = "G1001"
+    day = 5
+    db_session.add(
+        Leave(
+            employee_id=employee_id,
+            leave_type="Annual Leave",
+            start_date=date(2026, 7, day),
+            end_date=date(2026, 7, day),
+            days=1,
+            status="Approved",
+        )
+    )
+    db_session.commit()
+
+    svc.set_cell(db_session, 2026, 7, employee_id, day, CODE_PRESENT)
+    svc.set_cell(db_session, 2026, 7, employee_id, day, CODE_ABSENT)
+    svc.set_cell(db_session, 2026, 7, employee_id, day, CODE_PRESENT)
+
+    override = (
+        db_session.query(TimesheetOverride)
+        .filter_by(year=2026, month=7, day=day, employee_id=employee_id)
+        .one()
+    )
+    assert override.code == CODE_PRESENT
+    assert _row(db_session, 2026, 7, employee_id).codes[day - 1] == CODE_PRESENT
+
+
+def test_undoing_a_present_cell_still_tracks_a_later_leave(db_session, guards):
+    """A derived cell restored by undo must react to a leave added later."""
+    employee_id = "G1001"
+    day = 5
+
+    svc.set_cell(db_session, 2026, 7, employee_id, day, CODE_ABSENT)
+    svc.set_cell(db_session, 2026, 7, employee_id, day, CODE_PRESENT)
+    db_session.add(
+        Leave(
+            employee_id=employee_id,
+            leave_type="Annual Leave",
+            start_date=date(2026, 7, day),
+            end_date=date(2026, 7, day),
+            days=1,
+            status="Approved",
+        )
+    )
+    db_session.commit()
+
+    assert _row(db_session, 2026, 7, employee_id).codes[day - 1] == CODE_ANNUAL
+
+
 def test_an_edit_for_an_employee_who_does_not_exist_is_a_404(db_session, guards):
     from app.api.errors import NotFoundError
 
