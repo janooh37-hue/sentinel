@@ -3,10 +3,18 @@
  *
  * Prototype `.idcard`: 80px rounded-[14px] photo, bilingual name, mono G-number,
  * status pill, 2-column facts grid (position / department / duty_unit / doj),
- * 3 action buttons (createDoc primary-white, addLeave ghost, edit ghost).
+ * action buttons (createDoc primary-white, addLeave ghost, timeSheet ghost,
+ * edit ghost).
  *
  * Photo upload button (camera icon) is copied from the old EmployeeHero pattern.
- * Gate: edit & camera are hidden when the operator lacks `employees.edit`.
+ * Gate: edit & camera are hidden when the operator lacks `employees.edit`; the
+ * time sheet is hidden without `timesheet.view`.
+ *
+ * This card is the record's ONLY action surface — `EmployeeDetailPage` has no
+ * `isMobile`, no `DropdownMenu` and no `md:hidden` / `hidden md:` pair — and the
+ * action row is one responsive flex row inside a sidebar that stacks below
+ * `md`, so a single button serves both viewports (`AGENTS.md:44` says record
+ * actions *often* split; on this page they do not).
  */
 
 import { Camera, Pencil } from 'lucide-react'
@@ -19,6 +27,7 @@ import { pickPosition } from '@/lib/employeePosition'
 import { useCapabilities } from '@/lib/useCapabilities'
 import { PendingDepartureBadge } from '@/components/employees/PendingDepartureBadge'
 import { useEmployeePhoto } from '@/components/employees/useEmployeePhoto'
+import { lastCompletedMonth, previousMonth } from '@/pages/timesheet/useTimesheet'
 
 const STATUS_DOT_CLS: Record<EmployeeStatus, string> = {
   Active: 'bg-success',
@@ -36,11 +45,33 @@ function cardInitials(name: string): string {
     .join('')
 }
 
+/**
+ * Which month the record offers, and how many sheets of it.
+ *
+ * A departure — a resignation or a termination, i.e. any record carrying an
+ * `end_date` — is the handover HR asked for: the month of departure AND the one
+ * before it, which the server returns as ONE workbook of two sheets, earlier
+ * first, named for the later month. Everyone else gets the month that just
+ * ended, the same month the time-sheet page opens on.
+ *
+ * `end_date` is split as a STRING. `new Date('2026-01-15').getMonth()` is UTC
+ * midnight, so west of Greenwich it reads December and a January departure
+ * would silently fetch the wrong two months.
+ */
+function sheetSpanOf(employee: EmployeeRead): { year: number; month: number; months: 1 | 2 } {
+  const end = employee.end_date
+  if (!end) return { ...lastCompletedMonth(), months: 1 }
+  const [year, month] = end.slice(0, 7).split('-').map(Number)
+  return year && month ? { year, month, months: 2 } : { ...lastCompletedMonth(), months: 2 }
+}
+
 interface Props {
   employee: EmployeeRead
   onEdit: () => void
   onAddLeave: () => void
   onGenerate: () => void
+  /** One employee's own sheet. `timesheet.view` — it freezes nothing. */
+  onTimesheet: (args: { year: number; month: number; months: 1 | 2 }) => void
   onChangeStatus?: () => void
 }
 
@@ -49,6 +80,7 @@ export function EmployeeIdCard({
   onEdit,
   onAddLeave,
   onGenerate,
+  onTimesheet,
   onChangeStatus,
 }: Props): React.JSX.Element {
   const { i18n, t } = useTranslation()
@@ -58,9 +90,35 @@ export function EmployeeIdCard({
   const positionLabel = pickPosition(employee, i18n.language)
   const { has } = useCapabilities()
   const canEdit = has('employees.edit')
+  // The per-employee export freezes nothing, so an operator holding only
+  // `timesheet.view` may take it (amendment A3, and the route agrees).
+  const canSeeTimesheet = has('timesheet.view')
   const { upload } = useEmployeePhoto(employee.id)
   const fileRef = useRef<HTMLInputElement>(null)
   const photoSrc = `/api/v1/employees/${encodeURIComponent(employee.id)}/photo?v=${employee.photo_version ?? ''}`
+
+  const span = sheetSpanOf(employee)
+  const monthName = (year: number, month: number): string =>
+    new Intl.DateTimeFormat(i18n.language, { month: 'long' }).format(new Date(year, month - 1, 1))
+  const earlier = previousMonth(span.year, span.month)
+  /**
+   * "2 months" alone does not say which two, so the span rides in the title.
+   * The later month always carries the year because it names the file; the
+   * earlier one carries its own only across a year boundary, so a
+   * December→January handover never reads as "December and January 2026".
+   */
+  const timesheetTitle =
+    span.months === 2
+      ? t('timesheet.employee.spanMonths', {
+          first:
+            earlier.year === span.year
+              ? monthName(earlier.year, earlier.month)
+              : `${monthName(earlier.year, earlier.month)} ${earlier.year}`,
+          second: `${monthName(span.year, span.month)} ${span.year}`,
+        })
+      : t('timesheet.record.oneMonth', {
+          month: `${monthName(span.year, span.month)} ${span.year}`,
+        })
 
   return (
     <div
@@ -198,7 +256,10 @@ export function EmployeeIdCard({
 
       {/* ── Action buttons — prototype .id-actions: compact single-line pills,
              no icons (they force mid-word wraps in the 350px sidebar). ───────── */}
-      <div className="mt-4 flex gap-2">
+      {/* `flex-wrap`: four `whitespace-nowrap` pills cannot shrink below their
+          own text (`min-width: auto` is min-content), so in a 350px sidebar the
+          fourth has to be allowed onto a second line instead of overflowing. */}
+      <div className="mt-4 flex flex-wrap gap-2">
         <button
           type="button"
           onClick={onGenerate}
@@ -214,6 +275,18 @@ export function EmployeeIdCard({
         >
           {t('employee.card.addLeave')}
         </button>
+        {canSeeTimesheet && (
+          <button
+            type="button"
+            onClick={() => onTimesheet(span)}
+            title={timesheetTitle}
+            className="flex flex-1 items-center justify-center whitespace-nowrap rounded-full border border-white/25 bg-white/15 px-2 py-2 text-[0.75em] font-medium transition-colors hover:bg-white/25"
+          >
+            {span.months === 2
+              ? t('timesheet.record.actionTwo')
+              : t('timesheet.record.action', { month: monthName(span.year, span.month) })}
+          </button>
+        )}
         {canEdit && (
           <button
             type="button"

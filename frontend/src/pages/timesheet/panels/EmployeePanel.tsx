@@ -30,7 +30,7 @@ import { cn } from '@/lib/utils'
 
 import { CODES, slugOf } from '../codes'
 import { tallyOf } from '../RowTally'
-import { employeeWorkbookName } from '../useTimesheet'
+import { employeeWorkbookName, previousMonth } from '../useTimesheet'
 
 export interface EmployeePanelProps {
   rows: TimesheetRow[]
@@ -58,10 +58,6 @@ export interface EmployeePanelProps {
 
 /** The `-` code prints as a hyphen but reads as an en dash on screen. */
 const glyphOf = (slug: string): string => (slug === '-' ? '–' : slug)
-
-/** The month before the one on screen, which is the one HR also wants. */
-const previousMonth = (year: number, month: number): { year: number; month: number } =>
-  month === 1 ? { year: year - 1, month: 12 } : { year, month: month - 1 }
 
 export function EmployeePanel({
   rows,

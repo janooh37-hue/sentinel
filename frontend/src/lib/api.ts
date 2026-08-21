@@ -828,6 +828,7 @@ export type TimesheetGridResponse = components['schemas']['TimesheetGridResponse
 export type TimesheetRow = components['schemas']['TimesheetRow']
 export type TimesheetIssue = components['schemas']['TimesheetIssue']
 export type TimesheetRemoved = components['schemas']['TimesheetRemoved']
+export type TimesheetDesignationRead = components['schemas']['TimesheetDesignationRead']
 export type TimesheetCellUpdate = components['schemas']['TimesheetCellUpdate']
 export type TimesheetPeriodPatch = components['schemas']['TimesheetPeriodPatch']
 export type TimesheetFillerUpdate = components['schemas']['TimesheetFillerUpdate']
@@ -2041,6 +2042,15 @@ export const api = {
     ),
 
   // --- monthly time sheet (site JD 908) ---
+  /** The printable designation catalog, in the rank order both workbooks
+   *  print. `timesheet.view` — reading the print order is not a write. */
+  listDesignations: () =>
+    request<TimesheetDesignationRead[]>('GET', '/timesheet/designations'),
+  /** Re-rank the whole catalog. `timesheet.edit`, and the payload must be
+   *  EVERY id exactly once — a partial list is refused with
+   *  `DESIGNATION_ORDER_INCOMPLETE`. Answers with the catalog as re-ranked. */
+  reorderDesignations: (ids: number[]) =>
+    request<TimesheetDesignationRead[]>('PUT', '/timesheet/designations/order', { ids }),
   getTimesheet: (p: TimesheetMonth) =>
     request<TimesheetGridResponse>(
       'GET',

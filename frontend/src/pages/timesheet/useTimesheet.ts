@@ -442,6 +442,25 @@ export function useAcknowledgeStart(params: TimesheetParams) {
   })
 }
 
+/**
+ * The month the operator works on: the one that just ended. The workbooks are
+ * produced after a month closes, not during it, so this is the month
+ * `TimesheetPage` opens on AND the month an employee record offers for someone
+ * still on the roster. One declaration, because two answers to "which month"
+ * is how the record and the page come to disagree.
+ */
+export const lastCompletedMonth = (now: Date = new Date()): { year: number; month: number } => {
+  const month = now.getMonth() // 0-based, so this IS last month 1-based
+  return month === 0 ? { year: now.getFullYear() - 1, month: 12 } : { year: now.getFullYear(), month }
+}
+
+/**
+ * The month before the one named — the earlier of the two sheets a `months=2`
+ * export carries. December→January is the whole reason this is a function.
+ */
+export const previousMonth = (year: number, month: number): { year: number; month: number } =>
+  month === 1 ? { year: year - 1, month: 12 } : { year, month: month - 1 }
+
 const arabicMonth = (year: number, month: number): string =>
   new Intl.DateTimeFormat('ar', { month: 'long' }).format(new Date(year, month - 1, 1))
 

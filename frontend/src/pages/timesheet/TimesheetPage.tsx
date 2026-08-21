@@ -46,6 +46,7 @@ import { TimesheetNotice } from './TimesheetNotice'
 import { MonthStepper, TimesheetToolbar, type TimesheetDensity } from './TimesheetToolbar'
 import { type Code, isCode, slugOf } from './codes'
 import {
+  lastCompletedMonth,
   useAcknowledgeStart,
   useCloseMonth,
   useEmployeeSheetDownload,
@@ -79,16 +80,6 @@ interface Correction {
 const SKELETON_ROWS = Array.from({ length: 14 }, (_, i) => i)
 
 /**
- * The month the operator works on is the one that just ended: the workbooks are
- * produced after the month closes, not during it. The stepper goes anywhere.
- */
-function lastMonth(): { year: number; month: number } {
-  const now = new Date()
-  const month = now.getMonth() // 0-based, so this IS last month 1-based
-  return month === 0 ? { year: now.getFullYear() - 1, month: 12 } : { year: now.getFullYear(), month }
-}
-
-/**
  * The dock takes the whole payload, and it is fixed furniture: it renders in
  * every state, including the one before the month has landed. So a pending
  * month reads as an empty one — zero rows, zero checks, no seal — rather than
@@ -115,7 +106,7 @@ export function TimesheetPage(): React.JSX.Element {
   const canEdit = has('timesheet.edit')
 
   const [params, setParams] = useState<{ year: number; month: number; sheet: TimesheetSheet }>(
-    () => ({ ...lastMonth(), sheet: 'main' }),
+    () => ({ ...lastCompletedMonth(), sheet: 'main' }),
   )
   const [ui, setUi] = useState<TimesheetUiState>({
     variant: 'attendance',
