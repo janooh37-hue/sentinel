@@ -74,7 +74,6 @@ def _grid(db: Session, year: int, month: int, sheet: str) -> TimesheetGridRespon
     return TimesheetGridResponse.model_validate(svc.build_month(db, year, month, sheet=sheet))
 
 
-
 def _preflight(db: Session, year: int, month: int) -> dict[str, svc.MonthGrid]:
     """Build both deliverables and refuse to seal if either one is blocked."""
 
@@ -96,6 +95,7 @@ def _preflight(db: Session, year: int, month: int) -> dict[str, svc.MonthGrid]:
             blocking=blocking,
         )
     return grids
+
 
 def _attachment(payload: bytes, filename: str) -> Response:
     """The workbook as a download named in Arabic.

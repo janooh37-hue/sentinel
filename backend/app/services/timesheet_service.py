@@ -369,8 +369,7 @@ def _fillers_by_employee(db: Session, year: int, month: int) -> dict[str, str]:
             latest,
             and_(
                 TimesheetStatFiller.employee_id == latest.c.employee_id,
-                TimesheetStatFiller.year * 12 + TimesheetStatFiller.month
-                == latest.c.month_index,
+                TimesheetStatFiller.year * 12 + TimesheetStatFiller.month == latest.c.month_index,
             ),
         )
     ).scalars()

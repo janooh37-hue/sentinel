@@ -480,9 +480,7 @@ def test_export_preflights_both_sheets_before_sealing(client, db_session):
 
     close = client.post("/api/v1/timesheet/2026/7/close")
     assert close.status_code == 422
-    assert {issue["sheet"] for issue in close.json()["error"]["details"]["blocking"]} == {
-        "drivers"
-    }
+    assert {issue["sheet"] for issue in close.json()["error"]["details"]["blocking"]} == {"drivers"}
     assert db_session.query(TimesheetPeriod).count() == 0
     assert db_session.query(TimesheetSnapshotRow).count() == 0
 
