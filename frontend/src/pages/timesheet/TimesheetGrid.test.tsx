@@ -25,7 +25,8 @@ vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn(), warning: v
 
 import type { TimesheetRow } from '@/lib/api'
 
-import { ID_COLUMNS, TimesheetGrid, TimesheetMasthead } from './TimesheetGrid'
+import { TimesheetGrid, TimesheetMasthead } from './TimesheetGrid'
+import { ID_COLUMNS } from './columns'
 
 /**
  * The stylesheet as text, so the token the geometry rests on can be asserted

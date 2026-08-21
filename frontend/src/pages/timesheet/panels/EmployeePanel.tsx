@@ -28,8 +28,7 @@ import { Link } from 'react-router-dom'
 import type { TimesheetRow, TimesheetVariant } from '@/lib/api'
 import { cn } from '@/lib/utils'
 
-import { CODES, slugOf } from '../codes'
-import { tallyOf } from '../RowTally'
+import { CODES, slugOf, tallyOf } from '../codes'
 import { employeeWorkbookName, spanMonthLabels } from '../useTimesheet'
 
 export interface EmployeePanelProps {

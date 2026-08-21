@@ -20,7 +20,7 @@
  * answers Enter and Space (UI spec §14) — and the reason is stated in its place.
  */
 
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { cn } from '@/lib/utils'
@@ -47,9 +47,24 @@ export function PostsPanel({
    * The raw field. Parsing every keystroke and writing the clamped number back
    * would turn `clear` then `24` into `024`; the commit happens on blur, which
    * is also one PATCH per edit rather than one per digit.
+   *
+   * A NEW `postCount` re-seats the draft, and it does so DURING the render that
+   * carries it rather than in an effect afterwards (React's "adjusting some
+   * state when a prop changes"): the effect form painted the stale number for a
+   * frame first, and cost a second render to replace it. `seen` is the previous
+   * prop, so the re-seat happens once per change and not on every render.
+   *
+   * Not `key`: resetting by key belongs to the PARENT, which would have to know
+   * this panel keeps a draft at all, and it remounts the whole panel — a value
+   * arriving from a refetch while the operator is still in the field would take
+   * the caret and the focus with it. The draft is this component's business.
    */
   const [raw, setRaw] = useState(String(postCount))
-  useEffect(() => setRaw(String(postCount)), [postCount])
+  const [seen, setSeen] = useState(postCount)
+  if (seen !== postCount) {
+    setSeen(postCount)
+    setRaw(String(postCount))
+  }
 
   /**
    * `Number('') === 0`, and `post_count: 0` is SERVER-VALID (`ge=0`, plus the

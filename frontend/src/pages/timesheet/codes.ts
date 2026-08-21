@@ -57,3 +57,24 @@ const IS_CODE: Record<string, true> = {
 }
 
 export const isCode = (value: string): value is Code => IS_CODE[value] === true
+
+/**
+ * Every code counted across the days the month ACTUALLY has — never 31 blindly,
+ * or a 30-day month would count `codes[30]` (which is `null`) as a day.
+ *
+ * It lives here rather than beside its first caller because two very different
+ * surfaces need the same eight numbers: the hover overlay (`RowTally`) and the
+ * dock's employee sheet (`EmployeePanel`). A counting function in a floating
+ * box's module made the panel import from the overlay for no reason.
+ */
+export function tallyOf(
+  codes: readonly (string | null)[],
+  daysInMonth: number,
+): Record<CodeSlug, number> {
+  const out = { P: 0, AL: 0, SL: 0, AB: 0, TR: 0, NG: 0, '-': 0, X: 0 }
+  for (let day = 1; day <= daysInMonth; day += 1) {
+    const slug = slugOf(codes[day - 1] ?? null)
+    if (slug !== '') out[slug] += 1
+  }
+  return out
+}

@@ -14,14 +14,14 @@
  * would be useless to a keyboard user (UI spec §15 change 4).
  */
 
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useRef } from 'react'
 import { createPortal } from 'react-dom'
 import { useTranslation } from 'react-i18next'
 
 import type { TimesheetRow } from '@/lib/api'
 import { cn } from '@/lib/utils'
 
-import { CODES, type CodeSlug, slugOf } from './codes'
+import { CODES, type CodeSlug, tallyOf } from './codes'
 
 export interface RowTallyProps {
   row: TimesheetRow
@@ -32,19 +32,6 @@ export interface RowTallyProps {
   anchor: HTMLElement
   /** The anchor has scrolled out of the sheet — stop showing counts for it. */
   onDismiss: () => void
-}
-
-/** Every code counted across the days the month actually has. */
-export function tallyOf(
-  codes: readonly (string | null)[],
-  daysInMonth: number,
-): Record<CodeSlug, number> {
-  const out = { P: 0, AL: 0, SL: 0, AB: 0, TR: 0, NG: 0, '-': 0, X: 0 }
-  for (let day = 1; day <= daysInMonth; day += 1) {
-    const slug = slugOf(codes[day - 1] ?? null)
-    if (slug !== '') out[slug] += 1
-  }
-  return out
 }
 
 /** The `-` code prints as a hyphen but reads as an en dash on screen. */
@@ -59,7 +46,6 @@ export function RowTally({
 }: RowTallyProps): React.JSX.Element {
   const { t } = useTranslation()
   const box = useRef<HTMLDivElement | null>(null)
-  const [ready, setReady] = useState(false)
   const counts = tallyOf(codes, daysInMonth)
 
   /**
@@ -93,7 +79,15 @@ export function RowTally({
       // gives it. Nothing here names `left` or `top`.
       const origin = rtl ? window.innerWidth - size.width : 0
       node.style.transform = `translate3d(${x - origin}px, ${y}px, 0)`
-      setReady(true)
+      // The reveal is part of the placement, not a consequence of it. It used
+      // to be a `ready` state set from the layout effect, which is a second
+      // render for a value nothing but this node reads — and the box is already
+      // being written to imperatively one line up. Both writes therefore land
+      // in the same layout pass, before paint, so the box is never painted at
+      // the wrong place and never painted twice. `opacity-0` in the class list
+      // is the mount state; an inline style outranks a class, and the class
+      // list is now static, so React never touches `style` and cannot undo it.
+      node.style.opacity = '1'
     },
     [anchor, onDismiss],
   )
@@ -118,10 +112,7 @@ export function RowTally({
     <div
       ref={box}
       role="status"
-      className={cn(
-        'ts-tally flex items-center gap-2.5 px-2.5 py-1.5',
-        !ready && 'opacity-0',
-      )}
+      className="ts-tally flex items-center gap-2.5 px-2.5 py-1.5 opacity-0"
     >
       <span className="font-mono text-[0.68rem] text-muted-foreground">
         <b className="font-semibold text-foreground">{row.employee_id}</b> {row.name_en}

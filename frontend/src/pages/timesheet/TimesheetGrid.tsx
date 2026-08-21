@@ -48,26 +48,13 @@ import { cn } from '@/lib/utils'
 import { CodePicker } from './CodePicker'
 import { RowTally } from './RowTally'
 import { CODES, type Code, isCode, slugOf } from './codes'
+import { DAYS, ID_COLUMNS, SPAN } from './columns'
 
 /** One cell a fill is asked to paint. */
 export interface FillCell {
   employeeId: string
   day: number
 }
-
-/**
- * The five identity columns, in printed order. `index.css` declares
- * `--id-block` as exactly this sum, so the loading skeleton's day strip and the
- * grid's first day column start at the same offset by arithmetic rather than by
- * two people remembering the same number.
- */
-export const ID_COLUMNS = ['--id-no', '--id-id', '--id-name', '--id-nat', '--id-desig'] as const
-
-/** Always 31, in every month. */
-const DAYS: readonly number[] = Array.from({ length: 31 }, (_, i) => i + 1)
-
-/** 5 identity columns + 31 days: what a full-width heading has to span. */
-const SPAN = ID_COLUMNS.length + DAYS.length
 
 const MONTH_STAMPS = [
   'JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC',
