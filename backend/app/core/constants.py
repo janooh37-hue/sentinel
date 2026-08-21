@@ -253,6 +253,13 @@ ADMIN_TYPES: Final[tuple[str, ...]] = (
 )
 
 
+#: The two monthly time-sheet workbooks. Drivers have always been reported
+#: separately from the main guard sheet.
+TIMESHEET_MAIN: Final[str] = "main"
+TIMESHEET_DRIVERS: Final[str] = "drivers"
+TIMESHEET_SHEETS: Final[tuple[str, str]] = (TIMESHEET_MAIN, TIMESHEET_DRIVERS)
+
+
 # --- Time-sheet display values ---------------------------------------------
 
 #: Arabic nationality → the English label column D of the time sheet prints.

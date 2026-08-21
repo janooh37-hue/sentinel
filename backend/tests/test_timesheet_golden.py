@@ -18,7 +18,7 @@ on the client's invoice.
 **What is not compared.** Row *order*: the comparison is keyed by ID and is
 order-insensitive by design, because the engine sorts by ``rank_order`` then
 numeric ID and deliberately does not reproduce the paper's guard-tier order
-(``design.md:151, :295, :507-509``) — only 36 of July's 275 row positions
+(``docs/superpowers/specs/2026-08-19-monthly-timesheet-design.md:151, :295, :507-509``) — only 36 of July's 275 row positions
 coincide. Nor the names, nationalities or designation labels beside the band;
 nor the rendered ``.xlsx``, the template or the API, none of which this module
 imports — its only production imports are :func:`attach_sqlite_pragmas`,

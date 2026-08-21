@@ -108,7 +108,7 @@ def _attachment(payload: bytes, filename: str) -> Response:
         content=payload,
         media_type=XLSX_MEDIA_TYPE,
         headers={
-            "Content-Disposition": f"attachment; filename*=UTF-8''{quote(filename)}",
+            "Content-Disposition": f"attachment; filename*=UTF-8''{quote(filename, safe='')}",
             "X-Content-Type-Options": "nosniff",
         },
     )
@@ -342,7 +342,7 @@ def export_employee(
             timesheet_xlsx.render_single(grid, employee_id),
             timesheet_xlsx.filename_for_single(grid, employee_id),
         )
-    earlier_year, earlier_month = (year - 1, 12) if month == 1 else (year, month - 1)
+    earlier_year, earlier_month = svc.previous_month(year, month)
     earlier = svc.build_month(db, earlier_year, earlier_month, sheet=sheet)
     payload = timesheet_xlsx.render_single_span([earlier, grid], employee_id)
     named = grid if any(row.employee_id == employee_id for row in grid.rows) else earlier
