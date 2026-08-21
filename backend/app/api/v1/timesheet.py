@@ -238,6 +238,13 @@ def patch_month(
     it and still answer with a failure.
     """
 
+    if payload.post_count is not None:
+        svc.set_post_count(db, year, month, payload.post_count, commit=False)
+    for filler in payload.fillers:
+        svc.set_filler(db, year, month, filler.employee_id, filler.code, commit=False)
+    db.commit()
+    return _grid(db, year, month, sheet)
+
 
 @router.post("/{year}/{month}/close", response_model=TimesheetGridResponse)
 def close_month(
