@@ -581,6 +581,7 @@ describe('TimesheetGrid', () => {
       isPrimary: true,
       pointerType: 'mouse',
     })
+    fireEvent.pointerOver(cell('G1001', 8), { pointerId: 1, pointerType: 'mouse' })
     unmount()
 
     window.dispatchEvent(new Event('pointerup'))
