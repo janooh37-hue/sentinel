@@ -27,7 +27,7 @@ import { pickPosition } from '@/lib/employeePosition'
 import { useCapabilities } from '@/lib/useCapabilities'
 import { PendingDepartureBadge } from '@/components/employees/PendingDepartureBadge'
 import { useEmployeePhoto } from '@/components/employees/useEmployeePhoto'
-import { lastCompletedMonth, previousMonth } from '@/pages/timesheet/useTimesheet'
+import { lastCompletedMonth, spanMonthLabels } from '@/pages/timesheet/useTimesheet'
 
 const STATUS_DOT_CLS: Record<EmployeeStatus, string> = {
   Active: 'bg-success',
@@ -48,21 +48,36 @@ function cardInitials(name: string): string {
 /**
  * Which month the record offers, and how many sheets of it.
  *
- * A departure — a resignation or a termination, i.e. any record carrying an
- * `end_date` — is the handover HR asked for: the month of departure AND the one
- * before it, which the server returns as ONE workbook of two sheets, earlier
- * first, named for the later month. Everyone else gets the month that just
- * ended, the same month the time-sheet page opens on.
+ * A departure whose month has ENDED is the handover HR asked for: the month of
+ * departure and the one before it, which the server returns as ONE workbook of
+ * two sheets, earlier first, named for the later month. Everything else gets
+ * the month that just ended, the same month the time-sheet page opens on.
+ *
+ * The `end_date` in hand is not enough on its own. A resignation dated ahead is
+ * a first-class LIVE state here, not a departure: `employee_service` keeps
+ * `status` Active and parks the target in `pending_status` until the date
+ * arrives, and the Pending Departures widget exists to list exactly those rows.
+ * Nothing downstream would refuse the export either — a live row is seeded
+ * `P` on every day of the month, and the span renderer only 404s when the
+ * employee is on neither month — so the operator would be handed a real `.xlsx`
+ * named for a future month asserting a manned post on days that have not
+ * happened, and would lose the ordinary export for that employee until the
+ * nightly flip. So the departure month has to be at or before the last
+ * completed month.
  *
  * `end_date` is split as a STRING. `new Date('2026-01-15').getMonth()` is UTC
  * midnight, so west of Greenwich it reads December and a January departure
  * would silently fetch the wrong two months.
  */
 function sheetSpanOf(employee: EmployeeRead): { year: number; month: number; months: 1 | 2 } {
+  const latest = lastCompletedMonth()
   const end = employee.end_date
-  if (!end) return { ...lastCompletedMonth(), months: 1 }
+  if (!end) return { ...latest, months: 1 }
   const [year, month] = end.slice(0, 7).split('-').map(Number)
-  return year && month ? { year, month, months: 2 } : { ...lastCompletedMonth(), months: 2 }
+  // An unparseable date is not evidence of a departure either.
+  if (!year || !month) return { ...latest, months: 1 }
+  const ended = year < latest.year || (year === latest.year && month <= latest.month)
+  return ended ? { year, month, months: 2 } : { ...latest, months: 1 }
 }
 
 interface Props {
@@ -100,22 +115,19 @@ export function EmployeeIdCard({
   const span = sheetSpanOf(employee)
   const monthName = (year: number, month: number): string =>
     new Intl.DateTimeFormat(i18n.language, { month: 'long' }).format(new Date(year, month - 1, 1))
-  const earlier = previousMonth(span.year, span.month)
+  /** The earlier/later naming rule, from the one declaration the dock shares. */
+  const spanNames = spanMonthLabels(span.year, span.month, i18n.language)
   /**
-   * "2 months" alone does not say which two, so the span rides in the title.
-   * The later month always carries the year because it names the file; the
-   * earlier one carries its own only across a year boundary, so a
-   * December→January handover never reads as "December and January 2026".
+   * "2 months" does not say WHICH two, and a `title` is mouse-hover only — it
+   * is exposed as a description, so a keyboard or touch operator never reads
+   * it. The two months are therefore visible copy, with the title supplying
+   * what the sentence adds: one workbook, two sheets, earlier first.
    */
+  const timesheetSpanLine =
+    span.months === 2 ? t('timesheet.record.bothMonths', spanNames) : null
   const timesheetTitle =
     span.months === 2
-      ? t('timesheet.employee.spanMonths', {
-          first:
-            earlier.year === span.year
-              ? monthName(earlier.year, earlier.month)
-              : `${monthName(earlier.year, earlier.month)} ${earlier.year}`,
-          second: `${monthName(span.year, span.month)} ${span.year}`,
-        })
+      ? t('timesheet.employee.spanMonths', spanNames)
       : t('timesheet.record.oneMonth', {
           month: `${monthName(span.year, span.month)} ${span.year}`,
         })
@@ -297,6 +309,9 @@ export function EmployeeIdCard({
           </button>
         )}
       </div>
+      {canSeeTimesheet && timesheetSpanLine && (
+        <p className="mt-2 text-[0.72em] leading-snug opacity-70">{timesheetSpanLine}</p>
+      )}
     </div>
   )
 }

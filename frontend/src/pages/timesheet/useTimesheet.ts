@@ -461,6 +461,32 @@ export const lastCompletedMonth = (now: Date = new Date()): { year: number; mont
 export const previousMonth = (year: number, month: number): { year: number; month: number } =>
   month === 1 ? { year: year - 1, month: 12 } : { year, month: month - 1 }
 
+/**
+ * How a two-month span names itself: the earlier sheet, then the later one.
+ *
+ * The later month ALWAYS carries the year, because it names the file. The
+ * earlier one carries its own only when the span crosses a new year, which is
+ * the only case where "December and January 2026" would be a lie. Two surfaces
+ * print this — the dock's employee panel and the employee record's card — and
+ * a second copy of the rule is a second chance to get the boundary wrong.
+ */
+export const spanMonthLabels = (
+  year: number,
+  month: number,
+  lang: string,
+): { first: string; second: string } => {
+  const name = (y: number, m: number): string =>
+    new Intl.DateTimeFormat(lang, { month: 'long' }).format(new Date(y, m - 1, 1))
+  const prev = previousMonth(year, month)
+  return {
+    first:
+      prev.year === year
+        ? name(prev.year, prev.month)
+        : `${name(prev.year, prev.month)} ${prev.year}`,
+    second: `${name(year, month)} ${year}`,
+  }
+}
+
 const arabicMonth = (year: number, month: number): string =>
   new Intl.DateTimeFormat('ar', { month: 'long' }).format(new Date(year, month - 1, 1))
 

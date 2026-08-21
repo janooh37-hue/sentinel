@@ -193,6 +193,11 @@ const KEYS = [
   // guard below). `record.actionTwo` uses the Arabic dual — no digit at all.
   'timesheet.record.action',
   'timesheet.record.actionTwo',
+  // Visible, not a `title`: a tooltip is mouse-only and exposed as a
+  // description, so "2 months" would never say WHICH two to a keyboard or
+  // touch operator. Two number runs, but Arabic letters separate them — the
+  // reordering the guard below pins needs a bare neutral between the runs.
+  'timesheet.record.bothMonths',
   'timesheet.record.oneMonth',
   // The printed rank order, reordered from Settings.
   'timesheet.designations.title',

@@ -30,7 +30,7 @@ import { cn } from '@/lib/utils'
 
 import { CODES, slugOf } from '../codes'
 import { tallyOf } from '../RowTally'
-import { employeeWorkbookName, previousMonth } from '../useTimesheet'
+import { employeeWorkbookName, spanMonthLabels } from '../useTimesheet'
 
 export interface EmployeePanelProps {
   rows: TimesheetRow[]
@@ -156,17 +156,8 @@ export function EmployeePanel({
 
   const billStart = Number(billRaw)
   const billAsked = Number.isInteger(billStart) && billStart >= 2
-  const monthName = (y: number, m: number, lang = i18n.language): string =>
-    new Intl.DateTimeFormat(lang, { month: 'long' }).format(new Date(y, m - 1, 1))
-  const prev = previousMonth(year, month)
-  /**
-   * The later month always carries the year, because it names the file. The
-   * earlier one carries its own only when the span crosses a new year, which is
-   * the only case where "December and January 2026" would be a lie.
-   */
-  const spanFirst =
-    prev.year === year ? monthName(prev.year, prev.month) : `${monthName(prev.year, prev.month)} ${prev.year}`
-  const spanSecond = `${monthName(year, month)} ${year}`
+  /** Both month names, from the one declaration the record's card also calls. */
+  const { first: spanFirst, second: spanSecond } = spanMonthLabels(year, month, i18n.language)
   /**
    * The deliverable's own name, from ONE declaration shared with the hook that
    * actually sends it — a second copy of the template is a name this panel can

@@ -3936,6 +3936,7 @@
     "record": {
       "action": "كشف الحضور · {{month}}",
       "actionTwo": "كشف الحضور · شهران",
+      "bothMonths": "الشهران: {{first}} و{{second}}.",
       "oneMonth": "ملف واحد: {{month}} — الشهر المنقضي."
     },
     "designations": {

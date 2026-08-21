@@ -3666,6 +3666,7 @@
     "record": {
       "action": "Time sheet · {{month}}",
       "actionTwo": "Time sheet · 2 months",
+      "bothMonths": "Both months: {{first}} and {{second}}.",
       "oneMonth": "One workbook: {{month}} — the month that just ended."
     },
     "designations": {

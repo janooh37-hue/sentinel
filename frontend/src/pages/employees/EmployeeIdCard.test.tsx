@@ -98,6 +98,9 @@ describe('EmployeeIdCard — the time-sheet action', () => {
       'title',
       expect.stringContaining('February and March 2026'),
     )
+    // Visible, not hover-only: a `title` is a description no keyboard or touch
+    // operator ever reads.
+    expect(screen.getByText('Both months: February and March 2026.')).toBeInTheDocument()
     fireEvent.click(button)
     // The month of departure. The server adds the month before it.
     expect(onTimesheet).toHaveBeenCalledWith({ year: 2026, month: 3, months: 2 })
@@ -116,6 +119,45 @@ describe('EmployeeIdCard — the time-sheet action', () => {
     )
     fireEvent.click(button)
     expect(onTimesheet).toHaveBeenCalledWith({ year: 2026, month: 1, months: 2 })
+  })
+
+  it('offers the ordinary single month for a departure that has not happened yet', () => {
+    // A resignation dated ahead keeps `status` Active and parks the target in
+    // `pending_status`; the row is still live. Nothing downstream would refuse
+    // the two-month export — a live row is seeded `P` on every day, and the
+    // span renderer only 404s when the employee is on neither month — so the
+    // operator would be handed a workbook asserting a manned post on days that
+    // have not happened, AND would lose the last-completed-month export for
+    // this employee until the nightly flip.
+    caps.add('timesheet.view')
+    const onTimesheet = wrap({
+      ...EMPLOYEE,
+      status: 'Active',
+      pending_status: 'Resigned',
+      end_date: '2026-09-30',
+    } as EmployeeRead)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Time sheet · July' }))
+    expect(onTimesheet).toHaveBeenCalledWith({ year: 2026, month: 7, months: 1 })
+    expect(screen.queryByText(/Both months/)).not.toBeInTheDocument()
+  })
+
+  it('still takes two months for a departure in the month that just ended', () => {
+    // The boundary itself: August has not ended, July has. A departure dated
+    // inside the last completed month is the handover.
+    caps.add('timesheet.view')
+    const onTimesheet = wrap({ ...EMPLOYEE, end_date: '2026-07-31' } as EmployeeRead)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Time sheet · 2 months' }))
+    expect(onTimesheet).toHaveBeenCalledWith({ year: 2026, month: 7, months: 2 })
+  })
+
+  it('treats an unparseable end date as no departure at all', () => {
+    caps.add('timesheet.view')
+    const onTimesheet = wrap({ ...EMPLOYEE, end_date: 'not-a-date' } as EmployeeRead)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Time sheet · July' }))
+    expect(onTimesheet).toHaveBeenCalledWith({ year: 2026, month: 7, months: 1 })
   })
 
   it('withholds the action from an operator who cannot see the time sheet', () => {

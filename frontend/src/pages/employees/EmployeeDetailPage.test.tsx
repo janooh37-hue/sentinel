@@ -108,6 +108,19 @@ function renderPage(initialEntry = '/employees/G100') {
   )
 }
 
+// FILE-LEVEL hooks: vitest registers these at collection, so they wrap every
+// test below whatever their position in the file. They are here, above the
+// first one, so that is visible rather than inferred.
+//
+// The save-as path builds an object URL and clicks a real anchor; jsdom has
+// neither, and a real anchor click navigates.
+beforeEach(() => {
+  URL.createObjectURL = vi.fn(() => 'blob:sheet') as unknown as typeof URL.createObjectURL
+  URL.revokeObjectURL = vi.fn()
+  vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {})
+})
+afterEach(() => vi.restoreAllMocks())
+
 test('clicking Edit renders EmployeeForm in edit mode', async () => {
   vi.mocked(api.getEmployeeDetail).mockResolvedValue(detail as never)
   renderPage()
@@ -148,15 +161,6 @@ test('violation deep link activates the tab and forwards the exact row id', asyn
   expect(await screen.findByTestId('tab-chips')).toHaveAttribute('data-active', 'violations')
   expect(screen.getByTestId('violations-tab')).toHaveAttribute('data-open-id', '42')
 })
-
-// The save-as path builds an object URL and clicks a real anchor; jsdom has
-// neither, and a real anchor click navigates.
-beforeEach(() => {
-  URL.createObjectURL = vi.fn(() => 'blob:sheet') as unknown as typeof URL.createObjectURL
-  URL.revokeObjectURL = vi.fn()
-  vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {})
-})
-afterEach(() => vi.restoreAllMocks())
 
 test('the card time-sheet action exports that employee, with the span the card chose', async () => {
   vi.mocked(api.getEmployeeDetail).mockResolvedValue(detail as never)
