@@ -1670,7 +1670,7 @@ class TimesheetSnapshotRow(Base):
 
 
 class TimesheetStatFiller(Base):
-    """The code block 2 shows for one employee in one month (migration 0071).
+    """The code block 2 shows for one employee in one month (migration 0074).
 
     Block 2 is the surplus headcount above the contracted post count. Those rows
     are not billed as manned posts, so the client statistics sheet prints the
@@ -1694,7 +1694,7 @@ class TimesheetStatFiller(Base):
 
 
 class TimesheetStartAck(Base):
-    """An operator acknowledgement of a mid-month joiner's start (migration 0072).
+    """An operator acknowledgement of a mid-month joiner's start (migration 0075).
 
     The days before a date of joining are ``NG`` and stay derived; this row only
     records that the flag was seen and accepted. It is deliberately not an

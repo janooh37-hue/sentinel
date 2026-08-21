@@ -238,7 +238,7 @@ Migration `0070` keeps its own frozen literal copy.
 | `stat_codes` | JSON | the statistics variant of the same row |
 | `stat_block` | int | 1 or 2 |
 
-**`timesheet_stat_fillers`** — the block-2 code assignments (migration 0071).
+**`timesheet_stat_fillers`** — the block-2 code assignments (migration 0074).
 
 | Column | Type | Notes |
 | --- | --- | --- |
@@ -301,7 +301,7 @@ From the same `MonthGrid`:
 1. Split at `period.post_count` in sort order.
 2. Block 1: every cell becomes `P` except `NG` and `-`.
 3. Block 2: every cell becomes its assigned filler code except `NG`, `-` and
-   real `AB`. Assignments live in `timesheet_stat_fillers` (migration 0071),
+   real `AB`. Assignments live in `timesheet_stat_fillers` (migration 0074),
    keyed by year, month and employee. A new member defaults to `AL`; thereafter
    the previous month's assignment carries forward, so the June/July shape — a
    first group of `SL`, a bulk of `AL`, a trailing group of `TR` — is set once by

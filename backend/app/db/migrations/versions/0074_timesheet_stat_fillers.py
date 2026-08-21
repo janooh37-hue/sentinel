@@ -1,7 +1,7 @@
 """timesheet stat fillers
 
-Revision ID: 0071_timesheet_stat_fillers
-Revises: 0070_timesheet
+Revision ID: 0074_timesheet_stat_fillers
+Revises: 0073_absence_after_twice_grace
 Create Date: 2026-08-19 00:00:00.000000
 
 Per-month block-2 code assignments for the client statistics sheet. Block 2 is
@@ -16,8 +16,8 @@ from collections.abc import Sequence
 import sqlalchemy as sa
 from alembic import op
 
-revision: str = "0071_timesheet_stat_fillers"
-down_revision: str | Sequence[str] | None = "0070_timesheet"
+revision: str = "0074_timesheet_stat_fillers"
+down_revision: str | Sequence[str] | None = "0073_absence_after_twice_grace"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
