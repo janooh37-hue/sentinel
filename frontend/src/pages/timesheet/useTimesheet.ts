@@ -442,19 +442,28 @@ export function useAcknowledgeStart(params: TimesheetParams) {
   })
 }
 
-/**
- * Only used when a response carries no `content-disposition` — the server's own
- * name is authoritative. These are the deliverables' own names, identical in
- * both UI languages, so they are not interface copy and do not belong in the
- * locale files.
- */
-const FALLBACK_NAME: Record<TimesheetVariant, (month: string) => string> = {
-  attendance: (month) => `كشف حضور شهر ${month}.xlsx`,
-  statistics: (month) => `الاحصائية شهر ${month}.xlsx`,
-}
-
 const arabicMonth = (year: number, month: number): string =>
   new Intl.DateTimeFormat('ar', { month: 'long' }).format(new Date(year, month - 1, 1))
+
+/**
+ * The two deliverables' own names for a month.
+ *
+ * These are the workbook names, identical in both UI languages, so they are not
+ * interface copy and do not belong in the locale files. They serve two callers
+ * from ONE declaration: the fallback when a response carries no
+ * `content-disposition` — the server's own name is authoritative — and the
+ * release panel, which prints what the operator is about to save.
+ */
+export const monthWorkbookNames = (
+  year: number,
+  month: number,
+): Record<TimesheetVariant, string> => {
+  const name = arabicMonth(year, month)
+  return {
+    attendance: `كشف حضور شهر ${name}.xlsx`,
+    statistics: `الاحصائية شهر ${name}.xlsx`,
+  }
+}
 
 /**
  * Land a blob on disk under its own name.
@@ -506,7 +515,7 @@ export function useTimesheetDownload(): {
     }) =>
       api.fetchTimesheetExport(
         args,
-        FALLBACK_NAME[args.variant](arabicMonth(args.year, args.month)),
+        monthWorkbookNames(args.year, args.month)[args.variant],
       ),
     onSuccess: (file, args) => {
       saveBlob(file)

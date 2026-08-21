@@ -194,9 +194,23 @@ describe('EmployeePanel', () => {
 
   it('offers nothing to block when every day before the start is a roster edge', async () => {
     const onFillRedBlock = vi.fn()
-    renderPanel(<EmployeePanel {...props} selected="G7141" onFillRedBlock={onFillRedBlock} />)
-    // 18..22 are all `-`: a block over them would be refused cell by cell.
-    await userEvent.type(screen.getByLabelText(/bill starts on day/i), '19')
+    const joiner: TimesheetRow = {
+      ...rows[0],
+      employee_id: 'G7176',
+      joined_day: 10,
+      left_day: null,
+      codes: [...Array<string>(9).fill('NG'), ...Array<string>(22).fill('P')],
+    }
+    renderPanel(
+      <EmployeePanel
+        {...props}
+        rows={[joiner]}
+        selected="G7176"
+        onFillRedBlock={onFillRedBlock}
+      />,
+    )
+    // Every day before 8 is before day 10: the server would refuse each one.
+    await userEvent.type(screen.getByLabelText(/bill starts on day/i), '8')
     expect(screen.getByRole('button', { name: /red block/i })).toBeDisabled()
     expect(screen.getByText(/nothing to block/i)).toBeInTheDocument()
   })

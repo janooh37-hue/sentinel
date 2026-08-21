@@ -3647,7 +3647,7 @@
       "extractOne": "Extract · 1 month",
       "extractTwo": "Extract · 2 months",
       "twoMonths": "2 months",
-      "spanMonths": "Two workbooks: {{first}} and {{second}} — the month of departure and the one before it.",
+      "spanMonths": "One workbook, two sheets: {{first}} and {{second}} — the month of departure and the one before it, earlier sheet first.",
       "printedRow": "printed row {{no}}",
       "billStart": "Bill starts on day",
       "redBlock": "Red block",

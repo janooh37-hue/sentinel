@@ -104,9 +104,12 @@ describe('ChecksPanel', () => {
         removed={[]}
       />,
     )
-    expect(await screen.findByText(/still active/i)).toBeInTheDocument()
+    // The server's own sentence, whole, with no row anywhere to hang it on.
+    expect(
+      await screen.findByText('OMAR SAEED finished on 2026-05-31 but is still Active.'),
+    ).toBeInTheDocument()
     expect(screen.getByText('G6001')).toBeInTheDocument()
-    expect(screen.getByText(/departed but still active/i)).toBeInTheDocument()
+    expect(screen.getByText('Departed but still active')).toBeInTheDocument()
     // Not offered a `Show row` it cannot honour.
     expect(screen.queryByRole('button', { name: /show row/i })).not.toBeInTheDocument()
   })

@@ -30,16 +30,31 @@ import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 
 import { EmptyState } from '@/components/ui/empty-state'
-import { apiErrorMessage, type TimesheetSheet, type TimesheetVariant } from '@/lib/api'
+import {
+  apiErrorMessage,
+  type TimesheetGridResponse,
+  type TimesheetSheet,
+  type TimesheetVariant,
+} from '@/lib/api'
 import { useCapabilities } from '@/lib/useCapabilities'
 import { cn } from '@/lib/utils'
 
 import { CodeRibbon } from './CodeRibbon'
+import { TimesheetDock } from './TimesheetDock'
 import { TimesheetGrid, TimesheetMasthead, type FillCell } from './TimesheetGrid'
 import { TimesheetNotice } from './TimesheetNotice'
 import { MonthStepper, TimesheetToolbar, type TimesheetDensity } from './TimesheetToolbar'
 import { type Code, isCode, slugOf } from './codes'
-import { useSetCell, useTimesheetGrid } from './useTimesheet'
+import {
+  useAcknowledgeStart,
+  useCloseMonth,
+  useEmployeeSheetDownload,
+  usePatchPeriod,
+  useReopenMonth,
+  useSetCell,
+  useTimesheetDownload,
+  useTimesheetGrid,
+} from './useTimesheet'
 
 export interface TimesheetUiState {
   variant: TimesheetVariant
@@ -73,6 +88,27 @@ function lastMonth(): { year: number; month: number } {
   return month === 0 ? { year: now.getFullYear() - 1, month: 12 } : { year: now.getFullYear(), month }
 }
 
+/**
+ * The dock takes the whole payload, and it is fixed furniture: it renders in
+ * every state, including the one before the month has landed. So a pending
+ * month reads as an empty one — zero rows, zero checks, no seal — rather than
+ * the dock appearing under the grid as the response arrives, which is the
+ * locked-rule-6 jump the skeleton exists to prevent, one band lower.
+ */
+const PENDING_MONTH: TimesheetGridResponse = {
+  year: 0,
+  month: 1,
+  days_in_month: 31,
+  sheet: 'main',
+  post_count: 0,
+  rows: [],
+  blocking: [],
+  warnings: [],
+  removed: [],
+  closed_at: null,
+  closed_by: null,
+}
+
 export function TimesheetPage(): React.JSX.Element {
   const { t, i18n } = useTranslation()
   const { has } = useCapabilities()
@@ -93,6 +129,12 @@ export function TimesheetPage(): React.JSX.Element {
 
   const grid = useTimesheetGrid(params)
   const setCell = useSetCell(params)
+  const period = usePatchPeriod(params)
+  const closeMonth = useCloseMonth(params)
+  const reopenMonth = useReopenMonth(params)
+  const acknowledge = useAcknowledgeStart(params)
+  const monthFile = useTimesheetDownload()
+  const employeeFile = useEmployeeSheetDownload()
 
   // Cells are correctable only on the attendance grid of an open month, by
   // someone holding `timesheet.edit`. The statistics grid is derived: the fix
@@ -258,6 +300,68 @@ export function TimesheetPage(): React.JSX.Element {
   const onSelectRow = useCallback((selected: string | null) => {
     setUi((prev) => ({ ...prev, selected }))
   }, [])
+
+  const onOpenPanel = useCallback((panel: TimesheetUiState['panel']) => {
+    setUi((prev) => ({ ...prev, panel }))
+  }, [])
+
+  const onQuery = useCallback((query: string) => {
+    setUi((prev) => ({ ...prev, query }))
+  }, [])
+
+  /**
+   * The red block, as ONE gesture rather than N writes announced N times.
+   *
+   * `onFill` is already the partial-refusal path: it paints optimistically,
+   * awaits every cell, rolls each refusal back to its last server-confirmed
+   * value, prunes the corrections that never landed, and tells the operator
+   * once. The helper's job is only to arrive with days the server will accept —
+   * `EmployeePanel` has already dropped the roster edges, which is what stops
+   * `set_cell` refusing `TIMESHEET_OFF_ROSTER` cell by cell.
+   */
+  const onFillRedBlock = useCallback(
+    (employeeId: string, days: number[]) => {
+      if (days.length === 0) return
+      onFill(
+        days.map((day) => ({ employeeId, day })),
+        'X',
+      )
+    },
+    [onFill],
+  )
+
+  const onSetPostCount = useCallback(
+    (postCount: number) => period.mutate({ post_count: postCount }),
+    [period],
+  )
+
+  /**
+   * Accepting a starting point is not a correction: it writes no override row,
+   * so the backend allows it on a CLOSED month too.
+   */
+  const onAcknowledge = useCallback(
+    (employeeId: string) => acknowledge.mutate(employeeId),
+    [acknowledge],
+  )
+
+  /**
+   * `download()` never rejects — `onError` has already shown the server's own
+   * message — so `void download(args)` is the whole call and a `.catch` would
+   * only be noise.
+   */
+  const onDownload = useCallback(
+    (variant: TimesheetVariant) => void monthFile.download({ ...params, variant }),
+    [monthFile, params],
+  )
+
+  const onEmployeeDownload = useCallback(
+    (args: { employeeId: string; year: number; month: number; months: 1 | 2 }) =>
+      void employeeFile.download(args),
+    [employeeFile],
+  )
+
+  const onCloseMonth = useCallback(() => closeMonth.mutate(), [closeMonth])
+  const onReopenMonth = useCallback(() => reopenMonth.mutate(), [reopenMonth])
 
   /** Every cell corrected in this session, for the grid's structural mark. */
   const edited = useMemo(
@@ -517,10 +621,23 @@ export function TimesheetPage(): React.JSX.Element {
       {/* The dock: fixed furniture below the scroll region, so opening a panel
           costs no layout shift and reaching a download costs no scrolling. Its
           four groups — contracted posts, codes, employee sheet, files and
-          downloads — are Task 9's `TimesheetDock`; the region is the shell's. */}
-      <div
-        data-testid="timesheet-dock"
-        className="flex min-h-[54px] shrink-0 flex-wrap items-center gap-2 border-t border-border bg-surface px-4 py-2 md:px-6"
+          downloads — and its five panels are Task 9's `TimesheetDock`. */}
+      <TimesheetDock
+        grid={grid.grid ?? PENDING_MONTH}
+        canEdit={canEdit}
+        joined={grid.joined}
+        leaving={grid.leaving}
+        ui={ui}
+        onOpenPanel={onOpenPanel}
+        onSelect={onSelectRow}
+        onQuery={onQuery}
+        onAcknowledge={onAcknowledge}
+        onSetPostCount={onSetPostCount}
+        onDownload={onDownload}
+        onEmployeeDownload={onEmployeeDownload}
+        onFillRedBlock={onFillRedBlock}
+        onClose={onCloseMonth}
+        onReopen={onReopenMonth}
       />
     </div>
   )
