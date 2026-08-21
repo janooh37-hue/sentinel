@@ -22,7 +22,7 @@
   - `ruff check .`: 22 errors across 8 files — `backend/app/core/crypto.py` (1), `backend/app/services/admin_notify.py` (1), `backend/app/services/email_service.py` (2), `backend/app/services/scheduler_service.py` (7), `backend/app/services/sms_templates.py` (8), `backend/tests/test_admin_notify.py` (1), `backend/tests/test_passport_printed.py` (1), `backend/tests/test_permit_book_generation.py` (1). Mix: 16 RUF001 (ambiguous Arabic characters), 4 SIM105, 1 SIM103, 1 F841, 1 W292. Your files must add none.
   - `mypy`: 30 errors across 11 files, none in timesheet code.
 - Arabic and English are peers. Use logical CSS properties (`margin-inline-start`, not `margin-left`). Run the `i18n-rtl-reviewer` after Task 9.
-- Exactly one Alembic head. Migration `0070_timesheet` is already applied. Task 3 adds `0074_timesheet_stat_fillers` and `0075_timesheet_start_acks`, in that order, after main's `0071`-`0073`. **(Corrected 2026-08-21, post-merge review. Main took `0071`-`0073` while this branch was in flight, and production is stamped `0073`; renumbering avoids duplicate migration file numbers.)**
+- Exactly one Alembic head. Migration `0070_timesheet` is already applied. Task 3 adds `0075_timesheet_stat_fillers` and `0076_timesheet_start_acks`, in that order, after `0073_absence_after_twice_grace` and the renumbered `0074_employee_supervisor`. **(Corrected 2026-08-21, final integration. Main took `0071`-`0073`, then `origin/main` added a second `0073_employee_supervisor`; the pushed-but-unapplied supervisor revision became `0074`, so the timesheet revisions finally shipped as `0075`/`0076`.)**
 - `CODE_SICK` is `"SL "` **with a trailing space**. The workbook totals sick days with `COUNTIF(F:AJ,$AO$5)` where `AO5` holds `"SL "`. Dropping the space silently zeroes the client's sick column.
 - Derived codes are only: `P`, `AL`, `SL `, `AB`, `TR`, `NG`, `-`. Never emit `OFF`, `R`, `S` or `T`. **`X` is an eighth code the rule engine never derives** — it exists only as a manual override (the red block: a roster day outside the billing window) and it survives the statistics transform beside `NG` and `-`.
 - **The template gains one legend entry and one footer row for `X`** (Task 1). That is a client-visible change to paper already in circulation: the operator must confirm HQ HR accepts it before the first send. Nothing else about the template moves.
@@ -106,8 +106,8 @@ The module has **no `__all__`** and also exposes `LEAVE_TYPE_CODES` and `VOID_LE
 | `backend/templates/GSSG-HR_Monthly_Time_Sheet.xlsx` (create) | The template: header + hidden `_parts` sheet |
 | `backend/app/core/timesheet_xlsx.py` (create) | Template → filled workbook bytes. No DB. |
 | `backend/app/services/timesheet_service.py` (create) | Seed, roster, grid, statistics split, close/reopen, snapshots |
-| `backend/app/db/migrations/versions/0074_timesheet_stat_fillers.py` (create) | Block-2 filler assignments |
-| `backend/app/db/migrations/versions/0075_timesheet_start_acks.py` (create) | Starting-point acknowledgements for mid-month joiners |
+| `backend/app/db/migrations/versions/0075_timesheet_stat_fillers.py` (create) | Block-2 filler assignments |
+| `backend/app/db/migrations/versions/0076_timesheet_start_acks.py` (create) | Starting-point acknowledgements for mid-month joiners |
 | `backend/app/db/models.py` (modify) | `TimesheetStatFiller`, `TimesheetStartAck`, both in `__all__` |
 | `backend/app/schemas/timesheet.py` (create) | Pydantic request/response models |
 | `backend/app/api/v1/timesheet.py` (create) | Routes |
@@ -552,8 +552,8 @@ git commit -m "feat(timesheet): nationality, month and designation reference dat
 
 **Files:**
 - Create: `backend/app/services/timesheet_service.py`
-- Create: `backend/app/db/migrations/versions/0074_timesheet_stat_fillers.py`
-- Create: `backend/app/db/migrations/versions/0075_timesheet_start_acks.py`
+- Create: `backend/app/db/migrations/versions/0075_timesheet_stat_fillers.py`
+- Create: `backend/app/db/migrations/versions/0076_timesheet_start_acks.py`
 - Modify: `backend/app/db/models.py` (add `TimesheetStatFiller` and `TimesheetStartAck`, both in `__all__`)
 - Modify: `backend/app/main.py` (call `seed_designations` in the startup reconcile block, `main.py:124-135` — the new call goes inside the `with SessionLocal() as _db:` body at `:134`, immediately after `correspondence_service.seed_defaults(_db)`)
 - Test: `backend/tests/test_timesheet_service.py`
@@ -667,7 +667,7 @@ Rules, all measured from the workbooks:
 
 Conventions, measured across the 67 files in `versions/`: revision ids are **not** uniformly `NNNN_slug` — bare numeric runs `0001`–`0040` and `0052`–`0068`, slugged runs `0041`–`0051` plus `0068_record_included_papers` and `0070_timesheet`, and three files have a revision id that differs from their filename stem (notably `0069_merge`). Follow the newest form: **filename stem == revision id**, as in `0070_timesheet.py`. Import order is isort's, not `script.py.mako`'s: `from __future__ import annotations` / blank / `from collections.abc import Sequence` / blank / `import sqlalchemy as sa` / `from alembic import op` — which is what the blocks below use. New tables use plain `op.create_table` with `sa.UniqueConstraint` / `sa.CheckConstraint` inline plus a separate `op.create_index`; only changes to an **existing** table need `op.batch_alter_table` (`env.py:57` and `:80` already set `render_as_batch=True`). There is no shared migration helper module — do not import one.
 
-The revisions shipped as `0074`/`0075` because `main` took `0071`-`0073` while this branch was in flight.
+The revisions shipped as `0075`/`0076` because `main` took `0071`-`0073`, then `origin/main` added a second `0073_employee_supervisor`; the supervisor revision was renumbered to `0074`.
 
 ```python
 # backend/app/db/migrations/versions/0071_timesheet_stat_fillers.py
@@ -767,7 +767,7 @@ Add the matching `TimesheetStartAck` model beside `TimesheetStatFiller`, same co
 Then confirm the head is single:
 
 Run: `venv\Scripts\alembic.exe heads`
-Expected: exactly one head, `0075_timesheet_start_acks`. **(Corrected 2026-08-21, post-merge review: main took `0071`-`0073` while this branch was in flight, so renumbering avoids duplicate file numbers.)**
+Expected: exactly one head, `0076_timesheet_start_acks`. **(Corrected 2026-08-21, final integration: main took `0071`-`0073`, then `origin/main` added a second `0073_employee_supervisor`; the supervisor revision was renumbered to `0074`.)**
 
 - [ ] **Step 2: Write the failing tests**
 
@@ -1115,14 +1115,14 @@ Add `timesheet_service.seed_designations(_db)` to the startup reconcile block in
 
 Run: `venv\Scripts\python.exe -m pytest backend/tests/test_timesheet_service.py -v`
 Then: `venv\Scripts\alembic.exe upgrade head && venv\Scripts\alembic.exe heads`
-Expected: 25 tests PASS; exactly one head, `0075_timesheet_start_acks`. **(Corrected 2026-08-21, post-merge review: main took `0071`-`0073` while this branch was in flight, so renumbering avoids duplicate file numbers.)**
+Expected: 25 tests PASS; exactly one head, `0076_timesheet_start_acks`. **(Corrected 2026-08-21, final integration: main took `0071`-`0073`, then `origin/main` added a second `0073_employee_supervisor`; the supervisor revision was renumbered to `0074`.)**
 
 One live-data note for whoever runs `build_month` against `data/gssg.db`: exactly one of the 304 employees has `designation_id IS NULL`, and he joined 2026-08-03. July is therefore clean, but **August will report one `no_designation` blocking issue** until that record is given a designation. That is the rule working, not a bug.
 
 - [ ] **Step 6: Commit**
 
 ```bash
-git add backend/app/services/timesheet_service.py backend/app/db/models.py backend/app/db/migrations/versions/0074_timesheet_stat_fillers.py backend/app/db/migrations/versions/0075_timesheet_start_acks.py backend/app/main.py backend/tests/test_timesheet_service.py
+git add backend/app/services/timesheet_service.py backend/app/db/models.py backend/app/db/migrations/versions/0075_timesheet_stat_fillers.py backend/app/db/migrations/versions/0076_timesheet_start_acks.py backend/app/main.py backend/tests/test_timesheet_service.py
 git commit -m "feat(timesheet): grid service with the statistics posts split"
 ```
 
@@ -2659,7 +2659,7 @@ Expected: ruff reports only the 22 pre-existing errors in the 8 files named in G
 - [ ] **Step 3: One Alembic head**
 
 Run: `venv\Scripts\alembic.exe heads`
-Expected: exactly one head, `0075_timesheet_start_acks`. **(Corrected 2026-08-21, post-merge review: main took `0071`-`0073` while this branch was in flight, so renumbering avoids duplicate file numbers.)**
+Expected: exactly one head, `0076_timesheet_start_acks`. **(Corrected 2026-08-21, final integration: main took `0071`-`0073`, then `origin/main` added a second `0073_employee_supervisor`; the supervisor revision was renumbered to `0074`.)**
 
 - [ ] **Step 4: Frontend checks, one at a time**
 
