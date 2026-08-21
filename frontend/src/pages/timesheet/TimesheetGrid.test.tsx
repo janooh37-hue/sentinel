@@ -17,7 +17,7 @@
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 
-import { render, screen, within } from '@testing-library/react'
+import { fireEvent, render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 
@@ -512,18 +512,16 @@ describe('TimesheetGrid', () => {
     )
   })
 
-  it('flags the sweep where the stylesheet looks for it', async () => {
-    // One `userEvent.setup()` instance, like the shift-click below: the direct
-    // API builds a fresh one per call, and a button pressed in one call is not
-    // held into the next — `[/MouseLeft]` on a fresh instance releases nothing
-    // and dispatches no `pointerup`, so the press and the release have to share
-    // an instance for the sweep to end at all.
-    const user = userEvent.setup()
+  it('flags the sweep where the stylesheet looks for it', () => {
     render(<TimesheetGrid {...props} brush="AL" />)
-    await user.pointer([
-      { keys: '[MouseLeft>]', target: cell('G1001', 3) },
-      { target: cell('G1001', 5) },
-    ])
+    fireEvent.pointerDown(cell('G1001', 3), {
+      button: 0,
+      buttons: 1,
+      pointerId: 1,
+      isPrimary: true,
+      pointerType: 'mouse',
+    })
+    fireEvent.pointerOver(cell('G1001', 5), { pointerId: 1, pointerType: 'mouse' })
     const sheet = screen.getByRole('table')
     // The component holds ONE ref — the wrapper `<div>` that carries the
     // capture-phase handlers — so `data-dragging` lands on an ancestor of the
@@ -550,8 +548,42 @@ describe('TimesheetGrid', () => {
         (node) => node.getAttribute('data-day'),
       ),
     ).toEqual(['3', '4', '5'])
-    await user.pointer([{ keys: '[/MouseLeft]' }])
+    window.dispatchEvent(new Event('pointerup'))
     expect(sheet.closest('[data-dragging="1"]')).toBeNull()
+  })
+
+  it('cancels the sweep on pointercancel without filling anything', () => {
+    const onFill = vi.fn()
+    render(<TimesheetGrid {...props} brush="AL" onFill={onFill} />)
+    fireEvent.pointerDown(cell('G1001', 3), {
+      button: 0,
+      buttons: 1,
+      pointerId: 1,
+      isPrimary: true,
+      pointerType: 'mouse',
+    })
+    fireEvent.pointerOver(cell('G1001', 8), { pointerId: 1, pointerType: 'mouse' })
+    expect(screen.getByRole('table').closest('[data-dragging="1"]')).not.toBeNull()
+
+    window.dispatchEvent(new Event('pointercancel'))
+    expect(screen.getByRole('table').closest('[data-dragging="1"]')).toBeNull()
+    window.dispatchEvent(new Event('pointerup'))
+    expect(onFill).not.toHaveBeenCalled()
+  })
+
+  it('removes the sweep listeners when the grid unmounts', () => {
+    const onFill = vi.fn()
+    const { unmount } = render(<TimesheetGrid {...props} brush="AL" onFill={onFill} />)
+    fireEvent.pointerDown(cell('G1001', 3), {
+      button: 0,
+      buttons: 1,
+      pointerId: 1,
+      isPrimary: true,
+      pointerType: 'mouse',
+    })
+
+    window.dispatchEvent(new Event('pointerup'))
+    expect(onFill).not.toHaveBeenCalled()
   })
 
   it('cancels the sweep on Escape without filling anything', async () => {
@@ -574,6 +606,7 @@ describe('TimesheetGrid', () => {
     expect(onFill).not.toHaveBeenCalled()
     expect(screen.getByRole('table').closest('[data-dragging="1"]')).toBeNull()
   })
+
 
   it('does not eat the next click when the sweep is released outside the grid', async () => {
     const onFill = vi.fn()
@@ -784,6 +817,38 @@ describe('TimesheetGrid', () => {
     expect(handle).toHaveAttribute('aria-pressed', 'true')
     await userEvent.click(handle)
     expect(onSelect).toHaveBeenCalledWith(null)
+  })
+
+  it('keeps the drag tag and printed form order LTR under RTL', () => {
+    const previousDir = document.documentElement.dir
+    document.documentElement.dir = 'rtl'
+    try {
+      render(
+        <>
+          <TimesheetMasthead year={2026} month={7} />
+          <TimesheetGrid {...props} brush="AL" />
+        </>,
+      )
+      expect(screen.getByTestId('timesheet-masthead-form')).toHaveAttribute('dir', 'ltr')
+      const tag = document.querySelector('.ts-dragtag') as HTMLDivElement
+      expect(tag).toHaveAttribute('dir', 'ltr')
+      Object.defineProperty(tag, 'offsetWidth', { configurable: true, value: 40 })
+
+      fireEvent.pointerDown(cell('G1001', 3), {
+        button: 0,
+        buttons: 1,
+        pointerId: 1,
+        isPrimary: true,
+        pointerType: 'mouse',
+      })
+      window.dispatchEvent(new MouseEvent('pointermove', { clientX: 100, clientY: 50 }))
+      expect(tag.style.transform).toBe(
+        `translate3d(${100 + 14 - (window.innerWidth - 40)}px, 64px, 0)`,
+      )
+      window.dispatchEvent(new Event('pointerup'))
+    } finally {
+      document.documentElement.dir = previousDir
+    }
   })
 })
 

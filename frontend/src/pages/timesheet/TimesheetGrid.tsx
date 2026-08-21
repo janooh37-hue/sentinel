@@ -108,7 +108,9 @@ export function TimesheetMasthead({
       {/* The template's three empty boxes. Not app copy in either language —
           they are printed on the form the client signs. */}
       <div
+        data-testid="timesheet-masthead-form"
         data-ts-caps
+        dir="ltr"
         className="ms-auto flex gap-1.5 text-[0.58rem] uppercase tracking-[0.1em] text-faint"
       >
         <span className="rounded border border-dashed border-border-strong px-1.5 py-0.5">
@@ -500,6 +502,8 @@ export function TimesheetGrid({
       ?.scrollIntoView({ block: 'center', behavior: 'smooth' })
   }, [selected])
 
+  useEffect(() => () => drag.current?.stop.abort(), [])
+
   // --------------------------------------------------------------- utilities
 
   const cellNode = useCallback(
@@ -670,12 +674,19 @@ export function TimesheetGrid({
       tag.current?.removeAttribute('hidden')
       preview(cell)
       window.addEventListener('pointerup', () => endDrag(true), { signal: stop.signal })
+      window.addEventListener('pointercancel', () => endDrag(false), { signal: stop.signal })
       window.addEventListener(
         'pointermove',
         (move: PointerEvent) => {
           const node2 = tag.current
           if (node2) {
-            node2.style.transform = `translate3d(${move.clientX + 14}px, ${move.clientY + 14}px, 0)`
+            // `.ts-dragtag` is anchored at `inset-inline-start: 0`, which is
+            // the viewport's RIGHT edge under `dir="rtl"` — subtract that
+            // origin, the same way `CodePicker.tsx:73` and `RowTally.tsx:80`
+            // already do.
+            const origin =
+              document.documentElement.dir === 'rtl' ? window.innerWidth - node2.offsetWidth : 0
+            node2.style.transform = `translate3d(${move.clientX + 14 - origin}px, ${move.clientY + 14}px, 0)`
           }
         },
         { signal: stop.signal },
@@ -833,6 +844,28 @@ export function TimesheetGrid({
     [byId, cellFrom, editable, onUndo, refuse, whyLocked],
   )
 
+  /**
+   * Paint-path enumeration (Task 8 fix rounds 4–5). Keep every future
+   * keyboard or activation path in this list before adding it:
+   * - `onKeyDownCapture` Ctrl/Cmd+Z reaches `onUndo` only when it is inside
+   *   this root, editable, not AltGr (`!altKey`), and not redo (`!shiftKey`);
+   * - the same capture handler's code-letter branch refuses locked cells and
+   *   bails on Ctrl/Cmd/Alt, so browser commands never paint;
+   * - `<tbody>` `onKeyDown` paints bare arrows/letters/Enter/Space only after
+   *   the same Ctrl/Cmd/Alt guard; its arrows move focus rather than paint;
+   * - `onClick` paints, fills, or opens the picker and bails on Ctrl/Cmd/Alt;
+   *   this covers native `Ctrl+Space` activation and modifier clicks, while
+   *   shift remains armed for the documented shift-click range;
+   * - `CodePicker.onKeyDown` has the same modifier guard before it can choose;
+   * - the picker menuitem click is deliberately unguarded: modifier and bare
+   *   activation have the same outcome, so another guard would add noise;
+   * - the picker note input's Enter is deliberately unguarded: it is a save
+   *   field, no browser command is shadowed, and every modifier still submits;
+   * - window `keydown` during a sweep recognizes Escape only and cancels;
+   * - ribbon swatches, Undo, and month-stepper Enter/Space use native button
+   *   activation, not a key interpreter, and the pointer path's shift-click is
+   *   handled by `onClick`.
+   */
   const paint = useCallback(
     (cell: FillCell, code: Code, node: HTMLElement | null) => {
       lastPaint.current = cell
@@ -934,6 +967,8 @@ export function TimesheetGrid({
   )
 
   const hoverRow = hover && byId.get(hover.employeeId)
+  const dismiss = useCallback(() => setHover(null), [])
+
 
   return (
     <div
@@ -1071,7 +1106,7 @@ export function TimesheetGrid({
         </tfoot>
       </table>
 
-      <div ref={tag} className="ts-dragtag" aria-hidden hidden />
+      <div ref={tag} dir="ltr" className="ts-dragtag [unicode-bidi:isolate]" aria-hidden hidden />
 
       {picker && (
         <CodePicker
@@ -1097,7 +1132,7 @@ export function TimesheetGrid({
           codes={codesOf(hoverRow)}
           daysInMonth={daysInMonth}
           anchor={hover.anchor}
-          onDismiss={() => setHover(null)}
+          onDismiss={dismiss}
         />
       )}
     </div>
