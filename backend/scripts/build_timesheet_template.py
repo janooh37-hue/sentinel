@@ -16,9 +16,7 @@ from openpyxl import load_workbook
 from openpyxl.formatting.formatting import ConditionalFormattingList
 from openpyxl.worksheet.datavalidation import DataValidationList
 
-SOURCE = Path(
-    r"E:\Al Watbha Shares\المالية\احصائية 2026\6-Jun\كشف حضور شهر يونيو.xlsx"
-)
+SOURCE = Path(r"E:\Al Watbha Shares\المالية\احصائية 2026\6-Jun\كشف حضور شهر يونيو.xlsx")
 DEST = Path(__file__).resolve().parents[1] / "templates" / "GSSG-HR_Monthly_Time_Sheet.xlsx"
 
 FIRST_DATA_ROW = 6
@@ -121,7 +119,9 @@ def main() -> None:
     assert check["Sheet1"].auto_filter.ref is None, "June's autofilter survived"
     assert not list(check["Sheet1"].defined_names), "orphaned filter names survived"
     specimens = check["_parts"]
-    differing = {c for c in range(1, 43) if specimens.cell(1, c)._style != specimens.cell(2, c)._style}
+    differing = {
+        c for c in range(1, 43) if specimens.cell(1, c)._style != specimens.cell(2, c)._style
+    }
     assert differing == set(range(37, 43)), f"specimens differ outside AK..AP: {sorted(differing)}"
     print("[template] logo, strip, autofilter, two specimens and 19-row footer verified")
 
