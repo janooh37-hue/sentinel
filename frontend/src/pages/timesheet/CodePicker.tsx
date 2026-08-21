@@ -117,7 +117,18 @@ export function CodePicker({
       return
     }
     // The same letters the ribbon teaches, so the menu is never a slower way
-    // of doing what the keyboard already does.
+    // of doing what the keyboard already does — but a letter under a MODIFIER
+    // is the browser's command, not a code. The grid's own guard returns
+    // without `stopPropagation`, so every chord it declines arrives here, and
+    // this is the surface a no-brush click opens: unguarded, Ctrl+S wrote sick
+    // leave and swallowed the save, Ctrl+B diverted to the note step, Ctrl+T
+    // wrote TR while a tab opened, and Ctrl+minus wrote the roster-edge dash
+    // while the page zoomed.
+    //
+    // `shiftKey` is deliberately absent: the match is case-insensitive, so
+    // Shift+S and Caps Lock have to keep painting, and §8's range selection is
+    // shift-CLICK — a pointer gesture that never reaches this handler.
+    if (event.ctrlKey || event.metaKey || event.altKey) return
     const hit = CODES.find((spec) => spec.key === event.key.toLowerCase())
     if (hit) {
       event.preventDefault()

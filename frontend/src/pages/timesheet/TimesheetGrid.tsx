@@ -767,10 +767,26 @@ export function TimesheetGrid({
       // UI spec §8's keyboard model ends `… Enter / Space opens the picker,
       // Escape closes it, Ctrl+Z undoes.` Without this an operator working the
       // sheet from the keyboard had to leave it and mouse to the ribbon.
-      // `metaKey` for parity. Both popovers are portals on `document.body`, so
-      // a Ctrl+Z inside the note field never reaches this handler and keeps the
-      // browser's own undo.
-      if ((event.ctrlKey || event.metaKey) && key.toLowerCase() === 'z') {
+      // `metaKey` for parity.
+      //
+      // Scoped to a FOCUSED CELL, where the rest of §8's keyboard model lives.
+      // A portal is not a boundary: React dispatches portal events along the
+      // FIBER tree, not the DOM tree — it attaches its listeners to the portal
+      // container when the `HostPortal` fiber mounts and builds the dispatch
+      // path by walking `instance.return`, with no portal break — and
+      // `CodePicker` is a React child of this root `<div>`. So this handler IS
+      // on the path for keystrokes typed inside the popover, and unscoped it
+      // answered Ctrl+Z in the note field by reversing the previous correction
+      // with a live non-quiet write instead of undoing the operator's text.
+      //
+      // `!altKey` closes the other half: Windows reports AltGr as Ctrl+Alt, and
+      // this is a bilingual product where AltGr is in daily use.
+      if (
+        (event.ctrlKey || event.metaKey) &&
+        !event.altKey &&
+        key.toLowerCase() === 'z' &&
+        cellFrom(event.target) !== null
+      ) {
         if (!editable) return
         event.preventDefault()
         onUndo()
@@ -778,9 +794,9 @@ export function TimesheetGrid({
       }
       // A code letter with a modifier held is a BROWSER command, not a paint.
       // `s` is sick leave, so Ctrl+S marked sick leave and swallowed the save;
-      // `a`, `p` and `x` did the same to select-all, print and cut. Reported as
-      // a deviation — it was found while wiring Ctrl+Z, which would otherwise
-      // have been the ninth chord this handler answered by mistake.
+      // `a`, `p` and `x` did the same to select-all, print and cut. This guard
+      // returns rather than stopping propagation, so `CodePicker` carries the
+      // same one — the paint path has THREE handlers, not two.
       if (event.ctrlKey || event.metaKey || event.altKey) return
       const activates =
         key === 'Enter' || key === ' ' || CODES.some((spec) => spec.key === key.toLowerCase())

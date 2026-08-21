@@ -193,6 +193,56 @@ describe('TimesheetGrid', () => {
     expect(onUndo).not.toHaveBeenCalled()
   })
 
+  it('leaves the browser its chords inside the picker too', async () => {
+    const onSetCell = vi.fn()
+    render(<TimesheetGrid {...props} onSetCell={onSetCell} />)
+    await userEvent.click(cell('G1001', 5))
+    expect(screen.getByRole('menu')).toBeInTheDocument()
+    // The paint path has THREE handlers, not two: the grid's guard returns
+    // without `stopPropagation`, so every chord it declines arrives here and
+    // `choose()` runs straight through to `onSetCell`. The picker is what a
+    // no-brush click opens, so this is the primary correction surface — and it
+    // is the whole code table: Ctrl+B diverts to the note step, Ctrl+T writes
+    // TR while a tab opens, Ctrl+N writes NG while a window opens, and
+    // Ctrl+minus writes the roster-edge dash while the page zooms.
+    for (const chord of ['s', 'a', 'p', 'x', 'b', 't', 'n', '-']) {
+      await userEvent.keyboard(`{Control>}${chord}{/Control}`)
+    }
+    await userEvent.keyboard('{Meta>}s{/Meta}')
+    await userEvent.keyboard('{Alt>}s{/Alt}')
+    expect(onSetCell).not.toHaveBeenCalled()
+    // Still a menu: Ctrl+B must not have diverted it to the note step either.
+    expect(screen.getByRole('menu')).toBeInTheDocument()
+    // The bare letter still picks. Shift stays out of the guard on purpose —
+    // the letters are matched case-insensitively, so Shift+S and Caps Lock have
+    // to keep working, and §8's range selection is shift-CLICK, a pointer
+    // gesture that never reaches a key handler.
+    await userEvent.keyboard('{Shift>}s{/Shift}')
+    expect(onSetCell).toHaveBeenCalledWith('G1001', 5, 'SL ')
+  })
+
+  it('does not undo from inside the picker, where the chord is the field\'s own', async () => {
+    const onUndo = vi.fn()
+    render(<TimesheetGrid {...props} onUndo={onUndo} />)
+    await userEvent.click(cell('G1001', 5))
+    await userEvent.click(screen.getByRole('menuitem', { name: /absence/i }))
+    const field = screen.getByRole('textbox', { name: /note/i })
+    await userEvent.type(field, 'no show')
+    // React dispatches portal events along the FIBER tree, not the DOM tree, so
+    // the grid root's capture handler is on the path for keystrokes inside the
+    // popover — the portal is not a boundary. Unscoped, Ctrl+Z in this field
+    // reversed the previous correction with a live non-quiet write instead of
+    // undoing the typed text.
+    await userEvent.keyboard('{Control>}z{/Control}')
+    // AltGr is reported as Ctrl+Alt on Windows, and this is a bilingual product
+    // where AltGr is in daily use.
+    await userEvent.keyboard('{Control>}{Alt>}z{/Alt}{/Control}')
+    expect(onUndo).not.toHaveBeenCalled()
+    // jsdom implements no native undo, so the text surviving is not observable
+    // here; what is, is that the sheet did not answer the keystroke.
+    expect(field).toHaveValue('no show')
+  })
+
   it('returns focus to the cell when the picker is dismissed', async () => {
     render(<TimesheetGrid {...props} />)
     const target = cell('G1001', 7)
@@ -546,12 +596,17 @@ describe('TimesheetGrid', () => {
     expect(cell('G1001', 4)).not.toHaveAttribute('data-edited')
   })
 
-  it('shows a note on the cell it belongs to, keyed the way the wire sends it', () => {
+  it('shows a note on the day it belongs to and not on its neighbour', () => {
     // `GridRow.notes` is `dict[int, str]` on the server and therefore STRING
-    // keys on the wire, so the cell reads `notes[String(day)]`. Written
-    // `notes[day]` it still type-checks — `notes` is a string-index record —
-    // renders `undefined` on every tooltip and loses every note on the sheet in
-    // silence. Nothing else in this file touches a cell's `title`.
+    // keys on the wire, so the cell reads `notes[String(day)]`. What this pins
+    // is the note landing on the day it owns and off the next one, and it is
+    // the only assertion in this file that touches a cell's `title` at all — so
+    // it catches a dropped `title` prop or an off-by-one.
+    //
+    // It does NOT catch a switch to `notes[day]`, and the round-3 comment that
+    // claimed it did was wrong: a JavaScript property key is always a string,
+    // so `notes[14]` and `notes['14']` are one lookup at runtime. There is no
+    // guard there to trust.
     render(<TimesheetGrid {...props} rows={[{ ...row, notes: { '14': 'called in' } }]} />)
     expect(cell('G1001', 14)).toHaveAttribute('title', 'called in')
     expect(cell('G1001', 15)).not.toHaveAttribute('title')
