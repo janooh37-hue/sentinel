@@ -212,7 +212,9 @@ describe('AttendancePrintSheet', () => {
 
     expect(screen.getByText(/\/employees\/attendance\?date=2026-08-19/)).toBeInTheDocument()
     expect(screen.getByTestId('attendance-print-stamp')).toHaveTextContent('19 Aug 2026, 16:00')
-    expect(screen.getByText('A. Alhamadi')).toBeInTheDocument()
+    // The G-number, not the name: it is what a query about the printout is filed
+    // under, and two men on this roster can share a name.
+    expect(screen.getByText('G9100')).toBeInTheDocument()
   })
 
   it('still prints the register when no operator is signed in', () => {

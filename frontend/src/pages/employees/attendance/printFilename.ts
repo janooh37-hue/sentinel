@@ -12,6 +12,11 @@
  *   نوع الكشف_مكان العمل_اليوم_الوردية_التاريخ
  *   كشف تدقيق الحضور_السرية الرابعة_الخميس_صباحية_20-08-2026
  *
+ * Four fields plus the date, except where two of them are the same word: the
+ * office duty is both the workplace and the shift, and «كشف تدقيق
+ * الحضور_الدوام الرسمي_الخميس_الدوام الرسمي_20-08-2026» says it twice, so the
+ * duplicate is dropped.
+ *
  * Arabic whatever the UI language is, which is why these are constants and not
  * i18n keys: the sheet is filed in an Arabic registry even when the operator
  * happens to be reading the screen in English. The date is the only numeric
@@ -136,11 +141,17 @@ export function attendancePrintFilename({
   const code = only(codes, EVERY_SHIFT)
   const shift = code !== null && codes.length === 1 ? SHIFT_NAME[code] : code
 
+  const workplace = field(only(distinct(rows.map((row) => row.duty_unit)), EVERY_UNIT), UNKNOWN)
+  const duty = field(shift, UNKNOWN)
+
   return [
     field(REPORT_NAME[layout], UNKNOWN),
-    field(only(distinct(rows.map((row) => row.duty_unit)), EVERY_UNIT), UNKNOWN),
+    workplace,
     field(dated ? WEEKDAY[at.getUTCDay()] : null, UNKNOWN),
-    field(shift, UNKNOWN),
+    // The office duty is its own workplace AND its own shift, so naming both
+    // spelled «الدوام الرسمي_الخميس_الدوام الرسمي». One field says it — but two
+    // blanks are two facts nobody has, not one, so the placeholder never folds.
+    ...(duty === workplace && duty !== UNKNOWN ? [] : [duty]),
     // `DD-MM-YYYY`: dashes, because a slash is a path separator on every OS.
     field(match ? `${match[3]}-${match[2]}-${match[1]}` : null, UNKNOWN),
   ].join('_')

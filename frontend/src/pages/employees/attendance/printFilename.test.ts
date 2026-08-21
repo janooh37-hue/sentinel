@@ -84,6 +84,20 @@ describe('attendancePrintFilename', () => {
     ).toBe('كشف البصمة العام_كل السرايا_الخميس_كل الورديات_20-08-2026')
   })
 
+  it('names the office duty once, not on both sides of the weekday', () => {
+    // The office duty is its own workplace AND its own shift, and the register
+    // came out as «…_الدوام الرسمي_الخميس_الدوام الرسمي_…».
+    const name = attendancePrintFilename({
+      layout: 'sheet',
+      rows: [row({ duty_unit: 'الدوام الرسمي', shift_code: 'office_day' })],
+      operationalDate: '2026-08-20',
+      shiftCode: 'office_day',
+    })
+
+    expect(name).toBe('كشف البصمة العام_الدوام الرسمي_الخميس_20-08-2026')
+    expect(name.split('_')).toHaveLength(4)
+  })
+
   it('never lets a missing value reach the name', () => {
     const name = attendancePrintFilename({
       layout: 'roster',

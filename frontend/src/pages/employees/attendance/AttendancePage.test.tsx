@@ -157,11 +157,13 @@ describe('AttendancePage', () => {
     expect(row).toHaveTextContent('G-9001')
   })
 
+  // The buttons carry the report names the saved PDFs are filed under, so the
+  // operator picks the same words on screen that end up on the file.
   it.each([
-    ['Print sheet', 1],
-    ['Print roster', 1],
+    ['Biometric register', 1],
+    ['Attendance audit', 1],
     // One sheet per shift, and 19 Aug is the rotation's double day.
-    ['Print by shift', 2],
+    ['Duty attendance', 2],
   ] as const)('the %s button prints that layout', async (label, crests) => {
     const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
     const print = vi.spyOn(window, 'print').mockImplementation(() => undefined)

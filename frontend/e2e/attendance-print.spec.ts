@@ -68,29 +68,41 @@ function pdfPages(pdf: Uint8Array): { sizes: string[]; pages: number } {
   }
 }
 
+interface MountOptions {
+  /** `dark` by default: it is the setting that used to leak onto paper. */
+  theme?: 'light' | 'dark'
+  /** Reproduces an active shift chip: filtered rows, and the chip beside them. */
+  shift?: string | null
+  /** Overrides every post and unit name — production names run long. */
+  names?: { post: string; unit: string } | null
+}
+
 /**
  * Mount one layout into the running app and switch the page to print media.
  *
- * `theme: 'dark'` and the largest font scale are the defaults on purpose: they
- * are the two settings that used to leak onto paper, so every case exercises
- * them rather than one dedicated test nobody reads.
+ * The sheet is rendered INSIDE `#root`, where the page really puts it, because
+ * the print stylesheet treats that subtree differently from the rest of the
+ * document: `#root *` is uncaged with `overflow: visible !important` so a long
+ * record is not clipped to one screen. Mounting beside `#root` hid a defect for
+ * a release — the register's `truncate` cells lost their clipping in production
+ * and long Arabic post names printed on top of the next column and off the
+ * paper, while every assertion here passed.
  *
- * `shift` reproduces an active shift chip: the page hands the print sheet the
- * rows it filtered, and the chip alongside them.
+ * The largest font scale is the default for the same reason the dark theme is:
+ * both used to reach the paper.
  */
 async function mount(
   page: Page,
   lang: string,
   layout: string,
-  theme: 'light' | 'dark' = 'dark',
-  shift: string | null = null,
+  { theme = 'dark', shift = null, names = null }: MountOptions = {},
 ): Promise<void> {
   await page.emulateMedia({ media: 'screen' })
   await page.goto('/')
   await page.waitForFunction("!!document.getElementById('root')")
 
   await page.evaluate(
-    async ({ lang, layout, theme, shift }) => {
+    async ({ lang, layout, theme, shift, names }) => {
       // Dynamic by necessity: this body is serialised and evaluated inside the
       // browser, where the specifiers are resolved by the dev server's module
       // graph. A static import here would be resolved by Node against the test
@@ -111,20 +123,27 @@ async function mount(
       await i18n.changeLanguage(lang)
       document.documentElement.dataset.theme = theme
       document.documentElement.dataset.fontScale = '3'
-      // The page under test hides its own screen tree exactly like this, so the
-      // named landscape page has no in-flow sibling to spend a blank sheet on.
-      document.getElementById('root')?.setAttribute('data-print-hide', '')
 
+      // The app's own tree is replaced rather than print-hidden: the sheet has
+      // to sit inside `#root` to be under the same print rules as production,
+      // and a named `@page` beside any in-flow box costs a blank sheet.
+      const root = document.getElementById('root') as HTMLElement
+      root.replaceChildren()
       const host = document.createElement('div')
-      document.body.append(host)
-      const user = { name_en: 'A. Alhamadi', name_ar: 'أ. الحمادي', email: 'ops@gssg.local' }
+      root.append(host)
+
+      const filtered = shift === null ? ROWS : ROWS.filter((row) => row.shift_code === shift)
+      const rows = names
+        ? filtered.map((row) => ({ ...row, duty_post: names.post, duty_unit: names.unit }))
+        : filtered
+      const user = { name_en: 'A. Alhamadi', name_ar: 'أ. الحمادي', employee_id: 'G9100' }
       ReactDOM.createRoot(host).render(
         React.createElement(
           AuthContext.Provider,
           { value: { user, status: 'authed' } },
           React.createElement(AttendancePrintSheet, {
             layout,
-            rows: shift === null ? ROWS : ROWS.filter((row) => row.shift_code === shift),
+            rows,
             now: new Date('2026-08-20T18:00:00Z'),
             operationalDate: '2026-08-20',
             shiftCode: shift,
@@ -133,7 +152,7 @@ async function mount(
         ),
       )
     },
-    { lang, layout, theme, shift },
+    { lang, layout, theme, shift, names },
   )
 
   // Hidden on screen is the contract that keeps this off the display.
@@ -245,7 +264,7 @@ test.describe('attendance printout', () => {
   test('save as pdf is suggested an Arabic name for the report', async ({ page }) => {
     // The English UI, deliberately: the sheet is filed in an Arabic registry
     // whichever language the operator is reading the screen in.
-    await mount(page, 'en', 'roster', 'dark', 'noon')
+    await mount(page, 'en', 'roster', { shift: 'noon' })
     const before = await page.title()
 
     const named = await page.evaluate(() => {
@@ -260,4 +279,57 @@ test.describe('attendance printout', () => {
     expect(named.suggested).toBe('كشف تدقيق الحضور_السرية الرابعة_الخميس_مسائية_20-08-2026')
     expect(named.after).toBe(before)
   })
+
+  /**
+   * The defect this file's mount position exists to catch: production posts run
+   * to «فرع الأمن والحراسة - مسؤول وحدة الأمن الداخلي», the register clips them
+   * with `truncate` inside fixed column widths, and the print stylesheet's
+   * uncaging of `#root *` took that clipping away — the post printed on top of
+   * the shift name and the outermost column ran off the left edge of the paper.
+   */
+  const LONG = {
+    post: 'فرع الأمن والحراسة - مسؤول وحدة الأمن الداخلي',
+    unit: 'الدوام الرسمي',
+  }
+
+  for (const layout of LAYOUTS) {
+    test(`long production names stay inside the ${layout} page`, async ({ page }) => {
+      await mount(page, 'ar', layout, { names: LONG })
+
+      const printed = await page.evaluate(() => {
+        const root = document.querySelector('.print-attendance') as HTMLElement
+        const box = root.getBoundingClientRect()
+        const style = getComputedStyle(root)
+        // The side margins are padding on the sheet, so the paper's safe area is
+        // the content box, not the border box.
+        const start = box.left + parseFloat(style.paddingLeft)
+        const end = box.right - parseFloat(style.paddingRight)
+        const spill: string[] = []
+        for (const el of root.querySelectorAll('*')) {
+          const r = el.getBoundingClientRect()
+          if (r.width === 0 && r.height === 0) continue
+          if (r.left < start - 0.5 || r.right > end + 0.5) {
+            spill.push(`${el.tagName} "${(el.textContent ?? '').trim().slice(0, 24)}"`)
+          }
+        }
+
+        // A box that clips is the only thing keeping a 45-character post name
+        // out of the next column, and text overflow does not move a bounding
+        // rect — the spill list above cannot see it, which is exactly how the
+        // regression shipped. So the contract is asserted where it lives: every
+        // truncating cell in the register must still compute `overflow: hidden`
+        // under the print stylesheet.
+        const clipping = [...root.querySelectorAll('.truncate')]
+        const leaking = clipping
+          .filter((el) => getComputedStyle(el).overflow !== 'hidden')
+          .map((el) => `${el.tagName} "${(el.textContent ?? '').trim().slice(0, 24)}"`)
+        return { spill, clipping: clipping.length, leaking }
+      })
+
+      expect(printed.spill, `boxes outside the printable width: ${printed.spill.join(' | ')}`).toEqual([])
+      // Guards the assertion below against passing because nothing was measured.
+      expect(printed.clipping).toBeGreaterThan(0)
+      expect(printed.leaking, `cells that stopped clipping: ${printed.leaking.join(' | ')}`).toEqual([])
+    })
+  }
 })

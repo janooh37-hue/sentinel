@@ -1378,13 +1378,22 @@ body {
   }
   /* The duty register is a wide document: shift, unit, post, G-number and a
      clock all have to sit on one line, and four name columns only fit across
-     the long edge. Landscape is therefore the page, not a preference. */
+     the long edge. Landscape is therefore the page, not a preference.
+
+     The SIDE margins are padding on the element, not page margins, because
+     "Margins: None" in the print dialog zeroes every @page margin and the
+     register's outermost column — الحالة, and the last stat of the strip —
+     then prints off the left edge of the paper. Inline padding is applied to
+     every fragment of a broken box, so it survives that setting on every
+     sheet. Block padding is NOT: it would inset only the first and last page,
+     so the top and bottom stay on @page where they belong. */
   @page attendance {
     size: A4 landscape;
-    margin: 10mm;
+    margin: 10mm 0;
   }
   .print-attendance {
     page: attendance;
+    padding-inline: 10mm;
   }
   /* Two hazards this sheet has to survive, both invisible on screen:
 
@@ -1449,8 +1458,15 @@ body {
     overflow: visible !important;
   }
   /* :not(canvas) — the sheet needs its own max-height cap below, and this rule
-     would out-specify it. */
-  #root *:not(canvas) {
+     would out-specify it.
+
+     The duty register is exempt, and that exemption is load-bearing: it clips
+     long Arabic post names with `truncate` (overflow:hidden) inside fixed
+     column widths, and uncaging it made every one of them spill across the
+     neighbouring column — «فرع الأمن والحراسة - مسؤول وحدة الأمن الداخلي»
+     printed on top of the shift name, and the strip ran off the paper. It is
+     a document, not a scroll cage: it has nothing to uncage. */
+  #root *:not(canvas):not(.print-attendance, .print-attendance *) {
     overflow: visible !important;
     max-height: none !important;
   }

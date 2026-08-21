@@ -266,10 +266,10 @@ export function AttendancePrintSheet({
   graceMinutes,
 }: Props): React.JSX.Element {
   const { t, i18n } = useTranslation()
-  // `useAuth` THROWS without a provider, and the operator's name is one
-  // optional line in the footer — hard-requiring the provider would make the
-  // whole register unmountable for a courtesy field. Read the context directly
-  // and let the line disappear when nobody is signed in.
+  // `useAuth` THROWS without a provider, and the operator is one optional line
+  // in the footer — hard-requiring the provider would make the whole register
+  // unmountable for a courtesy field. Read the context directly and let the
+  // line disappear when nobody is signed in.
   const auth = useContext(AuthContext)
   const user = auth?.user ?? null
   const printedAt = usePrintedAt(i18n.language)
@@ -277,9 +277,10 @@ export function AttendancePrintSheet({
   const input: StateInput = { now, graceMinutes }
   const list = sections(rows)
 
-  const operator = user
-    ? pickEmployeeName({ name_en: user.name_en ?? user.email, name_ar: user.name_ar }, i18n.language)
-    : null
+  // The G-number, not the name: it is what a query about this printout is filed
+  // under, it is unambiguous between two men who share a name, and it costs the
+  // footer a fifth of the width a four-part Arabic name does.
+  const operator = user?.employee_id ?? null
 
   // The link back to the screen this paper came from, filters included, so the
   // printout can be reproduced rather than argued about.
@@ -694,18 +695,24 @@ function Roster({
   // widths from the first row, and that row is the masthead's single colspan
   // cell — widths declared on the header cells are silently ignored and every
   // column collapses to an equal share, truncating names to a dozen characters.
+  //
+  // The post is the widest thing on the line, not the name: production posts
+  // read «فرع الأمن والحراسة - مسؤول وحدة الأمن الداخلي» where a name is three
+  // or four words. 62mm of post against 64mm of name (the remainder) is what
+  // stops both from being cut. The shift carries «الدوام الرسمي» behind a
+  // glyph, which is why it is wider than a word like «الظهيرة» needs.
   const columns: ReadonlyArray<readonly [string, string, string]> = [
     ['w-[7mm]', 'colLine', 'text-center font-mono text-[7.4pt] text-muted-foreground'],
     ['', 'colName', ''],
     ['w-[16mm]', 'colId', 'font-mono font-semibold tabular-nums'],
-    ['w-[26mm]', 'colUnit', ''],
-    ['w-[40mm]', 'colPost', ''],
-    ['w-[20mm]', 'colShift', ''],
+    ['w-[24mm]', 'colUnit', ''],
+    ['w-[62mm]', 'colPost', ''],
+    ['w-[24mm]', 'colShift', ''],
     ['w-[14mm]', 'colIn', 'text-center font-mono tabular-nums'],
     ['w-[14mm]', 'colOut', 'text-center font-mono tabular-nums'],
-    ['w-[17mm]', 'colTotal', 'text-center font-mono font-semibold tabular-nums'],
+    ['w-[16mm]', 'colTotal', 'text-center font-mono font-semibold tabular-nums'],
     ['w-[12mm]', 'colLate', 'text-center font-mono tabular-nums'],
-    ['w-[25mm]', 'colState', ''],
+    ['w-[24mm]', 'colState', ''],
   ]
 
   return (
@@ -1061,7 +1068,7 @@ function Foot({
         {operator && (
           <span>
             <Label>{t('attendance.print.printedBy')}</Label>{' '}
-            <span dir="auto" className="isolate-bidi">
+            <span dir="ltr" className="isolate-bidi font-mono">
               {operator}
             </span>
           </span>
