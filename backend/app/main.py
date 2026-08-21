@@ -36,8 +36,8 @@ from app.api.v1 import ledger as ledger_v1
 from app.api.v1 import managers as managers_v1
 from app.api.v1 import notifications as notifications_v1
 from app.api.v1 import notify as notify_v1
-from app.api.v1 import permissions as permissions_v1
 from app.api.v1 import org_tree as org_tree_v1
+from app.api.v1 import permissions as permissions_v1
 from app.api.v1 import permits as permits_v1
 from app.api.v1 import push as push_v1
 from app.api.v1 import recipients as recipients_v1
