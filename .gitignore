@@ -128,3 +128,10 @@ backend/scripts/_run_sample_report.bat
 
 # Local agent/tooling state
 .playwright-cli/
+
+# swarm agent memory (binary tool state)
+.swarm/
+
+# design mockup screenshots and reference images (large binaries, local only)
+mockups/shots/
+mockups/refreance/

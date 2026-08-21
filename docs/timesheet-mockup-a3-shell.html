@@ -1,0 +1,1166 @@
+<!doctype html>
+<html lang="en" dir="ltr" data-theme="light" data-density="default">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Monthly time sheet — A3 · Locked Shell</title>
+<link rel="stylesheet" href="timesheet-mockups.css" />
+<style>
+/* ============================================================================
+   A3 — the shell. A2 revised again:
+     1. employee search by G-number, with a real picker (list + preview)
+     2. the bottom widgets tightened into one dock, opened as panels
+     3. THE PAGE DOES NOT SCROLL. Only the grid does, so the dock and the
+        toolbar are always in reach and the roster list scrolls untouched
+     4. a new employee raises a starting-point flag and is NG until he started
+     5. a leaver is off the next month's roster — attendance and statistics
+   Everything else is A2: screen-wide grid, cell bodies per code, drag to fill,
+   row counts on hover, red block, two-month extract, no totals columns.
+   ========================================================================= */
+
+:root {
+  --cell: clamp(26px, calc((100vw - 600px) / 31), 46px);
+  --dock: 54px;
+}
+
+html[data-density="compact"] { --cell: clamp(22px, calc((100vw - 600px) / 31), 34px); --row: 24px; --cell-font: 10px; }
+html[data-density="roomy"]   { --cell: clamp(34px, calc((100vw - 600px) / 31), 58px); --row: 38px; --cell-font: 13px; }
+
+/* 3 — one scroll region on the page, and it is the grid. The shell owns the
+   viewport; the head, the ribbon, the notice line and the dock are all fixed
+   furniture, so reaching the release actions never means scrolling 275 rows. */
+html, body { block-size: 100%; }
+body { display: flex; flex-direction: column; overflow: hidden; }
+
+.shell {
+  position: relative;
+  flex: 1;
+  min-block-size: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 16px 0;
+}
+
+.gridzone { flex: 1; min-block-size: 0; display: flex; flex-direction: column; }
+.gridzone .card { display: flex; flex-direction: column; min-block-size: 0; flex: 1; }
+.sheetwrap { flex: 1; min-block-size: 0; max-block-size: none; border: 0; border-radius: 0; }
+
+/* --- head: one line of identity, one line of controls --------------------- */
+.head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 12px; }
+.head h1 { margin: 0; font-size: 19px; font-weight: 700; letter-spacing: -0.3px; }
+.head .eyebrow { font-size: 10px; }
+.head .lede { font-size: 12px; color: var(--text-muted); }
+.head .monthmark { font-size: 20px; }
+.head .monthmark small { font-size: 12px; }
+.head .right { margin-inline-start: auto; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+
+.bar { padding: 6px 10px; }
+.bar .rule { block-size: 18px; }
+
+/* the always-visible search box that opens the picker */
+.searchbox { display: flex; align-items: center; gap: 7px; }
+.searchbox input {
+  font: inherit;
+  font-size: 12.5px;
+  inline-size: 190px;
+  padding: 6px 10px;
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-pill);
+}
+.searchbox input::placeholder { color: var(--text-faint); }
+
+.ribbonline { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+.ribbonline .hint { font-size: 11.5px; color: var(--text-muted); }
+.ribbonline .hint kbd { font-family: var(--font-mono); font-size: 10px; padding: 1px 4px; border-radius: 4px; background: var(--surface-tinted); border: 1px solid var(--border); }
+.ribbonline .meta { margin-inline-start: auto; display: flex; align-items: center; gap: 10px; }
+
+/* --- notice line: checks + roster movement, one line, opens a panel ------- */
+.notice {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 11px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-pill);
+}
+.notice > .lbl { font-size: 10px; font-weight: 600; letter-spacing: 0.14em; text-transform: uppercase; color: var(--text-faint); }
+.notice button.chip { font: inherit; border: 0; cursor: pointer; }
+.notice button.chip:hover { filter: brightness(0.97); }
+.notice .spread { margin-inline-start: auto; }
+
+/* --- the quoted header, compact ------------------------------------------ */
+.docmast { display: flex; flex-wrap: wrap; align-items: center; gap: 14px; padding: 8px 14px; border-block-end: 1px solid var(--hairline); background: var(--surface-raised); }
+.docmast .quote { font-family: var(--font-mono); font-size: 11px; line-height: 1.5; color: var(--text-muted); white-space: pre; overflow-x: auto; }
+.docmast .quote b { color: var(--text); font-weight: 600; }
+.docmast .quote .var { color: var(--primary); font-weight: 600; }
+.docmast .quotelbl { font-size: 10px; font-weight: 600; letter-spacing: 0.14em; text-transform: uppercase; color: var(--text-faint); }
+.docmast .quotelbl:lang(ar) { letter-spacing: 0; text-transform: none; }
+.docmast .stamp { margin-inline-start: auto; display: flex; gap: 5px; font-size: 9.5px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--text-faint); }
+.docmast .stamp span { border: 1px dashed var(--border-strong); border-radius: 4px; padding: 2px 7px; }
+
+/* --- row badges ---------------------------------------------------------- */
+.rowbadge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-inline-start: 7px;
+  padding: 1px 6px;
+  border-radius: var(--radius-pill);
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  vertical-align: middle;
+}
+.rowbadge.newhire { background: var(--code-fill-NG); color: var(--code-ink-NG); }
+.rowbadge.newhire.ok { background: var(--surface-tinted); color: var(--text-muted); }
+.rowbadge.leaving { background: var(--accent-soft); color: var(--accent); }
+
+/* --- 2 — the dock: every widget that used to live under the roster ------- */
+.dock {
+  flex-shrink: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  min-block-size: var(--dock);
+  margin-inline: -16px;
+  padding: 8px 16px;
+  background: var(--surface);
+  border-block-start: 1px solid var(--border);
+  box-shadow: 0 -8px 24px rgba(16, 24, 40, 0.05);
+}
+
+[data-theme="dark"] .dock { box-shadow: 0 -8px 24px rgba(0, 0, 0, 0.35); }
+
+.dock .group {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font: inherit;
+  font-size: 12px;
+  padding: 6px 11px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-pill);
+  background: var(--surface);
+  color: var(--text);
+  cursor: pointer;
+  transition: background-color var(--motion-fast) linear, box-shadow var(--motion-base) var(--ease-out-expo);
+}
+
+.dock .group:hover { background: var(--surface-tinted); }
+.dock .group[aria-expanded="true"] { border-color: var(--primary); box-shadow: 0 0 0 1px var(--primary); background: var(--primary-soft); }
+.dock .group .k { font-size: 10px; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase; color: var(--text-faint); }
+.dock .group .k:lang(ar) { letter-spacing: 0; text-transform: none; }
+.dock .group .v { font-family: var(--font-mono); font-size: 12px; font-weight: 600; direction: ltr; unicode-bidi: isolate; }
+.dock .caret { color: var(--text-faint); font-size: 10px; }
+.dock .acts { margin-inline-start: auto; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+
+/* the code strip: eight counts, always in view, no panel needed to read them */
+.codestrip { display: flex; align-items: center; gap: 5px; }
+.codestrip .cc { display: inline-flex; align-items: center; gap: 4px; font-family: var(--font-mono); font-size: 11px; direction: ltr; unicode-bidi: isolate; }
+.codestrip .cc .g {
+  display: grid;
+  place-items: center;
+  inline-size: 22px;
+  block-size: 16px;
+  border-radius: 3px;
+  border: 1px solid color-mix(in oklab, var(--text) 14%, transparent);
+  font-size: 9.5px;
+  font-weight: 600;
+}
+.codestrip .cc.zero { opacity: 0.35; }
+
+/* --- panels: open upward over the grid, never reflow it ------------------ */
+.panel {
+  position: absolute;
+  inset-inline: 16px;
+  inset-block-end: calc(var(--dock) + 10px);
+  z-index: 40;
+  max-block-size: 46vh;
+  overflow: auto;
+  padding: 14px 16px;
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-lg);
+  animation: panel-in var(--motion-fast) var(--ease-out-expo);
+}
+
+@keyframes panel-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+
+.panel > header { display: flex; align-items: center; gap: 10px; margin-block-end: 11px; }
+.panel > header h2 { margin: 0; font-size: 13.5px; font-weight: 600; }
+.panel > header p { margin: 0; font-size: 11.5px; color: var(--text-muted); }
+.panel > header .x { margin-inline-start: auto; }
+
+/* 1 — the picker: search, results, preview */
+.picker { display: grid; grid-template-columns: minmax(280px, 1fr) minmax(300px, 1fr); gap: 14px; }
+@media (max-width: 900px) { .picker { grid-template-columns: 1fr; } }
+
+.picker .find input {
+  inline-size: 100%;
+  font: inherit;
+  font-size: 13px;
+  padding: 8px 11px;
+  color: var(--text);
+  background: var(--surface-raised);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+}
+
+.picker .results { margin-block-start: 8px; max-block-size: 27vh; overflow: auto; border: 1px solid var(--hairline); border-radius: var(--radius-sm); }
+.picker .results .none { padding: 12px; font-size: 12px; color: var(--text-muted); }
+
+.picker .row {
+  display: grid;
+  grid-template-columns: 66px minmax(0, 1fr) auto;
+  gap: 9px;
+  align-items: center;
+  inline-size: 100%;
+  font: inherit;
+  font-size: 12.5px;
+  text-align: start;
+  padding: 7px 9px;
+  border: 0;
+  border-block-end: 1px solid var(--hairline);
+  background: none;
+  color: var(--text);
+  cursor: pointer;
+}
+
+.picker .row:last-child { border-block-end: 0; }
+.picker .row:hover { background: var(--surface-tinted); }
+.picker .row[aria-selected="true"] { background: var(--primary-soft); }
+.picker .row .id { font-family: var(--font-mono); font-size: 11.5px; color: var(--text-muted); }
+.picker .row b { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.picker .row small { display: block; font-size: 11px; color: var(--text-muted); }
+
+.picker .addrow { display: flex; flex-wrap: wrap; align-items: center; gap: 7px; margin-block-start: 9px; padding-block-start: 9px; border-block-start: 1px solid var(--hairline); }
+.picker .addrow input[type="text"] { flex: 1; min-inline-size: 130px; font: inherit; font-size: 12.5px; padding: 6px 9px; color: var(--text); background: var(--surface); border: 1px solid var(--border-strong); border-radius: var(--radius-sm); }
+.picker .addrow input[type="number"] { inline-size: 62px; }
+
+.preview { padding: 12px; background: var(--surface-raised); border: 1px solid var(--hairline); border-radius: var(--radius-md); }
+.preview .name { font-size: 14px; font-weight: 600; }
+.preview .meta { margin-block-start: 2px; font-size: 11.5px; color: var(--text-muted); }
+.preview .counts { display: flex; flex-wrap: wrap; gap: 6px; margin-block-start: 10px; }
+.preview .acts { display: flex; flex-wrap: wrap; gap: 8px; margin-block-start: 12px; }
+.preview .span { margin-block-start: 10px; font-size: 11.5px; color: var(--text-muted); }
+.preview .span .files { display: grid; gap: 2px; margin-block-start: 4px; font-family: var(--font-mono); font-size: 11px; color: var(--text-faint); }
+.preview .block { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-block-start: 11px; padding-block-start: 10px; border-block-start: 1px solid var(--hairline); }
+.preview .block .why { flex-basis: 100%; font-size: 11px; color: var(--text-muted); }
+.preview .empty { font-size: 12px; color: var(--text-muted); }
+
+/* tally panel */
+.tally { display: grid; gap: 5px; max-inline-size: 620px; }
+.tally .line { display: grid; grid-template-columns: 26px 1fr 46px 90px; gap: 9px; align-items: center; font-size: 12px; }
+.tally .glyph { display: grid; place-items: center; block-size: 18px; border-radius: 3px; border: 1px solid color-mix(in oklab, var(--text) 14%, transparent); font-family: var(--font-mono); font-size: 10px; font-weight: 600; }
+.tally .n { font-family: var(--font-mono); font-size: 12px; text-align: end; }
+.tally .bar { block-size: 6px; border-radius: var(--radius-pill); background: var(--surface-tinted); overflow: hidden; }
+.tally .bar i { display: block; block-size: 100%; background: var(--primary); }
+.tally .line.zero { opacity: 0.4; }
+
+/* checks + roster movement panel */
+.movement { display: grid; gap: 7px; margin-block-start: 11px; }
+.movement .m {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 9px;
+  padding: 8px 11px;
+  font-size: 12.5px;
+  background: var(--surface-raised);
+  border: 1px solid var(--border);
+  border-inline-start: 3px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+}
+.movement .m.joined { border-inline-start-color: var(--code-fill-NG); }
+.movement .m.left { border-inline-start-color: var(--accent); }
+.movement .m .who { font-family: var(--font-mono); font-size: 11.5px; color: var(--text-muted); }
+.movement .m .grow { margin-inline-start: auto; display: flex; gap: 7px; }
+
+.posts { display: flex; flex-wrap: wrap; align-items: center; gap: 16px; }
+.posts .explain { font-size: 12px; color: var(--text-muted); max-inline-size: 62ch; }
+
+.releasepanel { display: grid; gap: 11px; }
+.releasepanel .files { display: grid; gap: 2px; font-family: var(--font-mono); font-size: 11px; color: var(--text-faint); }
+.releasepanel .why { font-size: 12px; color: var(--text-muted); max-inline-size: 72ch; }
+.releasepanel .acts { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+.confirm { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; font-size: 12px; color: var(--accent); }
+
+.foot { flex-shrink: 0; padding: 0 0 6px; font-size: 10.5px; color: var(--text-faint); }
+.foot code { font-family: var(--font-mono); font-size: 10px; }
+</style>
+</head>
+<body>
+<div id="review"></div>
+<header id="chrome"></header>
+
+<main class="shell">
+  <div class="head">
+    <div>
+      <div class="eyebrow" id="eyebrow"></div>
+      <h1 id="title"></h1>
+    </div>
+    <span class="lede" id="lede"></span>
+    <div class="right" id="headright"></div>
+  </div>
+
+  <div class="bar" id="controls"></div>
+
+  <div class="ribbonline">
+    <div class="ribbon" id="ribbon"></div>
+    <span class="hint" id="hint"></span>
+    <div class="meta" id="editmeta"></div>
+  </div>
+
+  <div class="notice" id="notice"></div>
+
+  <div class="gridzone">
+    <section class="card">
+      <div class="docmast" id="docmast"></div>
+      <div class="sheetwrap" id="sheet"></div>
+    </section>
+  </div>
+
+  <p class="foot" id="footnote"></p>
+
+  <div class="dock" id="dock"></div>
+  <div id="panelhost"></div>
+</main>
+
+<script src="timesheet-mockups.js"></script>
+<script>
+  TS.state.blockCode = true
+
+  const L = (en, ar) => (TS.state.lang === 'ar' ? ar : en)
+  const el = (id) => document.getElementById(id)
+  const rowById = (id) => TS.rows.find((r) => r.id === id)
+
+  let openPanel = null      // 'checks' | 'codes' | 'posts' | 'employee' | 'release'
+  let query = ''
+  let cursor = 0            // keyboard position in the picker results
+  let billStart = 23
+  let confirming = false
+  let addName = ''
+  let addDay = 1
+
+  /* ------------------------------------------------------------ 1. search */
+  /** G-number or name. `7141`, `g7141`, `G7141` and `rasel` all find the row. */
+  function matches(q) {
+    const needle = q.trim().toLowerCase()
+    if (!needle) return TS.rows
+    const digits = needle.replace(/^g/, '')
+    return TS.rows.filter(
+      (r) =>
+        r.id.toLowerCase().includes(needle) ||
+        r.id.toLowerCase().replace(/^g/, '').startsWith(digits) ||
+        r.name.toLowerCase().includes(needle) ||
+        r.desig.en.toLowerCase().includes(needle) ||
+        r.desig.ar.includes(needle),
+    )
+  }
+
+  function status(row) {
+    if (row.joinedDay) {
+      return {
+        cls: 'newhire',
+        text: L(`New · started day ${row.joinedDay}`, `جديد · بدأ يوم ${row.joinedDay}`),
+      }
+    }
+    if (row.leftDay) {
+      return {
+        cls: 'leaving',
+        text: L(`Leaving · last day ${row.leftDay}`, `منتهٍ · آخر يوم ${row.leftDay}`),
+      }
+    }
+    return null
+  }
+
+  function selectEmployee(id, { scroll = true } = {}) {
+    TS.state.selected = id
+    if (scroll) {
+      requestAnimationFrame(() => {
+        el('sheet')
+          .querySelector(`tr[data-row="${id}"]`)
+          ?.scrollIntoView({ block: 'center', behavior: 'smooth' })
+      })
+    }
+    TS.emit()
+  }
+
+  /* ------------------------------------------------------------- 2. panels */
+  function togglePanel(name) {
+    openPanel = openPanel === name ? null : name
+    if (openPanel === 'employee') cursor = 0
+    TS.emit()
+  }
+
+  function panelShell(title, sub, body) {
+    return (
+      `<div class="panel" role="region" aria-label="${title}">` +
+      `<header><div><h2>${title}</h2>${sub ? `<p>${sub}</p>` : ''}</div>` +
+      `<button type="button" class="icobtn x" data-act="close" aria-label="${L('Close', 'إغلاق')}">✕</button></header>` +
+      body +
+      `</div>`
+    )
+  }
+
+  function renderPanel() {
+    const host = el('panelhost')
+    if (!openPanel) return (host.innerHTML = '')
+    const move = TS.rosterChanges()
+
+    if (openPanel === 'checks') {
+      const items = [...TS.blocking(), ...TS.warnings()]
+      host.innerHTML = panelShell(
+        TS.t('issues'),
+        `${TS.blocking().length} ${TS.t('blocking')} · ${TS.warnings().length} ${TS.t('warning')}`,
+        `<div class="pf">` +
+          (items.length
+            ? items
+                .map(
+                  (i, idx) =>
+                    `<button type="button" class="item ${i.level}" data-check="${idx}">` +
+                    `<span class="chip ${i.level === 'stop' ? 'stop' : 'warn'}">${
+                      i.level === 'stop' ? TS.t('blocking') : TS.t('warning')
+                    }</span><span class="who">${i.who}</span>` +
+                    `<span>${TS.state.lang === 'ar' ? i.ar : i.en}</span>` +
+                    `<span class="go">${L('Open employee', 'فتح ملف الموظف')}</span></button>`,
+                )
+                .join('')
+            : `<p style="margin:0;font-size:12.5px;color:var(--success)">✓ ${TS.t('allClear')}</p>`) +
+          `</div>` +
+          movementHTML(move),
+      )
+      host.querySelectorAll('[data-check]').forEach((b, idx) => {
+        b.onclick = () => {
+          const entry = items[idx]
+          TS.resolve(entry)
+          TS.toast(`${entry.who} — ${TS.t('resolved')}`)
+        }
+      })
+      wireMovement(host)
+    }
+
+    if (openPanel === 'codes') {
+      const counts = TS.monthTally()
+      const total = Object.values(counts).reduce((a, b) => a + b, 0) || 1
+      host.innerHTML = panelShell(
+        L('Cells by code', 'الخلايا حسب الرمز'),
+        `${total} ${L('cells', 'خلية')} · ${TS.rows.length} ${L('rows', 'صفاً')} · ${
+          TS.state.variant === 'attendance' ? TS.t('attendance') : TS.t('statistics')
+        }`,
+        `<div class="tally">` +
+          TS.allCodes()
+            .map((c) => {
+              const n = counts[c.slug] || 0
+              return (
+                `<div class="line${n ? '' : ' zero'}">` +
+                `<span class="glyph" data-code="${c.slug}">${c.slug === '-' ? '–' : c.slug}</span>` +
+                `<span>${TS.state.lang === 'ar' ? c.ar : c.en}</span>` +
+                `<span class="n">${n}</span>` +
+                `<span class="bar"><i style="inline-size:${((n / total) * 100).toFixed(1)}%"></i></span></div>`
+              )
+            })
+            .join('') +
+          `</div>`,
+      )
+    }
+
+    if (openPanel === 'posts') {
+      const implied = TS.impliedPosts()
+      const drift = implied > TS.state.postCount
+      host.innerHTML = panelShell(
+        TS.t('posts'),
+        TS.state.variant === 'statistics' ? TS.t('statistics') : TS.t('attendance'),
+        `<div class="posts">` +
+          `<span class="field"><label for="posts">${TS.t('posts')}</label>` +
+          `<input id="posts" type="number" min="0" max="40" value="${TS.state.postCount}"></span>` +
+          `<span class="readout"><span class="big">${implied.toFixed(1)}</span>` +
+          `<span class="cap">${TS.t('impliedPosts')}<br>${drift ? TS.t('impliedDrift') : TS.t('impliedOk')}</span></span>` +
+          `<span class="chip num ${drift ? 'stop' : 'ok'}">${drift ? '▲' : '✓'} ${implied.toFixed(1)} / ${TS.state.postCount}</span>` +
+          `<span class="explain">${L(
+            'Block 1 is the contracted posts and prints as manned; block 2 is surplus headcount on its filler code. A red-blocked day survives both, and so does a roster edge — an unbilled day is never presented as a manned post.',
+            'الكتلة 1 هي النقاط التعاقدية وتُطبع مشغولة؛ الكتلة 2 عدد زائد برمزه التعويضي. اليوم المحجوب بالأحمر يبقى كما هو، وكذلك حدود الكشف — فاليوم غير المفوتر لا يُعرض أبداً كنقطة مشغولة.',
+          )}</span></div>`,
+      )
+      host.querySelector('#posts').onchange = (e) => TS.setPostCount(e.target.value)
+    }
+
+    if (openPanel === 'employee') renderPicker(host)
+
+    if (openPanel === 'release') {
+      const m = TS.monthLabel()
+      const blocked = TS.blocking().length > 0 && !TS.state.closed
+      host.innerHTML = panelShell(
+        L('Release the month', 'إصدار الشهر'),
+        TS.state.lang === 'ar' ? m.ar : m.en,
+        `<div class="releasepanel">` +
+          (TS.state.closed
+            ? `<span class="seal"><span class="ring">✓</span>${TS.t('closed')}</span>`
+            : '') +
+          `<div class="files"><span class="filename">${m.file}</span><span class="filename">${m.fileStats}</span></div>` +
+          `<span class="why">${
+            TS.state.closed
+              ? TS.t('closedNote')
+              : blocked
+                ? L(
+                    'Fix the blocking checks before either workbook can be produced.',
+                    'أصلح الفحوصات المانعة قبل إنتاج أي من الملفين.',
+                  )
+                : TS.t('firstDownload')
+          }</span>` +
+          `<div class="acts">` +
+          `<button type="button" class="btn btn-primary" data-act="dl-att"${blocked ? ' disabled' : ''}>↓ ${TS.t('downloadAttendance')}</button>` +
+          `<button type="button" class="btn btn-outline" data-act="dl-stat"${blocked ? ' disabled' : ''}>↓ ${TS.t('downloadStatistics')}</button>` +
+          (TS.state.closed
+            ? confirming
+              ? `<span class="confirm">${L('Reopen and supersede the sent file?', 'إعادة الفتح وإلغاء الملف المُرسل؟')}` +
+                `<button type="button" class="btn btn-danger btn-sm" data-act="reopen-yes">${TS.t('reopen')}</button>` +
+                `<button type="button" class="btn btn-outline btn-sm" data-act="reopen-no">${TS.t('cancel')}</button></span>`
+              : `<button type="button" class="btn btn-danger btn-sm" data-act="reopen">${TS.t('reopen')}</button>`
+            : '') +
+          `</div></div>`,
+      )
+      host.querySelector('[data-act="dl-att"]').onclick = () => TS.download('attendance')
+      host.querySelector('[data-act="dl-stat"]').onclick = () => TS.download('statistics')
+      const ask = host.querySelector('[data-act="reopen"]')
+      if (ask) ask.onclick = () => ((confirming = true), TS.emit())
+      const yes = host.querySelector('[data-act="reopen-yes"]')
+      if (yes) yes.onclick = () => ((confirming = false), TS.reopenMonth())
+      const no = host.querySelector('[data-act="reopen-no"]')
+      if (no) no.onclick = () => ((confirming = false), TS.emit())
+    }
+
+    host.querySelector('[data-act="close"]').onclick = () => togglePanel(openPanel)
+  }
+
+  /* -------------------------------------- 4 + 5. roster movement, rendered */
+  function movementHTML(move) {
+    if (!move.joined.length && !move.leaving.length && !move.dropped.length) return ''
+    const monthNow = TS.monthName(TS.state.month)
+    return (
+      `<div class="movement">` +
+      move.joined
+        .map(
+          (j) =>
+            `<div class="m joined"><span class="chip warn">${L('New employee', 'موظف جديد')}</span>` +
+            `<span class="who">${j.id}</span><span>${j.name}</span>` +
+            `<span>${L(
+              `Started on day ${j.day} of ${monthNow} — days 1–${j.day - 1} are NG until you say otherwise.`,
+              `بدأ في اليوم ${j.day} من ${monthNow} — الأيام 1–${j.day - 1} رمزها NG حتى تقول غير ذلك.`,
+            )}</span>` +
+            `<span class="grow">${
+              j.confirmed
+                ? `<span class="chip ok">✓ ${L('Starting point confirmed', 'تم تأكيد نقطة البداية')}</span>`
+                : `<button type="button" class="btn btn-outline btn-sm" data-confirm="${j.id}">${L(
+                    'Confirm starting point',
+                    'تأكيد نقطة البداية',
+                  )}</button>`
+            }<button type="button" class="btn btn-outline btn-sm" data-goto="${j.id}">${L('Show row', 'إظهار الصف')}</button></span></div>`,
+        )
+        .join('') +
+      move.leaving
+        .map(
+          (x) =>
+            `<div class="m left"><span class="chip stop">${L('Leaving', 'منتهي الخدمة')}</span>` +
+            `<span class="who">${x.id}</span><span>${x.name}</span>` +
+            `<span>${L(
+              `Last worked day ${x.day} — off roster after it, and off next month's sheet entirely.`,
+              `آخر يوم عمل ${x.day} — خارج الكشف بعده، وخارج كشف الشهر القادم تماماً.`,
+            )}</span>` +
+            `<span class="grow"><button type="button" class="btn btn-outline btn-sm" data-goto="${x.id}">${L('Show row', 'إظهار الصف')}</button></span></div>`,
+        )
+        .join('') +
+      move.dropped
+        .map(
+          (x) =>
+            `<div class="m"><span class="chip">${L('Removed', 'مُستبعد')}</span>` +
+            `<span class="who">${x.id}</span><span>${x.name}</span>` +
+            `<span>${L(
+              `Finished on day ${x.day} of ${TS.monthName(x.month)}, so he is not on this month's attendance sheet or statistics.`,
+              `انتهت خدمته في اليوم ${x.day} من ${TS.monthName(x.month)}، لذا لا يظهر في كشف حضور هذا الشهر ولا في الإحصائية.`,
+            )}</span></div>`,
+        )
+        .join('') +
+      `</div>`
+    )
+  }
+
+  function wireMovement(host) {
+    host.querySelectorAll('[data-confirm]').forEach((b) => {
+      b.onclick = () => {
+        TS.confirmStart(b.dataset.confirm)
+        TS.toast(L(`${b.dataset.confirm} · starting point confirmed`, `${b.dataset.confirm} · تم تأكيد نقطة البداية`))
+      }
+    })
+    host.querySelectorAll('[data-goto]').forEach((b) => (b.onclick = () => selectEmployee(b.dataset.goto)))
+  }
+
+  /* --------------------------------------------- 1. the picker + extract */
+  function renderPicker(host) {
+    const found = matches(query)
+    if (cursor >= found.length) cursor = Math.max(0, found.length - 1)
+    const shown = found[cursor]
+    const sel = TS.state.selected ? rowById(TS.state.selected) : null
+    const target = sel || shown
+    const prev = TS.state.month - 1
+
+    const list = found.length
+      ? found
+          .map((r, i) => {
+            const s = status(r)
+            return (
+              `<button type="button" class="row" data-pick="${r.id}" aria-selected="${i === cursor}">` +
+              `<span class="id">${r.id}</span>` +
+              `<span><b>${r.name}</b><small>${
+                TS.state.variant === 'statistics' ? r.desig.ar : r.desig.en
+              } · ${r.nat}</small></span>` +
+              `<span>${s ? `<span class="rowbadge ${s.cls}">${s.text}</span>` : ''}</span></button>`
+            )
+          })
+          .join('')
+      : `<p class="none">${L('No employee matches that.', 'لا يوجد موظف مطابق.')}</p>`
+
+    const counts = target ? TS.codeTally(target) : null
+    const s = target ? status(target) : null
+
+    const preview = target
+      ? `<div class="preview">` +
+        `<div class="name">${target.name}${s ? `<span class="rowbadge ${s.cls}">${s.text}</span>` : ''}</div>` +
+        `<div class="meta mono">${target.id}</div>` +
+        `<div class="meta">${TS.state.variant === 'statistics' ? target.desig.ar : target.desig.en} · ${target.nat} · ${L(
+          'row',
+          'صف',
+        )} ${target.no}</div>` +
+        `<div class="counts">` +
+        TS.allCodes()
+          .map(
+            (c) =>
+              `<span class="cc" style="display:inline-flex;align-items:center;gap:4px;font-family:var(--font-mono);font-size:11px${
+                counts[c.slug] ? '' : ';opacity:.35'
+              }"><span class="glyph" data-code="${c.slug}" style="display:grid;place-items:center;inline-size:22px;block-size:16px;border-radius:3px;border:1px solid color-mix(in oklab, var(--text) 14%, transparent);font-size:9.5px;font-weight:600">${
+                c.slug === '-' ? '–' : c.slug
+              }</span>${counts[c.slug]}</span>`,
+          )
+          .join('') +
+        `</div>` +
+        `<div class="acts">` +
+        `<button type="button" class="btn btn-outline btn-sm" data-act="goto">${L('Show in grid', 'إظهار في الشبكة')}</button>` +
+        `<button type="button" class="btn btn-primary btn-sm" data-act="export">↓ ${L(
+          'Extract · 2 months',
+          'استخراج · شهران',
+        )}</button></div>` +
+        `<div class="span">${L(
+          `Two workbooks: ${TS.monthName(prev)} and ${TS.monthName(TS.state.month)} ${TS.state.year} — the month of departure and the one before it.`,
+          `ملفان: ${TS.monthName(prev)} و${TS.monthName(TS.state.month)} ${TS.state.year} — شهر انتهاء الخدمة والشهر السابق له.`,
+        )}<div class="files"><span class="filename">كشف حضور ${target.name} ${TS.monthName(prev, 'ar')}.xlsx</span>` +
+        `<span class="filename">كشف حضور ${target.name} ${TS.monthName(TS.state.month, 'ar')}.xlsx</span></div></div>` +
+        `<div class="block"><span class="field"><label for="billday">${L('Bill starts on day', 'تبدأ الفوترة في اليوم')}</label>` +
+        `<input id="billday" type="number" min="1" max="31" value="${billStart}"></span>` +
+        `<button type="button" class="btn btn-outline btn-sm" data-act="block"${TS.state.closed ? ' disabled' : ''}>` +
+        `<span class="glyph" data-code="X" aria-hidden="true" style="padding:0 5px;border-radius:3px">X</span> ${L(
+          `Red block 1–${billStart - 1}`,
+          `حجب 1–${billStart - 1}`,
+        )}</button>` +
+        `<span class="why">${L(
+          'Applies to the month on screen; roster edges are left alone.',
+          'يُطبّق على الشهر المعروض؛ لا تُمسّ حدود الكشف.',
+        )}</span></div></div>`
+      : `<div class="preview"><p class="empty">${L(
+          'Search by G-number or name, then pick a row.',
+          'ابحث بالرقم الوظيفي أو الاسم ثم اختر صفاً.',
+        )}</p></div>`
+
+    host.innerHTML = panelShell(
+      L('Employee sheet', 'كشف موظف'),
+      L('Search by G-number or name. For a resignation or termination handover.', 'ابحث بالرقم الوظيفي أو الاسم. لتسليم حالة استقالة أو انتهاء خدمة.'),
+      `<div class="picker"><div class="find">` +
+        `<label class="vh" for="q">${L('Search', 'بحث')}</label>` +
+        `<input id="q" type="search" inputmode="search" placeholder="${L('G-number or name — e.g. 7141', 'الرقم الوظيفي أو الاسم — مثال 7141')}" value="${query}">` +
+        `<div class="results" role="listbox" aria-label="${L('Results', 'النتائج')}">${list}</div>` +
+        `<div class="addrow"><input type="text" id="newname" placeholder="${L('New employee name', 'اسم الموظف الجديد')}" value="${addName}">` +
+        `<span class="field"><label for="newday">${L('from day', 'من اليوم')}</label><input id="newday" type="number" min="1" max="31" value="${addDay}"></span>` +
+        `<button type="button" class="btn btn-outline btn-sm" data-act="add">+ ${L('Add employee', 'إضافة موظف')}</button></div>` +
+        `</div>${preview}</div>`,
+    )
+
+    const input = host.querySelector('#q')
+    input.oninput = (e) => {
+      query = e.target.value
+      cursor = 0
+      TS.emit()
+    }
+    input.onkeydown = (e) => {
+      if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+        e.preventDefault()
+        cursor = Math.max(0, Math.min(found.length - 1, cursor + (e.key === 'ArrowDown' ? 1 : -1)))
+        TS.emit()
+      }
+      if (e.key === 'Enter' && found[cursor]) {
+        e.preventDefault()
+        selectEmployee(found[cursor].id)
+      }
+    }
+    /* Keep the caret where the operator left it across the repaint. */
+    input.focus()
+    input.setSelectionRange(query.length, query.length)
+
+    host.querySelectorAll('[data-pick]').forEach((b) => (b.onclick = () => selectEmployee(b.dataset.pick)))
+
+    const goto = host.querySelector('[data-act="goto"]')
+    if (goto) goto.onclick = () => selectEmployee(target.id)
+
+    const go = host.querySelector('[data-act="export"]')
+    if (go) {
+      go.onclick = () =>
+        TS.toast(
+          L(
+            `Preparing 2 workbooks for ${target.id}: ${TS.monthName(prev)} + ${TS.monthName(TS.state.month)}`,
+            `جاري تجهيز ملفين لـ ${target.id}: ${TS.monthName(prev)} + ${TS.monthName(TS.state.month)}`,
+          ),
+        )
+    }
+
+    const day = host.querySelector('#billday')
+    if (day) {
+      day.onchange = (e) => {
+        billStart = Math.max(1, Math.min(31, Number(e.target.value) || 1))
+        TS.emit()
+      }
+    }
+
+    const block = host.querySelector('[data-act="block"]')
+    if (block && !TS.state.closed) {
+      block.onclick = () => {
+        let n = 0
+        for (let d = 1; d < billStart; d += 1) {
+          const code = TS.rawCode(target, d)
+          if (code === null || code === 'NG' || code === '-') continue
+          TS.setCell(target.id, d, 'X')
+          n += 1
+        }
+        TS.toast(
+          n
+            ? L(`${target.id} · ${n} days red blocked`, `${target.id} · حُجب ${n} يوماً`)
+            : L('Nothing to block — those days are roster edges.', 'لا شيء للحجب — تلك الأيام حدود كشف.'),
+        )
+      }
+    }
+
+    /* 4 — adding an employee sets his starting point: NG until he started. */
+    host.querySelector('#newname').oninput = (e) => (addName = e.target.value)
+    host.querySelector('#newday').oninput = (e) => (addDay = Number(e.target.value) || 1)
+    host.querySelector('[data-act="add"]').onclick = () => {
+      if (!addName.trim()) {
+        TS.toast(L('Give the new employee a name first.', 'أدخل اسم الموظف الجديد أولاً.'), 'warn')
+        return
+      }
+      const id = TS.addEmployee({ name: addName, startDay: addDay })
+      TS.toast(
+        L(
+          `${id} added · days 1–${addDay - 1} set to NG`,
+          `${id} أُضيف · الأيام 1–${addDay - 1} رمزها NG`,
+        ),
+      )
+      addName = ''
+      query = id
+      cursor = 0
+    }
+  }
+
+  /* --------------------------------------------------------------- chrome */
+  function headright() {
+    const m = TS.monthLabel()
+    const stops = TS.blocking().length
+    el('headright').innerHTML =
+      `<div class="searchbox"><label class="vh" for="qtop">${L('Find employee', 'ابحث عن موظف')}</label>` +
+      `<input id="qtop" type="search" placeholder="⌕ ${L('G-number or name', 'الرقم الوظيفي أو الاسم')}" value="${query}"></div>` +
+      `<div class="monthmark"><span class="num">${m.stamp}</span><small>${m.ar}</small></div>` +
+      (TS.state.closed
+        ? `<span class="chip info">${TS.t('closed')}</span>`
+        : stops
+          ? `<span class="chip stop"><span class="num">${stops}</span> ${L('to fix', 'للإصلاح')}</span>`
+          : `<span class="chip ok">${L('Ready', 'جاهز')}</span>`)
+    const top = el('headright').querySelector('#qtop')
+    top.oninput = (e) => {
+      query = e.target.value
+      cursor = 0
+      openPanel = 'employee'
+      TS.emit()
+    }
+  }
+
+  function controls() {
+    const m = TS.monthLabel()
+    el('controls').innerHTML =
+      `<button type="button" class="icobtn" data-act="prev" aria-label="${TS.t('prevMonth')}">‹</button>` +
+      `<b class="mono" style="font-size:12.5px">${TS.state.lang === 'ar' ? m.ar : m.en}</b>` +
+      `<button type="button" class="icobtn" data-act="next" aria-label="${TS.t('nextMonth')}">›</button>` +
+      `<span class="rule"></span>` +
+      `<div class="seg" role="group" aria-label="${L('Roster', 'الكشف')}">` +
+      `<button type="button" data-sheet="main" aria-pressed="${TS.state.sheet === 'main'}">${TS.t('main')}</button>` +
+      `<button type="button" data-sheet="drivers" aria-pressed="${TS.state.sheet === 'drivers'}">${TS.t('drivers')}</button></div>` +
+      `<div class="seg" role="group" aria-label="${L('Deliverable', 'المخرج')}">` +
+      `<button type="button" data-variant="attendance" aria-pressed="${TS.state.variant === 'attendance'}">${TS.t('attendance')}</button>` +
+      `<button type="button" data-variant="statistics" aria-pressed="${TS.state.variant === 'statistics'}">${TS.t('statistics')}</button></div>` +
+      `<span class="rule"></span>` +
+      `<span class="field">${TS.t('density')}<span class="seg" role="group" aria-label="${TS.t('density')}">` +
+      ['compact', 'default', 'roomy']
+        .map(
+          (d, i) =>
+            `<button type="button" data-density="${d}" aria-pressed="${TS.state.density === d}" aria-label="${
+              [L('Compact', 'مضغوط'), L('Default', 'افتراضي'), L('Roomy', 'مريح')][i]
+            }">${['S', 'M', 'L'][i]}</button>`,
+        )
+        .join('') +
+      `</span></span>` +
+      `<span class="spread field">${TS.rows.length} ${L('rows', 'صفاً')} · ${m.days} ${L('days', 'يوماً')}</span>`
+    el('controls').querySelector('[data-act="prev"]').onclick = () => TS.setMonth(-1)
+    el('controls').querySelector('[data-act="next"]').onclick = () => TS.setMonth(1)
+    el('controls').querySelectorAll('[data-sheet]').forEach((b) => (b.onclick = () => TS.setSheet(b.dataset.sheet)))
+    el('controls').querySelectorAll('[data-variant]').forEach((b) => (b.onclick = () => TS.setVariant(b.dataset.variant)))
+    el('controls').querySelectorAll('[data-density]').forEach((b) => (b.onclick = () => TS.setDensity(b.dataset.density)))
+  }
+
+  function ribbonline() {
+    TS.renderRibbon(el('ribbon'), { keys: !TS.state.closed && TS.state.variant === 'attendance' })
+    el('hint').innerHTML = TS.state.closed
+      ? TS.t('closedNote')
+      : TS.state.variant === 'statistics'
+        ? L('Derived — correct the attendance grid.', 'مشتقة — صحّح شبكة الحضور.')
+        : L(
+            'Arm a code, then <b>drag</b> across days or rows. Hover a row for its counts.',
+            'فعّل رمزاً ثم <b>اسحب</b> على الأيام أو الصفوف. مرّر على صف لعرض أعداده.',
+          )
+    const n = TS.editCount()
+    el('editmeta').innerHTML =
+      `<span class="chip"><span class="num">${n}</span> ${TS.t('edited')}</span>` +
+      `<button type="button" class="linkbtn" data-act="undo"${n ? '' : ' disabled aria-disabled="true"'}>↩ ${TS.t('undo')}</button>`
+    if (n) el('editmeta').querySelector('[data-act="undo"]').onclick = () => TS.undo()
+  }
+
+  function notice() {
+    const move = TS.rosterChanges()
+    const stops = TS.blocking().length
+    const warns = TS.warnings().length
+    const chip = (cls, text, panel) =>
+      `<button type="button" class="chip ${cls}" data-open="${panel}">${text}</button>`
+    el('notice').innerHTML =
+      `<span class="lbl">${L('This month', 'هذا الشهر')}</span>` +
+      (stops
+        ? chip('stop', `<span class="num">${stops}</span> ${TS.t('blocking')}`, 'checks')
+        : chip('ok', `✓ ${TS.t('allClear')}`, 'checks')) +
+      (warns ? chip('warn', `<span class="num">${warns}</span> ${TS.t('warning')}`, 'checks') : '') +
+      (move.joined.length
+        ? chip(
+            'warn',
+            `<span class="num">${move.joined.length}</span> ${L('new — starting point', 'جديد — نقطة بداية')}`,
+            'checks',
+          )
+        : '') +
+      (move.leaving.length
+        ? chip('stop', `<span class="num">${move.leaving.length}</span> ${L('leaving', 'منتهي الخدمة')}`, 'checks')
+        : '') +
+      (move.dropped.length
+        ? chip(
+            'info',
+            `<span class="num">${move.dropped.length}</span> ${L('removed from the sheet', 'مُستبعد من الكشف')}`,
+            'checks',
+          )
+        : '') +
+      `<span class="spread field">${L('Only the grid scrolls — the dock below stays put.', 'الشبكة وحدها تُمرَّر — الشريط أدناه ثابت.')}</span>`
+    el('notice')
+      .querySelectorAll('[data-open]')
+      .forEach((b) => (b.onclick = () => togglePanel(b.dataset.open)))
+  }
+
+  function docmast() {
+    const stamp = `${['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'][TS.state.month - 1]}-${TS.state.year}`
+    el('docmast').innerHTML =
+      `<span class="quotelbl">${L('As it prints', 'كما تُطبع')}</span>` +
+      `<div class="quote"><b>Global Security Service Group- MONTHLY  TIME SHEET</b>   ` +
+      `Client : JUDICIAL DEPARTMENT   Site Name :   JD 908   Clent Code : P0331_JD_PRN_908EXT   GSSG-HR   ` +
+      `For the Month of :<span class="var">${stamp}</span></div>` +
+      `<div class="stamp"><span>Date Of Issued</span><span>Issue No</span><span>Révision</span></div>`
+  }
+
+  /* ---------------------------------------------------------------- dock */
+  function dock() {
+    const m = TS.monthLabel()
+    const counts = TS.monthTally()
+    const implied = TS.impliedPosts()
+    const drift = implied > TS.state.postCount
+    const sel = TS.state.selected ? rowById(TS.state.selected) : null
+    const blocked = TS.blocking().length > 0 && !TS.state.closed
+    const group = (name, key, value, extra = '') =>
+      `<button type="button" class="group" data-open="${name}" aria-expanded="${openPanel === name}">` +
+      `<span class="k">${key}</span><span class="v">${value}</span>${extra}<span class="caret">▲</span></button>`
+
+    el('dock').innerHTML =
+      group(
+        'posts',
+        TS.t('posts'),
+        `${TS.state.postCount} · ${implied.toFixed(1)}`,
+        drift ? `<span class="chip stop">▲</span>` : `<span class="chip ok">✓</span>`,
+      ) +
+      `<button type="button" class="group" data-open="codes" aria-expanded="${openPanel === 'codes'}">` +
+      `<span class="k">${L('Codes', 'الرموز')}</span><span class="codestrip">` +
+      TS.allCodes()
+        .map(
+          (c) =>
+            `<span class="cc${counts[c.slug] ? '' : ' zero'}"><span class="g" data-code="${c.slug}">${
+              c.slug === '-' ? '–' : c.slug
+            }</span>${counts[c.slug]}</span>`,
+        )
+        .join('') +
+      `</span><span class="caret">▲</span></button>` +
+      group(
+        'employee',
+        L('Employee sheet', 'كشف موظف'),
+        sel ? `${sel.id}` : `⌕ ${L('search', 'بحث')}`,
+        sel ? `<span class="chip info">${L('2 months', 'شهران')}</span>` : '',
+      ) +
+      `<span class="acts">` +
+      (TS.state.closed ? `<span class="seal"><span class="ring">✓</span>${TS.t('closed')}</span>` : '') +
+      `<button type="button" class="btn btn-primary btn-sm" data-act="dl-att"${blocked ? ' disabled' : ''}>↓ ${TS.t('attendance')}</button>` +
+      `<button type="button" class="btn btn-outline btn-sm" data-act="dl-stat"${blocked ? ' disabled' : ''}>↓ ${TS.t('statistics')}</button>` +
+      group('release', L('Files', 'الملفات'), '2') +
+      `</span>`
+
+    el('dock')
+      .querySelectorAll('[data-open]')
+      .forEach((b) => (b.onclick = () => togglePanel(b.dataset.open)))
+    el('dock').querySelector('[data-act="dl-att"]').onclick = () => TS.download('attendance')
+    el('dock').querySelector('[data-act="dl-stat"]').onclick = () => TS.download('statistics')
+  }
+
+  function footnote() {
+    el('footnote').innerHTML = L(
+      'Sample data. The <code>AK..AP</code> totals block still prints in the workbook; hover a row for the same counts. A leaver is off the next month\'s roster on both deliverables; a new hire is NG until his starting point. The red block <code>X</code> needs one more legend row in the template before it can be sent.',
+      'بيانات نموذجية. كتلة المجاميع <code>AK..AP</code> ما زالت تُطبع في الملف؛ مرّر على صف لترى الأعداد نفسها. منتهي الخدمة يخرج من كشف الشهر القادم في المخرجين؛ والموظف الجديد رمزه NG حتى نقطة بدايته. الرمز الأحمر <code>X</code> يحتاج صفاً إضافياً في مفتاح الرموز قبل الإرسال.',
+    )
+  }
+
+  /* --------------------------------- drag to fill (as A2, kernel-agnostic) */
+  let drag = null
+  let justDragged = false
+  let tag = null
+  const cellAt = (t) => t?.closest?.('button.cell[data-row]')
+  const rowIndex = (id) => TS.rows.findIndex((r) => r.id === id)
+
+  const clearPreview = () =>
+    el('sheet').querySelectorAll('button.cell[data-preview]').forEach((c) => delete c.dataset.preview)
+
+  function previewRect(toRow, toDay) {
+    clearPreview()
+    const a = rowIndex(drag.row)
+    const b = rowIndex(toRow)
+    const [r1, r2] = a <= b ? [a, b] : [b, a]
+    const [d1, d2] = drag.day <= toDay ? [drag.day, toDay] : [toDay, drag.day]
+    const cells = []
+    for (let r = r1; r <= r2; r += 1) {
+      for (let d = d1; d <= d2; d += 1) {
+        const node = el('sheet').querySelector(`button.cell[data-row="${TS.rows[r].id}"][data-day="${d}"]`)
+        if (node) {
+          node.dataset.preview = '1'
+          cells.push({ row: TS.rows[r].id, day: d })
+        }
+      }
+    }
+    drag.cells = cells
+  }
+
+  function showTag(x, y) {
+    if (!tag) {
+      tag = document.createElement('div')
+      tag.className = 'dragtag'
+      document.body.append(tag)
+    }
+    tag.textContent = `${drag.cells.length} → ${TS.slugOf(drag.code)}`
+    tag.style.left = `${x + 14}px`
+    tag.style.top = `${y + 14}px`
+  }
+
+  function endDrag(commit) {
+    if (!drag) return
+    const { cells, code } = drag
+    drag = null
+    document.documentElement.removeAttribute('data-dragging')
+    tag?.remove()
+    tag = null
+    clearPreview()
+    if (!commit || cells.length < 2) return
+    cells.forEach(({ row, day }) => TS.setCell(row, day, code))
+    justDragged = true
+    TS.toast(L(`${cells.length} cells → ${TS.slugOf(code)}`, `${cells.length} خلية → ${TS.slugOf(code)}`))
+  }
+
+  el('sheet').addEventListener('pointerdown', (e) => {
+    if (e.button !== 0) return
+    const cell = cellAt(e.target)
+    if (!cell || TS.state.closed || TS.state.variant !== 'attendance') return
+    const row = rowById(cell.dataset.row)
+    const day = Number(cell.dataset.day)
+    const code = TS.state.brush ?? TS.rawCode(row, day)
+    if (!code) return
+    drag = { row: cell.dataset.row, day, code, cells: [] }
+    document.documentElement.dataset.dragging = '1'
+    previewRect(cell.dataset.row, day)
+  })
+
+  document.addEventListener('pointermove', (e) => {
+    if (!drag) return
+    const cell = cellAt(document.elementFromPoint(e.clientX, e.clientY))
+    if (cell) previewRect(cell.dataset.row, Number(cell.dataset.day))
+    showTag(e.clientX, e.clientY)
+  })
+
+  document.addEventListener('pointerup', () => endDrag(true))
+  document.addEventListener('keydown', (e) => {
+    if (e.key !== 'Escape') return
+    if (drag) return endDrag(false)
+    if (openPanel) togglePanel(openPanel)
+  })
+
+  el('sheet').addEventListener(
+    'click',
+    (e) => {
+      if (justDragged) {
+        justDragged = false
+        e.stopPropagation()
+        e.preventDefault()
+        return
+      }
+      if (TS.state.variant === 'statistics' && cellAt(e.target)) {
+        e.stopPropagation()
+        e.preventDefault()
+        TS.toast(L('Correct the attendance grid — this one is derived.', 'صحّح شبكة الحضور — هذه مشتقة.'), 'warn')
+      }
+    },
+    true,
+  )
+
+  /* ------------------------------------------- row counts on hover / focus */
+  let tallyBox = null
+  let tallyRow = null
+
+  const hideRowTally = () => (tallyBox?.remove(), (tallyBox = null), (tallyRow = null))
+
+  function placeRowTally(tr) {
+    const box = tr.getBoundingClientRect()
+    const size = tallyBox.getBoundingClientRect()
+    const rtl = document.documentElement.dir === 'rtl'
+    const x = rtl ? box.right - size.width : box.left
+    tallyBox.style.left = `${Math.max(8, Math.min(x, window.innerWidth - size.width - 8))}px`
+    const above = box.top - size.height - 6
+    tallyBox.style.top = `${above > 60 ? above : box.bottom + 6}px`
+  }
+
+  function showRowTally(tr) {
+    if (!tr || drag) return
+    if (tallyRow === tr.dataset.row && tallyBox) return placeRowTally(tr)
+    hideRowTally()
+    const row = rowById(tr.dataset.row)
+    if (!row) return
+    const counts = TS.codeTally(row)
+    tallyBox = document.createElement('div')
+    tallyBox.className = 'rowtally'
+    tallyBox.setAttribute('role', 'status')
+    tallyBox.innerHTML =
+      `<span class="who"><b>${row.id}</b> ${row.name}</span>` +
+      TS.allCodes()
+        .map(
+          (c) =>
+            `<span class="pair${counts[c.slug] ? '' : ' zero'}" title="${
+              TS.state.lang === 'ar' ? c.ar : c.en
+            }"><span class="glyph" data-code="${c.slug}">${c.slug === '-' ? '–' : c.slug}</span>${counts[c.slug]}</span>`,
+        )
+        .join('')
+    document.body.append(tallyBox)
+    tallyRow = tr.dataset.row
+    placeRowTally(tr)
+  }
+
+  el('sheet').addEventListener('pointerover', (e) => showRowTally(e.target.closest?.('tr[data-row]')))
+  el('sheet').addEventListener('pointerleave', hideRowTally)
+  el('sheet').addEventListener('focusin', (e) => showRowTally(e.target.closest?.('tr[data-row]')))
+  window.addEventListener(
+    'scroll',
+    () => {
+      if (!tallyBox || !tallyRow) return
+      const tr = el('sheet').querySelector(`tr[data-row="${tallyRow}"]`)
+      const box = tr?.getBoundingClientRect()
+      if (!box || box.bottom < 80 || box.top > window.innerHeight - 20) return hideRowTally()
+      placeRowTally(tr)
+    },
+    true,
+  )
+
+  el('sheet').addEventListener('click', (e) => {
+    const cell = e.target.closest?.('td.c-name, td.c-id, td.c-no')
+    if (!cell) return
+    const id = cell.closest('tr')?.dataset.row
+    if (!id) return
+    TS.state.selected = TS.state.selected === id ? null : id
+    TS.emit()
+  })
+
+  /* --------------------------------------------------- row badges (4 + 5) */
+  function decorateRows() {
+    TS.rows.forEach((row) => {
+      const s = status(row)
+      if (!s) return
+      const cell = el('sheet').querySelector(`tr[data-row="${row.id}"] td.c-name`)
+      if (!cell) return
+      const badge = document.createElement('span')
+      const confirmed = row.joinedDay && TS.state.confirmedStarts.has(row.id)
+      badge.className = `rowbadge ${s.cls}${confirmed ? ' ok' : ''}`
+      badge.textContent = row.joinedDay
+        ? confirmed
+          ? L(`from ${row.joinedDay}`, `من ${row.joinedDay}`)
+          : L('new', 'جديد')
+        : L(`to ${row.leftDay}`, `حتى ${row.leftDay}`)
+      badge.title = s.text
+      cell.append(badge)
+    })
+  }
+
+  /* ------------------------------------------------------------- painting */
+  function paint() {
+    TS.renderChrome(el('chrome'))
+    el('eyebrow').textContent = TS.t('eyebrow')
+    el('title').textContent = TS.t('title')
+    el('lede').textContent = TS.t('lede')
+    headright()
+    controls()
+    ribbonline()
+    notice()
+    docmast()
+    TS.renderSheet(el('sheet'), { totals: false })
+    decorateRows()
+    if (TS.state.selected) {
+      el('sheet').querySelector(`tr[data-row="${TS.state.selected}"]`)?.classList.add('armed')
+    }
+    dock()
+    renderPanel()
+    footnote()
+  }
+
+  TS.renderReview(
+    el('review'),
+    'a3',
+    'Nothing scrolls but the grid · G-number picker · dock panels · starting-point flag · leaver drops off',
+  )
+  TS.on('render', paint)
+  TS.on('change', paint)
+  paint()
+</script>
+</body>
+</html>

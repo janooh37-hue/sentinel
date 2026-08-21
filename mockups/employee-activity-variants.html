@@ -1,0 +1,705 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Employee Activity — 5 bold variants on the real page</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=IBM+Plex+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#f5f4f1; --surface:#ffffff; --surface-raised:#fafaf6; --surface-tinted:#f0eee8;
+    --primary:#0d2845; --primary-hover:#1d3a5e; --primary-soft:#e8edf3; --primary-on-soft:#0d2845;
+    --on-primary:#ffffff; --accent:#c8102e; --accent-hover:#a30d24; --success:#047857; --success-soft:#e5f3ee;
+    --warning:#b45309; --warning-soft:#fdf1e3;
+    --text:#1a1d21; --text-muted:#5b6470; --text-faint:#8b9098;
+    --border:#e6e4dd; --border-strong:#d4d1c8; --hairline:#efece5;
+    --hero-grad:linear-gradient(135deg,#0a1f3a 0%,#0d2845 50%,#1d3a5e 100%);
+    --font-sans:"Inter",ui-sans-serif,system-ui,sans-serif;
+    --font-mono:"IBM Plex Mono",ui-monospace,Consolas,monospace;
+    --doc:#0d5c8a; --doc-soft:#e6f0f6;
+    --leave:#047857; --leave-soft:#e5f3ee;
+    --violation:#b3541e; --violation-soft:#f9ede4;
+    --ledger:#6b4fb0; --ledger-soft:#f1eef8;
+    /* dark-deck palette (V1) */
+    --deck-bg:#081326; --deck-panel:#0d1c36; --deck-panel-2:#122344; --deck-line:rgba(148,180,224,.14);
+    --deck-text:#e8eef8; --deck-muted:#93a5c4; --deck-faint:#5f7396;
+    --deck-doc:#5eb3e8; --deck-leave:#3ed598; --deck-violation:#ffa25e; --deck-ledger:#b79cf0;
+  }
+  *{box-sizing:border-box;margin:0;padding:0;border-color:var(--border)}
+  body{background:var(--bg);color:var(--text);font-family:var(--font-sans);
+    font-feature-settings:"ss01","cv11";-webkit-font-smoothing:antialiased;line-height:1.45}
+  .mono{font-family:var(--font-mono);font-variant-numeric:tabular-nums}
+  button{font:inherit;cursor:pointer;background:none;border:none;color:inherit}
+  a{color:inherit;text-decoration:none}
+  svg{display:block}
+
+  /* ═════════ REAL HERO REPLICA (unchanged part) ═════════ */
+  .hero{position:relative;overflow:visible;color:#fff;background:var(--hero-grad)}
+  .hero-decor{position:absolute;inset:0;overflow:hidden}
+  .hero-decor .c1{position:absolute;top:-110px;right:-90px;width:320px;height:320px;border-radius:50%;background:rgba(255,255,255,.045)}
+  .hero-decor .c2{position:absolute;bottom:-140px;left:8%;width:260px;height:260px;border-radius:50%;background:rgba(255,255,255,.035)}
+  .hero-col{position:relative;z-index:30;margin:0 auto;max-width:720px;padding:46px 32px 8px;text-align:center}
+  .hero-eyebrow{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.22em;opacity:.65}
+  .hero-col h1{margin:8px 0 4px;font-size:27px;font-weight:700;letter-spacing:-0.01em}
+  .hero-sub{font-size:13.5px;opacity:.75}
+  .hero-pill{margin-top:22px;display:flex;height:56px;align-items:center;gap:12px;border-radius:99px;
+    background:#fff;padding:0 8px 0 20px;box-shadow:0 18px 44px -18px rgba(0,0,0,.5);text-align:start}
+  .hero-pill svg{color:var(--text-faint);flex:none}
+  .hero-pill input{min-width:0;flex:1;border:0;background:none;outline:0;font:inherit;font-size:16px;color:var(--text)}
+  .hero-pill input::placeholder{color:var(--text-faint)}
+  .hero-pill .go{flex:none;border-radius:99px;background:var(--accent);padding:9px 20px;font-size:13px;font-weight:700;color:#fff}
+  .hero-ghost-wrap{margin-top:16px;display:flex;justify-content:center}
+  .hero-ghost{display:inline-flex;align-items:center;gap:8px;border-radius:99px;border:1px solid rgba(255,255,255,.3);
+    background:rgba(255,255,255,.1);padding:9px 20px;font-size:13px;font-weight:600;color:#fff}
+  .hero-ghost .plus{display:grid;place-items:center;width:18px;height:18px;border-radius:50%;
+    background:var(--accent);font-size:13px;font-weight:800;line-height:1}
+  .hero-cards{position:relative;z-index:2;margin:26px auto 0;max-width:1020px;padding:0 32px 46px;
+    display:grid;grid-template-columns:repeat(3,1fr);gap:14px;text-align:start}
+  .hcard{border-radius:16px;border:1px solid rgba(255,255,255,.14);background:rgba(255,255,255,.07);
+    padding:16px;backdrop-filter:blur(4px)}
+  .hcard-head{margin-bottom:11px;display:flex;align-items:center;gap:9px}
+  .hcard-head .ico{display:grid;place-items:center;width:28px;height:28px;border-radius:9px;
+    background:rgba(255,255,255,.12);color:rgba(255,255,255,.85);font-size:.85rem;flex:none}
+  .hcard-head .ico.warn{background:rgba(251,191,36,.18);color:#fbbf24}
+  .hcard-head h4{font-size:12px;font-weight:700;letter-spacing:.08em;opacity:.85;text-transform:uppercase}
+  .hcard-head .badge{margin-inline-start:auto;border-radius:99px;padding:1px 8px;
+    font-family:var(--font-mono);font-size:11px;font-weight:700;background:rgba(251,191,36,.18);color:#fbbf24}
+  .hchip{display:flex;width:100%;align-items:center;gap:9px;border-radius:12px;border:1px solid rgba(255,255,255,.1);
+    background:rgba(255,255,255,.06);padding:6px 10px;color:#fff;text-align:start;margin-bottom:6px}
+  .hchip .av{display:grid;place-items:center;width:26px;height:26px;border-radius:50%;
+    background:rgba(255,255,255,.15);font-size:10.5px;font-weight:700;flex:none}
+  .hchip .lb{min-width:0;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px;font-weight:600}
+  .hchip .mt{flex:none;font-family:var(--font-mono);font-size:10.5px;opacity:.6;font-weight:700}
+  .hchip .mt.warn{font-family:var(--font-sans);color:#fbbf24;opacity:1}
+  .hcard .link{font-size:11.5px;font-weight:600;color:rgba(255,255,255,.75)}
+  .hcard .body{font-size:12px;line-height:1.6;opacity:.75;margin-bottom:10px}
+
+  .divider-note{max-width:1440px;margin:0 auto;padding:10px 32px;font-size:10.5px;
+    color:var(--text-faint);text-transform:uppercase;letter-spacing:.14em}
+  .variant-tag{position:fixed;bottom:16px;right:16px;z-index:99;background:var(--primary);color:#fff;
+    border-radius:99px;padding:8px 16px;font-size:12px;font-weight:700;box-shadow:0 8px 24px rgba(4,15,30,.4)}
+  .variant-tag span{color:#ff8fa0;font-family:var(--font-mono);margin-inline-end:8px}
+
+  /* shared atoms */
+  .kdot{width:7px;height:7px;border-radius:50%;flex:none}
+  .avatar{width:36px;height:36px;border-radius:50%;background:var(--primary-soft);
+    color:var(--primary);display:grid;place-items:center;font-size:12px;font-weight:700;flex:none}
+
+  /* ═════════ V1 — NIGHT OPS DECK ═════════ */
+  .v1{background:var(--deck-bg);color:var(--deck-text);padding:0 0 72px;position:relative;overflow:hidden}
+  .v1::after{content:"";position:absolute;top:-180px;left:50%;transform:translateX(-50%);width:900px;height:420px;
+    border-radius:50%;background:radial-gradient(closest-side,rgba(87,140,220,.16),transparent);pointer-events:none}
+  .v1 .wrap{position:relative;max-width:1280px;margin:0 auto;padding:52px 32px 0}
+  .v1-head{display:flex;align-items:flex-end;justify-content:space-between;gap:20px;flex-wrap:wrap}
+  .v1-head .eyebrow{display:flex;align-items:center;gap:8px;font-size:11px;font-weight:700;
+    letter-spacing:.2em;text-transform:uppercase;color:var(--deck-muted)}
+  .v1-head .eyebrow .live{width:8px;height:8px;border-radius:50%;background:var(--deck-leave);
+    box-shadow:0 0 0 4px rgba(62,213,152,.15);animation:v1pulse 2s ease-out infinite}
+  @keyframes v1pulse{0%{box-shadow:0 0 0 0 rgba(62,213,152,.35)}70%{box-shadow:0 0 0 8px rgba(62,213,152,0)}100%{box-shadow:0 0 0 0 rgba(62,213,152,0)}}
+  .v1-head h3{margin-top:10px;font-size:34px;font-weight:800;letter-spacing:-0.02em;color:#fff}
+  .v1-head .sub{margin-top:6px;font-size:14px;color:var(--deck-muted)}
+  .v1-clock{text-align:end}
+  .v1-clock .t{font-family:var(--font-mono);font-size:26px;font-weight:600;color:#fff;letter-spacing:.04em}
+  .v1-clock .d{font-size:12px;color:var(--deck-faint);margin-top:2px}
+
+  .v1-console{margin-top:28px;border:1px solid var(--deck-line);border-radius:20px;overflow:hidden;
+    background:linear-gradient(180deg,var(--deck-panel) 0%,rgba(13,28,54,.72) 100%);
+    box-shadow:0 30px 80px -30px rgba(0,0,0,.7)}
+  .v1-toolbar{display:flex;gap:14px;align-items:center;padding:16px 20px;border-bottom:1px solid var(--deck-line);flex-wrap:wrap}
+  .v1-search{flex:1 1 340px;display:flex;align-items:center;gap:10px;border-radius:12px;
+    border:1px solid var(--deck-line);background:rgba(6,14,30,.6);padding:11px 14px}
+  .v1-search svg{color:var(--deck-faint)}
+  .v1-search input{flex:1;border:0;outline:0;background:none;font:inherit;font-size:14px;color:var(--deck-text)}
+  .v1-search input::placeholder{color:var(--deck-faint)}
+  .v1-search .kbd{font-family:var(--font-mono);font-size:10.5px;color:var(--deck-faint);
+    border:1px solid var(--deck-line);border-radius:5px;padding:1px 6px}
+  .v1-keys{display:flex;gap:8px;flex-wrap:wrap}
+  .v1-key{display:flex;align-items:center;gap:8px;border-radius:10px;border:1px solid var(--deck-line);
+    padding:9px 14px;font-size:12.5px;font-weight:600;color:var(--deck-muted);background:rgba(6,14,30,.4)}
+  .v1-key[aria-pressed="true"]{border-color:rgba(94,179,232,.5);color:#fff;background:rgba(94,179,232,.12)}
+  .v1-count{margin-inline-start:auto;font-family:var(--font-mono);font-size:12px;color:var(--deck-faint)}
+  .v1-count b{color:var(--deck-text);font-weight:600}
+
+  .v1-day{display:flex;align-items:center;gap:12px;padding:14px 20px 8px;color:var(--deck-faint)}
+  .v1-day .lbl{font-family:var(--font-mono);font-size:11px;font-weight:600;letter-spacing:.16em;text-transform:uppercase}
+  .v1-day .rule{flex:1;height:1px;background:linear-gradient(90deg,var(--deck-line),transparent)}
+  .v1-row{display:grid;grid-template-columns:110px 1fr 220px 170px 130px;gap:16px;align-items:center;
+    padding:13px 20px;border-top:1px solid rgba(148,180,224,.07)}
+  .v1-row:hover{background:rgba(94,179,232,.06)}
+  .v1-time{font-family:var(--font-mono);font-size:12.5px;color:var(--deck-muted)}
+  .v1-main{display:flex;align-items:center;gap:12px;min-width:0}
+  .v1-main .kdot{width:8px;height:8px}
+  .v1-main .t{font-size:14px;font-weight:600;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .v1-main .s{font-size:12px;color:var(--deck-muted);margin-top:1px}
+  .v1-emp{display:flex;align-items:center;gap:10px;min-width:0}
+  .v1-emp .av{width:30px;height:30px;border-radius:50%;background:rgba(94,179,232,.14);color:#9cc8ec;
+    display:grid;place-items:center;font-size:10.5px;font-weight:700;flex:none;border:1px solid rgba(94,179,232,.25)}
+  .v1-emp .nm{font-size:13px;font-weight:600;color:var(--deck-text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .v1-emp .gid{font-family:var(--font-mono);font-size:10.5px;color:var(--deck-faint)}
+  .v1-ref{font-family:var(--font-mono);font-size:11.5px;color:var(--deck-faint)}
+  .v1-open{text-align:end;font-size:12.5px;font-weight:700;color:var(--deck-doc);opacity:0;transition:opacity .15s}
+  .v1-row:hover .v1-open{opacity:1}
+  .v1-more{display:block;width:100%;padding:14px;text-align:center;font-size:13px;font-weight:600;
+    color:var(--deck-muted);border-top:1px solid var(--deck-line);background:rgba(6,14,30,.4)}
+  .v1-more:hover{color:#fff}
+
+  /* ═════════ V2 — DAYBOOK FOLIO ═════════ */
+  .v2{padding:64px 0 80px;background:
+    radial-gradient(1200px 400px at 50% -200px,rgba(13,40,69,.05),transparent),var(--bg)}
+  .v2 .wrap{max-width:1180px;margin:0 auto;padding:0 32px}
+  .v2-mast{display:flex;align-items:baseline;justify-content:space-between;gap:24px;
+    border-bottom:3px double var(--border-strong);padding-bottom:18px;flex-wrap:wrap}
+  .v2-mast h3{font-size:44px;font-weight:900;letter-spacing:-0.03em;color:var(--primary)}
+  .v2-mast .folioline{font-family:var(--font-mono);font-size:11.5px;color:var(--text-muted);
+    text-transform:uppercase;letter-spacing:.14em}
+  .v2-mast .folioline b{color:var(--accent)}
+  .v2-controls{display:flex;gap:10px;align-items:center;margin-top:18px;flex-wrap:wrap}
+  .v2-search{flex:1 1 340px;display:flex;align-items:center;gap:10px;border-bottom:2px solid var(--primary);
+    padding:9px 2px;background:none}
+  .v2-search input{flex:1;border:0;outline:0;background:none;font:inherit;font-size:15px;color:var(--text)}
+  .v2-search svg{color:var(--text-faint)}
+  .v2-tabs{display:flex;gap:2px}
+  .v2-tabs button{padding:8px 15px;font-size:12.5px;font-weight:700;letter-spacing:.02em;color:var(--text-muted);
+    border-bottom:2px solid transparent}
+  .v2-tabs button[aria-pressed="true"]{color:var(--accent);border-bottom-color:var(--accent)}
+  .v2-tabs button .n{font-family:var(--font-mono);font-size:10.5px;margin-inline-start:4px;color:var(--text-faint)}
+
+  .v2-daypage{display:grid;grid-template-columns:170px 1fr;gap:36px;padding:40px 0 8px}
+  .v2-daypage + .v2-daypage{border-top:1px solid var(--border)}
+  .v2-datecol{text-align:end}
+  .v2-datecol .num{font-size:76px;font-weight:900;letter-spacing:-0.04em;line-height:.9;color:var(--primary)}
+  .v2-datecol .mo{margin-top:6px;font-size:13px;font-weight:800;text-transform:uppercase;letter-spacing:.22em;color:var(--accent)}
+  .v2-datecol .wd{margin-top:2px;font-size:12px;color:var(--text-faint)}
+  .v2-datecol .tally{margin-top:14px;font-family:var(--font-mono);font-size:11px;color:var(--text-muted)}
+  .v2-entries{min-width:0}
+  .v2-entry{display:flex;align-items:baseline;gap:14px;padding:13px 0;border-bottom:1px solid var(--hairline)}
+  .v2-entry:last-child{border-bottom:0}
+  .v2-entry .tm{font-family:var(--font-mono);font-size:12px;color:var(--text-faint);width:66px;flex:none;
+    font-variant-numeric:tabular-nums}
+  .v2-entry .kind{width:110px;flex:none;font-size:10.5px;font-weight:800;letter-spacing:.12em;text-transform:uppercase}
+  .v2-entry .t{font-size:15.5px;font-weight:700;color:var(--text);white-space:nowrap}
+  .v2-entry .who{font-size:13px;color:var(--text-muted);white-space:nowrap}
+  .v2-entry .who .gid{font-family:var(--font-mono);font-size:11.5px}
+  .v2-entry .leader{flex:1;border-bottom:1.5px dotted var(--border-strong);transform:translateY(-4px);min-width:24px}
+  .v2-entry .ref{font-family:var(--font-mono);font-size:11.5px;color:var(--text-muted);flex:none}
+  .v2-stamp{flex:none;border:2px solid var(--accent);color:var(--accent);border-radius:5px;
+    padding:2px 8px;font-size:9.5px;font-weight:800;letter-spacing:.16em;text-transform:uppercase;
+    transform:rotate(-4deg);opacity:.85;margin-inline-start:2px}
+  .v2-more{margin:34px auto 0;display:block;border:1px solid var(--border-strong);border-radius:99px;
+    padding:11px 32px;font-size:13px;font-weight:700;color:var(--primary);background:var(--surface)}
+  .v2-more:hover{background:var(--surface-raised)}
+
+  /* ═════════ V3 — BADGE DOSSIER ═════════ */
+  .v3{padding:56px 0 80px;background:var(--bg)}
+  .v3 .wrap{max-width:1280px;margin:0 auto;padding:0 32px}
+  .v3-head{margin-bottom:26px}
+  .v3-head h3{font-size:28px;font-weight:800;letter-spacing:-0.02em}
+  .v3-head .sub{margin-top:4px;font-size:14px;color:var(--text-muted)}
+  .v3-grid{display:grid;grid-template-columns:340px minmax(0,1fr);gap:32px;align-items:start}
+
+  .v3-badge{position:relative;border-radius:20px;background:var(--surface);overflow:hidden;
+    box-shadow:0 24px 60px -20px rgba(13,40,69,.35),0 2px 6px rgba(13,40,69,.08);
+    transform:rotate(-1.2deg)}
+  .v3-badge .clip{position:absolute;top:10px;left:50%;transform:translateX(-50%);width:64px;height:14px;
+    border-radius:99px;background:var(--surface-tinted);box-shadow:inset 0 1px 3px rgba(0,0,0,.25);z-index:2}
+  .v3-badge .band{background:var(--hero-grad);color:#fff;padding:30px 24px 14px;text-align:center}
+  .v3-badge .band .co{font-size:11px;font-weight:800;letter-spacing:.3em;text-transform:uppercase;opacity:.85}
+  .v3-badge .band .role{margin-top:2px;font-size:10px;letter-spacing:.18em;text-transform:uppercase;opacity:.55}
+  .v3-badge .photo{margin:-2px auto 0;margin-top:16px;width:120px;height:120px;border-radius:16px;
+    background:var(--primary-soft);display:grid;place-items:center;font-size:34px;font-weight:800;color:var(--primary);
+    border:4px solid rgba(255,255,255,.9);box-shadow:0 8px 20px rgba(4,15,30,.35)}
+  .v3-badge .bod{padding:18px 24px 22px;text-align:center;margin-top:-60px;padding-top:78px;background:var(--surface)}
+  .v3-badge .nm{font-size:21px;font-weight:800;letter-spacing:-0.01em;color:var(--primary)}
+  .v3-badge .pos{margin-top:3px;font-size:12.5px;color:var(--text-muted)}
+  .v3-badge .holo{margin:14px auto 0;height:10px;width:70%;border-radius:99px;opacity:.8;
+    background:linear-gradient(100deg,#8fd3f4,#b8a9f5,#f5c98f,#93e9be,#8fd3f4);background-size:300% 100%}
+  .v3-badge .status{margin-top:12px;display:inline-flex;align-items:center;gap:6px;border-radius:99px;
+    background:var(--success-soft);color:var(--success);padding:4px 14px;font-size:11.5px;font-weight:800}
+  .v3-badge .status::before{content:"";width:7px;height:7px;border-radius:50%;background:var(--success)}
+  .v3-badge .barcode{margin:18px auto 6px;height:44px;width:78%;
+    background:repeating-linear-gradient(90deg,#0d1421 0 2px,transparent 2px 5px,#0d1421 5px 6px,transparent 6px 8px,#0d1421 8px 11px,transparent 11px 13px,#0d1421 13px 14px,transparent 14px 18px)}
+  .v3-badge .gid{font-family:var(--font-mono);font-size:13px;font-weight:600;letter-spacing:.34em;color:var(--text);padding-bottom:18px}
+  .v3-badge-actions{margin-top:22px;display:flex;gap:10px}
+  .v3-badge-actions .pri{flex:1;border-radius:12px;background:var(--primary);color:#fff;padding:12px;font-size:13.5px;font-weight:700}
+  .v3-badge-actions .pri:hover{background:var(--primary-hover)}
+  .v3-badge-actions .sec{flex:1;border-radius:12px;border:1px solid var(--border-strong);background:var(--surface);
+    padding:12px;font-size:13.5px;font-weight:700;color:var(--text-muted)}
+  .v3-search-mini{margin-top:14px;display:flex;align-items:center;gap:8px;border:1px solid var(--border);
+    border-radius:12px;background:var(--surface);padding:10px 12px}
+  .v3-search-mini input{flex:1;border:0;outline:0;background:none;font-size:13px}
+  .v3-search-mini svg{color:var(--text-faint)}
+
+  .v3-folder{position:relative}
+  .v3-ftabs{display:flex;gap:6px;padding:0 14px;position:relative;z-index:1}
+  .v3-ftabs button{border-radius:12px 12px 0 0;border:1px solid var(--border);border-bottom:none;
+    background:var(--surface-tinted);padding:11px 18px 13px;font-size:13px;font-weight:700;color:var(--text-muted);
+    display:flex;align-items:center;gap:8px}
+  .v3-ftabs button .n{font-family:var(--font-mono);font-size:10.5px;background:rgba(13,40,69,.08);
+    border-radius:99px;padding:1px 7px}
+  .v3-ftabs button[aria-selected="true"]{background:var(--surface);color:var(--primary);
+    margin-bottom:-1px;padding-bottom:14px}
+  .v3-sheet{position:relative;border:1px solid var(--border);border-radius:16px;background:var(--surface);
+    box-shadow:0 16px 44px -18px rgba(13,40,69,.25)}
+  .v3-sheet::before{content:"";position:absolute;inset:auto 10px -8px 10px;height:8px;border-radius:0 0 12px 12px;
+    background:var(--surface-raised);border:1px solid var(--border);border-top:none;z-index:-1}
+  .v3-sheet::after{content:"";position:absolute;inset:auto 22px -15px 22px;height:8px;border-radius:0 0 12px 12px;
+    background:var(--surface-tinted);border:1px solid var(--border);border-top:none;z-index:-2}
+  .v3-shead{display:flex;justify-content:space-between;align-items:center;padding:16px 22px;
+    border-bottom:1px solid var(--hairline)}
+  .v3-shead .t{font-size:14.5px;font-weight:800}
+  .v3-shead .c{font-family:var(--font-mono);font-size:11.5px;color:var(--text-faint)}
+  .v3-day{padding:9px 22px;font-size:10.5px;font-weight:800;letter-spacing:.14em;text-transform:uppercase;
+    color:var(--text-faint);background:var(--surface-raised);border-bottom:1px solid var(--hairline)}
+  .v3-row{display:flex;align-items:center;gap:14px;padding:13px 22px;border-bottom:1px solid var(--hairline)}
+  .v3-row:hover{background:var(--surface-raised)}
+  .v3-ico{width:36px;height:36px;border-radius:11px;display:grid;place-items:center;flex:none}
+  .v3-row .t{font-size:14px;font-weight:700}
+  .v3-row .s{margin-top:1px;font-size:12.5px;color:var(--text-muted)}
+  .v3-row .ref{margin-inline-start:auto;font-family:var(--font-mono);font-size:11.5px;color:var(--text-faint)}
+  .v3-row .tm{font-size:12.5px;color:var(--text-muted);width:72px;text-align:end;flex:none;font-variant-numeric:tabular-nums}
+  .v3-more{display:block;width:100%;padding:13px;text-align:center;font-size:13px;font-weight:700;color:var(--primary)}
+
+  /* ═════════ V4 — PULSE NAVIGATOR ═════════ */
+  .v4{padding:56px 0 80px;background:var(--bg)}
+  .v4 .wrap{max-width:1280px;margin:0 auto;padding:0 32px}
+  .v4-head{display:flex;align-items:flex-end;justify-content:space-between;flex-wrap:wrap;gap:16px}
+  .v4-head h3{font-size:28px;font-weight:800;letter-spacing:-0.02em}
+  .v4-head .sub{margin-top:4px;font-size:14px;color:var(--text-muted)}
+  .v4-legend{display:flex;gap:8px;flex-wrap:wrap}
+  .v4-legend button{display:flex;align-items:center;gap:7px;border:1px solid var(--border);border-radius:99px;
+    background:var(--surface);padding:7px 14px;font-size:12.5px;font-weight:700;color:var(--text-muted)}
+  .v4-legend button .n{font-family:var(--font-mono);font-size:11px;color:var(--text-faint)}
+  .v4-legend button[aria-pressed="true"]{border-color:var(--primary);color:var(--primary);background:var(--primary-soft)}
+  .v4-legend button[aria-pressed="false"]{opacity:.45}
+
+  .v4-panel{margin-top:22px;background:var(--surface);border:1px solid var(--border);border-radius:20px;
+    box-shadow:0 2px 8px rgba(13,40,69,.05);overflow:hidden}
+  .v4-strip-zone{padding:24px 28px 18px;border-bottom:1px solid var(--hairline);
+    background:linear-gradient(180deg,var(--surface-raised),var(--surface))}
+  .v4-strip-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:14px}
+  .v4-strip-head .t{font-size:12px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:var(--text-muted)}
+  .v4-strip-head .hint{font-size:12px;color:var(--text-faint)}
+  .v4-strip{display:flex;align-items:flex-end;gap:10px;height:110px}
+  .v4-col{flex:1;display:flex;flex-direction:column-reverse;gap:2px;height:100%;justify-content:flex-start;
+    border-radius:6px;padding:3px;cursor:pointer}
+  .v4-col:hover{background:var(--surface-tinted)}
+  .v4-col.sel{background:var(--primary-soft);outline:2px solid var(--primary);outline-offset:0}
+  .v4-seg{border-radius:3px;width:100%}
+  .v4-axis{display:flex;gap:10px;margin-top:8px}
+  .v4-axis span{flex:1;text-align:center;font-family:var(--font-mono);font-size:10px;color:var(--text-faint)}
+  .v4-axis span.sel{color:var(--primary);font-weight:700}
+  .v4-toolbar{display:flex;gap:12px;align-items:center;padding:14px 20px;border-bottom:1px solid var(--hairline);flex-wrap:wrap}
+  .v4-search{flex:1 1 320px;display:flex;align-items:center;gap:9px;border:1px solid var(--border);
+    border-radius:11px;background:var(--surface-raised);padding:9px 13px}
+  .v4-search input{flex:1;border:0;outline:0;background:none;font-size:13.5px}
+  .v4-search svg{color:var(--text-faint)}
+  .v4-selday{display:inline-flex;align-items:center;gap:8px;border-radius:99px;background:var(--primary);
+    color:#fff;padding:8px 8px 8px 16px;font-size:12.5px;font-weight:700}
+  .v4-selday .x{width:20px;height:20px;border-radius:50%;background:rgba(255,255,255,.2);
+    display:grid;place-items:center;font-size:10px}
+  .v4-count{margin-inline-start:auto;font-size:12.5px;color:var(--text-muted)}
+  .v4-row{display:grid;grid-template-columns:76px 1.6fr 1.3fr 150px 120px;gap:16px;align-items:center;
+    padding:13px 20px;border-bottom:1px solid var(--hairline)}
+  .v4-row:hover{background:var(--surface-raised)}
+  .v4-row .tm{font-family:var(--font-mono);font-size:12px;color:var(--text-muted);font-variant-numeric:tabular-nums}
+  .v4-row .main{display:flex;align-items:center;gap:11px;min-width:0}
+  .v4-row .t{font-size:14px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .v4-row .s{font-size:12px;color:var(--text-muted)}
+  .v4-row .emp{display:flex;align-items:center;gap:9px;min-width:0}
+  .v4-row .emp .nm{font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .v4-row .emp .gid{font-family:var(--font-mono);font-size:11px;color:var(--text-faint)}
+  .v4-row .ref{font-family:var(--font-mono);font-size:11.5px;color:var(--text-faint)}
+  .v4-row .open{text-align:end;font-size:12.5px;font-weight:700;color:var(--primary);opacity:0}
+  .v4-row:hover .open{opacity:1}
+  .v4-daylabel{padding:9px 20px;background:var(--surface-raised);border-bottom:1px solid var(--hairline);
+    font-size:11px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:var(--text-muted)}
+
+  /* ═════════ V5 — OMNIBOX ═════════ */
+  .v5{padding:56px 0 80px;background:
+    radial-gradient(900px 300px at 50% 0,rgba(13,40,69,.06),transparent),var(--bg)}
+  .v5 .wrap{max-width:880px;margin:0 auto;padding:0 32px}
+  .v5-head{text-align:center}
+  .v5-head h3{font-size:28px;font-weight:800;letter-spacing:-0.02em}
+  .v5-head .sub{margin-top:4px;font-size:14px;color:var(--text-muted)}
+  .v5-box{margin-top:24px;border:1px solid var(--border);border-radius:18px;background:var(--surface);
+    box-shadow:0 24px 70px -24px rgba(13,40,69,.35),0 2px 8px rgba(13,40,69,.06);overflow:hidden}
+  .v5-input{display:flex;align-items:center;gap:10px;padding:16px 18px;border-bottom:1px solid var(--hairline)}
+  .v5-input svg{color:var(--text-faint);flex:none}
+  .v5-token{display:inline-flex;align-items:center;gap:6px;border-radius:8px;padding:5px 9px;
+    font-size:12.5px;font-weight:700;flex:none}
+  .v5-token.emp{background:var(--primary-soft);color:var(--primary)}
+  .v5-token.kind{background:var(--leave-soft);color:var(--leave)}
+  .v5-token .x{opacity:.55;font-size:10px}
+  .v5-input input{flex:1;min-width:120px;border:0;outline:0;background:none;font-size:15px}
+  .v5-input .kbd{font-family:var(--font-mono);font-size:10.5px;color:var(--text-faint);
+    border:1px solid var(--border);border-radius:5px;padding:2px 7px;flex:none}
+  .v5-sect{padding:8px 0 4px}
+  .v5-sect .lbl{padding:6px 18px;font-size:10.5px;font-weight:800;letter-spacing:.13em;
+    text-transform:uppercase;color:var(--text-faint)}
+  .v5-opt{display:flex;align-items:center;gap:12px;padding:9px 18px;font-size:13.5px}
+  .v5-opt:hover{background:var(--surface-raised)}
+  .v5-opt.hi{background:var(--primary-soft)}
+  .v5-opt .nm{font-weight:700}
+  .v5-opt .meta{color:var(--text-muted);font-size:12px}
+  .v5-opt .meta .mono{font-size:11px}
+  .v5-opt .go{margin-inline-start:auto;font-family:var(--font-mono);font-size:10.5px;color:var(--text-faint);
+    border:1px solid var(--border);border-radius:5px;padding:2px 7px}
+  .v5-opt .filt{display:inline-flex;align-items:center;gap:7px;font-weight:600}
+  .v5-foot{display:flex;gap:16px;padding:10px 18px;border-top:1px solid var(--hairline);
+    background:var(--surface-raised);font-size:11.5px;color:var(--text-faint)}
+  .v5-foot .k{font-family:var(--font-mono);border:1px solid var(--border);border-radius:4px;padding:0 5px;
+    background:var(--surface);color:var(--text-muted)}
+  .v5-views{margin-top:20px;display:flex;gap:8px;justify-content:center;flex-wrap:wrap}
+  .v5-views .lbl{font-size:12px;color:var(--text-faint);align-self:center}
+  .v5-views button{border:1px solid var(--border);border-radius:99px;background:var(--surface);
+    padding:7px 15px;font-size:12.5px;font-weight:700;color:var(--text-muted)}
+  .v5-views button:hover{border-color:var(--primary);color:var(--primary)}
+  .v5-results{margin-top:26px;background:var(--surface);border:1px solid var(--border);border-radius:16px;overflow:hidden}
+  .v5-rhead{display:flex;justify-content:space-between;padding:13px 18px;border-bottom:1px solid var(--hairline)}
+  .v5-rhead .t{font-size:13.5px;font-weight:800}
+  .v5-rhead .c{font-size:12px;color:var(--text-muted)}
+  .v5-day{padding:8px 18px;font-size:10.5px;font-weight:800;letter-spacing:.12em;text-transform:uppercase;
+    color:var(--text-faint);background:var(--surface-raised);border-bottom:1px solid var(--hairline)}
+  .v5-row{display:flex;align-items:center;gap:13px;padding:11px 18px;border-bottom:1px solid var(--hairline)}
+  .v5-row:hover{background:var(--surface-raised)}
+  .v5-row .ix{font-family:var(--font-mono);font-size:10.5px;color:var(--text-faint);width:18px;flex:none}
+  .v5-row .t{font-size:13.5px;font-weight:700}
+  .v5-row .s{font-size:12px;color:var(--text-muted)}
+  .v5-row .ref{margin-inline-start:auto;font-family:var(--font-mono);font-size:11px;color:var(--text-faint)}
+  .v5-row .tm{font-size:12px;color:var(--text-muted);width:66px;text-align:end;font-variant-numeric:tabular-nums}
+  .v5-more{display:block;width:100%;padding:12px;text-align:center;font-size:13px;font-weight:700;color:var(--primary)}
+</style>
+</head>
+<body>
+
+<!-- ═══════════ FAITHFUL HERO (the unchanged top part) ═══════════ -->
+<section class="hero">
+  <div class="hero-decor" aria-hidden="true"><div class="c1"></div><div class="c2"></div></div>
+  <div class="hero-col">
+    <div class="hero-eyebrow">Operations · Employees</div>
+    <h1>Who are you looking for?</h1>
+    <p class="hero-sub">Active, on leave, or separated — every file appears in search</p>
+    <div class="hero-pill">
+      <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.3-3.3"/></svg>
+      <input placeholder="Type a name or employee ID…">
+      <button class="go">Search</button>
+    </div>
+    <div class="hero-ghost-wrap"><button class="hero-ghost"><span class="plus">+</span>New employee — create file</button></div>
+  </div>
+  <div class="hero-cards">
+    <div class="hcard">
+      <div class="hcard-head"><span class="ico">◔</span><h4>Recently opened files</h4></div>
+      <button class="hchip"><span class="av">Mo</span><span class="lb">Mohammed Al-Harbi</span><span class="mt">G-1042</span></button>
+      <button class="hchip"><span class="av">Yo</span><span class="lb">Yousef Al-Dossari</span><span class="mt">G-0877</span></button>
+      <button class="hchip"><span class="av">Su</span><span class="lb">Sultan Al-Otaibi</span><span class="mt">G-0130</span></button>
+    </div>
+    <div class="hcard">
+      <div class="hcard-head"><span class="ico warn">⚠</span><h4>Documents expiring soon</h4><span class="badge">7</span></div>
+      <button class="hchip"><span class="av">Ra</span><span class="lb">Rakesh Kumar — Iqama</span><span class="mt warn">12 days</span></button>
+      <button class="hchip"><span class="av">Fa</span><span class="lb">Faisal Al-Qahtani — Passport</span><span class="mt warn">28 days</span></button>
+      <div style="margin-top:10px"><a class="link" href="#">View all expiring documents</a></div>
+    </div>
+    <div class="hcard">
+      <div class="hcard-head"><span class="ico">👤</span><h4>Files with missing data</h4><span class="badge">12</span></div>
+      <p class="body">Most missing: Bank IBAN, Passport expiry, Duty location. Completing them readies forms and letters instantly.</p>
+      <a class="link" href="#">Start completing files</a>
+    </div>
+  </div>
+</section>
+
+<div id="variants"></div>
+<div class="variant-tag" id="vtag"></div>
+
+<script>
+const KINDS = {
+  document:{label:'Documents', color:'var(--doc)', soft:'var(--doc-soft)', deck:'var(--deck-doc)',
+    ico:'M6 2h7l5 5v13a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2zm7 1.5V8h4.5'},
+  leave:{label:'Leave', color:'var(--leave)', soft:'var(--leave-soft)', deck:'var(--deck-leave)',
+    ico:'M8 2v3M16 2v3M3.5 9.5h17M5 4.5h14a1.5 1.5 0 0 1 1.5 1.5v13A1.5 1.5 0 0 1 19 20.5H5A1.5 1.5 0 0 1 3.5 19V6A1.5 1.5 0 0 1 5 4.5z'},
+  violation:{label:'Violations', color:'var(--violation)', soft:'var(--violation-soft)', deck:'var(--deck-violation)',
+    ico:'M12 3 2.5 20h19L12 3zm0 6v5m0 3v.5'},
+  ledger:{label:'Correspondence', color:'var(--ledger)', soft:'var(--ledger-soft)', deck:'var(--deck-ledger)',
+    ico:'M3.5 5.5h17v13h-17zM3.5 6.5 12 13l8.5-6.5'},
+}
+const DATA = [
+  {day:'Aug 13', dayFull:'Aug 13, 2026', weekday:'Thursday', items:[
+    {kind:'document', emp:'Mohammed Al-Harbi', gid:'G-1042', title:'Salary Certificate', sub:'Generated document', ref:'GSSG-HR-300-114', time:'10:42 AM'},
+    {kind:'leave', emp:'Yousef Al-Dossari', gid:'G-0877', title:'Annual leave', sub:'Leave record · 21 days', ref:'LV-2026-0311', time:'9:18 AM'},
+    {kind:'violation', emp:'Rakesh Kumar', gid:'G-1203', title:'Late arrival — Gate 4', sub:'Recorded violation', ref:'VIO-2026-058', time:'8:05 AM'},
+  ]},
+  {day:'Aug 12', dayFull:'Aug 12, 2026', weekday:'Wednesday', items:[
+    {kind:'ledger', emp:'Ali Hassan Shah', gid:'G-0954', title:'Iqama renewal follow-up', sub:'Recorded correspondence', ref:'LDG-26-0842', time:'4:31 PM'},
+    {kind:'document', emp:'Faisal Al-Qahtani', gid:'G-0311', title:'Clearance Form', sub:'Generated document', ref:'GSSG-HR-300-009', time:'1:56 PM'},
+    {kind:'leave', emp:'Mohammed Al-Harbi', gid:'G-1042', title:'Sick leave', sub:'Leave record · 3 days', ref:'LV-2026-0308', time:'11:22 AM'},
+  ]},
+  {day:'Aug 11', dayFull:'Aug 11, 2026', weekday:'Tuesday', items:[
+    {kind:'violation', emp:'Naveed Anwar', gid:'G-0722', title:'Uniform non-compliance', sub:'Recorded violation', ref:'VIO-2026-055', time:'6:47 PM'},
+    {kind:'ledger', emp:'Sultan Al-Otaibi', gid:'G-0130', title:'Transfer request — Riyadh HQ', sub:'Recorded correspondence', ref:'LDG-26-0838', time:'3:10 PM'},
+  ]},
+]
+/* Rows scoped to the selected employee (Mohammed Al-Harbi) for V3/V5 */
+const MA_DATA = [
+  {dayFull:'Aug 13, 2026', items:[
+    {kind:'document', title:'Salary Certificate', sub:'Generated document', ref:'GSSG-HR-300-114', time:'10:42 AM'},
+    {kind:'violation', title:'Late arrival — Gate 4', sub:'Recorded violation', ref:'VIO-2026-058', time:'8:05 AM'},
+  ]},
+  {dayFull:'Aug 12, 2026', items:[
+    {kind:'leave', title:'Sick leave', sub:'Leave record · 3 days', ref:'LV-2026-0308', time:'11:22 AM'},
+    {kind:'ledger', title:'Iqama renewal follow-up', sub:'Recorded correspondence', ref:'LDG-26-0841', time:'9:04 AM'},
+  ]},
+  {dayFull:'Aug 9, 2026', items:[
+    {kind:'document', title:'Clearance Form', sub:'Generated document', ref:'GSSG-HR-300-102', time:'2:12 PM'},
+    {kind:'leave', title:'Annual leave', sub:'Leave record · 21 days', ref:'LV-2026-0290', time:'10:38 AM'},
+  ]},
+]
+const initials = n => n.split(' ').filter(Boolean).slice(0,2).map(w=>w[0]).join('')
+const icon = (path, size=16) => `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="${path}"/></svg>`
+const searchIco = icon('M11 4a7 7 0 1 0 0 14 7 7 0 0 0 0-14zm10 17-4.8-4.8', 17)
+
+/* ───────── V1 — NIGHT OPS DECK ───────── */
+function v1(){
+  const keys = [['all','All activity',128,true],['document','Documents',52],['leave','Leave',31],['violation','Violations',19],['ledger','Correspondence',26]]
+    .map(([k,l,n,on])=>`<button class="v1-key" aria-pressed="${!!on}">
+      ${k==='all'?'':`<span class="kdot" style="background:${KINDS[k].deck};color:${KINDS[k].deck}"></span>`}${l}
+      <span class="mono" style="font-size:10.5px;opacity:.6">${n}</span></button>`).join('')
+  const rows = DATA.map(g=>`
+    <div class="v1-day"><span class="lbl">${g.dayFull}</span><span class="rule"></span></div>
+    ${g.items.map(it=>`
+      <a href="#" class="v1-row">
+        <span class="v1-time">${it.time}</span>
+        <span class="v1-main"><span class="kdot" style="background:${KINDS[it.kind].deck};color:${KINDS[it.kind].deck}"></span>
+          <span style="min-width:0"><span class="t" style="display:block">${it.title}</span><span class="s">${it.sub}</span></span></span>
+        <span class="v1-emp"><span class="av">${initials(it.emp)}</span>
+          <span style="min-width:0"><span class="nm" style="display:block">${it.emp}</span><span class="gid">${it.gid}</span></span></span>
+        <span class="v1-ref">${it.ref}</span>
+        <span class="v1-open">Open record →</span>
+      </a>`).join('')}`).join('')
+  return `<section class="v1"><div class="wrap">
+    <div class="v1-head">
+      <div><div class="eyebrow"><span class="live"></span>Employee records · live</div>
+        <h3>Recent activity</h3>
+        <p class="sub">Review recent record activity across all employees or find one employee.</p></div>
+      <div class="v1-clock"><div class="t">14:36:08</div><div class="d">Thursday, Aug 13 2026 · Riyadh</div></div>
+    </div>
+    <div class="v1-console">
+      <div class="v1-toolbar">
+        <div class="v1-search">${searchIco}<input placeholder="Search by employee name or G-number"><span class="kbd">/</span></div>
+        <div class="v1-keys">${keys}</div>
+        <span class="v1-count">SHOWING <b>8</b> / 128</span>
+      </div>
+      ${rows}
+      <button class="v1-more">Load more activity ↓</button>
+    </div>
+  </div></section>`
+}
+
+/* ───────── V2 — DAYBOOK FOLIO ───────── */
+function v2(){
+  const tabs = [['All activity',128,true],['Documents',52],['Leave',31],['Violations',19],['Correspondence',26]]
+    .map(([l,n,on])=>`<button aria-pressed="${!!on}">${l}<span class="n">${n}</span></button>`).join('')
+  const pages = DATA.map(g=>`
+    <div class="v2-daypage">
+      <div class="v2-datecol">
+        <div class="num">${g.day.split(' ')[1]}</div>
+        <div class="mo">${g.day.split(' ')[0]} 2026</div>
+        <div class="wd">${g.weekday}</div>
+        <div class="tally">${g.items.length} entries</div>
+      </div>
+      <div class="v2-entries">
+        ${g.items.map(it=>`
+          <a href="#" class="v2-entry">
+            <span class="tm">${it.time}</span>
+            <span class="kind" style="color:${KINDS[it.kind].color}">${KINDS[it.kind].label}</span>
+            <span style="min-width:0"><span class="t">${it.title}</span>
+              <span class="who"> — ${it.emp} <span class="gid">${it.gid}</span></span></span>
+            ${it.kind==='violation'?'<span class="v2-stamp">Violation</span>':''}
+            <span class="leader"></span>
+            <span class="ref">${it.ref}</span>
+          </a>`).join('')}
+      </div>
+    </div>`).join('')
+  return `<section class="v2"><div class="wrap">
+    <div class="v2-mast">
+      <h3>The Daybook</h3>
+      <span class="folioline">Employee records · <b>128 entries</b> · updated 10:42 AM</span>
+    </div>
+    <div class="v2-controls">
+      <div class="v2-search">${searchIco}<input placeholder="Search by employee name or G-number"></div>
+      <div class="v2-tabs">${tabs}</div>
+    </div>
+    ${pages}
+    <button class="v2-more">Turn back a page — load older days</button>
+  </div></section>`
+}
+
+/* ───────── V3 — BADGE DOSSIER ───────── */
+function v3(){
+  const tabs = [['All activity',24,true],['Documents',9],['Leave',6],['Violations',3],['Correspondence',6]]
+    .map(([l,n,on])=>`<button aria-selected="${!!on}">${l}<span class="n">${n}</span></button>`).join('')
+  const rows = MA_DATA.map(g=>`
+    <div class="v3-day">${g.dayFull}</div>
+    ${g.items.map(it=>`
+      <a href="#" class="v3-row">
+        <span class="v3-ico" style="background:${KINDS[it.kind].soft};color:${KINDS[it.kind].color}">${icon(KINDS[it.kind].ico)}</span>
+        <span style="min-width:0"><span class="t" style="display:block">${it.title}</span><span class="s">${it.sub}</span></span>
+        <span class="ref">${it.ref}</span><span class="tm">${it.time}</span>
+      </a>`).join('')}`).join('')
+  return `<section class="v3"><div class="wrap">
+    <div class="v3-head"><h3>Recent activity</h3>
+      <p class="sub">Review recent record activity across all employees or find one employee.</p></div>
+    <div class="v3-grid">
+      <div>
+        <div class="v3-badge">
+          <span class="clip"></span>
+          <div class="band"><div class="co">GSSG Security</div><div class="role">Employee identification</div>
+            <div class="photo">MA</div></div>
+          <div class="bod">
+            <div class="nm">Mohammed Al-Harbi</div>
+            <div class="pos">Security Guard · Riyadh HQ</div>
+            <div class="holo"></div>
+            <div><span class="status">Active</span></div>
+            <div class="barcode"></div>
+            <div class="gid">G-1042</div>
+          </div>
+        </div>
+        <div class="v3-badge-actions"><button class="pri">Open profile</button><button class="sec">Clear</button></div>
+        <div class="v3-search-mini">${searchIco}<input placeholder="Look up another employee…"></div>
+      </div>
+      <div class="v3-folder">
+        <div class="v3-ftabs">${tabs}</div>
+        <div class="v3-sheet">
+          <div class="v3-shead"><span class="t">Activity file — Mohammed Al-Harbi</span><span class="c">SHOWING 6 / 24</span></div>
+          ${rows}
+          <button class="v3-more">Load more activity</button>
+        </div>
+      </div>
+    </div>
+  </div></section>`
+}
+
+/* ───────── V4 — PULSE NAVIGATOR ───────── */
+function v4(){
+  // 14 days of synthetic per-kind counts (document, leave, violation, ledger)
+  const days = [
+    ['Jul 31',[2,1,0,1]],['Aug 1',[1,0,1,0]],['Aug 2',[3,1,0,2]],['Aug 3',[2,2,1,1]],
+    ['Aug 4',[1,1,0,0]],['Aug 5',[4,0,1,2]],['Aug 6',[2,1,0,1]],['Aug 7',[3,2,1,0]],
+    ['Aug 8',[1,0,0,1]],['Aug 9',[2,1,1,2]],['Aug 10',[3,1,0,1]],['Aug 11',[0,0,1,1]],
+    ['Aug 12',[1,1,0,1]],['Aug 13',[1,1,1,0]],
+  ]
+  const kindOrder = ['document','leave','violation','ledger']
+  const max = Math.max(...days.map(([,c])=>c.reduce((a,b)=>a+b,0)))
+  const strip = days.map(([d,c],i)=>{
+    const segs = c.map((n,k)=>n?`<span class="v4-seg" style="height:${(n/max)*92}px;background:${['var(--doc)','var(--leave)','var(--violation)','var(--ledger)'][k]}"></span>`:'').join('')
+    return `<button class="v4-col${d==='Aug 13'?' sel':''}" title="${d}">${segs}</button>`
+  }).join('')
+  const axis = days.map(([d])=>`<span class="${d==='Aug 13'?'sel':''}">${d.replace('Aug ','A').replace('Jul ','J')}</span>`).join('')
+  const legend = [['all','All',128,true],['document','Documents',52,true],['leave','Leave',31,true],['violation','Violations',19,true],['ledger','Correspondence',26,true]]
+    .map(([k,l,n,on])=>`<button aria-pressed="${!!on}">
+      ${k==='all'?'':`<span class="kdot" style="background:${KINDS[k].color}"></span>`}${l}<span class="n">${n}</span></button>`).join('')
+  const dayRows = (g)=>g.items.map(it=>`
+    <a href="#" class="v4-row">
+      <span class="tm">${it.time}</span>
+      <span class="main"><span class="kdot" style="background:${KINDS[it.kind].color}"></span>
+        <span style="min-width:0"><span class="t" style="display:block">${it.title}</span><span class="s">${it.sub}</span></span></span>
+      <span class="emp"><span class="avatar" style="width:28px;height:28px;font-size:10px">${initials(it.emp)}</span>
+        <span style="min-width:0"><span class="nm" style="display:block">${it.emp}</span><span class="gid">${it.gid}</span></span></span>
+      <span class="ref">${it.ref}</span>
+      <span class="open">Open →</span>
+    </a>`).join('')
+  return `<section class="v4"><div class="wrap">
+    <div class="v4-head">
+      <div><h3>Recent activity</h3>
+        <p class="sub">Review recent record activity across all employees or find one employee.</p></div>
+      <div class="v4-legend">${legend}</div>
+    </div>
+    <div class="v4-panel">
+      <div class="v4-strip-zone">
+        <div class="v4-strip-head"><span class="t">14-day pulse</span><span class="hint">Click a day to jump · drag to select a range</span></div>
+        <div class="v4-strip">${strip}</div>
+        <div class="v4-axis">${axis}</div>
+      </div>
+      <div class="v4-toolbar">
+        <div class="v4-search">${searchIco}<input placeholder="Search by employee name or G-number"></div>
+        <span class="v4-selday">Aug 13, 2026 <span class="x">✕</span></span>
+        <span class="v4-count">Showing 8 of 128 recent entries</span>
+      </div>
+      <div class="v4-daylabel">Aug 13, 2026 — Thursday</div>
+      ${dayRows(DATA[0])}
+      <div class="v4-daylabel">Aug 12, 2026 — Wednesday</div>
+      ${dayRows(DATA[1])}
+      <div class="v4-daylabel">Aug 11, 2026 — Tuesday</div>
+      ${dayRows(DATA[2])}
+      <button class="v3-more" style="border-top:1px solid var(--hairline)">Load more activity</button>
+    </div>
+  </div></section>`
+}
+
+/* ───────── V5 — OMNIBOX ───────── */
+function v5(){
+  const rows = MA_DATA.map(g=>`
+    <div class="v5-day">${g.dayFull}</div>
+    ${g.items.map((it,i)=>`
+      <a href="#" class="v5-row">
+        <span class="ix">${i+1}</span>
+        <span class="kdot" style="background:${KINDS[it.kind].color}"></span>
+        <span style="min-width:0"><span class="t" style="display:block">${it.title}</span><span class="s">${it.sub}</span></span>
+        <span class="ref">${it.ref}</span><span class="tm">${it.time}</span>
+      </a>`).join('')}`).join('')
+  return `<section class="v5"><div class="wrap">
+    <div class="v5-head"><h3>Recent activity</h3>
+      <p class="sub">One box for everything — type a name, filter by record type, or pick a saved view.</p></div>
+    <div class="v5-box">
+      <div class="v5-input">
+        ${searchIco}
+        <span class="v5-token emp">Mohammed Al-Harbi <span class="x">✕</span></span>
+        <span class="v5-token kind">last 30 days <span class="x">✕</span></span>
+        <input placeholder="Add a filter or search…">
+        <span class="kbd">⌘K</span>
+      </div>
+      <div class="v5-sect">
+        <div class="lbl">Employees</div>
+        <div class="v5-opt hi"><span class="avatar" style="width:28px;height:28px;font-size:10px">MA</span>
+          <span><span class="nm">Mohammed Al-Harbi</span> <span class="meta"><span class="mono">G-1042</span> · Security Guard</span></span>
+          <span class="go">↵ filter</span></div>
+        <div class="v5-opt"><span class="avatar" style="width:28px;height:28px;font-size:10px">MF</span>
+          <span><span class="nm">Mohammed Al-Faraj</span> <span class="meta"><span class="mono">G-0561</span> · Supervisor</span></span>
+          <span class="go">↵ filter</span></div>
+      </div>
+      <div class="v5-sect" style="border-top:1px solid var(--hairline)">
+        <div class="lbl">Quick filters</div>
+        <div class="v5-opt"><span class="filt"><span class="kdot" style="background:var(--violation)"></span>Violations this week</span><span class="go">tab</span></div>
+        <div class="v5-opt"><span class="filt"><span class="kdot" style="background:var(--leave)"></span>Leave starting today</span><span class="go">tab</span></div>
+      </div>
+      <div class="v5-foot">
+        <span><span class="k">↑↓</span> navigate</span><span><span class="k">↵</span> apply</span>
+        <span><span class="k">esc</span> clear</span><span style="margin-inline-start:auto">All statuses appear in results</span>
+      </div>
+    </div>
+    <div class="v5-views">
+      <span class="lbl">Saved views:</span>
+      <button>⚑ This week's violations</button>
+      <button>◔ Returning from leave</button>
+      <button>✉ Open correspondence</button>
+    </div>
+    <div class="v5-results">
+      <div class="v5-rhead"><span class="t">All activity — Mohammed Al-Harbi</span><span class="c">Showing 6 of 24</span></div>
+      ${rows}
+      <button class="v5-more">Load more activity</button>
+    </div>
+  </div></section>`
+}
+
+const all = {1:['Night Ops deck',v1],2:['Daybook folio',v2],3:['Badge dossier',v3],4:['Pulse navigator',v4],5:['Omnibox',v5]}
+const only = Number(new URLSearchParams(location.search).get('v'))
+const host = document.getElementById('variants')
+if (all[only]) {
+  host.innerHTML = all[only][1]()
+  document.getElementById('vtag').innerHTML = `<span>V${only}</span>${all[only][0]}`
+} else {
+  host.innerHTML = Object.values(all).map(([,f])=>f()).join('')
+  document.getElementById('vtag').style.display='none'
+}
+</script>
+</body>
+</html>

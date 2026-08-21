@@ -1,0 +1,1145 @@
+<!doctype html>
+<html lang="en" dir="ltr" data-theme="light" data-density="default">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Monthly time sheet — direction B · Focus Painter</title>
+<link rel="stylesheet" href="timesheet-mockups.css">
+<style>
+/* ============================================================================
+   Direction B — Focus Painter (layout and interaction only; every colour,
+   font, button and fill comes from timesheet-mockups.css)
+
+   The premise: the real correction is never "fix one cell", it is "this man was
+   on annual leave from the 6th to the 17th". So the 26x31 grid is split in two.
+   A roster RAIL carries every row's whole month as a silhouette you scan, and a
+   FOCUS PANEL gives one employee's month as day tiles big enough to paint with
+   a brush, a range gesture and the keyboard.
+   ========================================================================= */
+
+#page { --tile: calc(var(--row) + 8px); }  /* 32 / 36 / 44px across the zoom steps */
+#page [hidden] { display: none; }          /* .seal and .chip set display, so [hidden] needs the id */
+
+/* ------------------------------------------------------------- 1. masthead */
+.acts { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-inline-start: auto; }
+
+/* One line under the two download buttons, carrying the consequence of
+   pressing them — and, once the month is closed, the record of who closed it. */
+.dlnote {
+  flex-basis: 100%;
+  margin: 0;
+  font-size: 11.5px;
+  color: var(--text-faint);
+  text-align: end;
+}
+
+.monthname { font-size: 13px; }
+.bar .readout .big { font-size: 16px; }    /* the pill stays a pill */
+
+/* --------------------------------------------------------- 2. the two panes */
+.focusgrid {
+  display: grid;
+  grid-template-columns: 300px minmax(0, 1fr);
+  align-items: start;
+  gap: 16px;
+  margin-block-start: 14px;
+}
+
+/* Viewport width is physical, not directional, and `inline-size` is a Level 5
+   media feature no engine ships yet — so breakpoints use `width`. Everything
+   INSIDE them stays logical. */
+@media (max-width: 900px) {
+  .focusgrid { grid-template-columns: minmax(0, 1fr); }
+  #raillist { max-block-size: 44vh; }
+}
+
+/* ------------------------------------------------------------- 3. the rail */
+.rail > .body { padding: 12px 10px; }
+.search { display: flex; }
+.search input { inline-size: 100%; font-family: var(--font-sans); font-size: 12.5px; }
+
+#raillist {
+  max-block-size: clamp(360px, 62vh, 720px);
+  overflow: auto;
+  margin-block-start: 10px;
+}
+
+/* Same treatment as the sheet's rank separator, so the rail and the printed
+   grid read as one product. */
+.rgroup {
+  position: sticky;
+  inset-block-start: 0;
+  z-index: 2;
+  margin-block-start: 8px;
+  padding: 6px 8px;
+  background: var(--surface-raised);
+  border-block: 1px solid var(--hairline);
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+}
+
+.rgroup:first-child { margin-block-start: 0; }
+
+.rrow {
+  display: grid;
+  gap: 5px;
+  inline-size: 100%;
+  padding: 7px 8px;
+  font: inherit;
+  text-align: start;
+  color: var(--text);
+  background: none;
+  border: 0;
+  border-inline-start: 3px solid transparent;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: background-color var(--motion-fast) linear;
+}
+
+.rrow:hover { background: var(--surface-tinted); }
+
+/* Selection carries three signals — a start rule, a tint, a heavier name — so
+   it survives greyscale, colour blindness and a projector. */
+.rrow[aria-current="true"] {
+  background: var(--primary-soft);
+  border-inline-start-color: var(--primary);
+}
+
+.rrow[aria-current="true"] .nm { font-weight: 700; }
+.rtop { display: flex; align-items: center; gap: 6px; }
+
+.nm {
+  flex: 1;
+  min-inline-size: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.gid { font-family: var(--font-mono); font-size: 10.5px; color: var(--text-muted); }
+.mix { display: flex; flex-wrap: wrap; gap: 3px; }
+
+/* The month's exceptions as text, beside the same facts as colour. */
+.mx {
+  padding: 1px 4px;
+  border: 1px solid color-mix(in oklab, var(--text) 12%, transparent);
+  border-radius: 3px;
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-size: 9.5px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.iss {
+  display: grid;
+  place-items: center;
+  inline-size: 16px;
+  block-size: 16px;
+  border-radius: var(--radius-pill);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.iss.stop { background: var(--accent-soft); color: var(--accent); }
+.iss.warn { background: var(--warning-soft); color: var(--warning); }
+
+.blk {
+  padding: 1px 4px;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+/* ------------------------------------------------------- 4. the mini-heat */
+/* 31 bars, one per day, fills inherited from [data-code]. This is the
+   shape-recognition device: a twelve-day leave has a silhouette you learn to
+   spot before you can read the name. A working day is a thin baseline and an
+   exception is a full-height bar, so the silhouette survives greyscale. Not
+   interactive and not in the a11y tree — the row button is the only control,
+   and the .mx chips carry the same information as text. */
+.heat {
+  display: grid;
+  grid-template-columns: repeat(31, minmax(3px, 1fr));
+  align-items: stretch;
+  gap: 1px;
+  inline-size: 100%;
+  block-size: 14px;
+}
+
+.hb { border-radius: 1px; }
+.heat .hb[data-code="P"] { align-self: center; block-size: 4px; background: var(--border-strong); }
+.heat .hb[data-code="-"] { background: none; box-shadow: inset 0 0 0 1px var(--border-strong); }
+.heat .hb[data-code=""] { background: none; }
+
+html[data-density="compact"] .heat { block-size: 11px; }
+html[data-density="roomy"] .heat { block-size: 18px; }
+
+/* ------------------------------------------------------ 5. the focus panel */
+.pmeta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-block-start: 3px;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.pmeta .sep { color: var(--text-faint); }
+
+.ptools {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px 14px;
+  padding: 11px 16px;
+  border-block-end: 1px solid var(--hairline);
+}
+
+.ptools .ribbon { grid-column: 1 / -1; }
+
+/* Where nothing can be painted the ribbon is still the legend, so the swatches
+   keep full contrast and only lose their affordances. */
+.ribbon[data-mode="legend"] .swatch { cursor: default; }
+.ribbon[data-mode="legend"] .swatch:hover { box-shadow: none; }
+
+.hint { margin: 0; font-size: 12px; line-height: 1.45; color: var(--text-muted); }
+.hint b { font-weight: 600; color: var(--text); }
+
+.hint kbd {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  padding: 2px 5px;
+  border-radius: 5px;
+  background: var(--surface-tinted);
+  color: var(--text-muted);
+  border: 1px solid var(--border);
+}
+
+.pbody {
+  display: grid;
+  grid-template-columns: minmax(0, auto) minmax(272px, 1fr);
+  align-items: start;
+  gap: 20px 26px;
+  padding: 16px;
+}
+
+@media (max-width: 1180px) {
+  .pbody { grid-template-columns: minmax(0, 1fr); }
+}
+
+/* ----------------------------------------------------------- 6. week rows */
+/* Weeks are the workbook's day numbers in sevens, not calendar weeks: the
+   columns stay aligned month to month, and each tile still prints its own
+   weekday letter, so the real weekend is never lost. */
+.weeks { display: grid; gap: 8px; }
+.wk { display: grid; grid-template-columns: 30px auto; align-items: end; gap: 8px; }
+
+.wlabel {
+  padding-block-end: 4px;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  font-weight: 600;
+  color: var(--text-faint);
+}
+
+.wtrack { display: grid; grid-template-columns: repeat(7, var(--tile)); gap: 5px; }
+
+/* .tile is emitted by TS.renderStrip: day number, weekday letter, code cell. */
+.tile { display: grid; justify-items: center; gap: 2px; }
+
+.tile .dnum {
+  font-size: 10.5px;
+  line-height: 1;
+  color: var(--text-muted);
+}
+
+.tile .dname {
+  font-size: 8.5px;
+  line-height: 1;
+  letter-spacing: 0.06em;
+  color: var(--text-faint);
+}
+
+.tile button.cell {
+  position: relative;                    /* anchors the kernel's edited dot */
+  inline-size: var(--tile);
+  block-size: var(--tile);
+  font-size: calc(var(--cell-font) + 1px);
+  border: 1px solid var(--border);       /* the strip has no table rules to lean on */
+}
+
+/* A closed month and the statistics view are both records, not drafts: the
+   tiles stay readable and keyboard-reachable, but nothing can be painted. */
+.tile button.cell[aria-disabled="true"] { pointer-events: none; cursor: default; }
+
+/* A day the month does not have carries no cell at all, so the week keeps its
+   shape with an empty slot — the strip is 31 tiles wide in every month, exactly
+   as the workbook is 31 columns wide. */
+.tile[data-out="1"]::after {
+  content: "";
+  inline-size: var(--tile);
+  block-size: var(--tile);
+  border: 1px dashed var(--border);
+  border-radius: 3px;
+}
+
+/* --------------------------------------------------- 7. readings and log */
+.side { display: grid; gap: 18px; }
+
+.sec > h3 {
+  margin: 0 0 8px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+}
+
+.stats { display: grid; gap: 5px; }
+
+.stat {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 5px 8px;
+  border-radius: var(--radius-sm);
+  background: var(--surface-raised);
+}
+
+.g {
+  display: grid;
+  place-items: center;
+  inline-size: 26px;
+  block-size: 20px;
+  border: 1px solid color-mix(in oklab, var(--text) 14%, transparent);
+  border-radius: 3px;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  font-weight: 600;
+}
+
+.stat .v {
+  margin-inline-start: auto;
+  min-inline-size: 28px;
+  text-align: end;
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.stat .n { font-size: 12px; color: var(--text-muted); }
+.lg { display: grid; gap: 6px; }
+
+.lgrow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px;
+  padding-inline-start: 9px;
+  border: 1px solid var(--border);
+  border-inline-start: 3px solid var(--primary);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+}
+
+.lgrow .what {
+  flex: 1;
+  min-inline-size: 0;
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-size: 11.5px;
+}
+
+.empty {
+  display: grid;
+  justify-items: start;
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--text-muted);
+}
+
+.empty .linkbtn { margin-block-start: 4px; }
+.empty .chip { margin-block-end: 5px; }
+
+/* ------------------------------------------------------------ 8. preflight */
+.pfcard { margin-block-start: 16px; }
+.pfrow { display: flex; align-items: center; gap: 8px; }
+.pfrow .item { flex: 1; min-inline-size: 0; }
+.pfhead { margin: 2px 0 0; font-size: 12px; color: var(--text-muted); }
+
+.pfgroup {
+  margin-block-start: 4px;
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+}
+
+.pfgroup:first-child { margin-block-start: 0; }
+
+/* The kernel neutralises Arabic tracking on its own labels; these classes are
+   this direction's, so they need the same rule — keyed on :lang(ar) too, so a
+   Latin string that carries its own `lang` keeps its tracking. */
+.rgroup:lang(ar),
+.sec > h3:lang(ar),
+.pfgroup:lang(ar),
+.tile .dname:lang(ar) {
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+/* The kernel's affordance chevron points at the reading edge; mirror it. */
+html[dir="rtl"] .pf .item .go::after { content: " ‹"; }
+</style>
+</head>
+<body>
+<div id="review"></div>
+<header id="chrome"></header>
+<main class="page" id="page">
+  <p class="eyebrow" data-t="eyebrow"></p>
+
+  <div class="masthead">
+    <div>
+      <h1 data-t="title"></h1>
+      <p data-t="lede"></p>
+    </div>
+
+    <div class="monthmark"><span class="num" id="stamp"></span><small id="stampar"></small></div>
+
+    <div class="acts">
+      <span class="chip" id="checks"></span>
+      <div class="seg" id="segvariant" role="group" data-aen="Workbook" data-aar="الملف">
+        <button type="button" data-value="attendance" data-t="attendance"></button>
+        <button type="button" data-value="statistics" data-t="statistics"></button>
+      </div>
+      <button type="button" class="btn btn-primary" id="dlprimary"></button>
+      <button type="button" class="btn btn-outline" id="dlsecond"></button>
+      <span class="seal" id="seal" hidden>
+        <span class="ring" aria-hidden="true">&#10003;</span><span data-t="closed"></span>
+      </span>
+      <button type="button" class="btn btn-danger" id="reopen" data-t="reopen" hidden></button>
+      <p class="dlnote" id="dlnote"></p>
+    </div>
+  </div>
+
+  <div class="bar">
+    <button type="button" class="icobtn" id="prev" data-tar="prevMonth">
+      <span id="prevg" aria-hidden="true"></span>
+    </button>
+    <span class="monthname iso" id="monthname"></span>
+    <button type="button" class="icobtn" id="next" data-tar="nextMonth">
+      <span id="nextg" aria-hidden="true"></span>
+    </button>
+    <span class="chip" id="statechip"></span>
+
+    <span class="rule" aria-hidden="true"></span>
+    <div class="seg" id="segsheet" role="group" data-aen="Workbook roster" data-aar="كشف الملف">
+      <button type="button" data-value="main" data-t="main"></button>
+      <button type="button" data-value="drivers" data-t="drivers"></button>
+    </div>
+
+    <span class="rule" aria-hidden="true"></span>
+    <label class="field">
+      <span data-t="posts"></span>
+      <input id="posts" type="number" min="0" inputmode="numeric">
+    </label>
+    <div class="readout">
+      <span class="big" id="implied"></span>
+      <span class="cap" data-t="impliedPosts"></span>
+    </div>
+    <span class="chip" id="impliedchip"></span>
+
+    <span class="rule" aria-hidden="true"></span>
+    <div class="field">
+      <span data-t="density"></span>
+      <div class="seg" id="segzoom" role="group" data-tar="density">
+        <button type="button" data-value="compact" data-en="Compact" data-ar="مضغوط"></button>
+        <button type="button" data-value="default" data-en="Default" data-ar="افتراضي"></button>
+        <button type="button" data-value="roomy" data-en="Roomy" data-ar="واسع"></button>
+      </div>
+    </div>
+  </div>
+
+  <div class="focusgrid">
+    <section class="card rail" aria-labelledby="railtitle">
+      <header>
+        <div>
+          <h2 id="railtitle" data-en="Roster" data-ar="الكشف"></h2>
+          <p id="railcount"></p>
+        </div>
+      </header>
+      <div class="body">
+        <label class="field search">
+          <span class="vh" data-t="search"></span>
+          <input id="q" type="search" autocomplete="off">
+        </label>
+        <div id="raillist"></div>
+      </div>
+    </section>
+
+    <section class="card panel" aria-labelledby="pname">
+      <header>
+        <div>
+          <h2 id="pname"></h2>
+          <div class="pmeta" id="pmeta"></div>
+        </div>
+        <span class="spread"></span>
+        <span class="chip" id="editcount"></span>
+      </header>
+
+      <div class="ptools">
+        <div class="ribbon" id="ribbon"></div>
+        <p class="hint" id="hint" aria-live="polite"></p>
+        <button type="button" class="btn btn-outline btn-sm" id="undo" data-t="undo"></button>
+      </div>
+
+      <div class="pbody">
+        <div class="weeks" id="weeks"></div>
+        <div class="side">
+          <section class="sec">
+            <h3 data-en="This month" data-ar="هذا الشهر"></h3>
+            <div class="stats" id="stats"></div>
+          </section>
+          <section class="sec">
+            <h3 data-en="Corrections" data-ar="التصحيحات"></h3>
+            <div class="lg" id="log"></div>
+          </section>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <section class="card pfcard" aria-labelledby="pftitle">
+    <header>
+      <div>
+        <h2 id="pftitle" data-t="issues"></h2>
+        <p class="pfhead" data-en="Blocking checks hold both downloads. Warnings do not."
+           data-ar="الفحوصات المانعة توقف التنزيلين. التحذيرات لا توقفهما."></p>
+      </div>
+    </header>
+    <div class="body"><div class="pf" id="pflist"></div></div>
+  </section>
+
+  <p class="footnote" id="foot"></p>
+</main>
+<script src="timesheet-mockups.js"></script>
+<script>
+(() => {
+  'use strict'
+
+  /* ------------------------------------------------------------ 0. helpers */
+  const $ = (sel) => document.querySelector(sel)
+  const all = (sel) => document.querySelectorAll(sel)
+  const L = (en, ar) => (TS.state.lang === 'ar' ? ar : en)
+  const rtl = () => document.documentElement.dir === 'rtl'
+  /* The statistics view is generated and a closed month is the printed record:
+     neither can be painted. */
+  const readonly = () => TS.state.closed || TS.state.variant === 'statistics'
+  const CODEKEYS = new Set(TS.CODES.map((c) => c.key))
+
+  function el(tag, cls, text) {
+    const node = document.createElement(tag)
+    if (cls) node.className = cls
+    if (text !== undefined) node.textContent = text
+    return node
+  }
+
+  function button(cls, text) {
+    const node = el('button', cls, text)
+    node.type = 'button'
+    return node
+  }
+
+  /* Write only on change. paint() runs on every keystroke and every painted
+     cell, and rewriting an aria-live line re-announces it. */
+  const setText = (node, text) => { if (node.textContent !== text) node.textContent = text }
+  const setHTML = (node, html) => { if (node.innerHTML !== html) node.innerHTML = html }
+  const chipNode = (tone, text) => el('span', `chip ${tone}`, text)
+
+  /* A digit dropped into an Arabic sentence has to be isolated, or the bidi
+     algorithm reorders it against the neighbouring punctuation. The kernel's
+     .num carries direction + isolation; this only marks up the leaf. */
+  const num = (value) => `<span class="num">${value}</span>`
+
+  function setChip(node, tone, html) {
+    node.hidden = !html
+    node.className = tone ? `chip ${tone}` : 'chip'
+    setHTML(node, html || '')
+  }
+
+  function sep() {
+    const node = el('span', 'sep', '·')
+    node.setAttribute('aria-hidden', 'true')
+    return node
+  }
+
+  const press = (host, value) =>
+    all(`${host} button[data-value]`).forEach((b) =>
+      b.setAttribute('aria-pressed', String(b.dataset.value === value)))
+
+  /* --------------------------------------------------- 1. what is in focus */
+  let sel = null      /* the employee in the focus panel — direction state */
+  let query = ''
+
+  const inSheet = (id) => TS.rows.some((r) => r.id === id)
+
+  function matches(row) {
+    if (!query) return true
+    return `${row.name} ${row.id} ${row.nat} ${row.desig.en} ${row.desig.ar}`
+      .toLowerCase()
+      .includes(query)
+  }
+
+  const visible = () => TS.rows.filter(matches)
+
+  /* row.codes is always 31 long and TS.codeOf returns null past the month end,
+     so every scan runs the full width and skips the days the month lacks. */
+  function scan(row, fn) {
+    for (let d = 1; d <= 31; d += 1) {
+      const code = TS.codeOf(row, d)
+      if (code !== null && fn(code, d) === false) return false
+    }
+    return true
+  }
+
+  /* The panel opens on the first row carrying something other than a plain
+     working day, because that is the row the operator came for. */
+  function defaultRow() {
+    const odd = TS.rows.find((row) => !scan(row, (code) => code === 'P'))
+    return (odd || TS.rows[0]).id
+  }
+
+  /* Selection is direction-local, so it paints synchronously: no kernel state
+     changed, nothing to coalesce, and the rail keeps the keyboard. */
+  function select(id, opts = {}) {
+    const keepFocus = opts.focusRail || !!document.activeElement?.closest?.('.rrow')
+    sel = id
+    paint()
+    const node = $(`.rrow[data-row="${id}"]`)
+    if (keepFocus) node?.focus()
+    node?.scrollIntoView({ block: 'nearest' })
+  }
+
+  function jumpTo(id) {
+    if (query) {
+      query = ''
+      $('#q').value = ''
+    }
+    select(id, { focusRail: true })
+  }
+
+  /* ------------------------------------------------------- 2. row summaries */
+  /* The exception codes as counts, in the legend's order. The rail prints them
+     beside the silhouette so the shape is never the only carrier of the fact. */
+  function tally(row) {
+    const counts = new Map()
+    scan(row, (code) => {
+      const slug = TS.slugOf(code)
+      if (slug !== 'P') counts.set(slug, (counts.get(slug) || 0) + 1)
+    })
+    return TS.CODES.filter((c) => counts.has(c.slug)).map((c) => ({ c, n: counts.get(c.slug) }))
+  }
+
+  /* ------------------------------------------------------------- 3. the rail */
+  function railRow(row, marks) {
+    const b = button('rrow')
+    b.dataset.row = row.id
+    const current = row.id === sel
+    if (current) b.setAttribute('aria-current', 'true')
+    b.tabIndex = current ? 0 : -1        /* roving focus: one tab stop, then arrows */
+
+    const top = el('div', 'rtop')
+    top.append(el('span', 'nm', row.name), el('span', 'gid num', row.id))
+    const mark = marks.get(row.id)
+    if (mark) {
+      const dot = el('span', `iss ${mark.tone}`, mark.tone === 'stop' ? '!' : '?')
+      dot.append(el('span', 'vh', ` ${mark.label}`))
+      top.append(dot)
+    }
+    b.append(top)
+
+    const mix = el('div', 'mix')
+    /* The client statistics file is read as two blocks, so the rail says which
+       block a row is billed in — the reason a contracted post reads P all month. */
+    if (TS.state.variant === 'statistics') {
+      const blk = el('span', 'blk iso', L(`B${row.block}`, `ك${row.block}`))
+      blk.append(el('span', 'vh', ` ${row.block === 1 ? TS.t('block1') : TS.t('block2')}`))
+      mix.append(blk)
+    }
+    tally(row).forEach(({ c, n }) => {
+      const chip = el('span', 'mx num', `${c.slug === '-' ? '–' : c.slug} ${n}`)
+      chip.dataset.code = c.slug
+      chip.append(el('span', 'vh', ` ${L(c.en, c.ar)}`))
+      mix.append(chip)
+    })
+    if (mix.childElementCount) b.append(mix)
+
+    /* 31 bars, one per day, in the reading direction. */
+    const heat = el('div', 'heat')
+    heat.setAttribute('aria-hidden', 'true')
+    for (let d = 1; d <= 31; d += 1) {
+      const bar = el('div', 'hb')
+      bar.dataset.code = TS.slugOf(TS.codeOf(row, d))
+      heat.append(bar)
+    }
+    b.append(heat)
+
+    b.addEventListener('click', () => select(row.id))
+    b.addEventListener('keydown', railKey)
+    return b
+  }
+
+  /* Arrow keys walk the roster, so an operator can read one month after another
+     without touching the mouse. */
+  function railKey(e) {
+    const list = visible()
+    const i = list.findIndex((r) => r.id === e.currentTarget.dataset.row)
+    const step = { ArrowDown: 1, ArrowUp: -1 }[e.key]
+    let next = step ? list[i + step] : null
+    if (e.key === 'Home') next = list[0]
+    if (e.key === 'End') next = list[list.length - 1]
+    if (!step && !next) return
+    e.preventDefault()
+    if (next) select(next.id, { focusRail: true })
+  }
+
+  function paintRail() {
+    const host = $('#raillist')
+    const keepScroll = host.scrollTop     /* paint() runs on every painted cell */
+    const marks = new Map()
+    TS.warnings().forEach((i) => marks.set(i.who, { tone: 'warn', label: TS.t('warning') }))
+    TS.blocking().forEach((i) => marks.set(i.who, { tone: 'stop', label: TS.t('blocking') }))
+    const list = visible()
+    host.textContent = ''
+
+    if (!list.length) {
+      const empty = el('p', 'empty', L(
+        `No row in this workbook matches “${query}”.`,
+        `لا يوجد صف في هذا الملف يطابق «${query}».`))
+      const clear = button('linkbtn', L('Clear the search', 'مسح البحث'))
+      clear.addEventListener('click', () => {
+        query = ''
+        $('#q').value = ''
+        paint()
+        $('#q').focus()
+      })
+      empty.append(clear)
+      host.append(empty)
+      return
+    }
+
+    let rank = null
+    list.forEach((row) => {
+      if (row.rank !== rank) {
+        rank = row.rank
+        host.append(el('div', 'rgroup', L(row.desig.en, row.desig.ar)))
+      }
+      host.append(railRow(row, marks))
+    })
+    host.scrollTop = keepScroll
+  }
+
+  /* ------------------------------------------------------ 4. the focus panel */
+  function paintHead(row) {
+    setText($('#pname'), row.name)
+    const meta = $('#pmeta')
+    meta.textContent = ''
+    meta.append(el('span', 'mono', row.id), sep())
+    meta.append(row.desigMissing
+      ? chipNode('stop', TS.t('notSet'))
+      : el('span', null, L(row.desig.en, row.desig.ar)))
+    meta.append(sep())
+    meta.append(row.natUnmapped
+      ? chipNode('stop', `${row.nat} · ${TS.t('unmapped')}`)
+      : el('span', null, row.nat))
+    const no = el('span', 'iso', `${TS.t('row')} `)
+    no.append(el('span', 'num', row.no))
+    meta.append(sep(), no)
+  }
+
+  /* The kernel builds the tiles — number, weekday letter and a wired code
+     button, including the blank tiles for days a 30-day month does not have.
+     This direction only groups them into weeks of seven. */
+  function paintWeeks(row) {
+    const host = $('#weeks')
+    const scratch = el('div')
+    TS.renderStrip(scratch, row)
+    if (readonly()) {
+      scratch.querySelectorAll('button.cell').forEach((c) => c.setAttribute('aria-disabled', 'true'))
+    }
+    const tiles = Array.from(scratch.children)
+    host.textContent = ''
+    for (let i = 0; i < tiles.length; i += 7) {
+      const n = i / 7 + 1
+      const week = el('div', 'wk')
+      week.setAttribute('role', 'group')
+      week.setAttribute('aria-label', L(`Week ${n}`, `الأسبوع ${n}`))
+      const label = el('span', 'wlabel iso', L(`W${n}`, `أ${n}`))
+      label.setAttribute('aria-hidden', 'true')
+      const track = el('div', 'wtrack')
+      track.append(...tiles.slice(i, i + 7))
+      week.append(label, track)
+      host.append(week)
+    }
+  }
+
+  /* The paper's per-row totals block, read down instead of across. */
+  const STATS = [['P', 'P'], ['AL', 'AL'], ['SL', 'SL␣'], ['AB', 'AB'], ['TR', 'TR']]
+
+  function paintStats(row) {
+    const totals = TS.rowTotals(row)
+    const host = $('#stats')
+    host.textContent = ''
+    STATS.forEach(([key, label]) => {
+      const code = TS.CODES.find((c) => c.slug === key)
+      const glyph = el('span', 'g', label)
+      glyph.dataset.code = key
+      glyph.setAttribute('aria-hidden', 'true')
+      const line = el('div', 'stat')
+      /* No .num here: a bare integer cannot reorder, and this element carries
+         margin-inline-start:auto, which would resolve against a forced LTR. */
+      line.append(glyph, el('span', 'n', L(code.en, code.ar)), el('span', 'v', totals[key]))
+      host.append(line)
+    })
+  }
+
+  /* --------------------------------------------------------- 5. change log */
+  /* Contiguous runs of corrected days that now carry the same code. A run is
+     undoable exactly while it sits at the top of the kernel's edit stack, which
+     is the definition of "the most recent correction" — so the rule needs no
+     special case for the first row. */
+  function tailDepth(run) {
+    const edits = TS.state.edits
+    let n = 0
+    while (n < edits.length) {
+      const e = edits[edits.length - 1 - n]
+      if (e.rowId !== run.row || e.day < run.from || e.day > run.to) break
+      n += 1
+    }
+    return n
+  }
+
+  function recencyOf(run) {
+    const edits = TS.state.edits
+    for (let i = edits.length - 1; i >= 0; i -= 1) {
+      const e = edits[i]
+      if (e.rowId === run.row && e.day >= run.from && e.day <= run.to) return i
+    }
+    return -1
+  }
+
+  function runs() {
+    const out = []
+    TS.rows.forEach((row) => {
+      Array.from(row.edited).sort((a, b) => a - b).forEach((day) => {
+        const code = TS.slugOf(TS.rawCode(row, day))
+        const last = out[out.length - 1]
+        if (last && last.row === row.id && last.code === code && last.to === day - 1) last.to = day
+        else out.push({ row: row.id, name: row.name, code, from: day, to: day })
+      })
+    })
+    return out.sort((a, b) => recencyOf(b) - recencyOf(a))
+  }
+
+  function paintLog() {
+    const host = $('#log')
+    const list = runs()
+    host.textContent = ''
+
+    if (!list.length) {
+      host.append(el('p', 'empty', TS.state.closed
+        ? TS.t('closedNote')
+        : L('No corrections yet. Arm a code, then paint the days the records got wrong.',
+            'لا توجد تصحيحات بعد. جهّز رمزًا، ثم لوّن الأيام التي أخطأت بها السجلات.')))
+      return
+    }
+
+    list.forEach((run) => {
+      const span = run.from === run.to ? `${run.from}` : `${run.from}–${run.to}`
+      /* The entry is a record, not a sentence: id, day range and code always
+         read in workbook order, so .num pins it left-to-right in both languages. */
+      const what = el('span', 'what num',
+        `${run.row} · ${TS.t('day')} ${span} → ${run.code === '-' ? '–' : run.code}`)
+      what.append(el('span', 'vh', ` ${run.name}`))
+      const depth = tailDepth(run)
+      const can = depth > 0 && !readonly()
+      const undo = button('icobtn', '↺')
+      undo.disabled = !can
+      undo.setAttribute('aria-disabled', String(!can))
+      undo.setAttribute('aria-label', can
+        ? L(`Undo ${run.row} day ${span}`, `التراجع عن ${run.row} يوم ${span}`)
+        : L('Only the most recent correction can be undone',
+            'يمكن التراجع عن آخر تصحيح فقط'))
+      if (can) undo.addEventListener('click', () => {
+        for (let i = 0; i < depth; i += 1) TS.undo()
+      })
+      const line = el('div', 'lgrow')
+      line.append(what, undo)
+      host.append(line)
+    })
+  }
+
+  /* ---------------------------------------------------------- 6. preflight */
+  function pfItem(item) {
+    const open = button(`item ${item.level}`)
+    open.append(
+      el('span', 'who num', item.who),
+      el('span', null, L(item.en, item.ar)),
+      el('span', 'go', L('Open in panel', 'عرض في اللوحة')))
+    open.addEventListener('click', () => jumpTo(item.who))
+    const done = button('linkbtn', TS.t('resolve'))
+    done.addEventListener('click', () => {
+      TS.resolve(item)
+      TS.toast(`${item.who} — ${TS.t('resolved')}`)
+    })
+    const row = el('div', 'pfrow')
+    row.append(open, done)
+    return row
+  }
+
+  function paintPreflight() {
+    const host = $('#pflist')
+    const stop = TS.blocking()
+    const warn = TS.warnings()
+    host.textContent = ''
+
+    if (!stop.length && !warn.length) {
+      const clear = el('p', 'empty')
+      clear.append(chipNode('ok', TS.t('allClear')))
+      const note = el('span')
+      note.innerHTML = L(
+        `${TS.t(TS.state.sheet)} · <span class="iso">${TS.monthLabel().en}</span> — nothing left to resolve, so both workbooks can be released.`,
+        `${TS.t(TS.state.sheet)} · <span class="iso">${TS.monthLabel().ar}</span> — لا شيء متبقٍ للمعالجة، والملفان جاهزان للإصدار.`)
+      clear.append(note)
+      host.append(clear)
+      return
+    }
+
+    const group = (label, n) => {
+      const node = el('div', 'pfgroup', `${label} · `)
+      node.append(el('span', 'num', n))
+      return node
+    }
+
+    if (stop.length) {
+      host.append(group(TS.t('blocking'), stop.length))
+      stop.forEach((item) => host.append(pfItem(item)))
+    }
+    if (warn.length) {
+      host.append(group(TS.t('warning'), warn.length))
+      warn.forEach((item) => host.append(pfItem(item)))
+    }
+  }
+
+  /* ------------------------------------------------------- 7. copy switches */
+  /* Every visible string switches with the language: kernel keys through TS.t,
+     direction-only copy through the data-en / data-ar pair. */
+  function strings() {
+    all('[data-t]').forEach((n) => setText(n, TS.t(n.dataset.t)))
+    all('[data-en]').forEach((n) => setText(n, L(n.dataset.en, n.dataset.ar)))
+    all('[data-tar]').forEach((n) => n.setAttribute('aria-label', TS.t(n.dataset.tar)))
+    all('[data-aen]').forEach((n) => n.setAttribute('aria-label', L(n.dataset.aen, n.dataset.aar)))
+    $('#q').placeholder = TS.t('search')
+  }
+
+  /* The ribbon is the legend and the brush palette in one object. Where nothing
+     can be painted it is only the legend, and its label says so. */
+  function paintRibbon() {
+    const host = $('#ribbon')
+    const ro = readonly()
+    TS.renderRibbon(host, { label: ro ? TS.t('legend') : TS.t('codes'), keys: !ro })
+    host.dataset.mode = ro ? 'legend' : 'brush'
+    if (!ro) return
+    host.querySelectorAll('.swatch').forEach((s) => {
+      s.disabled = true
+      s.setAttribute('aria-pressed', 'false')
+    })
+  }
+
+  /* One line that names the gesture in front of the operator. */
+  function paintHint() {
+    const brush = TS.CODES.find((c) => c.code === TS.state.brush)
+    let html
+    if (TS.state.closed) {
+      html = TS.t('closedNote')
+    } else if (TS.state.variant === 'statistics') {
+      html = L(
+        'Generated view. Block 1 is billed as manned, so every contracted post reads P — correct the attendance sheet instead.',
+        'عرض مُشتق. الكتلة 1 تُحتسب مشغولة، لذا تقرأ كل نقطة تعاقدية P — صحّح كشف الحضور بدلًا من ذلك.')
+    } else if (brush) {
+      html = L(
+        `<b>${brush.en}</b> is armed. Click a day to paint it, or <b>shift-click</b> to paint every day from the one you painted last through to it.`,
+        `<b>${brush.ar}</b> جاهز. انقر يومًا لتلوينه، أو انقر مع <b>Shift</b> لتلوين كل الأيام من آخر يوم لوّنته حتى ذلك اليوم.`)
+    } else {
+      html = L('Click a day to choose its code, or arm one below and paint. On the focused day: ',
+               'انقر يومًا لاختيار رمزه، أو جهّز رمزًا أدناه ولوّن. على اليوم المحدد: ') +
+        TS.CODES.map((c) => `<kbd>${c.key}</kbd>`).join(' ')
+    }
+    setHTML($('#hint'), html)
+  }
+
+  function paintFoot() {
+    const m = TS.monthLabel()
+    /* .filename, not .iso: the kernel gives a quoted workbook name an LTR base
+       so the .xlsx trails the Arabic name instead of jumping to the far end. */
+    setHTML($('#foot'), L(
+      `Sample data. The two deliverables keep the circulating file names <code class="filename">${m.file}</code> and <code class="filename">${m.fileStats}</code>. The grid is ${num(31)} columns in every month: a ${num(30)}-day month simply leaves the last one blank, and sick leave is emitted as <code>SL&nbsp;</code> with the trailing space the workbook expects.`,
+      `بيانات تجريبية. يحتفظ الملفان بالاسمين المتداولين <code class="filename">${m.file}</code> و<code class="filename">${m.fileStats}</code>. الشبكة ${num(31)} عمودًا في كل شهر: الشهر ذو ${num(30)} يومًا يترك العمود الأخير فارغًا، وتُكتب الإجازة المرضية <code>SL&nbsp;</code> بمسافة لاحقة كما يتوقعها الملف.`))
+  }
+
+  /* ---------------------------------------------------------- 8. one paint */
+  function paint() {
+    /* Selection has to survive a month change, a workbook change and a search. */
+    if (!sel || !inSheet(sel)) sel = defaultRow()
+    const row = TS.rows.find((r) => r.id === sel)
+    const month = TS.monthLabel()
+    const stop = TS.blocking().length
+    const warn = TS.warnings().length
+    const attendance = TS.state.variant === 'attendance'
+
+    TS.renderChrome($('#chrome'))
+    strings()
+
+    setText($('#stamp'), month.stamp)
+    setText($('#stampar'), month.ar)
+    setText($('#monthname'), L(month.en, month.ar))
+    setText($('#prevg'), rtl() ? '▶' : '◀')
+    setText($('#nextg'), rtl() ? '◀' : '▶')
+    setChip($('#statechip'), TS.state.closed ? 'ok' : 'info',
+      `${num(month.days)} ${L('days', 'يومًا')} · ${TS.state.closed ? TS.t('closed') : TS.t('open')}`)
+    setChip($('#checks'), stop ? 'stop' : warn ? 'warn' : 'ok',
+      stop ? L(`${num(stop)} to fix before download`, `${num(stop)} يجب إصلاحه قبل التنزيل`)
+        : warn ? `${num(warn)} · ${TS.t('warning')}`
+          : L('All checks passed', 'اجتازت جميع الفحوصات'))
+
+    const primary = $('#dlprimary')
+    const second = $('#dlsecond')
+    setText(primary, attendance ? TS.t('downloadAttendance') : TS.t('downloadStatistics'))
+    setText(second, attendance ? TS.t('downloadStatistics') : TS.t('downloadAttendance'))
+    primary.disabled = stop > 0
+    second.disabled = stop > 0
+    setHTML($('#dlnote'), stop
+      ? L(`Both downloads are held until the ${num(stop)} blocking checks below are resolved.`,
+          `التنزيلان موقوفان حتى تُعالج الفحوصات المانعة (${num(stop)}) أدناه.`)
+      : TS.state.closed ? TS.t('closedNote') : TS.t('firstDownload'))
+    $('#seal').hidden = !TS.state.closed
+    $('#reopen').hidden = !TS.state.closed
+
+    const posts = $('#posts')
+    posts.max = String(TS.rows.length)
+    if (document.activeElement !== posts) posts.value = String(TS.state.postCount)
+    const implied = TS.impliedPosts()
+    setText($('#implied'), implied.toFixed(1))
+    const drift = implied > TS.state.postCount + 0.005
+    setChip($('#impliedchip'), drift ? 'warn' : 'ok',
+      drift ? TS.t('impliedDrift') : TS.t('impliedOk'))
+
+    press('#segvariant', TS.state.variant)
+    press('#segsheet', TS.state.sheet)
+    press('#segzoom', TS.state.density)
+
+    const shown = visible().length
+    setHTML($('#railcount'), query
+      ? L(`${num(shown)} of ${num(TS.rows.length)} rows match`,
+          `${num(shown)} من ${num(TS.rows.length)} صفًا مطابق`)
+      : L(`${num(TS.rows.length)} rows · ${TS.t('paperOrder').toLowerCase()}`,
+          `${num(TS.rows.length)} صفًا · ${TS.t('paperOrder')}`))
+
+    paintHead(row)
+    setChip($('#editcount'), 'info',
+      TS.editCount() ? `${num(TS.editCount())} ${TS.t('edited')}` : '')
+    paintRibbon()
+    paintHint()
+    $('#undo').disabled = readonly() || !TS.state.edits.length
+    paintWeeks(row)
+    paintStats(row)
+    paintLog()
+    paintRail()
+    paintPreflight()
+    paintFoot()
+  }
+
+  /* ------------------------------------------------------------- 9. wiring */
+  /* A brush cannot survive into a view that has nothing to paint. */
+  const disarm = () => { if (TS.state.brush) TS.armBrush(TS.state.brush) }
+  const segValue = (e) => e.target.closest('button[data-value]')?.dataset.value
+
+  $('#prev').addEventListener('click', () => { disarm(); TS.setMonth(-1) })
+  $('#next').addEventListener('click', () => { disarm(); TS.setMonth(1) })
+  $('#reopen').addEventListener('click', () => TS.reopenMonth())
+  $('#undo').addEventListener('click', () => TS.undo())
+  $('#dlprimary').addEventListener('click', () => { disarm(); TS.download(TS.state.variant) })
+  $('#dlsecond').addEventListener('click', () => {
+    disarm()
+    TS.download(TS.state.variant === 'attendance' ? 'statistics' : 'attendance')
+  })
+
+  $('#segvariant').addEventListener('click', (e) => {
+    const value = segValue(e)
+    if (!value) return
+    disarm()
+    TS.setVariant(value)
+  })
+
+  $('#segsheet').addEventListener('click', (e) => {
+    const value = segValue(e)
+    if (!value) return
+    query = ''
+    $('#q').value = ''
+    TS.setSheet(value)          /* re-derives TS.rows; paint picks the new row */
+  })
+
+  $('#segzoom').addEventListener('click', (e) => {
+    const value = segValue(e)
+    if (value) TS.setDensity(value)
+  })
+
+  $('#posts').addEventListener('input', (e) => TS.setPostCount(e.target.value))
+  $('#q').addEventListener('input', (e) => {
+    query = e.target.value.trim().toLowerCase()
+    paint()
+  })
+
+  /* Where nothing can be painted, stop the kernel's code keys and the cell's
+     own activation before either reaches the button — the capture phase runs
+     first, so the picker never opens and no code is written. CSS alone would
+     not do it: pointer-events skips the mouse, but Enter and Space on a focused
+     cell still fire a click. Arrow keys are left alone, so the frozen record
+     stays readable from the keyboard. */
+  const frozen = (e) => readonly() && e.target.matches('button.cell')
+
+  $('#weeks').addEventListener('click', (e) => {
+    if (!frozen(e)) return
+    e.preventDefault()
+    e.stopPropagation()
+  }, true)
+
+  $('#weeks').addEventListener('keydown', (e) => {
+    if (!frozen(e) || !CODEKEYS.has(e.key.toLowerCase())) return
+    e.preventDefault()
+    e.stopPropagation()
+  }, true)
+
+  TS.renderReview($('#review'), 'b',
+    "Roster rail + one employee's month as paintable day tiles")
+  TS.on('render', paint)
+  TS.on('change', paint)
+  paint()
+})()
+</script>
+</body>
+</html>

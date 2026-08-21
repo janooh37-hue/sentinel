@@ -1,0 +1,5 @@
+interface:
+  display_name: "New GSSG Migration"
+  short_description: "Create and validate one SQLite-safe Alembic revision"
+policy:
+  allow_implicit_invocation: false

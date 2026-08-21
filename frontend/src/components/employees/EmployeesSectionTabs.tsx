@@ -1,12 +1,12 @@
 /**
  * EmployeesSectionTabs — the Employees section switcher.
  *
- * Rendered at the foot of the navy band by both the Directory
- * (`EmployeeLookupPage`) and Attendance (`AttendancePage`) pages, which is where
- * Sentinel already puts section switching. Deliberately not a top-nav
- * destination: the top nav is a single row at every width and its budget is
- * spent (see the tiers in index.css), and the mobile dock builds its catalogue
- * from NAV_ITEMS.
+ * Rendered at the foot of the navy band by the Directory (`EmployeeLookupPage`),
+ * Attendance (`AttendancePage`) and ORG-tree (`EmployeesOrgTreePage`) pages,
+ * which is where Sentinel already puts section switching. Deliberately not a
+ * top-nav destination: the top nav is a single row at every width and its budget
+ * is spent (see the tiers in index.css), and the mobile dock builds its
+ * catalogue from NAV_ITEMS.
  *
  * Active state comes from `NavLink`, not from a prop: the route *is* the active
  * tab, and `NavLink` already owns both the styling hook and `aria-current`.
@@ -69,6 +69,15 @@ export function EmployeesSectionTabs({ attentionCount = null }: Props): React.JS
               )}
             </>
           )}
+        </NavLink>
+      )}
+
+      {has('employees.view') && (
+        <NavLink to="/employees/org-tree" className={tabClass}>
+          {t('employees.sectionTabs.orgTree')}
+          <span dir="rtl" className="isolate-bidi text-[0.86em] font-normal opacity-70">
+            {t('employees.sectionTabs.orgTreeAr')}
+          </span>
         </NavLink>
       )}
 

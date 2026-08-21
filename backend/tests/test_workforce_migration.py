@@ -201,7 +201,7 @@ def _assert_baseline_duty_events(connection: Connection) -> None:
     )
 
 
-def test_workforce_migration_is_the_single_next_head_from_the_merge_head(tmp_path: Path) -> None:
+def test_workforce_migration_sits_on_the_merge_head_in_a_linear_graph(tmp_path: Path) -> None:
     config = _alembic_config(tmp_path / "workforce-head.db")
 
     revision, predecessor = _resolve_workforce_revisions(config)

@@ -1,0 +1,641 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Attendance · الحضور — where the subpage lives (5 placement options)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=IBM+Plex+Mono:wght@400;500;600;700&family=Noto+Sans+Arabic:wght@400;600;700&display=swap" rel="stylesheet">
+<style>
+  /* Tokens from frontend/src/index.css :root — judged in the real palette. */
+  :root{
+    --font-sans:"Inter",ui-sans-serif,system-ui,sans-serif;
+    --font-mono:"IBM Plex Mono",ui-monospace,Consolas,monospace;
+    --font-ar:"Noto Sans Arabic","Inter",sans-serif;
+    --bg:#f5f4f1; --surface:#fff; --surface-raised:#fafaf6; --surface-tinted:#f0eee8;
+    --primary:#0d2845; --primary-hover:#1d3a5e; --primary-soft:#e8edf3;
+    --accent:#c8102e; --accent-hover:#a30d24; --accent-soft:#fbe5e8;
+    --success:#047857; --success-soft:#d6f0e4;
+    --warning:#92400e; --warning-soft:#fbedd8;
+    --info:#1d4ed8; --info-soft:#e0e8f8;
+    --smart:#6b4fb0; --smart-soft:#f1eef8;
+    --text:#1c1f24; --text-muted:#5a6068; --text-faint:#8b9098;
+    --border:#e6e4dd; --border-strong:#d4d1c8; --hairline:#efece5;
+    --hero-grad:linear-gradient(135deg,#0a1f3a 0%,#0d2845 50%,#1d3a5e 100%);
+    --rail:#16243a; --rail-2:#1d3150; --rail-text:#c5d2e4; --rail-faint:#7e93b3; --rail-line:#2c405f;
+    --rail-warning:#fbbf24;
+    --sh-morning:#1d4ed8; --sh-noon:#b45309; --sh-night:#4c1d95; --sh-office:#0f766e;
+    --st-ok:#047857; --st-ok-soft:#d6f0e4; --st-late:#b45309; --st-late-soft:#fbedd8;
+    --st-miss:#c8102e; --st-miss-soft:#fbe5e8; --st-leave:#1d4ed8; --st-leave-soft:#e0e8f8;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:var(--bg);color:var(--text);font-family:var(--font-sans);-webkit-font-smoothing:antialiased}
+  .mono{font-family:var(--font-mono);font-variant-numeric:tabular-nums}
+  /* `unicode-bidi:isolate` matters: without it a clock range that follows an
+     Arabic run ("السرية الثانية · 05:00 – 13:00") is reordered by the bidi
+     algorithm and renders as "13:00 – 05:00". */
+  .ar{font-family:var(--font-ar);direction:rtl;unicode-bidi:isolate}
+  button{font:inherit;color:inherit;border:0;background:none;cursor:pointer;text-align:inherit}
+  a{color:inherit;text-decoration:none}
+
+  /* caption */
+  .vcap{background:var(--rail);color:#fff;padding:16px 32px;display:flex;gap:22px;align-items:flex-start;flex-wrap:wrap}
+  .vcap .num{flex:none;display:grid;place-items:center;width:34px;height:34px;border-radius:10px;background:var(--accent);
+    font-weight:800;font-size:14px}
+  .vcap h2{font-size:16px;font-weight:800;letter-spacing:-0.01em}
+  .vcap p{margin-top:3px;font-size:12.5px;color:var(--rail-text);max-width:104ch;line-height:1.55}
+  .vcap .cost{margin-top:6px;font-size:12px;color:var(--rail-warning)}
+  .vcap .tags{margin-inline-start:auto;display:flex;gap:6px;flex-wrap:wrap;max-width:320px}
+  .vcap .tags span{border:1px solid var(--rail-line);border-radius:99px;padding:3px 9px;font-size:10.5px;color:var(--rail-text);white-space:nowrap}
+  .frame{border-bottom:6px solid var(--rail)}
+  .flabel{background:var(--rail-2);color:var(--rail-text);font-size:11px;font-weight:700;letter-spacing:.14em;
+    text-transform:uppercase;padding:7px 32px;display:flex;gap:10px;align-items:center}
+  .flabel .path{font-family:var(--font-mono);letter-spacing:0;text-transform:none;color:#fff}
+  .flabel .n{margin-inline-start:auto;font-weight:400;letter-spacing:.04em;text-transform:none;color:var(--rail-faint)}
+
+  /* chrome replica */
+  .topnav{display:flex;align-items:center;gap:28px;border-bottom:1px solid var(--border);background:var(--surface);padding:14px 32px;position:relative}
+  .topnav .logo{width:40px;height:40px;border-radius:50%;object-fit:cover;box-shadow:0 0 0 1px var(--border)}
+  .topnav .bcopy{font-size:18px;font-weight:700;line-height:1.15;color:var(--primary)}
+  .topnav .bcopy small{display:block;margin-top:2px;font-size:11.5px;font-weight:400;letter-spacing:.08em;color:var(--text-muted)}
+  .topnav nav{display:flex;gap:4px;margin-inline-start:20px;font-size:15px}
+  .topnav nav a{position:relative;padding:8px 14px;border-radius:8px;font-weight:500}
+  .topnav nav a.on{font-weight:600;color:var(--primary)}
+  .topnav nav a.on::after{content:"";position:absolute;left:0;right:0;bottom:-14px;height:3px;border-radius:3px;background:var(--primary)}
+  .topnav .utils{margin-inline-start:auto;display:flex;align-items:center;gap:14px;color:var(--text-muted);font-size:13px}
+  .topnav .aa{display:inline-flex;align-items:center;gap:8px;border-radius:99px;background:var(--surface-tinted);padding:6px 12px}
+  .topnav .aa i{width:88px;height:4px;border-radius:99px;background:var(--border-strong);display:block}
+  .topnav .avatar{width:32px;height:32px;border-radius:50%;background:var(--primary);color:#fff;display:grid;place-items:center;font-size:12px;font-weight:700}
+
+  /* nav flyout (option 4) */
+  .flyout{position:absolute;top:calc(100% - 6px);left:198px;z-index:40;min-width:288px;background:var(--surface);
+    border:1px solid var(--border);border-radius:14px;box-shadow:0 26px 60px -26px rgba(13,40,69,.5);overflow:hidden}
+  .flyout .fh{padding:9px 14px;font-size:10.5px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;
+    color:var(--text-faint);background:var(--surface-raised);border-bottom:1px solid var(--hairline)}
+  .flyout .fi{display:flex;align-items:center;gap:11px;padding:10px 14px;border-bottom:1px solid var(--hairline)}
+  .flyout .fi:last-child{border-bottom:0}
+  .flyout .fi.on{background:var(--primary-soft)}
+  .flyout .fi .ic{width:28px;height:28px;border-radius:9px;display:grid;place-items:center;background:var(--surface-tinted);
+    color:var(--primary);font-size:13px}
+  .flyout .fi .tx{min-width:0}
+  .flyout .fi .tx b{display:block;font-size:13px;white-space:nowrap}
+  .flyout .fi .tx span{display:block;font-size:11px;color:var(--text-faint)}
+  .flyout .fi .bd{margin-inline-start:auto;font-family:var(--font-mono);font-size:11px;font-weight:700;
+    background:var(--accent-soft);color:var(--accent);border-radius:99px;padding:2px 8px}
+
+  /* hero replica (EmployeeSearchHero + LookupHeroCards) */
+  .hero{position:relative;overflow:visible;color:#fff;background:var(--hero-grad)}
+  .hero .decor{position:absolute;inset:0;overflow:hidden}
+  .hero .decor i{position:absolute;border-radius:50%}
+  .hero .decor .c1{top:-110px;right:-90px;width:320px;height:320px;background:rgba(255,255,255,.045)}
+  .hero .decor .c2{bottom:-140px;left:8%;width:260px;height:260px;background:rgba(255,255,255,.035)}
+  .hcol{position:relative;z-index:30;margin:0 auto;max-width:720px;padding:46px 32px 8px;text-align:center}
+  .heyebrow{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.22em;opacity:.65}
+  .hcol h1{margin:8px 0 4px;font-size:27px;font-weight:700;letter-spacing:-0.01em}
+  .hsub{font-size:13.5px;opacity:.75}
+  .hpill{margin-top:22px;display:flex;height:56px;align-items:center;gap:12px;border-radius:99px;background:#fff;
+    padding:0 20px;box-shadow:0 18px 44px -18px rgba(0,0,0,.5);text-align:start}
+  .hpill svg{flex:none;color:var(--text-faint)}
+  .hpill .ph{flex:1;font-size:16px;color:var(--text-faint)}
+  .hpill .go{flex:none;border-radius:99px;background:var(--accent);padding:9px 20px;font-size:13px;font-weight:700;color:#fff}
+  .hghost{margin-top:16px;display:inline-flex;align-items:center;gap:8px;border-radius:99px;border:1px solid rgba(255,255,255,.3);
+    padding:9px 17px;font-size:13px;color:#fff}
+  .hghost .plus{display:grid;place-items:center;width:18px;height:18px;border-radius:50%;background:rgba(255,255,255,.18);font-weight:700}
+  .hcards{position:relative;z-index:2;margin:26px auto 0;max-width:1180px;padding:0 32px 40px;display:grid;gap:14px;
+    grid-template-columns:repeat(3,minmax(0,1fr));text-align:start}
+  .hcards.four{grid-template-columns:repeat(4,minmax(0,1fr));max-width:1400px}
+  .hcard{border-radius:16px;border:1px solid rgba(255,255,255,.14);background:rgba(255,255,255,.07);padding:16px;backdrop-filter:blur(4px)}
+  .hcard.spot{border-color:rgba(251,191,36,.55);background:rgba(251,191,36,.10);box-shadow:0 0 0 1px rgba(251,191,36,.25)}
+  .hh{margin-bottom:11px;display:flex;align-items:center;gap:9px}
+  .hh .ic{display:grid;place-items:center;width:28px;height:28px;border-radius:9px;background:rgba(255,255,255,.12);font-size:13px}
+  .hh .ic.warn{background:rgba(251,191,36,.18);color:#fbbf24}
+  .hh .ic.bad{background:rgba(200,16,46,.24);color:#ff9fac}
+  .hh h4{font-size:12px;font-weight:700;letter-spacing:.08em;opacity:.85}
+  .hh .bd{margin-inline-start:auto;border-radius:99px;padding:1px 8px;font-family:var(--font-mono);font-size:11px;font-weight:700;
+    background:rgba(255,255,255,.12);opacity:.9}
+  .hh .bd.warn{background:rgba(251,191,36,.18);color:#fbbf24;opacity:1}
+  .hh .bd.bad{background:rgba(200,16,46,.3);color:#ffc2ca;opacity:1}
+  .hchip{display:flex;width:100%;align-items:center;gap:9px;border-radius:12px;border:1px solid rgba(255,255,255,.1);
+    background:rgba(255,255,255,.06);padding:6px 10px;margin-bottom:6px}
+  .hchip:last-child{margin-bottom:0}
+  .hchip .av{display:grid;place-items:center;width:26px;height:26px;border-radius:50%;background:rgba(255,255,255,.15);
+    font-size:10.5px;font-weight:700}
+  .hchip .lb{min-width:0;flex:1;font-size:12px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .hchip .mt{flex:none;font-family:var(--font-mono);font-size:10.5px;opacity:.6;font-weight:700}
+  .hchip .mt.warn{font-family:var(--font-sans);color:#fbbf24;opacity:1}
+  .hchip .mt.bad{font-family:var(--font-sans);color:#ff9fac;opacity:1}
+  .hcta{margin-top:9px;display:flex;align-items:center;gap:8px;font-size:12px;font-weight:700;color:#fff}
+  .hcta .b{border-radius:99px;background:rgba(255,255,255,.16);padding:6px 13px;white-space:nowrap}
+  .hcta .b.solid{background:var(--accent)}
+  .hmini{display:flex;gap:6px;margin-top:2px}
+  .hmini div{flex:1;border-radius:9px;background:rgba(255,255,255,.07);padding:6px 8px}
+  .hmini div .v{font-family:var(--font-mono);font-size:15px;font-weight:800;line-height:1.15}
+  .hmini div .l{font-size:9.5px;letter-spacing:.06em;text-transform:uppercase;opacity:.6;margin-top:2px}
+  .hmini .warnv{color:#fbbf24} .hmini .badv{color:#ff9fac} .hmini .okv{color:#6ee7b7}
+
+  /* section tab strip — the placement itself */
+  .stabs{position:relative;z-index:3;background:var(--hero-grad);padding:0 32px}
+  .stabs .in{max-width:1400px;margin:0 auto;display:flex;gap:4px;align-items:flex-end}
+  .stabs a{display:flex;align-items:center;gap:8px;padding:10px 16px;border-radius:12px 12px 0 0;font-size:13.5px;
+    font-weight:600;color:rgba(255,255,255,.72)}
+  .stabs a.on{background:var(--bg);color:var(--primary)}
+  .stabs a .bd{border-radius:99px;padding:1px 7px;font-family:var(--font-mono);font-size:10.5px;font-weight:700;
+    background:rgba(255,255,255,.14)}
+  .stabs a.on .bd{background:var(--accent);color:#fff}
+  .stabs a .ar{font-size:11px;opacity:.75;font-weight:400}
+  .stabs .sp{margin-inline-start:auto;display:flex;gap:8px;align-items:center;padding-bottom:8px}
+  .stabs .sp .p{border:1px solid rgba(255,255,255,.28);border-radius:99px;padding:5px 12px;font-size:12px;color:#fff}
+
+  /* attendance page band (compact — no search hero) */
+  .aband{background:var(--hero-grad);color:#fff;padding:18px 32px 0;position:relative;overflow:hidden}
+  .aband .decor{position:absolute;top:-130px;right:-60px;width:300px;height:300px;border-radius:50%;background:rgba(255,255,255,.05)}
+  .aband .in{position:relative;max-width:1400px;margin:0 auto}
+  .aband .crumb{font-size:11px;font-weight:600;letter-spacing:.2em;text-transform:uppercase;opacity:.62}
+  .aband h1{margin-top:6px;font-size:23px;font-weight:700;letter-spacing:-0.01em;display:flex;align-items:baseline;gap:10px}
+  .aband h1 .ar{font-size:17px;font-weight:400;opacity:.72}
+  .aband .sub{margin-top:3px;font-size:12.5px;opacity:.76}
+  .aband .right{position:absolute;top:2px;right:0;display:flex;gap:8px;align-items:center}
+  .aband .gpill{border:1px solid rgba(255,255,255,.28);border-radius:99px;padding:6px 13px;font-size:12px}
+  .aband .gpill.solid{background:var(--accent);border-color:transparent;font-weight:700}
+
+  .page{max-width:1400px;margin:0 auto;padding:16px 32px 36px}
+  .card{background:var(--surface);border:1px solid var(--hairline);border-radius:16px}
+  .card>header{display:flex;align-items:center;gap:10px;padding:12px 15px;border-bottom:1px solid var(--hairline)}
+  .card>header h3{font-size:13px;font-weight:700}
+  .card>header .hint{margin-inline-start:auto;font-size:11.5px;color:var(--text-faint)}
+  .lbl{font-size:10.5px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--text-faint)}
+  .chip{display:inline-flex;align-items:center;gap:5px;border-radius:99px;padding:3px 9px;font-size:11px;font-weight:600}
+  .chip.ok{background:var(--st-ok-soft);color:var(--st-ok)} .chip.late{background:var(--st-late-soft);color:var(--st-late)}
+  .chip.miss{background:var(--st-miss-soft);color:var(--st-miss)} .chip.leave{background:var(--st-leave-soft);color:var(--st-leave)}
+  .chip.mut{background:var(--surface-tinted);color:var(--text-muted)}
+  .chip.morning{background:#e0e8f8;color:var(--sh-morning)} .chip.noon{background:#fbedd8;color:var(--sh-noon)}
+  .chip.night{background:#ece7fa;color:var(--sh-night)} .chip.office{background:#d8f0ec;color:var(--sh-office)}
+  .btn{border:1px solid var(--border);border-radius:10px;padding:6px 12px;font-size:12px;font-weight:600;background:var(--surface);color:var(--primary)}
+  .btn.p{background:var(--primary);color:#fff;border-color:transparent}
+  .btn.s{padding:4px 9px;font-size:11px}
+  .dot{width:9px;height:9px;border-radius:50%;flex:none;display:inline-block}
+  .dot.ok{background:var(--st-ok)} .dot.late{background:var(--st-late)} .dot.miss{background:var(--st-miss)}
+  .dot.leave{background:var(--st-leave)}
+
+  /* services gallery replica (option 3) */
+  .svc{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
+  .svcell{background:var(--surface);border:1px solid var(--hairline);border-radius:16px;padding:15px;display:flex;gap:12px;align-items:flex-start}
+  .svcell .em{flex:none;display:grid;place-items:center;width:40px;height:40px;border-radius:12px;background:var(--surface-tinted);font-size:19px}
+  .svcell .nm{font-size:13px;font-weight:700;line-height:1.3}
+  .svcell .ct{margin-top:3px;font-size:11px;color:var(--text-faint)}
+  .svcell.new{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft)}
+  .svcell .bd{margin-inline-start:auto;border-radius:99px;background:var(--accent-soft);color:var(--accent);
+    font-family:var(--font-mono);font-size:11px;font-weight:700;padding:2px 8px}
+
+  /* improved toolbar (option 5) */
+  .tbar{position:sticky;top:0;z-index:20;background:var(--surface);border:1px solid var(--hairline);border-radius:16px;
+    padding:10px 12px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;box-shadow:0 10px 26px -22px rgba(13,40,69,.4)}
+  .step{display:flex;align-items:center;gap:2px;border:1px solid var(--border);border-radius:11px;overflow:hidden}
+  .step button{padding:6px 10px;font-size:13px;color:var(--text-muted)}
+  .step .d{padding:6px 12px;font-size:12.5px;font-weight:700;border-inline:1px solid var(--border);font-family:var(--font-mono)}
+  .seg{display:flex;border:1px solid var(--border);border-radius:11px;overflow:hidden}
+  .seg button{display:flex;align-items:center;gap:6px;padding:6px 12px;font-size:12px;color:var(--text-muted);
+    border-inline-end:1px solid var(--border)}
+  .seg button:last-child{border-inline-end:0}
+  .seg button.on{background:var(--primary);color:#fff}
+  .seg button .n{font-family:var(--font-mono);font-size:10.5px;font-weight:700;opacity:.75}
+  .seg button.on .n{opacity:.9}
+  .seg button.warn .n{color:var(--st-late)}
+  .seg button.pend{color:var(--text-faint)}
+  .tsearch{display:flex;align-items:center;gap:8px;border:1px solid var(--border);border-radius:11px;padding:6px 11px;min-width:240px}
+  .tsearch .ph{flex:1;font-size:12.5px;color:var(--text-faint)}
+  .tsearch .kbd{font-family:var(--font-mono);font-size:10.5px;color:var(--text-faint);border:1px solid var(--border);
+    border-radius:5px;padding:0 5px}
+  .views{display:flex;gap:2px;background:var(--surface-tinted);border-radius:11px;padding:3px}
+  .views button{padding:5px 11px;font-size:12px;border-radius:8px;color:var(--text-muted)}
+  .views button.on{background:var(--surface);color:var(--primary);font-weight:700;box-shadow:0 1px 3px rgba(0,0,0,.08)}
+  .strip{margin-top:8px;display:flex;gap:6px}
+  .strip .d{flex:1;border:1px solid var(--hairline);border-radius:11px;background:var(--surface);padding:7px 9px}
+  .strip .d.on{border-color:var(--primary);box-shadow:0 0 0 2px var(--primary-soft)}
+  .strip .d .wd{font-size:10.5px;color:var(--text-faint);letter-spacing:.08em;text-transform:uppercase}
+  .strip .d .dt{font-family:var(--font-mono);font-size:13px;font-weight:700;margin-top:2px}
+  .strip .d .mk{margin-top:5px;height:4px;border-radius:99px;display:flex;overflow:hidden;background:var(--surface-tinted)}
+  .strip .d .mk i{height:100%}
+  .strip .d.future{opacity:.5}
+  .kbdrow{margin-top:8px;display:flex;gap:14px;flex-wrap:wrap;font-size:11px;color:var(--text-faint);padding:0 4px}
+  .kbdrow b{font-family:var(--font-mono);color:var(--text-muted);border:1px solid var(--border);border-radius:5px;padding:0 5px}
+
+  /* register (condensed variant 10) */
+  .reg{margin-top:12px;background:var(--surface);border:1px solid var(--hairline);border-radius:16px;overflow:hidden}
+  .reg .mast{display:flex;align-items:flex-end;gap:14px;padding:13px 17px;border-bottom:2px solid var(--primary)}
+  .reg .mast h3{font-size:14.5px;font-weight:800}
+  .reg .mast .m2{font-size:11.5px;color:var(--text-muted);margin-top:2px}
+  .reg .mast .meta{margin-inline-start:auto;display:flex;gap:15px;font-size:11px;color:var(--text-muted);text-align:end}
+  .reg .mast .meta b{display:block;font-family:var(--font-mono);font-size:15px;color:var(--text)}
+  .cols{columns:3;column-gap:0;padding:3px 0}
+  .cols.four{columns:4}
+  .psec{break-inside:avoid;padding:9px 16px 11px;border-inline-end:1px solid var(--hairline)}
+  .psec .ph{display:flex;align-items:baseline;gap:7px;padding-bottom:5px;border-bottom:1px solid var(--border);margin-bottom:5px}
+  .psec .ph b{font-size:11.5px;font-weight:800}
+  .psec .ph .ar{font-size:10px;color:var(--text-faint)}
+  .psec .ph .c{margin-inline-start:auto;font-family:var(--font-mono);font-size:10.5px;color:var(--text-muted)}
+  .psec.flag .ph{border-bottom-color:var(--accent)}
+  .psec.flag .ph .c{color:var(--accent);font-weight:700}
+  .prow{display:flex;align-items:center;gap:7px;padding:2.5px 0;font-size:11.5px;color:var(--text-muted)}
+  .prow .nm{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .prow .tm{margin-inline-start:auto;font-family:var(--font-mono);font-size:10.5px;color:var(--text-faint)}
+  .prow.bad{color:var(--text);font-weight:600} .prow.bad .tm{color:var(--st-miss);font-weight:700}
+  .prow.warn{color:var(--text)} .prow.warn .tm{color:var(--st-late);font-weight:700}
+  .grid2{display:grid;grid-template-columns:minmax(0,1fr) 320px;gap:14px;margin-top:12px}
+  .side .it{display:flex;align-items:center;gap:9px;padding:9px 14px;border-bottom:1px solid var(--hairline);font-size:12px}
+  .side .it:last-child{border-bottom:0}
+  .side .it .m{margin-inline-start:auto;font-family:var(--font-mono);font-weight:700;color:var(--accent)}
+  .side .it .p{font-size:10.5px;color:var(--text-faint)}
+  .fold{display:flex;align-items:center;gap:10px;padding:11px 16px;border-top:1px solid var(--hairline);
+    background:var(--surface-raised);font-size:12.5px;color:var(--text-muted)}
+  .src{display:flex;align-items:center;gap:12px;flex-wrap:wrap;font-size:11.5px;color:var(--text-muted);
+    padding:9px 16px;border-top:1px solid var(--hairline)}
+  .src .live{width:7px;height:7px;border-radius:50%;background:var(--success);box-shadow:0 0 0 3px var(--success-soft)}
+  .src b{color:var(--text)}
+  .note{margin-top:12px;border:1px dashed var(--border-strong);border-radius:14px;padding:12px 15px;font-size:12px;
+    color:var(--text-muted);line-height:1.6;background:var(--surface)}
+  .note b{color:var(--text)}
+</style>
+</head>
+<body>
+<div id="app"></div>
+<script>
+/* ------------------------------------------------------------------ *
+ * Same site facts as the earlier mockups: 5 companies + الدوام الرسمي
+ * as duty_unit, free-text duty_post inside, 05/13/21 shift windows,
+ * office 07:00-15:00, grace 30m, 20 exceptions on 19 Aug 2026.
+ * ------------------------------------------------------------------ */
+const GUARD_POSTS = [
+  { en: 'Main Gate', ar: 'البوابة الرئيسية', req: 6 },
+  { en: 'Inspection', ar: 'التفتيش', req: 6 },
+  { en: 'Perimeter Patrol', ar: 'دورية السياج', req: 5 },
+  { en: 'Watchtower', ar: 'برج المراقبة', req: 4 },
+  { en: 'Liwan', ar: 'ليوان', req: 4 },
+  { en: 'Vehicle Search', ar: 'تفتيش المركبات', req: 4 },
+  { en: 'Workshop Gate', ar: 'بوابة الورشة', req: 4 },
+  { en: 'Store Yard', ar: 'ساحة المخازن', req: 4 },
+  { en: 'Control Room', ar: 'غرفة التحكم', req: 3 },
+];
+const FIRST = ['Ahmed', 'Mohammed', 'Salem', 'Khalid', 'Yousef', 'Faisal', 'Rashed', 'Omar', 'Hassan', 'Tariq', 'Saif',
+  'Majid', 'Obaid', 'Juma', 'Hamad', 'Nasser', 'Ali', 'Saeed', 'Ibrahim', 'Abdullah', 'Sultan', 'Mubarak', 'Marwan'];
+const LAST = ['Al Ali', 'Al Mazrouei', 'Al Ameri', 'Al Nuaimi', 'Al Dhaheri', 'Al Shamsi', 'Al Balushi', 'Al Marri',
+  'Al Kaabi', 'Al Hosani', 'Al Suwaidi', 'Al Mansoori', 'Al Zaabi', 'Al Falasi', 'Al Rumaithi'];
+function mulberry32(a) {
+  return function () {
+    a |= 0; a = (a + 0x6D2B79F5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+const hhmm = (m) => `${String(Math.floor((m % 1440) / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
+const rnd = mulberry32(41);
+const USED = new Set();
+const MORNING = GUARD_POSTS.map((post) => ({
+  ...post,
+  people: Array.from({ length: post.req }, () => {
+    let name = `${FIRST[Math.floor(rnd() * FIRST.length)]} ${LAST[Math.floor(rnd() * LAST.length)]}`;
+    while (USED.has(name)) name = `${FIRST[Math.floor(rnd() * FIRST.length)]} ${LAST[Math.floor(rnd() * LAST.length)]}`;
+    USED.add(name);
+    return { name, id: `G-${1000 + Math.floor(rnd() * 3800)}` };
+  }),
+}));
+const FLAT = MORNING.flatMap((p) => p.people.map((x) => ({ ...x, post: p.en, postAr: p.ar })));
+// Exact exception counts, so every headline agrees with the rows.
+const MIX = { miss: 1, single: 2, late: 3, leave: 1 };
+const order = FLAT.map((_, i) => i).sort((a, b) => mulberry32(97 + a)() - mulberry32(97 + b)());
+let cur = 0;
+const stateOf = new Array(FLAT.length).fill('ok');
+for (const [st, n] of Object.entries(MIX)) for (let k = 0; k < n; k += 1) { stateOf[order[cur]] = st; cur += 1; }
+FLAT.forEach((p, i) => {
+  p.state = stateOf[i];
+  const r = mulberry32(300 + i)();
+  p.offset = p.state === 'ok' ? Math.round(-28 + r * 50)
+    : p.state === 'late' ? Math.round(34 + r * 62)
+    : p.state === 'single' ? Math.round(-8 + r * 40) : null;
+  p.first = p.offset === null ? null : hhmm(5 * 60 + p.offset);
+  p.late = p.offset !== null && p.offset > 30 ? p.offset - 30 : 0;
+});
+const peopleOf = (postEn) => FLAT.filter((p) => p.post === postEn);
+const exOf = (postEn) => peopleOf(postEn).filter((p) => ['late', 'single', 'miss'].includes(p.state)).length;
+const RANK = { miss: 0, single: 1, late: 2, ok: 3, leave: 4 };
+const ATTN = FLAT.filter((p) => ['miss', 'single', 'late'].includes(p.state))
+  .sort((a, b) => RANK[a.state] - RANK[b.state] || (b.late || 0) - (a.late || 0));
+// Office numbers are carried as totals only; this file is about placement.
+const TOTALS = { assigned: 150, seen: 142, late: 8, unpaired: 4, leave: 5, attention: 20, office: { assigned: 70, seen: 67 } };
+const initials = (n) => n.split(' ').filter(Boolean).map((w) => w[0]).slice(0, 2).join('');
+
+/* ---------------- chrome ---------------- */
+function topnav(flyout) {
+  const items = [['Dashboard', 0], ['Employees', 1], ['Ledger', 0], ['Leaves', 0], ['Services', 0], ['Records', 0], ['Permits', 0]];
+  return `<header class="topnav">
+    <a style="display:flex;align-items:center;gap:28px">
+      <img class="logo" src="gssg-logo.png" alt="GSSG">
+      <div class="bcopy">GSSG<small>General Security Services Group</small></div>
+    </a>
+    <nav>${items.map(([l, on]) => `<a class="${on ? 'on' : ''}">${l}</a>`).join('')}</nav>
+    <div class="utils"><span class="aa">A<i></i>A</span><span>🌐 English</span><span>☀</span><span>⤓</span><span>✉</span><span>🔔</span><span>⚙</span>
+      <span class="avatar">AA</span></div>
+    ${flyout ? `<div class="flyout">
+      <div class="fh">Employees</div>
+      <div class="fi on"><span class="ic">👥</span><span class="tx"><b>Directory</b><span>Search every employee file</span></span></div>
+      <div class="fi"><span class="ic">🕘</span><span class="tx"><b>Attendance <span class="ar">الحضور</span></b><span>Today's duty register</span></span><span class="bd">20</span></div>
+      <div class="fi"><span class="ic">🚚</span><span class="tx"><b>Duty locations</b><span>Posts and transfers</span></span></div>
+    </div>` : ''}
+  </header>`;
+}
+/** The section tab strip. `badge` puts the live exception count on the tab. */
+function sectionTabs(active, badge, extras) {
+  const tab = (label, ar, on, bd) => `<a class="${on ? 'on' : ''}">${label}${ar ? ` <span class="ar">${ar}</span>` : ''}${bd ? `<span class="bd">${bd}</span>` : ''}</a>`;
+  return `<div class="stabs"><div class="in">
+    ${tab('Directory', '', active === 'dir')}
+    ${tab('Attendance', 'الحضور', active === 'att', badge ? TOTALS.attention : null)}
+    ${tab('Duty locations', '', false)}
+    ${extras ? `<div class="sp">${extras}</div>` : ''}
+  </div></div>`;
+}
+function hero(cards, tabs) {
+  return `<section class="hero">
+    <div class="decor" aria-hidden="true"><i class="c1"></i><i class="c2"></i></div>
+    <div class="hcol">
+      <div class="heyebrow">Operations · Employees</div>
+      <h1>Who are you looking for?</h1>
+      <p class="hsub">Active, on leave, or separated — every file appears in search</p>
+      <div class="hpill">
+        <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.3-3.3"/></svg>
+        <span class="ph">Search by name, G-number, or Emirates ID…</span>
+        <span class="go">Search</span>
+      </div>
+      <div><span class="hghost"><span class="plus">+</span>New employee — create file</span></div>
+    </div>
+    ${cards}
+  </section>${tabs || ''}`;
+}
+const recentsCard = `<div class="hcard">
+  <div class="hh"><span class="ic">🕘</span><h4>RECENTLY OPENED</h4></div>
+  ${[['Ahmed Ali Al Ali', 'G-1042'], ['Salem Obaid Al Ameri', 'G-1301'], ['Khalid Rashid Al Nuaimi', 'G-1288']]
+    .map(([n, g]) => `<div class="hchip"><span class="av">${initials(n)}</span><span class="lb">${n}</span><span class="mt">${g}</span></div>`).join('')}
+</div>`;
+const expiryCard = `<div class="hcard">
+  <div class="hh"><span class="ic warn">⚠</span><h4>EXPIRING SOON</h4><span class="bd warn">14</span></div>
+  ${[['Yousef Ibrahim — Passport', '12 days'], ['Omar Juma — Labour card', '21 days']]
+    .map(([n, d]) => `<div class="hchip"><span class="av">${initials(n)}</span><span class="lb">${n}</span><span class="mt warn">${d}</span></div>`).join('')}
+</div>`;
+const gapsCard = `<div class="hcard">
+  <div class="hh"><span class="ic">👤</span><h4>INCOMPLETE FILES</h4><span class="bd">37</span></div>
+  <div style="font-size:12px;opacity:.75;line-height:1.6">Most often missing: Emirates ID, contact number, date of joining.</div>
+  <div class="hcta"><span class="b">Open the first one</span></div>
+</div>`;
+/** Option 2's card: the entry point carries the number. */
+const attendanceCard = `<div class="hcard spot">
+  <div class="hh"><span class="ic bad">🕘</span><h4>ATTENDANCE TODAY <span class="ar" style="opacity:.7">الحضور</span></h4><span class="bd bad">20</span></div>
+  <div class="hmini">
+    <div><div class="v okv">142</div><div class="l">seen</div></div>
+    <div><div class="v warnv">8</div><div class="l">late</div></div>
+    <div><div class="v badv">4</div><div class="l">unpaired</div></div>
+  </div>
+  <div style="margin-top:8px">
+    ${ATTN.slice(0, 2).map((p) => `<div class="hchip"><span class="av">${initials(p.name)}</span><span class="lb">${p.name}</span>
+      <span class="mt bad">${p.state === 'miss' ? 'no punch' : p.state === 'single' ? '1 punch' : '+' + p.late + 'm'}</span></div>`).join('')}
+  </div>
+  <div class="hcta"><span class="b solid">Open attendance</span><span style="opacity:.7;font-weight:400">Noon shift running · 1h 07m in</span></div>
+</div>`;
+
+/* ---------------- attendance page pieces ---------------- */
+function aband(right) {
+  return `<section class="aband"><div class="decor"></div><div class="in">
+    <div class="crumb">Operations · Employees</div>
+    <h1>Attendance <span class="ar">الحضور</span></h1>
+    <p class="sub">Wed 19 Aug 2026 · duty register by unit and post</p>
+    <div class="right">${right}</div>
+  </div></section>`;
+}
+function toolbar() {
+  return `<div class="tbar">
+    <div class="step"><button>‹</button><span class="d">Wed 19 Aug</span><button>›</button></div>
+    <button class="btn s">Today</button>
+    <div class="seg">
+      <button class="on">Morning <span class="n">40</span></button>
+      <button class="warn">Noon <span class="n">37/40</span></button>
+      <button class="pend">Night <span class="n">due</span></button>
+      <button class="warn">Office <span class="n">67/70</span></button>
+    </div>
+    <div class="tsearch"><span>🔍</span><span class="ph">Name, G-number, or post…</span><span class="kbd">/</span></div>
+    <div class="views" style="margin-inline-start:auto">
+      <button class="on">Register</button><button>Board</button><button>Timeline</button>
+    </div>
+    <button class="btn s">Print</button><button class="btn s">Export</button>
+  </div>
+  <div class="strip">
+    ${[['Sat', '15', 12], ['Sun', '16', 6], ['Mon', '17', 9], ['Tue', '18', 14], ['Wed', '19', 20], ['Thu', '20', null], ['Fri', '21', null]]
+      .map(([wd, dt, ex]) => `<div class="d ${dt === '19' ? 'on' : ''} ${ex === null ? 'future' : ''}">
+        <div class="wd">${wd}</div><div class="dt">${dt} Aug</div>
+        <div class="mk">${ex === null
+          ? '<i style="width:100%;background:var(--surface-tinted)"></i>'
+          : `<i style="width:${100 - ex * 2}%;background:var(--st-ok)"></i><i style="width:${ex * 2}%;background:var(--st-miss)"></i>`}</div>
+      </div>`).join('')}
+  </div>
+  <div class="kbdrow">
+    <span><b>←</b> <b>→</b> change day</span><span><b>1</b>–<b>4</b> switch shift</span><span><b>/</b> search</span>
+    <span><b>Enter</b> open the highlighted file</span>
+    <span style="margin-inline-start:auto">Register, Board and Timeline are views of this same day — not separate pages</span>
+  </div>`;
+}
+function register() {
+  const sec = (post) => {
+    const people = peopleOf(post.en);
+    const ex = exOf(post.en);
+    const seen = people.filter((p) => p.first !== null).length;
+    const leave = people.filter((p) => p.state === 'leave').length;
+    const rows = [...people].sort((a, b) => RANK[a.state] - RANK[b.state]).map((p) => {
+      const cls = ['miss', 'single'].includes(p.state) ? 'bad' : p.state === 'late' ? 'warn' : '';
+      const t = p.state === 'miss' ? 'no punch' : p.state === 'leave' ? 'leave'
+        : p.state === 'single' ? `${p.first} only` : p.state === 'late' ? `${p.first} +${p.late}m` : p.first;
+      return `<div class="prow ${cls}"><i class="dot ${p.state === 'single' ? 'miss' : p.state}"></i>
+        <span class="nm">${p.name}</span><span class="tm">${t}</span></div>`;
+    }).join('');
+    return `<div class="psec ${ex ? 'flag' : ''}">
+      <div class="ph"><b>${post.en}</b><span class="ar">${post.ar}</span><span class="c">${seen}/${post.req - leave}</span></div>
+      ${rows}</div>`;
+  };
+  return `<div class="reg">
+    <div class="mast">
+      <div>
+        <h3>Morning duty register · Second Company</h3>
+        <div class="m2"><span class="ar">السرية الثانية</span> · 05:00 – 13:00 · closed · 9 posts</div>
+      </div>
+      <div class="meta">
+        <div><b>40</b>assigned</div><div><b>38</b>seen</div>
+        <div><b style="color:var(--st-late)">3</b>late</div>
+        <div><b style="color:var(--st-miss)">3</b>unpaired</div>
+        <div><b style="color:var(--st-leave)">1</b>leave</div>
+      </div>
+    </div>
+    <div class="cols">${[...GUARD_POSTS].sort((a, b) => exOf(b.en) - exOf(a.en)).map(sec).join('')}</div>
+    <div class="fold"><span>Office register · <span class="ar">الدوام الرسمي</span> · 07:00 – 15:00 · ${TOTALS.office.seen}/${TOTALS.office.assigned} seen · 13 posts</span>
+      <span class="chip late">5 late</span><span class="chip miss">3 unpaired</span>
+      <button class="btn s" style="margin-inline-start:auto">Show office register</button></div>
+    <div class="src"><i class="live"></i><span>Source: <b>BioTime mirror</b> · read-only · synced <b>2 min ago</b> · fresh through <b class="mono">14:20</b></span>
+      <button class="btn s" style="margin-inline-start:auto">Integration</button></div>
+  </div>`;
+}
+function sideQueue() {
+  return `<div class="card side">
+    <header><h3>Needs a decision</h3><span class="chip miss">${TOTALS.attention}</span>
+      <span class="hint">whole day</span></header>
+    ${ATTN.slice(0, 7).map((p) => `<div class="it">
+      <i class="dot ${p.state === 'late' ? 'late' : 'miss'}"></i>
+      <div><div>${p.name}</div><div class="p">${p.post} · Morning · ${p.id}</div></div>
+      <span class="m">${p.state === 'miss' ? 'none' : p.state === 'single' ? '1 punch' : '+' + p.late + 'm'}</span>
+    </div>`).join('')}
+    <div style="padding:11px 14px;display:flex;gap:8px"><button class="btn p s">Review all</button>
+      <button class="btn s">Assign to supervisor</button></div>
+  </div>`;
+}
+
+/* ==================================================================== *
+ * Placement options
+ * ==================================================================== */
+function p1() {
+  return `
+  <div class="flabel"><span>Screen 1 — the Employees landing page</span><span class="path">/employees</span><span class="n">tab strip added at the foot of the existing navy band</span></div>
+  ${topnav()}
+  ${hero(`<div class="hcards">${recentsCard}${expiryCard}${gapsCard}</div>`, sectionTabs('dir', false))}
+  <div class="page"><div class="note">Nothing else on this page changes. The strip is the only new chrome, and it is where Sentinel already
+    puts section switching, so it needs no explanation. <b>What it costs:</b> the count lives on the tab, so you learn there is a problem
+    only once you are already inside Employees.</div></div>
+  <div class="flabel"><span>Screen 2 — the Attendance page</span><span class="path">/employees/attendance</span><span class="n">same strip, Attendance active</span></div>
+  ${topnav()}
+  ${aband('<span class="gpill">Wed 19 Aug</span><span class="gpill solid">Print register</span>')}
+  ${sectionTabs('att', true)}
+  <div class="page">${toolbar()}${register()}</div>`;
+}
+function p2() {
+  return `
+  <div class="flabel"><span>Employees landing page, fourth hero card</span><span class="path">/employees</span><span class="n">the entry point carries the numbers</span></div>
+  ${topnav()}
+  ${hero(`<div class="hcards four">${recentsCard}${attendanceCard}${expiryCard}${gapsCard}</div>`, sectionTabs('dir', true))}
+  <div class="page"><div class="note">The card is a live signal, not a link: <b>142 seen · 8 late · 4 unpaired</b> and the two worst names are on
+    the surface, so on a clean day you never open the page at all. It reuses the existing glass-card shell
+    (<span class="mono">LookupHeroCards</span>), and the strip below still does the navigating.
+    <b>What it costs:</b> a fourth card makes the hero taller and pushes the recents row narrower — the grid goes 3 → 4 columns.</div></div>`;
+}
+function p3() {
+  const tiles = [
+    ['🚚', 'Duty Locations & Transfers', 'Personnel', false, null],
+    ['🕘', 'Attendance · الحضور', 'Personnel', true, '20'],
+    ['📄', 'Leave application', 'Leaves', false, null],
+    ['🪪', 'Employment certificate', 'Letters', false, null],
+    ['🚗', 'Vehicle permit', 'Permits', false, null],
+    ['📋', 'Violation report', 'Discipline', false, null],
+    ['🏥', 'Medical referral', 'Letters', false, null],
+    ['✈️', 'Exit permit', 'Permits', false, null],
+  ];
+  return `
+  <div class="flabel"><span>Services gallery</span><span class="path">/application</span><span class="n">a tile beside Duty Locations, the existing precedent</span></div>
+  ${topnav()}
+  <section class="aband"><div class="decor"></div><div class="in">
+    <div class="crumb">Operations · Services</div><h1>What do you need to issue?</h1>
+    <p class="sub">Pick a service — forms, letters, permits, and the personnel tools</p>
+  </div><div style="height:16px"></div></section>
+  <div class="page">
+    <div class="svc">${tiles.map(([em, nm, ct, isNew, bd]) => `<div class="svcell ${isNew ? 'new' : ''}">
+      <span class="em">${em}</span>
+      <div><div class="nm">${nm}</div><div class="ct">${ct}</div></div>
+      ${bd ? `<span class="bd">${bd}</span>` : ''}
+    </div>`).join('')}</div>
+    <div class="note">This is exactly how <b>Duty Locations</b> is reached today (<span class="mono">ApplicationPage</span> renders it as a
+      <span class="mono">ServiceCell</span>), so it is the one option that needs no new pattern at all.
+      <b>What it costs:</b> the gallery is a list of <em>things you issue</em>. Attendance issues nothing — it is a register you read — so it sits
+      oddly among forms, and a supervisor checking the shift has to go through Services to find Employees data.</div>
+  </div>`;
+}
+function p4() {
+  return `
+  <div class="flabel"><span>Top-nav flyout under Employees</span><span class="path">any page</span><span class="n">hover or focus the Employees item</span></div>
+  ${topnav(true)}
+  ${hero(`<div class="hcards">${recentsCard}${expiryCard}${gapsCard}</div>`, '')}
+  <div class="page"><div class="note">Reachable from anywhere, with the count visible before you commit to a page, and no extra top-level
+    destination — the single-row nav survives.
+    <b>What it costs:</b> Sentinel has no flyout menus anywhere today, so this invents an interaction pattern: it needs hover intent, keyboard
+    and touch equivalents, and a mobile answer, since the mobile dock builds its catalogue from
+    <span class="mono">NAV_ITEMS</span> and has no room for a submenu.</div></div>`;
+}
+function p5() {
+  return `
+  <div class="flabel"><span>Recommended — screen 1</span><span class="path">/employees</span><span class="n">tab strip + live card, no new nav pattern</span></div>
+  ${topnav()}
+  ${hero(`<div class="hcards four">${recentsCard}${attendanceCard}${expiryCard}${gapsCard}</div>`, sectionTabs('dir', true))}
+  <div class="flabel"><span>Recommended — screen 2</span><span class="path">/employees/attendance</span><span class="n">one day, one toolbar, three views</span></div>
+  ${topnav()}
+  ${aband('<span class="gpill">Live · 30s</span><span class="gpill">Wed 19 Aug</span><span class="gpill solid">Print register</span>')}
+  ${sectionTabs('att', true, '<span class="p">Jump to employee ⌘K</span>')}
+  <div class="page">
+    ${toolbar()}
+    <div class="grid2">
+      <div>${register()}</div>
+      <div>
+        ${sideQueue()}
+        <div class="card" style="margin-top:12px">
+          <header><h3>Per-employee check</h3><span class="chip mut">nice to have</span></header>
+          <div style="padding:12px 15px;font-size:12px;color:var(--text-muted);line-height:1.65">
+            Clicking any name opens that person's file on the new <b>Attendance</b> chip
+            (<span class="mono">/employees/G-1042?tab=attendance</span>) — month grid, punctuality, day timeline.
+            The register is the way in; the tab is the detail.
+          </div>
+          <div style="padding:0 15px 13px"><button class="btn s">See the employee tab</button></div>
+        </div>
+      </div>
+    </div>
+    <div class="note">Why this is the better UX, concretely:
+      <b>(1)</b> the day is a stepper with a seven-day strip, so yesterday is one key away and the red slice on each day shows where to look;
+      <b>(2)</b> the four shift buttons carry their own seen/assigned counts, so switching is informed rather than exploratory;
+      <b>(3)</b> Register / Board / Timeline are <em>views of the same day</em>, which means the designs you liked can land later without new
+      routes or new navigation;
+      <b>(4)</b> the queue on the right is the same ordered list as the hero card, so the number you saw is the work you get;
+      <b>(5)</b> the office register is folded by default — 70 more names only unfold when asked;
+      <b>(6)</b> provenance sits at the foot of the register, so “BioTime” appears once, as a source line, and never as a feature name.</div>
+  </div>`;
+}
+
+const OPTIONS = [
+  { n: 'A', name: 'Section tab strip only — Directory | Attendance | Duty locations',
+    body: p1,
+    blurb: 'One new piece of chrome at the foot of the navy band, shared by the Directory and the Attendance page. This is the minimum that satisfies “a subpage under Employees”.',
+    cost: 'Cost: the exception count is only visible once you are inside the Employees section.',
+    tags: ['no new pattern', 'cheapest to build', 'lowest discoverability'] },
+  { n: 'B', name: 'Live hero card — the entry point carries the numbers',
+    body: p2,
+    blurb: 'A fourth glass card in the existing hero: seen / late / unpaired plus the two worst names, and one button into the register. Reuses LookupHeroCards.',
+    cost: 'Cost: hero grows to four columns and gets taller; recents get narrower.',
+    tags: ['see it without opening it', 'reuses existing shell', 'taller hero'] },
+  { n: 'C', name: 'Services gallery tile — parity with Duty Locations',
+    body: p3,
+    blurb: 'A tile in /application beside Duty Locations, which is exactly how that page is reached today, so no new pattern is introduced anywhere.',
+    cost: 'Cost: the gallery lists things you issue; a register you read does not belong there, and the path runs away from Employees.',
+    tags: ['exact existing precedent', 'wrong mental model', 'extra hop'] },
+  { n: 'D', name: 'Top-nav flyout under Employees',
+    body: p4,
+    blurb: 'Employees opens a small menu — Directory / Attendance / Duty locations — with the live count, reachable from any page without adding a top-level destination.',
+    cost: 'Cost: invents a flyout pattern Sentinel does not have, and needs keyboard, touch and mobile-dock answers.',
+    tags: ['reachable anywhere', 'new interaction pattern', 'mobile problem'] },
+  { n: 'E', name: 'Recommended — tab strip + live card + one-day toolbar',
+    body: p5,
+    blurb: 'A and B together, plus a proper working surface: day stepper with a seven-day heat strip, four shift buttons carrying their own counts, search, and Register / Board / Timeline as views of the same day rather than separate pages.',
+    cost: 'Cost: the most work of the five — one shared tab component, one hero card, one toolbar — but no new navigation pattern and no new routes for the other views later.',
+    tags: ['best discoverability', 'keyboard-driven', 'room for the other designs', 'most build'] },
+];
+
+function render(o) {
+  return `<section class="vcap">
+    <span class="num">${o.n}</span>
+    <div><h2>${o.name}</h2><p>${o.blurb}</p><div class="cost">${o.cost}</div></div>
+    <div class="tags">${o.tags.map((t) => `<span>${t}</span>`).join('')}</div>
+  </section>
+  <div class="frame">${o.body()}</div>`;
+}
+const pick = (new URLSearchParams(location.search).get('v') || '').toUpperCase();
+const chosen = pick ? OPTIONS.filter((o) => o.n === pick) : OPTIONS;
+document.getElementById('app').innerHTML = chosen.map(render).join('');
+</script>
+</body>
+</html>

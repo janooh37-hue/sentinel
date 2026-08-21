@@ -1,0 +1,962 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Attendance · الحضور والغياب — 5 approaches for 40/shift + 70 office</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=IBM+Plex+Mono:wght@400;500;600;700&family=Noto+Sans+Arabic:wght@400;600;700&display=swap" rel="stylesheet">
+<style>
+  /* Tokens copied from frontend/src/index.css :root. */
+  :root{
+    --font-sans:"Inter",ui-sans-serif,system-ui,sans-serif;
+    --font-mono:"IBM Plex Mono",ui-monospace,Consolas,monospace;
+    --font-ar:"Noto Sans Arabic","Inter",sans-serif;
+    --bg:#f5f4f1; --surface:#fff; --surface-raised:#fafaf6; --surface-tinted:#f0eee8;
+    --primary:#0d2845; --primary-hover:#1d3a5e; --primary-soft:#e8edf3;
+    --accent:#c8102e; --accent-soft:#fbe5e8;
+    --success:#047857; --success-soft:#d6f0e4;
+    --warning:#92400e; --warning-soft:#fbedd8;
+    --info:#1d4ed8; --info-soft:#e0e8f8;
+    --smart:#6b4fb0; --smart-soft:#f1eef8;
+    --text:#1c1f24; --text-muted:#5a6068; --text-faint:#8b9098;
+    --border:#e6e4dd; --border-strong:#d4d1c8; --hairline:#efece5;
+    --hero-grad:linear-gradient(135deg,#0a1f3a 0%,#0d2845 50%,#1d3a5e 100%);
+    --rail:#16243a; --rail-2:#1d3150; --rail-3:#243c5f; --rail-text:#c5d2e4;
+    --rail-faint:#7e93b3; --rail-line:#2c405f; --rail-success:#34d399; --rail-warning:#fbbf24;
+    --sh-morning:#1d4ed8; --sh-noon:#b45309; --sh-night:#4c1d95; --sh-office:#0f766e;
+    /* One state palette used by every variant, so a colour always means the
+       same thing no matter which layout wins. */
+    --st-ok:#047857; --st-ok-soft:#d6f0e4;
+    --st-late:#b45309; --st-late-soft:#fbedd8;
+    --st-miss:#c8102e; --st-miss-soft:#fbe5e8;
+    --st-leave:#1d4ed8; --st-leave-soft:#e0e8f8;
+    --st-pend:#8b9098; --st-pend-soft:#f0eee8;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:var(--bg);color:var(--text);font-family:var(--font-sans);-webkit-font-smoothing:antialiased}
+  .mono{font-family:var(--font-mono);font-variant-numeric:tabular-nums}
+  .ar{font-family:var(--font-ar);direction:rtl;unicode-bidi:isolate}
+  button{font:inherit;color:inherit;border:0;background:none;cursor:pointer}
+  a{color:inherit;text-decoration:none}
+
+  /* caption */
+  .vcap{background:var(--rail);color:#fff;padding:16px 32px;display:flex;gap:22px;align-items:flex-start;flex-wrap:wrap}
+  .vcap .num{flex:none;display:grid;place-items:center;width:34px;height:34px;border-radius:10px;background:var(--accent);
+    font-weight:800;font-size:15px}
+  .vcap h2{font-size:16px;font-weight:800;letter-spacing:-0.01em}
+  .vcap p{margin-top:3px;font-size:12.5px;color:var(--rail-text);max-width:104ch;line-height:1.55}
+  .vcap .eye{margin-top:6px;font-size:12px;color:var(--rail-warning)}
+  .vcap .tags{margin-inline-start:auto;display:flex;gap:6px;flex-wrap:wrap;max-width:330px}
+  .vcap .tags span{border:1px solid var(--rail-line);border-radius:99px;padding:3px 9px;font-size:10.5px;color:var(--rail-text);white-space:nowrap}
+
+  /* chrome */
+  .topnav{display:flex;align-items:center;gap:28px;border-bottom:1px solid var(--border);background:var(--surface);padding:14px 32px}
+  .topnav .logo{width:40px;height:40px;border-radius:50%;object-fit:cover;box-shadow:0 0 0 1px var(--border)}
+  .topnav .bcopy{font-size:18px;font-weight:700;line-height:1.15;color:var(--primary)}
+  .topnav .bcopy small{display:block;margin-top:2px;font-size:11.5px;font-weight:400;letter-spacing:.08em;color:var(--text-muted)}
+  .topnav nav{display:flex;gap:4px;margin-inline-start:20px;font-size:15px}
+  .topnav nav a{position:relative;padding:8px 14px;border-radius:8px;font-weight:500}
+  .topnav nav a.on{font-weight:600;color:var(--primary)}
+  .topnav nav a.on::after{content:"";position:absolute;left:0;right:0;bottom:-14px;height:3px;border-radius:3px;background:var(--primary)}
+  .topnav .utils{margin-inline-start:auto;display:flex;align-items:center;gap:14px;color:var(--text-muted);font-size:13px}
+  .topnav .aa{display:inline-flex;align-items:center;gap:8px;border-radius:99px;background:var(--surface-tinted);padding:6px 12px}
+  .topnav .aa i{width:88px;height:4px;border-radius:99px;background:var(--border-strong);display:block}
+  .topnav .avatar{width:32px;height:32px;border-radius:50%;background:var(--primary);color:#fff;display:grid;place-items:center;
+    font-size:12px;font-weight:700}
+  .band{background:var(--hero-grad);color:#fff;padding:18px 32px 0;position:relative;overflow:hidden}
+  .band .deco{position:absolute;top:-130px;right:-60px;width:300px;height:300px;border-radius:50%;background:rgba(255,255,255,.05)}
+  .band .inner{position:relative;max-width:1600px;margin:0 auto}
+  .band .crumb{font-size:11px;font-weight:600;letter-spacing:.2em;text-transform:uppercase;opacity:.62}
+  .band h1{margin-top:6px;font-size:23px;font-weight:700;letter-spacing:-0.01em}
+  .band .sub{margin-top:3px;font-size:12.5px;opacity:.76}
+  .band .subnav{margin-top:14px;display:flex;gap:4px}
+  .band .subnav a{padding:9px 15px;border-radius:10px 10px 0 0;font-size:13px;font-weight:600;color:rgba(255,255,255,.72)}
+  .band .subnav a.on{background:var(--bg);color:var(--primary)}
+  .band .right{position:absolute;top:0;right:0;display:flex;gap:8px;align-items:center}
+  .band .gpill{border:1px solid rgba(255,255,255,.28);border-radius:99px;padding:6px 13px;font-size:12px}
+  .band .gpill.solid{background:var(--accent);border-color:transparent;font-weight:700}
+  .page{max-width:1600px;margin:0 auto;padding:18px 32px 40px}
+
+  .card{background:var(--surface);border:1px solid var(--hairline);border-radius:16px}
+  .card>header{display:flex;align-items:center;gap:10px;padding:12px 15px;border-bottom:1px solid var(--hairline)}
+  .card>header h3{font-size:13px;font-weight:700}
+  .card>header .hint{margin-inline-start:auto;font-size:11.5px;color:var(--text-faint)}
+  .lbl{font-size:10.5px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--text-faint)}
+  .chip{display:inline-flex;align-items:center;gap:5px;border-radius:99px;padding:3px 9px;font-size:11px;font-weight:600}
+  .chip.morning{background:#e0e8f8;color:var(--sh-morning)} .chip.noon{background:#fbedd8;color:var(--sh-noon)}
+  .chip.night{background:#ece7fa;color:var(--sh-night)} .chip.office{background:#d8f0ec;color:var(--sh-office)}
+  .chip.ok{background:var(--st-ok-soft);color:var(--st-ok)} .chip.late{background:var(--st-late-soft);color:var(--st-late)}
+  .chip.miss{background:var(--st-miss-soft);color:var(--st-miss)} .chip.leave{background:var(--st-leave-soft);color:var(--st-leave)}
+  .chip.mut{background:var(--surface-tinted);color:var(--text-muted)} .chip.smart{background:var(--smart-soft);color:var(--smart)}
+  .btn{border:1px solid var(--border);border-radius:10px;padding:6px 12px;font-size:12px;font-weight:600;background:var(--surface);color:var(--primary)}
+  .btn.p{background:var(--primary);color:#fff;border-color:transparent}
+  .btn.s{padding:4px 9px;font-size:11px}
+  .fresh{display:flex;align-items:center;gap:13px;flex-wrap:wrap;border:1px solid var(--hairline);background:var(--surface);
+    border-radius:14px;padding:10px 14px;font-size:12px;color:var(--text-muted)}
+  .fresh .src{display:inline-flex;align-items:center;gap:8px;font-weight:700;color:var(--primary);font-size:12.5px}
+  .fresh .live{width:8px;height:8px;border-radius:50%;background:var(--success);box-shadow:0 0 0 4px var(--success-soft)}
+  .fresh b{color:var(--text)}
+
+  /* attention band — the deliberate first stop for the eye */
+  .attn{margin-top:12px;display:flex;align-items:stretch;gap:10px;border-radius:16px;overflow:hidden;
+    border:1px solid #f0cfd6;background:linear-gradient(90deg,#fff5f6 0%,var(--surface) 62%)}
+  .attn .cnt{flex:none;display:flex;flex-direction:column;justify-content:center;padding:12px 16px;background:var(--accent);color:#fff;min-width:132px}
+  .attn .cnt b{font-family:var(--font-mono);font-size:30px;font-weight:800;line-height:1}
+  .attn .cnt span{font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;opacity:.85;margin-top:3px}
+  .attn .list{display:flex;gap:8px;padding:10px;overflow:hidden;flex-wrap:wrap;align-content:center}
+  .attn .it{display:flex;align-items:center;gap:9px;border:1px solid #f0cfd6;background:var(--surface);border-radius:11px;padding:6px 10px;font-size:12px}
+  .attn .it .m{font-family:var(--font-mono);font-weight:700;color:var(--accent)}
+  .attn .it .p{color:var(--text-faint);font-size:11px}
+  .attn .go{margin-inline-start:auto;display:flex;align-items:center;padding:0 14px}
+
+  /* KPI strip */
+  .kstrip{margin-top:12px;display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:10px}
+  .kbox{background:var(--surface);border:1px solid var(--hairline);border-radius:14px;padding:11px 13px}
+  .kbox .v{margin-top:4px;font-family:var(--font-mono);font-size:23px;font-weight:800;letter-spacing:-0.02em;line-height:1.1}
+  .kbox .d{margin-top:3px;font-size:11px;color:var(--text-faint)}
+  .kbox.ok .v{color:var(--st-ok)} .kbox.late .v{color:var(--st-late)} .kbox.miss .v{color:var(--st-miss)}
+
+  /* ---------- V6 post ladder ---------- */
+  .lad{margin-top:14px}
+  .lad table{width:100%;border-collapse:collapse}
+  .lad th{font-size:10px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--text-faint);text-align:left;
+    padding:8px 12px;border-bottom:1px solid var(--border);background:var(--surface-raised)}
+  .lad td{padding:7px 12px;border-bottom:1px solid var(--hairline);font-size:12.5px}
+  .lad tr.flagged td{background:#fffaf9}
+  .lad tr.flagged td:first-child{box-shadow:inset 3px 0 0 var(--accent)}
+  .lad tr.clean td{color:var(--text-muted)}
+  .lad .pn{font-weight:600;color:var(--text)}
+  .lad .pa{font-size:11px;color:var(--text-faint)}
+  .lad .strip{display:flex;gap:3px;flex-wrap:wrap;max-width:280px}
+  .lad .cell{width:15px;height:20px;border-radius:4px;background:var(--st-ok-soft);box-shadow:inset 0 0 0 1px rgba(4,120,87,.25)}
+  .lad .cell.late{background:var(--st-late-soft);box-shadow:inset 0 0 0 1px rgba(180,83,9,.3)}
+  .lad .cell.miss{background:var(--st-miss);box-shadow:none}
+  .lad .cell.single{background:var(--st-miss-soft);box-shadow:inset 0 0 0 1.5px var(--st-miss)}
+  .lad .cell.leave{background:var(--st-leave-soft);box-shadow:inset 0 0 0 1px rgba(29,78,216,.35)}
+  .lad .cell.pend{background:repeating-linear-gradient(45deg,var(--surface-tinted) 0 4px,transparent 4px 8px);
+    box-shadow:inset 0 0 0 1px var(--border-strong)}
+  .lad .bar{position:relative;height:6px;border-radius:99px;background:var(--surface-tinted);width:88px;overflow:hidden}
+  .lad .bar i{position:absolute;top:0;bottom:0;left:0;background:var(--st-ok)}
+  .lad .num{font-family:var(--font-mono);font-variant-numeric:tabular-nums}
+  .lad .sec{display:flex;align-items:center;gap:10px;padding:11px 14px;background:var(--surface);
+    border-top:1px solid var(--hairline);border-bottom:1px solid var(--border)}
+  .lad .sec h4{font-size:13px;font-weight:800}
+  .lad .sec .meta{font-size:11.5px;color:var(--text-muted)}
+  .lad .tot td{background:var(--surface-raised);font-weight:700;border-bottom:0}
+  .legend{display:flex;gap:14px;flex-wrap:wrap;padding:10px 14px;font-size:11px;color:var(--text-muted)}
+  .legend span{display:inline-flex;align-items:center;gap:6px}
+  .legend i{width:14px;height:16px;border-radius:4px;display:block}
+
+  /* ---------- V7 command mosaic ---------- */
+  .wall{margin-top:12px;background:var(--rail);border-radius:18px;padding:16px;color:#fff;
+    background-image:radial-gradient(1100px 340px at 12% -8%,rgba(52,211,153,.10),transparent 60%),
+                     radial-gradient(900px 320px at 88% -10%,rgba(200,16,46,.14),transparent 62%)}
+  .wall .hd{display:flex;align-items:flex-end;gap:20px;flex-wrap:wrap}
+  .wall .clock{font-family:var(--font-mono);font-size:44px;font-weight:700;line-height:1}
+  .wall .clock small{font-size:14px;color:var(--rail-faint)}
+  .wall .shifts{display:flex;gap:7px;flex-wrap:wrap}
+  .wall .sh{border:1px solid var(--rail-line);border-radius:11px;padding:7px 11px;background:rgba(255,255,255,.03)}
+  .wall .sh b{display:block;font-size:12px}
+  .wall .sh span{font-family:var(--font-mono);font-size:10.5px;color:var(--rail-faint)}
+  .wall .sh.on{border-color:var(--rail-warning);background:rgba(251,191,36,.10)}
+  .wall .kv{display:flex;gap:22px;margin-inline-start:auto}
+  .wall .kv .v{font-family:var(--font-mono);font-size:24px;font-weight:700;text-align:right}
+  .wall .kv .l{font-size:10px;letter-spacing:.09em;text-transform:uppercase;color:var(--rail-faint);text-align:right}
+  .wall .lane{margin-top:14px;display:flex;gap:8px;align-items:center;overflow:hidden}
+  .wall .lane .tag{flex:none;font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:#ffb3bf;font-weight:700}
+  .wall .lane .c{flex:none;display:flex;align-items:center;gap:9px;border:1px solid #5c2733;background:#2a1620;border-radius:11px;
+    padding:6px 11px;font-size:12px}
+  .wall .lane .c b{color:#fff} .wall .lane .c .m{font-family:var(--font-mono);font-weight:700;color:#ff8fa0}
+  .wall .lane .c .p{color:var(--rail-faint);font-size:11px}
+  .wall .grp{margin-top:14px;display:flex;align-items:center;gap:10px}
+  .wall .grp h4{font-size:12.5px;font-weight:800}
+  .wall .grp .ar{font-size:11.5px;color:var(--rail-faint)}
+  .wall .grp .r{margin-inline-start:auto;font-family:var(--font-mono);font-size:11.5px;color:var(--rail-text)}
+  .mos{margin-top:9px;display:grid;grid-template-columns:repeat(auto-fill,minmax(196px,1fr));gap:9px}
+  .mos.tight{grid-template-columns:repeat(auto-fill,minmax(166px,1fr))}
+  .blk{background:rgba(255,255,255,.035);border:1px solid var(--rail-line);border-radius:12px;padding:9px 10px}
+  .blk.hot{border-color:#7d3040;background:rgba(200,16,46,.10)}
+  .blk .t{display:flex;align-items:baseline;gap:7px;flex-wrap:wrap}
+  .blk .t .ar{flex-basis:100%}
+  .blk .t b{font-size:11.5px} .blk .t .c{margin-inline-start:auto;font-family:var(--font-mono);font-size:11px;color:var(--rail-text)}
+  .blk .t .ar{font-size:10px;color:var(--rail-faint)}
+  .tiles{margin-top:8px;display:flex;gap:5px;flex-wrap:wrap}
+  .ptile{width:26px;height:26px;border-radius:8px;display:grid;place-items:center;font-size:9.5px;font-weight:700;
+    background:rgba(255,255,255,.07);color:var(--rail-text);box-shadow:inset 0 0 0 1px rgba(255,255,255,.08)}
+  .ptile.ok{background:rgba(52,211,153,.14);color:#8ff0c8;box-shadow:inset 0 0 0 1px rgba(52,211,153,.4)}
+  .ptile.late{background:rgba(251,191,36,.16);color:#ffd979;box-shadow:inset 0 0 0 1.5px var(--rail-warning)}
+  .ptile.miss{background:var(--accent);color:#fff;box-shadow:0 0 0 2px rgba(200,16,46,.28)}
+  .ptile.single{background:rgba(200,16,46,.18);color:#ff9fac;box-shadow:inset 0 0 0 1.5px #ff6b7f}
+  .ptile.leave{background:rgba(29,78,216,.16);color:#a8c2ff;box-shadow:inset 0 0 0 1px rgba(120,160,255,.5)}
+  .ptile.pend{background:rgba(255,255,255,.04);color:var(--rail-faint);box-shadow:inset 0 0 0 1px var(--rail-line)}
+  .wall .note{margin-top:13px;font-size:11.5px;color:var(--rail-faint)}
+  .wlegend{margin-top:12px;display:flex;gap:14px;flex-wrap:wrap;font-size:11px;color:var(--rail-faint)}
+  .wlegend span{display:inline-flex;align-items:center;gap:6px}
+
+  /* ---------- V8 arrival timeline ---------- */
+  .tlcard{margin-top:12px}
+  .tlhead{display:flex;align-items:center;gap:12px;padding:11px 15px;border-bottom:1px solid var(--hairline)}
+  .tlhead h3{font-size:13px;font-weight:800}
+  .tlhead .meta{font-size:11.5px;color:var(--text-muted)}
+  .tlhead .hist{margin-inline-start:auto;display:flex;align-items:flex-end;gap:2px;height:34px}
+  .tlhead .hist i{width:7px;border-radius:2px;background:var(--primary-soft)}
+  .tlhead .hist i.a{background:var(--st-late-soft)}
+  .lanes{padding:8px 0 4px}
+  .lane2{display:grid;grid-template-columns:190px minmax(0,1fr) 74px;align-items:center;gap:10px;padding:2px 15px}
+  .lane2:nth-child(even){background:var(--surface-raised)}
+  .lane2 .nm{font-size:12px;font-weight:600;display:flex;align-items:baseline;gap:7px;min-width:0}
+  .lane2 .nm .ar{font-size:10.5px;color:var(--text-faint)}
+  .lane2 .track{position:relative;height:26px;overflow:hidden}
+  .lane2 .track .base{position:absolute;left:0;right:0;top:12px;height:2px;background:var(--hairline)}
+  .lane2 .track .win{position:absolute;top:6px;height:14px;border-radius:4px;background:#f2f5fb}
+  .lane2 .track .grace{position:absolute;top:6px;height:14px;background:repeating-linear-gradient(45deg,#f6e6cd 0 4px,transparent 4px 8px)}
+  .lane2 .d{position:absolute;top:8px;width:11px;height:11px;border-radius:50%;margin-inline-start:-5.5px;
+    background:var(--st-ok);box-shadow:0 0 0 2px #fff}
+  .lane2 .d.late{background:var(--st-late);box-shadow:0 0 0 2px #fff,0 0 0 4px var(--st-late-soft)}
+  .lane2 .d.single{background:#fff;box-shadow:0 0 0 2.5px var(--st-miss)}
+  .lane2 .tail{position:absolute;top:12.5px;height:2px;background:var(--st-late);opacity:.55}
+  .lane2 .cnt{font-family:var(--font-mono);font-size:11.5px;color:var(--text-muted);text-align:right}
+  .lane2 .cnt b{color:var(--st-miss)}
+  .gutter{position:absolute;top:4px;bottom:4px;width:1px;background:var(--border-strong)}
+  .axis2{display:grid;grid-template-columns:190px minmax(0,1fr) 74px;gap:10px;padding:2px 15px 10px}
+  .axis2 .ticks{position:relative;height:30px}
+  .axis2 .tk{position:absolute;transform:translateX(-50%);font-family:var(--font-mono);font-size:10px;color:var(--text-faint)}
+  .axis2 .tk.start{color:var(--primary);font-weight:700}
+  .axis2 .tk.grace{color:var(--st-late);font-weight:700}
+  .vline{position:absolute;top:0;bottom:0;width:2px}
+  .vline.start{background:rgba(13,40,69,.35)}
+  .vline.grace{background:var(--st-late);box-shadow:0 0 0 3px rgba(180,83,9,.10)}
+
+  /* ---------- V9 treemap ---------- */
+  .funnel{margin-top:12px;display:flex;align-items:stretch;gap:0;border:1px solid var(--hairline);border-radius:16px;overflow:hidden;background:var(--surface)}
+  .funnel .st{flex:1;padding:13px 16px;border-right:1px solid var(--hairline);position:relative}
+  .funnel .st:last-child{border-right:0}
+  .funnel .st .v{margin-top:4px;font-family:var(--font-mono);font-size:26px;font-weight:800;line-height:1}
+  .funnel .st .d{margin-top:3px;font-size:11px;color:var(--text-faint)}
+  .funnel .st.drop{background:linear-gradient(180deg,#fff7f8,var(--surface))}
+  .funnel .st.drop .v{color:var(--accent)}
+  .funnel .st .arrow{position:absolute;top:50%;right:-9px;transform:translateY(-50%);width:16px;height:16px;background:var(--surface);
+    border-top:1px solid var(--hairline);border-right:1px solid var(--hairline);rotate:45deg;z-index:2}
+  .v9{margin-top:12px;display:grid;grid-template-columns:minmax(0,1fr) 350px;gap:14px}
+  .tmwrap{padding:12px}
+  .tmgrp{margin-bottom:12px}
+  .tmgrp .h{display:flex;align-items:center;gap:9px;margin-bottom:7px}
+  .tmgrp .h b{font-size:12.5px}
+  .tmgrp .h .ar{font-size:11px;color:var(--text-faint)}
+  .tmgrp .h .r{margin-inline-start:auto;font-family:var(--font-mono);font-size:11.5px;color:var(--text-muted)}
+  .tm{display:flex;gap:6px;flex-wrap:wrap}
+  .tmb{border-radius:12px;padding:9px 11px;min-height:76px;display:flex;flex-direction:column;justify-content:space-between;
+    background:var(--st-ok-soft);box-shadow:inset 0 0 0 1px rgba(4,120,87,.18)}
+  .tmb .n{font-size:11.5px;font-weight:700;color:#0b3b2b}
+  .tmb .n .ar{display:block;font-weight:400;font-size:10px;opacity:.65}
+  .tmb .c{font-family:var(--font-mono);font-size:14px;font-weight:800;color:#0b3b2b}
+  .tmb .c small{font-size:10px;font-weight:600;opacity:.7}
+  .tmb.w1{background:#fdf3e4;box-shadow:inset 0 0 0 1px rgba(180,83,9,.22)} .tmb.w1 .n,.tmb.w1 .c{color:#6b3609}
+  .tmb.w2{background:#fbe0d6;box-shadow:inset 0 0 0 1px rgba(200,16,46,.22)} .tmb.w2 .n,.tmb.w2 .c{color:#7d1220}
+  .tmb.w3{background:var(--accent);box-shadow:0 6px 18px rgba(200,16,46,.22)} .tmb.w3 .n,.tmb.w3 .c{color:#fff}
+  .tmb.sel{outline:2px solid var(--primary);outline-offset:2px}
+  .tmb .f{display:flex;align-items:flex-end;gap:6px}
+  .tmb .f .b{flex:1;height:5px;border-radius:99px;background:rgba(0,0,0,.10);overflow:hidden}
+  .tmb .f .b i{display:block;height:100%;background:rgba(0,0,0,.35)}
+  .focus .p{display:flex;align-items:center;gap:9px;padding:9px 14px;border-bottom:1px solid var(--hairline);font-size:12.5px}
+  .focus .p:last-child{border-bottom:0}
+  .focus .p .t{margin-inline-start:auto;font-family:var(--font-mono);font-size:11.5px;color:var(--text-muted)}
+  .focus .p.bad{background:#fff6f7}
+  .dot{width:9px;height:9px;border-radius:50%;flex:none;display:inline-block}
+  .dot.ok{background:var(--st-ok)} .dot.late{background:var(--st-late)} .dot.miss{background:var(--st-miss)}
+  .dot.leave{background:var(--st-leave)} .dot.pend{background:var(--st-pend)}
+  .roll{margin-top:12px;display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:10px}
+  .roll .u{background:var(--surface);border:1px solid var(--hairline);border-radius:14px;padding:10px 12px}
+  .roll .u .n{font-size:11.5px;font-weight:700}
+  .roll .u .ar{font-size:10.5px;color:var(--text-faint)}
+  .roll .u .st{margin-top:7px;font-family:var(--font-mono);font-size:11px;color:var(--text-muted)}
+  .roll .u .m{margin-top:6px;height:6px;border-radius:99px;background:var(--surface-tinted);overflow:hidden;display:flex}
+  .roll .u .m i{height:100%}
+  .roll .u.rest{opacity:.55}
+
+  /* ---------- V10 duty register ---------- */
+  .reg{margin-top:12px;background:var(--surface);border:1px solid var(--hairline);border-radius:16px;overflow:hidden}
+  .reg .mast{display:flex;align-items:flex-end;gap:14px;padding:14px 18px;border-bottom:2px solid var(--primary)}
+  .reg .mast h3{font-size:15px;font-weight:800;letter-spacing:-0.01em}
+  .reg .mast .ar{font-size:12px;color:var(--text-muted)}
+  .reg .mast .meta{margin-inline-start:auto;display:flex;gap:16px;font-size:11.5px;color:var(--text-muted)}
+  .reg .mast .meta b{display:block;font-family:var(--font-mono);font-size:15px;color:var(--text)}
+  .cols{columns:3;column-gap:0;padding:4px 0}
+  .cols.four{columns:4}
+  .psec{break-inside:avoid;padding:9px 16px 11px;border-inline-end:1px solid var(--hairline)}
+  .psec .ph{display:flex;align-items:baseline;gap:7px;padding-bottom:5px;border-bottom:1px solid var(--border);margin-bottom:5px}
+  .psec .ph b{font-size:11.5px;font-weight:800}
+  .psec .ph .ar{font-size:10px;color:var(--text-faint)}
+  .psec .ph .c{margin-inline-start:auto;font-family:var(--font-mono);font-size:10.5px;color:var(--text-muted)}
+  .psec.flag .ph{border-bottom-color:var(--accent)}
+  .psec.flag .ph .c{color:var(--accent);font-weight:700}
+  .prow{display:flex;align-items:center;gap:7px;padding:2.5px 0;font-size:11.5px;color:var(--text-muted)}
+  .prow .nm{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .prow .tm{margin-inline-start:auto;font-family:var(--font-mono);font-size:10.5px;color:var(--text-faint)}
+  .prow.bad{color:var(--text);font-weight:600}
+  .prow.bad .tm{color:var(--st-miss);font-weight:700}
+  .prow.warn{color:var(--text)}
+  .prow.warn .tm{color:var(--st-late);font-weight:700}
+  .v10{display:grid;grid-template-columns:minmax(0,1fr) 320px;gap:14px;margin-top:12px}
+  .side .it{display:flex;align-items:center;gap:9px;padding:9px 14px;border-bottom:1px solid var(--hairline);font-size:12px}
+  .side .it:last-child{border-bottom:0}
+  .side .it .m{margin-inline-start:auto;font-family:var(--font-mono);font-weight:700;color:var(--accent)}
+  .side .it .p{font-size:10.5px;color:var(--text-faint)}
+</style>
+</head>
+<body>
+<div id="app"></div>
+<script>
+/* ==================================================================== *
+ * Grounding
+ * --------------------------------------------------------------------
+ * duty_unit is one of the six seeded units (five companies + الدوام
+ * الرسمي); duty_post is free text inside a unit — البوابة الرئيسية،
+ * برج المراقبة، التفتيش، ليوان are values already in the codebase.
+ * Shift windows 05/13/21, office 07:00–15:00, grace 30m, rotation
+ * anchored on crew 2 · noon · 18 Aug 2026. BioTime gives no punch
+ * direction (punch_state 255), so a lone event is "seen at", and a
+ * day with one punch is present + flag, never a computed span.
+ * ==================================================================== */
+const TODAY = { label: 'Wed 19 Aug 2026', now: '14:07' };
+
+const UNITS = {
+  crew_1: { en: 'First Company', ar: 'السرية الأولى' },
+  crew_2: { en: 'Second Company', ar: 'السرية الثانية' },
+  crew_3: { en: 'Third Company', ar: 'السرية الثالثة' },
+  crew_4: { en: 'Fourth Company', ar: 'السرية الرابعة' },
+  crew_5: { en: 'Fifth Company', ar: 'السرية الخامسة' },
+  office: { en: 'Official Hours', ar: 'الدوام الرسمي' },
+};
+
+// 40 guards per shift across nine posts.
+const GUARD_POSTS = [
+  { en: 'Main Gate', ar: 'البوابة الرئيسية', req: 6 },
+  { en: 'Inspection', ar: 'التفتيش', req: 6 },
+  { en: 'Perimeter Patrol', ar: 'دورية السياج', req: 5 },
+  { en: 'Watchtower', ar: 'برج المراقبة', req: 4 },
+  { en: 'Liwan', ar: 'ليوان', req: 4 },
+  { en: 'Vehicle Search', ar: 'تفتيش المركبات', req: 4 },
+  { en: 'Workshop Gate', ar: 'بوابة الورشة', req: 4 },
+  { en: 'Store Yard', ar: 'ساحة المخازن', req: 4 },
+  { en: 'Control Room', ar: 'غرفة التحكم', req: 3 },
+];
+// 70 office staff across thirteen posts.
+const OFFICE_POSTS = [
+  { en: 'Registry', ar: 'الديوان', req: 8 },
+  { en: 'Personnel', ar: 'شؤون الأفراد', req: 7 },
+  { en: 'Finance', ar: 'المالية', req: 6 },
+  { en: 'Operations Room', ar: 'غرفة العمليات', req: 6 },
+  { en: 'Transport', ar: 'النقل', req: 6 },
+  { en: 'Security Permits', ar: 'التصاريح', req: 6 },
+  { en: 'Archive', ar: 'الأرشيف', req: 5 },
+  { en: 'Stores', ar: 'المخازن', req: 5 },
+  { en: 'Training', ar: 'التدريب', req: 5 },
+  { en: 'Reception', ar: 'الاستقبال', req: 4 },
+  { en: 'Legal', ar: 'الشؤون القانونية', req: 4 },
+  { en: 'IT', ar: 'الأنظمة', req: 4 },
+  { en: 'Medical', ar: 'العيادة', req: 4 },
+];
+
+const FIRST = ['Ahmed', 'Mohammed', 'Salem', 'Khalid', 'Yousef', 'Faisal', 'Rashed', 'Omar', 'Hassan', 'Tariq', 'Saif', 'Majid',
+  'Obaid', 'Juma', 'Hamad', 'Nasser', 'Ali', 'Saeed', 'Ibrahim', 'Abdullah', 'Sultan', 'Mubarak', 'Rashid', 'Marwan'];
+const LAST = ['Al Ali', 'Al Mazrouei', 'Al Ameri', 'Al Nuaimi', 'Al Dhaheri', 'Al Shamsi', 'Al Balushi', 'Al Marri', 'Al Kaabi',
+  'Al Hosani', 'Al Suwaidi', 'Al Mansoori', 'Al Zaabi', 'Al Falasi', 'Al Rumaithi'];
+
+function mulberry32(a) {
+  return function () {
+    a |= 0; a = (a + 0x6D2B79F5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+const hhmm = (min) => `${String(Math.floor(((min % 1440) + 1440) % 1440 / 60)).padStart(2, '0')}:${String(min % 60).padStart(2, '0')}`;
+const initials = (n) => n.split(' ').filter(Boolean).map((w) => w[0]).slice(0, 2).join('');
+
+/* One person appears once per name and once per G-number across the whole
+   mock site, so tiles that show only an id stay unambiguous. Night reuses
+   the morning company, so that roster is cloned rather than regenerated. */
+const USED_NAMES = new Set();
+const USED_IDS = new Set();
+function nextId(rnd) {
+  let id = `G-${1000 + Math.floor(rnd() * 3800)}`;
+  let guard = 0;
+  while (USED_IDS.has(id) && guard < 400) { id = `G-${1000 + Math.floor(rnd() * 3800)}`; guard += 1; }
+  USED_IDS.add(id);
+  return id;
+}
+
+/**
+ * Build one shift's roster. `mix` gives exact counts so every headline
+ * number in every variant agrees with the cells beneath it.
+ */
+function buildShift({ posts, unit, shift, startMin, seed, mix, pending }) {
+  const rnd = mulberry32(seed);
+  const flat = [];
+  posts.forEach((post, pi) => {
+    for (let i = 0; i < post.req; i += 1) {
+      let name = `${FIRST[Math.floor(rnd() * FIRST.length)]} ${LAST[Math.floor(rnd() * LAST.length)]}`;
+      let guard = 0;
+      while (USED_NAMES.has(name) && guard < 60) {
+        name = `${FIRST[Math.floor(rnd() * FIRST.length)]} ${LAST[Math.floor(rnd() * LAST.length)]}`;
+        guard += 1;
+      }
+      USED_NAMES.add(name);
+      flat.push({ post: post.en, postAr: post.ar, pi, name, id: nextId(rnd) });
+    }
+  });
+  // Deterministic shuffle, then hand out the exception states by exact count.
+  const order = flat.map((_, i) => i).sort((a, b) => (mulberry32(seed + a)() - mulberry32(seed + b)()));
+  const states = new Array(flat.length).fill('ok');
+  let cursor = 0;
+  for (const [state, count] of Object.entries(mix)) {
+    for (let k = 0; k < count; k += 1) { states[order[cursor]] = state; cursor += 1; }
+  }
+  flat.forEach((p, i) => {
+    p.state = pending ? 'pend' : states[i];
+    const r = rnd();
+    if (p.state === 'ok') { p.offset = Math.round(-28 + r * 50); }         // −28 … +22, inside grace
+    else if (p.state === 'late') { p.offset = Math.round(34 + r * 62); }   // 34 … 96 past start
+    else if (p.state === 'single') { p.offset = Math.round(-10 + r * 46); }
+    else { p.offset = null; }
+    p.first = p.offset === null ? null : hhmm(startMin + p.offset);
+    p.late = p.offset !== null && p.offset > 30 ? p.offset - 30 : 0;
+  });
+  const byPost = posts.map((post) => ({
+    ...post,
+    people: flat.filter((p) => p.post === post.en),
+  }));
+  return { unit, shift, startMin, posts: byPost, people: flat, pending: !!pending };
+}
+
+const MORNING = buildShift({
+  posts: GUARD_POSTS, unit: 'crew_2', shift: 'morning', startMin: 5 * 60, seed: 41,
+  mix: { late: 3, single: 2, miss: 1, leave: 1 },
+});
+const NOON = buildShift({
+  posts: GUARD_POSTS, unit: 'crew_3', shift: 'noon', startMin: 13 * 60, seed: 77,
+  mix: { late: 4, single: 1, miss: 1, leave: 2 },
+});
+// The night window belongs to the same company that worked this morning, so it
+// is the same forty people with an unopened window — not a second roster.
+const NIGHT = (() => {
+  const people = MORNING.people.map((p) => ({ ...p, state: 'pend', offset: null, first: null, late: 0 }));
+  return {
+    unit: 'crew_2', shift: 'night', startMin: 21 * 60, pending: true, people,
+    posts: GUARD_POSTS.map((post) => ({ ...post, people: people.filter((p) => p.post === post.en) })),
+  };
+})();
+const OFFICE = buildShift({
+  posts: OFFICE_POSTS, unit: 'office', shift: 'office', startMin: 7 * 60, seed: 19,
+  mix: { late: 5, single: 2, miss: 1, leave: 2 },
+});
+
+const SHIFT_META = {
+  morning: { name: 'Morning', win: '05:00 – 13:00', state: 'closed' },
+  noon: { name: 'Noon', win: '13:00 – 21:00', state: 'running · 1h 07m in' },
+  night: { name: 'Night', win: '21:00 – 05:00', state: 'starts in 6h 53m' },
+  office: { name: 'Office', win: '07:00 – 15:00', state: 'running · 7h 07m in' },
+};
+const STATE_LABEL = { ok: 'Verified', late: 'Late past grace', single: 'Single punch', miss: 'No punch', leave: 'On leave', pend: 'Not started' };
+
+const count = (s, st) => s.people.filter((p) => p.state === st).length;
+const exceptionsOf = (s) => count(s, 'late') + count(s, 'single') + count(s, 'miss');
+const seenOf = (s) => s.people.filter((p) => p.first !== null).length;
+const postExceptions = (post) => post.people.filter((p) => ['late', 'single', 'miss'].includes(p.state)).length;
+
+/** The single ordered attention list every variant leads with. */
+function attention() {
+  const rank = { miss: 0, single: 1, late: 2 };
+  const items = [];
+  for (const s of [MORNING, NOON, OFFICE]) {
+    for (const p of s.people) {
+      if (!['miss', 'single', 'late'].includes(p.state)) continue;
+      items.push({ ...p, shift: s.shift, unit: s.unit });
+    }
+  }
+  return items.sort((a, b) => rank[a.state] - rank[b.state] || (b.late || 0) - (a.late || 0));
+}
+const ATTN = attention();
+
+/* ---------------- shared chrome ---------------- */
+function topnav() {
+  const items = [['Dashboard', 0], ['Employees', 1], ['Records', 0], ['Leaves', 0], ['Ledger', 0]];
+  return `<header class="topnav">
+    <a style="display:flex;align-items:center;gap:28px">
+      <img class="logo" src="gssg-logo.png" alt="GSSG">
+      <div class="bcopy">GSSG<small>General Security Services Group</small></div>
+    </a>
+    <nav>${items.map(([l, on]) => `<a class="${on ? 'on' : ''}">${l}</a>`).join('')}</nav>
+    <div class="utils"><span class="aa">A<i></i>A</span><span>🌐 English</span><span>☀</span><span>⤓</span><span>✉</span><span>🔔</span><span>⚙</span>
+      <span class="avatar">AA</span></div>
+  </header>`;
+}
+function band(title, sub, right) {
+  const tabs = [['Directory', 0], ['Attendance', 1], ['Duty locations', 0]];
+  return `<section class="band"><div class="deco"></div><div class="inner">
+    <div class="crumb">Operations · Employees</div>
+    <h1>${title}</h1><p class="sub">${sub}</p>
+    <div class="right">${right}</div>
+    <div class="subnav">${tabs.map(([l, on]) => `<a class="${on ? 'on' : ''}">${l}</a>`).join('')}</div>
+  </div></section>`;
+}
+function fresh() {
+  return `<div class="fresh">
+    <span class="src"><i class="live"></i>BioTime mirror</span><span>read-only · JWT</span>
+    <span>synced <b>2 min ago</b></span><span>fresh through <b class="mono">14:20</b></span>
+    <span>punches today <b class="mono">1,418</b></span>
+    <span>tracked <b class="mono">190</b> person-shifts</span>
+    <button class="btn s" style="margin-inline-start:auto">Sync now</button><button class="btn s">Integration</button>
+  </div>`;
+}
+function attnBand(limit) {
+  const items = ATTN.slice(0, limit).map((p) => `
+    <span class="it">
+      <i class="dot ${p.state === 'miss' || p.state === 'single' ? 'miss' : 'late'}"></i>
+      <b>${p.name}</b>
+      <span class="p">${p.post} · ${SHIFT_META[p.shift].name}</span>
+      <span class="m">${p.state === 'miss' ? 'no punch' : p.state === 'single' ? 'one punch' : '+' + p.late + 'm'}</span>
+    </span>`).join('');
+  return `<div class="attn">
+    <div class="cnt"><b>${ATTN.length}</b><span>need a look</span></div>
+    <div class="list">${items}</div>
+    <div class="go"><button class="btn p">Open queue</button></div>
+  </div>`;
+}
+function kstrip() {
+  const on = seenOf(NOON) + seenOf(OFFICE);
+  return `<div class="kstrip">
+    ${[['On duty now', on, 'noon crew + office', ''],
+      ['Verified today', count(MORNING, 'ok') + count(NOON, 'ok') + count(OFFICE, 'ok'), 'punched inside grace', 'ok'],
+      ['Late past grace', count(MORNING, 'late') + count(NOON, 'late') + count(OFFICE, 'late'), 'across three windows', 'late'],
+      ['Single punch', count(MORNING, 'single') + count(NOON, 'single') + count(OFFICE, 'single'), 'present, no pair', 'late'],
+      ['No punch', count(MORNING, 'miss') + count(NOON, 'miss') + count(OFFICE, 'miss'), 'nothing in the window', 'miss'],
+      ['On leave', count(MORNING, 'leave') + count(NOON, 'leave') + count(OFFICE, 'leave'), 'excused automatically', '']]
+      .map(([l, v, d, tone]) => `<div class="kbox ${tone}"><div class="lbl">${l}</div><div class="v">${v}</div><div class="d">${d}</div></div>`).join('')}
+  </div>`;
+}
+
+/* ==================================================================== *
+ * 6 — Post ladder: one row per post, one cell per person
+ * ==================================================================== */
+function v6() {
+  const section = (s, label) => {
+    const sorted = [...s.posts].sort((a, b) => postExceptions(b) - postExceptions(a) || b.req - a.req);
+    const rows = sorted.map((post) => {
+      const ex = postExceptions(post);
+      const seen = post.people.filter((p) => p.first !== null).length;
+      // People on approved leave leave the denominator: a post of 4 with one
+      // approved absence is at full strength on 3, not short-handed on 4.
+      const onLeave = post.people.filter((p) => p.state === 'leave').length;
+      const due = post.req - onLeave;
+      const times = post.people.filter((p) => p.first).map((p) => p.first).sort();
+      const flags = [];
+      const c = (st) => post.people.filter((p) => p.state === st).length;
+      if (c('miss')) flags.push(`<span class="chip miss">${c('miss')} no punch</span>`);
+      if (c('single')) flags.push(`<span class="chip miss">${c('single')} single</span>`);
+      if (c('late')) flags.push(`<span class="chip late">${c('late')} late</span>`);
+      if (c('leave')) flags.push(`<span class="chip leave">${c('leave')} leave</span>`);
+      if (!flags.length) flags.push('<span class="chip ok">clean</span>');
+      return `<tr class="${ex ? 'flagged' : 'clean'}">
+        <td><span class="pn">${post.en}</span> <span class="pa ar">${post.ar}</span></td>
+        <td class="num">${post.req}</td>
+        <td><div style="display:flex;align-items:center;gap:8px">
+          <span class="num" style="font-weight:700;color:${ex ? 'var(--accent)' : 'var(--text)'}">${seen}/${due}</span>
+          <span class="bar"><i style="width:${Math.round((seen / due) * 100)}%;background:${ex ? 'var(--st-late)' : 'var(--st-ok)'}"></i></span>
+          ${onLeave ? `<span class="pa">+${onLeave} leave</span>` : ''}
+        </div></td>
+        <td><div class="strip">${post.people.map((p) => `<i class="cell ${p.state}" title="${p.name} · ${STATE_LABEL[p.state]}"></i>`).join('')}</div></td>
+        <td class="num" style="color:var(--text-muted)">${times.length ? `${times[0]} → ${times[times.length - 1]}` : '—'}</td>
+        <td>${flags.join(' ')}</td>
+      </tr>`;
+    }).join('');
+    const seen = seenOf(s);
+    return `
+    <div class="sec">
+      <span class="chip ${s.shift}">${SHIFT_META[s.shift].name}</span>
+      <h4>${label}</h4>
+      <span class="meta">${UNITS[s.unit].en} <span class="ar">${UNITS[s.unit].ar}</span> · ${SHIFT_META[s.shift].win} · ${s.people.length} assigned across ${s.posts.length} posts</span>
+      <span class="meta" style="margin-inline-start:auto">${SHIFT_META[s.shift].state}</span>
+      <span class="chip ${exceptionsOf(s) ? 'miss' : 'ok'}">${exceptionsOf(s)} exceptions</span>
+    </div>
+    <table>
+      <thead><tr><th>Post</th><th>Req</th><th>Seen</th><th>Each person</th><th>First → last punch</th><th>Flags</th></tr></thead>
+      <tbody>${rows}
+        <tr class="tot"><td>Total</td><td class="num">${s.people.length}</td>
+          <td class="num">${seen}/${s.people.length - count(s, 'leave')}</td>
+          <td colspan="3" style="color:var(--text-muted);font-weight:400">
+            ${count(s, 'ok')} verified · ${count(s, 'late')} late · ${count(s, 'single')} single punch · ${count(s, 'miss')} no punch · ${count(s, 'leave')} on leave (out of the denominator)</td></tr>
+      </tbody>
+    </table>`;
+  };
+  return `${fresh()}${attnBand(4)}${kstrip()}
+  <div class="card lad">
+    <header><h3>Coverage by post</h3>
+      <span class="chip mut">shift → unit</span><span class="chip mut">office → post</span>
+      <span class="hint">Posts with exceptions float to the top of their section</span>
+    </header>
+    ${section(MORNING, 'Guard shift')}
+    ${section(OFFICE, 'Office')}
+    <div class="legend">
+      <span><i style="background:var(--st-ok-soft);box-shadow:inset 0 0 0 1px rgba(4,120,87,.25)"></i>Verified</span>
+      <span><i style="background:var(--st-late-soft);box-shadow:inset 0 0 0 1px rgba(180,83,9,.3)"></i>Late past grace</span>
+      <span><i style="background:var(--st-miss-soft);box-shadow:inset 0 0 0 1.5px var(--st-miss)"></i>Single punch</span>
+      <span><i style="background:var(--st-miss)"></i>No punch</span>
+      <span><i style="background:var(--st-leave-soft);box-shadow:inset 0 0 0 1px rgba(29,78,216,.35)"></i>On leave</span>
+      <span><i style="background:repeating-linear-gradient(45deg,var(--surface-tinted) 0 4px,transparent 4px 8px);box-shadow:inset 0 0 0 1px var(--border-strong)"></i>Window not started</span>
+      <span style="margin-inline-start:auto">190 person-shifts on one screen · hover a cell for the name</span>
+    </div>
+  </div>`;
+}
+
+/* ==================================================================== *
+ * 7 — Command mosaic: dark wall, one tile per person, grouped by post
+ * ==================================================================== */
+function v7() {
+  const block = (post, tight) => {
+    const ex = postExceptions(post);
+    const seen = post.people.filter((p) => p.first !== null).length;
+    return `<div class="blk ${ex ? 'hot' : ''}">
+      <div class="t"><b>${post.en}</b>
+        <span class="c" ${ex ? 'style="color:#ff9fac;font-weight:700"' : ''}>${seen}/${post.req}</span>
+        <span class="ar">${post.ar}</span></div>
+      <div class="tiles">${post.people.map((p) => `<span class="ptile ${p.state}" title="${p.name} · ${p.id} · ${STATE_LABEL[p.state]}">${p.id.slice(-3)}</span>`).join('')}</div>
+    </div>`;
+  };
+  const shiftChip = (s) => {
+    const running = SHIFT_META[s.shift].state.startsWith('running');
+    return `<div class="sh ${running ? 'on' : ''}">
+      <b>${SHIFT_META[s.shift].name} · ${UNITS[s.unit].en}</b>
+      <span>${SHIFT_META[s.shift].win} · ${s.pending ? `${s.people.length} due` : `${seenOf(s)}/${s.people.length} seen`} · ${SHIFT_META[s.shift].state}</span>
+    </div>`;
+  };
+  return `${fresh()}
+  <div class="wall">
+    <div class="hd">
+      <div>
+        <div class="clock">${TODAY.now}<small> Asia/Dubai</small></div>
+        <div style="margin-top:5px;font-size:12px;color:var(--rail-text)">${TODAY.label} · handover 21:00 → Second Company <span class="ar">السرية الثانية</span></div>
+      </div>
+      <div class="shifts">${[MORNING, NOON, NIGHT, OFFICE].map(shiftChip).join('')}</div>
+      <div class="kv">
+        <div><div class="v" style="color:var(--rail-success)">${seenOf(NOON) + seenOf(OFFICE)}</div><div class="l">on duty</div></div>
+        <div><div class="v">110</div><div class="l">expected</div></div>
+        <div><div class="v" style="color:var(--rail-warning)">${count(NOON, 'late') + count(OFFICE, 'late')}</div><div class="l">late</div></div>
+        <div><div class="v" style="color:#ff8fa0">${ATTN.filter((a) => a.state !== 'late').length}</div><div class="l">unaccounted</div></div>
+      </div>
+    </div>
+    <div class="lane">
+      <span class="tag">Look here</span>
+      ${ATTN.slice(0, 6).map((p) => `<span class="c"><b>${p.name}</b><span class="p">${p.post} · ${SHIFT_META[p.shift].name}</span>
+        <span class="m">${p.state === 'miss' ? 'no punch' : p.state === 'single' ? '1 punch' : '+' + p.late + 'm'}</span></span>`).join('')}
+      <button class="btn s" style="margin-inline-start:auto;background:transparent;border-color:#5c2733;color:#ffb3bf">All ${ATTN.length}</button>
+    </div>
+    <div class="grp"><h4>Noon · Third Company</h4><span class="ar">السرية الثالثة</span>
+      <span class="r">${seenOf(NOON)}/${NOON.people.length} seen · 9 posts · running</span></div>
+    <div class="mos">${NOON.posts.map((p) => block(p)).join('')}</div>
+    <div class="grp"><h4>Office · Official Hours</h4><span class="ar">الدوام الرسمي</span>
+      <span class="r">${seenOf(OFFICE)}/${OFFICE.people.length} seen · 13 posts · running</span></div>
+    <div class="mos tight">${OFFICE.posts.map((p) => block(p, true)).join('')}</div>
+    <div class="wlegend">
+      <span><i class="ptile ok" style="width:18px;height:18px"></i>verified</span>
+      <span><i class="ptile late" style="width:18px;height:18px"></i>late</span>
+      <span><i class="ptile single" style="width:18px;height:18px"></i>single punch</span>
+      <span><i class="ptile miss" style="width:18px;height:18px"></i>no punch</span>
+      <span><i class="ptile leave" style="width:18px;height:18px"></i>leave</span>
+      <span style="margin-inline-start:auto">150 tiles across three panels · colour is spent only on trouble, so the eye lands on it</span>
+    </div>
+    <p class="note">Tiles carry the last three digits of the G-number, not names: at this headcount the name belongs in the hover and in the
+      attention lane, not in the grid.
+      BioTime reports events without direction (<span class="mono">punch_state 255</span>), so a tile means “seen at”, never “checked in”.</p>
+  </div>`;
+}
+
+/* ==================================================================== *
+ * 8 — Arrival timeline: post lanes, one dot per person
+ * ==================================================================== */
+function v8() {
+  const panel = (s, axisStartMin, axisMin) => {
+    const pct = (min) => ((min - axisStartMin) / axisMin) * 100;
+    const start = s.startMin, grace = s.startMin + 30, end = s.startMin + 480;
+    const lanes = [...s.posts].sort((a, b) => postExceptions(b) - postExceptions(a)).map((post) => {
+      const dots = post.people.filter((p) => p.offset !== null).map((p) => {
+        const at = pct(start + p.offset);
+        const tail = p.late ? `<i class="tail" style="left:${pct(grace).toFixed(2)}%;width:${(at - pct(grace)).toFixed(2)}%"></i>` : '';
+        const cls = p.state === 'late' ? 'late' : p.state === 'single' ? 'single' : '';
+        return `${tail}<i class="d ${cls}" style="left:${at.toFixed(2)}%" title="${p.name} · ${p.first} · ${STATE_LABEL[p.state]}"></i>`;
+      }).join('');
+      const missing = post.people.filter((p) => p.state === 'miss').length;
+      const leave = post.people.filter((p) => p.state === 'leave').length;
+      return `<div class="lane2">
+        <span class="nm"><span>${post.en}</span><span class="ar">${post.ar}</span></span>
+        <span class="track">
+          <i class="base"></i>
+          <i class="win" style="left:${pct(start).toFixed(2)}%;width:${(pct(end) - pct(start)).toFixed(2)}%"></i>
+          <i class="grace" style="left:${pct(start).toFixed(2)}%;width:${(pct(grace) - pct(start)).toFixed(2)}%"></i>
+          <i class="vline start" style="left:${pct(start).toFixed(2)}%"></i>
+          <i class="vline grace" style="left:${pct(grace).toFixed(2)}%"></i>
+          ${dots}
+        </span>
+        <span class="cnt">${post.people.length - missing - leave}/${post.req}${missing ? ` <b>−${missing}</b>` : ''}${leave ? ` <span style="color:var(--st-leave)">·${leave}L</span>` : ''}</span>
+      </div>`;
+    }).join('');
+    // Ticks every half hour, but nothing within 25 minutes of the two labelled
+    // lines — a tick under "start" or "grace" is noise, not information.
+    const ticks = [];
+    for (let m = axisStartMin; m <= axisStartMin + axisMin - 25; m += 30) {
+      if (Math.abs(m - start) < 25 || Math.abs(m - grace) < 25) continue;
+      ticks.push(m);
+    }
+    const offsets = s.people.filter((p) => p.offset !== null).map((p) => p.offset);
+    const buckets = new Array(11).fill(0);
+    offsets.forEach((o) => { const b = Math.min(10, Math.max(0, Math.floor((o + 30) / 12))); buckets[b] += 1; });
+    const median = offsets.slice().sort((a, b) => a - b)[Math.floor(offsets.length / 2)];
+    return `<div class="card tlcard">
+      <div class="tlhead">
+        <span class="chip ${s.shift}">${SHIFT_META[s.shift].name}</span>
+        <h3>${UNITS[s.unit].en} <span class="ar" style="font-weight:400;color:var(--text-muted)">${UNITS[s.unit].ar}</span></h3>
+        <span class="meta">${SHIFT_META[s.shift].win} · ${s.people.length} assigned · grace 30m · ${SHIFT_META[s.shift].state}</span>
+        <span class="chip ${exceptionsOf(s) ? 'miss' : 'ok'}">${exceptionsOf(s)} right of the line</span>
+        <span class="meta">median arrival <b class="mono">${median >= 0 ? '+' : '−'}${Math.abs(median)}m</b></span>
+        <span class="hist">${buckets.map((b, i) => `<i class="${i > 5 ? 'a' : ''}" style="height:${Math.max(3, b * 3.4)}px"></i>`).join('')}</span>
+      </div>
+      <div class="lanes">${lanes}</div>
+      <div class="axis2"><span></span><span class="ticks">
+        ${ticks.map((m) => `<span class="tk" style="left:${pct(m).toFixed(2)}%">${hhmm(m)}</span>`).join('')}
+        <span class="tk start" style="left:${pct(start).toFixed(2)}%;top:14px">start ${hhmm(start)}</span>
+        <span class="tk grace" style="left:${pct(grace).toFixed(2)}%;top:14px">grace ${hhmm(grace)}</span>
+      </span><span class="tk" style="position:static;text-align:right">closes ${hhmm(end)}</span></div>
+    </div>`;
+  };
+  return `${fresh()}${attnBand(4)}
+  ${panel(MORNING, 5 * 60 - 45, 210)}
+  ${panel(OFFICE, 7 * 60 - 45, 210)}
+  <div class="card" style="margin-top:12px;padding:11px 15px;font-size:12px;color:var(--text-muted);display:flex;gap:16px;flex-wrap:wrap">
+    <span><i class="dot ok"></i> arrival inside grace</span>
+    <span><i class="dot late"></i> right of the bright line, tail = minutes lost</span>
+    <span><i class="dot miss" style="background:#fff;box-shadow:0 0 0 2.5px var(--st-miss)"></i> single punch</span>
+    <span><b class="mono" style="color:var(--st-miss)">−n</b> people with no punch at all</span>
+    <span style="margin-inline-start:auto">One glance test: is the cloud left of the amber line?</span>
+  </div>`;
+}
+
+/* ==================================================================== *
+ * 9 — Coverage mosaic sized by headcount + focus panel
+ * ==================================================================== */
+function v9() {
+  const scheduled = MORNING.people.length + NOON.people.length + OFFICE.people.length;
+  const seen = seenOf(MORNING) + seenOf(NOON) + seenOf(OFFICE);
+  const onTime = count(MORNING, 'ok') + count(NOON, 'ok') + count(OFFICE, 'ok');
+  const exc = exceptionsOf(MORNING) + exceptionsOf(NOON) + exceptionsOf(OFFICE);
+  const heat = (post) => {
+    const d = postExceptions(post) / post.req;
+    return d === 0 ? '' : d < 0.18 ? 'w1' : d < 0.34 ? 'w2' : 'w3';
+  };
+  const group = (s, sel) => {
+    const blocks = [...s.posts].sort((a, b) => postExceptions(b) / b.req - postExceptions(a) / a.req).map((post) => {
+      const seenP = post.people.filter((p) => p.first !== null).length;
+      const ex = postExceptions(post);
+      return `<div class="tmb ${heat(post)} ${post.en === sel ? 'sel' : ''}" style="flex:${post.req} 1 ${post.req * 22}px">
+        <div class="n">${post.en}<span class="ar">${post.ar}</span></div>
+        <div class="c">${seenP}<small>/${post.req}</small> ${ex ? `<small>· ${ex} flag${ex > 1 ? 's' : ''}</small>` : ''}</div>
+        <div class="f"><span class="b"><i style="width:${Math.round((seenP / post.req) * 100)}%"></i></span></div>
+      </div>`;
+    }).join('');
+    return `<div class="tmgrp">
+      <div class="h"><span class="chip ${s.shift}">${SHIFT_META[s.shift].name}</span>
+        <b>${UNITS[s.unit].en}</b><span class="ar">${UNITS[s.unit].ar}</span>
+        <span class="r">${s.people.length} people · ${s.posts.length} posts · ${exceptionsOf(s)} exceptions</span></div>
+      <div class="tm">${blocks}</div>
+    </div>`;
+  };
+  const selPost = OFFICE.posts.find((p) => p.en === 'Registry');
+  const rollup = ['crew_1', 'crew_2', 'crew_3', 'crew_4', 'crew_5', 'office'].map((code) => {
+    const duty = code === 'crew_2' ? MORNING : code === 'crew_3' ? NOON : code === 'office' ? OFFICE : null;
+    if (!duty) {
+      return `<div class="u rest"><div class="n">${UNITS[code].en}</div><div class="ar">${UNITS[code].ar}</div>
+        <div class="st">resting · next noon ${code === 'crew_4' ? '20 Aug' : code === 'crew_5' ? '21 Aug' : '23 Aug'}</div>
+        <div class="m"><i style="width:100%;background:var(--surface-tinted)"></i></div></div>`;
+    }
+    const okW = Math.round((count(duty, 'ok') / duty.people.length) * 100);
+    const lateW = Math.round(((count(duty, 'late') + count(duty, 'single')) / duty.people.length) * 100);
+    return `<div class="u"><div class="n">${UNITS[code].en}</div><div class="ar">${UNITS[code].ar}</div>
+      <div class="st">${code === 'crew_2' ? 'morning + night' : code === 'crew_3' ? 'noon' : 'office'} · ${seenOf(duty)}/${duty.people.length}</div>
+      <div class="m"><i style="width:${okW}%;background:var(--st-ok)"></i><i style="width:${lateW}%;background:var(--st-late)"></i>
+        <i style="width:${100 - okW - lateW}%;background:var(--st-miss)"></i></div></div>`;
+  }).join('');
+  return `${fresh()}
+  <div class="funnel">
+    ${[['Scheduled', scheduled, 'morning 40 · noon 40 · office 70 (night 40 not started)', ''],
+      ['Seen by a reader', seen, `${scheduled - seen} never appeared`, ''],
+      ['Inside grace', onTime, 'arrival ≤ start + 30m', ''],
+      ['Needs a decision', exc, 'late · single punch · no punch', 'drop'],
+      ['Excused', count(MORNING, 'leave') + count(NOON, 'leave') + count(OFFICE, 'leave'), 'approved leave in Sentinel', '']]
+      .map(([l, v, d, cls]) => `<div class="st ${cls}"><div class="lbl">${l}</div><div class="v">${v}</div><div class="d">${d}</div>
+        ${cls === 'drop' ? '' : '<i class="arrow"></i>'}</div>`).join('')}
+  </div>
+  <div class="v9">
+    <div class="card tmwrap">
+      ${group(MORNING)}
+      ${group(NOON)}
+      ${group(OFFICE, 'Registry')}
+      <div class="legend" style="padding:2px 0 0">
+        <span><i style="background:var(--st-ok-soft);border-radius:4px"></i>clean</span>
+        <span><i style="background:#fdf3e4;border-radius:4px"></i>1 flag</span>
+        <span><i style="background:#fbe0d6;border-radius:4px"></i>a few</span>
+        <span><i style="background:var(--accent);border-radius:4px"></i>worst post</span>
+        <span style="margin-inline-start:auto">Block width = headcount, colour = exception density. 31 blocks stand in for 150 people on duty.</span>
+      </div>
+    </div>
+    <div>
+      <div class="card focus">
+        <header><h3>Registry <span class="ar" style="font-weight:400;color:var(--text-muted)">الديوان</span></h3>
+          <span class="chip office">Office</span><span class="hint">8 assigned</span></header>
+        ${selPost.people.map((p) => `<div class="p ${['miss', 'single', 'late'].includes(p.state) ? 'bad' : ''}">
+          <i class="dot ${p.state === 'single' ? 'miss' : p.state}"></i>
+          <span>${p.name}</span>
+          <span class="t">${p.first ?? STATE_LABEL[p.state]}${p.late ? ` · +${p.late}m` : ''}</span>
+        </div>`).join('')}
+        <div style="padding:11px 14px;display:flex;gap:8px">
+          <button class="btn p s">Open queue for this post</button><button class="btn s">Export</button>
+        </div>
+      </div>
+      <div class="card" style="margin-top:12px">
+        <header><h3>Why a block turns red</h3></header>
+        <div style="padding:12px 15px;font-size:12px;color:var(--text-muted);line-height:1.65">
+          Density, not headcount: <b>3 flags in a post of 4</b> outranks <b>3 flags in a post of 8</b>. A post whose window has
+          not opened stays neutral rather than counting absences early, and people on approved leave are removed from the
+          denominator instead of being drawn as gaps.
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="roll">${rollup}</div>`;
+}
+
+/* ==================================================================== *
+ * 10 — Duty register: names visible at scale, typographic density
+ * ==================================================================== */
+function v10() {
+  const sec = (post) => {
+    const ex = postExceptions(post);
+    const seen = post.people.filter((p) => p.first !== null).length;
+    const rows = [...post.people].sort((a, b) => {
+      const rank = { miss: 0, single: 1, late: 2, ok: 3, leave: 4, pend: 5 };
+      return rank[a.state] - rank[b.state];
+    }).map((p) => {
+      const cls = ['miss', 'single'].includes(p.state) ? 'bad' : p.state === 'late' ? 'warn' : '';
+      const t = p.state === 'miss' ? 'no punch' : p.state === 'leave' ? 'leave'
+        : p.state === 'single' ? `${p.first} only` : p.state === 'late' ? `${p.first} +${p.late}m` : p.first;
+      return `<div class="prow ${cls}"><i class="dot ${p.state === 'single' ? 'miss' : p.state}"></i>
+        <span class="nm">${p.name}</span><span class="tm">${t}</span></div>`;
+    }).join('');
+    return `<div class="psec ${ex ? 'flag' : ''}">
+      <div class="ph"><b>${post.en}</b><span class="ar">${post.ar}</span><span class="c">${seen}/${post.req}</span></div>
+      ${rows}</div>`;
+  };
+  const register = (s, cols) => `
+    <div class="reg">
+      <div class="mast">
+        <div>
+          <h3>${SHIFT_META[s.shift].name} duty register · ${UNITS[s.unit].en}</h3>
+          <div style="font-size:12px;color:var(--text-muted)"><span class="ar">${UNITS[s.unit].ar}</span> · ${SHIFT_META[s.shift].win} · ${TODAY.label}</div>
+        </div>
+        <div class="meta">
+          <div><b>${s.people.length}</b>assigned</div>
+          <div><b>${seenOf(s)}</b>seen</div>
+          <div><b style="color:var(--st-late)">${count(s, 'late')}</b>late</div>
+          <div><b style="color:var(--st-miss)">${count(s, 'single') + count(s, 'miss')}</b>unpaired</div>
+          <div><b style="color:var(--st-leave)">${count(s, 'leave')}</b>leave</div>
+        </div>
+      </div>
+      <div class="cols ${cols === 4 ? 'four' : ''}">${[...s.posts].sort((a, b) => postExceptions(b) - postExceptions(a)).map(sec).join('')}</div>
+    </div>`;
+  return `${fresh()}
+  <div class="v10">
+    <div>
+      ${register(MORNING, 3)}
+      ${register(OFFICE, 4)}
+    </div>
+    <div>
+      <div class="card side">
+        <header><h3>Needs a decision</h3><span class="chip miss">${ATTN.length}</span></header>
+        ${ATTN.slice(0, 9).map((p) => `<div class="it">
+          <i class="dot ${p.state === 'late' ? 'late' : 'miss'}"></i>
+          <div><div>${p.name}</div><div class="p">${p.post} · ${SHIFT_META[p.shift].name} · ${UNITS[p.unit].en}</div></div>
+          <span class="m">${p.state === 'miss' ? 'none' : p.state === 'single' ? '1 punch' : '+' + p.late + 'm'}</span>
+        </div>`).join('')}
+        <div style="padding:11px 14px;display:flex;gap:8px"><button class="btn p s">Open queue</button><button class="btn s">Print register</button></div>
+      </div>
+      <div class="card" style="margin-top:12px">
+        <header><h3>Reading the register</h3></header>
+        <div style="padding:12px 15px;font-size:12px;color:var(--text-muted);line-height:1.65">
+          Every name is present, but only trouble is ink-black: verified rows sit at 11.5px in muted grey with a green bead, and
+          each post lists its exceptions first. A post with a flag gets a red rule under its heading, so the eye scans headings
+          before names.
+        </div>
+      </div>
+      <div class="card" style="margin-top:12px">
+        <header><h3>Night · Second Company</h3><span class="chip night">21:00 – 05:00</span></header>
+        <div style="padding:12px 15px;font-size:12px;color:var(--text-muted);line-height:1.65">
+          40 people due in 6h 53m. The register for a window that has not opened is printed empty rather than pre-filled with
+          absences, because a missing punch before the window means nothing.
+        </div>
+      </div>
+    </div>
+  </div>`;
+}
+
+/* ==================================================================== */
+const VARIANTS = [
+  { n: 6, name: 'Post ladder — one row per post, one cell per person',
+    band: () => band('Attendance <span style="font-weight:400;opacity:.7;font-size:17px">الحضور والغياب</span>', 'Coverage by post: 40 per guard shift, 70 in the office, on one screen',
+      '<span class="gpill">Wed 19 Aug</span><span class="gpill solid">Export day</span>'),
+    body: v6,
+    blurb: 'The unit of the row is the post, never the person, so headcount grows sideways as cells instead of downward as rows. Nine guard posts plus thirteen office posts = 22 rows for 150 people. Each cell is one person, coloured by state; hover gives the name.',
+    eye: 'Eye path: red attention band → the accent-barred rows that float to the top → the coloured cells inside them. Clean rows are deliberately low-contrast.',
+    tags: ['scales to hundreds', 'sortable, exportable', 'names only on hover', 'reads as a table, not a display'] },
+  { n: 7, name: 'Command mosaic — dark wall, tile per person, grouped by post',
+    band: () => band('Attendance <span style="font-weight:400;opacity:.7;font-size:17px">الحضور والغياب</span>', 'The duty-room wall: every person a tile, every post a block',
+      '<span class="gpill">Live · 30s</span><span class="gpill solid">Wall display</span>'),
+    body: v7,
+    blurb: 'Keeps the ops-room feel you liked and scales it: 110 tiles of 26px fit in one panel because a person costs a tile, not a row. Blocks are posts, sized by their own headcount; a block with a flag gets a red frame.',
+    eye: 'Eye path: “Look here” lane at the top → red-framed blocks → the filled red tiles inside. Verified tiles are near-monochrome navy, so colour equals trouble.',
+    tags: ['eye candy', 'great on a big screen', 'initials, not names', 'weak for export or audit'] },
+  { n: 8, name: 'Arrival timeline — post lanes, one dot per person',
+    band: () => band('Attendance <span style="font-weight:400;opacity:.7;font-size:17px">الحضور والغياب</span>', 'Arrivals against the grace line, lane per post',
+      '<span class="gpill">Wed 19 Aug</span><span class="gpill solid">Compare days</span>'),
+    body: v8,
+    blurb: 'Time is the x-axis, posts are lanes, each person is a dot at their first punch. Density stops mattering: 40 dots in 9 lanes and 70 in 13 lanes still read instantly, and a late arrival draws an amber tail back to the grace line so lost minutes are visible as length.',
+    eye: 'Eye path: the amber grace line → anything to the right of it → the −n counter on the right edge for people with no punch at all. One question answered in one glance: is the cloud left of the line?',
+    tags: ['fastest judgment', 'shows how late, not just late', 'per-post totals are secondary', 'unfamiliar chart for some readers'] },
+  { n: 9, name: 'Coverage mosaic — blocks sized by headcount, drill on the worst',
+    band: () => band('Attendance <span style="font-weight:400;opacity:.7;font-size:17px">الحضور والغياب</span>', 'Aggregate first: 31 blocks stand in for 150 people on duty',
+      '<span class="gpill">30-day trend</span><span class="gpill solid">Sync now</span>'),
+    body: v9,
+    blurb: 'Never draws 150 people at once. A funnel states the day in five numbers, then each post becomes a block whose width is its headcount and whose colour is its exception density; the right panel expands only the post you pick. Unit rollup at the bottom carries the rotation, including who is resting.',
+    eye: 'Eye path: funnel → the widest, reddest block → focus panel. Size and saturation do the pointing, so nothing needs to be read to find the problem.',
+    tags: ['best for a supervisor', 'progressive disclosure', 'density beats headcount', 'individuals need one click'] },
+  { n: 10, name: 'Duty register — every name visible, exceptions in ink',
+    band: () => band('Attendance <span style="font-weight:400;opacity:.7;font-size:17px">الحضور والغياب</span>', 'The duty register, printed by post, in reading order',
+      '<span class="gpill">Wed 19 Aug</span><span class="gpill solid">Print register</span>'),
+    body: v10,
+    blurb: 'For when names matter: three columns for the 40-guard shift, four for the 70 office staff, grouped by post and ordered exceptions-first inside each post. Typographic density instead of card chrome — 110 names with punch times in roughly one screen each.',
+    eye: 'Eye path: post headings with a red rule → the bold rows at the top of those posts → the side queue. Verified names stay muted grey so they never compete.',
+    tags: ['names at scale', 'matches the paper register', 'print-ready', 'least glanceable of the five'] },
+];
+
+function render(v) {
+  return `<section class="vcap">
+    <span class="num">${v.n}</span>
+    <div><h2>${v.name}</h2><p>${v.blurb}</p><div class="eye">${v.eye}</div></div>
+    <div class="tags">${v.tags.map((t) => `<span>${t}</span>`).join('')}</div>
+  </section>
+  <div>${topnav()}${v.band()}<div class="page">${v.body()}</div></div>`;
+}
+const pick = new URLSearchParams(location.search).get('v');
+const chosen = pick ? VARIANTS.filter((v) => String(v.n) === pick) : VARIANTS;
+document.getElementById('app').innerHTML = chosen.map(render).join('');
+</script>
+</body>
+</html>
