@@ -89,9 +89,10 @@ def _preflight(db: Session, year: int, month: int) -> dict[str, svc.MonthGrid]:
         for issue in grid.blocking
     ]
     if blocking:
+        blocked_sheets = ", ".join(sorted({issue["sheet"] for issue in blocking}))
         raise ValidationFailedError(
             "TIMESHEET_BLOCKED",
-            "Fix the blocking issues before downloading the sheets.",
+            f"Fix the blocking issues on the following sheet(s) before downloading: {blocked_sheets}.",
             blocking=blocking,
         )
     return grids

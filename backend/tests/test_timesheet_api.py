@@ -472,6 +472,9 @@ def test_export_preflights_both_sheets_before_sealing(client, db_session):
 
     response = client.get("/api/v1/timesheet/2026/7/export")
     assert response.status_code == 422
+    assert response.json()["error"]["message"] == (
+        "Fix the blocking issues on the following sheet(s) before downloading: drivers."
+    )
     blocking = response.json()["error"]["details"]["blocking"]
     assert {issue["sheet"] for issue in blocking} == {"drivers"}
     assert all(issue["kind"] == "no_nationality" for issue in blocking)
