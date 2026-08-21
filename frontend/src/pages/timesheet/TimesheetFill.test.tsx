@@ -253,4 +253,16 @@ describe('drag to fill, through the page', () => {
     await waitFor(() => expect(toast.error).toHaveBeenCalledTimes(1))
     expect(toast.error).toHaveBeenCalledWith(expect.stringContaining('The month is closed.'))
   })
+
+  it('removes a refused picker correction from the undo stack', async () => {
+    setTimesheetCell.mockRejectedValue(new Error('The month is closed.'))
+    renderPage()
+    await screen.findByRole('table')
+
+    await userEvent.click(cellOf(3))
+    await userEvent.click(screen.getByRole('menuitem', { name: /annual leave/i }))
+    await waitFor(() => expect(toast.error).toHaveBeenCalledWith('The month is closed.'))
+    expect(screen.getByText('No corrections yet')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /undo last change/i })).toBeDisabled()
+  })
 })

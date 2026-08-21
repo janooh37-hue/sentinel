@@ -132,6 +132,12 @@ export function TimesheetPage(): React.JSX.Element {
   // belongs upstream, in the attendance grid or the filler assignment.
   const editable = canEdit && !grid.closed && ui.variant === 'attendance'
 
+  const rowsById = useMemo(() => {
+    const index = new Map<string, (typeof grid.rows)[number]>()
+    for (const row of grid.rows) index.set(row.employee_id, row)
+    return index
+  }, [grid.rows])
+
   const stepMonth = useCallback((delta: -1 | 1) => {
     setParams((prev) => {
       const raw = prev.month + delta
@@ -152,18 +158,18 @@ export function TimesheetPage(): React.JSX.Element {
   /** The code a cell holds right now — the value a later Undo has to restore. */
   const codeAt = useCallback(
     (employeeId: string, day: number): Code | null => {
-      const row = grid.rows.find((r) => r.employee_id === employeeId)
+      const row = rowsById.get(employeeId)
       const held = row?.codes[day - 1] ?? null
       return held !== null && isCode(held) ? held : null
     },
-    [grid.rows],
+    [rowsById],
   )
 
   /**
    * One cell, from a click on the picker or a code letter on the keyboard.
    *
-   * The input object is built HERE and handed straight to `mutate`. It is never
-   * reused, copied or spread between calls: `useSetCell`'s `onSettled`
+   * The input object is built HERE and handed straight to `mutateAsync`. It is
+   * never reused, copied or spread between calls: `useSetCell`'s `onSettled`
    * recognises the write that is settling by reference identity on
    * `state.variables`, and two writes sharing one object would each be mistaken
    * for the other's sibling — which drops the baseline early and costs a
@@ -171,11 +177,11 @@ export function TimesheetPage(): React.JSX.Element {
    */
   const onSetCell = useCallback(
     (employeeId: string, day: number, code: Code | null, note?: string) => {
-      setCorrections((stack) => [
-        ...stack,
-        { employeeId, day, previous: codeAt(employeeId, day) },
-      ])
-      setCell.mutate({ employeeId, day, code, note })
+      const entry: Correction = { employeeId, day, previous: codeAt(employeeId, day) }
+      setCorrections((stack) => [...stack, entry])
+      void setCell
+        .mutateAsync({ employeeId, day, code, note })
+        .catch(() => setCorrections((stack) => stack.filter((candidate) => candidate !== entry)))
     },
     [codeAt, setCell],
   )
