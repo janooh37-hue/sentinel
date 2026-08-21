@@ -74,19 +74,23 @@ function pdfPages(pdf: Uint8Array): { sizes: string[]; pages: number } {
  * `theme: 'dark'` and the largest font scale are the defaults on purpose: they
  * are the two settings that used to leak onto paper, so every case exercises
  * them rather than one dedicated test nobody reads.
+ *
+ * `shift` reproduces an active shift chip: the page hands the print sheet the
+ * rows it filtered, and the chip alongside them.
  */
 async function mount(
   page: Page,
   lang: string,
   layout: string,
   theme: 'light' | 'dark' = 'dark',
+  shift: string | null = null,
 ): Promise<void> {
   await page.emulateMedia({ media: 'screen' })
   await page.goto('/')
   await page.waitForFunction("!!document.getElementById('root')")
 
   await page.evaluate(
-    async ({ lang, layout, theme }) => {
+    async ({ lang, layout, theme, shift }) => {
       // Dynamic by necessity: this body is serialised and evaluated inside the
       // browser, where the specifiers are resolved by the dev server's module
       // graph. A static import here would be resolved by Node against the test
@@ -120,16 +124,16 @@ async function mount(
           { value: { user, status: 'authed' } },
           React.createElement(AttendancePrintSheet, {
             layout,
-            rows: ROWS,
+            rows: shift === null ? ROWS : ROWS.filter((row) => row.shift_code === shift),
             now: new Date('2026-08-20T18:00:00Z'),
             operationalDate: '2026-08-20',
-            shiftCode: null,
+            shiftCode: shift,
             search: '',
           }),
         ),
       )
     },
-    { lang, layout, theme },
+    { lang, layout, theme, shift },
   )
 
   // Hidden on screen is the contract that keeps this off the display.
@@ -228,5 +232,32 @@ test.describe('attendance printout', () => {
     const windows = page.getByTestId('attendance-print-window')
     await expect(windows.first()).toHaveText('13:00 – 21:00')
     await expect(windows.nth(1)).toHaveText('21:00 – 05:00')
+  })
+
+  /**
+   * Save as PDF has no API: the dialog takes its suggested filename from
+   * `document.title` and nothing else, so the register renames the tab for the
+   * life of the dialog and puts it back after. Chromium's dialog cannot be
+   * opened from a test and `page.pdf()` fires neither lifecycle event, so the
+   * events the browser fires around it are dispatched here instead — on the
+   * real bundle, in a real browser.
+   */
+  test('save as pdf is suggested an Arabic name for the report', async ({ page }) => {
+    // The English UI, deliberately: the sheet is filed in an Arabic registry
+    // whichever language the operator is reading the screen in.
+    await mount(page, 'en', 'roster', 'dark', 'noon')
+    const before = await page.title()
+
+    const named = await page.evaluate(() => {
+      window.dispatchEvent(new Event('beforeprint'))
+      const suggested = document.title
+      window.dispatchEvent(new Event('afterprint'))
+      return { suggested, after: document.title }
+    })
+
+    // نوع الكشف_مكان العمل_اليوم_الوردية_التاريخ — 20 Aug 2026 is a Thursday,
+    // and the noon company on it is السرية الرابعة.
+    expect(named.suggested).toBe('كشف تدقيق الحضور_السرية الرابعة_الخميس_مسائية_20-08-2026')
+    expect(named.after).toBe(before)
   })
 })

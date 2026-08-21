@@ -23,7 +23,7 @@
  * register built from rules and weight needs no fill anyway.
  */
 
-import { useContext, useEffect, useState } from 'react'
+import { useContext, useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { AuthContext } from '@/lib/authContext'
@@ -42,6 +42,7 @@ import {
   siteTime,
   splitByShift,
 } from './attendanceModel'
+import { attendancePrintFilename } from './printFilename'
 
 export type PrintLayout = 'sheet' | 'roster' | 'shift'
 
@@ -212,6 +213,49 @@ function usePrintedAt(language: string): string {
   return stamp
 }
 
+/**
+ * The filename **Save as PDF** suggests, which the browser reads off
+ * `document.title`.
+ *
+ * Swapped on `beforeprint` and put back on `afterprint`, because the tab is a
+ * wall-mounted dashboard on some desks — a title permanently renamed to a
+ * register would be wrong everywhere except inside the dialog. `beforeprint`
+ * fires before the preview is generated, so the dialog reads the new title;
+ * unmounting mid-dialog restores it rather than stranding the register's name
+ * on the tab. See `printFilename.ts` for the shape.
+ */
+function usePrintFilename(filename: string): void {
+  // Read through a ref so the listeners are registered exactly once. Keyed on
+  // the filename instead, a background refetch landing while the dialog is open
+  // would run the cleanup — and therefore the restore — mid-print, and Save as
+  // PDF would be handed the app's own title back. The day is refetched on a
+  // 30-second staleTime, so that window is real.
+  const current = useRef(filename)
+  useEffect(() => {
+    current.current = filename
+  }, [filename])
+
+  const previous = useRef<string | null>(null)
+  useEffect(() => {
+    const swap = (): void => {
+      previous.current ??= document.title
+      document.title = current.current
+    }
+    const restore = (): void => {
+      if (previous.current === null) return
+      document.title = previous.current
+      previous.current = null
+    }
+    window.addEventListener('beforeprint', swap)
+    window.addEventListener('afterprint', restore)
+    return () => {
+      window.removeEventListener('beforeprint', swap)
+      window.removeEventListener('afterprint', restore)
+      restore()
+    }
+  }, [])
+}
+
 export function AttendancePrintSheet({
   layout,
   rows,
@@ -229,6 +273,7 @@ export function AttendancePrintSheet({
   const auth = useContext(AuthContext)
   const user = auth?.user ?? null
   const printedAt = usePrintedAt(i18n.language)
+  usePrintFilename(attendancePrintFilename({ layout, rows, operationalDate, shiftCode }))
   const input: StateInput = { now, graceMinutes }
   const list = sections(rows)
 

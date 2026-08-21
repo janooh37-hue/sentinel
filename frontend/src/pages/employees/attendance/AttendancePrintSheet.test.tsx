@@ -132,8 +132,8 @@ const USER = {
   has_signature: false,
 } as SessionUser
 
-function renderSheet(props: Partial<React.ComponentProps<typeof AttendancePrintSheet>> = {}) {
-  return render(
+function sheet(props: Partial<React.ComponentProps<typeof AttendancePrintSheet>> = {}) {
+  return (
     <AuthContext.Provider
       value={{
         user: USER,
@@ -153,8 +153,12 @@ function renderSheet(props: Partial<React.ComponentProps<typeof AttendancePrintS
         search=""
         {...props}
       />
-    </AuthContext.Provider>,
+    </AuthContext.Provider>
   )
+}
+
+function renderSheet(props: Partial<React.ComponentProps<typeof AttendancePrintSheet>> = {}) {
+  return render(sheet(props))
 }
 
 beforeEach(() => {
@@ -367,6 +371,60 @@ describe('AttendancePrintSheet', () => {
       const band = screen.getByText('05:00 – 13:00').closest('tr')
       expect(band).toHaveTextContent('Morning')
       expect(band).toHaveTextContent('السرية الثانية')
+    })
+  })
+
+  describe('save as pdf', () => {
+    // The dialog takes its suggested filename from `document.title` and nowhere
+    // else, so the swap has to happen on `beforeprint` and be undone after.
+    it('suggests the Arabic register name while the dialog is open', () => {
+      const original = document.title
+      const morning = ROWS.filter((r) => r.shift_code === 'morning')
+      renderSheet({ layout: 'roster', rows: morning, shiftCode: 'morning' })
+
+      expect(document.title).toBe(original)
+
+      act(() => window.dispatchEvent(new Event('beforeprint')))
+      expect(document.title).toBe('كشف تدقيق الحضور_السرية الثانية_الأربعاء_صباحية_19-08-2026')
+
+      act(() => window.dispatchEvent(new Event('afterprint')))
+      expect(document.title).toBe(original)
+    })
+
+    it('puts the tab title back when the register unmounts mid-dialog', () => {
+      const original = document.title
+      const { unmount } = renderSheet()
+
+      act(() => window.dispatchEvent(new Event('beforeprint')))
+      expect(document.title).not.toBe(original)
+
+      unmount()
+      expect(document.title).toBe(original)
+    })
+
+    it('keeps the register name when the day refetches mid-dialog', () => {
+      const original = document.title
+      const morning = ROWS.filter((r) => r.shift_code === 'morning')
+      const { rerender } = renderSheet({ rows: morning, shiftCode: 'morning' })
+
+      act(() => window.dispatchEvent(new Event('beforeprint')))
+
+      // The day is on a 30-second staleTime, so a payload can land while the
+      // dialog is open and change the rows the name is built from. The dialog
+      // already has the name it was given; what must never happen is the tab
+      // reverting to the app title, which is the name the PDF would be saved
+      // under. The next print picks up the new one.
+      const day = [...morning, ...ROWS.filter((r) => r.shift_code === 'night')]
+      act(() => rerender(sheet({ rows: day, shiftCode: null })))
+
+      expect(document.title).toBe('كشف البصمة العام_السرية الثانية_الأربعاء_صباحية_19-08-2026')
+      expect(document.title).not.toBe(original)
+
+      act(() => window.dispatchEvent(new Event('beforeprint')))
+      expect(document.title).toBe('كشف البصمة العام_كل السرايا_الأربعاء_كل الورديات_19-08-2026')
+
+      act(() => window.dispatchEvent(new Event('afterprint')))
+      expect(document.title).toBe(original)
     })
   })
 })
