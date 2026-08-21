@@ -37,6 +37,7 @@ from app.api.v1 import managers as managers_v1
 from app.api.v1 import notifications as notifications_v1
 from app.api.v1 import notify as notify_v1
 from app.api.v1 import permissions as permissions_v1
+from app.api.v1 import org_tree as org_tree_v1
 from app.api.v1 import permits as permits_v1
 from app.api.v1 import push as push_v1
 from app.api.v1 import recipients as recipients_v1
@@ -190,6 +191,7 @@ def create_app() -> FastAPI:
     app.include_router(documents_v1.jobs_router, prefix="/api/v1", dependencies=auth_gate)
     app.include_router(managers_v1.router, prefix="/api/v1", dependencies=auth_gate)
     app.include_router(duty_supervisors_v1.router, prefix="/api/v1", dependencies=auth_gate)
+    app.include_router(org_tree_v1.router, prefix="/api/v1", dependencies=auth_gate)
     app.include_router(digests_v1.router, prefix="/api/v1", dependencies=auth_gate)
     app.include_router(submitters_v1.router, prefix="/api/v1", dependencies=auth_gate)
     app.include_router(recipients_v1.router, prefix="/api/v1", dependencies=auth_gate)

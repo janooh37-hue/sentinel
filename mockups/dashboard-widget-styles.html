@@ -1,0 +1,599 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>GSSG — widget &amp; quick-action styles (full width)</title>
+<style>
+/* tokens — mirrors frontend/src/index.css light theme */
+:root{
+  --bg:#f5f4f1; --surface:#fff; --surface-raised:#fafaf6; --surface-tinted:#f0eee8;
+  --primary:#0d2845; --primary-hover:#1d3a5e; --primary-soft:#e8edf3;
+  --accent:#c8102e; --accent-soft:#fbe5e8;
+  --success:#047857; --success-soft:#d6f0e4;
+  --warning:#92400e; --warning-soft:#fbedd8;
+  --info:#1d4ed8; --info-soft:#e0e8f8;
+  --text:#1c1f24; --text-muted:#5a6068; --text-faint:#8b9098;
+  --border:#e6e4dd; --border-strong:#d4d1c8; --hairline:#efece5;
+  --hero-grad:linear-gradient(135deg,#0a1f3a 0%,#0d2845 50%,#1d3a5e 100%);
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:"Inter","Segoe UI",system-ui,sans-serif;background:var(--bg);color:var(--text);-webkit-font-smoothing:antialiased}
+.mono{font-family:"IBM Plex Mono",Consolas,monospace}
+.ar{font-family:"Noto Sans Arabic","Segoe UI",sans-serif}
+a{color:inherit;text-decoration:none} button{font:inherit;border:0;background:none;cursor:pointer;color:inherit}
+.variant{display:none}.variant.active{display:block}
+
+/* ── shared app chrome (IDENTICAL in all variants — “dashboard stays the same”) ── */
+.topnav{display:flex;align-items:center;gap:26px;height:56px;padding:0 28px;background:var(--surface);border-bottom:1px solid var(--border)}
+.brand{display:flex;align-items:center;gap:10px}
+.brand img{width:34px;height:34px}
+.brand b{font-size:.95rem}
+.brand small{display:block;font-size:.58rem;color:var(--text-muted);line-height:1.1;max-width:130px}
+.topnav nav{display:flex;gap:20px;font-size:.85rem;font-weight:500;color:var(--text-muted)}
+.topnav nav .on{color:var(--text);font-weight:600;position:relative}
+.topnav nav .on::after{content:"";position:absolute;left:0;right:0;bottom:-17px;height:2px;background:var(--primary)}
+.spacer{flex:1}
+.chip-personal{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--border);border-radius:99px;padding:4px 10px;font-size:.7rem;font-weight:600;background:var(--surface-raised);color:var(--text-muted)}
+.chip-personal .dot{width:7px;height:7px;border-radius:50%;background:var(--success)}
+.avatar{width:30px;height:30px;border-radius:50%;background:var(--primary-soft);display:grid;place-items:center;font-size:.75rem;font-weight:700;color:var(--primary)}
+
+/* full-width page container: gutters only, no max-width */
+.page{padding:24px 28px 56px}
+
+/* hero — faithful to current DashboardHero */
+.hero{position:relative;background:var(--hero-grad);border-radius:18px;color:#fff;padding:26px 30px 22px;overflow:hidden;margin-bottom:26px}
+.hero .eyebrow{font-size:.68rem;letter-spacing:.14em;font-weight:700;color:#f9d8dd;text-transform:uppercase}
+.hero h2{font-size:1.65rem;font-weight:700;letter-spacing:-.01em;margin:4px 0 10px}
+.hero .meta{display:flex;align-items:center;gap:10px;font-size:.78rem;color:#c7d2e2}
+.hero .meta .chip{display:inline-flex;gap:6px;align-items:center;background:rgba(255,255,255,.12);border-radius:99px;padding:3px 11px;color:#fff;font-weight:600}
+.hero .meta .chip b{color:#ffd7ac}
+.hero .line{margin-top:12px;font-size:.8rem;color:#aebcd2}
+.hero .globe{position:absolute;top:22px;inset-inline-end:30px;width:64px;height:64px;border-radius:50%;background:#fff;display:grid;place-items:center;box-shadow:0 6px 18px rgba(0,0,0,.35)}
+.hero .globe img{width:48px;height:48px}
+.sechead{display:flex;align-items:center;justify-content:space-between;margin:0 2px 14px}
+.sechead h3{font-size:1.05rem;font-weight:650;letter-spacing:-.01em}
+.sechead .edit{font-size:.78rem;font-weight:600;color:var(--primary)}
+.sechead .edit span{color:var(--text-faint);font-weight:500;margin-inline-end:10px}
+
+/* top big cards — current design, kept */
+.topcards{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:24px}
+.bigcard{position:relative;background:var(--surface);border:1px solid var(--border);border-radius:18px;padding:20px 22px;min-height:150px;box-shadow:0 1px 2px rgba(13,40,69,.04)}
+.bigcard .h{font-size:.86rem;color:var(--text-muted);font-weight:550}
+.bigcard .cur{font-size:.6rem;letter-spacing:.1em;color:var(--text-faint);font-weight:700}
+.bigcard .num{font-size:2.5rem;font-weight:750;letter-spacing:-.02em}
+.bigcard .rail{height:4px;border-radius:99px;background:var(--surface-tinted);margin:12px 0;overflow:hidden}
+.bigcard .rail i{display:block;height:100%;width:56%;background:var(--accent);border-radius:99px}
+.bigcard .foot{display:flex;align-items:center;gap:8px;font-size:.76rem;color:var(--text-muted)}
+.bigcard .cta{margin-inline-start:auto;background:var(--primary);color:#fff;border-radius:99px;padding:6px 16px;font-size:.76rem;font-weight:650}
+.bigcard .chev{position:absolute;top:18px;inset-inline-end:18px;color:var(--text-faint)}
+.dots{display:flex;gap:14px;font-size:.76rem;color:var(--text-muted);margin-top:10px}
+.dots i{width:8px;height:8px;border-radius:50%;display:inline-block;margin-inline-end:6px;vertical-align:1px}
+
+/* quick-action section header reuse */
+.qa-head{margin:26px 2px 14px}
+
+/* footnote */
+.note{margin-top:26px;font-size:.7rem;color:var(--text-faint);text-align:center}
+
+/* ═════════ S1 · REGISTER CARDS (refined current language, honest data) ═════════ */
+.s1 .wgrid{display:grid;grid-template-columns:repeat(4,1fr);gap:16px}
+.s1 .w{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:16px 18px;display:flex;flex-direction:column}
+.s1 .w .hd{display:flex;align-items:center;justify-content:space-between;font-size:.82rem;color:var(--text-muted);font-weight:550}
+.s1 .w .pill{font-size:.66rem;font-weight:700;border-radius:99px;padding:2px 9px}
+.s1 .w .n{font-size:2rem;font-weight:750;margin:8px 0 2px;letter-spacing:-.02em}
+.s1 .rows{margin-top:8px;border-top:1px solid var(--hairline)}
+.s1 .r{display:flex;gap:8px;align-items:center;padding:8px 0;border-bottom:1px solid var(--hairline);font-size:.78rem}
+.s1 .r:last-child{border-bottom:0}
+.s1 .r .who{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.s1 .r .id{font-size:.66rem;color:var(--text-faint)}
+.s1 .r .tag{font-size:.62rem;font-weight:700;padding:2px 6px;border-radius:5px}
+.s1 .w .foot{margin-top:auto;padding-top:10px;display:flex;justify-content:space-between;align-items:center;font-size:.74rem}
+.s1 .w .foot .go{color:var(--primary);font-weight:650}
+.s1 .w .foot .sub{color:var(--text-faint);font-size:.68rem}
+.s1 .span2{grid-column:span 2}
+.s1 .qa{display:grid;grid-template-columns:repeat(6,1fr);gap:12px}
+.s1 .t{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:14px;display:flex;flex-direction:column;gap:6px}
+.s1 .t:hover{border-color:var(--primary)}
+.s1 .t .e{font-size:1.35rem}
+.s1 .t .tt{font-size:.8rem;font-weight:650}
+.s1 .t .d{font-size:.68rem;color:var(--text-muted);line-height:1.35}
+
+/* ═════════ S2 · RING GAUGES (quadrant-ring numerals) ═════════ */
+.s2 .wgrid{display:grid;grid-template-columns:repeat(6,1fr);gap:16px}
+.s2 .w{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:16px;display:flex;flex-direction:column;align-items:center;text-align:center}
+.s2 .ringbox{position:relative;width:86px;height:86px;margin:6px 0 10px}
+.s2 .ringbox svg{width:86px;height:86px}
+.s2 .ringbox .cnum{position:absolute;inset:0;display:grid;place-items:center;font-size:1.5rem;font-weight:750}
+.s2 .w .lbl{font-size:.78rem;font-weight:600}
+.s2 .w .sub{font-size:.66rem;color:var(--text-faint);margin-top:3px}
+.s2 .w .go{margin-top:10px;font-size:.7rem;font-weight:650;color:var(--primary)}
+.s2 .panel{grid-column:span 3;align-items:stretch;text-align:start}
+.s2 .panel .rr{display:flex;gap:8px;align-items:center;padding:7px 0;border-bottom:1px solid var(--hairline);font-size:.78rem}
+.s2 .panel .rr:last-child{border-bottom:0}
+.s2 .qa{display:flex;flex-wrap:wrap;gap:10px}
+.s2 .chipa{display:inline-flex;align-items:center;gap:8px;background:var(--surface);border:1px solid var(--border);border-radius:99px;padding:8px 16px;font-size:.8rem;font-weight:600}
+.s2 .chipa:hover{border-color:var(--accent);color:var(--accent)}
+
+/* ═════════ S3 · WORKLIST PANELS (rows-first, inline actions) ═════════ */
+.s3 .wgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}
+.s3 .w{background:var(--surface);border:1px solid var(--border);border-radius:16px;overflow:hidden}
+.s3 .w>h4{display:flex;align-items:center;gap:8px;padding:12px 16px;border-bottom:1px solid var(--hairline);font-size:.8rem;font-weight:650}
+.s3 .w>h4 .k{font-family:"IBM Plex Mono",monospace;font-size:.68rem;background:var(--surface-tinted);border-radius:99px;padding:1px 8px;color:var(--text-muted)}
+.s3 .w>h4 .go{margin-inline-start:auto;font-size:.72rem;color:var(--primary);font-weight:650}
+.s3 .li{display:flex;align-items:center;gap:10px;padding:10px 16px;border-bottom:1px solid var(--hairline);font-size:.8rem}
+.s3 .li:last-child{border-bottom:0}
+.s3 .li:hover{background:var(--surface-raised)}
+.s3 .li .main{flex:1;min-width:0}
+.s3 .li .t1{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.s3 .li .t2{font-size:.68rem;color:var(--text-muted)}
+.s3 .li .end{font-family:"IBM Plex Mono",monospace;font-size:.68rem;color:var(--text-faint)}
+.s3 .b{border-radius:8px;padding:4px 10px;font-size:.7rem;font-weight:650}
+.s3 .b.ok{background:var(--success-soft);color:var(--success)}
+.s3 .b.no{background:var(--accent-soft);color:var(--accent)}
+.s3 .tag{font-size:.62rem;font-weight:700;padding:2px 7px;border-radius:5px;font-family:"IBM Plex Mono",monospace}
+.s3 .qa{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:8px;display:grid;grid-template-columns:repeat(9,1fr)}
+.s3 .t{display:flex;flex-direction:column;align-items:center;gap:6px;padding:12px 6px;border-radius:12px;font-size:.68rem;font-weight:600;text-align:center;color:var(--text-muted)}
+.s3 .t:hover{background:var(--surface-tinted);color:var(--text)}
+.s3 .t .e{font-size:1.3rem}
+
+/* ═════════ S4 · DOSSIER TABS (file-tab cards + stamps — badge family) ═════════ */
+.s4 .wgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:18px}
+.s4 .w{position:relative;background:#fffdf8;border:1px solid #e3ddd0;border-radius:4px 14px 14px 14px;padding:38px 18px 14px;box-shadow:0 6px 16px rgba(36,31,24,.08)}
+.s4 .w .tab{position:absolute;top:0;inset-inline-start:0;background:var(--primary);color:#fff;font-size:.66rem;font-weight:700;letter-spacing:.1em;text-transform:uppercase;border-radius:4px 10px 0 10px;padding:6px 14px}
+.s4 .w .tab.red{background:var(--accent)}
+.s4 .w .tab.green{background:var(--success)}
+.s4 .w .tab.amber{background:#b3541e}
+.s4 .w .cnt{position:absolute;top:7px;inset-inline-end:12px;font-family:"IBM Plex Mono",monospace;font-size:.78rem;font-weight:700;color:var(--text-faint)}
+.s4 .r{display:flex;gap:9px;align-items:center;padding:8px 2px;border-bottom:1px dashed #e9e3d6;font-size:.8rem}
+.s4 .r:last-child{border-bottom:0}
+.s4 .r .who{flex:1;min-width:0}
+.s4 .r .nm{font-weight:600;font-size:.79rem}
+.s4 .r .id{font-family:"IBM Plex Mono",monospace;font-size:.62rem;color:var(--text-faint)}
+.s4 .r .tag{font-family:"IBM Plex Mono",monospace;font-size:.6rem;font-weight:700;padding:2px 6px;border-radius:4px}
+.s4 .r .act{font-size:.66rem;font-weight:800;color:var(--success);letter-spacing:.04em}
+.s4 .stamp{position:absolute;bottom:8px;inset-inline-end:10px;font-size:.56rem;font-weight:800;letter-spacing:.12em;color:rgba(200,16,46,.35);border:2px solid rgba(200,16,46,.25);border-radius:4px;padding:1px 6px;transform:rotate(-5deg);text-transform:uppercase}
+.s4 .qa{display:flex;flex-wrap:wrap;gap:12px}
+.s4 .lam{position:relative;width:118px;background:#fff;border:1px solid #e3ddd0;border-radius:10px;padding:16px 8px 10px;display:flex;flex-direction:column;align-items:center;gap:6px;font-size:.66rem;font-weight:650;text-align:center;color:#4c463c;box-shadow:0 3px 9px rgba(36,31,24,.09)}
+.s4 .lam::before{content:"";position:absolute;top:5px;left:50%;transform:translateX(-50%);width:26px;height:5px;border-radius:99px;background:var(--bg)}
+.s4 .lam .e{font-size:1.35rem}
+.s4 .lam:hover{border-color:var(--accent)}
+.s4 .lam .k{font-family:"IBM Plex Mono",monospace;font-size:.54rem;color:var(--text-faint);font-weight:500}
+
+/* ═════════ S5 · NAVY LEDGER STRIPS (dark-header bands in light page) ═════════ */
+.s5 .wgrid{display:grid;grid-template-columns:repeat(2,1fr);gap:16px}
+.s5 .w{background:var(--surface);border:1px solid var(--border);border-radius:16px;overflow:hidden}
+.s5 .w>h4{display:flex;align-items:center;gap:10px;background:var(--primary);color:#fff;padding:11px 16px;font-size:.78rem;font-weight:650;letter-spacing:.02em}
+.s5 .w>h4 .k{font-family:"IBM Plex Mono",monospace;font-size:.68rem;background:rgba(255,255,255,.16);border-radius:99px;padding:1px 9px}
+.s5 .w>h4 .go{margin-inline-start:auto;font-size:.7rem;color:#c7d2e2;font-weight:600}
+.s5 .strip{display:flex;align-items:center;gap:12px;padding:11px 16px;border-bottom:1px solid var(--hairline);font-size:.82rem}
+.s5 .strip:last-child{border-bottom:0}
+.s5 .strip:nth-child(even){background:var(--surface-raised)}
+.s5 .strip .main{flex:1;min-width:0}
+.s5 .strip .t1{font-weight:600}
+.s5 .strip .t2{font-size:.7rem;color:var(--text-muted)}
+.s5 .strip .end{font-family:"IBM Plex Mono",monospace;font-size:.7rem;color:var(--text-faint)}
+.s5 .tag{font-size:.62rem;font-weight:700;padding:2px 7px;border-radius:5px;font-family:"IBM Plex Mono",monospace}
+.s5 .b{border-radius:8px;padding:5px 11px;font-size:.72rem;font-weight:650}
+.s5 .b.ok{background:var(--success-soft);color:var(--success)}
+.s5 .qa{display:grid;grid-template-columns:repeat(2,1fr);gap:16px}
+.s5 .qcol{background:var(--surface);border:1px solid var(--border);border-radius:16px;overflow:hidden}
+.s5 .qcol>h4{background:var(--primary);color:#fff;padding:11px 16px;font-size:.78rem;font-weight:650}
+.s5 .qrowa{display:flex;align-items:center;gap:12px;padding:10px 16px;border-bottom:1px solid var(--hairline);font-size:.8rem;font-weight:550}
+.s5 .qrowa:last-child{border-bottom:0}
+.s5 .qrowa:hover{background:var(--primary-soft)}
+.s5 .qrowa .e{width:26px;text-align:center;font-size:1.05rem}
+.s5 .qrowa .d{margin-inline-start:auto;font-size:.66rem;color:var(--text-faint);font-weight:400}
+
+/* picker */
+.picker{max-width:780px;margin:60px auto;padding:0 24px}
+.picker h1{font-size:1.5rem;margin-bottom:6px}
+.picker p{color:var(--text-muted);margin-bottom:24px}
+.picker a{display:flex;justify-content:space-between;align-items:center;border:1px solid var(--border);background:var(--surface);border-radius:14px;padding:17px 22px;margin-bottom:12px;font-weight:600}
+.picker a:hover{border-color:var(--primary)}
+.picker a small{color:var(--text-muted);font-weight:400}
+</style>
+</head>
+<body>
+
+<div id="picker" class="picker" style="display:none">
+  <h1>Widget &amp; quick-action styles — same dashboard, full width</h1>
+  <p>Chrome, hero and top cards are identical everywhere; only the widget cards + service tiles change. <span class="mono">?v=1…5</span></p>
+  <a href="?v=1"><span>1 · Register Cards</span><small>current card language, honest numbers + name rows</small></a>
+  <a href="?v=2"><span>2 · Ring Gauges</span><small>GSSG quadrant rings, service chips</small></a>
+  <a href="?v=3"><span>3 · Worklist Panels</span><small>rows-first, inline Sign/Renew, service dock</small></a>
+  <a href="?v=4"><span>4 · Dossier Tabs</span><small>file-tab cards, stamps, laminated tiles</small></a>
+  <a href="?v=5"><span>5 · Navy Ledger Strips</span><small>navy band headers, zebra rows, service menu columns</small></a>
+</div>
+
+<script id="shell-template" type="text/template">
+  <div class="topnav">
+    <div class="brand"><img src="gssg-globe.png" alt=""><div><b>GSSG</b><small>Global Security Services Group</small></div></div>
+    <nav><span class="on">Dashboard</span><span>Employees</span><span>Ledger</span><span>Leaves</span><span>Services</span><span>Records</span><span>Permits</span></nav>
+    <div class="spacer"></div>
+    <span class="chip-personal"><span class="dot"></span>Personal · saved to your account</span>
+    <span class="avatar">A</span>
+  </div>
+  <div class="page">
+    <div class="hero">
+      <div class="eyebrow">Good evening</div>
+      <h2>Welcome back</h2>
+      <div class="meta">
+        <span>Sat, 15 Aug</span><span>·</span><span class="ar">٢ ربيع الأول ١٤٤٨ هـ</span>
+        <span class="chip"><b>2</b> on leave today</span>
+      </div>
+      <div class="line">Quiet day. 4 on site, nothing returning today. 1 returning later this week.</div>
+      <div class="globe"><img src="gssg-globe.png" alt=""></div>
+    </div>
+    <div class="sechead"><h3>My Widgets</h3><span class="edit"><span>yours only</span>Edit My Widgets ✎</span></div>
+    <div class="topcards">
+      <div class="bigcard">
+        <div class="h">Documents This Month</div>
+        <div class="cur">DOCS</div>
+        <div class="num">14</div>
+        <div class="rail"><i></i></div>
+        <div class="foot"><span style="color:var(--accent)">●</span> 3 need my signature <button class="cta">Review</button></div>
+        <span class="chev">›</span>
+      </div>
+      <div class="bigcard">
+        <div class="h">My Workspace</div>
+        <div class="cur">STAFF</div>
+        <div class="num">6</div>
+        <div class="dots"><span><i style="background:var(--success)"></i>4 active</span><span><i style="background:var(--warning)"></i>2 on leave</span><span><i style="background:var(--accent)"></i>1 leaving soon</span></div>
+        <span class="chev">›</span>
+      </div>
+    </div>
+    <div class="slot-widgets"></div>
+    <div class="sechead qa-head"><h3>Quick Actions</h3><span class="edit"><span>services only · yours</span>Edit Quick Actions ✎</span></div>
+    <div class="slot-qa"></div>
+    <div class="note"></div>
+  </div>
+</script>
+
+<!-- ═════════ S1 ═════════ -->
+<section class="variant s1" id="v1" data-note="S1 · Register Cards — the current card language kept, numbers made honest, every card carries the actual names/refs behind the number.">
+  <template class="widgets">
+    <div class="wgrid">
+      <div class="w span2">
+        <div class="hd">Awaiting My Signature <span class="pill" style="background:var(--warning-soft);color:var(--warning)">oldest 1d</span></div>
+        <div class="n">3</div>
+        <div class="rows">
+          <div class="r"><span class="tag mono" style="background:var(--primary-soft);color:var(--primary)">1-0006</span><span class="who">Gate access request for contractor</span><button class="tag" style="background:var(--success-soft);color:var(--success)">SIGN</button><button class="tag" style="background:var(--accent-soft);color:var(--accent)">RETURN</button></div>
+          <div class="r"><span class="tag mono" style="background:var(--primary-soft);color:var(--primary)">1-0004</span><span class="who">Duty roster amendment — Al Wathba post</span><button class="tag" style="background:var(--success-soft);color:var(--success)">SIGN</button><button class="tag" style="background:var(--accent-soft);color:var(--accent)">RETURN</button></div>
+          <div class="r"><span class="tag mono" style="background:var(--primary-soft);color:var(--primary)">1-0002</span><span class="who">Uniform issue authorization — new intake</span><button class="tag" style="background:var(--success-soft);color:var(--success)">SIGN</button><button class="tag" style="background:var(--accent-soft);color:var(--accent)">RETURN</button></div>
+        </div>
+        <div class="foot"><span class="go">Open approval queue →</span><span class="sub">/books?status=pending</span></div>
+      </div>
+      <div class="w">
+        <div class="hd">Expiring Documents <span class="pill" style="background:var(--accent-soft);color:var(--accent)">1 expired</span></div>
+        <div class="n">3</div>
+        <div class="rows">
+          <div class="r"><span class="who">H. ALMANSOORI <span class="id">· EID</span></span><span class="tag" style="background:var(--accent-soft);color:var(--accent)">−3d</span></div>
+          <div class="r"><span class="who">A. ALKAABI <span class="id">· EID</span></span><span class="tag" style="background:var(--warning-soft);color:var(--warning)">18d</span></div>
+          <div class="r"><span class="who">S. ALSHAMSI <span class="id">· PP</span></span><span class="tag" style="background:var(--warning-soft);color:var(--warning)">45d</span></div>
+        </div>
+        <div class="foot"><span class="go">Full expiry list →</span><span class="sub">/expiry</span></div>
+      </div>
+      <div class="w">
+        <div class="hd">Inbox Unread <span class="pill" style="background:var(--success-soft);color:var(--success)">synced 6m</span></div>
+        <div class="n">3</div>
+        <div class="rows">
+          <div class="r"><span class="tag" style="background:var(--success-soft);color:var(--success)">IN</span><span class="who">Clearance circular 44/2026</span></div>
+          <div class="r"><span class="tag" style="background:var(--accent-soft);color:var(--accent)">OUT</span><span class="who">Inspection reply — MOI</span></div>
+          <div class="r"><span class="tag" style="background:var(--info-soft);color:var(--info)">INT</span><span class="who">Uniform renewal memo</span></div>
+        </div>
+        <div class="foot"><span class="go">Open inbox →</span><span class="sub">↻ Sync now</span></div>
+      </div>
+      <div class="w">
+        <div class="hd">Leave Radar</div>
+        <div class="n">2<span style="font-size:1rem;color:var(--text-faint)"> out</span></div>
+        <div class="rows">
+          <div class="r"><span class="who">K. ALDHAHERI</span><span class="tag" style="background:var(--info-soft);color:var(--info)">→ 15 Aug</span></div>
+          <div class="r"><span class="who">S. ALSHAMSI</span><span class="tag" style="background:var(--info-soft);color:var(--info)">→ 17 Aug</span></div>
+          <div class="r"><span class="who">S. ALSHAMSI back Sun</span><span class="tag" style="background:var(--success-soft);color:var(--success)">RESUME</span></div>
+        </div>
+        <div class="foot"><span class="go">Leave records →</span><span class="sub">/leaves</span></div>
+      </div>
+      <div class="w">
+        <div class="hd">Register Drafts</div>
+        <div class="n">3</div>
+        <div class="rows">
+          <div class="r"><span class="tag mono" style="background:var(--primary-soft);color:var(--primary)">1-0001</span><span class="who">Monthly duty roster</span></div>
+          <div class="r"><span class="tag mono" style="background:var(--primary-soft);color:var(--primary)">1-0003</span><span class="who">Contractor NDA cover</span></div>
+          <div class="r"><span class="tag mono" style="background:var(--primary-soft);color:var(--primary)">1-0005</span><span class="who">Night patrol summary</span></div>
+        </div>
+        <div class="foot"><span class="go">Resume drafts →</span><span class="sub">/books?status=none</span></div>
+      </div>
+      <div class="w">
+        <div class="hd">Departures &amp; Cases <span class="pill" style="background:var(--warning-soft);color:var(--warning)">2</span></div>
+        <div class="n" style="font-size:1.1rem;margin-top:12px">R. ALYAHYAEE</div>
+        <div class="rows" style="border-top:0">
+          <div class="r"><span class="who">Resignation · last day 27 Aug</span><span class="tag" style="background:var(--warning-soft);color:var(--warning)">12d</span></div>
+          <div class="r"><span class="who">H. ALMANSOORI · attendance</span><span class="tag" style="background:var(--accent-soft);color:var(--accent)">OPEN</span></div>
+        </div>
+        <div class="foot"><span class="go">Employee files →</span><span class="sub">clearance · case</span></div>
+      </div>
+    </div>
+  </template>
+  <template class="qa">
+    <div class="qa">
+      <button class="t"><span class="e">📅</span><span class="tt">Leave Application</span><span class="d">Apply for an employee leave.</span></button>
+      <button class="t"><span class="e">🎫</span><span class="tt">Leave Permit</span><span class="d">Hourly exit permit.</span></button>
+      <button class="t"><span class="e">🔁</span><span class="tt">Duty Resumption</span><span class="d">Record a return to duty.</span></button>
+      <button class="t"><span class="e">🚨</span><span class="tt">Violation</span><span class="d">File a disciplinary violation.</span></button>
+      <button class="t"><span class="e">⚠️</span><span class="tt">Warning</span><span class="d">Issue a formal warning.</span></button>
+      <button class="t"><span class="e">✍️</span><span class="tt">Acknowledgment</span><span class="d">Record an acknowledgment.</span></button>
+      <button class="t"><span class="e">💰</span><span class="tt">Salary Transfer</span><span class="d">Request account transfer.</span></button>
+      <button class="t"><span class="e">💸</span><span class="tt">Salary Deduction</span><span class="d">Apply a deduction.</span></button>
+      <button class="t"><span class="e">📓</span><span class="tt">General Book</span><span class="d">Draft a general letter.</span></button>
+      <button class="t"><span class="e">📊</span><span class="tt">Report</span><span class="d">File an incident report.</span></button>
+      <button class="t"><span class="e">🧑‍💼</span><span class="tt">HR Request</span><span class="d">General HR request.</span></button>
+      <button class="t" style="border-style:dashed;color:var(--text-muted)"><span class="e">⋯</span><span class="tt">All 18 services</span><span class="d">Open the gallery.</span></button>
+    </div>
+  </template>
+</section>
+
+<!-- ═════════ S2 ═════════ -->
+<section class="variant s2" id="v2" data-note="S2 · Ring Gauges — every number wears the GSSG quadrant ring; two list panels keep names on the page. Services become one-line chips.">
+  <template class="widgets">
+    <div class="wgrid">
+      <div class="w">
+        <div class="ringbox">
+          <svg viewBox="0 0 90 90"><circle cx="45" cy="45" r="36" fill="none" stroke="var(--surface-tinted)" stroke-width="9"/><circle cx="45" cy="45" r="36" fill="none" stroke="var(--warning)" stroke-width="9" stroke-dasharray="170 56" stroke-linecap="round" transform="rotate(-90 45 45)"/></svg>
+          <span class="cnum mono">3</span>
+        </div>
+        <div class="lbl">Need my signature</div><div class="sub">oldest 1 day</div>
+        <span class="go">Open queue →</span>
+      </div>
+      <div class="w">
+        <div class="ringbox">
+          <svg viewBox="0 0 90 90"><circle cx="45" cy="45" r="36" fill="none" stroke="var(--surface-tinted)" stroke-width="9"/><circle cx="45" cy="45" r="36" fill="none" stroke="var(--accent)" stroke-width="9" stroke-dasharray="75 151" stroke-linecap="round" transform="rotate(-90 45 45)"/></svg>
+          <span class="cnum mono">3</span>
+        </div>
+        <div class="lbl">Expiring documents</div><div class="sub">1 already expired</div>
+        <span class="go">/expiry →</span>
+      </div>
+      <div class="w">
+        <div class="ringbox">
+          <svg viewBox="0 0 90 90"><circle cx="45" cy="45" r="36" fill="none" stroke="var(--surface-tinted)" stroke-width="9"/><circle cx="45" cy="45" r="36" fill="none" stroke="var(--info)" stroke-width="9" stroke-dasharray="113 113" stroke-linecap="round" transform="rotate(-90 45 45)"/></svg>
+          <span class="cnum mono">3</span>
+        </div>
+        <div class="lbl">Unread inbox</div><div class="sub">synced 6 min ago</div>
+        <span class="go">Open inbox →</span>
+      </div>
+      <div class="w">
+        <div class="ringbox">
+          <svg viewBox="0 0 90 90"><circle cx="45" cy="45" r="36" fill="none" stroke="var(--surface-tinted)" stroke-width="9"/><circle cx="45" cy="45" r="36" fill="none" stroke="var(--success)" stroke-width="9" stroke-dasharray="151 75" stroke-linecap="round" transform="rotate(-90 45 45)"/></svg>
+          <span class="cnum mono" style="font-size:1.15rem">4/6</span>
+        </div>
+        <div class="lbl">On site now</div><div class="sub">2 on leave</div>
+        <span class="go">Staff →</span>
+      </div>
+      <div class="w">
+        <div class="ringbox">
+          <svg viewBox="0 0 90 90"><circle cx="45" cy="45" r="36" fill="none" stroke="var(--surface-tinted)" stroke-width="9"/><circle cx="45" cy="45" r="36" fill="none" stroke="var(--warning)" stroke-width="9" stroke-dasharray="38 188" stroke-linecap="round" transform="rotate(-90 45 45)"/></svg>
+          <span class="cnum mono">1</span>
+        </div>
+        <div class="lbl">Departure · 12d</div><div class="sub">clearance not started</div>
+        <span class="go">Open file →</span>
+      </div>
+      <div class="w">
+        <div class="ringbox">
+          <svg viewBox="0 0 90 90"><circle cx="45" cy="45" r="36" fill="none" stroke="var(--surface-tinted)" stroke-width="9"/><circle cx="45" cy="45" r="36" fill="none" stroke="var(--primary)" stroke-width="9" stroke-dasharray="113 113" stroke-linecap="round" transform="rotate(-90 45 45)"/></svg>
+          <span class="cnum mono">3</span>
+        </div>
+        <div class="lbl">Register drafts</div><div class="sub">unsubmitted</div>
+        <span class="go">Resume →</span>
+      </div>
+      <div class="w panel">
+        <div class="lbl" style="margin-bottom:6px">Sign-off queue</div>
+        <div class="rr"><span class="mono" style="font-size:.68rem;color:var(--primary);font-weight:700">1-0006</span><span style="flex:1">Gate access request for contractor</span><button class="go" style="color:var(--success)">✓ Sign</button></div>
+        <div class="rr"><span class="mono" style="font-size:.68rem;color:var(--primary);font-weight:700">1-0004</span><span style="flex:1">Duty roster amendment — Al Wathba</span><button class="go" style="color:var(--success)">✓ Sign</button></div>
+        <div class="rr"><span class="mono" style="font-size:.68rem;color:var(--primary);font-weight:700">1-0002</span><span style="flex:1">Uniform issue authorization</span><button class="go" style="color:var(--success)">✓ Sign</button></div>
+      </div>
+      <div class="w panel">
+        <div class="lbl" style="margin-bottom:6px">People today</div>
+        <div class="rr"><span style="flex:1">K. ALDHAHERI — annual until 15 Aug</span><span class="mono" style="font-size:.62rem;color:var(--info)">OUT</span></div>
+        <div class="rr"><span style="flex:1">S. ALSHAMSI — returns Sunday</span><span class="mono" style="font-size:.62rem;color:var(--success)">BACK</span></div>
+        <div class="rr"><span style="flex:1">H. ALMANSOORI — EID expired 3d</span><span class="mono" style="font-size:.62rem;color:var(--accent)">RENEW</span></div>
+      </div>
+    </div>
+  </template>
+  <template class="qa">
+    <div class="qa">
+      <button class="chipa">📅 Leave Application</button>
+      <button class="chipa">🎫 Leave Permit</button>
+      <button class="chipa">🔁 Duty Resumption</button>
+      <button class="chipa">🚨 Violation</button>
+      <button class="chipa">⚠️ Warning</button>
+      <button class="chipa">✍️ Acknowledgment</button>
+      <button class="chipa">💰 Salary Transfer</button>
+      <button class="chipa">💸 Salary Deduction</button>
+      <button class="chipa">✅ Clearance</button>
+      <button class="chipa">📓 General Book</button>
+      <button class="chipa">📊 Report</button>
+      <button class="chipa">🧑‍💼 HR Request</button>
+      <button class="chipa">📦 Material Request</button>
+      <button class="chipa">📤 Passport Request</button>
+      <button class="chipa">🛂 Passport Release List</button>
+      <button class="chipa">✉️ Resignation</button>
+      <button class="chipa">🗂️ Administrative Leave</button>
+      <button class="chipa">⛓️ Inmate Conduct</button>
+    </div>
+  </template>
+</section>
+
+<!-- ═════════ S3 ═════════ -->
+<section class="variant s3" id="v3" data-note="S3 · Worklist Panels — no vanity numbers: every widget is its rows, actions inline where you already are. Services live in a single dock.">
+  <template class="widgets">
+    <div class="wgrid">
+      <div class="w">
+        <h4>Need my signature <span class="k">3 · oldest 1d</span><a class="go">Open queue →</a></h4>
+        <div class="li"><div class="main"><div class="t1">Gate access request for contractor</div><div class="t2">1-0006 · Audit Admin · 4h ago</div></div><button class="b ok">✓ Sign</button><button class="b no">Return</button></div>
+        <div class="li"><div class="main"><div class="t1">Duty roster amendment — Al Wathba</div><div class="t2">1-0004 · S. Alshamsi · 6h ago</div></div><button class="b ok">✓ Sign</button><button class="b no">Return</button></div>
+        <div class="li"><div class="main"><div class="t1">Uniform issue authorization</div><div class="t2">1-0002 · K. Aldhaheri · 1d ago</div></div><button class="b ok">✓ Sign</button><button class="b no">Return</button></div>
+      </div>
+      <div class="w">
+        <h4>Expiry &amp; exits <span class="k">4</span><a class="go">/expiry →</a></h4>
+        <div class="li"><span class="tag" style="background:var(--accent-soft);color:var(--accent)">−3D</span><div class="main"><div class="t1">HAMDAN ALI ALMANSOORI</div><div class="t2">Emirates ID · G-1005</div></div><span class="end">renew →</span></div>
+        <div class="li"><span class="tag" style="background:var(--warning-soft);color:var(--warning)">18D</span><div class="main"><div class="t1">AHMED SAEED ALKAABI</div><div class="t2">Emirates ID · G-1001</div></div><span class="end">renew →</span></div>
+        <div class="li"><span class="tag" style="background:var(--warning-soft);color:var(--warning)">EXIT</span><div class="main"><div class="t1">RASHED SANAD ALYAHYAEE</div><div class="t2">Resignation · 12 days · clearance</div></div><span class="end">file →</span></div>
+        <div class="li"><span class="tag" style="background:var(--warning-soft);color:var(--warning)">45D</span><div class="main"><div class="t1">SALEM MOHAMED ALSHAMSI</div><div class="t2">Passport · G-1002</div></div><span class="end">renew →</span></div>
+      </div>
+      <div class="w">
+        <h4>Inbox &amp; movements <span class="k">3 unread</span><a class="go">Open inbox →</a></h4>
+        <div class="li"><span class="tag" style="background:var(--success-soft);color:var(--success)">IN</span><div class="main"><div class="t1">Security clearance circular 44/2026</div><div class="t2">Abu Dhabi Police HQ</div></div><span class="end">18:22</span></div>
+        <div class="li"><span class="tag" style="background:var(--info-soft);color:var(--info)">INT</span><div class="main"><div class="t1">Uniform renewal memo</div><div class="t2">HR Department</div></div><span class="end">Wed</span></div>
+        <div class="li"><span class="tag" style="background:var(--info-soft);color:var(--info)">OUT</span><div class="main"><div class="t1">K. ALDHAHERI on leave until 15 Aug</div><div class="t2">S. ALSHAMSI returns Sunday — resumption due</div></div><button class="b ok">Prepare</button></div>
+      </div>
+    </div>
+  </template>
+  <template class="qa">
+    <div class="qa">
+      <button class="t"><span class="e">📅</span>Leave Application</button>
+      <button class="t"><span class="e">🎫</span>Leave Permit</button>
+      <button class="t"><span class="e">🔁</span>Duty Resumption</button>
+      <button class="t"><span class="e">🚨</span>Violation</button>
+      <button class="t"><span class="e">⚠️</span>Warning</button>
+      <button class="t"><span class="e">✍️</span>Acknowledgment</button>
+      <button class="t"><span class="e">💰</span>Salary Transfer</button>
+      <button class="t"><span class="e">📓</span>General Book</button>
+      <button class="t"><span class="e">⋯</span>All 18</button>
+    </div>
+  </template>
+</section>
+
+<!-- ═════════ S4 ═════════ -->
+<section class="variant s4" id="v4" data-note="S4 · Dossier Tabs — widgets as physical files with colored tabs and stamps (your badge-dossier world); services as laminated ring tiles.">
+  <template class="widgets">
+    <div class="wgrid">
+      <div class="w">
+        <span class="tab">Signature file</span><span class="cnt">3</span>
+        <div class="r"><div class="who"><div class="nm">Gate access request for contractor</div><div class="id">1-0006 · 4h ago</div></div><button class="act">SIGN ✓</button></div>
+        <div class="r"><div class="who"><div class="nm">Duty roster amendment — Al Wathba</div><div class="id">1-0004 · 6h ago</div></div><button class="act">SIGN ✓</button></div>
+        <div class="r"><div class="who"><div class="nm">Uniform issue authorization</div><div class="id">1-0002 · 1d ago</div></div><button class="act">SIGN ✓</button></div>
+        <span class="stamp">Awaiting</span>
+      </div>
+      <div class="w">
+        <span class="tab red">Expiry file</span><span class="cnt">3</span>
+        <div class="r"><span class="tag" style="background:var(--accent-soft);color:var(--accent)">−3D</span><div class="who"><div class="nm">HAMDAN ALMANSOORI</div><div class="id">G-1005 · Emirates ID</div></div></div>
+        <div class="r"><span class="tag" style="background:var(--warning-soft);color:var(--warning)">18D</span><div class="who"><div class="nm">AHMED ALKAABI</div><div class="id">G-1001 · Emirates ID</div></div></div>
+        <div class="r"><span class="tag" style="background:var(--warning-soft);color:var(--warning)">45D</span><div class="who"><div class="nm">SALEM ALSHAMSI</div><div class="id">G-1002 · Passport</div></div></div>
+        <span class="stamp">1 expired</span>
+      </div>
+      <div class="w">
+        <span class="tab green">Movement file</span><span class="cnt">3</span>
+        <div class="r"><span class="tag" style="background:var(--info-soft);color:var(--info)">OUT</span><div class="who"><div class="nm">KHALED ALDHAHERI <span class="ar" style="font-weight:400;color:var(--text-faint)">خالد</span></div><div class="id">annual · until 15 Aug</div></div></div>
+        <div class="r"><span class="tag" style="background:var(--info-soft);color:var(--info)">OUT</span><div class="who"><div class="nm">SALEM ALSHAMSI <span class="ar" style="font-weight:400;color:var(--text-faint)">سالم</span></div><div class="id">annual · until 17 Aug</div></div></div>
+        <div class="r"><span class="tag" style="background:var(--success-soft);color:var(--success)">BACK</span><div class="who"><div class="nm">SALEM — Sunday</div><div class="id">duty resumption due</div></div><button class="act">PREP</button></div>
+      </div>
+      <div class="w">
+        <span class="tab" style="background:#0d5c8a">Inbox file</span><span class="cnt">3</span>
+        <div class="r"><span class="tag" style="background:var(--success-soft);color:var(--success)">IN</span><div class="who"><div class="nm">Clearance circular 44/2026</div><div class="id">Abu Dhabi Police HQ · 18:22</div></div></div>
+        <div class="r"><span class="tag" style="background:var(--accent-soft);color:var(--accent)">OUT</span><div class="who"><div class="nm">Inspection reply</div><div class="id">Ministry of Interior · Thu</div></div></div>
+        <div class="r"><span class="tag" style="background:var(--info-soft);color:var(--info)">INT</span><div class="who"><div class="nm">Uniform renewal memo</div><div class="id">HR Department · Wed</div></div></div>
+        <span class="stamp" style="color:rgba(4,120,87,.4);border-color:rgba(4,120,87,.3)">Synced 6m</span>
+      </div>
+      <div class="w">
+        <span class="tab amber">Exit file</span><span class="cnt">2</span>
+        <div class="r"><span class="tag" style="background:var(--warning-soft);color:var(--warning)">12D</span><div class="who"><div class="nm">RASHED ALYAHYAEE</div><div class="id">resignation · last day 27 Aug</div></div><button class="act">CLEAR</button></div>
+        <div class="r"><span class="tag" style="background:var(--accent-soft);color:var(--accent)">VIOL</span><div class="who"><div class="nm">HAMDAN ALMANSOORI</div><div class="id">attendance · open case</div></div><button class="act" style="color:var(--accent)">FILE</button></div>
+      </div>
+      <div class="w">
+        <span class="tab" style="background:#6b4fb0">Draft file</span><span class="cnt">3</span>
+        <div class="r"><span class="tag" style="background:var(--primary-soft);color:var(--primary)">1-0001</span><div class="who"><div class="nm">Monthly duty roster</div></div><button class="act" style="color:var(--primary)">RESUME</button></div>
+        <div class="r"><span class="tag" style="background:var(--primary-soft);color:var(--primary)">1-0003</span><div class="who"><div class="nm">Contractor NDA cover</div></div><button class="act" style="color:var(--primary)">RESUME</button></div>
+        <div class="r"><span class="tag" style="background:var(--primary-soft);color:var(--primary)">1-0005</span><div class="who"><div class="nm">Night patrol summary</div></div><button class="act" style="color:var(--primary)">RESUME</button></div>
+      </div>
+    </div>
+  </template>
+  <template class="qa">
+    <div class="qa">
+      <button class="lam"><span class="e">📅</span>Leave Application<span class="k">HR 300-003</span></button>
+      <button class="lam"><span class="e">🎫</span>Leave Permit<span class="k">HR 301-004</span></button>
+      <button class="lam"><span class="e">🔁</span>Duty Resumption<span class="k">HR 300-016</span></button>
+      <button class="lam"><span class="e">🚨</span>Violation<span class="k">NAT 300-004</span></button>
+      <button class="lam"><span class="e">⚠️</span>Warning<span class="k">NAT 301-004</span></button>
+      <button class="lam"><span class="e">✍️</span>Acknowledgment<span class="k">GS 300-003</span></button>
+      <button class="lam"><span class="e">💰</span>Salary Transfer<span class="k">HR 300-024</span></button>
+      <button class="lam"><span class="e">📓</span>General Book<span class="k">GS 300-003</span></button>
+      <button class="lam"><span class="e">📊</span>Report<span class="k">GS 300-004</span></button>
+      <button class="lam" style="border-style:dashed"><span class="e">⋯</span>All 18 services<span class="k">gallery</span></button>
+    </div>
+  </template>
+</section>
+
+<!-- ═════════ S5 ═════════ -->
+<section class="variant s5" id="v5" data-note="S5 · Navy Ledger Strips — widgets as navy-headed registers with zebra rows; quick actions as two service menu columns (Personnel / Records & Reports).">
+  <template class="widgets">
+    <div class="wgrid">
+      <div class="w">
+        <h4>Awaiting my signature <span class="k">3</span><a class="go">Open queue →</a></h4>
+        <div class="strip"><span class="tag" style="background:var(--primary-soft);color:var(--primary)">1-0006</span><div class="main"><div class="t1">Gate access request for contractor</div><div class="t2">Audit Admin · 4h ago</div></div><button class="b ok">✓ Sign</button></div>
+        <div class="strip"><span class="tag" style="background:var(--primary-soft);color:var(--primary)">1-0004</span><div class="main"><div class="t1">Duty roster amendment — Al Wathba</div><div class="t2">S. Alshamsi · 6h ago</div></div><button class="b ok">✓ Sign</button></div>
+        <div class="strip"><span class="tag" style="background:var(--primary-soft);color:var(--primary)">1-0002</span><div class="main"><div class="t1">Uniform issue authorization</div><div class="t2">K. Aldhaheri · 1d ago</div></div><button class="b ok">✓ Sign</button></div>
+      </div>
+      <div class="w">
+        <h4>Expiry radar <span class="k">1 expired</span><a class="go">/expiry →</a></h4>
+        <div class="strip"><span class="tag" style="background:var(--accent-soft);color:var(--accent)">−3D</span><div class="main"><div class="t1">HAMDAN ALI ALMANSOORI</div><div class="t2">Emirates ID · G-1005</div></div><span class="end">renew →</span></div>
+        <div class="strip"><span class="tag" style="background:var(--warning-soft);color:var(--warning)">18D</span><div class="main"><div class="t1">AHMED SAEED ALKAABI</div><div class="t2">Emirates ID · G-1001</div></div><span class="end">renew →</span></div>
+        <div class="strip"><span class="tag" style="background:var(--warning-soft);color:var(--warning)">45D</span><div class="main"><div class="t1">SALEM MOHAMED ALSHAMSI</div><div class="t2">Passport · G-1002</div></div><span class="end">renew →</span></div>
+      </div>
+      <div class="w">
+        <h4>Leave &amp; exits <span class="k">2 out · 1 exit</span><a class="go">/leaves →</a></h4>
+        <div class="strip"><span class="tag" style="background:var(--info-soft);color:var(--info)">OUT</span><div class="main"><div class="t1">KHALED OBAID ALDHAHERI</div><div class="t2">annual · until 15 Aug</div></div></div>
+        <div class="strip"><span class="tag" style="background:var(--success-soft);color:var(--success)">BACK</span><div class="main"><div class="t1">SALEM returns Sunday</div><div class="t2">duty resumption due</div></div><button class="b ok">Prepare</button></div>
+        <div class="strip"><span class="tag" style="background:var(--warning-soft);color:var(--warning)">EXIT</span><div class="main"><div class="t1">RASHED ALYAHYAEE · 12 days</div><div class="t2">clearance not started</div></div><span class="end">file →</span></div>
+      </div>
+      <div class="w">
+        <h4>Inbox <span class="k">3 unread</span><a class="go">Open inbox · ↻ Sync</a></h4>
+        <div class="strip"><span class="tag" style="background:var(--success-soft);color:var(--success)">IN</span><div class="main"><div class="t1">Security clearance circular 44/2026</div><div class="t2">Abu Dhabi Police HQ</div></div><span class="end">18:22</span></div>
+        <div class="strip"><span class="tag" style="background:var(--accent-soft);color:var(--accent)">OUT</span><div class="main"><div class="t1">Reply to inspection findings</div><div class="t2">Ministry of Interior</div></div><span class="end">Thu</span></div>
+        <div class="strip"><span class="tag" style="background:var(--info-soft);color:var(--info)">INT</span><div class="main"><div class="t1">Internal memo — uniform renewal</div><div class="t2">HR Department</div></div><span class="end">Wed</span></div>
+      </div>
+    </div>
+  </template>
+  <template class="qa">
+    <div class="qa">
+      <div class="qcol">
+        <h4>Personnel services</h4>
+        <button class="qrowa"><span class="e">📅</span>Leave Application<span class="d">HR 300-003</span></button>
+        <button class="qrowa"><span class="e">🎫</span>Leave Permit<span class="d">HR 301-004</span></button>
+        <button class="qrowa"><span class="e">🔁</span>Duty Resumption<span class="d">HR 300-016</span></button>
+        <button class="qrowa"><span class="e">🚨</span>Violation<span class="d">NAT 300-004</span></button>
+        <button class="qrowa"><span class="e">⚠️</span>Warning<span class="d">NAT 301-004</span></button>
+        <button class="qrowa"><span class="e">✅</span>Employee Clearance<span class="d">HR 300-009</span></button>
+        <button class="qrowa"><span class="e">✉️</span>Resignation<span class="d">HR 301-010</span></button>
+      </div>
+      <div class="qcol">
+        <h4>Records &amp; reports</h4>
+        <button class="qrowa"><span class="e">📓</span>General Book<span class="d">GS 300-003</span></button>
+        <button class="qrowa"><span class="e">📊</span>Report<span class="d">GS 300-004</span></button>
+        <button class="qrowa"><span class="e">💰</span>Salary Transfer<span class="d">HR 300-024</span></button>
+        <button class="qrowa"><span class="e">💸</span>Salary Deduction<span class="d">HR 300-013</span></button>
+        <button class="qrowa"><span class="e">📤</span>Passport Request<span class="d">HR 300-004</span></button>
+        <button class="qrowa"><span class="e">🛂</span>Passport Release List<span class="d">HR 300-004b</span></button>
+        <button class="qrowa"><span class="e">⋯</span>All 18 services<span class="d">gallery</span></button>
+      </div>
+    </div>
+  </template>
+</section>
+
+<script>
+const v = new URLSearchParams(location.search).get('v')
+const sec = v && document.getElementById('v' + v)
+if (sec) {
+  const shell = document.getElementById('shell-template').innerHTML
+  const host = document.createElement('div')
+  host.innerHTML = shell
+  host.querySelector('.slot-widgets').appendChild(sec.querySelector('template.widgets').content.cloneNode(true))
+  host.querySelector('.slot-qa').appendChild(sec.querySelector('template.qa').content.cloneNode(true))
+  host.querySelector('.note').textContent = sec.dataset.note + ' — full width, per-user layout & theme.'
+  sec.appendChild(host)
+  sec.classList.add('active')
+} else {
+  document.getElementById('picker').style.display = 'block'
+}
+</script>
+</body>
+</html>

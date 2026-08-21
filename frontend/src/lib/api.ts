@@ -723,6 +723,9 @@ export type ManagerCreate = components['schemas']['ManagerCreate']
 export type ManagerUpdate = components['schemas']['ManagerUpdate']
 export type DutySupervisorRead = components['schemas']['DutySupervisorRead']
 export type DutySupervisorCreate = components['schemas']['DutySupervisorCreate']
+// ORG-tree — the supervisor hierarchy under Duty Locations.
+export type OrgNodeRead = components['schemas']['OrgNode']
+export type OrgSupervisorUpdate = components['schemas']['OrgSupervisorUpdate']
 
 // Phase 2c — OpenWA announcements (Task 6/7)
 export type GroupOut = components['schemas']['GroupOut']
@@ -1090,6 +1093,10 @@ export const api = {
   // --- duty locations & internal transfers ---
   transferDuty: (body: DutyTransferRequest) =>
     request<DutyTransferResult>('POST', '/duty/transfer', body),
+
+  listOrgTree: () => request<OrgNodeRead[]>('GET', '/org-tree/'),
+  setOrgSupervisor: (employeeId: string, body: OrgSupervisorUpdate) =>
+    request<OrgNodeRead>('PATCH', `/org-tree/${encodeURIComponent(employeeId)}/supervisor`, body),
 
   // --- leaves (employee sub-resource, read-only) ---
   listEmployeeLeaves: (employeeId: string) =>

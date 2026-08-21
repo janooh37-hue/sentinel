@@ -79,6 +79,9 @@ class Employee(Base):
     # HR job title — the sheet needs a finer split (control room, messengers,
     # clinic, escort) that the HR title does not carry.
     designation_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    # Deliberately not a ForeignKey: adding the constraint would force a full
+    # employees-table rewrite in SQLite, as with `designation_id` above.
+    supervisor_id: Mapped[str | None] = mapped_column(String(16), nullable=True)
     other: Mapped[str | None] = mapped_column(String(256), nullable=True)
     duty_unit: Mapped[str | None] = mapped_column(String(128), nullable=True)
     duty_post: Mapped[str | None] = mapped_column(String(128), nullable=True)
@@ -110,7 +113,10 @@ class Employee(Base):
         back_populates="employee", cascade="all, delete-orphan"
     )
 
-    __table_args__ = (Index("ix_employees_status", "status"),)
+    __table_args__ = (
+        Index("ix_employees_status", "status"),
+        Index("ix_employees_supervisor_id", "supervisor_id"),
+    )
 
 
 class BookCategory(Base):

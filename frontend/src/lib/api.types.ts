@@ -1494,6 +1494,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/org-tree/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Nodes */
+        get: operations["list_nodes_api_v1_org_tree__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/org-tree/{employee_id}/supervisor": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Set Supervisor */
+        patch: operations["set_supervisor_api_v1_org_tree__employee_id__supervisor_patch"];
+        trace?: never;
+    };
     "/api/v1/digests/leave/preview": {
         parameters: {
             query?: never;
@@ -8666,6 +8700,34 @@ export interface components {
             enabled: boolean;
             last: components["schemas"]["NotifyStatusItem"] | null;
         };
+        /** OrgNode */
+        OrgNode: {
+            /** Id */
+            id: string;
+            /** Name En */
+            name_en: string;
+            /** Name Ar */
+            name_ar: string | null;
+            /** Position */
+            position: string | null;
+            /** Position Ar */
+            position_ar: string | null;
+            /** Department */
+            department: string | null;
+            /** Duty Unit */
+            duty_unit: string | null;
+            /** Duty Post */
+            duty_post: string | null;
+            /** Status */
+            status: string;
+            /** Supervisor Id */
+            supervisor_id: string | null;
+        };
+        /** OrgSupervisorUpdate */
+        OrgSupervisorUpdate: {
+            /** Supervisor Id */
+            supervisor_id?: string | null;
+        };
         /** PassportSuggestion */
         PassportSuggestion: {
             /** Number */
@@ -14131,6 +14193,74 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_nodes_api_v1_org_tree__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OrgNode"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    set_supervisor_api_v1_org_tree__employee_id__supervisor_patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                employee_id: string;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["OrgSupervisorUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OrgNode"];
+                };
             };
             /** @description Validation Error */
             422: {

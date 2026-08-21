@@ -1,0 +1,900 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>GSSG — original dashboard, full width, 5 widget-interior polishes</title>
+<style>
+:root{
+  --bg:#f5f4f1; --surface:#fff; --surface-raised:#fafaf6; --surface-tinted:#f0eee8;
+  --primary:#0d2845; --primary-soft:#e8edf3;
+  --accent:#c8102e; --accent-soft:#fbe5e8;
+  --success:#047857; --success-soft:#d6f0e4;
+  --warning:#92400e; --warning-amber:#d97706; --warning-soft:#fbedd8;
+  --info:#1d4ed8; --info-soft:#e0e8f8;
+  --smart:#6b4fb0; --smart-soft:#f1eef8;
+  --text:#1c1f24; --text-muted:#5a6068; --text-faint:#8b9098;
+  --border:#e6e4dd; --hairline:#efece5;
+  --hero-grad:linear-gradient(135deg,#0a1f3a 0%,#0d2845 50%,#1d3a5e 100%);
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:"Inter","Segoe UI",system-ui,sans-serif;background:var(--bg);color:var(--text);-webkit-font-smoothing:antialiased}
+.mono{font-family:"IBM Plex Mono",Consolas,monospace}
+.ar{font-family:"Noto Sans Arabic","Segoe UI",sans-serif}
+a{color:inherit;text-decoration:none} button{font:inherit;border:0;background:none;cursor:pointer;color:inherit}
+.variant{display:none}.variant.active{display:block}
+.topnav{display:flex;align-items:center;gap:26px;height:56px;padding:0 28px;background:var(--surface);border-bottom:1px solid var(--border)}
+.brand{display:flex;align-items:center;gap:10px}
+.brand img{width:34px;height:34px}
+.brand b{font-size:.95rem}
+.brand small{display:block;font-size:.58rem;color:var(--text-muted);line-height:1.1;max-width:130px}
+.topnav nav{display:flex;gap:20px;font-size:.85rem;font-weight:500;color:var(--text-muted)}
+.topnav nav .on{color:var(--text);font-weight:600;position:relative}
+.topnav nav .on::after{content:"";position:absolute;left:0;right:0;bottom:-17px;height:2px;background:var(--primary)}
+.spacer{flex:1}
+.chip-personal{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--border);border-radius:99px;padding:4px 10px;font-size:.7rem;font-weight:600;background:var(--surface-raised);color:var(--text-muted)}
+.chip-personal .dot{width:7px;height:7px;border-radius:50%;background:var(--success)}
+.avatar{width:30px;height:30px;border-radius:50%;background:var(--primary-soft);display:grid;place-items:center;font-size:.75rem;font-weight:700;color:var(--primary)}
+.page{padding:24px 28px 56px}
+.hero{position:relative;background:var(--hero-grad);border-radius:18px;color:#fff;padding:26px 30px 22px;overflow:hidden;margin-bottom:26px}
+.hero .eyebrow{font-size:.68rem;letter-spacing:.14em;font-weight:700;color:#f9d8dd;text-transform:uppercase}
+.hero h2{font-size:1.65rem;font-weight:700;margin:4px 0 10px}
+.hero .meta{display:flex;align-items:center;gap:10px;font-size:.78rem;color:#c7d2e2}
+.hero .meta .chip{display:inline-flex;gap:6px;align-items:center;background:rgba(255,255,255,.12);border-radius:99px;padding:3px 11px;color:#fff;font-weight:600}
+.hero .meta .chip b{color:#ffd7ac}
+.hero .line{margin-top:12px;font-size:.8rem;color:#aebcd2}
+.hero .globe{position:absolute;top:22px;inset-inline-end:30px;width:64px;height:64px;border-radius:50%;background:#fff;display:grid;place-items:center;box-shadow:0 6px 18px rgba(0,0,0,.35)}
+.hero .globe img{width:48px;height:48px}
+.sechead{display:flex;align-items:center;justify-content:space-between;margin:26px 2px 14px}
+.sechead h3{font-size:1.05rem;font-weight:650}
+.sechead .edit{font-size:.78rem;font-weight:600;color:var(--primary)}
+.sechead .edit span{color:var(--text-faint);font-weight:500;margin-inline-end:10px}
+.grid-top{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px}
+.grid-m{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-bottom:16px}
+.grid-p{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px}
+.card{position:relative;background:var(--surface);border:1px solid var(--border);border-radius:18px;padding:18px 20px;box-shadow:0 1px 2px rgba(13,40,69,.04)}
+.card .h{font-size:.86rem;color:var(--text-muted);font-weight:550;display:flex;align-items:center;gap:8px}
+.card .h .badge{margin-inline-start:auto;font-size:.66rem;font-weight:700;border-radius:99px;padding:2px 9px}
+.card .cta{background:var(--primary);color:#fff;border-radius:99px;padding:6px 15px;font-size:.74rem;font-weight:650}
+.card .foot{display:flex;align-items:center;gap:8px;font-size:.74rem;color:var(--text-muted);margin-top:12px}
+.card .foot .cta{margin-inline-start:auto}
+.qa{display:grid;grid-template-columns:repeat(4,1fr);gap:16px}
+.qa .t{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:16px 18px;display:flex;flex-direction:column;gap:6px;box-shadow:0 1px 2px rgba(13,40,69,.04);text-align:start}
+.qa .t:hover{border-color:var(--primary)}
+.qa .t .e{font-size:1.5rem}
+.qa .t .tt{font-size:.88rem;font-weight:650}
+.qa .t .d{font-size:.72rem;color:var(--text-muted);line-height:1.35}
+.qa .t.more{border-style:dashed;align-items:center;justify-content:center;color:var(--text-muted)}
+.note{margin-top:24px;font-size:.7rem;color:var(--text-faint);text-align:center}
+.rowbase{display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid var(--hairline);font-size:.8rem}
+.rowbase:last-child{border-bottom:0}
+.rowbase .who{flex:1;min-width:0}
+.rowbase .nm{font-weight:600;font-size:.79rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.rowbase .id{font-family:"IBM Plex Mono",monospace;font-size:.62rem;color:var(--text-faint)}
+.tag{font-family:"IBM Plex Mono",monospace;font-size:.6rem;font-weight:700;padding:2px 7px;border-radius:5px}
+.tag.red{background:var(--accent-soft);color:var(--accent)}
+.tag.amber{background:var(--warning-soft);color:var(--warning)}
+.tag.blue{background:var(--info-soft);color:var(--info)}
+.tag.green{background:var(--success-soft);color:var(--success)}
+.tag.navy{background:var(--primary-soft);color:var(--primary)}
+.bnum{font-size:2.1rem;font-weight:750;letter-spacing:-.02em;line-height:1}
+
+/* ═══════ P1 · INSTRUMENTS — arc gauges, flow arrows, pulse rings ═══════ */
+.p1 .gauge{position:relative;width:110px;height:64px;margin:10px auto 2px}
+.p1 .gauge svg{width:110px;height:64px}
+.p1 .gauge .gn{position:absolute;left:0;right:0;bottom:0;text-align:center;font-size:1.5rem;font-weight:750}
+.p1 .glbl{text-align:center;font-size:.66rem;color:var(--text-faint);margin-top:2px}
+.p1 .flow{display:flex;justify-content:space-around;align-items:center;margin:12px 0 4px}
+.p1 .flow .f{display:flex;flex-direction:column;align-items:center;gap:3px;font-size:.66rem;color:var(--text-muted)}
+.p1 .flow .f b{font-size:1.25rem;font-weight:750}
+.p1 .flow .arrow{font-size:1.2rem}
+.p1 .pulse{position:relative;width:74px;height:74px;margin:8px auto}
+.p1 .pulse i{position:absolute;inset:0;border-radius:50%;border:2px solid var(--success);opacity:.25}
+.p1 .pulse i:nth-child(2){inset:11px;opacity:.5}
+.p1 .pulse i:nth-child(3){inset:22px;opacity:1;background:var(--success-soft);border-width:0;display:grid;place-items:center;font-size:1rem;font-weight:750;color:var(--success)}
+.p1 .fuel{flex:none;width:120px;height:8px;border-radius:99px;background:var(--surface-tinted);overflow:hidden}
+.p1 .fuel i{display:block;height:100%;border-radius:99px}
+.p1 .dial-week{display:flex;gap:4px;margin-inline-start:auto}
+.p1 .dial-week span{width:16px;height:16px;border-radius:4px;display:grid;place-items:center;font-size:.52rem;font-weight:700;color:var(--text-faint);background:var(--surface-tinted)}
+.p1 .dial-week span.on{background:var(--info);color:#fff}
+.p1 .sigline{flex:none;display:flex;align-items:center;gap:6px}
+.p1 .sigline .ln{width:74px;border-bottom:1.5px dashed var(--border);position:relative}
+.p1 .sigline .ln::after{content:"✗";position:absolute;inset-inline-start:-2px;top:-14px;color:var(--text-faint);font-size:.7rem}
+
+/* ═══════ P2 · MINI CHARTS — sparklines, donuts, gantt, timelines ═══════ */
+.p2 .spark{height:44px;margin:10px 0 4px}
+.p2 .spark svg{width:100%;height:44px}
+.p2 .donut{position:relative;width:84px;height:84px;margin:6px auto}
+.p2 .donut svg{width:84px;height:84px;transform:rotate(-90deg)}
+.p2 .donut .c{position:absolute;inset:0;display:grid;place-items:center;font-size:1.35rem;font-weight:750}
+.p2 .hstack{display:flex;height:10px;border-radius:99px;overflow:hidden;margin:12px 0 8px}
+.p2 .hstack i{display:block;height:100%}
+.p2 .cols{display:flex;align-items:flex-end;gap:5px;height:44px;margin:10px 0 4px}
+.p2 .cols i{flex:1;border-radius:3px 3px 0 0;background:var(--primary-soft)}
+.p2 .cols i.hot{background:var(--accent)}
+.p2 .tline{position:relative;height:34px;margin:12px 2px 2px}
+.p2 .tline .axis{position:absolute;left:0;right:0;top:50%;height:2px;background:var(--surface-tinted);border-radius:99px}
+.p2 .tline .tick{position:absolute;top:50%;transform:translate(-50%,-50%);width:14px;height:14px;border-radius:50%;border:2.5px solid #fff;box-shadow:0 1px 3px rgba(13,40,69,.25)}
+.p2 .tline .lb{position:absolute;top:-4px;transform:translateX(-50%);font-size:.56rem;font-family:"IBM Plex Mono",monospace;color:var(--text-faint)}
+.p2 .tline .zone{position:absolute;top:calc(50% - 1px);height:4px;border-radius:99px;background:var(--accent-soft)}
+.p2 .gantt{display:flex;flex-direction:column;gap:7px;margin-top:10px}
+.p2 .gantt .g{display:flex;align-items:center;gap:9px;font-size:.72rem}
+.p2 .gantt .g .nm2{width:150px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.p2 .gantt .g .lane{flex:1;height:10px;border-radius:99px;background:var(--surface-tinted);position:relative}
+.p2 .gantt .g .lane i{position:absolute;top:0;bottom:0;border-radius:99px}
+.p2 .gantt .g .due{font-family:"IBM Plex Mono",monospace;font-size:.6rem;color:var(--text-faint);width:52px;text-align:end}
+.p2 .legend{display:flex;gap:12px;font-size:.66rem;color:var(--text-muted);margin-top:6px}
+.p2 .legend i{width:8px;height:8px;border-radius:2px;display:inline-block;margin-inline-end:5px;vertical-align:0}
+
+/* ═══════ P3 · PEOPLE-FIRST — avatar-led interiors ═══════ */
+.p3 .facepile{display:flex;margin:10px 0 6px}
+.p3 .fp{width:38px;height:38px;border-radius:50%;background:var(--primary-soft);color:var(--primary);display:grid;place-items:center;font-size:.72rem;font-weight:700;border:2.5px solid #fff;box-shadow:0 1px 3px rgba(13,40,69,.18)}
+.p3 .fp+.fp{margin-inline-start:-9px}
+.p3 .fp.red{background:var(--accent-soft);color:var(--accent)}
+.p3 .fp.amber{background:var(--warning-soft);color:var(--warning)}
+.p3 .fp.green{background:var(--success-soft);color:var(--success)}
+.p3 .fp.plus{background:var(--surface-tinted);color:var(--text-muted);font-size:.62rem}
+.p3 .pr{display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--hairline)}
+.p3 .pr:last-child{border-bottom:0}
+.p3 .pav{width:34px;height:34px;border-radius:50%;display:grid;place-items:center;font-size:.66rem;font-weight:700;flex:none;position:relative}
+.p3 .pav .st{position:absolute;bottom:-2px;inset-inline-end:-2px;width:13px;height:13px;border-radius:50%;border:2px solid #fff;display:grid;place-items:center;font-size:.5rem}
+.p3 .bignm{font-size:1.05rem;font-weight:700}
+.p3 .subnm{font-size:.68rem;color:var(--text-faint)}
+
+/* ═══════ P4 · PAPER TRAIL — stubs, cards, tags, postmarks ═══════ */
+.p4 .stub{flex:none;display:flex;align-items:center;background:var(--primary-soft);border-radius:6px;overflow:hidden}
+.p4 .stub .l{padding:3px 8px;font-family:"IBM Plex Mono",monospace;font-size:.62rem;font-weight:700;color:var(--primary)}
+.p4 .stub .r{padding:3px 6px;background:var(--primary);color:#fff;font-size:.54rem;font-weight:700;position:relative}
+.p4 .stub .r::before{content:"";position:absolute;inset-inline-start:-3px;top:0;bottom:0;width:6px;background:radial-gradient(circle at 0 3px,transparent 2.2px,var(--primary) 2.3px) 0 0/6px 6px}
+.p4 .idcard{flex:none;width:56px;height:36px;border-radius:5px;background:linear-gradient(135deg,#e8edf3,#fff);border:1px solid var(--border);position:relative;overflow:hidden}
+.p4 .idcard::before{content:"";position:absolute;top:5px;inset-inline-start:5px;width:12px;height:14px;border-radius:3px;background:var(--primary-soft)}
+.p4 .idcard::after{content:"";position:absolute;top:7px;inset-inline-end:5px;width:26px;height:2.5px;background:var(--border);box-shadow:0 5px 0 var(--border),0 10px 0 var(--border)}
+.p4 .idcard .exp{position:absolute;bottom:2px;inset-inline-end:4px;font-family:"IBM Plex Mono",monospace;font-size:.5rem;font-weight:800}
+.p4 .lugtag{flex:none;position:relative;background:var(--info-soft);border-radius:4px 10px 10px 4px;padding:4px 10px 4px 14px;font-family:"IBM Plex Mono",monospace;font-size:.6rem;font-weight:700;color:var(--info)}
+.p4 .lugtag::before{content:"";position:absolute;inset-inline-start:4px;top:50%;transform:translateY(-50%);width:5px;height:5px;border-radius:50%;background:#fff;box-shadow:0 0 0 1.5px var(--info)}
+.p4 .postmark{position:relative;width:74px;height:74px;margin:6px auto}
+.p4 .postmark .ring2{position:absolute;inset:0;border:2px dashed var(--success);border-radius:50%;opacity:.55}
+.p4 .postmark .inner{position:absolute;inset:12px;border:1.5px solid var(--success);border-radius:50%;display:grid;place-items:center;font-size:1.15rem;font-weight:750;color:var(--success);transform:rotate(-8deg)}
+.p4 .dogear{flex:none;width:34px;height:42px;background:#fffdf6;border:1px solid var(--border);border-radius:3px;position:relative;box-shadow:1.5px 1.5px 0 var(--surface-tinted),3px 3px 0 var(--hairline)}
+.p4 .dogear::before{content:"";position:absolute;top:0;inset-inline-end:0;border-style:solid;border-width:0 11px 11px 0;border-color:var(--bg) var(--bg) var(--surface-tinted) var(--surface-tinted)}
+.p4 .dogear span{position:absolute;inset-inline-start:5px;bottom:4px;font-family:"IBM Plex Mono",monospace;font-size:.56rem;font-weight:800;color:var(--primary)}
+.p4 .signhere{display:flex;align-items:center;gap:7px;flex:none}
+.p4 .signhere .ln{width:66px;border-bottom:1.5px solid var(--text);position:relative}
+.p4 .signhere .ln i{position:absolute;inset-inline-start:0;top:-13px;font-size:.66rem;color:var(--accent);font-style:normal;font-weight:800}
+.p4 .envrow{width:30px;height:20px;flex:none;border:1.5px solid;border-radius:3px;position:relative}
+.p4 .envrow::before{content:"";position:absolute;inset:0;background:linear-gradient(to bottom right,transparent 46%,currentColor 47%,transparent 54%),linear-gradient(to bottom left,transparent 46%,currentColor 47%,transparent 54%);opacity:.7;height:60%}
+
+/* ═══════ P5 · STATUS BLOCKS — color-coded headers, giant numerals ═══════ */
+.p5 .card{padding:0;overflow:hidden}
+.p5 .blockhead{display:flex;align-items:center;gap:8px;padding:10px 16px;font-size:.74rem;font-weight:700;color:#fff}
+.p5 .blockhead .badge2{margin-inline-start:auto;background:rgba(255,255,255,.22);border-radius:99px;padding:1px 9px;font-family:"IBM Plex Mono",monospace;font-size:.66rem}
+.p5 .blockbody{padding:14px 16px 16px}
+.p5 .huge{font-size:2.6rem;font-weight:800;letter-spacing:-.03em;line-height:1}
+.p5 .huge small{font-size:.85rem;color:var(--text-faint);font-weight:600;letter-spacing:0}
+.p5 .stripe{display:flex;gap:4px;margin:10px 0}
+.p5 .stripe i{height:6px;border-radius:99px;flex:1;background:var(--surface-tinted)}
+.p5 .kv{display:flex;justify-content:space-between;font-size:.72rem;color:var(--text-muted);padding:5px 0;border-bottom:1px dashed var(--hairline)}
+.p5 .kv:last-child{border-bottom:0}
+.p5 .kv b{font-family:"IBM Plex Mono",monospace;color:var(--text)}
+.picker{max-width:800px;margin:60px auto;padding:0 24px}
+.picker h1{font-size:1.5rem;margin-bottom:6px}
+.picker p{color:var(--text-muted);margin-bottom:24px}
+.picker a{display:flex;justify-content:space-between;align-items:center;border:1px solid var(--border);background:var(--surface);border-radius:14px;padding:17px 22px;margin-bottom:12px;font-weight:600}
+.picker a:hover{border-color:var(--primary)}
+.picker a small{color:var(--text-muted);font-weight:400}
+</style>
+</head>
+<body>
+
+<div id="picker" class="picker" style="display:none">
+  <h1>Original dashboard · full width · 5 interior polishes</h1>
+  <p>Same widgets you have today; each variant gives their insides a purpose-built design. Quick actions = services only, current tile look. <span class="mono">?v=1…5</span></p>
+  <a href="?v=1"><span>1 · Instruments</span><small>arc gauges, in/out flow, sync pulse, fuel bars</small></a>
+  <a href="?v=2"><span>2 · Mini Charts</span><small>sparklines, donut, expiry timeline, leave gantt</small></a>
+  <a href="?v=3"><span>3 · People First</span><small>avatar-led: faces carry every widget</small></a>
+  <a href="?v=4"><span>4 · Paper Trail</span><small>ticket-stub refs, mini ID cards, luggage tags, postmark</small></a>
+  <a href="?v=5"><span>5 · Status Blocks</span><small>color-block headers, giant numerals, key-value strips</small></a>
+</div>
+
+<script id="shell-template" type="text/template">
+  <div class="topnav">
+    <div class="brand"><img src="gssg-globe.png" alt=""><div><b>GSSG</b><small>Global Security Services Group</small></div></div>
+    <nav><span class="on">Dashboard</span><span>Employees</span><span>Ledger</span><span>Leaves</span><span>Services</span><span>Records</span><span>Permits</span></nav>
+    <div class="spacer"></div>
+    <span class="chip-personal"><span class="dot"></span>Personal · saved to your account</span>
+    <span class="avatar">A</span>
+  </div>
+  <div class="page">
+    <div class="hero">
+      <div class="eyebrow">Good evening</div>
+      <h2>Welcome back</h2>
+      <div class="meta">
+        <span>Sat, 15 Aug</span><span>·</span><span class="ar">٢ ربيع الأول ١٤٤٨ هـ</span>
+        <span class="chip"><b>2</b> on leave today</span>
+      </div>
+      <div class="line">Quiet day. 4 on site, nothing returning today. 1 returning later this week.</div>
+      <div class="globe"><img src="gssg-globe.png" alt=""></div>
+    </div>
+    <div class="sechead" style="margin-top:0"><h3>My Widgets</h3><span class="edit"><span>yours only</span>Edit My Widgets ✎</span></div>
+    <div class="slot-widgets"></div>
+    <div class="sechead"><h3>Quick Actions</h3><span class="edit"><span>services only · yours</span>Edit Quick Actions ✎</span></div>
+    <div class="qa">
+      <button class="t"><span class="e">📅</span><span class="tt">Leave Application</span><span class="d">Apply for an employee leave.</span></button>
+      <button class="t"><span class="e">🔁</span><span class="tt">Duty Resumption</span><span class="d">Record a return to duty.</span></button>
+      <button class="t"><span class="e">🚨</span><span class="tt">Violation</span><span class="d">File a new disciplinary violation.</span></button>
+      <button class="t"><span class="e">📓</span><span class="tt">General Book</span><span class="d">Draft a general letter.</span></button>
+      <button class="t"><span class="e">✍️</span><span class="tt">Acknowledgment</span><span class="d">Record an employee acknowledgment.</span></button>
+      <button class="t"><span class="e">💰</span><span class="tt">Salary Transfer</span><span class="d">Request a salary account transfer.</span></button>
+      <button class="t"><span class="e">🎫</span><span class="tt">Leave Permit</span><span class="d">Hourly exit permit.</span></button>
+      <button class="t more"><span class="e">⋯</span><span class="tt">All 18 services</span><span class="d">Open the gallery — pin favourites.</span></button>
+    </div>
+    <div class="slot-lower"></div>
+    <div class="note"></div>
+  </div>
+</script>
+
+<!-- ═══════════════ P1 · INSTRUMENTS ═══════════════ -->
+<section class="variant p1" id="v1" data-note="P1 · Instruments — every widget reads like a gauge on the duty desk: needle arcs, in/out flow, sync pulse, countdown fuel bars, week dials.">
+<template class="w">
+  <div class="grid-top">
+    <div class="card">
+      <div class="h">Documents Completed <span class="badge" style="background:var(--primary-soft);color:var(--primary)">this month</span></div>
+      <div style="display:flex;align-items:center;gap:26px">
+        <div class="gauge">
+          <svg viewBox="0 0 110 64"><path d="M10 58 A45 45 0 0 1 100 58" fill="none" stroke="var(--surface-tinted)" stroke-width="9" stroke-linecap="round"/><path d="M10 58 A45 45 0 0 1 76 21" fill="none" stroke="var(--accent)" stroke-width="9" stroke-linecap="round"/><line x1="55" y1="58" x2="76" y2="24" stroke="var(--primary)" stroke-width="2.5"/><circle cx="55" cy="58" r="4" fill="var(--primary)"/></svg>
+          <span class="gn">14</span>
+        </div>
+        <div style="flex:1">
+          <div style="display:flex;justify-content:space-between;font-size:.74rem;color:var(--text-muted);padding:5px 0;border-bottom:1px solid var(--hairline)"><span>Generated</span><b class="mono">14</b></div>
+          <div style="display:flex;justify-content:space-between;font-size:.74rem;color:var(--text-muted);padding:5px 0;border-bottom:1px solid var(--hairline)"><span>Signed &amp; closed</span><b class="mono">11</b></div>
+          <div style="display:flex;justify-content:space-between;font-size:.74rem;color:var(--accent);padding:5px 0"><span>Need my signature</span><b class="mono">3</b></div>
+        </div>
+      </div>
+      <div class="foot">Month pace: ahead of July <button class="cta">Review</button></div>
+    </div>
+    <div class="card">
+      <div class="h">My Workspace <span class="badge" style="background:var(--success-soft);color:var(--success)">4 on site</span></div>
+      <div style="display:flex;align-items:center;gap:26px">
+        <div class="gauge">
+          <svg viewBox="0 0 110 64"><path d="M10 58 A45 45 0 0 1 100 58" fill="none" stroke="var(--surface-tinted)" stroke-width="9" stroke-linecap="round"/><path d="M10 58 A45 45 0 0 1 87 30" fill="none" stroke="var(--success)" stroke-width="9" stroke-linecap="round"/><line x1="55" y1="58" x2="87" y2="33" stroke="var(--primary)" stroke-width="2.5"/><circle cx="55" cy="58" r="4" fill="var(--primary)"/></svg>
+          <span class="gn">6</span>
+        </div>
+        <div style="flex:1">
+          <div style="display:flex;justify-content:space-between;font-size:.74rem;color:var(--text-muted);padding:5px 0;border-bottom:1px solid var(--hairline)"><span>● Active on site</span><b class="mono">4</b></div>
+          <div style="display:flex;justify-content:space-between;font-size:.74rem;color:var(--text-muted);padding:5px 0;border-bottom:1px solid var(--hairline)"><span>● On leave</span><b class="mono">2</b></div>
+          <div style="display:flex;justify-content:space-between;font-size:.74rem;color:var(--warning);padding:5px 0"><span>● Leaving soon</span><b class="mono">1</b></div>
+        </div>
+      </div>
+      <div class="foot">Head-count needle at 67% presence <button class="cta">Staff</button></div>
+    </div>
+  </div>
+  <div class="grid-m">
+    <div class="card">
+      <div class="h">Open Violations <span class="badge" style="background:var(--accent-soft);color:var(--accent)">1 open</span></div>
+      <div class="gauge">
+        <svg viewBox="0 0 110 64"><path d="M10 58 A45 45 0 0 1 100 58" fill="none" stroke="var(--surface-tinted)" stroke-width="9" stroke-linecap="round"/><path d="M10 58 A45 45 0 0 1 33 26" fill="none" stroke="var(--accent)" stroke-width="9" stroke-linecap="round"/><line x1="55" y1="58" x2="35 " y2="29" stroke="var(--primary)" stroke-width="2.5"/><circle cx="55" cy="58" r="4" fill="var(--primary)"/></svg>
+        <span class="gn">1</span>
+      </div>
+      <div class="glbl">hazard level: low — 1 attendance case</div>
+      <div class="foot"><span class="mono" style="font-size:.66rem">ALMANSOORI · 14 AUG</span> <button class="cta" style="background:var(--accent)">Case</button></div>
+    </div>
+    <div class="card">
+      <div class="h">Drafts <span class="badge" style="background:var(--smart-soft);color:var(--smart)">3 unsubmitted</span></div>
+      <div class="gauge">
+        <svg viewBox="0 0 110 64"><path d="M10 58 A45 45 0 0 1 100 58" fill="none" stroke="var(--surface-tinted)" stroke-width="9" stroke-linecap="round"/><path d="M10 58 A45 45 0 0 1 55 13" fill="none" stroke="var(--smart)" stroke-width="9" stroke-linecap="round"/><line x1="55" y1="58" x2="55" y2="16" stroke="var(--primary)" stroke-width="2.5"/><circle cx="55" cy="58" r="4" fill="var(--primary)"/></svg>
+        <span class="gn">3</span>
+      </div>
+      <div class="glbl">oldest sitting 3 days — 1-0001</div>
+      <div class="foot">Refs reserved, unsent <button class="cta">Resume</button></div>
+    </div>
+    <div class="card">
+      <div class="h">Ledger Unread <span class="badge" style="background:var(--info-soft);color:var(--info)">3 unread</span></div>
+      <div class="flow">
+        <span class="f"><span class="arrow" style="color:var(--success)">⬇</span><b>2</b>in</span>
+        <span class="f"><span class="arrow" style="color:var(--accent)">⬆</span><b>0</b>out</span>
+        <span class="f"><span class="arrow" style="color:var(--primary)">↔</span><b>1</b>internal</span>
+      </div>
+      <div class="glbl">newest: circular 44/2026 · 18:22</div>
+      <div class="foot">Mark all read <button class="cta">Inbox</button></div>
+    </div>
+    <div class="card">
+      <div class="h">Email Sync <span class="badge" style="background:var(--success-soft);color:var(--success)">live</span></div>
+      <div class="pulse"><i></i><i></i><i>6m</i></div>
+      <div class="glbl">last sweep 6 min ago · every 15 min</div>
+      <div class="foot">IONOS mailbox linked <button class="cta">↻ Sync</button></div>
+    </div>
+  </div>
+  <div class="grid-p">
+    <div class="card">
+      <div class="h">Expiring Soon <span class="badge" style="background:var(--accent-soft);color:var(--accent)">1 expired</span></div>
+      <div style="margin-top:6px">
+        <div class="rowbase"><div class="who"><div class="nm">HAMDAN ALI ALMANSOORI</div><div class="id">G-1005 · EMIRATES ID</div></div><span class="fuel"><i style="width:4%;background:var(--accent)"></i></span><span class="tag red">−3d</span></div>
+        <div class="rowbase"><div class="who"><div class="nm">AHMED SAEED ALKAABI</div><div class="id">G-1001 · EMIRATES ID</div></div><span class="fuel"><i style="width:20%;background:var(--warning-amber)"></i></span><span class="tag amber">18d</span></div>
+        <div class="rowbase"><div class="who"><div class="nm">SALEM MOHAMED ALSHAMSI</div><div class="id">G-1002 · PASSPORT</div></div><span class="fuel"><i style="width:50%;background:var(--info)"></i></span><span class="tag blue">45d</span></div>
+      </div>
+      <div class="foot">Fuel bar = time left of 90-day window <button class="cta">View all</button></div>
+    </div>
+    <div class="card">
+      <div class="h">On Leave Today <span class="badge" style="background:var(--info-soft);color:var(--info)">2</span></div>
+      <div style="margin-top:6px">
+        <div class="rowbase"><div class="who"><div class="nm">KHALED OBAID ALDHAHERI</div><div class="id">G-1003 · ANNUAL</div></div><span class="dial-week"><span>S</span><span class="on">S</span><span class="on">M</span><span>T</span><span>W</span></span><span class="tag blue">until 15 Aug</span></div>
+        <div class="rowbase"><div class="who"><div class="nm">SALEM MOHAMED ALSHAMSI</div><div class="id">G-1002 · ANNUAL</div></div><span class="dial-week"><span class="on">S</span><span class="on">S</span><span class="on">M</span><span class="on">T</span><span>W</span></span><span class="tag blue">until 17 Aug</span></div>
+      </div>
+      <div class="foot">Week dial = days still away <button class="cta">Leaves</button></div>
+    </div>
+  </div>
+</template>
+<template class="l">
+  <div class="grid-p">
+    <div class="card">
+      <div class="h">Books · Awaiting Your Approval <span class="badge" style="background:var(--warning-soft);color:var(--warning)">3</span></div>
+      <div style="margin-top:6px">
+        <div class="rowbase"><span class="tag navy">1-0006</span><div class="who"><div class="nm">Gate access request for contractor</div><div class="id">AUDIT ADMIN · 4H AGO</div></div><span class="sigline"><span class="ln"></span></span><button class="tag green">SIGN</button><button class="tag red">✕</button></div>
+        <div class="rowbase"><span class="tag navy">1-0004</span><div class="who"><div class="nm">Duty roster amendment — Al Wathba</div><div class="id">S. ALSHAMSI · 6H AGO</div></div><span class="sigline"><span class="ln"></span></span><button class="tag green">SIGN</button><button class="tag red">✕</button></div>
+        <div class="rowbase"><span class="tag navy">1-0002</span><div class="who"><div class="nm">Uniform issue authorization</div><div class="id">K. ALDHAHERI · 1D AGO</div></div><span class="sigline"><span class="ln"></span></span><button class="tag green">SIGN</button><button class="tag red">✕</button></div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="h">Returning in the Next 7 Days <span class="badge" style="background:var(--success-soft);color:var(--success)">1</span></div>
+      <div style="margin-top:6px">
+        <div class="rowbase"><div class="who"><div class="nm">SALEM MOHAMED ALSHAMSI</div><div class="id">G-1002 · ANNUAL ENDS SUN</div></div><span class="fuel"><i style="width:71%;background:var(--success)"></i></span><span class="tag green">2 days</span></div>
+      </div>
+      <div class="foot">Prepare the duty resumption before Sunday <button class="cta">Form</button></div>
+    </div>
+  </div>
+  <div class="grid-p">
+    <div class="card">
+      <div class="h">Latest Documents</div>
+      <div style="margin-top:6px">
+        <div class="rowbase"><span class="tag navy">REPORT-1</span><div class="who"><div class="nm">Report — night patrol incident</div><div class="id">13 AUG 01:16</div></div><span class="tag amber">signed</span></div>
+        <div class="rowbase"><span class="tag navy">1-5-1</span><div class="who"><div class="nm">General Book — permit cover</div><div class="id">12 AUG 21:16</div></div><span class="tag green">closed</span></div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="h">Latest Correspondence <span class="badge" style="background:var(--info-soft);color:var(--info)">5 in 24h</span></div>
+      <div style="margin-top:6px">
+        <div class="rowbase"><span class="tag green">IN</span><div class="who"><div class="nm">Security clearance circular 44/2026</div><div class="id">ABU DHABI POLICE HQ</div></div><span class="tag blue">18:22</span></div>
+        <div class="rowbase"><span class="tag red">OUT</span><div class="who"><div class="nm">Reply to inspection findings</div><div class="id">MINISTRY OF INTERIOR</div></div><span class="tag blue">THU</span></div>
+        <div class="rowbase"><span class="tag navy">INT</span><div class="who"><div class="nm">Internal memo — uniform renewal</div><div class="id">HR DEPARTMENT</div></div><span class="tag blue">WED</span></div>
+      </div>
+    </div>
+  </div>
+  <div class="card">
+    <div class="h">Pending Departures <span class="badge" style="background:var(--warning-soft);color:var(--warning)">1</span></div>
+    <div class="rowbase" style="border-bottom:0"><div class="who"><div class="nm">RASHED SANAD ALYAHYAEE</div><div class="id">G-1004 · RESIGNATION · LAST DAY 27 AUG</div></div><span class="fuel"><i style="width:40%;background:var(--warning-amber)"></i></span><span class="tag amber">12 days</span><button class="tag navy">CANCEL</button><button class="cta" style="padding:5px 13px">Clearance</button></div>
+  </div>
+</template>
+</section>
+
+<!-- ═══════════════ P2 · MINI CHARTS ═══════════════ -->
+<section class="variant p2" id="v2" data-note="P2 · Mini Charts — each widget carries its own tiny visualization: month sparkline, staff donut, expiry timeline, leave gantt, direction stack.">
+<template class="w">
+  <div class="grid-top">
+    <div class="card">
+      <div class="h">Documents Completed <span class="badge" style="background:var(--primary-soft);color:var(--primary)">this month</span></div>
+      <div style="display:flex;gap:22px;align-items:center">
+        <div><span class="bnum">14</span><div style="font-size:.68rem;color:var(--text-faint)">docs · Aug</div></div>
+        <div class="spark" style="flex:1">
+          <svg viewBox="0 0 300 44" preserveAspectRatio="none"><polyline points="0,36 30,32 60,34 90,26 120,28 150,18 180,22 210,14 240,16 270,8 300,10" fill="none" stroke="var(--accent)" stroke-width="2.5"/><polyline points="0,36 30,32 60,34 90,26 120,28 150,18 180,22 210,14 240,16 270,8 300,10 300,44 0,44" fill="var(--accent-soft)" opacity=".55" stroke="none"/></svg>
+        </div>
+      </div>
+      <div class="foot">Trend up vs July (11) · 3 awaiting signature <button class="cta">Review</button></div>
+    </div>
+    <div class="card">
+      <div class="h">My Workspace <span class="badge" style="background:var(--success-soft);color:var(--success)">6 staff</span></div>
+      <div style="display:flex;gap:24px;align-items:center">
+        <div class="donut">
+          <svg viewBox="0 0 84 84"><circle cx="42" cy="42" r="34" fill="none" stroke="var(--surface-tinted)" stroke-width="12"/><circle cx="42" cy="42" r="34" fill="none" stroke="var(--success)" stroke-width="12" stroke-dasharray="142 72"/><circle cx="42" cy="42" r="34" fill="none" stroke="var(--warning-amber)" stroke-width="12" stroke-dasharray="71 143" stroke-dashoffset="-142"/></svg>
+          <span class="c">6</span>
+        </div>
+        <div style="flex:1" class="p2legend">
+          <div class="legend" style="flex-direction:column;gap:7px;font-size:.76rem">
+            <span><i style="background:var(--success)"></i>4 active on site</span>
+            <span><i style="background:var(--warning-amber)"></i>2 on leave</span>
+            <span><i style="background:var(--accent)"></i>1 leaving in 12 days</span>
+          </div>
+        </div>
+      </div>
+      <div class="foot">Presence 67% today <button class="cta">Staff</button></div>
+    </div>
+  </div>
+  <div class="grid-m">
+    <div class="card">
+      <div class="h">Open Violations</div>
+      <div style="display:flex;align-items:baseline;gap:10px"><span class="bnum">1</span><span class="tag red">attendance</span></div>
+      <div class="cols"><i style="height:30%"></i><i style="height:14%"></i><i style="height:40%"></i><i style="height:22%"></i><i style="height:8%"></i><i class="hot" style="height:16%"></i></div>
+      <div class="legend"><span>6-month history — August: 1</span></div>
+      <div class="foot"><button class="cta" style="background:var(--accent)">Case file</button></div>
+    </div>
+    <div class="card">
+      <div class="h">Drafts</div>
+      <div style="display:flex;align-items:baseline;gap:10px"><span class="bnum">3</span><span class="tag" style="background:var(--smart-soft);color:var(--smart)">unsubmitted</span></div>
+      <div class="cols"><i style="height:85%;background:var(--smart-soft)"></i><i style="height:55%;background:var(--smart-soft)"></i><i style="height:25%;background:var(--smart-soft)"></i></div>
+      <div class="legend"><span>age: 3d · 2d · 1d</span></div>
+      <div class="foot"><button class="cta">Resume</button></div>
+    </div>
+    <div class="card">
+      <div class="h">Ledger Unread</div>
+      <div style="display:flex;align-items:baseline;gap:10px"><span class="bnum">3</span><span class="tag blue">unread</span></div>
+      <div class="hstack"><i style="width:66%;background:var(--success)"></i><i style="width:0%;background:var(--accent)"></i><i style="width:34%;background:var(--primary)"></i></div>
+      <div class="legend"><span><i style="background:var(--success)"></i>2 in</span><span><i style="background:var(--accent)"></i>0 out</span><span><i style="background:var(--primary)"></i>1 internal</span></div>
+      <div class="foot"><button class="cta">Inbox</button></div>
+    </div>
+    <div class="card">
+      <div class="h">Email Sync</div>
+      <div style="display:flex;align-items:baseline;gap:10px"><span class="bnum">6<small style="font-size:.9rem;color:var(--text-faint)">m ago</small></span><span class="tag green">on · 15 min</span></div>
+      <div class="spark">
+        <svg viewBox="0 0 300 44" preserveAspectRatio="none"><polyline points="0,30 40,30 40,12 80,12 80,30 120,30 120,12 160,12 160,30 200,30 200,12 240,12 240,30 280,30 280,12 300,12" fill="none" stroke="var(--success)" stroke-width="2"/></svg>
+      </div>
+      <div class="legend"><span>sync heartbeat — steady</span></div>
+      <div class="foot"><button class="cta">↻ Sync now</button></div>
+    </div>
+  </div>
+  <div class="grid-p">
+    <div class="card">
+      <div class="h">Expiring Soon <span class="badge" style="background:var(--accent-soft);color:var(--accent)">1 expired</span></div>
+      <div class="tline">
+        <span class="zone" style="left:0;width:8%"></span>
+        <span class="axis"></span>
+        <span class="tick" style="left:4%;background:var(--accent)"></span><span class="lb" style="left:4%">−3d</span>
+        <span class="tick" style="left:26%;background:var(--warning-amber)"></span><span class="lb" style="left:26%">18d</span>
+        <span class="tick" style="left:54%;background:var(--info)"></span><span class="lb" style="left:54%">45d</span>
+        <span class="lb" style="left:96%">90d</span>
+      </div>
+      <div style="margin-top:8px">
+        <div class="rowbase"><span class="tag red">−3d</span><div class="who"><div class="nm">HAMDAN ALMANSOORI — Emirates ID</div></div><span class="id mono">G-1005</span></div>
+        <div class="rowbase"><span class="tag amber">18d</span><div class="who"><div class="nm">AHMED ALKAABI — Emirates ID</div></div><span class="id mono">G-1001</span></div>
+        <div class="rowbase"><span class="tag blue">45d</span><div class="who"><div class="nm">SALEM ALSHAMSI — Passport</div></div><span class="id mono">G-1002</span></div>
+      </div>
+      <div class="foot">Timeline = the 90-day window <button class="cta">View all</button></div>
+    </div>
+    <div class="card">
+      <div class="h">On Leave Today <span class="badge" style="background:var(--info-soft);color:var(--info)">2</span></div>
+      <div class="gantt" style="margin-top:14px">
+        <div class="g"><span class="nm2">KHALED ALDHAHERI</span><span class="lane"><i style="left:8%;width:54%;background:var(--info)"></i></span><span class="due">15 Aug</span></div>
+        <div class="g"><span class="nm2">SALEM ALSHAMSI</span><span class="lane"><i style="left:22%;width:70%;background:var(--info)"></i></span><span class="due">17 Aug</span></div>
+        <div class="g" style="opacity:.55"><span class="nm2">— returns Sunday</span><span class="lane"><i style="left:22%;width:70%;background:var(--success-soft);border:1px dashed var(--success)"></i></span><span class="due">resume</span></div>
+      </div>
+      <div class="foot">Bars span leave dates across this week <button class="cta">Leaves</button></div>
+    </div>
+  </div>
+</template>
+<template class="l">
+  <div class="grid-p">
+    <div class="card">
+      <div class="h">Books · Awaiting Your Approval <span class="badge" style="background:var(--warning-soft);color:var(--warning)">3 · oldest 1d</span></div>
+      <div class="hstack" style="margin-top:12px"><i style="width:15%;background:var(--warning-amber)"></i><i style="width:25%;background:var(--warning-soft)"></i><i style="width:60%;background:var(--surface-tinted)"></i></div>
+      <div class="legend"><span>queue age — 1d · 6h · 4h</span></div>
+      <div style="margin-top:4px">
+        <div class="rowbase"><span class="tag navy">1-0006</span><div class="who"><div class="nm">Gate access request for contractor</div></div><button class="tag green">SIGN</button><button class="tag red">✕</button></div>
+        <div class="rowbase"><span class="tag navy">1-0004</span><div class="who"><div class="nm">Duty roster amendment — Al Wathba</div></div><button class="tag green">SIGN</button><button class="tag red">✕</button></div>
+        <div class="rowbase"><span class="tag navy">1-0002</span><div class="who"><div class="nm">Uniform issue authorization</div></div><button class="tag green">SIGN</button><button class="tag red">✕</button></div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="h">Returning in the Next 7 Days <span class="badge" style="background:var(--success-soft);color:var(--success)">1</span></div>
+      <div class="gantt" style="margin-top:14px">
+        <div class="g"><span class="nm2">SALEM ALSHAMSI</span><span class="lane"><i style="left:0;width:71%;background:var(--success)"></i></span><span class="due">Sun</span></div>
+      </div>
+      <div class="foot">Countdown 71% elapsed — resumption form due <button class="cta">Prepare</button></div>
+    </div>
+  </div>
+  <div class="grid-p">
+    <div class="card">
+      <div class="h">Latest Documents</div>
+      <div style="margin-top:6px">
+        <div class="rowbase"><span class="tag navy">REPORT-1</span><div class="who"><div class="nm">Report — night patrol incident</div><div class="id">13 AUG 01:16</div></div><span class="tag amber">signed</span></div>
+        <div class="rowbase"><span class="tag navy">1-5-1</span><div class="who"><div class="nm">General Book — permit cover</div><div class="id">12 AUG 21:16</div></div><span class="tag green">closed</span></div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="h">Latest Correspondence <span class="badge" style="background:var(--info-soft);color:var(--info)">5 in 24h</span></div>
+      <div class="hstack" style="margin-top:12px"><i style="width:60%;background:var(--success)"></i><i style="width:20%;background:var(--accent)"></i><i style="width:20%;background:var(--primary)"></i></div>
+      <div class="legend"><span><i style="background:var(--success)"></i>3 in</span><span><i style="background:var(--accent)"></i>1 out</span><span><i style="background:var(--primary)"></i>1 internal</span></div>
+      <div style="margin-top:4px">
+        <div class="rowbase"><span class="tag green">IN</span><div class="who"><div class="nm">Security clearance circular 44/2026</div></div><span class="tag blue">18:22</span></div>
+        <div class="rowbase"><span class="tag navy">INT</span><div class="who"><div class="nm">Internal memo — uniform renewal</div></div><span class="tag blue">WED</span></div>
+      </div>
+    </div>
+  </div>
+  <div class="card">
+    <div class="h">Pending Departures <span class="badge" style="background:var(--warning-soft);color:var(--warning)">1</span></div>
+    <div class="gantt" style="margin:12px 0 4px">
+      <div class="g"><span class="nm2">RASHED ALYAHYAEE</span><span class="lane"><i style="left:0;width:40%;background:var(--warning-amber)"></i></span><span class="due">27 Aug</span></div>
+    </div>
+    <div class="foot">12 of 30 notice days elapsed — clearance not started <button class="tag navy" style="margin-inline-start:auto">CANCEL</button><button class="cta" style="padding:5px 13px">Clearance</button></div>
+  </div>
+</template>
+</section>
+
+<!-- ═══════════════ P3 · PEOPLE FIRST ═══════════════ -->
+<section class="variant p3" id="v3" data-note="P3 · People First — faces lead every widget: overlapping avatar piles, status rings, the person before the number.">
+<template class="w">
+  <div class="grid-top">
+    <div class="card">
+      <div class="h">Documents Completed <span class="badge" style="background:var(--primary-soft);color:var(--primary)">this month</span></div>
+      <div style="display:flex;align-items:center;gap:18px">
+        <span class="bignm" style="font-size:2.2rem;font-weight:750">14</span>
+        <div>
+          <div class="facepile">
+            <span class="fp">AA</span><span class="fp">SA</span><span class="fp">KA</span><span class="fp">HA</span><span class="fp plus">+3</span>
+          </div>
+          <div class="subnm">7 submitters this month · most active: Audit Admin (5)</div>
+        </div>
+      </div>
+      <div class="foot"><span style="color:var(--accent)">●</span> 3 need my signature <button class="cta">Review</button></div>
+    </div>
+    <div class="card">
+      <div class="h">My Workspace <span class="badge" style="background:var(--success-soft);color:var(--success)">6 staff</span></div>
+      <div style="display:flex;align-items:center;gap:18px">
+        <span class="bignm" style="font-size:2.2rem;font-weight:750">6</span>
+        <div>
+          <div class="facepile">
+            <span class="fp green">AK</span><span class="fp green">HM</span><span class="fp green">SN</span><span class="fp green">RY</span><span class="fp amber">KD</span><span class="fp amber">SS</span>
+          </div>
+          <div class="subnm">green = on site · amber = on leave · red ring = flag</div>
+        </div>
+      </div>
+      <div class="foot">1 leaving soon · 1 expired ID <button class="cta">Staff</button></div>
+    </div>
+  </div>
+  <div class="grid-m">
+    <div class="card">
+      <div class="h">Open Violations</div>
+      <div class="pr" style="border:0;padding-top:12px">
+        <span class="pav" style="background:var(--accent-soft);color:var(--accent)">HM<span class="st" style="background:var(--accent);color:#fff">!</span></span>
+        <div class="who"><div class="nm">HAMDAN ALMANSOORI</div><div class="id">ATTENDANCE · FILED 14 AUG</div></div>
+      </div>
+      <div class="foot"><span class="bignm">1</span><span class="subnm" style="margin-inline-start:6px">open case</span> <button class="cta" style="background:var(--accent)">Case</button></div>
+    </div>
+    <div class="card">
+      <div class="h">Drafts</div>
+      <div class="pr" style="border:0;padding-top:12px">
+        <span class="pav" style="background:var(--smart-soft);color:var(--smart)">AA</span>
+        <div class="who"><div class="nm">All 3 drafts are yours</div><div class="id">1-0001 · 1-0003 · 1-0005</div></div>
+      </div>
+      <div class="foot"><span class="bignm">3</span><span class="subnm" style="margin-inline-start:6px">unsubmitted</span> <button class="cta">Resume</button></div>
+    </div>
+    <div class="card">
+      <div class="h">Ledger Unread</div>
+      <div class="pr" style="border:0;padding-top:12px">
+        <span class="pav" style="background:var(--info-soft);color:var(--info)">PD</span>
+        <div class="who"><div class="nm">Abu Dhabi Police HQ</div><div class="id">+ MOI · HR DEPT</div></div>
+      </div>
+      <div class="foot"><span class="bignm">3</span><span class="subnm" style="margin-inline-start:6px">unread letters</span> <button class="cta">Inbox</button></div>
+    </div>
+    <div class="card">
+      <div class="h">Email Sync</div>
+      <div class="pr" style="border:0;padding-top:12px">
+        <span class="pav" style="background:var(--success-soft);color:var(--success)">✓<span class="st" style="background:var(--success);color:#fff">6</span></span>
+        <div class="who"><div class="nm">Mailbox linked · you</div><div class="id">SYNCED 6 MIN AGO · 15 MIN CYCLE</div></div>
+      </div>
+      <div class="foot"><span class="subnm">auto-import to ledger is on</span> <button class="cta">↻ Sync</button></div>
+    </div>
+  </div>
+  <div class="grid-p">
+    <div class="card">
+      <div class="h">Expiring Soon <span class="badge" style="background:var(--accent-soft);color:var(--accent)">1 expired</span></div>
+      <div style="margin-top:4px">
+        <div class="pr"><span class="pav" style="background:var(--accent-soft);color:var(--accent)">HM<span class="st" style="background:var(--accent);color:#fff">✕</span></span><div class="who"><div class="nm">HAMDAN ALI ALMANSOORI</div><div class="id">EMIRATES ID · G-1005</div></div><span class="tag red">expired 3d</span></div>
+        <div class="pr"><span class="pav" style="background:var(--warning-soft);color:var(--warning)">AK<span class="st" style="background:var(--warning-amber);color:#fff">18</span></span><div class="who"><div class="nm">AHMED SAEED ALKAABI</div><div class="id">EMIRATES ID · G-1001</div></div><span class="tag amber">18 days</span></div>
+        <div class="pr"><span class="pav" style="background:var(--info-soft);color:var(--info)">SS<span class="st" style="background:var(--info);color:#fff">45</span></span><div class="who"><div class="nm">SALEM MOHAMED ALSHAMSI</div><div class="id">PASSPORT · G-1002</div></div><span class="tag blue">45 days</span></div>
+      </div>
+      <div class="foot">Ring badge = days left <button class="cta">View all</button></div>
+    </div>
+    <div class="card">
+      <div class="h">On Leave Today <span class="badge" style="background:var(--info-soft);color:var(--info)">2</span></div>
+      <div style="margin-top:4px">
+        <div class="pr"><span class="pav" style="background:var(--info-soft);color:var(--info)">KD</span><div class="who"><div class="nm">KHALED OBAID ALDHAHERI <span class="ar" style="color:var(--text-faint);font-weight:400">خالد</span></div><div class="id">ANNUAL · G-1003</div></div><span class="tag blue">until 15 Aug</span></div>
+        <div class="pr"><span class="pav" style="background:var(--info-soft);color:var(--info)">SS</span><div class="who"><div class="nm">SALEM MOHAMED ALSHAMSI <span class="ar" style="color:var(--text-faint);font-weight:400">سالم</span></div><div class="id">ANNUAL · G-1002</div></div><span class="tag blue">until 17 Aug</span></div>
+      </div>
+      <div class="foot">Tap a person to open the leave record <button class="cta">Leaves</button></div>
+    </div>
+  </div>
+</template>
+<template class="l">
+  <div class="grid-p">
+    <div class="card">
+      <div class="h">Books · Awaiting Your Approval <span class="badge" style="background:var(--warning-soft);color:var(--warning)">3</span></div>
+      <div style="margin-top:4px">
+        <div class="pr"><span class="pav" style="background:var(--primary-soft);color:var(--primary)">AA</span><div class="who"><div class="nm">Gate access request for contractor</div><div class="id">1-0006 · AUDIT ADMIN · 4H</div></div><button class="tag green">SIGN</button><button class="tag red">✕</button></div>
+        <div class="pr"><span class="pav" style="background:var(--primary-soft);color:var(--primary)">SA</span><div class="who"><div class="nm">Duty roster amendment — Al Wathba</div><div class="id">1-0004 · S. ALSHAMSI · 6H</div></div><button class="tag green">SIGN</button><button class="tag red">✕</button></div>
+        <div class="pr"><span class="pav" style="background:var(--primary-soft);color:var(--primary)">KA</span><div class="who"><div class="nm">Uniform issue authorization</div><div class="id">1-0002 · K. ALDHAHERI · 1D</div></div><button class="tag green">SIGN</button><button class="tag red">✕</button></div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="h">Returning in the Next 7 Days <span class="badge" style="background:var(--success-soft);color:var(--success)">1</span></div>
+      <div class="pr" style="border:0"><span class="pav" style="background:var(--success-soft);color:var(--success)">SS<span class="st" style="background:var(--success);color:#fff">2</span></span><div class="who"><div class="nm">SALEM MOHAMED ALSHAMSI</div><div class="id">BACK SUNDAY · RESUMPTION DUE</div></div><button class="cta">Prepare form</button></div>
+    </div>
+  </div>
+  <div class="grid-p">
+    <div class="card">
+      <div class="h">Latest Documents</div>
+      <div style="margin-top:4px">
+        <div class="pr"><span class="pav" style="background:var(--primary-soft);color:var(--primary)">RP</span><div class="who"><div class="nm">Report — night patrol incident</div><div class="id">REPORT-1 · 13 AUG</div></div><span class="tag amber">signed</span></div>
+        <div class="pr"><span class="pav" style="background:var(--primary-soft);color:var(--primary)">GB</span><div class="who"><div class="nm">General Book — permit cover</div><div class="id">1-5-1 · 12 AUG</div></div><span class="tag green">closed</span></div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="h">Latest Correspondence <span class="badge" style="background:var(--info-soft);color:var(--info)">5 in 24h</span></div>
+      <div style="margin-top:4px">
+        <div class="pr"><span class="pav" style="background:var(--success-soft);color:var(--success)">PD</span><div class="who"><div class="nm">Security clearance circular 44/2026</div><div class="id">ABU DHABI POLICE HQ · 18:22</div></div><span class="tag green">IN</span></div>
+        <div class="pr"><span class="pav" style="background:var(--accent-soft);color:var(--accent)">MI</span><div class="who"><div class="nm">Reply to inspection findings</div><div class="id">MINISTRY OF INTERIOR · THU</div></div><span class="tag red">OUT</span></div>
+        <div class="pr"><span class="pav" style="background:var(--primary-soft);color:var(--primary)">HR</span><div class="who"><div class="nm">Internal memo — uniform renewal</div><div class="id">HR DEPARTMENT · WED</div></div><span class="tag navy">INT</span></div>
+      </div>
+    </div>
+  </div>
+  <div class="card">
+    <div class="h">Pending Departures <span class="badge" style="background:var(--warning-soft);color:var(--warning)">1</span></div>
+    <div class="pr" style="border:0"><span class="pav" style="background:var(--warning-soft);color:var(--warning)">RY<span class="st" style="background:var(--warning-amber);color:#fff">12</span></span><div class="who"><div class="nm">RASHED SANAD ALYAHYAEE</div><div class="id">G-1004 · RESIGNATION · LAST DAY 27 AUG</div></div><button class="tag navy">CANCEL</button><button class="cta" style="padding:5px 13px">Clearance</button></div>
+  </div>
+</template>
+</section>
+
+<!-- ═══════════════ P4 · PAPER TRAIL ═══════════════ -->
+<section class="variant p4" id="v4" data-note="P4 · Paper Trail — quiet physical metaphors in the current shade: ticket-stub refs, mini ID cards that expire, luggage tags for leave, a postmark for sync.">
+<template class="w">
+  <div class="grid-top">
+    <div class="card">
+      <div class="h">Documents Completed <span class="badge" style="background:var(--primary-soft);color:var(--primary)">this month</span></div>
+      <div style="display:flex;align-items:center;gap:18px;margin-top:6px">
+        <span class="dogear" style="width:44px;height:54px"><span style="font-size:.72rem">14</span></span>
+        <div style="flex:1">
+          <div class="rowbase" style="padding:6px 0"><span class="tag green">CLOSED</span><div class="who"><div class="nm">11 filed to the register</div></div></div>
+          <div class="rowbase" style="padding:6px 0"><span class="tag red">OPEN</span><div class="who"><div class="nm">3 waiting on your signature</div></div></div>
+        </div>
+      </div>
+      <div class="foot">Paper count for August <button class="cta">Review</button></div>
+    </div>
+    <div class="card">
+      <div class="h">My Workspace <span class="badge" style="background:var(--success-soft);color:var(--success)">6 staff</span></div>
+      <div style="display:flex;align-items:center;gap:14px;margin-top:10px">
+        <span class="lugtag" style="background:var(--success-soft);color:var(--success)">4 ON SITE</span>
+        <span class="lugtag">2 ON LEAVE</span>
+        <span class="lugtag" style="background:var(--warning-soft);color:var(--warning)">1 LEAVING</span>
+      </div>
+      <div class="foot">Tags mirror the duty board hooks <button class="cta">Staff</button></div>
+    </div>
+  </div>
+  <div class="grid-m">
+    <div class="card">
+      <div class="h">Open Violations</div>
+      <div style="display:flex;align-items:center;gap:12px;margin-top:10px">
+        <span class="bnum">1</span>
+        <div class="who"><div class="nm">HAMDAN ALMANSOORI</div><div class="id">ATTENDANCE · 14 AUG</div></div>
+      </div>
+      <div style="margin-top:10px;font-size:.62rem;font-weight:800;letter-spacing:.12em;color:rgba(200,16,46,.55);border:2px solid rgba(200,16,46,.4);border-radius:4px;padding:2px 8px;width:max-content;transform:rotate(-3deg)">CASE OPEN</div>
+      <div class="foot"><button class="cta" style="background:var(--accent)">Case file</button></div>
+    </div>
+    <div class="card">
+      <div class="h">Drafts</div>
+      <div style="display:flex;gap:8px;margin-top:10px;align-items:flex-end">
+        <span class="dogear"><span>1-0001</span></span>
+        <span class="dogear"><span>1-0003</span></span>
+        <span class="dogear"><span>1-0005</span></span>
+      </div>
+      <div class="foot">3 sheets waiting on the desk <button class="cta">Resume</button></div>
+    </div>
+    <div class="card">
+      <div class="h">Ledger Unread</div>
+      <div style="display:flex;flex-direction:column;gap:8px;margin-top:10px">
+        <div style="display:flex;align-items:center;gap:10px;font-size:.76rem"><span class="envrow" style="color:var(--success)"></span><b>2 incoming</b><span style="color:var(--text-faint)">sealed</span></div>
+        <div style="display:flex;align-items:center;gap:10px;font-size:.76rem"><span class="envrow" style="color:var(--primary)"></span><b>1 internal</b><span style="color:var(--text-faint)">sealed</span></div>
+      </div>
+      <div class="foot">3 unopened envelopes <button class="cta">Inbox</button></div>
+    </div>
+    <div class="card">
+      <div class="h">Email Sync</div>
+      <div class="postmark"><span class="ring2"></span><span class="inner">6m</span></div>
+      <div class="foot" style="justify-content:center">postmarked 6 min ago · IONOS <button class="cta">↻ Sync</button></div>
+    </div>
+  </div>
+  <div class="grid-p">
+    <div class="card">
+      <div class="h">Expiring Soon <span class="badge" style="background:var(--accent-soft);color:var(--accent)">1 expired</span></div>
+      <div style="margin-top:4px">
+        <div class="rowbase"><span class="idcard"><span class="exp" style="color:var(--accent)">−3D</span></span><div class="who"><div class="nm">HAMDAN ALI ALMANSOORI</div><div class="id">EMIRATES ID · G-1005</div></div><span class="tag red">renew now</span></div>
+        <div class="rowbase"><span class="idcard"><span class="exp" style="color:var(--warning)">18D</span></span><div class="who"><div class="nm">AHMED SAEED ALKAABI</div><div class="id">EMIRATES ID · G-1001</div></div><span class="tag amber">book renewal</span></div>
+        <div class="rowbase"><span class="idcard"><span class="exp" style="color:var(--info)">45D</span></span><div class="who"><div class="nm">SALEM MOHAMED ALSHAMSI</div><div class="id">PASSPORT · G-1002</div></div><span class="tag blue">watch</span></div>
+      </div>
+      <div class="foot">Each card shows its stamp date <button class="cta">View all</button></div>
+    </div>
+    <div class="card">
+      <div class="h">On Leave Today <span class="badge" style="background:var(--info-soft);color:var(--info)">2</span></div>
+      <div style="margin-top:4px">
+        <div class="rowbase"><span class="lugtag">G-1003</span><div class="who"><div class="nm">KHALED OBAID ALDHAHERI</div><div class="id">ANNUAL</div></div><span class="tag blue">until 15 Aug</span></div>
+        <div class="rowbase"><span class="lugtag">G-1002</span><div class="who"><div class="nm">SALEM MOHAMED ALSHAMSI</div><div class="id">ANNUAL</div></div><span class="tag blue">until 17 Aug</span></div>
+      </div>
+      <div class="foot">Luggage tag = away marker <button class="cta">Leaves</button></div>
+    </div>
+  </div>
+</template>
+<template class="l">
+  <div class="grid-p">
+    <div class="card">
+      <div class="h">Books · Awaiting Your Approval <span class="badge" style="background:var(--warning-soft);color:var(--warning)">3</span></div>
+      <div style="margin-top:4px">
+        <div class="rowbase"><span class="stub"><span class="l">1-0006</span><span class="r">HOLD</span></span><div class="who"><div class="nm">Gate access request for contractor</div><div class="id">AUDIT ADMIN · 4H</div></div><span class="signhere"><span class="ln"><i>✗</i></span></span><button class="tag green">SIGN</button></div>
+        <div class="rowbase"><span class="stub"><span class="l">1-0004</span><span class="r">HOLD</span></span><div class="who"><div class="nm">Duty roster amendment — Al Wathba</div><div class="id">S. ALSHAMSI · 6H</div></div><span class="signhere"><span class="ln"><i>✗</i></span></span><button class="tag green">SIGN</button></div>
+        <div class="rowbase"><span class="stub"><span class="l">1-0002</span><span class="r">HOLD</span></span><div class="who"><div class="nm">Uniform issue authorization</div><div class="id">K. ALDHAHERI · 1D</div></div><span class="signhere"><span class="ln"><i>✗</i></span></span><button class="tag green">SIGN</button></div>
+      </div>
+      <div class="foot">Stub detaches when the book is signed</div>
+    </div>
+    <div class="card">
+      <div class="h">Returning in the Next 7 Days <span class="badge" style="background:var(--success-soft);color:var(--success)">1</span></div>
+      <div class="rowbase" style="border:0;margin-top:4px"><span class="lugtag" style="background:var(--success-soft);color:var(--success)">RETURN</span><div class="who"><div class="nm">SALEM MOHAMED ALSHAMSI</div><div class="id">BACK SUNDAY · RESUMPTION FORM DUE</div></div><button class="cta">Prepare</button></div>
+    </div>
+  </div>
+  <div class="grid-p">
+    <div class="card">
+      <div class="h">Latest Documents</div>
+      <div style="margin-top:4px">
+        <div class="rowbase"><span class="stub"><span class="l">REPORT-1</span><span class="r" style="background:var(--warning-amber)">SGN</span></span><div class="who"><div class="nm">Report — night patrol incident</div><div class="id">13 AUG 01:16</div></div></div>
+        <div class="rowbase"><span class="stub"><span class="l">1-5-1</span><span class="r" style="background:var(--success)">OK</span></span><div class="who"><div class="nm">General Book — permit cover</div><div class="id">12 AUG 21:16</div></div></div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="h">Latest Correspondence <span class="badge" style="background:var(--info-soft);color:var(--info)">5 in 24h</span></div>
+      <div style="margin-top:4px">
+        <div class="rowbase"><span class="envrow" style="color:var(--success)"></span><div class="who"><div class="nm">Security clearance circular 44/2026</div><div class="id">ABU DHABI POLICE HQ</div></div><span class="tag blue">18:22</span></div>
+        <div class="rowbase"><span class="envrow" style="color:var(--accent)"></span><div class="who"><div class="nm">Reply to inspection findings</div><div class="id">MINISTRY OF INTERIOR</div></div><span class="tag blue">THU</span></div>
+        <div class="rowbase"><span class="envrow" style="color:var(--primary)"></span><div class="who"><div class="nm">Internal memo — uniform renewal</div><div class="id">HR DEPARTMENT</div></div><span class="tag blue">WED</span></div>
+      </div>
+    </div>
+  </div>
+  <div class="card">
+    <div class="h">Pending Departures <span class="badge" style="background:var(--warning-soft);color:var(--warning)">1</span></div>
+    <div class="rowbase" style="border:0"><span class="lugtag" style="background:var(--warning-soft);color:var(--warning)">EXIT 27 AUG</span><div class="who"><div class="nm">RASHED SANAD ALYAHYAEE</div><div class="id">G-1004 · RESIGNATION · 12 DAYS LEFT</div></div><button class="tag navy">CANCEL</button><button class="cta" style="padding:5px 13px">Clearance</button></div>
+  </div>
+</template>
+</section>
+
+<!-- ═══════════════ P5 · STATUS BLOCKS ═══════════════ -->
+<section class="variant p5" id="v5" data-note="P5 · Status Blocks — each widget wears its domain color as a solid header band; giant numerals and key-value strips underneath.">
+<template class="w">
+  <div class="grid-top">
+    <div class="card">
+      <div class="blockhead" style="background:var(--primary)">DOCUMENTS COMPLETED <span class="badge2">AUG</span></div>
+      <div class="blockbody">
+        <div style="display:flex;align-items:center;gap:20px">
+          <span class="huge">14</span>
+          <div style="flex:1">
+            <div class="kv"><span>Signed &amp; closed</span><b>11</b></div>
+            <div class="kv"><span style="color:var(--accent)">Need my signature</span><b style="color:var(--accent)">3</b></div>
+          </div>
+        </div>
+        <div class="foot" style="margin-top:10px">Pace ahead of July <button class="cta">Review</button></div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="blockhead" style="background:#0d5c8a">MY WORKSPACE <span class="badge2">6 STAFF</span></div>
+      <div class="blockbody">
+        <div style="display:flex;align-items:center;gap:20px">
+          <span class="huge">4<small>/6 on site</small></span>
+          <div style="flex:1">
+            <div class="kv"><span>On leave</span><b>2</b></div>
+            <div class="kv"><span style="color:var(--warning)">Leaving soon</span><b style="color:var(--warning)">1</b></div>
+          </div>
+        </div>
+        <div class="foot" style="margin-top:10px">Presence 67% <button class="cta">Staff</button></div>
+      </div>
+    </div>
+  </div>
+  <div class="grid-m">
+    <div class="card">
+      <div class="blockhead" style="background:var(--accent)">VIOLATIONS <span class="badge2">1 OPEN</span></div>
+      <div class="blockbody">
+        <span class="huge">1</span>
+        <div class="stripe"><i style="background:var(--accent)"></i><i></i><i></i></div>
+        <div class="kv"><span>ALMANSOORI · attendance</span><b>14 AUG</b></div>
+        <div class="foot"><button class="cta" style="background:var(--accent)">Case</button></div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="blockhead" style="background:var(--smart)">DRAFTS <span class="badge2">3</span></div>
+      <div class="blockbody">
+        <span class="huge">3</span>
+        <div class="stripe"><i style="background:var(--smart)"></i><i style="background:var(--smart)"></i><i style="background:var(--smart)"></i></div>
+        <div class="kv"><span>Oldest sitting</span><b>3 DAYS</b></div>
+        <div class="foot"><button class="cta">Resume</button></div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="blockhead" style="background:var(--info)">LEDGER UNREAD <span class="badge2">3</span></div>
+      <div class="blockbody">
+        <span class="huge">3</span>
+        <div class="stripe"><i style="background:var(--success)"></i><i style="background:var(--success)"></i><i style="background:var(--primary)"></i></div>
+        <div class="kv"><span>2 in · 0 out · 1 internal</span><b>24H</b></div>
+        <div class="foot"><button class="cta">Inbox</button></div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="blockhead" style="background:var(--success)">EMAIL SYNC <span class="badge2">LIVE</span></div>
+      <div class="blockbody">
+        <span class="huge">6<small>min ago</small></span>
+        <div class="stripe"><i style="background:var(--success)"></i><i style="background:var(--success)"></i><i style="background:var(--success)"></i></div>
+        <div class="kv"><span>Interval</span><b>15 MIN</b></div>
+        <div class="foot"><button class="cta">↻ Sync</button></div>
+      </div>
+    </div>
+  </div>
+  <div class="grid-p">
+    <div class="card">
+      <div class="blockhead" style="background:var(--warning-amber)">EXPIRING SOON <span class="badge2">1 EXPIRED · 2 CLOSE</span></div>
+      <div class="blockbody" style="padding-top:8px">
+        <div class="rowbase"><span class="tag red">−3D</span><div class="who"><div class="nm">HAMDAN ALMANSOORI — Emirates ID</div><div class="id">G-1005</div></div><button class="tag red">RENEW</button></div>
+        <div class="rowbase"><span class="tag amber">18D</span><div class="who"><div class="nm">AHMED ALKAABI — Emirates ID</div><div class="id">G-1001</div></div><button class="tag amber">BOOK</button></div>
+        <div class="rowbase"><span class="tag blue">45D</span><div class="who"><div class="nm">SALEM ALSHAMSI — Passport</div><div class="id">G-1002</div></div><button class="tag blue">WATCH</button></div>
+        <div class="foot"><button class="cta">View all</button></div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="blockhead" style="background:#047857">ON LEAVE TODAY <span class="badge2">2 OUT</span></div>
+      <div class="blockbody" style="padding-top:8px">
+        <div class="rowbase"><span class="tag green">OUT</span><div class="who"><div class="nm">KHALED OBAID ALDHAHERI</div><div class="id">ANNUAL · G-1003</div></div><span class="tag navy">UNTIL 15 AUG</span></div>
+        <div class="rowbase"><span class="tag green">OUT</span><div class="who"><div class="nm">SALEM MOHAMED ALSHAMSI</div><div class="id">ANNUAL · G-1002</div></div><span class="tag navy">UNTIL 17 AUG</span></div>
+        <div class="foot"><button class="cta">Leaves</button></div>
+      </div>
+    </div>
+  </div>
+</template>
+<template class="l">
+  <div class="grid-p">
+    <div class="card">
+      <div class="blockhead" style="background:var(--primary)">AWAITING YOUR APPROVAL <span class="badge2">3 BOOKS</span></div>
+      <div class="blockbody" style="padding-top:8px">
+        <div class="rowbase"><span class="tag navy">1-0006</span><div class="who"><div class="nm">Gate access request for contractor</div><div class="id">AUDIT ADMIN · 4H</div></div><button class="tag green">SIGN ✓</button><button class="tag red">✕</button></div>
+        <div class="rowbase"><span class="tag navy">1-0004</span><div class="who"><div class="nm">Duty roster amendment — Al Wathba</div><div class="id">S. ALSHAMSI · 6H</div></div><button class="tag green">SIGN ✓</button><button class="tag red">✕</button></div>
+        <div class="rowbase"><span class="tag navy">1-0002</span><div class="who"><div class="nm">Uniform issue authorization</div><div class="id">K. ALDHAHERI · 1D</div></div><button class="tag green">SIGN ✓</button><button class="tag red">✕</button></div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="blockhead" style="background:#059669">RETURNING THIS WEEK <span class="badge2">1</span></div>
+      <div class="blockbody" style="padding-top:8px">
+        <div class="rowbase" style="border:0"><span class="tag green">SUN</span><div class="who"><div class="nm">SALEM MOHAMED ALSHAMSI</div><div class="id">RESUMPTION FORM DUE</div></div><button class="cta">Prepare</button></div>
+      </div>
+    </div>
+  </div>
+  <div class="grid-p">
+    <div class="card">
+      <div class="blockhead" style="background:#334155">LATEST DOCUMENTS <span class="badge2">2</span></div>
+      <div class="blockbody" style="padding-top:8px">
+        <div class="rowbase"><span class="tag navy">REPORT-1</span><div class="who"><div class="nm">Report — night patrol incident</div><div class="id">13 AUG 01:16</div></div><span class="tag amber">SIGNED</span></div>
+        <div class="rowbase"><span class="tag navy">1-5-1</span><div class="who"><div class="nm">General Book — permit cover</div><div class="id">12 AUG 21:16</div></div><span class="tag green">CLOSED</span></div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="blockhead" style="background:#1d4ed8">LATEST CORRESPONDENCE <span class="badge2">5 · 24H</span></div>
+      <div class="blockbody" style="padding-top:8px">
+        <div class="rowbase"><span class="tag green">IN</span><div class="who"><div class="nm">Security clearance circular 44/2026</div><div class="id">ABU DHABI POLICE HQ</div></div><span class="tag blue">18:22</span></div>
+        <div class="rowbase"><span class="tag red">OUT</span><div class="who"><div class="nm">Reply to inspection findings</div><div class="id">MINISTRY OF INTERIOR</div></div><span class="tag blue">THU</span></div>
+        <div class="rowbase"><span class="tag navy">INT</span><div class="who"><div class="nm">Internal memo — uniform renewal</div><div class="id">HR DEPARTMENT</div></div><span class="tag blue">WED</span></div>
+      </div>
+    </div>
+  </div>
+  <div class="card">
+    <div class="blockhead" style="background:var(--warning-amber)">PENDING DEPARTURES <span class="badge2">1</span></div>
+    <div class="blockbody" style="padding-top:8px">
+      <div class="rowbase" style="border:0"><span class="tag amber">12D</span><div class="who"><div class="nm">RASHED SANAD ALYAHYAEE</div><div class="id">G-1004 · RESIGNATION · LAST DAY 27 AUG</div></div><button class="tag navy">CANCEL</button><button class="cta" style="padding:5px 13px">Clearance</button></div>
+    </div>
+  </div>
+</template>
+</section>
+
+<script>
+const v = new URLSearchParams(location.search).get('v')
+const sec = v && document.getElementById('v' + v)
+if (sec) {
+  const host = document.createElement('div')
+  host.innerHTML = document.getElementById('shell-template').innerHTML
+  host.querySelector('.slot-widgets').appendChild(sec.querySelector('template.w').content.cloneNode(true))
+  host.querySelector('.slot-lower').appendChild(sec.querySelector('template.l').content.cloneNode(true))
+  host.querySelector('.note').textContent = sec.dataset.note + ' — original layout, full width, per-user.'
+  sec.appendChild(host)
+  sec.classList.add('active')
+} else {
+  document.getElementById('picker').style.display = 'block'
+}
+</script>
+</body>
+</html>

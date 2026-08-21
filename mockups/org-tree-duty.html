@@ -1,0 +1,1900 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>ORG-tree · Duty Locations — Sentinel mockup</title>
+<!--
+  ORG-tree — a proposed VIEW-ONLY tab under Duty Locations & Internal Transfers,
+  with supervisor re-linking for users holding `employees.edit`.
+
+  Provenance
+  ----------
+  The chart engine is a port of the "Shajarah" tidy-tree reconstructed in
+  docs/org-chart/ (reverse-engineered from ahlanhamad.com/en/org-chart):
+    buildTree()  = their hr()   — flat list linked by managerId -> forest
+    layout()     = their We()   — two-pass tidy tree
+    connectors   = three 1px <div> segments (parent stem / bus / child stem)
+  Constants k=212 K=80 je=24 sr=72 nt=64 de=48 are kept as the V1 defaults; the
+  engine here is generalised to per-node width/height so variants 2 and 3 can
+  reuse it. Ahlan's green/palm palette is REPLACED by Sentinel tokens from
+  frontend/src/index.css (--primary #0d2845, --accent #c8102e, --bg #f5f4f1 ...).
+
+  Shell replicates frontend/src/pages/dutyLocations/DutyLocationsPage.tsx
+  (header eyebrow/title/subtitle + UnitRail 268px + content card) and adds the
+  proposed Roster | ORG-tree tab strip.
+
+  Variants —  ?v=1 faithful chart · 2 command ladder · 3 rank bands · 4 split explorer
+  Also: ?lang=ar for RTL, ?edit=1 to boot in edit mode.
+
+  SAMPLE DATA ONLY. Names are invented; the unit/post/rank vocabulary is real
+  (frontend/src/lib/dutyUnits.ts SEED_UNITS + the site's shift structure).
+-->
+<style>
+/* ---------------------------------------------------------------- tokens
+   Verbatim from frontend/src/index.css :root (light theme).            */
+:root{
+  --bg:#f5f4f1; --surface:#ffffff; --surface-raised:#fafaf6; --surface-tinted:#f0eee8;
+  --primary:#0d2845; --primary-hover:#1d3a5e; --primary-soft:#e8edf3; --on-primary:#fff;
+  --accent:#c8102e; --accent-hover:#a30d24; --accent-soft:#fbe5e8;
+  --success:#047857; --success-soft:#d6f0e4;
+  --warning:#92400e; --warning-soft:#fbedd8;
+  --info:#1d4ed8; --info-soft:#e0e8f8;
+  --smart:#6b4fb0; --smart-soft:#f1eef8;
+  --text:#1c1f24; --text-muted:#5a6068; --text-faint:#8b9098;
+  --border:#e6e4dd; --border-strong:#d4d1c8; --hairline:#efece5;
+  --hero-grad:linear-gradient(135deg,#0a1f3a 0%,#0d2845 50%,#1d3a5e 100%);
+  --radius-sm:8px; --radius-md:12px; --radius-lg:16px; --radius-pill:99px;
+  --motion-fast:120ms; --motion-base:200ms;
+  --ease-out-expo:cubic-bezier(.16,1,.3,1);
+  --font-sans:"Inter Variable","Inter","Segoe UI",ui-sans-serif,system-ui,sans-serif;
+  --font-ar:"Noto Sans Arabic","Segoe UI",Tahoma,sans-serif;
+  --font-mono:"IBM Plex Mono","Noto Sans Arabic",ui-monospace,monospace;
+  --shadow-sm:0 1px 2px rgba(13,40,69,.06),0 1px 3px rgba(13,40,69,.04);
+  --shadow-md:0 1px 2px rgba(13,40,69,.08),0 6px 18px rgba(13,40,69,.10);
+  --shadow-lg:0 18px 48px rgba(13,40,69,.22);
+  /* chart geometry — Shajarah constants, tightened for Sentinel density */
+  --node-w:200px; --node-h:72px;
+  /* connectors: the source's 1px hairline disappears on a grid canvas, so the
+     rail is a 2px navy tint and the traced line 3px accent. */
+  --conn:#5b7191;
+  --conn-w:2px;
+}
+*{box-sizing:border-box}
+html,body{height:100%}
+body{
+  margin:0;background:var(--bg);color:var(--text);
+  font-family:var(--font-sans);-webkit-font-smoothing:antialiased;
+  font-size:15px;line-height:1.45;overflow:hidden;
+}
+body[dir="rtl"]{font-family:var(--font-ar)}
+button{font:inherit;color:inherit}
+.mono{font-family:var(--font-mono);font-variant-numeric:tabular-nums}
+
+/* ------------------------------------------------------------ page shell */
+.page{position:fixed;inset:0;display:flex;flex-direction:column;overflow:hidden}
+.shell{width:100%;max-width:1240px;margin:0 auto;padding:22px 24px 0;display:flex;flex-direction:column;flex:1;min-height:0}
+.eyebrow{font-size:.75em;font-weight:500;text-transform:uppercase;letter-spacing:.18em;color:var(--text-muted)}
+h1.title{margin:4px 0 0;font-size:1.7em;font-weight:700;letter-spacing:-.01em}
+.subtitle{margin:4px 0 0;font-size:.86em;color:var(--text-muted);max-width:74ch}
+
+/* proposed tab strip: Roster | ORG-tree */
+.tabs{display:flex;align-items:flex-end;gap:2px;margin-top:16px;border-bottom:1px solid var(--border)}
+.tab{
+  appearance:none;border:0;background:transparent;cursor:pointer;
+  padding:9px 15px 10px;font-size:.87em;font-weight:600;color:var(--text-muted);
+  border-bottom:2px solid transparent;margin-bottom:-1px;border-radius:8px 8px 0 0;
+  display:inline-flex;align-items:center;gap:8px;transition:color var(--motion-fast),background var(--motion-fast);
+}
+.tab:hover{color:var(--text);background:var(--surface-tinted)}
+.tab[aria-selected="true"]{color:var(--primary);border-bottom-color:var(--accent);background:transparent}
+.tab .dot{width:6px;height:6px;border-radius:99px;background:var(--accent)}
+.tabs .grow{flex:1}
+.variantpick{display:flex;gap:6px;padding-bottom:7px;align-items:center}
+.variantpick a{
+  font-size:.72em;font-weight:600;text-decoration:none;color:var(--text-muted);
+  border:1px solid var(--border);border-radius:var(--radius-pill);padding:3px 9px;background:var(--surface);
+}
+.variantpick a.on{background:var(--primary);border-color:var(--primary);color:#fff}
+.variantpick span{font-size:.68em;color:var(--text-faint);text-transform:uppercase;letter-spacing:.1em}
+
+/* content card + rail (mirrors DutyLocationsPage) */
+.card{
+  margin:18px 0 22px;flex:1;min-height:0;display:grid;grid-template-columns:268px 1fr;
+  background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);
+  box-shadow:var(--shadow-sm);overflow:hidden;
+}
+.rail{border-inline-end:1px solid var(--hairline);background:var(--surface-raised);padding:10px;overflow-y:auto}
+.rail h2{margin:6px 8px 10px;font-size:.69em;font-weight:700;text-transform:uppercase;letter-spacing:.12em;color:var(--text-faint)}
+.railbtn{
+  width:100%;display:flex;align-items:center;gap:10px;border:0;background:transparent;cursor:pointer;
+  border-radius:var(--radius-sm);padding:9px 12px;text-align:start;font-size:.9em;transition:background var(--motion-fast);
+}
+.railbtn:hover{background:var(--surface-tinted)}
+.railbtn[aria-pressed="true"]{background:var(--primary);color:#fff}
+.railbtn .lbl{flex:1;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.railbtn .n{min-width:24px;text-align:center;border-radius:99px;padding:1px 7px;font-size:.76em;background:var(--surface-tinted);color:var(--text-muted)}
+.railbtn[aria-pressed="true"] .n{background:rgba(255,255,255,.2);color:#fff}
+.railfoot{margin:12px 8px 0;padding-top:10px;border-top:1px dashed var(--border);font-size:.78em;color:var(--text-muted)}
+.railfoot .faint{color:var(--text-faint)}
+
+.pane{display:flex;flex-direction:column;min-width:0;min-height:0}
+
+/* ------------------------------------------------------------- toolbar */
+.toolbar{
+  display:flex;align-items:center;gap:10px;flex-wrap:wrap;
+  padding:11px 16px;border-bottom:1px solid var(--hairline);background:var(--surface);
+}
+.toolbar .who{min-width:0}
+.toolbar .who b{font-size:1.02em;display:block;line-height:1.2}
+.toolbar .who small{font-size:.76em;color:var(--text-muted)}
+.spacer{flex:1}
+.searchwrap{position:relative;display:flex;align-items:center}
+.searchwrap svg{position:absolute;inset-inline-start:10px;width:15px;height:15px;color:var(--text-faint);pointer-events:none}
+.searchwrap input{
+  height:34px;width:210px;border:1px solid var(--border);background:var(--surface);border-radius:var(--radius-pill);
+  padding-inline:32px 12px;font-size:.86em;color:var(--text);outline:none;
+}
+.searchwrap input:focus{border-color:var(--primary);box-shadow:0 0 0 3px var(--primary-soft)}
+.seg{display:inline-flex;border:1px solid var(--border);border-radius:var(--radius-sm);overflow:hidden;background:var(--surface)}
+.seg button{border:0;background:transparent;cursor:pointer;font-size:.8em;font-weight:600;padding:7px 11px;color:var(--text-muted)}
+.seg button[aria-pressed="true"]{background:var(--primary);color:#fff}
+.ghostbtn{
+  border:1px solid var(--border);background:var(--surface);border-radius:var(--radius-sm);
+  padding:7px 11px;font-size:.8em;font-weight:600;cursor:pointer;color:var(--text-muted);
+  display:inline-flex;align-items:center;gap:6px;
+}
+.ghostbtn:hover{border-color:var(--border-strong);color:var(--text)}
+.ghostbtn.on{background:var(--accent);border-color:var(--accent);color:#fff}
+.ghostbtn[disabled]{opacity:.45;cursor:not-allowed}
+.capnote{font-size:.7em;color:var(--text-faint);font-family:var(--font-mono)}
+
+/* stats strip */
+.stats{
+  display:flex;align-items:center;gap:18px;flex-wrap:wrap;
+  padding:7px 16px;border-bottom:1px solid var(--hairline);
+  background:var(--surface-raised);font-size:.76em;color:var(--text-muted);
+}
+.stats b{color:var(--text);font-family:var(--font-mono)}
+.stats .warn{color:var(--accent);font-weight:600}
+.legend{display:inline-flex;align-items:center;gap:6px}
+.legend i{width:16px;height:2px;background:var(--border-strong);display:inline-block}
+.legend i.lin{background:var(--accent);height:2px}
+
+/* ------------------------------------------------------------ chart stage */
+.viewport{position:relative;flex:1;min-height:0;overflow:hidden;cursor:grab;background:var(--bg)}
+.viewport.panning{cursor:grabbing}
+.canvas{
+  position:absolute;top:0;left:0;transform-origin:0 0;
+  --grid-minor:#eae7e0;--grid-major:#e0dcd2;
+  background-image:
+    linear-gradient(to right,var(--grid-major) 1px,transparent 1px),
+    linear-gradient(to bottom,var(--grid-major) 1px,transparent 1px),
+    linear-gradient(to right,var(--grid-minor) 1px,transparent 1px),
+    linear-gradient(to bottom,var(--grid-minor) 1px,transparent 1px);
+  background-size:96px 96px,96px 96px,24px 24px,24px 24px;
+}
+.layer{position:absolute;inset:0}
+.conn{z-index:0;pointer-events:none}
+.nodes{z-index:10}
+
+/* connector segments — <div> rails, thicker + darker than the 1px source */
+.seg-h,.seg-v{position:absolute;top:0;left:0;background:var(--conn);border-radius:1px;transition:background-color var(--motion-fast)}
+.seg-h.is-lineage,.seg-v.is-lineage{background:var(--accent);z-index:2;box-shadow:0 0 0 .5px var(--accent)}
+
+/* rank bands (v3) */
+.band{position:absolute;left:0;top:0;border-top:1px dashed var(--border);background:rgba(255,255,255,.55)}
+.band.alt{background:rgba(13,40,69,.025)}
+.bandlbl{
+  position:absolute;inset-inline-start:8px;font-size:.66em;font-weight:700;letter-spacing:.14em;
+  text-transform:uppercase;color:var(--text-faint);background:var(--bg);padding:2px 6px;border-radius:6px;
+}
+
+/* --------------------------------------------------------------- node card */
+.item{position:absolute;top:0;left:0;transition:transform .26s var(--ease-out-expo)}
+.item.dragging{opacity:.35}
+.pcard{
+  position:relative;width:100%;height:100%;display:flex;flex-direction:column;justify-content:center;gap:7px;
+  border-radius:var(--radius-md);border:1px solid rgba(255,255,255,.08);padding:11px 12px;
+  background:var(--primary);box-shadow:var(--shadow-md);cursor:pointer;text-align:start;overflow:hidden;
+  transition:border-color var(--motion-fast),box-shadow var(--motion-fast),opacity var(--motion-fast),transform var(--motion-fast);
+}
+.pcard:hover{border-color:rgba(255,255,255,.34);transform:translateY(-1px)}
+.pcard .row{display:flex;align-items:center;gap:9px;min-width:0}
+.pcard .av{
+  flex:none;width:32px;height:32px;border-radius:99px;display:grid;place-items:center;
+  background:rgba(255,255,255,.14);color:#fff;font-size:.78em;font-weight:700;letter-spacing:.02em;
+}
+.pcard .who{min-width:0;flex:1}
+.pcard .nm{margin:0;font-size:.9em;font-weight:600;line-height:1.2;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pcard .ti{margin:2px 0 0;font-size:.75em;line-height:1.15;color:#a8bcd4;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pcard .foot{display:flex;align-items:center;gap:7px;min-width:0}
+.pcard .eyebrow{
+  font-size:.66em;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:#7fd4ad;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+}
+.pcard .idchip{
+  font-family:var(--font-mono);font-size:.66em;color:#93a7bf;background:rgba(255,255,255,.08);
+  border-radius:5px;padding:1px 5px;flex:none;
+}
+.pcard .span{
+  margin-inline-start:auto;flex:none;font-family:var(--font-mono);font-size:.66em;color:#cfe0f0;
+  background:rgba(255,255,255,.12);border-radius:99px;padding:1px 6px;
+}
+/* commander / unit head gets the accent hairline */
+.pcard.is-head{background:var(--hero-grad);border-color:rgba(200,16,46,.6)}
+.pcard.is-orphan{background:var(--surface);border:1px dashed var(--accent);box-shadow:var(--shadow-sm)}
+.pcard.is-orphan .nm{color:var(--text)}
+.pcard.is-orphan .ti{color:var(--text-muted)}
+.pcard.is-orphan .av{background:var(--accent-soft);color:var(--accent)}
+.pcard.is-orphan .eyebrow{color:var(--accent)}
+.pcard.is-orphan .idchip{background:var(--surface-tinted);color:var(--text-muted)}
+.item:focus{outline:none}
+.item:focus .pcard{border-color:#fff;box-shadow:0 0 0 3px rgba(13,40,69,.28)}
+.tracing .pcard:not(.is-lineage){opacity:.28}
+.tracing .pcard.is-lineage{border-color:var(--accent)}
+.pcard.is-drop{border-color:#7fd4ad;box-shadow:0 0 0 3px rgba(4,120,87,.35)}
+.pcard.is-nodrop{border-color:var(--accent);box-shadow:0 0 0 3px rgba(200,16,46,.3);cursor:not-allowed}
+
+/* collapse pip */
+.pip{
+  position:absolute;inset-inline-start:50%;transform:translateX(-50%);bottom:-11px;z-index:12;
+  width:22px;height:22px;border-radius:99px;border:1px solid var(--border-strong);background:var(--surface);
+  color:var(--primary);cursor:pointer;font-size:.78em;line-height:1;display:grid;place-items:center;
+  box-shadow:var(--shadow-sm);font-family:var(--font-mono);
+}
+.pip:hover{border-color:var(--primary)}
+/* edit affordances */
+.editbtn{
+  position:absolute;top:6px;inset-inline-end:6px;z-index:13;width:22px;height:22px;border-radius:7px;
+  border:1px solid rgba(255,255,255,.28);background:rgba(255,255,255,.14);color:#fff;cursor:pointer;
+  display:none;place-items:center;padding:0;
+}
+.editmode .pcard:hover .editbtn,.editmode .item:focus .editbtn{display:grid}
+.editbtn:hover{background:#fff;color:var(--primary)}
+.grip{
+  position:absolute;top:6px;inset-inline-start:6px;z-index:13;display:none;color:rgba(255,255,255,.5);
+  cursor:grab;padding:2px;
+}
+.editmode .pcard:hover .grip{display:block}
+.editmode .pcard{cursor:grab}
+.pcard.is-orphan .editbtn{border-color:var(--border);background:var(--surface-tinted);color:var(--text-muted)}
+.pcard.is-orphan .grip{color:var(--text-faint)}
+
+/* squad tile (v2) */
+.squad{
+  position:relative;width:100%;height:100%;border-radius:var(--radius-md);border:1px solid var(--border);
+  background:var(--surface);box-shadow:var(--shadow-sm);padding:8px 9px;overflow:hidden;
+}
+.squad .sh{display:flex;align-items:center;gap:7px;margin-bottom:6px}
+.squad .sh b{font-size:.72em;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--text-faint)}
+.squad .sh .n{font-family:var(--font-mono);font-size:.7em;color:var(--primary);background:var(--primary-soft);border-radius:99px;padding:1px 7px}
+.squad .grid{display:grid;grid-template-columns:repeat(var(--cols,3),1fr);gap:4px}
+.chip{
+  display:flex;align-items:center;gap:5px;min-width:0;border:1px solid var(--hairline);border-radius:6px;
+  background:var(--surface-raised);padding:3px 6px;font-size:.72em;cursor:pointer;
+}
+.chip:hover{border-color:var(--primary);background:var(--primary-soft)}
+.chip .cid{font-family:var(--font-mono);font-size:.86em;color:var(--text-faint);flex:none}
+.chip .cn{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.chip.is-lineage{border-color:var(--accent);background:var(--accent-soft)}
+.chip.flag::after{content:"";width:5px;height:5px;border-radius:99px;background:var(--accent);flex:none}
+
+/* ------------------------------------------- scope breadcrumb (all variants) */
+.crumbbar{
+  display:flex;align-items:center;gap:6px;flex-wrap:wrap;
+  padding:7px 16px;border-bottom:1px solid var(--hairline);background:var(--primary-soft);font-size:.78em;
+}
+.crumbbar .lb{font-weight:700;letter-spacing:.1em;text-transform:uppercase;font-size:.86em;color:var(--primary)}
+.crumbbar button{
+  border:1px solid transparent;background:var(--surface);border-radius:var(--radius-pill);padding:3px 10px;
+  font-size:.94em;font-weight:600;color:var(--primary);cursor:pointer;
+}
+.crumbbar button:hover{border-color:var(--primary)}
+.crumbbar .sep{color:var(--text-faint)}
+.crumbbar .cur{font-weight:700;color:var(--primary);padding:3px 4px}
+
+/* ------------------------------------------- v2 vertical (indented) tree */
+.vtree{flex:1;min-height:0;overflow:auto;padding:14px 18px 40px;background:var(--bg);position:relative}
+.vrow{position:relative;display:flex;align-items:stretch;margin-bottom:6px}
+.vrail{position:relative;flex:none;width:0}
+.vcard{
+  position:relative;flex:1;min-width:0;display:flex;align-items:center;gap:10px;
+  background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-md);
+  padding:8px 12px;box-shadow:var(--shadow-sm);cursor:pointer;max-width:760px;
+  transition:border-color var(--motion-fast),box-shadow var(--motion-fast),transform var(--motion-fast);
+}
+.vcard:hover{border-color:var(--primary);transform:translateX(1px)}
+.vcard.lvl0{background:var(--hero-grad);border-color:var(--primary);color:#fff}
+.vcard.lvl1{background:var(--primary);border-color:var(--primary);color:#fff}
+.vcard.lvl0 .vti,.vcard.lvl1 .vti{color:#a8bcd4}
+.vcard.lvl0 .vid,.vcard.lvl1 .vid{background:rgba(255,255,255,.14);color:#cfe0f0}
+.vcard.lvl2{border-inline-start:3px solid var(--primary)}
+.vcard .av{flex:none;width:28px;height:28px;border-radius:99px;background:var(--primary-soft);color:var(--primary);display:grid;place-items:center;font-size:.68em;font-weight:700}
+.vcard.lvl0 .av,.vcard.lvl1 .av{background:rgba(255,255,255,.16);color:#fff}
+.vcard .vnm{font-size:.9em;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.vcard .vti{font-size:.8em;color:var(--text-muted);white-space:nowrap}
+.vcard .vid{font-family:var(--font-mono);font-size:.72em;color:var(--text-muted);background:var(--surface-tinted);border-radius:5px;padding:1px 6px;flex:none}
+.vcard .vpost{font-size:.74em;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--success);white-space:nowrap}
+.vcard.lvl0 .vpost,.vcard.lvl1 .vpost{color:#7fd4ad}
+.vcard .vspan{margin-inline-start:auto;flex:none;font-family:var(--font-mono);font-size:.74em;color:var(--primary);background:var(--primary-soft);border-radius:99px;padding:2px 9px}
+.vcard.lvl0 .vspan,.vcard.lvl1 .vspan{background:rgba(255,255,255,.16);color:#fff}
+.vcard.is-orphan{border:1px dashed var(--accent);background:var(--accent-soft)}
+.vcard.is-lineage{border-color:var(--accent);box-shadow:0 0 0 2px var(--accent-soft)}
+.vtree.tracing .vcard:not(.is-lineage){opacity:.3}
+.vcard.is-drop{border-color:var(--success);box-shadow:0 0 0 3px var(--success-soft)}
+.vcard.is-nodrop{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft)}
+.vtw{
+  flex:none;width:22px;display:grid;place-items:center;border:0;background:transparent;cursor:pointer;
+  color:var(--text-faint);font-family:var(--font-mono);font-size:.84em;
+}
+.velbow{position:absolute;inset-inline-start:0;top:0;bottom:0;pointer-events:none}
+.velbow i{position:absolute;background:var(--border-strong)}
+.velbow i.lin{background:var(--accent)}
+.vgroup{display:flex;flex-wrap:wrap;gap:4px;margin:0 0 8px;max-width:760px}
+.vgroup .lead{font-size:.72em;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:var(--text-faint);align-self:center;margin-inline-end:4px}
+
+/* ------------------------------------------------------- v3 shift lanes */
+.lanes{flex:1;min-height:0;overflow:auto;padding:14px 18px 40px;background:var(--bg)}
+.lane{
+  background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);
+  box-shadow:var(--shadow-sm);margin-bottom:12px;overflow:hidden;
+}
+.lanehead{display:flex;align-items:center;gap:11px;padding:10px 14px;background:var(--hero-grad);color:#fff}
+.lanehead .av{flex:none;width:32px;height:32px;border-radius:99px;background:rgba(255,255,255,.16);display:grid;place-items:center;font-size:.76em;font-weight:700}
+.lanehead b{font-size:.94em;display:block;line-height:1.2}
+.lanehead small{font-size:.76em;color:#a8bcd4}
+.lanehead .tag{margin-inline-start:auto;font-family:var(--font-mono);font-size:.74em;background:rgba(255,255,255,.14);border-radius:99px;padding:3px 10px}
+.lanehead .shiftpill{font-size:.74em;font-weight:700;background:var(--accent);border-radius:99px;padding:3px 10px}
+.lanebody{display:grid;grid-template-columns:repeat(auto-fill,minmax(232px,1fr));gap:10px;padding:12px 14px}
+.post{border:1px solid var(--hairline);border-radius:var(--radius-md);background:var(--surface-raised);overflow:hidden}
+.posthead{display:flex;align-items:center;gap:8px;padding:7px 10px;border-bottom:1px solid var(--hairline);background:var(--surface)}
+.posthead .av{flex:none;width:24px;height:24px;border-radius:99px;background:var(--primary-soft);color:var(--primary);display:grid;place-items:center;font-size:.62em;font-weight:700}
+.posthead b{font-size:.82em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.posthead small{display:block;font-size:.72em;color:var(--text-muted)}
+.posthead .n{margin-inline-start:auto;font-family:var(--font-mono);font-size:.72em;color:var(--text-faint)}
+.postbody{display:flex;flex-direction:column;gap:3px;padding:8px 9px}
+.postbody .chip{background:var(--surface)}
+.lane.is-lineage{border-color:var(--accent);box-shadow:0 0 0 2px var(--accent-soft)}
+.posthead.is-lineage{background:var(--accent-soft)}
+
+/* ------------------------------------------------- v4 split explorer */
+.split{display:grid;grid-template-columns:minmax(300px,380px) 1fr;flex:1;min-height:0}
+.outline{border-inline-end:1px solid var(--hairline);overflow-y:auto;padding:8px 6px 24px;background:var(--surface-raised)}
+.orow{
+  display:flex;align-items:center;gap:8px;border-radius:var(--radius-sm);padding:5px 8px;cursor:pointer;
+  font-size:.85em;position:relative;
+}
+.orow:hover{background:var(--surface-tinted)}
+.orow.sel{background:var(--primary);color:#fff}
+.orow.sel .oid,.orow.sel .oti{color:rgba(255,255,255,.72)}
+.orow .tw{width:16px;flex:none;text-align:center;font-family:var(--font-mono);font-size:.8em;color:var(--text-faint)}
+.orow .oav{flex:none;width:22px;height:22px;border-radius:99px;background:var(--primary-soft);color:var(--primary);display:grid;place-items:center;font-size:.62em;font-weight:700}
+.orow.sel .oav{background:rgba(255,255,255,.2);color:#fff}
+.orow .onm{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.orow .oti{font-size:.82em;color:var(--text-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.orow .oid{margin-inline-start:auto;font-family:var(--font-mono);font-size:.76em;color:var(--text-faint);flex:none}
+.orow .rule{position:absolute;inset-inline-start:calc(var(--d,0)*18px + 14px);top:0;bottom:0;border-inline-start:1px solid var(--hairline)}
+.dossier{overflow-y:auto;padding:20px 24px 40px}
+.dhead{display:flex;align-items:flex-start;gap:14px}
+.dhead .bigav{width:56px;height:56px;border-radius:var(--radius-md);background:var(--hero-grad);color:#fff;display:grid;place-items:center;font-size:1.1em;font-weight:700;flex:none}
+.dhead h3{margin:0;font-size:1.25em}
+.dhead p{margin:3px 0 0;font-size:.86em;color:var(--text-muted)}
+.pillrow{display:flex;gap:7px;flex-wrap:wrap;margin-top:9px}
+.pill{font-size:.74em;font-weight:600;border-radius:99px;padding:3px 10px;background:var(--surface-tinted);color:var(--text-muted)}
+.pill.p{background:var(--primary-soft);color:var(--primary)}
+.pill.a{background:var(--accent-soft);color:var(--accent)}
+.pill.s{background:var(--success-soft);color:var(--success)}
+.sect{margin-top:22px}
+.sect h4{margin:0 0 9px;font-size:.72em;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--text-faint)}
+.chain{display:flex;flex-direction:column;gap:0}
+.chainrow{display:flex;align-items:center;gap:9px;font-size:.87em;padding:6px 9px;border-radius:var(--radius-sm);background:var(--surface-raised);border:1px solid var(--hairline)}
+.chainrow .av{width:24px;height:24px;border-radius:99px;background:var(--primary-soft);color:var(--primary);display:grid;place-items:center;font-size:.66em;font-weight:700;flex:none}
+.chainrow b{font-weight:600}
+.chainrow small{color:var(--text-muted)}
+.chainlink{height:12px;margin-inline-start:20px;border-inline-start:2px solid var(--accent)}
+.reports{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:8px}
+.rcard{display:flex;align-items:center;gap:9px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--surface);padding:8px 10px;cursor:pointer}
+.rcard:hover{border-color:var(--primary);box-shadow:var(--shadow-sm)}
+.rcard .av{width:28px;height:28px;border-radius:99px;background:var(--primary-soft);color:var(--primary);display:grid;place-items:center;font-size:.7em;font-weight:700;flex:none}
+.rcard .m{min-width:0}
+.rcard b{display:block;font-size:.85em;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.rcard small{font-size:.76em;color:var(--text-muted)}
+.rcard .cnt{margin-inline-start:auto;font-family:var(--font-mono);font-size:.72em;color:var(--text-faint)}
+.emptyline{font-size:.85em;color:var(--text-faint);font-style:italic}
+
+/* ------------------------------------------------------------- overlays */
+.zoombar{position:absolute;inset-inline-end:14px;bottom:14px;z-index:30;display:flex;gap:6px}
+.zoombar button{
+  width:32px;height:32px;border:1px solid var(--border);background:var(--surface);border-radius:var(--radius-sm);
+  cursor:pointer;font-size:1em;color:var(--primary);display:grid;place-items:center;box-shadow:var(--shadow-sm);
+}
+.zoombar button.wide{
+  width:auto;padding:0 11px;display:inline-flex;align-items:center;gap:7px;
+  font-size:.78em;font-weight:600;
+}
+.zoombar button.on{background:var(--primary);border-color:var(--primary);color:#fff}
+/* fullscreen: rail + chart fill the screen; only the page header is dropped */
+.card:fullscreen{margin:0;height:100%;border:0;border-radius:0;box-shadow:none}
+.card:fullscreen .viewport{background:var(--bg)}
+.card:fullscreen .toolbar{padding-inline:22px}
+.zoombar button:hover{border-color:var(--primary)}
+.hint{
+  position:absolute;inset-inline-start:14px;bottom:14px;z-index:30;font-size:.72em;color:var(--text-muted);
+  background:rgba(255,255,255,.86);backdrop-filter:blur(4px);padding:5px 10px;border-radius:var(--radius-pill);
+  border:1px solid var(--border);
+}
+.orphanbar{
+  position:absolute;inset-inline:14px;top:12px;z-index:28;display:flex;align-items:center;gap:9px;flex-wrap:wrap;
+  background:rgba(255,255,255,.94);backdrop-filter:blur(6px);border:1px solid var(--accent);
+  border-inline-start:3px solid var(--accent);border-radius:var(--radius-md);padding:8px 12px;box-shadow:var(--shadow-sm);
+}
+.orphanbar b{font-size:.8em;color:var(--accent)}
+.orphanbar small{font-size:.75em;color:var(--text-muted)}
+.orphanbar .chips{display:flex;gap:6px;flex-wrap:wrap}
+.orphanbar .chip{background:var(--surface)}
+
+/* drag ghost */
+.ghost{
+  position:fixed;z-index:60;pointer-events:none;width:var(--node-w);height:var(--node-h);opacity:.92;
+  transform:translate(-50%,-50%) rotate(-1.5deg);filter:drop-shadow(0 12px 24px rgba(13,40,69,.3));
+}
+/* supervisor picker — anchored popover, no scrim, chart stays readable */
+.pop{
+  position:fixed;z-index:70;width:330px;max-height:min(360px,62vh);display:flex;flex-direction:column;
+  background:var(--surface);border:1px solid var(--border-strong);border-radius:var(--radius-md);
+  box-shadow:var(--shadow-lg);overflow:hidden;animation:popin .16s var(--ease-out-expo);
+}
+@keyframes popin{from{opacity:0;transform:translateY(-4px) scale(.985)}}
+.pop header{padding:11px 13px 9px;border-bottom:1px solid var(--hairline);background:var(--surface-raised);position:relative}
+.pop header b{display:block;font-size:.9em;padding-inline-end:20px}
+.pop header small{display:block;font-size:.76em;color:var(--text-muted);margin-top:1px}
+.popx{
+  position:absolute;top:8px;inset-inline-end:8px;width:20px;height:20px;border:0;background:transparent;
+  color:var(--text-faint);cursor:pointer;border-radius:5px;font-size:.8em;display:grid;place-items:center;
+}
+.popx:hover{background:var(--surface-tinted);color:var(--text)}
+.pop .cur{
+  margin:9px 11px 0;padding:6px 9px;border-radius:var(--radius-sm);background:var(--primary-soft);
+  border:1px solid transparent;font-size:.8em;display:flex;align-items:center;gap:7px;
+}
+.pop .cur span{color:var(--text-muted)}
+.pop .cur b{color:var(--primary);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pop .field{padding:9px 11px}
+.pop input{
+  width:100%;height:32px;border:1px solid var(--border);border-radius:var(--radius-sm);padding:0 10px;
+  font-size:.84em;outline:none;background:var(--surface);
+}
+.pop input:focus{border-color:var(--primary);box-shadow:0 0 0 3px var(--primary-soft)}
+.pop .list{flex:1;overflow-y:auto;padding:0 6px 7px}
+.opt{display:flex;align-items:center;gap:9px;width:100%;border:0;background:transparent;cursor:pointer;text-align:start;padding:8px 10px;border-radius:var(--radius-sm);font-size:.86em}
+.opt:hover{background:var(--surface-tinted)}
+.opt .av{width:26px;height:26px;border-radius:99px;background:var(--primary-soft);color:var(--primary);display:grid;place-items:center;font-size:.66em;font-weight:700;flex:none}
+.opt .m{min-width:0;flex:1}
+.opt b{display:block;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.opt small{color:var(--text-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:block}
+.opt .tag{font-family:var(--font-mono);font-size:.72em;color:var(--text-faint)}
+.opt.bad{opacity:.4;cursor:not-allowed}
+.opt.root b{color:var(--accent)}
+.btn{border:1px solid var(--border);background:var(--surface);border-radius:var(--radius-sm);padding:8px 14px;font-size:.85em;font-weight:600;cursor:pointer}
+.btn.pri{background:var(--primary);border-color:var(--primary);color:#fff}
+/* toast */
+.toasts{position:fixed;inset-inline-end:20px;bottom:20px;z-index:80;display:flex;flex-direction:column;gap:8px;align-items:flex-end}
+.toast{
+  display:flex;align-items:center;gap:12px;background:var(--primary);color:#fff;border-radius:var(--radius-md);
+  padding:10px 14px;font-size:.84em;box-shadow:var(--shadow-lg);animation:pop .22s var(--ease-out-expo);
+}
+.toast button{border:1px solid rgba(255,255,255,.4);background:transparent;color:#fff;border-radius:6px;padding:3px 9px;font-size:.9em;font-weight:600;cursor:pointer}
+@keyframes pop{from{opacity:0;transform:translateY(8px)}}
+.readonly-note{display:inline-flex;align-items:center;gap:6px;font-size:.74em;color:var(--text-muted);background:var(--surface-tinted);border-radius:99px;padding:4px 10px}
+</style>
+</head>
+<body>
+<div class="page">
+  <div class="shell">
+    <div class="eyebrow" data-i18n="eyebrow"></div>
+    <h1 class="title" data-i18n="title"></h1>
+    <p class="subtitle" data-i18n="subtitle"></p>
+
+    <div class="tabs" role="tablist">
+      <button class="tab" role="tab" aria-selected="false" data-i18n="tabRoster"></button>
+      <button class="tab" role="tab" aria-selected="true"><span class="dot"></span><span data-i18n="tabOrg"></span></button>
+      <span class="grow"></span>
+      <div class="variantpick">
+        <span data-i18n="variantLabel"></span>
+        <a href="?v=1" data-v="1">1</a><a href="?v=2" data-v="2">2</a>
+        <a href="?v=3" data-v="3">3</a><a href="?v=4" data-v="4">4</a>
+        <a id="langlink" href="?lang=ar">ع</a>
+      </div>
+    </div>
+
+    <div class="card">
+      <nav class="rail" id="rail"></nav>
+      <section class="pane">
+        <div class="toolbar">
+          <div class="who"><b id="unitName"></b><small id="unitSub"></small></div>
+          <span class="spacer"></span>
+          <label class="searchwrap">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+            <input id="search" type="search" data-i18n-ph="searchPh">
+          </label>
+          <div class="seg" id="depthSeg"></div>
+          <button class="ghostbtn" id="editToggle"></button>
+          <span class="capnote" id="capnote"></span>
+        </div>
+        <div class="stats" id="stats"></div>
+        <div class="crumbbar" id="crumbbar" hidden></div>
+        <div id="stage" style="display:flex;flex:1;min-height:0;flex-direction:column"></div>
+      </section>
+    </div>
+  </div>
+</div>
+<div class="toasts" id="toasts"></div>
+
+<script>
+/* ==================================================================
+   i18n — copy lifted from frontend/src/locales/{en,ar}.json
+   (dutyLocations.*) plus the proposed orgTree.* subtree.
+================================================================== */
+const STR = {
+  en:{
+    eyebrow:"Personnel",
+    title:"Duty Locations & Internal Transfers",
+    subtitle:"Where each employee stands — move staff between units & posts to generate a General Book transfer letter.",
+    tabRoster:"Roster", tabOrg:"ORG-tree",
+    variantLabel:"variant",
+    units:"Units", unassigned:"Unassigned",
+    searchPh:"Search by name or number…",
+    assigned:"Assigned: {a} / {t}", unassignedCount:"Unassigned: {n}",
+    people:"{n} people", layers:"{n} layers", supervisors:"{n} supervisors",
+    unlinked:"{n} without a supervisor",
+    widest:"widest span {n}",
+    legendReports:"reports to", legendTrace:"traced line",
+    view:"View only", edit:"Edit links",
+    canEdit:"employees.edit", cannotEdit:"employees.view",
+    hint:"Drag to pan · scroll to zoom · click a card to trace its reporting line",
+    hintEdit:"Drag a card onto its new supervisor · ✎ to pick from a list",
+    depthAll:"All", depth2:"2 levels", depth3:"3 levels",
+    squad:"Guards", spanOf:"span",
+    orphanTitle:"{n} not linked yet",
+    orphanBody:"Drag each onto their supervisor, or use ✎.",
+    changed:"{name} now reports to {sup}.",
+    centerMgr:"Center on manager", zoomIn:"Zoom in", zoomOut:"Zoom out",
+    fit:"Fit to view", fullscreen:"Full screen",
+    changedRoot:"{name} is now a root — no supervisor.",
+    undo:"Undo",
+    cycle:"That would create a loop — {name} is already below {other}.",
+    pickTitle:"Change supervisor", pickSub:"Who does {name} report to?",
+    pickCurrent:"Currently:", pickNone:"No supervisor (root of the unit)",
+    pickPh:"Search this unit by name, number or post…",
+    cancel:"Cancel", noReports:"No direct reports.",
+    chain:"Reporting line", directs:"Direct reports", details:"Details",
+    post:"Post", unit:"Unit", rank:"Rank", status:"Active",
+    sample:"Sample data",
+    readonly:"Read-only for your role",
+    scope:"Showing", allOfUnit:"Whole unit",
+    under:"under", unitHead:"Unit head", directsShort:"direct",
+  },
+  ar:{
+    eyebrow:"شؤون الموظفين",
+    title:"مواقع العمل والنقل الداخلي",
+    subtitle:"موقع كل موظف — انقل الأفراد بين السرايا والنقاط لإصدار خطاب نقل في الكتاب العام.",
+    tabRoster:"الكشف", tabOrg:"الهيكل التنظيمي",
+    variantLabel:"نموذج",
+    units:"السرايا", unassigned:"غير محدد",
+    searchPh:"ابحث بالاسم أو الرقم…",
+    assigned:"محدد: {a} / {t}", unassignedCount:"غير محدد: {n}",
+    people:"{n} موظف", layers:"{n} مستويات", supervisors:"{n} مشرف",
+    unlinked:"{n} بدون مشرف",
+    widest:"أوسع نطاق {n}",
+    legendReports:"يتبع", legendTrace:"خط التبعية",
+    view:"عرض فقط", edit:"تعديل التبعية",
+    canEdit:"employees.edit", cannotEdit:"employees.view",
+    hint:"اسحب للتحريك · مرر للتكبير · اضغط البطاقة لتتبع خط التبعية",
+    hintEdit:"اسحب البطاقة على المشرف الجديد · أو اضغط ✎ للاختيار",
+    depthAll:"الكل", depth2:"مستويان", depth3:"٣ مستويات",
+    squad:"الأفراد", spanOf:"نطاق",
+    orphanTitle:"{n} بدون ربط",
+    orphanBody:"اسحب كل واحد على مشرفه، أو استخدم ✎.",
+    changed:"{name} يتبع الآن {sup}.",
+    centerMgr:"توسيط المشرف", zoomIn:"تكبير", zoomOut:"تصغير",
+    fit:"ملء الإطار", fullscreen:"شاشة كاملة",
+    changedRoot:"{name} أصبح رأس الهيكل — بدون مشرف.",
+    undo:"تراجع",
+    cycle:"سينشئ ذلك حلقة مغلقة — {name} يتبع {other} أصلاً.",
+    pickTitle:"تغيير المشرف", pickSub:"من هو مشرف {name}؟",
+    pickCurrent:"حالياً:", pickNone:"بدون مشرف (رأس السرية)",
+    pickPh:"ابحث داخل السرية بالاسم أو الرقم أو النقطة…",
+    cancel:"إلغاء", noReports:"لا يوجد تابعون مباشرون.",
+    chain:"خط التبعية", directs:"التابعون المباشرون", details:"البيانات",
+    post:"النقطة", unit:"السرية", rank:"الرتبة", status:"على رأس العمل",
+    sample:"بيانات تجريبية",
+    readonly:"عرض فقط لصلاحيتك",
+    scope:"المعروض", allOfUnit:"كامل السرية",
+    under:"تابع", unitHead:"رئيس السرية", directsShort:"مباشر",
+  }
+};
+const Q = new URLSearchParams(location.search);
+const V = Math.min(4, Math.max(1, parseInt(Q.get("v")||"1", 10) || 1));
+const LANG = Q.get("lang") === "ar" ? "ar" : "en";
+const T = (k, vars) => {
+  let s = STR[LANG][k] ?? k;
+  if (vars) for (const [a,b] of Object.entries(vars)) s = s.replaceAll("{"+a+"}", b);
+  return s;
+};
+document.documentElement.lang = LANG;
+document.body.dir = LANG === "ar" ? "rtl" : "ltr";
+const RTL = LANG === "ar";
+
+/* ==================================================================
+   Sample roster — real vocabulary (SEED_UNITS + site shift structure),
+   invented people. Deterministic: seeded PRNG so every screenshot and
+   every reload is identical.
+================================================================== */
+const SEED_UNITS = ["الدوام الرسمي","السرية الأولى","السرية الثانية","السرية الثالثة","السرية الرابعة","السرية الخامسة"];
+let _s = 20260820;
+const rnd = () => ((_s = (_s * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff);
+const pick = a => a[Math.floor(rnd() * a.length)];
+
+const FIRST = ["أحمد","محمد","خالد","سالم","عبدالله","راشد","سعيد","حمد","علي","يوسف","ماجد","فيصل","طارق","ناصر","بدر","عمر","إبراهيم","سيف","مروان","زايد","جمعة","هزاع","صقر","مبارك","عيسى","حسن","فهد","وليد","ثاني","مطر"];
+const LAST  = ["المنصوري","الكعبي","البلوشي","الشامسي","النقبي","الظاهري","الحمادي","السويدي","المرزوقي","الزعابي","الطنيجي","الرميثي","الفلاسي","العلي","الجنيبي","الحوسني","الكندي","المهيري","النعيمي","الغفلي"];
+const EN_F = ["Ahmed","Mohammed","Khalid","Salem","Abdullah","Rashid","Saeed","Hamad","Ali","Yousef","Majid","Faisal","Tariq","Nasser","Badr","Omar","Ibrahim","Saif","Marwan","Zayed","Juma","Hazza","Saqr","Mubarak","Isa","Hassan","Fahad","Waleed","Thani","Matar"];
+const EN_L = ["Al Mansoori","Al Kaabi","Al Balushi","Al Shamsi","Al Nuqbi","Al Dhaheri","Al Hammadi","Al Suwaidi","Al Marzouqi","Al Zaabi","Al Tunaiji","Al Rumaithi","Al Falasi","Al Ali","Al Junaibi","Al Housani","Al Kindi","Al Muhairi","Al Nuaimi","Al Ghafli"];
+
+const RANK = {
+  head:      {ar:"رئيس السرية",   en:"Company Commander", tier:"Command"},
+  deputy:    {ar:"نائب الرئيس",   en:"Deputy Commander",  tier:"Command"},
+  shift:     {ar:"مشرف وردية",    en:"Shift Supervisor",  tier:"Supervision"},
+  post:      {ar:"رئيس نقطة",     en:"Post Leader",       tier:"Post lead"},
+  guard:     {ar:"حارس أمن",      en:"Security Guard",    tier:"Guards"},
+  admin:     {ar:"مدير الإدارة",  en:"Administration Manager", tier:"Command"},
+  dept:      {ar:"رئيس قسم",      en:"Department Head",   tier:"Supervision"},
+  sup:       {ar:"مشرف",          en:"Supervisor",        tier:"Post lead"},
+  clerk:     {ar:"كاتب",          en:"Clerk",             tier:"Guards"},
+};
+const SHIFTS = [
+  {ar:"وردية 05:00", en:"Shift 05:00"},
+  {ar:"وردية 13:00", en:"Shift 13:00"},
+  {ar:"وردية 21:00", en:"Shift 21:00"},
+];
+const GUARD_POSTS = ["البوابة الرئيسية","برج المراقبة رقم ١","برج المراقبة رقم ٢","الدورية الراجلة","غرفة التحكم","نقطة التفتيش","المرافقة"];
+const GUARD_POSTS_EN = ["Main Gate","Watchtower 1","Watchtower 2","Foot Patrol","Control Room","Checkpoint","Escort"];
+const OFFICE_DEPTS = [
+  {ar:"الموارد البشرية", en:"Human Resources"},
+  {ar:"المالية", en:"Finance"},
+  {ar:"العمليات", en:"Operations"},
+  {ar:"الخدمات المساندة", en:"Support Services"},
+  {ar:"غرفة التحكم", en:"Control Room"},
+  {ar:"العيادة", en:"Clinic"},
+];
+
+let SEQ = 3001;
+const PEOPLE = [];
+function person(rankKey, unit, post, postEn, supervisorId){
+  const i = Math.floor(rnd()*FIRST.length), j = Math.floor(rnd()*LAST.length);
+  const p = {
+    id: "G-" + (SEQ++),
+    name_ar: FIRST[i] + " " + LAST[j],
+    name_en: EN_F[i] + " " + EN_L[j],
+    rank: rankKey,
+    position_ar: RANK[rankKey].ar,
+    position_en: RANK[rankKey].en,
+    tier: RANK[rankKey].tier,
+    duty_unit: unit,
+    duty_post: post, duty_post_en: postEn,
+    supervisor_id: supervisorId ?? null,
+    status: "Active",
+  };
+  PEOPLE.push(p);
+  return p;
+}
+function buildCompany(unit, opts){
+  const head = person("head", unit, "قيادة السرية", "Company Command", null);
+  const dep  = person("deputy", unit, "قيادة السرية", "Company Command", head.id);
+  SHIFTS.forEach((sh, si) => {
+    const s = person("shift", unit, sh.ar, sh.en, si === 2 ? dep.id : head.id);
+    const nPosts = 3 + (si === 0 ? 1 : 0);
+    for (let p = 0; p < nPosts; p++){
+      const pi = (si * 3 + p) % GUARD_POSTS.length;
+      const pl = person("post", unit, GUARD_POSTS[pi], GUARD_POSTS_EN[pi], s.id);
+      const n = 3 + Math.floor(rnd() * 3);
+      for (let g = 0; g < n; g++) person("guard", unit, GUARD_POSTS[pi], GUARD_POSTS_EN[pi], pl.id);
+    }
+  });
+  // day-one reality: a few people the operator has not linked yet
+  for (let k = 0; k < (opts?.orphans ?? 0); k++){
+    const pi = Math.floor(rnd() * GUARD_POSTS.length);
+    person("guard", unit, GUARD_POSTS[pi], GUARD_POSTS_EN[pi], null);
+  }
+}
+function buildOffice(){
+  const unit = "الدوام الرسمي";
+  const mgr = person("admin", unit, "الإدارة", "Administration", null);
+  OFFICE_DEPTS.forEach(d => {
+    const h = person("dept", unit, d.ar, d.en, mgr.id);
+    const nSup = 2 + Math.floor(rnd() * 2);
+    for (let s = 0; s < nSup; s++){
+      const sp = person("sup", unit, d.ar, d.en, h.id);
+      const n = 2 + Math.floor(rnd() * 4);
+      for (let c = 0; c < n; c++) person("clerk", unit, d.ar, d.en, sp.id);
+    }
+  });
+  for (let k = 0; k < 2; k++) person("clerk", unit, pick(OFFICE_DEPTS).ar, "", null);
+}
+buildOffice();
+buildCompany("السرية الأولى", {orphans:3});
+buildCompany("السرية الثانية", {orphans:1});
+buildCompany("السرية الثالثة", {orphans:0});
+buildCompany("السرية الرابعة", {orphans:2});
+buildCompany("السرية الخامسة", {orphans:0});
+
+const nameOf = p => RTL ? p.name_ar : p.name_en;
+const titleOf = p => RTL ? p.position_ar : p.position_en;
+const postOf  = p => RTL ? p.duty_post : (p.duty_post_en || p.duty_post);
+const initials = p => {
+  const n = (RTL ? p.name_ar : p.name_en).trim().split(/\s+/);
+  return ((n[0]?.[0]||"") + (n[n.length-1]?.[0]||"")).toUpperCase();
+};
+const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+
+/* ==================================================================
+   Tree build (port of Shajarah `hr()`), rank-ordered
+================================================================== */
+const RANK_WEIGHT = {head:100, admin:100, deputy:90, shift:80, dept:80, post:60, sup:60, guard:20, clerk:20};
+function buildTree(list){
+  const byId = new Map();
+  for (const e of list) byId.set(e.id, {...e, children:[], depth:0});
+  const roots = [];
+  for (const e of list){
+    const node = byId.get(e.id);
+    const sup = e.supervisor_id ? byId.get(e.supervisor_id) : undefined;
+    if (sup && sup !== node) sup.children.push(node);
+    else roots.push(node);          // unresolved supervisor == root, by design
+  }
+  const bw = n => RANK_WEIGHT[n.rank] ?? 20;
+  const sortRec = n => { n.children.sort((a,b) => bw(b) - bw(a) || a.id.localeCompare(b.id)); n.children.forEach(sortRec); };
+  roots.sort((a,b) => bw(b) - bw(a) || a.id.localeCompare(b.id));
+  roots.forEach(sortRec);
+  const stack = [...roots];
+  while (stack.length){
+    const n = stack.pop();
+    for (const c of n.children){ c.depth = n.depth + 1; stack.push(c); }
+  }
+  return roots;
+}
+
+/* ==================================================================
+   Layout — Shajarah `We()`, generalised to per-node width/height so the
+   squad-tile and band variants share one engine.
+   Constants: k=212 K=80 je=24 sr=72 nt=64 de=48  (docs/org-chart/FINDINGS.md §4)
+================================================================== */
+/* Shajarah source values were k=212 K=80 je=24 sr=72 nt=64 de=48. Tightened:
+   cards 200×72, sibling gap 14, root gap 44, level gap 46, margin 28 — the
+   original spacing was tuned for a one-node tenant, not 61 per company. */
+const NODE_W = 200, NODE_H = 72, SIBLING_GAP = 14, ROOT_GAP = 44, LEVEL_GAP = 46,
+      STEM = 22, MARGIN = 28, LINE_W = 2, LINE_W_LIN = 3;
+
+function layout(roots, opts){
+  const collapsed = opts.collapsed, sizeOf = opts.sizeOf, hidden = opts.hidden || (() => false);
+  if (!roots.length) return {nodes:[], links:[], width:0, height:0, levels:[]};
+
+  // pre-order walk, honouring collapse + per-variant hiding
+  const order = [];
+  const dfs = [];
+  for (let i = roots.length-1; i >= 0; i--) dfs.push({node:roots[i], level:0});
+  while (dfs.length){
+    const m = dfs.pop();
+    order.push(m);
+    if (collapsed.has(m.node.id)) continue;
+    const ch = m.node.children.filter(c => !hidden(c, m.level+1));
+    m.visibleChildren = ch;
+    for (let i = ch.length-1; i >= 0; i--) dfs.push({node:ch[i], level:m.level+1});
+  }
+  const kidsOf = m => (collapsed.has(m.node.id) ? [] : (m.visibleChildren || []));
+  const byNode = new Map(order.map(m => [m.node.id, m]));
+
+  // pass 1 — bottom-up subtree width + centre
+  const A = new Map(), H = new Map();
+  for (let i = order.length-1; i >= 0; i--){
+    const m = order[i], id = m.node.id, own = sizeOf(m.node, m.level);
+    const kids = kidsOf(m);
+    if (!kids.length){ A.set(id, own.w); H.set(id, own.w/2); continue; }
+    let w = 0, first = 0, last = 0;
+    kids.forEach((c, z) => {
+      const cw = A.get(c.id), cc = H.get(c.id);
+      if (z === 0) first = w + cc;
+      last = w + cc;
+      w += cw + SIBLING_GAP;
+    });
+    w -= SIBLING_GAP;
+    const span = Math.max(w, own.w);
+    A.set(id, span);
+    H.set(id, span === w ? (first + last)/2 : span/2);
+  }
+
+  // level heights (variable card heights => stacked bands)
+  const levelH = [];
+  for (const m of order){
+    const h = sizeOf(m.node, m.level).h;
+    levelH[m.level] = Math.max(levelH[m.level] || 0, h);
+  }
+  const levelY = []; let acc = MARGIN;
+  for (let l = 0; l < levelH.length; l++){ levelY[l] = acc; acc += levelH[l] + LEVEL_GAP; }
+
+  // pass 2 — top-down placement
+  const nodes = [], out = new Map(), left = new Map();
+  let cursor = MARGIN;
+  for (const r of roots){ if (!byNode.has(r.id)) continue; left.set(r.id, cursor); cursor += A.get(r.id) + ROOT_GAP; }
+  for (const m of order){
+    const id = m.node.id, lx = left.get(id) ?? MARGIN, own = sizeOf(m.node, m.level);
+    const N = {
+      node:m.node, level:m.level, w:own.w, h:own.h, kind:own.kind || "person",
+      x: lx + H.get(id) - own.w/2,
+      y: levelY[m.level],
+      hasChildren: m.node.children.length > 0,
+      expanded: m.node.children.length > 0 && !collapsed.has(id),
+    };
+    nodes.push(N); out.set(id, N);
+    const kids = kidsOf(m);
+    if (!kids.length) continue;
+    let total = 0; kids.forEach(c => total += A.get(c.id) + SIBLING_GAP);
+    total -= SIBLING_GAP;
+    let cx = lx + (A.get(id) - total)/2;
+    for (const c of kids){ left.set(c.id, cx); cx += A.get(c.id) + SIBLING_GAP; }
+  }
+
+  // links: parent bottom-centre -> child top-centre
+  const links = [];
+  for (const m of nodes){
+    if (!m.expanded) continue;
+    for (const c of (byNode.get(m.node.id)?.visibleChildren || [])){
+      const cn = out.get(c.id);
+      if (cn) links.push({id:c.id, parentId:m.node.id, px:m.x + m.w/2, py:m.y + m.h, cx:cn.x + cn.w/2, cy:cn.y});
+    }
+  }
+  let w = 0, h = 0;
+  for (const m of nodes){ w = Math.max(w, m.x + m.w); h = Math.max(h, m.y + m.h); }
+  const levels = levelY.map((y, l) => ({y, h:levelH[l], level:l}));
+  return {nodes, links, width:w + MARGIN, height:h + MARGIN, levels};
+}
+
+/* ==================================================================
+   App state
+================================================================== */
+const state = {
+  unit: "السرية الأولى",
+  collapsed: new Set(),
+  lineage: null,
+  edit: Q.get("edit") === "1",
+  search: "",
+  // V1 opens at 2 levels: full depth in one company is ~11k px wide and fits
+  // only at ~10% zoom. V2/V3/V4 have no width limit, so they open full.
+  depth: V === 1 ? "2" : "all",
+  scope: null,        // drill into one subtree (breadcrumb above the stage)
+  selected: null,     // v4 dossier
+  scale: 1, tx: 0, ty: 0,
+};
+const CAN_EDIT = true;   // mockup: the signed-in user holds employees.edit
+const history = [];
+
+const inUnit = () => PEOPLE.filter(p => p.duty_unit === state.unit);
+const byId = id => PEOPLE.find(p => p.id === id);
+function supChainOf(id){
+  const out = []; let cur = byId(id);
+  const seen = new Set();
+  while (cur && cur.supervisor_id && !seen.has(cur.supervisor_id)){
+    seen.add(cur.supervisor_id);
+    const s = byId(cur.supervisor_id); if (!s) break;
+    out.push(s); cur = s;
+  }
+  return out;                        // nearest-first
+}
+function isBelow(candidateId, ofId){ // would linking create a loop?
+  return supChainOf(candidateId).some(s => s.id === ofId) || candidateId === ofId;
+}
+function directsOf(id){ return PEOPLE.filter(p => p.supervisor_id === id); }
+
+function relink(empId, supId, {silent} = {}){
+  const emp = byId(empId);
+  const prev = emp.supervisor_id;
+  emp.supervisor_id = supId;
+  if (!silent){
+    history.push(() => { emp.supervisor_id = prev; render(); });
+    const sup = supId ? byId(supId) : null;
+    toast(sup ? T("changed", {name:nameOf(emp), sup:nameOf(sup)}) : T("changedRoot", {name:nameOf(emp)}), T("undo"));
+  }
+  render();
+}
+
+/* ------------------------------------------------------------- toasts */
+function toast(msg, undoLabel){
+  const el = document.createElement("div");
+  el.className = "toast";
+  el.innerHTML = `<span>${esc(msg)}</span>`;
+  if (undoLabel && history.length){
+    const b = document.createElement("button");
+    b.textContent = undoLabel;
+    b.onclick = () => { const f = history.pop(); if (f) f(); el.remove(); };
+    el.appendChild(b);
+  }
+  // the toast stack must live inside the fullscreen element, otherwise it is
+  // never painted while the chart is full screen
+  const stackHost = overlayHost();
+  const stack = document.getElementById("toasts");
+  if (stack.parentElement !== stackHost) stackHost.appendChild(stack);
+  stack.appendChild(el);
+  setTimeout(() => el.remove(), 5200);
+}
+
+/* ==================================================================
+   Chrome — header, rail, toolbar, stats
+================================================================== */
+for (const el of document.querySelectorAll("[data-i18n]")) el.textContent = T(el.dataset.i18n);
+for (const el of document.querySelectorAll("[data-i18n-ph]")) el.placeholder = T(el.dataset.i18nPh);
+document.querySelectorAll(".variantpick a[data-v]").forEach(a => {
+  a.classList.toggle("on", Number(a.dataset.v) === V);
+  a.href = `?v=${a.dataset.v}${LANG === "ar" ? "&lang=ar" : ""}${state.edit ? "&edit=1" : ""}`;
+});
+{
+  const l = document.getElementById("langlink");
+  l.href = `?v=${V}${RTL ? "" : "&lang=ar"}${state.edit ? "&edit=1" : ""}`;
+  l.textContent = RTL ? "EN" : "ع";
+}
+
+function renderRail(){
+  const rail = document.getElementById("rail");
+  const counts = new Map();
+  for (const p of PEOPLE) counts.set(p.duty_unit, (counts.get(p.duty_unit) || 0) + 1);
+  rail.innerHTML = `<h2>${esc(T("units"))}</h2>`;
+  for (const u of SEED_UNITS){
+    const b = document.createElement("button");
+    b.className = "railbtn";
+    b.setAttribute("aria-pressed", String(u === state.unit));
+    b.innerHTML = `<span class="lbl" dir="auto">${esc(u)}</span><span class="n">${counts.get(u) || 0}</span>`;
+    b.onclick = () => {
+      state.unit = u; state.collapsed = new Set(); state.lineage = null;
+      state.selected = null; state.scope = null;
+      render(); resetView();
+    };
+    rail.appendChild(b);
+  }
+  const foot = document.createElement("div");
+  foot.className = "railfoot";
+  foot.innerHTML = `<div>${esc(T("assigned", {a:PEOPLE.length, t:PEOPLE.length}))}</div>
+    <div class="faint">${esc(T("unassignedCount", {n:0}))}</div>
+    <div class="faint" style="margin-top:6px">${esc(T("sample"))}</div>`;
+  rail.appendChild(foot);
+}
+
+function renderToolbar(roots, model){
+  const list = inUnit();
+  document.getElementById("unitName").textContent = state.unit;
+  document.getElementById("unitSub").textContent =
+    T("people", {n:list.length}) + " · " + T("post") + ": " + new Set(list.map(p => p.duty_post)).size;
+
+  const seg = document.getElementById("depthSeg");
+  if (!seg.dataset.built){
+    seg.dataset.built = "1";
+    [["all", T("depthAll")], ["2", T("depth2")], ["3", T("depth3")]].forEach(([k, lbl]) => {
+      const b = document.createElement("button");
+      b.textContent = lbl;
+      b.onclick = () => { state.depth = k; render(); resetView(); };
+      b.dataset.k = k;
+      seg.appendChild(b);
+    });
+  }
+  seg.querySelectorAll("button").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.k === state.depth)));
+  seg.style.display = V === 1 ? "" : "none";   // depth cap only matters for the wide chart
+
+  const et = document.getElementById("editToggle");
+  et.textContent = (state.edit ? "✎ " : "👁 ") + (state.edit ? T("edit") : T("view"));
+  et.classList.toggle("on", state.edit);
+  et.disabled = !CAN_EDIT;
+  et.onclick = () => { state.edit = !state.edit; render(); };
+  document.getElementById("capnote").textContent = CAN_EDIT ? T("canEdit") : T("cannotEdit");
+
+  const s = document.getElementById("stats");
+  const unlinked = list.filter(p => !p.supervisor_id).length - 1;
+  const sups = list.filter(p => directsOf(p.id).length > 0).length;
+  const widest = Math.max(0, ...list.map(p => directsOf(p.id).length));
+  const layers = model ? model.levels.length : 0;
+  s.innerHTML =
+    `<span><b>${list.length}</b> ${esc(T("people", {n:""}).replace("{n}","").trim())}</span>` +
+    `<span><b>${layers}</b> ${esc(T("layers", {n:""}).replace("{n}","").trim())}</span>` +
+    `<span><b>${sups}</b> ${esc(T("supervisors", {n:""}).replace("{n}","").trim())}</span>` +
+    `<span><b>${widest}</b> ${esc(T("widest", {n:""}).replace("{n}","").trim())}</span>` +
+    (unlinked > 0 ? `<span class="warn">▲ ${esc(T("unlinked", {n:unlinked}))}</span>` : "") +
+    `<span class="spacer"></span>` +
+    `<span class="legend"><i></i>${esc(T("legendReports"))}</span>` +
+    `<span class="legend"><i class="lin"></i>${esc(T("legendTrace"))}</span>`;
+}
+
+/* ==================================================================
+   Variant renderers
+================================================================== */
+const stage = document.getElementById("stage");
+
+function chartShell(){
+  stage.innerHTML = `
+    <div class="viewport" id="viewport">
+      <div class="canvas" id="canvas">
+        <div class="layer conn" id="bands"></div>
+        <div class="layer conn" id="connLayer"></div>
+        <div class="layer nodes" id="nodeLayer"></div>
+      </div>
+      <div class="hint">${esc(state.edit ? T("hintEdit") : T("hint"))}</div>
+      <div class="zoombar">
+        <button id="zmgr" class="wide" title="${esc(T("centerMgr"))}">
+          <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="8" r="3.2"/><path d="M12 11.2V21M6 16h12"/></svg>
+          <span>${esc(T("centerMgr"))}</span>
+        </button>
+        <button id="zin" title="${esc(T("zoomIn"))}">+</button>
+        <button id="zout" title="${esc(T("zoomOut"))}">−</button>
+        <button id="zfit" title="${esc(T("fit"))}">⌾</button>
+        <button id="zfull" title="${esc(T("fullscreen"))}">⛶</button>
+      </div>
+    </div>`;
+  wireViewport();
+}
+
+function segEl(x, y, w, h, lin, vertical){
+  const d = document.createElement("div");
+  d.className = (vertical ? "seg-v" : "seg-h") + (lin ? " is-lineage" : "");
+  d.style.width = w + "px"; d.style.height = h + "px";
+  d.style.transform = `translate(${x}px, ${y}px)`;
+  return d;
+}
+
+function personCard(n, extra){
+  const p = n.node;
+  const orphan = !p.supervisor_id && p.rank !== "head" && p.rank !== "admin";
+  const head = p.rank === "head" || p.rank === "admin";
+  const onLin = state.lineage && state.lineage.has(p.id);
+  const kids = directsOf(p.id).length;
+  const card = document.createElement("div");
+  card.className = "pcard" + (head ? " is-head" : "") + (orphan ? " is-orphan" : "") + (onLin ? " is-lineage" : "");
+  card.dataset.id = p.id;
+  card.innerHTML = `
+    <div class="row">
+      <span class="av">${esc(initials(p))}</span>
+      <div class="who">
+        <p class="nm" dir="auto">${esc(nameOf(p))}</p>
+        <p class="ti" dir="auto">${esc(titleOf(p))}</p>
+      </div>
+    </div>
+    <div class="foot">
+      <span class="idchip">${esc(p.id)}</span>
+      <span class="eyebrow" dir="auto">${esc(postOf(p))}</span>
+      ${kids ? `<span class="span" title="${esc(T("scope"))}">${kids} ▾</span>` : ""}
+    </div>
+    ${state.edit ? `<span class="grip" title="drag"><svg width="12" height="12" viewBox="0 0 12 12" fill="currentColor"><circle cx="3" cy="3" r="1.2"/><circle cx="9" cy="3" r="1.2"/><circle cx="3" cy="6" r="1.2"/><circle cx="9" cy="6" r="1.2"/><circle cx="3" cy="9" r="1.2"/><circle cx="9" cy="9" r="1.2"/></svg></span>
+      <button class="editbtn" title="${esc(T("pickTitle"))}">✎</button>` : ""}
+    ${extra || ""}`;
+  card.addEventListener("click", e => {
+    if (e.target.closest(".editbtn")) { e.stopPropagation(); openPicker(p.id); return; }
+    e.stopPropagation();
+    // the span badge drills in: a wide-shallow tree only stays readable when
+    // you can make one branch the root.
+    if (e.target.closest(".span")){ state.scope = p.id; render(); resetView(); return; }
+    state.lineage = (state.lineage && state.lineage.has(p.id)) ? null : new Set([p.id, ...supChainOf(p.id).map(s => s.id)]);
+    render();
+  });
+  if (state.edit) makeDraggable(card, p.id);
+  return card;
+}
+
+/* ---- scope: drill into one subtree so a 61-person company stays legible */
+function scopedForest(){
+  const roots = buildTree(inUnit());
+  if (!state.scope) return roots;
+  const find = ns => { for (const n of ns){ if (n.id === state.scope) return n; const f = find(n.children); if (f) return f; } return null; };
+  return [find(roots) || roots[0]].filter(Boolean);
+}
+function renderCrumbs(){
+  const bar = document.getElementById("crumbbar");
+  if (!state.scope){ bar.hidden = true; bar.innerHTML = ""; return; }
+  bar.hidden = false;
+  const chain = supChainOf(state.scope).slice().reverse();
+  const cur = byId(state.scope);
+  bar.innerHTML = `<span class="lb">${esc(T("scope"))}</span>`;
+  const all = document.createElement("button");
+  all.textContent = T("allOfUnit");
+  all.onclick = () => { state.scope = null; render(); resetView(); };
+  bar.appendChild(all);
+  for (const s of chain){
+    bar.insertAdjacentHTML("beforeend", `<span class="sep">›</span>`);
+    const b = document.createElement("button");
+    b.textContent = nameOf(s);
+    b.dir = "auto";
+    b.onclick = () => { state.scope = s.id; render(); resetView(); };
+    bar.appendChild(b);
+  }
+  bar.insertAdjacentHTML("beforeend",
+    `<span class="sep">›</span><span class="cur" dir="auto">${esc(nameOf(cur))}</span>`);
+}
+
+/* ---- V1: faithful Shajarah, one card per person --------------------- */
+/* ---- V3 (bands variant kept for reference) -------------------------- */
+function renderChart(withBands){
+  chartShell();
+  // Unlinked people are NOT drawn as extra roots: they would double the canvas
+  // width and duplicate the banner. They live in the banner until linked.
+  const roots = scopedForest().filter(
+    r => r.supervisor_id || r.rank === "head" || r.rank === "admin" || state.scope === r.id,
+  );
+  const maxLevel = state.depth === "all" ? 99 : Number(state.depth);
+  const model = layout(roots, {
+    collapsed: state.collapsed,
+    hidden: (n, level) => level >= maxLevel,
+    sizeOf: () => ({w:NODE_W, h:NODE_H}),
+  });
+  paint(model, withBands);
+  renderToolbar(roots, model);
+  orphanBar();
+  return model;
+}
+
+/* ---- V2: vertical (indented) tree ----------------------------------
+   The tidy tree is wide and shallow: one company at full depth is ~11k px
+   across, legible only at ~10%. Indenting downward trades width for height,
+   which a pane can scroll — every one of the 61 stays readable at 100%. */
+const INDENT = 26;
+function renderVertical(){
+  const roots = scopedForest();
+  stage.innerHTML = `<div class="vtree" id="vtree"></div>`;
+  const host = document.getElementById("vtree");
+  host.classList.toggle("tracing", !!state.lineage);
+  const q = state.search.trim().toLowerCase();
+  let deepest = 0;
+
+  const rowFor = (n, d, isLast) => {
+    const p = byId(n.id);
+    deepest = Math.max(deepest, d);
+    const kids = n.children;
+    const onLin = state.lineage && state.lineage.has(p.id);
+    const orphan = !p.supervisor_id && p.rank !== "head" && p.rank !== "admin";
+    const hit = !q || p.id.toLowerCase().includes(q) || nameOf(p).toLowerCase().includes(q) || (p.duty_post || "").toLowerCase().includes(q);
+
+    const row = document.createElement("div");
+    row.className = "vrow";
+    row.style.marginInlineStart = (d * INDENT) + "px";
+    row.style.opacity = hit ? "1" : ".28";
+
+    const card = document.createElement("div");
+    card.className = "vcard lvl" + Math.min(d, 2) + (onLin ? " is-lineage" : "") + (orphan ? " is-orphan" : "");
+    card.dataset.id = p.id;
+    card.innerHTML =
+      `<span class="av">${esc(initials(p))}</span>
+       <span class="vnm" dir="auto">${esc(nameOf(p))}</span>
+       <span class="vti" dir="auto">${esc(titleOf(p))}</span>
+       <span class="vid">${esc(p.id)}</span>
+       <span class="vpost" dir="auto">${esc(postOf(p))}</span>
+       ${kids.length ? `<span class="vspan">${kids.length} ▾</span>` : ""}
+       ${state.edit ? `<button class="editbtn" style="position:static;display:grid;background:var(--surface-tinted);border-color:var(--border);color:var(--primary)" title="${esc(T("pickTitle"))}">✎</button>` : ""}`;
+    card.addEventListener("click", e => {
+      if (e.target.closest(".editbtn")){ e.stopPropagation(); openPicker(p.id); return; }
+      if (e.target.closest(".vspan")){ e.stopPropagation(); state.scope = p.id; render(); return; }
+      state.lineage = (state.lineage && state.lineage.has(p.id)) ? null : new Set([p.id, ...supChainOf(p.id).map(s => s.id)]);
+      render();
+    });
+    if (state.edit) makeDraggable(card, p.id);
+
+    if (kids.length){
+      const tw = document.createElement("button");
+      tw.className = "vtw";
+      tw.textContent = state.collapsed.has(p.id) ? "▸" : "▾";
+      tw.onclick = e => {
+        e.stopPropagation();
+        state.collapsed.has(p.id) ? state.collapsed.delete(p.id) : state.collapsed.add(p.id);
+        render();
+      };
+      row.appendChild(tw);
+    } else {
+      const sp = document.createElement("span");
+      sp.className = "vtw"; sp.textContent = "·";
+      row.appendChild(sp);
+    }
+    row.appendChild(card);
+    host.appendChild(row);
+
+    if (state.collapsed.has(p.id)) return;
+    // A run of ≥4 leaf children collapses into one chip group: a guard must
+    // never cost a full row, or one post fills the pane.
+    const leaves = kids.filter(c => c.children.length === 0);
+    const branches = kids.filter(c => c.children.length > 0);
+    branches.forEach((c, i) => rowFor(c, d + 1, i === branches.length - 1 && !leaves.length));
+    if (leaves.length >= 4){
+      const g = document.createElement("div");
+      g.className = "vgroup";
+      g.style.marginInlineStart = ((d + 1) * INDENT + 22) + "px";
+      g.innerHTML = `<span class="lead">${esc(T("squad"))} ${leaves.length}</span>` + leaves.map(m => {
+        const lin = state.lineage && state.lineage.has(m.id);
+        return `<span class="chip${lin ? " is-lineage" : ""}${!m.supervisor_id ? " flag" : ""}" data-id="${esc(m.id)}" title="${esc(nameOf(m))} · ${esc(titleOf(m))} · ${esc(m.id)}">
+          <span class="cid">${esc(m.id.replace("G-",""))}</span><span class="cn" dir="auto">${esc(nameOf(m))}</span></span>`;
+      }).join("");
+      g.querySelectorAll(".chip").forEach(ch => {
+        ch.addEventListener("click", e => {
+          e.stopPropagation();
+          const id = ch.dataset.id;
+          if (state.edit){ openPicker(id); return; }
+          state.lineage = (state.lineage && state.lineage.has(id)) ? null : new Set([id, ...supChainOf(id).map(s => s.id)]);
+          render();
+        });
+        if (state.edit) makeDraggable(ch, ch.dataset.id);
+      });
+      host.appendChild(g);
+    } else {
+      leaves.forEach((c, i) => rowFor(c, d + 1, i === leaves.length - 1));
+    }
+  };
+  roots.forEach(r => rowFor(r, 0, true));
+  const orphans = inUnit().filter(p => !p.supervisor_id && p.rank !== "head" && p.rank !== "admin");
+  if (orphans.length){
+    const g = document.createElement("div");
+    g.className = "orphanbar";
+    g.style.position = "static";
+    g.style.marginTop = "14px";
+    g.innerHTML = `<b>▲ ${esc(T("orphanTitle", {n:orphans.length}))}</b><small>${esc(T("orphanBody"))}</small>
+      <span class="chips">${orphans.map(o => `<span class="chip flag" data-id="${esc(o.id)}"><span class="cid">${esc(o.id.replace("G-",""))}</span><span class="cn" dir="auto">${esc(nameOf(o))}</span></span>`).join("")}</span>`;
+    g.querySelectorAll(".chip").forEach(ch => {
+      ch.addEventListener("click", () => openPicker(ch.dataset.id));
+      if (state.edit) makeDraggable(ch, ch.dataset.id);
+    });
+    host.appendChild(g);
+  }
+  renderToolbar(roots, {levels:new Array(deepest + 1)});
+}
+
+/* ---- V3: shift lanes — one lane per level-1 branch -------------------
+   Reads the way the site is actually run: a lane per shift (or per office
+   department), post leaders as tiles inside it, guards as chips. Everything
+   fits the pane width at 100%; the lane header names the supervisor, so the
+   manager→employee edge is containment plus an explicit "reports to" line. */
+function renderLanes(){
+  const roots = scopedForest();
+  stage.innerHTML = `<div class="lanes" id="lanes"></div>`;
+  const host = document.getElementById("lanes");
+  const q = state.search.trim().toLowerCase();
+  const hitOf = p => !q || p.id.toLowerCase().includes(q) || nameOf(p).toLowerCase().includes(q) || (p.duty_post || "").toLowerCase().includes(q);
+  let deepest = 1;
+
+  const chipsFor = list => list.map(m => {
+    const lin = state.lineage && state.lineage.has(m.id);
+    return `<span class="chip${lin ? " is-lineage" : ""}${!m.supervisor_id ? " flag" : ""}" data-id="${esc(m.id)}" style="opacity:${hitOf(m) ? 1 : .25}" title="${esc(nameOf(m))} · ${esc(titleOf(m))} · ${esc(m.id)}">
+      <span class="cid">${esc(m.id.replace("G-",""))}</span><span class="cn" dir="auto">${esc(nameOf(m))}</span></span>`;
+  }).join("");
+
+  const laneFor = (sup, depth) => {
+    deepest = Math.max(deepest, depth + 2);
+    const posts = sup.children.filter(c => c.children.length > 0);
+    const loose = sup.children.filter(c => c.children.length === 0);
+    const total = (function count(n){ return n.children.reduce((a, c) => a + count(c), 1); })(sup) - 1;
+    const onLin = state.lineage && state.lineage.has(sup.id);
+    const lane = document.createElement("div");
+    lane.className = "lane" + (onLin ? " is-lineage" : "");
+    lane.innerHTML = `
+      <div class="lanehead" data-id="${esc(sup.id)}">
+        <span class="av">${esc(initials(sup))}</span>
+        <span>
+          <b dir="auto">${esc(nameOf(sup))}</b>
+          <small dir="auto">${esc(titleOf(sup))} · ${esc(sup.id)}</small>
+        </span>
+        <span class="shiftpill" dir="auto">${esc(postOf(sup))}</span>
+        <span class="tag">${total} ${esc(T("under"))}</span>
+        ${state.edit ? `<button class="editbtn" style="position:static;display:grid" title="${esc(T("pickTitle"))}">✎</button>` : ""}
+      </div>
+      <div class="lanebody">
+        ${posts.map(pl => `
+          <div class="post">
+            <div class="posthead${state.lineage && state.lineage.has(pl.id) ? " is-lineage" : ""}" data-id="${esc(pl.id)}">
+              <span class="av">${esc(initials(pl))}</span>
+              <span style="min-width:0"><b dir="auto">${esc(nameOf(pl))}</b><small dir="auto">${esc(titleOf(pl))} · ${esc(postOf(pl))}</small></span>
+              <span class="n">${pl.children.length}</span>
+            </div>
+            <div class="postbody">${chipsFor(pl.children.map(c => byId(c.id)))}</div>
+          </div>`).join("")}
+        ${loose.length ? `<div class="post"><div class="posthead"><span class="av">·</span><span><b>${esc(T("directs"))}</b><small>${esc(nameOf(sup))}</small></span><span class="n">${loose.length}</span></div>
+          <div class="postbody">${chipsFor(loose.map(c => byId(c.id)))}</div></div>` : ""}
+      </div>`;
+    lane.querySelectorAll("[data-id]").forEach(el => {
+      el.addEventListener("click", e => {
+        e.stopPropagation();
+        const id = el.dataset.id;
+        if (e.target.closest(".editbtn") || (state.edit && el.classList.contains("chip"))){ openPicker(id); return; }
+        state.lineage = (state.lineage && state.lineage.has(id)) ? null : new Set([id, ...supChainOf(id).map(s => s.id)]);
+        render();
+      });
+      if (state.edit) makeDraggable(el, el.dataset.id);
+    });
+    host.appendChild(lane);
+  };
+
+  for (const root of roots){
+    // the unit head sits in its own compact lane, then one lane per direct
+    const head = document.createElement("div");
+    head.className = "lane";
+    const directs = root.children;
+    head.innerHTML = `
+      <div class="lanehead" data-id="${esc(root.id)}">
+        <span class="av">${esc(initials(root))}</span>
+        <span><b dir="auto">${esc(nameOf(root))}</b><small dir="auto">${esc(titleOf(root))} · ${esc(root.id)}</small></span>
+        <span class="shiftpill">${esc(T("unitHead"))}</span>
+        <span class="tag">${directs.length} ${esc(T("directsShort"))}</span>
+        ${state.edit ? `<button class="editbtn" style="position:static;display:grid" title="${esc(T("pickTitle"))}">✎</button>` : ""}
+      </div>`;
+    head.querySelector(".lanehead").addEventListener("click", e => {
+      if (e.target.closest(".editbtn")){ e.stopPropagation(); openPicker(root.id); return; }
+      state.lineage = (state.lineage && state.lineage.has(root.id)) ? null : new Set([root.id]);
+      render();
+    });
+    host.appendChild(head);
+    directs.forEach(d => d.children.length ? laneFor(d, 1) : null);
+    const soloDirects = directs.filter(d => !d.children.length);
+    if (soloDirects.length){
+      const lane = document.createElement("div");
+      lane.className = "lane";
+      lane.innerHTML = `<div class="lanebody" style="grid-template-columns:1fr"><div class="post">
+        <div class="posthead"><span class="av">·</span><span><b>${esc(T("directs"))}</b><small dir="auto">${esc(nameOf(root))}</small></span><span class="n">${soloDirects.length}</span></div>
+        <div class="postbody" style="flex-direction:row;flex-wrap:wrap">${chipsFor(soloDirects.map(c => byId(c.id)))}</div></div></div>`;
+      lane.querySelectorAll(".chip").forEach(ch => {
+        ch.addEventListener("click", () => { if (state.edit) openPicker(ch.dataset.id); });
+        if (state.edit) makeDraggable(ch, ch.dataset.id);
+      });
+      host.appendChild(lane);
+    }
+  }
+  const orphans = inUnit().filter(p => !p.supervisor_id && p.rank !== "head" && p.rank !== "admin");
+  if (orphans.length){
+    const g = document.createElement("div");
+    g.className = "orphanbar";
+    g.style.position = "static";
+    g.innerHTML = `<b>▲ ${esc(T("orphanTitle", {n:orphans.length}))}</b><small>${esc(T("orphanBody"))}</small>
+      <span class="chips">${chipsFor(orphans)}</span>`;
+    g.querySelectorAll(".chip").forEach(ch => {
+      ch.addEventListener("click", () => openPicker(ch.dataset.id));
+      if (state.edit) makeDraggable(ch, ch.dataset.id);
+    });
+    host.appendChild(g);
+  }
+  renderToolbar(roots, {levels:new Array(deepest + 1)});
+}
+
+function squadTile(n){
+  const c = n.members ? (n.members.length <= 4 ? 2 : n.members.length <= 12 ? 3 : 4) : 3;
+  const el = document.createElement("div");
+  el.className = "squad";
+  el.style.setProperty("--cols", c);
+  el.innerHTML = `<div class="sh"><b>${esc(T("squad"))}</b><span class="n">${n.members.length}</span></div>
+    <div class="grid">${n.members.map(m => {
+      const lin = state.lineage && state.lineage.has(m.id);
+      const orphan = !m.supervisor_id;
+      return `<span class="chip${lin ? " is-lineage" : ""}${orphan ? " flag" : ""}" data-id="${esc(m.id)}" title="${esc(nameOf(m))} · ${esc(m.id)}">
+        <span class="cid">${esc(m.id.replace("G-",""))}</span><span class="cn" dir="auto">${esc(nameOf(m))}</span></span>`;
+    }).join("")}</div>`;
+  el.querySelectorAll(".chip").forEach(ch => {
+    ch.addEventListener("click", e => {
+      e.stopPropagation();
+      const id = ch.dataset.id;
+      if (state.edit) { openPicker(id); return; }
+      state.lineage = (state.lineage && state.lineage.has(id)) ? null : new Set([id, ...supChainOf(id).map(s => s.id)]);
+      render();
+    });
+    if (state.edit) makeDraggable(ch, ch.dataset.id);
+  });
+  return el;
+}
+
+/* ---- shared painter ------------------------------------------------ */
+const TIER_ORDER = ["Command","Supervision","Post lead","Guards"];
+let lastModel = null;
+function paint(model, withBands){
+  const canvas = document.getElementById("canvas");
+  const connLayer = document.getElementById("connLayer");
+  const nodeLayer = document.getElementById("nodeLayer");
+  const bands = document.getElementById("bands");
+  const W = Math.max(model.width, 600);
+  canvas.style.width = W + "px";
+  canvas.style.height = Math.max(model.height, 320) + "px";
+  const mx = x => RTL ? (W - x) : x;   // mirror the tree for RTL
+  // remember the painted geometry so "center to manager" can jump to a card
+  lastModel = {...model, paintW:W, rtl:RTL};
+
+  bands.innerHTML = "";
+  if (withBands){
+    model.levels.forEach((L, i) => {
+      const b = document.createElement("div");
+      b.className = "band" + (i % 2 ? " alt" : "");
+      b.style.width = W + "px";
+      b.style.height = (L.h + LEVEL_GAP) + "px";
+      b.style.transform = `translate(0px, ${L.y - LEVEL_GAP/2}px)`;
+      bands.appendChild(b);
+      const lbl = document.createElement("div");
+      lbl.className = "bandlbl";
+      const tier = model.nodes.find(n => n.level === L.level)?.node.tier;
+      lbl.textContent = (RTL
+        ? {Command:"القيادة", Supervision:"الإشراف", "Post lead":"رؤساء النقاط", Guards:"الأفراد"}[tier] || ""
+        : tier || "");
+      lbl.style.transform = `translate(0px, ${L.y - LEVEL_GAP/2 + 6}px)`;
+      bands.appendChild(lbl);
+    });
+  }
+
+  connLayer.innerHTML = "";
+  for (const l of model.links){
+    const lin = state.lineage && state.lineage.has(l.id) && state.lineage.has(l.parentId);
+    const t = lin ? LINE_W_LIN : LINE_W;          // traced line is thicker
+    const px = mx(l.px), cx = mx(l.cx);
+    // parent stem · horizontal bus · child stem — the three <div> segments,
+    // overlapped by t/2 at the corners so the elbow has no notch.
+    connLayer.appendChild(segEl(px - t/2, l.py, t, STEM + t/2, lin, true));
+    const hx = Math.min(px, cx) - t/2, hw = Math.abs(cx - px) + t;
+    if (hw > t) connLayer.appendChild(segEl(hx, l.py + STEM - t/2, hw, t, lin, false));
+    connLayer.appendChild(segEl(cx - t/2, l.py + STEM - t/2, t, l.cy - l.py - STEM + t/2, lin, true));
+  }
+
+  nodeLayer.innerHTML = "";
+  nodeLayer.classList.toggle("tracing", !!state.lineage);
+  const q = state.search.trim().toLowerCase();
+  for (const n of model.nodes){
+    const item = document.createElement("div");
+    item.className = "item";
+    item.setAttribute("role", "treeitem");
+    item.setAttribute("aria-level", n.level + 1);
+    item.tabIndex = 0;
+    item.style.width = n.w + "px";
+    item.style.height = n.h + "px";
+    item.style.transform = `translate(${RTL ? (W - n.x - n.w) : n.x}px, ${n.y}px)`;
+
+    if (n.node.squad){ item.appendChild(squadTile(n.node)); }
+    else {
+      const card = personCard(n);
+      if (q){
+        const p = n.node;
+        const hit = p.id.toLowerCase().includes(q) || nameOf(p).toLowerCase().includes(q) ||
+                    (p.duty_post || "").toLowerCase().includes(q);
+        card.style.opacity = hit ? "1" : ".22";
+        if (hit) card.style.borderColor = "#7fd4ad";
+      }
+      item.appendChild(card);
+      if (n.hasChildren){
+        const pip = document.createElement("button");
+        pip.className = "pip";
+        pip.textContent = n.expanded ? "−" : "+" ;
+        pip.title = n.expanded ? "Collapse" : "Expand";
+        pip.onclick = e => {
+          e.stopPropagation();
+          state.collapsed.has(n.node.id) ? state.collapsed.delete(n.node.id) : state.collapsed.add(n.node.id);
+          render();
+        };
+        item.appendChild(pip);
+      }
+    }
+    nodeLayer.appendChild(item);
+  }
+  applyTransform();
+}
+
+function orphanBar(){
+  const orphans = inUnit().filter(p => !p.supervisor_id && p.rank !== "head" && p.rank !== "admin");
+  if (!orphans.length) return;
+  const vp = document.getElementById("viewport");
+  const bar = document.createElement("div");
+  bar.className = "orphanbar";
+  bar.innerHTML = `<b>▲ ${esc(T("orphanTitle", {n:orphans.length}))}</b><small>${esc(T("orphanBody"))}</small>
+    <span class="chips">${orphans.map(o => `<span class="chip flag" data-id="${esc(o.id)}"><span class="cid">${esc(o.id.replace("G-",""))}</span><span class="cn" dir="auto">${esc(nameOf(o))}</span></span>`).join("")}</span>`;
+  bar.querySelectorAll(".chip").forEach(ch => {
+    ch.addEventListener("click", e => { e.stopPropagation(); openPicker(ch.dataset.id); });
+    if (state.edit) makeDraggable(ch, ch.dataset.id);
+  });
+  vp.appendChild(bar);
+}
+
+/* ---- V4: split explorer -------------------------------------------- */
+function renderSplit(){
+  const roots = buildTree(inUnit());
+  stage.innerHTML = `<div class="split"><div class="outline" id="outline"></div><div class="dossier" id="dossier"></div></div>`;
+  const outline = document.getElementById("outline");
+  const q = state.search.trim().toLowerCase();
+  const rows = [];
+  const walk = (n, d) => {
+    rows.push({n, d});
+    if (!state.collapsed.has(n.id)) n.children.forEach(c => walk(c, d + 1));
+  };
+  roots.forEach(r => walk(r, 0));
+  if (!state.selected && rows.length) state.selected = rows[0].n.id;
+
+  for (const {n, d} of rows){
+    const p = byId(n.id);
+    const hit = !q || p.id.toLowerCase().includes(q) || nameOf(p).toLowerCase().includes(q) || (p.duty_post||"").toLowerCase().includes(q);
+    const row = document.createElement("div");
+    row.className = "orow" + (state.selected === n.id ? " sel" : "");
+    row.style.paddingInlineStart = (8 + d * 18) + "px";
+    row.style.opacity = hit ? "1" : ".3";
+    const kids = directsOf(p.id).length;
+    row.innerHTML =
+      `<span class="tw">${kids ? (state.collapsed.has(n.id) ? "▸" : "▾") : "·"}</span>` +
+      `<span class="oav">${esc(initials(p))}</span>` +
+      `<span class="onm" dir="auto">${esc(nameOf(p))}</span>` +
+      `<span class="oti" dir="auto">— ${esc(titleOf(p))}</span>` +
+      (kids ? `<span class="oid">${kids}</span>` : `<span class="oid">${esc(p.id)}</span>`);
+    row.onclick = e => {
+      if (e.target.closest(".tw") && kids){
+        state.collapsed.has(n.id) ? state.collapsed.delete(n.id) : state.collapsed.add(n.id);
+      } else { state.selected = n.id; }
+      render();
+    };
+    if (state.edit) makeDraggable(row, p.id);
+    outline.appendChild(row);
+  }
+  renderDossier();
+  renderToolbar(roots, {levels:new Array(1 + Math.max(0, ...rows.map(r => r.d)))});
+}
+
+function renderDossier(){
+  const el = document.getElementById("dossier");
+  const p = byId(state.selected);
+  if (!p){ el.innerHTML = ""; return; }
+  const chain = supChainOf(p.id);
+  const directs = directsOf(p.id);
+  el.innerHTML = `
+    <div class="dhead">
+      <div class="bigav">${esc(initials(p))}</div>
+      <div>
+        <h3 dir="auto">${esc(nameOf(p))}</h3>
+        <p dir="auto">${esc(titleOf(p))} · <span class="mono">${esc(p.id)}</span></p>
+        <div class="pillrow">
+          <span class="pill p" dir="auto">${esc(T("unit"))}: ${esc(p.duty_unit)}</span>
+          <span class="pill" dir="auto">${esc(T("post"))}: ${esc(postOf(p))}</span>
+          <span class="pill s">${esc(T("status"))}</span>
+          ${!p.supervisor_id && p.rank !== "head" && p.rank !== "admin" ? `<span class="pill a">▲ ${esc(T("unlinked", {n:1}))}</span>` : ""}
+        </div>
+      </div>
+      <span class="spacer" style="flex:1"></span>
+      ${state.edit ? `<button class="btn pri" id="dchange">✎ ${esc(T("pickTitle"))}</button>` : `<span class="readonly-note">👁 ${esc(T("readonly"))}</span>`}
+    </div>
+
+    <div class="sect">
+      <h4>${esc(T("chain"))}</h4>
+      <div class="chain">
+        ${chain.slice().reverse().map(s => `
+          <div class="chainrow"><span class="av">${esc(initials(s))}</span><div><b dir="auto">${esc(nameOf(s))}</b> <small dir="auto">— ${esc(titleOf(s))}</small></div><span class="oid mono" style="margin-inline-start:auto">${esc(s.id)}</span></div>
+          <div class="chainlink"></div>`).join("")}
+        <div class="chainrow" style="border-color:var(--accent);background:var(--accent-soft)">
+          <span class="av" style="background:var(--accent);color:#fff">${esc(initials(p))}</span>
+          <div><b dir="auto">${esc(nameOf(p))}</b> <small dir="auto">— ${esc(titleOf(p))}</small></div>
+        </div>
+      </div>
+      ${chain.length === 0 ? `<p class="emptyline" style="margin-top:8px">${esc(T("pickNone"))}</p>` : ""}
+    </div>
+
+    <div class="sect">
+      <h4>${esc(T("directs"))} <span class="mono">(${directs.length})</span></h4>
+      ${directs.length ? `<div class="reports">${directs.map(d => `
+        <div class="rcard" data-id="${esc(d.id)}">
+          <span class="av">${esc(initials(d))}</span>
+          <span class="m"><b dir="auto">${esc(nameOf(d))}</b><small dir="auto">${esc(titleOf(d))} · ${esc(postOf(d))}</small></span>
+          <span class="cnt">${directsOf(d.id).length || ""}</span>
+        </div>`).join("")}</div>` : `<p class="emptyline">${esc(T("noReports"))}</p>`}
+    </div>`;
+  el.querySelectorAll(".rcard").forEach(c => c.onclick = () => { state.selected = c.dataset.id; render(); });
+  const b = document.getElementById("dchange");
+  if (b) b.onclick = () => openPicker(p.id);
+}
+
+/* ==================================================================
+   Supervisor picker — an ANCHORED, NON-MODAL popover.
+
+   Two reasons it is not a centred dialog with a scrim:
+   1. Fullscreen: only the fullscreen element's subtree renders, so anything
+      appended to <body> is invisible. Overlays mount into overlayHost().
+   2. Re-linking is a judgement call made FROM the chart — dimming the chart
+      behind a modal hides the very tree you are reading. The popover sits
+      beside the card, the chart stays visible and interactive.
+================================================================== */
+function overlayHost(){
+  return document.fullscreenElement || document.body;
+}
+
+let openPop = null;
+function closePicker(){
+  if (!openPop) return;
+  openPop.remove();
+  openPop = null;
+  document.removeEventListener("pointerdown", onDocDown, true);
+  document.removeEventListener("keydown", onPopKey, true);
+}
+function onDocDown(e){
+  if (openPop && !openPop.contains(e.target) && !e.target.closest(".editbtn")) closePicker();
+}
+function onPopKey(e){ if (e.key === "Escape") closePicker(); }
+
+function openPicker(empId, anchorEl){
+  closePicker();
+  const emp = byId(empId);
+  const anchor = anchorEl || document.querySelector(`[data-id="${empId}"]`);
+
+  const pop = document.createElement("div");
+  pop.className = "pop";
+  pop.setAttribute("role", "dialog");
+  pop.innerHTML = `
+    <header>
+      <b>${esc(T("pickTitle"))}</b>
+      <button class="popx" title="${esc(T("cancel"))}">✕</button>
+      <small dir="auto">${esc(T("pickSub", {name:nameOf(emp)}))}</small>
+    </header>
+    <div class="cur"><span>${esc(T("pickCurrent"))}</span>
+      <b dir="auto">${emp.supervisor_id ? esc(nameOf(byId(emp.supervisor_id))) : esc(T("pickNone"))}</b></div>
+    <div class="field"><input id="pq" placeholder="${esc(T("pickPh"))}"></div>
+    <div class="list" id="plist"></div>`;
+  overlayHost().appendChild(pop);
+  openPop = pop;
+
+  // Placement order: BELOW the card first. The tree is top-anchored, so the
+  // canvas under it is empty — the popover lands on nothing instead of
+  // covering sibling cards. Then above, then beside; always clamped.
+  //
+  // Bounds are the CHART STAGE, not the window: windowed, a window-bounded
+  // popover flips up over the page header and tab strip. It must stay on the
+  // canvas it belongs to.
+  const place = () => {
+    const stageEl = document.getElementById("viewport") || overlayHost();
+    const hb = stageEl.getBoundingClientRect();
+    const r = anchor
+      ? anchor.getBoundingClientRect()
+      : {left:hb.left + 40, top:hb.top + 40, right:hb.left + 240, bottom:hb.top + 100};
+    const w = pop.offsetWidth, GAP = 12, MIN_H = 210;
+
+    // The empty canvas is under the WHOLE TREE, not under the card — a card's
+    // "below" is exactly where its children sit. So aim for the tree's
+    // footprint, and if the gap there is short, SHRINK the popover into it
+    // rather than flipping back over the cards.
+    let treeBottom = hb.top;
+    for (const it of document.querySelectorAll("#nodeLayer .item")){
+      treeBottom = Math.max(treeBottom, it.getBoundingClientRect().bottom);
+    }
+    const gapUnderTree = (hb.bottom - 10) - (treeBottom + GAP);
+    pop.style.maxHeight = gapUnderTree >= MIN_H ? Math.floor(gapUnderTree) + "px" : "";
+    const h = pop.offsetHeight;
+
+    let y;
+    if (treeBottom + GAP + h <= hb.bottom - 10)    y = treeBottom + GAP;   // under the tree
+    else if (r.bottom + GAP + h <= hb.bottom - 10) y = r.bottom + GAP;     // below the card
+    else if (r.top - GAP - h >= hb.top + 10)       y = r.top - GAP - h;    // above it
+    else y = Math.max(hb.top + 10, Math.min(r.top, hb.bottom - h - 10));   // beside it
+
+    // horizontally: hug the card's start edge, clamp inside the host
+    let x = r.left;
+    if (x + w > hb.right - 10) x = hb.right - w - 10;
+    if (x < hb.left + 10) x = hb.left + 10;
+
+    pop.style.left = Math.round(x) + "px";
+    pop.style.top  = Math.round(y) + "px";
+  };
+
+  const list = pop.querySelector("#plist");
+  const draw = q => {
+    const ql = q.trim().toLowerCase();
+    const cands = inUnit().filter(p =>
+      p.id !== emp.id &&
+      (!ql || p.id.toLowerCase().includes(ql) || nameOf(p).toLowerCase().includes(ql) || (p.duty_post||"").toLowerCase().includes(ql))
+    ).sort((a,b) => (RANK_WEIGHT[b.rank]||20) - (RANK_WEIGHT[a.rank]||20));
+    list.innerHTML = `<button class="opt root" data-id=""><span class="av">⌾</span>
+      <span class="m"><b>${esc(T("pickNone"))}</b></span></button>` +
+      cands.map(p => {
+        const bad = isBelow(p.id, emp.id);
+        return `<button class="opt${bad ? " bad" : ""}" data-id="${esc(p.id)}" ${bad ? "disabled" : ""}>
+          <span class="av">${esc(initials(p))}</span>
+          <span class="m"><b dir="auto">${esc(nameOf(p))}</b><small dir="auto">${esc(titleOf(p))} · ${esc(postOf(p))}</small></span>
+          <span class="tag">${esc(p.id)}${directsOf(p.id).length ? " · " + directsOf(p.id).length : ""}</span></button>`;
+      }).join("");
+    list.querySelectorAll(".opt").forEach(o => o.onclick = ev => {
+      ev.stopPropagation();
+      if (o.disabled) return;
+      const target = o.dataset.id || null;
+      closePicker();
+      relink(emp.id, target);
+    });
+  };
+  draw("");
+  place();
+  pop.querySelector("#pq").addEventListener("input", e => { draw(e.target.value); });
+  pop.querySelector(".popx").onclick = closePicker;
+  // the popover must never pan or zoom the chart under it
+  pop.addEventListener("pointerdown", e => e.stopPropagation());
+  pop.addEventListener("wheel", e => e.stopPropagation(), {passive:true});
+  pop.addEventListener("click", e => e.stopPropagation());
+  document.addEventListener("pointerdown", onDocDown, true);
+  document.addEventListener("keydown", onPopKey, true);
+  setTimeout(() => pop.querySelector("#pq").focus(), 20);
+}
+
+/* ==================================================================
+   Drag-to-reparent (edit mode)
+================================================================== */
+function makeDraggable(el, empId){
+  el.addEventListener("pointerdown", e => {
+    if (e.target.closest(".pip") || e.target.closest(".editbtn")) return;
+    if (!state.edit) return;
+    e.stopPropagation();
+    const startX = e.clientX, startY = e.clientY;
+    let ghost = null, lastTarget = null;
+    const emp = byId(empId);
+
+    const move = ev => {
+      if (!ghost && Math.hypot(ev.clientX - startX, ev.clientY - startY) < 6) return;
+      if (!ghost){
+        ghost = document.createElement("div");
+        ghost.className = "ghost";
+        ghost.innerHTML = `<div class="pcard" style="width:var(--node-w);height:var(--node-h)">
+          <div class="row"><span class="av">${esc(initials(emp))}</span>
+            <div class="who"><p class="nm" dir="auto">${esc(nameOf(emp))}</p><p class="ti" dir="auto">${esc(titleOf(emp))}</p></div></div>
+          <div class="foot"><span class="idchip">${esc(emp.id)}</span></div></div>`;
+        overlayHost().appendChild(ghost);   // survives fullscreen
+        el.classList.add("dragging");
+      }
+      ghost.style.left = ev.clientX + "px";
+      ghost.style.top = ev.clientY + "px";
+      ghost.style.display = "none";
+      const under = document.elementFromPoint(ev.clientX, ev.clientY);
+      ghost.style.display = "";
+      const card = under && (under.closest(".pcard[data-id]") || under.closest(".orow") || under.closest(".rcard"));
+      if (lastTarget && lastTarget !== card) lastTarget.classList.remove("is-drop", "is-nodrop");
+      if (card){
+        const tid = card.dataset.id || card.querySelector?.(".oid")?.textContent;
+        const target = card.dataset.id ? byId(card.dataset.id) : null;
+        if (target && target.id !== emp.id){
+          card.classList.add(isBelow(target.id, emp.id) ? "is-nodrop" : "is-drop");
+        }
+      }
+      lastTarget = card;
+    };
+    const up = ev => {
+      window.removeEventListener("pointermove", move);
+      window.removeEventListener("pointerup", up);
+      el.classList.remove("dragging");
+      if (ghost){
+        ghost.style.display = "none";
+        const under = document.elementFromPoint(ev.clientX, ev.clientY);
+        ghost.remove();
+        const card = under && (under.closest("[data-id]"));
+        const tid = card?.dataset?.id;
+        if (tid && tid !== emp.id){
+          if (isBelow(tid, emp.id)) toast(T("cycle", {name:nameOf(byId(tid)), other:nameOf(emp)}));
+          else relink(emp.id, tid);
+        }
+      }
+      if (lastTarget) lastTarget.classList.remove("is-drop", "is-nodrop");
+    };
+    window.addEventListener("pointermove", move);
+    window.addEventListener("pointerup", up);
+  });
+}
+
+/* ==================================================================
+   Pan / zoom
+================================================================== */
+function applyTransform(){
+  const c = document.getElementById("canvas");
+  if (c) c.style.transform = `translate(${state.tx}px, ${state.ty}px) scale(${state.scale})`;
+}
+/* Fit-to-width. At real density (61 in one company) a full-depth tree is
+   ~11k px wide, so "reset" must fit, never snap to 100%. */
+function resetView(){
+  const vp = document.getElementById("viewport");
+  const c = document.getElementById("canvas");
+  if (!vp || !c) return;
+  const cw = parseFloat(c.style.width) || 0;
+  const ch = parseFloat(c.style.height) || 0;
+  const fitW = (vp.clientWidth - 40) / Math.max(cw, 1);
+  const fitH = (vp.clientHeight - 40) / Math.max(ch, 1);
+  state.scale = Math.max(0.16, Math.min(1, fitW, fitH));
+  state.tx = Math.max(20, (vp.clientWidth - cw * state.scale) / 2);
+  // clear the "not linked yet" banner when it is present
+  state.ty = vp.querySelector(".orphanbar") ? 74 : 20;
+  applyTransform();
+}
+function wireViewport(){
+  const vp = document.getElementById("viewport");
+  vp.addEventListener("wheel", e => {
+    e.preventDefault();
+    const r = vp.getBoundingClientRect();
+    const mx = e.clientX - r.left, my = e.clientY - r.top;
+    const f = e.deltaY < 0 ? 1.1 : 1/1.1;
+    const ns = Math.min(2.2, Math.max(0.25, state.scale * f));
+    state.tx = mx - (mx - state.tx) * (ns / state.scale);
+    state.ty = my - (my - state.ty) * (ns / state.scale);
+    state.scale = ns; applyTransform();
+  }, {passive:false});
+  let dragging = false, sx = 0, sy = 0;
+  vp.addEventListener("pointerdown", e => {
+    if (e.target.closest(".pcard") || e.target.closest(".squad") || e.target.closest(".orphanbar")) return;
+    dragging = true; sx = e.clientX - state.tx; sy = e.clientY - state.ty;
+    vp.classList.add("panning");
+  });
+  window.addEventListener("pointermove", e => {
+    if (!dragging) return;
+    state.tx = e.clientX - sx; state.ty = e.clientY - sy; applyTransform();
+  });
+  window.addEventListener("pointerup", () => { dragging = false; vp.classList.remove("panning"); });
+  vp.addEventListener("click", e => {
+    if (e.target.closest(".pcard") || e.target.closest(".chip")) return;
+    if (state.lineage){ state.lineage = null; render(); }
+  });
+  document.getElementById("zin").onclick = () => { state.scale = Math.min(2.2, state.scale*1.15); applyTransform(); };
+  document.getElementById("zout").onclick = () => { state.scale = Math.max(0.25, state.scale/1.15); applyTransform(); };
+  document.getElementById("zfit").onclick = resetView;
+  document.getElementById("zmgr").onclick = centerOnManager;
+  document.getElementById("zfull").onclick = toggleFullscreen;
+  const full = document.getElementById("zfull");
+  full.classList.toggle("on", !!document.fullscreenElement);
+}
+
+/* Centre the manager in view: the supervisor of the traced/last-touched card,
+   else the head of whatever is currently scoped. Zoom is left alone — this is
+   a "take me to my manager" jump, not a zoom reset. */
+function centerOnManager(){
+  if (!lastModel || !lastModel.nodes.length) return;
+  let targetId = null;
+  if (state.lineage){
+    // the traced set is {person, …ancestors}: the manager is the person's parent
+    const traced = [...state.lineage];
+    const person = traced[0];
+    targetId = byId(person)?.supervisor_id || person;
+  }
+  if (!targetId) targetId = lastModel.nodes[0].node.id;
+  const n = lastModel.nodes.find(m => m.node.id === targetId) || lastModel.nodes[0];
+  const vp = document.getElementById("viewport");
+  const x = (lastModel.rtl ? (lastModel.paintW - n.x - n.w) : n.x) + n.w/2;
+  const y = n.y + n.h/2;
+  // readable on arrival, and parked at 26% height so the reports below it stay
+  // on screen rather than the manager sitting dead-centre over empty canvas
+  state.scale = Math.max(state.scale, 0.9);
+  state.tx = vp.clientWidth/2 - x * state.scale;
+  state.ty = vp.clientHeight * 0.26 - y * state.scale;
+  applyTransform();
+  const el = document.querySelector(`.pcard[data-id="${targetId}"]`);
+  if (el){
+    el.animate(
+      [{boxShadow:"0 0 0 0 rgba(200,16,46,.55)"}, {boxShadow:"0 0 0 12px rgba(200,16,46,0)"}],
+      {duration:620, easing:"cubic-bezier(.16,1,.3,1)"},
+    );
+  }
+}
+
+function toggleFullscreen(){
+  const host = document.querySelector(".card");   // rail + chart, not just the pane
+  if (document.fullscreenElement) void document.exitFullscreen();
+  else void host.requestFullscreen?.();
+}
+document.addEventListener("fullscreenchange", () => {
+  const full = document.getElementById("zfull");
+  if (full) full.classList.toggle("on", !!document.fullscreenElement);
+  closePicker();               // its anchor and host both just moved
+  setTimeout(resetView, 60);   // the pane resizes after the event
+});
+
+/* ==================================================================
+   Render root
+================================================================== */
+let firstPaint = true;
+function render(){
+  closePicker();               // the anchor card is about to be replaced
+  renderRail();
+  document.body.classList.toggle("editmode", state.edit);
+  const keep = {tx:state.tx, ty:state.ty, scale:state.scale};
+  if (V === 4) renderSplit();
+  else if (V === 3) renderLanes();
+  else if (V === 2) renderVertical();
+  else renderChart(false);
+  renderCrumbs();
+  if (V === 1){
+    if (firstPaint){ resetView(); firstPaint = false; }
+    else { state.tx = keep.tx; state.ty = keep.ty; state.scale = keep.scale; applyTransform(); }
+  }
+}
+document.getElementById("search").addEventListener("input", e => { state.search = e.target.value; render(); });
+render();
+window.addEventListener("resize", () => { if (state.scale === 1) resetView(); });
+</script>
+</body>
+</html>

@@ -1,0 +1,418 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>GSSG — Mobile bottom nav redesign variants</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@500;600&display=swap');
+
+  :root{
+    --bg:#f5f4f1; --surface:#ffffff; --surface-raised:#fafaf6; --surface-tinted:#f0eee8;
+    --primary:#0d2845; --primary-hover:#1d3a5e; --primary-soft:#e8edf3;
+    --accent:#c8102e; --accent-soft:#fbe5e8;
+    --text:#1c1f24; --muted:#5a6068; --faint:#8b9098;
+    --border:#e6e4dd; --border-strong:#d4d1c8; --hairline:#efece5;
+    --hero-grad:linear-gradient(135deg,#0a1f3a 0%,#0d2845 50%,#1d3a5e 100%);
+    --mono:"IBM Plex Mono",ui-monospace,Consolas,monospace;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{background:#e9e7e2}
+  body{font-family:Inter,system-ui,sans-serif;color:var(--text);padding:40px 48px 72px}
+  ::selection{background:var(--primary);color:#fff}
+
+  /* ---------- gallery chrome ---------- */
+  .gal-head{max-width:1280px;margin:0 auto 30px}
+  .gal-head h1{font-size:26px;font-weight:800;letter-spacing:-.02em;color:var(--primary)}
+  .gal-head p{margin-top:6px;color:var(--muted);font-size:14px;max-width:78ch;line-height:1.55}
+  .gal-head p b{color:var(--text)}
+  .grid{max-width:1280px;margin:0 auto;display:grid;grid-template-columns:repeat(3,1fr);gap:34px 26px}
+  .cell{display:flex;flex-direction:column;align-items:center;gap:14px}
+  .plate{width:100%;max-width:360px}
+  .plate h2{font-size:15px;font-weight:700;letter-spacing:-.01em;display:flex;align-items:baseline;gap:8px}
+  .plate h2 .k{font-family:var(--mono);font-size:11px;font-weight:600;color:#fff;background:var(--primary);border-radius:6px;padding:2px 7px}
+  .plate h2 .k.bad{background:var(--accent)}
+  .plate .why{margin-top:5px;font-size:12.5px;line-height:1.5;color:var(--muted)}
+  .plate .fix{margin-top:5px;font-size:11.5px;line-height:1.45;color:var(--primary);font-weight:600}
+
+  /* ---------- phone frame (simulates the physical device) ---------- */
+  .phone{position:relative;width:390px;height:844px;flex:none}
+  .phone .device{position:absolute;inset:-13px;border-radius:64px;background:#0b0d12;
+    box-shadow:0 22px 60px rgba(10,20,35,.35),inset 0 0 0 2px #2a2e36}
+  .phone .screen{position:absolute;inset:0;border-radius:52px;overflow:hidden;background:var(--bg)}
+  .phone .island{position:absolute;top:11px;left:50%;transform:translateX(-50%);width:122px;height:34px;border-radius:20px;background:#0b0d12;z-index:60}
+  .phone .homebar{position:absolute;bottom:8px;left:50%;transform:translateX(-50%);width:139px;height:5px;border-radius:3px;background:rgba(10,13,18,.88);z-index:70}
+  .statusbar{position:absolute;top:0;left:0;right:0;height:54px;display:flex;align-items:flex-end;justify-content:space-between;
+    padding:0 34px 6px;z-index:50;pointer-events:none}
+  .statusbar .time{font-size:15px;font-weight:700;letter-spacing:.01em}
+  .statusbar svg{display:block}
+
+  /* ---------- app replica ---------- */
+  .app{position:absolute;inset:0;display:flex;flex-direction:column;padding-top:54px}
+  .topbar{display:flex;align-items:center;gap:12px;background:var(--surface);border-bottom:1px solid var(--border);padding:10px 16px;flex:none}
+  .topbar .burger{width:44px;height:44px;display:grid;place-items:center;border-radius:10px;color:var(--text)}
+  .topbar img{width:32px;height:32px;border-radius:50%;object-fit:cover;box-shadow:0 0 0 1px var(--border)}
+  .topbar .brand{font-size:16.5px;font-weight:700;letter-spacing:-.01em;color:var(--primary)}
+  .topbar .spacer{margin-inline-start:auto;display:flex;align-items:center;gap:10px;color:var(--muted)}
+  .topbar .avatar{width:30px;height:30px;border-radius:50%;background:var(--primary-soft);color:var(--primary);
+    display:grid;place-items:center;font-size:12px;font-weight:700}
+
+  .content{flex:1;overflow:hidden;padding:18px 16px 0;display:flex;flex-direction:column;gap:14px}
+  .content h3{font-size:22px;font-weight:800;letter-spacing:-.02em}
+  .content .sub{color:var(--muted);font-size:13px;margin-top:2px}
+  .hero{background:var(--hero-grad);border-radius:16px;padding:16px;color:#fff;position:relative;overflow:hidden;flex:none}
+  .hero::after{content:"";position:absolute;inset-inline-end:-30px;top:-40px;width:150px;height:150px;border-radius:50%;
+    background:radial-gradient(closest-side,rgba(255,255,255,.14),transparent)}
+  .hero .hi{font-size:15.5px;font-weight:700}
+  .hero .date{font-size:12px;opacity:.75;margin-top:2px;font-family:var(--mono)}
+  .hero .chips{display:flex;gap:8px;margin-top:12px}
+  .hero .chip{background:rgba(255,255,255,.13);border:1px solid rgba(255,255,255,.18);border-radius:10px;padding:7px 10px;flex:1}
+  .hero .chip b{display:block;font-size:16px;font-weight:800;font-family:var(--mono)}
+  .hero .chip span{font-size:10.5px;opacity:.8}
+  .cards{display:grid;grid-template-columns:1fr 1fr;gap:10px;flex:none}
+  .stat{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:12px}
+  .stat b{font-size:20px;font-weight:800;font-family:var(--mono);color:var(--primary)}
+  .stat span{display:block;font-size:11.5px;color:var(--muted);margin-top:2px}
+  .listcard{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:4px 14px;flex:none}
+  .row{display:flex;align-items:center;gap:11px;padding:11px 0;border-bottom:1px solid var(--hairline)}
+  .row:last-child{border-bottom:0}
+  .row .ico{width:32px;height:32px;border-radius:9px;background:var(--primary-soft);color:var(--primary);display:grid;place-items:center;flex:none}
+  .row .t{font-size:13px;font-weight:600;line-height:1.3}
+  .row .s{font-size:11px;color:var(--faint);font-family:var(--mono);margin-top:1px}
+
+  /* ---------- shared tab pieces ---------- */
+  .tab{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;flex:1;min-width:0;
+    color:var(--muted);font-size:11px;font-weight:500;line-height:1.15;text-align:center}
+  .tab svg{flex:none}
+  .tab.on{color:var(--primary);font-weight:600}
+
+  /* ---------- BEFORE: the shipped bar, safe-area = 0 ---------- */
+  .nav-before{position:absolute;left:0;right:0;bottom:0;z-index:40;display:flex;background:var(--surface);border-top:1px solid var(--border)}
+  .nav-before .tab{padding:8px 4px}
+  .callout{position:absolute;z-index:80;font-size:10.5px;font-weight:700;color:#fff;background:var(--accent);
+    padding:4px 8px;border-radius:7px;box-shadow:0 4px 12px rgba(200,16,46,.35);white-space:nowrap}
+  .callout::after{content:"";position:absolute;width:2px;background:var(--accent)}
+  .co-l{left:14px;bottom:96px}.co-l::after{left:12px;top:100%;height:52px}
+  .co-r{right:14px;bottom:96px}.co-r::after{right:12px;top:100%;height:52px}
+  .co-h{left:50%;transform:translateX(-50%);bottom:64px}.co-h::after{left:50%;top:100%;height:34px}
+  .cornercut{position:absolute;z-index:75;width:38px;height:38px;border:2px dashed var(--accent);border-radius:50%;bottom:-8px}
+  .cornercut.l{left:-8px}.cornercut.r{right:-8px}
+
+  /* ---------- V1 anchored ---------- */
+  .nav-v1{position:absolute;left:0;right:0;bottom:0;z-index:40;background:var(--surface);
+    border-top:1px solid var(--hairline);box-shadow:0 -6px 20px rgba(13,40,69,.06);
+    padding-bottom:34px /* env(safe-area-inset-bottom) on iPhone */;display:flex}
+  .nav-v1 .tab{padding:9px 4px 6px;position:relative}
+  .nav-v1 .tab .tile{width:52px;height:30px;border-radius:10px;display:grid;place-items:center}
+  .nav-v1 .tab.on .tile{background:var(--primary-soft)}
+
+  /* ---------- V2 frost dock ---------- */
+  .nav-v2{position:absolute;left:12px;right:12px;bottom:30px /* clears the home indicator */;z-index:40;display:flex;
+    background:rgba(255,255,255,.78);backdrop-filter:blur(18px) saturate(1.5);-webkit-backdrop-filter:blur(18px) saturate(1.5);
+    border:1px solid rgba(230,228,221,.85);border-radius:26px;padding:7px 6px;
+    box-shadow:0 10px 30px rgba(13,40,69,.16),0 2px 6px rgba(13,40,69,.07)}
+  .nav-v2 .tab{gap:2.5px;padding:2px 0;font-size:10.5px}
+  .nav-v2 .tab .puck{width:44px;height:32px;border-radius:14px;display:grid;place-items:center;transition:background .2s}
+  .nav-v2 .tab.on .puck{background:var(--primary);color:#fff;box-shadow:0 4px 10px rgba(13,40,69,.32)}
+  .nav-v2 .tab.on{color:var(--primary)}
+
+  /* ---------- V3 command deck ---------- */
+  .nav-v3{position:absolute;left:12px;right:12px;bottom:30px;z-index:40;display:flex;
+    background:var(--hero-grad);border-radius:26px;padding:7px 6px;
+    box-shadow:0 14px 34px rgba(10,31,58,.42),inset 0 1px 0 rgba(255,255,255,.09)}
+  .nav-v3 .tab{color:rgba(255,255,255,.78);gap:2.5px;padding:2px 0;font-size:10.5px}
+  .nav-v3 .tab .puck{width:44px;height:32px;border-radius:14px;display:grid;place-items:center;position:relative}
+  .nav-v3 .tab.on{color:#fff;font-weight:600}
+  .nav-v3 .tab.on .puck{background:#fff;color:var(--primary);box-shadow:0 5px 14px rgba(0,0,0,.28)}
+  .nav-v3 .tab.on .puck::after{content:"";position:absolute;top:-7px;left:50%;transform:translateX(-50%);
+    width:6px;height:6px;border-radius:50%;background:var(--accent);box-shadow:0 0 10px rgba(200,16,46,.95)}
+
+  /* ---------- V4 signal rail ---------- */
+  .nav-v4{position:absolute;left:0;right:0;bottom:0;z-index:40;background:var(--surface);
+    border-top:1px solid var(--border);padding-bottom:34px;display:flex}
+  .nav-v4 .tab{padding:10px 4px 6px;position:relative}
+  .nav-v4 .tab.on::before{content:"";position:absolute;top:-1px;left:50%;transform:translateX(-50%);
+    width:44px;height:3px;border-radius:0 0 4px 4px;background:var(--accent);box-shadow:0 2px 8px rgba(200,16,46,.45)}
+  .nav-v4 .tab.on svg{transform:translateY(-1px)}
+
+  /* ---------- V5 file-tab tray ---------- */
+  .nav-v5{position:absolute;left:0;right:0;bottom:0;z-index:40;background:#f6f4ef;
+    border-top:1px solid var(--border-strong);padding-bottom:34px;display:flex;
+    box-shadow:inset 0 8px 10px -8px rgba(13,40,69,.24)}
+  .nav-v5 .tab{padding:11px 4px 6px;position:relative;z-index:1}
+  .nav-v5 .tab.on{z-index:2}
+  .nav-v5 .tab.on .folder{position:absolute;top:-19px;left:50%;transform:translateX(-50%);width:76px;height:56px;z-index:-1;
+    filter:drop-shadow(0 -3px 6px rgba(13,40,69,.10))}
+  .nav-v5 .tab.on svg{transform:translateY(-9px)}
+  .nav-v5 .tab.on span{transform:translateY(-5px);color:var(--primary);font-weight:600}
+  .nav-v5 .tab span{display:block}
+
+  /* ---------- V2 behavior: hold-to-customize ---------- */
+  .nav-v2.editing .tab .puck{background:var(--surface-tinted)}
+  .nav-v2.editing .tab:nth-child(odd){transform:rotate(-2.2deg)}
+  .nav-v2.editing .tab:nth-child(even){transform:rotate(2.2deg)}
+  .nav-v2.editing .tab .remove{position:absolute;top:-5px;inset-inline-end:2px;width:16px;height:16px;border-radius:50%;
+    background:var(--text);color:#fff;display:grid;place-items:center;box-shadow:0 2px 5px rgba(0,0,0,.3)}
+  .nav-v2.editing .tab{position:relative}
+  .nav-v2 .tab{position:relative}
+  .badge{position:absolute;top:-4px;inset-inline-end:-7px;min-width:16px;height:16px;border-radius:9px;background:var(--accent);
+    color:#fff;font-size:10px;font-weight:700;display:grid;place-items:center;padding:0 4px;
+    box-shadow:0 1px 4px rgba(200,16,46,.4);font-family:var(--mono)}
+  .backdrop{position:absolute;inset:0;z-index:35;background:rgba(13,40,69,.34);backdrop-filter:blur(2px);-webkit-backdrop-filter:blur(2px)}
+  .sheet{position:absolute;left:0;right:0;bottom:104px;z-index:38;background:var(--surface);border-radius:20px 20px 0 0;
+    box-shadow:0 -12px 40px rgba(13,40,69,.25);padding:14px 16px 18px}
+  .sheet .grab{width:36px;height:4px;border-radius:2px;background:var(--border-strong);margin:0 auto 12px}
+  .sheet h4{font-size:15px;font-weight:700;letter-spacing:-.01em}
+  .sheet .hint{font-size:11.5px;color:var(--muted);margin-top:2px;line-height:1.45}
+  .sheet .sec{font-size:10.5px;font-weight:600;color:var(--faint);text-transform:uppercase;letter-spacing:.07em;margin:14px 0 8px}
+  .lib{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+  .lib .item{border:1px solid var(--border);border-radius:12px;padding:8px 4px 7px;display:flex;flex-direction:column;
+    align-items:center;gap:4px;font-size:10px;font-weight:500;color:var(--muted);text-align:center;position:relative;background:var(--surface)}
+  .lib .item .tile{width:34px;height:34px;border-radius:10px;background:var(--surface-tinted);color:var(--primary);
+    display:grid;place-items:center;position:relative}
+  .lib .item.sig .tile{background:var(--accent-soft);color:var(--accent)}
+  .lib .item .cnt{position:absolute;top:-4px;inset-inline-end:-6px;min-width:15px;height:15px;border-radius:8px;background:var(--accent);
+    color:#fff;font-size:9px;font-weight:700;display:grid;place-items:center;padding:0 3px;font-family:var(--mono)}
+  .lib .item.ghost{border-style:dashed;border-color:var(--border-strong);color:var(--faint)}
+  .lib .item.ghost .tile{background:transparent;border:1.5px dashed var(--border-strong);color:var(--faint)}
+  .sheet .done{position:absolute;top:12px;inset-inline-end:14px;font-size:12.5px;font-weight:700;color:var(--primary);
+    background:var(--primary-soft);border-radius:99px;padding:5px 12px}
+  .holdtip{position:absolute;left:50%;transform:translateX(-50%);bottom:112px;z-index:42;background:var(--text);color:#fff;
+    font-size:11px;font-weight:600;padding:6px 11px;border-radius:9px;white-space:nowrap;box-shadow:0 6px 18px rgba(0,0,0,.3)}
+  .holdtip::after{content:"";position:absolute;top:100%;left:50%;transform:translateX(-50%);
+    border:5px solid transparent;border-top-color:var(--text)}
+
+  /* ---------- single-variant mode ---------- */
+  body.single{display:flex;flex-direction:column;align-items:center;gap:26px;padding:44px 20px 60px}
+  body.single .gal-head{display:none}
+</style>
+</head>
+<body>
+
+<header class="gal-head">
+  <h1>Mobile bottom nav — redesign variants</h1>
+  <p><b>The bug:</b> the app ships without <span style="font-family:var(--mono)">viewport-fit=cover</span>, so
+  <span style="font-family:var(--mono)">env(safe-area-inset-bottom)</span> is 0 on iPhone. The bar sits flush on the physical
+  screen edge: the display's rounded corners slice its far left/right, and the home indicator lands on the tabs.
+  Browser + screenshots hide it because Safari's own chrome pads the bottom. Every variant below fixes it —
+  two geometries: <b>full-bleed</b> (bar extends under the home indicator, corners covered by its own background) or
+  <b>floating</b> (bar inset from the edges, physically can't touch the corners).</p>
+</header>
+
+<div class="grid" id="grid"></div>
+
+<script>
+/* ------------------------------------------------------------------ */
+/* lucide icons (24px viewBox, stroke)                                 */
+const I = {
+  dash: '<rect width="7" height="9" x="3" y="3" rx="1"/><rect width="7" height="5" x="14" y="3" rx="1"/><rect width="7" height="9" x="14" y="12" rx="1"/><rect width="7" height="5" x="3" y="16" rx="1"/>',
+  users: '<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>',
+  mail: '<rect width="20" height="16" x="2" y="4" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/>',
+  file: '<path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M10 9H8"/><path d="M16 13H8"/><path d="M16 17H8"/>',
+  book: '<path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H19a1 1 0 0 1 1 1v18a1 1 0 0 1-1 1H6.5a1 1 0 0 1 0-5H20"/><path d="M8 7h6"/><path d="M8 11h8"/>',
+  menu: '<line x1="4" x2="20" y1="6" y2="6"/><line x1="4" x2="20" y1="12" y2="12"/><line x1="4" x2="20" y1="18" y2="18"/>',
+  bell: '<path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/>',
+  doc: '<path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/>',
+  hourglass: '<path d="M5 22h14"/><path d="M5 2h14"/><path d="M17 22v-4.172a2 2 0 0 0-.586-1.414L12 12l-4.414 4.414A2 2 0 0 0 7 17.828V22"/><path d="M7 2v4.172a2 2 0 0 0 .586 1.414L12 12l4.414-4.414A2 2 0 0 0 17 6.172V2"/>',
+  cal: '<path d="M8 2v4"/><path d="M16 2v4"/><rect width="18" height="18" x="3" y="4" rx="2"/><path d="M3 10h18"/><path d="M8 14h.01"/><path d="M12 14h.01"/><path d="M16 14h.01"/><path d="M8 18h.01"/><path d="M12 18h.01"/><path d="M16 18h.01"/>',
+  shield: '<path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/><path d="m9 12 2 2 4-4"/>',
+  gear: '<path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/>',
+  scan: '<path d="M3 7V5a2 2 0 0 1 2-2h2"/><path d="M17 3h2a2 2 0 0 1 2 2v2"/><path d="M21 17v2a2 2 0 0 1-2 2h-2"/><path d="M7 21H5a2 2 0 0 1-2-2v-2"/><path d="M7 12h10"/>',
+  inbox: '<polyline points="22 12 16 12 14 15 10 15 8 12 2 12"/><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/>',
+  stamp: '<path d="M5 22h14"/><path d="M19.27 13.73A2.5 2.5 0 0 0 17.5 13h-11A2.5 2.5 0 0 0 4 15.5V17a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-1.5c0-.66-.26-1.3-.73-1.77Z"/><path d="M14 13V8.5C14 7 15 7 15 5a3 3 0 0 0-6 0c0 2 1 2 1 3.5V13"/>',
+  minus: '<path d="M5 12h14"/>',
+  plus: '<path d="M5 12h14"/><path d="M12 5v14"/>',
+};
+function ic(name, size, sw){
+  return `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="${sw||1.8}" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${I[name]}</svg>`;
+}
+const TABS = [
+  {icon:'dash',  label:'Dashboard'},
+  {icon:'users', label:'Employees'},
+  {icon:'mail',  label:'Ledger'},
+  {icon:'file',  label:'Services'},
+  {icon:'book',  label:'Records'},
+];
+const ACTIVE = 0;
+
+/* folder-tab SVG for V5 (trapezoid with rounded shoulders, open bottom) */
+const FOLDER = `
+<svg class="folder" viewBox="0 0 76 56" fill="none" aria-hidden="true">
+  <path d="M9 56 L13.2 12.5 Q14 5 21 5 L55 5 Q62 5 62.8 12.5 L67 56 Z"
+        fill="var(--surface)" stroke="var(--border-strong)" stroke-width="1"/>
+  <rect x="10" y="53.5" width="56" height="3" fill="var(--surface)"/>
+</svg>`;
+
+/* ------------------------------------------------------------------ */
+/* app replica pieces                                                  */
+const statusbar = `
+<div class="statusbar">
+  <span class="time">9:41</span>
+  <span style="display:flex;gap:6px;align-items:center">
+    <svg width="18" height="12" viewBox="0 0 18 12" fill="currentColor"><rect x="0" y="7" width="3" height="5" rx="1"/><rect x="5" y="5" width="3" height="7" rx="1"/><rect x="10" y="2.5" width="3" height="9.5" rx="1"/><rect x="15" y="0" width="3" height="12" rx="1" opacity=".35"/></svg>
+    <svg width="17" height="12" viewBox="0 0 17 12" fill="currentColor"><path d="M8.5 12 12 8.2a5.2 5.2 0 0 0-7 0Z"/><path d="M8.5 5.6c1.9 0 3.7.75 5 2l2.3-2.5a10.4 10.4 0 0 0-14.6 0L3.5 7.6a7.3 7.3 0 0 1 5-2Z" opacity=".55"/></svg>
+    <svg width="26" height="12" viewBox="0 0 26 12"><rect x=".5" y=".5" width="21" height="11" rx="3.5" fill="none" stroke="currentColor" opacity=".4"/><rect x="2" y="2" width="15" height="8" rx="2" fill="currentColor"/><path d="M23.5 4v4a2.2 2.2 0 0 0 0-4Z" fill="currentColor" opacity=".4"/></svg>
+  </span>
+</div>`;
+
+const topbar = `
+<div class="topbar">
+  <span class="burger">${ic('menu',24)}</span>
+  <img src="../frontend/public/brand/gssg-logo.png" alt="" />
+  <span class="brand">GSSG</span>
+  <span class="spacer">
+    ${ic('bell',21)}
+    <span class="avatar">AM</span>
+  </span>
+</div>`;
+
+const content = `
+<div class="content">
+  <div>
+    <h3>Dashboard</h3>
+    <div class="sub">Today at a glance</div>
+  </div>
+  <div class="hero">
+    <div class="hi">Welcome back, Ahmed</div>
+    <div class="date">Sat, 15 Aug 2026</div>
+    <div class="chips">
+      <div class="chip"><b>248</b><span>Employees</span></div>
+      <div class="chip"><b>12</b><span>On leave</span></div>
+      <div class="chip"><b>7</b><span>Unread</span></div>
+    </div>
+  </div>
+  <div class="cards">
+    <div class="stat"><b>36</b><span>Documents this week</span></div>
+    <div class="stat"><b>4</b><span>Pending approvals</span></div>
+  </div>
+  <div class="listcard">
+    <div class="row"><span class="ico">${ic('doc',16)}</span><div><div class="t">Duty roster — August</div><div class="s">DOC-2214 · 2h ago</div></div></div>
+    <div class="row"><span class="ico">${ic('mail',16)}</span><div><div class="t">HQ circular 44/2026</div><div class="s">LED-0187 · 5h ago</div></div></div>
+    <div class="row"><span class="ico">${ic('book',16)}</span><div><div class="t">Record 3391 approved</div><div class="s">BK-3391 · yesterday</div></div></div>
+    <div class="row"><span class="ico">${ic('doc',16)}</span><div><div class="t">Gate pass renewal batch</div><div class="s">SRV-0912 · yesterday</div></div></div>
+    <div class="row"><span class="ico">${ic('users',16)}</span><div><div class="t">New employee intake — G-1077</div><div class="s">EMP-1077 · 2d ago</div></div></div>
+    <div class="row"><span class="ico">${ic('mail',16)}</span><div><div class="t">Transfer memo — Sector 4</div><div class="s">LED-0192 · 2d ago</div></div></div>
+    <div class="row"><span class="ico">${ic('book',16)}</span><div><div class="t">Record 3384 returned</div><div class="s">BK-3384 · 3d ago</div></div></div>
+  </div>
+</div>`;
+
+function tabs(iconSize, wrap){
+  return TABS.map((t,i)=>{
+    const on = i===ACTIVE ? ' on' : '';
+    const icon = ic(t.icon, iconSize);
+    const inner = wrap ? wrap(icon) : icon;
+    return `<span class="tab${on}">${inner}<span>${t.label}</span></span>`;
+  }).join('');
+}
+
+/* ------------------------------------------------------------------ */
+/* nav variants                                                        */
+const NAVS = {
+  before: `
+    <nav class="nav-before">${tabs(20)}</nav>
+    <span class="cornercut l"></span><span class="cornercut r"></span>
+    <span class="callout co-l">corner clipped</span>
+    <span class="callout co-r">corner clipped</span>
+    <span class="callout co-h">home bar sits on the tabs</span>`,
+  v1: `<nav class="nav-v1">${tabs(20,(icon)=>`<span class="tile">${icon}</span>`)}</nav>`,
+  v2: `<nav class="nav-v2">${tabs(19,(icon)=>`<span class="puck">${icon}</span>`)}</nav>`,
+  v3: `<nav class="nav-v3">${tabs(19,(icon)=>`<span class="puck">${icon}</span>`)}</nav>`,
+  v4: `<nav class="nav-v4">${tabs(20)}</nav>`,
+  v5: `<nav class="nav-v5">${TABS.map((t,i)=>{
+        const on = i===ACTIVE ? ' on' : '';
+        return `<span class="tab${on}">${i===ACTIVE?FOLDER:''}${ic(t.icon,20)}<span>${t.label}</span></span>`;
+      }).join('')}</nav>`,
+  b1: `
+    <div class="backdrop"></div>
+    <div class="sheet">
+      <div class="grab"></div>
+      <h4>Customize navigation</h4>
+      <span class="done">Done</span>
+      <p class="hint">Drag anything into the dock. Waiting signals show a live count.</p>
+      <div class="sec">Sections</div>
+      <div class="lib">
+        <span class="item"><span class="tile">${ic('cal',17)}</span>Leaves</span>
+        <span class="item"><span class="tile">${ic('shield',17)}</span>Permits</span>
+        <span class="item"><span class="tile">${ic('gear',17)}</span>Settings</span>
+        <span class="item ghost"><span class="tile">${ic('plus',17)}</span>Empty</span>
+      </div>
+      <div class="sec">Waiting signals</div>
+      <div class="lib">
+        <span class="item sig"><span class="tile">${ic('hourglass',17)}<span class="cnt">4</span></span>Approvals</span>
+        <span class="item sig"><span class="tile">${ic('scan',17)}<span class="cnt">2</span></span>Scan-back</span>
+        <span class="item sig"><span class="tile">${ic('inbox',17)}<span class="cnt">7</span></span>Unread</span>
+        <span class="item sig"><span class="tile">${ic('stamp',17)}<span class="cnt">1</span></span>To sign</span>
+      </div>
+    </div>
+    <nav class="nav-v2 editing">${TABS.map((t,i)=>{
+      const on = i===ACTIVE ? ' on' : '';
+      return `<span class="tab${on}"><span class="remove">${ic('minus',10,2.5)}</span><span class="puck">${ic(t.icon,19)}</span><span>${t.label}</span></span>`;
+    }).join('')}</nav>`,
+  b2: `<span class="holdtip">Hold any tab to customize</span><nav class="nav-v2">${[
+      {icon:'dash',label:'Dashboard',on:true},
+      {icon:'users',label:'Employees'},
+      {icon:'mail',label:'Ledger'},
+      {icon:'hourglass',label:'Waiting',badge:4},
+      {icon:'book',label:'Records'},
+    ].map(t=>`<span class="tab${t.on?' on':''}"><span class="puck">${ic(t.icon,19)}${t.badge?`<span class="badge">${t.badge}</span>`:''}</span><span>${t.label}</span></span>`).join('')}</nav>`,
+};
+
+const VARIANTS = [
+  {id:'before', k:'NOW', bad:true, name:'Shipped bar on a real iPhone',
+   why:'What the user sees on device: squared bar flush with the physical edge.',
+   fix:'safe-area inset resolves to 0 — no viewport-fit=cover in index.html.'},
+  {id:'v1', k:'V1', name:'Anchored — disciplined dock',
+   why:'The category standard played straight: full-bleed bar, soft navy tile behind the active icon, hairline + lifted shadow instead of a hard border.',
+   fix:'Full-bleed fix: viewport-fit=cover + pb-[env(safe-area-inset-bottom)] — bar background extends under the home indicator, device corners cut only white.'},
+  {id:'v2', k:'V2', name:'Frost dock — floating glass',
+   why:'Inset pill floating over the content; page scrolls visibly beneath the blur. Active tab is a filled navy puck. Feels current-iOS, light, alive.',
+   fix:'Floating fix: 12px side insets + bottom offset above the safe area — the bar physically never reaches the screen corners.'},
+  {id:'v3', k:'V3', name:'Command deck — navy dock',
+   why:'The GSSG hero gradient becomes the dock. White puck carries the active tab, red signal dot above it. The nav becomes the strongest brand moment on phone.',
+   fix:'Floating fix: same inset geometry as V2 — corner-proof by construction.'},
+  {id:'v4', k:'V4', name:'Signal rail — red lamp',
+   why:'Quietest bold move: keeps the full-bleed shell but a red indicator lamp slides along the top edge to mark the active tab. GSSG red gets a daily job.',
+   fix:'Full-bleed fix: viewport-fit=cover + safe-area padding under the tabs.'},
+  {id:'v5', k:'V5', name:'File tray — folder tab',
+   why:'The active section rises as a physical folder tab out of a paper tray — the records-room language of the product, nowhere else in mobile nav.',
+   fix:'Full-bleed fix: raised-paper tray extends under the home indicator; safe-area padded.'},
+  {id:'b1', k:'V2·HOLD', name:'Long-press — edit mode',
+   why:'Hold any tab: the dock enters edit mode (tabs tilt, remove handles appear) and the customize sheet rises — sections and live waiting signals, all drag-into-dock. Icons come from the app\u2019s existing lucide SVG library, so any entry ships with a proper drawn icon.',
+   fix:'Persisted per user; Done or tapping outside exits. Long-press never fires navigation.'},
+  {id:'b2', k:'V2·SLOT', name:'Custom slot — waiting signal',
+   why:'Result: \u201cServices\u201d swapped for a Waiting slot. The hourglass carries a live count of items stuck in approval \u2014 the dock becomes a queue monitor, not just a router.',
+   fix:'Badge is the accent red, mono numerals; count comes from the same queries the dashboard already runs.'},
+];
+
+function phone(v){
+  return `
+  <div class="cell" id="cell-${v.id}">
+    <div class="plate">
+      <h2><span class="k${v.bad?' bad':''}">${v.k}</span>${v.name}</h2>
+      <p class="why">${v.why}</p>
+      <p class="fix">${v.fix}</p>
+    </div>
+    <div class="phone">
+      <div class="device"></div>
+      <div class="screen">
+        <div class="app">
+          ${topbar}
+          ${content}
+        </div>
+        ${NAVS[v.id]}
+        ${statusbar}
+      </div>
+      <div class="island"></div>
+      <div class="homebar"></div>
+    </div>
+  </div>`;
+}
+
+const q = new URLSearchParams(location.search).get('v');
+const pick = q ? VARIANTS.filter(v=>v.id===q || v.id==='v'+q) : VARIANTS;
+if (q) document.body.classList.add('single');
+document.getElementById('grid').innerHTML = pick.map(phone).join('');
+if (q) { const g=document.getElementById('grid'); g.style.display='flex'; g.style.justifyContent='center'; }
+</script>
+</body>
+</html>

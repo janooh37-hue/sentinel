@@ -1,0 +1,694 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Employee Activity — Badge dossier family (5 variants)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=IBM+Plex+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#f5f4f1; --surface:#ffffff; --surface-raised:#fafaf6; --surface-tinted:#f0eee8;
+    --primary:#0d2845; --primary-hover:#1d3a5e; --primary-soft:#e8edf3;
+    --on-primary:#ffffff; --accent:#c8102e; --accent-hover:#a30d24;
+    --success:#047857; --success-soft:#e5f3ee; --warning:#b45309; --warning-soft:#fdf1e3;
+    --text:#1a1d21; --text-muted:#5b6470; --text-faint:#8b9098;
+    --border:#e6e4dd; --border-strong:#d4d1c8; --hairline:#efece5;
+    --hero-grad:linear-gradient(135deg,#0a1f3a 0%,#0d2845 50%,#1d3a5e 100%);
+    --font-sans:"Inter",ui-sans-serif,system-ui,sans-serif;
+    --font-mono:"IBM Plex Mono",ui-monospace,Consolas,monospace;
+    --doc:#0d5c8a; --doc-soft:#e6f0f6;
+    --leave:#047857; --leave-soft:#e5f3ee;
+    --violation:#b3541e; --violation-soft:#f9ede4;
+    --ledger:#6b4fb0; --ledger-soft:#f1eef8;
+    --deck-bg:#081326; --deck-panel:#0d1c36; --deck-panel-2:#122344; --deck-line:rgba(148,180,224,.14);
+    --deck-text:#e8eef8; --deck-muted:#93a5c4; --deck-faint:#5f7396;
+    --deck-doc:#5eb3e8; --deck-leave:#3ed598; --deck-violation:#ffa25e; --deck-ledger:#b79cf0;
+    --manila:#f6efdf; --manila-2:#efe5cd; --manila-line:#e0d4b4; --manila-deep:#e7dcc2;
+  }
+  *{box-sizing:border-box;margin:0;padding:0;border-color:var(--border)}
+  body{background:var(--bg);color:var(--text);font-family:var(--font-sans);
+    font-feature-settings:"ss01","cv11";-webkit-font-smoothing:antialiased;line-height:1.45}
+  .mono{font-family:var(--font-mono);font-variant-numeric:tabular-nums}
+  button{font:inherit;cursor:pointer;background:none;border:none;color:inherit}
+  a{color:inherit;text-decoration:none}
+  svg{display:block}
+
+  /* ═════════ REAL HERO REPLICA ═════════ */
+  .hero{position:relative;overflow:visible;color:#fff;background:var(--hero-grad)}
+  .hero-decor{position:absolute;inset:0;overflow:hidden}
+  .hero-decor .c1{position:absolute;top:-110px;right:-90px;width:320px;height:320px;border-radius:50%;background:rgba(255,255,255,.045)}
+  .hero-decor .c2{position:absolute;bottom:-140px;left:8%;width:260px;height:260px;border-radius:50%;background:rgba(255,255,255,.035)}
+  .hero-col{position:relative;z-index:30;margin:0 auto;max-width:720px;padding:46px 32px 8px;text-align:center}
+  .hero-eyebrow{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.22em;opacity:.65}
+  .hero-col h1{margin:8px 0 4px;font-size:27px;font-weight:700;letter-spacing:-0.01em}
+  .hero-sub{font-size:13.5px;opacity:.75}
+  .hero-pill{margin-top:22px;display:flex;height:56px;align-items:center;gap:12px;border-radius:99px;
+    background:#fff;padding:0 8px 0 20px;box-shadow:0 18px 44px -18px rgba(0,0,0,.5);text-align:start}
+  .hero-pill svg{color:var(--text-faint);flex:none}
+  .hero-pill input{min-width:0;flex:1;border:0;background:none;outline:0;font:inherit;font-size:16px;color:var(--text)}
+  .hero-pill input::placeholder{color:var(--text-faint)}
+  .hero-pill .go{flex:none;border-radius:99px;background:var(--accent);padding:9px 20px;font-size:13px;font-weight:700;color:#fff}
+  .hero-ghost-wrap{margin-top:16px;display:flex;justify-content:center}
+  .hero-ghost{display:inline-flex;align-items:center;gap:8px;border-radius:99px;border:1px solid rgba(255,255,255,.3);
+    background:rgba(255,255,255,.1);padding:9px 20px;font-size:13px;font-weight:600;color:#fff}
+  .hero-ghost .plus{display:grid;place-items:center;width:18px;height:18px;border-radius:50%;
+    background:var(--accent);font-size:13px;font-weight:800;line-height:1}
+  .hero-cards{position:relative;z-index:2;margin:26px auto 0;max-width:1020px;padding:0 32px 46px;
+    display:grid;grid-template-columns:repeat(3,1fr);gap:14px;text-align:start}
+  .hcard{border-radius:16px;border:1px solid rgba(255,255,255,.14);background:rgba(255,255,255,.07);
+    padding:16px;backdrop-filter:blur(4px)}
+  .hcard-head{margin-bottom:11px;display:flex;align-items:center;gap:9px}
+  .hcard-head .ico{display:grid;place-items:center;width:28px;height:28px;border-radius:9px;
+    background:rgba(255,255,255,.12);color:rgba(255,255,255,.85);font-size:.85rem;flex:none}
+  .hcard-head .ico.warn{background:rgba(251,191,36,.18);color:#fbbf24}
+  .hcard-head h4{font-size:12px;font-weight:700;letter-spacing:.08em;opacity:.85;text-transform:uppercase}
+  .hcard-head .badge{margin-inline-start:auto;border-radius:99px;padding:1px 8px;
+    font-family:var(--font-mono);font-size:11px;font-weight:700;background:rgba(251,191,36,.18);color:#fbbf24}
+  .hchip{display:flex;width:100%;align-items:center;gap:9px;border-radius:12px;border:1px solid rgba(255,255,255,.1);
+    background:rgba(255,255,255,.06);padding:6px 10px;color:#fff;text-align:start;margin-bottom:6px}
+  .hchip .av{display:grid;place-items:center;width:26px;height:26px;border-radius:50%;
+    background:rgba(255,255,255,.15);font-size:10.5px;font-weight:700;flex:none}
+  .hchip .lb{min-width:0;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px;font-weight:600}
+  .hchip .mt{flex:none;font-family:var(--font-mono);font-size:10.5px;opacity:.6;font-weight:700}
+  .hchip .mt.warn{font-family:var(--font-sans);color:#fbbf24;opacity:1}
+  .hcard .link{font-size:11.5px;font-weight:600;color:rgba(255,255,255,.75)}
+  .hcard .body{font-size:12px;line-height:1.6;opacity:.75;margin-bottom:10px}
+
+  .variant-tag{position:fixed;bottom:16px;right:16px;z-index:99;background:var(--primary);color:#fff;
+    border-radius:99px;padding:8px 16px;font-size:12px;font-weight:700;box-shadow:0 8px 24px rgba(4,15,30,.4)}
+  .variant-tag span{color:#ff8fa0;font-family:var(--font-mono);margin-inline-end:8px}
+
+  /* ═════════ SHARED BADGE + ATOMS ═════════ */
+  .kdot{width:7px;height:7px;border-radius:50%;flex:none}
+  .badge-card{position:relative;border-radius:20px;background:var(--surface);overflow:hidden;
+    box-shadow:0 24px 60px -20px rgba(13,40,69,.35),0 2px 6px rgba(13,40,69,.08)}
+  .badge-card .clip{position:absolute;top:10px;left:50%;transform:translateX(-50%);width:64px;height:14px;
+    border-radius:99px;background:var(--surface-tinted);box-shadow:inset 0 1px 3px rgba(0,0,0,.25);z-index:2}
+  .badge-card .band{background:var(--hero-grad);color:#fff;padding:30px 24px 14px;text-align:center}
+  .badge-card .band .co{font-size:11px;font-weight:800;letter-spacing:.3em;text-transform:uppercase;opacity:.85}
+  .badge-card .band .role{margin-top:2px;font-size:10px;letter-spacing:.18em;text-transform:uppercase;opacity:.55}
+  .badge-card .photo{margin:16px auto 0;width:120px;height:120px;border-radius:16px;
+    background:var(--primary-soft);display:grid;place-items:center;font-size:34px;font-weight:800;color:var(--primary);
+    border:4px solid rgba(255,255,255,.9);box-shadow:0 8px 20px rgba(4,15,30,.35)}
+  .badge-card .bod{padding:78px 24px 22px;text-align:center;margin-top:-60px;background:var(--surface)}
+  .badge-card .nm{font-size:21px;font-weight:800;letter-spacing:-0.01em;color:var(--primary)}
+  .badge-card .pos{margin-top:3px;font-size:12.5px;color:var(--text-muted)}
+  .badge-card .holo{margin:14px auto 0;height:10px;width:70%;border-radius:99px;opacity:.8;
+    background:linear-gradient(100deg,#8fd3f4,#b8a9f5,#f5c98f,#93e9be,#8fd3f4);background-size:300% 100%}
+  .badge-card .status{margin-top:12px;display:inline-flex;align-items:center;gap:6px;border-radius:99px;
+    background:var(--success-soft);color:var(--success);padding:4px 14px;font-size:11.5px;font-weight:800}
+  .badge-card .status::before{content:"";width:7px;height:7px;border-radius:50%;background:var(--success)}
+  .badge-card .barcode{margin:18px auto 6px;height:44px;width:78%;
+    background:repeating-linear-gradient(90deg,#0d1421 0 2px,transparent 2px 5px,#0d1421 5px 6px,transparent 6px 8px,#0d1421 8px 11px,transparent 11px 13px,#0d1421 13px 14px,transparent 14px 18px)}
+  .badge-card .gid{font-family:var(--font-mono);font-size:13px;font-weight:600;letter-spacing:.34em;color:var(--text);padding-bottom:18px}
+  .row-hover:hover{background:var(--surface-raised)}
+  .k-ico{width:36px;height:36px;border-radius:11px;display:grid;place-items:center;flex:none}
+  .sec-sub{margin-top:4px;font-size:14px;color:var(--text-muted)}
+
+  /* ═════════ F1 — NIGHT DOSSIER (V1 × V3) ═════════ */
+  .f1{background:var(--deck-bg);color:var(--deck-text);padding:52px 0 76px;position:relative;overflow:hidden}
+  .f1::after{content:"";position:absolute;top:-180px;left:50%;transform:translateX(-50%);width:900px;height:420px;
+    border-radius:50%;background:radial-gradient(closest-side,rgba(87,140,220,.14),transparent);pointer-events:none}
+  .f1 .wrap{position:relative;max-width:1280px;margin:0 auto;padding:0 32px}
+  .f1-head{display:flex;align-items:flex-end;justify-content:space-between;gap:20px;flex-wrap:wrap;margin-bottom:30px}
+  .f1-head .eyebrow{display:flex;align-items:center;gap:8px;font-size:11px;font-weight:700;
+    letter-spacing:.2em;text-transform:uppercase;color:var(--deck-muted)}
+  .f1-head .eyebrow .live{width:8px;height:8px;border-radius:50%;background:var(--deck-leave)}
+  .f1-head h3{margin-top:10px;font-size:34px;font-weight:800;letter-spacing:-0.02em;color:#fff}
+  .f1-head .sub{margin-top:6px;font-size:14px;color:var(--deck-muted)}
+  .f1-clock{text-align:end}
+  .f1-clock .t{font-family:var(--font-mono);font-size:26px;font-weight:600;color:#fff;letter-spacing:.04em}
+  .f1-clock .d{font-size:12px;color:var(--deck-faint);margin-top:2px}
+  .f1-grid{display:grid;grid-template-columns:340px minmax(0,1fr);gap:32px;align-items:start}
+  .f1 .badge-card{transform:rotate(-1.2deg);box-shadow:0 40px 90px -24px rgba(0,0,0,.85),0 4px 14px rgba(0,0,0,.4)}
+  .f1-actions{margin-top:22px;display:flex;gap:10px}
+  .f1-actions .pri{flex:1;border-radius:12px;background:var(--deck-doc);color:#04101f;padding:12px;font-size:13.5px;font-weight:700}
+  .f1-actions .sec{flex:1;border-radius:12px;border:1px solid var(--deck-line);background:rgba(6,14,30,.4);
+    padding:12px;font-size:13.5px;font-weight:700;color:var(--deck-muted)}
+  .f1-search{margin-top:14px;display:flex;align-items:center;gap:8px;border:1px solid var(--deck-line);
+    border-radius:12px;background:rgba(6,14,30,.6);padding:10px 12px}
+  .f1-search input{flex:1;border:0;outline:0;background:none;font-size:13px;color:var(--deck-text)}
+  .f1-search input::placeholder{color:var(--deck-faint)}
+  .f1-search svg{color:var(--deck-faint)}
+  .f1-console{border:1px solid var(--deck-line);border-radius:20px;overflow:hidden;
+    background:linear-gradient(180deg,var(--deck-panel) 0%,rgba(13,28,54,.72) 100%);
+    box-shadow:0 30px 80px -30px rgba(0,0,0,.7)}
+  .f1-tabs{display:flex;gap:4px;padding:10px 14px 0;border-bottom:1px solid var(--deck-line)}
+  .f1-tabs button{padding:10px 16px 12px;font-size:13px;font-weight:600;color:var(--deck-muted);
+    border-radius:10px 10px 0 0;display:flex;gap:8px;align-items:center}
+  .f1-tabs button .n{font-family:var(--font-mono);font-size:10.5px;color:var(--deck-faint)}
+  .f1-tabs button[aria-selected="true"]{background:rgba(94,179,232,.1);color:#fff;
+    box-shadow:inset 0 -2px 0 var(--deck-doc)}
+  .f1-shead{display:flex;justify-content:space-between;align-items:center;padding:14px 20px;
+    border-bottom:1px solid var(--deck-line);font-family:var(--font-mono);font-size:11px;
+    letter-spacing:.14em;text-transform:uppercase;color:var(--deck-faint)}
+  .f1-day{display:flex;align-items:center;gap:12px;padding:14px 20px 8px;color:var(--deck-faint)}
+  .f1-day .lbl{font-family:var(--font-mono);font-size:11px;font-weight:600;letter-spacing:.16em;text-transform:uppercase}
+  .f1-day .rule{flex:1;height:1px;background:linear-gradient(90deg,var(--deck-line),transparent)}
+  .f1-row{display:grid;grid-template-columns:96px 1fr 170px 110px;gap:16px;align-items:center;
+    padding:13px 20px;border-top:1px solid rgba(148,180,224,.07)}
+  .f1-row:hover{background:rgba(94,179,232,.06)}
+  .f1-row .tm{font-family:var(--font-mono);font-size:12.5px;color:var(--deck-muted)}
+  .f1-row .main{display:flex;align-items:center;gap:12px;min-width:0}
+  .f1-row .t{font-size:14px;font-weight:600;color:#fff}
+  .f1-row .s{font-size:12px;color:var(--deck-muted);margin-top:1px}
+  .f1-row .ref{font-family:var(--font-mono);font-size:11.5px;color:var(--deck-faint)}
+  .f1-row .open{text-align:end;font-size:12.5px;font-weight:700;color:var(--deck-doc);opacity:0;transition:opacity .15s}
+  .f1-row:hover .open{opacity:1}
+  .f1-more{display:block;width:100%;padding:14px;text-align:center;font-size:13px;font-weight:600;
+    color:var(--deck-muted);border-top:1px solid var(--deck-line);background:rgba(6,14,30,.4)}
+  .f1-more:hover{color:#fff}
+
+  /* ═════════ F2 — SERVICE RECORD ═════════ */
+  .f2{padding:56px 0 80px;background:var(--bg)}
+  .f2 .wrap{max-width:1280px;margin:0 auto;padding:0 32px}
+  .f2-head{text-align:center;margin-bottom:30px}
+  .f2-head .eyebrow{font-size:11px;font-weight:800;letter-spacing:.26em;text-transform:uppercase;color:var(--accent)}
+  .f2-head h3{margin-top:8px;font-size:30px;font-weight:900;letter-spacing:-0.02em;color:var(--primary)}
+  .f2-head .rule{margin:14px auto 0;width:120px;border-bottom:3px double var(--border-strong)}
+  .f2-grid{display:grid;grid-template-columns:340px minmax(0,1fr);gap:32px;align-items:start}
+  .f2-ribbons{margin-top:22px;background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:16px}
+  .f2-ribbons .lbl{font-size:10.5px;font-weight:800;letter-spacing:.14em;text-transform:uppercase;
+    color:var(--text-faint);margin-bottom:10px}
+  .f2-ribbon{display:flex;align-items:center;gap:10px;width:100%;padding:7px 8px;border-radius:9px;text-align:start}
+  .f2-ribbon:hover{background:var(--surface-raised)}
+  .f2-ribbon[aria-pressed="true"]{background:var(--primary-soft)}
+  .f2-ribbon .bar{width:44px;height:14px;border-radius:3px;flex:none;
+    box-shadow:inset 0 -2px 0 rgba(0,0,0,.15)}
+  .f2-ribbon .nm{font-size:12.5px;font-weight:700;flex:1}
+  .f2-ribbon .n{font-family:var(--font-mono);font-size:11px;color:var(--text-faint)}
+  .f2-search{margin-top:14px;display:flex;align-items:center;gap:8px;border:1px solid var(--border);
+    border-radius:12px;background:var(--surface);padding:10px 12px}
+  .f2-search input{flex:1;border:0;outline:0;background:none;font-size:13px}
+  .f2-search svg{color:var(--text-faint)}
+  .f2-sheet{position:relative;background:var(--surface);border:1px solid var(--border);border-radius:6px;
+    box-shadow:0 16px 44px -18px rgba(13,40,69,.25);overflow:hidden}
+  .f2-sheet::before{content:"GSSG";position:absolute;top:50%;left:50%;transform:translate(-50%,-50%) rotate(-24deg);
+    font-size:200px;font-weight:900;letter-spacing:.1em;color:rgba(13,40,69,.035);pointer-events:none}
+  .f2-shead{padding:22px 28px 16px;border-bottom:3px double var(--border-strong);
+    display:flex;justify-content:space-between;align-items:baseline;flex-wrap:wrap;gap:8px}
+  .f2-shead .t{font-size:17px;font-weight:900;letter-spacing:.06em;text-transform:uppercase;color:var(--primary)}
+  .f2-shead .meta{font-family:var(--font-mono);font-size:11.5px;color:var(--text-muted)}
+  .f2-cols{display:grid;grid-template-columns:84px 130px 1fr 150px;gap:14px;padding:10px 28px;
+    border-bottom:1px solid var(--border);font-size:10px;font-weight:800;letter-spacing:.12em;
+    text-transform:uppercase;color:var(--text-faint)}
+  .f2-day{padding:8px 28px;font-family:var(--font-mono);font-size:10.5px;font-weight:600;letter-spacing:.14em;
+    text-transform:uppercase;color:var(--text-muted);background:var(--surface-raised);border-bottom:1px solid var(--hairline)}
+  .f2-row{display:grid;grid-template-columns:84px 130px 1fr 150px;gap:14px;align-items:baseline;
+    padding:12px 28px;border-bottom:1px solid var(--hairline);position:relative}
+  .f2-row:hover{background:var(--surface-raised)}
+  .f2-row .tm{font-family:var(--font-mono);font-size:12px;color:var(--text-faint)}
+  .f2-row .kind{font-size:10.5px;font-weight:800;letter-spacing:.1em;text-transform:uppercase}
+  .f2-row .t{font-size:14.5px;font-weight:700}
+  .f2-row .s{font-size:12px;color:var(--text-muted);margin-top:1px}
+  .f2-row .ref{font-family:var(--font-mono);font-size:11.5px;color:var(--text-muted);text-align:end}
+  .f2-stamp{position:absolute;right:170px;top:8px;border:2px solid var(--accent);color:var(--accent);
+    border-radius:5px;padding:1px 7px;font-size:9px;font-weight:800;letter-spacing:.16em;
+    text-transform:uppercase;transform:rotate(-4deg);opacity:.8}
+  .f2-more{display:block;width:100%;padding:14px;text-align:center;font-size:13px;font-weight:700;color:var(--primary)}
+
+  /* ═════════ F3 — LANYARD ═════════ */
+  .f3{padding:0 0 80px;background:var(--bg);position:relative}
+  .f3 .wrap{max-width:1280px;margin:0 auto;padding:0 32px}
+  .f3-grid{display:grid;grid-template-columns:340px minmax(0,1fr);gap:40px;align-items:start}
+  .f3-hang{position:relative;padding-top:24px}
+  /* White retractable badge reel — disc, ribbed stem, swivel, split ring, clear vinyl strap + snap */
+  .f3-reel{position:relative;z-index:2;display:flex;flex-direction:column;align-items:center}
+  .reel-disc{width:118px;height:118px;border-radius:50%;position:relative;display:grid;place-items:center;
+    background:radial-gradient(circle at 35% 28%,#ffffff 0%,#f4f4f2 55%,#e3e3df 100%);
+    box-shadow:0 14px 30px -10px rgba(13,40,69,.35),0 2px 5px rgba(13,40,69,.14)}
+  .reel-disc::before{content:"";position:absolute;inset:13px;border-radius:50%;
+    box-shadow:inset 0 2px 4px rgba(0,0,0,.13),inset 0 -1px 2px rgba(255,255,255,.9);background:#fbfbfa}
+  .reel-logo{position:relative;width:80px;height:80px;display:grid;place-items:center}
+  .reel-logo svg{position:absolute;inset:0}
+  .reel-logo img{width:52px;height:52px;display:block}
+  .reel-neck{width:28px;height:15px;margin-top:-3px;
+    background:repeating-linear-gradient(180deg,#f8f8f6 0 3px,#d9d9d5 3px 5px);
+    clip-path:polygon(12% 0,88% 0,72% 100%,28% 100%)}
+  .reel-ball{width:17px;height:13px;border-radius:50%;background:#f3f3f1;margin-top:-1px;
+    box-shadow:inset 0 -2px 3px rgba(0,0,0,.13)}
+  .reel-ring{width:25px;height:25px;border-radius:50%;border:3.5px solid #c3c7cd;margin-top:-2px;
+    box-shadow:inset 0 1px 1px rgba(255,255,255,.7),0 1px 2px rgba(0,0,0,.14)}
+  .reel-strap{position:relative;width:31px;height:62px;margin-top:-5px;
+    background:linear-gradient(180deg,rgba(255,255,255,.55),rgba(244,246,248,.4));
+    border:1.5px solid rgba(150,158,170,.5);border-radius:8px 8px 11px 11px;
+    box-shadow:0 2px 6px rgba(13,40,69,.13)}
+  .reel-strap .snap{position:absolute;left:50%;bottom:9px;transform:translateX(-50%);
+    width:19px;height:19px;border-radius:50%;
+    background:radial-gradient(circle at 35% 30%,#eef0f2,#b9bec7 68%,#99a0aa);
+    box-shadow:inset 0 0 0 3px #cdd1d7,inset 0 0 0 6px #a8aeb8,0 1px 2px rgba(0,0,0,.18)}
+  .f3 .badge-card{margin-top:-20px;transform:rotate(1deg)}
+  .f3-actions{margin-top:22px;display:flex;gap:10px}
+  .f3-actions .pri{flex:1;border-radius:12px;background:var(--primary);color:#fff;padding:12px;font-size:13.5px;font-weight:700}
+  .f3-actions .sec{flex:1;border-radius:12px;border:1px solid var(--border-strong);background:var(--surface);
+    padding:12px;font-size:13.5px;font-weight:700;color:var(--text-muted)}
+  .f3-right{padding-top:56px}
+  .f3-right h3{font-size:28px;font-weight:800;letter-spacing:-0.02em}
+  .f3-toolbar{margin-top:18px;display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+  .f3-search{flex:1 1 300px;display:flex;align-items:center;gap:9px;border:1px solid var(--border);
+    border-radius:12px;background:var(--surface);padding:10px 13px}
+  .f3-search input{flex:1;border:0;outline:0;background:none;font-size:13.5px}
+  .f3-search svg{color:var(--text-faint)}
+  .f3-chips{display:flex;gap:6px;flex-wrap:wrap}
+  .f3-chips button{padding:8px 14px;border-radius:99px;font-size:12.5px;font-weight:700;
+    border:1px solid var(--border);background:var(--surface);color:var(--text-muted)}
+  .f3-chips button[aria-pressed="true"]{background:var(--primary);border-color:var(--primary);color:#fff}
+  .f3-panel{margin-top:16px;background:var(--surface);border:1px solid var(--border);border-radius:16px;overflow:hidden;
+    box-shadow:0 2px 8px rgba(13,40,69,.05)}
+  .f3-day{padding:9px 22px;font-size:10.5px;font-weight:800;letter-spacing:.14em;text-transform:uppercase;
+    color:var(--text-faint);background:var(--surface-raised);border-bottom:1px solid var(--hairline)}
+  .f3-row{display:flex;align-items:center;gap:14px;padding:13px 22px;border-bottom:1px solid var(--hairline)}
+  .f3-row .t{font-size:14px;font-weight:700}
+  .f3-row .s{margin-top:1px;font-size:12.5px;color:var(--text-muted)}
+  .f3-row .ref{margin-inline-start:auto;font-family:var(--font-mono);font-size:11.5px;color:var(--text-faint)}
+  .f3-row .tm{font-size:12.5px;color:var(--text-muted);width:72px;text-align:end;flex:none;font-variant-numeric:tabular-nums}
+  .f3-more{display:block;width:100%;padding:13px;text-align:center;font-size:13px;font-weight:700;color:var(--primary)}
+
+  /* ═════════ F4 — BADGE DRAWER ═════════ */
+  .f4{padding:56px 0 80px;background:var(--bg)}
+  .f4 .wrap{max-width:1180px;margin:0 auto;padding:0 32px}
+  .f4-head{text-align:center}
+  .f4-head h3{font-size:28px;font-weight:800;letter-spacing:-0.02em}
+  .f4-search{margin:20px auto 0;max-width:560px;display:flex;align-items:center;gap:10px;
+    border:1px solid var(--border);border-radius:99px;background:var(--surface);padding:12px 20px;
+    box-shadow:0 6px 20px rgba(13,40,69,.07)}
+  .f4-search input{flex:1;border:0;outline:0;background:none;font-size:14px}
+  .f4-search svg{color:var(--text-faint)}
+  .f4-drawer{margin-top:28px;display:flex;gap:16px;justify-content:center;align-items:flex-end}
+  .f4-mini{width:150px;border-radius:14px;background:var(--surface);border:1px solid var(--border);
+    overflow:hidden;text-align:center;padding-bottom:12px;opacity:.72;transition:all .15s;position:relative;top:6px}
+  .f4-mini:hover{opacity:1;top:0}
+  .f4-mini .mband{background:var(--hero-grad);height:34px;display:grid;place-items:center}
+  .f4-mini .mband span{font-size:8px;font-weight:800;letter-spacing:.24em;color:rgba(255,255,255,.8)}
+  .f4-mini .mav{margin:-14px auto 0;width:44px;height:44px;border-radius:12px;background:var(--primary-soft);
+    display:grid;place-items:center;font-size:14px;font-weight:800;color:var(--primary);
+    border:3px solid var(--surface)}
+  .f4-mini .mnm{margin-top:6px;font-size:11.5px;font-weight:700;padding:0 8px;white-space:nowrap;
+    overflow:hidden;text-overflow:ellipsis}
+  .f4-mini .mgid{margin-top:2px;font-family:var(--font-mono);font-size:9.5px;color:var(--text-faint)}
+  .f4-mini .mbar{margin:8px auto 0;height:12px;width:70%;
+    background:repeating-linear-gradient(90deg,#0d1421 0 1px,transparent 1px 3px,#0d1421 3px 4px,transparent 4px 6px)}
+  .f4-mini.sel{width:190px;opacity:1;top:0;border-color:var(--primary);
+    box-shadow:0 20px 44px -16px rgba(13,40,69,.4);padding-bottom:16px}
+  .f4-mini.sel .mband{height:42px}
+  .f4-mini.sel .mav{width:58px;height:58px;font-size:18px;margin-top:-18px}
+  .f4-mini.sel .mnm{font-size:13px}
+  .f4-mini.sel .stat{margin-top:6px;display:inline-flex;align-items:center;gap:5px;border-radius:99px;
+    background:var(--success-soft);color:var(--success);padding:2px 10px;font-size:10px;font-weight:800}
+  .f4-mini.sel .stat::before{content:"";width:5px;height:5px;border-radius:50%;background:var(--success)}
+  .f4-hint{margin-top:10px;text-align:center;font-size:11.5px;color:var(--text-faint)}
+  .f4-panel{margin-top:26px;background:var(--surface);border:1px solid var(--border);border-radius:18px;overflow:hidden;
+    box-shadow:0 2px 8px rgba(13,40,69,.05)}
+  .f4-phead{display:flex;align-items:center;gap:14px;padding:16px 22px;border-bottom:1px solid var(--hairline);flex-wrap:wrap}
+  .f4-phead .t{font-size:15px;font-weight:800}
+  .f4-mini-pulse{display:flex;align-items:flex-end;gap:4px;height:34px;margin-inline-start:auto}
+  .f4-mini-pulse span{width:14px;border-radius:2.5px;background:var(--primary-soft)}
+  .f4-mini-pulse span.hot{background:var(--primary)}
+  .f4-mini-pulse-lbl{font-size:10.5px;color:var(--text-faint);align-self:center}
+  .f4-tabs{display:flex;gap:4px;padding:0 14px;border-bottom:1px solid var(--hairline)}
+  .f4-tabs button{padding:11px 15px;font-size:13px;font-weight:600;color:var(--text-muted);
+    border-bottom:2px solid transparent;margin-bottom:-1px;display:flex;gap:7px;align-items:center}
+  .f4-tabs button .n{font-family:var(--font-mono);font-size:10.5px;background:var(--surface-tinted);
+    border-radius:99px;padding:1px 7px;color:var(--text-muted)}
+  .f4-tabs button[aria-selected="true"]{color:var(--primary);border-bottom-color:var(--accent)}
+  .f4-day{padding:8px 22px;font-size:10.5px;font-weight:800;letter-spacing:.13em;text-transform:uppercase;
+    color:var(--text-faint);background:var(--surface-raised);border-bottom:1px solid var(--hairline)}
+  .f4-row{display:flex;align-items:center;gap:14px;padding:12px 22px;border-bottom:1px solid var(--hairline)}
+  .f4-row .t{font-size:13.5px;font-weight:700}
+  .f4-row .s{margin-top:1px;font-size:12px;color:var(--text-muted)}
+  .f4-row .ref{margin-inline-start:auto;font-family:var(--font-mono);font-size:11px;color:var(--text-faint)}
+  .f4-row .tm{font-size:12px;color:var(--text-muted);width:66px;text-align:end;flex:none}
+  .f4-more{display:block;width:100%;padding:12px;text-align:center;font-size:13px;font-weight:700;color:var(--primary)}
+
+  /* ═════════ F5 — FOLDER SPREAD ═════════ */
+  .f5{padding:56px 0 88px;background:var(--bg)}
+  .f5 .wrap{max-width:1240px;margin:0 auto;padding:0 32px}
+  .f5-head{margin-bottom:8px;display:flex;justify-content:space-between;align-items:flex-end;flex-wrap:wrap;gap:14px}
+  .f5-head h3{font-size:28px;font-weight:800;letter-spacing:-0.02em}
+  .f5-search{display:flex;align-items:center;gap:9px;border:1px solid var(--border);
+    border-radius:12px;background:var(--surface);padding:10px 14px;min-width:320px}
+  .f5-search input{flex:1;border:0;outline:0;background:none;font-size:13.5px}
+  .f5-search svg{color:var(--text-faint)}
+  .f5-foldertab{position:relative;z-index:2;margin-left:34px;display:inline-flex;align-items:center;gap:10px;
+    background:var(--manila);border:1px solid var(--manila-line);border-bottom:none;
+    border-radius:12px 12px 0 0;padding:10px 22px 14px;font-weight:800;font-size:13px;color:#6b5d3e;
+    letter-spacing:.06em}
+  .f5-foldertab .mono{font-size:11.5px;color:#93835c}
+  .f5-folder{position:relative;margin-top:-4px;display:grid;grid-template-columns:1fr 1.35fr;
+    background:var(--manila);border:1px solid var(--manila-line);border-radius:0 18px 18px 18px;
+    box-shadow:0 30px 70px -28px rgba(90,70,30,.45),0 3px 10px rgba(90,70,30,.12)}
+  .f5-crease{position:absolute;inset:18px auto 18px 42.4%;width:3px;
+    background:linear-gradient(180deg,transparent,var(--manila-deep) 12%,var(--manila-deep) 88%,transparent)}
+  .f5-left{padding:34px 38px}
+  .f5-photo{width:110px;height:110px;border-radius:14px;background:var(--primary-soft);
+    display:grid;place-items:center;font-size:30px;font-weight:800;color:var(--primary);
+    box-shadow:0 6px 16px rgba(90,70,30,.25);transform:rotate(-2deg);position:relative}
+  .f5-photo::before{content:"";position:absolute;top:-9px;left:50%;transform:translateX(-50%) rotate(2deg);
+    width:58px;height:18px;background:rgba(240,235,220,.75);border:1px solid rgba(90,70,30,.15)}
+  .f5-nm{margin-top:18px;font-size:22px;font-weight:900;letter-spacing:-0.01em;color:var(--primary)}
+  .f5-fields{margin-top:18px;display:flex;flex-direction:column;gap:0}
+  .f5-field{display:flex;justify-content:space-between;gap:14px;padding:8px 0;
+    border-bottom:1px dotted var(--manila-line);font-size:13px}
+  .f5-field .k{font-size:10.5px;font-weight:800;letter-spacing:.12em;text-transform:uppercase;color:#93835c;align-self:center}
+  .f5-field .v{font-weight:700;color:var(--text)}
+  .f5-field .v.mono{font-size:12px}
+  .f5-badge-actions{margin-top:22px;display:flex;gap:10px}
+  .f5-badge-actions .pri{flex:1;border-radius:11px;background:var(--primary);color:#fff;padding:11px;font-size:13px;font-weight:700}
+  .f5-badge-actions .sec{flex:1;border-radius:11px;border:1px solid var(--manila-line);background:rgba(255,255,255,.55);
+    padding:11px;font-size:13px;font-weight:700;color:#6b5d3e}
+  .f5-right{position:relative;background:var(--surface);margin:18px 18px 18px 10px;border-radius:12px;
+    border:1px solid var(--hairline);overflow:visible;box-shadow:0 4px 14px rgba(90,70,30,.12)}
+  .f5-rhead{padding:16px 22px;border-bottom:1px solid var(--hairline);display:flex;justify-content:space-between;align-items:baseline}
+  .f5-rhead .t{font-size:14px;font-weight:800}
+  .f5-rhead .c{font-family:var(--font-mono);font-size:11px;color:var(--text-faint)}
+  .f5-idx{position:absolute;top:64px;right:-13px;display:flex;flex-direction:column;gap:10px;z-index:2}
+  .f5-idx button{writing-mode:vertical-rl;padding:14px 0;width:26px;border-radius:0 8px 8px 0;
+    font-size:10px;font-weight:800;letter-spacing:.14em;text-transform:uppercase;color:#fff;
+    box-shadow:2px 2px 6px rgba(90,70,30,.25);opacity:.85;text-align:center}
+  .f5-idx button[aria-pressed="true"]{opacity:1;width:32px}
+  .f5-day{padding:8px 22px;font-size:10.5px;font-weight:800;letter-spacing:.13em;text-transform:uppercase;
+    color:var(--text-faint);background:var(--surface-raised);border-bottom:1px solid var(--hairline)}
+  .f5-row{display:flex;align-items:center;gap:13px;padding:12px 22px;border-bottom:1px solid var(--hairline);
+    padding-right:40px}
+  .f5-row .t{font-size:13.5px;font-weight:700}
+  .f5-row .s{margin-top:1px;font-size:12px;color:var(--text-muted)}
+  .f5-row .ref{margin-inline-start:auto;font-family:var(--font-mono);font-size:11px;color:var(--text-faint)}
+  .f5-row .tm{font-size:12px;color:var(--text-muted);width:64px;text-align:end;flex:none}
+  .f5-more{display:block;width:100%;padding:12px;text-align:center;font-size:13px;font-weight:700;color:var(--primary)}
+</style>
+</head>
+<body>
+
+<!-- ═══════════ FAITHFUL HERO ═══════════ -->
+<section class="hero">
+  <div class="hero-decor" aria-hidden="true"><div class="c1"></div><div class="c2"></div></div>
+  <div class="hero-col">
+    <div class="hero-eyebrow">Operations · Employees</div>
+    <h1>Who are you looking for?</h1>
+    <p class="hero-sub">Active, on leave, or separated — every file appears in search</p>
+    <div class="hero-pill">
+      <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.3-3.3"/></svg>
+      <input placeholder="Type a name or employee ID…">
+      <button class="go">Search</button>
+    </div>
+    <div class="hero-ghost-wrap"><button class="hero-ghost"><span class="plus">+</span>New employee — create file</button></div>
+  </div>
+  <div class="hero-cards">
+    <div class="hcard">
+      <div class="hcard-head"><span class="ico">◔</span><h4>Recently opened files</h4></div>
+      <button class="hchip"><span class="av">Mo</span><span class="lb">Mohammed Al-Harbi</span><span class="mt">G-1042</span></button>
+      <button class="hchip"><span class="av">Yo</span><span class="lb">Yousef Al-Dossari</span><span class="mt">G-0877</span></button>
+      <button class="hchip"><span class="av">Su</span><span class="lb">Sultan Al-Otaibi</span><span class="mt">G-0130</span></button>
+    </div>
+    <div class="hcard">
+      <div class="hcard-head"><span class="ico warn">⚠</span><h4>Documents expiring soon</h4><span class="badge">7</span></div>
+      <button class="hchip"><span class="av">Ra</span><span class="lb">Rakesh Kumar — Iqama</span><span class="mt warn">12 days</span></button>
+      <button class="hchip"><span class="av">Fa</span><span class="lb">Faisal Al-Qahtani — Passport</span><span class="mt warn">28 days</span></button>
+      <div style="margin-top:10px"><a class="link" href="#">View all expiring documents</a></div>
+    </div>
+    <div class="hcard">
+      <div class="hcard-head"><span class="ico">👤</span><h4>Files with missing data</h4><span class="badge">12</span></div>
+      <p class="body">Most missing: Bank IBAN, Passport expiry, Duty location. Completing them readies forms and letters instantly.</p>
+      <a class="link" href="#">Start completing files</a>
+    </div>
+  </div>
+</section>
+
+<div id="variants"></div>
+<div class="variant-tag" id="vtag"></div>
+
+<script>
+const KINDS = {
+  document:{label:'Documents', color:'var(--doc)', soft:'var(--doc-soft)', deck:'var(--deck-doc)',
+    ico:'M6 2h7l5 5v13a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2zm7 1.5V8h4.5'},
+  leave:{label:'Leave', color:'var(--leave)', soft:'var(--leave-soft)', deck:'var(--deck-leave)',
+    ico:'M8 2v3M16 2v3M3.5 9.5h17M5 4.5h14a1.5 1.5 0 0 1 1.5 1.5v13A1.5 1.5 0 0 1 19 20.5H5A1.5 1.5 0 0 1 3.5 19V6A1.5 1.5 0 0 1 5 4.5z'},
+  violation:{label:'Violations', color:'var(--violation)', soft:'var(--violation-soft)', deck:'var(--deck-violation)',
+    ico:'M12 3 2.5 20h19L12 3zm0 6v5m0 3v.5'},
+  ledger:{label:'Correspondence', color:'var(--ledger)', soft:'var(--ledger-soft)', deck:'var(--deck-ledger)',
+    ico:'M3.5 5.5h17v13h-17zM3.5 6.5 12 13l8.5-6.5'},
+}
+/* Activity scoped to Mohammed Al-Harbi (the selected employee) */
+const MA_DATA = [
+  {dayFull:'Aug 13, 2026', items:[
+    {kind:'document', title:'Salary Certificate', sub:'Generated document', ref:'GSSG-HR-300-114', time:'10:42 AM'},
+    {kind:'violation', title:'Late arrival — Gate 4', sub:'Recorded violation', ref:'VIO-2026-058', time:'8:05 AM'},
+  ]},
+  {dayFull:'Aug 12, 2026', items:[
+    {kind:'leave', title:'Sick leave', sub:'Leave record · 3 days', ref:'LV-2026-0308', time:'11:22 AM'},
+    {kind:'ledger', title:'Iqama renewal follow-up', sub:'Recorded correspondence', ref:'LDG-26-0841', time:'9:04 AM'},
+  ]},
+  {dayFull:'Aug 9, 2026', items:[
+    {kind:'document', title:'Clearance Form', sub:'Generated document', ref:'GSSG-HR-300-102', time:'2:12 PM'},
+    {kind:'leave', title:'Annual leave', sub:'Leave record · 21 days', ref:'LV-2026-0290', time:'10:38 AM'},
+  ]},
+]
+const icon = (path, size=16) => `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="${path}"/></svg>`
+const searchIco = icon('M11 4a7 7 0 1 0 0 14 7 7 0 0 0 0-14zm10 17-4.8-4.8', 17)
+
+const BADGE = `
+  <div class="badge-card">
+    <span class="clip"></span>
+    <div class="band"><div class="co">GSSG Security</div><div class="role">Employee identification</div>
+      <div class="photo">MA</div></div>
+    <div class="bod">
+      <div class="nm">Mohammed Al-Harbi</div>
+      <div class="pos">Security Guard · Riyadh HQ</div>
+      <div class="holo"></div>
+      <div><span class="status">Active</span></div>
+      <div class="barcode"></div>
+      <div class="gid">G-1042</div>
+    </div>
+  </div>`
+
+/* ───────── F1 — NIGHT DOSSIER (V1 × V3) ───────── */
+function f1(){
+  const tabs = [['All activity',24,true],['Documents',9],['Leave',6],['Violations',3],['Correspondence',6]]
+    .map(([l,n,on])=>`<button aria-selected="${!!on}">${l}<span class="n">${n}</span></button>`).join('')
+  const rows = MA_DATA.map(g=>`
+    <div class="f1-day"><span class="lbl">${g.dayFull}</span><span class="rule"></span></div>
+    ${g.items.map(it=>`
+      <a href="#" class="f1-row">
+        <span class="tm">${it.time}</span>
+        <span class="main"><span class="kdot" style="background:${KINDS[it.kind].deck}"></span>
+          <span style="min-width:0"><span class="t" style="display:block">${it.title}</span><span class="s">${it.sub}</span></span></span>
+        <span class="ref">${it.ref}</span>
+        <span class="open">Open record →</span>
+      </a>`).join('')}`).join('')
+  return `<section class="f1"><div class="wrap">
+    <div class="f1-head">
+      <div><div class="eyebrow"><span class="live"></span>Employee records · live</div>
+        <h3>Recent activity</h3>
+        <p class="sub">Review recent record activity across all employees or find one employee.</p></div>
+      <div class="f1-clock"><div class="t">14:36:08</div><div class="d">Thursday, Aug 13 2026 · Riyadh</div></div>
+    </div>
+    <div class="f1-grid">
+      <div>
+        ${BADGE}
+        <div class="f1-actions"><button class="pri">Open profile</button><button class="sec">Clear</button></div>
+        <div class="f1-search">${searchIco}<input placeholder="Look up another employee…"></div>
+      </div>
+      <div class="f1-console">
+        <div class="f1-tabs">${tabs}</div>
+        <div class="f1-shead"><span>Activity file — Mohammed Al-Harbi</span><span>Showing 6 / 24</span></div>
+        ${rows}
+        <button class="f1-more">Load more activity ↓</button>
+      </div>
+    </div>
+  </div></section>`
+}
+
+/* ───────── F2 — SERVICE RECORD ───────── */
+function f2(){
+  const ribbons = [['all','All activity',24,true,'repeating-linear-gradient(90deg,#0d2845 0 6px,#c8102e 6px 10px,#0d2845 10px 16px)'],
+    ['document','Documents',9,false,'repeating-linear-gradient(90deg,#0d5c8a 0 8px,#e6f0f6 8px 11px,#0d5c8a 11px 19px)'],
+    ['leave','Leave',6,false,'repeating-linear-gradient(90deg,#047857 0 8px,#e5f3ee 8px 11px,#047857 11px 19px)'],
+    ['violation','Violations',3,false,'repeating-linear-gradient(90deg,#b3541e 0 8px,#f9ede4 8px 11px,#b3541e 11px 19px)'],
+    ['ledger','Correspondence',6,false,'repeating-linear-gradient(90deg,#6b4fb0 0 8px,#f1eef8 8px 11px,#6b4fb0 11px 19px)']]
+    .map(([k,l,n,on,bg])=>`<button class="f2-ribbon" aria-pressed="${on}">
+      <span class="bar" style="background:${bg}"></span><span class="nm">${l}</span><span class="n">${n}</span></button>`).join('')
+  const rows = MA_DATA.map(g=>`
+    <div class="f2-day">${g.dayFull}</div>
+    ${g.items.map(it=>`
+      <a href="#" class="f2-row">
+        <span class="tm">${it.time}</span>
+        <span class="kind" style="color:${KINDS[it.kind].color}">${KINDS[it.kind].label}</span>
+        <span style="min-width:0"><span class="t" style="display:block">${it.title}</span><span class="s">${it.sub}</span></span>
+        <span class="ref">${it.ref}</span>
+        ${it.kind==='violation'?'<span class="f2-stamp">Violation</span>':''}
+      </a>`).join('')}`).join('')
+  return `<section class="f2"><div class="wrap">
+    <div class="f2-head">
+      <div class="eyebrow">Employee records</div>
+      <h3>Service Record</h3>
+      <div class="rule"></div>
+    </div>
+    <div class="f2-grid">
+      <div>
+        ${BADGE}
+        <div class="f2-ribbons"><div class="lbl">Record types</div>${ribbons}</div>
+        <div class="f2-search">${searchIco}<input placeholder="Look up another employee…"></div>
+      </div>
+      <div class="f2-sheet">
+        <div class="f2-shead"><span class="t">Service record — Al-Harbi, Mohammed</span>
+          <span class="meta">FILE G-1042 · SHOWING 6 / 24</span></div>
+        <div class="f2-cols"><span>Time</span><span>Type</span><span>Entry</span><span style="text-align:end">Reference</span></div>
+        ${rows}
+        <button class="f2-more">Load more activity</button>
+      </div>
+    </div>
+  </div></section>`
+}
+
+/* ───────── F3 — LANYARD ───────── */
+function f3(){
+  const chips = [['All activity',true],['Documents'],['Leave'],['Violations'],['Correspondence']]
+    .map(([l,on])=>`<button aria-pressed="${!!on}">${l}</button>`).join('')
+  const rows = MA_DATA.map(g=>`
+    <div class="f3-day">${g.dayFull}</div>
+    ${g.items.map(it=>`
+      <a href="#" class="f3-row row-hover">
+        <span class="k-ico" style="background:${KINDS[it.kind].soft};color:${KINDS[it.kind].color}">${icon(KINDS[it.kind].ico)}</span>
+        <span style="min-width:0"><span class="t" style="display:block">${it.title}</span><span class="s">${it.sub}</span></span>
+        <span class="ref">${it.ref}</span><span class="tm">${it.time}</span>
+      </a>`).join('')}`).join('')
+  return `<section class="f3"><div class="wrap">
+    <div class="f3-grid">
+      <div class="f3-hang">
+        <div class="f3-reel">
+          <div class="reel-disc"><span class="reel-logo">
+            <svg viewBox="0 0 80 80" fill="none"><circle cx="40" cy="40" r="34.3" stroke="#cf3238" stroke-width="8.3"
+              stroke-dasharray="46.77 7.1" stroke-dashoffset="50.32" transform="rotate(-90 40 40)"/></svg>
+            <img src="gssg-globe.png" alt="GSSG logo">
+          </span></div>
+          <div class="reel-neck"></div>
+          <div class="reel-ball"></div>
+          <div class="reel-ring"></div>
+          <div class="reel-strap"><span class="snap"></span></div>
+        </div>
+        ${BADGE}
+        <div class="f3-actions"><button class="pri">Open profile</button><button class="sec">Clear</button></div>
+      </div>
+      <div class="f3-right">
+        <h3>Recent activity</h3>
+        <p class="sec-sub">Review recent record activity across all employees or find one employee.</p>
+        <div class="f3-toolbar">
+          <div class="f3-search">${searchIco}<input placeholder="Search by employee name or G-number"></div>
+          <div class="f3-chips">${chips}</div>
+        </div>
+        <div class="f3-panel">
+          ${rows}
+          <button class="f3-more">Load more activity</button>
+        </div>
+      </div>
+    </div>
+  </div></section>`
+}
+
+/* ───────── F4 — BADGE DRAWER ───────── */
+function f4(){
+  const minis = [
+    ['Yousef Al-Dossari','YA','G-0877'],
+    ['Rakesh Kumar','RK','G-1203'],
+    ['Mohammed Al-Harbi','MA','G-1042',true],
+    ['Ali Hassan Shah','AH','G-0954'],
+    ['Sultan Al-Otaibi','SA','G-0130'],
+  ].map(([nm,av,gid,sel])=>`
+    <button class="f4-mini${sel?' sel':''}">
+      <span class="mband"><span>GSSG</span></span>
+      <span class="mav">${av}</span>
+      <span class="mnm" style="display:block">${nm}</span>
+      <span class="mgid" style="display:block">${gid}</span>
+      ${sel?'<span class="stat">Active</span>':''}
+      <span class="mbar" style="display:block"></span>
+    </button>`).join('')
+  const pulse = [3,1,0,2,4,2,6].map((n,i)=>
+    `<span style="height:${6+n*4}px" class="${i===6?'hot':''}"></span>`).join('')
+  const tabs = [['All activity',24,true],['Documents',9],['Leave',6],['Violations',3],['Correspondence',6]]
+    .map(([l,n,on])=>`<button aria-selected="${!!on}">${l}<span class="n">${n}</span></button>`).join('')
+  const rows = MA_DATA.map(g=>`
+    <div class="f4-day">${g.dayFull}</div>
+    ${g.items.map(it=>`
+      <a href="#" class="f4-row row-hover">
+        <span class="kdot" style="background:${KINDS[it.kind].color}"></span>
+        <span style="min-width:0"><span class="t" style="display:block">${it.title}</span><span class="s">${it.sub}</span></span>
+        <span class="ref">${it.ref}</span><span class="tm">${it.time}</span>
+      </a>`).join('')}`).join('')
+  return `<section class="f4"><div class="wrap">
+    <div class="f4-head"><h3>Recent activity</h3>
+      <p class="sec-sub">Pick a badge from the tray — search adds more.</p></div>
+    <div class="f4-search">${searchIco}<input placeholder="Search by employee name or G-number"></div>
+    <div class="f4-drawer">${minis}</div>
+    <p class="f4-hint">Recently opened — most recent in the middle</p>
+    <div class="f4-panel">
+      <div class="f4-phead">
+        <span class="t">Activity — Mohammed Al-Harbi</span>
+        <span class="f4-mini-pulse-lbl">Last 7 days</span>
+        <span class="f4-mini-pulse">${pulse}</span>
+      </div>
+      <div class="f4-tabs">${tabs}</div>
+      ${rows}
+      <button class="f4-more">Load more activity</button>
+    </div>
+  </div></section>`
+}
+
+/* ───────── F5 — FOLDER SPREAD ───────── */
+function f5(){
+  const idx = [['all','All','var(--primary)',true],['document','Docs','var(--doc)'],['leave','Leave','var(--leave)'],
+    ['violation','Violation','var(--violation)'],['ledger','Letters','var(--ledger)']]
+    .map(([k,l,c,on])=>`<button aria-pressed="${!!on}" style="background:${c}">${l}</button>`).join('')
+  const rows = MA_DATA.map(g=>`
+    <div class="f5-day">${g.dayFull}</div>
+    ${g.items.map(it=>`
+      <a href="#" class="f5-row row-hover">
+        <span class="kdot" style="background:${KINDS[it.kind].color}"></span>
+        <span style="min-width:0"><span class="t" style="display:block">${it.title}</span><span class="s">${it.sub}</span></span>
+        <span class="ref">${it.ref}</span><span class="tm">${it.time}</span>
+      </a>`).join('')}`).join('')
+  return `<section class="f5"><div class="wrap">
+    <div class="f5-head">
+      <div><h3>Recent activity</h3>
+        <p class="sec-sub">Review recent record activity across all employees or find one employee.</p></div>
+      <div class="f5-search">${searchIco}<input placeholder="Search by employee name or G-number"></div>
+    </div>
+    <div class="f5-foldertab">Personnel file <span class="mono">G-1042 · AL-HARBI</span></div>
+    <div class="f5-folder">
+      <span class="f5-crease"></span>
+      <div class="f5-left">
+        <div class="f5-photo">MA</div>
+        <div class="f5-nm">Mohammed Al-Harbi</div>
+        <div class="f5-fields">
+          <div class="f5-field"><span class="k">Employee ID</span><span class="v mono">G-1042</span></div>
+          <div class="f5-field"><span class="k">Position</span><span class="v">Security Guard</span></div>
+          <div class="f5-field"><span class="k">Duty location</span><span class="v">Riyadh HQ</span></div>
+          <div class="f5-field"><span class="k">Status</span><span class="v" style="color:var(--success)">Active</span></div>
+          <div class="f5-field"><span class="k">Joined</span><span class="v mono">03 Feb 2021</span></div>
+          <div class="f5-field"><span class="k">Iqama expiry</span><span class="v mono">21 Nov 2026</span></div>
+        </div>
+        <div class="f5-badge-actions"><button class="pri">Open profile</button><button class="sec">Close file</button></div>
+      </div>
+      <div class="f5-right">
+        <div class="f5-idx">${idx}</div>
+        <div class="f5-rhead"><span class="t">Activity log</span><span class="c">SHOWING 6 / 24</span></div>
+        ${rows}
+        <button class="f5-more">Load more activity</button>
+      </div>
+    </div>
+  </div></section>`
+}
+
+const all = {1:['Night dossier',f1],2:['Service record',f2],3:['Lanyard',f3],4:['Badge drawer',f4],5:['Folder spread',f5]}
+const only = Number(new URLSearchParams(location.search).get('v'))
+const host = document.getElementById('variants')
+if (all[only]) {
+  host.innerHTML = all[only][1]()
+  document.getElementById('vtag').innerHTML = `<span>F${only}</span>${all[only][0]}`
+} else {
+  host.innerHTML = Object.values(all).map(([,f])=>f()).join('')
+  document.getElementById('vtag').style.display='none'
+}
+</script>
+</body>
+</html>

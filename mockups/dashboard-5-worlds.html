@@ -1,0 +1,796 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>GSSG Dashboard — 5 Worlds</title>
+<style>
+/* ============ shared tokens (mirrors frontend/src/index.css) ============ */
+:root{
+  --bg:#f5f4f1; --surface:#fff; --surface-raised:#fafaf6; --surface-tinted:#f0eee8;
+  --primary:#0d2845; --primary-hover:#1d3a5e; --primary-soft:#e8edf3;
+  --accent:#c8102e; --accent-soft:#fbe5e8;
+  --success:#047857; --success-soft:#d6f0e4;
+  --warning:#92400e; --warning-soft:#fbedd8;
+  --info:#1d4ed8; --info-soft:#e0e8f8;
+  --smart:#6b4fb0; --smart-soft:#f1eef8;
+  --text:#1c1f24; --text-muted:#5a6068; --text-faint:#8b9098;
+  --border:#e6e4dd; --border-strong:#d4d1c8; --hairline:#efece5;
+  --hero-grad:linear-gradient(135deg,#0a1f3a 0%,#0d2845 50%,#1d3a5e 100%);
+  /* dark palette for V1 */
+  --d-bg:#0a0e18; --d-surface:#131826; --d-raised:#1a2034; --d-tinted:#1f263b;
+  --d-primary:#5778cf; --d-primary-soft:#1c2849; --d-accent:#ef4858;
+  --d-success:#34d399; --d-warning:#fbbf24; --d-info:#60a5fa;
+  --d-text:#e6e9f2; --d-muted:#8a93a7; --d-faint:#5f6678;
+  --d-border:#2a3148; --d-hairline:#1f263b;
+  font-size:16px;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:"Inter","Segoe UI",system-ui,sans-serif;background:var(--bg);color:var(--text);-webkit-font-smoothing:antialiased}
+.mono{font-family:"IBM Plex Mono","Consolas",monospace}
+.ar{font-family:"Noto Sans Arabic","Segoe UI",sans-serif}
+a{color:inherit;text-decoration:none}
+button{font:inherit;border:0;background:none;cursor:pointer;color:inherit}
+.variant{display:none}
+.variant.active{display:block}
+
+/* ============ shared top nav replica ============ */
+.topnav{display:flex;align-items:center;gap:26px;height:56px;padding:0 28px;background:var(--surface);border-bottom:1px solid var(--border)}
+.topnav .brand{display:flex;align-items:center;gap:10px;margin-inline-end:6px}
+.topnav .brand img{width:34px;height:34px}
+.topnav .brand b{font-size:.95rem;letter-spacing:.01em}
+.topnav .brand small{display:block;font-size:.58rem;color:var(--text-muted);font-weight:500;line-height:1.1;max-width:120px}
+.topnav nav{display:flex;gap:20px;font-size:.85rem;font-weight:500;color:var(--text-muted)}
+.topnav nav .on{color:var(--text);font-weight:600;position:relative}
+.topnav nav .on::after{content:"";position:absolute;left:0;right:0;bottom:-18px;height:2px;background:var(--primary)}
+.topnav .spacer{flex:1}
+.topnav .pillbox{display:flex;align-items:center;gap:12px;font-size:.8rem;color:var(--text-muted)}
+.chip-personal{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--border);border-radius:99px;padding:4px 10px;font-size:.72rem;font-weight:600;background:var(--surface-raised)}
+.chip-personal .dot{width:7px;height:7px;border-radius:50%;background:var(--success)}
+.avatar{width:30px;height:30px;border-radius:50%;background:var(--primary-soft);display:grid;place-items:center;font-size:.75rem;font-weight:700;color:var(--primary)}
+
+/* ═══════════════════ V1 — COMMAND DECK (dark ops console) ═══════════════════ */
+.v1{background:var(--d-bg);color:var(--d-text);min-height:100vh}
+.v1 .topnav{background:#0d1322;border-color:var(--d-border)}
+.v1 .topnav nav{color:var(--d-muted)}
+.v1 .topnav nav .on{color:var(--d-text)}
+.v1 .topnav nav .on::after{background:var(--d-primary)}
+.v1 .chip-personal{background:var(--d-raised);border-color:var(--d-border);color:var(--d-text)}
+.v1 .avatar{background:var(--d-primary-soft);color:var(--d-primary)}
+.v1 .deck{padding:22px 28px 60px}
+.v1 .greet{display:flex;align-items:baseline;gap:14px;margin-bottom:18px}
+.v1 .greet h1{font-size:1.35rem;font-weight:650;letter-spacing:-.01em}
+.v1 .greet .date{font-size:.78rem;color:var(--d-muted)}
+.v1 .greet .hijri{font-size:.78rem;color:var(--d-faint)}
+/* signature: status spine — full-width gauge strip w/ quadrant ring ticks */
+.v1 .spine{display:grid;grid-template-columns:repeat(5,1fr);border:1px solid var(--d-border);border-radius:14px;background:linear-gradient(180deg,#111828,#0d1322);overflow:hidden;margin-bottom:22px}
+.v1 .gauge{position:relative;display:flex;gap:14px;align-items:center;padding:18px 20px;border-inline-end:1px solid var(--d-hairline)}
+.v1 .gauge:last-child{border-inline-end:0}
+.v1 .gauge:hover{background:#151d31}
+.v1 .ring{width:52px;height:52px;flex:none}
+.v1 .gauge .num{font-size:1.7rem;font-weight:700;line-height:1}
+.v1 .gauge .lbl{font-size:.68rem;text-transform:uppercase;letter-spacing:.09em;color:var(--d-muted);margin-top:5px}
+.v1 .gauge .go{position:absolute;top:10px;inset-inline-end:12px;font-size:.66rem;color:var(--d-faint)}
+.v1 .gauge.warn .num{color:var(--d-warning)}
+.v1 .gauge.alert .num{color:var(--d-accent)}
+.v1 .gauge.ok .num{color:var(--d-success)}
+.v1 .grid{display:grid;grid-template-columns:340px 1fr 360px;gap:16px;align-items:start}
+.v1 .panel{background:var(--d-surface);border:1px solid var(--d-border);border-radius:14px}
+.v1 .panel h3{display:flex;align-items:center;justify-content:space-between;padding:13px 16px;border-bottom:1px solid var(--d-hairline);font-size:.78rem;text-transform:uppercase;letter-spacing:.08em;color:var(--d-muted);font-weight:600}
+.v1 .panel h3 .count{font-family:"IBM Plex Mono",monospace;color:var(--d-warning);background:#2a230f;border-radius:99px;padding:1px 8px;font-size:.72rem}
+.v1 .qrow{padding:12px 16px;border-bottom:1px solid var(--d-hairline)}
+.v1 .qrow:last-child{border-bottom:0}
+.v1 .qrow .ref{font-family:"IBM Plex Mono",monospace;font-size:.72rem;color:var(--d-info);background:#14213a;padding:1px 7px;border-radius:6px}
+.v1 .qrow .sub{font-size:.85rem;margin:7px 0 9px;line-height:1.35}
+.v1 .qrow .meta{font-size:.7rem;color:var(--d-faint)}
+.v1 .qrow .acts{display:flex;gap:8px;margin-top:9px}
+.v1 .btn{border-radius:8px;padding:5px 12px;font-size:.74rem;font-weight:600}
+.v1 .btn.ok{background:#12312a;color:var(--d-success)}
+.v1 .btn.no{background:#33161c;color:var(--d-accent)}
+.v1 .btn.ghost{background:var(--d-tinted);color:var(--d-muted)}
+.v1 .radar-row{display:flex;align-items:center;gap:12px;padding:11px 16px;border-bottom:1px solid var(--d-hairline);font-size:.82rem}
+.v1 .radar-row:last-child{border-bottom:0}
+.v1 .badge{font-size:.66rem;font-weight:700;border-radius:6px;padding:2px 7px;font-family:"IBM Plex Mono",monospace}
+.v1 .badge.red{background:#3a1820;color:var(--d-accent)}
+.v1 .badge.amber{background:#3a2a10;color:var(--d-warning)}
+.v1 .badge.blue{background:#1c2940;color:var(--d-info)}
+.v1 .badge.green{background:#142d23;color:var(--d-success)}
+.v1 .who{flex:1;min-width:0}
+.v1 .who .nm{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.v1 .who .id{font-family:"IBM Plex Mono",monospace;font-size:.66rem;color:var(--d-faint)}
+.v1 .feed-row{display:flex;gap:10px;padding:11px 16px;border-bottom:1px solid var(--d-hairline);font-size:.8rem;align-items:flex-start}
+.v1 .feed-row:last-child{border-bottom:0}
+.v1 .feed-dot{width:8px;height:8px;border-radius:50%;margin-top:5px;flex:none}
+.v1 .feed-row .t{color:var(--d-faint);font-size:.68rem;font-family:"IBM Plex Mono",monospace;white-space:nowrap}
+.v1 .dock{position:sticky;bottom:0;margin-top:26px;background:linear-gradient(180deg,transparent,#0a0e18 30%);padding-top:18px}
+.v1 .dock-inner{display:flex;gap:10px;justify-content:center;background:#111828;border:1px solid var(--d-border);border-radius:16px;padding:12px 16px;overflow-x:auto}
+.v1 .svc{display:flex;flex-direction:column;align-items:center;gap:6px;min-width:86px;padding:9px 6px;border-radius:10px;font-size:.64rem;color:var(--d-muted);text-align:center}
+.v1 .svc:hover{background:var(--d-tinted);color:var(--d-text)}
+.v1 .svc .e{font-size:1.25rem}
+.v1 .subttl{font-size:.7rem;color:var(--d-faint);text-align:center;margin-top:8px}
+
+/* ═══════════════════ V2 — DAYBOOK FOLIO (editorial register) ═══════════════════ */
+.v2{min-height:100vh;background:#f7f5f0}
+.v2 .masthead{border-bottom:3px double var(--border-strong);background:#fbfaf7;padding:26px 34px 18px;position:relative}
+.v2 .masthead::before{content:"";position:absolute;top:0;bottom:0;inset-inline-start:76px;width:1px;background:rgba(200,16,46,.25)}
+.v2 .mast-row{display:flex;align-items:baseline;gap:18px}
+.v2 .mast-row h1{font-size:2rem;font-weight:750;letter-spacing:-.02em}
+.v2 .mast-row .day{font-size:.85rem;color:var(--text-muted)}
+.v2 .mast-row .hijri{font-size:.85rem;color:var(--text-faint)}
+.v2 .mast-sub{display:flex;gap:26px;margin-top:10px;font-size:.78rem;color:var(--text-muted)}
+.v2 .mast-sub b{font-family:"IBM Plex Mono",monospace;color:var(--text)}
+.v2 .folio{display:grid;grid-template-columns:1.25fr .95fr .8fr;gap:0;padding:0 34px 40px}
+.v2 .col{padding:22px 26px;border-inline-end:1px solid var(--border)}
+.v2 .col:last-child{border-inline-end:0}
+.v2 .block{margin-bottom:26px}
+.v2 .block>h3{font-size:.7rem;letter-spacing:.14em;text-transform:uppercase;color:var(--accent);font-weight:700;padding-bottom:8px;border-bottom:2px solid var(--text);margin-bottom:4px;display:flex;justify-content:space-between}
+.v2 .block>h3 .n{font-family:"IBM Plex Mono",monospace;color:var(--text)}
+.v2 .lrow{display:flex;align-items:baseline;gap:10px;padding:10px 2px;border-bottom:1px solid var(--hairline);font-size:.85rem}
+.v2 .lrow .ref{font-family:"IBM Plex Mono",monospace;font-size:.72rem;color:var(--primary);font-weight:600}
+.v2 .lrow .grow{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.v2 .lrow .tail{font-family:"IBM Plex Mono",monospace;font-size:.7rem;color:var(--text-faint);white-space:nowrap}
+.v2 .lrow .act{font-size:.7rem;font-weight:700;color:var(--success)}
+.v2 .lrow .act.rej{color:var(--accent)}
+.v2 .statline{display:flex;justify-content:space-between;align-items:baseline;padding:9px 2px;border-bottom:1px solid var(--hairline);font-size:.85rem}
+.v2 .statline b{font-family:"IBM Plex Mono",monospace;font-size:1.05rem}
+.v2 .statline .to{font-size:.68rem;color:var(--text-faint)}
+.v2 .warnrow{color:var(--warning)}
+.v2 .index{column-count:2;column-gap:26px;font-size:.82rem}
+.v2 .index a{display:flex;gap:8px;padding:6px 0;border-bottom:1px solid var(--hairline);break-inside:avoid}
+.v2 .index a:hover{color:var(--accent)}
+.v2 .index .e{width:20px;text-align:center}
+.v2 .foot-note{margin:6px 34px 30px;font-size:.7rem;color:var(--text-faint)}
+
+/* ═══════════════════ V3 — MISSION BOARD (work lanes) ═══════════════════ */
+.v3{min-height:100vh}
+.v3 .head{display:flex;align-items:center;gap:18px;padding:20px 28px 14px}
+.v3 .head h1{font-size:1.3rem;font-weight:700;letter-spacing:-.01em}
+.v3 .head .sub{font-size:.8rem;color:var(--text-muted)}
+.v3 .head .spacer{flex:1}
+.v3 .board{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;padding:6px 28px 46px;align-items:start}
+.v3 .lane{background:var(--surface-tinted);border-radius:16px;padding:10px}
+.v3 .lane>header{display:flex;align-items:center;gap:8px;padding:8px 8px 12px;font-size:.8rem;font-weight:700}
+.v3 .lane>header .cnt{font-family:"IBM Plex Mono",monospace;font-size:.72rem;background:var(--surface);border-radius:99px;padding:1px 8px;color:var(--text-muted)}
+.v3 .lane>header .bar{width:4px;height:16px;border-radius:2px}
+.v3 .card{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:12px 13px;margin-bottom:10px;box-shadow:0 1px 2px rgba(13,40,69,.05)}
+.v3 .card .top{display:flex;align-items:center;gap:8px;font-size:.7rem;color:var(--text-muted)}
+.v3 .card .ref{font-family:"IBM Plex Mono",monospace;background:var(--primary-soft);color:var(--primary);border-radius:6px;padding:1px 7px;font-weight:600}
+.v3 .card .sub{font-size:.84rem;font-weight:550;margin:7px 0;line-height:1.35}
+.v3 .card .who{font-size:.72rem;color:var(--text-muted)}
+.v3 .card .acts{display:flex;gap:7px;margin-top:10px}
+.v3 .bt{border-radius:8px;padding:5px 11px;font-size:.72rem;font-weight:650}
+.v3 .bt.sign{background:var(--success-soft);color:var(--success)}
+.v3 .bt.rej{background:var(--accent-soft);color:var(--accent)}
+.v3 .bt.open{background:var(--surface-tinted);color:var(--text-muted)}
+.v3 .bt.wide{width:100%;text-align:center}
+.v3 .pill{font-size:.64rem;font-weight:700;border-radius:6px;padding:2px 7px;font-family:"IBM Plex Mono",monospace}
+.v3 .pill.red{background:var(--accent-soft);color:var(--accent)}
+.v3 .pill.amber{background:var(--warning-soft);color:var(--warning)}
+.v3 .pill.blue{background:var(--info-soft);color:var(--info)}
+.v3 .pill.green{background:var(--success-soft);color:var(--success)}
+.v3 .empty{font-size:.75rem;color:var(--text-faint);text-align:center;padding:20px 0 14px}
+.v3 .svc-fab{position:fixed;bottom:24px;inset-inline-end:24px;background:var(--primary);color:#fff;border-radius:14px;padding:13px 18px;font-size:.85rem;font-weight:650;box-shadow:0 8px 24px rgba(13,40,69,.35);display:flex;gap:9px;align-items:center}
+.v3 .tray{position:fixed;bottom:86px;inset-inline-end:24px;width:330px;background:var(--surface);border:1px solid var(--border);border-radius:16px;box-shadow:0 18px 44px rgba(13,40,69,.22);padding:14px}
+.v3 .tray h4{font-size:.72rem;letter-spacing:.1em;text-transform:uppercase;color:var(--text-muted);margin:2px 4px 10px}
+.v3 .tray .list{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.v3 .tray a{display:flex;gap:8px;align-items:center;font-size:.76rem;font-weight:550;padding:8px 9px;border-radius:9px}
+.v3 .tray a:hover{background:var(--surface-tinted)}
+
+/* ═══════════════════ V4 — BADGE BOARD (pinned dossier) ═══════════════════ */
+.v4{min-height:100vh;background:#efe9df;background-image:radial-gradient(rgba(13,40,69,.05) 1px,transparent 1px);background-size:22px 22px}
+.v4 .boardhead{display:flex;align-items:center;gap:16px;padding:22px 32px 6px}
+.v4 .boardhead h1{font-size:1.35rem;font-weight:750;color:#241f18}
+.v4 .boardhead .date{font-size:.8rem;color:#6d675c}
+.v4 .mybadge{margin-inline-start:auto;display:flex;align-items:center;gap:10px;background:#fff;border-radius:12px;padding:8px 14px 8px 8px;box-shadow:0 6px 16px rgba(36,31,24,.18);transform:rotate(1.6deg)}
+.v4 .mybadge .clip{width:10px;height:22px;border-radius:5px;background:linear-gradient(180deg,#d8d4cc,#b9b4aa);margin-inline-end:2px}
+.v4 .mybadge .ph{width:34px;height:34px;border-radius:8px;background:var(--primary);color:#fff;display:grid;place-items:center;font-weight:700;font-size:.8rem}
+.v4 .mybadge .nm{font-size:.74rem;font-weight:700}
+.v4 .mybadge .rl{font-size:.62rem;color:#8a8478}
+.v4 .pinwrap{columns:3;column-gap:20px;padding:18px 32px 60px}
+.v4 .pin-card{break-inside:avoid;background:#fffdf8;border:1px solid #e2dccf;border-radius:4px;margin-bottom:20px;box-shadow:0 10px 22px rgba(36,31,24,.12);position:relative;padding:16px 18px 14px}
+.v4 .pin-card::before{content:"";position:absolute;top:-7px;left:50%;transform:translateX(-50%) rotate(-1deg);width:74px;height:16px;background:rgba(200,16,46,.14);border:1px solid rgba(200,16,46,.1)}
+.v4 .pin-card.tilt-l{transform:rotate(-.7deg)}
+.v4 .pin-card.tilt-r{transform:rotate(.8deg)}
+.v4 .pin-card>h3{font-size:.72rem;letter-spacing:.12em;text-transform:uppercase;color:#8a8478;font-weight:700;display:flex;justify-content:space-between;margin-bottom:10px}
+.v4 .pin-card>h3 .n{font-family:"IBM Plex Mono",monospace;color:var(--accent)}
+.v4 .prow{display:flex;gap:10px;align-items:center;padding:8px 0;border-top:1px dashed #e2dccf;font-size:.82rem}
+.v4 .prow .tag{font-family:"IBM Plex Mono",monospace;font-size:.64rem;font-weight:700;padding:2px 7px;border-radius:5px}
+.v4 .stamp{position:absolute;bottom:10px;inset-inline-end:12px;font-size:.6rem;font-weight:800;letter-spacing:.14em;color:rgba(200,16,46,.4);border:2px solid rgba(200,16,46,.3);border-radius:4px;padding:2px 7px;transform:rotate(-6deg);text-transform:uppercase}
+.v4 .bignum{font-family:"IBM Plex Mono",monospace;font-size:2rem;font-weight:700;color:#241f18}
+.v4 .ring-tiles{display:flex;flex-wrap:wrap;gap:9px;padding-top:6px}
+.v4 .ltile{display:flex;flex-direction:column;gap:5px;align-items:center;width:92px;background:#fff;border:1px solid #e2dccf;border-radius:9px;padding:10px 6px;font-size:.62rem;text-align:center;font-weight:600;color:#514c42;box-shadow:0 3px 8px rgba(36,31,24,.08);position:relative}
+.v4 .ltile::before{content:"";position:absolute;top:4px;left:50%;transform:translateX(-50%);width:22px;height:4px;border-radius:99px;background:#efe9df}
+.v4 .ltile .e{font-size:1.2rem;margin-top:4px}
+.v4 .ltile:hover{border-color:var(--accent)}
+
+/* ═══════════════════ V5 — PULSE RAIL (SaaS bands) ═══════════════════ */
+.v5{min-height:100vh}
+.v5 .wrap{display:grid;grid-template-columns:230px 1fr;gap:0}
+.v5 .rail{position:sticky;top:0;height:100vh;background:var(--primary);color:#dbe4f0;padding:18px 14px;display:flex;flex-direction:column;gap:6px}
+.v5 .rail .me{display:flex;gap:10px;align-items:center;padding:8px 10px 16px;border-bottom:1px solid rgba(255,255,255,.12);margin-bottom:8px}
+.v5 .rail .me .av{width:36px;height:36px;border-radius:10px;background:rgba(255,255,255,.14);display:grid;place-items:center;font-weight:700}
+.v5 .rail .me .nm{font-size:.8rem;font-weight:650;color:#fff}
+.v5 .rail .me .st{font-size:.62rem;color:#9fb1c9}
+.v5 .pulse{display:flex;align-items:center;gap:12px;padding:11px 12px;border-radius:12px;font-size:.78rem;font-weight:550}
+.v5 .pulse:hover,.v5 .pulse.on{background:rgba(255,255,255,.1)}
+.v5 .pulse .n{font-family:"IBM Plex Mono",monospace;font-size:1.05rem;font-weight:700;width:38px;text-align:center;border-radius:9px;padding:4px 0}
+.v5 .pulse .n.warn{background:rgba(251,191,36,.15);color:#fbbf24}
+.v5 .pulse .n.alert{background:rgba(239,72,88,.18);color:#ff8b96}
+.v5 .pulse .n.ok{background:rgba(52,211,153,.15);color:#5eead4}
+.v5 .pulse .n.info{background:rgba(96,165,250,.16);color:#93c5fd}
+.v5 .rail .theme{margin-top:auto;border-top:1px solid rgba(255,255,255,.12);padding-top:12px;font-size:.7rem;color:#9fb1c9}
+.v5 .rail .theme .tg{display:flex;background:rgba(255,255,255,.1);border-radius:99px;padding:3px;margin-top:8px}
+.v5 .rail .theme .tg span{flex:1;text-align:center;border-radius:99px;padding:4px 0;font-weight:650}
+.v5 .rail .theme .tg .sel{background:#fff;color:var(--primary)}
+.v5 .main{padding:22px 30px 50px}
+.v5 .hello{display:flex;align-items:baseline;gap:14px;margin-bottom:16px}
+.v5 .hello h1{font-size:1.4rem;font-weight:700;letter-spacing:-.015em}
+.v5 .hello .d{font-size:.8rem;color:var(--text-muted)}
+.v5 .film{display:flex;gap:10px;overflow-x:auto;padding:4px 2px 14px;border-bottom:1px solid var(--border);margin-bottom:22px}
+.v5 .ftile{flex:none;display:flex;gap:9px;align-items:center;background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:9px 14px;font-size:.78rem;font-weight:600}
+.v5 .ftile:hover{border-color:var(--primary);box-shadow:0 3px 10px rgba(13,40,69,.1)}
+.v5 .band{background:var(--surface);border:1px solid var(--border);border-radius:16px;margin-bottom:16px;overflow:hidden}
+.v5 .band>header{display:flex;align-items:center;gap:12px;padding:14px 20px;border-bottom:1px solid var(--hairline)}
+.v5 .band>header h2{font-size:.95rem;font-weight:700}
+.v5 .band>header .k{font-family:"IBM Plex Mono",monospace;font-size:.75rem;background:var(--surface-tinted);padding:2px 9px;border-radius:99px;color:var(--text-muted)}
+.v5 .band>header .go{margin-inline-start:auto;font-size:.75rem;font-weight:650;color:var(--primary)}
+.v5 .brow{display:flex;align-items:center;gap:14px;padding:12px 20px;border-bottom:1px solid var(--hairline);font-size:.85rem}
+.v5 .brow:last-child{border-bottom:0}
+.v5 .brow .avx{width:32px;height:32px;border-radius:9px;display:grid;place-items:center;font-size:.72rem;font-weight:700;background:var(--primary-soft);color:var(--primary);flex:none}
+.v5 .brow .mainx{flex:1;min-width:0}
+.v5 .brow .t1{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.v5 .brow .t2{font-size:.72rem;color:var(--text-muted)}
+.v5 .brow .end{font-family:"IBM Plex Mono",monospace;font-size:.72rem;color:var(--text-faint);white-space:nowrap}
+.v5 .btn2{border-radius:9px;padding:6px 13px;font-size:.75rem;font-weight:650}
+.v5 .btn2.ok{background:var(--success-soft);color:var(--success)}
+.v5 .btn2.no{background:var(--accent-soft);color:var(--accent)}
+.v5 .split{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.v5 .tag2{font-size:.64rem;font-weight:700;border-radius:6px;padding:2px 7px;font-family:"IBM Plex Mono",monospace}
+
+/* picker */
+.picker{max-width:760px;margin:60px auto;padding:0 24px}
+.picker h1{font-size:1.6rem;margin-bottom:6px}
+.picker p{color:var(--text-muted);margin-bottom:26px}
+.picker a{display:flex;justify-content:space-between;align-items:center;border:1px solid var(--border);background:var(--surface);border-radius:14px;padding:18px 22px;margin-bottom:12px;font-weight:600}
+.picker a:hover{border-color:var(--primary)}
+.picker a small{color:var(--text-muted);font-weight:400}
+</style>
+</head>
+<body>
+
+<!-- ══════════════ PICKER ══════════════ -->
+<div id="picker" class="picker" style="display:none">
+  <h1>GSSG Dashboard — 5 worlds</h1>
+  <p>Full-width · per-user personalization · new widget set · services-only quick actions. Open with <span class="mono">?v=1…5</span>.</p>
+  <a href="?v=1"><span>1 · Command Deck</span><small>dark ops console, status spine, service dock</small></a>
+  <a href="?v=2"><span>2 · Daybook Folio</span><small>editorial duty register, red margin rule, service index</small></a>
+  <a href="?v=3"><span>3 · Mission Board</span><small>four work lanes, inline sign-off, service tray</small></a>
+  <a href="?v=4"><span>4 · Badge Board</span><small>pinned dossier cards, your badge, laminated tiles</small></a>
+  <a href="?v=5"><span>5 · Pulse Rail</span><small>sticky pulse rail, detail bands, service filmstrip</small></a>
+</div>
+
+<!-- ══════════════ V1 · COMMAND DECK ══════════════ -->
+<section class="variant v1" id="v1">
+  <div class="topnav">
+    <div class="brand"><img src="gssg-globe.png" alt=""><div><b>GSSG</b><small>Global Security Services Group</small></div></div>
+    <nav><span class="on">Dashboard</span><span>Employees</span><span>Ledger</span><span>Leaves</span><span>Services</span><span>Records</span><span>Permits</span></nav>
+    <div class="spacer"></div>
+    <div class="pillbox"><span class="chip-personal"><span class="dot"></span>Your deck · dark</span><span class="avatar">A</span></div>
+  </div>
+  <div class="deck">
+    <div class="greet">
+      <h1>Good evening, Ahmed</h1>
+      <span class="date">Sat 15 Aug 2026</span>
+      <span class="hijri ar">٢ ربيع الأول ١٤٤٨ هـ</span>
+      <span style="margin-inline-start:auto;font-size:.72rem;color:var(--d-faint)">Changes here save to <b style="color:var(--d-muted)">your account only</b></span>
+    </div>
+
+    <!-- SIGNATURE: status spine -->
+    <div class="spine">
+      <button class="gauge warn">
+        <svg class="ring" viewBox="0 0 60 60"><circle cx="30" cy="30" r="24" fill="none" stroke="#1f263b" stroke-width="6"/><circle cx="30" cy="30" r="24" fill="none" stroke="#fbbf24" stroke-width="6" stroke-dasharray="113 38" stroke-linecap="round" transform="rotate(-90 30 30)"/></svg>
+        <div><div class="num mono">3</div><div class="lbl">Need my signature</div></div><span class="go">→ queue</span>
+      </button>
+      <button class="gauge alert">
+        <svg class="ring" viewBox="0 0 60 60"><circle cx="30" cy="30" r="24" fill="none" stroke="#1f263b" stroke-width="6"/><circle cx="30" cy="30" r="24" fill="none" stroke="#ef4858" stroke-width="6" stroke-dasharray="50 101" stroke-linecap="round" transform="rotate(-90 30 30)"/></svg>
+        <div><div class="num mono">1</div><div class="lbl">Expired document</div></div><span class="go">→ expiry</span>
+      </button>
+      <button class="gauge">
+        <svg class="ring" viewBox="0 0 60 60"><circle cx="30" cy="30" r="24" fill="none" stroke="#1f263b" stroke-width="6"/><circle cx="30" cy="30" r="24" fill="none" stroke="#60a5fa" stroke-width="6" stroke-dasharray="75 76" stroke-linecap="round" transform="rotate(-90 30 30)"/></svg>
+        <div><div class="num mono">3</div><div class="lbl">Unread inbox</div></div><span class="go">→ ledger</span>
+      </button>
+      <button class="gauge ok">
+        <svg class="ring" viewBox="0 0 60 60"><circle cx="30" cy="30" r="24" fill="none" stroke="#1f263b" stroke-width="6"/><circle cx="30" cy="30" r="24" fill="none" stroke="#34d399" stroke-width="6" stroke-dasharray="100 51" stroke-linecap="round" transform="rotate(-90 30 30)"/></svg>
+        <div><div class="num mono">4<span style="font-size:.85rem;color:var(--d-faint)">/6</span></div><div class="lbl">On site today</div></div><span class="go">→ staff</span>
+      </button>
+      <button class="gauge warn">
+        <svg class="ring" viewBox="0 0 60 60"><circle cx="30" cy="30" r="24" fill="none" stroke="#1f263b" stroke-width="6"/><circle cx="30" cy="30" r="24" fill="none" stroke="#fbbf24" stroke-width="6" stroke-dasharray="25 126" stroke-linecap="round" transform="rotate(-90 30 30)"/></svg>
+        <div><div class="num mono">1</div><div class="lbl">Scheduled departure</div></div><span class="go">→ file</span>
+      </button>
+    </div>
+
+    <div class="grid">
+      <!-- left: approval queue -->
+      <div class="panel">
+        <h3>Needs my signature <span class="count">3</span></h3>
+        <div class="qrow">
+          <span class="ref">1-0006</span> <span style="font-size:.68rem;color:var(--d-faint)">Employee Staff · 4h ago</span>
+          <div class="sub">Gate access request for contractor</div>
+          <div class="meta">Submitted by Audit Admin</div>
+          <div class="acts"><button class="btn ok">✓ Sign & approve</button><button class="btn no">✕</button><button class="btn ghost">Open</button></div>
+        </div>
+        <div class="qrow">
+          <span class="ref">1-0004</span> <span style="font-size:.68rem;color:var(--d-faint)">Employee Staff · 6h ago</span>
+          <div class="sub">Duty roster amendment — Al Wathba post</div>
+          <div class="meta">Submitted by S. Alshamsi</div>
+          <div class="acts"><button class="btn ok">✓ Sign & approve</button><button class="btn no">✕</button><button class="btn ghost">Open</button></div>
+        </div>
+        <div class="qrow">
+          <span class="ref">1-0002</span> <span style="font-size:.68rem;color:var(--d-faint)">Employee Staff · 1d ago</span>
+          <div class="sub">Uniform issue authorization — new intake</div>
+          <div class="meta">Submitted by K. Aldhaheri</div>
+          <div class="acts"><button class="btn ok">✓ Sign & approve</button><button class="btn no">✕</button><button class="btn ghost">Open</button></div>
+        </div>
+      </div>
+
+      <!-- center: radars -->
+      <div style="display:flex;flex-direction:column;gap:16px">
+        <div class="panel">
+          <h3>Document expiry radar <span class="count" style="color:var(--d-accent);background:#331119">3</span></h3>
+          <div class="radar-row"><span class="badge red">EXPIRED 3D</span><div class="who"><div class="nm">HAMDAN ALI ALMANSOORI</div><div class="id">G-1005 · Emirates ID</div></div><button class="btn ghost">Renew file →</button></div>
+          <div class="radar-row"><span class="badge amber">18 DAYS</span><div class="who"><div class="nm">AHMED SAEED ALKAABI</div><div class="id">G-1001 · Emirates ID</div></div><button class="btn ghost">Renew file →</button></div>
+          <div class="radar-row"><span class="badge amber">45 DAYS</span><div class="who"><div class="nm">SALEM MOHAMED ALSHAMSI</div><div class="id">G-1002 · Passport</div></div><button class="btn ghost">Renew file →</button></div>
+        </div>
+        <div class="panel">
+          <h3>Leave radar <span style="font-size:.66rem;color:var(--d-faint);text-transform:none;letter-spacing:0">2 out · 1 returning</span></h3>
+          <div class="radar-row"><span class="badge blue">OUT</span><div class="who"><div class="nm">KHALED OBAID ALDHAHERI</div><div class="id">G-1003 · Annual · until 15 Aug</div></div></div>
+          <div class="radar-row"><span class="badge blue">OUT</span><div class="who"><div class="nm">SALEM MOHAMED ALSHAMSI</div><div class="id">G-1002 · Annual · until 17 Aug</div></div></div>
+          <div class="radar-row"><span class="badge green">BACK SUN</span><div class="who"><div class="nm">SALEM MOHAMED ALSHAMSI</div><div class="id">G-1002 · returns in 2 days</div></div><button class="btn ghost">Duty resumption →</button></div>
+        </div>
+        <div class="panel">
+          <h3>Departures <span class="count">1</span></h3>
+          <div class="radar-row"><span class="badge amber">12 DAYS</span><div class="who"><div class="nm">RASHED SANAD ALYAHYAEE</div><div class="id">G-1004 · Resignation · last day 27 Aug</div></div><button class="btn ghost">Clearance →</button></div>
+        </div>
+      </div>
+
+      <!-- right: inbox feed -->
+      <div class="panel">
+        <h3>Inbox · unread <span class="count" style="color:var(--d-info);background:#14213a">3</span></h3>
+        <div class="feed-row"><span class="feed-dot" style="background:var(--d-success)"></span><div style="flex:1;min-width:0"><div style="font-weight:600">Security clearance circular 44/2026</div><div style="font-size:.7rem;color:var(--d-faint)">Abu Dhabi Police HQ · incoming</div></div><span class="t">18:22</span></div>
+        <div class="feed-row"><span class="feed-dot" style="background:var(--d-accent)"></span><div style="flex:1;min-width:0"><div style="font-weight:600">Reply to inspection findings</div><div style="font-size:.7rem;color:var(--d-faint)">Ministry of Interior · outgoing</div></div><span class="t">Thu</span></div>
+        <div class="feed-row"><span class="feed-dot" style="background:var(--d-primary)"></span><div style="flex:1;min-width:0"><div style="font-weight:600">Internal memo — uniform renewal</div><div style="font-size:.7rem;color:var(--d-faint)">HR Department · internal</div></div><span class="t">Wed</span></div>
+        <div style="display:flex;gap:8px;padding:12px 16px">
+          <button class="btn ghost" style="flex:1">Open inbox</button><button class="btn ghost">Mark all read</button><button class="btn ghost">↻ Sync</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- service dock -->
+    <div class="dock">
+      <div class="dock-inner">
+        <button class="svc"><span class="e">📅</span>Leave Application</button>
+        <button class="svc"><span class="e">🎫</span>Leave Permit</button>
+        <button class="svc"><span class="e">🔁</span>Duty Resumption</button>
+        <button class="svc"><span class="e">🚨</span>Violation</button>
+        <button class="svc"><span class="e">⚠️</span>Warning</button>
+        <button class="svc"><span class="e">✍️</span>Acknowledgment</button>
+        <button class="svc"><span class="e">💰</span>Salary Transfer</button>
+        <button class="svc"><span class="e">📓</span>General Book</button>
+        <button class="svc"><span class="e">📊</span>Report</button>
+        <button class="svc"><span class="e">🧑‍💼</span>HR Request</button>
+        <button class="svc" style="border:1px dashed var(--d-border);border-radius:10px"><span class="e">⋯</span>All 18 services</button>
+      </div>
+      <div class="subttl">Service dock — drag to reorder · saved to your account</div>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════════ V2 · DAYBOOK FOLIO ══════════════ -->
+<section class="variant v2" id="v2">
+  <div class="topnav">
+    <div class="brand"><img src="gssg-globe.png" alt=""><div><b>GSSG</b><small>Global Security Services Group</small></div></div>
+    <nav><span class="on">Dashboard</span><span>Employees</span><span>Ledger</span><span>Leaves</span><span>Services</span><span>Records</span><span>Permits</span></nav>
+    <div class="spacer"></div>
+    <div class="pillbox"><span class="chip-personal"><span class="dot"></span>Your folio · light</span><span class="avatar">A</span></div>
+  </div>
+
+  <!-- SIGNATURE: duty-register masthead with red margin rule -->
+  <div class="masthead">
+    <div class="mast-row">
+      <h1>Saturday duty book</h1>
+      <span class="day">15 August 2026</span>
+      <span class="hijri ar">٢ ربيع الأول ١٤٤٨ هـ</span>
+      <span style="margin-inline-start:auto;font-size:.72rem;color:var(--text-faint)">Personal edition — layout &amp; theme save to your account</span>
+    </div>
+    <div class="mast-sub">
+      <span>On site <b>4/6</b></span><span>Awaiting my signature <b style="color:var(--accent)">3</b></span><span>Unread correspondence <b>3</b></span><span>Documents this month <b>14</b></span><span>Open violations <b>1</b></span>
+    </div>
+  </div>
+
+  <div class="folio">
+    <!-- col 1: my desk -->
+    <div class="col">
+      <div class="block">
+        <h3>Awaiting my signature <span class="n">3</span></h3>
+        <div class="lrow"><span class="ref">1-0006</span><span class="grow">Gate access request for contractor</span><span class="tail">4h</span><button class="act">SIGN</button><button class="act rej">RETURN</button></div>
+        <div class="lrow"><span class="ref">1-0004</span><span class="grow">Duty roster amendment — Al Wathba post</span><span class="tail">6h</span><button class="act">SIGN</button><button class="act rej">RETURN</button></div>
+        <div class="lrow"><span class="ref">1-0002</span><span class="grow">Uniform issue authorization — new intake</span><span class="tail">1d</span><button class="act">SIGN</button><button class="act rej">RETURN</button></div>
+      </div>
+      <div class="block">
+        <h3>Unread correspondence <span class="n">3</span></h3>
+        <div class="lrow"><span class="tail" style="color:var(--success)">IN</span><span class="grow">Security clearance circular 44/2026 — Abu Dhabi Police HQ</span><span class="tail">18:22</span></div>
+        <div class="lrow"><span class="tail" style="color:var(--accent)">OUT</span><span class="grow">Reply to inspection findings — Ministry of Interior</span><span class="tail">Thu</span></div>
+        <div class="lrow"><span class="tail" style="color:var(--info)">INT</span><span class="grow">Internal memo — uniform renewal — HR Department</span><span class="tail">Wed</span></div>
+        <div class="lrow" style="border-bottom:0"><span class="grow" style="color:var(--text-faint);font-size:.72rem">Last mail sync 6 min ago</span><button class="act" style="color:var(--primary)">OPEN INBOX</button><button class="act" style="color:var(--primary)">SYNC</button></div>
+      </div>
+      <div class="block">
+        <h3>Register drafts <span class="n">3</span></h3>
+        <div class="lrow"><span class="ref">1-0001</span><span class="grow">Monthly duty roster draft</span><button class="act" style="color:var(--primary)">RESUME</button></div>
+        <div class="lrow"><span class="ref">1-0003</span><span class="grow">Contractor NDA cover letter</span><button class="act" style="color:var(--primary)">RESUME</button></div>
+        <div class="lrow"><span class="ref">1-0005</span><span class="grow">Night patrol incident summary</span><button class="act" style="color:var(--primary)">RESUME</button></div>
+      </div>
+    </div>
+
+    <!-- col 2: personnel radar -->
+    <div class="col">
+      <div class="block">
+        <h3>Expiring documents <span class="n">3</span></h3>
+        <div class="statline warnrow" style="color:var(--accent)"><span>HAMDAN ALMANSOORI · G-1005 · Emirates ID</span><b>−3d</b></div>
+        <div class="statline warnrow"><span>AHMED ALKAABI · G-1001 · Emirates ID</span><b>18d</b></div>
+        <div class="statline"><span>SALEM ALSHAMSI · G-1002 · Passport</span><b>45d</b></div>
+        <div class="lrow" style="border-bottom:0"><span class="grow" style="color:var(--text-faint);font-size:.72rem">Emirates ID &amp; passports · next 90 days</span><button class="act" style="color:var(--primary)">FULL LIST</button></div>
+      </div>
+      <div class="block">
+        <h3>Leave movements <span class="n">2 out</span></h3>
+        <div class="lrow"><span class="tail" style="color:var(--info)">OUT</span><span class="grow">KHALED ALDHAHERI <span class="ar" style="color:var(--text-faint)">خالد الظاهري</span></span><span class="tail">until 15 Aug</span></div>
+        <div class="lrow"><span class="tail" style="color:var(--info)">OUT</span><span class="grow">SALEM ALSHAMSI <span class="ar" style="color:var(--text-faint)">سالم الشامسي</span></span><span class="tail">until 17 Aug</span></div>
+        <div class="lrow"><span class="tail" style="color:var(--success)">BACK</span><span class="grow">SALEM ALSHAMSI — returns Sunday</span><button class="act" style="color:var(--primary)">RESUMPTION</button></div>
+      </div>
+      <div class="block">
+        <h3>Departures &amp; discipline</h3>
+        <div class="lrow"><span class="tail" style="color:var(--warning)">EXIT</span><span class="grow">RASHED ALYAHYAEE · G-1004 · resignation</span><span class="tail">12d</span><button class="act" style="color:var(--primary)">CLEARANCE</button></div>
+        <div class="lrow"><span class="tail" style="color:var(--accent)">VIOL</span><span class="grow">HAMDAN ALMANSOORI · attendance · open</span><span class="tail">14 Aug</span><button class="act" style="color:var(--primary)">FILE</button></div>
+      </div>
+    </div>
+
+    <!-- col 3: service index -->
+    <div class="col">
+      <div class="block">
+        <h3>Service index <span class="n">18</span></h3>
+        <div class="index">
+          <a href="#"><span class="e">✍️</span>Acknowledgment</a>
+          <a href="#"><span class="e">🗂️</span>Administrative Leave</a>
+          <a href="#"><span class="e">✅</span>Employee Clearance</a>
+          <a href="#"><span class="e">🔁</span>Duty Resumption</a>
+          <a href="#"><span class="e">📓</span>General Book</a>
+          <a href="#"><span class="e">🧑‍💼</span>HR Request</a>
+          <a href="#"><span class="e">⛓️</span>Inmate Conduct</a>
+          <a href="#"><span class="e">📅</span>Leave Application</a>
+          <a href="#"><span class="e">🎫</span>Leave Permit</a>
+          <a href="#"><span class="e">📦</span>Material Request</a>
+          <a href="#"><span class="e">🛂</span>Passport Release List</a>
+          <a href="#"><span class="e">📤</span>Passport Request</a>
+          <a href="#"><span class="e">📊</span>Report</a>
+          <a href="#"><span class="e">✉️</span>Resignation</a>
+          <a href="#"><span class="e">💸</span>Salary Deduction</a>
+          <a href="#"><span class="e">💰</span>Salary Transfer</a>
+          <a href="#"><span class="e">🚨</span>Violation</a>
+          <a href="#"><span class="e">⚠️</span>Warning</a>
+        </div>
+        <div style="font-size:.68rem;color:var(--text-faint);margin-top:10px">Pin your six most-used — pins save to your account.</div>
+      </div>
+      <div class="block">
+        <h3>Month so far</h3>
+        <div class="statline"><span>Documents issued</span><b>14</b></div>
+        <div class="statline"><span>Books approved</span><b>9</b></div>
+        <div class="statline"><span>Leaves settled</span><b>2</b></div>
+      </div>
+    </div>
+  </div>
+  <div class="foot-note">Rows open their records directly — refs to the register, names to the employee file, correspondence to the reading pane.</div>
+</section>
+
+<!-- ══════════════ V3 · MISSION BOARD ══════════════ -->
+<section class="variant v3" id="v3">
+  <div class="topnav">
+    <div class="brand"><img src="gssg-globe.png" alt=""><div><b>GSSG</b><small>Global Security Services Group</small></div></div>
+    <nav><span class="on">Dashboard</span><span>Employees</span><span>Ledger</span><span>Leaves</span><span>Services</span><span>Records</span><span>Permits</span></nav>
+    <div class="spacer"></div>
+    <div class="pillbox"><span class="chip-personal"><span class="dot"></span>Your board</span><span class="avatar">A</span></div>
+  </div>
+  <div class="head">
+    <h1>Good evening, Ahmed</h1>
+    <span class="sub">Sat 15 Aug · <span class="ar">٢ ربيع الأول ١٤٤٨</span> · 4 of 6 on site</span>
+    <div class="spacer"></div>
+    <span class="sub">Lanes &amp; order are yours — drag to rearrange</span>
+  </div>
+
+  <!-- SIGNATURE: four full-width work lanes -->
+  <div class="board">
+    <div class="lane">
+      <header><span class="bar" style="background:var(--accent)"></span>Sign-off <span class="cnt">3</span></header>
+      <div class="card">
+        <div class="top"><span class="ref">1-0006</span><span>4h ago</span><span class="pill amber" style="margin-inline-start:auto">HIGH</span></div>
+        <div class="sub">Gate access request for contractor</div>
+        <div class="who">Audit Admin · Employee Staff</div>
+        <div class="acts"><button class="bt sign">✓ Sign</button><button class="bt rej">Return</button><button class="bt open">Open</button></div>
+      </div>
+      <div class="card">
+        <div class="top"><span class="ref">1-0004</span><span>6h ago</span></div>
+        <div class="sub">Duty roster amendment — Al Wathba post</div>
+        <div class="who">S. Alshamsi · Employee Staff</div>
+        <div class="acts"><button class="bt sign">✓ Sign</button><button class="bt rej">Return</button><button class="bt open">Open</button></div>
+      </div>
+      <div class="card">
+        <div class="top"><span class="ref">1-0002</span><span>1d ago</span></div>
+        <div class="sub">Uniform issue authorization — new intake</div>
+        <div class="who">K. Aldhaheri · Employee Staff</div>
+        <div class="acts"><button class="bt sign">✓ Sign</button><button class="bt rej">Return</button><button class="bt open">Open</button></div>
+      </div>
+    </div>
+
+    <div class="lane">
+      <header><span class="bar" style="background:var(--warning)"></span>Expiring &amp; exits <span class="cnt">4</span></header>
+      <div class="card">
+        <div class="top"><span class="pill red">EXPIRED 3D</span></div>
+        <div class="sub">HAMDAN ALI ALMANSOORI — Emirates ID</div>
+        <div class="who mono" style="font-size:.68rem">G-1005 · Transport</div>
+        <div class="acts"><button class="bt wide open">Open renewal file →</button></div>
+      </div>
+      <div class="card">
+        <div class="top"><span class="pill amber">18 DAYS</span></div>
+        <div class="sub">AHMED SAEED ALKAABI — Emirates ID</div>
+        <div class="who mono" style="font-size:.68rem">G-1001 · Operations</div>
+        <div class="acts"><button class="bt wide open">Open renewal file →</button></div>
+      </div>
+      <div class="card">
+        <div class="top"><span class="pill amber">EXIT 12D</span></div>
+        <div class="sub">RASHED SANAD ALYAHYAEE — resignation</div>
+        <div class="who mono" style="font-size:.68rem">G-1004 · last day 27 Aug</div>
+        <div class="acts"><button class="bt sign">Start clearance</button><button class="bt open">Cancel exit</button></div>
+      </div>
+      <div class="card">
+        <div class="top"><span class="pill amber">45 DAYS</span></div>
+        <div class="sub">SALEM MOHAMED ALSHAMSI — Passport</div>
+        <div class="who mono" style="font-size:.68rem">G-1002 · Operations</div>
+        <div class="acts"><button class="bt wide open">Open renewal file →</button></div>
+      </div>
+    </div>
+
+    <div class="lane">
+      <header><span class="bar" style="background:var(--info)"></span>People today <span class="cnt">3</span></header>
+      <div class="card">
+        <div class="top"><span class="pill blue">ON LEAVE</span><span style="margin-inline-start:auto">until 15 Aug</span></div>
+        <div class="sub">KHALED OBAID ALDHAHERI</div>
+        <div class="who">Annual · <span class="mono" style="font-size:.68rem">G-1003</span></div>
+      </div>
+      <div class="card">
+        <div class="top"><span class="pill blue">ON LEAVE</span><span style="margin-inline-start:auto">until 17 Aug</span></div>
+        <div class="sub">SALEM MOHAMED ALSHAMSI</div>
+        <div class="who">Annual · <span class="mono" style="font-size:.68rem">G-1002</span></div>
+      </div>
+      <div class="card">
+        <div class="top"><span class="pill green">RETURNS SUN</span></div>
+        <div class="sub">SALEM MOHAMED ALSHAMSI</div>
+        <div class="who">Prepare duty resumption</div>
+        <div class="acts"><button class="bt wide sign">Duty resumption form →</button></div>
+      </div>
+      <div class="card">
+        <div class="top"><span class="pill red">VIOLATION</span><span style="margin-inline-start:auto">open</span></div>
+        <div class="sub">HAMDAN ALI ALMANSOORI — attendance</div>
+        <div class="who">Filed 14 Aug</div>
+        <div class="acts"><button class="bt wide open">Open case →</button></div>
+      </div>
+    </div>
+
+    <div class="lane">
+      <header><span class="bar" style="background:var(--primary)"></span>Inbox &amp; drafts <span class="cnt">6</span></header>
+      <div class="card">
+        <div class="top"><span class="pill green">IN · UNREAD</span><span style="margin-inline-start:auto">18:22</span></div>
+        <div class="sub">Security clearance circular 44/2026</div>
+        <div class="who">Abu Dhabi Police HQ</div>
+      </div>
+      <div class="card">
+        <div class="top"><span class="pill blue">INTERNAL</span><span style="margin-inline-start:auto">Wed</span></div>
+        <div class="sub">Internal memo — uniform renewal</div>
+        <div class="who">HR Department</div>
+      </div>
+      <div class="card">
+        <div class="top"><span class="ref">1-0001</span><span class="pill amber" style="margin-inline-start:auto">DRAFT</span></div>
+        <div class="sub">Monthly duty roster draft</div>
+        <div class="acts"><button class="bt wide open">Resume draft →</button></div>
+      </div>
+      <div class="empty">+ 2 more drafts · 1 more unread — open registers ↗</div>
+    </div>
+  </div>
+
+  <!-- SIGNATURE #2: floating services tray -->
+  <div class="tray">
+    <h4>New service <span style="float:inline-end;color:var(--text-faint)">your pins</span></h4>
+    <div class="list">
+      <a href="#">📅 Leave Application</a>
+      <a href="#">🔁 Duty Resumption</a>
+      <a href="#">🚨 Violation</a>
+      <a href="#">⚠️ Warning</a>
+      <a href="#">✍️ Acknowledgment</a>
+      <a href="#">📓 General Book</a>
+      <a href="#">💰 Salary Transfer</a>
+      <a href="#" style="color:var(--primary);font-weight:700">All 18 →</a>
+    </div>
+  </div>
+  <button class="svc-fab">＋ New service</button>
+</section>
+
+<!-- ══════════════ V4 · BADGE BOARD ══════════════ -->
+<section class="variant v4" id="v4">
+  <div class="topnav">
+    <div class="brand"><img src="gssg-globe.png" alt=""><div><b>GSSG</b><small>Global Security Services Group</small></div></div>
+    <nav><span class="on">Dashboard</span><span>Employees</span><span>Ledger</span><span>Leaves</span><span>Services</span><span>Records</span><span>Permits</span></nav>
+    <div class="spacer"></div>
+    <div class="pillbox"><span class="chip-personal"><span class="dot"></span>Your board</span><span class="avatar">A</span></div>
+  </div>
+  <div class="boardhead">
+    <h1>Duty board</h1>
+    <span class="date">Sat 15 Aug 2026 · <span class="ar">٢ ربيع الأول ١٤٤٨</span></span>
+    <!-- SIGNATURE: your badge = ownership of this board -->
+    <div class="mybadge">
+      <span class="clip"></span>
+      <span class="ph">AA</span>
+      <div><div class="nm">Audit Admin</div><div class="rl">This board is yours — pins, order &amp; theme</div></div>
+    </div>
+  </div>
+
+  <div class="pinwrap">
+    <div class="pin-card tilt-l">
+      <h3>Needs my signature <span class="n">3</span></h3>
+      <div class="prow" style="border-top:0"><span class="tag" style="background:var(--primary-soft);color:var(--primary)">1-0006</span><span style="flex:1">Gate access request for contractor</span><button class="tag" style="background:var(--success-soft);color:var(--success)">SIGN</button></div>
+      <div class="prow"><span class="tag" style="background:var(--primary-soft);color:var(--primary)">1-0004</span><span style="flex:1">Duty roster amendment — Al Wathba</span><button class="tag" style="background:var(--success-soft);color:var(--success)">SIGN</button></div>
+      <div class="prow"><span class="tag" style="background:var(--primary-soft);color:var(--primary)">1-0002</span><span style="flex:1">Uniform issue authorization</span><button class="tag" style="background:var(--success-soft);color:var(--success)">SIGN</button></div>
+      <div class="stamp">Priority</div>
+    </div>
+
+    <div class="pin-card tilt-r">
+      <h3>Expiry watch <span class="n">3</span></h3>
+      <div class="prow" style="border-top:0"><span class="tag" style="background:var(--accent-soft);color:var(--accent)">−3D</span><span style="flex:1">HAMDAN ALMANSOORI · EID<br><span class="mono" style="font-size:.64rem;color:#8a8478">G-1005</span></span></div>
+      <div class="prow"><span class="tag" style="background:var(--warning-soft);color:var(--warning)">18D</span><span style="flex:1">AHMED ALKAABI · EID<br><span class="mono" style="font-size:.64rem;color:#8a8478">G-1001</span></span></div>
+      <div class="prow"><span class="tag" style="background:var(--warning-soft);color:var(--warning)">45D</span><span style="flex:1">SALEM ALSHAMSI · Passport<br><span class="mono" style="font-size:.64rem;color:#8a8478">G-1002</span></span></div>
+    </div>
+
+    <div class="pin-card">
+      <h3>Off site today</h3>
+      <div class="prow" style="border-top:0"><span class="tag" style="background:var(--info-soft);color:var(--info)">OUT</span><span style="flex:1">KHALED ALDHAHERI — until 15 Aug</span></div>
+      <div class="prow"><span class="tag" style="background:var(--info-soft);color:var(--info)">OUT</span><span style="flex:1">SALEM ALSHAMSI — until 17 Aug</span></div>
+      <div class="prow"><span class="tag" style="background:var(--success-soft);color:var(--success)">BACK</span><span style="flex:1">SALEM ALSHAMSI — Sunday · resumption due</span></div>
+    </div>
+
+    <div class="pin-card tilt-r">
+      <h3>Site count</h3>
+      <div style="display:flex;align-items:baseline;gap:10px"><span class="bignum">4<span style="font-size:1rem;color:#8a8478">/6</span></span><span style="font-size:.78rem;color:#6d675c">on site now</span></div>
+      <div style="font-size:.72rem;color:#8a8478;margin-top:6px">2 on leave · 0 unaccounted</div>
+    </div>
+
+    <div class="pin-card tilt-l">
+      <h3>Inbox <span class="n">3 unread</span></h3>
+      <div class="prow" style="border-top:0"><span class="tag" style="background:var(--success-soft);color:var(--success)">IN</span><span style="flex:1">Clearance circular 44/2026 — ADP HQ</span></div>
+      <div class="prow"><span class="tag" style="background:var(--accent-soft);color:var(--accent)">OUT</span><span style="flex:1">Inspection reply — MOI</span></div>
+      <div class="prow"><span class="tag" style="background:var(--info-soft);color:var(--info)">INT</span><span style="flex:1">Uniform renewal memo — HR</span></div>
+      <div class="stamp" style="color:rgba(4,120,87,.45);border-color:rgba(4,120,87,.35)">Synced 6m</div>
+    </div>
+
+    <div class="pin-card">
+      <h3>Exits &amp; cases</h3>
+      <div class="prow" style="border-top:0"><span class="tag" style="background:var(--warning-soft);color:var(--warning)">EXIT</span><span style="flex:1">RASHED ALYAHYAEE — 12 days · clearance</span></div>
+      <div class="prow"><span class="tag" style="background:var(--accent-soft);color:var(--accent)">VIOL</span><span style="flex:1">HAMDAN ALMANSOORI — attendance · open</span></div>
+    </div>
+
+    <div class="pin-card tilt-r">
+      <h3>Register drafts <span class="n">3</span></h3>
+      <div class="prow" style="border-top:0"><span class="tag" style="background:var(--primary-soft);color:var(--primary)">1-0001</span><span style="flex:1">Monthly duty roster</span></div>
+      <div class="prow"><span class="tag" style="background:var(--primary-soft);color:var(--primary)">1-0003</span><span style="flex:1">Contractor NDA cover</span></div>
+      <div class="prow"><span class="tag" style="background:var(--primary-soft);color:var(--primary)">1-0005</span><span style="flex:1">Night patrol summary</span></div>
+    </div>
+
+    <div class="pin-card tilt-l">
+      <h3>Services · your ring <span class="n">18</span></h3>
+      <div class="ring-tiles">
+        <a class="ltile" href="#"><span class="e">📅</span>Leave Application</a>
+        <a class="ltile" href="#"><span class="e">🔁</span>Duty Resumption</a>
+        <a class="ltile" href="#"><span class="e">🚨</span>Violation</a>
+        <a class="ltile" href="#"><span class="e">✍️</span>Acknowledgment</a>
+        <a class="ltile" href="#"><span class="e">💰</span>Salary Transfer</a>
+        <a class="ltile" href="#"><span class="e">📓</span>General Book</a>
+        <a class="ltile" href="#"><span class="e">⚠️</span>Warning</a>
+        <a class="ltile" href="#"><span class="e">📊</span>Report</a>
+        <a class="ltile" href="#" style="border-style:dashed;color:#8a8478"><span class="e">⋯</span>All services</a>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════════ V5 · PULSE RAIL ══════════════ -->
+<section class="variant v5" id="v5">
+  <div class="wrap">
+    <!-- SIGNATURE: sticky pulse rail -->
+    <aside class="rail">
+      <div class="me"><span class="av">AA</span><div><div class="nm">Audit Admin</div><div class="st">admin · your view</div></div></div>
+      <button class="pulse on"><span class="n warn">3</span>Need my signature</button>
+      <button class="pulse"><span class="n alert">1</span>Expired document</button>
+      <button class="pulse"><span class="n info">3</span>Unread inbox</button>
+      <button class="pulse"><span class="n ok">4/6</span>On site now</button>
+      <button class="pulse"><span class="n warn">1</span>Departure · 12d</button>
+      <button class="pulse"><span class="n info">3</span>Register drafts</button>
+      <div class="theme">
+        APPEARANCE — YOURS ONLY
+        <div class="tg"><span class="sel">Light</span><span>Dark</span></div>
+      </div>
+    </aside>
+
+    <div class="main">
+      <div class="hello">
+        <h1>Good evening, Ahmed</h1>
+        <span class="d">Sat 15 Aug 2026 · <span class="ar">٢ ربيع الأول ١٤٤٨ هـ</span></span>
+      </div>
+
+      <!-- services filmstrip -->
+      <div class="film">
+        <a class="ftile" href="#">📅 Leave Application</a>
+        <a class="ftile" href="#">🎫 Leave Permit</a>
+        <a class="ftile" href="#">🔁 Duty Resumption</a>
+        <a class="ftile" href="#">🚨 Violation</a>
+        <a class="ftile" href="#">⚠️ Warning</a>
+        <a class="ftile" href="#">✍️ Acknowledgment</a>
+        <a class="ftile" href="#">📓 General Book</a>
+        <a class="ftile" href="#">💰 Salary Transfer</a>
+        <a class="ftile" href="#" style="color:var(--primary)">All 18 →</a>
+      </div>
+
+      <div class="band">
+        <header><h2>Need my signature</h2><span class="k">3 waiting · oldest 1d</span><a class="go" href="#">Open queue →</a></header>
+        <div class="brow"><span class="avx mono" style="font-size:.62rem">1-0006</span><div class="mainx"><div class="t1">Gate access request for contractor</div><div class="t2">Audit Admin · Employee Staff · 4h ago</div></div><button class="btn2 ok">✓ Sign</button><button class="btn2 no">Return</button></div>
+        <div class="brow"><span class="avx mono" style="font-size:.62rem">1-0004</span><div class="mainx"><div class="t1">Duty roster amendment — Al Wathba post</div><div class="t2">S. Alshamsi · 6h ago</div></div><button class="btn2 ok">✓ Sign</button><button class="btn2 no">Return</button></div>
+        <div class="brow"><span class="avx mono" style="font-size:.62rem">1-0002</span><div class="mainx"><div class="t1">Uniform issue authorization — new intake</div><div class="t2">K. Aldhaheri · 1d ago</div></div><button class="btn2 ok">✓ Sign</button><button class="btn2 no">Return</button></div>
+      </div>
+
+      <div class="split">
+        <div class="band">
+          <header><h2>Expiry radar</h2><span class="k">1 expired</span><a class="go" href="#">/expiry →</a></header>
+          <div class="brow"><span class="tag2" style="background:var(--accent-soft);color:var(--accent)">−3D</span><div class="mainx"><div class="t1">HAMDAN ALI ALMANSOORI</div><div class="t2">Emirates ID · G-1005</div></div><span class="end">renew →</span></div>
+          <div class="brow"><span class="tag2" style="background:var(--warning-soft);color:var(--warning)">18D</span><div class="mainx"><div class="t1">AHMED SAEED ALKAABI</div><div class="t2">Emirates ID · G-1001</div></div><span class="end">renew →</span></div>
+          <div class="brow"><span class="tag2" style="background:var(--warning-soft);color:var(--warning)">45D</span><div class="mainx"><div class="t1">SALEM MOHAMED ALSHAMSI</div><div class="t2">Passport · G-1002</div></div><span class="end">renew →</span></div>
+        </div>
+        <div class="band">
+          <header><h2>Leave radar</h2><span class="k">2 out · 1 back Sun</span><a class="go" href="#">/leaves →</a></header>
+          <div class="brow"><span class="avx">KA</span><div class="mainx"><div class="t1">KHALED OBAID ALDHAHERI</div><div class="t2">Annual · until 15 Aug</div></div><span class="tag2" style="background:var(--info-soft);color:var(--info)">OUT</span></div>
+          <div class="brow"><span class="avx">SA</span><div class="mainx"><div class="t1">SALEM MOHAMED ALSHAMSI</div><div class="t2">Annual · until 17 Aug</div></div><span class="tag2" style="background:var(--info-soft);color:var(--info)">OUT</span></div>
+          <div class="brow"><span class="avx" style="background:var(--success-soft);color:var(--success)">SA</span><div class="mainx"><div class="t1">SALEM returns Sunday</div><div class="t2">Duty resumption due</div></div><button class="btn2 ok">Prepare →</button></div>
+        </div>
+      </div>
+
+      <div class="split">
+        <div class="band">
+          <header><h2>Inbox</h2><span class="k">3 unread</span><a class="go" href="#">Open inbox →</a></header>
+          <div class="brow"><span class="tag2" style="background:var(--success-soft);color:var(--success)">IN</span><div class="mainx"><div class="t1">Security clearance circular 44/2026</div><div class="t2">Abu Dhabi Police HQ</div></div><span class="end">18:22</span></div>
+          <div class="brow"><span class="tag2" style="background:var(--accent-soft);color:var(--accent)">OUT</span><div class="mainx"><div class="t1">Reply to inspection findings</div><div class="t2">Ministry of Interior</div></div><span class="end">Thu</span></div>
+          <div class="brow"><span class="tag2" style="background:var(--info-soft);color:var(--info)">INT</span><div class="mainx"><div class="t1">Internal memo — uniform renewal</div><div class="t2">HR Department</div></div><span class="end">Wed</span></div>
+        </div>
+        <div class="band">
+          <header><h2>People files</h2><span class="k">2 flags</span><a class="go" href="#">/employees →</a></header>
+          <div class="brow"><span class="tag2" style="background:var(--warning-soft);color:var(--warning)">EXIT 12D</span><div class="mainx"><div class="t1">RASHED SANAD ALYAHYAEE</div><div class="t2">Resignation · clearance not started</div></div><button class="btn2 ok">Clearance →</button></div>
+          <div class="brow"><span class="tag2" style="background:var(--accent-soft);color:var(--accent)">VIOL</span><div class="mainx"><div class="t1">HAMDAN ALI ALMANSOORI</div><div class="t2">Attendance · filed 14 Aug · open</div></div><button class="btn2 no">Open case →</button></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<script>
+const v = new URLSearchParams(location.search).get('v')
+if (v && document.getElementById('v' + v)) {
+  document.getElementById('v' + v).classList.add('active')
+  document.body.style.background = getComputedStyle(document.getElementById('v' + v)).backgroundColor
+} else {
+  document.getElementById('picker').style.display = 'block'
+}
+</script>
+</body>
+</html>

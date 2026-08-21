@@ -1,0 +1,494 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Org Chart — reconstructed</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
+<style>
+  /* ------------------------------------------------------------------
+     Design tokens — recovered verbatim from ahlanhamad.com :root
+     (see FINDINGS.md). Light theme, matching the live page.
+  ------------------------------------------------------------------ */
+  :root{
+    --ahlan-palm-900:#0c1310;   /* card background (dark chip)         */
+    --ahlan-palm-300:#9fada6;   /* job title / muted text             */
+    --ahlan-signal:#2fe38b;     /* department eyebrow (on dark card)  */
+    --ahlan-green:#10a05a;      /* lineage / active connector         */
+    --ahlan-green-tint:#d7f0e2; /* focus ring                         */
+    --ahlan-tint-green:#ecfaf2; /* avatar fallback background         */
+    --ahlan-green-text:#096538; /* avatar fallback text               */
+    --ahlan-hairline:#dde4e0;   /* connector segment                  */
+    --ahlan-bg-base:#f7faf8;    /* canvas base                        */
+    --ahlan-palm-400:#64756d;   /* grid line tint                     */
+    --radius-lg:6px;
+    --shadow-md:0 1px 2px #070c0a12, 0 4px 14px #070c0a12;
+    --ease-decel:cubic-bezier(.16,.84,.44,1);
+
+    /* Layout constants — recovered from the minified layout fn `We()` */
+    --node-w:212px;
+    --node-h:80px;
+  }
+
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{
+    margin:0;
+    font-family:"IBM Plex Sans",system-ui,-apple-system,sans-serif;
+    color:#0c1310;
+    background:var(--ahlan-bg-base);
+    -webkit-font-smoothing:antialiased;
+    overflow:hidden;
+  }
+
+  /* --- top bar ----------------------------------------------------- */
+  .bar{
+    position:fixed;inset:0 0 auto 0;height:56px;z-index:30;
+    display:flex;align-items:center;gap:16px;
+    padding:0 20px;background:#fff;border-bottom:1px solid var(--ahlan-hairline);
+  }
+  .bar h1{font-size:15px;font-weight:600;margin:0}
+  .bar .crumb{color:#8b978f;font-weight:500;font-size:13px}
+  .bar .stats{color:#4f5e57;font-size:12.5px;font-variant-numeric:tabular-nums}
+  .bar .spacer{flex:1}
+  .seg-toggle{display:inline-flex;border:1px solid var(--ahlan-hairline);border-radius:8px;overflow:hidden;background:#fff}
+  .seg-toggle button{
+    appearance:none;border:0;background:transparent;cursor:pointer;
+    font:inherit;font-size:12.5px;font-weight:500;padding:7px 12px;color:#4f5e57;
+  }
+  .seg-toggle button[aria-pressed="true"]{background:var(--ahlan-green);color:#fff}
+  .hint{
+    position:fixed;left:20px;bottom:16px;z-index:30;
+    font-size:11.5px;color:#8b978f;background:#ffffffcc;backdrop-filter:blur(4px);
+    padding:4px 9px;border-radius:6px;border:1px solid var(--ahlan-hairline);
+  }
+  .zoombar{position:fixed;right:20px;bottom:16px;z-index:30;display:flex;gap:6px}
+  .zoombar button{
+    width:32px;height:32px;border:1px solid var(--ahlan-hairline);background:#fff;border-radius:8px;
+    cursor:pointer;font-size:16px;color:#27332d;display:grid;place-items:center;box-shadow:var(--shadow-md)
+  }
+  .zoombar button:hover{border-color:#c4cfc9}
+
+  /* --- viewport / canvas ------------------------------------------- */
+  .viewport{position:fixed;inset:56px 0 0 0;overflow:hidden;cursor:grab}
+  .viewport.panning{cursor:grabbing}
+  .ah-org-canvas{
+    position:absolute;top:0;left:0;transform-origin:0 0;
+    --ah-grid-minor:#e4eae6;--ah-grid-major:#d7e0da;
+    background-image:
+      linear-gradient(to right,var(--ah-grid-major) 1px,transparent 1px),
+      linear-gradient(to bottom,var(--ah-grid-major) 1px,transparent 1px),
+      linear-gradient(to right,var(--ah-grid-minor) 1px,transparent 1px),
+      linear-gradient(to bottom,var(--ah-grid-minor) 1px,transparent 1px);
+    background-size:96px 96px,96px 96px,24px 24px,24px 24px;
+  }
+  .layer{position:absolute;inset:0}
+  .conn-layer{z-index:0;pointer-events:none}
+  .node-layer{z-index:10}
+
+  /* --- connector segments (1px divs — exactly as the source) ------- */
+  .ah-org-seg{
+    position:absolute;top:0;left:0;background:var(--ahlan-hairline);
+    transition:background-color .12s var(--ease-decel);
+  }
+  .ah-org-seg.is-lineage{background:var(--ahlan-green);z-index:1}
+
+  /* --- node card --------------------------------------------------- */
+  .ah-org-item{position:absolute;top:0;left:0;transition:transform .26s var(--ease-decel)}
+  .ah-org-card{
+    position:relative;width:var(--node-w);height:var(--node-h);
+    display:flex;flex-direction:column;justify-content:center;gap:8px;
+    border-radius:var(--radius-lg);border:1px solid transparent;padding:12px;
+    background:var(--ahlan-palm-900);box-shadow:var(--shadow-md);
+    cursor:pointer;text-align:start;
+    transition:border-color .14s var(--ease-decel),box-shadow .14s var(--ease-decel),opacity .14s var(--ease-decel);
+  }
+  .ah-org-card:hover{border-color:#10a05a66}
+  .ah-org-item:focus{outline:none}
+  .ah-org-item:focus .ah-org-card{border-color:var(--ahlan-green);box-shadow:0 0 0 3px var(--ahlan-green-tint)}
+  .ah-org-tracing .ah-org-card:not(.is-lineage){opacity:.32}
+  .ah-org-tracing .ah-org-card.is-lineage{border-color:var(--ahlan-green)}
+
+  .row{display:flex;align-items:center;gap:10px}
+  .avatar{
+    flex:none;width:32px;height:32px;border-radius:9999px;
+    display:flex;align-items:center;justify-content:center;
+    background:var(--ahlan-tint-green);color:var(--ahlan-green-text);
+    font-size:12px;font-weight:600;
+  }
+  .who{min-width:0;flex:1}
+  .name{margin:0;font-size:13.5px;font-weight:600;line-height:1.25;color:#fff;
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .title{margin:2px 0 0;font-size:11.5px;line-height:1.15;color:var(--ahlan-palm-300);
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .eyebrow{
+    font-size:10px;font-weight:500;letter-spacing:.6px;text-transform:uppercase;
+    color:var(--ahlan-signal);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+  }
+  .collapse-btn{
+    position:absolute;left:50%;transform:translateX(-50%);bottom:-11px;z-index:12;
+    width:22px;height:22px;border-radius:9999px;border:1px solid var(--ahlan-hairline);
+    background:#fff;color:#27332d;cursor:pointer;font-size:12px;line-height:1;
+    display:grid;place-items:center;box-shadow:var(--shadow-md);
+  }
+  .collapse-btn:hover{border-color:var(--ahlan-green)}
+</style>
+</head>
+<body>
+  <div class="bar">
+    <span class="crumb">People&nbsp;/&nbsp;</span>
+    <h1>Organization Chart</h1>
+    <span class="stats" id="stats"></span>
+    <span class="spacer"></span>
+    <span class="seg-toggle" role="group" aria-label="Dataset">
+      <button id="btn-live"  aria-pressed="true">Live snapshot</button>
+      <button id="btn-demo"  aria-pressed="false">Demo (multi-level)</button>
+    </span>
+  </div>
+
+  <div class="viewport" id="viewport">
+    <div class="ah-org-canvas" id="canvas">
+      <div class="layer conn-layer" id="connLayer"></div>
+      <div class="layer node-layer" id="nodeLayer" role="tree" aria-label="Reporting structure" aria-orientation="horizontal"></div>
+    </div>
+  </div>
+
+  <div class="hint">Drag to pan · scroll to zoom · click a card to trace its reporting line</div>
+  <div class="zoombar">
+    <button id="zoom-out" title="Zoom out">−</button>
+    <button id="zoom-in"  title="Zoom in">+</button>
+    <button id="zoom-reset" title="Reset view">⟳</button>
+  </div>
+
+<script>
+/* ====================================================================
+   Ahlan Hamad "Shajarah" org chart — faithful reconstruction.
+
+   The layout is a direct port of the site's minified layout functions
+   `hr()` (flat list -> tree) and `We()` (tidy tree layout). Constant
+   names below map 1:1 to the originals:
+
+       k  = 212  -> NODE_W        je = 24 -> SIBLING_GAP
+       K  = 80   -> NODE_H        sr = 72 -> ROOT_GAP
+       nt = 64   -> LEVEL_GAP     ie = 32 -> STEM (= nt/2)
+       de = 48   -> MARGIN
+
+   Data shape matches `api.orgChart.getOrgTree`: a flat array of
+   employee docs linked by `managerId`.
+==================================================================== */
+const NODE_W = 212, NODE_H = 80, SIBLING_GAP = 24, ROOT_GAP = 72,
+      LEVEL_GAP = 64, STEM = LEVEL_GAP / 2 /* 32 */, MARGIN = 48;
+
+/* Embedded datasets (self-contained so the file opens over file://).
+   `live` is the real captured snapshot; `demo` is synthetic sample data
+   to demonstrate that the recovered layout engine scales to many levels. */
+const DATA = {
+  live: [
+    { _id:"s97096fyjg7dp207w9tqqpxh898csyr3", nameEn:"Ahmed AlAli", jobTitleEn:"Supervisor", department:"emp.dept.executive", managerId:null, status:"active" }
+  ],
+  demo: [
+    { _id:"d01", nameEn:"Amel Mabrouk",  jobTitleEn:"Chief Executive Officer", department:"emp.dept.executive",   managerId:null },
+    { _id:"d02", nameEn:"Ahmed AlAli",   jobTitleEn:"Chief Operating Officer", department:"emp.dept.operations",  managerId:"d01" },
+    { _id:"d03", nameEn:"Sara Haddad",   jobTitleEn:"VP Engineering",          department:"emp.dept.engineering", managerId:"d01" },
+    { _id:"d04", nameEn:"Khalid Nasser", jobTitleEn:"Finance Director",        department:"emp.dept.finance",     managerId:"d02" },
+    { _id:"d05", nameEn:"Lina Farouk",   jobTitleEn:"People Lead",             department:"emp.dept.hr",          managerId:"d02" },
+    { _id:"d06", nameEn:"Omar Zayed",    jobTitleEn:"Backend Manager",         department:"emp.dept.engineering", managerId:"d03" },
+    { _id:"d07", nameEn:"Maya Suleiman", jobTitleEn:"Frontend Manager",        department:"emp.dept.engineering", managerId:"d03" },
+    { _id:"d08", nameEn:"Yousef Karim",  jobTitleEn:"Senior Engineer",         department:"emp.dept.engineering", managerId:"d06" },
+    { _id:"d09", nameEn:"Nadia Aziz",    jobTitleEn:"Engineer",                department:"emp.dept.engineering", managerId:"d06" },
+    { _id:"d10", nameEn:"Rami Habib",    jobTitleEn:"UI Engineer",             department:"emp.dept.engineering", managerId:"d07" },
+    { _id:"d11", nameEn:"Dana Salim",    jobTitleEn:"Accountant",              department:"emp.dept.finance",     managerId:"d04" },
+    { _id:"d12", nameEn:"Tariq Mansour", jobTitleEn:"Recruiter",               department:"emp.dept.hr",          managerId:"d05" }
+  ]
+};
+
+/* Seniority ranking used only to order sibling roots (port of `Ye`). */
+const SENIORITY = [
+  [/chief|ceo|coo|cfo|cto|founder|president/i, 100],
+  [/vp|vice president|head|director/i,          80],
+  [/lead|principal|manager|supervisor/i,        60],
+  [/senior|sr\.?/i,                             40],
+];
+function seniority(title){
+  for (const [re, w] of SENIORITY) if (re.test(title||"")) return w;
+  return 20;
+}
+function initials(name){
+  const parts = (name||"").trim().split(/\s+/);
+  return ((parts[0]?.[0]||"") + (parts[parts.length-1]?.[0]||"")).toUpperCase();
+}
+function dept(d){ return (d||"").replace("emp.dept.",""); }
+
+/* --- hr(): flat employee list -> forest -------------------------- */
+function buildTree(list){
+  const byId = new Map();
+  for (const e of list) byId.set(e._id, { ...e, children:[], depth:0 });
+  const roots = [];
+  for (const e of list){
+    const node = byId.get(e._id);
+    const mgr  = e.managerId ? byId.get(e.managerId) : undefined;
+    if (mgr && mgr !== node) mgr.children.push(node);
+    else roots.push(node);
+  }
+  roots.sort((a,b) => seniority(b.jobTitleEn) - seniority(a.jobTitleEn));
+  // stamp depth via BFS
+  const stack = [...roots];
+  while (stack.length){
+    const n = stack.pop();
+    for (const c of n.children){ c.depth = n.depth + 1; stack.push(c); }
+  }
+  return roots;
+}
+
+/* --- We(): tidy-tree layout (faithful port) ---------------------- */
+function layout(roots, collapsed){
+  if (!roots.length) return { nodes:[], links:[], width:0, height:0 };
+
+  // pre-order list
+  const order = [];
+  const dfs = [];
+  for (let i = roots.length-1; i >= 0; i--)
+    dfs.push({ node:roots[i], level:0, posInSet:i+1, setSize:roots.length });
+  while (dfs.length){
+    const m = dfs.pop();
+    order.push(m);
+    if (collapsed.has(m.node._id)) continue;
+    const ch = m.node.children;
+    for (let i = ch.length-1; i >= 0; i--)
+      dfs.push({ node:ch[i], level:m.level+1, posInSet:i+1, setSize:ch.length });
+  }
+
+  // bottom-up subtree width (A) and center (H)
+  const A = new Map(), H = new Map();
+  for (let m = order.length-1; m >= 0; m--){
+    const node = order[m].node;
+    const kids = collapsed.has(node._id) ? [] : node.children;
+    if (!kids.length){ A.set(node._id, NODE_W); H.set(node._id, NODE_W/2); continue; }
+    let w = 0, first = 0, last = 0;
+    for (let z = 0; z < kids.length; z++){
+      const cw = A.get(kids[z]._id), cc = H.get(kids[z]._id);
+      if (z === 0) first = w + cc;
+      last = w + cc;
+      w += cw + SIBLING_GAP;
+    }
+    w -= SIBLING_GAP;
+    A.set(node._id, w);
+    H.set(node._id, (first + last) / 2);
+  }
+
+  // top-down positions
+  const nodes = [], byId = new Map(), left = new Map();
+  let cursor = MARGIN;
+  for (const r of roots){ left.set(r._id, cursor); cursor += A.get(r._id) + ROOT_GAP; }
+  for (const m of order){
+    const node = m.node, lx = left.get(node._id);
+    const N = {
+      node,
+      x: lx + H.get(node._id) - NODE_W/2,
+      y: MARGIN + m.level * (NODE_H + LEVEL_GAP),
+      level: m.level,
+      hasChildren: node.children.length > 0,
+      expanded: node.children.length > 0 && !collapsed.has(node._id),
+    };
+    nodes.push(N); byId.set(node._id, N);
+    if (!N.expanded) continue;
+    let cx = lx;
+    for (const c of node.children){ left.set(c._id, cx); cx += A.get(c._id) + SIBLING_GAP; }
+  }
+
+  // links: parent bottom-center -> child top-center
+  const links = [];
+  for (const m of nodes){
+    if (!m.expanded) continue;
+    for (const c of m.node.children){
+      const cn = byId.get(c._id);
+      if (cn) links.push({ id:c._id, parentId:m.node._id,
+        px:m.x + NODE_W/2, py:m.y + NODE_H, cx:cn.x + NODE_W/2, cy:cn.y });
+    }
+  }
+
+  let w = 0, h = 0;
+  for (const m of nodes){ w = Math.max(w, m.x + NODE_W); h = Math.max(h, m.y + NODE_H); }
+  return { nodes, links, width:w + MARGIN, height:h + MARGIN };
+}
+
+/* ==================================================================
+   Render
+================================================================== */
+const nodeLayer = document.getElementById("nodeLayer");
+const connLayer = document.getElementById("connLayer");
+const canvas    = document.getElementById("canvas");
+const statsEl   = document.getElementById("stats");
+
+let current = "live";
+let collapsed = new Set();
+let roots = [];
+let lineage = null;   // set of ids on the traced reporting line
+
+function computeStats(rootsArr){
+  let total = 0, managers = 0, depth = 0;
+  const walk = (n, d) => {
+    total++; depth = Math.max(depth, d);
+    if (n.children.length) managers++;
+    n.children.forEach(c => walk(c, d+1));
+  };
+  rootsArr.forEach(r => walk(r, 0));
+  return { total, managers, layers: depth + 1 };
+}
+
+function seg(x, y, w, h, isLineage){
+  const d = document.createElement("div");
+  d.className = "ah-org-seg" + (isLineage ? " is-lineage" : "");
+  d.style.width = w + "px";
+  d.style.height = h + "px";
+  d.style.transform = `translate(${x}px, ${y}px)`;
+  return d;
+}
+
+function ancestryOf(id){
+  // returns set of ids from `id` up to its root (inclusive)
+  const parent = new Map();
+  const walk = n => n.children.forEach(c => { parent.set(c._id, n._id); walk(c); });
+  roots.forEach(walk);
+  const set = new Set([id]);
+  let cur = id;
+  while (parent.has(cur)){ cur = parent.get(cur); set.add(cur); }
+  return set;
+}
+
+function render(){
+  const model = layout(roots, collapsed);
+  canvas.style.width  = model.width + "px";
+  canvas.style.height = model.height + "px";
+
+  // connectors
+  connLayer.innerHTML = "";
+  for (const l of model.links){
+    const lin = lineage && lineage.has(l.id) && lineage.has(l.parentId);
+    // parent stem (down STEM px from parent bottom)
+    connLayer.appendChild(seg(l.px - 0.5, l.py, 1, STEM, lin));
+    // horizontal bus
+    const hx = Math.min(l.px, l.cx), hw = Math.abs(l.cx - l.px);
+    if (hw > 0) connLayer.appendChild(seg(hx, l.py + STEM - 0.5, hw, 1, lin));
+    // child stem (bus down to child top)
+    connLayer.appendChild(seg(l.cx - 0.5, l.py + STEM, 1, l.cy - l.py - STEM, lin));
+  }
+
+  // nodes
+  nodeLayer.innerHTML = "";
+  nodeLayer.classList.toggle("ah-org-tracing", !!lineage);
+  for (const n of model.nodes){
+    const item = document.createElement("div");
+    item.className = "ah-org-item";
+    item.setAttribute("role", "treeitem");
+    item.setAttribute("aria-level", n.level + 1);
+    item.tabIndex = 0;
+    item.style.width  = NODE_W + "px";
+    item.style.height = NODE_H + "px";
+    item.style.transform = `translate(${n.x}px, ${n.y}px)`;
+
+    const onLineage = lineage && lineage.has(n.node._id);
+    item.innerHTML = `
+      <div class="ah-org-card${onLineage ? " is-lineage" : ""}">
+        <div class="row">
+          <span class="avatar">${initials(n.node.nameEn)}</span>
+          <div class="who">
+            <p class="name" dir="auto">${esc(n.node.nameEn)}</p>
+            <p class="title" dir="auto">${esc(n.node.jobTitleEn||"")}</p>
+          </div>
+        </div>
+        <div><span class="eyebrow">${esc(dept(n.node.department))}</span></div>
+      </div>`;
+
+    item.querySelector(".ah-org-card").addEventListener("click", (e) => {
+      e.stopPropagation();
+      lineage = (lineage && lineage.has(n.node._id)) ? null : ancestryOf(n.node._id);
+      render();
+    });
+
+    if (n.hasChildren){
+      const btn = document.createElement("button");
+      btn.className = "collapse-btn";
+      btn.textContent = n.expanded ? "−" : "+";
+      btn.title = n.expanded ? "Collapse" : "Expand";
+      btn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        if (collapsed.has(n.node._id)) collapsed.delete(n.node._id);
+        else collapsed.add(n.node._id);
+        render();
+      });
+      item.appendChild(btn);
+    }
+    nodeLayer.appendChild(item);
+  }
+}
+
+function esc(s){ return String(s).replace(/[&<>"]/g, c => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;" }[c])); }
+
+function load(which){
+  current = which;
+  collapsed = new Set();
+  lineage = null;
+  roots = buildTree(DATA[which]);
+  const s = computeStats(roots);
+  statsEl.textContent = `${s.total} ${s.total===1?"person":"people"} · ${s.layers} ${s.layers===1?"layer":"layers"} · ${s.managers} ${s.managers===1?"manager":"managers"}`;
+  document.getElementById("btn-live").setAttribute("aria-pressed", which==="live");
+  document.getElementById("btn-demo").setAttribute("aria-pressed", which==="demo");
+  render();
+  resetView();
+}
+
+/* ==================================================================
+   Pan / zoom
+================================================================== */
+const viewport = document.getElementById("viewport");
+let scale = 1, tx = 0, ty = 0;
+
+function apply(){ canvas.style.transform = `translate(${tx}px, ${ty}px) scale(${scale})`; }
+function resetView(){
+  scale = 1;
+  const vp = viewport.getBoundingClientRect();
+  const cw = parseFloat(canvas.style.width)  || 0;
+  tx = Math.max(24, (vp.width  - cw) / 2);
+  ty = 24;
+  apply();
+}
+viewport.addEventListener("wheel", (e) => {
+  e.preventDefault();
+  const vp = viewport.getBoundingClientRect();
+  const mx = e.clientX - vp.left, my = e.clientY - vp.top;
+  const factor = e.deltaY < 0 ? 1.1 : 1/1.1;
+  const ns = Math.min(2.2, Math.max(0.3, scale * factor));
+  // zoom toward cursor
+  tx = mx - (mx - tx) * (ns / scale);
+  ty = my - (my - ty) * (ns / scale);
+  scale = ns; apply();
+}, { passive:false });
+
+let dragging = false, sx = 0, sy = 0;
+viewport.addEventListener("pointerdown", (e) => {
+  dragging = true; sx = e.clientX - tx; sy = e.clientY - ty;
+  viewport.classList.add("panning"); viewport.setPointerCapture(e.pointerId);
+});
+viewport.addEventListener("pointermove", (e) => {
+  if (!dragging) return; tx = e.clientX - sx; ty = e.clientY - sy; apply();
+});
+viewport.addEventListener("pointerup", (e) => {
+  dragging = false; viewport.classList.remove("panning");
+  try { viewport.releasePointerCapture(e.pointerId); } catch(_){}
+});
+viewport.addEventListener("click", () => { if (lineage){ lineage = null; render(); } });
+
+document.getElementById("zoom-in").onclick    = () => { scale = Math.min(2.2, scale*1.15); apply(); };
+document.getElementById("zoom-out").onclick   = () => { scale = Math.max(0.3, scale/1.15); apply(); };
+document.getElementById("zoom-reset").onclick = resetView;
+document.getElementById("btn-live").onclick   = () => load("live");
+document.getElementById("btn-demo").onclick   = () => load("demo");
+
+load("live");
+window.addEventListener("resize", () => { if (scale === 1) resetView(); });
+</script>
+</body>
+</html>

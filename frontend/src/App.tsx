@@ -61,6 +61,11 @@ const AttendancePage = lazy(() =>
     default: m.AttendancePage,
   })),
 )
+const EmployeesOrgTreePage = lazy(() =>
+  import('@/pages/employees/orgTree/EmployeesOrgTreePage').then((m) => ({
+    default: m.EmployeesOrgTreePage,
+  })),
+)
 const EmployeeDetailPage = lazy(() =>
   import('@/pages/employees/EmployeeDetailPage').then((m) => ({ default: m.EmployeeDetailPage })),
 )
@@ -237,6 +242,14 @@ function Shell(): React.JSX.Element {
                 element={
                   <RequireCapability cap="workforce.people.view">
                     <AttendancePage />
+                  </RequireCapability>
+                }
+              />
+              <Route
+                path="/employees/org-tree"
+                element={
+                  <RequireCapability cap="employees.view">
+                    <EmployeesOrgTreePage />
                   </RequireCapability>
                 }
               />
