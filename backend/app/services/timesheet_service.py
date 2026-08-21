@@ -28,11 +28,11 @@ from dataclasses import dataclass
 from datetime import UTC, date, datetime
 from typing import Final
 
-from sqlalchemy import and_, or_, select
+from sqlalchemy import and_, func, select
 from sqlalchemy.orm import Session
 
 from app.api.errors import ConflictError, NotFoundError, ValidationFailedError
-from app.core.constants import DESIGNATION_SEED, nationality_en
+from app.core.constants import DESIGNATION_SEED, TIMESHEET_SHEETS, nationality_en
 from app.core.leave_lifecycle import english_part
 from app.core.timesheet_codes import (
     CODE_ABSENT,
@@ -41,6 +41,7 @@ from app.core.timesheet_codes import (
     CODE_OFF_ROSTER,
     CODE_PRESENT,
     EMITTED_CODES,
+    UNKNOWN_LEAVE,
     LeaveSpan,
     in_roster,
     is_void,
@@ -71,7 +72,7 @@ DEFAULT_POST_COUNT: Final[int] = 249
 DEFAULT_STAT_FILLER: Final[str] = CODE_ANNUAL
 
 #: The two workbooks. Drivers have always been reported separately.
-SHEETS: Final[tuple[str, str]] = ("main", "drivers")
+SHEETS: Final[tuple[str, str]] = TIMESHEET_SHEETS
 
 #: What :func:`set_cell` and :func:`set_filler` accept. ``EMITTED_CODES`` is a
 #: *tuple*, so it is unpacked — ``EMITTED_CODES | {...}`` is a ``TypeError``.
@@ -85,8 +86,6 @@ CELL_CODES: Final[frozenset[str]] = frozenset({*EMITTED_CODES, CODE_BLOCKED})
 STAT_KEEP_BLOCK_1: Final[frozenset[str]] = frozenset({CODE_NEW, CODE_OFF_ROSTER, CODE_BLOCKED})
 STAT_KEEP_BLOCK_2: Final[frozenset[str]] = STAT_KEEP_BLOCK_1 | {CODE_ABSENT}
 
-#: The English leave-type half that means the type was lost in form generation.
-_UNKNOWN_LEAVE: Final[str] = "Unknown"
 
 #: Sorts a row with no rank behind every ranked one.
 _UNRANKED: Final[int] = 10**9
@@ -168,7 +167,7 @@ def _month_bounds(year: int, month: int) -> tuple[int, date, date]:
     return days_in_month, date(year, month, 1), date(year, month, days_in_month)
 
 
-def _previous_month(year: int, month: int) -> tuple[int, int]:
+def previous_month(year: int, month: int) -> tuple[int, int]:
     return (year - 1, 12) if month == 1 else (year, month - 1)
 
 
@@ -231,7 +230,7 @@ def _lists_on(designation: TimesheetDesignation | None, sheet: str) -> bool:
     """
 
     if designation is None:
-        return sheet == "main"
+        return sheet == SHEETS[0]
     return designation.sheet == sheet
 
 
@@ -344,28 +343,36 @@ def _overrides_by_employee(db: Session, year: int, month: int) -> dict[str, dict
 
 
 def _fillers_by_employee(db: Session, year: int, month: int) -> dict[str, str]:
-    """Every block-2 filler choice in force for this month, in one query.
+    """Latest block-2 filler choice at or before this month, in one query.
 
     The choice carries forward from the most recent *earlier* month that has one
     — not from last month, because the operator is allowed to skip months and
-    "the shape is set once" has to survive that. Ordering ascending and letting
-    each employee's later row overwrite the earlier one collapses the whole
-    lookback into a single pass; doing it as one ``LIMIT 1`` query per row would
-    be a round trip per surplus body on site.
+    "the shape is set once" has to survive that. The grouped subquery bounds the
+    lookback in SQL and selects only the latest row per employee instead of
+    materialising the full history.
     """
 
-    rows = db.execute(
-        select(TimesheetStatFiller)
-        .where(
-            or_(
-                TimesheetStatFiller.year < year,
-                and_(
-                    TimesheetStatFiller.year == year,
-                    TimesheetStatFiller.month <= month,
-                ),
-            )
+    month_index = year * 12 + month
+    latest = (
+        select(
+            TimesheetStatFiller.employee_id.label("employee_id"),
+            func.max(TimesheetStatFiller.year * 12 + TimesheetStatFiller.month).label(
+                "month_index"
+            ),
         )
-        .order_by(TimesheetStatFiller.year, TimesheetStatFiller.month)
+        .where(TimesheetStatFiller.year * 12 + TimesheetStatFiller.month <= month_index)
+        .group_by(TimesheetStatFiller.employee_id)
+        .subquery()
+    )
+    rows = db.execute(
+        select(TimesheetStatFiller).join(
+            latest,
+            and_(
+                TimesheetStatFiller.employee_id == latest.c.employee_id,
+                TimesheetStatFiller.year * 12 + TimesheetStatFiller.month
+                == latest.c.month_index,
+            ),
+        )
     ).scalars()
     return {row.employee_id: row.code for row in rows}
 
@@ -481,7 +488,7 @@ def _warning_issues(
             )
         leaves = _live_leaves(leaves_by_employee.get(employee.id, ()))
         for row in leaves:
-            if english_part(row.leave_type) == _UNKNOWN_LEAVE:
+            if english_part(row.leave_type) == UNKNOWN_LEAVE:
                 issues.append(
                     Issue(
                         employee.id,
@@ -560,7 +567,7 @@ def _removed(
 ) -> list[Removed]:
     """Who was on last month's workbook and is deliberately absent from this one."""
 
-    prev_year, prev_month = _previous_month(year, month)
+    prev_year, prev_month = previous_month(year, month)
     _, prev_start, prev_end = _month_bounds(prev_year, prev_month)
     candidates = db.execute(
         select(Employee).where(Employee.end_date >= prev_start, Employee.end_date <= prev_end)
