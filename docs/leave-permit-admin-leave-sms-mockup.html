@@ -1,0 +1,279 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>SMS wording — Leave Permit & Administrative Leave</title>
+<style>
+  :root{
+    --bg:#eae6df; --panel:#fbfaf7; --ink:#1f2a24; --muted:#6b7770;
+    --line:#dcd6cc; --accent:#1f7a5a; --accent-soft:#e7f3ed;
+    --bubble:#d9fdd3; --bubble-line:#bfeeb6; --tick:#53bdeb;
+    --warn:#8a5a00; --warn-bg:#fdf3df; --warn-line:#f0dfae;
+  }
+  *{box-sizing:border-box}
+  body{
+    margin:0;background:var(--bg);color:var(--ink);
+    font:15px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  }
+  .wrap{max-width:1120px;margin:0 auto;padding:40px 24px 80px}
+  header.top{margin-bottom:8px}
+  h1{font-size:26px;letter-spacing:-.01em;margin:0 0 6px}
+  .sub{color:var(--muted);max-width:760px;margin:0 0 4px}
+  .pill{display:inline-block;font-size:12px;font-weight:600;color:var(--accent);
+    background:var(--accent-soft);border:1px solid var(--bubble-line);
+    border-radius:999px;padding:2px 10px;margin-top:10px}
+
+  section.form{margin-top:44px}
+  .form-head{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap;
+    border-bottom:2px solid var(--line);padding-bottom:10px;margin-bottom:6px}
+  .form-head h2{font-size:20px;margin:0}
+  .form-head .ar-name{font-size:18px;color:var(--muted);font-weight:500}
+  .form-note{color:var(--muted);font-size:13.5px;margin:8px 0 20px;max-width:820px}
+  .form-note code{background:#efeae1;border:1px solid var(--line);border-radius:5px;
+    padding:1px 5px;font-size:12.5px}
+
+  .variants{display:grid;grid-template-columns:repeat(3,1fr);gap:18px}
+  @media(max-width:920px){.variants{grid-template-columns:1fr}}
+  .variant{background:var(--panel);border:1px solid var(--line);border-radius:14px;
+    padding:14px 14px 16px;box-shadow:0 1px 0 rgba(0,0,0,.02)}
+  .vtag{display:flex;align-items:center;gap:8px;margin-bottom:12px}
+  .vtag .n{width:22px;height:22px;border-radius:6px;background:var(--accent);
+    color:#fff;font-size:12px;font-weight:700;display:grid;place-items:center}
+  .vtag .t{font-weight:600;font-size:13.5px}
+  .vtag .desc{color:var(--muted);font-size:12px;margin-inline-start:auto;text-align:end}
+
+  .phone{background:#efe7de url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='40' height='40'><circle cx='6' cy='6' r='1' fill='%23e2d8cb'/></svg>");
+    border-radius:10px;padding:12px 10px;margin-bottom:10px}
+  .lang{font-size:10.5px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;
+    color:var(--muted);margin:2px 2px 6px}
+  .bubble{position:relative;background:var(--bubble);border:1px solid var(--bubble-line);
+    border-radius:10px;padding:8px 10px 18px;max-width:92%;
+    white-space:pre-wrap;font-size:13.5px;line-height:1.5;
+    box-shadow:0 1px 1px rgba(0,0,0,.06)}
+  .bubble.en{margin-inline-start:0}
+  .bubble.ar{margin-inline-start:auto;direction:rtl;text-align:right;
+    font-family:"Segoe UI","Noto Naskh Arabic",Tahoma,sans-serif;font-size:14px}
+  .meta{position:absolute;bottom:4px;inset-inline-end:9px;font-size:10px;color:#5b7a67}
+  .meta .ck{color:var(--tick);font-weight:700}
+
+  .callout{margin-top:22px;background:var(--warn-bg);border:1px solid var(--warn-line);
+    border-radius:12px;padding:14px 16px;color:#5c4a22;font-size:13.5px}
+  .callout b{color:var(--warn)}
+  .callout ul{margin:8px 0 0;padding-inline-start:20px}
+  .callout li{margin:4px 0}
+  .sample{color:var(--muted);font-size:12.5px;margin:14px 2px 0}
+  .sample code{background:#efeae1;border:1px solid var(--line);border-radius:5px;padding:1px 5px}
+  footer{margin-top:56px;color:var(--muted);font-size:12.5px;border-top:1px solid var(--line);padding-top:16px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <h1>SMS / WhatsApp wording — Leave Permit &amp; Administrative Leave</h1>
+    <p class="sub">Both are Admin-Affairs document forms that currently send <b>no</b> employee
+      notification. This mockup proposes net-new bilingual message wording for each.
+      Same body is used on WhatsApp and SMS (single template, both channels read identically).</p>
+    <p class="sub">Pick one variant per form (or mix &amp; match lines). Sample values are filled in
+      so you can read the real shape — placeholders in <code>{…}</code> below each section.</p>
+    <span class="pill">Review &amp; choose — nothing implemented yet</span>
+  </header>
+
+  <!-- ============================ LEAVE PERMIT ============================ -->
+  <section class="form">
+    <div class="form-head">
+      <h2>1 · Leave Permit</h2>
+      <span class="ar-name" dir="rtl">تصريح خروج</span>
+    </div>
+    <p class="form-note">
+      A short same-day <b>exit permit</b> — hours, not days. Your idea: drop start/end dates and
+      instead say <b>“from the time it was issued, for N hours.”</b> The form captures
+      <code>duration_hours</code>; the issue time comes from the record’s creation timestamp.
+      No fixed end-date exists, so the wording is built around <i>issue time + duration</i>.
+    </p>
+
+    <div class="variants">
+      <!-- V1 -->
+      <div class="variant">
+        <div class="vtag"><span class="n">1</span><span class="t">Issued · valid-from</span>
+          <span class="desc">clean &amp; factual</span></div>
+        <div class="phone">
+          <div class="lang">English</div>
+          <div class="bubble en">Dear Ahmed Ali Hassan,
+Your leave permit has been issued.
+Valid from 10:30 AM on Thursday, 16 Jul 2026, for 3 hours.
+Al Wathba Rehabilitation Centre<span class="meta">10:30 <span class="ck">✓✓</span></span></div>
+        </div>
+        <div class="phone">
+          <div class="lang">العربية</div>
+          <div class="bubble ar">عزيزي أحمد علي حسن،
+تم إصدار تصريح خروجك.
+اعتباراً من الساعة 10:30 صباحاً يوم الخميس 16 يوليو 2026، ولمدة 3 ساعات.
+إدارة مركز الإصلاح والتأهيل بالوثبة<span class="meta">10:30 <span class="ck">✓✓</span></span></div>
+        </div>
+      </div>
+
+      <!-- V2 -->
+      <div class="variant">
+        <div class="vtag"><span class="n">2</span><span class="t">Approved · structured</span>
+          <span class="desc">labelled lines + reminder</span></div>
+        <div class="phone">
+          <div class="lang">English</div>
+          <div class="bubble en">Dear Ahmed Ali Hassan,
+Your leave permit is approved.
+Date: Thursday, 16 Jul 2026
+From: 10:30 AM · Duration: 3 hours
+Please return to duty on time.
+Al Wathba Rehabilitation Centre<span class="meta">10:30 <span class="ck">✓✓</span></span></div>
+        </div>
+        <div class="phone">
+          <div class="lang">العربية</div>
+          <div class="bubble ar">عزيزي أحمد علي حسن،
+تمت الموافقة على تصريح خروجك.
+التاريخ: الخميس 16 يوليو 2026
+من الساعة: 10:30 صباحاً · المدة: 3 ساعات
+يرجى الالتزام بموعد العودة.
+إدارة مركز الإصلاح والتأهيل بالوثبة<span class="meta">10:30 <span class="ck">✓✓</span></span></div>
+        </div>
+      </div>
+
+      <!-- V3 -->
+      <div class="variant">
+        <div class="vtag"><span class="n">3</span><span class="t">Granted · one-line + return</span>
+          <span class="desc">shortest; computes return time</span></div>
+        <div class="phone">
+          <div class="lang">English</div>
+          <div class="bubble en">Dear Ahmed Ali Hassan,
+Leave permit granted: you may leave for 3 hours from 10:30 AM on Thursday, 16 Jul 2026 (return by 1:30 PM).
+Al Wathba Rehabilitation Centre<span class="meta">10:30 <span class="ck">✓✓</span></span></div>
+        </div>
+        <div class="phone">
+          <div class="lang">العربية</div>
+          <div class="bubble ar">عزيزي أحمد علي حسن،
+تم منحك تصريح خروج لمدة 3 ساعات اعتباراً من الساعة 10:30 صباحاً يوم الخميس 16 يوليو 2026 (العودة الساعة 1:30 ظهراً).
+إدارة مركز الإصلاح والتأهيل بالوثبة<span class="meta">10:30 <span class="ck">✓✓</span></span></div>
+        </div>
+      </div>
+    </div>
+
+    <p class="sample">Placeholders: <code>{name}</code> · <code>{issue_time}</code> (10:30 AM) ·
+      <code>{date}</code> + <code>{weekday}</code> · <code>{hours}</code> (duration_hours) ·
+      V3 also <code>{return_time}</code> = issue + hours.</p>
+
+    <div class="callout">
+      <b>Decisions / data needed for Leave Permit</b>
+      <ul>
+        <li><b>Issue time source:</b> shown time comes from the record’s <code>created_at</code>,
+          stored in <b>UTC</b> — needs a <b>+4 (UAE)</b> conversion, and <code>BookEvent</code>
+          must carry the time (today it only keeps the date).</li>
+        <li><b>Verb:</b> “issued” (V1) vs “approved” (V2) vs “granted” (V3) — which fits how the permit
+          actually works when the SMS fires?</li>
+        <li><b>Return time (V3):</b> nice touch, but only meaningful if the permit is genuinely
+          continuous from issue. Drop if permits can start later than issue.</li>
+        <li><b>Arabic hours plural:</b> 1 → ساعة · 2 → ساعتان · 3–10 → ساعات · 11+ → ساعة
+          (same plural engine already used by the leave SMS).</li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- ======================= ADMINISTRATIVE LEAVE ======================= -->
+  <section class="form">
+    <div class="form-head">
+      <h2>2 · Administrative Leave</h2>
+      <span class="ar-name" dir="rtl">إجازة إدارية</span>
+    </div>
+    <p class="form-note">
+      A multi-day leave generated for the <b>manager to sign</b>. Per your note: <b>no “waiting for
+      signature”</b> wording — the message should simply confirm the leave has been
+      <b>created / issued / recorded</b>. The form captures <code>leave_date_range</code> and
+      <code>duration</code> (days). Three framings below, none mentioning the signature.
+    </p>
+
+    <div class="variants">
+      <!-- V1 -->
+      <div class="variant">
+        <div class="vtag"><span class="n">1</span><span class="t">Issued · period line</span>
+          <span class="desc">factual, structured</span></div>
+        <div class="phone">
+          <div class="lang">English</div>
+          <div class="bubble en">Dear Ahmed Ali Hassan,
+Your administrative leave has been issued.
+Period: 20–22 Jul 2026 (3 days).
+Al Wathba Rehabilitation Centre<span class="meta">10:30 <span class="ck">✓✓</span></span></div>
+        </div>
+        <div class="phone">
+          <div class="lang">العربية</div>
+          <div class="bubble ar">عزيزي أحمد علي حسن،
+تم إصدار إجازتك الإدارية.
+الفترة: 20–22 يوليو 2026 (3 أيام).
+إدارة مركز الإصلاح والتأهيل بالوثبة<span class="meta">10:30 <span class="ck">✓✓</span></span></div>
+        </div>
+      </div>
+
+      <!-- V2 -->
+      <div class="variant">
+        <div class="vtag"><span class="n">2</span><span class="t">Registered · full dates</span>
+          <span class="desc">warmer, weekday range</span></div>
+        <div class="phone">
+          <div class="lang">English</div>
+          <div class="bubble en">Dear Ahmed Ali Hassan,
+Your administrative leave has been registered.
+From Monday, 20 Jul to Wednesday, 22 Jul 2026 — 3 days.
+Al Wathba Rehabilitation Centre<span class="meta">10:30 <span class="ck">✓✓</span></span></div>
+        </div>
+        <div class="phone">
+          <div class="lang">العربية</div>
+          <div class="bubble ar">عزيزي أحمد علي حسن،
+تم تسجيل إجازتك الإدارية.
+من الإثنين 20 يوليو إلى الأربعاء 22 يوليو 2026 — 3 أيام.
+إدارة مركز الإصلاح والتأهيل بالوثبة<span class="meta">10:30 <span class="ck">✓✓</span></span></div>
+        </div>
+      </div>
+
+      <!-- V3 -->
+      <div class="variant">
+        <div class="vtag"><span class="n">3</span><span class="t">Created · on record</span>
+          <span class="desc">emphasises “on file”</span></div>
+        <div class="phone">
+          <div class="lang">English</div>
+          <div class="bubble en">Dear Ahmed Ali Hassan,
+Your administrative leave for 20–22 Jul 2026 (3 days) has been created and is on record.
+Al Wathba Rehabilitation Centre<span class="meta">10:30 <span class="ck">✓✓</span></span></div>
+        </div>
+        <div class="phone">
+          <div class="lang">العربية</div>
+          <div class="bubble ar">عزيزي أحمد علي حسن،
+تم إنشاء إجازتك الإدارية للفترة 20–22 يوليو 2026 (3 أيام) وتسجيلها في السجلات.
+إدارة مركز الإصلاح والتأهيل بالوثبة<span class="meta">10:30 <span class="ck">✓✓</span></span></div>
+        </div>
+      </div>
+    </div>
+
+    <p class="sample">Placeholders: <code>{name}</code> · <code>{range}</code> (leave_date_range) ·
+      <code>{duration}</code> (days). V2 expands weekdays — needs the range parsed into start/end.</p>
+
+    <div class="callout">
+      <b>Decisions / data needed for Administrative Leave</b>
+      <ul>
+        <li><b>Verb:</b> “issued” (V1) / “registered” (V2) / “created &amp; on record” (V3) — all avoid
+          the signature. Which tone do you want?</li>
+        <li><b>Date range:</b> the form stores <code>leave_date_range</code> as one pre-formatted
+          string. V1 &amp; V3 use it verbatim (safe); <b>V2’s weekday expansion</b> needs discrete
+          start/end dates (extra parsing).</li>
+        <li><b>Send timing:</b> the auto-send fires when the form is generated (before the manager’s
+          signature). “Issued / created” is accurate then; “approved” would not be — hence avoided.</li>
+        <li><b>Optional:</b> drop the count field <code>admin_leaves_this_month</code> from the SMS
+          (it’s an internal control figure, not employee-facing) — confirm.</li>
+        <li><b>Arabic days plural:</b> 1 → يوم · 2 → يومان · 3–10 → أيام · 11+ → يوماً.</li>
+      </ul>
+    </div>
+  </section>
+
+  <footer>
+    Sample employee: Ahmed Ali Hassan / أحمد علي حسن · permit 16 Jul 2026 10:30 for 3 h ·
+    admin leave 20–22 Jul 2026 (3 days). Signature line matches the existing SMS templates.
+    Once you pick, I’ll wire the events + builders (TDD) and resync — nothing is committed yet.
+  </footer>
+</div>
+</body>
+</html>

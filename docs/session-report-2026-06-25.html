@@ -1,0 +1,284 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>GSSG Manager — Work Report (25 Jun 2026)</title>
+<style>
+  :root{
+    --bg:#0f172a; --panel:#ffffff; --ink:#0f172a; --muted:#64748b; --line:#e2e8f0;
+    --brand:#0d9488; --brand-d:#0f766e; --navy:#1e293b;
+    --green:#16a34a; --amber:#d97706; --blue:#2563eb; --red:#dc2626; --violet:#7c3aed;
+    --soft:#f8fafc;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,"Noto Sans Arabic",sans-serif;
+       color:var(--ink);background:#eef2f6;line-height:1.55;-webkit-font-smoothing:antialiased}
+  .wrap{max-width:980px;margin:0 auto;padding:0 20px 80px}
+  header.hero{background:linear-gradient(135deg,#0f766e,#0e7490);color:#fff;padding:46px 20px 40px;
+       box-shadow:inset 0 -1px 0 rgba(0,0,0,.1)}
+  header.hero .inner{max-width:980px;margin:0 auto;padding:0}
+  header.hero h1{margin:0 0 6px;font-size:30px;letter-spacing:-.4px}
+  header.hero p{margin:0;opacity:.92}
+  .tag{display:inline-block;background:rgba(255,255,255,.16);border:1px solid rgba(255,255,255,.25);
+       padding:3px 10px;border-radius:999px;font-size:12px;margin-top:14px}
+  h2{font-size:21px;margin:38px 0 6px;letter-spacing:-.3px}
+  h2 .num{color:var(--brand);font-variant-numeric:tabular-nums}
+  h3{font-size:15px;margin:20px 0 8px;color:var(--navy)}
+  .lead{color:var(--muted);margin:2px 0 14px}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:18px 20px;margin:14px 0;
+        box-shadow:0 1px 2px rgba(15,23,42,.04)}
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+  @media(max-width:720px){.grid{grid-template-columns:1fr}}
+  .badge{display:inline-flex;align-items:center;gap:6px;font-size:11.5px;font-weight:600;
+         padding:3px 9px;border-radius:999px;white-space:nowrap}
+  .b-live{background:#dcfce7;color:#166534} .b-wait{background:#fef3c7;color:#92400e}
+  .b-merged{background:#ede9fe;color:#5b21b6} .b-fixed{background:#dbeafe;color:#1e40af}
+  .row{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+  .kv{display:grid;grid-template-columns:120px 1fr;gap:6px 14px;font-size:14px}
+  .kv dt{color:var(--muted)} .kv dd{margin:0}
+  .why{border-left:3px solid var(--amber);background:#fffbeb;padding:8px 12px;border-radius:0 8px 8px 0;margin:8px 0;font-size:14px}
+  .fix{border-left:3px solid var(--green);background:#f0fdf4;padding:8px 12px;border-radius:0 8px 8px 0;margin:8px 0;font-size:14px}
+  code{background:#f1f5f9;border:1px solid #e2e8f0;border-radius:5px;padding:1px 6px;font-size:12.5px;
+       font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+  ul.tick{list-style:none;padding-left:0;margin:8px 0}
+  ul.tick li{padding-left:24px;position:relative;margin:5px 0}
+  ul.tick li::before{content:"✓";position:absolute;left:0;color:var(--green);font-weight:700}
+  /* mock UI */
+  .mock{border:1px solid var(--line);border-radius:12px;overflow:hidden;background:#fff;margin:10px 0;
+        box-shadow:0 6px 22px rgba(15,23,42,.08)}
+  .mock .bar{background:#f1f5f9;border-bottom:1px solid var(--line);padding:7px 12px;font-size:12px;color:#64748b;display:flex;gap:6px;align-items:center}
+  .dot{width:9px;height:9px;border-radius:50%}
+  .mock .body{padding:16px}
+  .figcap{font-size:12px;color:var(--muted);margin:4px 2px 18px;text-align:center}
+  .btn{display:inline-flex;align-items:center;gap:6px;border-radius:8px;padding:7px 12px;font-size:13px;font-weight:600;border:1px solid transparent;cursor:default}
+  .btn-primary{background:var(--brand);color:#fff} .btn-ghost{background:#fff;border-color:var(--line);color:#334155}
+  .btn-danger{background:#fff;border:1px solid #fecaca;color:#b91c1c}
+  .lockbtn{display:inline-flex;align-items:center;gap:7px;border:1px dashed #cbd5e1;border-radius:8px;padding:7px 12px;color:#64748b;font-size:13px;background:#f8fafc}
+  .seal{font-size:11px;font-weight:700;padding:2px 8px;border-radius:6px}
+  .seal.pending{background:#fef3c7;color:#92400e}.seal.scan{background:#e0f2fe;color:#075985}
+  table.t{width:100%;border-collapse:collapse;font-size:13.5px;margin:6px 0}
+  table.t th,table.t td{text-align:left;padding:9px 10px;border-bottom:1px solid var(--line)}
+  table.t th{color:var(--muted);font-weight:600;font-size:12px;text-transform:uppercase;letter-spacing:.04em}
+  .mono{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12.5px}
+  .pill{font-size:11px;border:1px solid var(--line);border-radius:999px;padding:2px 8px;color:#475569;background:#fff}
+  .pill.on{background:var(--brand);color:#fff;border-color:var(--brand)}
+  .toc{columns:2;gap:24px} @media(max-width:600px){.toc{columns:1}}
+  .toc a{display:block;color:var(--navy);text-decoration:none;padding:4px 0;font-size:14px}
+  .toc a:hover{color:var(--brand)}
+  .foot{color:var(--muted);font-size:12.5px;margin-top:30px;border-top:1px solid var(--line);padding-top:14px}
+  .ar{direction:rtl;text-align:right;font-family:"Noto Sans Arabic",sans-serif}
+  .note{font-size:12.5px;color:#92400e;background:#fffbeb;border:1px solid #fde68a;border-radius:10px;padding:10px 12px;margin:12px 0}
+</style>
+</head>
+<body>
+<header class="hero">
+  <div class="inner">
+    <h1>GSSG Manager — Work Report</h1>
+    <p>Everything fixed and built in this session · 25 June 2026</p>
+    <span class="tag">6 areas · ~30 commits · all tests green</span>
+  </div>
+</header>
+
+<div class="wrap">
+
+  <div class="card">
+    <strong>At a glance.</strong>
+    <p class="lead" style="margin-top:6px">Six pieces of work, from a one-line config fix that brought PDF generation back to life, through three reported bugs, two new features, and a full permissions system. Below: what was wrong, what was done, and exactly what is live now vs. waiting on a restart.</p>
+    <div class="row">
+      <span class="badge b-live">● Live now</span>
+      <span class="badge b-wait">● Needs <code>mng restart</code></span>
+      <span class="badge b-merged">● Merged to main, not deployed</span>
+    </div>
+  </div>
+
+  <div class="card">
+    <strong>Contents</strong>
+    <nav class="toc" style="margin-top:8px">
+      <a href="#pdf">1 · PDF generation &amp; preview — fixed</a>
+      <a href="#three">2 · Three reported issues</a>
+      <a href="#delete">3 · Bulk delete in Records</a>
+      <a href="#notif">4 · Notifications overhaul</a>
+      <a href="#perms">5 · Permissions system (new)</a>
+      <a href="#status">6 · Deploy status &amp; next steps</a>
+    </nav>
+  </div>
+
+  <!-- 1 PDF -->
+  <h2 id="pdf"><span class="num">1.</span> PDF generation &amp; preview <span class="badge b-live" style="vertical-align:middle">● Live &amp; verified</span></h2>
+  <p class="lead">Every generated document showed “no PDF / not generated”, and the in-app preview was blank.</p>
+  <div class="card">
+    <div class="why"><b>Root cause.</b> DOCX→PDF conversion drives Microsoft&nbsp;Word through COM. The app ran as the <code>LocalSystem</code> Windows service account, and Word automation simply does not work there — it failed or hung, leaving <b>15 zombie Word processes</b> piling up. Result: <code>pdf_path</code> was <code>NULL</code> for all 7 documents.</div>
+    <div class="fix"><b>Fix.</b> Created the Word “Session-0” desktop folders and reconfigured the <b>GSSGManager service to run as the <code>Admin</code> user</b> (real profile → Word behaves). Cleared the zombies. Confirmed working end-to-end — you generated a General Book and the PDF rendered.</div>
+    <dl class="kv">
+      <dt>Surfaced</dt><dd>0 / 7 documents had a PDF; preview showed the generic “couldn’t render”.</dd>
+      <dt>Also improved</dt><dd>The viewer now says “No PDF was generated — download the DOCX” instead of a vague error.</dd>
+      <dt>Recorded</dt><dd>Saved to project memory so a service reinstall doesn’t silently reset it.</dd>
+    </dl>
+  </div>
+
+  <!-- 2 three issues -->
+  <h2 id="three"><span class="num">2.</span> Three reported issues</h2>
+  <div class="grid">
+    <div class="card">
+      <div class="row"><h3 style="margin:0">Can’t send for approval</h3><span class="badge b-live">● Live</span></div>
+      <div class="why">The approver picker hid anyone without a saved signature, so the list went empty and the <b>Submit button disappeared</b>.</div>
+      <div class="fix">Signature is enforced at sign-time, not submit-time — picker no longer filters by signature. Plus a clean 422 instead of a 500 on a stale approver, and the friendly error message now actually fires.</div>
+    </div>
+    <div class="card">
+      <div class="row"><h3 style="margin:0">New docs not in Records</h3><span class="badge b-live">● Diagnosed</span></div>
+      <div class="why">Records lists a <b>Book row</b>, which is only created on <b>Save</b> (a real ref number). A <b>Preview</b> produces a “DRAFT” with no Book — so it never appears.</div>
+      <div class="fix">Confirmed from the live DB (DRAFT vs real refs). A silent “missing category” drop now logs loudly. Saved docs do appear; previews are by design.</div>
+    </div>
+  </div>
+  <div class="card">
+    <div class="row"><h3 style="margin:0">Issues viewing docs while creating</h3><span class="badge b-live">● Live</span></div>
+    <div class="lead">Same root cause as §1 (no PDF produced). With conversion fixed, previews render; and the viewer now distinguishes “PDF never generated” from a true render failure so problems are diagnosable.</div>
+  </div>
+
+  <!-- 3 delete -->
+  <h2 id="delete"><span class="num">3.</span> Bulk delete in Records <span class="badge b-live" style="vertical-align:middle">● Live</span></h2>
+  <p class="lead">You had no way to delete records. The list already had per-row checkboxes (for “add to email”) — I reused them.</p>
+  <div class="mock">
+    <div class="bar"><span class="dot" style="background:#f87171"></span><span class="dot" style="background:#fbbf24"></span><span class="dot" style="background:#34d399"></span> &nbsp;Records</div>
+    <div class="body">
+      <div class="row" style="justify-content:space-between;background:#f1f5f9;border:1px solid #e2e8f0;border-radius:10px;padding:8px 12px;margin-bottom:10px">
+        <span style="font-size:13px;color:#475569"><b>2</b> selected</span>
+        <span class="row"><span class="btn btn-primary">Add to email (2)</span><span class="btn btn-danger">🗑 Delete</span></span>
+      </div>
+      <div class="row" style="gap:12px;border-bottom:1px solid #eef2f6;padding:8px 2px"><input type="checkbox" checked> <span class="mono">GS-0412</span> <span style="flex:1">General Book — Subject…</span> <span class="seal pending">Pending</span></div>
+      <div class="row" style="gap:12px;border-bottom:1px solid #eef2f6;padding:8px 2px"><input type="checkbox" checked> <span class="mono">HR-0409</span> <span style="flex:1">Leave Undertaking</span> <span class="seal pending">Approved</span></div>
+      <div class="row" style="gap:12px;padding:8px 2px"><input type="checkbox"> <span class="mono">NAT-0408</span> <span style="flex:1">Letter</span> <span class="pill">none</span></div>
+    </div>
+  </div>
+  <p class="figcap">Mockup — select rows → a <b>Delete</b> button appears (admins only) → confirm dialog → soft-delete (ref numbers not reused). EN + AR.</p>
+
+  <!-- 4 notifications -->
+  <h2 id="notif"><span class="num">4.</span> Notifications overhaul <span class="badge b-wait" style="vertical-align:middle">● Needs restart</span></h2>
+  <p class="lead">Push notifications resent the same items repeatedly, only opened the app root, and were English-only. Rebuilt around a durable per-item ledger.</p>
+  <div class="grid">
+    <div class="card"><h3>Only new items, once</h3><div class="lead">A durable <code>push_sent</code> ledger tracks each item per user, so a still-open item is sent <b>once</b> and never replays on restart. The existing backlog was seeded as “already sent”.</div></div>
+    <div class="card"><h3>Tap → the exact item</h3><div class="lead">Each push carries a deep link; the service worker routes client-side (fixing the iOS blank-page) to the precise book / scan / inbox.</div></div>
+    <div class="card"><h3>Sign vs review</h3><div class="lead">Approvers get “awaiting your <b>signature</b>”, reviewers “awaiting your <b>review</b>”, with the document subject + who submitted it.</div></div>
+    <div class="card"><h3>One device, one user</h3><div class="lead">A shared phone registered under two accounts caused double messages — an endpoint now belongs to a single user (existing duplicate pruned).</div></div>
+  </div>
+  <div class="grid">
+    <div>
+      <div class="mock"><div class="bar">🔔 iPhone</div><div class="body">
+        <div style="font-weight:600">GSSG Manager</div>
+        <div style="color:#475569;font-size:13px">GS-0412 — Vehicle request · awaiting your signature (from Saeed)</div>
+      </div></div>
+      <p class="figcap">English notification → taps straight to <code>/books/412</code></p>
+    </div>
+    <div>
+      <div class="mock"><div class="bar">🔔 iPhone · العربية</div><div class="body ar">
+        <div style="font-weight:600">مدير GSSG</div>
+        <div style="color:#475569;font-size:13px">GS-0412 — طلب مركبة · بانتظار توقيعك (من سعيد)</div>
+      </div></div>
+      <p class="figcap">Arabic when the phone is set to Arabic (locale stored at subscribe)</p>
+    </div>
+  </div>
+
+  <!-- 5 permissions -->
+  <h2 id="perms"><span class="num">5.</span> Permissions system <span class="badge b-merged" style="vertical-align:middle">● Merged to main · not deployed</span></h2>
+  <p class="lead">Built fully test-driven across 20 commits — every task implemented, independently reviewed, and a final whole-branch review (no critical issues). Two halves on one foundation.</p>
+
+  <h3>A · Request access instead of a dead end</h3>
+  <p class="lead">When someone lacks a permission, the action is now <b>shown with a lock</b> — clicking it offers to request access. The request reaches admins instantly.</p>
+  <div class="grid">
+    <div>
+      <div class="mock"><div class="bar">Application form</div><div class="body">
+        <span class="lockbtn">🔒 Manage recipients</span>
+        <div style="font-size:12px;color:#94a3b8;margin-top:8px">↑ visible but locked — click to request</div>
+      </div></div>
+      <p class="figcap">Locked control (was simply hidden before)</p>
+    </div>
+    <div>
+      <div class="mock"><div class="bar">Request access</div><div class="body">
+        <div style="font-weight:700;margin-bottom:4px">You don’t have permission to <span style="color:#0f766e">Approve / reject books</span></div>
+        <div style="font-size:13px;color:#475569">Approve, sign, or reject documents in the approval queue. Request access?</div>
+        <div class="row" style="margin-top:14px;justify-content:flex-end"><span class="btn btn-ghost">Close</span><span class="btn btn-primary">Request</span></div>
+      </div></div>
+      <p class="figcap">Plain-language dialog — uses the new capability descriptions</p>
+    </div>
+  </div>
+
+  <h3>B · Admin decides: once, permanent, or refuse</h3>
+  <div class="mock"><div class="bar">Access Requests › <b>Permission requests</b></div><div class="body">
+    <div style="border:1px solid #e2e8f0;border-radius:12px;padding:14px">
+      <div class="row" style="justify-content:space-between">
+        <div><b>Saeed Rashid</b> wants <span class="pill on">Approve / reject books</span><div style="font-size:12.5px;color:#64748b;margin-top:3px">Approve, sign, or reject documents in the approval queue · asked 2 min ago</div></div>
+      </div>
+      <div class="row" style="margin-top:12px">
+        <span class="row" style="border:1px solid #e2e8f0;border-radius:8px;padding:4px">Grant once: <span class="pill on">2h</span><span class="pill">Today</span><span class="pill">This week</span></span>
+        <span class="btn btn-primary">Grant permanent</span>
+        <span class="btn btn-danger">Refuse</span>
+      </div>
+    </div>
+  </div></div>
+  <p class="figcap">New tab on the Access Requests page. “Grant once” is time-limited and auto-revokes; permanent writes a per-user grant; refuse can carry a note.</p>
+
+  <h3>C · An explained permission editor</h3>
+  <div class="mock"><div class="bar">Edit permissions — Saeed Rashid</div><div class="body">
+    <div style="font-size:12px;text-transform:uppercase;letter-spacing:.05em;color:#94a3b8;margin-bottom:6px">Books</div>
+    <div class="row" style="justify-content:space-between;border-bottom:1px solid #eef2f6;padding:10px 2px">
+      <div><div style="font-weight:600">Approve / reject books</div><div style="font-size:12.5px;color:#64748b">Approve, sign, or reject documents in the approval queue.</div></div>
+      <span class="row"><span class="pill">Default</span><span class="pill on">Grant</span><span class="pill">Deny</span></span>
+    </div>
+    <div class="row" style="justify-content:space-between;padding:10px 2px">
+      <div><div style="font-weight:600">View books</div><div style="font-size:12.5px;color:#64748b">Browse the records / books register.</div></div>
+      <span class="row"><span class="pill on">Default</span><span class="pill">Grant</span><span class="pill">Deny</span></span>
+    </div>
+  </div></div>
+  <p class="figcap">Replaces the cramped side-panel: wider, grouped by area, and <b>every permission now explains what it allows</b> — so you’re never guessing what you’re granting.</p>
+
+  <div class="card">
+    <h3 style="margin-top:0">Under the hood</h3>
+    <ul class="tick">
+      <li><b>22 capabilities</b> gained plain-language descriptions (one source of truth, EN now + AR-ready).</li>
+      <li><b>Time-limited grants</b> — <code>user_permissions.expires_at</code>; resolution ignores expired grants; a once-a-minute sweep revokes them.</li>
+      <li><b>Request workflow</b> — new <code>permission_requests</code> table + service + API (create / list / decide); admins are pushed on each request; re-requesting re-pings.</li>
+      <li><b>Safety</b> — <code>users.manage</code> &amp; <code>system.admin</code> can never be requested or granted via override; admin-only routes gated; default gating across the app unchanged.</li>
+    </ul>
+  </div>
+
+  <!-- 6 status -->
+  <h2 id="status"><span class="num">6.</span> Deploy status &amp; next steps</h2>
+  <div class="card">
+    <table class="t">
+      <thead><tr><th>Work</th><th>Code</th><th>Live?</th></tr></thead>
+      <tbody>
+        <tr><td>PDF generation fix (run-as-Admin)</td><td><span class="badge b-live">● applied</span></td><td>Yes — verified</td></tr>
+        <tr><td>Approval / records / viewing fixes</td><td><span class="badge b-live">● deployed</span></td><td>Yes</td></tr>
+        <tr><td>Bulk delete in Records</td><td><span class="badge b-live">● deployed</span></td><td>Yes (frontend live)</td></tr>
+        <tr><td>Notifications overhaul + bug fixes</td><td><span class="badge b-wait">● pushed</span></td><td>Frontend yes · backend needs <code>mng restart</code></td></tr>
+        <tr><td>Permissions system</td><td><span class="badge b-merged">● merged to main</span></td><td>Not yet — see below</td></tr>
+      </tbody>
+    </table>
+    <div class="note">
+      <b>To go fully live</b> (with you at the server console for the UAC prompts):
+      <ol style="margin:8px 0 0 18px;padding:0">
+        <li><code>cd C:\Users\Admin\sentinel</code> then <code>venv\Scripts\python -m alembic upgrade head</code> — applies the additive migration <code>0042</code> (new <code>permission_requests</code> table + <code>user_permissions.expires_at</code>). Safe; old code ignores it.</li>
+        <li><code>mng build</code> — rebuild the frontend bundle.</li>
+        <li><code>mng restart</code> — load the new backend (also activates the notification fixes).</li>
+        <li><code>mng status</code> — confirm healthy.</li>
+      </ol>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3 style="margin-top:0">Quality</h3>
+    <dl class="kv">
+      <dt>Tests</dt><dd>Backend <b>26 passed</b> · frontend <b>tsc/eslint clean</b>, <b>vitest 13 passed</b>.</dd>
+      <dt>Method</dt><dd>Test-driven, one reviewed task at a time, plus a final whole-branch review — <b>no critical issues</b>.</dd>
+      <dt>Deferred</dt><dd>In-app bell badge for requests (optional); the editor’s per-grant “expires” chip (needs a small GET change). Both documented.</dd>
+    </dl>
+  </div>
+
+  <p class="foot">
+    GSSG Manager · session report generated 25 June 2026. Mockups above are faithful illustrations of the implemented screens (the permissions UI is merged but not yet deployed, so these are rendered designs, not live captures). Once you run the deploy steps, I can capture real screenshots from the running app.
+  </p>
+
+</div>
+</body>
+</html>
