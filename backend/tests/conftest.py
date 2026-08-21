@@ -94,3 +94,31 @@ def make_user(db: Session, *, role="operator", status="active", email="u@x.ae") 
 @pytest.fixture()
 def admin_user(db_session: Session) -> User:
     return make_user(db_session, role="admin", email="admin@test.ae")
+
+
+@pytest.fixture()
+def api_db(monkeypatch, tmp_path) -> Iterator[Session]:
+    """A file-backed SQLite database shared by API handlers and test setup.
+
+    Lives here rather than in one test module because more than one suite needs
+    it, and importing a fixture across test modules makes every consumer's
+    parameter shadow the import (ruff F811) while quietly depending on import
+    order. ``check_same_thread=False`` is required: TestClient runs handlers on a
+    worker thread while the test body uses the same session.
+    """
+    engine = create_engine(
+        f"sqlite:///{tmp_path / 'api_fixture.db'}",
+        future=True,
+        connect_args={"check_same_thread": False},
+    )
+    attach_sqlite_pragmas(engine, wal=False)
+    Base.metadata.create_all(engine)
+    test_session = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False, future=True)
+    monkeypatch.setattr(session_mod, "engine", engine)
+    monkeypatch.setattr(session_mod, "SessionLocal", test_session)
+    db = test_session()
+    perm_service.seed_role_defaults(db)
+    try:
+        yield db
+    finally:
+        db.close()

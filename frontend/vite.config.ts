@@ -25,7 +25,11 @@ export default defineConfig({
     strictPort: true,
     proxy: {
       '/api': {
-        target: 'http://127.0.0.1:8765',
+        // 8765 is the default local backend, but a side-by-side stack (a
+        // worktree preview, a second branch) needs its own port. Without this
+        // override every API call is silently answered by whichever instance
+        // owns 8765 — including its SPA fallback, which returns 200 HTML.
+        target: process.env.GSSG_API_TARGET ?? 'http://127.0.0.1:8765',
         changeOrigin: false,
       },
     },

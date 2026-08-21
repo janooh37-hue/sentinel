@@ -28,12 +28,14 @@ General Book.
 from __future__ import annotations
 
 import html
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from sqlalchemy.orm import Session
 
 from app.api.errors import ValidationFailedError
 from app.db.models import Employee, User
+from app.db.workforce_models import DutyAssignmentEvent
 from app.schemas.duty import DutyTransferMove, DutyTransferResult
 from app.services import document_service
 
@@ -55,6 +57,74 @@ _TH = (
 )
 _TD = "border:1px solid #000000;padding:4px 9px;text-align:center"
 _SPACER = "<p>&nbsp;</p>"
+
+
+def _event_hierarchy(
+    employee: Employee, unit: str | None, post: str | None
+) -> tuple[str | None, str | None, str | None]:
+    """Return a hierarchy-prefix-safe snapshot for a duty event.
+
+    The department is recorded when the employee has one and left absent when
+    they do not: most of this roster is placed by duty unit alone, and the unit
+    and post are the placement worth keeping.  Only a post with no unit is
+    dropped, because that is not a hierarchy path.
+    """
+
+    department = (employee.department or "").strip() or None
+    unit = (unit or "").strip() or None
+    post = (post or "").strip() or None
+    return department, unit, post if unit is not None else None
+
+
+def _record_assignment_event(
+    db: Session,
+    *,
+    employee: Employee,
+    to_unit: str | None,
+    to_post: str | None,
+    event_type: str,
+    current_user: User,
+    effective_at: datetime,
+) -> None:
+    """Append the immutable assignment snapshot before mutating ``employee``."""
+
+    from_department, from_unit, from_post = _event_hierarchy(
+        employee, employee.duty_unit, employee.duty_post
+    )
+    to_department, event_unit, event_post = _event_hierarchy(employee, to_unit, to_post)
+    db.add(
+        DutyAssignmentEvent(
+            employee_id=employee.id,
+            event_type=event_type,
+            from_department=from_department,
+            from_unit=from_unit,
+            from_post=from_post,
+            to_department=to_department,
+            to_unit=event_unit,
+            to_post=event_post,
+            effective_at=effective_at,
+            actor_user_id=current_user.id,
+            reason="Duty transfer",
+        )
+    )
+
+
+def _enqueue_assignment_reevaluation(
+    db: Session, *, employee_id: str, effective_at: datetime
+) -> None:
+    """Stage the current duty-hierarchy reevaluation in the caller transaction."""
+
+    from app.services.attendance_queue_service import enqueue_evaluation
+
+    instant = effective_at.replace(tzinfo=UTC)
+    enqueue_evaluation(
+        db,
+        employee_id=employee_id,
+        window_start_at=instant - timedelta(days=1),
+        window_end_at=instant + timedelta(days=1),
+        reason_code="DUTY_ASSIGNMENT_CHANGED",
+        now=datetime.now(UTC),
+    )
 
 
 def _location_label(unit: str | None, post: str | None) -> str:
@@ -108,7 +178,7 @@ def transfer(
     recipient_id: int | None = None,
     manager_id: int | None = None,
     cc: list[str] | None = None,
-    current_user: User | None = None,
+    current_user: User,
 ) -> DutyTransferResult:
     """Move each employee to its own ``to_unit``/``to_post`` and mint the letter.
 
@@ -148,7 +218,20 @@ def transfer(
     # No-book path: when EVERY selected employee is currently unassigned, this is
     # initial placement, not a transfer needing a formal letter — just move them.
     if all(not (emp.duty_unit or "").strip() for emp, _, _ in rows):
+        effective_at = datetime.now(UTC).replace(tzinfo=None)
         for emp, to_unit, to_post in rows:
+            _record_assignment_event(
+                db,
+                employee=emp,
+                to_unit=to_unit,
+                to_post=to_post,
+                event_type="initial_placement",
+                current_user=current_user,
+                effective_at=effective_at,
+            )
+            _enqueue_assignment_reevaluation(
+                db, employee_id=emp.id, effective_at=effective_at
+            )
             emp.duty_unit = to_unit
             emp.duty_post = to_post
         db.commit()
@@ -158,9 +241,20 @@ def transfer(
     # locations BEFORE mutating.
     body_html = _build_body_html(rows)
 
-    # Stage the moves on this session; generate_document's single commit
-    # persists them together with the doc/Book rows.
+    # Stage the immutable event alongside each legacy mutation.  The document
+    # generator's one commit therefore persists all three records together.
+    effective_at = datetime.now(UTC).replace(tzinfo=None)
     for emp, to_unit, to_post in rows:
+        _record_assignment_event(
+            db,
+            employee=emp,
+            to_unit=to_unit,
+            to_post=to_post,
+            event_type="transfer",
+            current_user=current_user,
+            effective_at=effective_at,
+        )
+        _enqueue_assignment_reevaluation(db, employee_id=emp.id, effective_at=effective_at)
         emp.duty_unit = to_unit
         emp.duty_post = to_post
 

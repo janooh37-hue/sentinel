@@ -56,6 +56,7 @@ import { ExpiringSoonWidget } from '@/pages/dashboard/widgets/ExpiringSoonWidget
 import { PendingDeparturesWidget } from '@/pages/dashboard/widgets/PendingDeparturesWidget'
 import { WaitingApprovalsCard } from '@/pages/dashboard/widgets/WaitingApprovalsCard'
 import {
+  DEFAULT_CANVAS_WIDTH,
   DEFAULT_LAYOUT,
   MAX_VISIBLE_QUICK_ACTIONS,
   QUICK_ACTION_IDS,
@@ -499,7 +500,12 @@ export function DashboardPage({ onNavigate }: DashboardPageProps): React.JSX.Ele
     <div className="flex flex-1 flex-col overflow-hidden bg-background">
       <div className="flex-1 min-h-0">
       <PullToRefresh>
-      <div className="mx-auto w-full max-w-[1180px] px-4 pb-12 pt-6 md:px-7">
+      <div
+        data-canvas-width={layout.canvas_width}
+        className={`w-full px-4 pb-12 pt-6 md:px-7 ${
+          layout.canvas_width === 'wide' ? '' : 'mx-auto max-w-[1180px]'
+        }`}
+      >
         {/* ============ HERO ============ */}
         <DashboardHero
           name={welcomeName}
@@ -579,12 +585,10 @@ export function DashboardPage({ onNavigate }: DashboardPageProps): React.JSX.Ele
         {/* ============ QUICK-ACTION TILES ============
             Drives order + visibility from `layout.quick_actions`. Capped at
             MAX_VISIBLE_QUICK_ACTIONS (8) — fills up to two 4-col rows.
-            Each tile's emoji + href + slug come from QUICK_ACTION_META —
-            section shortcuts use the legacy `onNavigate(page)` (which the
-            shell wires to router pushes), form tiles deep-link via
-            `navigate('/application?form=...')` which ApplicationPage
-            hydrates into a pre-selected template. Empty state surfaces a
-            hint pointing operators at the edit dialog. */}
+            Each tile's emoji + href + slug come from QUICK_ACTION_META; every
+            one deep-links via `navigate('/application?form=...')` which
+            ApplicationPage hydrates into a pre-selected template. Empty state
+            surfaces a hint pointing operators at the edit dialog. */}
         {visibleQuickActions.length === 0 ? (
           <div
             className="anim-fade-up mb-8 rounded-2xl border border-dashed border-hairline bg-surface py-2"
@@ -597,24 +601,13 @@ export function DashboardPage({ onNavigate }: DashboardPageProps): React.JSX.Ele
             {visibleQuickActions.map((qa, index) => {
               const meta = QUICK_ACTION_META[qa.id as QuickActionId]
               const delay = `${340 + index * 20}ms`
-              const handleClick = () => {
-                // Section shortcuts use the parent's typed page-nav so the
-                // shell can keep its existing route state (sidebar collapse,
-                // last page, etc.). Form deep-links go through the router
-                // directly — ApplicationPage reads `?form=` on mount.
-                if (qa.id === 'hr') return onNavigate('application')
-                if (qa.id === 'violations') return onNavigate('employees')
-                if (qa.id === 'leaves') return onNavigate('leaves')
-                if (qa.id === 'books') return onNavigate('books')
-                navigate(meta.href)
-              }
               return (
                 <div key={qa.id} className="anim-fade-up h-full" style={{ animationDelay: delay }}>
                   <ServiceTile
                     emoji={meta.emoji}
                     title={quickActionLabels[qa.id as QuickActionId]}
                     description={quickActionDescriptions[qa.id as QuickActionId]}
-                    onClick={handleClick}
+                    onClick={() => navigate(meta.href)}
                   />
                 </div>
               )
@@ -638,10 +631,17 @@ export function DashboardPage({ onNavigate }: DashboardPageProps): React.JSX.Ele
         onOpenChange={setWidgetDialogOpen}
         items={layout.widgets}
         labels={widgetLabels}
+        canvasWidth={layout.canvas_width ?? DEFAULT_CANVAS_WIDTH}
         isSaving={updateSettings.isPending}
-        onSave={(items) => {
+        onSave={(items, canvasWidth) => {
           updateSettings.mutate(
-            { dashboard_layout: { ...layout, widgets: widgetsForApi(items) } },
+            {
+              dashboard_layout: {
+                ...layout,
+                widgets: widgetsForApi(items),
+                canvas_width: canvasWidth,
+              },
+            },
             { onSuccess: () => setWidgetDialogOpen(false) },
           )
         }}

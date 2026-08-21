@@ -68,7 +68,7 @@ export function TopNav({ onLock, onOpenSettings, onSignOut }: TopNavProps): Reac
   return (
     <header
       data-topnav
-      className="flex items-center gap-7 border-b border-border bg-surface px-8 py-3.5"
+      className="flex flex-nowrap items-center gap-7 border-b border-border bg-surface px-8 py-3.5"
     >
       <NavLink
         to="/"
@@ -81,32 +81,40 @@ export function TopNav({ onLock, onOpenSettings, onSignOut }: TopNavProps): Reac
           alt="GSSG"
           className="h-10 w-10 rounded-full object-cover ring-1 ring-border"
         />
-        <div className="text-[1.15em] font-bold leading-tight tracking-tight text-primary">
+        <div className="topnav-brand-copy text-[1.15em] font-bold leading-tight tracking-tight text-primary">
           GSSG
-          <span className="mt-0.5 block text-[0.72em] font-normal tracking-wider text-muted-foreground">
+          <span className="mt-0.5 block whitespace-nowrap text-[0.72em] font-normal tracking-wider text-muted-foreground">
             {t('branding.tagline')}
           </span>
         </div>
       </NavLink>
-      <nav className="ms-5 flex gap-1 text-[0.95em]">
-        {NAV_ITEMS.filter((item) => !item.cap || has(item.cap)).map(({ to, key }) => (
+      <nav
+        aria-label={t('nav.menu')}
+        className="topnav-destinations ms-5 flex min-w-0 gap-1 text-[0.95em]"
+      >
+        {NAV_ITEMS.filter((item) => !item.cap || has(item.cap)).map(({ to, key, Icon }) => (
           <NavLink
             key={to}
             to={to}
             end={to === '/'}
+            title={t(key)}
+            aria-label={t(key)}
             className={({ isActive }) =>
-              `relative rounded-lg px-3.5 py-2 font-medium transition-all duration-200 motion-reduce:!transition-none ${
+              `topnav-link relative flex items-center justify-center gap-2 rounded-lg px-3.5 py-2 font-medium transition-all duration-200 motion-reduce:!transition-none ${
                 isActive
                   ? 'font-semibold text-primary after:absolute after:-bottom-[14px] after:left-0 after:right-0 after:h-[3px] after:rounded after:bg-primary'
                   : 'text-foreground hover:-translate-y-0.5 hover:bg-surface-tinted hover:text-primary motion-reduce:!transform-none'
               }`
             }
           >
-            {t(key)}
+            {/* Kept in the DOM at every width; CSS reveals it only in the
+                collapsed tier, where the label is hidden. */}
+            <Icon className="topnav-link-icon h-[1.15em] w-[1.15em] shrink-0" strokeWidth={1.8} aria-hidden />
+            <span className="topnav-link-label whitespace-nowrap">{t(key)}</span>
           </NavLink>
         ))}
       </nav>
-      <div className="ms-auto flex shrink-0 items-center gap-3.5">
+      <div className="topnav-utilities ms-auto flex shrink-0 items-center gap-3.5">
         <AaSlider
           value={fontScale}
           onChange={(v) => {

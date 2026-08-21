@@ -14,7 +14,9 @@ export default defineConfig({
   reporter: 'list',
 
   use: {
-    baseURL: 'http://localhost:5173',
+    // Overridable so a side-by-side worktree preview can be reviewed without
+    // stealing 5173 from another running dev server.
+    baseURL: process.env.PLAYWRIGHT_BASE_URL ?? 'http://localhost:5173',
     trace: 'on-first-retry',
   },
 

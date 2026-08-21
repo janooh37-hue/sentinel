@@ -215,6 +215,12 @@ def create_app() -> FastAPI:
     app.include_router(push_v1.router, prefix="/api/v1", dependencies=auth_gate)
     app.include_router(permissions_v1.router, prefix="/api/v1", dependencies=auth_gate)
     app.include_router(permits_v1.router, prefix="/api/v1", dependencies=auth_gate)
+    # Workforce depends on the optional attendance persistence surface.  Import
+    # it only while constructing the application so routine module imports
+    # (including migration tooling) do not eagerly initialize that surface.
+    from app.api.v1 import workforce as workforce_v1
+
+    app.include_router(workforce_v1.router, prefix="/api/v1", dependencies=auth_gate)
 
     if STATIC_DIR.is_dir():
         # Serve the built React app. `html=True` lets `/` resolve index.html.

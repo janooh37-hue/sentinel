@@ -20,16 +20,13 @@ import { QUICK_ACTION_META } from '@/lib/quickActions'
 const DEFAULT_EMOJI = '📄'
 
 /**
- * Emoji for templates that aren't dashboard quick-actions (the `QuickActionId`
- * union mirrors the backend and is closed, so new forms that don't ship a tile
- * register their glyph here instead). Wayfinding per DESIGN principle 1.
+ * Emoji for templates that aren't dashboard quick-actions. Empty now that the
+ * quick-action catalog is services-only — every selectable template ships a
+ * tile in `QUICK_ACTION_META`. Kept as the registration point for a future
+ * template that deliberately gets no tile. Wayfinding per DESIGN principle 1:
+ * glyphs stay unique across both maps (formEmoji.test.ts).
  */
-export const EXTRA_TEMPLATE_EMOJI: Record<string, string> = {
-  'Warning Form': '⚠️',
-  'Passport Release List': '🛂',
-  'Report': '📊',
-  'Inmate Conduct Violations': '⛓️',
-}
+export const EXTRA_TEMPLATE_EMOJI: Record<string, string> = {}
 
 /**
  * Look up the emoji for a template id. The id is the canonical name used by

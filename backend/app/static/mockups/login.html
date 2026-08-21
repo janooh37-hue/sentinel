@@ -1,0 +1,1157 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>GSSG · Login mockups</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Noto+Sans+Arabic:wght@400;500;700&family=IBM+Plex+Mono:wght@400;500&family=Cormorant+Garamond:ital,wght@0,400;0,500;1,400;1,500&display=swap">
+<style>
+:root {
+  --bg: #f5f4f1;
+  --surface: #ffffff;
+  --surface-raised: #fafaf6;
+  --surface-tinted: #f0eee8;
+  --primary: #0d2845;
+  --primary-hover: #1d3a5e;
+  --primary-soft: #e8edf3;
+  --on-primary: #ffffff;
+  --accent: #c8102e;
+  --accent-hover: #a30d24;
+  --text: #1c1f24;
+  --text-muted: #5a6068;
+  --text-faint: #8b9098;
+  --border: #e6e4dd;
+  --border-strong: #d4d1c8;
+  --hairline: #efece5;
+  --hero-grad: linear-gradient(135deg, #0a1f3a 0%, #0d2845 50%, #1d3a5e 100%);
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "SF Mono", Consolas, monospace;
+  --font-arabic: "Noto Sans Arabic", system-ui, sans-serif;
+  --font-serif: "Cormorant Garamond", Georgia, serif;
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+  font-family: var(--font-sans);
+  color: var(--text);
+  background: #ece9e1;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+/* Page chrome */
+.page-header {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  background: rgba(236, 233, 225, 0.92);
+  backdrop-filter: saturate(150%) blur(8px);
+  border-bottom: 1px solid rgba(13, 40, 69, 0.08);
+}
+.page-header-inner {
+  max-width: 1180px;
+  margin: 0 auto;
+  padding: 18px 28px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+}
+.page-title {
+  font-family: var(--font-serif);
+  font-size: 24px;
+  font-style: italic;
+  font-weight: 500;
+  color: var(--primary);
+  margin: 0;
+  letter-spacing: -0.01em;
+}
+.page-title small {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-style: normal;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  margin-left: 12px;
+}
+.jumpnav {
+  display: flex;
+  gap: 4px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.1em;
+}
+.jumpnav a {
+  padding: 6px 10px;
+  border-radius: 99px;
+  color: var(--text-muted);
+  text-decoration: none;
+  transition: color .15s, background .15s;
+}
+.jumpnav a:hover {
+  background: var(--primary);
+  color: var(--on-primary);
+}
+
+.gallery {
+  max-width: 1180px;
+  margin: 0 auto;
+  padding: 36px 28px 80px;
+  display: flex;
+  flex-direction: column;
+  gap: 64px;
+}
+
+.mock-section {
+  scroll-margin-top: 88px;
+}
+.mock-meta {
+  display: flex;
+  align-items: baseline;
+  gap: 14px;
+  margin: 0 0 14px;
+  padding: 0 6px;
+}
+.mock-num {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.18em;
+  color: var(--accent);
+  text-transform: uppercase;
+}
+.mock-name {
+  font-family: var(--font-serif);
+  font-style: italic;
+  font-size: 22px;
+  font-weight: 500;
+  color: var(--primary);
+  margin: 0;
+}
+.mock-desc {
+  font-size: 13px;
+  color: var(--text-muted);
+  margin: 4px 6px 16px;
+  max-width: 720px;
+  line-height: 1.55;
+}
+.mock-frame {
+  position: relative;
+  border-radius: 16px;
+  overflow: hidden;
+  box-shadow:
+    0 1px 0 rgba(13, 40, 69, 0.04),
+    0 12px 32px -16px rgba(13, 40, 69, 0.25),
+    0 30px 80px -40px rgba(13, 40, 69, 0.3);
+  background: var(--bg);
+  aspect-ratio: 16 / 10;
+}
+.mock-frame::before {
+  content: "";
+  position: absolute; top: 0; left: 0; right: 0; height: 28px;
+  background: linear-gradient(to bottom, #e1ddd2, #d6d2c6);
+  border-bottom: 1px solid rgba(0,0,0,0.06);
+  z-index: 2;
+}
+.mock-frame::after {
+  content: "● ● ●";
+  position: absolute;
+  top: 4px; left: 12px;
+  z-index: 3;
+  font-size: 11px;
+  color: rgba(13, 40, 69, 0.32);
+  letter-spacing: 4px;
+}
+.mock-canvas {
+  position: absolute;
+  top: 28px; left: 0; right: 0; bottom: 0;
+  overflow: hidden;
+  isolation: isolate;
+}
+
+/* ----------------------------------------------------------------------- */
+/* Shared form atoms                                                        */
+/* ----------------------------------------------------------------------- */
+
+.field-label {
+  display: block;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  margin-bottom: 6px;
+}
+.input-shell {
+  position: relative;
+}
+.input-shell input {
+  width: 100%;
+  font-family: inherit;
+  font-size: 14.5px;
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 11px 14px;
+  outline: none;
+  transition: border-color .15s, box-shadow .15s;
+}
+.input-shell input:focus {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 4px rgba(13, 40, 69, 0.1);
+}
+.input-shell .eye {
+  position: absolute;
+  right: 10px; top: 50%; transform: translateY(-50%);
+  display: inline-flex;
+  width: 28px; height: 28px;
+  align-items: center; justify-content: center;
+  color: var(--text-faint);
+  cursor: pointer;
+  border-radius: 999px;
+}
+.input-shell .eye:hover { color: var(--primary); background: var(--primary-soft); }
+
+.btn-primary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  font-family: inherit;
+  font-weight: 600;
+  font-size: 14.5px;
+  letter-spacing: -0.005em;
+  padding: 12px 22px;
+  background: var(--primary);
+  color: var(--on-primary);
+  border: none;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: background .15s, transform .15s;
+}
+.btn-primary:hover { background: var(--primary-hover); }
+.btn-primary:active { transform: translateY(1px); }
+
+.link-quiet {
+  color: var(--primary);
+  text-decoration: none;
+  font-weight: 500;
+  border-bottom: 1px solid currentColor;
+  padding-bottom: 1px;
+}
+.link-quiet:hover { color: var(--accent); }
+
+.eye-svg { width: 16px; height: 16px; }
+.arrow-svg { width: 14px; height: 14px; }
+
+/* ======================================================================= */
+/* MOCK 1 — Split brand+form                                                */
+/* ======================================================================= */
+
+.m1 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  height: 100%;
+  font-family: var(--font-sans);
+}
+.m1-brand {
+  position: relative;
+  background: var(--hero-grad);
+  color: #f5f4f1;
+  padding: 48px 44px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  overflow: hidden;
+}
+.m1-brand::before {
+  /* mountain silhouette */
+  content: "";
+  position: absolute;
+  left: 0; right: 0; bottom: 0;
+  height: 38%;
+  background:
+    radial-gradient(ellipse 90% 100% at 30% 100%, rgba(13, 40, 69, 0.4), transparent 60%),
+    radial-gradient(ellipse 70% 100% at 75% 100%, rgba(13, 40, 69, 0.55), transparent 65%);
+  clip-path: polygon(0 50%, 12% 38%, 28% 60%, 42% 22%, 58% 55%, 72% 32%, 88% 58%, 100% 40%, 100% 100%, 0 100%);
+}
+.m1-crest {
+  width: 76px; height: 76px;
+  border-radius: 50%;
+  background: rgba(255,255,255,0.08);
+  border: 1px solid rgba(255,255,255,0.18);
+  display: flex; align-items: center; justify-content: center;
+  font-family: var(--font-serif);
+  font-style: italic;
+  font-size: 28px;
+  font-weight: 500;
+  color: #fff;
+  margin-bottom: 32px;
+}
+.m1-eyebrow {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: rgba(245, 244, 241, 0.6);
+  margin-bottom: 12px;
+}
+.m1-title-en {
+  font-family: var(--font-serif);
+  font-size: 32px;
+  font-weight: 400;
+  line-height: 1.2;
+  margin: 0 0 14px;
+  color: #fff;
+  letter-spacing: -0.01em;
+}
+.m1-title-ar {
+  direction: rtl;
+  font-family: var(--font-arabic);
+  font-size: 18px;
+  font-weight: 500;
+  line-height: 1.7;
+  color: rgba(245, 244, 241, 0.78);
+  max-width: 380px;
+}
+.m1-form-side {
+  background: var(--surface);
+  padding: 52px 56px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 18px;
+}
+.m1-greeting-eyebrow {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--accent);
+  margin-bottom: 6px;
+}
+.m1-greeting {
+  font-family: var(--font-serif);
+  font-style: italic;
+  font-size: 36px;
+  font-weight: 400;
+  margin: 0 0 4px;
+  color: var(--primary);
+  letter-spacing: -0.015em;
+}
+.m1-rule {
+  width: 28px; height: 1px; background: var(--accent); margin-bottom: 20px;
+}
+.m1-form {
+  display: flex; flex-direction: column; gap: 14px;
+}
+.m1-footer {
+  margin-top: 12px;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+/* ======================================================================= */
+/* MOCK 2 — Editorial full-bleed                                            */
+/* ======================================================================= */
+
+.m2 {
+  position: relative;
+  height: 100%;
+  background: var(--bg);
+  padding: 32px 56px 40px;
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+}
+.m2-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+.m2-mark {
+  display: flex; align-items: center; gap: 8px;
+  font-family: var(--font-serif); font-style: italic;
+  font-size: 26px; font-weight: 500;
+  color: var(--primary);
+  letter-spacing: -0.01em;
+}
+.m2-mark::after {
+  content: "";
+  display: inline-block;
+  width: 3px; height: 22px;
+  background: var(--accent);
+}
+.m2-date { color: var(--text-muted); }
+.m2-mid {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  max-width: 540px;
+  margin: 0 auto;
+  width: 100%;
+}
+.m2-head {
+  font-family: var(--font-serif);
+  font-size: 56px;
+  font-weight: 400;
+  font-style: italic;
+  line-height: 1.05;
+  color: var(--primary);
+  margin: 0 0 12px;
+  letter-spacing: -0.025em;
+}
+.m2-sub {
+  font-size: 15px;
+  color: var(--text-muted);
+  margin: 0 0 36px;
+  max-width: 440px;
+  line-height: 1.55;
+}
+.m2-form { display: flex; flex-direction: column; gap: 26px; }
+.m2-field {
+  display: flex; flex-direction: column;
+}
+.m2-field label {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  margin-bottom: 8px;
+}
+.m2-field .inp {
+  position: relative;
+}
+.m2-field input {
+  width: 100%;
+  background: transparent;
+  border: none;
+  border-bottom: 1px solid var(--border-strong);
+  padding: 8px 0 10px;
+  font-family: inherit;
+  font-size: 17px;
+  color: var(--text);
+  outline: none;
+  transition: border-color .15s;
+}
+.m2-field input:focus { border-bottom-color: var(--primary); }
+.m2-field .eye {
+  position: absolute; right: 0; top: 6px;
+  color: var(--text-faint); cursor: pointer;
+}
+.m2-cta {
+  margin-top: 16px;
+  align-self: flex-start;
+  display: inline-flex; align-items: center; gap: 10px;
+  font-family: var(--font-serif);
+  font-style: italic;
+  font-size: 22px;
+  font-weight: 500;
+  color: var(--primary);
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 8px 4px;
+  border-bottom: 2px solid var(--accent);
+}
+.m2-cta:hover { color: var(--accent); }
+.m2-bottom {
+  display: flex;
+  justify-content: center;
+  gap: 18px;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+.m2-bottom a { color: var(--text-muted); text-decoration: none; border-bottom: 1px solid var(--border-strong); padding-bottom: 1px; }
+.m2-bottom a:hover { color: var(--primary); border-color: var(--primary); }
+
+/* ======================================================================= */
+/* MOCK 3 — Letterhead / form register                                      */
+/* ======================================================================= */
+
+.m3 {
+  position: relative;
+  height: 100%;
+  background: var(--surface);
+  padding: 36px 60px 44px;
+  font-family: var(--font-sans);
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+.m3-letterhead {
+  border: 1px solid var(--border-strong);
+  padding: 18px 22px;
+  display: flex; align-items: center; justify-content: space-between;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  background: var(--surface-raised);
+}
+.m3-letterhead .lh-left { display: flex; gap: 14px; align-items: center; }
+.m3-star {
+  width: 30px; height: 30px;
+  border: 1.5px solid var(--accent);
+  border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  color: var(--accent);
+  font-size: 14px;
+}
+.m3-letterhead .lh-title { color: var(--primary); font-weight: 600; }
+.m3-letterhead .lh-no { color: var(--text-muted); font-feature-settings: "tnum"; }
+.m3-formhead {
+  display: flex; align-items: baseline; justify-content: space-between;
+  border-bottom: 2px solid var(--primary);
+  padding-bottom: 8px;
+}
+.m3-formhead h3 {
+  font-family: var(--font-serif);
+  font-style: italic;
+  font-size: 26px;
+  font-weight: 500;
+  margin: 0;
+  color: var(--primary);
+}
+.m3-formhead time {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  color: var(--text-muted);
+  text-transform: uppercase;
+}
+.m3-rows { display: flex; flex-direction: column; gap: 18px; }
+.m3-row {
+  display: grid;
+  grid-template-columns: 36px 1fr;
+  gap: 18px;
+  align-items: start;
+}
+.m3-num {
+  font-family: var(--font-serif);
+  font-style: italic;
+  font-size: 26px;
+  color: var(--accent);
+  text-align: right;
+  padding-top: 22px;
+  line-height: 1;
+}
+.m3-row label {
+  display: block;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  margin-bottom: 6px;
+}
+.m3-row .input-shell input {
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: 6px;
+}
+.m3-footer {
+  margin-top: auto;
+  display: flex; align-items: center; gap: 24px;
+  border-top: 1px solid var(--border);
+  padding-top: 16px;
+}
+.m3-sig-label {
+  font-family: var(--font-serif);
+  font-style: italic;
+  color: var(--text-muted);
+  font-size: 15px;
+}
+.m3-seal {
+  background: var(--accent);
+  color: #fff;
+  padding: 12px 26px;
+  border-radius: 999px;
+  border: none;
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 14.5px;
+  letter-spacing: 0.02em;
+  box-shadow: 0 0 0 4px rgba(200, 16, 46, 0.08);
+}
+.m3-seal:hover { background: var(--accent-hover); }
+.m3-first {
+  margin-left: auto;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+/* ======================================================================= */
+/* MOCK 4 — Vertical broadsheet column                                      */
+/* ======================================================================= */
+
+.m4 {
+  position: relative;
+  height: 100%;
+  background: var(--bg);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  padding: 32px;
+}
+.m4::before, .m4::after {
+  content: ""; position: absolute;
+  left: 50%; transform: translateX(-50%);
+  width: 460px; height: 1px;
+  background: var(--primary);
+}
+.m4::before { top: 36px; }
+.m4::after  { bottom: 36px; }
+.m4-col {
+  max-width: 420px; width: 100%;
+  text-align: center;
+  display: flex; flex-direction: column; gap: 18px;
+  font-family: var(--font-sans);
+}
+.m4-mark {
+  font-family: var(--font-serif);
+  font-style: italic;
+  font-size: 30px;
+  color: var(--primary);
+  font-weight: 500;
+  margin: 0;
+}
+.m4-crest-rule {
+  display: flex; align-items: center; gap: 10px;
+  justify-content: center;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  letter-spacing: 0.2em;
+  color: var(--text-muted);
+  text-transform: uppercase;
+}
+.m4-crest-rule::before, .m4-crest-rule::after {
+  content: ""; height: 1px; width: 60px; background: var(--border-strong);
+}
+.m4-greet {
+  font-family: var(--font-mono);
+  font-size: 14px;
+  font-weight: 500;
+  letter-spacing: 0.32em;
+  text-transform: uppercase;
+  color: var(--primary);
+  margin: 12px 0 2px;
+}
+.m4-sub {
+  font-family: var(--font-serif);
+  font-style: italic;
+  font-size: 18px;
+  color: var(--text-muted);
+  margin: 0 0 10px;
+}
+.m4-form { display: flex; flex-direction: column; gap: 10px; margin-top: 4px; }
+.m4-form input {
+  width: 100%; text-align: center;
+  font-family: inherit; font-size: 14.5px;
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: 999px;
+  padding: 11px 16px;
+  color: var(--text);
+  outline: none;
+  transition: border-color .15s, box-shadow .15s;
+}
+.m4-form input:focus { border-color: var(--primary); box-shadow: 0 0 0 4px rgba(13, 40, 69, 0.08); }
+.m4-form button {
+  margin-top: 6px;
+  background: var(--primary);
+  color: var(--on-primary);
+  border: none;
+  padding: 12px 22px;
+  border-radius: 999px;
+  font-weight: 600;
+  font-size: 14.5px;
+  cursor: pointer;
+  letter-spacing: 0.02em;
+}
+.m4-form button:hover { background: var(--primary-hover); }
+.m4-foot {
+  font-size: 12.5px;
+  color: var(--text-muted);
+  letter-spacing: 0.02em;
+}
+.m4-foot a { color: var(--primary); text-decoration: none; border-bottom: 1px solid currentColor; padding-bottom: 1px; }
+
+/* ======================================================================= */
+/* MOCK 5 — Photographic split                                              */
+/* ======================================================================= */
+
+.m5 {
+  display: grid;
+  grid-template-columns: 1.4fr 1fr;
+  height: 100%;
+}
+.m5-hero {
+  position: relative;
+  background:
+    linear-gradient(135deg, rgba(13, 40, 69, 0.6), rgba(13, 40, 69, 0.92)),
+    linear-gradient(180deg, #d2c6a8 0%, #b89d6e 45%, #6a4a28 100%);
+  overflow: hidden;
+  color: #f5f4f1;
+  padding: 40px 36px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+}
+.m5-hero::before {
+  /* abstract dune contour */
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(ellipse 80% 40% at 70% 90%, rgba(245, 200, 130, 0.18), transparent 70%),
+    radial-gradient(ellipse 60% 30% at 20% 70%, rgba(200, 16, 46, 0.12), transparent 70%);
+  mix-blend-mode: screen;
+}
+.m5-hero::after {
+  /* horizon line / mountain ridge */
+  content: "";
+  position: absolute;
+  left: 0; right: 0; bottom: 28%;
+  height: 1px;
+  background: linear-gradient(to right, transparent, rgba(245, 244, 241, 0.4), transparent);
+}
+.m5-tagline {
+  position: relative; z-index: 2;
+  font-family: var(--font-serif);
+  font-style: italic;
+  font-size: 26px;
+  line-height: 1.3;
+  color: #fff;
+  margin: 0;
+  max-width: 320px;
+}
+.m5-tagline-ar {
+  direction: rtl;
+  font-family: var(--font-arabic);
+  font-size: 16px;
+  color: rgba(245, 244, 241, 0.7);
+  margin-top: 4px;
+}
+.m5-corner-mark {
+  position: relative; z-index: 2;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: rgba(245, 244, 241, 0.5);
+}
+.m5-form-side {
+  background: var(--surface);
+  padding: 44px 40px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 16px;
+}
+.m5-form-side h3 {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.2em;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  margin: 0 0 18px;
+}
+.m5-form-side .welcome {
+  font-family: var(--font-serif);
+  font-style: italic;
+  font-size: 32px;
+  color: var(--primary);
+  margin: 0 0 14px;
+  font-weight: 500;
+}
+.m5-form-side .rule { width: 24px; height: 2px; background: var(--accent); margin-bottom: 18px; }
+
+/* ======================================================================= */
+/* MOCK 6 — Coordinates / map-mark                                          */
+/* ======================================================================= */
+
+.m6 {
+  position: relative;
+  height: 100%;
+  background: var(--bg);
+  padding: 36px 56px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+.m6-compass {
+  position: absolute;
+  top: 36px; left: 36px;
+  width: 56px; height: 56px;
+}
+.m6-compass svg { width: 100%; height: 100%; }
+.m6-coords {
+  position: absolute;
+  bottom: 28px; right: 36px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  color: var(--text-faint);
+  font-variant-numeric: tabular-nums;
+}
+.m6-content {
+  max-width: 380px;
+  display: flex; flex-direction: column; gap: 12px;
+  padding-left: 80px;
+}
+.m6-welcome {
+  font-family: var(--font-serif);
+  font-style: italic;
+  font-size: 30px;
+  color: var(--primary);
+  margin: 0;
+  font-weight: 500;
+  line-height: 1.15;
+}
+.m6-tag {
+  font-size: 14px;
+  color: var(--text-muted);
+  margin: 0 0 18px;
+}
+.m6-field input {
+  width: 100%;
+  background: transparent;
+  border: none;
+  border-bottom: 1px solid var(--border-strong);
+  padding: 6px 0 9px;
+  font-family: inherit;
+  font-size: 15.5px;
+  color: var(--text);
+  outline: none;
+}
+.m6-field input:focus { border-bottom-color: var(--primary); }
+.m6-field {
+  display: flex; flex-direction: column;
+  margin-bottom: 14px;
+}
+.m6-field label {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  letter-spacing: 0.16em;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  margin-bottom: 4px;
+}
+.m6-divider {
+  width: 60%;
+  height: 2px;
+  background: var(--accent);
+  margin: 16px 0 8px;
+}
+.m6-submit {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-family: var(--font-serif);
+  font-style: italic;
+  font-size: 22px;
+  color: var(--primary);
+  padding: 0;
+  text-align: left;
+  align-self: flex-start;
+  transition: color .15s;
+}
+.m6-submit:hover { color: var(--accent); }
+.m6-foot {
+  font-size: 12.5px;
+  color: var(--text-muted);
+  margin-top: 18px;
+}
+.m6-foot a { color: var(--text-muted); border-bottom: 1px solid var(--border-strong); padding-bottom: 1px; text-decoration: none; }
+.m6-foot a:hover { color: var(--primary); border-color: var(--primary); }
+
+</style>
+</head>
+<body>
+
+<header class="page-header">
+  <div class="page-header-inner">
+    <h1 class="page-title">Login mockups <small>GSSG · 6 directions</small></h1>
+    <nav class="jumpnav">
+      <a href="#m1">1</a><a href="#m2">2</a><a href="#m3">3</a>
+      <a href="#m4">4</a><a href="#m5">5</a><a href="#m6">6</a>
+    </nav>
+  </div>
+</header>
+
+<main class="gallery">
+
+  <!-- ============================ MOCK 1 ============================ -->
+  <section class="mock-section" id="m1">
+    <div class="mock-meta">
+      <span class="mock-num">Mock 01</span>
+      <h2 class="mock-name">Split brand + form</h2>
+    </div>
+    <p class="mock-desc">Navy hero panel on the left with the GSSG crest and Arabic title over a mountain silhouette; cream form panel on the right. Familiar split-screen pattern, elevated with serif italic typography and a single hairline accent.</p>
+    <div class="mock-frame">
+      <div class="mock-canvas">
+        <div class="m1">
+          <aside class="m1-brand">
+            <div>
+              <div class="m1-crest">G</div>
+              <div class="m1-eyebrow">Saturday · 23 May 2026</div>
+            </div>
+            <div>
+              <h2 class="m1-title-en">Joint Authority for Government Services.</h2>
+              <p class="m1-title-ar">السلطة المشتركة لخدمات الجامعات الحكومية</p>
+            </div>
+          </aside>
+          <div class="m1-form-side">
+            <div class="m1-greeting-eyebrow">Welcome to</div>
+            <h3 class="m1-greeting">Good morning.</h3>
+            <div class="m1-rule"></div>
+            <form class="m1-form" onsubmit="return false">
+              <div>
+                <label class="field-label" for="m1-id">Email or G-number</label>
+                <div class="input-shell"><input id="m1-id" type="text" placeholder="you@gssg.ae or G3082" /></div>
+              </div>
+              <div>
+                <label class="field-label" for="m1-pwd">Password</label>
+                <div class="input-shell">
+                  <input id="m1-pwd" type="password" placeholder="••••••••••" />
+                  <span class="eye" title="Show / hide">
+                    <svg class="eye-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="2.5"/></svg>
+                  </span>
+                </div>
+              </div>
+              <button type="submit" class="btn-primary" style="margin-top:8px; width:100%;">Sign in</button>
+            </form>
+            <p class="m1-footer">No account yet? <a class="link-quiet" href="#">Request access →</a></p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================ MOCK 2 ============================ -->
+  <section class="mock-section" id="m2">
+    <div class="mock-meta">
+      <span class="mock-num">Mock 02</span>
+      <h2 class="mock-name">Editorial full-bleed</h2>
+    </div>
+    <p class="mock-desc">No card, no box. Pure typography on a sand canvas; hairline inputs; the only accent is a small red rule on the brand mark and the underline beneath the italic CTA. The furthest from any login template a model would default to.</p>
+    <div class="mock-frame">
+      <div class="mock-canvas">
+        <div class="m2">
+          <div class="m2-top">
+            <span class="m2-mark">GSSG</span>
+            <span class="m2-date">Sat · 23 May 2026</span>
+          </div>
+          <div class="m2-mid">
+            <h2 class="m2-head">Good morning.</h2>
+            <p class="m2-sub">A new day at the joint authority. Sign in to continue.</p>
+            <form class="m2-form" onsubmit="return false">
+              <div class="m2-field">
+                <label for="m2-id">Email or G-number</label>
+                <div class="inp"><input id="m2-id" type="text" placeholder="you@gssg.ae" /></div>
+              </div>
+              <div class="m2-field">
+                <label for="m2-pwd">Password</label>
+                <div class="inp">
+                  <input id="m2-pwd" type="password" placeholder="••••••••••" />
+                  <span class="eye" title="Show / hide">
+                    <svg class="eye-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="2.5"/></svg>
+                  </span>
+                </div>
+              </div>
+              <button type="submit" class="m2-cta">Sign in
+                <svg class="arrow-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M5 12h14m-4-5 5 5-5 5"/></svg>
+              </button>
+            </form>
+          </div>
+          <div class="m2-bottom">
+            <a href="#">Request access</a>
+            <span style="opacity:.5;">·</span>
+            <a href="#">العربية</a>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================ MOCK 3 ============================ -->
+  <section class="mock-section" id="m3">
+    <div class="mock-meta">
+      <span class="mock-num">Mock 03</span>
+      <h2 class="mock-name">Letterhead / form register</h2>
+    </div>
+    <p class="mock-desc">Borrows directly from the codebase's own document-form DNA — numbered fields, a "FORM A" head, a No. 0001 reference. The red pill is the sole flash of accent, like a wax seal at the bottom of an official paper.</p>
+    <div class="mock-frame">
+      <div class="mock-canvas">
+        <div class="m3">
+          <div class="m3-letterhead">
+            <div class="lh-left">
+              <span class="m3-star">★</span>
+              <span class="lh-title">GSSG · Joint Authority for Government Services</span>
+            </div>
+            <span class="lh-no">No. 0001</span>
+          </div>
+          <div class="m3-formhead">
+            <h3>Form A · Sign-in</h3>
+            <time>Sat · 23 May 2026</time>
+          </div>
+          <div class="m3-rows">
+            <div class="m3-row">
+              <span class="m3-num">①</span>
+              <div>
+                <label for="m3-id">Identifier</label>
+                <div class="input-shell"><input id="m3-id" type="text" placeholder="email or G-number" /></div>
+              </div>
+            </div>
+            <div class="m3-row">
+              <span class="m3-num">②</span>
+              <div>
+                <label for="m3-pwd">Password</label>
+                <div class="input-shell">
+                  <input id="m3-pwd" type="password" placeholder="••••••••••" />
+                  <span class="eye" title="Show / hide">
+                    <svg class="eye-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="2.5"/></svg>
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="m3-footer">
+            <span class="m3-sig-label">Signature</span>
+            <button class="m3-seal">Sign in</button>
+            <span class="m3-first">First time? <a class="link-quiet" href="#">Request access →</a></span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================ MOCK 4 ============================ -->
+  <section class="mock-section" id="m4">
+    <div class="mock-meta">
+      <span class="mock-num">Mock 04</span>
+      <h2 class="mock-name">Vertical broadsheet column</h2>
+    </div>
+    <p class="mock-desc">Narrow centered column framed by two navy hairlines top and bottom. Pill-shaped inputs reinforce the symmetry; bottom-and-top symmetry gives the whole surface a "page-of-a-book" feel.</p>
+    <div class="mock-frame">
+      <div class="mock-canvas">
+        <div class="m4">
+          <div class="m4-col">
+            <h2 class="m4-mark">GSSG</h2>
+            <div class="m4-crest-rule">Joint Authority</div>
+            <div class="m4-greet">Good morning</div>
+            <div class="m4-sub">Sign in to continue.</div>
+            <form class="m4-form" onsubmit="return false">
+              <input type="text" placeholder="email or G-number" />
+              <input type="password" placeholder="password" />
+              <button type="submit">Sign in</button>
+            </form>
+            <p class="m4-foot"><a href="#">Request access</a> &nbsp;·&nbsp; <a href="#">العربية</a></p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================ MOCK 5 ============================ -->
+  <section class="mock-section" id="m5">
+    <div class="mock-meta">
+      <span class="mock-num">Mock 05</span>
+      <h2 class="mock-name">Photographic split</h2>
+    </div>
+    <p class="mock-desc">A 60/40 split with a calibrated photographic / dune-gradient hero on the left and a slim white form column on the right. Carries the brand more aggressively than Mock 1; risk is the photo needs to be authored well, not stock.</p>
+    <div class="mock-frame">
+      <div class="mock-canvas">
+        <div class="m5">
+          <aside class="m5-hero">
+            <span class="m5-corner-mark">GSSG · 24.466°N 54.367°E</span>
+            <div>
+              <p class="m5-tagline">Together for the nation.</p>
+              <p class="m5-tagline-ar">معًا من أجل الوطن.</p>
+            </div>
+          </aside>
+          <div class="m5-form-side">
+            <h3>Sign in</h3>
+            <p class="welcome">Welcome.</p>
+            <div class="rule"></div>
+            <form onsubmit="return false" style="display:flex;flex-direction:column;gap:14px;">
+              <div>
+                <label class="field-label" for="m5-id">Email or G-number</label>
+                <div class="input-shell"><input id="m5-id" type="text" placeholder="you@gssg.ae" /></div>
+              </div>
+              <div>
+                <label class="field-label" for="m5-pwd">Password</label>
+                <div class="input-shell">
+                  <input id="m5-pwd" type="password" placeholder="••••••••••" />
+                  <span class="eye" title="Show / hide">
+                    <svg class="eye-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="2.5"/></svg>
+                  </span>
+                </div>
+              </div>
+              <button type="submit" class="btn-primary" style="margin-top:6px;">Sign in</button>
+            </form>
+            <p style="margin-top:14px; font-size:13px; color:var(--text-muted);"><a class="link-quiet" href="#">Request access →</a></p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================ MOCK 6 ============================ -->
+  <section class="mock-section" id="m6">
+    <div class="mock-meta">
+      <span class="mock-num">Mock 06</span>
+      <h2 class="mock-name">Coordinates / map-mark</h2>
+    </div>
+    <p class="mock-desc">95% sand, 5% navy. A tiny compass-rose mark anchors the top-left corner and the GSSG HQ coordinates anchor the bottom-right; the form sits inside in a quiet typographic column. The CTA is a serif-italic link with a red rule above it — no pill, no box.</p>
+    <div class="mock-frame">
+      <div class="mock-canvas">
+        <div class="m6">
+          <div class="m6-compass">
+            <svg viewBox="0 0 56 56" fill="none" stroke="#0d2845" stroke-width="1.2">
+              <circle cx="28" cy="28" r="20"/>
+              <path d="M28 6 L31 28 L28 50 L25 28 Z" fill="#0d2845" stroke="none"/>
+              <path d="M6 28 L28 25 L50 28 L28 31 Z" fill="#c8102e" stroke="none" opacity="0.85"/>
+              <text x="28" y="4" font-family="IBM Plex Mono" font-size="6" text-anchor="middle" fill="#0d2845" stroke="none">N</text>
+            </svg>
+          </div>
+          <span class="m6-coords">24.466°N · 54.367°E</span>
+          <div class="m6-content">
+            <h2 class="m6-welcome">Welcome to GSSG.</h2>
+            <p class="m6-tag">Sign in to continue.</p>
+            <form onsubmit="return false">
+              <div class="m6-field">
+                <label for="m6-id">Email or G-number</label>
+                <input id="m6-id" type="text" placeholder="you@gssg.ae or G3082" />
+              </div>
+              <div class="m6-field">
+                <label for="m6-pwd">Password</label>
+                <input id="m6-pwd" type="password" placeholder="••••••••••" />
+              </div>
+              <div class="m6-divider"></div>
+              <button type="submit" class="m6-submit">Sign in →</button>
+              <p class="m6-foot"><a href="#">Request access</a> &nbsp;·&nbsp; <a href="#">العربية</a></p>
+            </form>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+</body>
+</html>

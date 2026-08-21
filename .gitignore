@@ -27,6 +27,7 @@ output/
 
 # Scratch / throwaway artifacts + local PII test docs (never commit real ID/medical scans)
 .tmp/
+.worktrees/
 
 # Env / secrets
 .env
@@ -76,6 +77,12 @@ Thumbs.db
 # Playwright MCP debug artifacts (console logs, page snapshots, screenshots)
 .playwright-mcp/
 
+# Playwright run output and review screenshots (heavy PNG evidence, regenerated
+# by `playwright test e2e/attendance-shots.spec.ts`; the verification record in
+# docs/ is what stays tracked - same policy as audit-report/screens below).
+frontend/test-results/
+frontend/e2e/__screenshots__/
+
 # Design handoff bundles (Claude Design exports — not source)
 GSSG Manager Design System-handoff/
 GSSG Manager Design System-handoff.zip
@@ -83,6 +90,15 @@ GSSG Manager Design System-handoff.zip
 
 # Audit verification screenshots (heavy PNG evidence — findings .md + index.html stay tracked)
 audit-report/screens/
+
+# Captures of the live app (real employee names, G-numbers, leave and medical
+# history). These are PII in a PUBLIC repository, so they never get committed -
+# not by hand and not by a broad `git add docs`. Same policy as the screenshot
+# directories above; regenerate them locally from docs/how-we-work/capture.mjs.
+docs/how-we-work/shots/
+docs/how-we-work/*.pdf
+docs/repro/*.png
+docs/org-chart/work/
 
 # Skill scratch dirs + one-off review/report artifacts (heavy, not source)
 .superpowers/brainstorm/

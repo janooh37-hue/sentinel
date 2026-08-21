@@ -8,7 +8,14 @@
 
 import { useTranslation } from 'react-i18next'
 
-export type Tab = 'documents' | 'profile' | 'leaves' | 'violations' | 'activity' | 'messages'
+export type Tab =
+  | 'documents'
+  | 'profile'
+  | 'leaves'
+  | 'violations'
+  | 'activity'
+  | 'messages'
+  | 'attendance'
 
 interface Counts {
   documents: number
@@ -17,6 +24,8 @@ interface Counts {
   activity: number
   messages: number
   profileGaps: number
+  /** Attendance days needing a decision; null hides the chip's badge. */
+  attendance: number | null
 }
 
 interface Props {
@@ -25,7 +34,15 @@ interface Props {
   onChange: (next: Tab) => void
 }
 
-const ORDER: Tab[] = ['profile', 'documents', 'leaves', 'messages', 'activity', 'violations']
+const ORDER: Tab[] = [
+  'profile',
+  'documents',
+  'leaves',
+  'messages',
+  'activity',
+  'attendance',
+  'violations',
+]
 
 export function EmployeeTabChips({ active, counts, onChange }: Props): React.JSX.Element {
   const { t } = useTranslation()
@@ -44,6 +61,7 @@ export function EmployeeTabChips({ active, counts, onChange }: Props): React.JSX
         else if (tab === 'leaves') badge = counts.leaves
         else if (tab === 'messages') badge = counts.messages
         else if (tab === 'activity') badge = counts.activity
+        else if (tab === 'attendance') badge = counts.attendance
         else if (tab === 'violations') badge = counts.violations
 
         return (

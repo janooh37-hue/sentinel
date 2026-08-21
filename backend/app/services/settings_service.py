@@ -10,19 +10,21 @@ from __future__ import annotations
 import json
 import logging
 import os
+from datetime import UTC, datetime
 from pathlib import Path
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.constants import STAMP_STYLE_HEADER
-from app.db.models import AppSetting
+from app.db.models import AppSetting, AuditLog
 from app.schemas.settings import (
     DASHBOARD_QUICK_ACTION_IDS,
     AppSettingsRead,
     AppSettingsUpdate,
     DashboardLayout,
 )
+from app.schemas.workforce import WorkforceConfiguration
 
 _VALID_QUICK_ACTION_IDS = frozenset(DASHBOARD_QUICK_ACTION_IDS)
 
@@ -30,6 +32,28 @@ _VALID_QUICK_ACTION_IDS = frozenset(DASHBOARD_QUICK_ACTION_IDS)
 # column. The column is nullable and only populated on this one row; all
 # other settings continue to use the (key, value) text pattern.
 _DASHBOARD_LAYOUT_KEY = "settings.dashboard_layout"
+
+# Workforce configuration is stored as individual, JSON-encoded AppSetting
+# values for backwards-compatible operational reads.  It is never writable
+# through the general settings path.
+_WORKFORCE_CONFIGURATION_FIELDS = (
+    "integration_enabled",
+    "sync_interval_minutes",
+    "stale_after_minutes",
+    "initial_backfill_start_at",
+    "evaluation_start_at",
+    "nationality_fold_min_count",
+    "excusing_record_kinds",
+    "provider_person_retention_days",
+    "punch_retention_days",
+    "attendance_retention_days",
+    "duty_event_retention_days",
+    "audit_retention_days",
+)
+_WORKFORCE_CONFIGURATION_KEYS = frozenset(
+    f"workforce.{field}" for field in _WORKFORCE_CONFIGURATION_FIELDS
+)
+_MISSING = object()
 
 log = logging.getLogger(__name__)
 
@@ -103,13 +127,27 @@ def _get(db: Session, key: str, default: object = None) -> object:
     return json.loads(row.value)
 
 
-def _set(db: Session, key: str, value: object) -> None:
+def _upsert_setting(db: Session, key: str, value: object) -> None:
     existing = db.execute(select(AppSetting).where(AppSetting.key == key)).scalar_one_or_none()
     encoded = json.dumps(value)
     if existing is None:
         db.add(AppSetting(key=key, value=encoded))
     else:
         existing.value = encoded
+
+
+def _set(db: Session, key: str, value: object) -> None:
+    """Write a non-workforce setting through the legacy/general settings path."""
+    if key.startswith("workforce."):
+        raise ValueError("workforce settings must be written through WorkforceConfiguration")
+    _upsert_setting(db, key, value)
+
+
+def _set_workforce_configuration_value(db: Session, key: str, value: object) -> None:
+    """Write one key after the complete typed configuration has been validated."""
+    if key not in _WORKFORCE_CONFIGURATION_KEYS:
+        raise ValueError(f"Unknown workforce configuration key: {key}")
+    _upsert_setting(db, key, value)
 
 
 def _get_dashboard_layout(db: Session) -> DashboardLayout | None:
@@ -240,3 +278,125 @@ def update_settings(db: Session, payload: AppSettingsUpdate) -> AppSettingsRead:
         _set_dashboard_layout(db, payload.dashboard_layout)
     db.commit()
     return get_settings(db)
+
+
+def _as_utc(value: datetime) -> datetime:
+    """Normalize persisted UTC instants, including SQLite's naive round-trip."""
+    if value.tzinfo is None or value.utcoffset() is None:
+        return value.replace(tzinfo=UTC)
+    return value.astimezone(UTC)
+
+
+def _duty_assignment_baseline(db: Session) -> datetime | None:
+    """Read the immutable baseline from source history; callers cannot bypass it."""
+    from app.db.workforce_models import DutyAssignmentEvent
+
+    value = db.scalar(
+        select(DutyAssignmentEvent.effective_at)
+        .where(DutyAssignmentEvent.event_type == "baseline")
+        .order_by(DutyAssignmentEvent.effective_at)
+        .limit(1)
+    )
+    return _as_utc(value) if value is not None else None
+
+
+def _validate_workforce_evaluation_boundary(
+    configuration: WorkforceConfiguration,
+    duty_assignment_baseline_at: datetime | None,
+) -> None:
+    """Reject evaluation before the immutable duty-assignment evidence baseline."""
+    if duty_assignment_baseline_at is None:
+        return
+    if configuration.evaluation_start_at < duty_assignment_baseline_at:
+        raise ValueError(
+            "evaluation_start_at must be at or after duty_assignment_baseline_at"
+        )
+
+
+def get_workforce_configuration(db: Session) -> WorkforceConfiguration | None:
+    """Read a complete validated workforce configuration, if one is configured."""
+    raw: dict[str, object] = {}
+    missing = False
+    for field in _WORKFORCE_CONFIGURATION_FIELDS:
+        value = _get(db, f"workforce.{field}", _MISSING)
+        if value is _MISSING:
+            missing = True
+        else:
+            raw[field] = value
+
+    if not raw:
+        return None
+    if missing:
+        raise ValueError("Workforce configuration is incomplete")
+
+    baseline = _duty_assignment_baseline(db)
+    raw["duty_assignment_baseline_at"] = baseline
+    configuration = WorkforceConfiguration.model_validate(raw)
+    _validate_workforce_evaluation_boundary(configuration, baseline)
+    return configuration
+
+
+def update_workforce_configuration(
+    db: Session,
+    configuration: WorkforceConfiguration,
+    *,
+    actor: str,
+) -> WorkforceConfiguration:
+    """Atomically persist one complete, non-secret workforce configuration."""
+    from app.db.workforce_models import AttendanceCase
+
+    normalized_actor = actor.strip()
+    if not normalized_actor:
+        raise ValueError("actor is required for workforce configuration changes")
+
+    baseline = _duty_assignment_baseline(db)
+    validated = WorkforceConfiguration.model_validate(
+        {
+            **configuration.model_dump(mode="python"),
+            "duty_assignment_baseline_at": baseline,
+        }
+    )
+    _validate_workforce_evaluation_boundary(validated, baseline)
+
+    current = get_workforce_configuration(db)
+    if (
+        current is not None
+        and validated.evaluation_start_at != current.evaluation_start_at
+        and db.scalar(select(AttendanceCase.id).limit(1)) is not None
+    ):
+        raise ValueError(
+            "evaluation_start_at cannot change after attendance cases exist"
+        )
+
+    serialized = validated.model_dump(mode="json")
+    current_serialized = (
+        current.model_dump(mode="json") if current is not None else {}
+    )
+    changes = {
+        field: {
+            "before": current_serialized.get(field),
+            "after": serialized[field],
+        }
+        for field in _WORKFORCE_CONFIGURATION_FIELDS
+        if current_serialized.get(field, _MISSING) != serialized[field]
+    }
+    if not changes:
+        return validated
+
+    for field in _WORKFORCE_CONFIGURATION_FIELDS:
+        _set_workforce_configuration_value(
+            db,
+            f"workforce.{field}",
+            serialized[field],
+        )
+
+    db.add(
+        AuditLog(
+            actor=normalized_actor,
+            action="workforce.configuration.updated",
+            entity_type="workforce_configuration",
+            payload=json.dumps({"changes": changes}, sort_keys=True),
+        )
+    )
+    db.commit()
+    return validated

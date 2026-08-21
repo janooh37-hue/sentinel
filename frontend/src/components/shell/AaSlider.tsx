@@ -45,7 +45,10 @@ export function AaSlider({ value, onChange }: AaSliderProps): React.JSX.Element 
   const atMin = index <= 0
   const atMax = index >= maxIndex
   return (
-    <div className="inline-flex items-center gap-2 rounded-full bg-surface-tinted px-3 py-1.5">
+    <div
+      data-topnav-aa
+      className="inline-flex items-center gap-2 rounded-full bg-surface-tinted px-3 py-1.5"
+    >
       <button
         type="button"
         onClick={decrement}
@@ -71,6 +74,7 @@ export function AaSlider({ value, onChange }: AaSliderProps): React.JSX.Element 
         aria-valuemin={stops[0]}
         aria-valuemax={stops[maxIndex]}
         aria-valuenow={snapped}
+        data-topnav-aa-range
         className="aa-slider h-1 w-[100px] cursor-pointer appearance-none rounded-full bg-border"
       />
       <button

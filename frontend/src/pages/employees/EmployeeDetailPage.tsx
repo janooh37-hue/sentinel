@@ -30,6 +30,7 @@ import type { Tab } from './EmployeeTabChips'
 import { EmployeeTabChips } from './EmployeeTabChips'
 import { StatusDialog } from './StatusDialog'
 import { ActivityTab } from './tabs/ActivityTab'
+import { AttendanceTab } from './tabs/AttendanceTab'
 import { DocumentsTab } from './tabs/DocumentsTab'
 import { LeavesTab } from './tabs/LeavesTab'
 import { MessagesTab } from './tabs/MessagesTab'
@@ -42,6 +43,7 @@ const VALID_TABS = new Set<Tab>([
   'leaves',
   'messages',
   'activity',
+  'attendance',
   'violations',
 ])
 
@@ -292,6 +294,9 @@ export function EmployeeDetailPage(): React.JSX.Element {
                 leaves: `${data.stats.leaves_taken_days}d`,
                 violations: data.stats.violations,
                 activity: data.stats.ledger_count,
+                // The chip carries no count: the number that matters is per day,
+                // and the tab body owns the month it is showing.
+                attendance: null,
                 messages: data.recent_sms.length,
                 profileGaps: data.missing_fields.length,
               }}
@@ -325,6 +330,7 @@ export function EmployeeDetailPage(): React.JSX.Element {
               />
             )}
             {tab === 'activity' && <ActivityTab activity={data.recent_activity} />}
+            {tab === 'attendance' && id && <AttendanceTab employeeId={id} />}
             {tab === 'messages' && (
               <MessagesTab
                 messages={data.recent_sms}

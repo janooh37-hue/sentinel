@@ -9,11 +9,11 @@ from __future__ import annotations
 
 import logging
 
-from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError, OperationalError
 from sqlalchemy.orm import Session
 
 from app.db.models import ClassifiedRefSequence
+from app.db.repos._locking import begin_immediate_if_idle
 
 log = logging.getLogger(__name__)
 
@@ -30,11 +30,17 @@ def allocate_classified_serial(
     Runs BEGIN IMMEDIATE → read row (create if missing) → return current
     value → increment.  Retries on lock contention or integrity collisions.
     Does NOT commit — caller owns the transaction boundary.
+
+    When the caller already holds the write lock (it has flushed in this same
+    transaction), the lock is not re-taken and a failure is raised rather than
+    retried: rolling back here would silently discard the caller's staged work.
+    See :mod:`app.db.repos._locking`.
     """
     last_exc: Exception | None = None
     for attempt in range(1, attempts + 1):
+        owns_transaction = False
         try:
-            session.execute(text("BEGIN IMMEDIATE"))
+            owns_transaction = begin_immediate_if_idle(session)
             row = session.get(ClassifiedRefSequence, _SEQUENCE_ID)
             if row is None:
                 row = ClassifiedRefSequence(id=_SEQUENCE_ID, next_value=1)
@@ -46,6 +52,8 @@ def allocate_classified_serial(
             return serial
         except (OperationalError, IntegrityError) as exc:
             last_exc = exc
+            if not owns_transaction:
+                raise
             session.rollback()
             if attempt >= attempts:
                 break

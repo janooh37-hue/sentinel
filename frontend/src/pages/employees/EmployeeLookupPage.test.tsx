@@ -57,6 +57,29 @@ vi.mock('@/components/employees/EmployeeSearchHero', () => ({
   ),
 }))
 
+// The page now reads today's attendance for the hero card and the section tabs;
+// both go through useCapabilities -> useAuth, which this suite does not provide.
+vi.mock('@/components/employees/useAttendanceAttention', () => ({
+  siteToday: () => '2026-08-19',
+  useAttendanceAttention: () => ({
+    allowed: false,
+    isLoading: false,
+    attention: null,
+    seen: 0,
+    late: 0,
+    unpaired: 0,
+    worst: [],
+  }),
+}))
+
+vi.mock('@/components/employees/AttendanceHeroCard', () => ({
+  AttendanceHeroCard: () => null,
+}))
+
+vi.mock('@/components/employees/EmployeesSectionTabs', () => ({
+  EmployeesSectionTabs: () => <nav data-testid="employees-section-tabs" />,
+}))
+
 // Mock LookupHeroCards to avoid the heavy api calls it makes.
 vi.mock('@/components/employees/LookupHeroCards', () => ({
   LookupHeroCards: ({ onOpen }: { onOpen: (id: string) => void }) => (

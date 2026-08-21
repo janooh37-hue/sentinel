@@ -25,7 +25,7 @@ def _seed(db, **kw):
     return emp
 
 
-def test_transfer_forwards_letter_metadata_and_moves(db_session, monkeypatch):
+def test_transfer_forwards_letter_metadata_and_moves(db_session, admin_user, monkeypatch):
     _seed(db_session)
     captured = {}
 
@@ -45,6 +45,7 @@ def test_transfer_forwards_letter_metadata_and_moves(db_session, monkeypatch):
         recipient_id=3,
         manager_id=5,
         cc=["مدراء الأفرع"],
+        current_user=admin_user,
     )
 
     assert captured["template_id"] == "General Book"
@@ -62,7 +63,7 @@ def test_transfer_forwards_letter_metadata_and_moves(db_session, monkeypatch):
     assert result.book_id == 7 and result.moved == ["G3309"]
 
 
-def test_transfer_all_unassigned_skips_book(db_session, monkeypatch):
+def test_transfer_all_unassigned_skips_book(db_session, admin_user, monkeypatch):
     # Two employees with NO current duty place.
     for eid in ("G100", "G200"):
         db_session.add(Employee(id=eid, name_en=eid, name_ar=eid, duty_unit=None, duty_post=None))
@@ -82,6 +83,7 @@ def test_transfer_all_unassigned_skips_book(db_session, monkeypatch):
             DutyTransferMove(employee_id="G100", to_unit="السرية الأولى", to_post="ليوان"),
             DutyTransferMove(employee_id="G200", to_unit="السرية الثانية", to_post=None),
         ],
+        current_user=admin_user,
     )
 
     assert called["n"] == 0
@@ -94,7 +96,7 @@ def test_transfer_all_unassigned_skips_book(db_session, monkeypatch):
     assert b.duty_unit == "السرية الثانية" and b.duty_post is None
 
 
-def test_transfer_mixed_assignment_mints_book(db_session, monkeypatch):
+def test_transfer_mixed_assignment_mints_book(db_session, admin_user, monkeypatch):
     db_session.add(Employee(id="G100", name_en="a", name_ar="a", duty_unit=None, duty_post=None))
     db_session.add(
         Employee(id="G300", name_en="b", name_ar="b", duty_unit="السرية الثالثة", duty_post="تفتيش")
@@ -117,6 +119,7 @@ def test_transfer_mixed_assignment_mints_book(db_session, monkeypatch):
             DutyTransferMove(employee_id="G100", to_unit="السرية الأولى", to_post=None),
             DutyTransferMove(employee_id="G300", to_unit="السرية الرابعة", to_post="ليوان"),
         ],
+        current_user=admin_user,
     )
 
     assert "fields" in captured  # book path taken (≥1 already placed)
@@ -125,7 +128,7 @@ def test_transfer_mixed_assignment_mints_book(db_session, monkeypatch):
     assert result.document_id == 22
 
 
-def test_transfer_moves_each_employee_to_its_own_destination(db_session, monkeypatch):
+def test_transfer_moves_each_employee_to_its_own_destination(db_session, admin_user, monkeypatch):
     """A swap in one letter: two employees exchange units."""
     db_session.add(
         Employee(id="G500", name_en="a", name_ar="أ", duty_unit="السرية الأولى", duty_post="ليوان")
@@ -151,6 +154,7 @@ def test_transfer_moves_each_employee_to_its_own_destination(db_session, monkeyp
             DutyTransferMove(employee_id="G500", to_unit="السرية الثانية", to_post="تفتيش"),
             DutyTransferMove(employee_id="G600", to_unit="السرية الأولى", to_post="ليوان"),
         ],
+        current_user=admin_user,
     )
 
     # Both destinations appear in the single letter body.
@@ -164,7 +168,7 @@ def test_transfer_moves_each_employee_to_its_own_destination(db_session, monkeyp
     assert db_session.get(Employee, "G600").duty_post == "ليوان"
 
 
-def test_transfer_rejects_a_duplicate_employee(db_session, monkeypatch):
+def test_transfer_rejects_a_duplicate_employee(db_session, admin_user, monkeypatch):
     """Two destinations for one person is ambiguous — refuse, don't guess."""
     _seed(db_session, id="G700")
 
@@ -180,6 +184,7 @@ def test_transfer_rejects_a_duplicate_employee(db_session, monkeypatch):
                 DutyTransferMove(employee_id="G700", to_unit="السرية الأولى", to_post=None),
                 DutyTransferMove(employee_id="G700", to_unit="السرية الثانية", to_post=None),
             ],
+            current_user=admin_user,
         )
 
     assert err.value.code == "DUTY_DUPLICATE_EMPLOYEE"

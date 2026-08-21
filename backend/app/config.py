@@ -38,6 +38,11 @@ def _default_templates_dir() -> Path:
     return root / "backend" / "templates"
 
 
+def _csv_set(raw: str) -> frozenset[str]:
+    """Parse a comma-separated env value into a trimmed, non-empty set."""
+    return frozenset(token.strip() for token in raw.split(",") if token.strip())
+
+
 class Settings(BaseSettings):
     """Application settings.
 
@@ -85,6 +90,46 @@ class Settings(BaseSettings):
     openwa_api_key: str = ""  # X-API-Key for the gateway (secret)
     openwa_session: str = "default"  # OpenWA sessionId holding the logged-in number
     openwa_country_code: str = "971"  # default CC for normalizing contact
+
+    # --- Attendance provider: installed ZKTeco BioTime -----------------------
+    # All GSSG_BIOTIME_* env vars. Disabled by default: the scheduler resolves
+    # no provider until a base URL and credentials are present, so an unset
+    # deployment reports `not_configured` rather than manufacturing attendance.
+    # Credentials and TLS trust are environment-only and never enter the
+    # database, the API, audit payloads, or logs.
+    biotime_base_url: str = ""  # e.g. http://biotime.internal:8081
+    biotime_username: str = ""  # least-privilege read-only account
+    biotime_password: str = ""
+    biotime_ca_bundle: str = ""  # CA bundle trusting the server, when HTTPS
+    biotime_verify_tls: bool = True
+    biotime_timeout_seconds: float = 30.0
+    biotime_page_size: int = 500
+    # `punch_time` is device-local wall time with no offset, and the server
+    # compares start_time/end_time against it as a literal string. The adapter
+    # therefore converts UTC bounds into this zone before querying.
+    biotime_time_zone: str = "Asia/Dubai"
+    # Site allow-list, comma separated. The provider account is normally scoped
+    # server-side already; these are enforced again on ingest because a filter
+    # this build silently ignores fails open.
+    biotime_area_names: str = ""
+    biotime_terminal_sns: str = ""
+    biotime_department_ids: str = ""
+
+    @property
+    def biotime_configured(self) -> bool:
+        return bool(self.biotime_base_url and self.biotime_username and self.biotime_password)
+
+    @property
+    def biotime_area_name_set(self) -> frozenset[str]:
+        return _csv_set(self.biotime_area_names)
+
+    @property
+    def biotime_terminal_sn_set(self) -> frozenset[str]:
+        return _csv_set(self.biotime_terminal_sns)
+
+    @property
+    def biotime_department_id_set(self) -> frozenset[str]:
+        return _csv_set(self.biotime_department_ids)
 
     @property
     def db_path(self) -> Path:

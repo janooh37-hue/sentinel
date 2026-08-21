@@ -390,6 +390,13 @@
         "company": "GSSG Security",
         "role": "Employee identification"
       }
+    },
+    "sectionTabs": {
+      "aria": "Employees sections",
+      "directory": "Directory",
+      "attendance": "Attendance",
+      "attendanceAr": "الحضور",
+      "dutyLocations": "Duty locations"
     }
   },
   "violations": {
@@ -2158,7 +2165,8 @@
       "violations": "Violations",
       "activity": "Activity",
       "messages": "Messages",
-      "showingRecent": "Showing {{shown}} of {{total}}"
+      "showingRecent": "Showing {{shown}} of {{total}}",
+      "attendance": "Attendance"
     },
     "stats": {
       "documents": "Documents",
@@ -2563,7 +2571,7 @@
     "viewAll": "View All",
     "editWidgets": {
       "customizeTitle": "Customize Dashboard",
-      "customizeDescription": "Choose where each widget appears. Use the zone selector and arrows.",
+      "customizeDescription": "Group by placement to move and reorder widgets, or by source page to find one fast.",
       "zones": {
         "top": "Top (big cards)",
         "under_workspace": "Under Workspace",
@@ -2571,6 +2579,24 @@
         "hidden": "Hidden"
       },
       "zonePicker": "Move to zone",
+      "width": {
+        "label": "Width",
+        "compact": "Compact",
+        "wide": "Wide",
+        "compactHint": "A 1180px column, like the rest of the app.",
+        "wideHint": "The grid spans the whole window."
+      },
+      "groupBy": {
+        "label": "Group by",
+        "placement": "Placement",
+        "source": "Source page"
+      },
+      "sources": {
+        "employees": "From Employees",
+        "leaves": "From Leaves",
+        "records": "From Records",
+        "ledger": "From Ledger"
+      },
       "topFull": "Top zone is full (max {{count}})",
       "topOnlyBigCards": "Only big cards can go in the Top zone",
       "zoneFull": "This zone is full (max {{count}})",
@@ -2607,44 +2633,44 @@
       "pending_departures": "Pending Departures"
     },
     "quickActionLabels": {
-      "hr": "HR Requests",
-      "violations": "Violations",
-      "leaves": "Leaves",
-      "books": "Book Refs",
+      "general_book": "General Book",
       "acknowledgment": "Acknowledgment",
       "salary_transfer_request": "Salary Transfer",
-      "salary_deduction": "Salary Deduction",
-      "violation": "New Violation",
-      "employee_clearance": "Clearance",
-      "leave_application": "Leave Application",
-      "passport_release": "Passport Request",
-      "duty_resumption": "Duty Resumption",
-      "material_request": "Material Request",
-      "general_book": "General Book",
-      "hr_request": "HR Request",
-      "resignation_letter": "Resignation Letter",
       "leave_permit": "Leave Permit",
-      "administrative_leave": "Admin Leave"
+      "violation": "New Violation",
+      "leave_application": "Leave Application",
+      "duty_resumption": "Duty Resumption",
+      "hr_request": "HR Request",
+      "salary_deduction": "Salary Deduction",
+      "employee_clearance": "Clearance",
+      "passport_release": "Passport Request",
+      "material_request": "Material Request",
+      "resignation_letter": "Resignation Letter",
+      "administrative_leave": "Admin Leave",
+      "warning": "Warning",
+      "passport_release_list": "Passport Release",
+      "report": "Report",
+      "inmate_conduct_violations": "Inmate Conduct"
     },
     "quickActionDesc": {
-      "hr": "Issue, approve, and track HR documents.",
-      "violations": "Open, escalate, and close cases.",
-      "leaves": "Manage leave balances and applications.",
-      "books": "Search and stamp the records book.",
+      "general_book": "Open the general records book.",
       "acknowledgment": "Record an employee acknowledgment.",
       "salary_transfer_request": "Request a salary account transfer.",
-      "salary_deduction": "Issue a salary deduction notice.",
-      "violation": "File a new disciplinary violation.",
-      "employee_clearance": "Issue a clearance / exit form.",
-      "leave_application": "Apply for an employee leave.",
-      "passport_release": "Request custody of a passport.",
-      "duty_resumption": "Mark return to duty after leave.",
-      "material_request": "Request stores or material.",
-      "general_book": "Open the general records book.",
-      "hr_request": "Submit an HR request.",
-      "resignation_letter": "Compose a resignation letter.",
       "leave_permit": "Issue a short leave permit.",
-      "administrative_leave": "File an administrative leave."
+      "violation": "File a new disciplinary violation.",
+      "leave_application": "Apply for an employee leave.",
+      "duty_resumption": "Mark return to duty after leave.",
+      "hr_request": "Submit an HR request.",
+      "salary_deduction": "Issue a salary deduction notice.",
+      "employee_clearance": "Issue a clearance / exit form.",
+      "passport_release": "Request custody of a passport.",
+      "material_request": "Request stores or material.",
+      "resignation_letter": "Compose a resignation letter.",
+      "administrative_leave": "File an administrative leave.",
+      "warning": "Issue a formal warning notice.",
+      "passport_release_list": "Release passports to a list of employees.",
+      "report": "File an incident or duty report.",
+      "inmate_conduct_violations": "Record inmate conduct violations."
     },
     "pending": {
       "title": "Documents Completed",
@@ -2984,8 +3010,14 @@
     "drop": "Drop the scan here, or click to browse",
     "filed": "Filed — {{ref}} is closed",
     "uploadError": "Could not file that scan",
-    "scope": { "mine": "Mine", "all": "Everyone" },
-    "sort": { "oldest": "Oldest first", "newest": "Newest first" },
+    "scope": {
+      "mine": "Mine",
+      "all": "Everyone"
+    },
+    "sort": {
+      "oldest": "Oldest first",
+      "newest": "Newest first"
+    },
     "group": {
       "overMonth": "Over a month",
       "weeks": "Two to four weeks",
@@ -3685,5 +3717,122 @@
     },
     "openRecord": "Open record",
     "openLookup": "Add an employee on the Employees page"
+  },
+  "attendance": {
+    "title": "Attendance",
+    "titleAr": "الحضور",
+    "subtitle": "{{date}} · duty register by unit and post",
+    "pastGrace": "+{{minutes}}m",
+    "views": {
+      "register": "Register",
+      "board": "Board",
+      "timeline": "Timeline"
+    },
+    "shift": {
+      "morning": "Morning",
+      "noon": "Noon",
+      "night": "Night",
+      "office_day": "Office"
+    },
+    "state": {
+      "verified": "On time",
+      "grace": "Inside grace",
+      "late": "Late past grace",
+      "unpaired": "Single punch",
+      "absent": "Absent",
+      "leave": "On leave",
+      "pending": "Not started"
+    },
+    "toolbar": {
+      "today": "Today",
+      "previousDay": "Previous day",
+      "nextDay": "Next day",
+      "search": "Name, G-number, or post…",
+      "print": "Print",
+      "export": "Export",
+      "keyboardDay": "change day",
+      "keyboardShift": "switch shift",
+      "keyboardSearch": "search",
+      "viewsHint": "Register, Board and Timeline are views of this same day"
+    },
+    "register": {
+      "masthead": "{{shift}} duty register · {{unit}}",
+      "assigned": "assigned",
+      "seen": "seen",
+      "late": "late",
+      "unpaired": "unpaired",
+      "leave": "leave",
+      "posts": "{{count}} posts",
+      "source": "Source: BioTime mirror · read-only · fresh through {{through}}",
+      "sourceUnknown": "Source: BioTime mirror · read-only · freshness unknown",
+      "noPunch": "no punch",
+      "absent": "absent",
+      "onlyPunch": "{{time}} only",
+      "latePunch": "{{time}} +{{minutes}}m",
+      "duePunch": "due {{time}}"
+    },
+    "board": {
+      "seenOf": "{{seen}}/{{due}}",
+      "legend": "Colour marks only trouble"
+    },
+    "timeline": {
+      "grace": "grace {{time}}",
+      "start": "start {{time}}",
+      "closes": "closes {{time}}",
+      "missingGutter": "−{{count}}",
+      "median": "median arrival",
+      "glance": "One glance: is the cloud left of the amber line?"
+    },
+    "attention": {
+      "title": "Needs a decision",
+      "none": "Nothing needs a decision today.",
+      "reviewAll": "Review all",
+      "openFile": "Open attendance file"
+    },
+    "hero": {
+      "title": "ATTENDANCE TODAY",
+      "seen": "seen",
+      "late": "late",
+      "absent": "absent",
+      "unpaired": "unpaired",
+      "open": "Open attendance",
+      "clean": "Every scheduled person has been seen.",
+      "pending": "Reading today's punches…"
+    },
+    "tab": {
+      "punctuality": "Punctuality",
+      "lateMinutes": "Late minutes",
+      "missingPunches": "Missing punches",
+      "shiftsWorked": "Shifts worked",
+      "absentDays": "Absent days",
+      "monthOf": "{{month}}",
+      "restDay": "off",
+      "dayDetail": "{{date}} · {{shift}} {{window}}",
+      "noSchedule": "No scheduled attendance in this month.",
+      "punchesUnknownDirection": "{{count}} punches · direction unknown",
+      "grace": "grace {{minutes}}m",
+      "seenCount": "{{count}} seen",
+      "seenOnly": "Not rostered",
+      "fromDevice": "From the device record",
+      "firstSeen": "First seen",
+      "lastSeen": "Last seen",
+      "punchCount": "Punches",
+      "devices": "Device",
+      "unenrolled": "Not enrolled on any attendance device.",
+      "wholeRecord": "Whole record",
+      "wholeRecordHint": "Days the device saw, by month",
+      "habit": "Punch habit",
+      "beforeStart": "in {{minutes}}m before start",
+      "afterStart": "in {{minutes}}m after start",
+      "beforeEnd": "out {{minutes}}m before end",
+      "afterEnd": "out {{minutes}}m after end",
+      "sampleDays_one": "{{count}} day observed",
+      "sampleDays_other": "{{count}} days observed",
+      "rosterMismatch": "These punches fit the {{shift}} shift, not the rostered one.",
+      "deviceSawMore": "The device recorded {{device}} punches this day; {{judged}} counted toward the duty."
+    },
+    "empty": "No attendance rows for this day yet.",
+    "notStartedHint": "This window has not opened yet, so nothing is missing.",
+    "loadFailed": "Attendance could not be loaded."
   }
 }

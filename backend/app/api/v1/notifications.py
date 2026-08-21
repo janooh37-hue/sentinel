@@ -81,10 +81,16 @@ async def stream(
     the cancellation as GeneratorExit); the per-tick session is always closed
     in a finally block.
 
-    Per-tick session: we do NOT hold the injected ``db`` open for the whole
-    stream (would pin a SQLite connection). Instead each tick opens a new
-    session from the same engine that backed the injected ``db`` — this way
-    the test-fixture engine override also applies to the per-tick sessions.
+    Per-tick session: we do NOT use the injected ``db`` beyond reading its bind.
+    A ``StreamingResponse`` finishes only when the stream does, and FastAPI
+    tears request-scoped dependencies down *after* the response completes — so
+    an injected session on an endless stream stays checked out for the life of
+    the connection, pinning one pool connection per viewer. With the default
+    QueuePool (5 + 10 overflow) the 16th concurrent viewer exhausted the pool
+    and unrelated requests, login included, began failing with 500s. The
+    injected session is therefore closed immediately once its engine has been
+    captured, and every tick — including the first — opens its own session from
+    that same engine, so test-fixture engine overrides still apply.
     """
     user_id = user.id
     # Capture the engine from the injected session so that test overrides
@@ -102,11 +108,20 @@ async def stream(
         # Fallback to the module-level factory (production path when bind is None).
         return SessionLocal()
 
+    # Release the request-scoped connection before the endless response starts;
+    # `get_db` closing it again later is a no-op.
+    db.close()
+
     async def gen() -> AsyncIterator[str]:
-        # Initial event from the injected (request-scoped) session.
-        last = await anyio.to_thread.run_sync(
-            lambda: notification_service.relevant_counts(db, user)
-        )
+        # Initial event, from a session of this stream's own.
+        def _initial() -> NotificationCounts:
+            session = _tick_session()
+            try:
+                return notification_service.relevant_counts(session, user)
+            finally:
+                session.close()
+
+        last = await anyio.to_thread.run_sync(_initial)
         yield _frame(last)
         emitted = 1
         if max_events is not None and emitted >= max_events:

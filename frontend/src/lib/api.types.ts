@@ -3557,10 +3557,16 @@ export interface paths {
          *     the cancellation as GeneratorExit); the per-tick session is always closed
          *     in a finally block.
          *
-         *     Per-tick session: we do NOT hold the injected ``db`` open for the whole
-         *     stream (would pin a SQLite connection). Instead each tick opens a new
-         *     session from the same engine that backed the injected ``db`` — this way
-         *     the test-fixture engine override also applies to the per-tick sessions.
+         *     Per-tick session: we do NOT use the injected ``db`` beyond reading its bind.
+         *     A ``StreamingResponse`` finishes only when the stream does, and FastAPI
+         *     tears request-scoped dependencies down *after* the response completes — so
+         *     an injected session on an endless stream stays checked out for the life of
+         *     the connection, pinning one pool connection per viewer. With the default
+         *     QueuePool (5 + 10 overflow) the 16th concurrent viewer exhausted the pool
+         *     and unrelated requests, login included, began failing with 500s. The
+         *     injected session is therefore closed immediately once its engine has been
+         *     captured, and every tick — including the first — opens its own session from
+         *     that same engine, so test-fixture engine overrides still apply.
          */
         get: operations["stream_api_v1_notifications_stream_get"];
         put?: never;
@@ -4015,6 +4021,723 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/workforce/dashboard/snapshot": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Dashboard Snapshot */
+        get: operations["get_dashboard_snapshot_api_v1_workforce_dashboard_snapshot_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workforce/dashboard/analytics": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Dashboard Analytics */
+        get: operations["get_dashboard_analytics_api_v1_workforce_dashboard_analytics_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workforce/dashboard/coverage": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Dashboard Coverage */
+        get: operations["get_dashboard_coverage_api_v1_workforce_dashboard_coverage_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workforce/access/me": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get My Workforce Access */
+        get: operations["get_my_workforce_access_api_v1_workforce_access_me_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workforce/access/users/{user_id}/scopes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get User Scopes */
+        get: operations["get_user_scopes_api_v1_workforce_access_users__user_id__scopes_get"];
+        /** Replace User Scopes */
+        put: operations["replace_user_scopes_api_v1_workforce_access_users__user_id__scopes_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workforce/roster": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Roster */
+        get: operations["get_roster_api_v1_workforce_roster_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workforce/attendance/exceptions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Attendance Exceptions */
+        get: operations["get_attendance_exceptions_api_v1_workforce_attendance_exceptions_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workforce/attendance/day": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Attendance Day
+         * @description The register payload: one row per person per scheduled shift, with punches.
+         */
+        get: operations["get_attendance_day_api_v1_workforce_attendance_day_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workforce/employees/{employee_id}/attendance": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Employee Attendance
+         * @description One employee's attendance days.
+         *
+         *     Two separate doors: ``workforce.self.view`` opens only the caller's own linked
+         *     employee record, while a roster reader needs both ``workforce.people.view``
+         *     and ``workforce.attendance.review`` and stays inside their resolved scope.
+         */
+        get: operations["get_employee_attendance_api_v1_workforce_employees__employee_id__attendance_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workforce/employees/{employee_id}/attendance/history": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Employee Attendance History
+         * @description One employee's punch history, read from the provider on request.
+         *
+         *     The provider owns years the roster does not cover, so this answers "when was
+         *     this person seen" without importing anything and without pretending the days
+         *     before the schedule existed can be judged. Same two doors as
+         *     ``get_employee_attendance``, plus the caller's resolved scope.
+         */
+        get: operations["get_employee_attendance_history_api_v1_workforce_employees__employee_id__attendance_history_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workforce/attendance/cases/{case_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Attendance Case */
+        get: operations["get_attendance_case_api_v1_workforce_attendance_cases__case_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workforce/attendance/cases/{case_id}/adjustments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create Attendance Adjustment */
+        post: operations["create_attendance_adjustment_api_v1_workforce_attendance_cases__case_id__adjustments_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workforce/attendance/cases/{case_id}/adjustments/{adjustment_id}/revoke": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Revoke Attendance Adjustment */
+        post: operations["revoke_attendance_adjustment_api_v1_workforce_attendance_cases__case_id__adjustments__adjustment_id__revoke_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workforce/duty-assignment-events": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Duty Assignment Events */
+        get: operations["get_duty_assignment_events_api_v1_workforce_duty_assignment_events_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workforce/schedule/definitions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Shift Definitions */
+        get: operations["get_shift_definitions_api_v1_workforce_schedule_definitions_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workforce/schedule/rotation": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Rotation Pattern */
+        get: operations["get_rotation_pattern_api_v1_workforce_schedule_rotation_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workforce/crews": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Crews */
+        get: operations["list_crews_api_v1_workforce_crews_get"];
+        put?: never;
+        /** Create Crew */
+        post: operations["create_crew_api_v1_workforce_crews_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workforce/crews/{crew_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Crew */
+        get: operations["get_crew_api_v1_workforce_crews__crew_id__get"];
+        put?: never;
+        post?: never;
+        /** Retire Crew */
+        delete: operations["retire_crew_api_v1_workforce_crews__crew_id__delete"];
+        options?: never;
+        head?: never;
+        /** Patch Crew */
+        patch: operations["patch_crew_api_v1_workforce_crews__crew_id__patch"];
+        trace?: never;
+    };
+    "/api/v1/workforce/crews/{crew_id}/schedules": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Crew Schedules */
+        get: operations["list_crew_schedules_api_v1_workforce_crews__crew_id__schedules_get"];
+        put?: never;
+        /** Create Crew Schedule */
+        post: operations["create_crew_schedule_api_v1_workforce_crews__crew_id__schedules_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workforce/crews/{crew_id}/schedules/{schedule_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Crew Schedule */
+        get: operations["get_crew_schedule_api_v1_workforce_crews__crew_id__schedules__schedule_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workforce/crews/{crew_id}/schedules/{schedule_id}/replace": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Replace Crew Schedule */
+        post: operations["replace_crew_schedule_api_v1_workforce_crews__crew_id__schedules__schedule_id__replace_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workforce/crews/{crew_id}/schedules/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Preview Crew Schedule */
+        post: operations["preview_crew_schedule_api_v1_workforce_crews__crew_id__schedules_preview_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workforce/crews/{crew_id}/memberships": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Crew Memberships */
+        get: operations["list_crew_memberships_api_v1_workforce_crews__crew_id__memberships_get"];
+        put?: never;
+        /** Create Crew Membership */
+        post: operations["create_crew_membership_api_v1_workforce_crews__crew_id__memberships_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workforce/crews/{crew_id}/memberships/{membership_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Crew Membership */
+        get: operations["get_crew_membership_api_v1_workforce_crews__crew_id__memberships__membership_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workforce/crews/{crew_id}/memberships/{membership_id}/end": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** End Crew Membership */
+        post: operations["end_crew_membership_api_v1_workforce_crews__crew_id__memberships__membership_id__end_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workforce/overrides": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Overrides */
+        get: operations["list_overrides_api_v1_workforce_overrides_get"];
+        put?: never;
+        /** Create Shift Override */
+        post: operations["create_shift_override_api_v1_workforce_overrides_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workforce/overrides/{override_id}/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Cancel Shift Override */
+        post: operations["cancel_shift_override_api_v1_workforce_overrides__override_id__cancel_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workforce/overrides/swap": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create Shift Swap */
+        post: operations["create_shift_swap_api_v1_workforce_overrides_swap_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workforce/requirements": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Requirements */
+        get: operations["list_requirements_api_v1_workforce_requirements_get"];
+        put?: never;
+        /** Create Staffing Requirement */
+        post: operations["create_staffing_requirement_api_v1_workforce_requirements_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workforce/requirements/{requirement_id}/approve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Approve Staffing Requirement */
+        post: operations["approve_staffing_requirement_api_v1_workforce_requirements__requirement_id__approve_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workforce/policies": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Attendance Policies */
+        get: operations["list_attendance_policies_api_v1_workforce_policies_get"];
+        put?: never;
+        /** Create Attendance Policy */
+        post: operations["create_attendance_policy_api_v1_workforce_policies_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workforce/policies/{policy_id}/approve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Approve Policy */
+        post: operations["approve_policy_api_v1_workforce_policies__policy_id__approve_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workforce/integration/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Integration Status */
+        get: operations["get_integration_status_api_v1_workforce_integration_status_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workforce/integration/test": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Test Integration
+         * @description Probe the configured provider without exposing credentials or vendor detail.
+         */
+        post: operations["test_integration_api_v1_workforce_integration_test_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workforce/integration/sync": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Start Integration Sync
+         * @description Import one people page and one punch page, then commit.
+         *
+         *     Bounded on purpose: the request path must not hold a transaction open for a
+         *     full backfill. The scheduled job drains the remaining pages.
+         */
+        post: operations["start_integration_sync_api_v1_workforce_integration_sync_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workforce/integration/people": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Integration People */
+        get: operations["list_integration_people_api_v1_workforce_integration_people_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workforce/integration/people/{person_id}/mapping": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Patch Provider Mapping */
+        patch: operations["patch_provider_mapping_api_v1_workforce_integration_people__person_id__mapping_patch"];
+        trace?: never;
+    };
+    "/api/v1/workforce/integration/evaluation-queue": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Evaluation Queue */
+        get: operations["list_evaluation_queue_api_v1_workforce_integration_evaluation_queue_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workforce/integration/evaluation-queue/{queue_id}/retry": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Retry Evaluation Queue */
+        post: operations["retry_evaluation_queue_api_v1_workforce_integration_evaluation_queue__queue_id__retry_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workforce/configuration": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Workforce Configuration */
+        get: operations["get_workforce_configuration_api_v1_workforce_configuration_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Patch Workforce Configuration */
+        patch: operations["patch_workforce_configuration_api_v1_workforce_configuration_patch"];
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -4062,6 +4785,11 @@ export interface components {
              * Format: date-time
              */
             created_at: string;
+        };
+        /** AdjustmentRevokeWrite */
+        AdjustmentRevokeWrite: {
+            /** Reason */
+            reason: string;
         };
         /** AdminKeyRequest */
         AdminKeyRequest: {
@@ -4292,6 +5020,184 @@ export interface components {
              * @default
              */
             hint_ar: string;
+        };
+        /** AttendanceAdjustmentWrite */
+        AttendanceAdjustmentWrite: {
+            /** Replacement Presence State */
+            replacement_presence_state?: ("scheduled" | "on_duty" | "completed" | "absent" | "excused_leave" | "off" | "unknown") | null;
+            /** Replacement First In At */
+            replacement_first_in_at?: string | null;
+            /** Replacement Latest In At */
+            replacement_latest_in_at?: string | null;
+            /** Replacement Final Out At */
+            replacement_final_out_at?: string | null;
+            /** Replacement Late Minutes */
+            replacement_late_minutes?: number | null;
+            /** Replacement Early Exit Minutes */
+            replacement_early_exit_minutes?: number | null;
+            /** Replacement Missing Checkout */
+            replacement_missing_checkout?: boolean | null;
+            /** Reason */
+            reason: string;
+        };
+        /** AttendanceCaseRead */
+        AttendanceCaseRead: {
+            /** Id */
+            id: number;
+            /** Employee Id */
+            employee_id: string;
+            /**
+             * Operational Date
+             * Format: date
+             */
+            operational_date: string;
+            /**
+             * Scheduled Start At
+             * Format: date-time
+             */
+            scheduled_start_at: string;
+            /**
+             * Scheduled End At
+             * Format: date-time
+             */
+            scheduled_end_at: string;
+            /** Effective */
+            effective?: {
+                [key: string]: unknown;
+            } | null;
+            /** Evaluations */
+            evaluations: {
+                [key: string]: unknown;
+            }[];
+            /** Adjustments */
+            adjustments: {
+                [key: string]: unknown;
+            }[];
+        };
+        /**
+         * AttendanceDayRowRead
+         * @description One person's scheduled shift on one operational date, with punch facts.
+         *
+         *     ``first_punch_at`` / ``last_punch_at`` are the earliest and latest punches
+         *     inside this case's policy match window. They are timestamps of events, not a
+         *     check-in and a check-out: this provider reports no direction, so a single
+         *     punch yields ``punch_count == 1`` with both bounds equal, and a client must
+         *     present it as "seen at", never as a span.
+         *
+         *     ``judgment_due_at`` is when the duty stops running and a lone punch may be
+         *     called unpaired: before that instant one punch is an arrival still waiting for
+         *     its departure, not an exception. ``absence_due_at`` is the earlier boundary,
+         *     twice the grace past the start, after which a case with no punch at all is an
+         *     absence. ``grace_minutes`` is the policy's own grace, published so a client
+         *     names the same arrival late as the evaluator does instead of guessing.
+         */
+        AttendanceDayRowRead: {
+            /** Employee Id */
+            employee_id: string;
+            /** Name En */
+            name_en: string;
+            /** Name Ar */
+            name_ar?: string | null;
+            /** Department */
+            department?: string | null;
+            /** Duty Unit */
+            duty_unit?: string | null;
+            /** Duty Post */
+            duty_post?: string | null;
+            /** Crew Code */
+            crew_code?: string | null;
+            /** Shift Code */
+            shift_code?: string | null;
+            /** Presence State */
+            presence_state?: ("scheduled" | "on_duty" | "completed" | "absent" | "excused_leave" | "off" | "unknown") | null;
+            /** Reason Code */
+            reason_code?: string | null;
+            /** Scheduled Start At */
+            scheduled_start_at?: string | null;
+            /** Scheduled End At */
+            scheduled_end_at?: string | null;
+            /** First Punch At */
+            first_punch_at?: string | null;
+            /** Last Punch At */
+            last_punch_at?: string | null;
+            /**
+             * Punch Count
+             * @default 0
+             */
+            punch_count: number;
+            /** Late Minutes */
+            late_minutes?: number | null;
+            /**
+             * On Leave
+             * @default false
+             */
+            on_leave: boolean;
+            /** Judgment Due At */
+            judgment_due_at?: string | null;
+            /** Absence Due At */
+            absence_due_at?: string | null;
+            /** Grace Minutes */
+            grace_minutes?: number | null;
+        };
+        /** AttendanceExceptionRead */
+        AttendanceExceptionRead: {
+            /** Employee Id */
+            employee_id: string;
+            /** Name En */
+            name_en: string;
+            /** Name Ar */
+            name_ar?: string | null;
+            /** Department */
+            department?: string | null;
+            /** Duty Unit */
+            duty_unit?: string | null;
+            /** Duty Post */
+            duty_post?: string | null;
+            /** Crew Code */
+            crew_code?: string | null;
+            /** Shift Code */
+            shift_code?: string | null;
+            /** Presence State */
+            presence_state?: ("scheduled" | "on_duty" | "completed" | "absent" | "excused_leave" | "off" | "unknown") | null;
+            /** Reason Code */
+            reason_code?: string | null;
+            /** Scheduled Start At */
+            scheduled_start_at?: string | null;
+            /** Scheduled End At */
+            scheduled_end_at?: string | null;
+            /** Late Minutes */
+            late_minutes?: number | null;
+            /** Early Exit Minutes */
+            early_exit_minutes?: number | null;
+            /** Missing Checkout */
+            missing_checkout?: boolean | null;
+        };
+        /** AttendancePolicyWrite */
+        AttendancePolicyWrite: {
+            /** Shift Definition Id */
+            shift_definition_id?: number | null;
+            /** Grace Minutes */
+            grace_minutes: number;
+            /** Absence After Minutes */
+            absence_after_minutes: number;
+            /** Early Exit Grace Minutes */
+            early_exit_grace_minutes: number;
+            /** Match Before Minutes */
+            match_before_minutes: number;
+            /** Match After Minutes */
+            match_after_minutes: number;
+            /**
+             * Require Checkout
+             * @default true
+             */
+            require_checkout: boolean;
+            /**
+             * Effective From
+             * Format: date
+             */
+            effective_from: string;
+            /** Effective To */
+            effective_to?: string | null;
         };
         /**
          * AuditEntryRead
@@ -4935,6 +5841,36 @@ export interface components {
             /** First Incomplete Id */
             first_incomplete_id: string | null;
         };
+        /**
+         * ConfigurationPatch
+         * @description Partial typed patch; the router combines it with the current configuration.
+         */
+        ConfigurationPatch: {
+            /** Integration Enabled */
+            integration_enabled?: boolean | null;
+            /** Sync Interval Minutes */
+            sync_interval_minutes?: number | null;
+            /** Stale After Minutes */
+            stale_after_minutes?: number | null;
+            /** Initial Backfill Start At */
+            initial_backfill_start_at?: string | null;
+            /** Evaluation Start At */
+            evaluation_start_at?: string | null;
+            /** Nationality Fold Min Count */
+            nationality_fold_min_count?: number | null;
+            /** Excusing Record Kinds */
+            excusing_record_kinds?: string[] | null;
+            /** Provider Person Retention Days */
+            provider_person_retention_days?: number | null;
+            /** Punch Retention Days */
+            punch_retention_days?: number | null;
+            /** Attendance Retention Days */
+            attendance_retention_days?: number | null;
+            /** Duty Event Retention Days */
+            duty_event_retention_days?: number | null;
+            /** Audit Retention Days */
+            audit_retention_days?: number | null;
+        };
         /** CorrespondenceCategoryCreate */
         CorrespondenceCategoryCreate: {
             /** Key */
@@ -5119,6 +6055,37 @@ export interface components {
             /** Sort */
             sort?: number | null;
         };
+        /**
+         * CoverageRowRead
+         * @description Aggregate hierarchy row.  Deliberately contains no person identity.
+         */
+        CoverageRowRead: {
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "department" | "duty_unit" | "duty_post";
+            /** Department */
+            department?: string | null;
+            /** Duty Unit */
+            duty_unit?: string | null;
+            /** Duty Post */
+            duty_post?: string | null;
+            /** Scheduled */
+            scheduled: number;
+            /** Excused */
+            excused: number;
+            /** Expected */
+            expected: number;
+            /** Evaluated Count */
+            evaluated_count: number;
+            /** Pending Or Error Excluded Count */
+            pending_or_error_excluded_count: number;
+            /** Working */
+            working?: number | null;
+            /** Child Count */
+            child_count: number;
+        };
         /** CrashReportPayload */
         CrashReportPayload: {
             /** Message */
@@ -5148,12 +6115,230 @@ export interface components {
             /** Capability */
             capability: string;
         };
+        /** CrewMembershipEndWrite */
+        CrewMembershipEndWrite: {
+            /**
+             * Effective To
+             * Format: date-time
+             * @description Timezone-aware timestamp normalized to UTC.
+             */
+            effective_to: string;
+            /** End Reason */
+            end_reason: string;
+        };
+        /** CrewMembershipWrite */
+        CrewMembershipWrite: {
+            /** Employee Id */
+            employee_id: string;
+            /**
+             * Effective From
+             * Format: date-time
+             * @description Timezone-aware timestamp normalized to UTC.
+             */
+            effective_from: string;
+            /** Effective To */
+            effective_to?: string | null;
+            /** End Reason */
+            end_reason?: string | null;
+        };
+        /** CrewSchedulePreviewRead */
+        CrewSchedulePreviewRead: {
+            /** Crew Id */
+            crew_id: number;
+            /** Occurrences */
+            occurrences?: components["schemas"]["WorkforceShiftOccurrencePreviewRead"][];
+            /** Conflicts */
+            conflicts?: components["schemas"]["WorkforceScheduleValidationConflictRead"][];
+        };
+        /**
+         * CrewSchedulePreviewWrite
+         * @description Side-effect-free bounded horizon for an anchor candidate.
+         */
+        CrewSchedulePreviewWrite: {
+            /** Pattern Id */
+            pattern_id: number;
+            /**
+             * Anchor At
+             * Format: date-time
+             * @description Timezone-aware timestamp normalized to UTC.
+             */
+            anchor_at: string;
+            /**
+             * Effective From
+             * Format: date-time
+             * @description Timezone-aware timestamp normalized to UTC.
+             */
+            effective_from: string;
+            /** Effective To */
+            effective_to?: string | null;
+            /**
+             * Preview Ends At
+             * Format: date-time
+             * @description Timezone-aware timestamp normalized to UTC.
+             */
+            preview_ends_at: string;
+            /** Replaces Schedule Id */
+            replaces_schedule_id?: number | null;
+        };
+        /** CrewScheduleReplaceWrite */
+        CrewScheduleReplaceWrite: {
+            /** Pattern Id */
+            pattern_id: number;
+            /**
+             * Anchor At
+             * Format: date-time
+             * @description Timezone-aware timestamp normalized to UTC.
+             */
+            anchor_at: string;
+            /**
+             * Effective From
+             * Format: date-time
+             * @description Timezone-aware timestamp normalized to UTC.
+             */
+            effective_from: string;
+        };
+        /** CrewScheduleWrite */
+        CrewScheduleWrite: {
+            /** Pattern Id */
+            pattern_id: number;
+            /**
+             * Anchor At
+             * Format: date-time
+             * @description Timezone-aware timestamp normalized to UTC.
+             */
+            anchor_at: string;
+            /**
+             * Effective From
+             * Format: date-time
+             * @description Timezone-aware timestamp normalized to UTC.
+             */
+            effective_from: string;
+            /** Effective To */
+            effective_to?: string | null;
+        };
+        /** CurrentShiftRead */
+        CurrentShiftRead: {
+            /** Starts At */
+            starts_at?: string | null;
+            /** Ends At */
+            ends_at?: string | null;
+            /** Scheduled */
+            scheduled: number;
+            /** Excused */
+            excused: number;
+            /** Expected */
+            expected?: number | null;
+            /** Evaluated Count */
+            evaluated_count: number;
+            /** Pending Or Error Excluded Count */
+            pending_or_error_excluded_count: number;
+            /** Working */
+            working?: number | null;
+            /** Verified Roster Gap */
+            verified_roster_gap?: number | null;
+            /** Verified Coverage Percent */
+            verified_coverage_percent?: number | null;
+            /** Staffing Status */
+            staffing_status?: ("adequate" | "deficient" | "indeterminate") | null;
+        };
+        /** CursorPage[AttendanceDayRowRead] */
+        CursorPage_AttendanceDayRowRead_: {
+            /** Items */
+            items: components["schemas"]["AttendanceDayRowRead"][];
+            /** Next Cursor */
+            next_cursor?: string | null;
+        };
+        /** CursorPage[AttendanceExceptionRead] */
+        CursorPage_AttendanceExceptionRead_: {
+            /** Items */
+            items: components["schemas"]["AttendanceExceptionRead"][];
+            /** Next Cursor */
+            next_cursor?: string | null;
+        };
+        /** CursorPage[CoverageRowRead] */
+        CursorPage_CoverageRowRead_: {
+            /** Items */
+            items: components["schemas"]["CoverageRowRead"][];
+            /** Next Cursor */
+            next_cursor?: string | null;
+        };
+        /** CursorPage[DutyAssignmentEventRead] */
+        CursorPage_DutyAssignmentEventRead_: {
+            /** Items */
+            items: components["schemas"]["DutyAssignmentEventRead"][];
+            /** Next Cursor */
+            next_cursor?: string | null;
+        };
+        /** CursorPage[EvaluationQueueRead] */
+        CursorPage_EvaluationQueueRead_: {
+            /** Items */
+            items: components["schemas"]["EvaluationQueueRead"][];
+            /** Next Cursor */
+            next_cursor?: string | null;
+        };
+        /** CursorPage[ProviderPersonRead] */
+        CursorPage_ProviderPersonRead_: {
+            /** Items */
+            items: components["schemas"]["ProviderPersonRead"][];
+            /** Next Cursor */
+            next_cursor?: string | null;
+        };
+        /** CursorPage[RosterRowRead] */
+        CursorPage_RosterRowRead_: {
+            /** Items */
+            items: components["schemas"]["RosterRowRead"][];
+            /** Next Cursor */
+            next_cursor?: string | null;
+        };
+        /** CursorPage[WorkCrewRead] */
+        CursorPage_WorkCrewRead_: {
+            /** Items */
+            items: components["schemas"]["WorkCrewRead"][];
+            /** Next Cursor */
+            next_cursor?: string | null;
+        };
+        /** CursorPage[WorkforceCrewMembershipRead] */
+        CursorPage_WorkforceCrewMembershipRead_: {
+            /** Items */
+            items: components["schemas"]["WorkforceCrewMembershipRead"][];
+            /** Next Cursor */
+            next_cursor?: string | null;
+        };
+        /** CursorPage[WorkforceCrewScheduleRead] */
+        CursorPage_WorkforceCrewScheduleRead_: {
+            /** Items */
+            items: components["schemas"]["WorkforceCrewScheduleRead"][];
+            /** Next Cursor */
+            next_cursor?: string | null;
+        };
+        /** CursorPage[WorkforceShiftDefinitionRead] */
+        CursorPage_WorkforceShiftDefinitionRead_: {
+            /** Items */
+            items: components["schemas"]["WorkforceShiftDefinitionRead"][];
+            /** Next Cursor */
+            next_cursor?: string | null;
+        };
+        /** CursorPage[dict[str, Any]] */
+        CursorPage_dict_str__Any__: {
+            /** Items */
+            items: {
+                [key: string]: unknown;
+            }[];
+            /** Next Cursor */
+            next_cursor?: string | null;
+        };
         /** DashboardLayout */
         DashboardLayout: {
             /** Widgets */
             widgets?: components["schemas"]["DashboardWidgetConfig"][];
             /** Quick Actions */
             quick_actions?: components["schemas"]["DashboardQuickActionConfig"][];
+            /**
+             * Canvas Width
+             * @default compact
+             * @enum {string}
+             */
+            canvas_width: "compact" | "wide";
         };
         /** DashboardLeaveItem */
         DashboardLeaveItem: {
@@ -5184,7 +6369,7 @@ export interface components {
              * Id
              * @enum {string}
              */
-            id: "hr" | "violations" | "leaves" | "books" | "Acknowledgment Form" | "Salary Transfer Request" | "Salary Deduction Form" | "Violation Form" | "Employee Clearance Form" | "Leave Application Form" | "Passport Release Form" | "Duty Resumption Form" | "Material Request Form" | "General Book" | "HR Request Form" | "Resignation Letter" | "Leave Permit Form" | "Administrative Leave Form";
+            id: "General Book" | "Acknowledgment Form" | "Salary Transfer Request" | "Leave Permit Form" | "Violation Form" | "Leave Application Form" | "Duty Resumption Form" | "HR Request Form" | "Salary Deduction Form" | "Employee Clearance Form" | "Passport Release Form" | "Material Request Form" | "Resignation Letter" | "Administrative Leave Form" | "Warning Form" | "Passport Release List" | "Report" | "Inmate Conduct Violations";
             /**
              * Visible
              * @default true
@@ -5529,6 +6714,34 @@ export interface components {
              */
             use_signature: boolean;
         };
+        /** DutyAssignmentEventRead */
+        DutyAssignmentEventRead: {
+            /** Id */
+            id: number;
+            /** Employee Id */
+            employee_id: string;
+            /** Event Type */
+            event_type: string;
+            /** From Department */
+            from_department?: string | null;
+            /** From Unit */
+            from_unit?: string | null;
+            /** From Post */
+            from_post?: string | null;
+            /** To Department */
+            to_department?: string | null;
+            /** To Unit */
+            to_unit?: string | null;
+            /** To Post */
+            to_post?: string | null;
+            /**
+             * Effective At
+             * Format: date-time
+             */
+            effective_at: string;
+            /** Reason */
+            reason?: string | null;
+        };
         /** DutySupervisorCreate */
         DutySupervisorCreate: {
             /** Duty Unit */
@@ -5854,6 +7067,159 @@ export interface components {
             /** Offset */
             offset: number;
         };
+        /** EmployeeAttendanceDayRead */
+        EmployeeAttendanceDayRead: {
+            /**
+             * Operational Date
+             * Format: date
+             */
+            operational_date: string;
+            /** Shift Code */
+            shift_code?: string | null;
+            /** Scheduled Start At */
+            scheduled_start_at?: string | null;
+            /** Scheduled End At */
+            scheduled_end_at?: string | null;
+            /** Presence State */
+            presence_state?: ("scheduled" | "on_duty" | "completed" | "absent" | "excused_leave" | "off" | "unknown") | null;
+            /** Reason Code */
+            reason_code?: string | null;
+            /** Late Minutes */
+            late_minutes?: number | null;
+            /**
+             * Punch Count
+             * @default 0
+             */
+            punch_count: number;
+            /** Absence Due At */
+            absence_due_at?: string | null;
+            /** Judgment Due At */
+            judgment_due_at?: string | null;
+            /** Grace Minutes */
+            grace_minutes?: number | null;
+            /** Punches */
+            punches?: components["schemas"]["EmployeeAttendancePunchRead"][];
+        };
+        /**
+         * EmployeeAttendanceHabitRead
+         * @description What this person's own punches say about one shift they work.
+         *
+         *     Offsets are signed minutes: arrivals against the shift's start, departures
+         *     against its end, so -20 reads as "twenty minutes early". A
+         *     ``suggested_shift_code`` means the punches fit a different shift than the one
+         *     the roster assigns, which is a rostering question rather than a punch one.
+         */
+        EmployeeAttendanceHabitRead: {
+            /** Shift Code */
+            shift_code: string;
+            /** Sample Days */
+            sample_days: number;
+            /** Arrival Typical Offset */
+            arrival_typical_offset: number;
+            /** Departure Typical Offset */
+            departure_typical_offset?: number | null;
+            /** Suggested Shift Code */
+            suggested_shift_code?: string | null;
+        };
+        /**
+         * EmployeeAttendanceHistoryDayRead
+         * @description One local calendar day of provider punches, with no verdict attached.
+         *
+         *     ``first_seen_at`` and ``last_seen_at`` are sightings, not a check-in pair:
+         *     this build reports no punch direction, and days before the roster existed
+         *     have no shift to judge them against.
+         */
+        EmployeeAttendanceHistoryDayRead: {
+            /**
+             * Operational Date
+             * Format: date
+             */
+            operational_date: string;
+            /**
+             * First Seen At
+             * Format: date-time
+             */
+            first_seen_at: string;
+            /**
+             * Last Seen At
+             * Format: date-time
+             */
+            last_seen_at: string;
+            /** Punch Count */
+            punch_count: number;
+            /** Devices */
+            devices?: string[];
+        };
+        /**
+         * EmployeeAttendanceHistoryRead
+         * @description Provider-held punch history, read on request and never stored here.
+         *
+         *     ``linked`` is false when the employee has no verified provider identity, in
+         *     which case there is nothing to ask the provider for. ``truncated`` says the
+         *     bounded read stopped before the range was exhausted.
+         */
+        EmployeeAttendanceHistoryRead: {
+            /** Employee Id */
+            employee_id: string;
+            /** Provider Code */
+            provider_code: string;
+            /** External Employee Code */
+            external_employee_code?: string | null;
+            /**
+             * From Date
+             * Format: date
+             */
+            from_date: string;
+            /**
+             * To Date
+             * Format: date
+             */
+            to_date: string;
+            /** Linked */
+            linked: boolean;
+            /** Truncated */
+            truncated: boolean;
+            /** Days */
+            days?: components["schemas"]["EmployeeAttendanceHistoryDayRead"][];
+        };
+        /**
+         * EmployeeAttendancePunchRead
+         * @description One provider event.
+         *
+         *     Inherits ORMBase so `occurred_at` serializes UTC-tagged, like every other
+         *     timestamp in the API (pinned by test_schema_utc_serialization).
+         *
+         *     Direction is omitted deliberately: this build reports ``punch_state 255``
+         *     for every row, so a client must not render an in/out pair.
+         */
+        EmployeeAttendancePunchRead: {
+            /**
+             * Occurred At
+             * Format: date-time
+             */
+            occurred_at: string;
+            /** Device Name */
+            device_name?: string | null;
+        };
+        /** EmployeeAttendanceRangeRead */
+        EmployeeAttendanceRangeRead: {
+            /** Employee Id */
+            employee_id: string;
+            /**
+             * From Date
+             * Format: date
+             */
+            from_date: string;
+            /**
+             * To Date
+             * Format: date
+             */
+            to_date: string;
+            /** Days */
+            days: components["schemas"]["EmployeeAttendanceDayRead"][];
+            /** Habits */
+            habits?: components["schemas"]["EmployeeAttendanceHabitRead"][];
+        };
         /** EmployeeCandidate */
         EmployeeCandidate: {
             /** Employee Id */
@@ -6142,6 +7508,45 @@ export interface components {
             /** Endpoint */
             endpoint: string;
         };
+        /** EvaluationHealthRead */
+        EvaluationHealthRead: {
+            /** Pending Count */
+            pending_count: number;
+            /** Error Count */
+            error_count: number;
+            /** Oldest Pending At */
+            oldest_pending_at?: string | null;
+        };
+        /** EvaluationQueueRead */
+        EvaluationQueueRead: {
+            /** Id */
+            id: number;
+            /** Employee Id */
+            employee_id: string;
+            /**
+             * Window Start At
+             * Format: date-time
+             */
+            window_start_at: string;
+            /**
+             * Window End At
+             * Format: date-time
+             */
+            window_end_at: string;
+            /** Reason Codes */
+            reason_codes: string[];
+            /**
+             * Available At
+             * Format: date-time
+             */
+            available_at: string;
+            /** Failed At */
+            failed_at?: string | null;
+            /** Attempts */
+            attempts: number;
+            /** Last Error Code */
+            last_error_code?: string | null;
+        };
         /** ExpiryItemOut */
         ExpiryItemOut: {
             /** Employee Id */
@@ -6336,6 +7741,20 @@ export interface components {
             /** Uptime Seconds */
             uptime_seconds: number;
         };
+        /** HealthStreamRead */
+        HealthStreamRead: {
+            /**
+             * State
+             * @enum {string}
+             */
+            state: "not_configured" | "healthy" | "stale" | "error" | "pending";
+            /** Fresh Through */
+            fresh_through?: string | null;
+            /** Last Success At */
+            last_success_at?: string | null;
+            /** Last Error Code */
+            last_error_code?: string | null;
+        };
         /**
          * IdentityRead
          * @description Resolved identity for the configured EmailAccount.
@@ -6494,6 +7913,22 @@ export interface components {
             /** Items */
             items: components["schemas"]["IncludedPaperProposal"][];
         };
+        /** IntegrationStatusRead */
+        IntegrationStatusRead: {
+            /** Enabled */
+            enabled: boolean;
+            /**
+             * Provider State
+             * @enum {string}
+             */
+            provider_state: "not_configured" | "ready" | "disabled";
+            /** Streams */
+            streams: {
+                [key: string]: components["schemas"]["HealthStreamRead"];
+            };
+            /** Sync Running */
+            sync_running: boolean;
+        };
         /**
          * JobDocumentItem
          * @description Describes one document (primary or companion) inside a completed job.
@@ -6577,6 +8012,17 @@ export interface components {
             eligible: boolean;
             /** Message */
             message: string;
+        };
+        /** LeaveCompositionRead */
+        LeaveCompositionRead: {
+            /** Annual */
+            annual: number;
+            /** Sick */
+            sick: number;
+            /** National Service */
+            national_service: number;
+            /** Other */
+            other: number;
         };
         /**
          * LeaveCreate
@@ -7090,6 +8536,32 @@ export interface components {
             field: string;
             /** Count */
             count: number;
+        };
+        /** NationalityDistributionRead */
+        NationalityDistributionRead: {
+            /** Nationality */
+            nationality: string;
+            /** Count */
+            count: number;
+        };
+        /** NextShiftRead */
+        NextShiftRead: {
+            /** Starts At */
+            starts_at?: string | null;
+            /** Ends At */
+            ends_at?: string | null;
+            /** Shift Code */
+            shift_code?: string | null;
+            /** Shift Name */
+            shift_name?: string | null;
+            /** Crews */
+            crews?: string[];
+            /** Scheduled */
+            scheduled: number;
+            /** Expected */
+            expected?: number | null;
+            /** Staffing Minimum */
+            staffing_minimum?: number | null;
         };
         /** NotificationCounts */
         NotificationCounts: {
@@ -7682,6 +9154,48 @@ export interface components {
             /** Nationality */
             nationality?: string | null;
         };
+        /** ProviderPersonMappingWrite */
+        ProviderPersonMappingWrite: {
+            /** Employee Id */
+            employee_id?: string | null;
+            /**
+             * Mapping State
+             * @enum {string}
+             */
+            mapping_state: "unmapped" | "verified" | "conflict" | "ignored";
+        };
+        /** ProviderPersonRead */
+        ProviderPersonRead: {
+            /** Id */
+            id: number;
+            /** Provider */
+            provider: string;
+            /** External Person Id */
+            external_person_id: string;
+            /** External Employee Code */
+            external_employee_code?: string | null;
+            /** Display Name Snapshot */
+            display_name_snapshot?: string | null;
+            /** Employee Id */
+            employee_id?: string | null;
+            /**
+             * Mapping State
+             * @enum {string}
+             */
+            mapping_state: "unmapped" | "verified" | "conflict" | "ignored";
+            /** Active */
+            active: boolean;
+            /**
+             * First Seen At
+             * Format: date-time
+             */
+            first_seen_at: string;
+            /**
+             * Last Seen At
+             * Format: date-time
+             */
+            last_seen_at: string;
+        };
         /** PushKeys */
         PushKeys: {
             /** P256Dh */
@@ -7926,6 +9440,33 @@ export interface components {
             /** User Ids */
             user_ids: number[];
         };
+        /** RosterRowRead */
+        RosterRowRead: {
+            /** Employee Id */
+            employee_id: string;
+            /** Name En */
+            name_en: string;
+            /** Name Ar */
+            name_ar?: string | null;
+            /** Department */
+            department?: string | null;
+            /** Duty Unit */
+            duty_unit?: string | null;
+            /** Duty Post */
+            duty_post?: string | null;
+            /** Crew Code */
+            crew_code?: string | null;
+            /** Shift Code */
+            shift_code?: string | null;
+            /** Presence State */
+            presence_state?: ("scheduled" | "on_duty" | "completed" | "absent" | "excused_leave" | "off" | "unknown") | null;
+            /** Reason Code */
+            reason_code?: string | null;
+            /** Scheduled Start At */
+            scheduled_start_at?: string | null;
+            /** Scheduled End At */
+            scheduled_end_at?: string | null;
+        };
         /** RouteRequest */
         RouteRequest: {
             /** Employee Id */
@@ -8022,6 +9563,19 @@ export interface components {
             /** Total */
             total: number;
         };
+        /** SelfShiftRead */
+        SelfShiftRead: {
+            /** Employee Id */
+            employee_id: string;
+            /** Presence State */
+            presence_state?: ("scheduled" | "on_duty" | "completed" | "absent" | "excused_leave" | "off" | "unknown") | null;
+            /** Reason Code */
+            reason_code?: string | null;
+            /** Scheduled Start At */
+            scheduled_start_at?: string | null;
+            /** Scheduled End At */
+            scheduled_end_at?: string | null;
+        };
         /** SendToVaultRequest */
         SendToVaultRequest: {
             /** Employee Id */
@@ -8108,6 +9662,68 @@ export interface components {
             /** Role */
             role: string;
         };
+        /** ShiftOverrideWrite */
+        ShiftOverrideWrite: {
+            /** Employee Id */
+            employee_id: string;
+            /**
+             * Assignment Kind
+             * @enum {string}
+             */
+            assignment_kind: "work" | "off";
+            /**
+             * Reason Kind
+             * @enum {string}
+             */
+            reason_kind: "swap" | "training" | "temporary_duty" | "exceptional_work" | "exceptional_off" | "other";
+            /**
+             * Starts At
+             * Format: date-time
+             * @description Timezone-aware timestamp normalized to UTC.
+             */
+            starts_at: string;
+            /**
+             * Ends At
+             * Format: date-time
+             * @description Timezone-aware timestamp normalized to UTC.
+             */
+            ends_at: string;
+            /** Shift Definition Id */
+            shift_definition_id?: number | null;
+            /** Crew Id */
+            crew_id?: number | null;
+            /** Department */
+            department?: string | null;
+            /** Duty Unit */
+            duty_unit?: string | null;
+            /** Duty Post */
+            duty_post?: string | null;
+            /** Reason */
+            reason: string;
+        };
+        /** ShiftSwapWrite */
+        ShiftSwapWrite: {
+            /** From Employee Id */
+            from_employee_id: string;
+            /** To Employee Id */
+            to_employee_id: string;
+            /**
+             * Starts At
+             * Format: date-time
+             * @description Timezone-aware timestamp normalized to UTC.
+             */
+            starts_at: string;
+            /**
+             * Ends At
+             * Format: date-time
+             * @description Timezone-aware timestamp normalized to UTC.
+             */
+            ends_at: string;
+            /** Shift Definition Id */
+            shift_definition_id: number;
+            /** Reason */
+            reason: string;
+        };
         /** SignaturePreviewRequest */
         SignaturePreviewRequest: {
             /** Size Mm */
@@ -8189,6 +9805,31 @@ export interface components {
             name_en?: string | null;
             /** Name Ar */
             name_ar?: string | null;
+        };
+        /** StaffingRequirementWrite */
+        StaffingRequirementWrite: {
+            /**
+             * Scope Kind
+             * @enum {string}
+             */
+            scope_kind: "department" | "duty_unit" | "duty_post";
+            /** Department */
+            department?: string | null;
+            /** Duty Unit */
+            duty_unit?: string | null;
+            /** Duty Post */
+            duty_post?: string | null;
+            /** Shift Definition Id */
+            shift_definition_id?: number | null;
+            /** Minimum Headcount */
+            minimum_headcount: number;
+            /**
+             * Effective From
+             * Format: date
+             */
+            effective_from: string;
+            /** Effective To */
+            effective_to?: string | null;
         };
         /**
          * StagedAttachmentRead
@@ -8800,6 +10441,398 @@ export interface components {
             has_table: boolean;
             /** Columns */
             columns: string[];
+        };
+        /**
+         * WorkCrewPatch
+         * @description Mutable crew attributes; a referenced crew code is enforced server-side immutable.
+         */
+        WorkCrewPatch: {
+            /** Code */
+            code?: string | null;
+            /** Name En */
+            name_en?: string | null;
+            /** Name Ar */
+            name_ar?: string | null;
+            /** Active */
+            active?: boolean | null;
+        };
+        /** WorkCrewRead */
+        WorkCrewRead: {
+            /** Code */
+            code: string;
+            /** Name En */
+            name_en?: string | null;
+            /** Name Ar */
+            name_ar?: string | null;
+            /**
+             * Active
+             * @default true
+             */
+            active: boolean;
+            /** Id */
+            id: number;
+            /** Version */
+            version: string;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+        };
+        /** WorkCrewWrite */
+        WorkCrewWrite: {
+            /** Code */
+            code: string;
+            /** Name En */
+            name_en?: string | null;
+            /** Name Ar */
+            name_ar?: string | null;
+            /**
+             * Active
+             * @default true
+             */
+            active: boolean;
+        };
+        /** WorkforceAccessRead */
+        WorkforceAccessRead: {
+            /**
+             * Workforce Access Tier
+             * @enum {string}
+             */
+            workforce_access_tier: "none" | "self" | "scoped" | "organization";
+            /** Scopes */
+            scopes: components["schemas"]["WorkforceScopeRead"][];
+        };
+        /** WorkforceAnalyticsRead */
+        WorkforceAnalyticsRead: {
+            /** Department Coverage */
+            department_coverage: components["schemas"]["CoverageRowRead"][];
+            /** Shift Roster */
+            shift_roster: {
+                [key: string]: number | string | null;
+            }[];
+            leave_today: components["schemas"]["LeaveCompositionRead"];
+            /** Leave Trend */
+            leave_trend: {
+                [key: string]: number | string;
+            }[];
+            /** Nationality Distribution */
+            nationality_distribution: components["schemas"]["NationalityDistributionRead"][];
+            /** Duty Assignment Events */
+            duty_assignment_events: {
+                [key: string]: string | number | null;
+            }[];
+        };
+        /**
+         * WorkforceConfiguration
+         * @description Validated configuration persisted exclusively under ``workforce.*`` keys.
+         *
+         *     This deliberately contains operational values only.  Provider URLs,
+         *     credentials, TLS configuration, and adapter-specific controls are supplied
+         *     by the environment and cannot be represented by this API/storage contract.
+         */
+        WorkforceConfiguration: {
+            /** Integration Enabled */
+            integration_enabled: boolean;
+            /** Sync Interval Minutes */
+            sync_interval_minutes: number;
+            /** Stale After Minutes */
+            stale_after_minutes: number;
+            /**
+             * Initial Backfill Start At
+             * Format: date-time
+             * @description Timezone-aware timestamp normalized to UTC.
+             */
+            initial_backfill_start_at: string;
+            /**
+             * Evaluation Start At
+             * Format: date-time
+             * @description Timezone-aware timestamp normalized to UTC.
+             */
+            evaluation_start_at: string;
+            /** Nationality Fold Min Count */
+            nationality_fold_min_count: number;
+            /** Excusing Record Kinds */
+            excusing_record_kinds?: string[];
+            /** Provider Person Retention Days */
+            provider_person_retention_days: number;
+            /** Punch Retention Days */
+            punch_retention_days: number;
+            /** Attendance Retention Days */
+            attendance_retention_days: number;
+            /** Duty Event Retention Days */
+            duty_event_retention_days: number;
+            /** Audit Retention Days */
+            audit_retention_days: number;
+            /** Duty Assignment Baseline At */
+            duty_assignment_baseline_at?: string | null;
+        };
+        /**
+         * WorkforceConfigurationRead
+         * @description Truthful configuration state without invented site-policy defaults.
+         */
+        WorkforceConfigurationRead: {
+            /** Configured */
+            configured: boolean;
+            configuration?: components["schemas"]["WorkforceConfiguration"] | null;
+        };
+        /** WorkforceCrewMembershipRead */
+        WorkforceCrewMembershipRead: {
+            /** Id */
+            id: number;
+            /** Crew Id */
+            crew_id: number;
+            /** Employee Id */
+            employee_id: string;
+            /**
+             * Effective From
+             * Format: date-time
+             */
+            effective_from: string;
+            /** Effective To */
+            effective_to?: string | null;
+            /** Created By User Id */
+            created_by_user_id: number;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Updated By User Id */
+            updated_by_user_id: number;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+            /** End Reason */
+            end_reason?: string | null;
+        };
+        /** WorkforceCrewScheduleRead */
+        WorkforceCrewScheduleRead: {
+            /** Id */
+            id: number;
+            /** Crew Id */
+            crew_id: number;
+            /** Pattern Id */
+            pattern_id: number;
+            /**
+             * Anchor At
+             * Format: date-time
+             */
+            anchor_at: string;
+            /**
+             * Effective From
+             * Format: date-time
+             */
+            effective_from: string;
+            /** Effective To */
+            effective_to?: string | null;
+            /** Version */
+            version: number;
+            /** Created By User Id */
+            created_by_user_id: number;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+        };
+        /**
+         * WorkforceReadinessRead
+         * @description Non-identifying setup gates for truthful dashboard state rendering.
+         */
+        WorkforceReadinessRead: {
+            /** Schedules Ready */
+            schedules_ready: boolean;
+            /** Policy Ready */
+            policy_ready: boolean;
+            /** Mappings Ready */
+            mappings_ready: boolean;
+            /** Integration Ready */
+            integration_ready: boolean;
+        };
+        /** WorkforceRotationRead */
+        WorkforceRotationRead: {
+            /** Id */
+            id: number;
+            /** Code */
+            code: string;
+            /** Name */
+            name: string;
+            /** Cycle Minutes */
+            cycle_minutes: number;
+            /** Timezone */
+            timezone: string;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+            /** Steps */
+            steps?: components["schemas"]["WorkforceRotationStepRead"][];
+        };
+        /** WorkforceRotationStepRead */
+        WorkforceRotationStepRead: {
+            /** Id */
+            id: number;
+            /** Pattern Id */
+            pattern_id: number;
+            /** Shift Definition Id */
+            shift_definition_id: number;
+            /** Start Offset Minutes */
+            start_offset_minutes: number;
+        };
+        /** WorkforceScheduleValidationConflictRead */
+        WorkforceScheduleValidationConflictRead: {
+            /** Code */
+            code: string;
+            /** Message */
+            message: string;
+            /** Schedule Id */
+            schedule_id?: number | null;
+        };
+        /** WorkforceScopeRead */
+        WorkforceScopeRead: {
+            /**
+             * Scope Kind
+             * @enum {string}
+             */
+            scope_kind: "organization" | "department" | "duty_unit" | "duty_post";
+            /** Department */
+            department?: string | null;
+            /** Duty Unit */
+            duty_unit?: string | null;
+            /** Duty Post */
+            duty_post?: string | null;
+        };
+        /** WorkforceScopeReplace */
+        WorkforceScopeReplace: {
+            /** Scopes */
+            scopes?: components["schemas"]["WorkforceScopeWrite"][];
+        };
+        /**
+         * WorkforceScopeWrite
+         * @description One normalized hierarchy grant; the router rejects duplicate grants.
+         *
+         *     ``department`` is optional on a unit or post grant because this roster is
+         *     placed by duty unit and only part of it records a department.
+         */
+        WorkforceScopeWrite: {
+            /**
+             * Scope Kind
+             * @enum {string}
+             */
+            scope_kind: "organization" | "department" | "duty_unit" | "duty_post";
+            /** Department */
+            department?: string | null;
+            /** Duty Unit */
+            duty_unit?: string | null;
+            /** Duty Post */
+            duty_post?: string | null;
+        };
+        /** WorkforceShiftDefinitionRead */
+        WorkforceShiftDefinitionRead: {
+            /** Id */
+            id: number;
+            /** Code */
+            code: string;
+            /**
+             * Start Local Time
+             * Format: time
+             */
+            start_local_time: string;
+            /** Duration Minutes */
+            duration_minutes: number;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+        };
+        /** WorkforceShiftOccurrencePreviewRead */
+        WorkforceShiftOccurrencePreviewRead: {
+            /** Crew Id */
+            crew_id: number;
+            /** Shift Definition Id */
+            shift_definition_id: number;
+            /** Shift Code */
+            shift_code: string;
+            /**
+             * Starts At
+             * Format: date-time
+             */
+            starts_at: string;
+            /**
+             * Ends At
+             * Format: date-time
+             */
+            ends_at: string;
+            /**
+             * Operational Date
+             * Format: date
+             */
+            operational_date: string;
+        };
+        /**
+         * WorkforceSnapshotRead
+         * @description Fast, privacy-safe workforce dashboard projection.
+         */
+        WorkforceSnapshotRead: {
+            /**
+             * As Of
+             * Format: date-time
+             */
+            as_of: string;
+            /**
+             * Operational Date
+             * Format: date
+             */
+            operational_date: string;
+            /** Timezone */
+            timezone: string;
+            /** Sync Health */
+            sync_health?: {
+                [key: string]: components["schemas"]["HealthStreamRead"];
+            } | null;
+            evaluation_health: components["schemas"]["EvaluationHealthRead"];
+            readiness?: components["schemas"]["WorkforceReadinessRead"] | null;
+            current_shift: components["schemas"]["CurrentShiftRead"];
+            next_shift: components["schemas"]["NextShiftRead"];
+            leave_today: components["schemas"]["LeaveCompositionRead"];
+            /** Mapping Completeness */
+            mapping_completeness: {
+                [key: string]: number;
+            };
+            /** Schedule Completeness */
+            schedule_completeness: {
+                [key: string]: number;
+            };
+            self?: components["schemas"]["SelfShiftRead"] | null;
+            /** Aggregate */
+            aggregate?: {
+                [key: string]: number;
+            } | null;
         };
     };
     responses: never;
@@ -17938,6 +19971,1786 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PermitVisitRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_dashboard_snapshot_api_v1_workforce_dashboard_snapshot_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkforceSnapshotRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_dashboard_analytics_api_v1_workforce_dashboard_analytics_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkforceAnalyticsRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_dashboard_coverage_api_v1_workforce_dashboard_coverage_get: {
+        parameters: {
+            query: {
+                operational_date: string;
+                parent_kind: string;
+                department?: string | null;
+                duty_unit?: string | null;
+                duty_post?: string | null;
+                limit?: number;
+                cursor?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CursorPage_CoverageRowRead_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_my_workforce_access_api_v1_workforce_access_me_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkforceAccessRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_user_scopes_api_v1_workforce_access_users__user_id__scopes_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                user_id: number;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkforceScopeReplace"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    replace_user_scopes_api_v1_workforce_access_users__user_id__scopes_put: {
+        parameters: {
+            query?: never;
+            header?: {
+                "If-Match"?: string | null;
+            };
+            path: {
+                user_id: number;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WorkforceScopeReplace"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkforceScopeReplace"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_roster_api_v1_workforce_roster_get: {
+        parameters: {
+            query: {
+                operational_date: string;
+                limit?: number;
+                cursor?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CursorPage_RosterRowRead_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_attendance_exceptions_api_v1_workforce_attendance_exceptions_get: {
+        parameters: {
+            query?: {
+                operational_date?: string | null;
+                presence?: string | null;
+                exception?: string | null;
+                limit?: number;
+                cursor?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CursorPage_AttendanceExceptionRead_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_attendance_day_api_v1_workforce_attendance_day_get: {
+        parameters: {
+            query: {
+                operational_date: string;
+                shift_code?: string | null;
+                limit?: number;
+                cursor?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CursorPage_AttendanceDayRowRead_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_employee_attendance_api_v1_workforce_employees__employee_id__attendance_get: {
+        parameters: {
+            query: {
+                from_date: string;
+                to_date: string;
+            };
+            header?: never;
+            path: {
+                employee_id: string;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EmployeeAttendanceRangeRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_employee_attendance_history_api_v1_workforce_employees__employee_id__attendance_history_get: {
+        parameters: {
+            query: {
+                from_date: string;
+                to_date: string;
+            };
+            header?: never;
+            path: {
+                employee_id: string;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EmployeeAttendanceHistoryRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_attendance_case_api_v1_workforce_attendance_cases__case_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                case_id: number;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AttendanceCaseRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_attendance_adjustment_api_v1_workforce_attendance_cases__case_id__adjustments_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "If-Match"?: string | null;
+            };
+            path: {
+                case_id: number;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AttendanceAdjustmentWrite"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    revoke_attendance_adjustment_api_v1_workforce_attendance_cases__case_id__adjustments__adjustment_id__revoke_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "If-Match"?: string | null;
+            };
+            path: {
+                case_id: number;
+                adjustment_id: number;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AdjustmentRevokeWrite"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_duty_assignment_events_api_v1_workforce_duty_assignment_events_get: {
+        parameters: {
+            query?: {
+                limit?: number;
+                cursor?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CursorPage_DutyAssignmentEventRead_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_shift_definitions_api_v1_workforce_schedule_definitions_get: {
+        parameters: {
+            query?: {
+                limit?: number;
+                cursor?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CursorPage_WorkforceShiftDefinitionRead_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_rotation_pattern_api_v1_workforce_schedule_rotation_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkforceRotationRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_crews_api_v1_workforce_crews_get: {
+        parameters: {
+            query?: {
+                limit?: number;
+                cursor?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CursorPage_WorkCrewRead_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_crew_api_v1_workforce_crews_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "If-Match"?: string | null;
+            };
+            path?: never;
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WorkCrewWrite"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkCrewRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_crew_api_v1_workforce_crews__crew_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                crew_id: number;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkCrewRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    retire_crew_api_v1_workforce_crews__crew_id__delete: {
+        parameters: {
+            query?: never;
+            header?: {
+                "If-Match"?: string | null;
+            };
+            path: {
+                crew_id: number;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkCrewRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    patch_crew_api_v1_workforce_crews__crew_id__patch: {
+        parameters: {
+            query?: never;
+            header?: {
+                "If-Match"?: string | null;
+            };
+            path: {
+                crew_id: number;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WorkCrewPatch"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkCrewRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_crew_schedules_api_v1_workforce_crews__crew_id__schedules_get: {
+        parameters: {
+            query?: {
+                limit?: number;
+                cursor?: string | null;
+            };
+            header?: never;
+            path: {
+                crew_id: number;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CursorPage_WorkforceCrewScheduleRead_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_crew_schedule_api_v1_workforce_crews__crew_id__schedules_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "If-Match"?: string | null;
+            };
+            path: {
+                crew_id: number;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CrewScheduleWrite"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkforceCrewScheduleRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_crew_schedule_api_v1_workforce_crews__crew_id__schedules__schedule_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                crew_id: number;
+                schedule_id: number;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkforceCrewScheduleRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    replace_crew_schedule_api_v1_workforce_crews__crew_id__schedules__schedule_id__replace_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "If-Match"?: string | null;
+            };
+            path: {
+                crew_id: number;
+                schedule_id: number;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CrewScheduleReplaceWrite"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkforceCrewScheduleRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    preview_crew_schedule_api_v1_workforce_crews__crew_id__schedules_preview_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                crew_id: number;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CrewSchedulePreviewWrite"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CrewSchedulePreviewRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_crew_memberships_api_v1_workforce_crews__crew_id__memberships_get: {
+        parameters: {
+            query?: {
+                limit?: number;
+                cursor?: string | null;
+            };
+            header?: never;
+            path: {
+                crew_id: number;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CursorPage_WorkforceCrewMembershipRead_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_crew_membership_api_v1_workforce_crews__crew_id__memberships_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "If-Match"?: string | null;
+            };
+            path: {
+                crew_id: number;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CrewMembershipWrite"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkforceCrewMembershipRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_crew_membership_api_v1_workforce_crews__crew_id__memberships__membership_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                crew_id: number;
+                membership_id: number;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkforceCrewMembershipRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    end_crew_membership_api_v1_workforce_crews__crew_id__memberships__membership_id__end_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "If-Match"?: string | null;
+            };
+            path: {
+                crew_id: number;
+                membership_id: number;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CrewMembershipEndWrite"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkforceCrewMembershipRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_overrides_api_v1_workforce_overrides_get: {
+        parameters: {
+            query?: {
+                limit?: number;
+                cursor?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CursorPage_dict_str__Any__"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_shift_override_api_v1_workforce_overrides_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ShiftOverrideWrite"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    cancel_shift_override_api_v1_workforce_overrides__override_id__cancel_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "If-Match"?: string | null;
+            };
+            path: {
+                override_id: number;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_shift_swap_api_v1_workforce_overrides_swap_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ShiftSwapWrite"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_requirements_api_v1_workforce_requirements_get: {
+        parameters: {
+            query?: {
+                limit?: number;
+                cursor?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CursorPage_dict_str__Any__"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_staffing_requirement_api_v1_workforce_requirements_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StaffingRequirementWrite"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    approve_staffing_requirement_api_v1_workforce_requirements__requirement_id__approve_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "If-Match"?: string | null;
+            };
+            path: {
+                requirement_id: number;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_attendance_policies_api_v1_workforce_policies_get: {
+        parameters: {
+            query?: {
+                limit?: number;
+                cursor?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CursorPage_dict_str__Any__"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_attendance_policy_api_v1_workforce_policies_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AttendancePolicyWrite"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    approve_policy_api_v1_workforce_policies__policy_id__approve_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "If-Match"?: string | null;
+            };
+            path: {
+                policy_id: number;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_integration_status_api_v1_workforce_integration_status_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IntegrationStatusRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    test_integration_api_v1_workforce_integration_test_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    start_integration_sync_api_v1_workforce_integration_sync_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_integration_people_api_v1_workforce_integration_people_get: {
+        parameters: {
+            query?: {
+                mapping_state?: string | null;
+                limit?: number;
+                cursor?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CursorPage_ProviderPersonRead_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    patch_provider_mapping_api_v1_workforce_integration_people__person_id__mapping_patch: {
+        parameters: {
+            query?: never;
+            header?: {
+                "If-Match"?: string | null;
+            };
+            path: {
+                person_id: number;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProviderPersonMappingWrite"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProviderPersonRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_evaluation_queue_api_v1_workforce_integration_evaluation_queue_get: {
+        parameters: {
+            query?: {
+                state?: string;
+                limit?: number;
+                cursor?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CursorPage_EvaluationQueueRead_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    retry_evaluation_queue_api_v1_workforce_integration_evaluation_queue__queue_id__retry_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                queue_id: number;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EvaluationQueueRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_workforce_configuration_api_v1_workforce_configuration_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkforceConfigurationRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    patch_workforce_configuration_api_v1_workforce_configuration_patch: {
+        parameters: {
+            query?: never;
+            header?: {
+                "If-Match"?: string | null;
+            };
+            path?: never;
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ConfigurationPatch"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkforceConfigurationRead"];
                 };
             };
             /** @description Validation Error */

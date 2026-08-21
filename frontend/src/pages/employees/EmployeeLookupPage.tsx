@@ -18,9 +18,12 @@ import { useTranslation } from 'react-i18next'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { toast } from 'sonner'
 
+import { AttendanceHeroCard } from '@/components/employees/AttendanceHeroCard'
+import { useAttendanceAttention } from '@/components/employees/useAttendanceAttention'
 import { EmployeeForm } from '@/components/employees/EmployeeForm'
 import { EmployeeActivitySection } from '@/components/employees/EmployeeActivitySection'
 import { EmployeeSearchHero } from '@/components/employees/EmployeeSearchHero'
+import { EmployeesSectionTabs } from '@/components/employees/EmployeesSectionTabs'
 import { LookupHeroCards } from '@/components/employees/LookupHeroCards'
 import type { EmployeeFormOutput } from '@/components/employees/schema'
 import { ApiError, api, apiErrorMessage } from '@/lib/api'
@@ -50,6 +53,8 @@ export function EmployeeLookupPage(): React.JSX.Element {
     ExtractionResponse | undefined
   >(() => intakeState?.injectedExtraction)
   const createFormRef = useRef<HTMLDivElement>(null)
+  // Same ordered list as the hero card and the register queue.
+  const attendance = useAttendanceAttention()
 
   useEffect(() => {
     if (!creating || !createFormRef.current) return
@@ -140,7 +145,14 @@ export function EmployeeLookupPage(): React.JSX.Element {
         onCreate={handleCreate}
         onLeaveIds={onLeaveIds}
       >
-        <LookupHeroCards onOpen={handleSelect} />
+        <LookupHeroCards
+          onOpen={handleSelect}
+          extraCard={<AttendanceHeroCard onOpen={() => navigate('/employees/attendance')} />}
+        />
+        {/* The lookup band is centre-composed, so the strip sits on its axis. */}
+        <div className="mt-7 flex justify-center">
+          <EmployeesSectionTabs attentionCount={attendance.attention} />
+        </div>
       </EmployeeSearchHero>
 
       {/* The monthly time sheet is a subpage here, deliberately NOT a top-nav

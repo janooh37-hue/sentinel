@@ -169,6 +169,54 @@ CAPABILITIES: Final[tuple[Capability, ...]] = (
         "Send group announcements",
         "Post announcements (text or a document) to WhatsApp groups.",
     ),
+    Capability(
+        "workforce.self.view",
+        "workforce",
+        "View own workforce record",
+        "View your own schedule, attendance punches, and leave.",
+    ),
+    Capability(
+        "workforce.dashboard.view",
+        "workforce",
+        "View workforce dashboard",
+        "View aggregate workforce dashboard data inside assigned scope.",
+    ),
+    Capability(
+        "workforce.people.view",
+        "workforce",
+        "View workforce people",
+        "View roster and attendance details inside assigned scope.",
+    ),
+    Capability(
+        "workforce.schedule.manage",
+        "workforce",
+        "Manage workforce schedules",
+        "Manage crews, rotations, memberships, and schedule overrides.",
+    ),
+    Capability(
+        "workforce.policy.manage",
+        "workforce",
+        "Manage workforce policies",
+        "Manage staffing requirements, attendance policies, and excusing leave kinds.",
+    ),
+    Capability(
+        "workforce.attendance.review",
+        "workforce",
+        "Review workforce attendance",
+        "Review workforce attendance cases, exceptions, and source facts.",
+    ),
+    Capability(
+        "workforce.attendance.correct",
+        "workforce",
+        "Correct workforce attendance",
+        "Create audited workforce attendance adjustments.",
+    ),
+    Capability(
+        "workforce.integration.manage",
+        "workforce",
+        "Manage workforce integration",
+        "Manage workforce provider status, mappings, tests, and synchronization.",
+    ),
 )
 
 CAPABILITY_IDS: Final[frozenset[str]] = frozenset(c.id for c in CAPABILITIES)
@@ -198,24 +246,28 @@ _OPERATOR_CAPS: Final[frozenset[str]] = frozenset(
         "ledger.send",  # Phase 3: send as yourself
         "email.manage",  # Phase 3: link/sync your OWN mailbox
         "settings.view",
+        "workforce.self.view",
     }
 )
 
-_MANAGER_CAPS: Final[frozenset[str]] = _OPERATOR_CAPS | frozenset(
-    {
-        "employees.edit",
-        "employees.notify",
-        "leaves.edit",
-        "timesheet.edit",
-        "violations.manage",
-        "books.manage",
-        "books.approve",
-        "permits.manage",
-        "ledger.send",
-        "submitters.manage",
-        "editor_templates.manage",
-    }
-)
+_MANAGER_CAPS: Final[frozenset[str]] = (
+    _OPERATOR_CAPS
+    | frozenset(
+        {
+            "employees.edit",
+            "employees.notify",
+            "leaves.edit",
+            "timesheet.edit",
+            "violations.manage",
+            "books.manage",
+            "books.approve",
+            "permits.manage",
+            "ledger.send",
+            "submitters.manage",
+            "editor_templates.manage",
+        }
+    )
+) - frozenset({"workforce.self.view"})
 
 ROLE_DEFAULTS: Final[dict[str, frozenset[str]]] = {
     OPERATOR_ROLE: _OPERATOR_CAPS,
