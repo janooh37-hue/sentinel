@@ -234,11 +234,12 @@ describe('TimesheetDock', () => {
     expect(posts).toHaveTextContent('0.9')
   })
 
-  it('seals a closed month in the dock and in the panel', async () => {
+  it('seals a closed month with who closed it and when', async () => {
     const base = dockProps({ blocking: 0, closed: true })
     renderPanel(<TimesheetDock {...base} ui={{ ...base.ui, panel: 'release' }} />)
-    expect(await screen.findAllByText(/closed/i)).not.toHaveLength(0)
-    expect(screen.getByText(/A\. Al Mansoori/)).toBeInTheDocument()
+    expect(await screen.findByTestId('release-seal')).toHaveTextContent(/A\. Al Mansoori/)
+    // The dock reads it at a glance too, without opening the panel.
+    expect(screen.getByTestId('dock-seal')).toHaveTextContent(/closed/i)
   })
 
   it('states that the download freezes the month', async () => {
@@ -275,7 +276,9 @@ describe('TimesheetDock', () => {
     // Posts: the readout and the rule are still there; the field is not.
     expect(await screen.findByRole('region', { name: /contracted posts/i })).toBeInTheDocument()
     expect(screen.getByTestId('implied-posts')).toHaveTextContent('0.9')
-    expect(screen.queryByLabelText(/contracted posts/i)).not.toBeInTheDocument()
+    // `queryByLabelText` would also match the panel region's own `aria-label`,
+    // so the FIELD is asked for by its role.
+    expect(screen.queryByRole('spinbutton')).not.toBeInTheDocument()
 
     // The month download FREEZES the month, so it needs `timesheet.edit`.
     expect(screen.queryByRole('button', { name: /attendance/i })).not.toBeInTheDocument()
@@ -321,7 +324,7 @@ describe('TimesheetDock', () => {
         onSetPostCount={onSetPostCount}
       />,
     )
-    const field = await screen.findByLabelText(/contracted posts/i)
+    const field = await screen.findByRole('spinbutton', { name: /contracted posts/i })
     await userEvent.clear(field)
     await userEvent.type(field, '24')
     await userEvent.tab()
@@ -332,7 +335,7 @@ describe('TimesheetDock', () => {
     const base = dockProps({ blocking: 0, closed: true, rows: [ROW] })
     renderPanel(<TimesheetDock {...base} ui={{ ...base.ui, panel: 'posts' }} />)
     expect(await screen.findByTestId('implied-posts')).toHaveTextContent('0.9')
-    expect(screen.queryByLabelText(/contracted posts/i)).not.toBeInTheDocument()
+    expect(screen.queryByRole('spinbutton')).not.toBeInTheDocument()
     expect(screen.getByText(/this month is closed/i)).toBeInTheDocument()
   })
 })
