@@ -8,15 +8,26 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import { MemoryRouter } from 'react-router-dom'
 import { describe, expect, it, vi } from 'vitest'
 
 import type { TimesheetRow } from '@/lib/api'
 
 import { EmployeePanel } from './EmployeePanel'
 
+function wrap(ui: React.ReactNode, qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })) {
+  // The panels link to the employee record now (UI spec §9), so the wrapper
+  // needs a router — the navigating-page pattern from
+  // pages/employees/EmployeeActivitySection.test.tsx:109-114.
+  return (
+    <MemoryRouter>
+      <QueryClientProvider client={qc}>{ui}</QueryClientProvider>
+    </MemoryRouter>
+  )
+}
+
 function renderPanel(ui: React.ReactNode) {
-  const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
-  return render(<QueryClientProvider client={qc}>{ui}</QueryClientProvider>)
+  return render(wrap(ui))
 }
 
 // `nationality_en` is what `constants.nationality_en()` returns, so it can only
@@ -88,11 +99,7 @@ describe('EmployeePanel', () => {
   it('finds the same employee with the G prefix, either case', async () => {
     const { rerender } = renderPanel(<EmployeePanel {...props} query="g7141" />)
     expect(await screen.findByRole('option', { name: /HOWLADER/ })).toBeInTheDocument()
-    rerender(
-      <QueryClientProvider client={new QueryClient()}>
-        <EmployeePanel {...props} query="G7141" />
-      </QueryClientProvider>,
-    )
+    rerender(wrap(<EmployeePanel {...props} query="G7141" />))
     expect(await screen.findByRole('option', { name: /HOWLADER/ })).toBeInTheDocument()
   })
 
@@ -105,11 +112,7 @@ describe('EmployeePanel', () => {
     const { rerender } = renderPanel(<EmployeePanel {...props} query="supervisor" />)
     expect(await screen.findByRole('option', { name: /RAJESH/ })).toBeInTheDocument()
     expect(screen.queryByRole('option', { name: /HOWLADER/ })).not.toBeInTheDocument()
-    rerender(
-      <QueryClientProvider client={new QueryClient()}>
-        <EmployeePanel {...props} query="مشرف" />
-      </QueryClientProvider>,
-    )
+    rerender(wrap(<EmployeePanel {...props} query="مشرف" />))
     expect(await screen.findByRole('option', { name: /RAJESH/ })).toBeInTheDocument()
   })
 
@@ -247,6 +250,22 @@ describe('EmployeePanel', () => {
     renderPanel(<EmployeePanel {...props} onQuery={onQuery} />)
     await userEvent.type(screen.getByRole('searchbox', { name: /find employee/i }), '7')
     expect(onQuery).toHaveBeenCalledWith('7')
+  })
+
+  /** §16.3 enumerates the new/leaving badge as part of the preview. */
+  it('badges the preview with the roster edge', async () => {
+    renderPanel(<EmployeePanel {...props} selected="G7141" />)
+    const preview = (await screen.findByText(/last worked day 17/i)).closest('div')
+      ?.parentElement as HTMLElement
+    expect(preview).toHaveTextContent('to 17')
+  })
+
+  it('links the preview to the employee record', async () => {
+    renderPanel(<EmployeePanel {...props} selected="G7141" />)
+    expect(await screen.findByRole('link', { name: 'G7141' })).toHaveAttribute(
+      'href',
+      '/employees/G7141',
+    )
   })
 
   it('says so when nothing matches', async () => {

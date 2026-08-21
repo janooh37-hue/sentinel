@@ -21,6 +21,7 @@
  */
 
 import { useTranslation } from 'react-i18next'
+import { Link } from 'react-router-dom'
 
 import type { TimesheetIssue, TimesheetRemoved } from '@/lib/api'
 import { cn } from '@/lib/utils'
@@ -75,33 +76,48 @@ export function ChecksPanel({
     'shrink-0 rounded-full border border-border-strong bg-surface px-2.5 py-0.5 text-[0.72em] font-semibold text-muted-foreground transition-colors hover:bg-surface-tinted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring'
 
   /**
-   * One finding. The level is text plus shape, never colour alone (UI spec §6),
-   * and the 3px reading-start rule is the level again in a third channel.
+   * One finding, as the row-as-button §6 asks for — a `<Link>` to the employee
+   * RECORD, which is §9's "the rows link to the employee that fixes it".
+   *
+   * A record link is the one action that works for every issue, including the
+   * ones naming somebody with no row on this sheet: it goes to the person, not
+   * to a grid row. (`Show row` would be the one that cannot honour itself, and
+   * it stays where a row exists by construction — the roster movement below.)
+   *
+   * The level is text plus shape, never colour alone (UI spec §6), and the 3px
+   * reading-start rule is the level again in a third channel.
    */
-  const issue = (item: TimesheetIssue, stop: boolean): React.JSX.Element => (
-    <div
-      key={`${item.employee_id}|${item.kind}|${item.detail}`}
-      className={cn(
-        line,
-        'border-s-[3px]',
-        stop ? 'border-accent bg-accent-soft/45' : 'border-warning bg-warning-soft/45',
-      )}
-    >
-      <span className={cn(chip, stop ? 'bg-accent-soft text-accent' : 'bg-warning-soft text-warning')}>
-        {stop ? t('timesheet.blocking') : t('timesheet.warning')}
-      </span>
-      <span dir="ltr" className={who}>
-        {item.employee_id}
-      </span>
-      {/* `kind` is the stable machine string and this panel owns the words. A
-          kind nobody has translated yet falls back to the server's own
-          sentence rather than printing `timesheet.issues.whatever`. */}
-      <b className="shrink-0 font-semibold">
-        {t(`timesheet.issues.${item.kind}`, { defaultValue: '' }) || item.detail}
-      </b>
-      <span className="min-w-0 text-muted-foreground">{item.detail}</span>
-    </div>
-  )
+  const issue = (item: TimesheetIssue, stop: boolean): React.JSX.Element => {
+    // Bound once. When no translation exists the `<b>` shows the server's
+    // sentence, so rendering `detail` again beside it would print the same
+    // sentence twice — in exactly the case the fallback exists for.
+    const kind = t(`timesheet.issues.${item.kind}`, { defaultValue: '' })
+    return (
+      <Link
+        key={`${item.employee_id}|${item.kind}|${item.detail}`}
+        to={`/employees/${encodeURIComponent(item.employee_id)}`}
+        className={cn(
+          line,
+          'border-s-[3px] transition-colors hover:bg-surface-tinted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring',
+          stop ? 'border-accent bg-accent-soft/45' : 'border-warning bg-warning-soft/45',
+        )}
+      >
+        <span
+          className={cn(chip, stop ? 'bg-accent-soft text-accent' : 'bg-warning-soft text-warning')}
+        >
+          {stop ? t('timesheet.blocking') : t('timesheet.warning')}
+        </span>
+        <span dir="ltr" className={who}>
+          {item.employee_id}
+        </span>
+        <b className="shrink-0 font-semibold">{kind || item.detail}</b>
+        {kind !== '' && <span className="min-w-0 text-muted-foreground">{item.detail}</span>}
+        <span className="ms-auto shrink-0 text-[0.72em] font-semibold text-primary">
+          {t('timesheet.openRecord')}
+        </span>
+      </Link>
+    )
+  }
 
   const movement = joined.length + leaving.length + removed.length
 
@@ -171,6 +187,14 @@ export function ChecksPanel({
                 >
                   {t('timesheet.showRow')}
                 </button>
+                {/* §16.4: the page flags a date of joining inside the month and
+                    links to the record, where the date itself is corrected. */}
+                <Link
+                  to={`/employees/${encodeURIComponent(edge.employee_id)}`}
+                  className={action}
+                >
+                  {t('timesheet.openRecord')}
+                </Link>
               </span>
             </div>
           ))}

@@ -24,7 +24,7 @@
  * and Space (UI spec §14).
  */
 
-import { useEffect, useMemo } from 'react'
+import { useEffect, useMemo, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import type { TimesheetGridResponse, TimesheetRemoved, TimesheetVariant } from '@/lib/api'
@@ -90,7 +90,7 @@ export function TimesheetDock({
   onClose,
   onReopen,
 }: TimesheetDockProps): React.JSX.Element {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   const open = ui.panel
   const closed = grid.closed_at !== null
   const blocked = grid.blocking.length > 0 && !closed
@@ -112,7 +112,38 @@ export function TimesheetDock({
     return () => document.removeEventListener('keydown', shut)
   }, [onOpenPanel, open])
 
-  /** Every code counted across the workbook on screen, for the strip. */
+  /**
+   * Where focus goes when the panel closes.
+   *
+   * The panel unmounts with focus inside it — on the ✕, or on the picker's
+   * search field after `Escape` — so without this `document.activeElement`
+   * falls back to `<body>` and the next `Tab` restarts at the top of the
+   * document: past the head, the toolbar, the ribbon, the notice line and the
+   * entire 275-row grid before the dock is reachable again. On a page whose
+   * premise is that the release actions are always in reach, that is the
+   * keyboard path undone. `CodePicker` already sets this precedent on the same
+   * page by restoring focus to the cell it opened from.
+   *
+   * Clicking a `<button>` focuses it, so the trigger IS `activeElement` at the
+   * moment `open` turns non-null; switching panels re-captures the new one.
+   */
+  const trigger = useRef<HTMLElement | null>(null)
+  useEffect(() => {
+    if (open !== null) {
+      trigger.current = document.activeElement instanceof HTMLElement ? document.activeElement : null
+      return
+    }
+    const back = trigger.current
+    trigger.current = null
+    back?.focus()
+  }, [open])
+
+  /**
+   * Every code counted across the workbook ON SCREEN, for the strip and for the
+   * tally panel — "cells by code" is a fact about the sheet being shown, so it
+   * follows the variant. Computed once here and handed to `CodesPanel`, which
+   * ran the identical loop over the same 275 rows a second time per render.
+   */
   const counts = useMemo(() => {
     const out: Record<CodeSlug, number> = { P: 0, AL: 0, SL: 0, AB: 0, TR: 0, NG: 0, '-': 0, X: 0 }
     for (const row of grid.rows) {
@@ -126,10 +157,28 @@ export function TimesheetDock({
   }, [daysInMonth, grid.rows, ui.variant])
 
   /**
-   * Implied posts: the mean daily manned headcount, which is the same number
-   * the grid's headcount footer adds up column by column.
+   * Implied posts: the mean daily manned headcount, and the same number the
+   * grid's headcount footer adds up column by column.
+   *
+   * Counted from the ATTENDANCE array in both variants, unlike the strip above.
+   * The drift it feeds asks one question — "are block-2 rows still marked as
+   * working days?" — and that is a fact about the attendance sheet. The
+   * statistics sheet is the already-corrected view: block 1 is `row_no <=
+   * post_count` by construction, so its working-day count can never exceed
+   * `post_count * days` and `drift` would be mathematically unable to fire, in
+   * the one variant §9 actually places this readout in. The A3 mockup has the
+   * same dead flag; this is where it stops being dead.
    */
-  const impliedPosts = daysInMonth === 0 ? 0 : counts.P / daysInMonth
+  const impliedPosts = useMemo(() => {
+    if (daysInMonth === 0) return 0
+    let manned = 0
+    for (const row of grid.rows) {
+      for (let day = 1; day <= daysInMonth; day += 1) {
+        if (row.codes[day - 1] === 'P') manned += 1
+      }
+    }
+    return manned / daysInMonth
+  }, [daysInMonth, grid.rows])
   const drift = impliedPosts > grid.post_count
 
   const group =
@@ -156,6 +205,35 @@ export function TimesheetDock({
             ? t('timesheet.employee.sheet')
             : open === 'release'
               ? t('timesheet.release.title')
+              : ''
+
+  /**
+   * The subtitle line the A3 mockup gives every panel (`.panel > header p`),
+   * which says what the panel is looking AT: which deliverable, how much of it,
+   * or which month. Composed here from facts the dock already holds, so it
+   * needs no key of its own except the employee panel's, which existed and was
+   * rendered nowhere.
+   */
+  const deliverable =
+    ui.variant === 'statistics' ? t('timesheet.statistics') : t('timesheet.attendance')
+  const cellCount = CODES.reduce((sum, spec) => sum + counts[spec.slug], 0)
+  const subtitle =
+    open === 'posts'
+      ? deliverable
+      : open === 'codes'
+        ? `${t('timesheet.cells', { count: cellCount })} · ${t('timesheet.rows', {
+            count: grid.rows.length,
+          })} · ${deliverable}`
+        : open === 'checks'
+          ? `${t('timesheet.blocking')} ${grid.blocking.length} · ${t('timesheet.warning')} ${
+              grid.warnings.length
+            }`
+          : open === 'employee'
+            ? t('timesheet.employee.hint')
+            : open === 'release'
+              ? `${new Intl.DateTimeFormat(i18n.language, { month: 'long' }).format(
+                  new Date(grid.year, grid.month - 1, 1),
+                )} ${grid.year}`
               : ''
 
   return (
@@ -329,7 +407,12 @@ export function TimesheetDock({
       {open !== null && (
         <div role="region" aria-label={title} className="ts-panel">
           <header className="mb-2.5 flex items-start gap-3">
-            <h2 className="text-[0.92em] font-semibold">{title}</h2>
+            <div className="min-w-0">
+              <h2 className="text-[0.92em] font-semibold">{title}</h2>
+              {subtitle && (
+                <p className="text-[0.72em] text-muted-foreground [unicode-bidi:isolate]">{subtitle}</p>
+              )}
+            </div>
             <button
               type="button"
               aria-label={t('common.close')}
@@ -350,7 +433,7 @@ export function TimesheetDock({
             />
           )}
           {open === 'codes' && (
-            <CodesPanel rows={grid.rows} daysInMonth={daysInMonth} variant={ui.variant} />
+            <CodesPanel counts={counts} />
           )}
           {open === 'checks' && (
             <ChecksPanel

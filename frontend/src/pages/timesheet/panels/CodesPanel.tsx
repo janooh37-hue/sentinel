@@ -3,59 +3,34 @@
  * tally, which UI spec §15 change 2 brought across to A.
  *
  * Read-only by nature: it is the month's own arithmetic, so there is nothing to
- * gate. It counts the code array the sheet is actually showing, so switching to
- * the statistics variant re-counts against the fillers rather than the
- * attendance cells.
+ * gate. It does not count anything itself either — the dock already counted the
+ * same eight numbers for its always-visible strip, over the same 275 rows, so
+ * they arrive as a prop rather than being recomputed here once per render.
  *
  * No colour is named here. A glyph renders `data-code={slug}` and `index.css`
  * resolves the workbook's own fill (UI spec §3.2).
  */
 
-import { useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 
-import type { TimesheetRow, TimesheetVariant } from '@/lib/api'
 import { cn } from '@/lib/utils'
 
-import { CODES, type CodeSlug, slugOf } from '../codes'
+import { CODES, type CodeSlug } from '../codes'
 
 export interface CodesPanelProps {
-  rows: TimesheetRow[]
-  daysInMonth: number
-  variant: TimesheetVariant
+  /** Counted by the dock, from the code array the sheet is actually showing. */
+  counts: Record<CodeSlug, number>
 }
 
 /** The `-` code prints as a hyphen but reads as an en dash on screen. */
 const glyphOf = (slug: CodeSlug): string => (slug === '-' ? '–' : slug)
 
-export function CodesPanel({ rows, daysInMonth, variant }: CodesPanelProps): React.JSX.Element {
+export function CodesPanel({ counts }: CodesPanelProps): React.JSX.Element {
   const { t } = useTranslation()
-
-  const counts = useMemo(() => {
-    const out: Record<CodeSlug, number> = { P: 0, AL: 0, SL: 0, AB: 0, TR: 0, NG: 0, '-': 0, X: 0 }
-    for (const row of rows) {
-      const codes = variant === 'statistics' ? row.stat_codes : row.codes
-      for (let day = 1; day <= daysInMonth; day += 1) {
-        const slug = slugOf(codes[day - 1] ?? null)
-        if (slug !== '') out[slug] += 1
-      }
-    }
-    return out
-  }, [daysInMonth, rows, variant])
-
   const total = CODES.reduce((sum, spec) => sum + counts[spec.slug], 0)
 
   return (
     <div className="flex flex-col gap-2">
-      <p className="flex flex-wrap items-center gap-1.5 text-[0.74em] text-muted-foreground">
-        <span className="[unicode-bidi:isolate]">{t('timesheet.cells', { count: total })}</span>
-        <span aria-hidden>·</span>
-        <span className="[unicode-bidi:isolate]">{t('timesheet.rows', { count: rows.length })}</span>
-        <span aria-hidden>·</span>
-        <span>
-          {variant === 'statistics' ? t('timesheet.statistics') : t('timesheet.attendance')}
-        </span>
-      </p>
       <div className="grid max-w-[42rem] gap-1">
         {CODES.map((spec) => {
           const n = counts[spec.slug]

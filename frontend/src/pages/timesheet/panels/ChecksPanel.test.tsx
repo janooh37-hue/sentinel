@@ -9,13 +9,24 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import { MemoryRouter } from 'react-router-dom'
 import { describe, expect, it, vi } from 'vitest'
 
 import { ChecksPanel } from './ChecksPanel'
 
+function wrap(ui: React.ReactNode, qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })) {
+  // The panels link to the employee record now (UI spec §9), so the wrapper
+  // needs a router — the navigating-page pattern from
+  // pages/employees/EmployeeActivitySection.test.tsx:109-114.
+  return (
+    <MemoryRouter>
+      <QueryClientProvider client={qc}>{ui}</QueryClientProvider>
+    </MemoryRouter>
+  )
+}
+
 function renderPanel(ui: React.ReactNode) {
-  const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
-  return render(<QueryClientProvider client={qc}>{ui}</QueryClientProvider>)
+  return render(wrap(ui))
 }
 
 const props = {
@@ -155,6 +166,44 @@ describe('ChecksPanel', () => {
     expect(
       screen.queryByRole('button', { name: /confirm starting point/i }),
     ).not.toBeInTheDocument()
+  })
+
+  /**
+   * A kind nobody has translated falls back to the server's own sentence — so
+   * the muted detail beside it must NOT render, or the same sentence is printed
+   * twice side by side in exactly the case the fallback exists for.
+   */
+  it('prints an untranslated kind\u2019s sentence once, not twice', async () => {
+    renderPanel(
+      <ChecksPanel
+        {...props}
+        blocking={[{ employee_id: 'G7099', kind: 'brand_new_kind', detail: 'Something the UI has never heard of.' }]}
+      />,
+    )
+    expect(
+      await screen.findAllByText('Something the UI has never heard of.'),
+    ).toHaveLength(1)
+    expect(screen.queryByText(/timesheet\.issues/)).not.toBeInTheDocument()
+  })
+
+  /**
+   * UI spec §9: the rows link to the employee that fixes it. A record link, not
+   * a grid row — which is why it works for an issue naming somebody with no row.
+   */
+  it('routes every finding to the employee record, row or no row', async () => {
+    renderPanel(
+      <ChecksPanel
+        {...props}
+        warnings={[
+          { employee_id: 'G6001', kind: 'departed_but_active', detail: 'OMAR SAEED is still Active.' },
+        ]}
+      />,
+    )
+    const links = await screen.findAllByRole('link', { name: /open record/i })
+    const targets = links.map((a) => a.getAttribute('href'))
+    expect(targets).toContain('/employees/G7099')
+    // The employee with NO row on this sheet still gets a route.
+    expect(targets).toContain('/employees/G6001')
   })
 
   it('says every check passed when there is nothing to fix', async () => {

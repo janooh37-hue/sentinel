@@ -184,6 +184,10 @@ const KEYS = [
   'timesheet.release.close',
   'timesheet.release.closeNote',
   'timesheet.release.reopenConfirm',
+  // The route from a finding to the record that fixes it (UI spec §9), and
+  // the pointer at the page that owns employee creation (locked rule 8).
+  'timesheet.openRecord',
+  'timesheet.openLookup',
 ]
 
 describe('timesheet i18n parity', () => {

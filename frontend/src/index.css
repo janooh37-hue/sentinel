@@ -707,7 +707,11 @@
    which is exactly what the shell's `overflow: hidden` forbids. */
 .ts-panel {
   position: absolute;
-  inset-inline: 0;
+  /* The dock's own content is inset by `px-4 md:px-6`, so the panel matches it
+     rather than running edge-to-edge with its border lining up with nothing
+     above or below. Two stops because the dock has two; a viewport IS physical,
+     which is why the query is `min-width` while the layout stays logical. */
+  inset-inline: 1rem;
   inset-block-end: 100%;
   max-block-size: 46vh;
   overflow: auto;
@@ -718,6 +722,10 @@
   background: var(--surface-raised);
   box-shadow: 0 -18px 48px -18px color-mix(in oklab, var(--text) 34%, transparent);
   animation: ts-panel-in var(--motion-fast) var(--ease-out-expo);
+}
+
+@media (min-width: 48rem) {
+  .ts-panel { inset-inline: 1.5rem; }
 }
 
 @keyframes ts-panel-in {

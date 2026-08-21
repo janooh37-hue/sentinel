@@ -466,6 +466,21 @@ export const monthWorkbookNames = (
 }
 
 /**
+ * One employee's sheet for one month, under the same agreed pattern.
+ *
+ * Exported for the same reason as `monthWorkbookNames`: the release surface
+ * prints what the operator is about to save, and a second copy of the template
+ * is a name the panel can show after the hook has stopped sending it. For
+ * `months=2` the server answers with ONE workbook carrying two sheets, named
+ * from the LATER month — which is the month passed here.
+ */
+export const employeeWorkbookName = (
+  employeeId: string,
+  year: number,
+  month: number,
+): string => `كشف حضور ${employeeId} ${arabicMonth(year, month)}.xlsx`
+
+/**
  * Land a blob on disk under its own name.
  *
  * This is the app's first real save-as: every other blob helper here opens a
@@ -552,7 +567,7 @@ export function useEmployeeSheetDownload(): {
     mutationFn: (args: { employeeId: string; year: number; month: number; months: 1 | 2 }) =>
       api.fetchTimesheetEmployeeExport(
         args,
-        `كشف حضور ${args.employeeId} ${arabicMonth(args.year, args.month)}.xlsx`,
+        employeeWorkbookName(args.employeeId, args.year, args.month),
       ),
     onSuccess: saveBlob,
     onError: (err) => toast.error(apiErrorMessage(err)),

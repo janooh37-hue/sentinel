@@ -3662,6 +3662,8 @@
       "close": "Close the month",
       "closeNote": "Sealing does the same as the first download, without producing a file.",
       "reopenConfirm": "Reopen"
-    }
+    },
+    "openRecord": "Open record",
+    "openLookup": "Add an employee on the Employees page"
   }
 }

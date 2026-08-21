@@ -14,15 +14,26 @@ import { resolve } from 'node:path'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import { MemoryRouter } from 'react-router-dom'
 import { describe, expect, it, vi } from 'vitest'
 
 import type { TimesheetGridResponse, TimesheetRow } from '@/lib/api'
 
 import { TimesheetDock, type TimesheetDockProps } from './TimesheetDock'
 
+function wrap(ui: React.ReactNode, qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })) {
+  // The panels link to the employee record now (UI spec §9), so the wrapper
+  // needs a router — the navigating-page pattern from
+  // pages/employees/EmployeeActivitySection.test.tsx:109-114.
+  return (
+    <MemoryRouter>
+      <QueryClientProvider client={qc}>{ui}</QueryClientProvider>
+    </MemoryRouter>
+  )
+}
+
 function renderPanel(ui: React.ReactNode) {
-  const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
-  return render(<QueryClientProvider client={qc}>{ui}</QueryClientProvider>)
+  return render(wrap(ui))
 }
 
 const ROW: TimesheetRow = {
@@ -129,11 +140,7 @@ describe('TimesheetDock', () => {
     await userEvent.click(trigger)
     expect(onOpenPanel).toHaveBeenCalledWith('codes')
 
-    rerender(
-      <QueryClientProvider client={new QueryClient()}>
-        <TimesheetDock {...base} ui={{ ...base.ui, panel: 'codes' }} onOpenPanel={onOpenPanel} />
-      </QueryClientProvider>,
-    )
+    rerender(wrap(<TimesheetDock {...base} ui={{ ...base.ui, panel: 'codes' }} onOpenPanel={onOpenPanel} />))
     expect(screen.getByRole('button', { name: /codes/i })).toHaveAttribute(
       'aria-expanded',
       'true',
@@ -183,11 +190,7 @@ describe('TimesheetDock', () => {
     )
     expect(await screen.findByRole('region', { name: /cells by code/i })).toBeInTheDocument()
     expect(screen.getAllByRole('region')).toHaveLength(1)
-    rerender(
-      <QueryClientProvider client={new QueryClient()}>
-        <TimesheetDock {...base} ui={{ ...base.ui, panel: 'posts' }} />
-      </QueryClientProvider>,
-    )
+    rerender(wrap(<TimesheetDock {...base} ui={{ ...base.ui, panel: 'posts' }} />))
     expect(screen.getAllByRole('region')).toHaveLength(1)
     expect(screen.getByRole('region', { name: /contracted posts/i })).toBeInTheDocument()
     expect(screen.queryByRole('region', { name: /cells by code/i })).not.toBeInTheDocument()
@@ -285,19 +288,11 @@ describe('TimesheetDock', () => {
     expect(screen.queryByRole('button', { name: /client statistics/i })).not.toBeInTheDocument()
 
     // Codes read for anybody.
-    rerender(
-      <QueryClientProvider client={new QueryClient()}>
-        <TimesheetDock {...base} ui={{ ...base.ui, panel: 'codes' }} />
-      </QueryClientProvider>,
-    )
+    rerender(wrap(<TimesheetDock {...base} ui={{ ...base.ui, panel: 'codes' }} />))
     expect(screen.getByRole('region', { name: /cells by code/i })).toBeInTheDocument()
 
     // Release: the names and the reason, no close and no reopen.
-    rerender(
-      <QueryClientProvider client={new QueryClient()}>
-        <TimesheetDock {...base} ui={{ ...base.ui, panel: 'release' }} />
-      </QueryClientProvider>,
-    )
+    rerender(wrap(<TimesheetDock {...base} ui={{ ...base.ui, panel: 'release' }} />))
     expect(screen.getByTestId('release-files').children).toHaveLength(2)
     expect(screen.getByText(/reading only/i)).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: /reopen/i })).not.toBeInTheDocument()
@@ -329,6 +324,111 @@ describe('TimesheetDock', () => {
     await userEvent.type(field, '24')
     await userEvent.tab()
     expect(onSetPostCount).toHaveBeenCalledWith(24)
+  })
+
+  /**
+   * `Number('') === 0` and `post_count: 0` is server-valid, so an empty field
+   * would PATCH zero — emptying block 1 and dropping the ENTIRE roster into
+   * block 2 of the client statistics workbook, silently, off the corrections
+   * stack, and sealed by the next download. The gesture is the ordinary one.
+   */
+  it('never commits an emptied post-count field', async () => {
+    const onSetPostCount = vi.fn()
+    const base = dockProps({ blocking: 0, rows: [ROW] })
+    renderPanel(
+      <TimesheetDock
+        {...base}
+        ui={{ ...base.ui, panel: 'posts' }}
+        onSetPostCount={onSetPostCount}
+      />,
+    )
+    const field = await screen.findByRole('spinbutton', { name: /contracted posts/i })
+    await userEvent.clear(field)
+    await userEvent.tab()
+    expect(onSetPostCount).not.toHaveBeenCalled()
+    // And the field is re-seated, so the operator sees what the month still holds.
+    expect(field).toHaveValue(249)
+  })
+
+  /**
+   * The statistics grid is derived and its cells are read-only (§9), so there
+   * must be no cell-write path out of it. The grid computes
+   * `editable = canEdit && !closed && !statistics`; this panel has to agree.
+   */
+  it('withholds the red block on the derived statistics sheet', async () => {
+    const base = dockProps({ blocking: 0, rows: [ROW] })
+    renderPanel(
+      <TimesheetDock
+        {...base}
+        ui={{ ...base.ui, panel: 'employee', variant: 'statistics', selected: 'G7057' }}
+      />,
+    )
+    // Scoped to the panel: the dock's own employee group carries a `2 months`
+    // chip whenever somebody is selected, so an unscoped query finds both.
+    const panel = await screen.findByRole('region', { name: /employee sheet/i })
+    expect(within(panel).queryByRole('button', { name: /red block/i })).not.toBeInTheDocument()
+    expect(within(panel).queryByLabelText(/bill starts on day/i)).not.toBeInTheDocument()
+    // Still readable: the extract needs only `timesheet.view`.
+    expect(within(panel).getByRole('button', { name: /2 months/i })).toBeEnabled()
+  })
+
+  /**
+   * The panel unmounts with focus inside it, so without a restore the next Tab
+   * restarts at the document top — past the entire 275-row grid — on a page
+   * whose premise is that the release actions are always in reach. `CodePicker`
+   * sets the precedent on this same page.
+   */
+  it('returns focus to the trigger when the panel closes', async () => {
+    const base = dockProps({ blocking: 0 })
+    let panel: TimesheetDockProps['ui']['panel'] = null
+    const onOpenPanel = vi.fn((next: TimesheetDockProps['ui']['panel']) => {
+      panel = next
+    })
+    const view = renderPanel(
+      <TimesheetDock {...base} ui={{ ...base.ui, panel }} onOpenPanel={onOpenPanel} />,
+    )
+    const trigger = await screen.findByRole('button', { name: /codes/i })
+    await userEvent.click(trigger)
+    view.rerender(
+      wrap(<TimesheetDock {...base} ui={{ ...base.ui, panel }} onOpenPanel={onOpenPanel} />),
+    )
+    // Escape, from wherever focus happens to be.
+    await userEvent.keyboard('{Escape}')
+    view.rerender(
+      wrap(<TimesheetDock {...base} ui={{ ...base.ui, panel }} onOpenPanel={onOpenPanel} />),
+    )
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: /codes/i }))
+  })
+
+  it('returns focus to the trigger when the panel is dismissed with the close button', async () => {
+    const base = dockProps({ blocking: 0 })
+    let panel: TimesheetDockProps['ui']['panel'] = null
+    const onOpenPanel = vi.fn((next: TimesheetDockProps['ui']['panel']) => {
+      panel = next
+    })
+    const view = renderPanel(
+      <TimesheetDock {...base} ui={{ ...base.ui, panel }} onOpenPanel={onOpenPanel} />,
+    )
+    await userEvent.click(await screen.findByRole('button', { name: /codes/i }))
+    view.rerender(
+      wrap(<TimesheetDock {...base} ui={{ ...base.ui, panel }} onOpenPanel={onOpenPanel} />),
+    )
+    await userEvent.click(screen.getByRole('button', { name: /^close$/i }))
+    view.rerender(
+      wrap(<TimesheetDock {...base} ui={{ ...base.ui, panel }} onOpenPanel={onOpenPanel} />),
+    )
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: /codes/i }))
+  })
+
+  /** The A3 mockup gives every panel a subtitle (`.panel > header p`). */
+  it('says what each panel is looking at', async () => {
+    const base = dockProps({ blocking: 0, rows: [ROW] })
+    const { rerender } = renderPanel(
+      <TimesheetDock {...base} ui={{ ...base.ui, panel: 'employee' }} />,
+    )
+    expect(await screen.findByText(/for a resignation or termination handover/i)).toBeInTheDocument()
+    rerender(wrap(<TimesheetDock {...base} ui={{ ...base.ui, panel: 'codes' }} />))
+    expect(screen.getByText(/31 cells · 1 row · Attendance/i)).toBeInTheDocument()
   })
 
   it('refuses the post count on a closed month without a dead control', async () => {

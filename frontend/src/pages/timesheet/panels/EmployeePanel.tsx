@@ -23,12 +23,14 @@
 
 import { useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { Link } from 'react-router-dom'
 
 import type { TimesheetRow, TimesheetVariant } from '@/lib/api'
 import { cn } from '@/lib/utils'
 
 import { CODES, slugOf } from '../codes'
 import { tallyOf } from '../RowTally'
+import { employeeWorkbookName } from '../useTimesheet'
 
 export interface EmployeePanelProps {
   rows: TimesheetRow[]
@@ -170,13 +172,11 @@ export function EmployeePanel({
     prev.year === year ? monthName(prev.year, prev.month) : `${monthName(prev.year, prev.month)} ${prev.year}`
   const spanSecond = `${monthName(year, month)} ${year}`
   /**
-   * The deliverable's own name, identical in both UI languages, so it is not
-   * interface copy — the same fallback `useEmployeeSheetDownload` sends when the
-   * response carries no `content-disposition`.
+   * The deliverable's own name, from ONE declaration shared with the hook that
+   * actually sends it — a second copy of the template is a name this panel can
+   * print after the download has stopped using it.
    */
-  const filename = target
-    ? `كشف حضور ${target.employee_id} ${monthName(year, month, 'ar')}.xlsx`
-    : ''
+  const filename = target ? employeeWorkbookName(target.employee_id, year, month) : ''
 
   const onKeyDown = (event: React.KeyboardEvent<HTMLInputElement>): void => {
     if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
@@ -279,6 +279,18 @@ export function EmployeePanel({
             })
           )}
         </div>
+        {/* Locked rule 8: adding an employee is NOT owned here. The mockup's
+            inline create form is a demonstration of the trigger; in the app the
+            create flow is local dialog state inside `EmployeeLookupPage` with no
+            route of its own, so there is no flow to open from here and building
+            a second one is what the rule forbids. This points at the page that
+            owns it. */}
+        <Link
+          to="/employees"
+          className="self-start text-[0.72em] font-semibold text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        >
+          + {t('timesheet.openLookup')}
+        </Link>
       </div>
 
       {target === null || counts === null ? (
@@ -290,12 +302,23 @@ export function EmployeePanel({
           <div>
             <div className="flex flex-wrap items-baseline gap-2">
               <b className="text-[0.92em] font-semibold">{target.name_en}</b>
-              <span
+              {/* The new/leaving badge, which §16.3 enumerates as part of the
+                  preview and the A3 mockup puts right here beside the name. */}
+              {badge(target) && (
+                <span className="shrink-0 rounded-full bg-warning-soft px-1.5 py-0.5 text-[0.62rem] font-semibold text-warning">
+                  {badge(target)}
+                </span>
+              )}
+              {/* §9: the route from a finding to the employee that fixes it.
+                  A record link, not a grid row — it works whether or not this
+                  month has a row for him. */}
+              <Link
+                to={`/employees/${encodeURIComponent(target.employee_id)}`}
                 dir="ltr"
-                className="font-mono text-[0.72rem] text-muted-foreground [unicode-bidi:isolate]"
+                className="font-mono text-[0.72rem] text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring [unicode-bidi:isolate]"
               >
                 {target.employee_id}
-              </span>
+              </Link>
             </div>
             <div className="text-[0.74em] text-muted-foreground">
               {designationOf(target)}
@@ -381,7 +404,16 @@ export function EmployeePanel({
           {/* The red block writes cells, so it is `timesheet.edit` and it is not
               offered on a sealed month. Absent rather than disabled: a disabled
               control still answers Enter and Space (UI spec §14). */}
-          {canEdit && !closed && (
+          {/* `!statistics` matters as much as the other two. The grid computes
+              `editable = canEdit && !closed && !statistics` and §9 says the
+              statistics cells are read-only because the sheet is DERIVED — the
+              fix belongs in the attendance grid or the filler assignment.
+              Without it this panel is a cell-write path out of the surface Task
+              8 deliberately made inert, and a wrong one twice over: `blockDays`
+              would be chosen from `stat_codes` while `set_cell` writes the
+              attendance override, and `paintCell` only touches `row.codes`, so
+              nothing would move on screen until the server answered. */}
+          {canEdit && !closed && !statistics && (
             <div className="flex flex-wrap items-center gap-2 border-t border-hairline pt-2.5">
               <label
                 htmlFor="ts-bill-start"

@@ -44,9 +44,26 @@ export function PostsPanel({
   const [raw, setRaw] = useState(String(postCount))
   useEffect(() => setRaw(String(postCount)), [postCount])
 
+  /**
+   * `Number('') === 0`, and `post_count: 0` is SERVER-VALID (`ge=0`, plus the
+   * CHECK on the table), so an empty field would sail through an
+   * `Number.isInteger` guard and PATCH zero. Block 1 would then be empty and
+   * the ENTIRE roster would fall into block 2 of the client statistics
+   * workbook — silently, off the corrections stack, and sealed into the
+   * deliverable by the next download. The gesture that does it is the ordinary
+   * one: select all, Delete, click away. So the blank string is refused FIRST,
+   * by looking at the text rather than at the number it coerces to.
+   *
+   * No confirmation beyond this, deliberately. A "suspiciously small" threshold
+   * is a magic number no document specifies, and the count is freely
+   * re-writable for as long as the month is open — the dock reads the new value
+   * back immediately, the drift chip moves with it, and the one irreversible
+   * step (the download) already states that it freezes the month. What was
+   * missing was not a prompt; it was refusing an input the operator never made.
+   */
   const commit = (): void => {
     const next = Number(raw)
-    if (!Number.isInteger(next) || next < 0 || next === postCount) {
+    if (raw.trim() === '' || !Number.isInteger(next) || next < 0 || next === postCount) {
       setRaw(String(postCount))
       return
     }
