@@ -172,6 +172,14 @@ describe('TimesheetGrid', () => {
     expect(onUndo).toHaveBeenCalledTimes(1)
     await userEvent.keyboard('{Meta>}z{/Meta}')
     expect(onUndo).toHaveBeenCalledTimes(2)
+    // Ctrl+Shift+Z is REDO on both platforms, and this feature has none: `undo`
+    // only pops the correction stack and issues another live non-quiet write, so
+    // answering redo would reverse a second correction with no way forward and
+    // compound on every further press. The letter guards below leave `shiftKey`
+    // alone because they match case-insensitively; `z` has no counterpart.
+    await userEvent.keyboard('{Control>}{Shift>}z{/Shift}{/Control}')
+    await userEvent.keyboard('{Meta>}{Shift>}z{/Shift}{/Meta}')
+    expect(onUndo).toHaveBeenCalledTimes(2)
     // And a code letter under a modifier is the BROWSER's command, not a paint:
     // `s` is sick leave, so Ctrl+S marked sick leave and swallowed the save.
     // `a`, `p` and `x` did the same to select-all, print and cut.
@@ -183,6 +191,49 @@ describe('TimesheetGrid', () => {
     // The letter alone still paints.
     await userEvent.keyboard('s')
     expect(onSetCell).toHaveBeenCalledWith('G1001', 5, 'SL ')
+  })
+
+  it('undoes from the row handle too, not only from a cell', async () => {
+    const onUndo = vi.fn()
+    render(<TimesheetGrid {...props} onUndo={onUndo} />)
+    // The row handle is a focusable button in the grid that is not a `.ts-cell`
+    // — it is what points the dock's panels and the two-month extract at one
+    // employee (§16.2, §16.3) — so scoping the chord to a cell made Ctrl+Z a
+    // silent no-op right after the select gesture. The scope is DOM containment
+    // in the grid, which is also what keeps the portalled popover out: a fiber
+    // descendant of this root, but not a DOM one.
+    screen.getByRole('button', { name: /select G1001/i }).focus()
+    await userEvent.keyboard('{Control>}z{/Control}')
+    expect(onUndo).toHaveBeenCalledTimes(1)
+  })
+
+  it('treats a modifier click as the browser\'s, and keeps shift-click as the range', async () => {
+    const onSetCell = vi.fn()
+    const onFill = vi.fn()
+    const user = userEvent.setup()
+    render(<TimesheetGrid {...props} brush="AL" onSetCell={onSetCell} onFill={onFill} />)
+    // This is the paint path a keydown guard cannot reach: a day cell is a real
+    // `<button>` and its native activation is not modifier-gated. Measured in
+    // Chromium, `Ctrl+Space` on a focused cell dispatches a synthesized click
+    // that PAINTED the armed brush, where bare Space opens the picker — a
+    // silent write in place of a menu. The synthesized click carries the
+    // modifier state, so the guard lives on the click, and a real Ctrl+click
+    // exercises the same line. (`Ctrl+Enter` does not synthesize one: Chromium
+    // gates the Enter activation on modifiers and the Space activation not.)
+    await user.keyboard('{Control>}')
+    await user.click(cell('G1001', 3))
+    await user.keyboard('{/Control}')
+    expect(onSetCell).not.toHaveBeenCalled()
+    // Shift stays out of the guard: it is §8's range gesture.
+    await user.click(cell('G1001', 3))
+    expect(onSetCell).toHaveBeenCalledWith('G1001', 3, 'AL')
+    await user.keyboard('{Shift>}')
+    await user.click(cell('G1001', 6))
+    await user.keyboard('{/Shift}')
+    expect(onFill).toHaveBeenCalledWith(
+      [at('G1001', 3), at('G1001', 4), at('G1001', 5), at('G1001', 6)],
+      'AL',
+    )
   })
 
   it('does not undo from the keyboard on a sealed month', async () => {

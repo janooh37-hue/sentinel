@@ -769,23 +769,38 @@ export function TimesheetGrid({
       // sheet from the keyboard had to leave it and mouse to the ribbon.
       // `metaKey` for parity.
       //
-      // Scoped to a FOCUSED CELL, where the rest of §8's keyboard model lives.
-      // A portal is not a boundary: React dispatches portal events along the
-      // FIBER tree, not the DOM tree — it attaches its listeners to the portal
-      // container when the `HostPortal` fiber mounts and builds the dispatch
-      // path by walking `instance.return`, with no portal break — and
-      // `CodePicker` is a React child of this root `<div>`. So this handler IS
-      // on the path for keystrokes typed inside the popover, and unscoped it
-      // answered Ctrl+Z in the note field by reversing the previous correction
-      // with a live non-quiet write instead of undoing the operator's text.
+      // Scoped by DOM CONTAINMENT — anywhere inside the sheet, which is what
+      // "from the grid" was always meant to be. Not `cellFrom`, which was a
+      // cell and nothing else: the row handle is a focusable button in this
+      // root that is not a `.ts-cell`, so after clicking an employee ID to
+      // select a row (§16.2, §16.3 — the gesture the dock's panels and the
+      // two-month extract are pointed with) Ctrl+Z became a silent no-op.
       //
-      // `!altKey` closes the other half: Windows reports AltGr as Ctrl+Alt, and
-      // this is a bilingual product where AltGr is in daily use.
+      // Containment is also the honest boundary for the popover. A portal is
+      // not a boundary in REACT's dispatch: React attaches its listeners to the
+      // portal container when the `HostPortal` fiber mounts and builds the path
+      // by walking `instance.return`, with no portal break — and `CodePicker`
+      // is a React child of this root — so this handler IS on the path for
+      // keystrokes typed inside the note field, where unscoped it answered
+      // Ctrl+Z by reversing the previous correction with a live non-quiet write
+      // instead of undoing the operator's text. The popover is portalled to
+      // `document.body`, so it is a fiber descendant and NOT a DOM one, which
+      // is exactly the distinction `contains` reads.
+      //
+      // `!altKey` closes the AltGr case: Windows reports AltGr as Ctrl+Alt, and
+      // this is a bilingual product where AltGr is in daily use. `!shiftKey`
+      // closes redo — Ctrl+Shift+Z on both platforms — which this feature does
+      // not have: `undo` only pops the correction stack and issues another live
+      // write, so answering redo would reverse a SECOND correction with no way
+      // forward, and compound on every further press. (The letter guards below
+      // leave `shiftKey` alone because they match case-insensitively; `z` has no
+      // such counterpart.)
       if (
         (event.ctrlKey || event.metaKey) &&
         !event.altKey &&
+        !event.shiftKey &&
         key.toLowerCase() === 'z' &&
-        cellFrom(event.target) !== null
+        root.current?.contains(event.target as Node) === true
       ) {
         if (!editable) return
         event.preventDefault()
@@ -824,6 +839,18 @@ export function TimesheetGrid({
 
   const onClick = useCallback(
     (event: React.MouseEvent) => {
+      // The one paint path a KEYDOWN guard cannot reach. A day cell is a real
+      // `<button>`, and its native activation behaviour is not modifier-gated:
+      // measured in Chromium, `Ctrl+Space` on a focused cell dispatches a
+      // synthesized click even though the keydown handlers decline the chord
+      // (`Ctrl+Enter` does not — Chromium gates the Enter synthesis on
+      // modifiers, the Space one it does not). With a brush armed that click
+      // PAINTED, where bare Space opens the picker — so the chord did not match
+      // the bare key, it silently wrote instead of showing a menu.
+      //
+      // The synthesized click carries the modifier state, so the guard belongs
+      // here. `shiftKey` stays out: shift-click is §8's range gesture, below.
+      if (event.ctrlKey || event.metaKey || event.altKey) return
       const cell = cellFrom(event.target)
       const row = cell && byId.get(cell.employeeId)
       if (!cell || !row || whyLocked(row, cell.day) !== null) return
