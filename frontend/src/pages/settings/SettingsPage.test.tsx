@@ -64,6 +64,9 @@ vi.mock('./SigningSignatureSection', () => ({
 }))
 vi.mock('./EmailSection', () => ({ EmailSection: () => <div>email-section</div> }))
 vi.mock('./ManagersSection', () => ({ ManagersSection: () => <div>managers-section</div> }))
+vi.mock('./DesignationCatalog', () => ({
+  DesignationCatalog: () => <div>designation-catalog</div>,
+}))
 vi.mock('@/pages/system/MigrationWizard', () => ({
   MIGRATION_SKIPPED_KEY: 'migration-skipped',
   MigrationWizard: () => null,
@@ -121,5 +124,28 @@ describe('SettingsPage capability alignment', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /settings.navigation.communications/ }))
     expect(await screen.findByText('email-section')).toBeInTheDocument()
+  })
+
+  // Amendment A3: `timesheet.view` is the operator capability, `timesheet.edit`
+  // the manager one. Reordering the printed catalog re-ranks rows on a
+  // deliverable already in circulation, so it is an editor's panel — and the
+  // registration is where that is enforced, not inside the panel.
+  it('withholds the designation catalog from a read-only time-sheet holder', async () => {
+    granted.add('timesheet.view')
+    granted.add('settings.edit')
+    renderPage()
+
+    fireEvent.click(await screen.findByRole('button', { name: /settings.navigation.documents/ }))
+    expect(screen.queryByText('timesheet.designations.title')).not.toBeInTheDocument()
+    expect(screen.queryByText('designation-catalog')).not.toBeInTheDocument()
+  })
+
+  it('offers the designation catalog to a time-sheet editor', async () => {
+    granted.add('timesheet.edit')
+    renderPage()
+
+    fireEvent.click(await screen.findByRole('button', { name: /settings.navigation.documents/ }))
+    fireEvent.click(screen.getByRole('button', { name: /timesheet.designations.title/ }))
+    expect(await screen.findByText('designation-catalog')).toBeInTheDocument()
   })
 })
