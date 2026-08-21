@@ -351,6 +351,38 @@ describe('TimesheetDock', () => {
   })
 
   /**
+   * A post count arriving from the server — a refetch, or the answer to this
+   * operator's own PATCH — re-seats the field during the render that carries
+   * it, and WITHOUT remounting the panel. Both halves matter: a stale draft
+   * shows a number the month no longer holds, and a remount (which is what
+   * resetting by `key` would cost) takes the caret out of the field mid-edit.
+   */
+  it('re-seats the post-count field from the server without remounting it', async () => {
+    const base = dockProps({ blocking: 0, rows: [ROW] })
+    const view = renderPanel(<TimesheetDock {...base} ui={{ ...base.ui, panel: 'posts' }} />)
+    const field = await screen.findByRole('spinbutton', { name: /contracted posts/i })
+    await userEvent.clear(field)
+    await userEvent.type(field, '17')
+    expect(field).toHaveValue(17)
+    expect(field).toHaveFocus()
+
+    view.rerender(
+      wrap(
+        <TimesheetDock
+          {...base}
+          grid={{ ...base.grid, post_count: 250 }}
+          ui={{ ...base.ui, panel: 'posts' }}
+        />,
+      ),
+    )
+    // The same DOM node: the new value came from the derivation, not from a
+    // fresh mount re-running `useState(String(postCount))`.
+    expect(screen.getByRole('spinbutton', { name: /contracted posts/i })).toBe(field)
+    expect(field).toHaveValue(250)
+    expect(field).toHaveFocus()
+  })
+
+  /**
    * The statistics grid is derived and its cells are read-only (§9), so there
    * must be no cell-write path out of it. The grid computes
    * `editable = canEdit && !closed && !statistics`; this panel has to agree.

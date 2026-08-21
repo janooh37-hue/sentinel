@@ -310,6 +310,14 @@ describe('TimesheetGrid', () => {
     const tally = await screen.findByRole('status')
     expect(tally).toHaveTextContent('G1001')
     expect(tally).toHaveTextContent('31')
+    // Placed and revealed in one layout pass: the box mounts at `opacity-0` and
+    // the SAME imperative write that positions it makes it visible, so it can
+    // never be painted at the wrong place — and a React-owned `style` prop
+    // added here later, which would clobber the reveal and leave the counts
+    // permanently invisible, fails right here.
+    expect(tally.className).toContain('opacity-0')
+    expect(tally.style.transform).toMatch(/^translate3d\(/)
+    expect(tally.style.opacity).toBe('1')
   })
 
   it('offers no editing once the month is closed', async () => {
