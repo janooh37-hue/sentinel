@@ -157,6 +157,31 @@ describe('AttendancePage', () => {
     expect(row).toHaveTextContent('G-9001')
   })
 
+  it.each([
+    ['Print sheet', 1],
+    ['Print roster', 1],
+    // One sheet per shift, and 19 Aug is the rotation's double day.
+    ['Print by shift', 2],
+  ] as const)('the %s button prints that layout', async (label, crests) => {
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
+    const print = vi.spyOn(window, 'print').mockImplementation(() => undefined)
+    renderPage()
+    await waitFor(() =>
+      expect(screen.getAllByTestId('attendance-register-post').length).toBeGreaterThan(0),
+    )
+
+    await user.click(screen.getByRole('button', { name: label }))
+
+    expect(print).toHaveBeenCalledTimes(1)
+    // `flushSync` has to commit the chosen layout BEFORE `window.print()` blocks,
+    // so by the time it is called the right sheet is already in the DOM — one
+    // crest for a single-sheet layout, one per sheet for the per-shift one.
+    const sheet = document.querySelector('.print-attendance')
+    expect(sheet).not.toBeNull()
+    expect(sheet?.querySelectorAll('img')).toHaveLength(crests)
+    print.mockRestore()
+  })
+
   it('filters to one shift and keeps the request count at one', async () => {
     const user = userEvent.setup()
     renderPage()

@@ -863,16 +863,71 @@ body {
   .print-register {
     page: register;
   }
+  /* The duty register is a wide document: shift, unit, post, G-number and a
+     clock all have to sit on one line, and four name columns only fit across
+     the long edge. Landscape is therefore the page, not a preference. */
+  @page attendance {
+    size: A4 landscape;
+    margin: 10mm;
+  }
+  .print-attendance {
+    page: attendance;
+  }
+  /* Two hazards this sheet has to survive, both invisible on screen:
+
+     1. `[data-font-scale]` sets html{font-size} to 16/19/22/24px, and almost
+        every size in the app is em/rem-relative — an operator reading at the
+        largest stop would otherwise print a register 50% larger and spill it
+        over twice the paper. The sheet is a fixed-geometry document, so it
+        pins the root size.
+     2. A dark-theme operator would print dark-theme ink (near-white --text,
+        colours picked for a dark ground) onto white paper. Re-pinning the raw
+        light values here is enough: `@theme inline` inlines these vars into
+        every utility, so `text-warning` inside the sheet resolves light again
+        without a single override on the elements themselves. */
+  .print-attendance {
+    --text: #1c1f24;
+    --text-muted: #5a6068;
+    --text-faint: #8b9098;
+    --primary: #0d2845;
+    --accent: #c8102e;
+    --success: #047857;
+    --warning: #92400e;
+    --caution: #ca8a04;
+    --info: #1d4ed8;
+    --destructive: #dc2626;
+    --border: #e6e4dd;
+    --border-strong: #d4d1c8;
+    --hairline: #efece5;
+    color: #000;
+  }
+  /* The roster layout spills onto several sheets, and a sheet with no crest and
+     no printed-at stamp cannot be filed. A table header/footer GROUP is the one
+     mechanism a browser repeats on every fragment of a broken table, so the
+     roster carries its masthead in `thead` and its provenance in `tfoot` — the
+     display values are declared here because no utility class covers them. */
+  .print-attendance thead {
+    display: table-header-group;
+  }
+  .print-attendance tfoot {
+    display: table-footer-group;
+  }
   /* The desk that hosts the sheet pads the document on screen (px-6); on paper
      that padding is another ~13mm off the width. */
   :has(> .print-paper) {
     padding: 0 !important;
   }
+  /* `font-size` is pinned for EVERY printed document, not just this sheet:
+     `[data-font-scale]` moves html{font-size} to 16/19/22/24px for reading
+     comfort, and nearly every length in the app is rem/em-relative, so an
+     operator at the largest stop would print a differently-sized document than
+     the one beside them. Paper geometry must not depend on a screen setting. */
   html,
   body {
     height: auto !important;
     overflow: visible !important;
     background: #fff !important;
+    font-size: 16px !important;
   }
   /* Uncage the shell: h-screen / flex-1 / overflow-hidden / min-h-0 otherwise
      clamp the content to one screen and clip the rest. */

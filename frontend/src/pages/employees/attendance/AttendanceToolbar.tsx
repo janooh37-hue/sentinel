@@ -9,6 +9,7 @@
 
 import { useTranslation } from 'react-i18next'
 
+import type { PrintLayout } from './AttendancePrintSheet'
 import type { AttendanceRow, ShiftCount } from './attendanceModel'
 import { shiftCounts } from './attendanceModel'
 
@@ -37,10 +38,17 @@ interface Props {
   onShiftChange: (shiftCode: string | null) => void
   onViewChange: (view: AttendanceView) => void
   onSearchChange: (value: string) => void
-  onPrint: () => void
+  onPrint: (layout: PrintLayout) => void
 }
 
 const SHIFT_ORDER: readonly string[] = ['morning', 'noon', 'night', 'office_day']
+
+/** Widest first: the whole day, then a line per assignment, then a sheet per shift. */
+const PRINT_LAYOUTS: ReadonlyArray<readonly [PrintLayout, string]> = [
+  ['sheet', 'attendance.print.layoutSheet'],
+  ['roster', 'attendance.print.layoutRoster'],
+  ['shift', 'attendance.print.layoutShift'],
+]
 
 function orderedShifts(counts: Record<string, ShiftCount>): string[] {
   const present = Object.keys(counts)
@@ -156,13 +164,21 @@ export function AttendanceToolbar({
           ))}
         </div>
 
-        <button
-          type="button"
-          onClick={onPrint}
-          className="rounded-xl border border-border px-3 py-1.5 text-[0.78em] font-semibold text-primary hover:bg-primary-soft"
-        >
-          {t('attendance.toolbar.print')}
-        </button>
+        {/* Three sheets, three buttons. The choice belongs to the print run, not
+            to a mode the toolbar has to hold and the operator has to remember,
+            so each button prints its own layout in one click. */}
+        <div role="group" aria-label={t('attendance.toolbar.print')} className="flex overflow-hidden rounded-xl border border-border">
+          {PRINT_LAYOUTS.map(([layout, label]) => (
+            <button
+              key={layout}
+              type="button"
+              onClick={() => onPrint(layout)}
+              className="border-e border-border px-3 py-1.5 text-[0.78em] font-semibold text-primary last:border-e-0 hover:bg-primary-soft"
+            >
+              {t(label)}
+            </button>
+          ))}
+        </div>
       </div>
 
       <div className="mt-2 grid grid-cols-4 gap-1.5 md:grid-cols-7">
