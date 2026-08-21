@@ -74,6 +74,29 @@ def _grid(db: Session, year: int, month: int, sheet: str) -> TimesheetGridRespon
     return TimesheetGridResponse.model_validate(svc.build_month(db, year, month, sheet=sheet))
 
 
+
+def _preflight(db: Session, year: int, month: int) -> dict[str, svc.MonthGrid]:
+    """Build both deliverables and refuse to seal if either one is blocked."""
+
+    grids = {sheet: svc.build_month(db, year, month, sheet=sheet) for sheet in svc.SHEETS}
+    blocking = [
+        {
+            "sheet": sheet,
+            "employee_id": issue.employee_id,
+            "kind": issue.kind,
+            "detail": issue.detail,
+        }
+        for sheet, grid in grids.items()
+        for issue in grid.blocking
+    ]
+    if blocking:
+        raise ValidationFailedError(
+            "TIMESHEET_BLOCKED",
+            "Fix the blocking issues before downloading the sheets.",
+            blocking=blocking,
+        )
+    return grids
+
 def _attachment(payload: bytes, filename: str) -> Response:
     """The workbook as a download named in Arabic.
 
@@ -215,13 +238,6 @@ def patch_month(
     it and still answer with a failure.
     """
 
-    if payload.post_count is not None:
-        svc.set_post_count(db, year, month, payload.post_count, commit=False)
-    for filler in payload.fillers:
-        svc.set_filler(db, year, month, filler.employee_id, filler.code, commit=False)
-    db.commit()
-    return _grid(db, year, month, sheet)
-
 
 @router.post("/{year}/{month}/close", response_model=TimesheetGridResponse)
 def close_month(
@@ -231,6 +247,7 @@ def close_month(
     user: Annotated[User, Depends(require_capability("timesheet.edit"))],
     sheet: Sheet = "main",
 ) -> TimesheetGridResponse:
+    _preflight(db, year, month)
     svc.close_month(db, year, month, user_id=user.id)
     return _grid(db, year, month, sheet)
 
@@ -286,17 +303,8 @@ def export_month(
     The grid built for the check is the one rendered: ``close_month`` snapshots
     exactly it, so re-rendering after the seal would be the same bytes twice.
     """
-
-    grid = svc.build_month(db, year, month, sheet=sheet)
-    if grid.blocking:
-        raise ValidationFailedError(
-            "TIMESHEET_BLOCKED",
-            "Fix the blocking issues before downloading the sheet.",
-            blocking=[
-                {"employee_id": issue.employee_id, "kind": issue.kind, "detail": issue.detail}
-                for issue in grid.blocking
-            ],
-        )
+    grids = _preflight(db, year, month)
+    grid = grids[sheet]
     payload = timesheet_xlsx.render(grid, variant=variant)
     svc.close_month(db, year, month, user_id=user.id)
     return _attachment(payload, timesheet_xlsx.filename_for(grid, variant=variant))

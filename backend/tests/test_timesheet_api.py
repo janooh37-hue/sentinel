@@ -25,6 +25,7 @@ from app.db.models import (
     Leave,
     TimesheetDesignation,
     TimesheetPeriod,
+    TimesheetSnapshotRow,
     TimesheetStartAck,
     TimesheetStatFiller,
     User,
@@ -451,6 +452,39 @@ def test_export_blocks_when_an_employee_has_no_designation(client, db_session):
     assert response.status_code == 422
     assert "no_designation" in response.text
     assert db_session.query(TimesheetPeriod).count() == 0  # a refused download freezes nothing
+
+
+def test_export_preflights_both_sheets_before_sealing(client, db_session):
+    """A clean requested sheet must not seal a different blocked sheet."""
+
+    _guard(db_session)
+    designation = db_session.query(TimesheetDesignation).filter_by(name_en="Driver").one()
+    db_session.add(
+        Employee(
+            id="G2000",
+            name_en="UNKNOWN NATIONALITY DRIVER",
+            nationality="India",
+            doj=date(2020, 1, 1),
+            designation_id=designation.id,
+        )
+    )
+    db_session.commit()
+
+    response = client.get("/api/v1/timesheet/2026/7/export")
+    assert response.status_code == 422
+    blocking = response.json()["error"]["details"]["blocking"]
+    assert {issue["sheet"] for issue in blocking} == {"drivers"}
+    assert all(issue["kind"] == "no_nationality" for issue in blocking)
+    assert db_session.query(TimesheetPeriod).count() == 0
+    assert db_session.query(TimesheetSnapshotRow).count() == 0
+
+    close = client.post("/api/v1/timesheet/2026/7/close")
+    assert close.status_code == 422
+    assert {issue["sheet"] for issue in close.json()["error"]["details"]["blocking"]} == {
+        "drivers"
+    }
+    assert db_session.query(TimesheetPeriod).count() == 0
+    assert db_session.query(TimesheetSnapshotRow).count() == 0
 
 
 def test_single_employee_export(client, db_session):
