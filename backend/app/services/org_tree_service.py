@@ -39,7 +39,7 @@ def set_supervisor(
         if current.id == employee_id:
             raise HTTPException(
                 status_code=409,
-                detail=f"{supervisor.name_en} already reports to {employee.name_en}",
+                detail=f"{current.name_en} already reports to {employee.name_en}",
             )
         seen.add(current.id)
         current = (
