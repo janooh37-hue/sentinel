@@ -225,6 +225,51 @@ describe('timesheet i18n parity', () => {
     }
   })
 
+  /**
+   * The three Arabic sentences that interpolate a numeric RANGE carry an
+   * explicit isolate around it — `U+2066 LRI` … `U+2069 PDI`.
+   *
+   * They are load-bearing and invisible, which is the whole reason this is
+   * pinned rather than left to review: measured in Chromium, `الأيام 1–9`
+   * without the isolate paints as **`9–1`**, `حجب 1–17` as `17–1` and
+   * `يوم 6–17` as `17–6`. The digits become AN after Arabic-letter context
+   * (UBA W2), the en dash is neutral and resolves R between two number runs
+   * (N1), and the run reorders — so the sentence says "days 9 to 1" on the one
+   * surface an operator corrects the month from. Delete the two characters and
+   * every other test in this file still passes.
+   *
+   * Same shape as the `'SL '` trailing space this plan already protects: an
+   * invisible character a well-meaning editor drops, silently.
+   *
+   * `rangePainted` is the least obvious of the three — nothing renders it, the
+   * `onFill` SUCCESS TOAST does, which is how the red-block helper reaches it.
+   */
+  it('isolates every Arabic numeric range, in balanced pairs', () => {
+    const LRI = '\u2066'
+    const PDI = '\u2069'
+    const ranged = [
+      'timesheet.startedOn',
+      'timesheet.employee.redBlockRange',
+      'timesheet.rangePainted',
+    ]
+    for (const key of ranged) {
+      const value = get(ar as unknown as Rec, key)
+      // Balanced, not merely present: a stray opener leaks the isolation into
+      // the rest of the sentence, and a stray closer does nothing at all.
+      const opens = value.split(LRI).length - 1
+      const closes = value.split(PDI).length - 1
+      expect(opens, `${key} has no isolate opener`).toBeGreaterThan(0)
+      expect(closes, `${key} isolate is unbalanced`).toBe(opens)
+      // And the range is INSIDE it, not merely adjacent to it.
+      const isolated = value.match(/\u2066([^\u2066\u2069]*)\u2069/)
+      expect(isolated, `${key} has no isolated span`).not.toBeNull()
+      expect(isolated?.[1], `${key} isolates something other than the range`).toMatch(
+        /\{\{\w+\}\}|\d/,
+      )
+      expect(isolated?.[1], `${key} isolates no range`).toContain('–')
+    }
+  })
+
   it('pluralizes corrections through configured i18next resources', async () => {
     await i18n.changeLanguage('en')
     try {
