@@ -252,6 +252,16 @@ describe('timesheet i18n parity', () => {
       'timesheet.employee.redBlockRange',
       'timesheet.rangePainted',
     ]
+    // The isolate has to wrap the RANGE and nothing else. Anchoring the
+    // captured span subsumes "contains a number" and "contains a dash", and it
+    // is the only form that rejects the fix that looks right and is not:
+    // markers moved out to the sentence boundary keep one balanced pair and a
+    // span still holding an interpolation and the dash, while fixing nothing —
+    // an LRI around the whole Arabic sentence puts the Arabic at embedding
+    // level 3 and the digit runs at 4 with the dash left at 3, so the level-3
+    // reversal reorders them exactly as the unisolated paragraph did. `9–1`
+    // again, suite green.
+    const RANGE = /^\u2066(?:\d+|\{\{\w+\}\})–(?:\d+|\{\{\w+\}\})\u2069$/
     for (const key of ranged) {
       const value = get(ar as unknown as Rec, key)
       // Balanced, not merely present: a stray opener leaks the isolation into
@@ -260,13 +270,9 @@ describe('timesheet i18n parity', () => {
       const closes = value.split(PDI).length - 1
       expect(opens, `${key} has no isolate opener`).toBeGreaterThan(0)
       expect(closes, `${key} isolate is unbalanced`).toBe(opens)
-      // And the range is INSIDE it, not merely adjacent to it.
-      const isolated = value.match(/\u2066([^\u2066\u2069]*)\u2069/)
-      expect(isolated, `${key} has no isolated span`).not.toBeNull()
-      expect(isolated?.[1], `${key} isolates something other than the range`).toMatch(
-        /\{\{\w+\}\}|\d/,
-      )
-      expect(isolated?.[1], `${key} isolates no range`).toContain('–')
+      const isolated = value.match(/\u2066[^\u2066\u2069]*\u2069/)?.[0]
+      expect(isolated, `${key} has no isolated span`).toBeDefined()
+      expect(isolated, `${key} isolates something other than a bare range`).toMatch(RANGE)
     }
   })
 

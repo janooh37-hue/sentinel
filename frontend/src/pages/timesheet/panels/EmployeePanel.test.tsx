@@ -2,8 +2,10 @@
  * The G-number picker, the two-month extract and the red-block helper
  * (UI spec §16.3, §15 changes 5 and 6).
  *
- * No shared helper exists; panels do not navigate, so `QueryClientProvider`
- * alone — the pattern in `pages/employees/EmployeeActivityLookup.test.tsx:35-37`.
+ * No shared helper exists. The panel links to the employee record (UI spec §9),
+ * so the wrapper is `MemoryRouter` + `QueryClientProvider` — the navigating
+ * pattern in `pages/employees/EmployeeActivitySection.test.tsx:109-114`, not the
+ * provider-only one this file used before the record link existed.
  */
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { render, screen } from '@testing-library/react'

@@ -113,16 +113,29 @@ export function TimesheetDock({
   }, [onOpenPanel, open])
 
   /**
-   * Where focus goes when the panel closes.
+   * Where focus goes when the panel closes — but ONLY when it was inside.
    *
-   * The panel unmounts with focus inside it — on the ✕, or on the picker's
-   * search field after `Escape` — so without this `document.activeElement`
-   * falls back to `<body>` and the next `Tab` restarts at the top of the
-   * document: past the head, the toolbar, the ribbon, the notice line and the
-   * entire 275-row grid before the dock is reachable again. On a page whose
-   * premise is that the release actions are always in reach, that is the
-   * keyboard path undone. `CodePicker` already sets this precedent on the same
-   * page by restoring focus to the cell it opened from.
+   * A panel dismissed from the ✕, or with `Escape` from the picker's search
+   * field, unmounts with focus inside it, so `document.activeElement` falls back
+   * to `<body>` and the next `Tab` restarts at the top of the document: past the
+   * head, the toolbar, the ribbon, the notice line and the entire 275-row grid
+   * before the dock is reachable again. On a page whose premise is that the
+   * release actions are always in reach, that is the keyboard path undone.
+   * `CodePicker` sets the precedent on this same page.
+   *
+   * The condition is load-bearing, not defensive. `Escape` is bound to
+   * `document`, and nothing closes a panel when the operator moves into the
+   * grid — so a panel left open while a cell has focus is the ordinary state,
+   * and there `Escape` closes the panel out from under a keyboard user who was
+   * aiming at the sheet. Restoring unconditionally would then yank focus out of
+   * the roster down to a dock trigger, which is the exact harm this restore
+   * exists to prevent, caused by the restore. `CodePicker` already draws the
+   * same line: it restores on `Escape` and not on an outside click, because the
+   * operator is already aiming elsewhere.
+   *
+   * By the time this effect runs the panel is unmounted, so `activeElement`
+   * being `<body>` is an exact test for "focus was inside the thing that just
+   * went away" — no ref to the panel node and no `contains()` check needed.
    *
    * Clicking a `<button>` focuses it, so the trigger IS `activeElement` at the
    * moment `open` turns non-null; switching panels re-captures the new one.
@@ -135,7 +148,7 @@ export function TimesheetDock({
     }
     const back = trigger.current
     trigger.current = null
-    back?.focus()
+    if (document.activeElement === document.body) back?.focus()
   }, [open])
 
   /**
@@ -157,10 +170,13 @@ export function TimesheetDock({
   }, [daysInMonth, grid.rows, ui.variant])
 
   /**
-   * Implied posts: the mean daily manned headcount, and the same number the
-   * grid's headcount footer adds up column by column.
-   *
-   * Counted from the ATTENDANCE array in both variants, unlike the strip above.
+   * Implied posts: the mean daily manned headcount on the ATTENDANCE sheet, in
+   * both variants — unlike the strip above, and unlike the grid's headcount
+   * footer, which follows the variant. So on the statistics sheet this readout
+   * and that footer DISAGREE on one screen, deliberately: the footer reports the
+   * derived sheet it sits in, and this reports the sheet the drift is a fact
+   * about. They agree on the attendance variant, which is where they are read
+   * together.
    * The drift it feeds asks one question — "are block-2 rows still marked as
    * working days?" — and that is a fact about the attendance sheet. The
    * statistics sheet is the already-corrected view: block 1 is `row_no <=
@@ -231,9 +247,18 @@ export function TimesheetDock({
           : open === 'employee'
             ? t('timesheet.employee.hint')
             : open === 'release'
-              ? `${new Intl.DateTimeFormat(i18n.language, { month: 'long' }).format(
-                  new Date(grid.year, grid.month - 1, 1),
-                )} ${grid.year}`
+              ? // `PENDING_MONTH` carries year 0, and `new Date(0, 0, 1)` is
+                // 1 January **1900** under the two-digit-year rule — so this
+                // read "January 0", and not only in the ~200ms before the month
+                // lands: on a load failure the placeholder persists while the
+                // dock still renders. The other four subtitles degrade to a
+                // zero or an empty count, which are honest; a month that does
+                // not exist is not. No month, no month line.
+                grid.year > 0
+                ? `${new Intl.DateTimeFormat(i18n.language, { month: 'long' }).format(
+                    new Date(grid.year, grid.month - 1, 1),
+                  )} ${grid.year}`
+                : ''
               : ''
 
   return (

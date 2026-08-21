@@ -387,17 +387,58 @@ describe('TimesheetDock', () => {
     const view = renderPanel(
       <TimesheetDock {...base} ui={{ ...base.ui, panel }} onOpenPanel={onOpenPanel} />,
     )
-    const trigger = await screen.findByRole('button', { name: /codes/i })
-    await userEvent.click(trigger)
+    await userEvent.click(await screen.findByRole('button', { name: /codes/i }))
     view.rerender(
       wrap(<TimesheetDock {...base} ui={{ ...base.ui, panel }} onOpenPanel={onOpenPanel} />),
     )
-    // Escape, from wherever focus happens to be.
+
+    // Focus has to be INSIDE the panel, or this proves nothing: the rerender
+    // reconciles the trigger to the same node and never unmounts it, so focus
+    // would simply still be sitting on it and the assertion would hold with the
+    // whole restore effect deleted.
+    const close = screen.getByRole('button', { name: /^close$/i })
+    close.focus()
+    expect(document.activeElement).toBe(close)
+
     await userEvent.keyboard('{Escape}')
     view.rerender(
       wrap(<TimesheetDock {...base} ui={{ ...base.ui, panel }} onOpenPanel={onOpenPanel} />),
     )
     expect(document.activeElement).toBe(screen.getByRole('button', { name: /codes/i }))
+  })
+
+  /**
+   * The other half of the same rule. `Escape` is bound to `document` and nothing
+   * closes a panel when the operator moves into the grid, so a panel left open
+   * while a cell has focus is the ordinary state — and restoring there would
+   * yank focus out of the 275-row roster down to a dock trigger, which is the
+   * exact harm the restore exists to prevent.
+   */
+  it('leaves focus alone when the panel was closed from outside it', async () => {
+    const base = dockProps({ blocking: 0 })
+    let panel: TimesheetDockProps['ui']['panel'] = null
+    const onOpenPanel = vi.fn((next: TimesheetDockProps['ui']['panel']) => {
+      panel = next
+    })
+    const view = renderPanel(
+      <TimesheetDock {...base} ui={{ ...base.ui, panel }} onOpenPanel={onOpenPanel} />,
+    )
+    await userEvent.click(await screen.findByRole('button', { name: /codes/i }))
+    view.rerender(
+      wrap(<TimesheetDock {...base} ui={{ ...base.ui, panel }} onOpenPanel={onOpenPanel} />),
+    )
+
+    // Somewhere else entirely — a grid cell, in the real page.
+    const elsewhere = document.createElement('button')
+    document.body.append(elsewhere)
+    elsewhere.focus()
+
+    await userEvent.keyboard('{Escape}')
+    view.rerender(
+      wrap(<TimesheetDock {...base} ui={{ ...base.ui, panel }} onOpenPanel={onOpenPanel} />),
+    )
+    expect(document.activeElement).toBe(elsewhere)
+    elsewhere.remove()
   })
 
   it('returns focus to the trigger when the panel is dismissed with the close button', async () => {

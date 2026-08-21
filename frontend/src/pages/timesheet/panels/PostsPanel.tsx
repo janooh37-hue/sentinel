@@ -2,11 +2,18 @@
  * The contracted post count, what the month actually implies, and the two-block
  * rule that connects them (UI spec §16.2, §9's "implied posts above contract").
  *
- * Implied posts is the mean daily manned headcount — every working-day cell
- * divided by the days the month has, which is the same number the grid's
- * headcount footer adds up column by column. At or below the contract is
- * correct; above it means block-2 rows are still carrying the working-day code
- * instead of a filler, and the client would be billed for posts nobody staffed.
+ * Implied posts is the mean daily manned headcount — every working-day cell on
+ * the ATTENDANCE sheet divided by the days the month has. At or below the
+ * contract is correct; above it means block-2 rows are still carrying the
+ * working-day code instead of a filler, and the client would be billed for posts
+ * nobody staffed.
+ *
+ * It is counted from the attendance array in BOTH variants, so on the statistics
+ * sheet it does not match the grid's headcount footer, which follows the
+ * variant. That is deliberate: the drift asks whether block-2 rows are still
+ * marked as working days, and only the attendance sheet can answer it — block 1
+ * of the statistics sheet is `row_no <= post_count` by construction, so counted
+ * there the flag could never fire at all.
  *
  * Writing the count is `timesheet.edit` and is refused on a sealed month, so on
  * either of those the field is not rendered at all — a disabled control still
