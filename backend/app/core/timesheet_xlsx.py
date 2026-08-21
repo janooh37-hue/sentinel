@@ -70,7 +70,7 @@ from openpyxl.worksheet.datavalidation import DataValidation
 
 from app.api.errors import NotFoundError, ValidationFailedError
 from app.config import get_settings
-from app.core.constants import ARABIC_MONTHS
+from app.core.constants import ARABIC_MONTHS, TIMESHEET_DRIVERS
 from app.core.timesheet_codes import (
     CODE_ABSENT,
     CODE_ANNUAL,
@@ -127,7 +127,6 @@ VARIANT_ATTENDANCE: Final[str] = "attendance"
 VARIANT_STATISTICS: Final[str] = "statistics"
 VARIANTS: Final[frozenset[str]] = frozenset({VARIANT_ATTENDANCE, VARIANT_STATISTICS})
 
-_DRIVERS_SHEET: Final[str] = "drivers"
 
 #: File-name stems, exactly as the share already spells them.
 _ATTENDANCE_STEM: Final[str] = "كشف حضور شهر"
@@ -172,7 +171,7 @@ _CELL_RULES: Final[tuple[tuple[str, str, str | None], ...]] = (
 
 #: The codes an operator may type into a day cell, as a literal list. Quoted
 #: because that is how openpyxl passes an inline list to Excel.
-_CODE_LIST: Final[str] = '"P,AL,SL ,AB,TR,NG,-,X"'
+_CODE_LIST: Final[str] = '"P,AL,SL ,AB,TR,NG,-,R,S ,OFF,X"'
 
 
 # --------------------------------------------------------------------------- #
@@ -506,7 +505,7 @@ def filename_for(grid: MonthGrid, *, variant: str = VARIANT_ATTENDANCE) -> str:
     _require_variant(variant)
     stem = _STATISTICS_STEM if variant == VARIANT_STATISTICS else _ATTENDANCE_STEM
     words = [stem, _month(grid)]
-    if grid.sheet == _DRIVERS_SHEET:
+    if grid.sheet == TIMESHEET_DRIVERS:
         words.append(_DRIVERS_SUFFIX)
     return " ".join(words) + ".xlsx"
 

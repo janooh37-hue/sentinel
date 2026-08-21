@@ -316,7 +316,7 @@ def test_the_code_validation_is_a_quoted_literal_list_that_still_blocks() -> Non
     assert len(validations) == 1
     validation = validations[0]
     assert validation.type == "list"
-    assert validation.formula1 == '"P,AL,SL ,AB,TR,NG,-,X"'
+    assert validation.formula1 == '"P,AL,SL ,AB,TR,NG,-,R,S ,OFF,X"'
     assert validation.allow_blank is True
     assert validation.showErrorMessage is True
     assert validation.showInputMessage is True
