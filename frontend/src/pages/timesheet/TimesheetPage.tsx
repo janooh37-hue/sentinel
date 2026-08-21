@@ -131,12 +131,13 @@ export function TimesheetPage(): React.JSX.Element {
   // someone holding `timesheet.edit`. The statistics grid is derived: the fix
   // belongs upstream, in the attendance grid or the filler assignment.
   const editable = canEdit && !grid.closed && ui.variant === 'attendance'
+  const rows = grid.rows
 
   const rowsById = useMemo(() => {
-    const index = new Map<string, (typeof grid.rows)[number]>()
-    for (const row of grid.rows) index.set(row.employee_id, row)
+    const index = new Map<string, (typeof rows)[number]>()
+    for (const row of rows) index.set(row.employee_id, row)
     return index
-  }, [grid.rows])
+  }, [rows])
 
   const stepMonth = useCallback((delta: -1 | 1) => {
     setParams((prev) => {

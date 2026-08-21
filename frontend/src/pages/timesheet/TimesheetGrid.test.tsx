@@ -581,6 +581,7 @@ describe('TimesheetGrid', () => {
       isPrimary: true,
       pointerType: 'mouse',
     })
+    unmount()
 
     window.dispatchEvent(new Event('pointerup'))
     expect(onFill).not.toHaveBeenCalled()
