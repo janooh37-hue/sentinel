@@ -117,3 +117,14 @@ backend/openapi.json
 
 # graphify knowledge-graph output (derived, ~28 MB; rebuild with /graphify)
 graphify-out/
+
+# Local PII exports and one-off scratch output - never commit these.
+# directory.csv carries employee IDs, Arabic/English names, nationality and status;
+# passport-sample-report.txt names G-numbers against passport-scan availability.
+directory.csv
+passport-sample-report.txt
+pytest_output.txt
+backend/scripts/_run_sample_report.bat
+
+# Local agent/tooling state
+.playwright-cli/
