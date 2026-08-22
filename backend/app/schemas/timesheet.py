@@ -74,6 +74,7 @@ class TimesheetRow(ORMBase):
     left_day: int | None
     start_confirmed: bool
     notes: dict[int, str]
+    designation_id: int | None = None
 
 
 class TimesheetGridResponse(ORMBase):
@@ -101,6 +102,34 @@ class TimesheetDesignationRead(ORMBase):
     rank_order: int
     sheet: str
     active: bool
+    system_key: str | None
+
+class TimesheetDesignationCreate(BaseModel):
+    """A user-created catalog designation."""
+
+    name_en: str = Field(min_length=1, max_length=128)
+    name_ar: str = Field(min_length=1, max_length=128)
+    sheet: Sheet
+
+
+class TimesheetDesignationUpdate(BaseModel):
+    """The two printable names changed by a catalog rename."""
+
+    name_en: str = Field(min_length=1, max_length=128)
+    name_ar: str = Field(min_length=1, max_length=128)
+
+
+class TimesheetRosterAssignmentWrite(BaseModel):
+    """One employee's designation from an effective month onward."""
+
+    employee_id: str = Field(min_length=1, max_length=16)
+    designation_id: int | None
+
+
+class TimesheetRosterBatch(BaseModel):
+    """A non-empty atomic month roster update."""
+
+    assignments: list[TimesheetRosterAssignmentWrite] = Field(min_length=1)
 
 
 class TimesheetDesignationOrder(BaseModel):
@@ -141,13 +170,17 @@ class TimesheetStartAckRequest(BaseModel):
 __all__ = [
     "Sheet",
     "TimesheetCellUpdate",
+    "TimesheetDesignationCreate",
     "TimesheetDesignationOrder",
     "TimesheetDesignationRead",
+    "TimesheetDesignationUpdate",
     "TimesheetFillerUpdate",
     "TimesheetGridResponse",
     "TimesheetIssue",
     "TimesheetPeriodPatch",
     "TimesheetRemoved",
+    "TimesheetRosterAssignmentWrite",
+    "TimesheetRosterBatch",
     "TimesheetRow",
     "TimesheetStartAckRequest",
     "Variant",

@@ -1,8 +1,11 @@
-"""Monthly time-sheet endpoints — the grid, the corrections, and both workbooks.
+"""Monthly time-sheet endpoints — the grid, corrections, catalog, roster, and workbooks.
 
 Routes:
   GET    /timesheet/designations                              — the catalog
+  POST   /timesheet/designations                              — add a catalog row
+  PATCH  /timesheet/designations/{id}                         — rename a catalog row
   PUT    /timesheet/designations/order                        — re-rank it
+  PUT    /timesheet/{year}/{month}/roster                     — replace assignments
   GET    /timesheet/{year}/{month}                            — the grid
   PUT    /timesheet/{year}/{month}/cell                       — force one cell
   PATCH  /timesheet/{year}/{month}                            — posts + fillers
@@ -12,46 +15,39 @@ Routes:
   GET    /timesheet/{year}/{month}/export                     — the workbook
   GET    /timesheet/employee/{id}/{year}/{month}/export        — one man's sheet
 
-Three things about this module are load-bearing:
+Static catalog and roster routes are declared before the dynamic month routes.
+Otherwise a two-segment ``PATCH /designations/{id}`` would be captured as a
+month path and fail its integer conversion.
 
-* **The two ``designations`` routes are declared first.** ``/{year}/{month}``
-  matches ``/designations/order`` too, so declaring it earlier makes the catalog
-  a 422 on ``int("designations")``.
-* **The month export freezes the month**, which is why it is gated on
-  ``timesheet.edit`` while the per-employee export — which freezes nothing —
-  needs only ``timesheet.view``. A read-only holder must not be able to seal a
-  month that only an editor can reopen.
-* **Every write passes the signed-in user down.** ``created_by``, ``closed_by``,
-  ``reopened_by`` and ``acked_by`` exist to answer "who did this", and a route
-  that drops the id leaves those columns NULL forever.
-
-The month writes answer with the refreshed grid, which is the state the page has
-to render next; the export answers with raw bytes and an RFC 5987
-``content-disposition``, because Starlette encodes headers as latin-1 and a bare
-``filename="كشف حضور…"`` raises mid-response.
+The month export freezes the month, so it is gated on ``timesheet.edit`` while
+the per-employee export freezes nothing and needs only ``timesheet.view``.
+Every write passes the signed-in user down for audit columns.
 """
 
-from __future__ import annotations
-
+from datetime import date
 from typing import Annotated
 from urllib.parse import quote
 
 from fastapi import APIRouter, Depends, Path, Query, status
 from fastapi.responses import Response
+from sqlalchemy import and_, func, select
 from sqlalchemy.orm import Session
 
 from app.api.deps import require_capability
 from app.api.errors import NotFoundError, ValidationFailedError
 from app.core import timesheet_xlsx
-from app.db.models import Employee, TimesheetDesignation, User
+from app.db.models import Employee, TimesheetDesignation, TimesheetRosterAssignment, User
 from app.db.session import get_db
 from app.schemas.timesheet import (
     Sheet,
     TimesheetCellUpdate,
+    TimesheetDesignationCreate,
     TimesheetDesignationOrder,
     TimesheetDesignationRead,
+    TimesheetDesignationUpdate,
     TimesheetGridResponse,
     TimesheetPeriodPatch,
+    TimesheetRosterBatch,
     TimesheetStartAckRequest,
     Variant,
 )
@@ -115,26 +111,39 @@ def _attachment(payload: bytes, filename: str) -> Response:
     )
 
 
-def _sheet_of(db: Session, employee_id: str) -> str:
-    """The workbook this employee is printed on — drivers report separately.
+def _sheet_of(db: Session, year: int, month: int, employee_id: str) -> str:
+    """Resolve one employee's latest effective designation for this month."""
 
-    Resolved from his designation rather than by searching both grids: the
-    per-employee export is reached from the employee record, which knows nothing
-    about sheets, and a man off this month's roster still has to resolve to the
-    sheet his row would be on. Mirrors ``timesheet_service._lists_on``: no
-    designation means the main sheet, where he also raises a blocking issue.
-    """
-
-    employee = db.get(Employee, employee_id)
-    if employee is None:
+    month_start = date(year, month, 1)
+    latest = (
+        select(func.max(TimesheetRosterAssignment.effective_from))
+        .where(
+            TimesheetRosterAssignment.employee_id == employee_id,
+            TimesheetRosterAssignment.effective_from <= month_start,
+        )
+        .scalar_subquery()
+    )
+    employee_and_designation = db.execute(
+        select(Employee, TimesheetDesignation)
+        .select_from(Employee)
+        .outerjoin(
+            TimesheetRosterAssignment,
+            and_(
+                TimesheetRosterAssignment.employee_id == employee_id,
+                TimesheetRosterAssignment.effective_from == latest,
+            ),
+        )
+        .outerjoin(
+            TimesheetDesignation,
+            TimesheetDesignation.id == TimesheetRosterAssignment.designation_id,
+        )
+        .where(Employee.id == employee_id)
+    ).one_or_none()
+    if employee_and_designation is None:
         raise NotFoundError(
             "EMPLOYEE_NOT_FOUND", f"No employee {employee_id!r}", employee_id=employee_id
         )
-    designation = (
-        db.get(TimesheetDesignation, employee.designation_id)
-        if employee.designation_id is not None
-        else None
-    )
+    _, designation = employee_and_designation
     return svc.SHEETS[0] if designation is None else designation.sheet
 
 
@@ -152,13 +161,34 @@ def _require_on_roster(db: Session, year: int, month: int, employee_id: str) -> 
     still accept the acknowledgement.
     """
 
-    grid = svc.build_month(db, year, month, sheet=_sheet_of(db, employee_id))
+    grid = svc.build_month(db, year, month, sheet=_sheet_of(db, year, month, employee_id))
     if not any(row.employee_id == employee_id for row in grid.rows):
         raise NotFoundError(
             "EMPLOYEE_NOT_ON_SHEET",
             f"{employee_id!r} is not on the {month}/{year} roster",
             employee_id=employee_id,
         )
+
+@router.post("/designations", response_model=TimesheetDesignationRead)
+def create_designation(
+    payload: TimesheetDesignationCreate,
+    db: Annotated[Session, Depends(get_db)],
+    _user: Annotated[User, Depends(require_capability("timesheet.edit"))],
+) -> TimesheetDesignation:
+    return svc.create_designation(
+        db, payload.name_en, payload.name_ar, sheet=payload.sheet
+    )
+
+
+@router.patch("/designations/{designation_id}", response_model=TimesheetDesignationRead)
+def rename_designation(
+    designation_id: int,
+    payload: TimesheetDesignationUpdate,
+    db: Annotated[Session, Depends(get_db)],
+    _user: Annotated[User, Depends(require_capability("timesheet.edit"))],
+) -> TimesheetDesignation:
+    return svc.rename_designation(db, designation_id, payload.name_en, payload.name_ar)
+
 
 
 # --------------------------------------------------------------------------- #
@@ -182,6 +212,20 @@ def reorder_designations(
 ) -> list[TimesheetDesignation]:
     svc.reorder_designations(db, payload.ids)
     return svc.list_designations(db)
+@router.put("/{year}/{month}/roster", status_code=status.HTTP_204_NO_CONTENT)
+def set_roster(
+    year: Year,
+    month: Month,
+    payload: TimesheetRosterBatch,
+    db: Annotated[Session, Depends(get_db)],
+    user: Annotated[User, Depends(require_capability("timesheet.edit"))],
+) -> Response:
+    svc.set_roster_assignments(
+        db, year, month, payload.assignments, actor_id=user.id
+    )
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
 
 
 # --------------------------------------------------------------------------- #
@@ -343,7 +387,7 @@ def export_employee(
     A man on neither month still 404s, out of ``render_single_span``.
     """
 
-    sheet = _sheet_of(db, employee_id)
+    sheet = _sheet_of(db, year, month, employee_id)
     grid = svc.build_month(db, year, month, sheet=sheet)
     if months == 1:
         return _attachment(

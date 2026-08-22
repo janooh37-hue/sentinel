@@ -60,6 +60,7 @@ from app.db.models import (
     TimesheetStatFiller,
     User,
 )
+from app.schemas.timesheet import TimesheetRosterAssignmentWrite
 
 #: The manual red block: a day the operator declares outside the billing window.
 #: Derived by nothing — the engine never emits it — and kept by both statistics
@@ -908,6 +909,66 @@ def list_designations(db: Session) -> list[TimesheetDesignation]:
     return list(
         db.execute(select(TimesheetDesignation).order_by(TimesheetDesignation.rank_order)).scalars()
     )
+def _catalog_names(name_en: str, name_ar: str) -> tuple[str, str]:
+    names = (name_en.strip(), name_ar.strip())
+    if not all(names):
+        raise ValidationFailedError(
+            "DESIGNATION_NAME_REQUIRED",
+            "Designation names must not be blank.",
+        )
+    return names
+
+
+def _ensure_catalog_names_unique(
+    db: Session, name_en: str, name_ar: str, *, exclude_id: int | None = None
+) -> None:
+    wanted = {"name_en": name_en.casefold(), "name_ar": name_ar.casefold()}
+    for row in db.execute(select(TimesheetDesignation)).scalars():
+        if row.id == exclude_id:
+            continue
+        if row.name_en.casefold() == wanted["name_en"] or row.name_ar.casefold() == wanted["name_ar"]:
+            raise ValidationFailedError(
+                "DESIGNATION_NAME_DUPLICATE",
+                "Designation names must be unique, ignoring case.",
+            )
+
+
+def create_designation(
+    db: Session, name_en: str, name_ar: str, *, sheet: str
+) -> TimesheetDesignation:
+    name_en, name_ar = _catalog_names(name_en, name_ar)
+    _ensure_catalog_names_unique(db, name_en, name_ar)
+    max_rank = db.execute(select(func.max(TimesheetDesignation.rank_order))).scalar_one()
+    row = TimesheetDesignation(
+        name_en=name_en,
+        name_ar=name_ar,
+        rank_order=(max_rank or 0) + 1,
+        sheet=sheet,
+        system_key=None,
+    )
+    db.add(row)
+    db.commit()
+    return row
+
+
+def rename_designation(
+    db: Session, designation_id: int, name_en: str, name_ar: str
+) -> TimesheetDesignation:
+    row = db.get(TimesheetDesignation, designation_id)
+    if row is None:
+        raise NotFoundError(
+            "DESIGNATION_NOT_FOUND",
+            f"No designation {designation_id}.",
+            designation_id=designation_id,
+        )
+    name_en, name_ar = _catalog_names(name_en, name_ar)
+    _ensure_catalog_names_unique(db, name_en, name_ar, exclude_id=designation_id)
+    row.name_en = name_en
+    row.name_ar = name_ar
+    db.commit()
+    return row
+
+
 
 
 def reorder_designations(db: Session, ids: list[int]) -> None:
@@ -966,6 +1027,102 @@ def _require_employee(db: Session, employee_id: str) -> Employee:
             "EMPLOYEE_NOT_FOUND", f"No employee {employee_id!r}", employee_id=employee_id
         )
     return employee
+def set_roster_assignments(
+    db: Session,
+    year: int,
+    month: int,
+    assignments: Sequence[TimesheetRosterAssignmentWrite],
+    *,
+    actor_id: int | None,
+) -> None:
+    """Validate and upsert one effective roster month as a single transaction."""
+
+    if not assignments:
+        raise ValidationFailedError(
+            "ROSTER_EMPTY",
+            "At least one roster assignment is required.",
+        )
+    _require_open(db, year, month)
+    employee_ids = [assignment.employee_id for assignment in assignments]
+    if len(employee_ids) != len(set(employee_ids)):
+        raise ValidationFailedError(
+            "ROSTER_DUPLICATE_EMPLOYEE",
+            "Each employee may appear only once in a roster batch.",
+        )
+
+    employees = {
+        row.id
+        for row in db.execute(select(Employee).where(Employee.id.in_(employee_ids))).scalars()
+    }
+    missing_employees = sorted(set(employee_ids) - employees)
+    if missing_employees:
+        raise NotFoundError(
+            "EMPLOYEE_NOT_FOUND",
+            f"No employee {missing_employees[0]!r}.",
+            employee_ids=missing_employees,
+        )
+
+    designation_ids = {
+        assignment.designation_id
+        for assignment in assignments
+        if assignment.designation_id is not None
+    }
+    designations = {
+        row.id
+        for row in db.execute(
+            select(TimesheetDesignation).where(TimesheetDesignation.id.in_(designation_ids))
+        ).scalars()
+    }
+    missing_designations = sorted(designation_ids - designations)
+    if missing_designations:
+        raise NotFoundError(
+            "DESIGNATION_NOT_FOUND",
+            f"No designation {missing_designations[0]}.",
+            designation_ids=missing_designations,
+        )
+    inactive = [
+        row.id
+        for row in db.execute(
+            select(TimesheetDesignation).where(
+                TimesheetDesignation.id.in_(designation_ids),
+                TimesheetDesignation.active.is_(False),
+            )
+        ).scalars()
+    ]
+    if inactive:
+        raise ValidationFailedError(
+            "DESIGNATION_INACTIVE",
+            "Roster assignments require active designations.",
+            designation_ids=sorted(inactive),
+        )
+
+    effective_from = date(year, month, 1)
+    existing = {
+        row.employee_id: row
+        for row in db.execute(
+            select(TimesheetRosterAssignment).where(
+                TimesheetRosterAssignment.employee_id.in_(employee_ids),
+                TimesheetRosterAssignment.effective_from == effective_from,
+            )
+        ).scalars()
+    }
+    for assignment in assignments:
+        row = existing.get(assignment.employee_id)
+        if row is None:
+            db.add(
+                TimesheetRosterAssignment(
+                    employee_id=assignment.employee_id,
+                    designation_id=assignment.designation_id,
+                    effective_from=effective_from,
+                    assigned_by=actor_id,
+                )
+            )
+        else:
+            row.designation_id = assignment.designation_id
+            row.assigned_by = actor_id
+    db.commit()
+
+
 
 
 def _derived_cell_code(

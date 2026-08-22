@@ -25,6 +25,7 @@ from app.db.models import (
     Leave,
     TimesheetDesignation,
     TimesheetPeriod,
+    TimesheetRosterAssignment,
     TimesheetSnapshotRow,
     TimesheetStartAck,
     TimesheetStatFiller,
@@ -99,7 +100,13 @@ def _guard(db: Session) -> None:
             name_en="TEST GUARD",
             nationality="الإمارات",
             doj=date(2020, 1, 1),
+        )
+    )
+    db.add(
+        TimesheetRosterAssignment(
+            employee_id="G1001",
             designation_id=designation.id,
+            effective_from=date(2026, 1, 1),
         )
     )
     db.commit()
@@ -113,16 +120,34 @@ def _driver(db: Session) -> None:
             name_en="TEST DRIVER",
             nationality="الإمارات",
             doj=date(2020, 1, 1),
+        )
+    )
+    db.add(
+        TimesheetRosterAssignment(
+            employee_id="G2000",
             designation_id=designation.id,
+            effective_from=date(2026, 1, 1),
         )
     )
     db.commit()
+def _add_assignment(
+    db: Session, employee_id: str, designation_id: int | None, effective_from: date = date(2026, 1, 1)
+) -> None:
+    db.add(
+        TimesheetRosterAssignment(
+            employee_id=employee_id,
+            designation_id=designation_id,
+            effective_from=effective_from,
+        )
+    )
+
+
+
 
 
 # --------------------------------------------------------------------------- #
 # the grid
 # --------------------------------------------------------------------------- #
-
 
 def test_get_returns_the_grid(client, db_session):
     _guard(db_session)
@@ -149,10 +174,11 @@ def test_the_grid_response_loses_no_field(client, db_session):
 
     grid_fields = {f.name for f in fields(svc.MonthGrid)}
     row_fields = {f.name for f in fields(svc.GridRow)}
-    assert len(grid_fields) == 11 and len(row_fields) == 15
+    assert len(grid_fields) == 11 and len(row_fields) == 16
     assert set(body) == grid_fields
     row = body["rows"][0]
     assert set(row) == row_fields
+    assert row["designation_id"] == db_session.query(TimesheetRosterAssignment).one().designation_id
     assert row["stat_filler"] is None
     assert row["joined_day"] is None
     assert row["left_day"] is None
@@ -184,9 +210,9 @@ def test_a_warning_may_name_someone_with_no_row(client, db_session):
             doj=date(2020, 1, 1),
             end_date=date(2026, 6, 20),
             status="Active",
-            designation_id=designation.id,
         )
     )
+    _add_assignment(db_session, "G1002", designation.id)
     db_session.commit()
 
     body = client.get("/api/v1/timesheet/2026/7").json()
@@ -341,9 +367,9 @@ def test_start_ack_is_204_idempotent_and_records_the_actor(client, db_session):
             name_en="NEW GUARD",
             nationality="الإمارات",
             doj=date(2026, 7, 14),
-            designation_id=designation.id,
         )
     )
+    _add_assignment(db_session, "G7176", designation.id)
     db_session.commit()
 
     first = client.post("/api/v1/timesheet/2026/7/start-ack", json={"employee_id": "G7176"})
@@ -398,9 +424,9 @@ def test_start_ack_for_someone_off_the_roster_is_a_404(client, db_session):
             name_en="FUTURE GUARD",
             nationality="الإمارات",
             doj=date(2026, 9, 1),  # exists, but not on July's roster
-            designation_id=designation.id,
         )
     )
+    _add_assignment(db_session, "G3000", designation.id)
     db_session.commit()
 
     response = client.post("/api/v1/timesheet/2026/7/start-ack", json={"employee_id": "G3000"})
@@ -465,9 +491,9 @@ def test_export_preflights_both_sheets_before_sealing(client, db_session):
             name_en="UNKNOWN NATIONALITY DRIVER",
             nationality="India",
             doj=date(2020, 1, 1),
-            designation_id=designation.id,
         )
     )
+    _add_assignment(db_session, "G2000", designation.id)
     db_session.commit()
 
     response = client.get("/api/v1/timesheet/2026/7/export")
@@ -506,6 +532,17 @@ def test_the_employee_export_finds_a_driver_on_his_own_sheet(client, db_session)
     response = client.get("/api/v1/timesheet/employee/G2000/2026/7/export")
     assert response.status_code == 200
     assert load_workbook(io.BytesIO(response.content)).worksheets[0]["B6"].value == "G2000"
+def test_employee_export_uses_the_requested_month_assignment(client, db_session):
+    _guard(db_session)
+    july = client.get("/api/v1/timesheet/employee/G1001/2026/7/export")
+    assert load_workbook(io.BytesIO(july.content)).worksheets[0]["B6"].value == "G1001"
+
+    driver = db_session.query(TimesheetDesignation).filter_by(name_en="Driver").one()
+    _add_assignment(db_session, "G1001", driver.id, date(2026, 8, 1))
+    db_session.commit()
+    august = client.get("/api/v1/timesheet/employee/G1001/2026/8/export")
+    assert load_workbook(io.BytesIO(august.content)).worksheets[0]["B6"].value == "G1001"
+
 
 
 def test_two_months_are_one_workbook_earlier_sheet_first(client, db_session):
@@ -548,9 +585,9 @@ def test_the_handover_span_of_someone_who_left_last_month(client, db_session):
             nationality="الإمارات",
             doj=date(2020, 1, 1),
             end_date=date(2026, 6, 20),
-            designation_id=designation.id,
         )
     )
+    _add_assignment(db_session, "G4000", designation.id)
     db_session.commit()
 
     response = client.get("/api/v1/timesheet/employee/G4000/2026/7/export?months=2")
@@ -573,9 +610,9 @@ def test_a_span_that_misses_both_months_still_404s(client, db_session):
             name_en="LATER GUARD",
             nationality="الإمارات",
             doj=date(2026, 10, 1),
-            designation_id=designation.id,
         )
     )
+    _add_assignment(db_session, "G5000", designation.id)
     db_session.commit()
 
     response = client.get("/api/v1/timesheet/employee/G5000/2026/7/export?months=2")
@@ -604,9 +641,9 @@ def test_the_employee_export_404s_for_someone_off_the_sheet(client, db_session):
             name_en="LATER GUARD",
             nationality="الإمارات",
             doj=date(2026, 9, 1),  # employed, but not in July
-            designation_id=designation.id,
         )
     )
+    _add_assignment(db_session, "G3000", designation.id)
     db_session.commit()
     off_roster = client.get("/api/v1/timesheet/employee/G3000/2026/7/export")
     assert off_roster.status_code == 404
@@ -642,22 +679,149 @@ def test_designations_list_and_reorder(client):
     assert (
         client.put("/api/v1/timesheet/designations/order", json={"ids": ids[:5]}).status_code == 422
     )
+def test_designation_create_normalizes_names_and_rename_preserves_catalog_fields(
+    client, db_session
+):
+    created = client.post(
+        "/api/v1/timesheet/designations",
+        json={"name_en": " Relief Supervisor ", "name_ar": " مشرف بديل ", "sheet": "main"},
+    )
+    assert created.status_code == 200
+    body = created.json()
+    assert (body["name_en"], body["name_ar"], body["system_key"]) == (
+        "Relief Supervisor",
+        "مشرف بديل",
+        None,
+    )
+    assert body["rank_order"] == 17
+
+    renamed = client.patch(
+        f"/api/v1/timesheet/designations/{body['id']}",
+        json={"name_en": " Relief Duty Supervisor ", "name_ar": " مشرف مناوب بديل "},
+    )
+    assert renamed.status_code == 200
+    assert renamed.json()["name_en"] == "Relief Duty Supervisor"
+    assert renamed.json()["name_ar"] == "مشرف مناوب بديل"
+    assert renamed.json()["rank_order"] == 17
+    assert renamed.json()["sheet"] == "main"
+    assert renamed.json()["system_key"] is None
+
+    duplicate = client.post(
+        "/api/v1/timesheet/designations",
+        json={"name_en": " security guard ", "name_ar": "حارس آخر", "sheet": "main"},
+    )
+    assert duplicate.status_code == 422
+    assert duplicate.json()["error"]["code"] == "DESIGNATION_NAME_DUPLICATE"
+
+
+def test_roster_put_upserts_effective_assignment_and_allows_explicit_null(client, db_session):
+    _guard(db_session)
+    designation = db_session.query(TimesheetDesignation).filter_by(name_en="Driver").one()
+    response = client.put(
+        "/api/v1/timesheet/2026/8/roster",
+        json={"assignments": [{"employee_id": "G1001", "designation_id": designation.id}]},
+    )
+    assert response.status_code == 204
+    row = (
+        db_session.query(TimesheetRosterAssignment)
+        .filter_by(employee_id="G1001", effective_from=date(2026, 8, 1))
+        .one()
+    )
+    assert (row.designation_id, row.assigned_by) == (designation.id, client.user_id)
+
+    cleared = client.put(
+        "/api/v1/timesheet/2026/8/roster",
+        json={"assignments": [{"employee_id": "G1001", "designation_id": None}]},
+    )
+    assert cleared.status_code == 204
+    db_session.refresh(row)
+    assert row.designation_id is None
+
+
+def test_roster_duplicate_employee_is_atomic(client, db_session):
+    _guard(db_session)
+    before = [
+        (row.employee_id, row.effective_from, row.designation_id)
+        for row in db_session.query(TimesheetRosterAssignment).all()
+    ]
+    response = client.put(
+        "/api/v1/timesheet/2026/8/roster",
+        json={
+            "assignments": [
+                {"employee_id": "G1001", "designation_id": 1},
+                {"employee_id": "G1001", "designation_id": None},
+            ]
+        },
+    )
+    assert response.status_code == 422
+    assert response.json()["error"]["code"] == "ROSTER_DUPLICATE_EMPLOYEE"
+    db_session.rollback()
+    assert [
+        (row.employee_id, row.effective_from, row.designation_id)
+        for row in db_session.query(TimesheetRosterAssignment).all()
+    ] == before
+
+
+def test_roster_unknown_employee_is_atomic(client, db_session):
+    _guard(db_session)
+    before = db_session.query(TimesheetRosterAssignment).count()
+    designation = db_session.query(TimesheetDesignation).filter_by(name_en="Driver").one()
+    response = client.put(
+        "/api/v1/timesheet/2026/8/roster",
+        json={
+            "assignments": [
+                {"employee_id": "G1001", "designation_id": designation.id},
+                {"employee_id": "G9999", "designation_id": designation.id},
+            ]
+        },
+    )
+    assert response.status_code == 404
+    assert response.json()["error"]["code"] == "EMPLOYEE_NOT_FOUND"
+    db_session.rollback()
+    assert db_session.query(TimesheetRosterAssignment).count() == before
+
+
+def test_roster_inactive_designation_is_atomic(client, db_session):
+    _guard(db_session)
+    designation = db_session.query(TimesheetDesignation).filter_by(name_en="Driver").one()
+    designation.active = False
+    db_session.commit()
+    before = db_session.query(TimesheetRosterAssignment).count()
+    response = client.put(
+        "/api/v1/timesheet/2026/8/roster",
+        json={"assignments": [{"employee_id": "G1001", "designation_id": designation.id}]},
+    )
+    assert response.status_code == 422
+    assert response.json()["error"]["code"] == "DESIGNATION_INACTIVE"
+    db_session.rollback()
+    assert db_session.query(TimesheetRosterAssignment).count() == before
+
+
+def test_roster_closed_month_is_atomic(client, db_session):
+    _guard(db_session)
+    client.get("/api/v1/timesheet/2026/8/export")
+    designation = db_session.query(TimesheetDesignation).filter_by(name_en="Driver").one()
+    before = db_session.query(TimesheetRosterAssignment).count()
+    response = client.put(
+        "/api/v1/timesheet/2026/8/roster",
+        json={"assignments": [{"employee_id": "G1001", "designation_id": designation.id}]},
+    )
+    assert response.status_code == 409
+    assert response.json()["error"]["code"] == "TIMESHEET_CLOSED"
+    db_session.rollback()
+    assert db_session.query(TimesheetRosterAssignment).count() == before
+
 
 
 def test_the_static_designation_routes_are_declared_before_the_month_route():
-    """The order, not a status code.
-
-    Every declaration order answers the same today — ``/designations`` is one
-    segment against a two-segment regex, and the ``PUT`` gets ``Match.PARTIAL``
-    on the method mismatch and keeps scanning — so a status assertion proves
-    nothing. The order is what has to hold: it becomes load-bearing the moment a
-    two-segment static ``GET`` is added under this prefix.
-    """
+    """Static catalog and roster routes must not be shadowed by month paths."""
 
     paths = [getattr(route, "path", "") for route in create_app().routes]
     month = paths.index("/api/v1/timesheet/{year}/{month}")
     assert paths.index("/api/v1/timesheet/designations") < month
     assert paths.index("/api/v1/timesheet/designations/order") < month
+    assert paths.index("/api/v1/timesheet/designations/{designation_id}") < month
+    assert paths.index("/api/v1/timesheet/{year}/{month}/roster") < month
 
 
 # --------------------------------------------------------------------------- #
@@ -677,6 +841,9 @@ def test_the_presets_split_reading_from_correcting():
 @pytest.mark.parametrize(
     ("method", "path", "body"),
     [
+        ("POST", "/api/v1/timesheet/designations", {"name_en": "New", "name_ar": "جديد", "sheet": "main"}),
+        ("PATCH", "/api/v1/timesheet/designations/1", {"name_en": "Renamed", "name_ar": "معدل"}),
+        ("PUT", "/api/v1/timesheet/2026/7/roster", {"assignments": [{"employee_id": "G1001", "designation_id": 1}]}),
         ("PUT", "/api/v1/timesheet/designations/order", {"ids": [1]}),
         ("PUT", "/api/v1/timesheet/2026/7/cell", {"employee_id": "G1001", "day": 9, "code": "AB"}),
         ("PATCH", "/api/v1/timesheet/2026/7", {"post_count": 100}),

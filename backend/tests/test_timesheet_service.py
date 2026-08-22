@@ -13,7 +13,7 @@ from datetime import date, datetime
 
 import pytest
 
-from app.api.errors import ConflictError, ValidationFailedError
+from app.api.errors import ConflictError, NotFoundError, ValidationFailedError
 from app.core.timesheet_codes import (
     CODE_ABSENT,
     CODE_ANNUAL,
@@ -35,6 +35,7 @@ from app.db.models import (
     TimesheetStartAck,
     TimesheetStatFiller,
 )
+from app.schemas.timesheet import TimesheetRosterAssignmentWrite
 from app.services import timesheet_service as svc
 from tests.conftest import make_user
 
@@ -314,6 +315,64 @@ def test_reorder_rewrites_ranks_and_rejects_a_partial_list(db_session):
     assert svc.list_designations(db_session)[0].name_en == "Ass. Director"
     with pytest.raises(ValidationFailedError):
         svc.reorder_designations(db_session, ids[:5])
+def test_catalog_create_and_rename_are_normalized_and_unique(db_session):
+    created = svc.create_designation(
+        db_session, " Relief Supervisor ", " مشرف بديل ", sheet="main"
+    )
+    assert (created.name_en, created.name_ar, created.system_key, created.rank_order) == (
+        "Relief Supervisor",
+        "مشرف بديل",
+        None,
+        17,
+    )
+
+    svc.rename_designation(db_session, created.id, " Relief Duty Supervisor ", " مشرف مناوب بديل ")
+    db_session.refresh(created)
+    assert (created.name_en, created.name_ar, created.rank_order, created.sheet) == (
+        "Relief Duty Supervisor",
+        "مشرف مناوب بديل",
+        17,
+        "main",
+    )
+    with pytest.raises(ValidationFailedError, match="unique"):
+        svc.create_designation(db_session, " security guard ", "حارس آخر", sheet="main")
+
+
+def test_roster_batch_validates_every_row_before_mutating(db_session, guards):
+    supervisor = (
+        db_session.query(TimesheetDesignation).filter_by(name_en="Security Supervisor").one()
+    )
+    before = db_session.query(TimesheetRosterAssignment).count()
+    with pytest.raises(NotFoundError, match="G9999"):
+        svc.set_roster_assignments(
+            db_session,
+            2026,
+            8,
+            [
+                TimesheetRosterAssignmentWrite(
+                    employee_id="G1001", designation_id=supervisor.id
+                ),
+                TimesheetRosterAssignmentWrite(employee_id="G9999", designation_id=None),
+            ],
+            actor_id=7,
+        )
+    db_session.rollback()
+    assert db_session.query(TimesheetRosterAssignment).count() == before
+
+    svc.set_roster_assignments(
+        db_session,
+        2026,
+        8,
+        [TimesheetRosterAssignmentWrite(employee_id="G1001", designation_id=None)],
+        actor_id=7,
+    )
+    row = (
+        db_session.query(TimesheetRosterAssignment)
+        .filter_by(employee_id="G1001", effective_from=date(2026, 8, 1))
+        .one()
+    )
+    assert (row.designation_id, row.assigned_by) == (None, 7)
+
 
 
 def _guard(db, employee_id, *, doj=date(2024, 1, 1), end_date=None, rank=15):
