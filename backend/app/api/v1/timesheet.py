@@ -395,7 +395,8 @@ def export_employee(
             timesheet_xlsx.filename_for_single(grid, employee_id),
         )
     earlier_year, earlier_month = svc.previous_month(year, month)
-    earlier = svc.build_month(db, earlier_year, earlier_month, sheet=sheet)
+    earlier_sheet = _sheet_of(db, earlier_year, earlier_month, employee_id)
+    earlier = svc.build_month(db, earlier_year, earlier_month, sheet=earlier_sheet)
     payload = timesheet_xlsx.render_single_span([earlier, grid], employee_id)
     named = grid if any(row.employee_id == employee_id for row in grid.rows) else earlier
     return _attachment(payload, timesheet_xlsx.filename_for_single(named, employee_id))

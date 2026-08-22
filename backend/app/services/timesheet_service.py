@@ -1120,6 +1120,7 @@ def set_roster_assignments(
         else:
             row.designation_id = assignment.designation_id
             row.assigned_by = actor_id
+            row.assigned_at = _utcnow()
     db.commit()
 
 

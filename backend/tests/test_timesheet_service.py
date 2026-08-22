@@ -372,6 +372,36 @@ def test_roster_batch_validates_every_row_before_mutating(db_session, guards):
         .one()
     )
     assert (row.designation_id, row.assigned_by) == (None, 7)
+def test_roster_same_month_update_refreshes_audit_timestamp(db_session, guards):
+    designation = db_session.query(TimesheetDesignation).filter_by(name_en="Driver").one()
+    svc.set_roster_assignments(
+        db_session,
+        2026,
+        8,
+        [TimesheetRosterAssignmentWrite(employee_id="G1001", designation_id=designation.id)],
+        actor_id=7,
+    )
+    row = (
+        db_session.query(TimesheetRosterAssignment)
+        .filter_by(employee_id="G1001", effective_from=date(2026, 8, 1))
+        .one()
+    )
+    old_timestamp = datetime(2020, 1, 1)
+    row.assigned_at = old_timestamp
+    db_session.commit()
+
+    svc.set_roster_assignments(
+        db_session,
+        2026,
+        8,
+        [TimesheetRosterAssignmentWrite(employee_id="G1001", designation_id=None)],
+        actor_id=9,
+    )
+    db_session.refresh(row)
+    assert row.assigned_by == 9
+    assert row.assigned_at > old_timestamp
+
+
 
 
 

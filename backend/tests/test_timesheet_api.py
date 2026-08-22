@@ -542,6 +542,19 @@ def test_employee_export_uses_the_requested_month_assignment(client, db_session)
     db_session.commit()
     august = client.get("/api/v1/timesheet/employee/G1001/2026/8/export")
     assert load_workbook(io.BytesIO(august.content)).worksheets[0]["B6"].value == "G1001"
+def test_two_month_export_resolves_each_month_sheet_after_assignment_change(client, db_session):
+    _guard(db_session)
+    driver = db_session.query(TimesheetDesignation).filter_by(name_en="Driver").one()
+    _add_assignment(db_session, "G1001", driver.id, date(2026, 8, 1))
+    db_session.commit()
+
+    response = client.get("/api/v1/timesheet/employee/G1001/2026/8/export?months=2")
+    assert response.status_code == 200
+    workbook = load_workbook(io.BytesIO(response.content))
+    assert workbook.sheetnames == ["JUL", "AUG"]
+    assert workbook["JUL"]["B6"].value == "G1001"
+    assert workbook["AUG"]["B6"].value == "G1001"
+
 
 
 
