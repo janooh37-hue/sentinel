@@ -58,6 +58,24 @@ def test_timesheet_roster_assignment_migration_backfills_and_downgrades(
         ).fetchall()
         assert keys[0] == ("prisons_director",)
         assert keys[-1] == ("driver",)
+        assert keys == [
+            ("prisons_director",),
+            ("assistant_director",),
+            ("project_manager",),
+            ("branch_manager",),
+            ("duty_in_charge",),
+            ("security_supervisor",),
+            ("armory_officer",),
+            ("assistant_security_supervisor",),
+            ("armory_keeper",),
+            ("control_room_security_guard",),
+            ("clinic_security_guard",),
+            ("habilitation_security_guard",),
+            ("escort_security_guard",),
+            ("messengers",),
+            ("security_guard",),
+            ("driver",),
+        ]
 
         connection.execute(
             text(

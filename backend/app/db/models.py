@@ -73,8 +73,8 @@ class Employee(Base):
     department: Mapped[str | None] = mapped_column(String(128), nullable=True)
     position: Mapped[str | None] = mapped_column(String(128), nullable=True)
     position_ar: Mapped[str | None] = mapped_column(String(128), nullable=True)
-    # `supervisor_id` is deliberately not a ForeignKey: employee records can
-    # be imported before their supervisor exists.
+    # Deliberately not a ForeignKey: adding the constraint would force a full
+    # employees-table rewrite in SQLite.
     supervisor_id: Mapped[str | None] = mapped_column(String(16), nullable=True)
     other: Mapped[str | None] = mapped_column(String(256), nullable=True)
     duty_unit: Mapped[str | None] = mapped_column(String(128), nullable=True)
