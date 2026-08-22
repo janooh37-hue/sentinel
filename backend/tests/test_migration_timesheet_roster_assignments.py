@@ -37,9 +37,7 @@ def test_timesheet_roster_assignment_migration_backfills_and_downgrades(
     command.upgrade(config, "0077")
 
     with engine.begin() as connection:
-        columns = {
-            row[1] for row in connection.exec_driver_sql("PRAGMA table_info(employees)")
-        }
+        columns = {row[1] for row in connection.exec_driver_sql("PRAGMA table_info(employees)")}
         assert "designation_id" not in columns
 
         assignment = connection.execute(
@@ -51,10 +49,7 @@ def test_timesheet_roster_assignment_migration_backfills_and_downgrades(
         assert assignment == [("G1001", 1, "2026-01-01")]
 
         keys = connection.execute(
-            text(
-                "SELECT system_key FROM timesheet_designations "
-                "ORDER BY rank_order"
-            )
+            text("SELECT system_key FROM timesheet_designations ORDER BY rank_order")
         ).fetchall()
         assert keys[0] == ("prisons_director",)
         assert keys[-1] == ("driver",)
@@ -85,38 +80,32 @@ def test_timesheet_roster_assignment_migration_backfills_and_downgrades(
             )
         )
 
-    with pytest.raises(IntegrityError):
-        with engine.begin() as connection:
-            connection.execute(
-                text(
-                    "INSERT INTO timesheet_roster_assignments "
-                    "(employee_id, designation_id, effective_from) "
-                    "VALUES ('G1001', 16, '2026-02-01')"
-                )
+    with pytest.raises(IntegrityError), engine.begin() as connection:
+        connection.execute(
+            text(
+                "INSERT INTO timesheet_roster_assignments "
+                "(employee_id, designation_id, effective_from) "
+                "VALUES ('G1001', 16, '2026-02-01')"
             )
+        )
 
-    with pytest.raises(IntegrityError):
-        with engine.begin() as connection:
-            connection.execute(
-                text(
-                    "INSERT INTO timesheet_designations "
-                    "(name_en, name_ar, rank_order, system_key) "
-                    "VALUES ('Duplicate', 'Duplicate', 17, 'driver')"
-                )
+    with pytest.raises(IntegrityError), engine.begin() as connection:
+        connection.execute(
+            text(
+                "INSERT INTO timesheet_designations "
+                "(name_en, name_ar, rank_order, system_key) "
+                "VALUES ('Duplicate', 'Duplicate', 17, 'driver')"
             )
+        )
 
     command.downgrade(config, "0076")
 
     with engine.connect() as connection:
-        columns = {
-            row[1] for row in connection.exec_driver_sql("PRAGMA table_info(employees)")
-        }
+        columns = {row[1] for row in connection.exec_driver_sql("PRAGMA table_info(employees)")}
         assert "designation_id" in columns
         designation_columns = {
             row[1]
-            for row in connection.exec_driver_sql(
-                "PRAGMA table_info(timesheet_designations)"
-            )
+            for row in connection.exec_driver_sql("PRAGMA table_info(timesheet_designations)")
         }
         assert "system_key" not in designation_columns
         assert not connection.dialect.has_table(connection, "timesheet_roster_assignments")

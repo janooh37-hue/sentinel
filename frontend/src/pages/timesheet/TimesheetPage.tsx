@@ -689,18 +689,15 @@ export function TimesheetPage(): React.JSX.Element {
    */
   useEffect(() => {
     if (!roster.editing || canRoster) return
-    setRoster({ editing: false, draft: NO_DRAFT })
-    setRosterError(null)
-  }, [canRoster, roster.editing])
+    // Server refetches can revoke editability after entry; synchronize local mode.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    onCancelRoster()
+  }, [canRoster, onCancelRoster, roster.editing])
   useEffect(() => {
-    if (!filter) return
-    if (filterMatches.length === 0) {
-      setFilter(null)
-      return
-    }
-    const next = ((filter.index % filterMatches.length) + filterMatches.length) % filterMatches.length
-    if (next !== filter.index) setFilter({ ...filter, index: next })
-  }, [filter, filterMatches.length])
+    // Match membership comes from the server query and can disappear on refetch.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    if (filter !== null && filterMatches.length === 0) onClearFilter()
+  }, [filter, filterMatches.length, onClearFilter])
 
   useEffect(() => {
     if (filterCode === null) {

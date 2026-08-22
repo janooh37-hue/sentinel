@@ -104,6 +104,7 @@ class TimesheetDesignationRead(ORMBase):
     active: bool
     system_key: str | None
 
+
 class TimesheetDesignationCreate(BaseModel):
     """A user-created catalog designation."""
 

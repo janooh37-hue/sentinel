@@ -346,6 +346,7 @@ class Plan:
     #: (employee_id, effective_from) → sheet designation with no catalog match.
     unmatched_designations: dict[tuple[str, date], str]
 
+
 def build_plan(series: dict[str, dict[date, str]], db: Session) -> Plan:
     employees, leaves = load_db_state(db)
     corrected_keys = {(c[0], c[1], c[2], c[3]) for c in CORRECTIONS}
@@ -442,13 +443,13 @@ def build_plan(series: dict[str, dict[date, str]], db: Session) -> Plan:
         if record is None:
             continue
         for effective_from, name in sorted(monthly.items()):
-            key = (employee_id, effective_from)
+            designation_key = (employee_id, effective_from)
             if not name:
                 designations.append((employee_id, effective_from, None, ""))
                 continue
             designation_id = catalog.get(name.casefold())
             if designation_id is None:
-                unmatched[key] = name
+                unmatched[designation_key] = name
                 continue
             designations.append((employee_id, effective_from, designation_id, name))
     designations.sort(key=lambda row: (row[0], row[1]))
@@ -528,10 +529,10 @@ def print_plan(plan: Plan) -> None:
     for employee_id, new, old in plan.end_date_fixes:
         print(f"             {employee_id:7} end_date {old} -> {new}")
     if plan.duplicate:
-        drop, keep, end = plan.duplicate
+        drop, keep, duplicate_end = plan.duplicate
         print(
             f"[import] duplicate employee: merge {drop} -> {keep} "
-            f"(end_date {end}, status Resigned), delete {drop}"
+            f"(end_date {duplicate_end}, status Resigned), delete {drop}"
         )
         if plan.duplicate_refs:
             total = sum(plan.duplicate_refs.values())
@@ -618,13 +619,13 @@ def apply_plan(db: Session, plan: Plan) -> None:
         )
 
     if plan.duplicate:
-        drop, keep, end = plan.duplicate
+        drop, keep, duplicate_end = plan.duplicate
         db.execute(
             text(
                 "UPDATE employees SET status = 'Resigned', end_date = :d, updated_at = :now "
                 "WHERE id = :i"
             ),
-            {"d": end, "now": now, "i": keep},
+            {"d": duplicate_end, "now": now, "i": keep},
         )
         db.execute(
             text(
@@ -675,17 +676,17 @@ def verify(series: dict[str, dict[date, str]], db: Session) -> int:
 
     employees, leaves = load_db_state(db)
     absences: dict[str, set[date]] = defaultdict(set)
-    for row in db.execute(text("SELECT employee_id, date FROM absences")).all():
-        parsed = _as_date(row.date)
+    for absence_row in db.execute(text("SELECT employee_id, date FROM absences")).all():
+        parsed = _as_date(absence_row.date)
         if parsed:
-            absences[row.employee_id].add(parsed)
+            absences[absence_row.employee_id].add(parsed)
 
     spans: dict[str, list[LeaveSpan]] = defaultdict(list)
-    for row in leaves:
-        start, end = _as_date(row["start_date"]), _as_date(row["end_date"])
+    for leave_row in leaves:
+        start, end = _as_date(leave_row["start_date"]), _as_date(leave_row["end_date"])
         if start and end:
-            spans[str(row["employee_id"])].append(
-                LeaveSpan(str(row["leave_type"]), start, end, str(row["status"]))
+            spans[str(leave_row["employee_id"])].append(
+                LeaveSpan(str(leave_row["leave_type"]), start, end, str(leave_row["status"]))
             )
 
     total = 0

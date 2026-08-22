@@ -87,9 +87,7 @@ def _row(db, year, month, employee_id, *, sheet="main"):
     return next(r for r in grid.rows if r.employee_id == employee_id)
 
 
-def test_effective_roster_assignment_wins_by_month_and_explicit_null_unassigns(
-    db_session, guards
-):
+def test_effective_roster_assignment_wins_by_month_and_explicit_null_unassigns(db_session, guards):
     guard = db_session.query(TimesheetDesignation).filter_by(name_en="Security Guard").one()
     supervisor = (
         db_session.query(TimesheetDesignation).filter_by(name_en="Security Supervisor").one()
@@ -315,10 +313,10 @@ def test_reorder_rewrites_ranks_and_rejects_a_partial_list(db_session):
     assert svc.list_designations(db_session)[0].name_en == "Ass. Director"
     with pytest.raises(ValidationFailedError):
         svc.reorder_designations(db_session, ids[:5])
+
+
 def test_catalog_create_and_rename_are_normalized_and_unique(db_session):
-    created = svc.create_designation(
-        db_session, " Relief Supervisor ", " مشرف بديل ", sheet="main"
-    )
+    created = svc.create_designation(db_session, " Relief Supervisor ", " مشرف بديل ", sheet="main")
     assert (created.name_en, created.name_ar, created.system_key, created.rank_order) == (
         "Relief Supervisor",
         "مشرف بديل",
@@ -349,9 +347,7 @@ def test_roster_batch_validates_every_row_before_mutating(db_session, guards):
             2026,
             8,
             [
-                TimesheetRosterAssignmentWrite(
-                    employee_id="G1001", designation_id=supervisor.id
-                ),
+                TimesheetRosterAssignmentWrite(employee_id="G1001", designation_id=supervisor.id),
                 TimesheetRosterAssignmentWrite(employee_id="G9999", designation_id=None),
             ],
             actor_id=7,
@@ -372,6 +368,8 @@ def test_roster_batch_validates_every_row_before_mutating(db_session, guards):
         .one()
     )
     assert (row.designation_id, row.assigned_by) == (None, 7)
+
+
 def test_roster_same_month_update_refreshes_audit_timestamp(db_session, guards):
     designation = db_session.query(TimesheetDesignation).filter_by(name_en="Driver").one()
     svc.set_roster_assignments(
@@ -400,9 +398,6 @@ def test_roster_same_month_update_refreshes_audit_timestamp(db_session, guards):
     db_session.refresh(row)
     assert row.assigned_by == 9
     assert row.assigned_at > old_timestamp
-
-
-
 
 
 def _guard(db, employee_id, *, doj=date(2024, 1, 1), end_date=None, rank=15):
@@ -506,9 +501,7 @@ def test_seeding_restores_a_missing_row_without_resetting_the_operator_order(db_
     svc.seed_designations(db_session)
 
     rows = svc.list_designations(db_session)
-    restored = db_session.query(TimesheetDesignation).filter_by(
-        system_key="prisons_director"
-    ).one()
+    restored = db_session.query(TimesheetDesignation).filter_by(system_key="prisons_director").one()
     assert len(rows) == 16
     assert rows[0].name_en == "Driver"
     assert restored.name_en == "Prisons Director"
@@ -535,8 +528,6 @@ def test_seeding_preserves_operator_edits_to_an_existing_key(db_session):
         False,
         17,
     )
-
-
 
 
 # --- rules 3 and 4: the period upsert and the tie-break ----------------------

@@ -130,8 +130,13 @@ def _driver(db: Session) -> None:
         )
     )
     db.commit()
+
+
 def _add_assignment(
-    db: Session, employee_id: str, designation_id: int | None, effective_from: date = date(2026, 1, 1)
+    db: Session,
+    employee_id: str,
+    designation_id: int | None,
+    effective_from: date = date(2026, 1, 1),
 ) -> None:
     db.add(
         TimesheetRosterAssignment(
@@ -142,12 +147,10 @@ def _add_assignment(
     )
 
 
-
-
-
 # --------------------------------------------------------------------------- #
 # the grid
 # --------------------------------------------------------------------------- #
+
 
 def test_get_returns_the_grid(client, db_session):
     _guard(db_session)
@@ -532,6 +535,8 @@ def test_the_employee_export_finds_a_driver_on_his_own_sheet(client, db_session)
     response = client.get("/api/v1/timesheet/employee/G2000/2026/7/export")
     assert response.status_code == 200
     assert load_workbook(io.BytesIO(response.content)).worksheets[0]["B6"].value == "G2000"
+
+
 def test_employee_export_uses_the_requested_month_assignment(client, db_session):
     _guard(db_session)
     july = client.get("/api/v1/timesheet/employee/G1001/2026/7/export")
@@ -542,6 +547,8 @@ def test_employee_export_uses_the_requested_month_assignment(client, db_session)
     db_session.commit()
     august = client.get("/api/v1/timesheet/employee/G1001/2026/8/export")
     assert load_workbook(io.BytesIO(august.content)).worksheets[0]["B6"].value == "G1001"
+
+
 def test_two_month_export_resolves_each_month_sheet_after_assignment_change(client, db_session):
     _guard(db_session)
     driver = db_session.query(TimesheetDesignation).filter_by(name_en="Driver").one()
@@ -554,8 +561,6 @@ def test_two_month_export_resolves_each_month_sheet_after_assignment_change(clie
     assert workbook.sheetnames == ["JUL", "AUG"]
     assert workbook["JUL"]["B6"].value == "G1001"
     assert workbook["AUG"]["B6"].value == "G1001"
-
-
 
 
 def test_two_months_are_one_workbook_earlier_sheet_first(client, db_session):
@@ -692,6 +697,8 @@ def test_designations_list_and_reorder(client):
     assert (
         client.put("/api/v1/timesheet/designations/order", json={"ids": ids[:5]}).status_code == 422
     )
+
+
 def test_designation_create_normalizes_names_and_rename_preserves_catalog_fields(
     client, db_session
 ):
@@ -825,7 +832,6 @@ def test_roster_closed_month_is_atomic(client, db_session):
     assert db_session.query(TimesheetRosterAssignment).count() == before
 
 
-
 def test_the_static_designation_routes_are_declared_before_the_month_route():
     """Static catalog and roster routes must not be shadowed by month paths."""
 
@@ -854,9 +860,17 @@ def test_the_presets_split_reading_from_correcting():
 @pytest.mark.parametrize(
     ("method", "path", "body"),
     [
-        ("POST", "/api/v1/timesheet/designations", {"name_en": "New", "name_ar": "جديد", "sheet": "main"}),
+        (
+            "POST",
+            "/api/v1/timesheet/designations",
+            {"name_en": "New", "name_ar": "جديد", "sheet": "main"},
+        ),
         ("PATCH", "/api/v1/timesheet/designations/1", {"name_en": "Renamed", "name_ar": "معدل"}),
-        ("PUT", "/api/v1/timesheet/2026/7/roster", {"assignments": [{"employee_id": "G1001", "designation_id": 1}]}),
+        (
+            "PUT",
+            "/api/v1/timesheet/2026/7/roster",
+            {"assignments": [{"employee_id": "G1001", "designation_id": 1}]},
+        ),
         ("PUT", "/api/v1/timesheet/designations/order", {"ids": [1]}),
         ("PUT", "/api/v1/timesheet/2026/7/cell", {"employee_id": "G1001", "day": 9, "code": "AB"}),
         ("PATCH", "/api/v1/timesheet/2026/7", {"post_count": 100}),

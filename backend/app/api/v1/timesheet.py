@@ -169,15 +169,14 @@ def _require_on_roster(db: Session, year: int, month: int, employee_id: str) -> 
             employee_id=employee_id,
         )
 
+
 @router.post("/designations", response_model=TimesheetDesignationRead)
 def create_designation(
     payload: TimesheetDesignationCreate,
     db: Annotated[Session, Depends(get_db)],
     _user: Annotated[User, Depends(require_capability("timesheet.edit"))],
 ) -> TimesheetDesignation:
-    return svc.create_designation(
-        db, payload.name_en, payload.name_ar, sheet=payload.sheet
-    )
+    return svc.create_designation(db, payload.name_en, payload.name_ar, sheet=payload.sheet)
 
 
 @router.patch("/designations/{designation_id}", response_model=TimesheetDesignationRead)
@@ -188,7 +187,6 @@ def rename_designation(
     _user: Annotated[User, Depends(require_capability("timesheet.edit"))],
 ) -> TimesheetDesignation:
     return svc.rename_designation(db, designation_id, payload.name_en, payload.name_ar)
-
 
 
 # --------------------------------------------------------------------------- #
@@ -212,6 +210,8 @@ def reorder_designations(
 ) -> list[TimesheetDesignation]:
     svc.reorder_designations(db, payload.ids)
     return svc.list_designations(db)
+
+
 @router.put("/{year}/{month}/roster", status_code=status.HTTP_204_NO_CONTENT)
 def set_roster(
     year: Year,
@@ -220,12 +220,8 @@ def set_roster(
     db: Annotated[Session, Depends(get_db)],
     user: Annotated[User, Depends(require_capability("timesheet.edit"))],
 ) -> Response:
-    svc.set_roster_assignments(
-        db, year, month, payload.assignments, actor_id=user.id
-    )
+    svc.set_roster_assignments(db, year, month, payload.assignments, actor_id=user.id)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
-
-
 
 
 # --------------------------------------------------------------------------- #

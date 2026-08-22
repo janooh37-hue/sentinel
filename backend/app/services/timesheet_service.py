@@ -112,6 +112,7 @@ class GridRow:
     notes: dict[int, str]  # day -> absence note, for the cell tooltip
     designation_id: int | None = None
 
+
 @dataclass(frozen=True, slots=True)
 class Issue:
     employee_id: str
@@ -215,7 +216,6 @@ def _covers_day(employee: Employee, day: date) -> bool:
     return in_roster(doj=employee.doj, end_date=employee.end_date, month_start=day, month_end=day)
 
 
-
 def _lists_on(designation: TimesheetDesignation | None, sheet: str) -> bool:
     """Whether a roster member is printed on ``sheet``.
 
@@ -267,9 +267,7 @@ def _designations_by_id(db: Session) -> dict[int, TimesheetDesignation]:
     return {row.id: row for row in db.execute(select(TimesheetDesignation)).scalars()}
 
 
-def _roster_assignments_on(
-    db: Session, month_start: date
-) -> dict[str, TimesheetRosterAssignment]:
+def _roster_assignments_on(db: Session, month_start: date) -> dict[str, TimesheetRosterAssignment]:
     latest = (
         select(
             TimesheetRosterAssignment.employee_id,
@@ -909,6 +907,8 @@ def list_designations(db: Session) -> list[TimesheetDesignation]:
     return list(
         db.execute(select(TimesheetDesignation).order_by(TimesheetDesignation.rank_order)).scalars()
     )
+
+
 def _catalog_names(name_en: str, name_ar: str) -> tuple[str, str]:
     names = (name_en.strip(), name_ar.strip())
     if not all(names):
@@ -926,7 +926,10 @@ def _ensure_catalog_names_unique(
     for row in db.execute(select(TimesheetDesignation)).scalars():
         if row.id == exclude_id:
             continue
-        if row.name_en.casefold() == wanted["name_en"] or row.name_ar.casefold() == wanted["name_ar"]:
+        if (
+            row.name_en.casefold() == wanted["name_en"]
+            or row.name_ar.casefold() == wanted["name_ar"]
+        ):
             raise ValidationFailedError(
                 "DESIGNATION_NAME_DUPLICATE",
                 "Designation names must be unique, ignoring case.",
@@ -967,8 +970,6 @@ def rename_designation(
     row.name_ar = name_ar
     db.commit()
     return row
-
-
 
 
 def reorder_designations(db: Session, ids: list[int]) -> None:
@@ -1027,6 +1028,8 @@ def _require_employee(db: Session, employee_id: str) -> Employee:
             "EMPLOYEE_NOT_FOUND", f"No employee {employee_id!r}", employee_id=employee_id
         )
     return employee
+
+
 def set_roster_assignments(
     db: Session,
     year: int,
@@ -1122,8 +1125,6 @@ def set_roster_assignments(
             row.assigned_by = actor_id
             row.assigned_at = _utcnow()
     db.commit()
-
-
 
 
 def _derived_cell_code(

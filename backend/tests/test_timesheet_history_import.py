@@ -1,8 +1,8 @@
 from datetime import date
 
-from scripts import import_timesheet_history_2026 as importer
 from app.db.models import Employee, TimesheetDesignation, TimesheetRosterAssignment
 from app.services import timesheet_service as svc
+from scripts import import_timesheet_history_2026 as importer
 
 
 def _plan(designation_id: int) -> importer.Plan:
@@ -33,9 +33,7 @@ def test_import_upserts_assignment_by_employee_and_effective_month(db_session):
     svc.seed_designations(db_session)
     guard = db_session.query(TimesheetDesignation).filter_by(system_key="security_guard").one()
     supervisor = (
-        db_session.query(TimesheetDesignation)
-        .filter_by(system_key="security_supervisor")
-        .one()
+        db_session.query(TimesheetDesignation).filter_by(system_key="security_supervisor").one()
     )
 
     importer.apply_plan(db_session, _plan(guard.id))
@@ -105,9 +103,7 @@ def test_duplicate_merge_preserves_noncolliding_assignment_history(db_session):
     svc.seed_designations(db_session)
     guard = db_session.query(TimesheetDesignation).filter_by(system_key="security_guard").one()
     supervisor = (
-        db_session.query(TimesheetDesignation)
-        .filter_by(system_key="security_supervisor")
-        .one()
+        db_session.query(TimesheetDesignation).filter_by(system_key="security_supervisor").one()
     )
     db_session.add_all(
         [
