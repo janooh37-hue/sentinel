@@ -374,6 +374,16 @@ def test_a_leaver_is_off_the_next_month_and_reported_as_removed(db_session):
     assert (removed.last_day, removed.month) == (17, 7)
 
 
+def test_removal_notice_uses_the_departure_month_assignment(db_session):
+    _guard(db_session, "G8006", end_date=date(2026, 7, 17))
+    _add_assignment(db_session, "G8006", None, date(2026, 8, 1))
+    db_session.commit()
+
+    august = svc.build_month(db_session, 2026, 8)
+
+    assert [(row.employee_id, row.month) for row in august.removed] == [("G8006", 7)]
+
+
 def test_the_red_block_is_accepted_manually_and_survives_the_statistics(db_session):
     _guard(db_session, "G8004")
     svc.set_post_count(db_session, 2026, 7, 249)  # G8004 lands in block 1

@@ -591,7 +591,6 @@ def _removed(
     year: int,
     month: int,
     *,
-    assignments: Mapping[str, TimesheetRosterAssignment],
     designations: Mapping[int, TimesheetDesignation],
     sheet: str,
 ) -> list[Removed]:
@@ -599,6 +598,7 @@ def _removed(
 
     prev_year, prev_month = previous_month(year, month)
     _, prev_start, prev_end = _month_bounds(prev_year, prev_month)
+    assignments = _roster_assignments_on(db, prev_start)
     candidates = db.execute(
         select(Employee).where(Employee.end_date >= prev_start, Employee.end_date <= prev_end)
     ).scalars()
@@ -858,7 +858,6 @@ def build_month(db: Session, year: int, month: int, *, sheet: str = "main") -> M
             db,
             year,
             month,
-            assignments=assignments,
             designations=designations,
             sheet=sheet,
         ),

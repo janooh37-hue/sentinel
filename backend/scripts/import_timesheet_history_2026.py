@@ -256,7 +256,8 @@ def read_designations() -> dict[str, dict[date, str]]:
     """``{employee_id: {effective_from: designation_en}}`` from every workbook.
 
     Each month is an effective-dated change, not a replacement for earlier
-    history. Empty designation cells are retained as explicit unassignments.
+    history. Blank cells are skipped because workbooks cannot distinguish a
+    deliberate clear from a merged/not-repeated value.
     The drivers workbook is read last because its rows are not present in the
     monthly main sheets.
     """
@@ -279,8 +280,11 @@ def read_designations() -> dict[str, dict[date, str]]:
                     break
                 employee_id = canonical_employee_id(str(raw_id).strip())
                 raw_name = row[DESIGNATION_COL - 1]
-                name = "" if raw_name is None else str(raw_name).strip()
-                found[employee_id][effective_from] = name
+                if raw_name is None:
+                    continue
+                name = str(raw_name).strip()
+                if name:
+                    found[employee_id][effective_from] = name
         finally:
             workbook.close()
     return dict(found)
@@ -621,6 +625,17 @@ def apply_plan(db: Session, plan: Plan) -> None:
                 "WHERE id = :i"
             ),
             {"d": end, "now": now, "i": keep},
+        )
+        db.execute(
+            text(
+                "DELETE FROM timesheet_roster_assignments "
+                "WHERE employee_id = :drop "
+                "AND effective_from IN ("
+                "SELECT effective_from FROM timesheet_roster_assignments "
+                "WHERE employee_id = :keep"
+                ")"
+            ),
+            {"drop": drop, "keep": keep},
         )
         # Re-point first: foreign_keys=ON, and the dropped record owns books,
         # violations and documents that must survive on the surviving ID.
