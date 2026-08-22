@@ -54,7 +54,7 @@ import { type Code, isCode, slugOf } from './codes'
 import { applyRosterDraft, type RosterDraft } from './rosterDraft'
 import {
   currentMonth,
-  isStaleDesignationError,
+  isStaleRosterError,
   timesheetRosterErrorKey,
   useAcknowledgeStart,
   useCloseMonth,
@@ -514,11 +514,12 @@ export function TimesheetPage(): React.JSX.Element {
           // least says what happened.
           const key = timesheetRosterErrorKey(err)
           setRosterError(key === null ? apiErrorMessage(err) : t(key))
-          // A stale catalog means the bands themselves were wrong, so both the
-          // catalog and the month are reloaded — the draft and the mode stay,
-          // because the operator's intent is still valid (design §"Failure and
-          // empty states").
-          if (isStaleDesignationError(err)) {
+          // A stale catalog or a vanished employee means the bands and the rows
+          // themselves were wrong, not just the write — and the sentence for
+          // each of them promises a reload — so both queries are refetched. The
+          // draft and the mode stay, because the operator's intent is still
+          // valid (design §"Failure and empty states").
+          if (isStaleRosterError(err)) {
             void catalog.refetch()
             void grid.refetch()
           }

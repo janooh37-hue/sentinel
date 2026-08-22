@@ -329,10 +329,16 @@ const ROSTER_ERROR_KEY: Record<string, string> = {
   TIMESHEET_CLOSED: 'timesheet.frozen',
 }
 
-/** The refusals that mean the catalog on screen is out of date. */
-const STALE_DESIGNATION: Record<string, true> = {
+/**
+ * The refusals that mean what the editor was staging against is out of date —
+ * a designation the catalog no longer offers, or an employee the month no
+ * longer has. Both leave a wrong band or a wrong row on screen, so both are
+ * answered by reloading the catalog and the month as well as by a sentence.
+ */
+const STALE_ROSTER: Record<string, true> = {
   DESIGNATION_NOT_FOUND: true,
   DESIGNATION_INACTIVE: true,
+  EMPLOYEE_NOT_FOUND: true,
 }
 
 function codeOf(err: unknown): string {
@@ -344,12 +350,14 @@ export const timesheetRosterErrorKey = (err: unknown): string | null =>
   ROSTER_ERROR_KEY[codeOf(err)] ?? null
 
 /**
- * A stale catalog is the one failure the design asks to answer with a refetch
- * as well as a sentence: the ids the editor was offering no longer exist or no
- * longer take assignments, so the bands themselves are wrong.
+ * The failures the design asks to answer with a refetch as well as a sentence:
+ * the ids the editor was offering no longer exist, no longer take assignments,
+ * or name somebody the month has since dropped — so the bands and the rows
+ * themselves are wrong, not just the write. The copy for all three says so,
+ * which is why the two must not drift apart.
  */
-export const isStaleDesignationError = (err: unknown): boolean =>
-  STALE_DESIGNATION[codeOf(err)] === true
+export const isStaleRosterError = (err: unknown): boolean =>
+  STALE_ROSTER[codeOf(err)] === true
 
 /** Notes serialise with STRING keys, so `day` is indexed as one. */
 function withNote(

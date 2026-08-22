@@ -482,6 +482,30 @@ describe('saving the draft', () => {
     expect(screen.getByRole('button', { name: 'Save roster' })).toBeEnabled()
   })
 
+  it('answers a vanished employee in its own words and reloads the month', async () => {
+    setTimesheetRoster.mockRejectedValue(
+      new ApiError(404, 'EMPLOYEE_NOT_FOUND', "No employee 'G7160'."),
+    )
+    renderPage()
+    await screen.findByText('GUARD G7160')
+    await enterRosterMode()
+    dragTo(grip('G7160'), band(DUTY.id))
+    await waitFor(() => expect(printed()).toEqual(['G6001', 'G7160', 'G7014']))
+
+    await userEvent.click(screen.getByRole('button', { name: 'Save roster' }))
+
+    const alert = await screen.findByRole('alert')
+    expect(alert).toHaveTextContent(/no longer on file/i)
+    expect(alert).not.toHaveTextContent("No employee 'G7160'.")
+    // The sentence PROMISES a reload, so the reload has to happen: a man the
+    // batch could not find is a row the sheet is still printing, and leaving
+    // it there means the operator retries against the same stale month.
+    await waitFor(() => expect(getTimesheet).toHaveBeenCalledTimes(2))
+    await waitFor(() => expect(listDesignations).toHaveBeenCalledTimes(2))
+    expect(printed()).toEqual(['G6001', 'G7160', 'G7014'])
+    expect(screen.getByRole('button', { name: 'Save roster' })).toBeEnabled()
+  })
+
   it('leaves edit mode when a refetch finds the month sealed', async () => {
     const { qc } = renderPage()
     await screen.findByText('GUARD G7160')
