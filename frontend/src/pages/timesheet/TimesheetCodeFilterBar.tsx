@@ -20,7 +20,7 @@
  */
 
 import { ChevronLeft, ChevronRight } from 'lucide-react'
-import { useId } from 'react'
+import { forwardRef, useId } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { CODES, type CodeSlug } from './codes'
@@ -56,23 +56,29 @@ const glyphOf = (slug: CodeSlug): string => (slug === '-' ? '–' : slug)
 const CONTROL =
   'inline-flex shrink-0 items-center gap-1 rounded-full border border-border bg-surface px-2 py-0.5 text-[0.72em] font-semibold text-muted-foreground transition-colors hover:border-primary hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring'
 
-export function TimesheetCodeFilterBar({
-  code,
-  cellCount,
-  employeeCount,
-  position,
-  employeeId,
-  employeeName,
-  onPrevious,
-  onNext,
-  onClear,
-}: TimesheetCodeFilterBarProps): React.JSX.Element {
-  const { t } = useTranslation()
-  const id = useId()
+export const TimesheetCodeFilterBar = forwardRef<HTMLDivElement, TimesheetCodeFilterBarProps>(
+  function TimesheetCodeFilterBar(
+    {
+      code,
+      cellCount,
+      employeeCount,
+      position,
+      employeeId,
+      employeeName,
+      onPrevious,
+      onNext,
+      onClear,
+    },
+    ref,
+  ): React.JSX.Element {
+    const { t } = useTranslation()
+    const id = useId()
 
-  return (
-    <div
-      data-testid="code-filter-bar"
+    return (
+      <div
+        ref={ref}
+        tabIndex={-1}
+        data-testid="code-filter-bar"
       role="group"
       // Named from its own visible words — "Filtered by Annual leave" — so
       // tabbing straight into Previous says which list is being walked. No
@@ -160,5 +166,6 @@ export function TimesheetCodeFilterBar({
         </div>
       </div>
     </div>
-  )
-}
+    )
+  },
+)

@@ -43,9 +43,8 @@ export function CodesPanel({ index, onFilterCode }: CodesPanelProps): React.JSX.
             <button
               key={spec.slug}
               type="button"
-              data-testid={`code-badge-${spec.slug}`}
-              data-code={spec.slug}
-              aria-label={t(spec.labelKey)}
+              data-testid={`code-row-${spec.slug}`}
+              aria-label={`${t(spec.labelKey)} · ${t('timesheet.cells', { count: n })}`}
               disabled={!enabled}
               onClick={() => onFilterCode(spec.slug)}
               className={cn(
@@ -54,6 +53,7 @@ export function CodesPanel({ index, onFilterCode }: CodesPanelProps): React.JSX.
               )}
             >
               <span
+                data-testid={`code-badge-${spec.slug}`}
                 data-code={spec.slug}
                 aria-hidden
                 className="grid h-[1.1rem] place-items-center rounded-[3px] border border-border font-mono text-[0.62rem] font-semibold"

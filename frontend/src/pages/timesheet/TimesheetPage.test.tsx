@@ -124,6 +124,16 @@ const FILTER_MONTH: TimesheetGridResponse = {
   rows: FILTER_ROWS,
   days_in_month: 31,
 }
+const DESIGNATION = {
+  id: 1,
+  name_en: 'SECURITY GUARD',
+  name_ar: 'حارس أمن',
+  rank_order: 1,
+  sheet: 'main',
+  active: true,
+  system_key: null,
+}
+
 
 
 /** A recomputed blocking check — the kind of fact only the server can supply. */
@@ -415,6 +425,67 @@ describe('TimesheetPage code filtering', () => {
     expect(screen.queryByTestId('code-filter-bar')).not.toBeInTheDocument()
     expect(screen.getAllByTestId('timesheet-row')).toHaveLength(5)
   })
+  it('centers a selected row without competing with filter scrolling', async () => {
+    getTimesheet.mockResolvedValue(FILTER_MONTH)
+    const user = userEvent.setup()
+    const scroll = vi.spyOn(Element.prototype, 'scrollIntoView')
+    renderPage()
+    await screen.findByText('MOHAMMED ASLAM')
+
+    await user.click(screen.getByRole('button', { name: /select G7014/i }))
+    expect(scroll).toHaveBeenCalledWith({ block: 'center', inline: 'nearest', behavior: 'smooth' })
+    scroll.mockRestore()
+  })
+
+  it('focuses the filter announcement once and pulses an actual primary outline', async () => {
+    getTimesheet.mockResolvedValue(FILTER_MONTH)
+    const descriptor = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'animate')
+    const animate = vi.fn()
+    Object.defineProperty(HTMLElement.prototype, 'animate', {
+      configurable: true,
+      value: animate,
+    })
+    try {
+      const user = userEvent.setup()
+      renderPage()
+      await screen.findByText('MOHAMMED ASLAM')
+      await activateAnnualLeave(user)
+
+      const bar = screen.getByTestId('code-filter-bar')
+      expect(bar).toHaveAttribute('tabindex', '-1')
+      expect(document.activeElement).toBe(bar)
+      expect(screen.getByRole('group', { name: /filtered by annual leave/i })).toBe(bar)
+      expect(animate).toHaveBeenCalled()
+      expect(JSON.stringify(animate.mock.calls[0]?.[0])).toContain('var(--primary)')
+
+      await user.click(screen.getByRole('button', { name: /next employee/i }))
+      expect(document.activeElement).not.toBe(bar)
+    } finally {
+      if (descriptor) Object.defineProperty(HTMLElement.prototype, 'animate', descriptor)
+      else delete (HTMLElement.prototype as HTMLElement & { animate?: unknown }).animate
+    }
+  })
+
+  it('does not let roster edit retain or regain a code filter', async () => {
+    getTimesheet.mockResolvedValue(FILTER_MONTH)
+    listDesignations.mockResolvedValue([DESIGNATION])
+    const user = userEvent.setup()
+    renderPage()
+    await screen.findByText('MOHAMMED ASLAM')
+    await user.click(await screen.findByRole('button', { name: /edit roster/i }))
+    expect(screen.getByRole('button', { name: /cancel/i })).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: /cells by code/i }))
+    const panel = await screen.findByRole('region', { name: /cells by code/i })
+    await user.click(within(panel).getByRole('button', { name: /annual leave/i }))
+    expect(screen.queryByTestId('code-filter-bar')).not.toBeInTheDocument()
+    expect(screen.getAllByTestId('timesheet-row')).toHaveLength(5)
+
+    await user.click(screen.getByRole('button', { name: /cancel/i }))
+    expect(screen.queryByTestId('code-filter-bar')).not.toBeInTheDocument()
+    expect(screen.getAllByTestId('timesheet-row')).toHaveLength(5)
+  })
+
 })
 
 describe('useSetCell', () => {

@@ -177,6 +177,9 @@ export function TimesheetPage(): React.JSX.Element {
   const rows = grid.rows
   const [filter, setFilter] = useState<{ code: CodeSlug; index: number } | null>(null)
   const scrollRef = useRef<HTMLDivElement | null>(null)
+  const filterBarRef = useRef<HTMLDivElement | null>(null)
+  const focusedFilterCode = useRef<CodeSlug | null>(null)
+  const scrollTarget = useRef<string | null>(null)
   /** The index always describes the server response, never the staged roster. */
   const codeIndex = useMemo(
     () => buildTimesheetCodeIndex(rows, ui.variant, grid.daysInMonth),
@@ -192,8 +195,8 @@ export function TimesheetPage(): React.JSX.Element {
   }, [filter, filterMatches.length])
   const currentFilterEmployeeId = filter ? (filterMatches[filterIndex] ?? null) : null
   const filteredEmployeeIds = useMemo(
-    () => (filter && filterMatches.length > 0 ? new Set(filterMatches) : null),
-    [filter, filterMatches],
+    () => (filterMatches.length > 0 ? new Set(filterMatches) : null),
+    [filterMatches],
   )
 
   /**
@@ -431,10 +434,14 @@ export function TimesheetPage(): React.JSX.Element {
   const onQuery = useCallback((query: string) => {
     setUi((prev) => ({ ...prev, query }))
   }, [])
-  const onFilterCode = useCallback((code: CodeSlug) => {
-    setFilter({ code, index: 0 })
-    setUi((prev) => ({ ...prev, panel: null }))
-  }, [])
+  const onFilterCode = useCallback(
+    (code: CodeSlug) => {
+      if (roster.editing) return
+      setFilter({ code, index: 0 })
+      setUi((prev) => ({ ...prev, panel: null }))
+    },
+    [roster.editing],
+  )
 
   const onPreviousFilterEmployee = useCallback(() => {
     setFilter((prev) =>
@@ -606,19 +613,50 @@ export function TimesheetPage(): React.JSX.Element {
   }, [filter, filterMatches.length])
 
   useEffect(() => {
-    if (!currentFilterEmployeeId) return
+    if (!filter) {
+      focusedFilterCode.current = null
+      return
+    }
+    if (focusedFilterCode.current === filter.code) return
+    focusedFilterCode.current = filter.code
+    filterBarRef.current?.focus()
+  }, [filter?.code])
+
+  useEffect(() => {
+    const targetId = currentFilterEmployeeId ?? ui.selected
+    if (!targetId) {
+      scrollTarget.current = null
+      return
+    }
+    const mode = currentFilterEmployeeId ? 'filter' : 'selection'
+    const key = `${mode}:${targetId}`
+    if (scrollTarget.current === key) return
     const row = scrollRef.current?.querySelector<HTMLElement>(
-      `tr[data-employee="${CSS.escape(currentFilterEmployeeId)}"]`,
+      `tr[data-employee="${CSS.escape(targetId)}"]`,
     )
     if (!row) return
+    scrollTarget.current = key
     const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches
-    row.scrollIntoView({ block: 'center', inline: 'nearest' })
-    if (!reduced && typeof row.animate === 'function') {
-      row.animate([{ outlineOffset: '0px' }, { outlineOffset: '3px' }, { outlineOffset: '0px' }], {
-        duration: 220,
+    if (mode === 'filter') {
+      row.scrollIntoView({ block: 'center', inline: 'nearest' })
+      if (!reduced && typeof row.animate === 'function') {
+        row.animate(
+          [
+            { outline: '2px solid var(--primary)' },
+            { outline: '2px solid transparent' },
+            { outline: 'none' },
+          ],
+          { duration: 220 },
+        )
+      }
+    } else {
+      row.scrollIntoView({
+        block: 'center',
+        inline: 'nearest',
+        behavior: reduced ? 'auto' : 'smooth',
       })
     }
-  }, [currentFilterEmployeeId])
+  }, [currentFilterEmployeeId, ui.selected])
 
 
   /**
@@ -857,6 +895,7 @@ export function TimesheetPage(): React.JSX.Element {
           )}
           {filter && currentFilterEmployeeId && filterMatches.length > 0 && (
             <TimesheetCodeFilterBar
+              ref={filterBarRef}
               code={filter.code}
               cellCount={codeIndex.cellCounts[filter.code]}
               employeeCount={filterMatches.length}

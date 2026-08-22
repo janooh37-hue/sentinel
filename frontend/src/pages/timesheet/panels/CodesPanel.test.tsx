@@ -15,9 +15,12 @@ describe('CodesPanel', () => {
     render(<CodesPanel index={index} onFilterCode={onFilterCode} />)
 
     const annualLeave = screen.getByRole('button', { name: /annual leave/i })
+    expect(annualLeave).not.toHaveAttribute('data-code')
+    expect(annualLeave).toHaveAccessibleName(/annual leave.*2 cells/i)
     await userEvent.click(annualLeave)
     expect(onFilterCode).toHaveBeenCalledWith('AL')
     expect(screen.getByTestId('code-badge-AL')).toHaveAttribute('data-code', 'AL')
+    expect(screen.getByTestId('code-badge-AL')).toHaveTextContent('AL')
     expect(screen.getByRole('button', { name: /sick leave/i })).toBeDisabled()
   })
 })

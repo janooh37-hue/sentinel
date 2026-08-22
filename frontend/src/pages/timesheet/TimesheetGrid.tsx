@@ -578,10 +578,10 @@ export function TimesheetGrid({
 
   const visibleRows = useMemo(
     () =>
-      filteredEmployeeIds === null
+      rosterEdit || filteredEmployeeIds === null
         ? rows
         : rows.filter((row) => filteredEmployeeIds.has(row.employee_id)),
-    [filteredEmployeeIds, rows],
+    [filteredEmployeeIds, rosterEdit, rows],
   )
 
   const byId = useMemo(() => {
