@@ -201,9 +201,7 @@ def _statistics_codes(codes: list[str | None], *, block: int, filler: str) -> li
     return [None if c is None else (c if c in keep else replacement) for c in codes]
 
 
-def _compensated_day(
-    codes: Sequence[str | None], post_count: int
-) -> list[str | None]:
+def _compensated_day(codes: Sequence[str | None], post_count: int) -> list[str | None]:
     """Move real above-contract codes into available lower ``P`` cells."""
 
     result = list(codes)
@@ -213,9 +211,7 @@ def _compensated_day(
         if code is not None and code in _STAT_TRANSFER_ORDER:
             sources.append((index, code))
     targets = [
-        index
-        for index, code in enumerate(codes[boundary:], start=boundary)
-        if code == CODE_PRESENT
+        index for index, code in enumerate(codes[boundary:], start=boundary) if code == CODE_PRESENT
     ]
 
     moved = sources[: len(targets)]

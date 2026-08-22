@@ -374,12 +374,12 @@
 /* The sheet's three zoom stops. Scoped to the shell, not `html`, because the
    zoom is page state, not an app setting. */
 [data-ts-density='compact'] {
-  --cell: clamp(22px, calc((100vw - 600px) / 31), 34px);
+  --cell: clamp(22px, calc((100vw - 668px) / 31), 34px);
   --row: 24px;
   --cell-font: 10px;
 }
 [data-ts-density='roomy'] {
-  --cell: clamp(34px, calc((100vw - 600px) / 31), 58px);
+  --cell: clamp(34px, calc((100vw - 668px) / 31), 58px);
   --row: 38px;
   --cell-font: 13px;
 }
