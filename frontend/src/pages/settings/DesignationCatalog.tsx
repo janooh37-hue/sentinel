@@ -35,9 +35,9 @@ import {
   type TimesheetDesignationRead,
 } from '@/lib/api'
 
-import { OutlineButton, PrimaryButton, SectionCard } from './SettingsPage'
+import { TIMESHEET_DESIGNATIONS_KEY } from '@/pages/timesheet/useTimesheet'
 
-const DESIGNATIONS_KEY = ['timesheet-designations'] as const
+import { OutlineButton, PrimaryButton, SectionCard } from './SettingsPage'
 
 const MOVE_BUTTON =
   'rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-surface-tinted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:cursor-not-allowed disabled:opacity-40'
@@ -61,7 +61,7 @@ export function DesignationCatalog(): React.JSX.Element {
   const [draft, setDraft] = useState<number[] | null>(null)
 
   const { data } = useQuery({
-    queryKey: DESIGNATIONS_KEY,
+    queryKey: TIMESHEET_DESIGNATIONS_KEY,
     queryFn: () => api.listDesignations(),
   })
   const rows = ordered(data ?? [], draft)
@@ -71,14 +71,14 @@ export function DesignationCatalog(): React.JSX.Element {
     onSuccess: (updated) => {
       // The response IS the catalog as re-ranked, so the draft has nothing left
       // to say and the list goes back to following the server.
-      qc.setQueryData(DESIGNATIONS_KEY, updated)
+      qc.setQueryData(TIMESHEET_DESIGNATIONS_KEY, updated)
       setDraft(null)
       toast.success(t('timesheet.designations.saved'))
     },
     onError: (err) => {
       if (err instanceof ApiError && err.code === 'DESIGNATION_ORDER_INCOMPLETE') {
         setDraft(null)
-        void qc.invalidateQueries({ queryKey: DESIGNATIONS_KEY })
+        void qc.invalidateQueries({ queryKey: TIMESHEET_DESIGNATIONS_KEY })
         toast.error(t('timesheet.designations.stale'))
         return
       }

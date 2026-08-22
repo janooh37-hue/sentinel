@@ -856,6 +856,9 @@ export type TimesheetRow = components['schemas']['TimesheetRow']
 export type TimesheetIssue = components['schemas']['TimesheetIssue']
 export type TimesheetRemoved = components['schemas']['TimesheetRemoved']
 export type TimesheetDesignationRead = components['schemas']['TimesheetDesignationRead']
+export type TimesheetDesignationCreate = components['schemas']['TimesheetDesignationCreate']
+export type TimesheetDesignationUpdate = components['schemas']['TimesheetDesignationUpdate']
+export type TimesheetRosterBatch = components['schemas']['TimesheetRosterBatch']
 export type TimesheetCellUpdate = components['schemas']['TimesheetCellUpdate']
 export type TimesheetPeriodPatch = components['schemas']['TimesheetPeriodPatch']
 export type TimesheetFillerUpdate = components['schemas']['TimesheetFillerUpdate']
@@ -2091,6 +2094,18 @@ export const api = {
    *  print. `timesheet.view` — reading the print order is not a write. */
   listDesignations: () =>
     request<TimesheetDesignationRead[]>('GET', '/timesheet/designations'),
+  createTimesheetDesignation: (input: TimesheetDesignationCreate) =>
+    request<TimesheetDesignationRead>('POST', '/timesheet/designations', input),
+  updateTimesheetDesignation: (id: number, input: TimesheetDesignationUpdate) =>
+    request<TimesheetDesignationRead>(
+      'PATCH',
+      `/timesheet/designations/${encodeURIComponent(String(id))}`,
+      input,
+    ),
+  setTimesheetRoster: (p: { year: number; month: number } & TimesheetRosterBatch) =>
+    request<void>('PUT', `/timesheet/${p.year}/${p.month}/roster`, {
+      assignments: p.assignments,
+    }),
   /** Re-rank the whole catalog. `timesheet.edit`, and the payload must be
    *  EVERY id exactly once — a partial list is refused with
    *  `DESIGNATION_ORDER_INCOMPLETE`. Answers with the catalog as re-ranked. */

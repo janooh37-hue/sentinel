@@ -65,8 +65,8 @@ const CATALOG: TimesheetDesignationRead[] = SEED.map(([name_en, name_ar, sheet],
   rank_order: i + 1,
   sheet,
   active: true,
+  system_key: null,
 }))
-
 const IDS = CATALOG.map((d) => d.id)
 
 function wrap() {

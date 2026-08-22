@@ -4286,6 +4286,63 @@
       }
     },
     "/api/v1/timesheet/designations": {
+      "post": {
+        "tags": [
+          "timesheet"
+        ],
+        "summary": "Create Designation",
+        "operationId": "create_designation_api_v1_timesheet_designations_post",
+        "parameters": [
+          {
+            "name": "gssg_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Gssg Session"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TimesheetDesignationCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TimesheetDesignationRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
       "get": {
         "tags": [
           "timesheet"
@@ -4321,6 +4378,74 @@
                     "$ref": "#/components/schemas/TimesheetDesignationRead"
                   },
                   "title": "Response List Designations Api V1 Timesheet Designations Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/timesheet/designations/{designation_id}": {
+      "patch": {
+        "tags": [
+          "timesheet"
+        ],
+        "summary": "Rename Designation",
+        "operationId": "rename_designation_api_v1_timesheet_designations__designation_id__patch",
+        "parameters": [
+          {
+            "name": "designation_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Designation Id"
+            }
+          },
+          {
+            "name": "gssg_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Gssg Session"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TimesheetDesignationUpdate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TimesheetDesignationRead"
                 }
               }
             }
@@ -4387,6 +4512,80 @@
                 }
               }
             }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/timesheet/{year}/{month}/roster": {
+      "put": {
+        "tags": [
+          "timesheet"
+        ],
+        "summary": "Set Roster",
+        "operationId": "set_roster_api_v1_timesheet__year___month__roster_put",
+        "parameters": [
+          {
+            "name": "year",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "maximum": 2100,
+              "minimum": 2000,
+              "title": "Year"
+            }
+          },
+          {
+            "name": "month",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "maximum": 12,
+              "minimum": 1,
+              "title": "Month"
+            }
+          },
+          {
+            "name": "gssg_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Gssg Session"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TimesheetRosterBatch"
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": "Successful Response"
           },
           "422": {
             "description": "Validation Error",
@@ -36909,6 +37108,38 @@
         "title": "TimesheetCellUpdate",
         "description": "Force one cell. ``code: null`` clears it back to the derived value."
       },
+      "TimesheetDesignationCreate": {
+        "properties": {
+          "name_en": {
+            "type": "string",
+            "maxLength": 128,
+            "minLength": 1,
+            "title": "Name En"
+          },
+          "name_ar": {
+            "type": "string",
+            "maxLength": 128,
+            "minLength": 1,
+            "title": "Name Ar"
+          },
+          "sheet": {
+            "type": "string",
+            "enum": [
+              "main",
+              "drivers"
+            ],
+            "title": "Sheet"
+          }
+        },
+        "type": "object",
+        "required": [
+          "name_en",
+          "name_ar",
+          "sheet"
+        ],
+        "title": "TimesheetDesignationCreate",
+        "description": "A user-created catalog designation."
+      },
       "TimesheetDesignationOrder": {
         "properties": {
           "ids": {
@@ -36951,6 +37182,17 @@
           "active": {
             "type": "boolean",
             "title": "Active"
+          },
+          "system_key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "System Key"
           }
         },
         "type": "object",
@@ -36960,10 +37202,34 @@
           "name_ar",
           "rank_order",
           "sheet",
-          "active"
+          "active",
+          "system_key"
         ],
         "title": "TimesheetDesignationRead",
         "description": "One printable designation from the catalog."
+      },
+      "TimesheetDesignationUpdate": {
+        "properties": {
+          "name_en": {
+            "type": "string",
+            "maxLength": 128,
+            "minLength": 1,
+            "title": "Name En"
+          },
+          "name_ar": {
+            "type": "string",
+            "maxLength": 128,
+            "minLength": 1,
+            "title": "Name Ar"
+          }
+        },
+        "type": "object",
+        "required": [
+          "name_en",
+          "name_ar"
+        ],
+        "title": "TimesheetDesignationUpdate",
+        "description": "The two printable names changed by a catalog rename."
       },
       "TimesheetFillerUpdate": {
         "properties": {
@@ -37165,6 +37431,52 @@
         "title": "TimesheetRemoved",
         "description": "Someone who finished last month and is therefore off this roster."
       },
+      "TimesheetRosterAssignmentWrite": {
+        "properties": {
+          "employee_id": {
+            "type": "string",
+            "maxLength": 16,
+            "minLength": 1,
+            "title": "Employee Id"
+          },
+          "designation_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Designation Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "employee_id",
+          "designation_id"
+        ],
+        "title": "TimesheetRosterAssignmentWrite",
+        "description": "One employee's designation from an effective month onward."
+      },
+      "TimesheetRosterBatch": {
+        "properties": {
+          "assignments": {
+            "items": {
+              "$ref": "#/components/schemas/TimesheetRosterAssignmentWrite"
+            },
+            "type": "array",
+            "minItems": 1,
+            "title": "Assignments"
+          }
+        },
+        "type": "object",
+        "required": [
+          "assignments"
+        ],
+        "title": "TimesheetRosterBatch",
+        "description": "A non-empty atomic month roster update."
+      },
       "TimesheetRow": {
         "properties": {
           "employee_id": {
@@ -37298,6 +37610,17 @@
             },
             "type": "object",
             "title": "Notes"
+          },
+          "designation_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Designation Id"
           }
         },
         "type": "object",

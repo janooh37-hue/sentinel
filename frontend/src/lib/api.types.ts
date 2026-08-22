@@ -1043,11 +1043,29 @@ export interface paths {
         /** List Designations */
         get: operations["list_designations_api_v1_timesheet_designations_get"];
         put?: never;
-        post?: never;
+        /** Create Designation */
+        post: operations["create_designation_api_v1_timesheet_designations_post"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
+        trace?: never;
+    };
+    "/api/v1/timesheet/designations/{designation_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Rename Designation */
+        patch: operations["rename_designation_api_v1_timesheet_designations__designation_id__patch"];
         trace?: never;
     };
     "/api/v1/timesheet/designations/order": {
@@ -1060,6 +1078,23 @@ export interface paths {
         get?: never;
         /** Reorder Designations */
         put: operations["reorder_designations_api_v1_timesheet_designations_order_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/timesheet/{year}/{month}/roster": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Set Roster */
+        put: operations["set_roster_api_v1_timesheet__year___month__roster_put"];
         post?: never;
         delete?: never;
         options?: never;
@@ -10022,6 +10057,21 @@ export interface components {
             note?: string | null;
         };
         /**
+         * TimesheetDesignationCreate
+         * @description A user-created catalog designation.
+         */
+        TimesheetDesignationCreate: {
+            /** Name En */
+            name_en: string;
+            /** Name Ar */
+            name_ar: string;
+            /**
+             * Sheet
+             * @enum {string}
+             */
+            sheet: "main" | "drivers";
+        };
+        /**
          * TimesheetDesignationOrder
          * @description The full designation catalog in its new order — every id, exactly once.
          */
@@ -10046,6 +10096,18 @@ export interface components {
             sheet: string;
             /** Active */
             active: boolean;
+            /** System Key */
+            system_key: string | null;
+        };
+        /**
+         * TimesheetDesignationUpdate
+         * @description The two printable names changed by a catalog rename.
+         */
+        TimesheetDesignationUpdate: {
+            /** Name En */
+            name_en: string;
+            /** Name Ar */
+            name_ar: string;
         };
         /**
          * TimesheetFillerUpdate
@@ -10133,6 +10195,24 @@ export interface components {
             year: number;
         };
         /**
+         * TimesheetRosterAssignmentWrite
+         * @description One employee's designation from an effective month onward.
+         */
+        TimesheetRosterAssignmentWrite: {
+            /** Employee Id */
+            employee_id: string;
+            /** Designation Id */
+            designation_id: number | null;
+        };
+        /**
+         * TimesheetRosterBatch
+         * @description A non-empty atomic month roster update.
+         */
+        TimesheetRosterBatch: {
+            /** Assignments */
+            assignments: components["schemas"]["TimesheetRosterAssignmentWrite"][];
+        };
+        /**
          * TimesheetRow
          * @description One printed row: the identity block, 31 cells, and both statistics.
          */
@@ -10169,6 +10249,8 @@ export interface components {
             notes: {
                 [key: string]: string;
             };
+            /** Designation Id */
+            designation_id?: number | null;
         };
         /**
          * TimesheetStartAckRequest
@@ -13260,6 +13342,78 @@ export interface operations {
             };
         };
     };
+    create_designation_api_v1_timesheet_designations_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TimesheetDesignationCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TimesheetDesignationRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    rename_designation_api_v1_timesheet_designations__designation_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                designation_id: number;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TimesheetDesignationUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TimesheetDesignationRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     reorder_designations_api_v1_timesheet_designations_order_put: {
         parameters: {
             query?: never;
@@ -13283,6 +13437,42 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["TimesheetDesignationRead"][];
                 };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    set_roster_api_v1_timesheet__year___month__roster_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                year: number;
+                month: number;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TimesheetRosterBatch"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Validation Error */
             422: {

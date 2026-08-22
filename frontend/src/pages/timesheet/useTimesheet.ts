@@ -31,10 +31,13 @@ import { toast } from 'sonner'
 
 import { api, apiErrorMessage } from '@/lib/api'
 import type {
+  TimesheetDesignationCreate,
+  TimesheetDesignationUpdate,
   TimesheetGridResponse,
   TimesheetIssue,
   TimesheetPeriodPatch,
   TimesheetRemoved,
+  TimesheetRosterBatch,
   TimesheetRow,
   TimesheetSheet,
   TimesheetVariant,
@@ -144,12 +147,12 @@ const EMPTY_ROWS: TimesheetRow[] = []
 const EMPTY_ISSUES: TimesheetIssue[] = []
 const EMPTY_REMOVED: TimesheetRemoved[] = []
 
-const keyOf = (p: TimesheetParams): readonly unknown[] => [
-  'timesheet',
-  p.year,
-  p.month,
-  p.sheet,
-]
+export const TIMESHEET_DESIGNATIONS_KEY = ['timesheet-designations'] as const
+
+export const timesheetMonthKey = (p: TimesheetParams) =>
+  ['timesheet', p.year, p.month, p.sheet] as const
+
+const keyOf = timesheetMonthKey
 
 /**
  * Every cell write for one month shares this scope, so react-query runs them
@@ -237,6 +240,52 @@ export function useTimesheetGrid(params: TimesheetParams) {
     closedBy: grid?.closed_by ?? null,
     refetch: query.refetch,
   }
+}
+
+export function useTimesheetDesignations() {
+  return useQuery({
+    queryKey: TIMESHEET_DESIGNATIONS_KEY,
+    queryFn: () => api.listDesignations(),
+  })
+}
+
+export function useCreateTimesheetDesignation() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (input: TimesheetDesignationCreate) =>
+      api.createTimesheetDesignation(input),
+    onSuccess: () => qc.invalidateQueries({ queryKey: TIMESHEET_DESIGNATIONS_KEY }),
+    onError: (err) => toast.error(apiErrorMessage(err)),
+  })
+}
+
+export function useUpdateTimesheetDesignation() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, input }: { id: number; input: TimesheetDesignationUpdate }) =>
+      api.updateTimesheetDesignation(id, input),
+    onSuccess: () => qc.invalidateQueries({ queryKey: TIMESHEET_DESIGNATIONS_KEY }),
+    onError: (err) => toast.error(apiErrorMessage(err)),
+  })
+}
+
+type TimesheetRosterInput = { year: number; month: number } & TimesheetRosterBatch
+
+export function useSetTimesheetRoster() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (input: TimesheetRosterInput) => api.setTimesheetRoster(input),
+    onSuccess: (_result, input) =>
+      Promise.all([
+        qc.invalidateQueries({
+          queryKey: timesheetMonthKey({ year: input.year, month: input.month, sheet: 'main' }),
+        }),
+        qc.invalidateQueries({
+          queryKey: timesheetMonthKey({ year: input.year, month: input.month, sheet: 'drivers' }),
+        }),
+      ]),
+    onError: (err) => toast.error(apiErrorMessage(err)),
+  })
 }
 
 /** Notes serialise with STRING keys, so `day` is indexed as one. */
