@@ -73,14 +73,8 @@ class Employee(Base):
     department: Mapped[str | None] = mapped_column(String(128), nullable=True)
     position: Mapped[str | None] = mapped_column(String(128), nullable=True)
     position_ar: Mapped[str | None] = mapped_column(String(128), nullable=True)
-    # The printable time-sheet designation (migration 0070). Deliberately a
-    # plain integer, not a ForeignKey: adding the constraint would force a full
-    # employees-table rewrite in SQLite. `position`/`position_ar` above stay the
-    # HR job title — the sheet needs a finer split (control room, messengers,
-    # clinic, escort) that the HR title does not carry.
-    designation_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    # Deliberately not a ForeignKey: adding the constraint would force a full
-    # employees-table rewrite in SQLite, as with `designation_id` above.
+    # `supervisor_id` is deliberately not a ForeignKey: employee records can
+    # be imported before their supervisor exists.
     supervisor_id: Mapped[str | None] = mapped_column(String(16), nullable=True)
     other: Mapped[str | None] = mapped_column(String(256), nullable=True)
     duty_unit: Mapped[str | None] = mapped_column(String(128), nullable=True)
@@ -1541,6 +1535,7 @@ class TimesheetDesignation(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     name_en: Mapped[str] = mapped_column(String(128), nullable=False)
     name_ar: Mapped[str] = mapped_column(String(128), nullable=False)
+    system_key: Mapped[str | None] = mapped_column(String(64), nullable=True)
     rank_order: Mapped[int] = mapped_column(Integer, nullable=False)
     sheet: Mapped[str] = mapped_column(String(16), default="main", server_default="main")
     active: Mapped[bool] = mapped_column(Boolean, default=True, server_default=text("1"))
@@ -1548,7 +1543,32 @@ class TimesheetDesignation(Base):
     __table_args__ = (
         UniqueConstraint("name_en", name="uq_timesheet_designations_name_en"),
         UniqueConstraint("rank_order", name="uq_timesheet_designations_rank"),
+        Index("ux_timesheet_designations_system_key", "system_key", unique=True),
         CheckConstraint("sheet IN ('main', 'drivers')", name="ck_timesheet_desig_sheet"),
+    )
+
+
+class TimesheetRosterAssignment(Base):
+    """An employee's effective-dated time-sheet designation (migration 0077)."""
+
+    __tablename__ = "timesheet_roster_assignments"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    employee_id: Mapped[str] = mapped_column(ForeignKey("employees.id"), nullable=False)
+    designation_id: Mapped[int | None] = mapped_column(
+        ForeignKey("timesheet_designations.id"), nullable=True
+    )
+    effective_from: Mapped[date] = mapped_column(Date, nullable=False)
+    assigned_at: Mapped[datetime] = mapped_column(
+        DateTime, default=_utcnow, server_default=func.current_timestamp()
+    )
+    assigned_by: Mapped[int | None] = mapped_column(Integer, nullable=True)
+
+    __table_args__ = (
+        UniqueConstraint(
+            "employee_id", "effective_from", name="uq_timesheet_roster_assignment_effective"
+        ),
+        Index("ix_timesheet_roster_assignment_effective", "effective_from"),
     )
 
 
@@ -1796,6 +1816,7 @@ __all__ = [
     "TimesheetDesignation",
     "TimesheetOverride",
     "TimesheetPeriod",
+    "TimesheetRosterAssignment",
     "TimesheetSnapshotRow",
     "TimesheetStartAck",
     "TimesheetStatFiller",
