@@ -395,10 +395,9 @@
       "aria": "Employees sections",
       "directory": "Directory",
       "attendance": "Attendance",
-      "attendanceAr": "الحضور",
-      "dutyLocations": "Duty locations",
-      "orgTree": "ORG-tree",
-      "orgTreeAr": "الهيكل التنظيمي"
+      "orgTree": "Organization",
+      "dutyLocations": "Duty Locations",
+      "timesheet": "Time Sheet"
     },
     "orgTree": {
       "title": "ORG-tree",
@@ -3581,10 +3580,6 @@
     "eyebrow": "Monthly deliverables · Site JD 908",
     "title": "Monthly time sheet",
     "lede": "Check the month, correct what the records got wrong, then release the two workbooks.",
-    "entry": {
-      "label": "Monthly time sheet",
-      "hint": "Check the month, then release the two workbooks"
-    },
     "searchLabel": "Find employee",
     "searchPlaceholder": "G-number or name",
     "ready": "Ready",

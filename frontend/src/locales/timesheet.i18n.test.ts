@@ -21,8 +21,6 @@ const KEYS = [
   'timesheet.eyebrow',
   'timesheet.title',
   'timesheet.lede',
-  'timesheet.entry.label',
-  'timesheet.entry.hint',
   'timesheet.searchLabel',
   'timesheet.searchPlaceholder',
   'timesheet.ready',
@@ -232,8 +230,8 @@ describe('timesheet i18n parity', () => {
     expect(KEYS.length).toBeGreaterThanOrEqual(40)
   })
 
-  // No `nav.*` key: the time sheet is a subpage under Employees, entered from
-  // EmployeeLookupPage, and NAV_ITEMS keeps its seven entries.
+  // No `nav.*` key: the time sheet is a subpage under Employees, reached from
+  // the Employees section tabs, and NAV_ITEMS keeps its seven entries.
   it('adds no nav entry for the time sheet', () => {
     expect(get(en as unknown as Rec, 'nav.timesheet')).toBeUndefined()
     expect(get(ar as unknown as Rec, 'nav.timesheet')).toBeUndefined()

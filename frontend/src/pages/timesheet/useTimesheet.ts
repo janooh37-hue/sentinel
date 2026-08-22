@@ -443,11 +443,27 @@ export function useAcknowledgeStart(params: TimesheetParams) {
 }
 
 /**
- * The month the operator works on: the one that just ended. The workbooks are
- * produced after a month closes, not during it, so this is the month
- * `TimesheetPage` opens on AND the month an employee record offers for someone
- * still on the roster. One declaration, because two answers to "which month"
- * is how the record and the page come to disagree.
+ * The month the page opens on: the one in progress.
+ *
+ * The roster is corrected as the month runs — a joiner, a leaver or a wrong
+ * code is fixed the week it happens, not four weeks later — so the sheet the
+ * operator wants on arrival is today's. A function anyway, so the January case
+ * is asserted rather than assumed: unlike `lastCompletedMonth`, this one must
+ * NOT roll the year back.
+ */
+export const currentMonth = (now: Date = new Date()): { year: number; month: number } => ({
+  year: now.getFullYear(),
+  month: now.getMonth() + 1, // 0-based, so +1 IS the month in progress
+})
+
+/**
+ * The month an employee record offers: the one that just ended. The workbooks
+ * are produced after a month closes, not during it, so an extract for someone
+ * still on the roster names the last month with a complete answer.
+ *
+ * Deliberately NOT the month `TimesheetPage` opens on — that is `currentMonth`.
+ * The two differ because the questions differ, and `monthSpan.test.ts` pins
+ * both against one date so the difference stays a decision.
  */
 export const lastCompletedMonth = (now: Date = new Date()): { year: number; month: number } => {
   const month = now.getMonth() // 0-based, so this IS last month 1-based

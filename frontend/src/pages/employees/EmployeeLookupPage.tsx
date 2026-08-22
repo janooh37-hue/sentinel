@@ -30,7 +30,6 @@ import { ApiError, api, apiErrorMessage } from '@/lib/api'
 import type { EmployeeCreate } from '@/lib/api'
 import type { ExtractionResponse } from '@/lib/extraction'
 import { useShortcutAction } from '@/lib/useKeyboardShortcuts'
-import { TimesheetEntry } from '@/pages/timesheet/TimesheetEntry'
 
 export function EmployeeLookupPage(): React.JSX.Element {
   const { t } = useTranslation()
@@ -154,12 +153,6 @@ export function EmployeeLookupPage(): React.JSX.Element {
           <EmployeesSectionTabs attentionCount={attendance.attention} />
         </div>
       </EmployeeSearchHero>
-
-      {/* The monthly time sheet is a subpage here, deliberately NOT a top-nav
-          entry — the reasoning is in TimesheetEntry, next to the same call for
-          scan-back in navItems.ts. This page has one surface, so one placement.
-          Self-gating on `timesheet.view`: it renders nothing without it. */}
-      <TimesheetEntry />
 
       <EmployeeActivitySection
         onOpenProfile={(employeeId) =>

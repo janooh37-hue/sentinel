@@ -15,7 +15,9 @@
  * the same property; only one of them exists.
  *
  * Route: `/employees/timesheet`. The time sheet is a subpage under Employees,
- * not an eighth top-nav entry — see `TimesheetEntry` for the reasoning.
+ * not an eighth top-nav entry: it is reached from the Employees section tabs,
+ * which this page carries in a navy band above the shell, so the way in is also
+ * the way back out.
  *
  * Capability split (backend `_OPERATOR_CAPS` / `_MANAGER_CAPS`): `timesheet.view`
  * reads the month, `timesheet.edit` corrects it and produces the workbooks —
@@ -29,6 +31,8 @@ import { CalendarClock } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 
+import { EmployeesSectionTabs } from '@/components/employees/EmployeesSectionTabs'
+import { useAttendanceAttention } from '@/components/employees/useAttendanceAttention'
 import { EmptyState } from '@/components/ui/empty-state'
 import {
   apiErrorMessage,
@@ -46,7 +50,7 @@ import { TimesheetNotice } from './TimesheetNotice'
 import { MonthStepper, TimesheetToolbar, type TimesheetDensity } from './TimesheetToolbar'
 import { type Code, isCode, slugOf } from './codes'
 import {
-  lastCompletedMonth,
+  currentMonth,
   useAcknowledgeStart,
   useCloseMonth,
   useEmployeeSheetDownload,
@@ -106,7 +110,7 @@ export function TimesheetPage(): React.JSX.Element {
   const canEdit = has('timesheet.edit')
 
   const [params, setParams] = useState<{ year: number; month: number; sheet: TimesheetSheet }>(
-    () => ({ ...lastCompletedMonth(), sheet: 'main' }),
+    () => ({ ...currentMonth(), sheet: 'main' }),
   )
   const [ui, setUi] = useState<TimesheetUiState>({
     variant: 'attendance',
@@ -126,6 +130,9 @@ export function TimesheetPage(): React.JSX.Element {
   const acknowledge = useAcknowledgeStart(params)
   const monthFile = useTimesheetDownload()
   const employeeFile = useEmployeeSheetDownload()
+  // The switcher's badge: the same count the Attendance tab carries on every
+  // other page in the section, so the number never depends on the way in.
+  const attendance = useAttendanceAttention()
 
   // Cells are correctable only on the attendance grid of an open month, by
   // someone holding `timesheet.edit`. The statistics grid is derived: the fix
@@ -394,6 +401,22 @@ export function TimesheetPage(): React.JSX.Element {
       data-ts-density={ui.density}
       className="flex min-h-0 flex-1 flex-col overflow-hidden bg-background"
     >
+      {/* The Employees switcher, at the foot of the same navy band the other
+          three section pages carry. `shrink-0` because its sibling is a full
+          roster, and without it the band collapses to a few pixels. Compact by
+          design: this shell gets one screen, and the head below already names
+          the month, so the band holds nothing but the tabs.
+          `data-print-hide` because the paper is the sheet, not the screen — a
+          named `@page` turns any box left in flow beside it into a blank
+          sheet. */}
+      <section
+        data-print-hide
+        className="shrink-0 pt-3.5 text-white"
+        style={{ background: 'var(--hero-grad)' }}
+      >
+        <EmployeesSectionTabs attentionCount={attendance.attention} />
+      </section>
+
       <div className="flex shrink-0 flex-col gap-2 px-4 pb-2 pt-3 md:px-6">
         <header className="flex flex-wrap items-baseline gap-x-4 gap-y-2">
           <div className="min-w-0">

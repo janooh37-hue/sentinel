@@ -2,8 +2,13 @@
  * TimesheetPage — the A3 locked shell (UI spec §16.1).
  *
  * The contract under test is the shape, not the sheet: the page itself never
- * scrolls, the grid is the one scroll region, and the dock sits outside it so
- * reaching the release actions never means scrolling 275 employees.
+ * scrolls, the grid is the one scroll region, and the Employee section tabs and
+ * the dock both sit outside it so reaching the release actions never means
+ * scrolling 275 employees.
+ *
+ * Which month it opens on is pinned here too, against a faked clock: the roster
+ * is corrected during the month, so the page opens on the month in progress and
+ * not on the one that closed.
  *
  * `useSetCell`'s optimistic rollback is tested here too — a failed correction
  * that leaves the wrong code on screen is the one failure mode this page
@@ -13,7 +18,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { act, render, renderHook, screen, waitFor } from '@testing-library/react'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { toast } from 'sonner'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }))
 vi.mock('@/lib/api', () => ({
@@ -28,6 +33,24 @@ vi.mock('@/lib/api', () => ({
 // A `vi.fn()` rather than a fixed value, because amendment A3's read-only page
 // is only reachable by handing back `timesheet.view` WITHOUT `timesheet.edit`.
 vi.mock('@/lib/useCapabilities', () => ({ useCapabilities: vi.fn() }))
+// The band's tab badge reads today's attendance, whose query calls
+// `api.listAttendanceDay` — absent from the api mock above, so an unmocked hook
+// throws on every render. Stubbed as the directory suite does
+// (EmployeeLookupPage.test.tsx:62).
+vi.mock('@/components/employees/useAttendanceAttention', () => ({
+  siteToday: () => '2026-08-22',
+  useAttendanceAttention: () => ({
+    allowed: false,
+    isLoading: false,
+    attention: null,
+    seen: 0,
+    late: 0,
+    absent: 0,
+    unpaired: 0,
+    worst: [],
+    judgedAt: new Date(0),
+  }),
+}))
 
 import { api } from '@/lib/api'
 import type { TimesheetGridResponse, TimesheetIssue, TimesheetRow } from '@/lib/api'
@@ -129,6 +152,18 @@ describe('TimesheetPage shell', () => {
     renderPage()
     const grid = await screen.findByTestId('timesheet-scroll')
     expect(grid).not.toContainElement(await screen.findByTestId('timesheet-dock'))
+  })
+
+  it('keeps the Employee section tabs outside the scroll region', async () => {
+    renderPage()
+    const grid = await screen.findByTestId('timesheet-scroll')
+    const tabs = screen.getByRole('navigation', { name: 'Employees sections' })
+    // The band is chrome, not content: scrolling the roster must never scroll
+    // the way back out of the time sheet.
+    expect(grid).not.toContainElement(tabs)
+    // The paper is the dedicated sheet, not this layout. A named `@page` forces
+    // a break, so an in-flow box left visible beside it costs a blank sheet.
+    expect(tabs.closest('[data-print-hide]')).not.toBeNull()
   })
 
   it('names the month and the site in the head', async () => {
@@ -248,6 +283,26 @@ describe('TimesheetPage shell', () => {
     expect(screen.getAllByRole('button', { name: /previous month/i }).length).toBeGreaterThan(0)
     expect(screen.getByRole('group', { name: 'Roster' })).toBeInTheDocument()
     expect(screen.getByRole('group', { name: 'Deliverable' })).toBeInTheDocument()
+  })
+})
+
+describe('TimesheetPage month', () => {
+  beforeEach(() => {
+    // Date only: faking the whole timer set starves react-query and `waitFor`,
+    // which is why EmployeeIdCard.test.tsx pins the clock exactly this way.
+    vi.useFakeTimers({ toFake: ['Date'] })
+    vi.setSystemTime(new Date(2026, 7, 22))
+  })
+  afterEach(() => vi.useRealTimers())
+
+  it('opens on the month in progress, not the one that closed', async () => {
+    renderPage()
+    await screen.findByTestId('timesheet-shell')
+
+    // 22 Aug 2026 — `lastCompletedMonth()` would have asked for July.
+    await waitFor(() =>
+      expect(getTimesheet).toHaveBeenCalledWith({ year: 2026, month: 8, sheet: 'main' }),
+    )
   })
 })
 
