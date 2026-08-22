@@ -51,6 +51,8 @@ export interface TimesheetDockProps {
   leaving: RosterEdge[]
   /** One page-owned pass shared by every code surface. */
   index: TimesheetCodeIndex
+  /** Roster edit owns the sheet; filtering is unavailable while it is active. */
+  filterDisabled?: boolean
   ui: TimesheetUiState
   onOpenPanel: (panel: Panel) => void
   /** Activates a code filter in the page. */
@@ -84,6 +86,7 @@ export function TimesheetDock({
   joined,
   leaving,
   index,
+  filterDisabled = false,
   ui,
   onOpenPanel,
   onFilterCode,
@@ -296,8 +299,11 @@ export function TimesheetDock({
         */}
         <button
           type="button"
-          aria-expanded={open === 'codes'}
-          aria-label={`${t('timesheet.codesLabel')} — ${t('timesheet.cellsByCode')}`}
+          disabled={filterDisabled}
+          aria-expanded={!filterDisabled && open === 'codes'}
+          aria-label={`${t('timesheet.codesLabel')} — ${t('timesheet.cellsByCode')}${
+            filterDisabled ? ` — ${t('timesheet.rosterEdit.cellsLocked')}` : ''
+          }`}
           onClick={toggle('codes')}
           className={group}
         >
@@ -419,7 +425,7 @@ export function TimesheetDock({
         </span>
       </div>
 
-      {open !== null && (
+      {open !== null && !(filterDisabled && open === 'codes') && (
         <div role="region" aria-label={title} className="ts-panel">
           <header className="mb-2.5 flex items-start gap-3">
             <div className="min-w-0">

@@ -261,6 +261,27 @@ describe('TimesheetDock', () => {
     expect(onOpenPanel).toHaveBeenCalledWith(null)
     expect(onFilterCode).toHaveBeenCalledWith('AL')
   })
+  it('disables the code trigger and never leaves a codes panel open in roster mode', async () => {
+    const base = dockProps({ blocking: 0, rows: [ROW] })
+    const trigger = base.onOpenPanel
+    renderPanel(
+      <TimesheetDock
+        {...base}
+        filterDisabled
+        ui={{ ...base.ui, panel: 'codes' }}
+        onOpenPanel={trigger}
+      />,
+    )
+
+    const codes = screen.getByRole('button', { name: /cells by code/i })
+    expect(codes).toBeDisabled()
+    codes.focus()
+    expect(document.activeElement).not.toBe(codes)
+    expect(screen.queryByRole('region', { name: /cells by code/i })).not.toBeInTheDocument()
+    await userEvent.keyboard('{Enter}')
+    expect(trigger).not.toHaveBeenCalledWith('codes')
+  })
+
 
   it('seals a closed month with who closed it and when', async () => {
     const base = dockProps({ blocking: 0, closed: true })

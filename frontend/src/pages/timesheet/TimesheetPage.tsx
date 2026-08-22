@@ -177,6 +177,7 @@ export function TimesheetPage(): React.JSX.Element {
   const rows = grid.rows
   const [filter, setFilter] = useState<{ code: CodeSlug; index: number } | null>(null)
   const scrollRef = useRef<HTMLDivElement | null>(null)
+  const filterCode = filter?.code ?? null
   const filterBarRef = useRef<HTMLDivElement | null>(null)
   const focusedFilterCode = useRef<CodeSlug | null>(null)
   const scrollTarget = useRef<string | null>(null)
@@ -523,7 +524,7 @@ export function TimesheetPage(): React.JSX.Element {
    * armed for cells that are now refused is a control that answers nothing.
    */
   const onEditRoster = useCallback(() => {
-    setUi((prev) => ({ ...prev, variant: 'attendance', brush: null }))
+    setUi((prev) => ({ ...prev, variant: 'attendance', brush: null, panel: null }))
     setFilter(null)
     setRoster({ editing: true, draft: NO_DRAFT })
     setRosterError(null)
@@ -613,14 +614,14 @@ export function TimesheetPage(): React.JSX.Element {
   }, [filter, filterMatches.length])
 
   useEffect(() => {
-    if (!filter) {
+    if (filterCode === null) {
       focusedFilterCode.current = null
       return
     }
-    if (focusedFilterCode.current === filter.code) return
-    focusedFilterCode.current = filter.code
+    if (focusedFilterCode.current === filterCode) return
+    focusedFilterCode.current = filterCode
     filterBarRef.current?.focus()
-  }, [filter?.code])
+  }, [filterCode])
 
   useEffect(() => {
     const targetId = currentFilterEmployeeId ?? ui.selected
@@ -644,7 +645,7 @@ export function TimesheetPage(): React.JSX.Element {
           [
             { outline: '2px solid var(--primary)' },
             { outline: '2px solid transparent' },
-            { outline: 'none' },
+            { outline: '2px solid transparent' },
           ],
           { duration: 220 },
         )
@@ -1018,6 +1019,7 @@ export function TimesheetPage(): React.JSX.Element {
         canEdit={canEdit}
         joined={grid.joined}
         index={codeIndex}
+        filterDisabled={roster.editing}
         leaving={grid.leaving}
         ui={ui}
         onOpenPanel={onOpenPanel}

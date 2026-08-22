@@ -473,18 +473,35 @@ describe('TimesheetPage code filtering', () => {
     renderPage()
     await screen.findByText('MOHAMMED ASLAM')
     await user.click(await screen.findByRole('button', { name: /edit roster/i }))
-    expect(screen.getByRole('button', { name: /cancel/i })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /^cancel$/i })).toBeInTheDocument()
 
-    await user.click(screen.getByRole('button', { name: /cells by code/i }))
-    const panel = await screen.findByRole('region', { name: /cells by code/i })
-    await user.click(within(panel).getByRole('button', { name: /annual leave/i }))
+    const codes = screen.getByRole('button', { name: /cells by code/i })
+    expect(codes).toBeDisabled()
+    expect(screen.queryByRole('region', { name: /cells by code/i })).not.toBeInTheDocument()
     expect(screen.queryByTestId('code-filter-bar')).not.toBeInTheDocument()
     expect(screen.getAllByTestId('timesheet-row')).toHaveLength(5)
 
-    await user.click(screen.getByRole('button', { name: /cancel/i }))
+    await user.click(screen.getByRole('button', { name: /^cancel$/i }))
     expect(screen.queryByTestId('code-filter-bar')).not.toBeInTheDocument()
     expect(screen.getAllByTestId('timesheet-row')).toHaveLength(5)
   })
+  it('closes and disables the bottom code surface when roster edit starts', async () => {
+    getTimesheet.mockResolvedValue(FILTER_MONTH)
+    listDesignations.mockResolvedValue([DESIGNATION])
+    const user = userEvent.setup()
+    renderPage()
+    await screen.findByText('MOHAMMED ASLAM')
+    await user.click(screen.getByRole('button', { name: /cells by code/i }))
+    expect(await screen.findByRole('region', { name: /cells by code/i })).toBeInTheDocument()
+
+    await user.click(await screen.findByRole('button', { name: /edit roster/i }))
+    expect(screen.queryByRole('region', { name: /cells by code/i })).not.toBeInTheDocument()
+    const codes = screen.getByRole('button', { name: /cells by code/i })
+    expect(codes).toBeDisabled()
+    codes.focus()
+    expect(document.activeElement).not.toBe(codes)
+  })
+
 
 })
 
