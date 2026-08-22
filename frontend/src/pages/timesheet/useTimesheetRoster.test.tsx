@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ReactNode } from 'react'
 
 vi.mock('sonner', () => ({ toast: { error: vi.fn(), success: vi.fn() } }))
+import { toast } from 'sonner'
 
 import { api, ApiError } from '@/lib/api'
 import {
@@ -33,6 +34,7 @@ const designation = {
 
 beforeEach(() => {
   vi.restoreAllMocks()
+  vi.mocked(toast.error).mockReset()
   vi.spyOn(api, 'listDesignations')
   vi.spyOn(api, 'createTimesheetDesignation')
   vi.spyOn(api, 'updateTimesheetDesignation')
@@ -55,6 +57,9 @@ describe('timesheet roster and designation hooks', () => {
     vi.mocked(api.createTimesheetDesignation).mockResolvedValue(designation)
     vi.mocked(api.updateTimesheetDesignation).mockResolvedValue(designation)
     const queryClient = new QueryClient({ defaultOptions: { mutations: { retry: false } } })
+    queryClient.setQueryData(TIMESHEET_DESIGNATIONS_KEY, [designation])
+    queryClient.setQueryData(['timesheet', 2026, 8, 'main'], { rows: [] })
+    queryClient.setQueryData(['timesheet', 2026, 8, 'drivers'], { rows: [] })
     const invalidate = vi.spyOn(queryClient, 'invalidateQueries')
     const wrapper = wrapperFor(queryClient)
     const create = renderHook(() => useCreateTimesheetDesignation(), { wrapper })
@@ -64,7 +69,8 @@ describe('timesheet roster and designation hooks', () => {
     await update.result.current.mutateAsync({ id: 12, input: { name_en: 'Guard 2', name_ar: 'حارس 2' } })
 
     expect(invalidate).toHaveBeenCalledWith({ queryKey: TIMESHEET_DESIGNATIONS_KEY })
-    expect(invalidate).toHaveBeenCalledTimes(2)
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: ['timesheet'] })
+    expect(invalidate).toHaveBeenCalledTimes(3)
   })
 
   it('preserves the structured ApiError when a designation write rejects', async () => {
@@ -78,6 +84,24 @@ describe('timesheet roster and designation hooks', () => {
     await expect(
       result.current.mutateAsync({ name_en: 'Guard', name_ar: 'حارس', sheet: 'main' }),
     ).rejects.toBe(error)
+    expect(toast.error).toHaveBeenCalledWith('Already exists')
+  })
+  it('quiet designation writes preserve ApiError rejection without showing a toast', async () => {
+    const error = new ApiError(409, 'DESIGNATION_EXISTS', 'Already exists')
+    vi.mocked(api.createTimesheetDesignation).mockRejectedValue(error)
+    vi.mocked(api.updateTimesheetDesignation).mockRejectedValue(error)
+    const queryClient = new QueryClient({ defaultOptions: { mutations: { retry: false } } })
+    const wrapper = wrapperFor(queryClient)
+    const create = renderHook(() => useCreateTimesheetDesignation({ quiet: true }), { wrapper })
+    const update = renderHook(() => useUpdateTimesheetDesignation({ quiet: true }), { wrapper })
+
+    await expect(
+      create.result.current.mutateAsync({ name_en: 'Guard', name_ar: 'حارس', sheet: 'main' }),
+    ).rejects.toBe(error)
+    await expect(
+      update.result.current.mutateAsync({ id: 12, input: { name_en: 'Guard 2', name_ar: 'حارس 2' } }),
+    ).rejects.toBe(error)
+    expect(toast.error).not.toHaveBeenCalled()
   })
 
   it('sends the exact roster payload and invalidates both selected-month sheets', async () => {

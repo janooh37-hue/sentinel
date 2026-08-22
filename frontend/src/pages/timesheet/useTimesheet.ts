@@ -249,23 +249,33 @@ export function useTimesheetDesignations() {
   })
 }
 
-export function useCreateTimesheetDesignation() {
+type DesignationMutationOptions = { quiet?: boolean }
+
+export function useCreateTimesheetDesignation(options: DesignationMutationOptions = {}) {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: (input: TimesheetDesignationCreate) =>
       api.createTimesheetDesignation(input),
     onSuccess: () => qc.invalidateQueries({ queryKey: TIMESHEET_DESIGNATIONS_KEY }),
-    onError: (err) => toast.error(apiErrorMessage(err)),
+    onError: (err) => {
+      if (!options.quiet) toast.error(apiErrorMessage(err))
+    },
   })
 }
 
-export function useUpdateTimesheetDesignation() {
+export function useUpdateTimesheetDesignation(options: DesignationMutationOptions = {}) {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: ({ id, input }: { id: number; input: TimesheetDesignationUpdate }) =>
       api.updateTimesheetDesignation(id, input),
-    onSuccess: () => qc.invalidateQueries({ queryKey: TIMESHEET_DESIGNATIONS_KEY }),
-    onError: (err) => toast.error(apiErrorMessage(err)),
+    onSuccess: () =>
+      Promise.all([
+        qc.invalidateQueries({ queryKey: TIMESHEET_DESIGNATIONS_KEY }),
+        qc.invalidateQueries({ queryKey: ['timesheet'] }),
+      ]),
+    onError: (err) => {
+      if (!options.quiet) toast.error(apiErrorMessage(err))
+    },
   })
 }
 
