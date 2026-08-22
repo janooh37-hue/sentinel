@@ -265,13 +265,24 @@ async function selectDriversSheet(): Promise<void> {
 }
 
 /** The two selects and the button that bring a man in from the other workbook. */
+const crossGroup = (): HTMLElement =>
+  screen.getByRole('group', { name: 'From the other workbook' })
 const crossEmployee = (): HTMLSelectElement =>
   screen.getByLabelText('Employee to move') as HTMLSelectElement
 const crossTarget = (): HTMLSelectElement =>
   screen.getByLabelText('Designation') as HTMLSelectElement
 const crossStage = (): HTMLElement => screen.getByRole('button', { name: 'Stage move' })
+const crossRemove = (employeeId: string): HTMLElement =>
+  screen.getByRole('button', { name: `Take ${employeeId} back off this sheet` })
 const optionsOf = (select: HTMLSelectElement): string[] =>
   Array.from(select.options).map((option) => option.textContent ?? '')
+
+/** Chooses the target once, then the man — the order the operator works in. */
+async function stageAcross(employeeId: string, designationId: number): Promise<void> {
+  await userEvent.selectOptions(crossTarget(), String(designationId))
+  await userEvent.selectOptions(crossEmployee(), employeeId)
+  await userEvent.click(crossStage())
+}
 
 beforeEach(() => {
   vi.clearAllMocks()
@@ -844,6 +855,159 @@ describe('moving a man in from the other workbook', () => {
       ]),
     )
     expect(printed()).toEqual(['G9001'])
+  })
+
+  it('prints the first arrival onto a workbook the server has nobody on', async () => {
+    // The bootstrap case: a Drivers workbook that has not been used yet. The
+    // empty state is what the sheet shows, so an arrival that only appears
+    // after Save is an arrival the operator stages blind.
+    getTimesheet.mockImplementation(async (asked: { sheet?: string }) =>
+      asked.sheet === 'drivers' ? { ...DRIVERS_MONTH, rows: [] } : MONTH,
+    )
+    renderPage()
+    await screen.findByText('GUARD G7160')
+    const switcher = screen.getByRole('group', { name: 'Roster' })
+    await userEvent.click(within(switcher).getByRole('button', { name: 'Drivers' }))
+    await screen.findByTestId('timesheet-empty')
+    await enterRosterMode()
+    await waitFor(() => expect(optionsOf(crossEmployee())).toHaveLength(4))
+
+    await stageAcross('G7160', DRIVER.id)
+
+    await waitFor(() => expect(printed()).toEqual(['G7160']))
+    expect(screen.queryByTestId('timesheet-empty')).not.toBeInTheDocument()
+    // On the sheet properly: the grip is what makes him re-targetable.
+    expect(grip('G7160')).toBeInTheDocument()
+    expect(setTimesheetRoster).not.toHaveBeenCalled()
+  })
+
+  it('refuses a chosen man the other workbook no longer offers', async () => {
+    bothWorkbooks()
+    const { qc } = renderPage()
+    await screen.findByText('GUARD G7160')
+    await selectDriversSheet()
+    await enterRosterMode()
+    await waitFor(() => expect(optionsOf(crossEmployee())).toHaveLength(4))
+    await userEvent.selectOptions(crossTarget(), String(DRIVER.id))
+    await userEvent.selectOptions(crossEmployee(), 'G7160')
+
+    // He leaves the other workbook between the choice and the press — someone
+    // else moved him, or he is off the roster entirely.
+    getTimesheet.mockImplementation(async (asked: { sheet?: string }) =>
+      asked.sheet === 'drivers'
+        ? DRIVERS_MONTH
+        : { ...MONTH, rows: MONTH.rows.filter((each) => each.employee_id !== 'G7160') },
+    )
+    await act(async () => {
+      await qc.invalidateQueries({ queryKey: ['timesheet'] })
+    })
+
+    await waitFor(() =>
+      expect(optionsOf(crossEmployee())).toEqual([
+        'Choose…',
+        'G6001 — GUARD G6001',
+        'G7014 — GUARD G7014',
+      ]),
+    )
+    // A stale id is not a move: the control that would send it is refused, and
+    // nothing is staged for a man the list no longer holds.
+    expect(crossStage()).toBeDisabled()
+    expect(printed()).toEqual(['G9001'])
+    expect(screen.getByText('Nothing staged')).toBeInTheDocument()
+  })
+
+  it('says the other workbook could not be read, and offers another try', async () => {
+    getTimesheet.mockImplementation(async (asked: { sheet?: string }) => {
+      if (asked.sheet === 'drivers') throw new Error('the drivers workbook is down')
+      return MONTH
+    })
+    renderPage()
+    await screen.findByText('GUARD G7160')
+    await enterRosterMode()
+
+    // A failed read is not an empty one: "nobody left to move" would be a
+    // sentence about the roster, and this is a sentence about the network.
+    const group = await screen.findByRole('group', { name: 'From the other workbook' })
+    expect(
+      within(group).getByText("Couldn't load this. Check your connection and try again."),
+    ).toBeInTheDocument()
+    expect(
+      screen.queryByText('The other workbook has nobody left to move here.'),
+    ).not.toBeInTheDocument()
+    // The sheet in front of the operator is loaded, so its own moves still work.
+    dragTo(grip('G7160'), band(DUTY.id))
+    await waitFor(() => expect(printed()).toEqual(['G6001', 'G7160', 'G7014']))
+
+    bothWorkbooks()
+    await userEvent.click(within(group).getByRole('button', { name: 'Retry' }))
+
+    await waitFor(() =>
+      expect(optionsOf(crossEmployee())).toEqual(['Choose…', 'G9001 — GUARD G9001']),
+    )
+  })
+
+  it('keeps focus inside the picker after staging, with men left and with none', async () => {
+    bothWorkbooks()
+    renderPage()
+    await screen.findByText('GUARD G7160')
+    await selectDriversSheet()
+    await enterRosterMode()
+    await waitFor(() => expect(optionsOf(crossEmployee())).toHaveLength(4))
+    const group = crossGroup()
+
+    await stageAcross('G7160', DRIVER.id)
+
+    // Staging disables the button that was just pressed, and a disabled active
+    // element drops focus to the document body — which loses the keyboard
+    // operator's place on a band they are about to use again.
+    await waitFor(() => expect(document.activeElement).toBe(group))
+    expect(crossStage()).toBeDisabled()
+
+    await userEvent.selectOptions(crossEmployee(), 'G6001')
+    await userEvent.click(crossStage())
+    await userEvent.selectOptions(crossEmployee(), 'G7014')
+    await userEvent.click(crossStage())
+
+    // The last man takes the whole form with him; focus still has somewhere to
+    // land, because the group itself is the stop.
+    await waitFor(() =>
+      expect(
+        screen.getByText('The other workbook has nobody left to move here.'),
+      ).toBeInTheDocument(),
+    )
+    expect(document.activeElement).toBe(group)
+  })
+
+  it('takes one staged arrival back off the sheet and leaves the rest', async () => {
+    bothWorkbooks()
+    renderPage()
+    await screen.findByText('GUARD G7160')
+    await selectDriversSheet()
+    await enterRosterMode()
+    await waitFor(() => expect(optionsOf(crossEmployee())).toHaveLength(4))
+
+    await stageAcross('G7160', DRIVER.id)
+    await userEvent.selectOptions(crossEmployee(), 'G6001')
+    await userEvent.click(crossStage())
+    await waitFor(() => expect(printed()).toEqual(['G6001', 'G7160', 'G9001']))
+    expect(screen.getByText('2 moves staged')).toBeInTheDocument()
+    const group = crossGroup()
+
+    await userEvent.click(crossRemove('G7160'))
+
+    // An arrival is the one staged move with no row to drag back, so it needs a
+    // way out of its own — and it must take exactly ONE draft entry with it.
+    await waitFor(() => expect(printed()).toEqual(['G6001', 'G9001']))
+    expect(screen.getByText('1 move staged')).toBeInTheDocument()
+    expect(optionsOf(crossEmployee())).toEqual([
+      'Choose…',
+      'G7014 — GUARD G7014',
+      'G7160 — GUARD G7160',
+    ])
+    expect(crossRemove('G6001')).toBeInTheDocument()
+    expect(setTimesheetRoster).not.toHaveBeenCalled()
+    // Same focus contract: the control that answered has just unmounted.
+    expect(document.activeElement).toBe(group)
   })
 })
 

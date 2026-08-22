@@ -3758,7 +3758,8 @@
         "choose": "Choose…",
         "stage": "Stage move",
         "loading": "Reading the other workbook…",
-        "empty": "The other workbook has nobody left to move here."
+        "empty": "The other workbook has nobody left to move here.",
+        "remove": "Take {{id}} back off this sheet"
       }
     },
     "issues": {

@@ -227,6 +227,10 @@ const KEYS = [
   'timesheet.rosterEdit.cross.stage',
   'timesheet.rosterEdit.cross.loading',
   'timesheet.rosterEdit.cross.empty',
+  // The take-back for one arrival. An arrival is the only staged move with no
+  // row of its own to drag back, so it carries its own way out, named after the
+  // man it undoes — a bare "Remove" beside three others says nothing.
+  'timesheet.rosterEdit.cross.remove',
   // All six CLDR forms: the staged count is rendered under `ar`, exactly as
   // `corrections` is, so an untranslated dual or few form is a visible defect.
   'timesheet.rosterEdit.staged_zero',
@@ -409,5 +413,22 @@ describe('timesheet i18n parity', () => {
     } finally {
       await i18n.changeLanguage('en')
     }
+  })
+
+  /**
+   * The two cross-workbook sentences an Arabic reviewer corrected. Both were
+   * grammatical-looking calques of the English: `الموظف المنقول` states the man
+   * has ALREADY been moved, where the field is asking which one to move, and
+   * `لا أحد ... يمكن نقله` negates the wrong clause. Pinned because the parity
+   * test above only sees that a string exists and differs from English, which
+   * is exactly what a plausible mistranslation also does.
+   */
+  it('keeps the reviewed Arabic wording for the cross-workbook picker', () => {
+    expect(get(ar as unknown as Rec, 'timesheet.rosterEdit.cross.employee')).toBe(
+      'الموظف المراد نقله',
+    )
+    expect(get(ar as unknown as Rec, 'timesheet.rosterEdit.cross.empty')).toBe(
+      'لم يبقَ في الملف الآخر أحد يمكن نقله إلى هنا.',
+    )
   })
 })

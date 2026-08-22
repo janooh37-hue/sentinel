@@ -29,8 +29,8 @@
  * gesture the design's sentence assumes.
  */
 
-import { useState } from 'react'
-import { Pencil } from 'lucide-react'
+import { useRef, useState } from 'react'
+import { Pencil, X } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 
 import type { TimesheetDesignationRead, TimesheetRow, TimesheetSheet } from '@/lib/api'
@@ -49,11 +49,18 @@ export interface TimesheetRosterEditorProps {
   /** The valid targets: active designations of the sheet on screen. */
   designations: readonly TimesheetDesignationRead[]
   /** The other workbook's men who can still be moved onto this sheet. */
-  crossRows: readonly TimesheetRow[]
+  crossOffered: readonly TimesheetRow[]
+  /** The arrivals already staged onto it — each one its own way back. */
+  crossStaged: readonly TimesheetRow[]
   /** The other workbook has been asked for and has not arrived yet. */
   crossLoading: boolean
+  /** The other workbook could not be read at all, which is not the same as empty. */
+  crossFailed: boolean
+  onCrossRetry: () => void
   /** Stage one arrival. Same callback the drop bands and the grip picker use. */
   onStage: (employeeId: string, designationId: number) => void
+  /** Drop ONE staged arrival, leaving the rest of the draft. */
+  onUnstage: (employeeId: string) => void
   onSave: () => void
   onCancel: () => void
 }
@@ -111,7 +118,7 @@ export function DesignationRenameControl({
 }
 
 /**
- * Naming a man the sheet on screen does not print yet.
+ * Naming a man the sheet on screen does not print yet, and taking him back off.
  *
  * Two native selects and one button. The platform's own picker is the calm
  * answer here: it is one line tall in a band that has to stay one line tall, it
@@ -120,40 +127,62 @@ export function DesignationRenameControl({
  * and this sheet's targets. The men are the page's list, so somebody already
  * printed here or already staged is not in it.
  *
- * The chosen target is resolved back through `designations` instead of being
- * trusted as a number, so a catalog that changed under an open draft can never
- * stage an id this sheet has no band for.
+ * Both choices are resolved back through the lists they came from rather than
+ * trusted as strings. A refetch can drop a man out of the other workbook, and a
+ * catalog edit can drop a designation, between the choice and the press — so a
+ * selection that no longer exists refuses instead of staging a stale id.
+ *
+ * The group is a focus stop of its own (`tabIndex={-1}`). Staging removes the
+ * man from the list, which disables — or unmounts — the very control that was
+ * pressed, and a disabled active element hands focus to the document body. That
+ * loses the keyboard operator's place on a band they are about to use again, so
+ * every action that removes its own control puts focus here instead.
  */
 function CrossWorkbookPicker({
   designations,
-  rows,
+  offered,
+  staged,
   loading,
+  failed,
   onStage,
+  onUnstage,
+  onRetry,
 }: {
   designations: readonly TimesheetDesignationRead[]
-  rows: readonly TimesheetRow[]
+  offered: readonly TimesheetRow[]
+  staged: readonly TimesheetRow[]
   loading: boolean
+  failed: boolean
   onStage: (employeeId: string, designationId: number) => void
+  onUnstage: (employeeId: string) => void
+  onRetry: () => void
 }): React.JSX.Element {
   const { t } = useTranslation()
+  const group = useRef<HTMLDivElement | null>(null)
   const [employee, setEmployee] = useState('')
   const [target, setTarget] = useState('')
+  const man = offered.find((row) => row.employee_id === employee) ?? null
   const chosen = designations.find((each) => String(each.id) === target) ?? null
+
+  const keepFocus = (): void => group.current?.focus()
 
   const stage = (event: React.FormEvent): void => {
     event.preventDefault()
-    if (employee === '' || chosen === null) return
-    onStage(employee, chosen.id)
+    if (man === null || chosen === null) return
+    onStage(man.employee_id, chosen.id)
     // He is on this sheet now, so the list he came from no longer holds him.
     // The target stays: two men into one designation is a choice made once.
     setEmployee('')
+    keepFocus()
   }
 
   return (
     <div
+      ref={group}
       role="group"
+      tabIndex={-1}
       aria-labelledby="roster-cross-label"
-      className="flex w-full flex-wrap items-center gap-x-2 gap-y-1 border-t border-hairline pt-1.5"
+      className="flex w-full flex-wrap items-center gap-x-2 gap-y-1 border-t border-hairline pt-1.5 focus-visible:outline-none"
     >
       <span id="roster-cross-label" className={FIELD_LABEL}>
         {t('timesheet.rosterEdit.cross.label')}
@@ -162,7 +191,17 @@ function CrossWorkbookPicker({
         <span role="status" className="text-[0.75em] text-muted-foreground">
           {t('timesheet.rosterEdit.cross.loading')}
         </span>
-      ) : rows.length === 0 ? (
+      ) : failed ? (
+        // A workbook that could not be READ is not a workbook with nobody on
+        // it: one is a sentence about the network with a way to try again, the
+        // other a statement about the roster that would simply be false.
+        <>
+          <span className="text-[0.75em] text-muted-foreground">{t('common.loadError')}</span>
+          <button type="button" onClick={() => onRetry()} className={CONTROL}>
+            {t('common.retry')}
+          </button>
+        </>
+      ) : offered.length === 0 ? (
         // Said plainly and in one line. It costs this one control and nothing
         // else: the sheet on screen keeps its drop bands and its grip picker.
         <span className="text-[0.75em] text-muted-foreground">
@@ -175,12 +214,12 @@ function CrossWorkbookPicker({
           </label>
           <select
             id="roster-cross-employee"
-            value={employee}
+            value={man === null ? '' : man.employee_id}
             onChange={(event) => setEmployee(event.target.value)}
             className={FIELD}
           >
             <option value="">{t('timesheet.rosterEdit.cross.choose')}</option>
-            {rows.map((row) => (
+            {offered.map((row) => (
               // A G-number and the name the workbook prints — data, not copy —
               // so the option declares its own language and direction rather
               // than inheriting an Arabic paragraph's and reordering the id.
@@ -195,7 +234,7 @@ function CrossWorkbookPicker({
           </label>
           <select
             id="roster-cross-target"
-            value={target}
+            value={chosen === null ? '' : String(chosen.id)}
             onChange={(event) => setTarget(event.target.value)}
             className={FIELD}
           >
@@ -209,10 +248,40 @@ function CrossWorkbookPicker({
             ))}
           </select>
 
-          <button type="submit" disabled={employee === '' || chosen === null} className={SUBMIT}>
+          <button type="submit" disabled={man === null || chosen === null} className={SUBMIT}>
             {t('timesheet.rosterEdit.cross.stage')}
           </button>
         </form>
+      )}
+
+      {/* The arrivals, each with its own way back. Every other staged move is
+          undone by moving the row again; an arrival cannot be, because the
+          designations that would send him home belong to the workbook that is
+          not on screen. */}
+      {staged.length > 0 && (
+        <ul className="flex flex-wrap items-center gap-1">
+          {staged.map((row) => (
+            <li
+              key={row.employee_id}
+              className="inline-flex items-center gap-1 rounded-full border border-border bg-surface px-2 py-0.5 text-[0.72em] font-semibold"
+            >
+              <span dir="ltr" lang="en" className="font-mono [unicode-bidi:isolate]">
+                {row.employee_id}
+              </span>
+              <button
+                type="button"
+                aria-label={t('timesheet.rosterEdit.cross.remove', { id: row.employee_id })}
+                onClick={() => {
+                  onUnstage(row.employee_id)
+                  keepFocus()
+                }}
+                className="inline-grid h-4 w-4 place-items-center rounded text-muted-foreground hover:text-primary focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+              >
+                <X className="h-3 w-3" strokeWidth={2} aria-hidden />
+              </button>
+            </li>
+          ))}
+        </ul>
       )}
     </div>
   )
@@ -224,9 +293,13 @@ export function TimesheetRosterEditor({
   pending,
   error,
   designations,
-  crossRows,
+  crossOffered,
+  crossStaged,
   crossLoading,
+  crossFailed,
+  onCrossRetry,
   onStage,
+  onUnstage,
   onSave,
   onCancel,
 }: TimesheetRosterEditorProps): React.JSX.Element {
@@ -277,9 +350,13 @@ export function TimesheetRosterEditor({
           and above the refusal because a refused batch is the last word. */}
       <CrossWorkbookPicker
         designations={designations}
-        rows={crossRows}
+        offered={crossOffered}
+        staged={crossStaged}
         loading={crossLoading}
+        failed={crossFailed}
         onStage={onStage}
+        onUnstage={onUnstage}
+        onRetry={onCrossRetry}
       />
 
       {error !== null && (

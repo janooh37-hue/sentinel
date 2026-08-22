@@ -713,6 +713,26 @@ export function TimesheetPage(): React.JSX.Element {
     [baselineById],
   )
 
+  /**
+   * Drop ONE staged entry, leaving the rest of the draft alone.
+   *
+   * Every other staged move can be undone by moving the row back, because the
+   * row is on the sheet with a grip on it. An arrival from the other workbook
+   * cannot: the designations that would send him home belong to the workbook
+   * that is not on screen, and putting them among this sheet's drop targets is
+   * exactly the parity the design forbids. So the take-back is a control of its
+   * own, and it is the draft entry it removes — never the whole draft, which is
+   * what Cancel is for.
+   */
+  const onUnstageRoster = useCallback((employeeId: string) => {
+    setRoster((prev) => {
+      if (!prev.draft.has(employeeId)) return prev
+      const draft = new Map(prev.draft)
+      draft.delete(employeeId)
+      return { ...prev, draft }
+    })
+  }, [])
+
   /** One batch, for the month on screen. Success closes; failure keeps both. */
   const onSaveRoster = useCallback(() => {
     if (roster.draft.size === 0 || rosterWrite.isPending) return
@@ -1093,9 +1113,13 @@ export function TimesheetPage(): React.JSX.Element {
               pending={rosterWrite.isPending}
               error={rosterError}
               designations={designations}
-              crossRows={crossCandidates}
+              crossOffered={crossCandidates}
+              crossStaged={crossRows}
               crossLoading={sibling.isPending}
+              crossFailed={sibling.isError}
+              onCrossRetry={sibling.refetch}
               onStage={onAssignRoster}
+              onUnstage={onUnstageRoster}
               onSave={onSaveRoster}
               onCancel={onCancelRoster}
             />
@@ -1175,8 +1199,11 @@ export function TimesheetPage(): React.JSX.Element {
                   {t('common.retry')}
                 </button>
               </div>
-            ) : grid.rows.length === 0 ? (
-              // Not a shrug: the reason, and the way out of the month.
+            ) : printedRows.length === 0 ? (
+              // Not a shrug: the reason, and the way out of the month. Keyed to
+              // what the sheet PRINTS, not to what the server sent: a Drivers
+              // workbook nobody is on yet is empty until the first arrival is
+              // staged onto it, and that arrival has to be visible before Save.
               <div
                 data-testid="timesheet-empty"
                 className="flex flex-col items-center gap-2 pb-10"
