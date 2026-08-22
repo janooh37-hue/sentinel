@@ -743,7 +743,7 @@ describe('TimesheetPage side glance', () => {
       expect(screen.getAllByTestId('timesheet-row')).toHaveLength(4)
       await user.click(within(glance).getByRole('button', { name: /^checks/i }))
 
-      const line = screen.getByTestId('check-issue-G7091-no_designation')
+      const line = screen.getByTestId('check-issue-G7091-no_designation-0')
       scroll.mockClear()
       animate.mockClear()
       await user.click(within(line).getByRole('button', { name: /show row/i }))
@@ -782,7 +782,7 @@ describe('TimesheetPage side glance', () => {
       await screen.findByText('MOHAMMED ASLAM')
       await user.click(within(screen.getByTestId('timesheet-glance')).getByRole('button', { name: /^checks/i }))
       await user.click(
-        within(screen.getByTestId('check-issue-G7091-no_designation')).getByRole('button', {
+        within(screen.getByTestId('check-issue-G7091-no_designation-0')).getByRole('button', {
           name: /show row/i,
         }),
       )
@@ -815,7 +815,7 @@ describe('TimesheetPage side glance', () => {
       await user.click(screen.getByRole('button', { name: /^checks/i }))
       scroll.mockClear()
       await user.click(
-        within(screen.getByTestId('check-issue-G7091-no_designation')).getByRole('button', {
+        within(screen.getByTestId('check-issue-G7091-no_designation-0')).getByRole('button', {
           name: /show row/i,
         }),
       )

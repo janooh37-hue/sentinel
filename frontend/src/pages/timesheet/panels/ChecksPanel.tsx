@@ -100,7 +100,7 @@ export function ChecksPanel({
    * The level is text plus shape, never colour alone (UI spec §6), and the 3px
    * reading-start rule is the level again in a third channel.
    */
-  const issue = (item: TimesheetIssue, stop: boolean): React.JSX.Element => {
+  const issue = (item: TimesheetIssue, stop: boolean, ordinal: number): React.JSX.Element => {
     // Bound once. When no translation exists the `<b>` shows the server's
     // sentence, so rendering `detail` again beside it would print the same
     // sentence twice — in exactly the case the fallback exists for.
@@ -108,8 +108,8 @@ export function ChecksPanel({
     const jumpable = rosterEmployeeIds.has(item.employee_id)
     return (
       <div
-        key={`${item.employee_id}|${item.kind}|${item.detail}`}
-        data-testid={`check-issue-${item.employee_id}-${item.kind}`}
+        key={`${item.employee_id}|${item.kind}|${item.detail}|${ordinal}`}
+        data-testid={`check-issue-${item.employee_id}-${item.kind}-${ordinal}`}
         className={cn(
           line,
           'border-s-[3px]',
@@ -166,8 +166,8 @@ export function ChecksPanel({
           <p className="text-[0.8em] font-medium text-success">✓ {t('timesheet.allClear')}</p>
         ) : (
           <>
-            {blocking.map((item) => issue(item, true))}
-            {warnings.map((item) => issue(item, false))}
+            {blocking.map((item, index) => issue(item, true, index))}
+            {warnings.map((item, index) => issue(item, false, blocking.length + index))}
             {/* A sealed month cannot be corrected, so say why the fixes above
                 are not reachable from here rather than leaving the operator to
                 click at a frozen grid. */}

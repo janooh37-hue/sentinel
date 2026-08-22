@@ -176,7 +176,7 @@ const KEYS = [
   'timesheet.filter.employees_other',
   // The side glance (Task 8). Only three keys: the column's own name and the
   // two directions of its collapse control. Everything else it prints is a
-  // word the sheet already owns — `codesLabel` and `panelChecks` name the two
+  // word the sheet already owns — `cellsByCode` and `panelChecks` name the two
   // views, `toFix` is the blocking badge's sentence, `codes.*` the meanings,
   // and `cells` the counts. A tab label of its own would be the fourth name
   // for something already named three times.

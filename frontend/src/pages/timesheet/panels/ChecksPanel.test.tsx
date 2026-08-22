@@ -94,6 +94,23 @@ describe('ChecksPanel', () => {
     expect(screen.getByText('G7099 NAWAF AL BALUSHI')).toBeInTheDocument()
     expect(screen.queryByText('no_designation')).not.toBeInTheDocument()
   })
+  it('keeps duplicate employee and issue kinds addressable by ordinal', async () => {
+    renderPanel(
+      <ChecksPanel
+        {...props}
+        blocking={[
+          { employee_id: 'G7099', kind: 'no_designation', detail: 'First detail' },
+          { employee_id: 'G7099', kind: 'no_designation', detail: 'Second detail' },
+        ]}
+        joined={[]}
+        leaving={[]}
+        removed={[]}
+      />,
+    )
+    expect(await screen.findByTestId('check-issue-G7099-no_designation-0')).toBeInTheDocument()
+    expect(screen.getByTestId('check-issue-G7099-no_designation-1')).toBeInTheDocument()
+  })
+
 
   /**
    * `MonthGrid.warnings` is recomputed live even on a closed month, so
@@ -148,7 +165,7 @@ describe('ChecksPanel', () => {
   it('jumps to the row of a finding whose man is on this sheet', async () => {
     const onShowRow = vi.fn()
     renderPanel(<ChecksPanel {...props} onShowRow={onShowRow} />)
-    const line = await screen.findByTestId('check-issue-G7099-no_designation')
+    const line = await screen.findByTestId('check-issue-G7099-no_designation-0')
 
     await userEvent.click(within(line).getByRole('button', { name: /G7099/ }))
     expect(onShowRow).toHaveBeenCalledWith('G7099')
@@ -179,7 +196,7 @@ describe('ChecksPanel', () => {
         onShowRow={onShowRow}
       />,
     )
-    const line = await screen.findByTestId('check-issue-G6001-departed_but_active')
+    const line = await screen.findByTestId('check-issue-G6001-departed_but_active-0')
     // No jump it cannot honour, and the route to the person still there.
     expect(within(line).queryByRole('button')).not.toBeInTheDocument()
     expect(within(line).getByRole('link', { name: /open record/i })).toHaveAttribute(
