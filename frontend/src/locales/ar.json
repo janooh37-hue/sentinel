@@ -3997,6 +3997,19 @@
     "cells_few": "{{count}} خلايا",
     "cells_many": "{{count}} خلية",
     "cells_other": "{{count}} خلية",
+    "filter": {
+      "by": "التصفية حسب",
+      "previousEmployee": "الموظف السابق",
+      "nextEmployee": "الموظف التالي",
+      "clear": "مسح التصفية",
+      "position": "{{n}} من {{total}}",
+      "employees_zero": "لا موظفين",
+      "employees_one": "موظف واحد",
+      "employees_two": "موظفان",
+      "employees_few": "{{count}} موظفين",
+      "employees_many": "{{count}} موظفاً",
+      "employees_other": "{{count}} موظف"
+    },
     "issues": {
       "no_designation": "لا مسمى وظيفي",
       "no_nationality": "لا مسمى للجنسية بالإنجليزية",

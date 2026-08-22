@@ -157,6 +157,23 @@ const KEYS = [
   'timesheet.cells_few',
   'timesheet.cells_many',
   'timesheet.cells_other',
+  // The filter navigation bar (Task 7). `previousEmployee` / `nextEmployee`
+  // exist beside `common.previous` / `common.next` rather than instead of
+  // them: the strip carries the short word, and the ACCESSIBLE name says what
+  // is stepped, because "Next" alone in a bar that also prints days, cells and
+  // a month is three different lists. `employees` needs all six CLDR forms for
+  // the same reason `rows` does — the count is rendered under `ar`.
+  'timesheet.filter.by',
+  'timesheet.filter.previousEmployee',
+  'timesheet.filter.nextEmployee',
+  'timesheet.filter.clear',
+  'timesheet.filter.position',
+  'timesheet.filter.employees_zero',
+  'timesheet.filter.employees_one',
+  'timesheet.filter.employees_two',
+  'timesheet.filter.employees_few',
+  'timesheet.filter.employees_many',
+  'timesheet.filter.employees_other',
   // `Issue.kind` is the stable machine string; the panel owns the words, so
   // every kind `timesheet_service` can emit needs a pair here. Blocking:
   // no_designation, no_nationality. Warning: unknown_leave, overlapping_leave,
