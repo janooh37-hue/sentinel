@@ -1,12 +1,12 @@
 """The monthly time-sheet grid: one month of one site resolved to printable rows.
 
 Two deliverables come off the same grid. The HR attendance sheet prints
-``GridRow.codes`` — the truth about each day — while the client statistics sheet
-prints ``GridRow.stat_codes``, where every row inside the contracted post count
-reads as a manned post and the surplus headcount above it is parked on a filler
-code. That split is the whole reason this module exists: the client is invoiced
-for posts, not for people, so a guard on annual leave still bills as ``P`` while
-the 250th body on site bills as nothing.
+``GridRow.codes`` — the truth about each day — while the Main client statistics
+sheet transfers real ``AL``/``SL``/``AB``/``TR`` cells from higher-ranked
+contracted rows into available lower-ranked ``P`` cells. A contracted row reads
+as manned only when a lower row actually carries its code, so the client view
+neither invents leave nor hides leave that nobody compensated. Drivers retains
+its historical per-row filler transform.
 
 Day codes themselves are not decided here. :mod:`app.core.timesheet_codes` owns
 that as a pure function of dates, leave rows, absences and manual overrides; this
@@ -37,9 +37,11 @@ from app.core.leave_lifecycle import english_part
 from app.core.timesheet_codes import (
     CODE_ABSENT,
     CODE_ANNUAL,
+    CODE_NATIONAL,
     CODE_NEW,
     CODE_OFF_ROSTER,
     CODE_PRESENT,
+    CODE_SICK,
     EMITTED_CODES,
     UNKNOWN_LEAVE,
     LeaveSpan,
@@ -87,6 +89,14 @@ CELL_CODES: Final[frozenset[str]] = frozenset({*EMITTED_CODES, CODE_BLOCKED})
 #: an absence is not the filler the operator chose.
 STAT_KEEP_BLOCK_1: Final[frozenset[str]] = frozenset({CODE_NEW, CODE_OFF_ROSTER, CODE_BLOCKED})
 STAT_KEEP_BLOCK_2: Final[frozenset[str]] = STAT_KEEP_BLOCK_1 | {CODE_ABSENT}
+
+#: The lower block is printed in this order after rank-first source selection.
+_STAT_TRANSFER_ORDER: Final[dict[str, int]] = {
+    CODE_ANNUAL: 0,
+    CODE_SICK: 1,
+    CODE_ABSENT: 2,
+    CODE_NATIONAL: 3,
+}
 
 
 #: Sorts a row with no rank behind every ranked one.
@@ -189,6 +199,49 @@ def _statistics_codes(codes: list[str | None], *, block: int, filler: str) -> li
     keep = STAT_KEEP_BLOCK_1 if block == 1 else STAT_KEEP_BLOCK_2
     replacement = CODE_PRESENT if block == 1 else filler
     return [None if c is None else (c if c in keep else replacement) for c in codes]
+
+
+def _compensated_day(
+    codes: Sequence[str | None], post_count: int
+) -> list[str | None]:
+    """Move real above-contract codes into available lower ``P`` cells."""
+
+    result = list(codes)
+    boundary = min(post_count, len(codes))
+    sources: list[tuple[int, str]] = []
+    for index, code in enumerate(codes[:boundary]):
+        if code is not None and code in _STAT_TRANSFER_ORDER:
+            sources.append((index, code))
+    targets = [
+        index
+        for index, code in enumerate(codes[boundary:], start=boundary)
+        if code == CODE_PRESENT
+    ]
+
+    moved = sources[: len(targets)]
+    for index, _code in moved:
+        result[index] = CODE_PRESENT
+    moved_codes = sorted(
+        (code for _index, code in moved),
+        key=_STAT_TRANSFER_ORDER.__getitem__,
+    )
+    for index, code in zip(targets, moved_codes, strict=False):
+        result[index] = code
+    return result
+
+
+def _apply_main_statistics(rows: Sequence[GridRow], post_count: int) -> None:
+    """Derive Main statistics independently for each wire day."""
+
+    if not rows:
+        return
+    for day_index in range(len(rows[0].codes)):
+        compensated = _compensated_day(
+            [row.codes[day_index] for row in rows],
+            post_count,
+        )
+        for row, code in zip(rows, compensated, strict=True):
+            row.stat_codes[day_index] = code
 
 
 def _edge_day(value: date | None, year: int, month: int) -> int | None:
@@ -663,6 +716,7 @@ def _live_rows(
     year: int,
     month: int,
     *,
+    sheet: str,
     members: Sequence[tuple[Employee, TimesheetDesignation | None]],
     leaves_by_employee: Mapping[str, list[Leave]],
     post_count: int,
@@ -698,7 +752,11 @@ def _live_rows(
                 designation_ar=designation.name_ar if designation is not None else None,
                 rank_order=designation.rank_order if designation is not None else None,
                 codes=codes,
-                stat_codes=_statistics_codes(codes, block=block, filler=filler),
+                stat_codes=(
+                    list(codes)
+                    if sheet == "main"
+                    else _statistics_codes(codes, block=block, filler=filler)
+                ),
                 stat_block=block,
                 stat_filler=filler if block == 2 else None,
                 joined_day=_edge_day(employee.doj, year, month),
@@ -708,6 +766,9 @@ def _live_rows(
                 designation_id=designation.id if designation is not None else None,
             )
         )
+
+    if sheet == "main":
+        _apply_main_statistics(rows, post_count)
 
     return rows
 
@@ -824,6 +885,7 @@ def build_month(db: Session, year: int, month: int, *, sheet: str = "main") -> M
             db,
             year,
             month,
+            sheet=sheet,
             members=members,
             leaves_by_employee=leaves_by_employee,
             post_count=post_count,

@@ -161,8 +161,43 @@ def test_a_quiet_guard_is_present_all_month(db_session, guards):
     assert grid.days_in_month == 31
 
 
-def test_block_one_hides_leave_from_the_client(db_session, guards):
-    """A guard on annual leave still shows P to the client: the post was covered."""
+def test_main_statistics_compensates_by_rank_then_groups_codes():
+    assert svc._compensated_day(
+        [CODE_SICK, CODE_ANNUAL, CODE_PRESENT, CODE_PRESENT, CODE_PRESENT], 3
+    ) == [CODE_PRESENT, CODE_PRESENT, CODE_PRESENT, CODE_ANNUAL, CODE_SICK]
+
+
+def test_main_statistics_does_not_invent_leave_when_targets_outnumber_sources():
+    assert svc._compensated_day(
+        [CODE_ANNUAL, CODE_PRESENT, CODE_PRESENT, CODE_PRESENT, CODE_PRESENT], 3
+    ) == [CODE_PRESENT, CODE_PRESENT, CODE_PRESENT, CODE_ANNUAL, CODE_PRESENT]
+
+
+def test_main_statistics_keeps_unmatched_and_fixed_codes():
+    assert svc._compensated_day(
+        [
+            CODE_SICK,
+            CODE_ANNUAL,
+            CODE_NEW,
+            CODE_PRESENT,
+            CODE_ABSENT,
+            CODE_OFF_ROSTER,
+            svc.CODE_BLOCKED,
+        ],
+        3,
+    ) == [
+        CODE_PRESENT,
+        CODE_ANNUAL,
+        CODE_NEW,
+        CODE_SICK,
+        CODE_ABSENT,
+        CODE_OFF_ROSTER,
+        svc.CODE_BLOCKED,
+    ]
+
+
+def test_main_statistics_moves_real_leave_without_filling_unused_targets(db_session, guards):
+    svc.set_post_count(db_session, 2026, 7, 2)
     db_session.add(
         Leave(
             employee_id="G1001",
@@ -174,33 +209,44 @@ def test_block_one_hides_leave_from_the_client(db_session, guards):
         )
     )
     db_session.commit()
-    row = _row(db_session, 2026, 7, "G1001")
-    assert row.codes[4:9] == [CODE_ANNUAL] * 5
-    assert row.stat_codes[4:9] == [CODE_PRESENT] * 5
-    assert row.stat_block == 1
+
+    source = _row(db_session, 2026, 7, "G1001")
+    target = _row(db_session, 2026, 7, "G1002")
+    assert source.codes[4:9] == [CODE_ANNUAL] * 5
+    assert source.stat_codes[4:9] == [CODE_PRESENT] * 5
+    assert target.stat_codes[4:9] == [CODE_ANNUAL] * 5
+    assert target.stat_codes[0] == CODE_PRESENT
 
 
-def test_surplus_headcount_falls_into_block_two(db_session, guards):
-    svc.set_post_count(db_session, 2026, 7, 2)
-    grid = svc.build_month(db_session, 2026, 7)
-    assert [r.stat_block for r in grid.rows] == [1, 1, 2]
-    assert grid.rows[2].stat_codes[:31] == [CODE_ANNUAL] * 31
-    assert grid.rows[2].codes[:31] == [CODE_PRESENT] * 31  # the HR sheet stays truthful
+def test_drivers_keep_existing_filler_derivation(db_session, guards):
+    svc.set_post_count(db_session, 2026, 7, 0)
+    svc.set_filler(db_session, 2026, 7, "G2000", CODE_SICK)
+    row = _row(db_session, 2026, 7, "G2000", sheet="drivers")
+    assert row.stat_codes[:31] == [CODE_SICK] * 31
 
 
-def test_a_filler_choice_overrides_the_default(db_session, guards):
-    svc.set_post_count(db_session, 2026, 7, 2)
-    svc.set_filler(db_session, 2026, 7, "G1002", CODE_SICK)
-    grid = svc.build_month(db_session, 2026, 7)
-    assert grid.rows[2].stat_codes[:31] == [CODE_SICK] * 31
+def test_a_driver_filler_choice_carries_into_the_next_month(db_session, guards):
+    svc.set_post_count(db_session, 2026, 7, 0)
+    svc.set_filler(db_session, 2026, 7, "G2000", CODE_SICK)
+    svc.set_post_count(db_session, 2026, 8, 0)
+    row = _row(db_session, 2026, 8, "G2000", sheet="drivers")
+    assert row.stat_codes[0] == CODE_SICK
 
 
-def test_a_filler_choice_carries_into_the_next_month(db_session, guards):
-    svc.set_post_count(db_session, 2026, 7, 2)
-    svc.set_filler(db_session, 2026, 7, "G1002", CODE_SICK)
-    svc.set_post_count(db_session, 2026, 8, 2)
-    grid = svc.build_month(db_session, 2026, 8)
-    assert grid.rows[2].stat_codes[0] == CODE_SICK
+def test_sealed_main_statistics_remain_frozen(db_session, guards):
+    svc.close_month(db_session, 2026, 7)
+    db_session.add(
+        Leave(
+            employee_id="G0999",
+            leave_type="Annual Leave",
+            start_date=date(2026, 7, 1),
+            end_date=date(2026, 7, 1),
+            days=1,
+            status="Approved",
+        )
+    )
+    db_session.commit()
+    assert _row(db_session, 2026, 7, "G0999").stat_codes[0] == CODE_PRESENT
 
 
 def test_roster_edges_survive_into_the_client_sheet(db_session, guards):
@@ -562,16 +608,14 @@ def test_the_filler_lookback_takes_the_most_recent_earlier_month(db_session, gua
     March, May and September are all set. Building August must read May — the
     most recent *earlier* month — not March and not September.
     """
-    svc.set_filler(db_session, 2026, 3, "G1002", CODE_NATIONAL)
-    svc.set_filler(db_session, 2026, 5, "G1002", CODE_SICK)
-    svc.set_filler(db_session, 2026, 9, "G1002", CODE_PRESENT)
-    svc.set_post_count(db_session, 2026, 8, 2)
+    svc.set_filler(db_session, 2026, 3, "G2000", CODE_NATIONAL)
+    svc.set_filler(db_session, 2026, 5, "G2000", CODE_SICK)
+    svc.set_filler(db_session, 2026, 9, "G2000", CODE_PRESENT)
+    svc.set_post_count(db_session, 2026, 8, 0)
 
-    grid = svc.build_month(db_session, 2026, 8)
-    assert grid.rows[2].employee_id == "G1002"
-    assert grid.rows[2].stat_filler == CODE_SICK
-    assert grid.rows[2].stat_codes[0] == CODE_SICK
-    assert grid.rows[1].stat_filler is None  # block 1 has no filler
+    row = _row(db_session, 2026, 8, "G2000", sheet="drivers")
+    assert row.stat_filler == CODE_SICK
+    assert row.stat_codes[0] == CODE_SICK
 
 
 def test_a_month_with_no_filler_anywhere_falls_back_to_annual_leave(db_session, guards):
@@ -589,7 +633,7 @@ def test_the_red_block_and_a_real_absence_survive_block_two(db_session, guards):
     assert row.stat_block == 2
     assert row.stat_codes[4] == "X"  # outside the billing window, never filled over
     assert row.stat_codes[5] == CODE_ABSENT  # a real absence is not filled over
-    assert row.stat_codes[6] == CODE_ANNUAL  # everything else becomes the filler
+    assert row.stat_codes[6] == CODE_PRESENT  # no real code above needs this P target
 
 
 def test_a_filler_code_the_legend_does_not_carry_is_rejected(db_session, guards):
@@ -927,7 +971,7 @@ def test_a_closed_month_recomputes_the_five_unfrozen_fields(db_session, guards):
     assert (row.joined_day, row.left_day) == (3, 20)
     # ...while the codes stay exactly as they were sealed.
     assert row.codes[9] == CODE_PRESENT
-    assert row.stat_codes[2] == CODE_ANNUAL  # the frozen filler, not the new one
+    assert row.stat_codes[2] == CODE_PRESENT  # the frozen derived code, not the new filler
     assert row.stat_codes[0] == CODE_NEW
     assert row.stat_block == 2
 
@@ -1018,7 +1062,7 @@ def test_build_month_does_not_query_once_per_row(db_session, guards, count_queri
         grid = svc.build_month(db_session, 2026, 7)
 
     assert len(grid.rows) == 33
-    assert grid.rows[-1].stat_codes[0] == CODE_SICK  # the lookback really ran
+    assert grid.rows[-1].stat_filler == CODE_SICK  # the batched lookback really ran
     assert large.count == small.count
     assert large.count <= 12
 
@@ -1055,7 +1099,7 @@ def test_a_closed_month_refuses_a_post_count_change_but_not_a_filler(db_session,
     svc.set_filler(db_session, 2026, 7, "G1002", CODE_SICK)  # still permitted
     row = _row(db_session, 2026, 7, "G1002")
     assert row.stat_filler == CODE_SICK
-    assert row.stat_codes[2] == CODE_ANNUAL  # ...and the sealed codes did not move
+    assert row.stat_codes[2] == CODE_PRESENT  # ...and the sealed codes did not move
 
 
 def test_every_writer_refuses_an_employee_who_does_not_exist(db_session, guards):
