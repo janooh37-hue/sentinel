@@ -17,16 +17,19 @@
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 
-import { fireEvent, render, screen, within } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import { useState } from 'react'
 import { describe, expect, it, vi } from 'vitest'
 
 vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn(), warning: vi.fn() } }))
 
-import type { TimesheetRow } from '@/lib/api'
+import { toast } from 'sonner'
+import type { TimesheetDesignationRead, TimesheetRow } from '@/lib/api'
 
 import { TimesheetGrid, TimesheetMasthead } from './TimesheetGrid'
 import { ID_COLUMNS } from './columns'
+import { applyRosterDraft, type RosterDraft } from './rosterDraft'
 
 /**
  * The stylesheet as text, so the token the geometry rests on can be asserted
@@ -876,5 +879,240 @@ describe('TimesheetMasthead', () => {
     expect(quote.className).toContain('whitespace-pre-wrap')
     expect(quote.className).not.toMatch(/overflow-(x-)?auto/)
     expect(screen.getByText('FEB-2026')).toBeInTheDocument()
+  })
+})
+
+/**
+ * Roster edit mode, as the sheet sees it: the grips, the drop bands, the cell
+ * lock, and the one animation this feature is allowed.
+ *
+ * Driven through a harness that owns the draft and applies the real transform,
+ * because the contract under test is the PRINTED result of a drop — the row
+ * under a new heading with recomputed numbers — and a spy on `onAssign` would
+ * prove only that a handler fired. `TimesheetPage` owns exactly this state in
+ * production; the harness is that owner, minus the page.
+ */
+describe('TimesheetGrid roster edit', () => {
+  const DUTY: TimesheetDesignationRead = {
+    id: 105,
+    name_en: 'Duty In charge',
+    name_ar: 'مناوب عام',
+    rank_order: 5,
+    sheet: 'main',
+    active: true,
+    system_key: null,
+  }
+  const MESSENGER: TimesheetDesignationRead = { ...DUTY, id: 114, name_en: 'Messengers', name_ar: 'حارس امن الارساليات', rank_order: 14 }
+  const GUARD: TimesheetDesignationRead = { ...DUTY, id: 115, name_en: 'Security Guard', name_ar: 'حارس امن', rank_order: 15 }
+  const DESIGNATIONS = [DUTY, MESSENGER, GUARD]
+
+  const guardRow = (employee_id: string, row_no: number): TimesheetRow => ({
+    ...row,
+    employee_id,
+    row_no,
+    designation_id: GUARD.id,
+  })
+  /** Rank 5, one man; rank 14 empty; rank 15, two guards; then nobody's man. */
+  const ROSTER_ROWS: TimesheetRow[] = [
+    { ...row, employee_id: 'G6001', row_no: 1, designation_id: DUTY.id, designation_en: DUTY.name_en, rank_order: DUTY.rank_order },
+    guardRow('G7014', 2),
+    guardRow('G7160', 3),
+    { ...row, employee_id: 'G712', row_no: 4, designation_id: null, designation_en: null, rank_order: null },
+  ]
+
+  function Harness({
+    rows = ROSTER_ROWS,
+    renameControl,
+    ...rest
+  }: Omit<Partial<React.ComponentProps<typeof TimesheetGrid>>, 'roster'> & {
+    renameControl?: (designation: TimesheetDesignationRead) => React.ReactNode
+  }): React.JSX.Element {
+    const [draft, setDraft] = useState<RosterDraft>(new Map())
+    const onAssign = (employeeId: string, designationId: number): void =>
+      setDraft((prev) => new Map(prev).set(employeeId, designationId))
+    return (
+      <TimesheetGrid
+        {...props}
+        {...rest}
+        rows={applyRosterDraft(rows, DESIGNATIONS, 'main', draft)}
+        roster={{ designations: DESIGNATIONS, onAssign, renameControl }}
+      />
+    )
+  }
+
+  const printed = (): string[] =>
+    screen.getAllByTestId('timesheet-row').map((tr) => tr.dataset.employee ?? '')
+
+  const grip = (employeeId: string): HTMLElement =>
+    screen.getByRole('button', {
+      name: new RegExp(`move ${employeeId} to another designation`, 'i'),
+    })
+
+  const band = (id: number): HTMLElement =>
+    document.querySelector(`[data-ts-drop="${id}"]`) as HTMLElement
+
+  function dragTo(source: HTMLElement, target: HTMLElement): void {
+    const dataTransfer = { setData: vi.fn(), getData: vi.fn(() => ''), dropEffect: 'none' }
+    fireEvent.dragStart(source, { dataTransfer })
+    fireEvent.dragOver(target, { dataTransfer })
+    fireEvent.drop(target, { dataTransfer })
+    fireEvent.dragEnd(source, { dataTransfer })
+  }
+
+  it('adds no column: the grip lives in the designation cell it changes', () => {
+    const { rerender } = render(<TimesheetGrid {...props} rows={ROSTER_ROWS} />)
+    const columns = (): number =>
+      screen.getAllByTestId('timesheet-row')[0].querySelectorAll('td').length
+    const plain = columns()
+    expect(screen.queryByRole('button', { name: /to another designation/i })).not.toBeInTheDocument()
+
+    rerender(<Harness />)
+    // Same 5 identity cells plus 31 days: a sixth identity column would move
+    // `--id-block` and put the day strip out of step with the skeleton.
+    expect(columns()).toBe(plain)
+    expect(grip('G7160').closest('td')).toHaveClass('ts-c-desig')
+    // The grip is what it says it is — a real button, and a real drag source.
+    expect(grip('G7160')).toHaveAttribute('draggable', 'true')
+  })
+
+  it('bands every active designation of the sheet, vacancies included', () => {
+    render(<Harness />)
+
+    // A designation nobody holds is still a place to drop somebody: the
+    // vacancy is the reason the band exists (design goal 6).
+    expect(band(MESSENGER.id)).toBeInTheDocument()
+    expect(band(MESSENGER.id)).toHaveTextContent('Messengers')
+    expect(band(MESSENGER.id)).toHaveTextContent('0 rows')
+    expect(band(GUARD.id)).toHaveTextContent('2 rows')
+    // The men with no designation at all keep their heading and stay last —
+    // and it is not a drop target: unassigning is not a move.
+    const headings = screen.getAllByRole('columnheader', { name: /rows|designation/i })
+    expect(headings[headings.length - 1]).toHaveTextContent('No designation')
+    expect(printed()[printed().length - 1]).toBe('G712')
+  })
+
+  it('reprints the sheet when a row is dropped on a band', async () => {
+    render(<Harness />)
+    expect(printed()).toEqual(['G6001', 'G7014', 'G7160', 'G712'])
+
+    dragTo(grip('G7160'), band(DUTY.id))
+
+    await waitFor(() => expect(printed()).toEqual(['G6001', 'G7160', 'G7014', 'G712']))
+    const moved = screen.getAllByTestId('timesheet-row')[1]
+    expect(moved.querySelector('.ts-c-no')?.textContent).toBe('2')
+    expect(band(DUTY.id)).toHaveTextContent('2 rows')
+    expect(band(GUARD.id)).toHaveTextContent('1 row')
+  })
+
+  /** jsdom implements no Web Animations API at all: install one, then take it
+   *  back out. Stubbing it is what proves the `typeof node.animate` guard
+   *  skips the animation for jsdom's sake and not for the browser's. */
+  type Flip = (keyframes: Keyframe[], options: KeyframeAnimationOptions) => Animation
+  const stubAnimate = () => {
+    const animate = vi.fn<Flip>()
+    Object.defineProperty(Element.prototype, 'animate', {
+      configurable: true,
+      writable: true,
+      value: animate,
+    })
+    return animate
+  }
+  const dropAnimate = (): void => {
+    Reflect.deleteProperty(Element.prototype, 'animate')
+  }
+
+  it('animates the moved row from the rectangle it left', async () => {
+    const animate = stubAnimate()
+    let reads = 0
+    const rect = vi.spyOn(Element.prototype, 'getBoundingClientRect').mockImplementation(() => {
+      reads += 1
+      // Read once before the drop and once after it: 300px of travel, which
+      // is the distance the transform has to undo.
+      const top = reads === 1 ? 400 : 100
+      return new DOMRect(0, top, 100, 24)
+    })
+    try {
+      render(<Harness />)
+      dragTo(grip('G7160'), band(DUTY.id))
+      await waitFor(() => expect(printed()).toEqual(['G6001', 'G7160', 'G7014', 'G712']))
+
+      expect(animate).toHaveBeenCalledTimes(1)
+      const [keyframes, options] = animate.mock.calls[0]
+      expect(keyframes).toEqual([{ transform: 'translateY(300px)' }, { transform: 'none' }])
+      // The plan's calm band: never snappier than the entrance token, never
+      // slower than the longest travel across a full sheet.
+      expect(options.duration).toBeGreaterThanOrEqual(220)
+      expect(options.duration).toBeLessThanOrEqual(460)
+    } finally {
+      rect.mockRestore()
+      dropAnimate()
+    }
+  })
+
+  it('applies the new order with no animation under reduced motion', async () => {
+    const animate = stubAnimate()
+    const media = window.matchMedia
+    // `setup.ts` answers `matches: false` to every query, so reduced motion is
+    // only reachable by replacing the stub for this case.
+    const reduced = (query: string): MediaQueryList =>
+      ({
+        matches: query.includes('prefers-reduced-motion'),
+        media: query,
+        onchange: null,
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+        addListener: vi.fn(),
+        removeListener: vi.fn(),
+        dispatchEvent: vi.fn(),
+      }) as MediaQueryList
+    window.matchMedia = reduced
+    try {
+      render(<Harness />)
+      dragTo(grip('G7160'), band(DUTY.id))
+
+      // The move still lands — instantly, which is what the preference asks
+      // for, rather than the move being refused.
+      await waitFor(() => expect(printed()).toEqual(['G6001', 'G7160', 'G7014', 'G712']))
+      expect(animate).not.toHaveBeenCalled()
+    } finally {
+      window.matchMedia = media
+      dropAnimate()
+    }
+  })
+
+  it('refuses a cell correction while the roster is being edited', async () => {
+    const onSetCell = vi.fn()
+    render(<Harness brush="AL" onSetCell={onSetCell} />)
+
+    const target = cell('G7160', 3)
+    // Locked, not disabled: a disabled control still answers Enter (UI spec
+    // §14), so the refusal has to arrive as the reason instead.
+    expect(target).toHaveAttribute('data-locked', '1')
+    await userEvent.click(target)
+    expect(onSetCell).not.toHaveBeenCalled()
+    expect(vi.mocked(toast.warning)).toHaveBeenCalledWith(
+      expect.stringMatching(/read-only while the roster/i),
+      expect.anything(),
+    )
+  })
+
+  it('offers a rename control the page owns, per band', () => {
+    render(
+      <Harness
+        // The catalog dialogs need react-query; the sheet must not. So the page
+        // hands the control in already built, and the grid only places it in
+        // the band it belongs to.
+        renameControl={(designation) => (
+          <button type="button">Rename {designation.name_en}</button>
+        )}
+      />,
+    )
+
+    expect(
+      within(band(GUARD.id)).getByRole('button', { name: 'Rename Security Guard' }),
+    ).toBeInTheDocument()
+    expect(
+      within(band(MESSENGER.id)).getByRole('button', { name: 'Rename Messengers' }),
+    ).toBeInTheDocument()
   })
 })

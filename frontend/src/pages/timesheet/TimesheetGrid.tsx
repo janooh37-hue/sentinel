@@ -38,11 +38,18 @@
  * none` blocks the pointer and not `Enter` (UI spec §14).
  */
 
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { GripVertical } from 'lucide-react'
+import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 
-import type { TimesheetIssue, TimesheetRow, TimesheetVariant } from '@/lib/api'
+import type {
+  TimesheetDesignationRead,
+  TimesheetIssue,
+  TimesheetRow,
+  TimesheetVariant,
+} from '@/lib/api'
 import { cn } from '@/lib/utils'
 
 import { CodePicker } from './CodePicker'
@@ -62,6 +69,111 @@ const MONTH_STAMPS = [
 
 /** The `-` code prints as a hyphen but reads as an en dash on screen. */
 const glyphOf = (slug: string): string => (slug === '-' ? '–' : slug)
+
+/** A band with no rank of its own sorts behind every designation. */
+const LAST_RANK = 1e9
+
+/**
+ * The keyboard half of a roster move: the same targets a drag offers, opened
+ * from the same grip button (design §"Keyboard and reduced motion").
+ *
+ * A menu rather than a listbox, because choosing one is an action and not a
+ * selection to be committed later — and the same shape as `CodePicker`, which
+ * is the other popover this sheet opens from a cell. Placement is that file's
+ * arithmetic: a viewport coordinate is physical and so is a transform, so the
+ * anchor's rect becomes a translation and RTL subtracts the far-edge origin
+ * `.ts-popover` gives it.
+ */
+function DesignationPicker({
+  employeeId,
+  designations,
+  anchor,
+  onPick,
+  onClose,
+}: {
+  employeeId: string
+  designations: readonly TimesheetDesignationRead[]
+  anchor: HTMLElement
+  onPick: (designationId: number) => void
+  onClose: (restore: boolean) => void
+}): React.JSX.Element {
+  const { t } = useTranslation()
+  const popover = useRef<HTMLDivElement | null>(null)
+
+  useLayoutEffect(() => {
+    const node = popover.current
+    if (!node) return
+    const rect = anchor.getBoundingClientRect()
+    const size = node.getBoundingClientRect()
+    const rtl = document.documentElement.dir === 'rtl'
+    const raw = rtl ? rect.right - size.width : rect.left
+    const x = Math.max(8, Math.min(raw, window.innerWidth - size.width - 8))
+    const below = rect.bottom + 6
+    const y = below + size.height > window.innerHeight - 8 ? rect.top - size.height - 6 : below
+    const origin = rtl ? window.innerWidth - size.width : 0
+    node.style.transform = `translate3d(${x - origin}px, ${Math.max(8, y)}px, 0)`
+  }, [anchor])
+
+  useEffect(() => {
+    popover.current?.querySelector<HTMLElement>('[role="menuitem"]')?.focus()
+  }, [])
+
+  useEffect(() => {
+    const outside = (event: MouseEvent): void => {
+      if (!popover.current?.contains(event.target as Node)) onClose(false)
+    }
+    document.addEventListener('mousedown', outside)
+    return () => document.removeEventListener('mousedown', outside)
+  }, [onClose])
+
+  const onKeyDown = (event: React.KeyboardEvent): void => {
+    if (event.key === 'Escape') {
+      event.preventDefault()
+      event.stopPropagation()
+      onClose(true)
+      return
+    }
+    const items = Array.from(
+      popover.current?.querySelectorAll<HTMLElement>('[role="menuitem"]') ?? [],
+    )
+    const step = event.key === 'ArrowDown' ? 1 : event.key === 'ArrowUp' ? -1 : 0
+    if (step === 0 || items.length === 0) return
+    event.preventDefault()
+    const here = items.indexOf(document.activeElement as HTMLElement)
+    items[(here + step + items.length) % items.length]?.focus()
+  }
+
+  return createPortal(
+    <div
+      ref={popover}
+      role="menu"
+      aria-label={t('timesheet.rosterEdit.targets')}
+      onKeyDown={onKeyDown}
+      className="ts-popover min-w-[14rem] rounded-xl border border-border bg-surface p-1.5 shadow-lg"
+    >
+      <div className="border-b border-hairline px-2 pb-1.5 pt-1 text-[0.7rem] text-muted-foreground">
+        <span dir="ltr" className="font-mono text-foreground [unicode-bidi:isolate]">
+          {employeeId}
+        </span>
+      </div>
+      {designations.map((designation) => (
+        <button
+          key={designation.id}
+          type="button"
+          role="menuitem"
+          onClick={() => onPick(designation.id)}
+          // The printed name, in the language it prints in — the band the row
+          // will land under says exactly this.
+          lang="en"
+          className="flex w-full items-center rounded-lg px-2 py-1.5 text-start text-[0.78rem] text-foreground hover:bg-surface-tinted focus-visible:bg-surface-tinted focus-visible:outline-none"
+        >
+          {designation.name_en}
+        </button>
+      ))}
+    </div>,
+    document.body,
+  )
+}
 
 /**
  * The quoted workbook header — the design's signature element, and a
@@ -137,6 +249,7 @@ interface RowStrings {
   badgeTo: (day: number) => string
   startedOn: (day: number) => string
   lastWorked: (day: number) => string
+  grip: (id: string) => string
 }
 
 interface GridRowProps {
@@ -150,6 +263,11 @@ interface GridRowProps {
   editedDays: ReadonlySet<number> | undefined
   /** A blocking check's own sentence, or `undefined` — never joined from `rows`. */
   blocked: string | undefined
+  /**
+   * The drag grip's accessible name in roster edit mode, `undefined` outside
+   * it. A string rather than a flag, so `memo` still holds by value.
+   */
+  grip: string | undefined
   strings: RowStrings
   onSelect: (employeeId: string | null) => void
 }
@@ -163,6 +281,7 @@ const GridRow = memo(function GridRow({
   selected,
   editedDays,
   blocked,
+  grip,
   strings,
   onSelect,
 }: GridRowProps): React.JSX.Element {
@@ -234,8 +353,27 @@ const GridRow = memo(function GridRow({
         {row.nationality_en ?? '—'}
         {flag}
       </td>
-      <td className="ts-c-desig" title={designation ?? undefined}>
-        {designation ?? '—'}
+      {/* In roster edit mode the designation cell becomes the handle for the
+          thing it names — no sixth identity column, because `--id-block` is
+          the sum of five and the loading skeleton starts its day strip at it.
+          A real button, so the keyboard reaches the same targets the pointer
+          drags to. */}
+      <td className="ts-c-desig" title={grip ?? designation ?? undefined}>
+        {grip === undefined ? (
+          (designation ?? '—')
+        ) : (
+          <button
+            type="button"
+            draggable
+            data-ts-grip
+            data-employee={row.employee_id}
+            aria-label={grip}
+            className="inline-flex w-full cursor-grab items-center gap-1 rounded text-start text-inherit hover:text-primary focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-ring"
+          >
+            <GripVertical className="h-3 w-3 shrink-0" strokeWidth={2} aria-hidden />
+            <span className="truncate">{designation ?? '—'}</span>
+          </button>
+        )}
       </td>
       {DAYS.map((day) => {
         const code = day <= daysInMonth ? codes[day - 1] ?? null : null
@@ -278,6 +416,25 @@ const GridRow = memo(function GridRow({
   )
 })
 
+/**
+ * Roster edit mode, as the sheet needs it: the valid targets and one way to
+ * stage a move. Present only while the page is in that mode, absent otherwise
+ * — an affordance nobody may use is not rendered disabled (UI spec §14).
+ *
+ * The grid holds no query of its own, which is the reason `renameControl` is a
+ * node the page builds rather than a callback the grid wires: the catalog
+ * dialogs need react-query, and the sheet is a props component that 30 test
+ * cases render with no provider at all.
+ */
+export interface RosterEdit {
+  /** Active designations of the displayed workbook, in printed rank order. */
+  designations: readonly TimesheetDesignationRead[]
+  /** Stage one move. The id is always one of `designations`. */
+  onAssign: (employeeId: string, designationId: number) => void
+  /** The rename affordance for one band, or nothing. */
+  renameControl?: (designation: TimesheetDesignationRead) => React.ReactNode
+}
+
 export interface TimesheetGridProps {
   rows: TimesheetRow[]
   year: number
@@ -295,6 +452,8 @@ export interface TimesheetGridProps {
   blocking?: TimesheetIssue[]
   /** The contracted post count, so a day below it can be flagged. */
   postCount?: number
+  /** Roster edit mode is on: grips, drop bands, and no cell corrections. */
+  roster?: RosterEdit
   onSetCell: (employeeId: string, day: number, code: Code | null, note?: string) => void
   onFill: (cells: FillCell[], code: Code) => void
   onSelect: (employeeId: string | null) => void
@@ -308,7 +467,16 @@ export interface TimesheetGridProps {
 
 /** A heading, a drawn gap, or an employee — the sheet as one flat list. */
 type Line =
-  | { kind: 'group'; key: string; label: string; lang: string }
+  | {
+      kind: 'group'
+      key: string
+      label: string
+      lang: string
+      /** How many rows the band holds — printed while the roster is edited. */
+      count?: number
+      /** The designation a drop on this band assigns, when it takes drops. */
+      drop?: number
+    }
   | { kind: 'gap'; key: string }
   | { kind: 'row'; key: string; row: TimesheetRow }
 
@@ -340,6 +508,7 @@ export function TimesheetGrid({
   edited,
   blocking,
   postCount = 0,
+  roster,
   onSetCell,
   onFill,
   onSelect,
@@ -353,18 +522,49 @@ export function TimesheetGrid({
   const lastPaint = useRef<FillCell | null>(null)
   /** A committed sweep ends in a click; it must not also open the picker. */
   const swallow = useRef(false)
+  /**
+   * The employee a native drag is carrying. The `DataTransfer` payload is set
+   * as well, because a browser drag without one is not a drag — but it is
+   * advisory: jsdom has none, and any other drop target on the page can read
+   * it, so the grid trusts its own ref for what it is moving.
+   */
+  const dragged = useRef<string | null>(null)
+  /** The band the drag is currently over, marked by attribute, never state. */
+  const over = useRef<HTMLElement | null>(null)
+  /** Where the moved row was before the draft changed, for the FLIP. */
+  const flip = useRef<{ employeeId: string; top: number } | null>(null)
   const [picker, setPicker] = useState<{ cell: FillCell; anchor: HTMLElement } | null>(null)
+  const [moving, setMoving] = useState<{ employeeId: string; anchor: HTMLElement } | null>(null)
   const [hover, setHover] = useState<{ employeeId: string; anchor: HTMLElement } | null>(null)
 
   const statistics = variant === 'statistics'
-  /** Cells are correctable only on the attendance grid of an open month. */
-  const editable = canEdit && !closed && !statistics
+  /**
+   * The roster is a property of the attendance grid: statistics groups by the
+   * two blocks, not by designation, so there is nothing there to drop onto.
+   * Switching variants mid-draft therefore hides the grips and keeps the
+   * draft, rather than offering targets the sheet is not printing.
+   */
+  const rosterEdit = statistics ? undefined : roster
+  /**
+   * Cells are correctable only on the attendance grid of an open month — and
+   * not while the roster is being edited: a move is staged and a correction is
+   * live, and mixing the two in one gesture set is how an operator loses track
+   * of which of the two Save applies to.
+   */
+  const editable = canEdit && !closed && !statistics && rosterEdit === undefined
 
   const byId = useMemo(() => {
     const index = new Map<string, TimesheetRow>()
     for (const row of rows) index.set(row.employee_id, row)
     return index
   }, [rows])
+
+  /** The drop targets by id, so a band can name the row its control renames. */
+  const targets = useMemo(() => {
+    const index = new Map<number, TimesheetDesignationRead>()
+    for (const designation of rosterEdit?.designations ?? []) index.set(designation.id, designation)
+    return index
+  }, [rosterEdit])
 
   const order = useMemo(() => {
     const index = new Map<string, number>()
@@ -410,6 +610,10 @@ export function TimesheetGrid({
   const whyLocked = useCallback(
     (row: TimesheetRow, day: number): string | null => {
       if (day > daysInMonth || codesOf(row)[day - 1] === null) return ''
+      // Roster mode first: it is the state the operator just chose, so it is
+      // the reason they need to hear. Refused rather than disabled, so the
+      // cell still answers Enter with the sentence (UI spec §14).
+      if (rosterEdit) return t('timesheet.rosterEdit.cellsLocked')
       if (statistics) return t('timesheet.derivedHint')
       if (closed) return t('timesheet.frozen')
       if (!canEdit) return t('timesheet.readOnlyHint')
@@ -421,7 +625,7 @@ export function TimesheetGrid({
       }
       return null
     },
-    [canEdit, closed, codesOf, daysInMonth, statistics, t],
+    [canEdit, closed, codesOf, daysInMonth, rosterEdit, statistics, t],
   )
 
   const strings = useMemo<RowStrings>(() => {
@@ -436,6 +640,7 @@ export function TimesheetGrid({
       badgeTo: (day) => t('timesheet.badgeTo', { day }),
       startedOn: (day) => t('timesheet.startedOn', { day, before: Math.max(1, day - 1) }),
       lastWorked: (day) => t('timesheet.lastWorked', { day }),
+      grip: (id) => t('timesheet.rosterEdit.grip', { id }),
     }
   }, [t])
 
@@ -449,6 +654,68 @@ export function TimesheetGrid({
 
   const lines = useMemo<Line[]>(() => {
     const out: Line[] = []
+    if (rosterEdit) {
+      // Grouped by designation ID and not by printed name: the id is what a
+      // drop writes, two catalog rows may print the same name at different
+      // ranks, and a rename mid-draft must not split a band in two.
+      const held = new Map<number | null, TimesheetRow[]>()
+      for (const row of rows) {
+        const key = row.designation_id ?? null
+        const bucket = held.get(key)
+        if (bucket) bucket.push(row)
+        else held.set(key, [row])
+      }
+      const sections: {
+        rank: number
+        id: number
+        label: string
+        lang: string
+        drop?: number
+        rows: TimesheetRow[]
+      }[] = []
+      // Every active designation of this workbook is a band, EMPTY ONES
+      // INCLUDED: a vacancy is a place to drop somebody, and hiding it until
+      // it has an occupant is how a designation nobody holds becomes
+      // unreachable (design goal 6).
+      for (const designation of rosterEdit.designations) {
+        sections.push({
+          rank: designation.rank_order,
+          id: designation.id,
+          label: designation.name_en,
+          lang: 'en',
+          drop: designation.id,
+          rows: held.get(designation.id) ?? [],
+        })
+        held.delete(designation.id)
+      }
+      // What the catalog no longer offers as a target still has to print. A man
+      // on a designation since deactivated keeps his own printed heading, and
+      // the men on no designation at all come last, under the words the checks
+      // panel already uses for them — a heading, not a drop target: taking
+      // somebody off every designation is not a move between two.
+      for (const [key, rows_] of held) {
+        sections.push({
+          rank: key === null ? LAST_RANK : rows_[0].rank_order ?? LAST_RANK,
+          id: key ?? LAST_RANK,
+          label: key === null ? t('timesheet.issues.no_designation') : rows_[0].designation_en ?? '—',
+          lang: key === null ? i18n.language : 'en',
+          rows: rows_,
+        })
+      }
+      sections.sort((a, b) => a.rank - b.rank || a.id - b.id)
+      for (const section of sections) {
+        out.push({
+          kind: 'group',
+          key: `g-${section.id}`,
+          label: section.label,
+          lang: section.lang,
+          count: section.rows.length,
+          drop: section.drop,
+        })
+        for (const row of section.rows) out.push({ kind: 'row', key: row.employee_id, row })
+      }
+      return out
+    }
     let group: string | null = null
     for (const row of rows) {
       // Attendance groups by the rank order the client asked for; statistics
@@ -470,7 +737,7 @@ export function TimesheetGrid({
       out.push({ kind: 'row', key: row.employee_id, row })
     }
     return out
-  }, [i18n.language, rows, statistics, t])
+  }, [i18n.language, rosterEdit, rows, statistics, t])
 
   /** Posts manned per day — not on the paper, and the cheapest drift detector. */
   const manned = useMemo(() => {
@@ -530,6 +797,133 @@ export function TimesheetGrid({
       ),
     [],
   )
+
+  const rowNode = useCallback(
+    (employeeId: string): HTMLTableRowElement | null =>
+      root.current?.querySelector<HTMLTableRowElement>(`tr[data-employee="${employeeId}"]`) ??
+      null,
+    [],
+  )
+
+  // ------------------------------------------------------------- roster moves
+
+  const bandOf = useCallback(
+    (target: EventTarget | null): HTMLElement | null =>
+      ((target as HTMLElement | null)?.closest?.('[data-ts-drop]') as HTMLElement | null) ?? null,
+    [],
+  )
+
+  const clearOver = useCallback(() => {
+    over.current?.removeAttribute('data-ts-over')
+    over.current = null
+  }, [])
+
+  /**
+   * Stage one move, remembering where the row was first.
+   *
+   * The rectangle has to be read HERE, before the draft changes: by the time
+   * the layout effect below runs, the sheet has already been reprinted and the
+   * row's old position is gone.
+   */
+  const assign = useCallback(
+    (employeeId: string, designationId: number) => {
+      const tr = rowNode(employeeId)
+      flip.current = tr ? { employeeId, top: tr.getBoundingClientRect().top } : null
+      rosterEdit?.onAssign(employeeId, designationId)
+    },
+    [rosterEdit, rowNode],
+  )
+
+  /**
+   * The move, animated from where the row was to where it now is (FLIP).
+   *
+   * Guarded on the method existing as well as on the preference, and one guard
+   * serves both: jsdom implements no Web Animations API at all, and an
+   * operator who asked for reduced motion asked for the new layout without the
+   * travel — not for the move to be refused. The travel scales the duration
+   * inside the plan's calm band, so a hop between neighbouring bands does not
+   * take as long as a move across 200 rows.
+   */
+  useLayoutEffect(() => {
+    const from = flip.current
+    flip.current = null
+    if (!from) return
+    const tr = rowNode(from.employeeId)
+    if (!tr || typeof tr.animate !== 'function') return
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return
+    const delta = from.top - tr.getBoundingClientRect().top
+    if (delta === 0) return
+    tr.animate([{ transform: `translateY(${delta}px)` }, { transform: 'none' }], {
+      duration: Math.min(460, 220 + Math.abs(delta) * 0.4),
+      // The sheet's own calm curve, read from the token rather than restated.
+      easing: getComputedStyle(tr).getPropertyValue('--ease-out-expo').trim() || 'ease-out',
+    })
+  }, [rowNode, rows])
+
+  const onDragStart = useCallback((event: React.DragEvent) => {
+    const node = (event.target as HTMLElement).closest?.('[data-ts-grip]') as HTMLElement | null
+    const employeeId = node?.dataset.employee
+    if (!employeeId) return
+    dragged.current = employeeId
+    const payload = event.dataTransfer
+    if (payload) {
+      payload.setData('text/plain', employeeId)
+      payload.effectAllowed = 'move'
+    }
+  }, [])
+
+  const onDragOver = useCallback(
+    (event: React.DragEvent) => {
+      if (dragged.current === null) return
+      const band = bandOf(event.target)
+      if (!band) return
+      // Without this the browser refuses the drop: preventing the default on
+      // dragover IS "this is a valid target".
+      event.preventDefault()
+      if (event.dataTransfer) event.dataTransfer.dropEffect = 'move'
+      if (over.current === band) return
+      clearOver()
+      over.current = band
+      band.setAttribute('data-ts-over', '1')
+    },
+    [bandOf, clearOver],
+  )
+
+  const onDragLeave = useCallback(
+    (event: React.DragEvent) => {
+      const band = bandOf(event.target)
+      if (band && band === over.current && !band.contains(event.relatedTarget as Node | null)) {
+        clearOver()
+      }
+    },
+    [bandOf, clearOver],
+  )
+
+  const onDrop = useCallback(
+    (event: React.DragEvent) => {
+      const employeeId = dragged.current
+      const band = bandOf(event.target)
+      const target = band?.dataset.tsDrop
+      dragged.current = null
+      clearOver()
+      if (!employeeId || !target) return
+      event.preventDefault()
+      assign(employeeId, Number(target))
+    },
+    [assign, bandOf, clearOver],
+  )
+
+  const onDragEnd = useCallback(() => {
+    dragged.current = null
+    clearOver()
+  }, [clearOver])
+
+  const closeMoving = useCallback((restore: boolean) => {
+    setMoving((open) => {
+      if (restore) open?.anchor.focus()
+      return null
+    })
+  }, [])
 
   const cellFrom = useCallback((target: EventTarget | null): FillCell | null => {
     const node = (target as HTMLElement | null)?.closest?.('.ts-cell') as HTMLElement | null
@@ -890,6 +1284,20 @@ export function TimesheetGrid({
       // The synthesized click carries the modifier state, so the guard belongs
       // here. `shiftKey` stays out: shift-click is §8's range gesture, below.
       if (event.ctrlKey || event.metaKey || event.altKey) return
+      // The grip's ACTIVATION, whichever way it arrives. A grip is a real
+      // button, so Enter and Space already synthesize a click here — one
+      // branch therefore serves the pointer operator who clicks instead of
+      // dragging and the keyboard operator who never can, with no second key
+      // interpreter to keep in step with the paint path enumerated below.
+      const gripNode = (event.target as HTMLElement).closest?.('[data-ts-grip]') as
+        | HTMLElement
+        | null
+      const gripped = gripNode?.dataset.employee
+      if (gripped) {
+        event.preventDefault()
+        setMoving({ employeeId: gripped, anchor: gripNode })
+        return
+      }
       const cell = cellFrom(event.target)
       const row = cell && byId.get(cell.employeeId)
       if (!cell || !row || whyLocked(row, cell.day) !== null) return
@@ -1047,6 +1455,15 @@ export function TimesheetGrid({
           onPointerDown={onPointerDown}
           onPointerOver={onPointerOver}
           onFocus={onFocusIn}
+          // Delegated like every other gesture in this sheet: one set of
+          // handlers on the body reads `data-ts-grip` / `data-ts-drop` off the
+          // target, instead of 275 grips and 16 bands each carrying five
+          // closures.
+          onDragStart={onDragStart}
+          onDragOver={onDragOver}
+          onDragLeave={onDragLeave}
+          onDrop={onDrop}
+          onDragEnd={onDragEnd}
         >
           {lines.map((line) => {
             if (line.kind === 'gap') {
@@ -1057,12 +1474,36 @@ export function TimesheetGrid({
               )
             }
             if (line.kind === 'group') {
+              const target = line.drop === undefined ? undefined : targets.get(line.drop)
               return (
                 <tr key={line.key} className="ts-group" style={{ blockSize: 'var(--row)' }}>
                   {/* The printed designation, so its language follows the
-                      DELIVERABLE and not the interface (UI spec §10). */}
-                  <th colSpan={SPAN} lang={line.lang} data-ts-caps scope="colgroup">
-                    {line.label}
+                      DELIVERABLE and not the interface (UI spec §10).
+
+                      In roster edit mode the same band is the drop target. A
+                      valid one is ringed thin and the one under the drag ringed
+                      thick, so validity is carried by the count beside the name
+                      and by a change of WEIGHT — never by colour alone. */}
+                  <th
+                    colSpan={SPAN}
+                    lang={line.lang}
+                    data-ts-caps
+                    scope="colgroup"
+                    data-ts-drop={line.drop}
+                    className={cn(
+                      line.drop !== undefined &&
+                        'ring-1 ring-inset ring-primary/40 data-[ts-over=1]:ring-2 data-[ts-over=1]:ring-primary',
+                    )}
+                  >
+                    <span className="flex items-center gap-2">
+                      <span className="truncate">{line.label}</span>
+                      {line.count !== undefined && (
+                        <span className="shrink-0 font-normal normal-case tracking-normal text-muted-foreground [unicode-bidi:isolate]">
+                          {t('timesheet.rows', { count: line.count })}
+                        </span>
+                      )}
+                      {target && rosterEdit?.renameControl?.(target)}
+                    </span>
                   </th>
                 </tr>
               )
@@ -1078,6 +1519,7 @@ export function TimesheetGrid({
                 selected={selected === line.row.employee_id}
                 editedDays={editedByRow?.get(line.row.employee_id)}
                 blocked={blockedBy.get(line.row.employee_id)}
+                grip={rosterEdit ? strings.grip(line.row.employee_id) : undefined}
                 strings={strings}
                 onSelect={onSelect}
               />
@@ -1124,6 +1566,19 @@ export function TimesheetGrid({
             closePicker(true)
           }}
           onClose={closePicker}
+        />
+      )}
+
+      {moving && rosterEdit && (
+        <DesignationPicker
+          employeeId={moving.employeeId}
+          designations={rosterEdit.designations}
+          anchor={moving.anchor}
+          onPick={(designationId) => {
+            assign(moving.employeeId, designationId)
+            closeMoving(true)
+          }}
+          onClose={closeMoving}
         />
       )}
 

@@ -174,6 +174,36 @@ const KEYS = [
   'timesheet.filter.employees_few',
   'timesheet.filter.employees_many',
   'timesheet.filter.employees_other',
+  // Staged roster editing (Task 6). Nested under `rosterEdit` and NOT under
+  // `roster`, which is already the flat label of the toolbar's sheet switch:
+  // i18next splits on `.`, so `timesheet.roster.save` would look for a child
+  // of the string "Roster" and resolve to nothing — and `get()` above would
+  // throw walking into it. Nothing here is a NEW word for something the sheet
+  // already names: the band count reuses `timesheet.rows`, the band for the
+  // men on no designation at all reuses `timesheet.issues.no_designation`, and
+  // the dialog's two buttons reuse `common.save` / `common.cancel`.
+  'timesheet.rosterEdit.enter',
+  'timesheet.rosterEdit.banner',
+  'timesheet.rosterEdit.save',
+  'timesheet.rosterEdit.grip',
+  'timesheet.rosterEdit.targets',
+  'timesheet.rosterEdit.cellsLocked',
+  'timesheet.rosterEdit.add',
+  'timesheet.rosterEdit.addHint',
+  'timesheet.rosterEdit.renameTitle',
+  'timesheet.rosterEdit.renameHint',
+  'timesheet.rosterEdit.rename',
+  'timesheet.rosterEdit.nameEn',
+  'timesheet.rosterEdit.nameAr',
+  'timesheet.rosterEdit.sheetField',
+  // All six CLDR forms: the staged count is rendered under `ar`, exactly as
+  // `corrections` is, so an untranslated dual or few form is a visible defect.
+  'timesheet.rosterEdit.staged_zero',
+  'timesheet.rosterEdit.staged_one',
+  'timesheet.rosterEdit.staged_two',
+  'timesheet.rosterEdit.staged_few',
+  'timesheet.rosterEdit.staged_many',
+  'timesheet.rosterEdit.staged_other',
   // `Issue.kind` is the stable machine string; the panel owns the words, so
   // every kind `timesheet_service` can emit needs a pair here. Blocking:
   // no_designation, no_nationality. Warning: unknown_leave, overlapping_leave,

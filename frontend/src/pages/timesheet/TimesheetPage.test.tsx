@@ -25,6 +25,9 @@ vi.mock('@/lib/api', () => ({
   api: {
     getTimesheet: vi.fn(),
     setTimesheetCell: vi.fn(),
+    // The roster editor's gate (Task 6): the page reads the catalog to know
+    // whether there is anything to drop onto, so every case here reaches it.
+    listDesignations: vi.fn(),
   },
   apiErrorMessage: (e: unknown) => (e instanceof Error ? e.message : String(e)),
 }))
@@ -100,6 +103,7 @@ const ISSUE: TimesheetIssue = {
 
 const getTimesheet = vi.mocked(api.getTimesheet)
 const setTimesheetCell = vi.mocked(api.setTimesheetCell)
+const listDesignations = vi.mocked(api.listDesignations)
 const mockCapabilities = vi.mocked(useCapabilities)
 
 /** Everything, i.e. a manager: the default for every case but the A3 one. */
@@ -131,6 +135,10 @@ beforeEach(() => {
   vi.clearAllMocks()
   grantAll()
   getTimesheet.mockResolvedValue(EMPTY_MONTH)
+  // Empty on purpose: the roster affordance is Task 6's own suite's subject,
+  // and this file's cases are the shell. An empty catalog is also the honest
+  // default for a month with no rows.
+  listDesignations.mockResolvedValue([])
 })
 
 describe('TimesheetPage shell', () => {

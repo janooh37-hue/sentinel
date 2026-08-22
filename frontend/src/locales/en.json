@@ -3720,6 +3720,28 @@
       "employees_many": "{{count}} employees",
       "employees_other": "{{count}} employees"
     },
+    "rosterEdit": {
+      "enter": "Edit roster",
+      "banner": "Moves change the Time Sheet only — not the employee record or the organization tree.",
+      "save": "Save roster",
+      "grip": "Move {{id}} to another designation",
+      "targets": "Move to designation",
+      "cellsLocked": "Cells are read-only while the roster is being edited — save or cancel first.",
+      "add": "Add designation",
+      "addHint": "It joins the end of the printed order on the sheet you choose.",
+      "renameTitle": "Rename designation",
+      "renameHint": "Both workbooks print the new names. The sheet it prints on does not change.",
+      "rename": "Rename {{name}}",
+      "nameEn": "English name",
+      "nameAr": "Arabic name",
+      "sheetField": "Workbook sheet",
+      "staged_zero": "Nothing staged",
+      "staged_one": "{{count}} move staged",
+      "staged_two": "{{count}} moves staged",
+      "staged_few": "{{count}} moves staged",
+      "staged_many": "{{count}} moves staged",
+      "staged_other": "{{count}} moves staged"
+    },
     "issues": {
       "no_designation": "No designation",
       "no_nationality": "No nationality label",

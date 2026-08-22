@@ -36,6 +36,7 @@ import { useAttendanceAttention } from '@/components/employees/useAttendanceAtte
 import { EmptyState } from '@/components/ui/empty-state'
 import {
   apiErrorMessage,
+  type TimesheetDesignationRead,
   type TimesheetGridResponse,
   type TimesheetSheet,
   type TimesheetVariant,
@@ -45,10 +46,12 @@ import { cn } from '@/lib/utils'
 
 import { CodeRibbon } from './CodeRibbon'
 import { TimesheetDock } from './TimesheetDock'
-import { TimesheetGrid, TimesheetMasthead, type FillCell } from './TimesheetGrid'
+import { TimesheetGrid, TimesheetMasthead, type FillCell, type RosterEdit } from './TimesheetGrid'
 import { TimesheetNotice } from './TimesheetNotice'
+import { DesignationRenameControl, TimesheetRosterEditor } from './TimesheetRosterEditor'
 import { MonthStepper, TimesheetToolbar, type TimesheetDensity } from './TimesheetToolbar'
 import { type Code, isCode, slugOf } from './codes'
+import { applyRosterDraft, type RosterDraft } from './rosterDraft'
 import {
   currentMonth,
   useAcknowledgeStart,
@@ -57,6 +60,8 @@ import {
   usePatchPeriod,
   useReopenMonth,
   useSetCell,
+  useSetTimesheetRoster,
+  useTimesheetDesignations,
   useTimesheetDownload,
   useTimesheetGrid,
 } from './useTimesheet'
@@ -104,6 +109,15 @@ const PENDING_MONTH: TimesheetGridResponse = {
   closed_by: null,
 }
 
+/**
+ * Stable empties, so "no draft" and "no catalog" keep one identity: both feed
+ * `useMemo` dependency lists that the grid's row memo hangs off, and a fresh
+ * `new Map()` per render would rebuild the printed sheet on every keystroke in
+ * the search field.
+ */
+const NO_DRAFT: RosterDraft = new Map()
+const NO_DESIGNATIONS: readonly TimesheetDesignationRead[] = []
+
 export function TimesheetPage(): React.JSX.Element {
   const { t, i18n } = useTranslation()
   const { has } = useCapabilities()
@@ -121,6 +135,17 @@ export function TimesheetPage(): React.JSX.Element {
     density: 'default',
   })
   const [corrections, setCorrections] = useState<Correction[]>([])
+  /**
+   * Roster edit mode and its staged assignments. The React Query result stays
+   * the rollback baseline: Cancel is this state going back to empty, with no
+   * request (design §"Draft and save").
+   */
+  const [roster, setRoster] = useState<{ editing: boolean; draft: RosterDraft }>({
+    editing: false,
+    draft: NO_DRAFT,
+  })
+  /** The last refused batch's own sentence, printed beside the draft it kept. */
+  const [rosterError, setRosterError] = useState<string | null>(null)
 
   const grid = useTimesheetGrid(params)
   const setCell = useSetCell(params)
@@ -130,15 +155,54 @@ export function TimesheetPage(): React.JSX.Element {
   const acknowledge = useAcknowledgeStart(params)
   const monthFile = useTimesheetDownload()
   const employeeFile = useEmployeeSheetDownload()
+  const catalog = useTimesheetDesignations()
+  const rosterWrite = useSetTimesheetRoster()
   // The switcher's badge: the same count the Attendance tab carries on every
   // other page in the section, so the number never depends on the way in.
   const attendance = useAttendanceAttention()
 
   // Cells are correctable only on the attendance grid of an open month, by
   // someone holding `timesheet.edit`. The statistics grid is derived: the fix
-  // belongs upstream, in the attendance grid or the filler assignment.
-  const editable = canEdit && !grid.closed && ui.variant === 'attendance'
+  // belongs upstream, in the attendance grid or the filler assignment. Roster
+  // mode suspends it: the ribbon becomes the legend again and the corrections
+  // chip goes with it, because neither applies to a staged move.
+  const editable = canEdit && !grid.closed && ui.variant === 'attendance' && !roster.editing
   const rows = grid.rows
+
+  /**
+   * The valid drop targets: active designations of the workbook on screen, in
+   * printed rank order. Moving somebody to the drivers workbook is done with
+   * the drivers sheet selected, which is the whole reason this is filtered by
+   * `params.sheet` rather than offering the catalog entire.
+   */
+  const designations = useMemo(() => {
+    const all = catalog.data ?? NO_DESIGNATIONS
+    return all
+      .filter((each) => each.active && each.sheet === params.sheet)
+      .sort((a, b) => a.rank_order - b.rank_order || a.id - b.id)
+  }, [catalog.data, params.sheet])
+
+  /**
+   * Roster editing needs all three: the permission, an open month, and a
+   * catalog that actually arrived. A failed catalog load therefore costs the
+   * roster editor and nothing else — the cells of an open month stay
+   * correctable (design §"Failure and empty states").
+   */
+  const canRoster = canEdit && !grid.closed && designations.length > 0
+
+  /**
+   * What the sheet prints: the server's rows until something is staged, and
+   * the staged order after that. Identity is preserved while the draft is
+   * empty, because this array is the grid's `rows` prop and 275 memoised rows
+   * hang off it.
+   */
+  const printedRows = useMemo(
+    () =>
+      roster.draft.size === 0
+        ? rows
+        : applyRosterDraft(rows, catalog.data ?? NO_DESIGNATIONS, params.sheet, roster.draft),
+    [catalog.data, params.sheet, roster.draft, rows],
+  )
 
   const rowsById = useMemo(() => {
     const index = new Map<string, (typeof rows)[number]>()
@@ -146,15 +210,29 @@ export function TimesheetPage(): React.JSX.Element {
     return index
   }, [rows])
 
-  const stepMonth = useCallback((delta: -1 | 1) => {
-    setParams((prev) => {
-      const raw = prev.month + delta
-      if (raw < 1) return { ...prev, year: prev.year - 1, month: 12 }
-      if (raw > 12) return { ...prev, year: prev.year + 1, month: 1 }
-      return { ...prev, month: raw }
-    })
+  /**
+   * Leaving the month drops the staged draft with the corrections log: a draft
+   * names employees for ONE month, and carrying it across would let Save write
+   * assignments the operator staged while looking at a different sheet.
+   */
+  const leaveMonth = useCallback(() => {
     setCorrections([])
+    setRoster({ editing: false, draft: NO_DRAFT })
+    setRosterError(null)
   }, [])
+
+  const stepMonth = useCallback(
+    (delta: -1 | 1) => {
+      setParams((prev) => {
+        const raw = prev.month + delta
+        if (raw < 1) return { ...prev, year: prev.year - 1, month: 12 }
+        if (raw > 12) return { ...prev, year: prev.year + 1, month: 1 }
+        return { ...prev, month: raw }
+      })
+      leaveMonth()
+    },
+    [leaveMonth],
+  )
 
   const undo = useCallback(() => {
     const last = corrections[corrections.length - 1]
@@ -368,6 +446,83 @@ export function TimesheetPage(): React.JSX.Element {
   const onCloseMonth = useCallback(() => closeMonth.mutate(), [closeMonth])
   const onReopenMonth = useCallback(() => reopenMonth.mutate(), [reopenMonth])
 
+  /**
+   * Entering roster edit mode (design §"Entering edit mode"): back to the
+   * attendance grid, because the statistics variant groups by block and has no
+   * designation bands to drop onto; and the brush disarmed, because a code
+   * armed for cells that are now refused is a control that answers nothing.
+   */
+  const onEditRoster = useCallback(() => {
+    setUi((prev) => ({ ...prev, variant: 'attendance', brush: null }))
+    setRoster({ editing: true, draft: NO_DRAFT })
+    setRosterError(null)
+  }, [])
+
+  /**
+   * Stage one move — or unstage it. The draft holds only what CHANGED: a man
+   * dropped back on the designation the server already has him on leaves the
+   * draft, so Save never names him and the atomic batch stays the size of the
+   * actual edit.
+   */
+  const onAssignRoster = useCallback(
+    (employeeId: string, designationId: number) => {
+      const original = rowsById.get(employeeId)?.designation_id ?? null
+      setRoster((prev) => {
+        const draft = new Map(prev.draft)
+        if (designationId === original) draft.delete(employeeId)
+        else draft.set(employeeId, designationId)
+        return { ...prev, draft }
+      })
+    },
+    [rowsById],
+  )
+
+  /** One batch, for the month on screen. Success closes; failure keeps both. */
+  const onSaveRoster = useCallback(() => {
+    if (roster.draft.size === 0 || rosterWrite.isPending) return
+    setRosterError(null)
+    rosterWrite.mutate(
+      {
+        year: params.year,
+        month: params.month,
+        assignments: [...roster.draft].map(([employee_id, designation_id]) => ({
+          employee_id,
+          designation_id,
+        })),
+      },
+      {
+        onSuccess: () => setRoster({ editing: false, draft: NO_DRAFT }),
+        onError: (err) => setRosterError(apiErrorMessage(err)),
+      },
+    )
+  }, [params.month, params.year, roster.draft, rosterWrite])
+
+  /** The rollback: the query result was never touched, so this is all it takes. */
+  const onCancelRoster = useCallback(() => {
+    setRoster({ editing: false, draft: NO_DRAFT })
+    setRosterError(null)
+  }, [])
+
+  /**
+   * The band's rename affordance, built here because the dialog reaches
+   * react-query and handed to the grid as a node, so the sheet itself stays a
+   * props component with no provider of its own.
+   */
+  const renameControl = useCallback(
+    (designation: TimesheetDesignationRead) => (
+      <DesignationRenameControl designation={designation} sheet={params.sheet} />
+    ),
+    [params.sheet],
+  )
+
+  const rosterEdit = useMemo<RosterEdit | undefined>(
+    () =>
+      roster.editing
+        ? { designations, onAssign: onAssignRoster, renameControl }
+        : undefined,
+    [designations, onAssignRoster, renameControl, roster.editing],
+  )
+
   /** Every cell corrected in this session, for the grid's structural mark. */
   const edited = useMemo(
     () => new Set(corrections.map((c) => `${c.employeeId}|${c.day}`)),
@@ -490,7 +645,12 @@ export function TimesheetPage(): React.JSX.Element {
           rowCount={grid.rows.length}
           daysInMonth={grid.daysInMonth}
           onStepMonth={stepMonth}
-          onSheetChange={(sheet) => setParams((prev) => ({ ...prev, sheet }))}
+          onSheetChange={(sheet) => {
+            setParams((prev) => ({ ...prev, sheet }))
+            // The other workbook has other designations, so a draft staged
+            // against this one cannot follow the operator across.
+            leaveMonth()
+          }}
           onVariantChange={(variant) => setUi((prev) => ({ ...prev, variant, brush: null }))}
           onDensityChange={(density) => setUi((prev) => ({ ...prev, density }))}
         />
@@ -502,25 +662,42 @@ export function TimesheetPage(): React.JSX.Element {
             readOnly={!editable}
           />
           <span className="text-[0.75em] text-muted-foreground">{hint}</span>
-          {/* Edit-only furniture. A `timesheet.view` operator can never push
-              onto this stack, so the chip would sit permanently at "No
-              corrections yet" with a permanently dead undo — immediately beside
-              the hint that has just explained they cannot edit. */}
-          {editable && (
-            <span className="ms-auto flex items-center gap-3">
-              <span className="inline-flex items-center gap-1.5 rounded-full bg-surface-tinted px-2.5 py-1 text-[0.72em] font-semibold text-muted-foreground">
-                {t('timesheet.corrections', { count: corrections.length })}
-              </span>
+          {/* The way into roster edit mode, beside the other edit furniture and
+              ABSENT — never disabled — for a viewer, a sealed month, or a
+              catalog that did not arrive (amendment A3, UI spec §14). Outside
+              the `editable` group below because entering is what switches the
+              variant back, so it has to be reachable from the statistics grid
+              too. */}
+          <span className="ms-auto flex items-center gap-3">
+            {canRoster && !roster.editing && (
               <button
                 type="button"
-                onClick={undo}
-                disabled={corrections.length === 0}
-                className="text-[0.78em] font-medium text-primary hover:underline disabled:cursor-not-allowed disabled:no-underline disabled:opacity-40"
+                onClick={onEditRoster}
+                className="inline-flex shrink-0 items-center rounded-full border border-border bg-surface px-2.5 py-1 text-[0.72em] font-semibold text-muted-foreground transition-colors hover:border-primary hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               >
-                ↩ {t('timesheet.undo')}
+                {t('timesheet.rosterEdit.enter')}
               </button>
-            </span>
-          )}
+            )}
+            {/* Edit-only furniture. A `timesheet.view` operator can never push
+                onto this stack, so the chip would sit permanently at "No
+                corrections yet" with a permanently dead undo — immediately
+                beside the hint that has just explained they cannot edit. */}
+            {editable && (
+              <>
+                <span className="inline-flex items-center gap-1.5 rounded-full bg-surface-tinted px-2.5 py-1 text-[0.72em] font-semibold text-muted-foreground">
+                  {t('timesheet.corrections', { count: corrections.length })}
+                </span>
+                <button
+                  type="button"
+                  onClick={undo}
+                  disabled={corrections.length === 0}
+                  className="text-[0.78em] font-medium text-primary hover:underline disabled:cursor-not-allowed disabled:no-underline disabled:opacity-40"
+                >
+                  ↩ {t('timesheet.undo')}
+                </button>
+              </>
+            )}
+          </span>
         </div>
 
         <TimesheetNotice
@@ -542,6 +719,21 @@ export function TimesheetPage(): React.JSX.Element {
               Rendered in every state — a band that appears only once the month
               lands is a band that shifts the sheet down as it arrives. */}
           <TimesheetMasthead year={params.year} month={params.month} />
+
+          {/* The mode band: inside the card, above the scroll region, and
+              `shrink-0` — fixed furniture like the masthead, so entering the
+              mode costs no scroll geometry and `timesheet-scroll` stays the one
+              scroller on the page. */}
+          {roster.editing && (
+            <TimesheetRosterEditor
+              sheet={params.sheet}
+              staged={roster.draft.size}
+              pending={rosterWrite.isPending}
+              error={rosterError}
+              onSave={onSaveRoster}
+              onCancel={onCancelRoster}
+            />
+          )}
 
           {/* THE ONLY SCROLL REGION ON THE PAGE. The grid owns its own
               `<table>` in here rather than the shared `Table` primitive, which
@@ -617,7 +809,7 @@ export function TimesheetPage(): React.JSX.Element {
               </div>
             ) : (
               <TimesheetGrid
-                rows={grid.rows}
+                rows={printedRows}
                 year={params.year}
                 month={params.month}
                 daysInMonth={grid.daysInMonth}
@@ -629,6 +821,7 @@ export function TimesheetPage(): React.JSX.Element {
                 edited={edited}
                 blocking={grid.blocking}
                 postCount={grid.postCount}
+                roster={rosterEdit}
                 onSetCell={onSetCell}
                 onFill={onFill}
                 onSelect={onSelectRow}
