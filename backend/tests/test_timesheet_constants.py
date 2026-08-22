@@ -57,25 +57,26 @@ def test_arabic_months_are_twelve_and_ordered():
     )
 
 
-def test_designation_seed_is_the_16_ranks_in_order():
+def test_designation_seed_is_the_16_stable_keys_in_order():
     assert len(DESIGNATION_SEED) == 16
-    assert [row[0] for row in DESIGNATION_SEED] == list(range(1, 17))
+    assert [row[1] for row in DESIGNATION_SEED] == list(range(1, 17))
     assert DESIGNATION_SEED == (
-        (1, "Prisons Director", "مدير عام الحراسات الأمنية", "main"),
-        (2, "Ass. Director", "نائب عام مدير الحراسات الأمنية", "main"),
-        (3, "Project Manager", "مديرمركز الإصلاح والتأهيل", "main"),
-        (4, "Branche Manager", "مدير فرع", "main"),
-        (5, "Duty In charge", "مناوب عام", "main"),
-        (6, "Security Supervisor", "مشرف", "main"),
-        (7, "Armory Officer", "مسؤول قطعة سلاح", "main"),
-        (8, "assistant security supervisor", "مساعد مشرف", "main"),
-        (9, "Armory Keeper", "خازن سلاح", "main"),
-        (10, "Control room Security Guard", "حارس امن عرفة العمليات", "main"),
-        (11, "Clinic Security Guard", "حارس امن حرس العيادة", "main"),
-        (12, "Habilitation Security Guard", "حارس امن حرس التأهيل", "main"),
-        (13, "Escort Security Guard", "حارس امن تنويم مستشفيات", "main"),
-        (14, "Messengers", "حارس امن الارساليات", "main"),
-        (15, "Security Guard", "حارس امن", "main"),
-        (16, "Driver", "سائق", "drivers"),
+        ("prisons_director", 1, "Prisons Director", "مدير عام الحراسات الأمنية", "main"),
+        ("assistant_director", 2, "Ass. Director", "نائب عام مدير الحراسات الأمنية", "main"),
+        ("project_manager", 3, "Project Manager", "مديرمركز الإصلاح والتأهيل", "main"),
+        ("branch_manager", 4, "Branche Manager", "مدير فرع", "main"),
+        ("duty_in_charge", 5, "Duty In charge", "مناوب عام", "main"),
+        ("security_supervisor", 6, "Security Supervisor", "مشرف", "main"),
+        ("armory_officer", 7, "Armory Officer", "مسؤول قطعة سلاح", "main"),
+        ("assistant_security_supervisor", 8, "assistant security supervisor", "مساعد مشرف", "main"),
+        ("armory_keeper", 9, "Armory Keeper", "خازن سلاح", "main"),
+        ("control_room_security_guard", 10, "Control room Security Guard", "حارس امن عرفة العمليات", "main"),
+        ("clinic_security_guard", 11, "Clinic Security Guard", "حارس امن حرس العيادة", "main"),
+        ("habilitation_security_guard", 12, "Habilitation Security Guard", "حارس امن حرس التأهيل", "main"),
+        ("escort_security_guard", 13, "Escort Security Guard", "حارس امن تنويم مستشفيات", "main"),
+        ("messengers", 14, "Messengers", "حارس امن الارساليات", "main"),
+        ("security_guard", 15, "Security Guard", "حارس امن", "main"),
+        ("driver", 16, "Driver", "سائق", "drivers"),
     )
-    assert {row[3] for row in DESIGNATION_SEED} == {"main", "drivers"}
+    assert len({row[0] for row in DESIGNATION_SEED}) == 16
+    assert {row[4] for row in DESIGNATION_SEED} == {"main", "drivers"}

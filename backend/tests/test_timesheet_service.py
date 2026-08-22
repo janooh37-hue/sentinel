@@ -14,7 +14,6 @@ from datetime import date, datetime
 import pytest
 
 from app.api.errors import ConflictError, ValidationFailedError
-from app.core.constants import DESIGNATION_SEED
 from app.core.timesheet_codes import (
     CODE_ABSENT,
     CODE_ANNUAL,
@@ -31,6 +30,7 @@ from app.db.models import (
     TimesheetDesignation,
     TimesheetOverride,
     TimesheetPeriod,
+    TimesheetRosterAssignment,
     TimesheetSnapshotRow,
     TimesheetStartAck,
     TimesheetStatFiller,
@@ -49,28 +49,88 @@ def _designations(db_session):
 def guards(db_session):
     """Three guards and one driver, all joined long ago."""
     rows = {d.name_en: d for d in db_session.query(TimesheetDesignation).all()}
-    for employee_id, designation in (
-        ("G1001", "Security Guard"),
-        ("G1002", "Security Guard"),
-        ("G0999", "Security Supervisor"),
-        ("G2000", "Driver"),
-    ):
+    for employee_id in ("G1001", "G1002", "G0999", "G2000"):
         db_session.add(
             Employee(
                 id=employee_id,
                 name_en=f"Name {employee_id}",
                 nationality="الإمارات",
                 doj=date(2020, 1, 1),
-                designation_id=rows[designation].id,
             )
         )
     db_session.commit()
+    for employee_id, designation in (
+        ("G1001", "Security Guard"),
+        ("G1002", "Security Guard"),
+        ("G0999", "Security Supervisor"),
+        ("G2000", "Driver"),
+    ):
+        _add_assignment(db_session, employee_id, rows[designation].id, date(2026, 1, 1))
+    db_session.commit()
+
+
+def _add_assignment(db, employee_id, designation_id, effective_from):
+    db.add(
+        TimesheetRosterAssignment(
+            employee_id=employee_id,
+            designation_id=designation_id,
+            effective_from=effective_from,
+        )
+    )
+    db.flush()
 
 
 def _row(db, year, month, employee_id, *, sheet="main"):
     """The one grid row for ``employee_id``; KeyError-loud if he is not on it."""
     grid = svc.build_month(db, year, month, sheet=sheet)
     return next(r for r in grid.rows if r.employee_id == employee_id)
+
+
+def test_effective_roster_assignment_wins_by_month_and_explicit_null_unassigns(
+    db_session, guards
+):
+    guard = db_session.query(TimesheetDesignation).filter_by(name_en="Security Guard").one()
+    supervisor = (
+        db_session.query(TimesheetDesignation).filter_by(name_en="Security Supervisor").one()
+    )
+    _add_assignment(db_session, "G1001", supervisor.id, date(2026, 8, 1))
+    _add_assignment(db_session, "G1001", None, date(2026, 9, 1))
+    db_session.commit()
+
+    july = _row(db_session, 2026, 7, "G1001")
+    august = _row(db_session, 2026, 8, "G1001")
+    september = _row(db_session, 2026, 9, "G1001")
+
+    assert (july.designation_en, july.designation_id) == ("Security Guard", guard.id)
+    assert (august.designation_en, august.designation_id) == ("Security Supervisor", supervisor.id)
+    assert (september.designation_en, september.designation_id) == (None, None)
+    assert any(
+        issue.employee_id == "G1001" and issue.kind == "no_designation"
+        for issue in svc.build_month(db_session, 2026, 9).blocking
+    )
+
+
+def test_sealed_rows_keep_frozen_designation_after_later_assignment_and_catalog_edit(
+    db_session, guards
+):
+    guard = db_session.query(TimesheetDesignation).filter_by(name_en="Security Guard").one()
+    supervisor = (
+        db_session.query(TimesheetDesignation).filter_by(name_en="Security Supervisor").one()
+    )
+    svc.close_month(db_session, 2026, 7)
+    _add_assignment(db_session, "G1001", supervisor.id, date(2026, 8, 1))
+    guard.name_en = "Edited after seal"
+    db_session.commit()
+
+    sealed = _row(db_session, 2026, 7, "G1001")
+    live = _row(db_session, 2026, 8, "G1001")
+
+    assert (sealed.designation_en, sealed.rank_order, sealed.designation_id) == (
+        "Security Guard",
+        guard.rank_order,
+        None,
+    )
+    assert (live.designation_en, live.designation_id) == ("Security Supervisor", supervisor.id)
 
 
 def test_seeding_is_idempotent(db_session):
@@ -274,10 +334,10 @@ def _guard(db, employee_id, *, doj=date(2024, 1, 1), end_date=None, rank=15):
             doj=doj,
             end_date=end_date,
             status="Resigned" if end_date else "Active",
-            designation_id=designation.id,
         )
     )
     db.flush()
+    _add_assignment(db, employee_id, designation.id, date(2024, 1, 1))
 
 
 def test_a_joiner_is_ng_until_his_starting_point(db_session):
@@ -336,40 +396,48 @@ def test_an_unknown_code_is_rejected(db_session):
 
 
 def test_seeding_restores_a_missing_row_without_resetting_the_operator_order(db_session):
-    """Rule 1 is *additive*: a re-seed at startup must not undo rule 10's reorder.
-
-    ``Driver`` is pulled to the front because its seed rank is the *last* one, so
-    a seed that writes the literal seed ranks back moves it visibly. And
-    ``Prisons Director`` is deleted because after the reorder its own seed rank
-    (1) belongs to another row, so restoring it at that rank would collide with
-    ``uq_timesheet_designations_rank``.
-    """
+    """Re-seeding restores by stable key and leaves the existing order alone."""
     ids = [d.id for d in svc.list_designations(db_session)]
     svc.reorder_designations(db_session, [ids[-1], *ids[:-1]])
     db_session.delete(
-        db_session.query(TimesheetDesignation).filter_by(name_en="Prisons Director").one()
+        db_session.query(TimesheetDesignation).filter_by(system_key="prisons_director").one()
     )
     db_session.commit()
 
     svc.seed_designations(db_session)
 
     rows = svc.list_designations(db_session)
+    restored = db_session.query(TimesheetDesignation).filter_by(
+        system_key="prisons_director"
+    ).one()
     assert len(rows) == 16
-    assert rows[0].name_en == "Driver"  # the reorder survived the re-seed
-    assert rows[-1].name_en == "Prisons Director"  # the missing row came back, last
-    assert len({r.rank_order for r in rows}) == 16  # ranks are still unique
+    assert rows[0].name_en == "Driver"
+    assert restored.name_en == "Prisons Director"
+    assert restored.rank_order == rows[-1].rank_order
+    assert len({r.rank_order for r in rows}) == 16
 
 
-def test_seeding_repairs_a_drifted_label(db_session):
-    row = db_session.query(TimesheetDesignation).filter_by(name_en="Driver").one()
-    row.name_ar = "not the printed label"
+def test_seeding_preserves_operator_edits_to_an_existing_key(db_session):
+    row = db_session.query(TimesheetDesignation).filter_by(system_key="driver").one()
+    row.name_en = "Edited Driver"
+    row.name_ar = "تعديل"
     row.sheet = "main"
+    row.active = False
+    row.rank_order = 17
     db_session.commit()
 
     svc.seed_designations(db_session)
 
-    row = db_session.query(TimesheetDesignation).filter_by(name_en="Driver").one()
-    assert (row.name_ar, row.sheet) == (DESIGNATION_SEED[-1][2], "drivers")
+    row = db_session.query(TimesheetDesignation).filter_by(system_key="driver").one()
+    assert (row.name_en, row.name_ar, row.sheet, row.active, row.rank_order) == (
+        "Edited Driver",
+        "تعديل",
+        "main",
+        False,
+        17,
+    )
+
+
 
 
 # --- rules 3 and 4: the period upsert and the tie-break ----------------------
@@ -791,20 +859,20 @@ def test_re_closing_a_month_reproduces_the_first_seal(db_session, guards):
 
 def test_a_closed_month_survives_live_drift(db_session, guards):
     svc.close_month(db_session, 2026, 7)
-    db_session.get(Employee, "G1001").designation_id = None
+    _add_assignment(db_session, "G1001", None, date(2026, 8, 1))
     db_session.get(Employee, "G1002").nationality = "فرنسا"
     db_session.commit()
 
     grid = svc.build_month(db_session, 2026, 7)
     assert grid.blocking == []  # the seal cannot be broken by later drift
     row = next(r for r in grid.rows if r.employee_id == "G1001")
-    assert (row.designation_en, row.rank_order) == ("Security Guard", 15)
+    assert (row.designation_en, row.rank_order, row.designation_id) == ("Security Guard", 15, None)
     assert next(r for r in grid.rows if r.employee_id == "G1002").nationality_en == "U.A.E"
 
 
 def test_a_gap_sealed_into_the_month_is_still_reported(db_session, guards):
     """The seal's preflight is the frozen row, not an empty list."""
-    db_session.get(Employee, "G1001").designation_id = None
+    _add_assignment(db_session, "G1001", None, date(2026, 7, 1))
     db_session.get(Employee, "G1002").nationality = "فرنسا"
     db_session.commit()
     svc.close_month(db_session, 2026, 7)
@@ -919,7 +987,7 @@ def test_a_closed_month_still_reports_live_warnings(db_session, guards):
     assert svc.build_month(db_session, 2026, 7).warnings == []
 
     db_session.get(Employee, "G1001").doj = None  # no_doj, after the seal
-    db_session.get(Employee, "G1001").designation_id = None  # would-be no_designation
+    _add_assignment(db_session, "G1001", None, date(2026, 8, 1))  # not effective in July
     db_session.commit()
 
     grid = svc.build_month(db_session, 2026, 7)

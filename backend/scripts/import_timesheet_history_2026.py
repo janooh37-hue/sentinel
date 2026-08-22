@@ -203,10 +203,9 @@ def load_db_state(db: Session) -> tuple[dict[str, dict[str, object]], list[dict[
             "status": row.status,
             "doj": row.doj,
             "end_date": row.end_date,
-            "designation_id": row.designation_id,
         }
         for row in db.execute(
-            text("SELECT id, name_en, status, doj, end_date, designation_id FROM employees")
+            text("SELECT id, name_en, status, doj, end_date FROM employees")
         ).all()
     }
     leaves = [
@@ -253,18 +252,19 @@ def covered_days(leaves: list[dict[str, object]], employee_id: str, code: str) -
     return covered
 
 
-def read_designations() -> dict[str, str]:
-    """``{employee_id: designation_en}``, newest workbook wins.
+def read_designations() -> dict[str, dict[date, str]]:
+    """``{employee_id: {effective_from: designation_en}}`` from every workbook.
 
-    Walked newest-first so a promotion recorded in a later month beats an older
-    sheet, and the drivers workbook is read last because its two rows appear in
-    no other file.
+    Each month is an effective-dated change, not a replacement for earlier
+    history. Empty designation cells are retained as explicit unassignments.
+    The drivers workbook is read last because its rows are not present in the
+    monthly main sheets.
     """
 
-    found: dict[str, str] = {}
-    sources = [MONTH_FILES[month] for month in sorted(MONTH_FILES, reverse=True)]
-    sources.append(DRIVERS_FILE)
-    for rel in sources:
+    found: dict[str, dict[date, str]] = defaultdict(dict)
+    sources = [(date(2026, month, 1), MONTH_FILES[month]) for month in sorted(MONTH_FILES)]
+    sources.append((date(2026, 7, 1), DRIVERS_FILE))
+    for effective_from, rel in sources:
         path = SHARE / rel
         if not path.exists():
             raise SystemExit(f"missing workbook: {path}")
@@ -279,14 +279,11 @@ def read_designations() -> dict[str, str]:
                     break
                 employee_id = canonical_employee_id(str(raw_id).strip())
                 raw_name = row[DESIGNATION_COL - 1]
-                if employee_id in found or raw_name is None:
-                    continue
-                name = str(raw_name).strip()
-                if name:
-                    found[employee_id] = name
+                name = "" if raw_name is None else str(raw_name).strip()
+                found[employee_id][effective_from] = name
         finally:
             workbook.close()
-    return found
+    return dict(found)
 
 
 def employee_tables(db: Session) -> list[str]:
@@ -340,11 +337,10 @@ class Plan:
     duplicate: tuple[str, str, str | None] | None
     #: table → rows on the dropped employee that must be re-pointed first.
     duplicate_refs: dict[str, int]
-    #: (employee_id, designation_id, name_en) rows to set.
-    designations: list[tuple[str, int, str]]
-    #: employee_id → sheet designation with no catalog match.
-    unmatched_designations: dict[str, str]
-
+    #: (employee_id, effective_from, designation_id, name_en) rows to upsert.
+    designations: list[tuple[str, date, int | None, str]]
+    #: (employee_id, effective_from) → sheet designation with no catalog match.
+    unmatched_designations: dict[tuple[str, date], str]
 
 def build_plan(series: dict[str, dict[date, str]], db: Session) -> Plan:
     employees, leaves = load_db_state(db)
@@ -435,19 +431,23 @@ def build_plan(series: dict[str, dict[date, str]], db: Session) -> Plan:
         str(row.name_en).strip().casefold(): int(row.id)
         for row in db.execute(text("SELECT id, name_en FROM timesheet_designations")).all()
     }
-    designations: list[tuple[str, int, str]] = []
-    unmatched: dict[str, str] = {}
-    for employee_id, name in read_designations().items():
+    designations: list[tuple[str, date, int | None, str]] = []
+    unmatched: dict[tuple[str, date], str] = {}
+    for employee_id, monthly in read_designations().items():
         record = employees.get(employee_id)
         if record is None:
             continue
-        designation_id = catalog.get(name.casefold())
-        if designation_id is None:
-            unmatched[employee_id] = name
-            continue
-        if record.get("designation_id") != designation_id:
-            designations.append((employee_id, designation_id, name))
-    designations.sort()
+        for effective_from, name in sorted(monthly.items()):
+            key = (employee_id, effective_from)
+            if not name:
+                designations.append((employee_id, effective_from, None, ""))
+                continue
+            designation_id = catalog.get(name.casefold())
+            if designation_id is None:
+                unmatched[key] = name
+                continue
+            designations.append((employee_id, effective_from, designation_id, name))
+    designations.sort(key=lambda row: (row[0], row[1]))
 
     return Plan(
         new_leaves,
@@ -509,8 +509,8 @@ def print_plan(plan: Plan) -> None:
     print(f"[import] 'Unknown' duplicates to delete: {len(plan.deletions)}")
     for leave_id, emp, start, end in plan.deletions:
         print(f"             id={leave_id} {emp:7} {start}..{end}")
-    print(f"[import] designation links to set: {len(plan.designations)}")
-    by_name = Counter(name for _e, _i, name in plan.designations)
+    print(f"[import] designation assignments to upsert: {len(plan.designations)}")
+    by_name = Counter(name or "(unassigned)" for _e, _effective, _i, name in plan.designations)
     for name, count in sorted(by_name.items(), key=lambda kv: (-kv[1], kv[0])):
         print(f"             {count:4} x {name}")
     if plan.unmatched_designations:
@@ -518,8 +518,8 @@ def print_plan(plan: Plan) -> None:
             f"[import] WARNING sheet designations with no catalog match: "
             f"{len(plan.unmatched_designations)}"
         )
-        for employee_id, name in sorted(plan.unmatched_designations.items()):
-            print(f"             {employee_id:7} {name!r}")
+        for (employee_id, effective_from), name in sorted(plan.unmatched_designations.items()):
+            print(f"             {employee_id:7} {effective_from} {name!r}")
     print(f"[import] employee end_date fixes: {len(plan.end_date_fixes)}")
     for employee_id, new, old in plan.end_date_fixes:
         print(f"             {employee_id:7} end_date {old} -> {new}")
@@ -635,10 +635,21 @@ def apply_plan(db: Session, plan: Plan) -> None:
             )
         db.execute(text("DELETE FROM employees WHERE id = :i"), {"i": drop})
 
-    for employee_id, designation_id, _name in plan.designations:
+    for employee_id, effective_from, designation_id, _name in plan.designations:
         db.execute(
-            text("UPDATE employees SET designation_id = :d, updated_at = :now WHERE id = :i"),
-            {"d": designation_id, "now": now, "i": employee_id},
+            text(
+                "INSERT INTO timesheet_roster_assignments "
+                "(employee_id, designation_id, effective_from, assigned_at) "
+                "VALUES (:e, :d, :effective, :now) "
+                "ON CONFLICT(employee_id, effective_from) DO UPDATE SET "
+                "designation_id = excluded.designation_id, assigned_at = excluded.assigned_at"
+            ),
+            {
+                "e": employee_id,
+                "d": designation_id,
+                "effective": effective_from.isoformat(),
+                "now": now,
+            },
         )
 
     db.commit()

@@ -54,6 +54,7 @@ from app.db.models import (
     TimesheetDesignation,
     TimesheetOverride,
     TimesheetPeriod,
+    TimesheetRosterAssignment,
     TimesheetSnapshotRow,
     TimesheetStartAck,
     TimesheetStatFiller,
@@ -108,7 +109,7 @@ class GridRow:
     left_day: int | None  # end_date falls inside this month -> `-` tail
     start_confirmed: bool  # operator acknowledged the NG head
     notes: dict[int, str]  # day -> absence note, for the cell tooltip
-
+    designation_id: int | None = None
 
 @dataclass(frozen=True, slots=True)
 class Issue:
@@ -213,13 +214,6 @@ def _covers_day(employee: Employee, day: date) -> bool:
     return in_roster(doj=employee.doj, end_date=employee.end_date, month_start=day, month_end=day)
 
 
-def _designation_of(
-    designations: Mapping[int, TimesheetDesignation], employee: Employee
-) -> TimesheetDesignation | None:
-    if employee.designation_id is None:
-        return None
-    return designations.get(employee.designation_id)
-
 
 def _lists_on(designation: TimesheetDesignation | None, sheet: str) -> bool:
     """Whether a roster member is printed on ``sheet``.
@@ -270,6 +264,41 @@ def _live_leaves(leaves: Iterable[Leave]) -> list[Leave]:
 
 def _designations_by_id(db: Session) -> dict[int, TimesheetDesignation]:
     return {row.id: row for row in db.execute(select(TimesheetDesignation)).scalars()}
+
+
+def _roster_assignments_on(
+    db: Session, month_start: date
+) -> dict[str, TimesheetRosterAssignment]:
+    latest = (
+        select(
+            TimesheetRosterAssignment.employee_id,
+            func.max(TimesheetRosterAssignment.effective_from).label("effective_from"),
+        )
+        .where(TimesheetRosterAssignment.effective_from <= month_start)
+        .group_by(TimesheetRosterAssignment.employee_id)
+        .subquery()
+    )
+    rows = db.execute(
+        select(TimesheetRosterAssignment).join(
+            latest,
+            and_(
+                TimesheetRosterAssignment.employee_id == latest.c.employee_id,
+                TimesheetRosterAssignment.effective_from == latest.c.effective_from,
+            ),
+        )
+    ).scalars()
+    return {row.employee_id: row for row in rows}
+
+
+def _designation_for(
+    employee_id: str,
+    assignments: Mapping[str, TimesheetRosterAssignment],
+    designations: Mapping[int, TimesheetDesignation],
+) -> TimesheetDesignation | None:
+    assignment = assignments.get(employee_id)
+    if assignment is None or assignment.designation_id is None:
+        return None
+    return designations.get(assignment.designation_id)
 
 
 def _period(db: Session, year: int, month: int) -> TimesheetPeriod | None:
@@ -470,6 +499,7 @@ def _warning_issues(
     members: Sequence[tuple[Employee, TimesheetDesignation | None]],
     *,
     leaves_by_employee: Mapping[str, list[Leave]],
+    assignments: Mapping[str, TimesheetRosterAssignment],
     designations: Mapping[int, TimesheetDesignation],
     month_start: date,
     sheet: str,
@@ -522,7 +552,7 @@ def _warning_issues(
         )
         for employee in departed
         if employee.end_date is not None
-        and _lists_on(_designation_of(designations, employee), sheet)
+        and _lists_on(_designation_for(employee.id, assignments, designations), sheet)
     )
     return issues
 
@@ -561,6 +591,7 @@ def _removed(
     year: int,
     month: int,
     *,
+    assignments: Mapping[str, TimesheetRosterAssignment],
     designations: Mapping[int, TimesheetDesignation],
     sheet: str,
 ) -> list[Removed]:
@@ -576,7 +607,7 @@ def _removed(
     for employee in candidates:
         if employee.end_date is None:
             continue
-        if not _routes_to(_designation_of(designations, employee), sheet):
+        if not _routes_to(_designation_for(employee.id, assignments, designations), sheet):
             continue
         out.append(
             Removed(
@@ -602,6 +633,7 @@ def _members(
     *,
     month_start: date,
     month_end: date,
+    assignments: Mapping[str, TimesheetRosterAssignment],
     designations: Mapping[int, TimesheetDesignation],
     sheet: str,
 ) -> list[tuple[Employee, TimesheetDesignation | None]]:
@@ -615,7 +647,10 @@ def _members(
     members = [
         (employee, designation)
         for employee, designation in (
-            (employee, _designation_of(designations, employee))
+            (
+                employee,
+                _designation_for(employee.id, assignments, designations),
+            )
             for employee in _roster(db, month_start, month_end)
         )
         if _lists_on(designation, sheet)
@@ -671,6 +706,7 @@ def _live_rows(
                 left_day=_edge_day(employee.end_date, year, month),
                 start_confirmed=employee.id in acks,
                 notes=_notes(employee_absences),
+                designation_id=designation.id if designation is not None else None,
             )
         )
 
@@ -740,6 +776,7 @@ def _sealed_rows(
                 ),
                 start_confirmed=frozen.employee_id in acks,
                 notes=_notes(employee_absences),
+                designation_id=None,
             )
         )
     return rows
@@ -761,6 +798,7 @@ def build_month(db: Session, year: int, month: int, *, sheet: str = "main") -> M
 
     days_in_month, month_start, month_end = _month_bounds(year, month)
     designations = _designations_by_id(db)
+    assignments = _roster_assignments_on(db, month_start)
     period = _period(db, year, month)
     post_count = DEFAULT_POST_COUNT if period is None else period.post_count
 
@@ -771,6 +809,7 @@ def build_month(db: Session, year: int, month: int, *, sheet: str = "main") -> M
         db,
         month_start=month_start,
         month_end=month_end,
+        assignments=assignments,
         designations=designations,
         sheet=sheet,
     )
@@ -800,6 +839,7 @@ def build_month(db: Session, year: int, month: int, *, sheet: str = "main") -> M
         db,
         members,
         leaves_by_employee=leaves_by_employee,
+        assignments=assignments,
         designations=designations,
         month_start=month_start,
         sheet=sheet,
@@ -814,7 +854,14 @@ def build_month(db: Session, year: int, month: int, *, sheet: str = "main") -> M
         rows=rows,
         blocking=blocking,
         warnings=warnings,
-        removed=_removed(db, year, month, designations=designations, sheet=sheet),
+        removed=_removed(
+            db,
+            year,
+            month,
+            assignments=assignments,
+            designations=designations,
+            sheet=sheet,
+        ),
         closed_at=closed_at,
         closed_by=closed_by,
     )
@@ -826,32 +873,33 @@ def build_month(db: Session, year: int, month: int, *, sheet: str = "main") -> M
 
 
 def seed_designations(db: Session) -> None:
-    """Upsert the printable designations by ``name_en``. Additive, never destructive.
+    """Insert missing built-in designations by stable key, without overwrites.
 
     Called at startup and from the test fixtures, because the suite builds schema
     with ``metadata.create_all`` and never runs the migration that first inserted
-    these rows. ``rank_order`` and ``active`` belong to the operator once the
-    catalog exists — :func:`reorder_designations` is exactly the feature that
-    moves them — so a re-seed only fills in a missing row and repairs the printed
-    labels. A restored row takes its seed rank when that rank is free and the next
-    one after the last otherwise, because the rank is uniquely constrained.
+    these rows. ``rank_order`` and all printable fields belong to the operator
+    once the catalog exists, so a re-seed only fills in a missing row. A restored
+    row takes its seed rank when that rank is free and the next one after the last
+    otherwise, because the rank is uniquely constrained.
     """
 
-    existing = {row.name_en: row for row in db.execute(select(TimesheetDesignation)).scalars()}
-    taken = {row.rank_order for row in existing.values()}
-    for rank, name_en, name_ar, sheet in DESIGNATION_SEED:
-        row = existing.get(name_en)
-        if row is None:
-            rank_order = rank if rank not in taken else max(taken, default=0) + 1
-            taken.add(rank_order)
-            db.add(
-                TimesheetDesignation(
-                    name_en=name_en, name_ar=name_ar, rank_order=rank_order, sheet=sheet
-                )
-            )
+    rows = list(db.execute(select(TimesheetDesignation)).scalars())
+    existing = {row.system_key: row for row in rows if row.system_key is not None}
+    taken = {row.rank_order for row in rows}
+    for system_key, rank, name_en, name_ar, sheet in DESIGNATION_SEED:
+        if system_key in existing:
             continue
-        row.name_ar = name_ar
-        row.sheet = sheet
+        rank_order = rank if rank not in taken else max(taken, default=0) + 1
+        taken.add(rank_order)
+        db.add(
+            TimesheetDesignation(
+                system_key=system_key,
+                name_en=name_en,
+                name_ar=name_ar,
+                rank_order=rank_order,
+                sheet=sheet,
+            )
+        )
     db.commit()
 
 
