@@ -3750,7 +3750,16 @@
       "staged_two": "{{count}} moves staged",
       "staged_few": "{{count}} moves staged",
       "staged_many": "{{count}} moves staged",
-      "staged_other": "{{count}} moves staged"
+      "staged_other": "{{count}} moves staged",
+      "cross": {
+        "label": "From the other workbook",
+        "employee": "Employee to move",
+        "target": "Designation",
+        "choose": "Choose…",
+        "stage": "Stage move",
+        "loading": "Reading the other workbook…",
+        "empty": "The other workbook has nobody left to move here."
+      }
     },
     "issues": {
       "no_designation": "No designation",

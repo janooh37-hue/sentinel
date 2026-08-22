@@ -161,6 +161,18 @@ const BLOCKED_MONTH: TimesheetGridResponse = {
   ],
 }
 
+/**
+ * The other deliverable, as the server sends it: one driver, under the one
+ * designation that workbook has. Nobody printed here is printed on `MONTH`,
+ * which is exactly why a move between the two needs a way to name a man who is
+ * not on the sheet in front of you (design §"Draft and save", last paragraph).
+ */
+const DRIVERS_MONTH: TimesheetGridResponse = {
+  ...MONTH,
+  sheet: 'drivers',
+  rows: [row('G9001', 1, DRIVER)],
+}
+
 const getTimesheet = vi.mocked(api.getTimesheet)
 const listDesignations = vi.mocked(api.listDesignations)
 const setTimesheetRoster = vi.mocked(api.setTimesheetRoster)
@@ -234,6 +246,32 @@ function dragTo(source: HTMLElement, target: HTMLElement): void {
 async function enterRosterMode(): Promise<void> {
   await userEvent.click(await screen.findByRole('button', { name: 'Edit roster' }))
 }
+
+/** Answers each sheet with its own workbook, as the real endpoint does. */
+function bothWorkbooks(main: TimesheetGridResponse = MONTH): void {
+  getTimesheet.mockImplementation(async (asked: { sheet?: string }) =>
+    asked.sheet === 'drivers' ? DRIVERS_MONTH : main,
+  )
+}
+
+/** How many times ONE workbook was read — the sibling read is a call too. */
+const loadsOf = (sheet: string): number =>
+  getTimesheet.mock.calls.filter(([asked]) => (asked as { sheet?: string }).sheet === sheet).length
+
+async function selectDriversSheet(): Promise<void> {
+  const switcher = screen.getByRole('group', { name: 'Roster' })
+  await userEvent.click(within(switcher).getByRole('button', { name: 'Drivers' }))
+  await screen.findByText('GUARD G9001')
+}
+
+/** The two selects and the button that bring a man in from the other workbook. */
+const crossEmployee = (): HTMLSelectElement =>
+  screen.getByLabelText('Employee to move') as HTMLSelectElement
+const crossTarget = (): HTMLSelectElement =>
+  screen.getByLabelText('Designation') as HTMLSelectElement
+const crossStage = (): HTMLElement => screen.getByRole('button', { name: 'Stage move' })
+const optionsOf = (select: HTMLSelectElement): string[] =>
+  Array.from(select.options).map((option) => option.textContent ?? '')
 
 beforeEach(() => {
   vi.clearAllMocks()
@@ -493,9 +531,11 @@ describe('saving the draft', () => {
     expect(alert).toHaveTextContent(/no longer takes new assignments/i)
     expect(alert).not.toHaveTextContent('Roster assignments require active designations.')
     // The catalog on screen is what went stale, so both it and the month are
-    // refetched — while the draft and the mode stay put.
+    // refetched — while the draft and the mode stay put. Counted for the sheet
+    // on screen: edit mode also reads the other workbook once, so a total would
+    // no longer say which month was reloaded.
     await waitFor(() => expect(listDesignations).toHaveBeenCalledTimes(2))
-    await waitFor(() => expect(getTimesheet).toHaveBeenCalledTimes(2))
+    await waitFor(() => expect(loadsOf('main')).toBe(2))
     expect(printed()).toEqual(['G6001', 'G7160', 'G7014'])
     expect(screen.getByRole('button', { name: 'Save roster' })).toBeEnabled()
   })
@@ -518,7 +558,7 @@ describe('saving the draft', () => {
     // The sentence PROMISES a reload, so the reload has to happen: a man the
     // batch could not find is a row the sheet is still printing, and leaving
     // it there means the operator retries against the same stale month.
-    await waitFor(() => expect(getTimesheet).toHaveBeenCalledTimes(2))
+    await waitFor(() => expect(loadsOf('main')).toBe(2))
     await waitFor(() => expect(listDesignations).toHaveBeenCalledTimes(2))
     expect(printed()).toEqual(['G6001', 'G7160', 'G7014'])
     expect(screen.getByRole('button', { name: 'Save roster' })).toBeEnabled()
@@ -601,6 +641,212 @@ describe('the other deliverable', () => {
   })
 })
 
+/**
+ * Moving a man between the two deliverables (design §"Draft and save": "Only
+ * designations belonging to the displayed workbook sheet are drop targets.
+ * Moving an employee to the Drivers workbook is done while the Drivers sheet is
+ * selected").
+ *
+ * That sentence assumes a path the drag bands cannot offer: a guard is not
+ * printed on the drivers workbook, so there is nothing there to grab. This is
+ * the path — name him, name the designation, stage it — and the sheet's own
+ * drag bands and grip picker are untouched by it.
+ */
+describe('moving a man in from the other workbook', () => {
+  it('reads the other workbook only while the roster is being edited', async () => {
+    bothWorkbooks()
+    renderPage()
+    await screen.findByText('GUARD G7160')
+
+    // Not staging anything: the page pays for the sheet on screen and nothing
+    // else, however long it is left open.
+    await waitFor(() => expect(loadsOf('main')).toBe(1))
+    expect(loadsOf('drivers')).toBe(0)
+
+    await enterRosterMode()
+    await waitFor(() => expect(loadsOf('drivers')).toBe(1))
+
+    await userEvent.click(screen.getByRole('button', { name: 'Cancel' }))
+    await screen.findByRole('button', { name: 'Edit roster' })
+    expect(loadsOf('drivers')).toBe(1)
+  })
+
+  it('names both choices, and offers only the other workbook and this sheet', async () => {
+    bothWorkbooks()
+    renderPage()
+    await screen.findByText('GUARD G7160')
+    await selectDriversSheet()
+    await enterRosterMode()
+
+    // The men come from the OTHER workbook, and G9001 is not among them: he is
+    // already printed here, so offering him would stage a move to where he is.
+    await waitFor(() =>
+      expect(optionsOf(crossEmployee())).toEqual([
+        'Choose…',
+        'G6001 — GUARD G6001',
+        'G7014 — GUARD G7014',
+        'G7160 — GUARD G7160',
+      ]),
+    )
+    // The targets are the sheet on screen's own active designations — the same
+    // set the drop bands and the grip picker offer, and no wider.
+    expect(optionsOf(crossTarget())).toEqual(['Choose…', 'Driver'])
+  })
+
+  it('stages the move onto this workbook without asking the server', async () => {
+    bothWorkbooks()
+    renderPage()
+    await screen.findByText('GUARD G7160')
+    await selectDriversSheet()
+    await enterRosterMode()
+    await waitFor(() => expect(optionsOf(crossEmployee())).toHaveLength(4))
+
+    expect(printed()).toEqual(['G9001'])
+    await userEvent.selectOptions(crossEmployee(), 'G7160')
+    await userEvent.selectOptions(crossTarget(), String(DRIVER.id))
+    await userEvent.click(crossStage())
+
+    // He prints on the drivers workbook now, ahead of G9001 because the tie
+    // inside a designation is the number in the G-number — and the server was
+    // not asked. One move staged, not two.
+    await waitFor(() => expect(printed()).toEqual(['G7160', 'G9001']))
+    expect(screen.getByText('1 move staged')).toBeInTheDocument()
+    expect(setTimesheetRoster).not.toHaveBeenCalled()
+    // He is on this sheet now: the list he came from no longer holds him, and
+    // the sheet's own grip does.
+    expect(optionsOf(crossEmployee())).toEqual([
+      'Choose…',
+      'G6001 — GUARD G6001',
+      'G7014 — GUARD G7014',
+    ])
+    expect(grip('G7160')).toBeInTheDocument()
+  })
+
+  it('sends the man and his new designation as one batch', async () => {
+    bothWorkbooks()
+    renderPage()
+    await screen.findByText('GUARD G7160')
+    await selectDriversSheet()
+    await enterRosterMode()
+    await waitFor(() => expect(optionsOf(crossEmployee())).toHaveLength(4))
+    await userEvent.selectOptions(crossEmployee(), 'G7160')
+    await userEvent.selectOptions(crossTarget(), String(DRIVER.id))
+    await userEvent.click(crossStage())
+    await waitFor(() => expect(printed()).toEqual(['G7160', 'G9001']))
+
+    await userEvent.click(screen.getByRole('button', { name: 'Save roster' }))
+
+    const asked = getTimesheet.mock.calls[0][0] as { year: number; month: number }
+    await waitFor(() =>
+      expect(setTimesheetRoster).toHaveBeenCalledWith({
+        year: asked.year,
+        month: asked.month,
+        assignments: [{ employee_id: 'G7160', designation_id: DRIVER.id }],
+      }),
+    )
+    expect(setTimesheetRoster).toHaveBeenCalledTimes(1)
+    await waitFor(() =>
+      expect(screen.queryByRole('button', { name: 'Save roster' })).not.toBeInTheDocument(),
+    )
+  })
+
+  it('restores this workbook on Cancel, without a request', async () => {
+    bothWorkbooks()
+    renderPage()
+    await screen.findByText('GUARD G7160')
+    await selectDriversSheet()
+    await enterRosterMode()
+    await waitFor(() => expect(optionsOf(crossEmployee())).toHaveLength(4))
+    await userEvent.selectOptions(crossEmployee(), 'G7160')
+    await userEvent.selectOptions(crossTarget(), String(DRIVER.id))
+    await userEvent.click(crossStage())
+    await waitFor(() => expect(printed()).toEqual(['G7160', 'G9001']))
+
+    await userEvent.click(screen.getByRole('button', { name: 'Cancel' }))
+
+    expect(printed()).toEqual(['G9001'])
+    expect(setTimesheetRoster).not.toHaveBeenCalled()
+    expect(await screen.findByRole('button', { name: 'Edit roster' })).toBeInTheDocument()
+  })
+
+  it('says the other workbook is still coming, and stages a same-sheet move meanwhile', async () => {
+    let land: (grid: TimesheetGridResponse) => void = () => {}
+    getTimesheet.mockImplementation(async (asked: { sheet?: string }) => {
+      if (asked.sheet !== 'drivers') return MONTH
+      return new Promise<TimesheetGridResponse>((resolve) => {
+        land = resolve
+      })
+    })
+    renderPage()
+    await screen.findByText('GUARD G7160')
+    await enterRosterMode()
+
+    // Plainly said, and it blocks nothing: the sheet in front of the operator
+    // is already loaded, so its own drag bands keep working.
+    expect(await screen.findByText('Reading the other workbook…')).toBeInTheDocument()
+    dragTo(grip('G7160'), band(DUTY.id))
+    await waitFor(() => expect(printed()).toEqual(['G6001', 'G7160', 'G7014']))
+
+    await act(async () => {
+      land(DRIVERS_MONTH)
+    })
+
+    // Arrived: the driver is the man this workbook can take, and the targets
+    // are the main sheet's three active designations.
+    await waitFor(() =>
+      expect(optionsOf(crossEmployee())).toEqual(['Choose…', 'G9001 — GUARD G9001']),
+    )
+    expect(optionsOf(crossTarget())).toEqual([
+      'Choose…',
+      'Duty In charge',
+      'Messengers',
+      'Security Guard',
+    ])
+  })
+
+  it('says plainly when the other workbook has nobody left to move', async () => {
+    getTimesheet.mockImplementation(async (asked: { sheet?: string }) =>
+      asked.sheet === 'drivers' ? { ...DRIVERS_MONTH, rows: [] } : MONTH,
+    )
+    renderPage()
+    await screen.findByText('GUARD G7160')
+    await enterRosterMode()
+
+    expect(
+      await screen.findByText('The other workbook has nobody left to move here.'),
+    ).toBeInTheDocument()
+    expect(screen.queryByLabelText('Employee to move')).not.toBeInTheDocument()
+    // The sheet on screen is still editable: an empty sibling costs this one
+    // control and nothing else.
+    dragTo(grip('G7160'), band(DUTY.id))
+    await waitFor(() => expect(printed()).toEqual(['G6001', 'G7160', 'G7014']))
+  })
+
+  it('never offers or prints a man the sheet on screen already holds', async () => {
+    // The window after a saved batch: both workbooks are invalidated, and the
+    // one that has not answered yet still names the man the other now prints.
+    getTimesheet.mockImplementation(async (asked: { sheet?: string }) =>
+      asked.sheet === 'drivers'
+        ? DRIVERS_MONTH
+        : { ...MONTH, rows: [...MONTH.rows, row('G9001', 4, GUARD)] },
+    )
+    renderPage()
+    await screen.findByText('GUARD G7160')
+    await selectDriversSheet()
+    await enterRosterMode()
+
+    await waitFor(() =>
+      expect(optionsOf(crossEmployee())).toEqual([
+        'Choose…',
+        'G6001 — GUARD G6001',
+        'G7014 — GUARD G7014',
+        'G7160 — GUARD G7160',
+      ]),
+    )
+    expect(printed()).toEqual(['G9001'])
+  })
+})
+
 describe('reading the sheet in Arabic', () => {
   it('names the rename control from the designation Arabic prints', async () => {
     await i18n.changeLanguage('ar')
@@ -620,6 +866,37 @@ describe('reading the sheet in Arabic', () => {
       expect(
         screen.queryByRole('button', { name: `تغيير اسم ${GUARD.name_en}` }),
       ).not.toBeInTheDocument()
+    } finally {
+      await i18n.changeLanguage('en')
+    }
+  })
+
+  it('reads the cross-workbook picker in Arabic and keeps the G-numbers LTR', async () => {
+    bothWorkbooks()
+    await i18n.changeLanguage('ar')
+    try {
+      renderPage()
+      await screen.findByText('GUARD G7160')
+      await userEvent.click(
+        await screen.findByRole('button', { name: i18n.t('timesheet.rosterEdit.enter') }),
+      )
+
+      const employee = await screen.findByLabelText(
+        i18n.t('timesheet.rosterEdit.cross.employee'),
+      )
+      expect(
+        screen.getByLabelText(i18n.t('timesheet.rosterEdit.cross.target')),
+      ).toBeInTheDocument()
+      expect(
+        screen.getByRole('button', { name: i18n.t('timesheet.rosterEdit.cross.stage') }),
+      ).toBeInTheDocument()
+      // The option is a G-number and an English name — data, not copy — so it
+      // declares its own language and direction instead of inheriting the
+      // Arabic paragraph's and reordering the id.
+      const option = (employee as HTMLSelectElement).options[1]
+      expect(option.textContent).toBe('G9001 — GUARD G9001')
+      expect(option).toHaveAttribute('dir', 'ltr')
+      expect(option).toHaveAttribute('lang', 'en')
     } finally {
       await i18n.changeLanguage('en')
     }

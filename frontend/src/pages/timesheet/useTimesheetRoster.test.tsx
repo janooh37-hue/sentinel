@@ -7,12 +7,14 @@ vi.mock('sonner', () => ({ toast: { error: vi.fn(), success: vi.fn() } }))
 import { toast } from 'sonner'
 
 import { api, ApiError } from '@/lib/api'
+import type { TimesheetGridResponse } from '@/lib/api'
 import {
   TIMESHEET_DESIGNATIONS_KEY,
   timesheetMonthKey,
   useCreateTimesheetDesignation,
   useSetTimesheetRoster,
   useTimesheetDesignations,
+  useTimesheetGrid,
   useUpdateTimesheetDesignation,
 } from './useTimesheet'
 
@@ -32,6 +34,20 @@ const designation = {
   system_key: null,
 }
 
+const MONTH: TimesheetGridResponse = {
+  year: 2026,
+  month: 8,
+  days_in_month: 31,
+  sheet: 'drivers',
+  post_count: 249,
+  rows: [],
+  blocking: [],
+  warnings: [],
+  removed: [],
+  closed_at: null,
+  closed_by: null,
+}
+
 beforeEach(() => {
   vi.restoreAllMocks()
   vi.mocked(toast.error).mockReset()
@@ -39,6 +55,48 @@ beforeEach(() => {
   vi.spyOn(api, 'createTimesheetDesignation')
   vi.spyOn(api, 'updateTimesheetDesignation')
   vi.spyOn(api, 'setTimesheetRoster')
+  vi.spyOn(api, 'getTimesheet')
+})
+
+/**
+ * The sibling workbook the roster editor reads while a cross-sheet move is
+ * being staged is the SAME month query pointed at the other sheet, so the read
+ * is gated rather than duplicated: a page that is not staging anything must not
+ * pay for a second workbook (design §"Draft and save").
+ */
+describe('useTimesheetGrid gating', () => {
+  it('asks for nothing while it is disabled, and asks once it is enabled', async () => {
+    vi.mocked(api.getTimesheet).mockResolvedValue(MONTH)
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    const params = { year: 2026, month: 8, sheet: 'drivers' as const }
+    const { result, rerender } = renderHook(
+      ({ on }: { on: boolean }) => useTimesheetGrid(params, on),
+      { wrapper: wrapperFor(queryClient), initialProps: { on: false } },
+    )
+
+    // Disabled is not "loading forever with a request in flight": nothing was
+    // asked for, and the caller still gets the stable empties it renders from.
+    expect(api.getTimesheet).not.toHaveBeenCalled()
+    expect(result.current.rows).toEqual([])
+    expect(queryClient.getQueryData(timesheetMonthKey(params))).toBeUndefined()
+
+    rerender({ on: true })
+
+    await waitFor(() => expect(result.current.grid).toEqual(MONTH))
+    expect(api.getTimesheet).toHaveBeenCalledTimes(1)
+    expect(api.getTimesheet).toHaveBeenCalledWith(params)
+  })
+
+  it('reads the month by default, so every existing caller is unchanged', async () => {
+    vi.mocked(api.getTimesheet).mockResolvedValue(MONTH)
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    const { result } = renderHook(
+      () => useTimesheetGrid({ year: 2026, month: 8, sheet: 'main' }),
+      { wrapper: wrapperFor(queryClient) },
+    )
+
+    await waitFor(() => expect(result.current.grid).toEqual(MONTH))
+  })
 })
 
 describe('timesheet roster and designation hooks', () => {

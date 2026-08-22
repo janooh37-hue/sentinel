@@ -180,11 +180,19 @@ const cellKeyOf = (p: TimesheetParams): readonly unknown[] => [
  * even on a sealed month, so an issue may name an employee who has no row here
  * at all (a departure, or someone hired after the seal). Anything rendered from
  * it is keyed by employee and stands on its own.
+ *
+ * `enabled` is what lets ONE page read BOTH workbooks without paying for both.
+ * The roster editor needs the sibling sheet while it is staging a move across
+ * the two deliverables — and only then — so the second read is this same hook,
+ * pointed at the other sheet and switched off the rest of the time. Off means
+ * nothing is asked for: the caller still gets the stable empties below, so a
+ * disabled read renders exactly like a month with no rows.
  */
-export function useTimesheetGrid(params: TimesheetParams) {
+export function useTimesheetGrid(params: TimesheetParams, enabled = true) {
   const query = useQuery({
     queryKey: keyOf(params),
     queryFn: () => api.getTimesheet(params),
+    enabled,
   })
   const grid = query.data
   const rows = grid?.rows ?? EMPTY_ROWS

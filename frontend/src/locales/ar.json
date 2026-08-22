@@ -4040,7 +4040,16 @@
       "staged_two": "نقلتان مُجهّزتان",
       "staged_few": "{{count}} نقلات مُجهّزة",
       "staged_many": "{{count}} نقلة مُجهّزة",
-      "staged_other": "{{count}} نقلة مُجهّزة"
+      "staged_other": "{{count}} نقلة مُجهّزة",
+      "cross": {
+        "label": "من الملف الآخر",
+        "employee": "الموظف المنقول",
+        "target": "المسمى الوظيفي",
+        "choose": "اختر…",
+        "stage": "تجهيز النقلة",
+        "loading": "جارٍ قراءة الملف الآخر…",
+        "empty": "لا أحد في الملف الآخر يمكن نقله إلى هنا."
+      }
     },
     "issues": {
       "no_designation": "لا مسمى وظيفي",

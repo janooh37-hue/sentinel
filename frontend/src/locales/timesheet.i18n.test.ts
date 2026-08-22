@@ -216,6 +216,17 @@ const KEYS = [
   'timesheet.rosterEdit.nameEn',
   'timesheet.rosterEdit.nameAr',
   'timesheet.rosterEdit.sheetField',
+  // Bringing a man in from the other workbook — the path the design's own
+  // "moving an employee to the Drivers workbook is done while the Drivers
+  // sheet is selected" needs, because he is not printed there to be dragged.
+  // Nested one level deeper so the flat `rosterEdit` strings stay readable.
+  'timesheet.rosterEdit.cross.label',
+  'timesheet.rosterEdit.cross.employee',
+  'timesheet.rosterEdit.cross.target',
+  'timesheet.rosterEdit.cross.choose',
+  'timesheet.rosterEdit.cross.stage',
+  'timesheet.rosterEdit.cross.loading',
+  'timesheet.rosterEdit.cross.empty',
   // All six CLDR forms: the staged count is rendered under `ar`, exactly as
   // `corrections` is, so an untranslated dual or few form is a visible defect.
   'timesheet.rosterEdit.staged_zero',

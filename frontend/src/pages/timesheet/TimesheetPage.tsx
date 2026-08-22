@@ -38,6 +38,7 @@ import {
   apiErrorMessage,
   type TimesheetDesignationRead,
   type TimesheetGridResponse,
+  type TimesheetRow,
   type TimesheetSheet,
   type TimesheetVariant,
 } from '@/lib/api'
@@ -115,13 +116,14 @@ const PENDING_MONTH: TimesheetGridResponse = {
 }
 
 /**
- * Stable empties, so "no draft" and "no catalog" keep one identity: both feed
- * `useMemo` dependency lists that the grid's row memo hangs off, and a fresh
- * `new Map()` per render would rebuild the printed sheet on every keystroke in
- * the search field.
+ * Stable empties, so "no draft", "no catalog" and "no sibling workbook" keep
+ * one identity each: they all feed `useMemo` dependency lists that the grid's
+ * row memo hangs off, and a fresh `new Map()` per render would rebuild the
+ * printed sheet on every keystroke in the search field.
  */
 const NO_DRAFT: RosterDraft = new Map()
 const NO_DESIGNATIONS: readonly TimesheetDesignationRead[] = []
+const NO_ROWS: readonly TimesheetRow[] = []
 
 /**
  * Below this the side glance starts on its rail. The day columns are already
@@ -196,6 +198,19 @@ export function TimesheetPage(): React.JSX.Element {
   const [cue, setCue] = useState<{ id: string; tick: number; jumped: boolean } | null>(null)
 
   const grid = useTimesheetGrid(params)
+  /**
+   * The OTHER workbook, read only while a move is being staged.
+   *
+   * The design has the operator select the Drivers sheet to move a man to the
+   * Drivers workbook — and he is not printed there, so there is nobody to drag.
+   * Naming him therefore needs the sibling month, and nothing else on this page
+   * does: outside roster edit mode the read is switched off and never issued.
+   */
+  const siblingParams = useMemo(() => {
+    const sheet: TimesheetSheet = params.sheet === 'main' ? 'drivers' : 'main'
+    return { ...params, sheet }
+  }, [params])
+  const sibling = useTimesheetGrid(siblingParams, roster.editing)
   const setCell = useSetCell(params)
   const period = usePatchPeriod(params)
   const closeMonth = useCloseMonth(params)
@@ -245,15 +260,15 @@ export function TimesheetPage(): React.JSX.Element {
   )
 
   /**
-   * The valid drop targets: active designations of the workbook on screen, in
+   * The valid targets: active designations of the workbook on screen, in
    * printed rank order (design §"Draft and save" — "Only designations
    * belonging to the displayed workbook sheet are drop targets").
    *
-   * So a move between the two workbooks is NOT reachable from this editor: the
-   * men on the main sheet can only be dropped on main designations, and the
-   * drivers sheet lists only the men already on a drivers one. That is the
-   * parity this filter enforces; whether the product needs a way across is a
-   * question for the design, not something to be invented here.
+   * This one list is every target the mode offers — the drop bands, the grip
+   * picker, and the cross-workbook picker in the band — which is what keeps the
+   * design's own next sentence true: moving a man to the Drivers workbook is
+   * done while the Drivers sheet is selected, because a Drivers designation is
+   * a target only then.
    */
   const designations = useMemo(() => {
     const all = catalog.data ?? NO_DESIGNATIONS
@@ -270,11 +285,78 @@ export function TimesheetPage(): React.JSX.Element {
    */
   const canRoster = canEdit && !grid.closed && designations.length > 0
 
+  const rowsById = useMemo(() => {
+    const index = new Map<string, (typeof rows)[number]>()
+    for (const row of rows) index.set(row.employee_id, row)
+    return index
+  }, [rows])
+
+  /**
+   * Who the sheet is printing — the SERVER's answer for the sheet on screen,
+   * never the staged one. It is what makes a jump from a finding honourable:
+   * `warnings` is recomputed live even on a sealed month, so an issue can name
+   * somebody with no row in the same payload.
+   */
+  const rosterEmployeeIds = useMemo(() => new Set(rowsById.keys()), [rowsById])
+
+  /** The other workbook, and only while there is a reason to have read it. */
+  const siblingRows = roster.editing ? sibling.rows : NO_ROWS
+
+  /**
+   * What the server already holds, across BOTH workbooks.
+   *
+   * `onAssignRoster` compares an assignment against this to decide whether it
+   * changed anything, and a man staged in from the other workbook has a real
+   * designation over there — reading it as "none" would make a re-pick of the
+   * band he is already staged under look like a fresh change. Rows from the
+   * sheet on screen win: while a saved batch settles both queries can name the
+   * same man, and the one the operator is reading is the one that counts.
+   */
+  const baselineById = useMemo(() => {
+    if (siblingRows.length === 0) return rowsById
+    const index = new Map<string, TimesheetRow>(
+      siblingRows.map((row) => [row.employee_id, row]),
+    )
+    for (const [id, row] of rowsById) index.set(id, row)
+    return index
+  }, [rowsById, siblingRows])
+
+  /**
+   * Who the other workbook still has to offer: everybody on it who is not
+   * already printed here and not already staged to come across. Staging one
+   * takes him out of this list and puts him on the sheet, where the grip and
+   * the drop bands take over — so he is never named in two places at once.
+   */
+  const crossCandidates = useMemo(
+    () =>
+      siblingRows.filter(
+        (row) => !rowsById.has(row.employee_id) && !roster.draft.has(row.employee_id),
+      ),
+    [roster.draft, rowsById, siblingRows],
+  )
+
+  /**
+   * The staged arrivals: rows the other workbook owns that the draft has moved
+   * onto this one. Only the STAGED ones — every other man over there belongs to
+   * the sheet the operator is not looking at, and `applyRosterDraft` passes a
+   * row it has no draft entry for straight through onto the wrong workbook.
+   */
+  const crossRows = useMemo(
+    () =>
+      roster.draft.size === 0
+        ? NO_ROWS
+        : siblingRows.filter(
+            (row) => roster.draft.has(row.employee_id) && !rowsById.has(row.employee_id),
+          ),
+    [roster.draft, rowsById, siblingRows],
+  )
+
   /**
    * What the sheet prints: the server's rows until something is staged, and
-   * the staged order after that. Identity is preserved while the draft is
-   * empty, because this array is the grid's `rows` prop and 275 memoised rows
-   * hang off it.
+   * the staged order after that — with the staged arrivals from the other
+   * workbook among them. Identity is preserved while the draft is empty,
+   * because this array is the grid's `rows` prop and 275 memoised rows hang
+   * off it.
    *
    * The statistics variant is deliberately excluded. It groups by the two
    * blocks rather than by designation, so a staged order there files a man
@@ -287,22 +369,14 @@ export function TimesheetPage(): React.JSX.Element {
     () =>
       roster.draft.size === 0 || ui.variant === 'statistics'
         ? rows
-        : applyRosterDraft(rows, catalog.data ?? NO_DESIGNATIONS, params.sheet, roster.draft),
-    [catalog.data, params.sheet, roster.draft, rows, ui.variant],
+        : applyRosterDraft(
+            crossRows.length === 0 ? rows : [...rows, ...crossRows],
+            catalog.data ?? NO_DESIGNATIONS,
+            params.sheet,
+            roster.draft,
+          ),
+    [catalog.data, crossRows, params.sheet, roster.draft, rows, ui.variant],
   )
-
-  const rowsById = useMemo(() => {
-    const index = new Map<string, (typeof rows)[number]>()
-    for (const row of rows) index.set(row.employee_id, row)
-    return index
-  }, [rows])
-
-  /**
-   * Who the sheet is printing. It is what makes a jump from a finding
-   * honourable: `warnings` is recomputed live even on a sealed month, so an
-   * issue can name somebody with no row in the same payload.
-   */
-  const rosterEmployeeIds = useMemo(() => new Set(rowsById.keys()), [rowsById])
 
   /**
    * Leaving the month drops the staged draft with the corrections log: a draft
@@ -623,11 +697,12 @@ export function TimesheetPage(): React.JSX.Element {
    * Stage one move — or unstage it. The draft holds only what CHANGED: a man
    * dropped back on the designation the server already has him on leaves the
    * draft, so Save never names him and the atomic batch stays the size of the
-   * actual edit.
+   * actual edit. "Already has him on" is read from both workbooks, because this
+   * is also the callback the cross-workbook picker stages through.
    */
   const onAssignRoster = useCallback(
     (employeeId: string, designationId: number) => {
-      const original = rowsById.get(employeeId)?.designation_id ?? null
+      const original = baselineById.get(employeeId)?.designation_id ?? null
       setRoster((prev) => {
         const draft = new Map(prev.draft)
         if (designationId === original) draft.delete(employeeId)
@@ -635,7 +710,7 @@ export function TimesheetPage(): React.JSX.Element {
         return { ...prev, draft }
       })
     },
-    [rowsById],
+    [baselineById],
   )
 
   /** One batch, for the month on screen. Success closes; failure keeps both. */
@@ -1017,6 +1092,10 @@ export function TimesheetPage(): React.JSX.Element {
               staged={roster.draft.size}
               pending={rosterWrite.isPending}
               error={rosterError}
+              designations={designations}
+              crossRows={crossCandidates}
+              crossLoading={sibling.isPending}
+              onStage={onAssignRoster}
               onSave={onSaveRoster}
               onCancel={onCancelRoster}
             />
