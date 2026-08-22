@@ -1,5 +1,5 @@
 /**
- * The side glance — the 210px margin column beside the sheet (design §"Side
+ * The side glance — the 400px margin column beside the sheet (design §"Side
  * glance").
  *
  * It holds nothing. `TimesheetPage` owns the active view, the collapsed flag,
@@ -226,7 +226,7 @@ describe('TimesheetGlance', () => {
   /**
    * The bottom panel opens UPWARD over the sheet and would cover this column,
    * so the column stands down entirely: zero width in the page's grid, no
-   * content, and out of the accessibility tree — a 210px strip of controls
+   * content, and out of the accessibility tree — a 400px strip of controls
    * behind an open panel is a tab stop into something the operator cannot see.
    */
   it('stands down while a bottom panel is open', async () => {

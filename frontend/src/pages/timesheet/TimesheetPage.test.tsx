@@ -571,13 +571,13 @@ describe('TimesheetPage side glance', () => {
     getTimesheet.mockResolvedValue(CHECK_MONTH)
   })
 
-  it('seats the glance beside the sheet at 210px, on the codes view', async () => {
+  it('seats the glance beside the sheet at 400px, on the codes view', async () => {
     renderPage()
     await screen.findByText('MOHAMMED ASLAM')
 
     const body = screen.getByTestId('timesheet-body')
     const glance = screen.getByTestId('timesheet-glance')
-    expect(body.className).toContain('grid-cols-[minmax(0,1fr)_210px]')
+    expect(body.className).toContain('grid-cols-[minmax(0,1fr)_400px]')
     // Second column in the DOM and in the grid, which is what puts it at the
     // inline END in both directions without a mirrored rule.
     expect(body.lastElementChild).toBe(glance)
@@ -606,7 +606,7 @@ describe('TimesheetPage side glance', () => {
       // nothing re-collapses it behind them.
       await user.click(screen.getByTestId('glance-toggle'))
       expect(screen.getByTestId('timesheet-body').className).toContain(
-        'grid-cols-[minmax(0,1fr)_210px]',
+        'grid-cols-[minmax(0,1fr)_400px]',
       )
 
       await user.click(screen.getByRole('button', { name: /^checks/i }))
@@ -679,7 +679,7 @@ describe('TimesheetPage side glance', () => {
     await user.click(screen.getByRole('button', { name: /fix before download/i }))
     expect(screen.queryByRole('region', { name: /cells by code/i })).not.toBeInTheDocument()
     expect(screen.getByTestId('timesheet-body').className).toContain(
-      'grid-cols-[minmax(0,1fr)_210px]',
+      'grid-cols-[minmax(0,1fr)_400px]',
     )
     expect(screen.getByRole('button', { name: /^checks/i })).toHaveAttribute(
       'aria-pressed',
@@ -703,7 +703,7 @@ describe('TimesheetPage side glance', () => {
     expect(screen.queryByRole('region', { name: /cells by code/i })).not.toBeInTheDocument()
     expect(await screen.findByTestId('code-filter-bar')).toBeInTheDocument()
     expect(screen.getByTestId('timesheet-body').className).toContain(
-      'grid-cols-[minmax(0,1fr)_210px]',
+      'grid-cols-[minmax(0,1fr)_400px]',
     )
     const glance = screen.getByTestId('timesheet-glance')
     expect(within(glance).getByRole('button', { name: /^cells by code$/i })).toHaveAttribute(
@@ -847,7 +847,7 @@ describe('TimesheetPage side glance', () => {
       // Grid tracks follow the writing direction, so the second track IS the
       // inline end in Arabic — one declaration, mirrored by the engine.
       expect(body.lastElementChild).toBe(glance)
-      expect(body.className).toContain('grid-cols-[minmax(0,1fr)_210px]')
+      expect(body.className).toContain('grid-cols-[minmax(0,1fr)_400px]')
       const physical = [glance, ...Array.from(glance.querySelectorAll('*'))]
         .flatMap((node) => Array.from((node as HTMLElement).classList))
         .map((token) => token.slice(token.lastIndexOf(':') + 1))

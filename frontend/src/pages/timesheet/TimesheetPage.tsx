@@ -916,7 +916,7 @@ export function TimesheetPage(): React.JSX.Element {
     ? 'grid-cols-[minmax(0,1fr)_0px]'
     : glance.collapsed
       ? 'grid-cols-[minmax(0,1fr)_36px]'
-      : 'grid-cols-[minmax(0,1fr)_210px]'
+      : 'grid-cols-[minmax(0,1fr)_400px]'
 
   return (
     <div
@@ -1082,7 +1082,7 @@ export function TimesheetPage(): React.JSX.Element {
       </div>
 
       {/* The sheet body: the workbook card, and the margin column beside it.
-          The tracks are the design's own numbers — 210px open, the 36px rail,
+          The tracks are the design's own numbers — 400px open, the 36px rail,
           and nothing at all while a bottom panel covers the grid — and
           `minmax(0, 1fr)` on the first is what stops the sheet's fixed
           `inline-size` from blowing that track out. The row track is explicit

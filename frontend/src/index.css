@@ -264,7 +264,7 @@
      600px in the `--cell` clamp above. */
   --id-no: 38px;
   --id-id: 74px;
-  --id-name: 196px;
+  --id-name: 264px;
   --id-nat: 82px;
   --id-desig: 168px;
   --id-block: calc(var(--id-no) + var(--id-id) + var(--id-name) + var(--id-nat) + var(--id-desig));
