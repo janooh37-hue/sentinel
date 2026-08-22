@@ -26,7 +26,7 @@
  * all (a disabled control still answers Enter and Space — UI spec §14).
  */
 
-import { useCallback, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { CalendarClock } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
@@ -54,6 +54,8 @@ import { type Code, isCode, slugOf } from './codes'
 import { applyRosterDraft, type RosterDraft } from './rosterDraft'
 import {
   currentMonth,
+  isStaleDesignationError,
+  timesheetRosterErrorKey,
   useAcknowledgeStart,
   useCloseMonth,
   useEmployeeSheetDownload,
@@ -156,7 +158,9 @@ export function TimesheetPage(): React.JSX.Element {
   const monthFile = useTimesheetDownload()
   const employeeFile = useEmployeeSheetDownload()
   const catalog = useTimesheetDesignations()
-  const rosterWrite = useSetTimesheetRoster()
+  // Quiet: the editor keeps the refused draft on screen and prints the reason
+  // beside it, so the hook's own toast would be the same sentence twice.
+  const rosterWrite = useSetTimesheetRoster({ quiet: true })
   // The switcher's badge: the same count the Attendance tab carries on every
   // other page in the section, so the number never depends on the way in.
   const attendance = useAttendanceAttention()
@@ -171,9 +175,14 @@ export function TimesheetPage(): React.JSX.Element {
 
   /**
    * The valid drop targets: active designations of the workbook on screen, in
-   * printed rank order. Moving somebody to the drivers workbook is done with
-   * the drivers sheet selected, which is the whole reason this is filtered by
-   * `params.sheet` rather than offering the catalog entire.
+   * printed rank order (design §"Draft and save" — "Only designations
+   * belonging to the displayed workbook sheet are drop targets").
+   *
+   * So a move between the two workbooks is NOT reachable from this editor: the
+   * men on the main sheet can only be dropped on main designations, and the
+   * drivers sheet lists only the men already on a drivers one. That is the
+   * parity this filter enforces; whether the product needs a way across is a
+   * question for the design, not something to be invented here.
    */
   const designations = useMemo(() => {
     const all = catalog.data ?? NO_DESIGNATIONS
@@ -195,13 +204,20 @@ export function TimesheetPage(): React.JSX.Element {
    * the staged order after that. Identity is preserved while the draft is
    * empty, because this array is the grid's `rows` prop and 275 memoised rows
    * hang off it.
+   *
+   * The statistics variant is deliberately excluded. It groups by the two
+   * blocks rather than by designation, so a staged order there files a man
+   * under a block heading he is not in and SPLITS the block he is — the group
+   * runs are emitted on a change of the consecutive key, so one drafted row in
+   * the middle prints the same block twice. The draft is not discarded, only
+   * unprinted: switching back to attendance shows it again.
    */
   const printedRows = useMemo(
     () =>
-      roster.draft.size === 0
+      roster.draft.size === 0 || ui.variant === 'statistics'
         ? rows
         : applyRosterDraft(rows, catalog.data ?? NO_DESIGNATIONS, params.sheet, roster.draft),
-    [catalog.data, params.sheet, roster.draft, rows],
+    [catalog.data, params.sheet, roster.draft, rows, ui.variant],
   )
 
   const rowsById = useMemo(() => {
@@ -492,16 +508,44 @@ export function TimesheetPage(): React.JSX.Element {
       },
       {
         onSuccess: () => setRoster({ editing: false, draft: NO_DRAFT }),
-        onError: (err) => setRosterError(apiErrorMessage(err)),
+        onError: (err) => {
+          // A refusal this surface has words for is read in the interface's
+          // own language; anything else keeps the server's sentence, which at
+          // least says what happened.
+          const key = timesheetRosterErrorKey(err)
+          setRosterError(key === null ? apiErrorMessage(err) : t(key))
+          // A stale catalog means the bands themselves were wrong, so both the
+          // catalog and the month are reloaded — the draft and the mode stay,
+          // because the operator's intent is still valid (design §"Failure and
+          // empty states").
+          if (isStaleDesignationError(err)) {
+            void catalog.refetch()
+            void grid.refetch()
+          }
+        },
       },
     )
-  }, [params.month, params.year, roster.draft, rosterWrite])
+  }, [catalog, grid, params.month, params.year, roster.draft, rosterWrite, t])
 
   /** The rollback: the query result was never touched, so this is all it takes. */
   const onCancelRoster = useCallback(() => {
     setRoster({ editing: false, draft: NO_DRAFT })
     setRosterError(null)
   }, [])
+
+  /**
+   * The mode cannot outlive its own preconditions. A refetch can seal the month
+   * under an open draft — somebody else pressed Close, or the first download
+   * did — and staging further moves against a sealed month only collects
+   * refusals. The same holds if the catalog empties. So the mode ends and the
+   * draft goes with it, which is what leaves the sheet printing the order the
+   * seal froze.
+   */
+  useEffect(() => {
+    if (!roster.editing || canRoster) return
+    setRoster({ editing: false, draft: NO_DRAFT })
+    setRosterError(null)
+  }, [canRoster, roster.editing])
 
   /**
    * The band's rename affordance, built here because the dialog reaches

@@ -26,6 +26,7 @@ vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn(), warning: v
 
 import { toast } from 'sonner'
 import type { TimesheetDesignationRead, TimesheetRow } from '@/lib/api'
+import i18n from '@/lib/i18n'
 
 import { TimesheetGrid, TimesheetMasthead } from './TimesheetGrid'
 import { ID_COLUMNS } from './columns'
@@ -984,6 +985,10 @@ describe('TimesheetGrid roster edit', () => {
     expect(band(MESSENGER.id)).toHaveTextContent('Messengers')
     expect(band(MESSENGER.id)).toHaveTextContent('0 rows')
     expect(band(GUARD.id)).toHaveTextContent('2 rows')
+    // The count is INTERFACE copy sitting inside a band whose name is the
+    // printed English designation, so it declares its own language instead of
+    // inheriting the deliverable's (UI spec §10).
+    expect(within(band(GUARD.id)).getByText('2 rows')).toHaveAttribute('lang', i18n.language)
     // The men with no designation at all keep their heading and stay last —
     // and it is not a drop target: unassigning is not a move.
     const headings = screen.getAllByRole('columnheader', { name: /rows|designation/i })
@@ -1002,6 +1007,35 @@ describe('TimesheetGrid roster edit', () => {
     expect(moved.querySelector('.ts-c-no')?.textContent).toBe('2')
     expect(band(DUTY.id)).toHaveTextContent('2 rows')
     expect(band(GUARD.id)).toHaveTextContent('1 row')
+  })
+
+  it('does not spend the FLIP rectangle on a drop that changes nothing', async () => {
+    const animate = stubAnimate()
+    let reads = 0
+    const rect = vi.spyOn(Element.prototype, 'getBoundingClientRect').mockImplementation(() => {
+      reads += 1
+      return new DOMRect(0, reads === 1 ? 400 : 100, 100, 24)
+    })
+    try {
+      render(<Harness />)
+      // A guard dropped back on the band he is already under: nothing to
+      // stage, so nothing may be measured either. Measuring here spends the
+      // one 400px read and leaves a stale rectangle behind, and the REAL move
+      // below then animates from where the row already is — i.e. not at all.
+      dragTo(grip('G7160'), band(GUARD.id))
+      expect(animate).not.toHaveBeenCalled()
+
+      dragTo(grip('G7160'), band(DUTY.id))
+      await waitFor(() => expect(printed()).toEqual(['G6001', 'G7160', 'G7014', 'G712']))
+      expect(animate).toHaveBeenCalledTimes(1)
+      expect(animate.mock.calls[0][0]).toEqual([
+        { transform: 'translateY(300px)' },
+        { transform: 'none' },
+      ])
+    } finally {
+      rect.mockRestore()
+      dropAnimate()
+    }
   })
 
   /** jsdom implements no Web Animations API at all: install one, then take it

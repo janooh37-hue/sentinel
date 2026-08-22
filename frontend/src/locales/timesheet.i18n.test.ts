@@ -188,6 +188,17 @@ const KEYS = [
   'timesheet.rosterEdit.grip',
   'timesheet.rosterEdit.targets',
   'timesheet.rosterEdit.cellsLocked',
+  // The refusals this surface has its own words for, keyed off the structured
+  // envelope's `code` (`timesheet_service`: DESIGNATION_NAME_REQUIRED,
+  // DESIGNATION_NAME_DUPLICATE, DESIGNATION_NOT_FOUND, DESIGNATION_INACTIVE,
+  // EMPLOYEE_NOT_FOUND). Without them an Arabic operator reads the backend's
+  // English sentence inside an otherwise Arabic dialog. `TIMESHEET_CLOSED`
+  // needs no key of its own — `timesheet.frozen` already says it.
+  'timesheet.rosterEdit.errNameRequired',
+  'timesheet.rosterEdit.errDuplicate',
+  'timesheet.rosterEdit.errMissing',
+  'timesheet.rosterEdit.errInactive',
+  'timesheet.rosterEdit.errEmployeeGone',
   'timesheet.rosterEdit.add',
   'timesheet.rosterEdit.addHint',
   'timesheet.rosterEdit.renameTitle',

@@ -281,7 +281,7 @@ export function useUpdateTimesheetDesignation(options: DesignationMutationOption
 
 type TimesheetRosterInput = { year: number; month: number } & TimesheetRosterBatch
 
-export function useSetTimesheetRoster() {
+export function useSetTimesheetRoster(options: DesignationMutationOptions = {}) {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: (input: TimesheetRosterInput) => api.setTimesheetRoster(input),
@@ -294,9 +294,62 @@ export function useSetTimesheetRoster() {
           queryKey: timesheetMonthKey({ year: input.year, month: input.month, sheet: 'drivers' }),
         }),
       ]),
-    onError: (err) => toast.error(apiErrorMessage(err)),
+    // Quiet like the catalog writes, and for the same reason: the roster editor
+    // keeps the refused draft on screen and prints the reason beside it, so a
+    // toast would say the same thing a second time — and say it for four
+    // seconds, next to a draft that stays until the operator deals with it.
+    onError: (err) => {
+      if (!options.quiet) toast.error(apiErrorMessage(err))
+    },
   })
 }
+
+/**
+ * The locale key for a refusal this surface has its own words for, or `null`
+ * for one it does not — the server's own sentence then stands, because an
+ * English line that says what happened beats a translated one that does not.
+ *
+ * Keyed off the envelope's `code` and read STRUCTURALLY rather than through
+ * `instanceof ApiError`: every timesheet suite mocks `@/lib/api` with a factory,
+ * and a class identity that only some of them provide is a guard that throws on
+ * exactly the error path it was added to explain.
+ *
+ * `TIMESHEET_CLOSED` needs no key of its own — `timesheet.frozen` is already
+ * the sentence the sheet uses for a sealed month. `ROSTER_EMPTY` and
+ * `ROSTER_DUPLICATE_EMPLOYEE` are unreachable from the editor (Save is disabled
+ * with nothing staged, and a draft is keyed by employee) so they are left to
+ * the fallback deliberately.
+ */
+const ROSTER_ERROR_KEY: Record<string, string> = {
+  DESIGNATION_NAME_REQUIRED: 'timesheet.rosterEdit.errNameRequired',
+  DESIGNATION_NAME_DUPLICATE: 'timesheet.rosterEdit.errDuplicate',
+  DESIGNATION_NOT_FOUND: 'timesheet.rosterEdit.errMissing',
+  DESIGNATION_INACTIVE: 'timesheet.rosterEdit.errInactive',
+  EMPLOYEE_NOT_FOUND: 'timesheet.rosterEdit.errEmployeeGone',
+  TIMESHEET_CLOSED: 'timesheet.frozen',
+}
+
+/** The refusals that mean the catalog on screen is out of date. */
+const STALE_DESIGNATION: Record<string, true> = {
+  DESIGNATION_NOT_FOUND: true,
+  DESIGNATION_INACTIVE: true,
+}
+
+function codeOf(err: unknown): string {
+  if (err === null || typeof err !== 'object' || !('code' in err)) return ''
+  return typeof err.code === 'string' ? err.code : ''
+}
+
+export const timesheetRosterErrorKey = (err: unknown): string | null =>
+  ROSTER_ERROR_KEY[codeOf(err)] ?? null
+
+/**
+ * A stale catalog is the one failure the design asks to answer with a refetch
+ * as well as a sentence: the ids the editor was offering no longer exist or no
+ * longer take assignments, so the bands themselves are wrong.
+ */
+export const isStaleDesignationError = (err: unknown): boolean =>
+  STALE_DESIGNATION[codeOf(err)] === true
 
 /** Notes serialise with STRING keys, so `day` is indexed as one. */
 function withNote(

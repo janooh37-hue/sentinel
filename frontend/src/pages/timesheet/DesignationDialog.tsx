@@ -44,6 +44,7 @@ import { apiErrorMessage } from '@/lib/api'
 import type { TimesheetDesignationRead, TimesheetSheet } from '@/lib/api'
 
 import {
+  timesheetRosterErrorKey,
   useCreateTimesheetDesignation,
   useUpdateTimesheetDesignation,
 } from './useTimesheet'
@@ -91,7 +92,15 @@ function DesignationForm({
     setRefused(null)
     const name_en = nameEn.trim()
     const name_ar = nameAr.trim()
-    const done = { onSuccess: onDone, onError: (err: unknown) => setRefused(apiErrorMessage(err)) }
+    // The routine refusals — a blank name, a duplicate, an id the catalog no
+    // longer holds — are answered from the CODE, so the sentence inside an
+    // Arabic modal is Arabic. Anything else keeps the server's own line, which
+    // at least says what happened.
+    const said = (err: unknown): string => {
+      const key = timesheetRosterErrorKey(err)
+      return key === null ? apiErrorMessage(err) : t(key)
+    }
+    const done = { onSuccess: onDone, onError: (err: unknown) => setRefused(said(err)) }
     if (designation) rename.mutate({ id: designation.id, input: { name_en, name_ar } }, done)
     else create.mutate({ name_en, name_ar, sheet: target }, done)
   }

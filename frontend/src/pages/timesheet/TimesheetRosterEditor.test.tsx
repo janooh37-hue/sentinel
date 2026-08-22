@@ -23,7 +23,7 @@
  * the page.
  */
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import { toast } from 'sonner'
@@ -42,6 +42,16 @@ vi.mock('@/lib/api', () => ({
     updateTimesheetDesignation: vi.fn(),
   },
   apiErrorMessage: (e: unknown) => (e instanceof Error ? e.message : String(e)),
+  // The structured envelope: a refusal this UI has its own words for is
+  // recognised by CODE, so the sentence an Arabic operator reads is never the
+  // backend's English one.
+  ApiError: class ApiError extends Error {
+    readonly code: string
+    constructor(_status: number, code: string, message: string) {
+      super(message)
+      this.code = code
+    }
+  },
 }))
 vi.mock('@/lib/useCapabilities', () => ({ useCapabilities: vi.fn() }))
 vi.mock('@/components/employees/useAttendanceAttention', () => ({
@@ -59,12 +69,13 @@ vi.mock('@/components/employees/useAttendanceAttention', () => ({
   }),
 }))
 
-import { api } from '@/lib/api'
+import { ApiError, api } from '@/lib/api'
 import type {
   TimesheetDesignationRead,
   TimesheetGridResponse,
   TimesheetRow,
 } from '@/lib/api'
+import i18n from '@/lib/i18n'
 import { useCapabilities } from '@/lib/useCapabilities'
 
 import { TimesheetPage } from './TimesheetPage'
@@ -132,6 +143,24 @@ const MONTH: TimesheetGridResponse = {
   closed_by: null,
 }
 
+/**
+ * The same month with a block-2 row, for the statistics variant: the two blocks
+ * are the only groups that sheet may have, so a staged order printed there
+ * would either duplicate a block heading or file a man under the wrong one.
+ */
+const BLOCKED_MONTH: TimesheetGridResponse = {
+  ...MONTH,
+  rows: [
+    ...MONTH.rows,
+    {
+      ...row('G7200', 4, GUARD),
+      stat_block: 2,
+      stat_filler: 'TR',
+      stat_codes: Array.from({ length: 31 }, () => 'TR'),
+    },
+  ],
+}
+
 const getTimesheet = vi.mocked(api.getTimesheet)
 const listDesignations = vi.mocked(api.listDesignations)
 const setTimesheetRoster = vi.mocked(api.setTimesheetRoster)
@@ -148,19 +177,19 @@ function grant(...caps: string[]): void {
 }
 
 function renderPage() {
-  return render(
-    <MemoryRouter>
-      <QueryClientProvider
-        client={
-          new QueryClient({
-            defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
-          })
-        }
-      >
-        <TimesheetPage />
-      </QueryClientProvider>
-    </MemoryRouter>,
-  )
+  const qc = new QueryClient({
+    defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+  })
+  return {
+    qc,
+    ...render(
+      <MemoryRouter>
+        <QueryClientProvider client={qc}>
+          <TimesheetPage />
+        </QueryClientProvider>
+      </MemoryRouter>,
+    ),
+  }
 }
 
 /** The printed order on screen, which is the whole thing a move changes. */
@@ -409,11 +438,14 @@ describe('saving the draft', () => {
 
     await userEvent.click(screen.getByRole('button', { name: 'Save roster' }))
 
-    // The server's own sentence, beside the draft it refused — once, and in
-    // one place, so a second attempt replaces it instead of stacking.
+    // A refusal with no code of its own falls back to whatever the server
+    // said, beside the draft it refused — ONCE, and in one place: the write is
+    // asked for its quiet variant, so the sentence is not also a toast the
+    // operator has to read twice and can only catch once.
     const alert = await screen.findByRole('alert')
     expect(alert).toHaveTextContent('Designation 105 is inactive.')
     expect(screen.getAllByRole('alert')).toHaveLength(1)
+    expect(toast.error).not.toHaveBeenCalled()
     // Nothing was rolled back: the staged order and the mode are both still on
     // screen, so the operator can retry or cancel.
     expect(printed()).toEqual(['G6001', 'G7160', 'G7014'])
@@ -422,6 +454,59 @@ describe('saving the draft', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Save roster' }))
     await waitFor(() => expect(setTimesheetRoster).toHaveBeenCalledTimes(2))
     expect(screen.getAllByRole('alert')).toHaveLength(1)
+  })
+
+  it('answers a stale designation in its own words and reloads what went stale', async () => {
+    setTimesheetRoster.mockRejectedValue(
+      new ApiError(422, 'DESIGNATION_INACTIVE', 'Roster assignments require active designations.'),
+    )
+    renderPage()
+    await screen.findByText('GUARD G7160')
+    await enterRosterMode()
+    dragTo(grip('G7160'), band(DUTY.id))
+    await waitFor(() => expect(printed()).toEqual(['G6001', 'G7160', 'G7014']))
+
+    await userEvent.click(screen.getByRole('button', { name: 'Save roster' }))
+
+    // A code this UI has words for is answered in the interface's language,
+    // not with the backend's English sentence — which is the whole reason the
+    // envelope carries a code.
+    const alert = await screen.findByRole('alert')
+    expect(alert).toHaveTextContent(/no longer takes new assignments/i)
+    expect(alert).not.toHaveTextContent('Roster assignments require active designations.')
+    // The catalog on screen is what went stale, so both it and the month are
+    // refetched — while the draft and the mode stay put.
+    await waitFor(() => expect(listDesignations).toHaveBeenCalledTimes(2))
+    await waitFor(() => expect(getTimesheet).toHaveBeenCalledTimes(2))
+    expect(printed()).toEqual(['G6001', 'G7160', 'G7014'])
+    expect(screen.getByRole('button', { name: 'Save roster' })).toBeEnabled()
+  })
+
+  it('leaves edit mode when a refetch finds the month sealed', async () => {
+    const { qc } = renderPage()
+    await screen.findByText('GUARD G7160')
+    await enterRosterMode()
+    dragTo(grip('G7160'), band(DUTY.id))
+    await waitFor(() => expect(printed()).toEqual(['G6001', 'G7160', 'G7014']))
+
+    getTimesheet.mockResolvedValue({
+      ...MONTH,
+      closed_at: '2026-09-01T06:00:00Z',
+      closed_by: 'M. Rahman',
+    })
+    await act(async () => {
+      await qc.invalidateQueries({ queryKey: ['timesheet'] })
+    })
+
+    // Somebody else sealed the month underneath the draft. Staging further
+    // moves against it would only collect refusals, so the mode ends and the
+    // sheet goes back to the order the seal froze — with no request of its own.
+    await waitFor(() =>
+      expect(screen.queryByRole('button', { name: 'Save roster' })).not.toBeInTheDocument(),
+    )
+    expect(printed()).toEqual(['G6001', 'G7014', 'G7160'])
+    expect(screen.queryByRole('button', { name: 'Edit roster' })).not.toBeInTheDocument()
+    expect(setTimesheetRoster).not.toHaveBeenCalled()
   })
 })
 
@@ -441,5 +526,60 @@ describe('cancelling the draft', () => {
     // The cells are correctable again the moment roster mode ends.
     await userEvent.click(cell('G7160', 3))
     expect(screen.getByRole('menu', { name: 'Codes' })).toBeInTheDocument()
+  })
+})
+
+describe('the other deliverable', () => {
+  it('prints the server order in the statistics variant while the draft waits', async () => {
+    getTimesheet.mockResolvedValue(BLOCKED_MONTH)
+    renderPage()
+    await screen.findByText('GUARD G7200')
+    await enterRosterMode()
+    dragTo(grip('G7160'), band(DUTY.id))
+    await waitFor(() => expect(printed()).toEqual(['G6001', 'G7160', 'G7014', 'G7200']))
+
+    const deliverable = screen.getByRole('group', { name: 'Deliverable' })
+    await userEvent.click(within(deliverable).getByRole('button', { name: 'Client statistics' }))
+
+    // The statistics sheet groups by BLOCK, not by designation. Printing the
+    // staged order there files a man under a block heading he is not in and
+    // splits the block he is, so this variant shows the server's own order —
+    // exactly two block headings, in the order the response had.
+    expect(printed()).toEqual(['G6001', 'G7014', 'G7160', 'G7200'])
+    expect(screen.getAllByText(/block 1/i)).toHaveLength(1)
+    expect(screen.getAllByText(/block 2/i)).toHaveLength(1)
+    expect(
+      screen.queryByRole('button', { name: /to another designation/i }),
+    ).not.toBeInTheDocument()
+
+    // Unprinted, not discarded: the attendance grid shows the draft again.
+    await userEvent.click(within(deliverable).getByRole('button', { name: 'Attendance' }))
+    expect(printed()).toEqual(['G6001', 'G7160', 'G7014', 'G7200'])
+    expect(screen.getByRole('button', { name: 'Save roster' })).toBeEnabled()
+  })
+})
+
+describe('reading the sheet in Arabic', () => {
+  it('names the rename control from the designation Arabic prints', async () => {
+    await i18n.changeLanguage('ar')
+    try {
+      renderPage()
+      await screen.findByText('GUARD G7160')
+      await userEvent.click(
+        await screen.findByRole('button', { name: i18n.t('timesheet.rosterEdit.enter') }),
+      )
+
+      // The sentence is Arabic, so the name inside it has to be the Arabic one:
+      // an Arabic label wrapped around an English designation is the exact
+      // mixed-language leak the locale parity test cannot see.
+      expect(
+        screen.getByRole('button', { name: `تغيير اسم ${GUARD.name_ar}` }),
+      ).toBeInTheDocument()
+      expect(
+        screen.queryByRole('button', { name: `تغيير اسم ${GUARD.name_en}` }),
+      ).not.toBeInTheDocument()
+    } finally {
+      await i18n.changeLanguage('en')
+    }
   })
 })

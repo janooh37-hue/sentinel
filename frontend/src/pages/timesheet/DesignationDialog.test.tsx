@@ -156,9 +156,13 @@ describe('renaming a designation', () => {
     )
   })
 
-  it("shows the server's own reason inside the dialog, once", async () => {
+  it('names a duplicate in the interface own words, once', async () => {
     update.mockRejectedValue(
-      new ApiError(409, 'DESIGNATION_NAME_TAKEN', 'Another designation already prints that name.'),
+      new ApiError(
+        422,
+        'DESIGNATION_NAME_DUPLICATE',
+        'Designation names must be unique, ignoring case.',
+      ),
     )
     const dialog = await openRename()
     const english = within(dialog).getByLabelText('English name')
@@ -167,8 +171,12 @@ describe('renaming a designation', () => {
     await userEvent.type(english, 'Driver')
     await userEvent.click(within(dialog).getByRole('button', { name: 'Save' }))
 
+    // The routine refusals are answered from the CODE, so an Arabic operator
+    // never reads the backend's English sentence inside an otherwise Arabic
+    // modal. That is the whole reason the envelope carries one.
     const alert = await within(dialog).findByRole('alert')
-    expect(alert).toHaveTextContent('Another designation already prints that name.')
+    expect(alert).toHaveTextContent(/already prints one of those names/i)
+    expect(alert).not.toHaveTextContent('Designation names must be unique, ignoring case.')
     // Inside the dialog and nowhere else: a toast behind a modal is a sentence
     // the operator cannot read, which is what the hooks' quiet mode is for.
     expect(toast.error).not.toHaveBeenCalled()
@@ -178,6 +186,18 @@ describe('renaming a designation', () => {
     await userEvent.click(within(dialog).getByRole('button', { name: 'Save' }))
     await waitFor(() => expect(update).toHaveBeenCalledTimes(2))
     expect(within(dialog).getAllByRole('alert')).toHaveLength(1)
+  })
+
+  it("falls back to the server's sentence for a refusal it has no words for", async () => {
+    update.mockRejectedValue(new ApiError(409, 'DESIGNATION_LOCKED', 'Locked by the night audit.'))
+    const dialog = await openRename()
+
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Save' }))
+
+    // Better an English sentence that says what happened than a translated one
+    // that says nothing: an unmapped code is a case this UI has not been
+    // taught, and hiding it would leave the operator with no reason at all.
+    expect(await within(dialog).findByRole('alert')).toHaveTextContent('Locked by the night audit.')
   })
 })
 

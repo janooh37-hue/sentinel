@@ -61,12 +61,19 @@ export function DesignationRenameControl({
   designation: TimesheetDesignationRead
   sheet: TimesheetSheet
 }): React.JSX.Element {
-  const { t } = useTranslation()
-  const label = t('timesheet.rosterEdit.rename', { name: designation.name_en })
+  const { t, i18n } = useTranslation()
+  // The sentence is the interface's, so the NAME inside it has to be the one
+  // that interface reads: an Arabic label wrapped around an English
+  // designation is a mixed-language leak no locale parity test can see.
+  const arabic = i18n.language.startsWith('ar')
+  const label = t('timesheet.rosterEdit.rename', {
+    name: arabic ? designation.name_ar : designation.name_en,
+  })
   return (
     <DesignationDialog sheet={sheet} designation={designation}>
       <button
         type="button"
+        lang={i18n.language}
         aria-label={label}
         title={label}
         className="ms-auto inline-grid h-4 w-4 shrink-0 place-items-center rounded text-muted-foreground hover:text-primary focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"

@@ -824,14 +824,21 @@ export function TimesheetGrid({
    * The rectangle has to be read HERE, before the draft changes: by the time
    * the layout effect below runs, the sheet has already been reprinted and the
    * row's old position is gone.
+   *
+   * A drop on the band the row is ALREADY under is not a move, and measuring it
+   * is worse than pointless: nothing re-renders, so the layout effect never
+   * runs to spend the rectangle, and the next real move then animates from a
+   * position the row left minutes ago — or, when the two happen to match, from
+   * nowhere at all.
    */
   const assign = useCallback(
     (employeeId: string, designationId: number) => {
+      if (byId.get(employeeId)?.designation_id === designationId) return
       const tr = rowNode(employeeId)
       flip.current = tr ? { employeeId, top: tr.getBoundingClientRect().top } : null
       rosterEdit?.onAssign(employeeId, designationId)
     },
-    [rosterEdit, rowNode],
+    [byId, rosterEdit, rowNode],
   )
 
   /**
@@ -1498,7 +1505,13 @@ export function TimesheetGrid({
                     <span className="flex items-center gap-2">
                       <span className="truncate">{line.label}</span>
                       {line.count !== undefined && (
-                        <span className="shrink-0 font-normal normal-case tracking-normal text-muted-foreground [unicode-bidi:isolate]">
+                        // Interface copy inside a band whose NAME is the printed
+                        // designation, so it declares its own language rather
+                        // than inheriting the deliverable's (UI spec §10).
+                        <span
+                          lang={i18n.language}
+                          className="shrink-0 font-normal normal-case tracking-normal text-muted-foreground [unicode-bidi:isolate]"
+                        >
                           {t('timesheet.rows', { count: line.count })}
                         </span>
                       )}
