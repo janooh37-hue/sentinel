@@ -48,6 +48,7 @@ import { CodeRibbon } from './CodeRibbon'
 import { TimesheetDock } from './TimesheetDock'
 import { TimesheetGrid, TimesheetMasthead, type FillCell, type RosterEdit } from './TimesheetGrid'
 import { TimesheetNotice } from './TimesheetNotice'
+import { TimesheetGlance, type GlanceTab } from './TimesheetGlance'
 import { DesignationRenameControl, TimesheetRosterEditor } from './TimesheetRosterEditor'
 import { MonthStepper, TimesheetToolbar, type TimesheetDensity } from './TimesheetToolbar'
 import { type Code, type CodeSlug, isCode, slugOf } from './codes'
@@ -76,7 +77,7 @@ export interface TimesheetUiState {
   brush: Code | null
   /** `employee_id` of the row the extract and the picker are pointed at. */
   selected: string | null
-  panel: 'checks' | 'posts' | 'codes' | 'employee' | 'release' | null
+  panel: 'posts' | 'codes' | 'employee' | 'release' | null
   /** The employee search, forgiving: `7141`, `g7141`, `rasel` all match. */
   query: string
   density: TimesheetDensity
@@ -122,6 +123,27 @@ const PENDING_MONTH: TimesheetGridResponse = {
 const NO_DRAFT: RosterDraft = new Map()
 const NO_DESIGNATIONS: readonly TimesheetDesignationRead[] = []
 
+/**
+ * Below this the side glance starts on its rail. The day columns are already
+ * at the 26px floor of `--cell`'s clamp under ~1406px, so the sheet scrolls
+ * sideways whatever this column does; `xl` is the project's own stop nearest
+ * that point, and it is the one the rest of the shell already switches on.
+ * Read ONCE, at mount: after that the operator's own answer stands.
+ */
+const NARROW = '(max-width: 1279px)'
+
+/**
+ * The short structural pulse a filter match or a row jump lands with. Keyframed
+ * rather than a class, because it has to fire again for the SAME row — a class
+ * toggle needs a reflow between two identical states, and a transition that
+ * ends on `outline: none` cannot be restarted at all.
+ */
+const PULSE: Keyframe[] = [
+  { outline: '2px solid var(--primary)' },
+  { outline: '2px solid transparent' },
+  { outline: '2px solid transparent' },
+]
+
 export function TimesheetPage(): React.JSX.Element {
   const { t, i18n } = useTranslation()
   const { has } = useCapabilities()
@@ -150,6 +172,28 @@ export function TimesheetPage(): React.JSX.Element {
   })
   /** The last refused batch's own sentence, printed beside the draft it kept. */
   const [rosterError, setRosterError] = useState<string | null>(null)
+  /**
+   * The side glance's own two facts (design §"State and performance"). It
+   * starts on the rail at narrow widths, and every change after that is the
+   * operator's: nothing re-collapses the column behind them, and neither a
+   * bottom panel nor a collapse can lose the active view, because the view is
+   * held here rather than in the column.
+   */
+  const [glance, setGlance] = useState<{ tab: GlanceTab; collapsed: boolean }>(() => ({
+    tab: 'codes',
+    collapsed: window.matchMedia(NARROW).matches,
+  }))
+  /**
+   * The row the sheet was last asked to show, and why.
+   *
+   * `tick` is what makes a REPEAT honourable: pressing `Show row` twice for the
+   * same man changes neither the selection nor the filter, so without a counter
+   * the second press is a no-op and the operator is left pressing a control
+   * that answers nothing. `jumped` keeps the pulse where it belongs — a jump
+   * arrives from somewhere else on the page and has to announce where it
+   * landed; clicking rows would otherwise flash the sheet all day.
+   */
+  const [cue, setCue] = useState<{ id: string; tick: number; jumped: boolean } | null>(null)
 
   const grid = useTimesheetGrid(params)
   const setCell = useSetCell(params)
@@ -252,6 +296,13 @@ export function TimesheetPage(): React.JSX.Element {
     for (const row of rows) index.set(row.employee_id, row)
     return index
   }, [rows])
+
+  /**
+   * Who the sheet is printing. It is what makes a jump from a finding
+   * honourable: `warnings` is recomputed live even on a sealed month, so an
+   * issue can name somebody with no row in the same payload.
+   */
+  const rosterEmployeeIds = useMemo(() => new Set(rowsById.keys()), [rowsById])
 
   /**
    * Leaving the month drops the staged draft with the corrections log: a draft
@@ -426,6 +477,9 @@ export function TimesheetPage(): React.JSX.Element {
    */
   const onSelectRow = useCallback((selected: string | null) => {
     setUi((prev) => ({ ...prev, selected }))
+    setCue((prev) =>
+      selected === null ? null : { id: selected, tick: (prev?.tick ?? 0) + 1, jumped: false },
+    )
   }, [])
 
   const onOpenPanel = useCallback((panel: TimesheetUiState['panel']) => {
@@ -440,6 +494,10 @@ export function TimesheetPage(): React.JSX.Element {
       if (roster.editing) return
       setFilter({ code, index: 0 })
       setUi((prev) => ({ ...prev, panel: null }))
+      // Wherever the code was pressed, the side comes back on its codes view:
+      // the bar above the sheet says what is filtered, and that list is where
+      // the next code is chosen (design §"Filtering", steps 1-2).
+      setGlance({ tab: 'codes', collapsed: false })
     },
     [roster.editing],
   )
@@ -461,6 +519,36 @@ export function TimesheetPage(): React.JSX.Element {
   }, [filterMatches.length])
 
   const onClearFilter = useCallback(() => setFilter(null), [])
+
+  /**
+   * A finding's row, from the side glance. It clears the filter first: the man
+   * a check names is not necessarily in the filtered set, and a jump that
+   * lands on a hidden row is a jump to nothing.
+   */
+  const onShowRow = useCallback((employeeId: string) => {
+    setFilter(null)
+    setUi((prev) => ({ ...prev, selected: employeeId }))
+    setCue((prev) => ({ id: employeeId, tick: (prev?.tick ?? 0) + 1, jumped: true }))
+  }, [])
+
+  const onGlanceTab = useCallback((tab: GlanceTab) => {
+    setGlance((prev) => ({ ...prev, tab }))
+  }, [])
+
+  const onGlanceCollapse = useCallback((collapsed: boolean) => {
+    setGlance((prev) => ({ ...prev, collapsed }))
+  }, [])
+
+  /**
+   * The notice line asks for the checks; this is where they are. Any bottom
+   * panel closes, because an open one covers the column the checks are printed
+   * in — and the column expands whatever state it was left in, because a chip
+   * that opens nothing visible is a chip that lied.
+   */
+  const onOpenChecks = useCallback(() => {
+    setUi((prev) => ({ ...prev, panel: null }))
+    setGlance({ tab: 'checks', collapsed: false })
+  }, [])
 
 
   /**
@@ -623,33 +711,50 @@ export function TimesheetPage(): React.JSX.Element {
     filterBarRef.current?.focus()
   }, [filterCode])
 
+  /**
+   * ONE scroll owner on the page, and one cue at a time. The grid deliberately
+   * has no selection effect of its own: two owners fight over the same
+   * `scrollIntoView` and the loser's `behavior` wins at random.
+   *
+   * Priority is freshness. A live filter is always the newest intent, because a
+   * jump CLEARS the filter before it selects. Below it the cue, but only while
+   * it still describes the selection — so a row picked somewhere else is never
+   * overruled by a jump the operator has already moved on from.
+   */
+  const scrollIntent = useMemo(() => {
+    if (currentFilterEmployeeId) {
+      return {
+        id: currentFilterEmployeeId,
+        key: `filter:${currentFilterEmployeeId}`,
+        mark: true,
+      }
+    }
+    if (cue && cue.id === ui.selected) {
+      return { id: cue.id, key: `cue:${cue.tick}`, mark: cue.jumped }
+    }
+    if (ui.selected) return { id: ui.selected, key: `selection:${ui.selected}`, mark: false }
+    return null
+  }, [cue, currentFilterEmployeeId, ui.selected])
+
   useEffect(() => {
-    const targetId = currentFilterEmployeeId ?? ui.selected
-    if (!targetId) {
+    if (!scrollIntent) {
       scrollTarget.current = null
       return
     }
-    const mode = currentFilterEmployeeId ? 'filter' : 'selection'
-    const key = `${mode}:${targetId}`
-    if (scrollTarget.current === key) return
+    if (scrollTarget.current === scrollIntent.key) return
     const row = scrollRef.current?.querySelector<HTMLElement>(
-      `tr[data-employee="${CSS.escape(targetId)}"]`,
+      `tr[data-employee="${CSS.escape(scrollIntent.id)}"]`,
     )
     if (!row) return
-    scrollTarget.current = key
+    scrollTarget.current = scrollIntent.key
     const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches
-    if (mode === 'filter') {
+    if (scrollIntent.mark) {
       row.scrollIntoView({ block: 'center', inline: 'nearest' })
-      if (!reduced && typeof row.animate === 'function') {
-        row.animate(
-          [
-            { outline: '2px solid var(--primary)' },
-            { outline: '2px solid transparent' },
-            { outline: '2px solid transparent' },
-          ],
-          { duration: 220 },
-        )
-      }
+      // The lasting mark is `data-selected` on the row itself; the pulse only
+      // draws the eye to it, so reduced motion drops the pulse and loses
+      // nothing permanent. jsdom implements no Web Animations API, which the
+      // same guard covers.
+      if (!reduced && typeof row.animate === 'function') row.animate(PULSE, { duration: 220 })
     } else {
       row.scrollIntoView({
         block: 'center',
@@ -657,7 +762,7 @@ export function TimesheetPage(): React.JSX.Element {
         behavior: reduced ? 'auto' : 'smooth',
       })
     }
-  }, [currentFilterEmployeeId, ui.selected])
+  }, [scrollIntent])
 
 
   /**
@@ -706,6 +811,19 @@ export function TimesheetPage(): React.JSX.Element {
       : canEdit
         ? t('timesheet.brushHint')
         : t('timesheet.readOnlyHint')
+
+  /**
+   * A bottom panel opens upward over the grid and would cover the margin
+   * column, so the column's track goes to nothing and its contents unmount
+   * (design §"Side glance"). The three tracks are written out rather than
+   * interpolated because Tailwind reads them out of this source.
+   */
+  const dockOpen = ui.panel !== null
+  const sideTrack = dockOpen
+    ? 'grid-cols-[minmax(0,1fr)_0px]'
+    : glance.collapsed
+      ? 'grid-cols-[minmax(0,1fr)_36px]'
+      : 'grid-cols-[minmax(0,1fr)_210px]'
 
   return (
     <div
@@ -866,11 +984,22 @@ export function TimesheetPage(): React.JSX.Element {
           joined={grid.joined.length}
           leaving={grid.leaving.length}
           removed={grid.removed.length}
-          onOpenChecks={() => setUi((prev) => ({ ...prev, panel: 'checks' }))}
+          onOpenChecks={onOpenChecks}
         />
       </div>
 
-      <div className="flex min-h-0 flex-1 flex-col px-4 md:px-6">
+      {/* The sheet body: the workbook card, and the margin column beside it.
+          The tracks are the design's own numbers — 210px open, the 36px rail,
+          and nothing at all while a bottom panel covers the grid — and
+          `minmax(0, 1fr)` on the first is what stops the sheet's fixed
+          `inline-size` from blowing that track out. The row track is explicit
+          for the same reason the flex ancestors carry `min-h-0`: one implicit
+          `auto` row would size to the whole table and take the page's only
+          scroller with it. */}
+      <div
+        data-testid="timesheet-body"
+        className={cn('grid min-h-0 flex-1 grid-rows-[minmax(0,1fr)] px-4 md:px-6', sideTrack)}
+      >
         <section className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-t-2xl border border-b-0 border-hairline bg-surface">
           {/* The quoted workbook header, INSIDE the card and above the scroll
               region (UI spec §16.1's shell diagram, and `.docmast` inside
@@ -1008,6 +1137,35 @@ export function TimesheetPage(): React.JSX.Element {
             )}
           </div>
         </section>
+
+        {/* The margin column, SECOND in the DOM and second in the grid, which
+            is what lands it at the inline end in both directions. Outside the
+            card on purpose: it annotates the workbook rather than belonging to
+            it, and it owns its own overflow so the sheet keeps the one
+            scroller. */}
+        <TimesheetGlance
+          index={codeIndex}
+          activeCode={filterCode}
+          blocking={grid.blocking}
+          warnings={grid.warnings}
+          joined={grid.joined}
+          leaving={grid.leaving}
+          removed={grid.removed}
+          rosterEmployeeIds={rosterEmployeeIds}
+          tab={glance.tab}
+          collapsed={glance.collapsed}
+          dockOpen={dockOpen}
+          filterDisabled={roster.editing}
+          year={params.year}
+          month={params.month}
+          closed={grid.closed}
+          canEdit={canEdit}
+          onTab={onGlanceTab}
+          onCollapse={onGlanceCollapse}
+          onFilterCode={onFilterCode}
+          onShowRow={onShowRow}
+          onAcknowledge={onAcknowledge}
+        />
       </div>
 
       {/* The dock: fixed furniture below the scroll region, so opening a panel
@@ -1017,16 +1175,13 @@ export function TimesheetPage(): React.JSX.Element {
       <TimesheetDock
         grid={grid.grid ?? PENDING_MONTH}
         canEdit={canEdit}
-        joined={grid.joined}
         index={codeIndex}
         filterDisabled={roster.editing}
-        leaving={grid.leaving}
         ui={ui}
         onOpenPanel={onOpenPanel}
         onFilterCode={onFilterCode}
         onSelect={onSelectRow}
         onQuery={onQuery}
-        onAcknowledge={onAcknowledge}
         onSetPostCount={onSetPostCount}
         onDownload={onDownload}
         onEmployeeDownload={onEmployeeDownload}

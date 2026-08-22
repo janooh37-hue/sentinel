@@ -7,7 +7,7 @@
  * same payload. Nothing here joins an issue to a row.
  */
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { render, screen } from '@testing-library/react'
+import { render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import { describe, expect, it, vi } from 'vitest'
@@ -56,8 +56,11 @@ const props = {
   year: 2026,
   closed: false,
   canEdit: true,
+  // Who has a row on the sheet on screen. A finding may name somebody who has
+  // none — the whole reason this arrives as a set rather than as a join.
+  rosterEmployeeIds: new Set(['G7099', 'G7176', 'G7141']),
   onAcknowledge: vi.fn(),
-  onSelect: vi.fn(),
+  onShowRow: vi.fn(),
 }
 
 describe('ChecksPanel', () => {
@@ -101,6 +104,9 @@ describe('ChecksPanel', () => {
     renderPanel(
       <ChecksPanel
         {...props}
+        // Nobody on this sheet either, so there is no row to jump to and the
+        // finding is informational — which is what the assertions below pin.
+        rosterEmployeeIds={new Set()}
         // Nobody in `joined` / `leaving` / `removed` and no row anywhere:
         // exactly the shape a live recompute produces after the seal.
         warnings={[
@@ -125,12 +131,61 @@ describe('ChecksPanel', () => {
     expect(screen.queryByRole('button', { name: /show row/i })).not.toBeInTheDocument()
   })
 
-  it('shows the row of somebody who has one', async () => {
-    const onSelect = vi.fn()
-    renderPanel(<ChecksPanel {...props} onSelect={onSelect} />)
-    const show = await screen.findAllByRole('button', { name: /show row/i })
-    await userEvent.click(show[0])
-    expect(onSelect).toHaveBeenCalledWith('G7176')
+  it('shows the row of a mid-month joiner', async () => {
+    const onShowRow = vi.fn()
+    renderPanel(<ChecksPanel {...props} onShowRow={onShowRow} />)
+    const line = await screen.findByTestId('check-joined-G7176')
+    await userEvent.click(within(line).getByRole('button', { name: /show row/i }))
+    expect(onShowRow).toHaveBeenCalledWith('G7176')
+  })
+
+  /**
+   * The two actions on one finding are separate CONTROLS, not one control with
+   * two meanings: the row jump moves the sheet, the record link leaves the
+   * page. Nested, either gesture would fire the other — a click on `Show row`
+   * inside a `<Link>` navigates away from the month it was meant to scroll.
+   */
+  it('jumps to the row of a finding whose man is on this sheet', async () => {
+    const onShowRow = vi.fn()
+    renderPanel(<ChecksPanel {...props} onShowRow={onShowRow} />)
+    const line = await screen.findByTestId('check-issue-G7099')
+
+    await userEvent.click(within(line).getByRole('button', { name: /G7099/ }))
+    expect(onShowRow).toHaveBeenCalledWith('G7099')
+    await userEvent.click(within(line).getByRole('button', { name: /show row/i }))
+    expect(onShowRow).toHaveBeenCalledTimes(2)
+
+    const profile = within(line).getByRole('link', { name: /open record/i })
+    expect(profile).toHaveAttribute('href', '/employees/G7099')
+    expect(profile.querySelector('button')).toBeNull()
+    expect(within(line).getByRole('button', { name: /show row/i }).closest('a')).toBeNull()
+  })
+
+  it('leaves a finding with no row on this sheet informational', async () => {
+    const onShowRow = vi.fn()
+    renderPanel(
+      <ChecksPanel
+        {...props}
+        blocking={[]}
+        warnings={[
+          {
+            employee_id: 'G6001',
+            kind: 'departed_but_active',
+            detail: 'OMAR SAEED is still Active.',
+          },
+        ]}
+        joined={[]}
+        leaving={[]}
+        onShowRow={onShowRow}
+      />,
+    )
+    const line = await screen.findByTestId('check-issue-G6001')
+    // No jump it cannot honour, and the route to the person still there.
+    expect(within(line).queryByRole('button')).not.toBeInTheDocument()
+    expect(within(line).getByRole('link', { name: /open record/i })).toHaveAttribute(
+      'href',
+      '/employees/G6001',
+    )
   })
 
   /**

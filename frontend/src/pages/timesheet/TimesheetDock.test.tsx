@@ -99,8 +99,6 @@ function dockProps({
   return {
     grid,
     canEdit,
-    joined: [],
-    leaving: [],
     index: buildTimesheetCodeIndex(rows, 'attendance', 31),
     ui: {
       variant: 'attendance',
@@ -113,7 +111,6 @@ function dockProps({
     onOpenPanel: vi.fn(),
     onSelect: vi.fn(),
     onQuery: vi.fn(),
-    onAcknowledge: vi.fn(),
     onSetPostCount: vi.fn(),
     onFilterCode: vi.fn(),
     onDownload: vi.fn(),
@@ -275,6 +272,10 @@ describe('TimesheetDock', () => {
 
     const codes = screen.getByRole('button', { name: /cells by code/i })
     expect(codes).toBeDisabled()
+    // Refused, and it LOOKS refused: a control that reads exactly like its
+    // enabled neighbours while answering nothing is the dead control amendment
+    // A3 forbids (UI spec §14).
+    expect(codes.className).toMatch(/disabled:opacity-\d/)
     codes.focus()
     expect(document.activeElement).not.toBe(codes)
     expect(screen.queryByRole('region', { name: /cells by code/i })).not.toBeInTheDocument()
@@ -314,14 +315,29 @@ describe('TimesheetDock', () => {
     expect(files.children).toHaveLength(2)
   })
 
-  it('does not print the sentinel month in release or checks', async () => {
+  it('does not print the sentinel month in release', async () => {
     const base = dockProps({ blocking: 0, year: 0, month: 1 })
-    const view = renderPanel(<TimesheetDock {...base} ui={{ ...base.ui, panel: 'release' }} />)
+    renderPanel(<TimesheetDock {...base} ui={{ ...base.ui, panel: 'release' }} />)
     expect(screen.queryByTestId('release-files')).not.toBeInTheDocument()
     expect(screen.queryByText(/January 0|يناير 0/)).not.toBeInTheDocument()
+  })
 
-    view.rerender(wrap(<TimesheetDock {...base} ui={{ ...base.ui, panel: 'checks' }} />))
-    expect(screen.queryByText(/January 0|يناير 0/)).not.toBeInTheDocument()
+  /**
+   * The checks left for the side glance (design §"Checks in the side glance"),
+   * so the dock has no checks surface at all — no trigger, no panel, and none
+   * of the roster-movement furniture that came with it. `TimesheetUiState.panel`
+   * no longer spells `'checks'`, which is why this case can only ask for the
+   * absence: the presence is a type error.
+   */
+  it('carries no checks surface at all', async () => {
+    const base = dockProps({ blocking: 2, rows: [ROW] })
+    renderPanel(<TimesheetDock {...base} />)
+    expect(await screen.findByTestId('dock-codes')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /^checks$/i })).not.toBeInTheDocument()
+    expect(screen.queryByText(/roster movement/i)).not.toBeInTheDocument()
+    expect(
+      screen.queryByRole('button', { name: /confirm starting point/i }),
+    ).not.toBeInTheDocument()
   })
 
   // Amendment A3: `timesheet.view` alone must still be a USABLE dock — the

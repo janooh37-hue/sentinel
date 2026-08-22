@@ -19,7 +19,7 @@ import { act, render, renderHook, screen, waitFor, within } from '@testing-libra
 import userEvent, { type UserEvent } from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { toast } from 'sonner'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }))
 vi.mock('@/lib/api', () => ({
@@ -59,6 +59,7 @@ vi.mock('@/components/employees/useAttendanceAttention', () => ({
 import { api } from '@/lib/api'
 import type { TimesheetGridResponse, TimesheetIssue, TimesheetRow } from '@/lib/api'
 import { useCapabilities } from '@/lib/useCapabilities'
+import i18n from '@/lib/i18n'
 
 import { TimesheetPage } from './TimesheetPage'
 import { useSetCell, useTimesheetGrid } from './useTimesheet'
@@ -123,6 +124,23 @@ const FILTER_MONTH: TimesheetGridResponse = {
   ...EMPTY_MONTH,
   rows: FILTER_ROWS,
   days_in_month: 31,
+}
+
+/**
+ * The same month with findings on it: one blocking check naming a man who HAS a
+ * row (so the glance can jump to it) and one warning naming a man who does not
+ * (`departed_but_active` is recomputed live and deliberately reports those).
+ */
+const CHECK_MONTH: TimesheetGridResponse = {
+  ...FILTER_MONTH,
+  blocking: [{ employee_id: 'G7091', kind: 'no_designation', detail: 'G7091 SURESH DAS' }],
+  warnings: [
+    {
+      employee_id: 'G6001',
+      kind: 'departed_but_active',
+      detail: 'OMAR SAEED finished on 2026-05-31 but is still Active.',
+    },
+  ],
 }
 const DESIGNATION = {
   id: 1,
@@ -320,10 +338,22 @@ describe('TimesheetPage shell', () => {
     renderPage()
     await screen.findByTestId('timesheet-shell')
 
+    // The side glance prints the same eight meanings as a filter list, so both
+    // assertions below are about the RIBBON and have to say so: an unscoped
+    // query would find the glance's own "Annual leave" row and pass, or throw
+    // on two matches, without ever looking at the legend.
+    const glance = screen.getByTestId('timesheet-glance')
+
     // The ribbon is the legend it looks like. Not a disabled button: a disabled
     // control still answers Enter and Space (UI spec §14).
-    expect(screen.getByText('Annual leave')).toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: /annual leave/i })).not.toBeInTheDocument()
+    expect(
+      screen.getAllByText('Annual leave').filter((node) => !glance.contains(node)),
+    ).toHaveLength(1)
+    expect(
+      screen.queryAllByRole('button', { name: /annual leave/i }).filter(
+        (node) => !glance.contains(node),
+      ),
+    ).toEqual([])
     // No <kbd> either: there is no shortcut to teach when there is no brush.
     expect(document.querySelectorAll('kbd')).toHaveLength(0)
 
@@ -480,6 +510,11 @@ describe('TimesheetPage code filtering', () => {
     expect(screen.queryByRole('region', { name: /cells by code/i })).not.toBeInTheDocument()
     expect(screen.queryByTestId('code-filter-bar')).not.toBeInTheDocument()
     expect(screen.getAllByTestId('timesheet-row')).toHaveLength(5)
+    // The side offers the same filter, so roster mode has to refuse it in both
+    // places: a live-looking code row calling a callback the page ignores is
+    // the dead control amendment A3 forbids.
+    const side = screen.getByTestId('timesheet-glance')
+    expect(within(side).getByRole('button', { name: /annual leave/i })).toBeDisabled()
 
     await user.click(screen.getByRole('button', { name: /^cancel$/i }))
     expect(screen.queryByTestId('code-filter-bar')).not.toBeInTheDocument()
@@ -501,8 +536,282 @@ describe('TimesheetPage code filtering', () => {
     codes.focus()
     expect(document.activeElement).not.toBe(codes)
   })
+})
 
+/**
+ * The side glance, in place (design §"Side glance"): the second column of the
+ * sheet body, the 36px rail, standing down for a bottom panel, and the two
+ * things it is the way into — the checks and the shared code filter.
+ */
+describe('TimesheetPage side glance', () => {
+  /**
+   * One `matchMedia` for the two media queries this page asks about — the
+   * narrow default and reduced motion. `setup.ts` answers `matches: false` to
+   * everything, so a case that needs either one has to say so here.
+   */
+  function media(matching: RegExp): () => void {
+    const original = window.matchMedia
+    window.matchMedia = ((query: string) =>
+      ({
+        matches: matching.test(query),
+        media: query,
+        onchange: null,
+        addListener: vi.fn(),
+        removeListener: vi.fn(),
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+        dispatchEvent: vi.fn(),
+      }) as unknown as MediaQueryList) as typeof window.matchMedia
+    return () => {
+      window.matchMedia = original
+    }
+  }
 
+  beforeEach(() => {
+    getTimesheet.mockResolvedValue(CHECK_MONTH)
+  })
+
+  it('seats the glance beside the sheet at 210px, on the codes view', async () => {
+    renderPage()
+    await screen.findByText('MOHAMMED ASLAM')
+
+    const body = screen.getByTestId('timesheet-body')
+    const glance = screen.getByTestId('timesheet-glance')
+    expect(body.className).toContain('grid-cols-[minmax(0,1fr)_210px]')
+    // Second column in the DOM and in the grid, which is what puts it at the
+    // inline END in both directions without a mirrored rule.
+    expect(body.lastElementChild).toBe(glance)
+    // Outside the sheet's own scroller: the column scrolls itself, and the one
+    // scroll region on the page stays the grid's.
+    expect(screen.getByTestId('timesheet-scroll')).not.toContainElement(glance)
+    expect(within(glance).getByTestId('code-badge-AL')).toHaveAttribute('data-code', 'AL')
+    expect(within(glance).getByRole('button', { name: /^codes$/i })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    )
+  })
+
+  it('starts on the rail at narrow widths and keeps the view across a collapse', async () => {
+    const restore = media(/max-width/)
+    try {
+      const user = userEvent.setup()
+      renderPage()
+      await screen.findByText('MOHAMMED ASLAM')
+      expect(screen.getByTestId('timesheet-body').className).toContain(
+        'grid-cols-[minmax(0,1fr)_36px]',
+      )
+      expect(screen.queryByTestId('glance-code-AL')).not.toBeInTheDocument()
+
+      // Explicit state persists: reopening is the operator's answer, and
+      // nothing re-collapses it behind them.
+      await user.click(screen.getByTestId('glance-toggle'))
+      expect(screen.getByTestId('timesheet-body').className).toContain(
+        'grid-cols-[minmax(0,1fr)_210px]',
+      )
+
+      await user.click(screen.getByRole('button', { name: /^checks/i }))
+      expect(screen.getByText('G7091 SURESH DAS')).toBeInTheDocument()
+      await user.click(screen.getByTestId('glance-toggle'))
+      await user.click(screen.getByTestId('glance-toggle'))
+      // The view survived the round trip: still Checks, not back to codes.
+      expect(screen.getByRole('button', { name: /^checks/i })).toHaveAttribute(
+        'aria-pressed',
+        'true',
+      )
+      expect(screen.getByText('G7091 SURESH DAS')).toBeInTheDocument()
+    } finally {
+      restore()
+    }
+  })
+
+  it('stands the glance down to zero for a bottom panel and restores the rail', async () => {
+    const user = userEvent.setup()
+    renderPage()
+    await screen.findByText('MOHAMMED ASLAM')
+
+    await user.click(screen.getByTestId('glance-toggle'))
+    expect(screen.getByTestId('timesheet-body').className).toContain(
+      'grid-cols-[minmax(0,1fr)_36px]',
+    )
+
+    await user.click(screen.getByRole('button', { name: /cells by code/i }))
+    expect(await screen.findByRole('region', { name: /cells by code/i })).toBeInTheDocument()
+    const hidden = screen.getByTestId('timesheet-glance')
+    expect(screen.getByTestId('timesheet-body').className).toContain(
+      'grid-cols-[minmax(0,1fr)_0px]',
+    )
+    expect(hidden).toHaveAttribute('inert')
+    expect(within(hidden).queryByTestId('glance-toggle')).not.toBeInTheDocument()
+
+    await user.keyboard('{Escape}')
+    expect(screen.queryByRole('region', { name: /cells by code/i })).not.toBeInTheDocument()
+    // The state it had before the panel, not a fresh one.
+    expect(screen.getByTestId('timesheet-body').className).toContain(
+      'grid-cols-[minmax(0,1fr)_36px]',
+    )
+    expect(screen.getByTestId('glance-toggle')).toHaveAttribute('aria-expanded', 'false')
+  })
+
+  it('opens the glance on Checks from the fix-before-download notice', async () => {
+    const user = userEvent.setup()
+    renderPage()
+    await screen.findByText('MOHAMMED ASLAM')
+
+    // The worst case the notice has to undo: a bottom panel covering the sheet
+    // and the column collapsed to its rail.
+    await user.click(screen.getByTestId('glance-toggle'))
+    await user.click(screen.getByRole('button', { name: /cells by code/i }))
+    await screen.findByRole('region', { name: /cells by code/i })
+
+    await user.click(screen.getByRole('button', { name: /fix before download/i }))
+    expect(screen.queryByRole('region', { name: /cells by code/i })).not.toBeInTheDocument()
+    expect(screen.getByTestId('timesheet-body').className).toContain(
+      'grid-cols-[minmax(0,1fr)_210px]',
+    )
+    expect(screen.getByRole('button', { name: /^checks/i })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    )
+    expect(screen.getByText('G7091 SURESH DAS')).toBeInTheDocument()
+  })
+
+  it('filters from the bottom panel and the side through one page filter', async () => {
+    const user = userEvent.setup()
+    renderPage()
+    await screen.findByText('MOHAMMED ASLAM')
+
+    await user.click(screen.getByTestId('glance-toggle'))
+    await user.click(screen.getByRole('button', { name: /cells by code/i }))
+    const panel = await screen.findByRole('region', { name: /cells by code/i })
+    await user.click(within(panel).getByRole('button', { name: /annual leave/i }))
+
+    // Closes the panel, restores the side on codes, then filters — in that
+    // order, so the operator never loses sight of what was pressed.
+    expect(screen.queryByRole('region', { name: /cells by code/i })).not.toBeInTheDocument()
+    expect(await screen.findByTestId('code-filter-bar')).toBeInTheDocument()
+    expect(screen.getByTestId('timesheet-body').className).toContain(
+      'grid-cols-[minmax(0,1fr)_210px]',
+    )
+    const glance = screen.getByTestId('timesheet-glance')
+    expect(within(glance).getByRole('button', { name: /^codes$/i })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    )
+    expect(within(glance).getByRole('button', { name: /annual leave/i })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    )
+    expect(screen.getAllByTestId('timesheet-row')).toHaveLength(4)
+
+    // The same code from the side is the same one filter, not a second one.
+    await user.click(screen.getByRole('button', { name: /clear filter/i }))
+    expect(screen.getAllByTestId('timesheet-row')).toHaveLength(5)
+    await user.click(within(glance).getByRole('button', { name: /annual leave/i }))
+    expect(await screen.findByTestId('code-filter-bar')).toBeInTheDocument()
+    expect(screen.getAllByTestId('timesheet-row')).toHaveLength(4)
+  })
+
+  it('jumps to the row of a finding, and jumps again on a repeat', async () => {
+    const scroll = vi.spyOn(Element.prototype, 'scrollIntoView')
+    const descriptor = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'animate')
+    const animate = vi.fn()
+    Object.defineProperty(HTMLElement.prototype, 'animate', {
+      configurable: true,
+      value: animate,
+    })
+    try {
+      const user = userEvent.setup()
+      renderPage()
+      await screen.findByText('MOHAMMED ASLAM')
+      const glance = screen.getByTestId('timesheet-glance')
+
+      // A filter on, so the jump has one to clear.
+      await user.click(within(glance).getByRole('button', { name: /annual leave/i }))
+      expect(screen.getAllByTestId('timesheet-row')).toHaveLength(4)
+      await user.click(within(glance).getByRole('button', { name: /^checks/i }))
+
+      const line = screen.getByTestId('check-issue-G7091')
+      scroll.mockClear()
+      animate.mockClear()
+      await user.click(within(line).getByRole('button', { name: /show row/i }))
+
+      expect(screen.queryByTestId('code-filter-bar')).not.toBeInTheDocument()
+      expect(screen.getAllByTestId('timesheet-row')).toHaveLength(5)
+      expect(
+        screen.getByTestId('timesheet-scroll').querySelector('tr[data-employee="G7091"]'),
+      ).toHaveAttribute('data-selected', '1')
+      expect(scroll).toHaveBeenCalledWith({ block: 'center', inline: 'nearest' })
+      expect(animate).toHaveBeenCalledTimes(1)
+
+      // The same man, again. Nothing about the page's state changed, so without
+      // a fresh cue the second press is dead — which is the whole point of it.
+      const before = scroll.mock.calls.length
+      await user.click(within(line).getByRole('button', { name: /show row/i }))
+      expect(scroll.mock.calls.length).toBeGreaterThan(before)
+      expect(animate).toHaveBeenCalledTimes(2)
+    } finally {
+      scroll.mockRestore()
+      if (descriptor) Object.defineProperty(HTMLElement.prototype, 'animate', descriptor)
+      else delete (HTMLElement.prototype as HTMLElement & { animate?: unknown }).animate
+    }
+  })
+
+  it('centres the jumped row without the pulse when motion is reduced', async () => {
+    const restore = media(/prefers-reduced-motion/)
+    const scroll = vi.spyOn(Element.prototype, 'scrollIntoView')
+    const descriptor = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'animate')
+    const animate = vi.fn()
+    Object.defineProperty(HTMLElement.prototype, 'animate', {
+      configurable: true,
+      value: animate,
+    })
+    try {
+      const user = userEvent.setup()
+      renderPage()
+      await screen.findByText('MOHAMMED ASLAM')
+      await user.click(screen.getByRole('button', { name: /^checks/i }))
+      scroll.mockClear()
+      await user.click(
+        within(screen.getByTestId('check-issue-G7091')).getByRole('button', {
+          name: /show row/i,
+        }),
+      )
+      expect(scroll).toHaveBeenCalledWith({ block: 'center', inline: 'nearest' })
+      expect(animate).not.toHaveBeenCalled()
+    } finally {
+      scroll.mockRestore()
+      restore()
+      if (descriptor) Object.defineProperty(HTMLElement.prototype, 'animate', descriptor)
+      else delete (HTMLElement.prototype as HTMLElement & { animate?: unknown }).animate
+    }
+  })
+
+  describe('under ar', () => {
+    beforeAll(async () => {
+      await i18n.changeLanguage('ar')
+    })
+    afterAll(async () => {
+      await i18n.changeLanguage('en')
+    })
+
+    it('keeps the glance at the inline end, with no physical offsets', async () => {
+      renderPage()
+      await screen.findByText('MOHAMMED ASLAM')
+      expect(document.documentElement.dir).toBe('rtl')
+
+      const body = screen.getByTestId('timesheet-body')
+      const glance = screen.getByTestId('timesheet-glance')
+      // Grid tracks follow the writing direction, so the second track IS the
+      // inline end in Arabic — one declaration, mirrored by the engine.
+      expect(body.lastElementChild).toBe(glance)
+      expect(body.className).toContain('grid-cols-[minmax(0,1fr)_210px]')
+      const physical = [glance, ...Array.from(glance.querySelectorAll('*'))]
+        .flatMap((node) => Array.from((node as HTMLElement).classList))
+        .map((token) => token.slice(token.lastIndexOf(':') + 1))
+        .filter((token) => /^(?:m[lr]|p[lr]|border-[lr]|left|right)-/.test(token))
+      expect(physical).toEqual([])
+    })
+  })
 })
 
 describe('useSetCell', () => {

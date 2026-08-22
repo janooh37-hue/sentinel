@@ -174,6 +174,15 @@ const KEYS = [
   'timesheet.filter.employees_few',
   'timesheet.filter.employees_many',
   'timesheet.filter.employees_other',
+  // The side glance (Task 8). Only three keys: the column's own name and the
+  // two directions of its collapse control. Everything else it prints is a
+  // word the sheet already owns — `codesLabel` and `panelChecks` name the two
+  // views, `toFix` is the blocking badge's sentence, `codes.*` the meanings,
+  // and `cells` the counts. A tab label of its own would be the fourth name
+  // for something already named three times.
+  'timesheet.glance.label',
+  'timesheet.glance.expand',
+  'timesheet.glance.collapse',
   // Staged roster editing (Task 6). Nested under `rosterEdit` and NOT under
   // `roster`, which is already the flat label of the toolbar's sheet switch:
   // i18next splits on `.`, so `timesheet.roster.save` would look for a child

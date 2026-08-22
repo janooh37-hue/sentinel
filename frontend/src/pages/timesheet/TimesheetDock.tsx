@@ -11,30 +11,37 @@
  * scrolling past 275 employees. `.ts-panelhost` / `.ts-panel` in `index.css` own
  * that geometry from one declaration; nothing here names a physical side.
  *
- * One host, one open panel. `ui.panel` is the single source of truth and lives
- * on `TimesheetPage`, because the grid highlights the same selection and the
- * head's search field opens the employee panel. `Escape` closes whatever is
- * open, from anywhere on the page.
+ * One host, one open panel — posts, codes, employee, release. `ui.panel` is the
+ * single source of truth and lives on `TimesheetPage`, because the grid
+ * highlights the same selection and the head's search field opens the employee
+ * panel. `Escape` closes whatever is open, from anywhere on the page. An open
+ * panel also stands the side glance down, which the page does by taking that
+ * column's track to zero — this file only reports which panel is open.
+ *
+ * The month's CHECKS are not here. They live in the side glance, beside the
+ * sheet rather than over it (design §"Checks in the side glance"), so a
+ * finding and the row it is about are readable at the same time — which is
+ * exactly what a panel covering the grid cannot do.
  *
  * Amendment A3's capability split runs through here: `timesheet.view` gets a
- * complete, usable dock — the posts readout, the code tally, the checks, the
- * per-employee extract — and every affordance that WRITES or FREEZES (the post
- * count, the month downloads, close, reopen, start-ack, the red block) is
- * absent rather than disabled, because a disabled control still answers Enter
- * and Space (UI spec §14).
+ * complete, usable dock — the posts readout, the code tally, the per-employee
+ * extract — and every affordance that WRITES or FREEZES (the post count, the
+ * month downloads, close, reopen, the red block) is absent rather than
+ * disabled, because a disabled control still answers Enter and Space (UI spec
+ * §14). The one exception is the Codes trigger while the roster is being
+ * staged: it is the same control, refused, and it says so in its name and its
+ * appearance.
  */
 
 import { useEffect, useMemo, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
 
-import type { TimesheetGridResponse, TimesheetRemoved, TimesheetVariant } from '@/lib/api'
+import type { TimesheetGridResponse, TimesheetVariant } from '@/lib/api'
 import { cn } from '@/lib/utils'
 
 import { CODES, type CodeSlug } from './codes'
 import type { TimesheetCodeIndex } from './timesheetCodeIndex'
 import type { TimesheetUiState } from './TimesheetPage'
-import type { RosterEdge } from './useTimesheet'
-import { ChecksPanel } from './panels/ChecksPanel'
 import { CodesPanel } from './panels/CodesPanel'
 import { EmployeePanel } from './panels/EmployeePanel'
 import { PostsPanel } from './panels/PostsPanel'
@@ -46,9 +53,6 @@ export interface TimesheetDockProps {
   grid: TimesheetGridResponse
   /** The operator holds `timesheet.edit` (amendment A3). */
   canEdit: boolean
-  /** Derived by `TimesheetPage` from `rows`; not fields on the payload. */
-  joined: RosterEdge[]
-  leaving: RosterEdge[]
   /** One page-owned pass shared by every code surface. */
   index: TimesheetCodeIndex
   /** Roster edit owns the sheet; filtering is unavailable while it is active. */
@@ -59,7 +63,6 @@ export interface TimesheetDockProps {
   onFilterCode: (code: CodeSlug) => void
   onSelect: (employeeId: string | null) => void
   onQuery: (query: string) => void
-  onAcknowledge: (employeeId: string) => void
   onSetPostCount: (postCount: number) => void
   onDownload: (variant: TimesheetVariant) => void
   onEmployeeDownload: (args: {
@@ -75,16 +78,12 @@ export interface TimesheetDockProps {
 }
 
 /** The `-` code prints as a hyphen but reads as an en dash on screen. */
-/** The `-` code prints as a hyphen but reads as an en dash on screen. */
 const glyphOf = (slug: CodeSlug): string => (slug === '-' ? '–' : slug)
-const EMPTY_REMOVED: TimesheetRemoved[] = []
 
 
 export function TimesheetDock({
   grid,
   canEdit,
-  joined,
-  leaving,
   index,
   filterDisabled = false,
   ui,
@@ -92,7 +91,6 @@ export function TimesheetDock({
   onFilterCode,
   onSelect,
   onQuery,
-  onAcknowledge,
   onSetPostCount,
   onDownload,
   onEmployeeDownload,
@@ -208,13 +206,11 @@ export function TimesheetDock({
       ? t('timesheet.postsLabel')
       : open === 'codes'
         ? t('timesheet.cellsByCode')
-        : open === 'checks'
-          ? t('timesheet.panelChecks')
-          : open === 'employee'
-            ? t('timesheet.employee.sheet')
-            : open === 'release'
-              ? t('timesheet.release.title')
-              : ''
+        : open === 'employee'
+          ? t('timesheet.employee.sheet')
+          : open === 'release'
+            ? t('timesheet.release.title')
+            : ''
 
   /**
    * The subtitle line the A3 mockup gives every panel (`.panel > header p`),
@@ -233,26 +229,22 @@ export function TimesheetDock({
         ? `${t('timesheet.cells', { count: cellCount })} · ${t('timesheet.rows', {
             count: grid.rows.length,
           })} · ${deliverable}`
-        : open === 'checks'
-          ? `${t('timesheet.blocking')} ${grid.blocking.length} · ${t('timesheet.warning')} ${
-              grid.warnings.length
-            }`
-          : open === 'employee'
-            ? t('timesheet.employee.hint')
-            : open === 'release'
-              ? // `PENDING_MONTH` carries year 0, and `new Date(0, 0, 1)` is
-                // 1 January **1900** under the two-digit-year rule — so this
-                // read "January 0", and not only in the ~200ms before the month
-                // lands: on a load failure the placeholder persists while the
-                // dock still renders. The other four subtitles degrade to a
-                // zero or an empty count, which are honest; a month that does
-                // not exist is not. No month, no month line.
-                grid.year > 0
-                ? `${new Intl.DateTimeFormat(i18n.language, { month: 'long' }).format(
-                    new Date(grid.year, grid.month - 1, 1),
-                  )} ${grid.year}`
-                : ''
+        : open === 'employee'
+          ? t('timesheet.employee.hint')
+          : open === 'release'
+            ? // `PENDING_MONTH` carries year 0, and `new Date(0, 0, 1)` is
+              // 1 January **1900** under the two-digit-year rule — so this read
+              // "January 0", and not only in the ~200ms before the month lands:
+              // on a load failure the placeholder persists while the dock still
+              // renders. The other subtitles degrade to a zero or an empty
+              // count, which are honest; a month that does not exist is not. No
+              // month, no month line.
+              grid.year > 0
+              ? `${new Intl.DateTimeFormat(i18n.language, { month: 'long' }).format(
+                  new Date(grid.year, grid.month - 1, 1),
+                )} ${grid.year}`
               : ''
+            : ''
 
   return (
     <div
@@ -305,7 +297,10 @@ export function TimesheetDock({
             filterDisabled ? ` — ${t('timesheet.rosterEdit.cellsLocked')}` : ''
           }`}
           onClick={toggle('codes')}
-          className={group}
+          className={cn(
+            group,
+            'disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-surface',
+          )}
         >
           <span data-ts-caps className={caps} aria-hidden>
             {t('timesheet.codesLabel')}
@@ -460,21 +455,6 @@ export function TimesheetDock({
                 onOpenPanel(null)
                 onFilterCode(code)
               }}
-            />
-          )}
-          {open === 'checks' && (
-            <ChecksPanel
-              blocking={grid.blocking}
-              warnings={grid.warnings}
-              joined={joined}
-              leaving={leaving}
-              removed={grid.removed ?? EMPTY_REMOVED}
-              year={grid.year}
-              month={grid.month}
-              closed={closed}
-              canEdit={canEdit}
-              onAcknowledge={onAcknowledge}
-              onSelect={onSelect}
             />
           )}
           {open === 'employee' && (

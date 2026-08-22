@@ -1,9 +1,15 @@
 /**
  * One line for everything wrong with the month, and everyone who moved.
  *
- * Each count is a button that opens the checks panel, because a number the
- * operator cannot act on is decoration. Every chip pairs its count with its own
- * words, so the level survives greyscale (UI spec §6, "status / count chips").
+ * Each count is a button that opens the month's checks — the side glance, on
+ * its Checks view, expanded whatever state it was left in — because a number
+ * the operator cannot act on is decoration. Every chip pairs its count with its
+ * own words, so the level survives greyscale (UI spec §6, "status / count
+ * chips").
+ *
+ * The prop is still named `onOpenChecks`: this line asks for the checks and
+ * does not care where they are printed. Which is why moving them out of the
+ * bottom dock cost this file nothing but the sentence above.
  *
  * The all-clear is the exception and is a PILL: there is nothing to show, and
  * §6 lists status chips as pills rather than buttons. A button onto an empty

@@ -10,10 +10,15 @@
  * server's own `detail`. Nothing here looks a row up, and nothing here assumes
  * one exists.
  *
- * Which is also why an issue is NOT a row-as-button. The only action that would
- * work for every issue is a navigation away from the month, and the roster
- * movement below — where a row exists by construction, because `joined` and
- * `leaving` are DERIVED from `rows` — is where `Show row` belongs.
+ * Which is why the row jump is CONDITIONAL rather than universal.
+ * `rosterEmployeeIds` is the page handing over the ids the sheet is actually
+ * printing, so a finding that names somebody with no row here is offered the
+ * record and nothing else — a `Show row` that cannot honour itself is worse
+ * than no control at all. Nothing in this file joins an issue to a row.
+ *
+ * The jump and the record are separate CONTROLS. As a `<Link>` wrapping a
+ * `Show row` button — which is what this panel used to be — one gesture fires
+ * the other, and a click meant to scroll the sheet leaves the month instead.
  *
  * `Confirm starting point` is `timesheet.edit` and is offered on a **closed**
  * month too: accepting a starting point creates no override row and changes no
@@ -45,8 +50,15 @@ export interface ChecksPanelProps {
    */
   closed: boolean
   canEdit: boolean
+  /**
+   * Who has a row on the sheet on screen. A set rather than the rows
+   * themselves: this panel must not be able to join an issue to a row, only to
+   * ask whether jumping to one is possible.
+   */
+  rosterEmployeeIds: ReadonlySet<string>
   onAcknowledge: (employeeId: string) => void
-  onSelect: (employeeId: string | null) => void
+  /** Clears any code filter, selects the row, scrolls to it, marks it. */
+  onShowRow: (employeeId: string) => void
 }
 
 export function ChecksPanel({
@@ -59,8 +71,9 @@ export function ChecksPanel({
   month,
   closed,
   canEdit,
+  rosterEmployeeIds,
   onAcknowledge,
-  onSelect,
+  onShowRow,
 }: ChecksPanelProps): React.JSX.Element {
   const { t, i18n } = useTranslation()
 
@@ -76,13 +89,13 @@ export function ChecksPanel({
     'shrink-0 rounded-full border border-border-strong bg-surface px-2.5 py-0.5 text-[0.72em] font-semibold text-muted-foreground transition-colors hover:bg-surface-tinted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring'
 
   /**
-   * One finding, as the row-as-button §6 asks for — a `<Link>` to the employee
-   * RECORD, which is §9's "the rows link to the employee that fixes it".
+   * One finding: its level, who it is about, what is wrong, the server's own
+   * sentence — and up to two actions, never nested.
    *
-   * A record link is the one action that works for every issue, including the
-   * ones naming somebody with no row on this sheet: it goes to the person, not
-   * to a grid row. (`Show row` would be the one that cannot honour itself, and
-   * it stays where a row exists by construction — the roster movement below.)
+   * The record link is the one action that works for EVERY issue, including
+   * the ones naming somebody with no row on this sheet: it goes to the person,
+   * not to a grid row. The jump is offered beside it only when the sheet is
+   * printing that person.
    *
    * The level is text plus shape, never colour alone (UI spec §6), and the 3px
    * reading-start rule is the level again in a third channel.
@@ -92,13 +105,14 @@ export function ChecksPanel({
     // sentence, so rendering `detail` again beside it would print the same
     // sentence twice — in exactly the case the fallback exists for.
     const kind = t(`timesheet.issues.${item.kind}`, { defaultValue: '' })
+    const jumpable = rosterEmployeeIds.has(item.employee_id)
     return (
-      <Link
+      <div
         key={`${item.employee_id}|${item.kind}|${item.detail}`}
-        to={`/employees/${encodeURIComponent(item.employee_id)}`}
+        data-testid={`check-issue-${item.employee_id}`}
         className={cn(
           line,
-          'border-s-[3px] transition-colors hover:bg-surface-tinted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring',
+          'border-s-[3px]',
           stop ? 'border-accent bg-accent-soft/45' : 'border-warning bg-warning-soft/45',
         )}
       >
@@ -107,15 +121,39 @@ export function ChecksPanel({
         >
           {stop ? t('timesheet.blocking') : t('timesheet.warning')}
         </span>
-        <span dir="ltr" className={who}>
-          {item.employee_id}
-        </span>
+        {/* The id is the shortest way to the row, for the operator who reads
+            the number before the sentence. */}
+        {jumpable ? (
+          <button
+            type="button"
+            dir="ltr"
+            onClick={() => onShowRow(item.employee_id)}
+            className={cn(
+              who,
+              'rounded-sm underline-offset-2 transition-colors hover:text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+            )}
+          >
+            {item.employee_id}
+          </button>
+        ) : (
+          <span dir="ltr" className={who}>
+            {item.employee_id}
+          </span>
+        )}
         <b className="shrink-0 font-semibold">{kind || item.detail}</b>
         {kind !== '' && <span className="min-w-0 text-muted-foreground">{item.detail}</span>}
-        <span className="ms-auto shrink-0 text-[0.72em] font-semibold text-primary">
-          {t('timesheet.openRecord')}
+        <span className="ms-auto flex shrink-0 items-center gap-1.5">
+          {jumpable && (
+            <button type="button" onClick={() => onShowRow(item.employee_id)} className={action}>
+              {t('timesheet.showRow')}
+            </button>
+          )}
+          {/* §9: the rows link to the employee that fixes it. */}
+          <Link to={`/employees/${encodeURIComponent(item.employee_id)}`} className={action}>
+            {t('timesheet.openRecord')}
+          </Link>
         </span>
-      </Link>
+      </div>
     )
   }
 
@@ -150,7 +188,11 @@ export function ChecksPanel({
           </span>
 
           {joined.map((edge) => (
-            <div key={edge.employee_id} className={cn(line, 'bg-surface-tinted')}>
+            <div
+              key={edge.employee_id}
+              data-testid={`check-joined-${edge.employee_id}`}
+              className={cn(line, 'bg-surface-tinted')}
+            >
               <span className={cn(chip, 'bg-warning-soft text-warning')}>
                 {t('timesheet.newEmployee')}
               </span>
@@ -182,7 +224,7 @@ export function ChecksPanel({
                 )}
                 <button
                   type="button"
-                  onClick={() => onSelect(edge.employee_id)}
+                  onClick={() => onShowRow(edge.employee_id)}
                   className={action}
                 >
                   {t('timesheet.showRow')}
@@ -200,7 +242,11 @@ export function ChecksPanel({
           ))}
 
           {leaving.map((edge) => (
-            <div key={edge.employee_id} className={cn(line, 'bg-surface-tinted')}>
+            <div
+              key={edge.employee_id}
+              data-testid={`check-leaving-${edge.employee_id}`}
+              className={cn(line, 'bg-surface-tinted')}
+            >
               <span className={cn(chip, 'bg-accent-soft text-accent')}>
                 {t('timesheet.leaving')}
               </span>
@@ -213,7 +259,7 @@ export function ChecksPanel({
               </span>
               <button
                 type="button"
-                onClick={() => onSelect(edge.employee_id)}
+                onClick={() => onShowRow(edge.employee_id)}
                 className={cn(action, 'ms-auto')}
               >
                 {t('timesheet.showRow')}
@@ -224,7 +270,11 @@ export function ChecksPanel({
           {/* Removed people have no row on this sheet by construction, so there
               is nothing to show and nothing to confirm — only the reason. */}
           {removed.map((gone) => (
-            <div key={gone.employee_id} className={cn(line, 'bg-surface-tinted')}>
+            <div
+              key={gone.employee_id}
+              data-testid={`check-removed-${gone.employee_id}`}
+              className={cn(line, 'bg-surface-tinted')}
+            >
               <span className={cn(chip, 'bg-primary-soft text-primary')}>
                 {t('timesheet.removedLabel')}
               </span>

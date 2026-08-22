@@ -270,10 +270,16 @@ describe('roster edit affordance', () => {
     await screen.findByText('GUARD G7160')
 
     // A catalog failure costs the roster editor and nothing else: the cells of
-    // an open month are still correctable.
+    // an open month are still correctable. Counted past the side glance, which
+    // lists the same eight meanings as filter rows.
     await waitFor(() => expect(listDesignations).toHaveBeenCalled())
     expect(screen.queryByRole('button', { name: 'Edit roster' })).not.toBeInTheDocument()
-    expect(screen.getByRole('button', { name: /annual leave/i })).toBeInTheDocument()
+    const glance = screen.getByTestId('timesheet-glance')
+    expect(
+      screen
+        .getAllByRole('button', { name: /annual leave/i })
+        .filter((node) => !glance.contains(node)),
+    ).toHaveLength(1)
   })
 })
 
@@ -283,9 +289,15 @@ describe('entering roster edit mode', () => {
     await screen.findByText('GUARD G7160')
 
     // Scoped to the variant switch: the dock names one of its files "Client
-    // statistics" too, and both are buttons on this page.
+    // statistics" too, and both are buttons on this page. The ribbon's brush is
+    // scoped the same way, past the side glance's own "Annual leave" filter row.
     const deliverable = screen.getByRole('group', { name: 'Deliverable' })
-    await userEvent.click(screen.getByRole('button', { name: /annual leave/i }))
+    const glance = screen.getByTestId('timesheet-glance')
+    const brush = screen
+      .getAllByRole('button', { name: /annual leave/i })
+      .filter((node) => !glance.contains(node))
+    expect(brush).toHaveLength(1)
+    await userEvent.click(brush[0])
     await userEvent.click(within(deliverable).getByRole('button', { name: 'Client statistics' }))
     await enterRosterMode()
 
@@ -297,8 +309,14 @@ describe('entering roster edit mode', () => {
     )
     // The armed code is gone with the whole brush: the ribbon is the legend it
     // looks like again, not a disabled control that still answers Enter.
-    expect(screen.queryByRole('button', { name: /annual leave/i })).not.toBeInTheDocument()
-    expect(screen.getByText('Annual leave')).toBeInTheDocument()
+    expect(
+      screen
+        .queryAllByRole('button', { name: /annual leave/i })
+        .filter((node) => !glance.contains(node)),
+    ).toEqual([])
+    expect(
+      screen.getAllByText('Annual leave').filter((node) => !glance.contains(node)),
+    ).toHaveLength(1)
 
     // A cell still answers — it is refused with the reason, never dead.
     await userEvent.click(cell('G7160', 3))

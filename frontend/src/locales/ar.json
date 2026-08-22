@@ -3997,6 +3997,11 @@
     "cells_few": "{{count}} خلايا",
     "cells_many": "{{count}} خلية",
     "cells_other": "{{count}} خلية",
+    "glance": {
+      "label": "لمحة سريعة",
+      "expand": "إظهار اللمحة",
+      "collapse": "إخفاء اللمحة"
+    },
     "filter": {
       "by": "التصفية حسب",
       "previousEmployee": "الموظف السابق",
@@ -4007,7 +4012,7 @@
       "employees_one": "موظف واحد",
       "employees_two": "موظفان",
       "employees_few": "{{count}} موظفين",
-      "employees_many": "{{count}} موظفاً",
+      "employees_many": "{{count}} موظفًا",
       "employees_other": "{{count}} موظف"
     },
     "rosterEdit": {

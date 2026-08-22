@@ -3707,6 +3707,11 @@
     "cells_few": "{{count}} cells",
     "cells_many": "{{count}} cells",
     "cells_other": "{{count}} cells",
+    "glance": {
+      "label": "At a glance",
+      "expand": "Show the glance",
+      "collapse": "Hide the glance"
+    },
     "filter": {
       "by": "Filtered by",
       "previousEmployee": "Previous employee",

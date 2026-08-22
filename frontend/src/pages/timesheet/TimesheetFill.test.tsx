@@ -194,8 +194,15 @@ describe('drag to fill, through the page', () => {
     await screen.findByRole('table')
 
     // Arm a code first, so the sweep paints something other than what the
-    // cells already hold and an accepted cell is visibly different.
-    await userEvent.click(screen.getByRole('button', { name: /annual leave/i }))
+    // cells already hold and an accepted cell is visibly different. The side
+    // glance lists the same meaning as a filter row, so the RIBBON's brush is
+    // the one outside that column.
+    const glance = screen.getByTestId('timesheet-glance')
+    const brush = screen
+      .getAllByRole('button', { name: /annual leave/i })
+      .filter((node) => !glance.contains(node))
+    expect(brush).toHaveLength(1)
+    await userEvent.click(brush[0])
     await userEvent.pointer([
       { keys: '[MouseLeft>]', target: cellOf(3) },
       { target: cellOf(6) },
