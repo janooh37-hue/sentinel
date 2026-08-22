@@ -2,10 +2,11 @@
 
 ## Scope
 
-Two focused changes:
+Three focused changes:
 
 1. Increase the expanded Time Sheet side glance from 210px to 400px. The collapsed rail remains 36px and an open bottom panel still removes the side column.
-2. Correct the Main workbook's live Client Statistics derivation so it transfers real absence and leave codes instead of inventing Annual Leave below the contracted-post boundary.
+2. Increase the Time Sheet employee-name column from 196px to 264px.
+3. Correct the Main workbook's live Client Statistics derivation so it transfers real absence and leave codes instead of inventing Annual Leave below the contracted-post boundary.
 
 Drivers retains its current derivation. Closed months retain their frozen statistics snapshot.
 
@@ -55,4 +56,4 @@ Focused service tests cover:
 - Drivers retaining its current behavior;
 - sealed Main months retaining their frozen output.
 
-The existing Time Sheet page test will pin the expanded track at 400px and the collapsed track at 36px.
+The existing Time Sheet page test will pin the expanded track at 400px and the collapsed track at 36px. Runtime layout verification will confirm the shared `--id-name` column variable is 264px.

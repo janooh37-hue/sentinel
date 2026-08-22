@@ -2,15 +2,16 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Widen the expanded Time Sheet side glance to 400px and make live Main Client Statistics transfer only real daily leave/absence codes into available lower-ranked P cells.
+**Goal:** Widen the expanded Time Sheet side glance to 400px, widen its employee-name column by 68px, and make live Main Client Statistics transfer only real daily leave/absence codes into available lower-ranked P cells.
 
-**Architecture:** Keep the backend service as the single derivation point. Build the live Main rows from truthful attendance codes, then run one pure per-day compensation function across the already-ranked rows; Drivers continues through the existing filler transform and sealed rows continue through snapshots. The frontend change is one grid-track value plus its existing assertions.
+**Architecture:** Keep the backend service as the single derivation point. Build the live Main rows from truthful attendance codes, then run one pure per-day compensation function across the already-ranked rows; Drivers continues through the existing filler transform and sealed rows continue through snapshots. The frontend changes are the existing side-track class and shared name-column CSS variable.
 
 **Tech Stack:** Python 3.12, FastAPI service layer, pytest, React 19, TypeScript, Vitest, Tailwind CSS.
 
 ## Global Constraints
 
 - Expanded side glance is exactly 400px; collapsed is 36px; an open bottom panel is 0px.
+- The Time Sheet name column is exactly 264px, up 68px from 196px.
 - Main live months use daily rank-first compensation and code placement order `AL`, `SL `, `AB`, `TR`.
 - Only lower `P` cells are targets. `-`, `NG`, `X`, and existing non-`P` lower cells remain unchanged.
 - A source becomes `P` only when its code is transferred; no leave code is invented or discarded.
@@ -163,16 +164,18 @@ git commit -m "fix(timesheet): compensate client statistics leave"
 
 ---
 
-### Task 2: Widen the Side Glance
+### Task 2: Widen the Side Glance and Name Column
 
 **Files:**
 - Modify: `frontend/src/pages/timesheet/TimesheetPage.tsx:914-919,1084-1086`
+- Modify: `frontend/src/index.css:267`
 - Modify: `frontend/src/pages/timesheet/TimesheetPage.test.tsx:542-850`
 - Modify: `frontend/src/pages/timesheet/TimesheetGlance.test.tsx:1-3,228-230`
 
 **Interfaces:**
 - No component API changes.
 - The expanded grid track changes from `210px` to `400px`; `36px` and `0px` states do not change.
+- The shared `--id-name` variable changes from `196px` to `264px`.
 
 - [ ] **Step 1: Change width assertions to RED**
 
@@ -194,12 +197,18 @@ pnpm -C frontend exec vitest run src/pages/timesheet/TimesheetPage.test.tsx src/
 
 Expected: expanded track assertions fail with the current `210px` class.
 
-- [ ] **Step 3: Change the expanded track**
+- [ ] **Step 3: Change both approved widths**
 
-In `TimesheetPage.tsx`, replace only the expanded class and its comment:
+In `TimesheetPage.tsx`, replace only the expanded track and its comment:
 
 ```typescript
 : 'grid-cols-[minmax(0,1fr)_400px]'
+```
+
+In `frontend/src/index.css`, widen the shared name column by exactly 68px:
+
+```css
+--id-name: 264px;
 ```
 
 - [ ] **Step 4: Verify frontend behavior**
@@ -217,8 +226,8 @@ Expected: all pass.
 - [ ] **Step 5: Commit**
 
 ```powershell
-git add frontend/src/pages/timesheet/TimesheetPage.tsx frontend/src/pages/timesheet/TimesheetPage.test.tsx frontend/src/pages/timesheet/TimesheetGlance.test.tsx
-git commit -m "fix(timesheet): widen side glance"
+git add frontend/src/index.css frontend/src/pages/timesheet/TimesheetPage.tsx frontend/src/pages/timesheet/TimesheetPage.test.tsx frontend/src/pages/timesheet/TimesheetGlance.test.tsx
+git commit -m "fix(timesheet): widen statistics workspace"
 ```
 
 ---
@@ -229,7 +238,7 @@ git commit -m "fix(timesheet): widen side glance"
 - No planned source changes.
 
 **Interfaces:**
-- Confirms the two independent edits coexist without widening scope.
+- Confirms the three approved edits coexist without widening scope.
 
 - [ ] **Step 1: Run focused backend and frontend checks**
 
