@@ -30,7 +30,8 @@ import { useTranslation } from 'react-i18next'
 import type { TimesheetGridResponse, TimesheetRemoved, TimesheetVariant } from '@/lib/api'
 import { cn } from '@/lib/utils'
 
-import { CODES, type CodeSlug, slugOf } from './codes'
+import { CODES, type CodeSlug } from './codes'
+import type { TimesheetCodeIndex } from './timesheetCodeIndex'
 import type { TimesheetUiState } from './TimesheetPage'
 import type { RosterEdge } from './useTimesheet'
 import { ChecksPanel } from './panels/ChecksPanel'
@@ -40,7 +41,6 @@ import { PostsPanel } from './panels/PostsPanel'
 import { ReleasePanel } from './panels/ReleasePanel'
 
 type Panel = TimesheetUiState['panel']
-
 export interface TimesheetDockProps {
   /** The whole GET payload, including `removed`. */
   grid: TimesheetGridResponse
@@ -49,8 +49,12 @@ export interface TimesheetDockProps {
   /** Derived by `TimesheetPage` from `rows`; not fields on the payload. */
   joined: RosterEdge[]
   leaving: RosterEdge[]
+  /** One page-owned pass shared by every code surface. */
+  index: TimesheetCodeIndex
   ui: TimesheetUiState
   onOpenPanel: (panel: Panel) => void
+  /** Activates a code filter in the page. */
+  onFilterCode: (code: CodeSlug) => void
   onSelect: (employeeId: string | null) => void
   onQuery: (query: string) => void
   onAcknowledge: (employeeId: string) => void
@@ -69,17 +73,20 @@ export interface TimesheetDockProps {
 }
 
 /** The `-` code prints as a hyphen but reads as an en dash on screen. */
+/** The `-` code prints as a hyphen but reads as an en dash on screen. */
 const glyphOf = (slug: CodeSlug): string => (slug === '-' ? '–' : slug)
-
 const EMPTY_REMOVED: TimesheetRemoved[] = []
+
 
 export function TimesheetDock({
   grid,
   canEdit,
   joined,
   leaving,
+  index,
   ui,
   onOpenPanel,
+  onFilterCode,
   onSelect,
   onQuery,
   onAcknowledge,
@@ -151,23 +158,6 @@ export function TimesheetDock({
     if (document.activeElement === document.body) back?.focus()
   }, [open])
 
-  /**
-   * Every code counted across the workbook ON SCREEN, for the strip and for the
-   * tally panel — "cells by code" is a fact about the sheet being shown, so it
-   * follows the variant. Computed once here and handed to `CodesPanel`, which
-   * ran the identical loop over the same 275 rows a second time per render.
-   */
-  const counts = useMemo(() => {
-    const out: Record<CodeSlug, number> = { P: 0, AL: 0, SL: 0, AB: 0, TR: 0, NG: 0, '-': 0, X: 0 }
-    for (const row of grid.rows) {
-      const codes = ui.variant === 'statistics' ? row.stat_codes : row.codes
-      for (let day = 1; day <= daysInMonth; day += 1) {
-        const slug = slugOf(codes[day - 1] ?? null)
-        if (slug !== '') out[slug] += 1
-      }
-    }
-    return out
-  }, [daysInMonth, grid.rows, ui.variant])
 
   /**
    * Implied posts: the mean daily manned headcount on the ATTENDANCE sheet, in
@@ -232,7 +222,7 @@ export function TimesheetDock({
    */
   const deliverable =
     ui.variant === 'statistics' ? t('timesheet.statistics') : t('timesheet.attendance')
-  const cellCount = CODES.reduce((sum, spec) => sum + counts[spec.slug], 0)
+  const cellCount = CODES.reduce((sum, spec) => sum + index.cellCounts[spec.slug], 0)
   const subtitle =
     open === 'posts'
       ? deliverable
@@ -321,7 +311,7 @@ export function TimesheetDock({
                 dir="ltr"
                 className={cn(
                   'inline-flex items-center gap-1 font-mono text-[0.68rem] [unicode-bidi:isolate]',
-                  counts[spec.slug] === 0 && 'opacity-40',
+                  index.cellCounts[spec.slug] === 0 && 'opacity-40',
                 )}
               >
                 <span
@@ -332,7 +322,7 @@ export function TimesheetDock({
                   {glyphOf(spec.slug)}
                 </span>
                 <span data-testid={`dock-count-${spec.slug}`} className="tabular-nums">
-                  {counts[spec.slug]}
+                  {index.cellCounts[spec.slug]}
                 </span>
               </span>
             ))}
@@ -458,7 +448,13 @@ export function TimesheetDock({
             />
           )}
           {open === 'codes' && (
-            <CodesPanel counts={counts} />
+            <CodesPanel
+              index={index}
+              onFilterCode={(code) => {
+                onOpenPanel(null)
+                onFilterCode(code)
+              }}
+            />
           )}
           {open === 'checks' && (
             <ChecksPanel

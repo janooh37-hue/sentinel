@@ -15,7 +15,8 @@
  * cannot have, and Task 7 owns the mutation.
  */
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { act, render, renderHook, screen, waitFor } from '@testing-library/react'
+import { act, render, renderHook, screen, waitFor, within } from '@testing-library/react'
+import userEvent, { type UserEvent } from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { toast } from 'sonner'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -93,6 +94,37 @@ const ROW: TimesheetRow = {
   start_confirmed: false,
   notes: {},
 }
+const filterRow = (
+  employee_id: string,
+  row_no: number,
+  name_en: string,
+  designation_en: string,
+  alDays: readonly number[],
+): TimesheetRow => ({
+  ...ROW,
+  employee_id,
+  row_no,
+  name_en,
+  designation_en,
+  designation_ar: designation_en,
+  codes: Array.from({ length: 31 }, (_, index) => (alDays.includes(index + 1) ? 'AL' : 'P')),
+  stat_codes: Array.from({ length: 31 }, (_, index) => (alDays.includes(index + 1) ? 'AL' : 'P')),
+})
+
+const FILTER_ROWS: TimesheetRow[] = [
+  filterRow('G7014', 1, 'MOHAMMED ASLAM', 'SECURITY GUARD', [1, 2]),
+  filterRow('G7999', 2, 'UNMATCHED ROW', 'SECURITY GUARD', []),
+  filterRow('G7068', 3, 'RAJESH KUMAR', 'SECURITY GUARD', [3]),
+  filterRow('G7091', 4, 'SURESH DAS', 'MESSENGER', [4]),
+  filterRow('G7120', 5, 'OMAR HASSAN', 'MESSENGER', [5]),
+]
+
+const FILTER_MONTH: TimesheetGridResponse = {
+  ...EMPTY_MONTH,
+  rows: FILTER_ROWS,
+  days_in_month: 31,
+}
+
 
 /** A recomputed blocking check — the kind of fact only the server can supply. */
 const ISSUE: TimesheetIssue = {
@@ -132,6 +164,15 @@ function renderPage() {
 }
 
 beforeEach(() => {
+  if (!globalThis.CSS?.escape) {
+    Object.defineProperty(globalThis, 'CSS', {
+      configurable: true,
+      value: {
+        ...(globalThis.CSS ?? {}),
+        escape: (value: string) => value.replace(/[^a-zA-Z0-9_-]/g, (char) => `\\${char}`),
+      },
+    })
+  }
   vi.clearAllMocks()
   grantAll()
   getTimesheet.mockResolvedValue(EMPTY_MONTH)
@@ -311,6 +352,68 @@ describe('TimesheetPage month', () => {
     await waitFor(() =>
       expect(getTimesheet).toHaveBeenCalledWith({ year: 2026, month: 8, sheet: 'main' }),
     )
+  })
+})
+
+describe('TimesheetPage code filtering', () => {
+  async function activateAnnualLeave(user: UserEvent) {
+    await user.click(screen.getByRole('button', { name: /cells by code/i }))
+    const panel = await screen.findByRole('region', { name: /cells by code/i })
+    await user.click(within(panel).getByRole('button', { name: /annual leave/i }))
+    expect(await screen.findByTestId('code-filter-bar')).toBeInTheDocument()
+  }
+
+  it('activates AL with employee and cell totals, wraps both directions, and scrolls the viewport', async () => {
+    getTimesheet.mockResolvedValue(FILTER_MONTH)
+    const user = userEvent.setup()
+    const scroll = vi.spyOn(Element.prototype, 'scrollIntoView')
+    renderPage()
+    await screen.findByText('MOHAMMED ASLAM')
+
+    await activateAnnualLeave(user)
+    expect(screen.getByText('4 employees')).toBeInTheDocument()
+    expect(screen.getByText('5 cells')).toBeInTheDocument()
+    expect(screen.getByTestId('code-filter-bar')).toHaveTextContent('G7014')
+    expect(screen.getByText('1 of 4')).toBeInTheDocument()
+    expect(screen.getAllByTestId('timesheet-row')).toHaveLength(4)
+    expect(screen.getAllByTestId('timesheet-headcount')[0]).toHaveTextContent('4')
+
+    await user.click(screen.getByRole('button', { name: /previous employee/i }))
+    expect(screen.getByText('4 of 4')).toBeInTheDocument()
+    expect(scroll).toHaveBeenCalledWith({ block: 'center', inline: 'nearest' })
+    expect(
+      screen.getByTestId('timesheet-scroll').querySelector('tr[data-employee="G7120"]'),
+    ).not.toBeNull()
+
+    await user.click(screen.getByRole('button', { name: /next employee/i }))
+    expect(screen.getByText('1 of 4')).toBeInTheDocument()
+    scroll.mockRestore()
+  })
+
+  it('shows zero-match codes disabled and Clear or variant changes restore the full sheet', async () => {
+    getTimesheet.mockResolvedValue(FILTER_MONTH)
+    const user = userEvent.setup()
+    renderPage()
+    await screen.findByText('MOHAMMED ASLAM')
+
+    await user.click(screen.getByRole('button', { name: /cells by code/i }))
+    const panel = await screen.findByRole('region', { name: /cells by code/i })
+    expect(within(panel).getByRole('button', { name: /sick leave/i })).toBeDisabled()
+    await user.click(within(panel).getByRole('button', { name: /annual leave/i }))
+    await screen.findByTestId('code-filter-bar')
+
+    await user.click(screen.getByRole('button', { name: /clear filter/i }))
+    expect(screen.queryByTestId('code-filter-bar')).not.toBeInTheDocument()
+    expect(screen.getAllByTestId('timesheet-row')).toHaveLength(5)
+
+    await activateAnnualLeave(user)
+    await user.click(
+      within(screen.getByRole('group', { name: 'Deliverable' })).getByRole('button', {
+        name: /client statistics/i,
+      }),
+    )
+    expect(screen.queryByTestId('code-filter-bar')).not.toBeInTheDocument()
+    expect(screen.getAllByTestId('timesheet-row')).toHaveLength(5)
   })
 })
 

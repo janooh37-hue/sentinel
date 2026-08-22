@@ -20,6 +20,7 @@
  */
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import { useState } from 'react'
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 
 // Both bundles, because the Arabic cases assert the Arabic copy itself: the
@@ -40,6 +41,50 @@ const props = {
   onNext: vi.fn(),
   onClear: vi.fn(),
 } as const
+
+const FILTER_EMPLOYEES = [
+  ['G7014', 'MOHAMMED ASLAM'],
+  ['G7068', 'RAJESH KUMAR'],
+  ['G7091', 'SURESH DAS'],
+  ['G7120', 'OMAR HASSAN'],
+] as const
+
+function NavigationHarness(): React.JSX.Element {
+  const [index, setIndex] = useState(0)
+  const [active, setActive] = useState(true)
+  const employee = FILTER_EMPLOYEES[index]
+  if (!active) return <span data-testid="filter-cleared">full sheet</span>
+  return (
+    <TimesheetCodeFilterBar
+      {...props}
+      employeeCount={FILTER_EMPLOYEES.length}
+      position={index + 1}
+      employeeId={employee[0]}
+      employeeName={employee[1]}
+      onPrevious={() =>
+        setIndex((current) => (current - 1 + FILTER_EMPLOYEES.length) % FILTER_EMPLOYEES.length)
+      }
+      onNext={() => setIndex((current) => (current + 1) % FILTER_EMPLOYEES.length)}
+      onClear={() => setActive(false)}
+    />
+  )
+}
+
+describe('TimesheetCodeFilterBar navigation harness', () => {
+  it('wraps Previous from first and Next from last, and Clear restores the sheet', async () => {
+    const user = userEvent.setup()
+    render(<NavigationHarness />)
+
+    expect(screen.getByText('1 of 4')).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: /previous employee/i }))
+    expect(screen.getByText('4 of 4')).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: /next employee/i }))
+    expect(screen.getByText('1 of 4')).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: /clear filter/i }))
+    expect(screen.getByTestId('filter-cleared')).toHaveTextContent('full sheet')
+  })
+})
 
 describe('TimesheetCodeFilterBar', () => {
   it('names the filtering code by glyph and by meaning', () => {

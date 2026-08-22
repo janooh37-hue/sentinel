@@ -26,7 +26,7 @@
  * all (a disabled control still answers Enter and Space — UI spec §14).
  */
 
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { CalendarClock } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
@@ -50,7 +50,9 @@ import { TimesheetGrid, TimesheetMasthead, type FillCell, type RosterEdit } from
 import { TimesheetNotice } from './TimesheetNotice'
 import { DesignationRenameControl, TimesheetRosterEditor } from './TimesheetRosterEditor'
 import { MonthStepper, TimesheetToolbar, type TimesheetDensity } from './TimesheetToolbar'
-import { type Code, isCode, slugOf } from './codes'
+import { type Code, type CodeSlug, isCode, slugOf } from './codes'
+import { TimesheetCodeFilterBar } from './TimesheetCodeFilterBar'
+import { buildTimesheetCodeIndex } from './timesheetCodeIndex'
 import { applyRosterDraft, type RosterDraft } from './rosterDraft'
 import {
   currentMonth,
@@ -171,7 +173,28 @@ export function TimesheetPage(): React.JSX.Element {
   // mode suspends it: the ribbon becomes the legend again and the corrections
   // chip goes with it, because neither applies to a staged move.
   const editable = canEdit && !grid.closed && ui.variant === 'attendance' && !roster.editing
+
   const rows = grid.rows
+  const [filter, setFilter] = useState<{ code: CodeSlug; index: number } | null>(null)
+  const scrollRef = useRef<HTMLDivElement | null>(null)
+  /** The index always describes the server response, never the staged roster. */
+  const codeIndex = useMemo(
+    () => buildTimesheetCodeIndex(rows, ui.variant, grid.daysInMonth),
+    [grid.daysInMonth, rows, ui.variant],
+  )
+  const filterMatches = useMemo(
+    () => (filter ? codeIndex.employeeIds[filter.code] : []),
+    [codeIndex, filter],
+  )
+  const filterIndex = useMemo(() => {
+    if (!filter || filterMatches.length === 0) return 0
+    return ((filter.index % filterMatches.length) + filterMatches.length) % filterMatches.length
+  }, [filter, filterMatches.length])
+  const currentFilterEmployeeId = filter ? (filterMatches[filterIndex] ?? null) : null
+  const filteredEmployeeIds = useMemo(
+    () => (filter && filterMatches.length > 0 ? new Set(filterMatches) : null),
+    [filter, filterMatches],
+  )
 
   /**
    * The valid drop targets: active designations of the workbook on screen, in
@@ -234,6 +257,7 @@ export function TimesheetPage(): React.JSX.Element {
   const leaveMonth = useCallback(() => {
     setCorrections([])
     setRoster({ editing: false, draft: NO_DRAFT })
+    setFilter(null)
     setRosterError(null)
   }, [])
 
@@ -407,6 +431,29 @@ export function TimesheetPage(): React.JSX.Element {
   const onQuery = useCallback((query: string) => {
     setUi((prev) => ({ ...prev, query }))
   }, [])
+  const onFilterCode = useCallback((code: CodeSlug) => {
+    setFilter({ code, index: 0 })
+    setUi((prev) => ({ ...prev, panel: null }))
+  }, [])
+
+  const onPreviousFilterEmployee = useCallback(() => {
+    setFilter((prev) =>
+      prev && filterMatches.length > 0
+        ? { ...prev, index: prev.index - 1 }
+        : prev,
+    )
+  }, [filterMatches.length])
+
+  const onNextFilterEmployee = useCallback(() => {
+    setFilter((prev) =>
+      prev && filterMatches.length > 0
+        ? { ...prev, index: prev.index + 1 }
+        : prev,
+    )
+  }, [filterMatches.length])
+
+  const onClearFilter = useCallback(() => setFilter(null), [])
+
 
   /**
    * The red block, as ONE gesture rather than N writes announced N times.
@@ -470,6 +517,7 @@ export function TimesheetPage(): React.JSX.Element {
    */
   const onEditRoster = useCallback(() => {
     setUi((prev) => ({ ...prev, variant: 'attendance', brush: null }))
+    setFilter(null)
     setRoster({ editing: true, draft: NO_DRAFT })
     setRosterError(null)
   }, [])
@@ -547,6 +595,31 @@ export function TimesheetPage(): React.JSX.Element {
     setRoster({ editing: false, draft: NO_DRAFT })
     setRosterError(null)
   }, [canRoster, roster.editing])
+  useEffect(() => {
+    if (!filter) return
+    if (filterMatches.length === 0) {
+      setFilter(null)
+      return
+    }
+    const next = ((filter.index % filterMatches.length) + filterMatches.length) % filterMatches.length
+    if (next !== filter.index) setFilter({ ...filter, index: next })
+  }, [filter, filterMatches.length])
+
+  useEffect(() => {
+    if (!currentFilterEmployeeId) return
+    const row = scrollRef.current?.querySelector<HTMLElement>(
+      `tr[data-employee="${CSS.escape(currentFilterEmployeeId)}"]`,
+    )
+    if (!row) return
+    const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    row.scrollIntoView({ block: 'center', inline: 'nearest' })
+    if (!reduced && typeof row.animate === 'function') {
+      row.animate([{ outlineOffset: '0px' }, { outlineOffset: '3px' }, { outlineOffset: '0px' }], {
+        duration: 220,
+      })
+    }
+  }, [currentFilterEmployeeId])
+
 
   /**
    * The band's rename affordance, built here because the dialog reaches
@@ -696,7 +769,10 @@ export function TimesheetPage(): React.JSX.Element {
             // against this one cannot follow the operator across.
             leaveMonth()
           }}
-          onVariantChange={(variant) => setUi((prev) => ({ ...prev, variant, brush: null }))}
+          onVariantChange={(variant) => {
+            setFilter(null)
+            setUi((prev) => ({ ...prev, variant, brush: null }))
+          }}
           onDensityChange={(density) => setUi((prev) => ({ ...prev, density }))}
         />
 
@@ -779,12 +855,26 @@ export function TimesheetPage(): React.JSX.Element {
               onCancel={onCancelRoster}
             />
           )}
+          {filter && currentFilterEmployeeId && filterMatches.length > 0 && (
+            <TimesheetCodeFilterBar
+              code={filter.code}
+              cellCount={codeIndex.cellCounts[filter.code]}
+              employeeCount={filterMatches.length}
+              position={filterIndex + 1}
+              employeeId={currentFilterEmployeeId}
+              employeeName={rowsById.get(currentFilterEmployeeId)?.name_en ?? currentFilterEmployeeId}
+              onPrevious={onPreviousFilterEmployee}
+              onNext={onNextFilterEmployee}
+              onClear={onClearFilter}
+            />
+          )}
+
 
           {/* THE ONLY SCROLL REGION ON THE PAGE. The grid owns its own
               `<table>` in here rather than the shared `Table` primitive, which
               wraps itself in `w-full overflow-x-auto` and would be a second
               scroller. */}
-          <div data-testid="timesheet-scroll" className="min-h-0 flex-1 overflow-auto">
+          <div ref={scrollRef} data-testid="timesheet-scroll" className="min-h-0 flex-1 overflow-auto">
             {grid.isPending ? (
               <>
                 <span role="status" className="sr-only">
@@ -863,6 +953,9 @@ export function TimesheetPage(): React.JSX.Element {
                 canEdit={canEdit}
                 brush={ui.brush}
                 selected={ui.selected}
+                activeFilterCode={filter?.code ?? null}
+                filteredEmployeeIds={filteredEmployeeIds}
+                currentFilterEmployeeId={currentFilterEmployeeId}
                 edited={edited}
                 blocking={grid.blocking}
                 postCount={grid.postCount}
@@ -885,9 +978,11 @@ export function TimesheetPage(): React.JSX.Element {
         grid={grid.grid ?? PENDING_MONTH}
         canEdit={canEdit}
         joined={grid.joined}
+        index={codeIndex}
         leaving={grid.leaving}
         ui={ui}
         onOpenPanel={onOpenPanel}
+        onFilterCode={onFilterCode}
         onSelect={onSelectRow}
         onQuery={onQuery}
         onAcknowledge={onAcknowledge}

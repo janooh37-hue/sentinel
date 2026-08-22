@@ -54,7 +54,7 @@ import { cn } from '@/lib/utils'
 
 import { CodePicker } from './CodePicker'
 import { RowTally } from './RowTally'
-import { CODES, type Code, isCode, slugOf } from './codes'
+import { CODES, type Code, type CodeSlug, isCode, slugOf } from './codes'
 import { DAYS, ID_COLUMNS, SPAN } from './columns'
 
 /** One cell a fill is asked to paint. */
@@ -260,6 +260,10 @@ interface GridRowProps {
   /** The whole sheet is read-only: cells keep the ring but lose the cursor. */
   locked: boolean
   selected: boolean
+  /** The active filter's code, or null when the sheet is unfiltered. */
+  filterCode: CodeSlug | null
+  /** This row is the current employee in the cyclic filter. */
+  filterCurrent: boolean
   editedDays: ReadonlySet<number> | undefined
   /** A blocking check's own sentence, or `undefined` — never joined from `rows`. */
   blocked: string | undefined
@@ -279,6 +283,8 @@ const GridRow = memo(function GridRow({
   designation,
   locked,
   selected,
+  filterCode,
+  filterCurrent,
   editedDays,
   blocked,
   grip,
@@ -318,6 +324,7 @@ const GridRow = memo(function GridRow({
       data-testid="timesheet-row"
       data-employee={row.employee_id}
       data-selected={selected ? '1' : undefined}
+      data-code-filter-current={filterCurrent ? '1' : undefined}
       style={{ blockSize: 'var(--row)' }}
     >
       <td className="ts-stick ts-c-no">{row.row_no}</td>
@@ -393,17 +400,24 @@ const GridRow = memo(function GridRow({
           )
         }
         const slug = slugOf(code)
+        const filterMatch = filterCode !== null && slug === filterCode
         const note = row.notes[String(day)]
         return (
           <td key={day} className="ts-cellcell">
             <button
               type="button"
-              className="ts-cell"
+              className={cn(
+                'ts-cell',
+                filterMatch && 'ring-1 ring-inset ring-primary',
+                filterMatch && filterCurrent && 'ring-2 ring-inset ring-primary',
+              )}
               data-code={slug}
               data-employee={row.employee_id}
               data-day={day}
               data-edited={editedDays?.has(day) ? '1' : undefined}
               data-locked={locked ? '1' : undefined}
+              data-code-filter-match={filterMatch ? '1' : undefined}
+              data-code-filter-current={filterMatch && filterCurrent ? '1' : undefined}
               title={note}
               aria-label={strings.cell(row.employee_id, day, strings.meaning[slug] ?? slug)}
             >
@@ -446,6 +460,12 @@ export interface TimesheetGridProps {
   canEdit: boolean
   brush: Code | null
   selected: string | null
+  /** The code whose matching cells receive the filter outline. */
+  activeFilterCode?: CodeSlug | null
+  /** Render only these employee rows; null means the complete sheet. */
+  filteredEmployeeIds?: ReadonlySet<string> | null
+  /** The current employee in the cyclic filter. */
+  currentFilterEmployeeId?: string | null
   /** `employeeId|day` for every cell corrected in this session. */
   edited?: ReadonlySet<string>
   /** Keyed by employee and never joined to `rows`: an issue may name nobody here. */
@@ -505,6 +525,9 @@ export function TimesheetGrid({
   canEdit,
   brush,
   selected,
+  activeFilterCode = null,
+  filteredEmployeeIds = null,
+  currentFilterEmployeeId = null,
   edited,
   blocking,
   postCount = 0,
@@ -553,6 +576,14 @@ export function TimesheetGrid({
    */
   const editable = canEdit && !closed && !statistics && rosterEdit === undefined
 
+  const visibleRows = useMemo(
+    () =>
+      filteredEmployeeIds === null
+        ? rows
+        : rows.filter((row) => filteredEmployeeIds.has(row.employee_id)),
+    [filteredEmployeeIds, rows],
+  )
+
   const byId = useMemo(() => {
     const index = new Map<string, TimesheetRow>()
     for (const row of rows) index.set(row.employee_id, row)
@@ -568,9 +599,9 @@ export function TimesheetGrid({
 
   const order = useMemo(() => {
     const index = new Map<string, number>()
-    rows.forEach((row, i) => index.set(row.employee_id, i))
+    visibleRows.forEach((row, i) => index.set(row.employee_id, i))
     return index
-  }, [rows])
+  }, [visibleRows])
 
   const blockedBy = useMemo(() => {
     const index = new Map<string, string>()
@@ -659,7 +690,7 @@ export function TimesheetGrid({
       // drop writes, two catalog rows may print the same name at different
       // ranks, and a rename mid-draft must not split a band in two.
       const held = new Map<number | null, TimesheetRow[]>()
-      for (const row of rows) {
+      for (const row of visibleRows) {
         const key = row.designation_id ?? null
         const bucket = held.get(key)
         if (bucket) bucket.push(row)
@@ -717,7 +748,7 @@ export function TimesheetGrid({
       return out
     }
     let group: string | null = null
-    for (const row of rows) {
+    for (const row of visibleRows) {
       // Attendance groups by the rank order the client asked for; statistics
       // replaces the groups with the two blocks and draws the printed gap
       // between them (UI spec §5, §9).
@@ -737,7 +768,7 @@ export function TimesheetGrid({
       out.push({ kind: 'row', key: row.employee_id, row })
     }
     return out
-  }, [i18n.language, rosterEdit, rows, statistics, t])
+  }, [i18n.language, rosterEdit, statistics, t, visibleRows])
 
   /** Posts manned per day — not on the paper, and the cheapest drift detector. */
   const manned = useMemo(() => {
@@ -751,23 +782,6 @@ export function TimesheetGrid({
     return counts
   }, [codesOf, daysInMonth, rows])
 
-  /**
-   * Selecting an employee scrolls his row into the CENTRE of the sheet (UI spec
-   * §16.3). Without it the dock's `Show in grid` and the checks panel's `Show
-   * row` highlight a row 200 rows below the fold and look like they did
-   * nothing — the highlight is off screen, which is the one place it cannot
-   * help.
-   *
-   * Keyed on `selected` alone, so a repaint of the same selection does not
-   * yank the sheet back while the operator is scrolling away from it. A
-   * selection naming somebody with no row simply finds nothing.
-   */
-  useEffect(() => {
-    if (selected === null) return
-    root.current
-      ?.querySelector(`tr[data-employee="${selected}"]`)
-      ?.scrollIntoView({ block: 'center', behavior: 'smooth' })
-  }, [selected])
 
   useEffect(() => () => drag.current?.stop.abort(), [])
 
@@ -983,7 +997,7 @@ export function TimesheetGrid({
       const [firstRow, lastRow] = a <= b ? [a, b] : [b, a]
       const cells: FillCell[] = []
       for (let index = firstRow; index <= lastRow; index += 1) {
-        const row = rows[index]
+        const row = visibleRows[index]
         if (!row) continue
         // Positional, not a selector: the day cells follow the five identity
         // cells in every row, so day N is `cells[5 + N - 1]` and its button is
@@ -1009,7 +1023,7 @@ export function TimesheetGrid({
       const node = tag.current
       if (node) node.textContent = `${cells.length} → ${slugOf(state.code)}`
     },
-    [clearPreview, order, rowNodes, rows, runOf],
+    [clearPreview, order, rowNodes, runOf, visibleRows],
   )
 
   const endDrag = useCallback(
@@ -1352,7 +1366,7 @@ export function TimesheetGrid({
       if (vertical !== 0) {
         event.preventDefault()
         const here = order.get(cell.employeeId)
-        const next = here === undefined ? undefined : rows[here + vertical]
+        const next = here === undefined ? undefined : visibleRows[here + vertical]
         if (next) cellNode(next.employee_id, cell.day)?.focus()
         return
       }
@@ -1369,7 +1383,7 @@ export function TimesheetGrid({
         paint(cell, hit.code, node)
       }
     },
-    [byId, cellFrom, cellNode, i18n, order, paint, rows, whyLocked],
+    [byId, cellFrom, cellNode, i18n, order, paint, visibleRows, whyLocked],
   )
 
   const closePicker = useCallback(
@@ -1530,6 +1544,8 @@ export function TimesheetGrid({
                 designation={statistics ? line.row.designation_ar : line.row.designation_en}
                 locked={!editable}
                 selected={selected === line.row.employee_id}
+                filterCode={activeFilterCode}
+                filterCurrent={currentFilterEmployeeId === line.row.employee_id}
                 editedDays={editedByRow?.get(line.row.employee_id)}
                 blocked={blockedBy.get(line.row.employee_id)}
                 grip={rosterEdit ? strings.grip(line.row.employee_id) : undefined}

@@ -893,6 +893,83 @@ describe('TimesheetMasthead', () => {
  * prove only that a handler fired. `TimesheetPage` owns exactly this state in
  * production; the harness is that owner, minus the page.
  */
+const filterRow = (
+  employee_id: string,
+  row_no: number,
+  designation_en: string,
+  alDays: readonly number[],
+): TimesheetRow => ({
+  ...row,
+  employee_id,
+  row_no,
+  name_en: employee_id,
+  designation_en,
+  designation_ar: designation_en,
+  codes: Array.from({ length: 31 }, (_, index) => (alDays.includes(index + 1) ? 'AL' : 'P')),
+})
+
+const FILTER_ROWS: TimesheetRow[] = [
+  filterRow('G7014', 1, 'Security Guard', [1, 2]),
+  filterRow('G7999', 2, 'Security Guard', []),
+  filterRow('G7068', 3, 'Security Guard', [3]),
+  filterRow('G7091', 4, 'Messengers', [4]),
+  filterRow('G7120', 5, 'Messengers', [5]),
+]
+
+describe('TimesheetGrid code filtering', () => {
+  it('renders matching rows and groups while footers still count the full sheet', () => {
+    render(
+      <TimesheetGrid
+        {...props}
+        rows={FILTER_ROWS}
+        activeFilterCode="AL"
+        filteredEmployeeIds={new Set(['G7014', 'G7068', 'G7091', 'G7120'])}
+        currentFilterEmployeeId="G7014"
+      />,
+    )
+
+    expect(screen.getAllByTestId('timesheet-row')).toHaveLength(4)
+    expect(screen.getAllByRole('columnheader', { name: /security guard|messengers/i })).toHaveLength(2)
+    expect(screen.getAllByTestId('timesheet-row')[0]).toHaveAttribute('data-code-filter-current', '1')
+    expect(cell('G7014', 1)).toHaveAttribute('data-code-filter-match', '1')
+    expect(cell('G7014', 1)).toHaveAttribute('data-code-filter-current', '1')
+    expect(cell('G7014', 3)).not.toHaveAttribute('data-code-filter-match')
+    // Day 1 has AL for G7014 and P for the other four server rows.
+    expect(screen.getAllByTestId('timesheet-headcount')[0]).toHaveTextContent('4')
+  })
+
+  it('uses visible rows for arrow order and sweep DOM mapping', async () => {
+    const onFill = vi.fn()
+    const visible = new Set(['G7014', 'G7068'])
+    render(
+      <TimesheetGrid
+        {...props}
+        rows={[FILTER_ROWS[0], FILTER_ROWS[1], FILTER_ROWS[2]]}
+        brush="AL"
+        activeFilterCode="AL"
+        filteredEmployeeIds={visible}
+        currentFilterEmployeeId="G7014"
+        onFill={onFill}
+      />,
+    )
+
+    const first = cell('G7014', 3)
+    first.focus()
+    await userEvent.keyboard('{ArrowDown}')
+    expect(document.activeElement).toBe(cell('G7068', 3))
+
+    await userEvent.pointer([
+      { keys: '[MouseLeft>]', target: cell('G7014', 3) },
+      { target: cell('G7068', 4) },
+      { keys: '[/MouseLeft]' },
+    ])
+    expect(onFill).toHaveBeenCalledWith(
+      [at('G7014', 3), at('G7014', 4), at('G7068', 3), at('G7068', 4)],
+      'AL',
+    )
+  })
+})
+
 describe('TimesheetGrid roster edit', () => {
   const DUTY: TimesheetDesignationRead = {
     id: 105,

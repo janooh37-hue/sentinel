@@ -20,6 +20,7 @@ import { describe, expect, it, vi } from 'vitest'
 import type { TimesheetGridResponse, TimesheetRow } from '@/lib/api'
 
 import { TimesheetDock, type TimesheetDockProps } from './TimesheetDock'
+import { buildTimesheetCodeIndex } from './timesheetCodeIndex'
 
 function wrap(ui: React.ReactNode, qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })) {
   // The panels link to the employee record now (UI spec §9), so the wrapper
@@ -100,6 +101,7 @@ function dockProps({
     canEdit,
     joined: [],
     leaving: [],
+    index: buildTimesheetCodeIndex(rows, 'attendance', 31),
     ui: {
       variant: 'attendance',
       brush: null,
@@ -113,6 +115,7 @@ function dockProps({
     onQuery: vi.fn(),
     onAcknowledge: vi.fn(),
     onSetPostCount: vi.fn(),
+    onFilterCode: vi.fn(),
     onDownload: vi.fn(),
     onEmployeeDownload: vi.fn(),
     onFillRedBlock: vi.fn(),
@@ -235,10 +238,28 @@ describe('TimesheetDock', () => {
 
   it('contracts and implies the posts at a glance', async () => {
     renderPanel(<TimesheetDock {...dockProps({ blocking: 0, rows: [ROW] })} />)
+
     // 29 P cells over 31 days = 0.9 implied posts against a contract of 249.
     const posts = await screen.findByRole('button', { name: /contracted posts/i })
     expect(posts).toHaveTextContent('249')
     expect(posts).toHaveTextContent('0.9')
+  })
+  it('closes the codes panel before activating its code filter', async () => {
+    const base = dockProps({ blocking: 0, rows: [ROW] })
+    const onOpenPanel = vi.fn()
+    const onFilterCode = vi.fn()
+    renderPanel(
+      <TimesheetDock
+        {...base}
+        ui={{ ...base.ui, panel: 'codes' }}
+        onOpenPanel={onOpenPanel}
+        onFilterCode={onFilterCode}
+      />,
+    )
+
+    await userEvent.click(screen.getByRole('button', { name: /annual leave/i }))
+    expect(onOpenPanel).toHaveBeenCalledWith(null)
+    expect(onFilterCode).toHaveBeenCalledWith('AL')
   })
 
   it('seals a closed month with who closed it and when', async () => {
