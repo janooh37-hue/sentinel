@@ -22,7 +22,7 @@
  *
  * 2. **A bottom panel stands the whole column down.** The panel opens UPWARD
  *    over the sheet and would cover this strip, so the page takes the track to
- *    zero and the contents unmount: a 210px column of live controls behind an
+ *    zero and the contents unmount: a 400px column of live controls behind an
  *    open panel is a tab stop into something invisible, and it would put a
  *    second `code-badge-<slug>` in the document while the bottom Codes panel
  *    prints the same eight badges from the same index.

@@ -206,13 +206,13 @@
 
   /* Sheet metrics. The grid deliberately opts out of the em-relative scale
      (UI spec §3.3): 31 columns is a fixed count, so the sheet gets its own
-     three-stop zoom instead of tracking the Aa slider. 600px is the frozen
-     identity block (558px) plus the page gutters; the rest divides by 31, so
-     all 31 columns land on screen from ~1560px up. Never under 26px
-     (unreadable) or over 46px (the row stops scanning as one line).
-     Declared on `:root` — a pseudo-class (0,1,0) that outranks `html`
-     (0,0,1) whatever the source order (UI spec §14). */
-  --cell: clamp(26px, calc((100vw - 600px) / 31), 46px);
+     three-stop zoom instead of tracking the Aa slider. 668px is the current
+     626px identity block plus the page gutters; the rest divides by 31, so all
+     31 columns land on screen from ~1560px up. Never under 26px (unreadable)
+     or over 46px (the row stops scanning as one line). Declared on `:root` — a
+     pseudo-class (0,1,0) that outranks `html` (0,0,1) whatever the source order
+     (UI spec §14). */
+  --cell: clamp(26px, calc((100vw - 668px) / 31), 46px);
   --row: 28px;
   /* The sheet's hairline, as a WIDTH. It gets a token because the row PITCH has
      to contain it: under `border-collapse: separate` with `box-sizing:
@@ -248,20 +248,13 @@
   --ts-head: 34px;
   --ts-foot: 26px;
   --cell-font: 11px;
-  /* The identity block, one column at a time — the paper's A..E band. Widths
-     are the locked mockup's own (`docs/timesheet-mockups.css:780-784`).
-     `--id-block` is their SUM rather than a second literal, because the
-     loading skeleton starts its day strip at `--id-block` and the grid starts
-     its first day column there too: a number in two places is a sheet that
-     jumps sideways when the month lands (locked rule 6). Move a column and the
-     token follows in the same edit.
-
-     568px was the earlier figure, taken from a comment in the A2 mockup that
-     added the borders twice. Measured in Chromium against the locked A3
-     mockup, the real offset of the first day column is 563px with `max-content`
-     sizing and 558px once the table declares its exact width — which the grid
-     does, so 558px is the honest sum. Fixed across the zoom stops, like the
-     600px in the `--cell` clamp above. */
+  /* The identity block, one column at a time — the paper's A..E band. The
+     widths began with the locked mockup (`docs/timesheet-mockups.css:780-784`);
+     the name column is deliberately 68px wider for live roster names.
+     `--id-block` is their SUM rather than a second literal, because the loading
+     skeleton and grid must start the first day column at the same 626px
+     offset. Move a column and both surfaces move in the same substitution.
+     Fixed across the zoom stops, like the 668px allowance in `--cell`. */
   --id-no: 38px;
   --id-id: 74px;
   --id-name: 264px;

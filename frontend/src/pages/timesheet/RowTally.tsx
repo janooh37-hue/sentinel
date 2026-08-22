@@ -3,7 +3,7 @@
  * `AK..AP` totals block (UI spec §15 change 7 took the six columns off the
  * grid; change 4 puts all eight counts a hover away instead).
  *
- * Why an overlay rather than six more columns: 31 day columns plus a 558px
+ * Why an overlay rather than six more columns: 31 day columns plus a 626px
  * identity block already fills a 1560px screen, and six totals columns are six
  * columns of numbers the operator reads once per employee. The workbook still
  * prints them — nothing here touches the renderer.
