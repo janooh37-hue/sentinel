@@ -148,7 +148,7 @@ describe('ChecksPanel', () => {
   it('jumps to the row of a finding whose man is on this sheet', async () => {
     const onShowRow = vi.fn()
     renderPanel(<ChecksPanel {...props} onShowRow={onShowRow} />)
-    const line = await screen.findByTestId('check-issue-G7099')
+    const line = await screen.findByTestId('check-issue-G7099-no_designation')
 
     await userEvent.click(within(line).getByRole('button', { name: /G7099/ }))
     expect(onShowRow).toHaveBeenCalledWith('G7099')
@@ -179,7 +179,7 @@ describe('ChecksPanel', () => {
         onShowRow={onShowRow}
       />,
     )
-    const line = await screen.findByTestId('check-issue-G6001')
+    const line = await screen.findByTestId('check-issue-G6001-departed_but_active')
     // No jump it cannot honour, and the route to the person still there.
     expect(within(line).queryByRole('button')).not.toBeInTheDocument()
     expect(within(line).getByRole('link', { name: /open record/i })).toHaveAttribute(

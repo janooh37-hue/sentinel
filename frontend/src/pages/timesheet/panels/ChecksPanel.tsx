@@ -109,7 +109,7 @@ export function ChecksPanel({
     return (
       <div
         key={`${item.employee_id}|${item.kind}|${item.detail}`}
-        data-testid={`check-issue-${item.employee_id}`}
+        data-testid={`check-issue-${item.employee_id}-${item.kind}`}
         className={cn(
           line,
           'border-s-[3px]',

@@ -492,6 +492,7 @@ export function TimesheetPage(): React.JSX.Element {
   const onFilterCode = useCallback(
     (code: CodeSlug) => {
       if (roster.editing) return
+      setCue(null)
       setFilter({ code, index: 0 })
       setUi((prev) => ({ ...prev, panel: null }))
       // Wherever the code was pressed, the side comes back on its codes view:

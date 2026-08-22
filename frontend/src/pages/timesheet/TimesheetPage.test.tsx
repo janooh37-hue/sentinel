@@ -397,7 +397,7 @@ describe('TimesheetPage month', () => {
 
 describe('TimesheetPage code filtering', () => {
   async function activateAnnualLeave(user: UserEvent) {
-    await user.click(screen.getByRole('button', { name: /cells by code/i }))
+    await user.click(screen.getByRole('button', { name: /^codes — cells by code$/i }))
     const panel = await screen.findByRole('region', { name: /cells by code/i })
     await user.click(within(panel).getByRole('button', { name: /annual leave/i }))
     expect(await screen.findByTestId('code-filter-bar')).toBeInTheDocument()
@@ -436,7 +436,7 @@ describe('TimesheetPage code filtering', () => {
     renderPage()
     await screen.findByText('MOHAMMED ASLAM')
 
-    await user.click(screen.getByRole('button', { name: /cells by code/i }))
+    await user.click(screen.getByRole('button', { name: /^codes — cells by code$/i }))
     const panel = await screen.findByRole('region', { name: /cells by code/i })
     expect(within(panel).getByRole('button', { name: /sick leave/i })).toBeDisabled()
     await user.click(within(panel).getByRole('button', { name: /annual leave/i }))
@@ -505,7 +505,7 @@ describe('TimesheetPage code filtering', () => {
     await user.click(await screen.findByRole('button', { name: /edit roster/i }))
     expect(screen.getByRole('button', { name: /^cancel$/i })).toBeInTheDocument()
 
-    const codes = screen.getByRole('button', { name: /cells by code/i })
+    const codes = screen.getByRole('button', { name: /^codes — cells by code/i })
     expect(codes).toBeDisabled()
     expect(screen.queryByRole('region', { name: /cells by code/i })).not.toBeInTheDocument()
     expect(screen.queryByTestId('code-filter-bar')).not.toBeInTheDocument()
@@ -526,12 +526,12 @@ describe('TimesheetPage code filtering', () => {
     const user = userEvent.setup()
     renderPage()
     await screen.findByText('MOHAMMED ASLAM')
-    await user.click(screen.getByRole('button', { name: /cells by code/i }))
+    await user.click(screen.getByRole('button', { name: /^codes — cells by code$/i }))
     expect(await screen.findByRole('region', { name: /cells by code/i })).toBeInTheDocument()
 
     await user.click(await screen.findByRole('button', { name: /edit roster/i }))
     expect(screen.queryByRole('region', { name: /cells by code/i })).not.toBeInTheDocument()
-    const codes = screen.getByRole('button', { name: /cells by code/i })
+    const codes = screen.getByRole('button', { name: /^codes — cells by code/i })
     expect(codes).toBeDisabled()
     codes.focus()
     expect(document.activeElement).not.toBe(codes)
@@ -585,7 +585,7 @@ describe('TimesheetPage side glance', () => {
     // scroll region on the page stays the grid's.
     expect(screen.getByTestId('timesheet-scroll')).not.toContainElement(glance)
     expect(within(glance).getByTestId('code-badge-AL')).toHaveAttribute('data-code', 'AL')
-    expect(within(glance).getByRole('button', { name: /^codes$/i })).toHaveAttribute(
+    expect(within(glance).getByRole('button', { name: /^cells by code$/i })).toHaveAttribute(
       'aria-pressed',
       'true',
     )
@@ -623,6 +623,19 @@ describe('TimesheetPage side glance', () => {
       restore()
     }
   })
+  it('does not focus the initial toggle, then restores focus after collapse and expand', async () => {
+    const user = userEvent.setup()
+    renderPage()
+    await screen.findByText('MOHAMMED ASLAM')
+
+    const initial = screen.getByTestId('glance-toggle')
+    expect(document.activeElement).not.toBe(initial)
+    await user.click(initial)
+    const rail = screen.getByTestId('glance-toggle')
+    await user.click(rail)
+    await waitFor(() => expect(document.activeElement).toBe(screen.getByTestId('glance-toggle')))
+  })
+
 
   it('stands the glance down to zero for a bottom panel and restores the rail', async () => {
     const user = userEvent.setup()
@@ -634,7 +647,7 @@ describe('TimesheetPage side glance', () => {
       'grid-cols-[minmax(0,1fr)_36px]',
     )
 
-    await user.click(screen.getByRole('button', { name: /cells by code/i }))
+    await user.click(screen.getByRole('button', { name: /^codes — cells by code$/i }))
     expect(await screen.findByRole('region', { name: /cells by code/i })).toBeInTheDocument()
     const hidden = screen.getByTestId('timesheet-glance')
     expect(screen.getByTestId('timesheet-body').className).toContain(
@@ -660,7 +673,7 @@ describe('TimesheetPage side glance', () => {
     // The worst case the notice has to undo: a bottom panel covering the sheet
     // and the column collapsed to its rail.
     await user.click(screen.getByTestId('glance-toggle'))
-    await user.click(screen.getByRole('button', { name: /cells by code/i }))
+    await user.click(screen.getByRole('button', { name: /^codes — cells by code$/i }))
     await screen.findByRole('region', { name: /cells by code/i })
 
     await user.click(screen.getByRole('button', { name: /fix before download/i }))
@@ -681,7 +694,7 @@ describe('TimesheetPage side glance', () => {
     await screen.findByText('MOHAMMED ASLAM')
 
     await user.click(screen.getByTestId('glance-toggle'))
-    await user.click(screen.getByRole('button', { name: /cells by code/i }))
+    await user.click(screen.getByRole('button', { name: /^codes — cells by code$/i }))
     const panel = await screen.findByRole('region', { name: /cells by code/i })
     await user.click(within(panel).getByRole('button', { name: /annual leave/i }))
 
@@ -693,7 +706,7 @@ describe('TimesheetPage side glance', () => {
       'grid-cols-[minmax(0,1fr)_210px]',
     )
     const glance = screen.getByTestId('timesheet-glance')
-    expect(within(glance).getByRole('button', { name: /^codes$/i })).toHaveAttribute(
+    expect(within(glance).getByRole('button', { name: /^cells by code$/i })).toHaveAttribute(
       'aria-pressed',
       'true',
     )
@@ -730,7 +743,7 @@ describe('TimesheetPage side glance', () => {
       expect(screen.getAllByTestId('timesheet-row')).toHaveLength(4)
       await user.click(within(glance).getByRole('button', { name: /^checks/i }))
 
-      const line = screen.getByTestId('check-issue-G7091')
+      const line = screen.getByTestId('check-issue-G7091-no_designation')
       scroll.mockClear()
       animate.mockClear()
       await user.click(within(line).getByRole('button', { name: /show row/i }))
@@ -741,6 +754,7 @@ describe('TimesheetPage side glance', () => {
         screen.getByTestId('timesheet-scroll').querySelector('tr[data-employee="G7091"]'),
       ).toHaveAttribute('data-selected', '1')
       expect(scroll).toHaveBeenCalledWith({ block: 'center', inline: 'nearest' })
+
       expect(animate).toHaveBeenCalledTimes(1)
 
       // The same man, again. Nothing about the page's state changed, so without
@@ -751,6 +765,35 @@ describe('TimesheetPage side glance', () => {
       expect(animate).toHaveBeenCalledTimes(2)
     } finally {
       scroll.mockRestore()
+      if (descriptor) Object.defineProperty(HTMLElement.prototype, 'animate', descriptor)
+      else delete (HTMLElement.prototype as HTMLElement & { animate?: unknown }).animate
+    }
+  })
+  it('clears a stale row-jump cue when a code filter supersedes it', async () => {
+    const descriptor = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'animate')
+    const animate = vi.fn()
+    Object.defineProperty(HTMLElement.prototype, 'animate', {
+      configurable: true,
+      value: animate,
+    })
+    try {
+      const user = userEvent.setup()
+      renderPage()
+      await screen.findByText('MOHAMMED ASLAM')
+      await user.click(within(screen.getByTestId('timesheet-glance')).getByRole('button', { name: /^checks/i }))
+      await user.click(
+        within(screen.getByTestId('check-issue-G7091-no_designation')).getByRole('button', {
+          name: /show row/i,
+        }),
+      )
+      expect(animate).toHaveBeenCalledTimes(1)
+      await user.click(within(screen.getByTestId('timesheet-glance')).getByRole('button', { name: /^cells by code$/i }))
+      await user.click(within(screen.getByTestId('timesheet-glance')).getByRole('button', { name: /annual leave/i }))
+      await screen.findByTestId('code-filter-bar')
+      const afterFilter = animate.mock.calls.length
+      await user.click(screen.getByRole('button', { name: /clear filter/i }))
+      expect(animate).toHaveBeenCalledTimes(afterFilter)
+    } finally {
       if (descriptor) Object.defineProperty(HTMLElement.prototype, 'animate', descriptor)
       else delete (HTMLElement.prototype as HTMLElement & { animate?: unknown }).animate
     }
@@ -772,7 +815,7 @@ describe('TimesheetPage side glance', () => {
       await user.click(screen.getByRole('button', { name: /^checks/i }))
       scroll.mockClear()
       await user.click(
-        within(screen.getByTestId('check-issue-G7091')).getByRole('button', {
+        within(screen.getByTestId('check-issue-G7091-no_designation')).getByRole('button', {
           name: /show row/i,
         }),
       )

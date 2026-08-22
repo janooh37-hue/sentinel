@@ -124,6 +124,24 @@ describe('TimesheetGlance', () => {
     await userEvent.click(await screen.findByRole('button', { name: /annual leave/i }))
     expect(onFilterCode).toHaveBeenCalledWith('AL')
   })
+  it('explains why every code filter is disabled during roster editing', async () => {
+    renderGlance({ filterDisabled: true })
+    const annual = await screen.findByRole('button', { name: /annual leave/i })
+    expect(annual).toBeDisabled()
+    expect(annual).toHaveAccessibleName(/cells are read-only while the roster is being edited/i)
+    expect(annual.className).toContain('opacity-45')
+  })
+
+  it('uses the exact cells-by-code tab label', async () => {
+    renderGlance()
+    expect(await screen.findByRole('button', { name: /^cells by code$/i })).toBeInTheDocument()
+  })
+
+  it('includes the blocking count in the collapsed rail name', async () => {
+    renderGlance({ collapsed: true })
+    expect(await screen.findByTestId('glance-toggle')).toHaveAccessibleName(/1 to fix/i)
+  })
+
 
   it('marks the code the sheet is already filtered by', async () => {
     renderGlance({ activeCode: 'AL' })

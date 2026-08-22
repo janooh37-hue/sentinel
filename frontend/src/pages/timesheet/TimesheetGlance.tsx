@@ -33,6 +33,7 @@
  */
 
 import { ChevronLeft, ChevronRight } from 'lucide-react'
+import { useEffect, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import type { TimesheetIssue, TimesheetRemoved } from '@/lib/api'
@@ -107,7 +108,26 @@ export function TimesheetGlance({
   onShowRow,
   onAcknowledge,
 }: TimesheetGlanceProps): React.JSX.Element {
+  const toggleRef = useRef<HTMLButtonElement>(null)
+  const restoreToggleFocus = useRef(false)
+  const mounted = useRef(false)
+  useEffect(() => {
+    if (!mounted.current) {
+      mounted.current = true
+      return
+    }
+    if (restoreToggleFocus.current && !dockOpen) {
+      toggleRef.current?.focus()
+      restoreToggleFocus.current = false
+    }
+  }, [collapsed, dockOpen])
+
   const { t } = useTranslation()
+  const railLabel =
+    blocking.length > 0
+      ? `${t('timesheet.glance.expand')} — ${t('timesheet.toFix', { count: blocking.length })}`
+      : t('timesheet.glance.expand')
+  const lockReason = filterDisabled ? ` — ${t('timesheet.rosterEdit.cellsLocked')}` : ''
 
   /**
    * The blocking count, in both places it appears — the rail and the Checks
@@ -140,11 +160,15 @@ export function TimesheetGlance({
         // whole 36px strip is the control, because a 14px chevron inside a 36px
         // column is a target nobody hits on the first try.
         <button
+          ref={toggleRef}
           type="button"
           data-testid="glance-toggle"
           aria-expanded={false}
-          aria-label={t('timesheet.glance.expand')}
-          onClick={() => onCollapse(false)}
+          aria-label={railLabel}
+          onClick={() => {
+            restoreToggleFocus.current = true
+            onCollapse(false)
+          }}
           className="flex min-h-0 flex-1 flex-col items-center gap-2 pt-2 text-muted-foreground transition-colors hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
         >
           {/* Points INTO the sheet, which is the direction it opens — one
@@ -162,11 +186,15 @@ export function TimesheetGlance({
               {t('timesheet.glance.label')}
             </span>
             <button
+              ref={toggleRef}
               type="button"
               data-testid="glance-toggle"
               aria-expanded
               aria-label={t('timesheet.glance.collapse')}
-              onClick={() => onCollapse(true)}
+              onClick={() => {
+                restoreToggleFocus.current = true
+                onCollapse(true)
+              }}
               className="ms-auto shrink-0 rounded p-0.5 text-muted-foreground transition-colors hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
               <ChevronRight className="h-3.5 w-3.5 rtl:rotate-180" strokeWidth={2} aria-hidden />
@@ -186,7 +214,7 @@ export function TimesheetGlance({
                 tab === 'codes' && 'bg-surface font-semibold text-primary shadow-sm',
               )}
             >
-              {t('timesheet.codesLabel')}
+              {t('timesheet.cellsByCode')}
             </button>
             <button
               type="button"
@@ -231,14 +259,14 @@ export function TimesheetGlance({
                       // the NAME is the meaning and its count.
                       aria-label={`${t(spec.labelKey)} · ${t('timesheet.cells', {
                         count: cells,
-                      })}`}
+                      })}${lockReason}`}
                       onClick={() => onFilterCode(spec.slug)}
                       className={cn(
                         'grid grid-cols-[1.4rem_minmax(0,1fr)_auto] items-center gap-1.5 rounded-sm px-1 py-0.5 text-start text-[0.72em] transition-colors',
                         'hover:bg-surface-tinted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring',
                         'disabled:cursor-not-allowed disabled:hover:bg-transparent',
                         activeCode === spec.slug && 'bg-primary-soft font-semibold text-primary',
-                        !carried && 'opacity-45',
+                        (!carried || filterDisabled) && 'opacity-45',
                       )}
                     >
                       <span
