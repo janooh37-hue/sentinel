@@ -290,14 +290,14 @@ def test_a_cell_edit_for_an_unknown_employee_is_a_404(client, db_session):
     assert response.json()["error"]["code"] == "EMPLOYEE_NOT_FOUND"
 
 
-def test_patch_sets_the_post_count_and_a_filler(client, db_session):
-    _guard(db_session)
+def test_patch_sets_the_post_count_and_a_driver_filler(client, db_session):
+    _driver(db_session)
     response = client.patch(
-        "/api/v1/timesheet/2026/7",
-        json={"post_count": 0, "fillers": [{"employee_id": "G1001", "code": "SL "}]},
+        "/api/v1/timesheet/2026/7?sheet=drivers",
+        json={"post_count": 0, "fillers": [{"employee_id": "G2000", "code": "SL "}]},
     )
     assert response.status_code == 200
-    row = client.get("/api/v1/timesheet/2026/7").json()["rows"][0]
+    row = response.json()["rows"][0]
     assert row["stat_block"] == 2
     assert row["stat_codes"][0] == "SL "
 
