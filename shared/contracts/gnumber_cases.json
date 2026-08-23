@@ -1,0 +1,11 @@
+{
+  "valid": [
+    { "text": "Employee G123 is assigned", "matches": ["G123"] },
+    { "text": "G1234 و g3082", "matches": ["G1234", "G3082"] },
+    { "text": "G3082, G3082", "matches": ["G3082"] }
+  ],
+  "invalid": [
+    { "text": "AG1234X", "matches": [] },
+    { "text": "G12 G12345", "matches": [] }
+  ]
+}

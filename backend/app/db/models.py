@@ -959,6 +959,151 @@ class LedgerEntry(Base):
         Index("ix_ledger_entries_category_id", "category_id"),
     )
 
+class CorrespondenceEmployeeLink(Base):
+    """Durable employee association for an indexed correspondence entry."""
+
+    __tablename__ = "correspondence_employee_links"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    ledger_entry_id: Mapped[int] = mapped_column(
+        ForeignKey("ledger_entries.id", ondelete="CASCADE"), nullable=False
+    )
+    employee_id: Mapped[str] = mapped_column(
+        ForeignKey("employees.id", ondelete="CASCADE"), nullable=False
+    )
+    state: Mapped[str] = mapped_column(
+        String(16), nullable=False, default="linked", server_default="linked"
+    )
+    source: Mapped[str] = mapped_column(
+        String(16), nullable=False, default="detected", server_default="detected"
+    )
+    acted_by_user_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, nullable=False, default=_utcnow, server_default=func.current_timestamp()
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, nullable=False, default=_utcnow, onupdate=_utcnow, server_default=func.current_timestamp()
+    )
+
+    ledger_entry: Mapped[LedgerEntry] = relationship("LedgerEntry")
+    employee: Mapped[Employee] = relationship("Employee")
+
+    __table_args__ = (
+        UniqueConstraint(
+            "ledger_entry_id",
+            "employee_id",
+            name="uq_correspondence_employee_links_entry_employee",
+        ),
+        Index(
+            "ix_correspondence_employee_links_employee_state_entry",
+            "employee_id",
+            "state",
+            "ledger_entry_id",
+        ),
+        Index(
+            "ix_correspondence_employee_links_entry_state",
+            "ledger_entry_id",
+            "state",
+        ),
+    )
+
+
+class OutlookBridgeDevice(Base):
+    """Paired classic-Outlook bridge device; only its credential hash is stored."""
+
+    __tablename__ = "outlook_bridge_devices"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    owner_user_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    )
+    mailbox_address: Mapped[str] = mapped_column(String(320), nullable=False)
+    device_label: Mapped[str] = mapped_column(String(128), nullable=False)
+    device_credential_hash: Mapped[str] = mapped_column(String(64), nullable=False, unique=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, nullable=False, default=_utcnow, server_default=func.current_timestamp()
+    )
+    last_seen_at: Mapped[datetime] = mapped_column(
+        DateTime, nullable=False, default=_utcnow, server_default=func.current_timestamp()
+    )
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+    __table_args__ = (Index("ix_outlook_bridge_devices_owner_user_id", "owner_user_id"),)
+
+
+class OutlookPairing(Base):
+    """Short-lived, single-use pairing token record."""
+
+    __tablename__ = "outlook_pairings"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    token_hash: Mapped[str] = mapped_column(String(64), nullable=False, unique=True)
+    owner_user_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    )
+    expected_mailbox: Mapped[str] = mapped_column(String(320), nullable=False)
+    expires_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    redeemed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, nullable=False, default=_utcnow, server_default=func.current_timestamp()
+    )
+
+    __table_args__ = (Index("ix_outlook_pairings_owner_user_id", "owner_user_id"),)
+
+
+class OutlookHandoff(Base):
+    """Short-lived compose/open envelope for the Outlook bridge."""
+
+    __tablename__ = "outlook_handoffs"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    token_hash: Mapped[str] = mapped_column(String(64), nullable=False, unique=True)
+    owner_user_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    )
+    kind: Mapped[str] = mapped_column(String(16), nullable=False)
+    payload: Mapped[dict[str, object]] = mapped_column(JSON, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, nullable=False, default=_utcnow, server_default=func.current_timestamp()
+    )
+    expires_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    redeemed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    failure_code: Mapped[str | None] = mapped_column(String(64), nullable=True)
+
+    __table_args__ = (Index("ix_outlook_handoffs_owner_user_id", "owner_user_id"),)
+
+
+class OutlookItemLocation(Base):
+    """Per-device Outlook location hint for an indexed correspondence link."""
+
+    __tablename__ = "outlook_item_locations"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    device_id: Mapped[str] = mapped_column(
+        ForeignKey("outlook_bridge_devices.id", ondelete="CASCADE"), nullable=False
+    )
+    correspondence_employee_link_id: Mapped[int] = mapped_column(
+        ForeignKey("correspondence_employee_links.id", ondelete="CASCADE"), nullable=False
+    )
+    store_id: Mapped[str] = mapped_column(String(512), nullable=False)
+    entry_id: Mapped[str] = mapped_column(String(512), nullable=False)
+    internet_message_id: Mapped[str] = mapped_column(String(512), nullable=False)
+    last_verified_at: Mapped[datetime] = mapped_column(
+        DateTime, nullable=False, default=_utcnow, server_default=func.current_timestamp()
+    )
+
+    __table_args__ = (
+        UniqueConstraint(
+            "device_id",
+            "correspondence_employee_link_id",
+            name="uq_outlook_item_locations_device_link",
+        ),
+        Index("ix_outlook_item_locations_link_id", "correspondence_employee_link_id"),
+    )
+
 
 class EditorTemplate(Base):
     """Reusable HTML snippet for the HugeRTE editor.
@@ -1795,6 +1940,7 @@ __all__ = [
     "BookCategory",
     "BookRefSequence",
     "BookVersion",
+    "CorrespondenceEmployeeLink",
     "Document",
     "DocumentExtraction",
     "DutyAssignmentEvent",
@@ -1806,6 +1952,10 @@ __all__ = [
     "LedgerEntry",
     "LedgerFlag",
     "Manager",
+    "OutlookBridgeDevice",
+    "OutlookHandoff",
+    "OutlookItemLocation",
+    "OutlookPairing",
     "PermissionRequest",
     "PushSubscription",
     "RolePermission",
