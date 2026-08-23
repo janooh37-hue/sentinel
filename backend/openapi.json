@@ -22328,7 +22328,7 @@
           "status"
         ],
         "title": "ApprovalLogItem",
-        "description": "One flattened approvals-log row (either scope).\n\nCarries exactly what an operator needs to recognise the record and where it\nsits in the chain — ref, subject, category, state, the people involved, the\ntwo timestamps, the verdict, and the current version's ``document_id`` so\nthe client can paint a page-1 thumbnail without fetching the detail payload."
+        "description": "One flattened approvals-log row (either scope).\n\nCarries exactly what an operator needs to recognise the record and where it\nsits in the chain — ref, subject, category, state, the people involved, the\ntwo timestamps, the verdict, and the current version's ``document_id`` so\nthe client can paint a page-1 thumbnail without fetching the detail payload.\n\nInherits ORMBase so every timestamp serializes with an offset (the\ntest_schema_utc_serialization guard). The service tags each stamp with its\nreal zone before construction — step stamps as UTC, the off-chain\n``Book.created_at`` fallback as Dubai wall-clock — and aware values pass\nthrough ORMBase's validator untouched."
       },
       "ApprovalLogResponse": {
         "properties": {

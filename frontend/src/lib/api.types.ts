@@ -5019,6 +5019,12 @@ export interface components {
          *     sits in the chain — ref, subject, category, state, the people involved, the
          *     two timestamps, the verdict, and the current version's ``document_id`` so
          *     the client can paint a page-1 thumbnail without fetching the detail payload.
+         *
+         *     Inherits ORMBase so every timestamp serializes with an offset (the
+         *     test_schema_utc_serialization guard). The service tags each stamp with its
+         *     real zone before construction — step stamps as UTC, the off-chain
+         *     ``Book.created_at`` fallback as Dubai wall-clock — and aware values pass
+         *     through ORMBase's validator untouched.
          */
         ApprovalLogItem: {
             /** Book Id */
