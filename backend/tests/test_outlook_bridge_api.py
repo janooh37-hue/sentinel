@@ -1,15 +1,17 @@
 from __future__ import annotations
 
 from datetime import date
+from types import SimpleNamespace
 
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user
-from app.db.models import EmailAccount, Employee, LedgerEntry, User, UserPermission
+from app.db.models import Document, EmailAccount, Employee, LedgerEntry, User, UserPermission
 from app.db.session import get_db
 from app.main import create_app
+from app.services import book_service, document_service
 
 
 @pytest.fixture()
@@ -126,6 +128,57 @@ def test_attachment_handoff_checks_capability_before_document_id(
         },
     )
     assert response.status_code == 403, response.text
+
+
+def test_locked_pdf_keeps_books_view_and_missing_id_is_oracle_safe(
+    outlook_client: tuple[TestClient, User], api_db: Session, tmp_path, monkeypatch
+) -> None:
+    client, user = outlook_client
+    api_db.add(UserPermission(user_id=user.id, capability="documents.generate", effect="deny"))
+    document = Document(
+        employee_id=None,
+        template_id="General Book",
+        ref_number="R-1",
+        pdf_path="signed.pdf",
+        submission_id="submission-1",
+    )
+    api_db.add(document)
+    api_db.commit()
+    api_db.refresh(document)
+    (tmp_path / "signed.pdf").write_bytes(b"%PDF-signed")
+    monkeypatch.setattr(
+        document_service, "get_settings", lambda: SimpleNamespace(data_dir=tmp_path)
+    )
+    monkeypatch.setattr(
+        book_service,
+        "is_document_signed_locked",
+        lambda _db, document_id: (document_id == document.id, "signed.pdf"),
+    )
+
+    payload = {
+        "kind": "compose",
+        "payload": {
+            "to": ["recipient@example.test"],
+            "subject": "x",
+            "body_html": "<p>x</p>",
+            "basket_key": "b",
+            "attachments": [
+                {"kind": "document_pdf", "document_id": document.id, "filename": "x.pdf"}
+            ],
+        },
+    }
+    allowed = client.post("/api/v1/outlook/handoffs", json=payload)
+    assert allowed.status_code == 200, allowed.text
+
+    missing = {
+        **payload,
+        "payload": {
+            **payload["payload"],
+            "attachments": [{"kind": "document_pdf", "document_id": 99999, "filename": "x.pdf"}],
+        },
+    }
+    denied = client.post("/api/v1/outlook/handoffs", json=missing)
+    assert denied.status_code == 403, denied.text
 
 
 def test_device_router_requires_bearer_and_browser_router_requires_session(

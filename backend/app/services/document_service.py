@@ -2220,26 +2220,22 @@ def resolve_pdf_for_access(db: Session, document_id: int, user: User) -> tuple[P
     """
     from app.services import book_service, perm_service
 
-    if not perm_service.has_capability(db, user, "documents.generate"):
-        raise AppError(
-            "FORBIDDEN",
-            "You don't have permission to download this document",
-            http_status=403,
-        )
-
     row = db.get(Document, document_id)
-    if row is None:
-        raise NotFoundError(
-            "DOCUMENT_NOT_FOUND", f"Document {document_id} not found", id=document_id
-        )
-
-    locked, signed_rel = book_service.is_document_signed_locked(db, document_id)
+    locked, signed_rel = (
+        book_service.is_document_signed_locked(db, document_id)
+        if row is not None
+        else (False, None)
+    )
     required_cap = "books.view" if locked else "documents.generate"
     if not perm_service.has_capability(db, user, required_cap):
         raise AppError(
             "FORBIDDEN",
             "You don't have permission to download this document",
             http_status=403,
+        )
+    if row is None:
+        raise NotFoundError(
+            "DOCUMENT_NOT_FOUND", f"Document {document_id} not found", id=document_id
         )
 
     relative = signed_rel if locked and signed_rel is not None else row.pdf_path
