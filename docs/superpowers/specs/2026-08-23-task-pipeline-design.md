@@ -101,33 +101,22 @@ Enforcement depth is verified during build before relying on it.
 
 ## Role–model assignment
 
-`models.json` maps every role to a model id; orchestrator reads it at spawn time.
-Changing a role's model is a one-line edit:
-
-```json
-{
-  "triage":     "opencode/x-preview-f-free",
-  "builder":    "opencode/x-preview-f-free",
-  "reviewer":   "opencode/x-preview-f-free",
-  "gatekeeper": "opencode/x-preview-f-free"
-}
-```
-
-All four start on the current model. If inline model override at dispatch is not
-honored by the harness, fallback path: define each role as a configured agent
-carrying its model — still one-line swaps. Verified during build.
+Each role agent's `model:` frontmatter line in `.opencode/agents/pipeline/<role>.md`
+is the switchboard — changing a role's model is a one-line edit to that file.
+All four ship pointed at the current model. Verified: opencode loads project
+agents from `.opencode/agents/` with native `model` and `permission` fields,
+so no external registry file is needed.
 
 ## File layout
 
 ```
+.opencode/agents/pipeline/
+├── triage.md             # frontmatter: model + hard tool permissions; body: role prompt
+├── builder.md
+├── reviewer.md
+└── gatekeeper.md
 .claude/skills/task-pipeline/
-├── SKILL.md              # orchestrator: flow, loop rules, state protocol
-├── models.json           # role → model switchboard (+ config like tripwire threshold)
-└── roles/
-    ├── triage.md
-    ├── builder.md
-    ├── reviewer.md
-    └── gatekeeper.md
+└── SKILL.md              # orchestrator: flow, loop rules, state protocol
 ```
 
 ## Known costs / risks
