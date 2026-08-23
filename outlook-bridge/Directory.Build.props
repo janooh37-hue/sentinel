@@ -1,0 +1,13 @@
+<Project>
+  <PropertyGroup>
+    <TargetFramework>net48</TargetFramework>
+    <LangVersion>7.3</LangVersion>
+    <Nullable>disable</Nullable>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <Configurations>Debug;Release</Configurations>
+    <Platforms>x86;x64</Platforms>
+    <PlatformTarget>$(Platform)</PlatformTarget>
+    <OutputPath>$(MSBuildThisFileDirectory)dist\$(Platform)\</OutputPath>
+    <IntermediateOutputPath>$(MSBuildThisFileDirectory)obj\$(MSBuildProjectName)\$(Configuration)\$(Platform)\</IntermediateOutputPath>
+  </PropertyGroup>
+</Project>

@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Wix xmlns="http://schemas.microsoft.com/wix/2006/wi">
+  <Product Id="*" Name="GSSG Manager Outlook Bridge" Language="1033" Version="1.0.0.0" Manufacturer="GSSG Manager" UpgradeCode="7D207C60-DF08-4D57-B2C5-3D7AA25A3A34">
+    <Package InstallerVersion="500" Compressed="yes" InstallScope="perMachine" Platform="$(var.Platform)" />
+    <MajorUpgrade DowngradeErrorMessage="A newer GSSG Manager Outlook Bridge is already installed." />
+    <MediaTemplate EmbedCab="yes" />
+
+    <Directory Id="TARGETDIR" Name="SourceDir">
+      <Directory Id="ProgramFilesFolder">
+        <Directory Id="INSTALLFOLDER" Name="GSSG Manager\Outlook Bridge" />
+      </Directory>
+    </Directory>
+
+    <Feature Id="Complete" Title="GSSG Manager Outlook Bridge" Level="1">
+      <ComponentRef Id="LauncherComponent" />
+      <ComponentRef Id="ConfigurationComponent" />
+      <ComponentRef Id="ProtocolComponent" />
+    </Feature>
+
+    <Component Id="LauncherComponent" Directory="INSTALLFOLDER" Guid="*">
+<?if $(var.Platform) = x64 ?>
+      <File Id="LauncherExe" Source="$(var.Gssg.Outlook.Launcher.TargetPath)" KeyPath="yes" />
+<?else ?>
+      <File Id="LauncherExe" Source="$(var.Gssg.Outlook.Launcher.TargetPath)" KeyPath="yes" />
+<?endif ?>
+    </Component>
+
+    <Component Id="ConfigurationComponent" Directory="INSTALLFOLDER" Guid="*">
+<?if $(var.Platform) = x64 ?>
+      <RegistryKey Root="HKLM" Key="Software\GSSG Manager\Outlook Bridge" Win64="yes">
+        <RegistryValue Name="SentinelOrigin" Type="string" Value="$(var.SentinelOrigin)" KeyPath="yes" />
+      </RegistryKey>
+<?else ?>
+      <RegistryKey Root="HKLM" Key="Software\GSSG Manager\Outlook Bridge">
+        <RegistryValue Name="SentinelOrigin" Type="string" Value="$(var.SentinelOrigin)" KeyPath="yes" />
+      </RegistryKey>
+<?endif ?>
+    </Component>
+
+    <Component Id="ProtocolComponent" Directory="INSTALLFOLDER" Guid="*">
+      <RegistryKey Root="HKCR" Key="gssg-outlook">
+        <RegistryValue Name="URL Protocol" Type="string" Value="" KeyPath="yes" />
+        <RegistryValue Name="" Type="string" Value="URL:GSSG Manager Outlook Bridge" />
+        <RegistryKey Key="shell\open\command">
+          <RegistryValue Name="" Type="string" Value="&quot;[INSTALLFOLDER]Gssg.Outlook.Launcher.exe&quot; &quot;%1&quot;" />
+        </RegistryKey>
+      </RegistryKey>
+    </Component>
+  </Product>
+</Wix>

@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <RootNamespace>Gssg.Outlook</RootNamespace>
+    <AssemblyName>Gssg.Outlook.Shared</AssemblyName>
+    <GenerateAssemblyInfo>true</GenerateAssemblyInfo>
+  </PropertyGroup>
+  <ItemGroup>
+    <Reference Include="System.Net.Http" />
+    <Reference Include="System.Runtime.Serialization" />
+    <Reference Include="System.Security" />
+  </ItemGroup>
+  <ItemGroup>
+    <InternalsVisibleTo Include="Gssg.Outlook.Tests" />
+    <InternalsVisibleTo Include="Gssg.Outlook.Launcher" />
+  </ItemGroup>
+</Project>
