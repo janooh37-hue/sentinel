@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Runtime.InteropServices;
 using Gssg.Outlook;
-using Outlook = Microsoft.Office.Interop.Outlook;
+using OfficeOutlook = global::Microsoft.Office.Interop.Outlook;
 
 namespace Gssg.Outlook.Launcher
 {
@@ -34,15 +34,15 @@ namespace Gssg.Outlook.Launcher
     internal sealed class OutlookClient : IDisposable
     {
         private const string InternetMessageIdProperty = "http://schemas.microsoft.com/mapi/proptag/0x1035001F";
-        private readonly Outlook.Application application;
-        private readonly Outlook.NameSpace session;
+        private readonly OfficeOutlook.Application application;
+        private readonly OfficeOutlook.NameSpace session;
         private bool disposed;
 
         internal OutlookClient()
         {
             try
             {
-                application = new Outlook.Application();
+                application = new OfficeOutlook.Application();
                 session = application.Session;
             }
             catch (COMException ex)
@@ -86,8 +86,8 @@ namespace Gssg.Outlook.Launcher
             EnsureNotDisposed();
             if (payload == null) throw new ArgumentNullException(nameof(payload));
             var staged = new List<string>();
-            Outlook.MailItem mail = null;
-            Outlook.Inspector inspector = null;
+            OfficeOutlook.MailItem mail = null;
+            OfficeOutlook.Inspector inspector = null;
             var draftSaved = false;
             try
             {
@@ -104,7 +104,7 @@ namespace Gssg.Outlook.Launcher
                     }
                 }
 
-                mail = (Outlook.MailItem)application.CreateItem(Outlook.OlItemType.olMailItem);
+                mail = (OfficeOutlook.MailItem)application.CreateItem(OfficeOutlook.OlItemType.olMailItem);
                 inspector = mail.GetInspector;
                 mail.Display(false);
                 var signature = mail.HTMLBody;
@@ -113,7 +113,7 @@ namespace Gssg.Outlook.Launcher
                 mail.CC = string.Join(";", payload.Cc ?? new List<string>());
                 mail.Subject = payload.Subject ?? string.Empty;
                 for (var index = 0; index < staged.Count; index++)
-                    mail.Attachments.Add(staged[index], Outlook.OlAttachmentType.olByValue, Type.Missing, payload.Attachments[index].Filename);
+                    mail.Attachments.Add(staged[index], OfficeOutlook.OlAttachmentType.olByValue, Type.Missing, payload.Attachments[index].Filename);
                 mail.Save();
                 draftSaved = true;
             }
@@ -129,7 +129,7 @@ namespace Gssg.Outlook.Launcher
             {
                 if (mail != null && inspector != null && !draftSaved)
                 {
-                    try { inspector.Close(Outlook.OlInspectorClose.olDiscard); }
+                    try { inspector.Close(OfficeOutlook.OlInspectorClose.olDiscard); }
                     catch (COMException) { }
                 }
                 foreach (var file in staged) DeleteStagedFile(file);
@@ -179,7 +179,7 @@ namespace Gssg.Outlook.Launcher
         private object FindInPairedStore(string storeId, string internetMessageId)
         {
             if (string.IsNullOrWhiteSpace(storeId) || string.IsNullOrWhiteSpace(internetMessageId)) return null;
-            foreach (Outlook.Store store in session.Stores)
+            foreach (OfficeOutlook.Store store in session.Stores)
             {
                 if (!string.Equals(store.StoreID, storeId, StringComparison.Ordinal)) continue;
                 return SearchFolder(store.GetRootFolder(), internetMessageId);
@@ -187,7 +187,7 @@ namespace Gssg.Outlook.Launcher
             return null;
         }
 
-        private static object SearchFolder(Outlook.MAPIFolder folder, string internetMessageId)
+        private static object SearchFolder(OfficeOutlook.MAPIFolder folder, string internetMessageId)
         {
             try
             {
@@ -201,7 +201,7 @@ namespace Gssg.Outlook.Launcher
                     }
                     catch (COMException) { }
                 }
-                foreach (Outlook.MAPIFolder child in folder.Folders)
+                foreach (OfficeOutlook.MAPIFolder child in folder.Folders)
                 {
                     var found = SearchFolder(child, internetMessageId);
                     if (found != null) return found;

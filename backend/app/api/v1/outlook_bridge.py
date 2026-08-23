@@ -334,9 +334,12 @@ def redeem_device_handoff(
         row = outlook_bridge_service.redeem_handoff(
             db, raw_token=payload.token, device_credential=raw_credential
         )
+        redeemed_payload = outlook_bridge_service.handoff_payload_for_device(
+            db, handoff=row, device_credential=raw_credential
+        )
     except outlook_bridge_service.BridgeInvalid as exc:
         raise _unauthorized("Invalid, expired, or already used Outlook handoff") from exc
-    return OutlookHandoffRedeemRead(handoff_id=row.id, kind=row.kind, payload=row.payload)
+    return OutlookHandoffRedeemRead(handoff_id=row.id, kind=row.kind, payload=redeemed_payload)
 
 
 @device_router.get("/handoffs/{handoff_id}/attachments/{index}", response_class=FileResponse)

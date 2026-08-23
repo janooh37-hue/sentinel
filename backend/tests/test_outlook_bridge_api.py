@@ -274,13 +274,29 @@ def test_open_handoff_redeems_and_erases_payload(
         },
     ).json()["credential"]
     headers = {"Authorization": f"Bearer {credential}"}
+    selected = client.post(
+        "/api/v1/outlook/device/selection",
+        headers=headers,
+        json={
+            "internet_message_id": "<message-1>",
+            "outlook_store_id": "store-1",
+            "outlook_entry_id": "entry-1",
+            "g_numbers": ["G3082"],
+        },
+    )
+    assert selected.status_code == 200, selected.text
     redeemed = client.post(
         "/api/v1/outlook/device/handoffs/redeem",
         headers=headers,
         json={"token": handoff["token"]},
     )
     assert redeemed.status_code == 200, redeemed.text
-    assert redeemed.json()["payload"]["ledger_entry_id"] == 1
+    assert redeemed.json()["payload"] == {
+        "ledger_entry_id": 1,
+        "outlook_store_id": "store-1",
+        "outlook_entry_id": "entry-1",
+        "internet_message_id": "<message-1>",
+    }
     completed = client.post(
         f"/api/v1/outlook/device/handoffs/{handoff['id']}/complete",
         headers=headers,

@@ -202,6 +202,64 @@ def test_failed_handoff_records_failure_without_retry(db_session: Session) -> No
     assert handoff.payload == {}
 
 
+
+def test_open_handoff_payload_uses_paired_device_location(db_session: Session) -> None:
+    user = _user(db_session, "owner@example.test")
+    _employee(db_session, "G3082", "Alice")
+    entry = LedgerEntry(
+        entry_date=date.today(),
+        direction="in",
+        channel="email",
+        counterparty="sender@example.test",
+        subject="Open me",
+        message_id="<message-open>",
+        owner_user_id=user.id,
+    )
+    db_session.add(entry)
+    db_session.flush()
+    db_session.add(
+        CorrespondenceEmployeeLink(
+            ledger_entry_id=entry.id,
+            employee_id="G3082",
+            state="linked",
+            source="detected",
+        )
+    )
+    db_session.commit()
+    _, credential = redeem_pairing(
+        db_session,
+        raw_token=create_pairing(db_session, owner_user_id=user.id),
+        device_id="pc-1",
+        device_label="HR-01",
+        mailbox_address="owner@example.test",
+    )
+    resolve_selection(
+        db_session,
+        device_credential=credential,
+        internet_message_id="<message-open>",
+        outlook_store_id="store-1",
+        outlook_entry_id="entry-1",
+        g_numbers=["G3082"],
+    )
+
+    raw = create_handoff(
+        db_session,
+        owner_user_id=user.id,
+        kind="open",
+        payload={"ledger_entry_id": entry.id},
+    )
+    handoff = redeem_handoff(db_session, raw_token=raw, device_credential=credential)
+    payload = bridge.handoff_payload_for_device(
+        db_session, handoff=handoff, device_credential=credential
+    )
+
+    assert payload == {
+        "ledger_entry_id": entry.id,
+        "outlook_store_id": "store-1",
+        "outlook_entry_id": "entry-1",
+        "internet_message_id": "<message-open>",
+    }
+
 def test_handoff_owner_isolation(db_session: Session) -> None:
     owner = _user(db_session, "owner@example.test")
     other = _user(db_session, "other@example.test")

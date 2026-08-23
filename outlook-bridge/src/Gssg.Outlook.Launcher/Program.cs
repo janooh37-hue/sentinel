@@ -204,6 +204,7 @@ namespace Gssg.Outlook.Launcher
             using (var key = Registry.LocalMachine.OpenSubKey(RegistryPath, false))
             {
                 var value = key == null ? null : key.GetValue(OriginValue) as string;
+                Uri parsed;
                 if (string.IsNullOrWhiteSpace(value))
                     throw new NativeOutlookException("INSTALLER_CONFIGURATION_MISSING", "The installed Sentinel HTTPS origin is missing.");
                 if (!Uri.TryCreate(value, UriKind.Absolute, out parsed) ||

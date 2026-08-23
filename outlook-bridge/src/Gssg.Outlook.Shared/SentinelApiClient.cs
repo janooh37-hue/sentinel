@@ -85,6 +85,12 @@ namespace Gssg.Outlook
         [DataMember(Name = "status")] internal string Status;
         [DataMember(Name = "failure_code")] internal string FailureCode;
     }
+    [DataContract]
+    internal sealed class HandoffFailureRequest
+    {
+        [DataMember(Name = "failure_code")] internal string FailureCode;
+    }
+
 
     [DataContract]
     internal sealed class SelectionRequest
@@ -196,7 +202,7 @@ namespace Gssg.Outlook
                 HttpMethod.Post,
                 "api/v1/outlook/device/handoffs/" + handoffId + "/fail",
                 credentialStore.Read(),
-                new Dictionary<string, string> { { "failure_code", failureCode } });
+                new HandoffFailureRequest { FailureCode = failureCode });
         }
 
         internal void PostSelection(string internetMessageId, string storeId, string entryId, IReadOnlyList<string> gNumbers)

@@ -348,6 +348,53 @@ def redeem_handoff(
     return row
 
 
+def handoff_payload_for_device(
+    db: Session,
+    *,
+    handoff: OutlookHandoff,
+    device_credential: str,
+) -> dict[str, object]:
+    """Return a redeemed handoff payload enriched with this device's exact location."""
+    device = authenticate_device(db, device_credential)
+    if device.owner_user_id != handoff.owner_user_id:
+        raise HandoffInvalid("handoff does not belong to this device")
+
+    payload = dict(handoff.payload or {})
+    if handoff.kind != "open":
+        return payload
+
+    entry_id = payload.get("ledger_entry_id")
+    if not isinstance(entry_id, int) or entry_id <= 0:
+        raise HandoffInvalid("open handoff payload is invalid")
+    location = db.scalar(
+        select(OutlookItemLocation)
+        .join(
+            CorrespondenceEmployeeLink,
+            CorrespondenceEmployeeLink.id == OutlookItemLocation.correspondence_employee_link_id,
+        )
+        .join(LedgerEntry, LedgerEntry.id == CorrespondenceEmployeeLink.ledger_entry_id)
+        .where(
+            OutlookItemLocation.device_id == device.id,
+            LedgerEntry.id == entry_id,
+            LedgerEntry.owner_user_id == device.owner_user_id,
+            LedgerEntry.channel == "email",
+            LedgerEntry.deleted_at.is_(None),
+        )
+        .order_by(OutlookItemLocation.last_verified_at.desc(), OutlookItemLocation.id.desc())
+    )
+    if location is not None:
+        payload.update(
+            {
+                "outlook_store_id": location.store_id,
+                "outlook_entry_id": location.entry_id,
+                "internet_message_id": location.internet_message_id,
+            }
+        )
+    return payload
+
+
+
+
 def _finish_handoff(
     db: Session, *, handoff_id: int, owner_user_id: int, failure_code: str | None
 ) -> OutlookHandoff:
@@ -577,6 +624,7 @@ __all__ = [
     "employee_photo_path",
     "fail_handoff",
     "handoff_for_id",
+    "handoff_payload_for_device",
     "handoff_for_token",
     "manual_link",
     "pairing_for_token",
