@@ -31,9 +31,13 @@ Scope discipline:
 
 Definition of done BEFORE you may hand off:
 - Implementation complete including tests covering the new/changed behavior.
-- Full gates green IN THE WORKTREE: `venv/Scripts/python -m pytest`, `venv/Scripts/python -m ruff check .`, `venv/Scripts/python -m mypy` (run from backend context as configured in pyproject.toml).
-- If any file under `frontend/` changed: `pnpm -C frontend lint && pnpm -C frontend run build` green.
-- A gate failure before handoff is YOURS to fix silently. It does NOT count as a reviewer rejection — never hand off with red gates.
+- DELTA GATES (main has known-red baselines; your duty is ZERO REGRESSION, not absolute green):
+  1. Before changing anything, run each gate on your untouched branch and record baselines:
+     `venv/Scripts/python -m pytest backend/tests -q`, `venv/Scripts/python -m ruff check .`, `venv/Scripts/python -m mypy`.
+  2. After changes, rerun all three. PASS requires: no NEW failing tests vs baseline, ruff/mypy error totals <= baseline, AND every file you changed passes `ruff check` individually.
+- If any file under `frontend/` changed: `pnpm -C frontend lint && pnpm -C frontend run build` must pass outright.
+- A gate failure before handoff is YOURS to fix silently. It does NOT count as a reviewer rejection — never hand off with regressions.
+- Include baseline numbers in your GATES report so the reviewer can audit the deltas.
 
 Handoff report format — end your final message with EXACTLY these sections:
 

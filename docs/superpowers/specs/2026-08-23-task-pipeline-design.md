@@ -26,7 +26,7 @@ final gate.
 | Rejection loop | Builder⇄Reviewer until approved; tripwire pause at rejection #5 |
 | State | GitHub is the DB: labels + issue comments; single-writer pattern |
 | Parallelism | Parallel workers via per-issue git worktrees |
-| Builder exit gates | pytest + ruff + mypy mandatory; pnpm build/lint if frontend touched |
+| Builder exit gates | DELTA-based (verified red baselines on main: pytest 3 fail, ruff 23, mypy 34): no new test failures vs merge-base baseline, ruff/mypy totals <= baseline, changed files individually ruff-clean; pnpm build/lint outright if frontend touched |
 | Reviewer testing | Scoped spot-check of test files touching changed areas |
 | Branches | `<type>/<issue#>-<slug>` off `main`, same repo, PR → `main` |
 | Skill location | `.claude/skills/task-pipeline/` committed to repo |
