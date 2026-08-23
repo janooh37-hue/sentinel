@@ -172,7 +172,7 @@ def list_contacts(
 )
 def save_contact(
     db: Annotated[Session, Depends(get_db)],
-    current_user: Annotated[User, Depends(require_capability("ledger.edit"))],
+    current_user: Annotated[User, Depends(require_capability("ledger.create"))],
     payload: AddressBookContactCreate,
 ) -> AddressBookContactRead:
     row = contacts_service.save_contact(
@@ -187,7 +187,7 @@ def save_contact(
 @router.delete("/contacts/{contact_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_contact(
     db: Annotated[Session, Depends(get_db)],
-    current_user: Annotated[User, Depends(require_capability("ledger.edit"))],
+    current_user: Annotated[User, Depends(require_capability("ledger.delete"))],
     contact_id: int,
 ) -> Response:
     contacts_service.delete_contact(
@@ -217,7 +217,7 @@ def list_recipient_lists(
 )
 def create_recipient_list(
     db: Annotated[Session, Depends(get_db)],
-    current_user: Annotated[User, Depends(require_capability("ledger.edit"))],
+    current_user: Annotated[User, Depends(require_capability("ledger.create"))],
     payload: RecipientListCreate,
 ) -> RecipientListRead:
     row = recipient_lists_service.create_list(
@@ -244,7 +244,7 @@ def update_recipient_list(
 )
 def delete_recipient_list(
     db: Annotated[Session, Depends(get_db)],
-    current_user: Annotated[User, Depends(require_capability("ledger.edit"))],
+    current_user: Annotated[User, Depends(require_capability("ledger.delete"))],
     list_id: int,
 ) -> Response:
     recipient_lists_service.delete_list(
@@ -523,7 +523,7 @@ def list_drafts(
 def create_draft(
     payload: DraftWrite,
     db: Annotated[Session, Depends(get_db)],
-    current_user: Annotated[User, Depends(require_capability("ledger.edit"))],
+    current_user: Annotated[User, Depends(require_capability("ledger.create"))],
 ) -> LedgerEntryRead:
     row = ledger_service.upsert_draft(db, None, payload, author_employee_id=current_user.employee_id, owner_user_id=current_user.id)
     return LedgerEntryRead.model_validate(row)
@@ -559,7 +559,7 @@ def update_draft(
 def delete_draft(
     draft_id: int,
     db: Annotated[Session, Depends(get_db)],
-    current_user: Annotated[User, Depends(require_capability("ledger.edit"))],
+    current_user: Annotated[User, Depends(require_capability("ledger.delete"))],
 ) -> Response:
     # owner_user_id guard: cross-owner draft is a 404 (don't leak existence).
     existing = ledger_service.get_entry(db, draft_id, owner_user_id=current_user.id)
@@ -758,7 +758,7 @@ def get_thread(
 def create_entry(
     payload: LedgerEntryCreate,
     db: Annotated[Session, Depends(get_db)],
-    current_user: Annotated[User, Depends(require_capability("ledger.edit"))],
+    current_user: Annotated[User, Depends(require_capability("ledger.create"))],
 ) -> LedgerEntryRead:
     row = ledger_service.create_entry(db, payload, owner_user_id=current_user.id)
     return LedgerEntryRead.model_validate(row)
@@ -779,7 +779,7 @@ def update_entry(
 def delete_entry(
     entry_id: int,
     db: Annotated[Session, Depends(get_db)],
-    _user: Annotated[User, Depends(require_capability("ledger.edit"))],
+    _user: Annotated[User, Depends(require_capability("ledger.delete"))],
 ) -> Response:
     ledger_service.soft_delete_entry(db, entry_id)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
