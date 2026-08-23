@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useTranslation } from 'react-i18next'
 
+import { pickEmployeeName } from '@/lib/employeeName'
 import { compareOrgPeople, isBelow, type OrgPerson } from '@/lib/orgTree'
 
 interface SupervisorPickerProps {
@@ -27,13 +28,14 @@ export function SupervisorPicker({
   const [placement, setPlacement] = useState<React.CSSProperties>({ visibility: 'hidden' })
   const host = document.fullscreenElement ?? document.body
   const currentSupervisor = candidates.find((candidate) => candidate.id === employee.supervisor_id)
+  const lang = i18n.language
   const filteredCandidates = useMemo(() => {
     const term = query.trim().toLocaleLowerCase(i18n.language)
     return candidates
       .filter((candidate) => candidate.id !== employee.id)
       .filter((candidate) => {
         if (!term) return true
-        return [candidate.id, candidate.name_en, candidate.name_ar, candidate.duty_post]
+        return [candidate.id, candidate.name_en, candidate.name_ar, candidate.position, candidate.position_ar, candidate.duty_post]
           .filter((value): value is string => Boolean(value))
           .some((value) => value.toLocaleLowerCase(i18n.language).includes(term))
       })
@@ -113,11 +115,11 @@ export function SupervisorPicker({
         <button type="button" className="org-popover-close" onClick={onClose} aria-label={t('employees.orgTree.cancel')}>
           ×
         </button>
-        <small dir="auto">{t('employees.orgTree.pickSub', { name: employee.name_en })}</small>
+        <small dir="auto">{t('employees.orgTree.pickSub', { name: pickEmployeeName(employee, lang) })}</small>
       </header>
       <div className="org-popover-current">
         <span>{t('employees.orgTree.pickCurrent')}</span>
-        <b dir="auto">{currentSupervisor?.name_en ?? t('employees.orgTree.pickNone')}</b>
+        <b dir="auto">{currentSupervisor ? pickEmployeeName(currentSupervisor, lang) : t('employees.orgTree.pickNone')}</b>
       </div>
       <div className="org-popover-field">
         <input
@@ -144,10 +146,10 @@ export function SupervisorPicker({
               disabled={invalid}
               onClick={() => onPick(candidate.id)}
             >
-              <span className="org-picker-avatar">{initials(candidate)}</span>
+              <span className="org-picker-avatar">{initials(candidate, lang)}</span>
               <span className="org-picker-copy">
-                <b dir="auto">{candidate.name_en}</b>
-                <small dir="auto">{[candidate.position, candidate.duty_post].filter(Boolean).join(' · ')}</small>
+                <b dir="auto">{pickEmployeeName(candidate, lang)}</b>
+                <small dir="auto">{[lang === 'ar' && candidate.position_ar?.trim() ? candidate.position_ar : candidate.position, candidate.duty_post].filter(Boolean).join(' · ')}</small>
               </span>
               <span className="org-picker-id">{candidate.id}</span>
             </button>
@@ -159,7 +161,7 @@ export function SupervisorPicker({
   )
 }
 
-function initials(person: OrgPerson): string {
-  const words = (person.name_en || person.name_ar || person.id).trim().split(/\s+/)
+function initials(person: OrgPerson, language: string): string {
+  const words = (pickEmployeeName(person, language) || person.id).trim().split(/\s+/)
   return `${words[0]?.[0] ?? ''}${words.at(-1)?.[0] ?? ''}`.toUpperCase()
 }

@@ -7,6 +7,7 @@ import { toast } from 'sonner'
 
 import { Skeleton } from '@/components/ui/skeleton'
 import { ApiError, api, type OrgNodeRead } from '@/lib/api'
+import { pickEmployeeName } from '@/lib/employeeName'
 import {
   LINE_W,
   LINE_W_LIN,
@@ -31,12 +32,15 @@ interface DragState {
   employee: OrgPerson
   x: number
   y: number
+  originX: number
+  originY: number
+  active: boolean
   targetId: string | null
 }
 
 
 export function OrgTreeView({ unit }: OrgTreeViewProps): React.JSX.Element {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   const queryClient = useQueryClient()
   const { has } = useCapabilities()
   const sectionRef = useRef<HTMLElement>(null)
@@ -50,12 +54,21 @@ export function OrgTreeView({ unit }: OrgTreeViewProps): React.JSX.Element {
   const [editMode, setEditMode] = useState(false)
   const [picker, setPicker] = useState<{ employee: OrgPerson; anchor: HTMLElement | null; boundsEl: HTMLElement | null } | null>(null)
   const [view, setView] = useState({ scale: 1, tx: 0, ty: 0 })
+  const viewRef = useRef(view)
+  const movedRef = useRef(false)
   const [drag, setDrag] = useState<DragState | null>(null)
   const [isFullscreen, setIsFullscreen] = useState(false)
 
   const treeQuery = useQuery({ queryKey: ['org-tree'], queryFn: api.listOrgTree })
   const people = useMemo(() => (treeQuery.data ?? []).filter((person) => person.duty_unit === unit), [treeQuery.data, unit])
   const canEdit = has('employees.edit')
+  const lang = i18n.language
+  const nameOf = useCallback(
+    (person: { name_en: string; name_ar?: string | null }): string => pickEmployeeName(person, lang),
+    [lang],
+  )
+  const positionOf = (person: OrgPerson): string | null =>
+    lang === 'ar' && person.position_ar?.trim() ? person.position_ar : person.position
   const forest = useMemo(() => buildForest(people), [people])
   const scopedForest = useMemo(() => {
     if (!scopeId) return forest
@@ -99,9 +112,10 @@ export function OrgTreeView({ unit }: OrgTreeViewProps): React.JSX.Element {
       const previousSupervisor = people.find((person) => person.id === variables.employeeId)?.supervisor_id ?? null
       const employee = people.find((person) => person.id === variables.employeeId)
       const supervisor = people.find((person) => person.id === variables.supervisorId)
+      const fallbackName = pickEmployeeName(updated, lang)
       const message = variables.supervisorId
-        ? t('employees.orgTree.changed', { name: employee?.name_en ?? updated.name_en, sup: supervisor?.name_en ?? variables.supervisorId })
-        : t('employees.orgTree.changedRoot', { name: employee?.name_en ?? updated.name_en })
+        ? t('employees.orgTree.changed', { name: employee ? nameOf(employee) : fallbackName, sup: supervisor ? nameOf(supervisor) : variables.supervisorId })
+        : t('employees.orgTree.changedRoot', { name: employee ? nameOf(employee) : fallbackName })
       toast.success(message, {
         action: {
           label: t('employees.orgTree.undo'),
@@ -113,12 +127,15 @@ export function OrgTreeView({ unit }: OrgTreeViewProps): React.JSX.Element {
       if (error instanceof ApiError && error.status === 409) {
         const target = people.find((person) => person.id === variables.supervisorId)
         const employee = people.find((person) => person.id === variables.employeeId)
-        toast.error(t('employees.orgTree.cycle', { name: target?.name_en ?? '', other: employee?.name_en ?? '' }))
+        toast.error(t('employees.orgTree.cycle', { name: target ? nameOf(target) : '', other: employee ? nameOf(employee) : '' }))
+      } else {
+        toast.error(t('employees.orgTree.saveError'))
       }
     },
   })
 
   const applyTransform = useCallback((next: { scale: number; tx: number; ty: number }): void => {
+    viewRef.current = next
     const canvas = canvasRef.current
     if (canvas) canvas.style.transform = `translate(${next.tx}px, ${next.ty}px) scale(${next.scale})`
     setView(next)
@@ -137,10 +154,46 @@ export function OrgTreeView({ unit }: OrgTreeViewProps): React.JSX.Element {
     })
   }, [applyTransform, layout.height, layout.width, unlinked.length])
 
+  // Fit once per scope change (depth / drill-in / unit), never on collapse
+  // toggles or post-edit refetches — those must not throw away the user's
+  // pan and zoom. The flag is armed by the deps effect and consumed by the
+  // layout effect in the same commit.
+  const fitViewRef = useRef(fitView)
   useEffect(() => {
-    const frame = requestAnimationFrame(fitView)
+    fitViewRef.current = fitView
+  }, [fitView])
+  const needsFitRef = useRef(true)
+  useEffect(() => {
+    needsFitRef.current = true
+  }, [depth, scopeId, unit])
+  useEffect(() => {
+    if (!needsFitRef.current || layout.nodes.length === 0) return
+    needsFitRef.current = false
+    const frame = requestAnimationFrame(() => fitViewRef.current())
     return () => cancelAnimationFrame(frame)
-  }, [depth, fitView, scopeId, unit])
+  }, [layout])
+
+  // Native non-passive listener: React attaches `onWheel` passively at the
+  // root, so `preventDefault()` there is a console error and the page
+  // scrolls behind the zoom. Deps include the early-return conditions so the
+  // listener attaches once the real viewport mounts.
+  useEffect(() => {
+    const viewport = viewportRef.current
+    if (!viewport) return
+    const onWheel = (event: WheelEvent): void => {
+      event.preventDefault()
+      const rect = viewport.getBoundingClientRect()
+      const current = viewRef.current
+      const scale = Math.min(2.2, Math.max(0.25, current.scale * (event.deltaY < 0 ? 1.1 : 1 / 1.1)))
+      applyTransform({
+        scale,
+        tx: event.clientX - rect.left - (event.clientX - rect.left - current.tx) * (scale / current.scale),
+        ty: event.clientY - rect.top - (event.clientY - rect.top - current.ty) * (scale / current.scale),
+      })
+    }
+    viewport.addEventListener('wheel', onWheel, { passive: false })
+    return () => viewport.removeEventListener('wheel', onWheel)
+  }, [applyTransform, treeQuery.isLoading, treeQuery.isError, people.length])
 
   useEffect(() => {
     const onFullscreenChange = (): void => {
@@ -155,22 +208,33 @@ export function OrgTreeView({ unit }: OrgTreeViewProps): React.JSX.Element {
   useEffect(() => {
     if (!drag) return
     const onMove = (event: PointerEvent): void => {
-      const under = document.elementFromPoint(event.clientX, event.clientY)?.closest<HTMLElement>('.org-card[data-person-id]')
-      const targetId = under?.dataset.personId ?? null
-      setDrag((current) => (current ? { ...current, x: event.clientX, y: event.clientY, targetId } : null))
+      setDrag((current) => {
+        if (!current) return null
+        // A press is not a drag until it travels: keeps plain clicks (trace,
+        // orphan-chip picker) from being swallowed by the drag machinery.
+        const active = current.active || Math.hypot(event.clientX - current.originX, event.clientY - current.originY) > 4
+        if (!active) return current
+        movedRef.current = true
+        const under = document.elementFromPoint(event.clientX, event.clientY)?.closest<HTMLElement>('.org-card[data-person-id]')
+        return { ...current, active, x: event.clientX, y: event.clientY, targetId: under?.dataset.personId ?? null }
+      })
     }
     const onUp = (): void => {
       setDrag((current) => {
-        if (current?.targetId && current.targetId !== current.employee.id) {
+        if (current?.active && current.targetId && current.targetId !== current.employee.id) {
           if (isBelow(people, current.targetId, current.employee.id)) {
             const target = people.find((person) => person.id === current.targetId)
-            toast.error(t('employees.orgTree.cycle', { name: target?.name_en ?? '', other: current.employee.name_en }))
+            toast.error(t('employees.orgTree.cycle', { name: target ? nameOf(target) : '', other: nameOf(current.employee) }))
           } else {
             setSupervisor.mutate({ employeeId: current.employee.id, supervisorId: current.targetId })
           }
         }
         return null
       })
+      // Deferred: the click (if the browser fires one) dispatches before
+      // timers, so suppression still works, but a drop that lands on a
+      // different element (no click) cannot swallow the NEXT click.
+      setTimeout(() => { movedRef.current = false }, 0)
     }
     window.addEventListener('pointermove', onMove)
     window.addEventListener('pointerup', onUp, { once: true })
@@ -178,7 +242,7 @@ export function OrgTreeView({ unit }: OrgTreeViewProps): React.JSX.Element {
       window.removeEventListener('pointermove', onMove)
       window.removeEventListener('pointerup', onUp)
     }
-  }, [drag, people, setSupervisor, t])
+  }, [drag, nameOf, people, setSupervisor, t])
 
   function toggleCollapsed(id: string): void {
     setCollapsed((current) => {
@@ -193,7 +257,8 @@ export function OrgTreeView({ unit }: OrgTreeViewProps): React.JSX.Element {
     if (!canEdit || !editMode || event.button !== 0) return
     if (event.target instanceof Element && (event.target.closest('[data-org-no-drag]') || (event.target.closest('button') && !event.target.closest('[data-org-drag-handle]')))) return
     event.stopPropagation()
-    setDrag({ employee, x: event.clientX, y: event.clientY, targetId: null })
+    movedRef.current = false
+    setDrag({ employee, x: event.clientX, y: event.clientY, originX: event.clientX, originY: event.clientY, active: false, targetId: null })
   }
 
   function centerOnManager(): void {
@@ -249,7 +314,7 @@ export function OrgTreeView({ unit }: OrgTreeViewProps): React.JSX.Element {
         </div>
         <label className="relative ms-auto flex w-full items-center sm:w-[210px]">
           <Search className="pointer-events-none absolute start-3 h-4 w-4 text-muted-foreground" aria-hidden />
-          <input className="h-9 w-full rounded-full border border-border bg-surface ps-9 pe-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30" type="search" value={search} onChange={(event) => setSearch(event.target.value)} placeholder={t('employees.orgTree.searchPlaceholder')} />
+          <input className="h-9 w-full rounded-full border border-border bg-surface ps-9 pe-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30" type="search" value={search} onChange={(event) => setSearch(event.target.value)} placeholder={t('employees.orgTree.searchPlaceholder')} aria-label={t('employees.orgTree.searchPlaceholder')} />
         </label>
         <div className="inline-flex overflow-hidden rounded-lg border border-border bg-surface">
           {(['all', '2', '3'] as const).map((value) => (
@@ -258,7 +323,7 @@ export function OrgTreeView({ unit }: OrgTreeViewProps): React.JSX.Element {
         </div>
         {canEdit ? <button type="button" className={`org-toolbar-button${editMode ? ' is-active' : ''}`} onClick={() => setEditMode((current) => !current)}><Pencil size={14} />{t('employees.orgTree.editLinks')}</button> : <span className="org-readonly-chip">{t('employees.orgTree.viewOnly')}</span>}
       </div>
-      {currentScope && <nav className="org-crumbbar" aria-label={t('employees.orgTree.wholeUnit')}><span>{t('employees.orgTree.showing')}</span><button type="button" onClick={() => setScopeId(null)}>{t('employees.orgTree.wholeUnit')}</button>{scopeChain.map((person) => <button key={person.id} type="button" dir="auto" onClick={() => setScopeId(person.id)}>{person.name_en}</button>)}<b dir="auto">{currentScope.name_en}</b></nav>}
+      {currentScope && <nav className="org-crumbbar" aria-label={t('employees.orgTree.wholeUnit')}><span>{t('employees.orgTree.showing')}</span><button type="button" onClick={() => setScopeId(null)}>{t('employees.orgTree.wholeUnit')}</button>{scopeChain.map((person) => <button key={person.id} type="button" dir="auto" onClick={() => setScopeId(person.id)}>{nameOf(person)}</button>)}<b dir="auto">{nameOf(currentScope)}</b></nav>}
       {/* Each stat is ONE pluralized phrase, not a number glued to a bare
           noun: Arabic picks a different form per count (موظف / موظفان /
           موظفين), so splitting the number out of the string breaks it. */}
@@ -282,21 +347,28 @@ export function OrgTreeView({ unit }: OrgTreeViewProps): React.JSX.Element {
       <div
         ref={viewportRef}
         className="org-canvas"
-        onWheel={(event) => {
-          event.preventDefault()
-          const rect = event.currentTarget.getBoundingClientRect()
-          const scale = Math.min(2.2, Math.max(0.25, view.scale * (event.deltaY < 0 ? 1.1 : 1 / 1.1)))
-          applyTransform({ scale, tx: event.clientX - rect.left - (event.clientX - rect.left - view.tx) * (scale / view.scale), ty: event.clientY - rect.top - (event.clientY - rect.top - view.ty) * (scale / view.scale) })
-        }}
         onPointerDown={(event) => {
+          if (event.button !== 0) return
           if (event.target !== event.currentTarget && !(event.target instanceof Element && event.target.closest('.org-layer'))) return
-          const start = { x: event.clientX - view.tx, y: event.clientY - view.ty }
-          const move = (moveEvent: PointerEvent): void => applyTransform({ ...view, tx: moveEvent.clientX - start.x, ty: moveEvent.clientY - start.y })
-          const end = (): void => { window.removeEventListener('pointermove', move); window.removeEventListener('pointerup', end) }
+          const origin = viewRef.current
+          const start = { x: event.clientX - origin.tx, y: event.clientY - origin.ty }
+          const startClient = { x: event.clientX, y: event.clientY }
+          const move = (moveEvent: PointerEvent): void => {
+            if (Math.hypot(moveEvent.clientX - startClient.x, moveEvent.clientY - startClient.y) > 4) movedRef.current = true
+            applyTransform({ scale: origin.scale, tx: moveEvent.clientX - start.x, ty: moveEvent.clientY - start.y })
+          }
+          const end = (): void => { window.removeEventListener('pointermove', move); window.removeEventListener('pointerup', end); setTimeout(() => { movedRef.current = false }, 0) }
           window.addEventListener('pointermove', move)
           window.addEventListener('pointerup', end)
         }}
-        onClick={(event) => { if (event.target === event.currentTarget) setTracedId(null) }}
+        onClick={(event) => {
+          // A pan that ends over the plane still fires a click; keep the
+          // trace in that case, and keep it when the click landed on a card
+          // or control rather than empty canvas.
+          if (movedRef.current) { movedRef.current = false; return }
+          if (event.target instanceof Element && event.target.closest('.org-card, button, .org-orphan-banner, .org-zoom-bar, .org-hint')) return
+          setTracedId(null)
+        }}
       >
         <div ref={canvasRef} className="org-tree-plane" style={{ width: planeWidth, height: Math.max(layout.height, 320), transform: `translate(${view.tx}px, ${view.ty}px) scale(${view.scale})` }}>
           <div className="org-layer org-connector-layer">{layout.links.flatMap((link) => connectorParts(link, Boolean(lineage?.has(link.id) && lineage.has(link.parentId)), planeWidth, rtl))}</div>
@@ -307,19 +379,19 @@ export function OrgTreeView({ unit }: OrgTreeViewProps): React.JSX.Element {
               const traced = Boolean(lineage?.has(person.id))
               const invalidDrop = drag?.targetId === person.id && isBelow(people, person.id, drag.employee.id)
               const validDrop = drag?.targetId === person.id && !invalidDrop && person.id !== drag.employee.id
-              return <div key={person.id} className="org-item" style={{ width: entry.w, height: entry.h, transform: `translate(${mirrorX(entry.x, planeWidth, rtl, entry.w)}px, ${entry.y}px)` }}><article data-person-id={person.id} className={`org-card${traced ? ' is-traced' : ''}${!matching ? ' is-dimmed' : ''}${drag?.employee.id === person.id ? ' is-dragging' : ''}${validDrop ? ' is-drop' : ''}${invalidDrop ? ' is-nodrop' : ''}`} onPointerDown={(event) => startDrag(event, person)} onClick={(event) => { event.stopPropagation(); setTracedId((current) => current === person.id ? null : person.id) }}>
-                <div className="org-card-main"><span className="org-avatar">{initials(person)}</span><div className="min-w-0"><p dir="auto">{person.name_en}</p><small dir="auto">{person.position}</small></div></div><div className="org-card-foot"><span>{person.id}</span><em dir="auto">{person.duty_post}</em>{directReports(people, person.id).length > 0 && <button type="button" data-org-no-drag onClick={(event) => { event.stopPropagation(); setScopeId(person.id) }}>{directReports(people, person.id).length} ▾</button>}</div>
-                {editMode && canEdit && <><GripVertical className="org-grip" size={14} /><button type="button" data-org-no-drag className="org-edit-button" onClick={(event) => { event.stopPropagation(); setPicker({ employee: person, anchor: event.currentTarget.closest<HTMLElement>('.org-card'), boundsEl: viewportRef.current }) }}><Pencil size={12} /></button></>}
-              </article>{entry.hasChildren && <button type="button" className="org-collapse-pip" onClick={(event) => { event.stopPropagation(); toggleCollapsed(person.id) }}>{collapsed.has(person.id) ? '+' : '−'}</button>}</div>
+              return <div key={person.id} className="org-item" style={{ width: entry.w, height: entry.h, transform: `translate(${mirrorX(entry.x, planeWidth, rtl, entry.w)}px, ${entry.y}px)` }}><article data-person-id={person.id} tabIndex={0} className={`org-card${traced ? ' is-traced' : ''}${!matching ? ' is-dimmed' : ''}${drag?.active && drag.employee.id === person.id ? ' is-dragging' : ''}${validDrop ? ' is-drop' : ''}${invalidDrop ? ' is-nodrop' : ''}`} onPointerDown={(event) => startDrag(event, person)} onClick={(event) => { event.stopPropagation(); if (movedRef.current) { movedRef.current = false; return } setTracedId((current) => current === person.id ? null : person.id) }} onKeyDown={(event) => { if (event.target === event.currentTarget && (event.key === 'Enter' || event.key === ' ')) { event.preventDefault(); setTracedId((current) => current === person.id ? null : person.id) } }}>
+                <div className="org-card-main"><span className="org-avatar">{initials(person, lang)}</span><div className="min-w-0"><p dir="auto">{nameOf(person)}</p><small dir="auto">{positionOf(person)}</small></div></div><div className="org-card-foot"><span>{person.id}</span><em dir="auto">{person.duty_post}</em>{directReports(people, person.id).length > 0 && <button type="button" data-org-no-drag onClick={(event) => { event.stopPropagation(); setScopeId(person.id) }}>{directReports(people, person.id).length} ▾</button>}</div>
+                {editMode && canEdit && <><GripVertical className="org-grip" size={14} /><button type="button" data-org-no-drag className="org-edit-button" aria-label={t('employees.orgTree.pickTitle')} onClick={(event) => { event.stopPropagation(); setPicker({ employee: person, anchor: event.currentTarget.closest<HTMLElement>('.org-card'), boundsEl: viewportRef.current }) }}><Pencil size={12} /></button></>}
+              </article>{entry.hasChildren && <button type="button" className="org-collapse-pip" aria-expanded={!collapsed.has(person.id)} aria-label={t(`employees.orgTree.${collapsed.has(person.id) ? 'expandReports' : 'collapseReports'}`)} onClick={(event) => { event.stopPropagation(); toggleCollapsed(person.id) }}>{collapsed.has(person.id) ? '+' : '−'}</button>}</div>
             })}
           </div>
         </div>
-        {unlinked.length > 0 && <div className="org-orphan-banner"><b>▲ {t('employees.orgTree.orphanTitle', { count: unlinked.length })}</b><small>{t('employees.orgTree.orphanBody')}</small><span>{unlinked.map((person) => <button key={person.id} type="button" data-org-drag-handle className="org-orphan-chip" onPointerDown={(event) => startDrag(event, person)} onClick={() => editMode && setPicker({ employee: person, anchor: null, boundsEl: viewportRef.current })}>{person.name_en}</button>)}</span></div>}
+        {unlinked.length > 0 && <div className="org-orphan-banner"><b>▲ {t('employees.orgTree.orphanTitle', { count: unlinked.length })}</b><small>{t('employees.orgTree.orphanBody')}</small><span>{unlinked.map((person) => <button key={person.id} type="button" dir="auto" data-org-drag-handle className="org-orphan-chip" onPointerDown={(event) => startDrag(event, person)} onClick={() => { if (movedRef.current) { movedRef.current = false; return } if (editMode) setPicker({ employee: person, anchor: null, boundsEl: viewportRef.current }) }}>{nameOf(person)}</button>)}</span></div>}
         <p className="org-hint">{t(`employees.orgTree.${editMode ? 'hintEdit' : 'hint'}`)}</p>
         <div className="org-zoom-bar"><button type="button" className="org-center-button" onClick={centerOnManager}><Crosshair size={15} />{t('employees.orgTree.centerManager')}</button><button type="button" onClick={() => applyTransform({ ...view, scale: Math.min(2.2, view.scale * 1.15) })} aria-label={t('employees.orgTree.zoomIn')}><ZoomIn size={16} /></button><button type="button" onClick={() => applyTransform({ ...view, scale: Math.max(0.25, view.scale / 1.15) })} aria-label={t('employees.orgTree.zoomOut')}><ZoomOut size={16} /></button><button type="button" onClick={fitView} aria-label={t('employees.orgTree.fitView')}><Shrink size={16} /></button><button type="button" onClick={toggleFullscreen} aria-label={t('employees.orgTree.fullscreen')}>{isFullscreen ? <Minimize2 size={16} /> : <Expand size={16} />}</button></div>
       </div>
       {picker && <SupervisorPicker employee={picker.employee} candidates={people} anchor={picker.anchor} boundsEl={picker.boundsEl} onClose={() => setPicker(null)} onPick={(supervisorId) => { setPicker(null); setSupervisor.mutate({ employeeId: picker.employee.id, supervisorId }) }} />}
-      {drag && createPortal(<div className="org-drag-ghost" style={{ left: drag.x, top: drag.y }}><span className="org-avatar">{initials(drag.employee)}</span><b dir="auto">{drag.employee.name_en}</b></div>, overlayHost)}
+      {drag?.active && createPortal(<div className="org-drag-ghost" style={{ left: drag.x, top: drag.y }}><span className="org-avatar">{initials(drag.employee, lang)}</span><b dir="auto">{nameOf(drag.employee)}</b></div>, overlayHost)}
     </section>
   )
 }
@@ -352,10 +424,12 @@ function connectorParts(
 
 function matches(person: OrgPerson, query: string): boolean {
   const term = query.trim().toLocaleLowerCase()
-  return !term || [person.id, person.name_en, person.name_ar, person.duty_post].filter((value): value is string => Boolean(value)).some((value) => value.toLocaleLowerCase().includes(term))
+  return !term || [person.id, person.name_en, person.name_ar, person.position, person.position_ar, person.duty_post].filter((value): value is string => Boolean(value)).some((value) => value.toLocaleLowerCase().includes(term))
 }
 
-function initials(person: OrgNodeRead): string {
-  const words = (person.name_en || person.name_ar || person.id).trim().split(/\s+/)
+/** Initials of the displayed (language-appropriate) name, not always the
+ *  English one — the avatar should match the name printed beside it. */
+function initials(person: OrgNodeRead, language: string): string {
+  const words = (pickEmployeeName(person, language) || person.id).trim().split(/\s+/)
   return `${words[0]?.[0] ?? ''}${words.at(-1)?.[0] ?? ''}`.toUpperCase()
 }

@@ -1529,7 +1529,7 @@ body {
 
 /* ORG-tree — approved Duty Locations hierarchy chart. */
 .org-tree-view { min-height: 520px; }
-.org-canvas { position: relative; flex: 1; min-height: 360px; overflow: hidden; cursor: grab; background-color: var(--bg); background-image: linear-gradient(to right, color-mix(in srgb, var(--org-conn) 18%, transparent) 1px, transparent 1px), linear-gradient(to bottom, color-mix(in srgb, var(--org-conn) 18%, transparent) 1px, transparent 1px), linear-gradient(to right, color-mix(in srgb, var(--org-conn) 9%, transparent) 1px, transparent 1px), linear-gradient(to bottom, color-mix(in srgb, var(--org-conn) 9%, transparent) 1px, transparent 1px); background-size: 96px 96px, 96px 96px, 24px 24px, 24px 24px; }
+.org-canvas { position: relative; flex: 1; min-height: 360px; overflow: hidden; cursor: grab; touch-action: none; user-select: none; -webkit-user-select: none; background-color: var(--bg); background-image: linear-gradient(to right, color-mix(in srgb, var(--org-conn) 18%, transparent) 1px, transparent 1px), linear-gradient(to bottom, color-mix(in srgb, var(--org-conn) 18%, transparent) 1px, transparent 1px), linear-gradient(to right, color-mix(in srgb, var(--org-conn) 9%, transparent) 1px, transparent 1px), linear-gradient(to bottom, color-mix(in srgb, var(--org-conn) 9%, transparent) 1px, transparent 1px); background-size: 96px 96px, 96px 96px, 24px 24px, 24px 24px; }
 /* PHYSICAL left/top on purpose: this is a coordinate space, not text flow.
    With logical `inset-inline-start` these all anchor to the right edge under
    RTL and a positive translateX throws the whole tree off-screen. RTL is
@@ -1544,6 +1544,7 @@ body {
 .org-item { transition: transform .26s var(--ease-out-expo); }
 .org-card { position: relative; display: flex; height: 100%; flex-direction: column; justify-content: center; gap: 7px; overflow: hidden; border: 1px solid rgb(255 255 255 / 8%); border-radius: var(--radius-md); background: var(--org-card); padding: 11px 12px; text-align: start; color: #fff; box-shadow: var(--shadow-md); transition: border-color var(--motion-fast), box-shadow var(--motion-fast), opacity var(--motion-fast), transform var(--motion-fast); cursor: pointer; }
 .org-card:hover { border-color: rgb(255 255 255 / 34%); transform: translateY(-1px); }
+.org-card:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .org-card-main { display: flex; min-width: 0; align-items: center; gap: 9px; }
 .org-avatar, .org-picker-avatar { display: grid; flex: none; place-items: center; border-radius: 999px; font-weight: 700; }
 .org-card .org-avatar { width: 32px; height: 32px; background: rgb(255 255 255 / 14%); font-size: .78em; }
@@ -1558,7 +1559,9 @@ body {
 .org-node-layer.is-tracing .org-card:not(.is-traced), .org-card.is-dimmed, .org-card.is-dragging { opacity: .28; }
 .org-card.is-drop { border-color: #7fd4ad; box-shadow: 0 0 0 3px rgb(4 120 87 / 35%); }
 .org-card.is-nodrop { border-color: var(--accent); box-shadow: 0 0 0 3px rgb(200 16 46 / 30%); cursor: not-allowed; }
-.org-collapse-pip { position: absolute; inset-inline-start: 50%; bottom: -11px; z-index: 12; display: grid; width: 22px; height: 22px; place-items: center; transform: translateX(-50%); border: 1px solid var(--border-strong); border-radius: 999px; background: var(--surface); color: var(--primary); box-shadow: var(--shadow-sm); }
+/* PHYSICAL left: the pip lives in the mirrored coordinate plane (see above),
+   so logical inset-inline-start would shove it 100% off-centre under RTL. */
+.org-collapse-pip { position: absolute; left: 50%; bottom: -11px; z-index: 12; display: grid; width: 22px; height: 22px; place-items: center; transform: translateX(-50%); border: 1px solid var(--border-strong); border-radius: 999px; background: var(--surface); color: var(--primary); box-shadow: var(--shadow-sm); }
 .org-edit-button, .org-grip { position: absolute; inset-block-start: 6px; z-index: 13; }
 .org-edit-button { inset-inline-end: 6px; display: grid; width: 22px; height: 22px; place-items: center; border: 1px solid rgb(255 255 255 / 28%); border-radius: 7px; background: rgb(255 255 255 / 14%); color: #fff; }
 .org-grip { inset-inline-start: 6px; color: rgb(255 255 255 / 50%); cursor: grab; }
@@ -1579,6 +1582,7 @@ body {
 .org-orphan-banner > span { display: flex; flex-wrap: wrap; gap: 6px; }
 .org-orphan-chip { border: 1px solid var(--hairline); border-radius: 6px; background: var(--surface); padding: 3px 6px; font-size: .72em; }
 .org-hint { position: absolute; inset-block-end: 6px; inset-inline-start: 14px; z-index: 30; margin: 0; border: 1px solid var(--border); border-radius: 999px; background: color-mix(in srgb, var(--surface) 86%, transparent); padding: 5px 10px; color: var(--text-muted); font-size: .72em; backdrop-filter: blur(4px); }
+@media (width <= 640px) { .org-hint { display: none; } }
 .org-zoom-bar { position: absolute; inset-block-end: 14px; inset-inline-end: 14px; z-index: 30; display: flex; gap: 6px; }
 .org-zoom-bar button { display: grid; width: 32px; height: 32px; place-items: center; padding: 0; color: var(--primary); box-shadow: var(--shadow-sm); }
 .org-zoom-bar .org-center-button { display: inline-flex; width: auto; padding-inline: 11px; }
