@@ -2209,3 +2209,45 @@ def download_filename_for(row: Document, ext: str, *, db: Session | None = None)
         is_sick_leave=is_sick,
         ext=ext,
     )
+
+
+def resolve_pdf_for_access(db: Session, document_id: int, user: User) -> tuple[Path, str]:
+    """Resolve a generated PDF with the same capability gate as document downloads.
+
+    The Outlook bridge stores only the document id.  This helper deliberately
+    returns a confined path and server-derived filename; callers never provide a
+    filesystem path or URL.
+    """
+    from app.services import book_service, perm_service
+
+    row = db.get(Document, document_id)
+    if row is None:
+        raise NotFoundError(
+            "DOCUMENT_NOT_FOUND", f"Document {document_id} not found", id=document_id
+        )
+
+    locked, signed_rel = book_service.is_document_signed_locked(db, document_id)
+    required_cap = "books.view" if locked else "documents.generate"
+    if not perm_service.has_capability(db, user, required_cap):
+        raise AppError(
+            "FORBIDDEN",
+            "You don't have permission to download this document",
+            http_status=403,
+        )
+
+    relative = signed_rel if locked and signed_rel is not None else row.pdf_path
+    if not relative or not relative.casefold().endswith(".pdf"):
+        raise NotFoundError(
+            "PDF_NOT_AVAILABLE",
+            f"No PDF rendition exists for document {document_id}",
+            id=document_id,
+        )
+    root = get_settings().data_dir.resolve()
+    path = (get_settings().data_dir / relative).resolve()
+    if root not in path.parents or not path.is_file():
+        raise NotFoundError(
+            "FILE_NOT_FOUND",
+            f"File not found on disk for document {document_id}",
+            id=document_id,
+        )
+    return path, download_filename_for(row, ".pdf", db=db)

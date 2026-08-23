@@ -37,6 +37,7 @@ from app.api.v1 import managers as managers_v1
 from app.api.v1 import notifications as notifications_v1
 from app.api.v1 import notify as notify_v1
 from app.api.v1 import org_tree as org_tree_v1
+from app.api.v1 import outlook_bridge as outlook_bridge_v1
 from app.api.v1 import permissions as permissions_v1
 from app.api.v1 import permits as permits_v1
 from app.api.v1 import push as push_v1
@@ -205,6 +206,9 @@ def create_app() -> FastAPI:
     app.include_router(editor_templates_v1.router, prefix="/api/v1", dependencies=auth_gate)
     app.include_router(dashboard_v1.router, prefix="/api/v1", dependencies=auth_gate)
     app.include_router(email_v1.router, prefix="/api/v1", dependencies=auth_gate)
+    app.include_router(outlook_bridge_v1.router, prefix="/api/v1", dependencies=auth_gate)
+    # Device bearer auth is authoritative; do not add the cookie session gate.
+    app.include_router(outlook_bridge_v1.device_router, prefix="/api/v1")
     app.include_router(identity_v1.router, prefix="/api/v1", dependencies=auth_gate)
     app.include_router(signatures_v1.router, prefix="/api/v1", dependencies=auth_gate)
     app.include_router(extractions_v1.router, prefix="/api/v1", dependencies=auth_gate)
