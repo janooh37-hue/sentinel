@@ -34,7 +34,7 @@ Primary compatibility references:
 
 ## Goal
 
-Make classic Outlook the only mailbox interface while retaining Sentinel's automatic multi-employee G-number linking, employee-profile correspondence history, generated-document email basket, and Scan Inbox ingestion.
+Make classic Outlook the only mailbox interface while retaining Sentinel's automatic multi-employee G-number linking from message text and existing attachment OCR, employee-profile correspondence history, generated-document email basket, and Scan Inbox ingestion.
 
 Success means an operator reads, searches, drafts, edits, signs, sends, replies, forwards, flags, and files mail entirely in Outlook. Sentinel appears only where it adds HR context: an Outlook employee pane, profile correspondence history, and prepared Outlook drafts from Sentinel records.
 
@@ -45,7 +45,7 @@ Success means an operator reads, searches, drafts, edits, signs, sends, replies,
 - Require classic Outlook on every operator PC. New Outlook is unsupported for this integration.
 - Install a signed Outlook add-in and protocol launcher on every operator PC.
 - Show employees in a read-only Sentinel side pane; never modify stored email bodies to create links.
-- Detect every valid G-number in the selected email's subject and body.
+- Detect every valid G-number in the selected email's subject/body and in OCR text already produced for PDF, PNG, JPG/JPEG, TIF/TIFF, WebP, BMP, or HEIC email attachments.
 - Link a message to every detected real employee, not only one primary employee.
 - Allow an operator to add a missing employee or dismiss an incorrect detected link.
 - Record matching incoming and sent mail automatically in the background even if nobody opens it in Outlook.
@@ -57,16 +57,17 @@ Success means an operator reads, searches, drafts, edits, signs, sends, replies,
 - Keep historical non-email/document rows read-only on employee profiles.
 - Remove the old Ledger page, Sentinel composer, SMTP send, drafts, smart folders, recipient lists, and mailbox interaction state after cutover.
 - Do not keep a compatibility mailbox route or a second compose path.
+- Reuse existing Scan Inbox OCR output for attachment G-number detection; do not add a second attachment extraction pipeline.
 
 ## Non-goals
 
 - Migrating IONOS mailboxes to Microsoft 365 or Exchange Online.
-- Supporting new Outlook, Outlook on the web, Outlook for Mac, or mobile Outlook.
+- Supporting Sentinel integration in new Outlook, Outlook on the web, Outlook for Mac, or mobile Outlook. Operators may use those clients normally for mail, but the Sentinel pane, basket handoff, and exact-open guarantees are classic-Windows-only while mailboxes remain on IONOS.
+- Extracting text from attachment formats outside the existing Scan Inbox set (PDF, PNG, JPG/JPEG, TIF/TIFF, WebP, BMP, and HEIC), or running another OCR pass solely for correspondence linking.
+- Creating a general Outlook automation framework or supporting other Office products.
 - Replacing Outlook search, folders, rules, contacts, signatures, drafts, flags, spellcheck, or send behavior.
 - Rendering full email bodies or attachments inside Sentinel after cutover.
 - Rewriting incoming or stored messages to insert hyperlinks.
-- Reading attachment contents to discover G-numbers. Detection covers message subject and body text.
-- Creating a general Outlook automation framework or supporting other Office products.
 - Preserving creation of new non-email ledger entries.
 
 ## Product terminology
@@ -102,6 +103,7 @@ The pane shows each matching employee's:
 A compact employee search adds a manual link when the message contains no usable G-number. Removed auto-links are durable decisions, not temporary visual hiding.
 
 The add-in never sends the selected message body to Sentinel. It sends only the Internet Message-ID, detected normalized G-numbers, Outlook Store/Entry IDs, and the authenticated bridge/device identity. Background IMAP indexing remains the source of stored message content and metadata.
+Employee summaries returned by Sentinel include durable matches previously found in attachment OCR. The add-in does not open, download, or OCR attachments itself.
 
 Selection processing must be asynchronous, cancellable, and keyed to the current Outlook item. A stale response from the previously selected message must never replace the current pane. Employee summaries and resolved message locations may be cached briefly per message.
 
@@ -127,11 +129,11 @@ The existing per-user IONOS IMAP synchronization remains server-side. Its respon
 
 - import and deduplicate incoming and sent messages;
 - store sanitized message metadata/body and authorized attachment files for audit and Scan Inbox processing;
-- detect canonical G-numbers in subject and body;
+- detect canonical G-numbers in subject and body during import;
 - resolve only IDs that exist in the employee roster;
 - create or update employee link decisions;
 - preserve an operator's manual dismissal;
-- feed email attachments into the existing Scan Inbox flow; and
+- feed supported email attachments into Scan Inbox and reuse its stored OCR text to add links; and
 - expose last-success/error health in Settings.
 
 The indexer does not provide mailbox folders, read/unread state, flags, drafts, compose, SMTP send, contact lists, or smart folders to the product.
@@ -291,9 +293,9 @@ Route/schema changes require regeneration of `backend/openapi.json` and `fronten
 2. Add-in cancels any previous selection request.
 3. It reads the Internet Message-ID and Outlook location and detects canonical `G` plus three or four digits in subject and body.
 4. It normalizes and deduplicates the detected IDs.
-5. Device-authenticated selection resolution returns every real matching employee and, when already indexed, the durable link state.
+5. Device-authenticated selection resolution returns the union of real local matches and durable matches already found by message indexing or attachment OCR.
 6. Pane renders the current message's cards only.
-7. The background indexer records detected links whether or not the message was opened.
+7. Background services record subject/body and supported-attachment matches whether or not the message was opened.
 
 If the message is not indexed yet, cards still display from roster lookup, with recording shown as pending. Manual link changes become available once indexing creates the correspondence row. The pane refreshes after the next index success without blocking Outlook.
 
@@ -352,6 +354,7 @@ Before deletion, each file and API callsite must be checked because attachment p
 
 - email account IMAP credentials and sync interval required by the hidden indexer;
 - Email Sync status, renamed and moved into Settings as recording health;
+- existing `ScanInbox.raw_text` as the only attachment-content source for correspondence linking;
 - Scan Inbox email-attachment ingestion;
 - email basket storage, grouping, templates, recipient learning, and document selection;
 - employee activity/profile correspondence metadata;
@@ -366,9 +369,9 @@ All changed strings must have Arabic and English peers. Sentinel layout changes 
 
 ## Background indexing and link semantics
 
-The canonical detector remains `G` plus three or four digits, case-insensitive, with word boundaries. Frontend/TypeScript, backend/Python, and add-in/C# implementations share contract fixtures containing valid, invalid, Arabic-context, HTML, quoted-thread, and multiple-ID examples. Each runtime may implement the small regex natively; the fixture file prevents drift without adding a cross-language runtime dependency.
+The canonical detector remains `G` plus three or four digits, case-insensitive, with word boundaries. Frontend/TypeScript, backend/Python, and add-in/C# implementations share contract fixtures containing valid, invalid, Arabic-context, HTML, quoted-thread, attachment-OCR, and multiple-ID examples. Each runtime may implement the small regex natively; the fixture file prevents drift without adding a cross-language runtime dependency.
 
-Indexer order for an imported or updated email:
+Import order for an incoming or sent email:
 
 1. normalize and persist Internet Message-ID;
 2. sanitize and store body/attachments using the existing security boundary;
@@ -376,10 +379,12 @@ Indexer order for an imported or updated email:
 4. resolve IDs against employees in one bounded query;
 5. upsert missing `linked/detected` rows;
 6. leave `dismissed` and `linked/manual` rows unchanged;
-7. update Scan Inbox attachments; and
+7. enqueue supported attachments in Scan Inbox; and
 8. commit message and links atomically.
 
-Detection never links a syntactically valid but nonexistent G-number. Multiple real G-numbers link all employees. Removing a G-number from a later duplicate/import update does not silently erase an earlier manual link or dismissal. Automatic links that are no longer detected may remain as history unless an operator dismisses them; email content is immutable audit evidence, not a live form field.
+Attachment detection runs later inside the existing Scan Inbox drain. When a row has `source == "email_attachment"`, a parent `ledger_entry_id`, and nonempty `raw_text`, the drain runs the same detector/resolver against that stored OCR output and upserts `linked/detected` rows in the OCR transaction. It does not reopen the attachment or run another extractor. Unsupported formats, empty OCR, and OCR failure create no automatic link; manual linking remains available.
+
+Detection never links a syntactically valid but nonexistent G-number. Multiple real G-numbers across message text and supported attachment OCR link all employees. Later sync/OCR work never erases a manual link or dismissal. Automatic links remain as auditable history unless an operator dismisses them.
 
 ## Error behavior
 
@@ -468,8 +473,9 @@ Schema changes require the project Alembic migration review and confirmation of 
 
 Tests must defend observable behavior:
 
-- one message links every real detected G-number;
+- one message links every real G-number detected across subject, body, and existing supported-attachment OCR;
 - nonexistent and malformed IDs do not link;
+- unsupported attachment formats, empty OCR, and OCR failure create no automatic link;
 - manual dismissal survives repeated sync;
 - manual add survives detector runs;
 - legacy relationship backfill is complete and idempotent;
@@ -511,17 +517,18 @@ Use a non-production IONOS test mailbox on representative operator hardware, the
 1. install and pair;
 2. select mail containing one real G-number;
 3. select mail containing multiple real G-numbers;
-4. confirm Arabic and English employee cards;
-5. add and dismiss a link, sync twice, and confirm persistence;
-6. prepare a basket containing multiple authorized PDFs and bilingual body;
-7. confirm recipients, ordering, Outlook signature, attachment names, editable draft, and saved Drafts copy;
-8. send and wait for automatic IMAP indexing;
-9. confirm the sent message appears once on every linked employee profile;
-10. open it from a profile;
-11. move it to another Outlook folder and open it again through Message-ID fallback;
-12. revoke the device and confirm both pane and launcher stop exposing Sentinel data;
-13. test an intentionally wrong Outlook mailbox; and
-14. stop IMAP temporarily, confirm Outlook remains usable, restore it, and confirm indexing catches up without duplicates.
+4. select mail whose only real G-number is in a supported PDF/image attachment, let Scan Inbox OCR it, and confirm the pane/profile gains the link without a second OCR pass;
+5. confirm Arabic and English employee cards;
+6. add and dismiss a link, sync twice, and confirm persistence;
+7. prepare a basket containing multiple authorized PDFs and bilingual body;
+8. confirm recipients, ordering, Outlook signature, attachment names, editable draft, and saved Drafts copy;
+9. send and wait for automatic IMAP indexing;
+10. confirm the sent message appears once on every linked employee profile;
+11. open it from a profile;
+12. move it to another Outlook folder and open it again through Message-ID fallback;
+13. revoke the device and confirm both pane and launcher stop exposing Sentinel data;
+14. test an intentionally wrong Outlook mailbox; and
+15. stop IMAP temporarily, confirm Outlook remains usable, restore it, and confirm indexing catches up without duplicates.
 
 Final project checks use the narrowest relevant backend/frontend commands, API type synchronization, migration review, and required i18n/RTL review. A real Outlook smoke test is mandatory; mocked COM tests alone cannot complete this feature.
 
@@ -536,6 +543,7 @@ Final project checks use the narrowest relevant backend/frontend commands, API t
 | Email moved after location cache | Internet Message-ID fallback and cache refresh. |
 | IMAP outage delays profile history | Outlook remains primary; delayed-recording health and catch-up dedup. |
 | Auto-detection creates noise | Resolve real roster IDs only; all links visible; durable dismissal/manual correction. |
+| Attachment OCR creates a false match | Reuse existing OCR only, resolve real roster IDs, and apply the same durable dismissal control. |
 | Basket attachment authorization bypass | Typed references and access recheck at download. |
 | Existing history lost during removal | Additive backfill, database/files backup, no row or attachment deletion. |
 | Native installer drift across Office bitness | Preflight inventory and signed package per supported bitness. |
@@ -547,10 +555,10 @@ The replacement is complete only when:
 - operators perform all mailbox work in classic Outlook;
 - Sentinel contains no mailbox page or composer;
 - employee context appears in the Outlook side pane without modifying messages;
-- every valid detected employee is recorded automatically and correctable;
+- every valid employee detected in message text or supported existing attachment OCR is recorded automatically and remains correctable;
 - employee profiles open exact Outlook mail and never render an internal email preview;
 - the email basket creates a complete saved Outlook draft and fails without clearing the basket;
 - historical correspondence and document rows remain available;
-- Scan Inbox continues receiving indexed email attachments;
+- Scan Inbox continues receiving indexed email attachments and supplies their existing OCR text to correspondence linking;
 - all operator PCs pass the signed installer/pairing/real-mail smoke test; and
 - old mailbox code, rollout scaffolding, obsolete API types, and stale bilingual copy are removed.
