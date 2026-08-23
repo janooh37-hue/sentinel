@@ -144,7 +144,10 @@ def redeem_pairing(
         raise PairingInvalid("pairing token expired or already redeemed")
     if _mailbox(mailbox_address) != row.expected_mailbox:
         raise PairingInvalid("mailbox mismatch")
-    if db.get(OutlookBridgeDevice, device_id) is not None:
+    existing = db.get(OutlookBridgeDevice, device_id)
+    if existing is not None and (
+        existing.owner_user_id != row.owner_user_id or existing.revoked_at is None
+    ):
         raise PairingInvalid("device id already exists")
     claimed = db.execute(
         update(OutlookPairing)
@@ -160,17 +163,25 @@ def redeem_pairing(
         raise PairingInvalid("pairing token expired or already redeemed")
 
     credential, credential_hash = _issue_token()
-    device = OutlookBridgeDevice(
-        id=device_id,
-        owner_user_id=row.owner_user_id,
-        mailbox_address=row.expected_mailbox,
-        device_label=device_label.strip(),
-        device_credential_hash=credential_hash,
-        created_at=now,
-        last_seen_at=now,
-    )
+    if existing is None:
+        device = OutlookBridgeDevice(
+            id=device_id,
+            owner_user_id=row.owner_user_id,
+            mailbox_address=row.expected_mailbox,
+            device_label=device_label.strip(),
+            device_credential_hash=credential_hash,
+            created_at=now,
+            last_seen_at=now,
+        )
+        db.add(device)
+    else:
+        existing.mailbox_address = row.expected_mailbox
+        existing.device_label = device_label.strip()
+        existing.device_credential_hash = credential_hash
+        existing.last_seen_at = now
+        existing.revoked_at = None
+        device = existing
     row.redeemed_at = now
-    db.add(device)
     db.commit()
     return device, credential
 

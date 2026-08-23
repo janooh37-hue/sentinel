@@ -32,7 +32,7 @@ from app.schemas.outlook_bridge import (
     OutlookSelectionRead,
     OutlookSelectionRequest,
 )
-from app.services import document_service, outlook_bridge_service
+from app.services import document_service, outlook_bridge_service, perm_service
 
 router = APIRouter(prefix="/outlook", tags=["outlook"])
 device_router = APIRouter(prefix="/outlook/device", tags=["outlook-device"])
@@ -87,6 +87,20 @@ def require_outlook_device(
         return outlook_bridge_service.authenticate_device(db, raw)
     except outlook_bridge_service.DeviceInvalid as exc:
         raise _unauthorized() from exc
+
+
+def require_outlook_employee_view(
+    device: Annotated[OutlookBridgeDevice, Depends(require_outlook_device)],
+    db: Annotated[Session, Depends(get_db)],
+) -> OutlookBridgeDevice:
+    owner = db.get(User, device.owner_user_id)
+    if owner is None or not perm_service.has_capability(db, owner, "employees.view"):
+        raise AppError(
+            "FORBIDDEN",
+            "Missing capability: employees.view",
+            http_status=403,
+        )
+    return device
 
 
 @router.post("/pairings", response_model=OutlookPairingRead)
@@ -234,7 +248,7 @@ def select_message(
 
 @device_router.get("/employees", response_model=list[OutlookEmployeeSummary])
 def search_employees(
-    device: Annotated[OutlookBridgeDevice, Depends(require_outlook_device)],
+    device: Annotated[OutlookBridgeDevice, Depends(require_outlook_employee_view)],
     db: Annotated[Session, Depends(get_db)],
     q: str | None = Query(default=None, max_length=128),
     limit: int = Query(default=20, ge=1, le=50),
@@ -249,7 +263,7 @@ def search_employees(
 @device_router.get("/employees/{employee_id}/photo", response_class=FileResponse)
 def employee_photo(
     employee_id: str,
-    _: Annotated[OutlookBridgeDevice, Depends(require_outlook_device)],
+    _: Annotated[OutlookBridgeDevice, Depends(require_outlook_employee_view)],
     db: Annotated[Session, Depends(get_db)],
 ) -> FileResponse:
     try:

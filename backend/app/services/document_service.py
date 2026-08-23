@@ -2220,6 +2220,13 @@ def resolve_pdf_for_access(db: Session, document_id: int, user: User) -> tuple[P
     """
     from app.services import book_service, perm_service
 
+    if not perm_service.has_capability(db, user, "documents.generate"):
+        raise AppError(
+            "FORBIDDEN",
+            "You don't have permission to download this document",
+            http_status=403,
+        )
+
     row = db.get(Document, document_id)
     if row is None:
         raise NotFoundError(

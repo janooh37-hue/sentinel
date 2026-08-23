@@ -7,7 +7,7 @@ from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user
-from app.db.models import EmailAccount, Employee, LedgerEntry, User
+from app.db.models import EmailAccount, Employee, LedgerEntry, User, UserPermission
 from app.db.session import get_db
 from app.main import create_app
 
@@ -78,6 +78,54 @@ def test_pair_and_use_device_without_browser_session(
     )
     assert employees.status_code == 200, employees.text
     assert employees.json()[0]["employee_id"] == "G3082"
+
+
+def test_device_employee_visibility_uses_owner_capability(
+    outlook_client: tuple[TestClient, User], api_db: Session
+) -> None:
+    client, user = outlook_client
+    pair = client.post("/api/v1/outlook/pairings", json={}).json()["token"]
+    credential = client.post(
+        "/api/v1/outlook/device/pair",
+        json={
+            "token": pair,
+            "device_id": "pc-1",
+            "device_label": "HR-01",
+            "mailbox_address": "owner@example.test",
+        },
+    ).json()["credential"]
+    api_db.add(UserPermission(user_id=user.id, capability="employees.view", effect="deny"))
+    api_db.commit()
+    headers = {"Authorization": f"Bearer {credential}"}
+    assert client.get("/api/v1/outlook/device/employees", headers=headers).status_code == 403
+    assert (
+        client.get("/api/v1/outlook/device/employees/G3082/photo", headers=headers).status_code
+        == 403
+    )
+
+
+def test_attachment_handoff_checks_capability_before_document_id(
+    outlook_client: tuple[TestClient, User], api_db: Session
+) -> None:
+    client, user = outlook_client
+    api_db.add(UserPermission(user_id=user.id, capability="documents.generate", effect="deny"))
+    api_db.commit()
+    response = client.post(
+        "/api/v1/outlook/handoffs",
+        json={
+            "kind": "compose",
+            "payload": {
+                "to": ["recipient@example.test"],
+                "subject": "x",
+                "body_html": "<p>x</p>",
+                "basket_key": "b",
+                "attachments": [
+                    {"kind": "document_pdf", "document_id": 99999, "filename": "x.pdf"}
+                ],
+            },
+        },
+    )
+    assert response.status_code == 403, response.text
 
 
 def test_device_router_requires_bearer_and_browser_router_requires_session(

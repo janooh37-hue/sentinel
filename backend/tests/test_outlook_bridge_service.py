@@ -16,6 +16,7 @@ from app.db.models import (
 from app.schemas.outlook_bridge import OutlookComposePayload
 from app.services import outlook_bridge_service as bridge
 from app.services.outlook_bridge_service import (
+    DeviceInvalid,
     HandoffInvalid,
     PairingInvalid,
     authenticate_device,
@@ -26,6 +27,7 @@ from app.services.outlook_bridge_service import (
     redeem_handoff,
     redeem_pairing,
     resolve_selection,
+    revoke_device,
 )
 
 
@@ -109,6 +111,32 @@ def test_expired_pairing_cannot_be_redeemed(db_session: Session, monkeypatch) ->
             device_label="HR-01",
             mailbox_address="owner@example.test",
         )
+
+
+def test_same_owner_can_repair_revoked_stable_device_id(db_session: Session) -> None:
+    user = _user(db_session, "owner@example.test")
+    first_pairing = create_pairing(db_session, owner_user_id=user.id)
+    device, old_credential = redeem_pairing(
+        db_session,
+        raw_token=first_pairing,
+        device_id="pc-1",
+        device_label="HR-01",
+        mailbox_address="owner@example.test",
+    )
+    revoke_device(db_session, owner_user_id=user.id, device_id=device.id)
+
+    _, new_credential = redeem_pairing(
+        db_session,
+        raw_token=create_pairing(db_session, owner_user_id=user.id),
+        device_id="pc-1",
+        device_label="HR-01-reinstalled",
+        mailbox_address="owner@example.test",
+    )
+
+    assert new_credential != old_credential
+    assert authenticate_device(db_session, new_credential).device_label == "HR-01-reinstalled"
+    with pytest.raises(DeviceInvalid):
+        authenticate_device(db_session, old_credential)
 
 
 def test_handoff_is_single_use_and_erases_compose_payload(db_session: Session) -> None:
