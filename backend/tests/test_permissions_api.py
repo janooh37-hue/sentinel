@@ -93,7 +93,7 @@ def test_operator_can_create_request(api_db):
     assert r.status_code == 201, r.text
     data = r.json()
     assert data["capability"] == "books.approve"
-    assert data["capability_label"] == "Approve / reject books"
+    assert data["capability_label"] == "Approve / reject records"
     assert data["status"] == "pending"
     assert data["decision"] is None
     assert data["user_id"] == u.id
