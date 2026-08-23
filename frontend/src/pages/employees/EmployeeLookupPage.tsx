@@ -5,11 +5,10 @@
  *   • EmployeeSearchHero (navy band) with LookupHeroCards as children
  *   • Recent activity, followed by the inline EmployeeForm card when creating.
  *
- * Cross-page handoffs (both ported verbatim from the old EmployeesPage):
- *   • Smart-link: Ledger stashes a G-number at `gssg.employees.openId` → on
- *     mount we consume it and replace-navigate to the detail page.
- *   • Intake: IntakePanel navigates here with state { openCreate, injectedExtraction }
- *     → we open the create form pre-filled; history state is cleared on mount.
+ * Cross-page handoffs:
+ *   • Intake: IntakePanel navigates here with state
+ *     { openCreate, injectedExtraction } → the create form is pre-filled and
+ *     history state is cleared on mount.
  */
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'

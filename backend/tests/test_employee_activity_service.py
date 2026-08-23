@@ -50,6 +50,7 @@ def _ledger(
     owner_user_id: int | None = None,
     tags: list[str] | None = None,
     deleted_at: datetime | None = None,
+    subject: str = "Test correspondence",
 ) -> LedgerEntry:
     return LedgerEntry(
         id=entry_id,
@@ -57,7 +58,7 @@ def _ledger(
         direction="incoming",
         channel=channel,
         counterparty="Test authority",
-        subject="Test correspondence",
+        subject=subject,
         notes_html=None,
         attachment_paths=[],
         tags=tags or [],
@@ -418,3 +419,42 @@ def test_private_email_rows_and_total_are_owner_scoped(db_session: Session):
 
     assert [x.source_id for x in result.items] == [92, 90]
     assert result.total == 2
+
+
+def test_activity_excludes_dismissed_and_suggested_correspondence_links(
+    db_session: Session,
+) -> None:
+    _employee(db_session)
+    linked = _ledger(entry_id=501, created_at=BASE, subject="Linked")
+    suggested = _ledger(entry_id=502, created_at=BASE + timedelta(minutes=1), subject="Suggested")
+    dismissed = _ledger(entry_id=503, created_at=BASE + timedelta(minutes=2), subject="Dismissed")
+    db_session.add_all([linked, suggested, dismissed])
+    db_session.add_all(
+        [
+            CorrespondenceEmployeeLink(
+                ledger_entry_id=linked.id,
+                employee_id="G100",
+                state="linked",
+                source="manual",
+            ),
+            CorrespondenceEmployeeLink(
+                ledger_entry_id=suggested.id,
+                employee_id="G100",
+                state="suggested",
+                source="detected",
+            ),
+            CorrespondenceEmployeeLink(
+                ledger_entry_id=dismissed.id,
+                employee_id="G100",
+                state="dismissed",
+                source="manual",
+            ),
+        ]
+    )
+    db_session.commit()
+
+    result = employee_activity_service.list_employee_activity(
+        db_session, owner_user_id=7, employee_id="G100", limit=25, offset=0
+    )
+
+    assert [(item.source_id, item.title) for item in result.items] == [(501, "Linked")]

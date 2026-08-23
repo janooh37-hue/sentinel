@@ -95,7 +95,7 @@ export default function PdfViewer({
         <div className="flex flex-1 flex-col items-center justify-center gap-2 text-white/70">
           <AlertCircle className="h-6 w-6" />
           <span className="text-sm">
-            {t('ledger.attachments.renderFailed', {
+            {t('employees.correspondence.attachments.renderFailed', {
               defaultValue: "Couldn't render this file",
             })}
           </span>

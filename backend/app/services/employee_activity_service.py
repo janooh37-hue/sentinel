@@ -190,6 +190,7 @@ def _ledger(
         )
         .join(Employee, CorrespondenceEmployeeLink.employee_id == Employee.id)
         .where(
+            CorrespondenceEmployeeLink.state == "linked",
             LedgerEntry.deleted_at.is_(None),
             correspondence_service.tags_contain(correspondence_service.DRAFT_TAG, negate=True),
             or_(LedgerEntry.channel != "email", LedgerEntry.owner_user_id == owner_user_id),

@@ -75,7 +75,7 @@ vi.mock('react-i18next', () => ({
         'employees.activity.openDocument': 'Open document',
         'employees.activity.openLeave': 'Open leave',
         'employees.activity.openViolation': 'Open violation',
-        'employees.activity.openLedger': 'Open correspondence',
+        'employees.activity.openCorrespondence': 'Open correspondence',
         'employees.activity.readOnly': 'Read-only historical record',
         'employees.activity.desktopRequired': 'Classic Outlook requires the desktop app',
         'employees.activity.loading': 'Loading recent activity',
@@ -89,7 +89,7 @@ vi.mock('react-i18next', () => ({
         'employees.activity.document': 'Documents',
         'employees.activity.leave': 'Leave',
         'employees.activity.violation': 'Violations',
-        'employees.activity.ledger': 'Correspondence',
+        'employees.activity.correspondence': 'Correspondence',
         'employees.activity.employee': 'Employee',
         'employees.activity.activity': 'Activity',
         'employees.activity.type': 'Type',
@@ -101,7 +101,7 @@ vi.mock('react-i18next', () => ({
       if (key === 'employees.activity.actions.document') return 'Generated document'
       if (key === 'employees.activity.actions.leave') return `Leave record · ${options?.days} days`
       if (key === 'employees.activity.actions.violation') return 'Recorded violation'
-      if (key === 'employees.activity.actions.ledger') return 'Recorded correspondence'
+      if (key === 'employees.activity.actions.correspondence') return 'Recorded correspondence'
       return values[key] ?? key
     },
   }),
@@ -270,14 +270,14 @@ describe('EmployeeActivitySection', () => {
       document: 'Generated document',
       leave: 'Leave record · {{days}} days',
       violation: 'Recorded violation',
-      ledger: 'Recorded correspondence',
+      correspondence: 'Recorded correspondence',
     })
     expect(ar.employees.activity.emptyFiltered).toBe('لا توجد أنشطة مطابقة لعوامل التصفية الحالية.')
     expect(ar.employees.activity.actions).toEqual({
       document: 'تم إنشاء المستند',
       leave: 'سجل الإجازة · {{days}} يومًا',
       violation: 'تم تسجيل المخالفة',
-      ledger: 'تم تسجيل المراسلة',
+      correspondence: 'تم تسجيل المراسلة',
     })
   })
 
