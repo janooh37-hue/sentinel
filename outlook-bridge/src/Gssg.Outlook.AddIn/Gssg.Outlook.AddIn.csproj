@@ -26,7 +26,10 @@
     <Reference Include="Microsoft.CSharp" />
     <Reference Include="Microsoft.Office.Tools" />
     <Reference Include="Microsoft.Office.Tools.Common" />
+    <Reference Include="Microsoft.Office.Tools.Common.v4.0.Utilities" />
     <Reference Include="Microsoft.Office.Tools.Outlook" />
+    <Reference Include="Microsoft.Office.Tools.Outlook.v4.0.Utilities" />
+    <Reference Include="Microsoft.Office.Tools.v4.0.Framework" />
     <Reference Include="Microsoft.VisualStudio.Tools.Applications.Runtime" />
   </ItemGroup>
   <ItemGroup>
@@ -39,8 +42,13 @@
       <EmbedInteropTypes>true</EmbedInteropTypes>
     </COMReference>
   </ItemGroup>
-  <Import Project="$(MSBuildExtensionsPath32)\Microsoft\VisualStudio\v$(VisualStudioVersion)\OfficeTools\Microsoft.VisualStudio.Tools.Office.targets"
-          Condition="Exists('$(MSBuildExtensionsPath32)\Microsoft\VisualStudio\v$(VisualStudioVersion)\OfficeTools\Microsoft.VisualStudio.Tools.Office.targets')" />
+  <PropertyGroup>
+    <VstoTargetsPath>$(MSBuildExtensionsPath32)\Microsoft\VisualStudio\v$(VisualStudioVersion)\OfficeTools\Microsoft.VisualStudio.Tools.Office.targets</VstoTargetsPath>
+  </PropertyGroup>
+  <Target Name="RequireVstoBuildTargets" BeforeTargets="PrepareForBuild">
+    <Error Condition="!Exists('$(VstoTargetsPath)')" Text="VSTO OfficeTools targets are required. Install Visual Studio Tools for Office before building Gssg.Outlook.AddIn." />
+  </Target>
+  <Import Project="$(VstoTargetsPath)" Condition="Exists('$(VstoTargetsPath)')" />
   <ItemGroup>
     <Compile Remove="SelectionController.cs" />
   </ItemGroup>

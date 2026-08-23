@@ -28,7 +28,7 @@ namespace Gssg.Outlook.AddIn
         private OfficeOutlook.Application outlookApplication;
         private bool disposed;
 
-        protected override void OnStartupMain()
+        private void ThisAddIn_Startup(object sender, EventArgs e)
         {
             try
             {
@@ -58,7 +58,11 @@ namespace Gssg.Outlook.AddIn
                     MessageBoxDefaultButton.Button1,
                     options);
             }
-            base.OnStartupMain();
+        }
+
+        private void ThisAddIn_Shutdown(object sender, EventArgs e)
+        {
+            ShutdownBridge();
         }
 
         private void Application_NewExplorer(OfficeOutlook.Explorer explorer)

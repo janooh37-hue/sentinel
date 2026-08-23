@@ -1,8 +1,6 @@
 using System;
-using System.ComponentModel;
-using Microsoft.Office.Tools;
-using Microsoft.Office.Tools.Outlook;
 using OfficeOutlook = Microsoft.Office.Interop.Outlook;
+using Microsoft.Office.Tools.Outlook;
 
 namespace Gssg.Outlook.AddIn
 {
@@ -10,10 +8,9 @@ namespace Gssg.Outlook.AddIn
     [System.Security.Permissions.PermissionSet(System.Security.Permissions.SecurityAction.Demand, Name = "FullTrust")]
     public sealed partial class ThisAddIn : OutlookAddInBase
     {
-        internal CustomTaskPaneCollection CustomTaskPanes;
         internal OfficeOutlook.Application Application;
-
-        public ThisAddIn(Factory factory, IServiceProvider serviceProvider)
+        internal Microsoft.Office.Tools.CustomTaskPaneCollection CustomTaskPanes;
+        public ThisAddIn(Microsoft.Office.Tools.Outlook.Factory factory, IServiceProvider serviceProvider)
             : base(factory, serviceProvider, "AddIn", "ThisAddIn")
         {
             Globals.Factory = factory;
@@ -36,6 +33,8 @@ namespace Gssg.Outlook.AddIn
 
         private void InternalStartup()
         {
+            Startup += ThisAddIn_Startup;
+            Shutdown += ThisAddIn_Shutdown;
         }
 
         private void InitializeControls()
@@ -59,7 +58,7 @@ namespace Gssg.Outlook.AddIn
     internal static class Globals
     {
         private static ThisAddIn thisAddIn;
-        private static Factory factory;
+        private static Microsoft.Office.Tools.Outlook.Factory factory;
 
         internal static ThisAddIn ThisAddIn
         {
@@ -71,7 +70,7 @@ namespace Gssg.Outlook.AddIn
             }
         }
 
-        internal static Factory Factory
+        internal static Microsoft.Office.Tools.Outlook.Factory Factory
         {
             get { return factory; }
             set
