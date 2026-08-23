@@ -21,8 +21,10 @@ from app.api.errors import NotFoundError, ValidationFailedError
 from app.config import get_settings
 from app.core.extraction import ocr
 from app.core.extraction.dates import parse_date
+from app.core.gnumber import detect_g_numbers
 from app.db.models import Employee, ScanInbox, User
 from app.services import book_service, scan_triage_service, vault_service
+from app.services.correspondence_link_service import sync_detected_links
 
 log = logging.getLogger(__name__)
 
@@ -146,6 +148,12 @@ def _process_one(db: Session, item: ScanInbox) -> None:
     item.fields = decision.fields or {}
     item.candidates = decision.candidates or []
     item.raw_text = text
+    if item.source == "email_attachment" and item.ledger_entry_id is not None and bool(text):
+        sync_detected_links(
+            db,
+            entry_id=item.ledger_entry_id,
+            employee_ids=detect_g_numbers(text),
+        )
     item.confidence = decision.confidence
     item.qr_refs = qr_refs
     item.proposed_route = decision.proposed_route

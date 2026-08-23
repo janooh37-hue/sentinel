@@ -38,6 +38,7 @@ from sqlalchemy.orm import Session
 
 from app.config import get_settings
 from app.core import crypto
+from app.core.gnumber import detect_g_numbers
 from app.db.models import EmailAccount, LedgerEntry
 from app.schemas.email import (
     EmailAccountUpsert,
@@ -46,6 +47,7 @@ from app.schemas.email import (
     EmailSyncResult,
     EmailSyncStatus,
 )
+from app.services import correspondence_link_service
 
 log = logging.getLogger(__name__)
 
@@ -922,6 +924,14 @@ def _build_entry(
     )
 
 
+def index_entry_text(db: Session, entry: LedgerEntry, text: str) -> None:
+    correspondence_link_service.sync_detected_links(
+        db,
+        entry_id=entry.id,
+        employee_ids=detect_g_numbers(text),
+    )
+
+
 _DEFAULT_SUBJECT_CLEAN = re.compile(r"^\s*(re|fw|fwd|رد|توجيه)\s*:", re.IGNORECASE)
 
 
@@ -1082,9 +1092,13 @@ def _sync_account_locked(db: Session, account: EmailAccount) -> EmailSyncResult:
                     # Back-fill empty recipient/message-id columns on historical
                     # rows so a single re-sync repopulates them (idempotent).
                     existing_row = db.get(LedgerEntry, entry_id)
-                    if existing_row is not None and _apply_recipient_backfill(
-                        existing_row, msg
-                    ):
+                    if existing_row is not None:
+                        index_entry_text(
+                            db,
+                            existing_row,
+                            f"{existing_row.subject}\n{existing_row.notes_html or ''}",
+                        )
+                        _apply_recipient_backfill(existing_row, msg)
                         db.commit()
                     skipped += 1
                     continue
@@ -1100,6 +1114,12 @@ def _sync_account_locked(db: Session, account: EmailAccount) -> EmailSyncResult:
                     # Flush so entry.id is assigned — we need it to name the
                     # attachment folder.
                     db.flush()
+
+                    index_entry_text(
+                        db,
+                        entry,
+                        f"{entry.subject}\n{entry.notes_html or ''}",
+                    )
 
                     # Extract + persist attachments (and enqueue incoming ones)
                     saved_paths, cid_map = _save_and_enqueue_attachments(
