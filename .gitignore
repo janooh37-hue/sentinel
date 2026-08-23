@@ -56,6 +56,7 @@ Thumbs.db
 .claude/skills/*/
 !.claude/skills/db-sync/
 !.claude/skills/verify-ui/
+!.claude/skills/task-pipeline/
 
 # ruflo / claude-flow generated scaffolding + state (tooling, regenerable via `ruflo init upgrade`)
 .claude/agents/
