@@ -492,6 +492,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/auth/users/{user_id}/permissions/bulk": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Set User Permissions Bulk
+         * @description Apply several override changes in one all-or-nothing call.
+         */
+        put: operations["set_user_permissions_bulk_api_v1_auth_users__user_id__permissions_bulk_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/announcements/groups": {
         parameters: {
             query?: never;
@@ -1876,7 +1896,7 @@ export interface paths {
         /**
          * Save Book As Template
          * @description Copy a finished General Book into the shared template library
-         *     (retokenized + validated; content becomes visible to all books.manage users).
+         *     (retokenized + validated; content becomes visible to all books.templates users).
          */
         post: operations["save_book_as_template_api_v1_books__book_id__save_as_template_post"];
         delete?: never;
@@ -1960,11 +1980,11 @@ export interface paths {
          * @description Records stranded at ``awaiting_scan`` past 24h, oldest first.
          *
          *     ``scope=mine`` (default) is the caller's own; ``scope=all`` is everyone's,
-         *     so an admin can clear records stranded by a user who lacks books.manage.
+         *     so an admin can clear records stranded by a user who lacks books.edit.
          *
          *     Declared before ``/{book_id}`` so the literal ``awaiting-scan`` segment isn't
          *     swallowed by the int path param — same reason as ``/awaiting`` above.
-         *     Authority is ``books.manage``: the same capability filing the scan requires.
+         *     Authority is ``books.edit``: the same capability filing the scan requires.
          */
         get: operations["list_awaiting_scan_api_v1_books_awaiting_scan_get"];
         put?: never;
@@ -2087,7 +2107,7 @@ export interface paths {
          *     ApplicationPage revise-mode prefill. Deliberately not on ``BookRead`` (the
          *     detail payload only exposes ``has_fields``).
          *
-         *     Requires ``books.manage`` (not ``books.view``) because this backs the
+         *     Requires ``books.edit`` (not ``books.view``) because this backs the
          *     revise/edit write-path: the caller fetches these fields in order to submit
          *     a revised generation, which is a managed write operation.
          */
@@ -2342,7 +2362,7 @@ export interface paths {
          * @description File an attachment. ``awaiting_scan`` books flip silently (the scan is the
          *     signature). For a ``none``/``pending`` book, ``as_signed=true`` records the
          *     upload as the signed copy and approves the record; otherwise it is filed as a
-         *     plain attachment. Authority is ``books.manage`` for every path.
+         *     plain attachment. Authority is ``books.edit`` for every path.
          */
         post: operations["add_book_attachment_api_v1_books__book_id__attachments_post"];
         delete?: never;
@@ -9743,6 +9763,14 @@ export interface components {
             has_signature: boolean;
         };
         /**
+         * SetPermissionBulkRequest
+         * @description Apply several override changes in one all-or-nothing call.
+         */
+        SetPermissionBulkRequest: {
+            /** Items */
+            items: components["schemas"]["SetPermissionRequest"][];
+        };
+        /**
          * SetPermissionRequest
          * @description Set or clear a single per-user capability override.
          *
@@ -11882,6 +11910,43 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["SetPermissionRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UserPermissionRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    set_user_permissions_bulk_api_v1_auth_users__user_id__permissions_bulk_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                user_id: number;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SetPermissionBulkRequest"];
             };
         };
         responses: {
