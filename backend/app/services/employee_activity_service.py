@@ -19,7 +19,7 @@ from app.schemas.employee_activity import (
     EmployeeActivityKind,
     EmployeeActivityListRead,
 )
-from app.services import ledger_service
+from app.services import correspondence_service
 
 DEFAULT_LIMIT = 25
 MAX_LIMIT = 100
@@ -190,9 +190,8 @@ def _ledger(
         )
         .join(Employee, CorrespondenceEmployeeLink.employee_id == Employee.id)
         .where(
-            CorrespondenceEmployeeLink.state == "linked",
             LedgerEntry.deleted_at.is_(None),
-            ledger_service._tags_contain(ledger_service.DRAFT_TAG, negate=True),
+            correspondence_service.tags_contain(correspondence_service.DRAFT_TAG, negate=True),
             or_(LedgerEntry.channel != "email", LedgerEntry.owner_user_id == owner_user_id),
         )
     )

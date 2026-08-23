@@ -12,7 +12,7 @@ from app.schemas.correspondence import (
     CorrespondenceItemRead,
     CorrespondenceListRead,
 )
-from app.services import ledger_service
+from app.services import correspondence_service
 
 DEFAULT_LIMIT = 25
 MAX_LIMIT = 100
@@ -96,7 +96,7 @@ def list_employee_correspondence(
         CorrespondenceEmployeeLink.employee_id == normalized_employee_id,
         CorrespondenceEmployeeLink.state == "linked",
         LedgerEntry.deleted_at.is_(None),
-        ledger_service._tags_contain(ledger_service.DRAFT_TAG, negate=True),
+        correspondence_service.tags_contain(correspondence_service.DRAFT_TAG, negate=True),
         or_(LedgerEntry.channel != "email", LedgerEntry.owner_user_id == owner_user_id),
     )
     total = int(

@@ -703,6 +703,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/employees/{employee_id}/correspondence": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Employee Correspondence */
+        get: operations["list_employee_correspondence_api_v1_employees__employee_id__correspondence_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/employees/{employee_id}/leaves": {
         parameters: {
             query?: never;
@@ -1400,8 +1417,7 @@ export interface paths {
          *     ``%PDF`` magic-byte stream. Browser PDF handlers and download accelerators
          *     (notably **Internet Download Manager**, which sniffs the URL+content-type
          *     and intercepts the request, returning an empty 204 to the JS ``fetch``)
-         *     would otherwise hijack the bytes and the canvas would never render. The
-         *     ledger team uses the same trick — see ``/ledger/.../attachments/by-index``.
+         *     would otherwise hijack the bytes and the canvas would never render.
          *
          *     ``original=true`` returns the pre-signature generated PDF (``pdf_path``) even
          *     when the version is signed-locked. The default download swaps in the signed
@@ -2455,612 +2471,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/ledger/smart-folders": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** List Smart Folders */
-        get: operations["list_smart_folders_api_v1_ledger_smart_folders_get"];
-        put?: never;
-        /** Create Smart Folder */
-        post: operations["create_smart_folder_api_v1_ledger_smart_folders_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/ledger/smart-folders/suggestions": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** List Suggestions */
-        get: operations["list_suggestions_api_v1_ledger_smart_folders_suggestions_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/ledger/smart-folders/dismiss": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Dismiss Suggestion */
-        post: operations["dismiss_suggestion_api_v1_ledger_smart_folders_dismiss_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/ledger/smart-folders/{folder_id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post?: never;
-        /** Delete Smart Folder */
-        delete: operations["delete_smart_folder_api_v1_ledger_smart_folders__folder_id__delete"];
-        options?: never;
-        head?: never;
-        /** Rename Smart Folder */
-        patch: operations["rename_smart_folder_api_v1_ledger_smart_folders__folder_id__patch"];
-        trace?: never;
-    };
-    "/api/v1/ledger": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** List Entries */
-        get: operations["list_entries_api_v1_ledger_get"];
-        put?: never;
-        /** Create Entry */
-        post: operations["create_entry_api_v1_ledger_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/ledger/counterparties": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** List Counterparties */
-        get: operations["list_counterparties_api_v1_ledger_counterparties_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/ledger/contacts": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** List Contacts */
-        get: operations["list_contacts_api_v1_ledger_contacts_get"];
-        put?: never;
-        /** Save Contact */
-        post: operations["save_contact_api_v1_ledger_contacts_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/ledger/contacts/{contact_id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post?: never;
-        /** Delete Contact */
-        delete: operations["delete_contact_api_v1_ledger_contacts__contact_id__delete"];
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/ledger/recipient-lists": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** List Recipient Lists */
-        get: operations["list_recipient_lists_api_v1_ledger_recipient_lists_get"];
-        put?: never;
-        /** Create Recipient List */
-        post: operations["create_recipient_list_api_v1_ledger_recipient_lists_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/ledger/recipient-lists/{list_id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post?: never;
-        /** Delete Recipient List */
-        delete: operations["delete_recipient_list_api_v1_ledger_recipient_lists__list_id__delete"];
-        options?: never;
-        head?: never;
-        /** Update Recipient List */
-        patch: operations["update_recipient_list_api_v1_ledger_recipient_lists__list_id__patch"];
-        trace?: never;
-    };
-    "/api/v1/ledger/search": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Search Entries */
-        get: operations["search_entries_api_v1_ledger_search_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/ledger/log": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** List Correspondence Log */
-        get: operations["list_correspondence_log_api_v1_ledger_log_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/ledger/log/{entry_id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Get Correspondence Log Record */
-        get: operations["get_correspondence_log_record_api_v1_ledger_log__entry_id__get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/ledger/unread-count": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Get Unread Count
-         * @description Number of un-opened incoming email entries — drives the NavBell badge.
-         *
-         *     Private inbox (Phase 6): counts the caller's own unread by default;
-         *     admins may widen with scope=all to see the whole-office count.
-         */
-        get: operations["get_unread_count_api_v1_ledger_unread_count_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/ledger/unread-recent": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Get Unread Recent
-         * @description Preview list of latest unread incoming emails for the NavBell popover.
-         *
-         *     Private inbox (Phase 6): scoped to the caller; admins may widen with
-         *     scope=all. (The NavBell itself never passes scope=all — own-scope only.)
-         */
-        get: operations["get_unread_recent_api_v1_ledger_unread_recent_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/ledger/mark-all-read": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Mark All Read
-         * @description Bulk-mark the caller's own unread incoming email as read.
-         *
-         *     Intentionally ignores any ``scope`` query param — mark-all-read is always
-         *     own-scope only.  An admin calling with ``?scope=all`` must not wipe the
-         *     whole office's unread state.
-         */
-        post: operations["mark_all_read_api_v1_ledger_mark_all_read_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/ledger/entries/{entry_id}/mark-read": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Mark Read
-         * @description Set ``read_at=utcnow()`` if currently NULL. Idempotent.
-         */
-        post: operations["mark_read_api_v1_ledger_entries__entry_id__mark_read_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/ledger/entries/{entry_id}/mark-unread": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Mark Unread
-         * @description Clear ``read_at`` (mark unread) if currently set. Idempotent — powers the
-         *     bulk "Mark unread" action.
-         */
-        post: operations["mark_unread_api_v1_ledger_entries__entry_id__mark_unread_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/ledger/drafts": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** List Drafts */
-        get: operations["list_drafts_api_v1_ledger_drafts_get"];
-        put?: never;
-        /** Create Draft */
-        post: operations["create_draft_api_v1_ledger_drafts_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/ledger/drafts/{draft_id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post?: never;
-        /** Delete Draft */
-        delete: operations["delete_draft_api_v1_ledger_drafts__draft_id__delete"];
-        options?: never;
-        head?: never;
-        /** Update Draft */
-        patch: operations["update_draft_api_v1_ledger_drafts__draft_id__patch"];
-        trace?: never;
-    };
-    "/api/v1/ledger/drafts/{draft_id}/send": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Send Draft */
-        post: operations["send_draft_api_v1_ledger_drafts__draft_id__send_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/ledger/flag-count": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Get Flag Count
-         * @description The caller's own follow-up flag count — drives the bell badge.
-         */
-        get: operations["get_flag_count_api_v1_ledger_flag_count_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/ledger/{entry_id}/flag": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Set Flag
-         * @description Upsert the caller's follow-up flag for an entry (optional ``due`` date).
-         */
-        post: operations["set_flag_api_v1_ledger__entry_id__flag_post"];
-        /**
-         * Clear Flag
-         * @description Delete the caller's follow-up flag for an entry.
-         */
-        delete: operations["clear_flag_api_v1_ledger__entry_id__flag_delete"];
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/ledger/{entry_id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Get Entry */
-        get: operations["get_entry_api_v1_ledger__entry_id__get"];
-        put?: never;
-        post?: never;
-        /** Delete Entry */
-        delete: operations["delete_entry_api_v1_ledger__entry_id__delete"];
-        options?: never;
-        head?: never;
-        /** Update Entry */
-        patch: operations["update_entry_api_v1_ledger__entry_id__patch"];
-        trace?: never;
-    };
-    "/api/v1/ledger/{entry_id}/thread": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Get Thread
-         * @description Return other email entries that share the same conversation as ``entry_id``.
-         *
-         *     Match key = (channel='email', same counterparty, normalised subject). The
-         *     seed entry is excluded; returned oldest-first.
-         */
-        get: operations["get_thread_api_v1_ledger__entry_id__thread_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/ledger/{entry_id}/attachments": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Add Attachment */
-        post: operations["add_attachment_api_v1_ledger__entry_id__attachments_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/ledger/entries/{entry_id}/star": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Toggle Star
-         * @description Flip the ★ tag on an entry. Idempotent: a second call removes it.
-         */
-        post: operations["toggle_star_api_v1_ledger_entries__entry_id__star_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/ledger/entries/{entry_id}/attachments/{attachment_index}/send-to-vault": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Send Attachment To Vault */
-        post: operations["send_attachment_to_vault_api_v1_ledger_entries__entry_id__attachments__attachment_index__send_to_vault_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/ledger/entries/{entry_id}/attachments.zip": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Download Attachments Zip
-         * @description Bundle every attachment for an entry into a single zip stream.
-         */
-        get: operations["download_attachments_zip_api_v1_ledger_entries__entry_id__attachments_zip_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/ledger/{entry_id}/attachments/by-index/{index}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Download Attachment By Index
-         * @description Stream the ``index``-th attachment of an entry.
-         *
-         *     Addressing by index keeps non-ASCII / spaced filenames out of the URL path
-         *     (they 204 through some proxies). ``index`` is the position in
-         *     ``attachment_paths``.
-         *
-         *     ``encoding=base64`` returns the bytes base64-encoded as ``text/plain`` —
-         *     the PDF preview uses this so the browser never sees a ``%PDF`` magic-byte
-         *     body (Chrome's PDF stream handler otherwise claims it and the JS ``fetch``
-         *     receives an empty 204). pdf.js decodes + renders the bytes itself.
-         */
-        get: operations["download_attachment_by_index_api_v1_ledger__entry_id__attachments_by_index__index__get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/ledger/{entry_id}/attachments/{filename}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Download Attachment
-         * @description Stream an attachment file back to the client.
-         *
-         *     Validates that ``filename`` is one of the entry's recorded attachments
-         *     so a caller can't drop "../../etc/passwd" and read arbitrary files.
-         *
-         *     ``disposition=inline`` lets the browser render PDFs/images in place (the
-         *     in-app preview); the default ``attachment`` forces a download.
-         */
-        get: operations["download_attachment_api_v1_ledger__entry_id__attachments__filename__get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/v1/correspondence/categories": {
         parameters: {
             query?: never;
@@ -3260,7 +2670,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/email/send": {
+    "/api/v1/outlook/pairings": {
         parameters: {
             query?: never;
             header?: never;
@@ -3269,12 +2679,230 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /**
-         * Send Email
-         * @description Multipart endpoint. ``to`` / ``cc`` are comma-separated lists of
-         *     addresses; ``files`` carries optional attachments.
-         */
-        post: operations["send_email_api_v1_email_send_post"];
+        /** Issue Pairing */
+        post: operations["issue_pairing_api_v1_outlook_pairings_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/outlook/devices": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Devices */
+        get: operations["get_devices_api_v1_outlook_devices_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/outlook/devices/{device_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete Device */
+        delete: operations["delete_device_api_v1_outlook_devices__device_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/outlook/handoffs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Issue Handoff */
+        post: operations["issue_handoff_api_v1_outlook_handoffs_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/outlook/handoffs/{handoff_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Handoff */
+        get: operations["get_handoff_api_v1_outlook_handoffs__handoff_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/outlook/device/pair": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Pair Device */
+        post: operations["pair_device_api_v1_outlook_device_pair_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/outlook/device/selection": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Select Message */
+        post: operations["select_message_api_v1_outlook_device_selection_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/outlook/device/employees": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Search Employees */
+        get: operations["search_employees_api_v1_outlook_device_employees_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/outlook/device/employees/{employee_id}/photo": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Employee Photo */
+        get: operations["employee_photo_api_v1_outlook_device_employees__employee_id__photo_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/outlook/device/messages/{entry_id}/employees/{employee_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Link Employee */
+        put: operations["link_employee_api_v1_outlook_device_messages__entry_id__employees__employee_id__put"];
+        post?: never;
+        /** Unlink Employee */
+        delete: operations["unlink_employee_api_v1_outlook_device_messages__entry_id__employees__employee_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/outlook/device/handoffs/redeem": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Redeem Device Handoff */
+        post: operations["redeem_device_handoff_api_v1_outlook_device_handoffs_redeem_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/outlook/device/handoffs/{handoff_id}/attachments/{index}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Download Handoff Attachment */
+        get: operations["download_handoff_attachment_api_v1_outlook_device_handoffs__handoff_id__attachments__index__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/outlook/device/handoffs/{handoff_id}/complete": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Complete Device Handoff */
+        post: operations["complete_device_handoff_api_v1_outlook_device_handoffs__handoff_id__complete_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/outlook/device/handoffs/{handoff_id}/fail": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Fail Device Handoff */
+        post: operations["fail_device_handoff_api_v1_outlook_device_handoffs__handoff_id__fail_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -4828,33 +4456,6 @@ export interface components {
             /** Ref Id */
             ref_id: number;
         };
-        /**
-         * AddressBookContactCreate
-         * @description Payload to save a contact. Owner comes from the session, never here.
-         */
-        AddressBookContactCreate: {
-            /**
-             * Display Name
-             * @default
-             */
-            display_name: string;
-            /** Address */
-            address: string;
-        };
-        /** AddressBookContactRead */
-        AddressBookContactRead: {
-            /** Id */
-            id: number;
-            /** Display Name */
-            display_name: string;
-            /** Address */
-            address: string;
-            /**
-             * Created At
-             * Format: date-time
-             */
-            created_at: string;
-        };
         /** AdjustmentRevokeWrite */
         AdjustmentRevokeWrite: {
             /** Reason */
@@ -5295,14 +4896,6 @@ export interface components {
              */
             ts: string;
         };
-        /** Body_add_attachment_api_v1_ledger__entry_id__attachments_post */
-        Body_add_attachment_api_v1_ledger__entry_id__attachments_post: {
-            /**
-             * Upload
-             * Format: binary
-             */
-            upload: string;
-        };
         /** Body_add_book_attachment_api_v1_books__book_id__attachments_post */
         Body_add_book_attachment_api_v1_books__book_id__attachments_post: {
             /**
@@ -5389,31 +4982,6 @@ export interface components {
             file?: string | null;
             /** Mentions */
             mentions?: string[] | null;
-        };
-        /** Body_send_email_api_v1_email_send_post */
-        Body_send_email_api_v1_email_send_post: {
-            /** To */
-            to: string;
-            /** Subject */
-            subject: string;
-            /** Html */
-            html: string;
-            /**
-             * Cc
-             * @default
-             */
-            cc: string;
-            /** In Reply To */
-            in_reply_to?: string | null;
-            /** References */
-            references?: string | null;
-            /**
-             * Use Signature
-             * @default true
-             */
-            use_signature: boolean;
-            /** Files */
-            files?: string[] | null;
         };
         /** Body_stage_attachment_api_v1_documents_attachments_stage_post */
         Body_stage_attachment_api_v1_documents_attachments_stage_post: {
@@ -5940,6 +5508,16 @@ export interface components {
             /** Audit Retention Days */
             audit_retention_days?: number | null;
         };
+        /** CorrespondenceAddress */
+        CorrespondenceAddress: {
+            /**
+             * Name
+             * @default
+             */
+            name: string;
+            /** Address */
+            address: string;
+        };
         /** CorrespondenceCategoryCreate */
         CorrespondenceCategoryCreate: {
             /** Key */
@@ -5989,13 +5567,12 @@ export interface components {
             /** Sort */
             sort?: number | null;
         };
-        /**
-         * CorrespondenceLogItem
-         * @description A row in the shared log list — projection of a LedgerEntry.
-         */
-        CorrespondenceLogItem: {
-            /** Id */
-            id: number;
+        /** CorrespondenceItemRead */
+        CorrespondenceItemRead: {
+            /** Entry Id */
+            entry_id: number;
+            /** Channel */
+            channel: string;
             /**
              * Entry Date
              * Format: date
@@ -6003,68 +5580,28 @@ export interface components {
             entry_date: string;
             /** Direction */
             direction: string;
-            /** Subject */
-            subject: string;
             /** Counterparty */
             counterparty: string;
-            /** Source Kind */
-            source_kind: string | null;
-            /** Category Id */
-            category_id: number | null;
-            /** Related Book Id */
-            related_book_id: number | null;
-            /** Related Employee Id */
-            related_employee_id: string | null;
-            /** Created By */
-            created_by: string | null;
-            /** Read At */
-            read_at?: string | null;
-        };
-        /**
-         * CorrespondenceLogRecord
-         * @description The record view — adds the resolved category + the linked Book's status.
-         */
-        CorrespondenceLogRecord: {
-            /** Id */
-            id: number;
+            /** Subject */
+            subject: string;
+            /** To Recipients */
+            to_recipients: components["schemas"]["CorrespondenceAddress"][];
+            /** Cc Recipients */
+            cc_recipients: components["schemas"]["CorrespondenceAddress"][];
+            /** Attachment Count */
+            attachment_count: number;
             /**
-             * Entry Date
-             * Format: date
+             * Link Source
+             * @enum {string}
              */
-            entry_date: string;
-            /** Direction */
-            direction: string;
-            /** Subject */
-            subject: string;
-            /** Counterparty */
-            counterparty: string;
-            /** Source Kind */
-            source_kind: string | null;
-            /** Category Id */
-            category_id: number | null;
-            /** Related Book Id */
-            related_book_id: number | null;
-            /** Related Employee Id */
-            related_employee_id: string | null;
-            /** Created By */
-            created_by: string | null;
-            /** Read At */
-            read_at?: string | null;
-            /** Category Key */
-            category_key?: string | null;
-            /** Category Name En */
-            category_name_en?: string | null;
-            /** Category Name Ar */
-            category_name_ar?: string | null;
-            /** Book Ref Number */
-            book_ref_number?: string | null;
-            /** Book Approval State */
-            book_approval_state?: string | null;
+            link_source: "detected" | "manual" | "legacy";
+            /** Can Open In Outlook */
+            can_open_in_outlook: boolean;
         };
-        /** CorrespondenceLogResponse */
-        CorrespondenceLogResponse: {
+        /** CorrespondenceListRead */
+        CorrespondenceListRead: {
             /** Items */
-            items: components["schemas"]["CorrespondenceLogItem"][];
+            items: components["schemas"]["CorrespondenceItemRead"][];
             /** Total */
             total: number;
         };
@@ -6469,35 +6006,6 @@ export interface components {
              */
             created_at: string;
         };
-        /** DashboardRecentLedger */
-        DashboardRecentLedger: {
-            /** Id */
-            id: number;
-            /**
-             * Entry Date
-             * Format: date
-             */
-            entry_date: string;
-            /** Direction */
-            direction: string;
-            /** Channel */
-            channel: string;
-            /** Counterparty */
-            counterparty: string;
-            /** Subject */
-            subject: string;
-            /** Related Employee Id */
-            related_employee_id: string | null;
-            /** Related Employee Name En */
-            related_employee_name_en: string | null;
-            /** Related Employee Name Ar */
-            related_employee_name_ar: string | null;
-            /**
-             * Created At
-             * Format: date-time
-             */
-            created_at: string;
-        };
         /** DashboardSummary */
         DashboardSummary: {
             totals: components["schemas"]["DashboardTotals"];
@@ -6507,27 +6015,6 @@ export interface components {
             upcoming_leave_ends: components["schemas"]["DashboardUpcomingLeaveItem"][];
             /** Recent Documents */
             recent_documents: components["schemas"]["DashboardRecentDocument"][];
-            /** Recent Ledger */
-            recent_ledger: components["schemas"]["DashboardRecentLedger"][];
-            email_sync: components["schemas"]["DashboardSyncStatus"];
-        };
-        /**
-         * DashboardSyncStatus
-         * @description Email-sync widget payload (Phase 18).
-         *
-         *     ``enabled`` requires both: an EmailAccount row exists AND its
-         *     ``sync_interval_minutes > 0``. ``last_synced_at`` is sourced from
-         *     ``EmailAccount.last_synced_at`` (populated by the scheduler / manual sync).
-         */
-        DashboardSyncStatus: {
-            /** Last Synced At */
-            last_synced_at: string | null;
-            /** Enabled */
-            enabled: boolean;
-            /** Interval Minutes */
-            interval_minutes: number;
-            /** Incoming Today */
-            incoming_today: number;
         };
         /** DashboardTotals */
         DashboardTotals: {
@@ -6544,16 +6031,6 @@ export interface components {
              * @default 0
              */
             open_violations_count: number;
-            /**
-             * Draft Count
-             * @default 0
-             */
-            draft_count: number;
-            /**
-             * Book Draft Count
-             * @default 0
-             */
-            book_draft_count: number;
         };
         /** DashboardUpcomingLeaveItem */
         DashboardUpcomingLeaveItem: {
@@ -6586,7 +6063,7 @@ export interface components {
              * Id
              * @enum {string}
              */
-            id: "pending" | "workspace" | "violations" | "drafts" | "ledger" | "on_leave_today" | "upcoming_leave" | "recent_docs" | "email_sync_status" | "waiting_approvals" | "expiring_soon" | "recent_ledger" | "pending_departures";
+            id: "pending" | "workspace" | "violations" | "on_leave_today" | "upcoming_leave" | "recent_docs" | "waiting_approvals" | "expiring_soon" | "pending_departures";
             /**
              * Visible
              * @default true
@@ -6747,42 +6224,6 @@ export interface components {
              */
             role: "primary" | "companion";
         };
-        /**
-         * DraftWrite
-         * @description Payload for creating or updating an email draft.
-         *
-         *     Drafts borrow the LedgerEntry shape (channel='email', direction='outgoing',
-         *     tag='draft'). ``to``/``cc``/``in_reply_to``/``references`` aren't first-
-         *     class on LedgerEntry, so they're persisted as ``draft_meta`` JSON.
-         *     ``subject`` and ``html`` map to ``subject`` and ``notes_html``.
-         *     ``use_signature`` is persisted in draft_meta and forwarded to
-         *     ``email_service.send_email`` when the draft is promoted to sent.
-         */
-        DraftWrite: {
-            /** To */
-            to?: string[];
-            /** Cc */
-            cc?: string[];
-            /**
-             * Subject
-             * @default
-             */
-            subject: string;
-            /**
-             * Html
-             * @default
-             */
-            html: string;
-            /** In Reply To */
-            in_reply_to?: string | null;
-            /** References */
-            references?: string | null;
-            /**
-             * Use Signature
-             * @default true
-             */
-            use_signature: boolean;
-        };
         /** DutyAssignmentEventRead */
         DutyAssignmentEventRead: {
             /** Id */
@@ -6939,7 +6380,7 @@ export interface components {
         };
         /**
          * EmailAccountRead
-         * @description Public view — never includes the password.
+         * @description Public IMAP recording view; legacy SMTP columns stay private.
          */
         EmailAccountRead: {
             /** Id */
@@ -6954,12 +6395,6 @@ export interface components {
             use_ssl: boolean;
             /** Username */
             username: string;
-            /** Smtp Host */
-            smtp_host: string;
-            /** Smtp Port */
-            smtp_port: number;
-            /** Smtp Use Tls */
-            smtp_use_tls: boolean;
             /** Sent Folder */
             sent_folder: string;
             /** Inbox Folder */
@@ -6983,8 +6418,7 @@ export interface components {
         };
         /**
          * EmailAccountUpsert
-         * @description Write payload. ``password`` is optional on PATCH — only set when
-         *     rotating credentials.
+         * @description IMAP account write payload.
          */
         EmailAccountUpsert: {
             /** Email */
@@ -7009,21 +6443,6 @@ export interface components {
             /** Password */
             password?: string | null;
             /**
-             * Smtp Host
-             * @default smtp.ionos.com
-             */
-            smtp_host: string;
-            /**
-             * Smtp Port
-             * @default 587
-             */
-            smtp_port: number;
-            /**
-             * Smtp Use Tls
-             * @default true
-             */
-            smtp_use_tls: boolean;
-            /**
              * Sent Folder
              * @default Sent
              */
@@ -7046,15 +6465,6 @@ export interface components {
             /** Linked Employee Id */
             linked_employee_id?: string | null;
         };
-        /** EmailSendResult */
-        EmailSendResult: {
-            /** Sent */
-            sent: boolean;
-            /** Message Id */
-            message_id: string;
-            /** Ledger Entry Id */
-            ledger_entry_id: number;
-        };
         /** EmailSyncResult */
         EmailSyncResult: {
             /** Imported */
@@ -7071,10 +6481,7 @@ export interface components {
         };
         /**
          * EmailSyncStatus
-         * @description Live sync state for the Ledger status strip.
-         *
-         *     ``syncing`` reflects the module sync lock — true during BOTH a manual
-         *     ``POST /email/sync`` and a scheduler tick.
+         * @description Live IMAP recording state for the settings sync status.
          */
         EmailSyncStatus: {
             /** Syncing */
@@ -7726,16 +7133,6 @@ export interface components {
             /** Matched Employee Name Ar */
             matched_employee_name_ar?: string | null;
         };
-        /** FlagCountResponse */
-        FlagCountResponse: {
-            /** Count */
-            count: number;
-        };
-        /** FlagRequest */
-        FlagRequest: {
-            /** Due */
-            due?: string | null;
-        };
         /** GatewayQrOut */
         GatewayQrOut: {
             /** Qr */
@@ -8250,241 +7647,6 @@ export interface components {
              */
             notify_employee: boolean;
         };
-        /** LedgerAddress */
-        LedgerAddress: {
-            /**
-             * Name
-             * @default
-             */
-            name: string;
-            /** Address */
-            address: string;
-        };
-        /**
-         * LedgerAttachmentMeta
-         * @description Per-attachment metadata for the detail view.
-         *
-         *     Populated by ``GET /{id}`` from disk; the other endpoints that return
-         *     ``LedgerEntryRead`` leave it empty (the drawer only reads the full entry).
-         *     ``index`` is the position in ``attachment_paths`` (stable; used to address
-         *     the file by ``/attachments/by-index/{index}`` so Arabic/spaced filenames
-         *     never go in the URL path). ``size`` is the on-disk byte count, or 0 when the
-         *     file is missing.
-         */
-        LedgerAttachmentMeta: {
-            /** Index */
-            index: number;
-            /** Name */
-            name: string;
-            /** Size */
-            size: number;
-        };
-        /**
-         * LedgerEntryCreate
-         * @description Fields accepted when creating a new ledger entry.
-         */
-        LedgerEntryCreate: {
-            /**
-             * Entry Date
-             * Format: date
-             */
-            entry_date: string;
-            /**
-             * Direction
-             * @enum {string}
-             */
-            direction: "incoming" | "outgoing" | "internal";
-            /**
-             * Channel
-             * @enum {string}
-             */
-            channel: "email" | "phone" | "in_person" | "fax" | "letter" | "other";
-            /** Counterparty */
-            counterparty: string;
-            /** Subject */
-            subject: string;
-            /** Notes Html */
-            notes_html?: string | null;
-            /** Tags */
-            tags?: string[];
-            /** Related Book Id */
-            related_book_id?: number | null;
-            /** Related Employee Id */
-            related_employee_id?: string | null;
-            /** Created By */
-            created_by?: string | null;
-        };
-        /**
-         * LedgerEntryRead
-         * @description Full row — returned by GET /{id}, POST, and PATCH.
-         */
-        LedgerEntryRead: {
-            /** Id */
-            id: number;
-            /**
-             * Entry Date
-             * Format: date
-             */
-            entry_date: string;
-            /** Direction */
-            direction: string;
-            /** Channel */
-            channel: string;
-            /** Counterparty */
-            counterparty: string;
-            /** Subject */
-            subject: string;
-            /** Notes Html */
-            notes_html: string | null;
-            /** Attachment Paths */
-            attachment_paths: string[];
-            /** Attachments */
-            attachments?: components["schemas"]["LedgerAttachmentMeta"][];
-            /** Tags */
-            tags: string[];
-            /** Inline Images */
-            inline_images?: {
-                [key: string]: string;
-            };
-            /** Draft Meta */
-            draft_meta?: {
-                [key: string]: string | boolean | string[] | null;
-            } | null;
-            /** Related Book Id */
-            related_book_id: number | null;
-            /** Related Employee Id */
-            related_employee_id: string | null;
-            /**
-             * Created At
-             * Format: date-time
-             */
-            created_at: string;
-            /** Updated At */
-            updated_at: string | null;
-            /** Created By */
-            created_by: string | null;
-            /** Created By Name En */
-            created_by_name_en?: string | null;
-            /** Created By Name Ar */
-            created_by_name_ar?: string | null;
-            /** Deleted At */
-            deleted_at: string | null;
-            /** Read At */
-            read_at?: string | null;
-            /** To Recipients */
-            to_recipients?: components["schemas"]["LedgerAddress"][];
-            /** Cc Recipients */
-            cc_recipients?: components["schemas"]["LedgerAddress"][];
-            /** Bcc Recipients */
-            bcc_recipients?: components["schemas"]["LedgerAddress"][];
-            /** Message Id */
-            message_id?: string | null;
-            /** In Reply To */
-            in_reply_to?: string | null;
-            /** Email References */
-            email_references?: string | null;
-            /**
-             * Flagged
-             * @default false
-             */
-            flagged: boolean;
-            /** Followup Due */
-            followup_due?: string | null;
-        };
-        /**
-         * LedgerEntryUpdate
-         * @description All fields optional — partial update (PATCH semantics).
-         */
-        LedgerEntryUpdate: {
-            /** Entry Date */
-            entry_date?: string | null;
-            /** Direction */
-            direction?: ("incoming" | "outgoing" | "internal") | null;
-            /** Channel */
-            channel?: ("email" | "phone" | "in_person" | "fax" | "letter" | "other") | null;
-            /** Counterparty */
-            counterparty?: string | null;
-            /** Subject */
-            subject?: string | null;
-            /** Notes Html */
-            notes_html?: string | null;
-            /** Tags */
-            tags?: string[] | null;
-            /** Related Book Id */
-            related_book_id?: number | null;
-            /** Related Employee Id */
-            related_employee_id?: string | null;
-        };
-        /**
-         * LedgerListItem
-         * @description Slim projection for list / timeline views.
-         *
-         *     Omits ``notes_html`` (can be large). ``attachment_count`` is exposed
-         *     instead of ``attachment_paths`` so the timeline can show a paperclip
-         *     glyph without paying the full-paths-of-every-row cost.
-         */
-        LedgerListItem: {
-            /** Id */
-            id: number;
-            /**
-             * Entry Date
-             * Format: date
-             */
-            entry_date: string;
-            /** Direction */
-            direction: string;
-            /** Channel */
-            channel: string;
-            /** Counterparty */
-            counterparty: string;
-            /** Subject */
-            subject: string;
-            /** Tags */
-            tags: string[];
-            /**
-             * Attachment Count
-             * @default 0
-             */
-            attachment_count: number;
-            /** Related Book Id */
-            related_book_id: number | null;
-            /** Related Employee Id */
-            related_employee_id: string | null;
-            /**
-             * Created At
-             * Format: date-time
-             */
-            created_at: string;
-            /** Updated At */
-            updated_at: string | null;
-            /** Deleted At */
-            deleted_at: string | null;
-            /** Read At */
-            read_at?: string | null;
-            /**
-             * Snippet
-             * @default
-             */
-            snippet: string;
-            /**
-             * Flagged
-             * @default false
-             */
-            flagged: boolean;
-            /** Followup Due */
-            followup_due?: string | null;
-        };
-        /** LedgerListResponse */
-        LedgerListResponse: {
-            /** Items */
-            items: components["schemas"]["LedgerListItem"][];
-            /** Total */
-            total: number;
-            /** Limit */
-            limit: number;
-            /** Offset */
-            offset: number;
-        };
         /**
          * LinkSelfRequest
          * @description Set (or clear, admin-only) the signed-in user's own employee link.
@@ -8555,11 +7717,6 @@ export interface components {
             active?: boolean | null;
             /** User Id */
             user_id?: number | null;
-        };
-        /** MarkAllReadResponse */
-        MarkAllReadResponse: {
-            /** Updated */
-            updated: number;
         };
         /** MigrateRequest */
         MigrateRequest: {
@@ -8640,8 +7797,6 @@ export interface components {
             leaves: number;
             /** Scans */
             scans: number;
-            /** Emails */
-            emails: number;
         };
         /** NotifyMessageRead */
         NotifyMessageRead: {
@@ -8768,6 +7923,247 @@ export interface components {
         OrgSupervisorUpdate: {
             /** Supervisor Id */
             supervisor_id?: string | null;
+        };
+        /** OutlookAttachmentRef */
+        OutlookAttachmentRef: {
+            /**
+             * Kind
+             * @constant
+             */
+            kind: "document_pdf";
+            /** Document Id */
+            document_id: number;
+            /** Filename */
+            filename: string;
+        };
+        /** OutlookComposePayload */
+        OutlookComposePayload: {
+            /** To */
+            to: string[];
+            /** Cc */
+            cc?: string[];
+            /** Subject */
+            subject: string;
+            /** Body Html */
+            body_html: string;
+            /** Basket Key */
+            basket_key: string;
+            /** Attachments */
+            attachments: components["schemas"]["OutlookAttachmentRef"][];
+        };
+        /** OutlookDevicePairRead */
+        OutlookDevicePairRead: {
+            /** Id */
+            id: string;
+            /** Mailbox Address */
+            mailbox_address: string;
+            /** Device Label */
+            device_label: string;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Last Seen At
+             * Format: date-time
+             */
+            last_seen_at: string;
+            /** Revoked At */
+            revoked_at?: string | null;
+            /** Credential */
+            credential: string;
+        };
+        /** OutlookDevicePairRequest */
+        OutlookDevicePairRequest: {
+            /** Token */
+            token: string;
+            /** Device Id */
+            device_id: string;
+            /** Device Label */
+            device_label: string;
+            /** Mailbox Address */
+            mailbox_address: string;
+        };
+        /** OutlookDeviceRead */
+        OutlookDeviceRead: {
+            /** Id */
+            id: string;
+            /** Mailbox Address */
+            mailbox_address: string;
+            /** Device Label */
+            device_label: string;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Last Seen At
+             * Format: date-time
+             */
+            last_seen_at: string;
+            /** Revoked At */
+            revoked_at?: string | null;
+        };
+        /** OutlookEmployeeSummary */
+        OutlookEmployeeSummary: {
+            /** Employee Id */
+            employee_id: string;
+            /** Name En */
+            name_en: string;
+            /** Name Ar */
+            name_ar?: string | null;
+            /** Status */
+            status: string;
+            /** Photo Version */
+            photo_version?: string | null;
+            /**
+             * Recording Pending
+             * @default false
+             */
+            recording_pending: boolean;
+        };
+        /** OutlookHandoffCreate */
+        OutlookHandoffCreate: {
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "compose" | "open";
+            /** Payload */
+            payload: components["schemas"]["OutlookComposePayload"] | components["schemas"]["OutlookOpenPayload"];
+        };
+        /** OutlookHandoffCreated */
+        OutlookHandoffCreated: {
+            /** Id */
+            id: number;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "compose" | "open";
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "pending" | "redeemed" | "completed" | "failed" | "expired";
+            /**
+             * Expires At
+             * Format: date-time
+             */
+            expires_at: string;
+            /** Redeemed At */
+            redeemed_at?: string | null;
+            /** Completed At */
+            completed_at?: string | null;
+            /** Failure Code */
+            failure_code?: string | null;
+            /** Payload */
+            payload?: {
+                [key: string]: unknown;
+            } | null;
+            /** Token */
+            token: string;
+        };
+        /** OutlookHandoffFailure */
+        OutlookHandoffFailure: {
+            /** Failure Code */
+            failure_code: string;
+        };
+        /** OutlookHandoffRead */
+        OutlookHandoffRead: {
+            /** Id */
+            id: number;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "compose" | "open";
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "pending" | "redeemed" | "completed" | "failed" | "expired";
+            /**
+             * Expires At
+             * Format: date-time
+             */
+            expires_at: string;
+            /** Redeemed At */
+            redeemed_at?: string | null;
+            /** Completed At */
+            completed_at?: string | null;
+            /** Failure Code */
+            failure_code?: string | null;
+            /** Payload */
+            payload?: {
+                [key: string]: unknown;
+            } | null;
+        };
+        /** OutlookHandoffRedeemRead */
+        OutlookHandoffRedeemRead: {
+            /** Handoff Id */
+            handoff_id: number;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "compose" | "open";
+            /** Payload */
+            payload: {
+                [key: string]: unknown;
+            };
+        };
+        /** OutlookHandoffRedeemRequest */
+        OutlookHandoffRedeemRequest: {
+            /** Token */
+            token: string;
+        };
+        /** OutlookOpenPayload */
+        OutlookOpenPayload: {
+            /** Ledger Entry Id */
+            ledger_entry_id: number;
+        };
+        /**
+         * OutlookPairingCreate
+         * @description Optional mailbox override used only to select the user's configured account.
+         */
+        OutlookPairingCreate: {
+            /** Mailbox Address */
+            mailbox_address?: string | null;
+        };
+        /** OutlookPairingRead */
+        OutlookPairingRead: {
+            /** Token */
+            token: string;
+            /**
+             * Expires At
+             * Format: date-time
+             */
+            expires_at: string;
+        };
+        /** OutlookSelectionRead */
+        OutlookSelectionRead: {
+            /** Indexed */
+            indexed: boolean;
+            /** Recording Pending */
+            recording_pending: boolean;
+            /** Entry Id */
+            entry_id?: number | null;
+            /** Employees */
+            employees: components["schemas"]["OutlookEmployeeSummary"][];
+        };
+        /** OutlookSelectionRequest */
+        OutlookSelectionRequest: {
+            /** Internet Message Id */
+            internet_message_id: string;
+            /** Outlook Store Id */
+            outlook_store_id: string;
+            /** Outlook Entry Id */
+            outlook_entry_id: string;
+            /** G Numbers */
+            g_numbers?: string[];
         };
         /** PassportSuggestion */
         PassportSuggestion: {
@@ -9392,61 +8788,6 @@ export interface components {
             /** Name Ar */
             name_ar?: string | null;
         };
-        /**
-         * RecipientListCreate
-         * @description Payload to create a list. Owner comes from the session, never here.
-         */
-        RecipientListCreate: {
-            /** Name */
-            name: string;
-            /** Members */
-            members?: components["schemas"]["RecipientListMember"][];
-        };
-        /**
-         * RecipientListMember
-         * @description One recipient in a list — pinned to the To or Cc field on apply.
-         */
-        RecipientListMember: {
-            /**
-             * Field
-             * @default to
-             * @enum {string}
-             */
-            field: "to" | "cc";
-            /** Address */
-            address: string;
-            /**
-             * Display Name
-             * @default
-             */
-            display_name: string;
-        };
-        /** RecipientListRead */
-        RecipientListRead: {
-            /** Id */
-            id: number;
-            /** Name */
-            name: string;
-            /** Members */
-            members: components["schemas"]["RecipientListMember"][];
-            /**
-             * Created At
-             * Format: date-time
-             */
-            created_at: string;
-            /** Updated At */
-            updated_at: string | null;
-        };
-        /**
-         * RecipientListUpdate
-         * @description Partial update — rename and/or replace the whole members array.
-         */
-        RecipientListUpdate: {
-            /** Name */
-            name?: string | null;
-            /** Members */
-            members?: components["schemas"]["RecipientListMember"][] | null;
-        };
         /** RecipientRead */
         RecipientRead: {
             /** Id */
@@ -9651,21 +8992,6 @@ export interface components {
             /** Total */
             total: number;
         };
-        /** SearchHit */
-        SearchHit: {
-            entry: components["schemas"]["LedgerEntryRead"];
-            /** Snippet */
-            snippet: string;
-            /** Score */
-            score: number;
-        };
-        /** SearchResponse */
-        SearchResponse: {
-            /** Hits */
-            hits: components["schemas"]["SearchHit"][];
-            /** Total */
-            total: number;
-        };
         /** SelfShiftRead */
         SelfShiftRead: {
             /** Employee Id */
@@ -9678,13 +9004,6 @@ export interface components {
             scheduled_start_at?: string | null;
             /** Scheduled End At */
             scheduled_end_at?: string | null;
-        };
-        /** SendToVaultRequest */
-        SendToVaultRequest: {
-            /** Employee Id */
-            employee_id: string;
-            /** Kind */
-            kind: string;
         };
         /**
          * ServiceFacetRead
@@ -9842,72 +9161,6 @@ export interface components {
             size_mm: number;
             /** Boldness */
             boldness: number;
-        };
-        /**
-         * SmartFolderCreate
-         * @description Payload to create a folder (confirmed). Owner comes from the session.
-         */
-        SmartFolderCreate: {
-            /** Name En */
-            name_en: string;
-            /** Name Ar */
-            name_ar: string;
-            /**
-             * Rule Kind
-             * @default subject
-             * @constant
-             */
-            rule_kind: "subject";
-            /** Rule Value */
-            rule_value: string;
-        };
-        /**
-         * SmartFolderDismiss
-         * @description Payload to dismiss a suggestion cluster (per-user).
-         */
-        SmartFolderDismiss: {
-            /** Cluster Key */
-            cluster_key: string;
-        };
-        /**
-         * SmartFolderRead
-         * @description An active smart folder with its live matching-entry count.
-         */
-        SmartFolderRead: {
-            /** Id */
-            id: number;
-            /** Name En */
-            name_en: string;
-            /** Name Ar */
-            name_ar: string;
-            /** Count */
-            count: number;
-        };
-        /**
-         * SmartFolderSuggestion
-         * @description A suggested subject cluster the caller could turn into a folder.
-         */
-        SmartFolderSuggestion: {
-            /** Cluster Key */
-            cluster_key: string;
-            /** Name Suggestion */
-            name_suggestion: string;
-            /** Count */
-            count: number;
-            /** Correspondent Count */
-            correspondent_count: number;
-            /** Sample Subjects */
-            sample_subjects: string[];
-        };
-        /**
-         * SmartFolderUpdate
-         * @description Partial rename — either/both localized names.
-         */
-        SmartFolderUpdate: {
-            /** Name En */
-            name_en?: string | null;
-            /** Name Ar */
-            name_ar?: string | null;
         };
         /** StaffingRequirementWrite */
         StaffingRequirementWrite: {
@@ -10271,38 +9524,6 @@ export interface components {
             /** Employee Id */
             employee_id: string;
         };
-        /** UnreadCountResponse */
-        UnreadCountResponse: {
-            /** Count */
-            count: number;
-        };
-        /** UnreadRecentItem */
-        UnreadRecentItem: {
-            /** Id */
-            id: number;
-            /** Subject */
-            subject: string;
-            /** Counterparty */
-            counterparty: string;
-            /** Counterparty Name */
-            counterparty_name: string | null;
-            /**
-             * Entry Date
-             * Format: date
-             */
-            entry_date: string;
-            /** Preview */
-            preview: string;
-            /** Attachment Count */
-            attachment_count: number;
-        };
-        /** UnreadRecentResponse */
-        UnreadRecentResponse: {
-            /** Items */
-            items: components["schemas"]["UnreadRecentItem"][];
-            /** Total Unread */
-            total_unread: number;
-        };
         /** UpdateCheckResult */
         UpdateCheckResult: {
             /** Current */
@@ -10383,29 +9604,6 @@ export interface components {
             modified: string;
             /** Is Pdf */
             is_pdf: boolean;
-        };
-        /** VaultFileRead */
-        VaultFileRead: {
-            /** Id */
-            id: number;
-            /** Employee Id */
-            employee_id: string;
-            /**
-             * Kind
-             * @enum {string}
-             */
-            kind: "uae_id" | "passport" | "other" | "leaves" | "violations";
-            /** Filename */
-            filename: string;
-            /** Path */
-            path: string;
-            /** Size Bytes */
-            size_bytes: number | null;
-            /**
-             * Created At
-             * Format: date-time
-             */
-            created_at: string;
         };
         /**
          * VaultTree
@@ -12361,6 +11559,42 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["EmployeeDetailRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_employee_correspondence_api_v1_employees__employee_id__correspondence_get: {
+        parameters: {
+            query?: {
+                limit?: number;
+                offset?: number;
+            };
+            header?: never;
+            path: {
+                employee_id: string;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CorrespondenceListRead"];
                 };
             };
             /** @description Validation Error */
@@ -16324,1463 +15558,6 @@ export interface operations {
             };
         };
     };
-    list_smart_folders_api_v1_ledger_smart_folders_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: {
-                gssg_session?: string | null;
-            };
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["SmartFolderRead"][];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    create_smart_folder_api_v1_ledger_smart_folders_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: {
-                gssg_session?: string | null;
-            };
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["SmartFolderCreate"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["SmartFolderRead"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    list_suggestions_api_v1_ledger_smart_folders_suggestions_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: {
-                gssg_session?: string | null;
-            };
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["SmartFolderSuggestion"][];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    dismiss_suggestion_api_v1_ledger_smart_folders_dismiss_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: {
-                gssg_session?: string | null;
-            };
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["SmartFolderDismiss"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            204: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    delete_smart_folder_api_v1_ledger_smart_folders__folder_id__delete: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                folder_id: number;
-            };
-            cookie?: {
-                gssg_session?: string | null;
-            };
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            204: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    rename_smart_folder_api_v1_ledger_smart_folders__folder_id__patch: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                folder_id: number;
-            };
-            cookie?: {
-                gssg_session?: string | null;
-            };
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["SmartFolderUpdate"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["SmartFolderRead"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    list_entries_api_v1_ledger_get: {
-        parameters: {
-            query?: {
-                from_date?: string | null;
-                to_date?: string | null;
-                since?: string | null;
-                direction?: string | null;
-                channel?: string | null;
-                counterparty?: string | null;
-                q?: string | null;
-                tag?: string | null;
-                related_employee_id?: string | null;
-                related_book_id?: number | null;
-                has_attachment?: boolean | null;
-                include_deleted?: boolean;
-                include_drafts?: boolean;
-                unread?: boolean | null;
-                has_attachments?: boolean | null;
-                flagged?: boolean | null;
-                employee_id?: string | null;
-                smart_folder_id?: number | null;
-                /** @description mine (default) | all (admin only) */
-                scope?: string;
-                limit?: number;
-                offset?: number;
-            };
-            header?: never;
-            path?: never;
-            cookie?: {
-                gssg_session?: string | null;
-            };
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["LedgerListResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    create_entry_api_v1_ledger_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: {
-                gssg_session?: string | null;
-            };
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["LedgerEntryCreate"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["LedgerEntryRead"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    list_counterparties_api_v1_ledger_counterparties_get: {
-        parameters: {
-            query?: {
-                q?: string | null;
-                limit?: number;
-            };
-            header?: never;
-            path?: never;
-            cookie?: {
-                gssg_session?: string | null;
-            };
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": string[];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    list_contacts_api_v1_ledger_contacts_get: {
-        parameters: {
-            query?: {
-                q?: string | null;
-                limit?: number;
-            };
-            header?: never;
-            path?: never;
-            cookie?: {
-                gssg_session?: string | null;
-            };
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["AddressBookContactRead"][];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    save_contact_api_v1_ledger_contacts_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: {
-                gssg_session?: string | null;
-            };
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["AddressBookContactCreate"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["AddressBookContactRead"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    delete_contact_api_v1_ledger_contacts__contact_id__delete: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                contact_id: number;
-            };
-            cookie?: {
-                gssg_session?: string | null;
-            };
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            204: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    list_recipient_lists_api_v1_ledger_recipient_lists_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: {
-                gssg_session?: string | null;
-            };
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["RecipientListRead"][];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    create_recipient_list_api_v1_ledger_recipient_lists_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: {
-                gssg_session?: string | null;
-            };
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["RecipientListCreate"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["RecipientListRead"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    delete_recipient_list_api_v1_ledger_recipient_lists__list_id__delete: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                list_id: number;
-            };
-            cookie?: {
-                gssg_session?: string | null;
-            };
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            204: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    update_recipient_list_api_v1_ledger_recipient_lists__list_id__patch: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                list_id: number;
-            };
-            cookie?: {
-                gssg_session?: string | null;
-            };
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["RecipientListUpdate"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["RecipientListRead"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    search_entries_api_v1_ledger_search_get: {
-        parameters: {
-            query: {
-                /** @description Free-text search query */
-                q: string;
-                limit?: number;
-                /** @description mine (default) | all (admin only) */
-                scope?: string;
-            };
-            header?: never;
-            path?: never;
-            cookie?: {
-                gssg_session?: string | null;
-            };
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["SearchResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    list_correspondence_log_api_v1_ledger_log_get: {
-        parameters: {
-            query?: {
-                category_id?: number | null;
-                limit?: number;
-                offset?: number;
-            };
-            header?: never;
-            path?: never;
-            cookie?: {
-                gssg_session?: string | null;
-            };
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["CorrespondenceLogResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    get_correspondence_log_record_api_v1_ledger_log__entry_id__get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                entry_id: number;
-            };
-            cookie?: {
-                gssg_session?: string | null;
-            };
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["CorrespondenceLogRecord"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    get_unread_count_api_v1_ledger_unread_count_get: {
-        parameters: {
-            query?: {
-                /** @description mine (default) | all (admin only) */
-                scope?: string;
-            };
-            header?: never;
-            path?: never;
-            cookie?: {
-                gssg_session?: string | null;
-            };
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["UnreadCountResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    get_unread_recent_api_v1_ledger_unread_recent_get: {
-        parameters: {
-            query?: {
-                limit?: number;
-                /** @description mine (default) | all (admin only) */
-                scope?: string;
-            };
-            header?: never;
-            path?: never;
-            cookie?: {
-                gssg_session?: string | null;
-            };
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["UnreadRecentResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    mark_all_read_api_v1_ledger_mark_all_read_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: {
-                gssg_session?: string | null;
-            };
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["MarkAllReadResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    mark_read_api_v1_ledger_entries__entry_id__mark_read_post: {
-        parameters: {
-            query?: {
-                /** @description mine (default) | all (admin only) */
-                scope?: string;
-            };
-            header?: never;
-            path: {
-                entry_id: number;
-            };
-            cookie?: {
-                gssg_session?: string | null;
-            };
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["LedgerEntryRead"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    mark_unread_api_v1_ledger_entries__entry_id__mark_unread_post: {
-        parameters: {
-            query?: {
-                /** @description mine (default) | all (admin only) */
-                scope?: string;
-            };
-            header?: never;
-            path: {
-                entry_id: number;
-            };
-            cookie?: {
-                gssg_session?: string | null;
-            };
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["LedgerEntryRead"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    list_drafts_api_v1_ledger_drafts_get: {
-        parameters: {
-            query?: {
-                limit?: number;
-                offset?: number;
-            };
-            header?: never;
-            path?: never;
-            cookie?: {
-                gssg_session?: string | null;
-            };
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["LedgerEntryRead"][];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    create_draft_api_v1_ledger_drafts_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: {
-                gssg_session?: string | null;
-            };
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["DraftWrite"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["LedgerEntryRead"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    delete_draft_api_v1_ledger_drafts__draft_id__delete: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                draft_id: number;
-            };
-            cookie?: {
-                gssg_session?: string | null;
-            };
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            204: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    update_draft_api_v1_ledger_drafts__draft_id__patch: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                draft_id: number;
-            };
-            cookie?: {
-                gssg_session?: string | null;
-            };
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["DraftWrite"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["LedgerEntryRead"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    send_draft_api_v1_ledger_drafts__draft_id__send_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                draft_id: number;
-            };
-            cookie?: {
-                gssg_session?: string | null;
-            };
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["LedgerEntryRead"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    get_flag_count_api_v1_ledger_flag_count_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: {
-                gssg_session?: string | null;
-            };
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["FlagCountResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    set_flag_api_v1_ledger__entry_id__flag_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                entry_id: number;
-            };
-            cookie?: {
-                gssg_session?: string | null;
-            };
-        };
-        requestBody?: {
-            content: {
-                "application/json": components["schemas"]["FlagRequest"] | null;
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["LedgerEntryRead"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    clear_flag_api_v1_ledger__entry_id__flag_delete: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                entry_id: number;
-            };
-            cookie?: {
-                gssg_session?: string | null;
-            };
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["LedgerEntryRead"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    get_entry_api_v1_ledger__entry_id__get: {
-        parameters: {
-            query?: {
-                include_deleted?: boolean;
-            };
-            header?: never;
-            path: {
-                entry_id: number;
-            };
-            cookie?: {
-                gssg_session?: string | null;
-            };
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["LedgerEntryRead"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    delete_entry_api_v1_ledger__entry_id__delete: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                entry_id: number;
-            };
-            cookie?: {
-                gssg_session?: string | null;
-            };
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            204: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    update_entry_api_v1_ledger__entry_id__patch: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                entry_id: number;
-            };
-            cookie?: {
-                gssg_session?: string | null;
-            };
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["LedgerEntryUpdate"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["LedgerEntryRead"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    get_thread_api_v1_ledger__entry_id__thread_get: {
-        parameters: {
-            query?: {
-                limit?: number;
-                /** @description mine (default) | all (admin only) */
-                scope?: string;
-            };
-            header?: never;
-            path: {
-                entry_id: number;
-            };
-            cookie?: {
-                gssg_session?: string | null;
-            };
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["LedgerListItem"][];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    add_attachment_api_v1_ledger__entry_id__attachments_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                entry_id: number;
-            };
-            cookie?: {
-                gssg_session?: string | null;
-            };
-        };
-        requestBody: {
-            content: {
-                "multipart/form-data": components["schemas"]["Body_add_attachment_api_v1_ledger__entry_id__attachments_post"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["LedgerEntryRead"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    toggle_star_api_v1_ledger_entries__entry_id__star_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                entry_id: number;
-            };
-            cookie?: {
-                gssg_session?: string | null;
-            };
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["LedgerEntryRead"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    send_attachment_to_vault_api_v1_ledger_entries__entry_id__attachments__attachment_index__send_to_vault_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                entry_id: number;
-                attachment_index: number;
-            };
-            cookie?: {
-                gssg_session?: string | null;
-            };
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["SendToVaultRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["VaultFileRead"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    download_attachments_zip_api_v1_ledger_entries__entry_id__attachments_zip_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                entry_id: number;
-            };
-            cookie?: {
-                gssg_session?: string | null;
-            };
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    download_attachment_by_index_api_v1_ledger__entry_id__attachments_by_index__index__get: {
-        parameters: {
-            query?: {
-                disposition?: string;
-                encoding?: string | null;
-            };
-            header?: never;
-            path: {
-                entry_id: number;
-                index: number;
-            };
-            cookie?: {
-                gssg_session?: string | null;
-            };
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    download_attachment_api_v1_ledger__entry_id__attachments__filename__get: {
-        parameters: {
-            query?: {
-                disposition?: string;
-            };
-            header?: never;
-            path: {
-                entry_id: number;
-                filename: string;
-            };
-            cookie?: {
-                gssg_session?: string | null;
-            };
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
     list_categories_api_v1_correspondence_categories_get: {
         parameters: {
             query?: never;
@@ -18444,7 +16221,7 @@ export interface operations {
             };
         };
     };
-    send_email_api_v1_email_send_post: {
+    issue_pairing_api_v1_outlook_pairings_post: {
         parameters: {
             query?: never;
             header?: never;
@@ -18455,7 +16232,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "multipart/form-data": components["schemas"]["Body_send_email_api_v1_email_send_post"];
+                "application/json": components["schemas"]["OutlookPairingCreate"];
             };
         };
         responses: {
@@ -18465,7 +16242,475 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["EmailSendResult"];
+                    "application/json": components["schemas"]["OutlookPairingRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_devices_api_v1_outlook_devices_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OutlookDeviceRead"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_device_api_v1_outlook_devices__device_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                device_id: string;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    issue_handoff_api_v1_outlook_handoffs_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["OutlookHandoffCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OutlookHandoffCreated"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_handoff_api_v1_outlook_handoffs__handoff_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                handoff_id: number;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OutlookHandoffRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    pair_device_api_v1_outlook_device_pair_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["OutlookDevicePairRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OutlookDevicePairRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    select_message_api_v1_outlook_device_selection_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["OutlookSelectionRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OutlookSelectionRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    search_employees_api_v1_outlook_device_employees_get: {
+        parameters: {
+            query?: {
+                q?: string | null;
+                limit?: number;
+            };
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OutlookEmployeeSummary"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    employee_photo_api_v1_outlook_device_employees__employee_id__photo_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                employee_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    link_employee_api_v1_outlook_device_messages__entry_id__employees__employee_id__put: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                entry_id: number;
+                employee_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    unlink_employee_api_v1_outlook_device_messages__entry_id__employees__employee_id__delete: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                entry_id: number;
+                employee_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    redeem_device_handoff_api_v1_outlook_device_handoffs_redeem_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["OutlookHandoffRedeemRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OutlookHandoffRedeemRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    download_handoff_attachment_api_v1_outlook_device_handoffs__handoff_id__attachments__index__get: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                handoff_id: number;
+                index: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    complete_device_handoff_api_v1_outlook_device_handoffs__handoff_id__complete_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                handoff_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OutlookHandoffRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    fail_device_handoff_api_v1_outlook_device_handoffs__handoff_id__fail_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                handoff_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["OutlookHandoffFailure"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OutlookHandoffRead"];
                 };
             };
             /** @description Validation Error */

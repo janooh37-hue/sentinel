@@ -1,18 +1,15 @@
 /**
- * Page-id ↔ route-path mapping for the legacy `onNavigate(page, id?)` seam used
- * by Dashboard + Ledger. Lives in its own module (not App.tsx) so App.tsx stays
- * a component-only file for react-refresh, and so `buildPagePath` is unit-testable
- * without importing the whole app tree.
+ * Page-id ↔ route-path mapping for the dashboard's legacy `onNavigate` seam.
+ * Kept separate from App.tsx so the mapping remains unit-testable.
  */
 
-/** Page identifiers historically used by Dashboard + Ledger's `onNavigate`. */
+/** Page identifiers historically used by the dashboard `onNavigate` callback. */
 export type Page =
   | 'dashboard'
   | 'employees'
   | 'application'
   | 'books'
   | 'leaves'
-  | 'ledger'
   | 'settings'
 
 export const PAGE_PATHS: Record<Page, string> = {
@@ -21,7 +18,6 @@ export const PAGE_PATHS: Record<Page, string> = {
   application: '/application',
   books: '/books',
   leaves: '/leaves',
-  ledger: '/ledger',
   settings: '/settings',
 }
 

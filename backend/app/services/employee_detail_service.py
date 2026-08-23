@@ -24,7 +24,7 @@ from app.db import models
 from app.schemas import employee_detail as sx
 from app.schemas.employee import EmployeeRead
 from app.schemas.employee_completeness import CompletenessRead
-from app.services import ledger_service, photo_service
+from app.services import correspondence_service, photo_service
 
 # Cap each recent-* array. The Employee Detail page paginates the per-tab
 # views via dedicated endpoints; this aggregate is for the at-a-glance hero.
@@ -81,7 +81,7 @@ def get_employee_detail(
         models.CorrespondenceEmployeeLink.employee_id == emp.id,
         models.CorrespondenceEmployeeLink.state == "linked",
         models.LedgerEntry.deleted_at.is_(None),
-        ledger_service._tags_contain(ledger_service.DRAFT_TAG, negate=True),
+        correspondence_service.tags_contain(correspondence_service.DRAFT_TAG, negate=True),
     ]
     if owner_user_id is not None:
         ledger_filters.append(

@@ -63,7 +63,7 @@ describe('BottomTabBar', () => {
     renderDock()
 
     const navigation = screen.getByRole('navigation', { name: 'Menu' })
-    for (const label of ['Dashboard', 'Employees', 'Ledger', 'Services', 'Records']) {
+    for (const label of ['Dashboard', 'Employees', 'Leaves', 'Services', 'Records']) {
       expect(within(navigation).getByRole('link', { name: label })).toBeInTheDocument()
     }
   })

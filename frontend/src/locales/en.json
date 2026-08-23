@@ -73,6 +73,7 @@
     "records": "Records",
     "permits": "Permits",
     "settings": "Settings",
+    "openOutlook": "Open Outlook",
     "customize": {
       "title": "Customize navigation",
       "hint": "Tap a slot, then tap what goes in it.",
@@ -83,8 +84,7 @@
     },
     "signals": {
       "approvals": "Approvals",
-      "scanback": "Scan-back",
-      "ledgerUnread": "Unread"
+      "scanback": "Scan-back"
     },
     "menu": "Menu",
     "sendToGroup": "Send to Group",
@@ -2722,8 +2722,7 @@
       "sources": {
         "employees": "From Employees",
         "leaves": "From Leaves",
-        "records": "From Records",
-        "ledger": "From Ledger"
+        "records": "From Records"
       },
       "topFull": "Top zone is full (max {{count}})",
       "topOnlyBigCards": "Only big cards can go in the Top zone",
@@ -2746,18 +2745,14 @@
       "pending": "Documents Completed",
       "workspace": "My Workspace",
       "violations": "Open Violations",
-      "drafts": "Drafts",
-      "ledger": "Ledger unread",
       "on_leave_today": "On Leave Today",
       "upcoming_leave": "Upcoming Returns",
       "recent_docs": "Recent Documents",
-      "email_sync_status": "Email Sync",
       "waiting_approvals": "Waiting Approvals",
       "waiting_approvals_cta": "Review",
       "waiting_approvals_aria_one": "Waiting approvals: {{count}}. Review.",
       "waiting_approvals_aria_other": "Waiting approvals: {{count}}. Review.",
       "expiring_soon": "Expiring Soon",
-      "recent_ledger": "Recent Ledger",
       "pending_departures": "Pending Departures"
     },
     "quickActionLabels": {
@@ -3036,8 +3031,7 @@
       "newSalaryTransfer": "New Salary Transfer",
       "newLeave": "New Leave (Sick)",
       "manualTitle": "Route manually",
-      "openForm": "Open a form",
-      "logLedger": "Log to ledger"
+      "openForm": "Open a form"
     },
     "error": {
       "generic": "Scan failed — try again",

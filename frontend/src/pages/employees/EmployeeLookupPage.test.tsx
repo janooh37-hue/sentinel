@@ -182,14 +182,6 @@ describe('EmployeeLookupPage', () => {
     expect(screen.getByRole('textbox', { name: 'First create field' })).toHaveFocus()
   })
 
-  it('replace-navigates to the profile and clears localStorage when gssg.employees.openId is set', async () => {
-    localStorage.setItem('gssg.employees.openId', 'G3190')
-    setup()
-    await waitFor(() => {
-      expect(screen.getByTestId('profile-stub')).toBeInTheDocument()
-    })
-    expect(localStorage.getItem('gssg.employees.openId')).toBeNull()
-  })
 
   it('renders LookupHeroCards inside the hero band', () => {
     setup()

@@ -1,9 +1,9 @@
-import { Hourglass, Inbox, ScanLine, Settings } from 'lucide-react'
+import { Hourglass, ScanLine, Settings } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 
 import { NAV_ITEMS } from './navItems'
 
-export type WaitingSignalId = 'approvals' | 'scanback' | 'ledgerUnread'
+export type WaitingSignalId = 'approvals' | 'scanback'
 
 export interface DockEntry {
   id: string
@@ -52,20 +52,12 @@ export const SIGNAL_ENTRIES: readonly DockEntry[] = [
     to: '/books',
     signal: 'scanback',
   },
-  {
-    id: 'sig:ledgerUnread',
-    kind: 'signal',
-    labelKey: 'nav.signals.ledgerUnread',
-    Icon: Inbox,
-    to: '/ledger',
-    signal: 'ledgerUnread',
-  },
 ]
 
 export const DEFAULT_SLOT_IDS: readonly string[] = [
   'sec:/',
   'sec:/employees',
-  'sec:/ledger',
+  'sec:/leaves',
   'sec:/application',
   'sec:/books',
 ]

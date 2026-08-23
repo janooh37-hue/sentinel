@@ -11,7 +11,7 @@ from app.schemas._base import ORMBase
 
 
 class EmailAccountRead(ORMBase):
-    """Public view — never includes the password."""
+    """Public IMAP recording view; legacy SMTP columns stay private."""
 
     id: int
     email: str
@@ -19,9 +19,6 @@ class EmailAccountRead(ORMBase):
     imap_port: int
     use_ssl: bool
     username: str
-    smtp_host: str
-    smtp_port: int
-    smtp_use_tls: bool
     sent_folder: str
     inbox_folder: str
     enabled: bool
@@ -35,8 +32,7 @@ class EmailAccountRead(ORMBase):
 
 
 class EmailAccountUpsert(BaseModel):
-    """Write payload. ``password`` is optional on PATCH — only set when
-    rotating credentials."""
+    """IMAP account write payload."""
 
     email: str
     imap_host: str = Field(default="imap.ionos.com")
@@ -44,9 +40,6 @@ class EmailAccountUpsert(BaseModel):
     use_ssl: bool = True
     username: str
     password: str | None = None
-    smtp_host: str = Field(default="smtp.ionos.com")
-    smtp_port: int = Field(default=587, ge=1, le=65535)
-    smtp_use_tls: bool = True
     sent_folder: str = "Sent"
     inbox_folder: str = "INBOX"
     enabled: bool = True
@@ -57,8 +50,6 @@ class EmailAccountUpsert(BaseModel):
     def _enforce_ionos(self) -> Self:
         if self.imap_host != "imap.ionos.com":
             raise ValueError("only imap.ionos.com is supported")
-        if self.smtp_host != "smtp.ionos.com":
-            raise ValueError("only smtp.ionos.com is supported")
         return self
 
 
@@ -70,30 +61,10 @@ class EmailSyncResult(ORMBase):
 
 
 class EmailSyncStatus(ORMBase):
-    """Live sync state for the Ledger status strip.
-
-    ``syncing`` reflects the module sync lock — true during BOTH a manual
-    ``POST /email/sync`` and a scheduler tick.
-    """
+    """Live IMAP recording state for the settings sync status."""
 
     syncing: bool
     last_synced_at: datetime | None
     last_sync_error: str | None
     enabled: bool
     interval_minutes: int
-
-
-class EmailSendRequest(BaseModel):
-    to: list[str] = Field(min_length=1)
-    cc: list[str] = Field(default_factory=list)
-    subject: str
-    html: str
-    in_reply_to: str | None = None  # Message-Id of the email being replied to
-    references: str | None = None  # threading: full References header
-    use_signature: bool = True
-
-
-class EmailSendResult(BaseModel):
-    sent: bool
-    message_id: str
-    ledger_entry_id: int

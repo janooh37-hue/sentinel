@@ -1,8 +1,7 @@
 /**
  * FileTypeIcon — a small page-with-folded-corner glyph whose colour + label
- * reflect the file extension. Recreated from the GSSG design-system handoff
- * (Ledger Email Detail). Decorative — `aria-hidden`; the card text carries the
- * accessible name.
+ * reflect the file extension. Decorative — `aria-hidden`; the card text
+ * carries the accessible name.
  */
 
 import { fileMeta, type FileKind } from '@/lib/fileTypes'

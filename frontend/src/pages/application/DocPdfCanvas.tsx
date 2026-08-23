@@ -3,17 +3,13 @@
  * not an <iframe>.
  *
  * The iframe approach (`<iframe src=pdfUrl>`) downloaded/blanked in the
- * packaged Edge WebView2 — the same failure the ledger team hit and solved
- * with a canvas renderer (`components/ledger/PdfViewer.tsx`). This mirrors that
- * pattern for the document-generation preview: fetch the inline PDF bytes and
- * paint each page to a canvas. Lazy-loaded (default export) so pdf.js + its
- * worker only ship in the preview chunk.
+ * packaged Edge WebView2, so this preview fetches inline PDF bytes and paints
+ * each page to a canvas. Lazy-loaded (default export) so pdf.js + its worker
+ * only ship in the preview chunk.
  *
  * **IDM bypass:** fetches the bytes as ``?encoding=base64`` (text/plain) so
  * Internet Download Manager (and Chrome's PDF stream handler) can't sniff the
- * URL/body, claim it, and return an empty 204 to the JS fetch. pdf.js decodes
- * the base64 into a Uint8Array and renders it. Same trick the ledger team
- * uses for attachment previews — see `components/ledger/PdfViewer.tsx`.
+ * URL/body, claim it, and return an empty 204 to the JS fetch.
  */
 
 import { useCallback, useEffect, useRef, useState } from 'react'

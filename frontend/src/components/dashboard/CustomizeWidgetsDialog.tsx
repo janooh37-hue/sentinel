@@ -6,9 +6,8 @@
  * headers: Top (max 2, big-card-eligible only), Under Workspace (max 6),
  * Under Quick Actions (max 6), Hidden — with up/down reorder inside each
  * group. Grouped by **source** they sit under the destination they report on
- * (Employees / Leaves / Records / Ledger), which is how an operator actually
- * looks for one; reorder is placement-only, so the arrows are not offered
- * there. Either way the zone <select> both places and shows/hides a widget.
+ * (Employees / Leaves / Records), which is how an operator actually looks for
+ * one; reorder is placement-only, so the arrows are not offered there.
  *
  * The dialog also owns the canvas measure (compact 1180px column vs wide,
  * full-window) since that is a layout decision, not a per-widget one. Save

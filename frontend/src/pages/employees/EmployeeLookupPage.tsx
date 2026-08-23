@@ -73,18 +73,6 @@ export function EmployeeLookupPage(): React.JSX.Element {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  // Smart-link handoff from Ledger: consume on mount and redirect to detail.
-  useEffect(() => {
-    try {
-      const pending = window.localStorage.getItem('gssg.employees.openId')
-      if (pending) {
-        window.localStorage.removeItem('gssg.employees.openId')
-        navigate(`/employees/${encodeURIComponent(pending)}`, { replace: true })
-      }
-    } catch {
-      // ignore storage failures (private mode, quota)
-    }
-  }, [navigate])
 
   // Cheap shared cache with Dashboard — exposes today's on-leave set so we
   // can both filter and tint status pills without a new endpoint.

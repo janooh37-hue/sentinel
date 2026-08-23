@@ -510,8 +510,7 @@ def download_document(
     ``%PDF`` magic-byte stream. Browser PDF handlers and download accelerators
     (notably **Internet Download Manager**, which sniffs the URL+content-type
     and intercepts the request, returning an empty 204 to the JS ``fetch``)
-    would otherwise hijack the bytes and the canvas would never render. The
-    ledger team uses the same trick — see ``/ledger/.../attachments/by-index``.
+    would otherwise hijack the bytes and the canvas would never render.
 
     ``original=true`` returns the pre-signature generated PDF (``pdf_path``) even
     when the version is signed-locked. The default download swaps in the signed

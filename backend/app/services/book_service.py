@@ -1456,8 +1456,7 @@ def build_step_read(db: Session, step: BookApprovalStep) -> BookApprovalStepRead
 
 
 # ---------------------------------------------------------------------------
-# Attachment helpers (mirrors ledger_service)
-# ---------------------------------------------------------------------------
+# Attachment helpers
 
 
 def _safe_filename(raw: str) -> str:

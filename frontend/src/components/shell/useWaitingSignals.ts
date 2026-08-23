@@ -1,11 +1,4 @@
-/**
- * Shared live counts for customizable mobile-dock waiting signals.
- *
- * Sources intentionally mirror their existing surfaces: approvals and scan-back
- * share the books queue queries, while ledger unread shares NavBell's unread
- * preview query, whose response carries the authoritative total. Every source
- * is optional: an unavailable capability or failed request produces no signal.
- */
+/** Shared live counts for customizable mobile-dock approval and scan signals. */
 import { useQuery } from '@tanstack/react-query'
 
 import { api } from '@/lib/api'
@@ -44,13 +37,6 @@ export function useWaitingSignals(enabled: boolean): Partial<Record<WaitingSigna
     staleTime: STALE_TIME,
     refetchInterval: REFRESH_INTERVAL,
   })
-  const ledgerUnreadQuery = useQuery({
-    queryKey: ['ledger', 'unread-recent'],
-    queryFn: () => api.getLedgerUnreadRecent(5),
-    enabled: authenticated,
-    staleTime: STALE_TIME,
-    refetchInterval: REFRESH_INTERVAL,
-  })
 
   const signals: Partial<Record<WaitingSignalId, number>> = {}
   if (approvalsQuery.isSuccess && !approvalsQuery.isError) {
@@ -58,9 +44,6 @@ export function useWaitingSignals(enabled: boolean): Partial<Record<WaitingSigna
   }
   if (scanBackQuery.isSuccess && !scanBackQuery.isError) {
     signals.scanback = scanBackQuery.data.length
-  }
-  if (ledgerUnreadQuery.isSuccess && !ledgerUnreadQuery.isError) {
-    signals.ledgerUnread = ledgerUnreadQuery.data.total_unread
   }
 
   return signals

@@ -477,7 +477,6 @@ _KIND_META: dict[str, str] = {
     "approval": "/books?status=pending",
     "review": "/books?status=pending",
     "scan": "/scan-inbox",
-    "email": "/ledger",
     "scanback": "/scan-back",
 }
 
@@ -487,43 +486,6 @@ def _localized(en: str, ar: str) -> dict[str, tuple[str, str]]:
     return {"en": (_APP_NAME, en), "ar": (_APP_NAME, ar)}
 
 
-def _attachments_line(n: int) -> tuple[str, str]:
-    """The email body's attachment ("size") line, EN/AR. Empty when none."""
-    if not n:
-        return "", ""
-    en = "1 attachment" if n == 1 else f"{n} attachments"
-    ar = "مرفق واحد" if n == 1 else f"{n} مرفقات"
-    return en, ar
-
-
-def _email_push(new_items: list, section_url: str) -> tuple[dict, str]:
-    """Email push — name the sender, subject, a content preview and attachment
-    count (single), or summarize the burst and name the latest (several)."""
-    n = len(new_items)
-    if n == 1:
-        it = new_items[0]
-        sender = it.requester or "Unknown sender"
-        subject = it.subject or "(no subject)"
-        att_en, att_ar = _attachments_line(it.attachments)
-        en_lines = [f"New email · {sender}", subject]
-        ar_lines = [f"بريد جديد · {sender}", subject]
-        if it.preview:
-            en_lines.append(it.preview)
-            ar_lines.append(it.preview)
-        if att_en:
-            en_lines.append(att_en)
-            ar_lines.append(att_ar)
-        return _localized("\n".join(en_lines), "\n".join(ar_lines)), it.url
-    latest = new_items[0]
-    who = latest.requester or "Unknown sender"
-    subj = latest.subject or "(no subject)"
-    return (
-        _localized(
-            f"{n} new emails\nLatest · {who} — {subj}",
-            f"{n} رسائل بريد جديدة\nالأحدث · {who} — {subj}",
-        ),
-        section_url,
-    )
 
 
 def _doc_push(kind: str, new_items: list, section_url: str) -> tuple[dict, str]:
@@ -558,7 +520,7 @@ def _scan_push(new_items: list, section_url: str) -> tuple[dict, str]:
         return (
             _localized(
                 f"New scan to review · {label}\nWaiting in your scan inbox",
-                f"ملف ممسوح جديد للمراجعة · {label}\nبانتظار المراجعة في صندوق الوارد",
+                f"ملف ممسوح جديد للمراجعة · {label}\nبانتظار المراجعة في صندوق الوارد",  # noqa: RUF001
             ),
             new_items[0].url,
         )
@@ -599,7 +561,7 @@ def _scanback_push(new_items: list, section_url: str) -> tuple[dict, str]:
         return (
             _localized(
                 f"Signed copy not filed · {it.label}{subj}\nScan it into the record",
-                f"لم تُرفع النسخة الموقّعة · {it.label}{subj}\nامسحها وأرفقها بالسجل",
+                f"لم تُرفع النسخة الموقّعة · {it.label}{subj}\nامسحها وأرفقها بالسجل",  # noqa: RUF001
             ),
             it.url,
         )
@@ -615,13 +577,7 @@ def _scanback_push(new_items: list, section_url: str) -> tuple[dict, str]:
 def _build_push(
     kind: str, new_items: list, section_url: str
 ) -> tuple[dict[str, tuple[str, str]], str]:
-    """Localized {lang: (title, body)} pairs + the click deep-link URL.
-
-    Title is always the app name; the body is specific, professional copy that
-    says exactly what arrived. Dispatches per kind.
-    """
-    if kind == "email":
-        return _email_push(new_items, section_url)
+    """Localized {lang: (title, body)} pairs + the click deep-link URL."""
     if kind == "scan":
         return _scan_push(new_items, section_url)
     if kind == "scanback":

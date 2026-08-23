@@ -446,14 +446,6 @@ function ExternalCard({ result, file, onDismiss }: ExternalCardProps): React.JSX
                 >
                   {t('intake.external.openForm')}
                 </Button>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={() => navigate('/ledger')}
-                >
-                  {t('intake.external.logLedger')}
-                </Button>
               </div>
             </div>
           ) : (

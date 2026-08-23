@@ -89,18 +89,8 @@ export interface MigrationResult {
 }
 
 // Phase 08 — Settings + System
-// Hand-augmented with signature appearance fields (Task 6) ahead of gen:api.
-// Task 10: sms_autosend_enabled added ahead of next gen:api run.
-export type AppSettingsRead = components['schemas']['AppSettingsRead'] & {
-  signature_size_mm: number
-  signature_boldness: number
-  sms_autosend_enabled: boolean
-}
-export type AppSettingsUpdate = components['schemas']['AppSettingsUpdate'] & {
-  signature_size_mm?: number
-  signature_boldness?: number
-  sms_autosend_enabled?: boolean
-}
+export type AppSettingsRead = components['schemas']['AppSettingsRead']
+export type AppSettingsUpdate = components['schemas']['AppSettingsUpdate']
 export type SystemInfo = components['schemas']['SystemInfo']
 export type UpdateCheckResult = components['schemas']['UpdateCheckResult']
 export type AdminKeyResponse = components['schemas']['AdminKeyResponse']
@@ -328,27 +318,11 @@ export type EditorTemplateListItem = components['schemas']['EditorTemplateListIt
 export type EditorTemplateListResponse = components['schemas']['EditorTemplateListResponse']
 export type EditorTemplateCreate = components['schemas']['EditorTemplateCreate']
 export type EditorTemplateUpdate = components['schemas']['EditorTemplateUpdate']
-
-// Phase 13 — Email integration (IMAP → ledger auto-create + SMTP send)
+// IMAP recording account contract. Legacy SMTP columns remain database-only.
 export type EmailAccountRead = components['schemas']['EmailAccountRead']
 export type EmailAccountUpsert = components['schemas']['EmailAccountUpsert']
 export type EmailSyncResult = components['schemas']['EmailSyncResult']
 export type EmailSyncStatus = components['schemas']['EmailSyncStatus']
-// ``/email/send`` is a multipart endpoint so openapi-typescript can't infer
-// its body shape. Mirror the Pydantic schema by hand.
-export interface EmailSendRequest {
-  to: string[]
-  cc?: string[]
-  subject: string
-  html: string
-  in_reply_to?: string | null
-  references?: string | null
-  /** Phase 15 — when true (default) the backend appends the configured
-   * `settings.email_signature` to the outgoing HTML body. */
-  use_signature?: boolean
-}
-export type EmailSendResult = components['schemas']['EmailSendResult']
-
 // Phase 14 — Identity linking. `email` was added to the backend schema
 // (2026-05-26 identity collapse) but openapi-typescript hasn't regenerated yet,
 // so hand-merge it until `npm run gen:api` runs.
@@ -452,137 +426,7 @@ export interface UserPermissionRead {
   overrides: Record<string, PermissionEffect>
 }
 
-// Phase 07 — Ledger
-// `inline_images` (Phase 15) + `draft_meta` (Phase 16) are added to the backend
-// schema; openapi-typescript may not yet have regenerated it. Hand-merge until
-// `npm run gen:api` runs.
-export interface LedgerDraftMeta {
-  to?: string[]
-  cc?: string[]
-  in_reply_to?: string | null
-  references?: string | null
-}
-/** Per-attachment metadata (name + byte size) returned by GET /ledger/{id}.
- * Hand-typed until backend regenerates openapi.json. `size` is 0 when the
- * file is missing on disk. */
-export interface LedgerAttachmentMeta {
-  /** Position in `attachment_paths` — used to address the file by index so
-   * Arabic/spaced filenames never enter the URL path. */
-  index: number
-  name: string
-  size: number
-}
-export type LedgerEntryRead = components['schemas']['LedgerEntryRead'] & {
-  inline_images?: Record<string, string>
-  draft_meta?: LedgerDraftMeta | null
-  /** Phase 17 — `read_at` is set the first time an incoming email entry is
-   * opened in the drawer. NULL means the entry is unread and counts toward
-   * the NavBell badge total. Hand-typed until backend regenerates openapi. */
-  read_at?: string | null
-  /** Email-detail redesign — per-attachment name + size; populated by
-   * GET /{id} only. Falls back to `attachment_paths` when absent. */
-  attachments?: LedgerAttachmentMeta[]
-  /** Phase 2 (D3) — per-user follow-up flag for the current caller. Hand-typed
-   * until the backend regenerates openapi.json. */
-  flagged?: boolean
-  followup_due?: string | null
-}
-
-// Phase 17 — Ledger read state (drives the NavBell numeric badge).
-export interface LedgerUnreadCount {
-  count: number
-}
-export interface LedgerMarkAllReadResult {
-  updated: number
-}
-
-// Phase 17 — NavBell popover preview row (newest N unread incoming entries).
-// Hand-typed until backend regenerates openapi.json with `UnreadRecentItem` /
-// `UnreadRecentResponse` schemas.
-export interface UnreadRecentItem {
-  id: number
-  subject: string
-  counterparty: string
-  counterparty_name: string | null
-  entry_date: string
-  preview: string
-  attachment_count: number
-}
-export interface UnreadRecentResponse {
-  items: UnreadRecentItem[]
-  total_unread: number
-}
-
-// Phase 16 — Search + drafts + send-to-vault.
-// Hand-typed until backend regenerates openapi.json.
-export interface LedgerSearchHit {
-  entry: LedgerEntryRead
-  snippet: string
-  score: number
-}
-export interface LedgerSearchResponse {
-  hits: LedgerSearchHit[]
-  total: number
-}
-export interface DraftWrite {
-  to: string[]
-  cc?: string[]
-  subject: string
-  html: string
-  in_reply_to?: string | null
-  references?: string | null
-}
-export type LedgerEntryCreate = components['schemas']['LedgerEntryCreate']
-export type LedgerEntryUpdate = components['schemas']['LedgerEntryUpdate']
-export type LedgerListItem = components['schemas']['LedgerListItem'] & {
-  /** Phase 2 (D3) — per-user follow-up flag for the current caller. `flagged`
-   * is the current user's flag; `followup_due` is its optional due date (ISO
-   * `YYYY-MM-DD`). Hand-typed until the backend regenerates openapi.json. */
-  flagged?: boolean
-  followup_due?: string | null
-}
-export type LedgerListResponse = components['schemas']['LedgerListResponse']
-export type LedgerDirection = LedgerEntryCreate['direction']
-export type LedgerChannel = LedgerEntryCreate['channel']
-
-// --- Ledger smart folders (Phase 3) — hand-typed against the frozen contract.
-// A smart folder is a per-user saved subject filter.
-/** An active smart folder owned by the current user. `count` = matching mail. */
-export interface SmartFolder {
-  id: number
-  name_en: string
-  name_ar: string
-  count: number
-}
-/** A confirm-first suggestion: a ≥5 cluster of mail sharing a normalised subject. */
-export interface SmartFolderSuggestion {
-  /** The normalised subject — the dismissal/rule key. */
-  cluster_key: string
-  /** The app's guessed folder name (the operator edits it before confirming). */
-  name_suggestion: string
-  count: number
-  correspondent_count: number
-  sample_subjects: string[]
-}
-/** Create body — `rule_kind` is `'subject'` in v1; `rule_value` is the cluster key. */
-export interface SmartFolderCreate {
-  name_en: string
-  name_ar: string
-  rule_kind: 'subject'
-  rule_value: string
-}
-/** Rename body — either field optional (PATCH). */
-export interface SmartFolderUpdate {
-  name_en?: string
-  name_ar?: string
-}
-
 // --- Ledger→Outlook Phase 1–4: automated Correspondence Log + address book ---
-export type CorrespondenceLogItem = components['schemas']['CorrespondenceLogItem']
-export type CorrespondenceLogResponse =
-  components['schemas']['CorrespondenceLogResponse']
-export type CorrespondenceLogRecord =
-  components['schemas']['CorrespondenceLogRecord']
 export type CorrespondenceCategoryRead =
   components['schemas']['CorrespondenceCategoryRead']
 export type CorrespondenceCategoryCreate =
@@ -593,14 +437,6 @@ export type CorrespondenceRuleCreate =
   components['schemas']['CorrespondenceRuleCreate']
 export type CorrespondenceRuleUpdate =
   components['schemas']['CorrespondenceRuleUpdate']
-export type AddressBookContactRead =
-  components['schemas']['AddressBookContactRead']
-export type LedgerAddress = components['schemas']['LedgerAddress']
-export type UnreadCountResponse = components['schemas']['UnreadCountResponse']
-export type RecipientListRead = components['schemas']['RecipientListRead']
-export type RecipientListMember = components['schemas']['RecipientListMember']
-export type RecipientListCreate = components['schemas']['RecipientListCreate']
-export type RecipientListUpdate = components['schemas']['RecipientListUpdate']
 
 // Phase C — Universal Intake Drop-zone
 // Hand-mirrored from backend/app/schemas/intake.py + extraction.py.
@@ -678,14 +514,8 @@ export interface ScanInboxCount {
   total: number
 }
 
-// Phase 4 LAN — Notification counts (SSE + JSON safety-poll).
-// Hand-mirrored from backend/app/schemas/notifications.py NotificationCounts.
-export interface NotificationCounts {
-  approvals: number
-  leaves: number
-  scans: number
-  emails: number
-}
+// Notification counts are generated from backend/app/schemas/notifications.py.
+export type NotificationCounts = components['schemas']['NotificationCounts']
 
 // Phase 05 — Books
 // ``attachment_paths`` (Task 1 / migration 0023) is not yet in api.types.ts;
@@ -833,86 +663,11 @@ export type AttachmentSlotRead = components['schemas']['AttachmentSlotRead']
 export type GenerateAttachmentSpec = components['schemas']['GenerateAttachmentSpec']
 export type StagedAttachmentRead = components['schemas']['StagedAttachmentRead']
 
-// Phase 12 — Dashboard
-// Hand-mirrored until backend lands and `npm run gen:api` picks it up.
-export interface DashboardOnLeaveItem {
-  employee_id: string
-  employee_name_en: string
-  employee_name_ar: string | null
-  leave_id: number
-  leave_type: string
-  start_date: string
-  end_date: string
-}
-
-export interface DashboardUpcomingItem {
-  employee_id: string
-  employee_name_en: string
-  employee_name_ar: string | null
-  leave_id: number
-  leave_type: string
-  end_date: string
-  days_remaining: number
-}
-
-export interface DashboardRecentDocument {
-  id: number
-  employee_id: string
-  employee_name_en: string
-  employee_name_ar: string | null
-  template_id: string
-  ref_number: string | null
-  role: string | null
-  created_at: string
-}
-
-export interface DashboardRecentLedger {
-  id: number
-  entry_date: string
-  direction: string
-  channel: string
-  counterparty: string
-  subject: string
-  related_employee_id: string | null
-  related_employee_name_en: string | null
-  related_employee_name_ar: string | null
-  created_at: string
-}
-
-/**
- * Email sync snapshot embedded in the dashboard summary. Drives the
- * `email_sync_status` widget. Hand-typed here until openapi-typescript
- * regenerates against the new backend response shape — keep in sync with
- * `backend/app/schemas/dashboard.py::EmailSyncSnapshot`.
- */
-export interface DashboardEmailSync {
-  /** ISO-8601 timestamp of the last successful sync, or `null` if never synced. */
-  last_synced_at: string | null
-  /** Whether email sync is configured (account exists + has credentials). */
-  enabled: boolean
-  /** Configured cadence in minutes. `0` means scheduled sync is off. */
-  interval_minutes: number
-  /** Count of emails imported today (per local calendar day). */
-  incoming_today: number
-}
-
-export interface DashboardSummary {
-  totals: {
-    employees_active: number
-    on_leave_today: number
-    present_today: number
-    forms_this_month: number
-    open_violations_count: number
-    draft_count: number
-    book_draft_count: number
-  }
-  on_leave_today: DashboardOnLeaveItem[]
-  upcoming_leave_ends: DashboardUpcomingItem[]
-  recent_documents: DashboardRecentDocument[]
-  recent_ledger: DashboardRecentLedger[]
-  /** Phase 18 — email sync widget payload. Always present (backend always returns it). */
-  email_sync: DashboardEmailSync
-}
+// Dashboard contract is generated from backend/openapi.json.
+export type DashboardOnLeaveItem = components['schemas']['DashboardLeaveItem']
+export type DashboardUpcomingItem = components['schemas']['DashboardUpcomingLeaveItem']
+export type DashboardRecentDocument = components['schemas']['DashboardRecentDocument']
+export type DashboardSummary = components['schemas']['DashboardSummary']
 
 // Monthly time sheet (site JD 908) — one month of one workbook, plus the two
 // deliverables it produces. `sheet` on the response is the generated `string`,
@@ -1775,131 +1530,6 @@ export const api = {
   undoScanItem: (id: number) =>
     request<ScanInboxItem>('POST', `/scan-inbox/${id}/undo`),
 
-  // --- ledger (Phase 07) ---
-  listLedger: (params: {
-    from_date?: string
-    to_date?: string
-    direction?: LedgerDirection
-    channel?: LedgerChannel
-    counterparty?: string
-    q?: string
-    tag?: string
-    related_employee_id?: string
-    related_book_id?: number
-    include_deleted?: boolean
-    /** Phase 15 — restrict to entries with at least one attachment. */
-    has_attachment?: boolean
-    /** Phase 15 — entries on or after this ISO date (inclusive). */
-    since?: string
-    /** Phase 16 — when true, draft entries (tag=draft) are included. The list
-     * endpoint defaults to excluding them. */
-    include_drafts?: boolean
-    /** Phase 6 — 'all' (admin only) widens to the whole-office inbox; default own. */
-    scope?: 'mine' | 'all'
-    /** Phase 2 (D1) — quick filters. `unread` keeps only unread entries;
-     * `has_attachments` keeps entries with ≥1 attachment; `flagged` keeps the
-     * current user's flagged entries (server-sorted by due when true);
-     * `employee_id` restricts to a linked employee's G-number. */
-    unread?: boolean
-    has_attachments?: boolean
-    flagged?: boolean
-    employee_id?: string
-    /** Phase 3 — a smart folder's saved subject filter (per-user). */
-    smart_folder_id?: number
-    limit?: number
-    offset?: number
-  } = {}) => request<LedgerListResponse>('GET', `/ledger${qs({ ...params })}`),
-  getLedgerEntry: (id: number) => request<LedgerEntryRead>('GET', `/ledger/${id}`),
-  listLedgerThread: (id: number, limit = 50) =>
-    request<LedgerListItem[]>('GET', `/ledger/${id}/thread${qs({ limit })}`),
-  createLedgerEntry: (body: LedgerEntryCreate) =>
-    request<LedgerEntryRead>('POST', '/ledger', body),
-  updateLedgerEntry: (id: number, body: LedgerEntryUpdate) =>
-    request<LedgerEntryRead>('PATCH', `/ledger/${id}`, body),
-  deleteLedgerEntry: (id: number) => request<void>('DELETE', `/ledger/${id}`),
-  listLedgerCounterparties: (q?: string, limit?: number) =>
-    request<string[]>('GET', `/ledger/counterparties${qs({ q, limit })}`),
-  uploadLedgerAttachment: (id: number, file: File) => {
-    const form = new FormData()
-    form.append('file', file)
-    return multipart<LedgerEntryRead>(`/ledger/${id}/attachments`, form)
-  },
-  // Phase 15
-  toggleLedgerStar: (id: number) =>
-    request<LedgerEntryRead>('POST', `/ledger/entries/${id}/star`),
-  /** Mark an entry unread (clears `read_at`) — the inverse of mark-read, used by
-   * the bulk selection bar's Read/Unread toggle (Phase 2, D4). */
-  markLedgerEntryUnread: (id: number) =>
-    request<LedgerEntryRead>('POST', `/ledger/entries/${id}/mark-unread`),
-  // --- Phase 2 (D3): per-user follow-up flags ---
-  /** Set / update the current user's follow-up flag on an entry. `due` is an
-   * optional ISO `YYYY-MM-DD`; omit/null for an undated flag. */
-  flagLedgerEntry: (id: number, due?: string | null) =>
-    request<LedgerEntryRead>('POST', `/ledger/${id}/flag`, { due: due ?? null }),
-  /** Clear the current user's follow-up flag on an entry. */
-  unflagLedgerEntry: (id: number) =>
-    request<LedgerEntryRead>('DELETE', `/ledger/${id}/flag`),
-  /** Current user's flagged-entry count (drives the Follow-ups badge + bell). */
-  getLedgerFlagCount: () =>
-    request<UnreadCountResponse>('GET', '/ledger/flag-count'),
-  // --- Phase 3 (2026-06-25): per-user smart folders ---
-  /** The current user's active smart folders (each with its matching count). */
-  listSmartFolders: () =>
-    request<SmartFolder[]>('GET', '/ledger/smart-folders'),
-  /** Confirm-first folder suggestions — ≥5-mail subject clusters not yet a
-   * folder and not dismissed by this user. */
-  getSmartFolderSuggestions: () =>
-    request<SmartFolderSuggestion[]>('GET', '/ledger/smart-folders/suggestions'),
-  /** Create a confirmed smart folder from a cluster (editable EN+AR name). */
-  createSmartFolder: (body: SmartFolderCreate) =>
-    request<SmartFolder>('POST', '/ledger/smart-folders', body),
-  /** Dismiss a suggestion cluster (per-user; it won't reappear). */
-  dismissSmartFolderSuggestion: (clusterKey: string) =>
-    request<void>('POST', '/ledger/smart-folders/dismiss', { cluster_key: clusterKey }),
-  /** Rename a smart folder. */
-  updateSmartFolder: (id: number, body: SmartFolderUpdate) =>
-    request<SmartFolder>('PATCH', `/ledger/smart-folders/${id}`, body),
-  /** Soft-delete a smart folder. */
-  deleteSmartFolder: (id: number) =>
-    request<void>('DELETE', `/ledger/smart-folders/${id}`),
-  ledgerAttachmentsZipUrl: (id: number) =>
-    `${BASE}/ledger/entries/${id}/attachments.zip`,
-  /** URL for a single attachment, addressed by its `attachment_paths` index
-   * (keeps non-ASCII/spaced filenames out of the path). `inline: true` asks the
-   * backend to serve it `Content-Disposition: inline` so preview can render it. */
-  ledgerAttachmentUrl: (
-    id: number,
-    index: number,
-    opts?: { inline?: boolean; base64?: boolean },
-  ) => {
-    const qs = opts?.base64
-      ? '?encoding=base64'
-      : opts?.inline
-        ? '?disposition=inline'
-        : ''
-    return `${BASE}/ledger/${id}/attachments/by-index/${index}${qs}`
-  },
-
-  // --- Phase 16: FTS5 search ---
-  searchLedger: (q: string, limit = 50, scope?: 'mine' | 'all') =>
-    request<LedgerSearchResponse>('GET', `/ledger/search${qs({ q, limit, scope })}`),
-
-  // --- Phase 17: read state (NavBell numeric badge) ---
-  /** Phase 17 — newest N unread incoming entries for the NavBell popover. */
-  getLedgerUnreadRecent: (limit = 5) =>
-    request<UnreadRecentResponse>('GET', `/ledger/unread-recent${qs({ limit })}`),
-  markLedgerEntryRead: (id: number) =>
-    request<LedgerEntryRead>('POST', `/ledger/entries/${id}/mark-read`),
-  markAllLedgerRead: () =>
-    request<LedgerMarkAllReadResult>('POST', '/ledger/mark-all-read'),
-
-  // --- Ledger→Outlook Phase 4: automated Correspondence Log + Inbox badge ---
-  /** Shared automated Correspondence Log; filter by `category_id` for an
-   * accordion sub-folder. */
-  getLedgerLog: (
-    params: { category_id?: number; limit?: number; offset?: number } = {},
-  ) =>
-    request<CorrespondenceLogResponse>('GET', `/ledger/log${qs({ ...params })}`),
   /** Correspondence-log categories — note: gated `settings.edit` server-side, so
    * non-admins get 403; the rail derives sub-items from the log when so. */
   getCorrespondenceCategories: () =>
@@ -1924,58 +1554,6 @@ export const api = {
   /** Delete a rule. */
   deleteCorrespondenceRule: (id: number) =>
     request<void>('DELETE', `/correspondence/rules/${id}`),
-  /** Unread count for the personal mailbox (drives the Inbox folder badge). */
-  getLedgerUnreadCount: (scope?: 'mine' | 'all') =>
-    request<UnreadCountResponse>('GET', `/ledger/unread-count${qs({ scope })}`),
-  /** Read-only auto-log record for a Correspondence-Log row. */
-  getLedgerLogRecord: (id: number) =>
-    request<CorrespondenceLogRecord>('GET', `/ledger/log/${id}`),
-
-  // --- Ledger→Outlook Phase 2: address book ---
-  listLedgerContacts: () =>
-    request<AddressBookContactRead[]>('GET', '/ledger/contacts'),
-  addLedgerContact: (body: { display_name: string; address: string }) =>
-    request<AddressBookContactRead>('POST', '/ledger/contacts', body),
-  deleteLedgerContact: (id: number) =>
-    request<void>('DELETE', `/ledger/contacts/${id}`),
-
-  // --- Ledger compose: recipient (distribution) lists ---
-  listRecipientLists: () =>
-    request<RecipientListRead[]>('GET', '/ledger/recipient-lists'),
-  createRecipientList: (body: RecipientListCreate) =>
-    request<RecipientListRead>('POST', '/ledger/recipient-lists', body),
-  updateRecipientList: (id: number, body: RecipientListUpdate) =>
-    request<RecipientListRead>('PATCH', `/ledger/recipient-lists/${id}`, body),
-  deleteRecipientList: (id: number) =>
-    request<void>('DELETE', `/ledger/recipient-lists/${id}`),
-
-  // --- Phase 16: drafts ---
-  createDraft: (body: DraftWrite) =>
-    request<LedgerEntryRead>('POST', '/ledger/drafts', body),
-  updateDraft: (id: number, body: DraftWrite) =>
-    request<LedgerEntryRead>('PATCH', `/ledger/drafts/${id}`, body),
-  /** Upsert helper — POST when id is null, PATCH otherwise. */
-  upsertDraft: (id: number | null, body: DraftWrite) =>
-    id == null
-      ? request<LedgerEntryRead>('POST', '/ledger/drafts', body)
-      : request<LedgerEntryRead>('PATCH', `/ledger/drafts/${id}`, body),
-  deleteDraft: (id: number) => request<void>('DELETE', `/ledger/drafts/${id}`),
-  sendDraft: (id: number) =>
-    request<LedgerEntryRead>('POST', `/ledger/drafts/${id}/send`),
-
-  // --- Phase 16: send attachment to vault ---
-  sendAttachmentToVault: (
-    entryId: number,
-    attachmentIndex: number,
-    employeeId: string,
-    kind: VaultKind,
-  ) =>
-    request<VaultEntry>(
-      'POST',
-      `/ledger/entries/${entryId}/attachments/${attachmentIndex}/send-to-vault`,
-      { employee_id: employeeId, kind },
-    ),
-
   // --- classic Outlook bridge ---
   createOutlookPairing: (body: { mailbox_address?: string } = {}) =>
     request<OutlookPairingRead>('POST', '/outlook/pairings', body),
@@ -2045,32 +1623,6 @@ export const api = {
   testEmailConnection: () => request<void>('POST', '/email/test'),
   syncEmail: () => request<EmailSyncResult>('POST', '/email/sync'),
   getEmailSyncStatus: () => request<EmailSyncStatus>('GET', '/email/sync/status'),
-  sendEmail: (body: EmailSendRequest, files: File[] = []) => {
-    const form = new FormData()
-    form.set('to', (body.to ?? []).join(','))
-    form.set('cc', (body.cc ?? []).join(','))
-    form.set('subject', body.subject)
-    form.set('html', body.html)
-    if (body.in_reply_to) form.set('in_reply_to', body.in_reply_to)
-    if (body.references) form.set('references', body.references)
-    if (body.use_signature !== undefined) {
-      form.set('use_signature', body.use_signature ? 'true' : 'false')
-    }
-    for (const f of files) form.append('files', f)
-    return multipart<EmailSendResult>('/email/send', form)
-  },
-
-  // --- email signature (Phase 15) ---
-  // Stored as a field on AppSettingsRead/Update — exposed via the standard
-  // GET /settings + PATCH /settings endpoints.
-  getEmailSignature: async (): Promise<{ value: string }> => {
-    const r = await request<{ email_signature?: string }>('GET', '/settings')
-    return { value: r.email_signature ?? '' }
-  },
-  setEmailSignature: async (value: string): Promise<{ value: string }> => {
-    const r = await request<{ email_signature?: string }>('PATCH', '/settings', { email_signature: value })
-    return { value: r.email_signature ?? '' }
-  },
 
   // --- identity (Phase 14) ---
   getIdentity: () => request<IdentityRead>('GET', '/identity/me'),
@@ -2102,28 +1654,18 @@ export const api = {
     request<AdminUserRead>('PATCH', `/auth/users/${id}/role`, { role }),
   lockAuthUser: (id: number) => request<AdminUserRead>('POST', `/auth/users/${id}/lock`),
   unlockAuthUser: (id: number) => request<AdminUserRead>('POST', `/auth/users/${id}/unlock`),
-  /** Set/clear the single-holder default-manager flag (forms signing paths,
-   * 2026-06-11 §5). Enabling on one user clears any previous holder. */
   setDefaultManager: (userId: number, enabled: boolean) =>
     request<AdminUserRead>('POST', `/auth/users/${userId}/default-manager`, { enabled }),
   listAuthAudit: (limit = 50) =>
     request<AuditEntryRead[]>('GET', `/auth/audit?limit=${limit}`),
 
   // --- permissions (granular capability matrix, 2026-05-26) ---
-  /** The signed-in user's own effective capabilities — drives the UI gates. */
   myCapabilities: () => request<string[]>('GET', '/auth/me/capabilities'),
-  /** Full capability catalog + per-role defaults (admin-only). */
   listCapabilities: () => request<CapabilityRead[]>('GET', '/auth/capabilities'),
-  /** A user's effective caps + overrides (admin-only). */
   getUserPermissions: (id: number) =>
     request<UserPermissionRead>('GET', `/auth/users/${id}/permissions`),
-  /** Set/clear one per-user override (effect null = revert to role default). */
   setUserPermission: (id: number, capability: string, effect: PermissionEffect | null) =>
-    request<UserPermissionRead>('PUT', `/auth/users/${id}/permissions`, {
-      capability,
-      effect,
-    }),
-
+    request<UserPermissionRead>('PUT', `/auth/users/${id}/permissions`, { capability, effect }),
   // --- permission requests (Task 10) ---
   /** Submit a capability request for the signed-in user.
    * The backend is idempotent — if a pending request already exists for this

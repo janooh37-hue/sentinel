@@ -3,8 +3,8 @@
  * by URL. Images render via <img>; PDFs via the pdf.js canvas PdfViewer; other
  * types show a download-only fallback. Nothing is sent to any external service.
  *
- * Modeled on ledger/AttachmentPreviewDialog (portal, Escape/arrows, RTL). Future
- * work converges that dialog onto this one.
+ * Uses the shared PDF renderer with a portal, Escape/arrows, RTL, and
+ * download fallback.
  */
 
 import { lazy, Suspense, useCallback, useEffect, useState } from 'react'
@@ -12,10 +12,10 @@ import { createPortal } from 'react-dom'
 import { useTranslation } from 'react-i18next'
 import { ChevronLeft, ChevronRight, Download, ExternalLink, Loader2, Maximize, RotateCw, X, ZoomIn, ZoomOut } from 'lucide-react'
 
-import { FileTypeIcon } from '@/components/ledger/FileTypeIcon'
+import { FileTypeIcon } from '@/components/ui/file-type-icon'
 import type { FileKind } from '@/lib/fileTypes'
 
-const PdfViewer = lazy(() => import('@/components/ledger/PdfViewer'))
+const PdfViewer = lazy(() => import('@/components/ui/pdf-viewer'))
 
 export interface DocViewerItem {
   name: string

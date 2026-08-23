@@ -2432,6 +2432,87 @@
         }
       }
     },
+    "/api/v1/employees/{employee_id}/correspondence": {
+      "get": {
+        "tags": [
+          "employees"
+        ],
+        "summary": "List Employee Correspondence",
+        "operationId": "list_employee_correspondence_api_v1_employees__employee_id__correspondence_get",
+        "parameters": [
+          {
+            "name": "employee_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Employee Id"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 100,
+              "minimum": 1,
+              "default": 25,
+              "title": "Limit"
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "default": 0,
+              "title": "Offset"
+            }
+          },
+          {
+            "name": "gssg_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Gssg Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CorrespondenceListRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/employees/{employee_id}/leaves": {
       "get": {
         "tags": [
@@ -5716,7 +5797,7 @@
           "documents"
         ],
         "summary": "Download Document",
-        "description": "Stream a generated document (PDF or DOCX).\n\n``encoding=base64`` returns the file bytes base64-encoded as ``text/plain``\n— the in-app PDF preview uses this so the response body never carries a\n``%PDF`` magic-byte stream. Browser PDF handlers and download accelerators\n(notably **Internet Download Manager**, which sniffs the URL+content-type\nand intercepts the request, returning an empty 204 to the JS ``fetch``)\nwould otherwise hijack the bytes and the canvas would never render. The\nledger team uses the same trick — see ``/ledger/.../attachments/by-index``.\n\n``original=true`` returns the pre-signature generated PDF (``pdf_path``) even\nwhen the version is signed-locked. The default download swaps in the signed\nartifact once a version is signed, which otherwise makes the original form\nunreachable; this lets the UI show the original alongside the signed copy.",
+        "description": "Stream a generated document (PDF or DOCX).\n\n``encoding=base64`` returns the file bytes base64-encoded as ``text/plain``\n— the in-app PDF preview uses this so the response body never carries a\n``%PDF`` magic-byte stream. Browser PDF handlers and download accelerators\n(notably **Internet Download Manager**, which sniffs the URL+content-type\nand intercepts the request, returning an empty 204 to the JS ``fetch``)\nwould otherwise hijack the bytes and the canvas would never render.\n\n``original=true`` returns the pre-signature generated PDF (``pdf_path``) even\nwhen the version is signed-locked. The default download swaps in the signed\nartifact once a version is signed, which otherwise makes the original form\nunreachable; this lets the UI show the original alongside the signed copy.",
         "operationId": "download_document_api_v1_documents__document_id__download_get",
         "parameters": [
           {
@@ -10031,3006 +10112,6 @@
         }
       }
     },
-    "/api/v1/ledger/smart-folders": {
-      "get": {
-        "tags": [
-          "ledger"
-        ],
-        "summary": "List Smart Folders",
-        "operationId": "list_smart_folders_api_v1_ledger_smart_folders_get",
-        "parameters": [
-          {
-            "name": "gssg_session",
-            "in": "cookie",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Gssg Session"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "array",
-                  "items": {
-                    "$ref": "#/components/schemas/SmartFolderRead"
-                  },
-                  "title": "Response List Smart Folders Api V1 Ledger Smart Folders Get"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      },
-      "post": {
-        "tags": [
-          "ledger"
-        ],
-        "summary": "Create Smart Folder",
-        "operationId": "create_smart_folder_api_v1_ledger_smart_folders_post",
-        "parameters": [
-          {
-            "name": "gssg_session",
-            "in": "cookie",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Gssg Session"
-            }
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/SmartFolderCreate"
-              }
-            }
-          }
-        },
-        "responses": {
-          "201": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/SmartFolderRead"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/v1/ledger/smart-folders/suggestions": {
-      "get": {
-        "tags": [
-          "ledger"
-        ],
-        "summary": "List Suggestions",
-        "operationId": "list_suggestions_api_v1_ledger_smart_folders_suggestions_get",
-        "parameters": [
-          {
-            "name": "gssg_session",
-            "in": "cookie",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Gssg Session"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "array",
-                  "items": {
-                    "$ref": "#/components/schemas/SmartFolderSuggestion"
-                  },
-                  "title": "Response List Suggestions Api V1 Ledger Smart Folders Suggestions Get"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/v1/ledger/smart-folders/dismiss": {
-      "post": {
-        "tags": [
-          "ledger"
-        ],
-        "summary": "Dismiss Suggestion",
-        "operationId": "dismiss_suggestion_api_v1_ledger_smart_folders_dismiss_post",
-        "parameters": [
-          {
-            "name": "gssg_session",
-            "in": "cookie",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Gssg Session"
-            }
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/SmartFolderDismiss"
-              }
-            }
-          }
-        },
-        "responses": {
-          "204": {
-            "description": "Successful Response"
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/v1/ledger/smart-folders/{folder_id}": {
-      "patch": {
-        "tags": [
-          "ledger"
-        ],
-        "summary": "Rename Smart Folder",
-        "operationId": "rename_smart_folder_api_v1_ledger_smart_folders__folder_id__patch",
-        "parameters": [
-          {
-            "name": "folder_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "integer",
-              "title": "Folder Id"
-            }
-          },
-          {
-            "name": "gssg_session",
-            "in": "cookie",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Gssg Session"
-            }
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/SmartFolderUpdate"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/SmartFolderRead"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      },
-      "delete": {
-        "tags": [
-          "ledger"
-        ],
-        "summary": "Delete Smart Folder",
-        "operationId": "delete_smart_folder_api_v1_ledger_smart_folders__folder_id__delete",
-        "parameters": [
-          {
-            "name": "folder_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "integer",
-              "title": "Folder Id"
-            }
-          },
-          {
-            "name": "gssg_session",
-            "in": "cookie",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Gssg Session"
-            }
-          }
-        ],
-        "responses": {
-          "204": {
-            "description": "Successful Response"
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/v1/ledger": {
-      "get": {
-        "tags": [
-          "ledger"
-        ],
-        "summary": "List Entries",
-        "operationId": "list_entries_api_v1_ledger_get",
-        "parameters": [
-          {
-            "name": "from_date",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string",
-                  "format": "date"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "From Date"
-            }
-          },
-          {
-            "name": "to_date",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string",
-                  "format": "date"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "To Date"
-            }
-          },
-          {
-            "name": "since",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string",
-                  "format": "date"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Since"
-            }
-          },
-          {
-            "name": "direction",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Direction"
-            }
-          },
-          {
-            "name": "channel",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Channel"
-            }
-          },
-          {
-            "name": "counterparty",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Counterparty"
-            }
-          },
-          {
-            "name": "q",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Q"
-            }
-          },
-          {
-            "name": "tag",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Tag"
-            }
-          },
-          {
-            "name": "related_employee_id",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Related Employee Id"
-            }
-          },
-          {
-            "name": "related_book_id",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "integer"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Related Book Id"
-            }
-          },
-          {
-            "name": "has_attachment",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "boolean"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Has Attachment"
-            }
-          },
-          {
-            "name": "include_deleted",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "boolean",
-              "default": false,
-              "title": "Include Deleted"
-            }
-          },
-          {
-            "name": "include_drafts",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "boolean",
-              "default": false,
-              "title": "Include Drafts"
-            }
-          },
-          {
-            "name": "unread",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "boolean"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Unread"
-            }
-          },
-          {
-            "name": "has_attachments",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "boolean"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Has Attachments"
-            }
-          },
-          {
-            "name": "flagged",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "boolean"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Flagged"
-            }
-          },
-          {
-            "name": "employee_id",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Employee Id"
-            }
-          },
-          {
-            "name": "smart_folder_id",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "integer"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Smart Folder Id"
-            }
-          },
-          {
-            "name": "scope",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "string",
-              "description": "mine (default) | all (admin only)",
-              "default": "mine",
-              "title": "Scope"
-            },
-            "description": "mine (default) | all (admin only)"
-          },
-          {
-            "name": "limit",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "integer",
-              "maximum": 500,
-              "minimum": 1,
-              "default": 100,
-              "title": "Limit"
-            }
-          },
-          {
-            "name": "offset",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "integer",
-              "minimum": 0,
-              "default": 0,
-              "title": "Offset"
-            }
-          },
-          {
-            "name": "gssg_session",
-            "in": "cookie",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Gssg Session"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/LedgerListResponse"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      },
-      "post": {
-        "tags": [
-          "ledger"
-        ],
-        "summary": "Create Entry",
-        "operationId": "create_entry_api_v1_ledger_post",
-        "parameters": [
-          {
-            "name": "gssg_session",
-            "in": "cookie",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Gssg Session"
-            }
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/LedgerEntryCreate"
-              }
-            }
-          }
-        },
-        "responses": {
-          "201": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/LedgerEntryRead"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/v1/ledger/counterparties": {
-      "get": {
-        "tags": [
-          "ledger"
-        ],
-        "summary": "List Counterparties",
-        "operationId": "list_counterparties_api_v1_ledger_counterparties_get",
-        "parameters": [
-          {
-            "name": "q",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Q"
-            }
-          },
-          {
-            "name": "limit",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "integer",
-              "maximum": 100,
-              "minimum": 1,
-              "default": 20,
-              "title": "Limit"
-            }
-          },
-          {
-            "name": "gssg_session",
-            "in": "cookie",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Gssg Session"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "array",
-                  "items": {
-                    "type": "string"
-                  },
-                  "title": "Response List Counterparties Api V1 Ledger Counterparties Get"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/v1/ledger/contacts": {
-      "get": {
-        "tags": [
-          "ledger"
-        ],
-        "summary": "List Contacts",
-        "operationId": "list_contacts_api_v1_ledger_contacts_get",
-        "parameters": [
-          {
-            "name": "q",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Q"
-            }
-          },
-          {
-            "name": "limit",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "integer",
-              "maximum": 100,
-              "minimum": 1,
-              "default": 20,
-              "title": "Limit"
-            }
-          },
-          {
-            "name": "gssg_session",
-            "in": "cookie",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Gssg Session"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "array",
-                  "items": {
-                    "$ref": "#/components/schemas/AddressBookContactRead"
-                  },
-                  "title": "Response List Contacts Api V1 Ledger Contacts Get"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      },
-      "post": {
-        "tags": [
-          "ledger"
-        ],
-        "summary": "Save Contact",
-        "operationId": "save_contact_api_v1_ledger_contacts_post",
-        "parameters": [
-          {
-            "name": "gssg_session",
-            "in": "cookie",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Gssg Session"
-            }
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/AddressBookContactCreate"
-              }
-            }
-          }
-        },
-        "responses": {
-          "201": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/AddressBookContactRead"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/v1/ledger/contacts/{contact_id}": {
-      "delete": {
-        "tags": [
-          "ledger"
-        ],
-        "summary": "Delete Contact",
-        "operationId": "delete_contact_api_v1_ledger_contacts__contact_id__delete",
-        "parameters": [
-          {
-            "name": "contact_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "integer",
-              "title": "Contact Id"
-            }
-          },
-          {
-            "name": "gssg_session",
-            "in": "cookie",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Gssg Session"
-            }
-          }
-        ],
-        "responses": {
-          "204": {
-            "description": "Successful Response"
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/v1/ledger/recipient-lists": {
-      "get": {
-        "tags": [
-          "ledger"
-        ],
-        "summary": "List Recipient Lists",
-        "operationId": "list_recipient_lists_api_v1_ledger_recipient_lists_get",
-        "parameters": [
-          {
-            "name": "gssg_session",
-            "in": "cookie",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Gssg Session"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "array",
-                  "items": {
-                    "$ref": "#/components/schemas/RecipientListRead"
-                  },
-                  "title": "Response List Recipient Lists Api V1 Ledger Recipient Lists Get"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      },
-      "post": {
-        "tags": [
-          "ledger"
-        ],
-        "summary": "Create Recipient List",
-        "operationId": "create_recipient_list_api_v1_ledger_recipient_lists_post",
-        "parameters": [
-          {
-            "name": "gssg_session",
-            "in": "cookie",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Gssg Session"
-            }
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/RecipientListCreate"
-              }
-            }
-          }
-        },
-        "responses": {
-          "201": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/RecipientListRead"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/v1/ledger/recipient-lists/{list_id}": {
-      "patch": {
-        "tags": [
-          "ledger"
-        ],
-        "summary": "Update Recipient List",
-        "operationId": "update_recipient_list_api_v1_ledger_recipient_lists__list_id__patch",
-        "parameters": [
-          {
-            "name": "list_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "integer",
-              "title": "List Id"
-            }
-          },
-          {
-            "name": "gssg_session",
-            "in": "cookie",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Gssg Session"
-            }
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/RecipientListUpdate"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/RecipientListRead"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      },
-      "delete": {
-        "tags": [
-          "ledger"
-        ],
-        "summary": "Delete Recipient List",
-        "operationId": "delete_recipient_list_api_v1_ledger_recipient_lists__list_id__delete",
-        "parameters": [
-          {
-            "name": "list_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "integer",
-              "title": "List Id"
-            }
-          },
-          {
-            "name": "gssg_session",
-            "in": "cookie",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Gssg Session"
-            }
-          }
-        ],
-        "responses": {
-          "204": {
-            "description": "Successful Response"
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/v1/ledger/search": {
-      "get": {
-        "tags": [
-          "ledger"
-        ],
-        "summary": "Search Entries",
-        "operationId": "search_entries_api_v1_ledger_search_get",
-        "parameters": [
-          {
-            "name": "q",
-            "in": "query",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "description": "Free-text search query",
-              "title": "Q"
-            },
-            "description": "Free-text search query"
-          },
-          {
-            "name": "limit",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "integer",
-              "maximum": 200,
-              "minimum": 1,
-              "default": 50,
-              "title": "Limit"
-            }
-          },
-          {
-            "name": "scope",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "string",
-              "description": "mine (default) | all (admin only)",
-              "default": "mine",
-              "title": "Scope"
-            },
-            "description": "mine (default) | all (admin only)"
-          },
-          {
-            "name": "gssg_session",
-            "in": "cookie",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Gssg Session"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/SearchResponse"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/v1/ledger/log": {
-      "get": {
-        "tags": [
-          "ledger"
-        ],
-        "summary": "List Correspondence Log",
-        "operationId": "list_correspondence_log_api_v1_ledger_log_get",
-        "parameters": [
-          {
-            "name": "category_id",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "integer"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Category Id"
-            }
-          },
-          {
-            "name": "limit",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "integer",
-              "maximum": 200,
-              "minimum": 1,
-              "default": 50,
-              "title": "Limit"
-            }
-          },
-          {
-            "name": "offset",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "integer",
-              "minimum": 0,
-              "default": 0,
-              "title": "Offset"
-            }
-          },
-          {
-            "name": "gssg_session",
-            "in": "cookie",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Gssg Session"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/CorrespondenceLogResponse"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/v1/ledger/log/{entry_id}": {
-      "get": {
-        "tags": [
-          "ledger"
-        ],
-        "summary": "Get Correspondence Log Record",
-        "operationId": "get_correspondence_log_record_api_v1_ledger_log__entry_id__get",
-        "parameters": [
-          {
-            "name": "entry_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "integer",
-              "title": "Entry Id"
-            }
-          },
-          {
-            "name": "gssg_session",
-            "in": "cookie",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Gssg Session"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/CorrespondenceLogRecord"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/v1/ledger/unread-count": {
-      "get": {
-        "tags": [
-          "ledger"
-        ],
-        "summary": "Get Unread Count",
-        "description": "Number of un-opened incoming email entries — drives the NavBell badge.\n\nPrivate inbox (Phase 6): counts the caller's own unread by default;\nadmins may widen with scope=all to see the whole-office count.",
-        "operationId": "get_unread_count_api_v1_ledger_unread_count_get",
-        "parameters": [
-          {
-            "name": "scope",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "string",
-              "description": "mine (default) | all (admin only)",
-              "default": "mine",
-              "title": "Scope"
-            },
-            "description": "mine (default) | all (admin only)"
-          },
-          {
-            "name": "gssg_session",
-            "in": "cookie",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Gssg Session"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/UnreadCountResponse"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/v1/ledger/unread-recent": {
-      "get": {
-        "tags": [
-          "ledger"
-        ],
-        "summary": "Get Unread Recent",
-        "description": "Preview list of latest unread incoming emails for the NavBell popover.\n\nPrivate inbox (Phase 6): scoped to the caller; admins may widen with\nscope=all. (The NavBell itself never passes scope=all — own-scope only.)",
-        "operationId": "get_unread_recent_api_v1_ledger_unread_recent_get",
-        "parameters": [
-          {
-            "name": "limit",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "integer",
-              "maximum": 20,
-              "minimum": 1,
-              "default": 5,
-              "title": "Limit"
-            }
-          },
-          {
-            "name": "scope",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "string",
-              "description": "mine (default) | all (admin only)",
-              "default": "mine",
-              "title": "Scope"
-            },
-            "description": "mine (default) | all (admin only)"
-          },
-          {
-            "name": "gssg_session",
-            "in": "cookie",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Gssg Session"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/UnreadRecentResponse"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/v1/ledger/mark-all-read": {
-      "post": {
-        "tags": [
-          "ledger"
-        ],
-        "summary": "Mark All Read",
-        "description": "Bulk-mark the caller's own unread incoming email as read.\n\nIntentionally ignores any ``scope`` query param — mark-all-read is always\nown-scope only.  An admin calling with ``?scope=all`` must not wipe the\nwhole office's unread state.",
-        "operationId": "mark_all_read_api_v1_ledger_mark_all_read_post",
-        "parameters": [
-          {
-            "name": "gssg_session",
-            "in": "cookie",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Gssg Session"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/MarkAllReadResponse"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/v1/ledger/entries/{entry_id}/mark-read": {
-      "post": {
-        "tags": [
-          "ledger"
-        ],
-        "summary": "Mark Read",
-        "description": "Set ``read_at=utcnow()`` if currently NULL. Idempotent.",
-        "operationId": "mark_read_api_v1_ledger_entries__entry_id__mark_read_post",
-        "parameters": [
-          {
-            "name": "entry_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "integer",
-              "title": "Entry Id"
-            }
-          },
-          {
-            "name": "scope",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "string",
-              "description": "mine (default) | all (admin only)",
-              "default": "mine",
-              "title": "Scope"
-            },
-            "description": "mine (default) | all (admin only)"
-          },
-          {
-            "name": "gssg_session",
-            "in": "cookie",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Gssg Session"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/LedgerEntryRead"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/v1/ledger/entries/{entry_id}/mark-unread": {
-      "post": {
-        "tags": [
-          "ledger"
-        ],
-        "summary": "Mark Unread",
-        "description": "Clear ``read_at`` (mark unread) if currently set. Idempotent — powers the\nbulk \"Mark unread\" action.",
-        "operationId": "mark_unread_api_v1_ledger_entries__entry_id__mark_unread_post",
-        "parameters": [
-          {
-            "name": "entry_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "integer",
-              "title": "Entry Id"
-            }
-          },
-          {
-            "name": "scope",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "string",
-              "description": "mine (default) | all (admin only)",
-              "default": "mine",
-              "title": "Scope"
-            },
-            "description": "mine (default) | all (admin only)"
-          },
-          {
-            "name": "gssg_session",
-            "in": "cookie",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Gssg Session"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/LedgerEntryRead"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/v1/ledger/drafts": {
-      "get": {
-        "tags": [
-          "ledger"
-        ],
-        "summary": "List Drafts",
-        "operationId": "list_drafts_api_v1_ledger_drafts_get",
-        "parameters": [
-          {
-            "name": "limit",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "integer",
-              "maximum": 500,
-              "minimum": 1,
-              "default": 100,
-              "title": "Limit"
-            }
-          },
-          {
-            "name": "offset",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "integer",
-              "minimum": 0,
-              "default": 0,
-              "title": "Offset"
-            }
-          },
-          {
-            "name": "gssg_session",
-            "in": "cookie",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Gssg Session"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "array",
-                  "items": {
-                    "$ref": "#/components/schemas/LedgerEntryRead"
-                  },
-                  "title": "Response List Drafts Api V1 Ledger Drafts Get"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      },
-      "post": {
-        "tags": [
-          "ledger"
-        ],
-        "summary": "Create Draft",
-        "operationId": "create_draft_api_v1_ledger_drafts_post",
-        "parameters": [
-          {
-            "name": "gssg_session",
-            "in": "cookie",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Gssg Session"
-            }
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/DraftWrite"
-              }
-            }
-          }
-        },
-        "responses": {
-          "201": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/LedgerEntryRead"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/v1/ledger/drafts/{draft_id}": {
-      "patch": {
-        "tags": [
-          "ledger"
-        ],
-        "summary": "Update Draft",
-        "operationId": "update_draft_api_v1_ledger_drafts__draft_id__patch",
-        "parameters": [
-          {
-            "name": "draft_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "integer",
-              "title": "Draft Id"
-            }
-          },
-          {
-            "name": "gssg_session",
-            "in": "cookie",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Gssg Session"
-            }
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/DraftWrite"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/LedgerEntryRead"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      },
-      "delete": {
-        "tags": [
-          "ledger"
-        ],
-        "summary": "Delete Draft",
-        "operationId": "delete_draft_api_v1_ledger_drafts__draft_id__delete",
-        "parameters": [
-          {
-            "name": "draft_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "integer",
-              "title": "Draft Id"
-            }
-          },
-          {
-            "name": "gssg_session",
-            "in": "cookie",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Gssg Session"
-            }
-          }
-        ],
-        "responses": {
-          "204": {
-            "description": "Successful Response"
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/v1/ledger/drafts/{draft_id}/send": {
-      "post": {
-        "tags": [
-          "ledger"
-        ],
-        "summary": "Send Draft",
-        "operationId": "send_draft_api_v1_ledger_drafts__draft_id__send_post",
-        "parameters": [
-          {
-            "name": "draft_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "integer",
-              "title": "Draft Id"
-            }
-          },
-          {
-            "name": "gssg_session",
-            "in": "cookie",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Gssg Session"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/LedgerEntryRead"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/v1/ledger/flag-count": {
-      "get": {
-        "tags": [
-          "ledger"
-        ],
-        "summary": "Get Flag Count",
-        "description": "The caller's own follow-up flag count — drives the bell badge.",
-        "operationId": "get_flag_count_api_v1_ledger_flag_count_get",
-        "parameters": [
-          {
-            "name": "gssg_session",
-            "in": "cookie",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Gssg Session"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/FlagCountResponse"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/v1/ledger/{entry_id}/flag": {
-      "post": {
-        "tags": [
-          "ledger"
-        ],
-        "summary": "Set Flag",
-        "description": "Upsert the caller's follow-up flag for an entry (optional ``due`` date).",
-        "operationId": "set_flag_api_v1_ledger__entry_id__flag_post",
-        "parameters": [
-          {
-            "name": "entry_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "integer",
-              "title": "Entry Id"
-            }
-          },
-          {
-            "name": "gssg_session",
-            "in": "cookie",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Gssg Session"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "anyOf": [
-                  {
-                    "$ref": "#/components/schemas/FlagRequest"
-                  },
-                  {
-                    "type": "null"
-                  }
-                ],
-                "title": "Payload"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/LedgerEntryRead"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      },
-      "delete": {
-        "tags": [
-          "ledger"
-        ],
-        "summary": "Clear Flag",
-        "description": "Delete the caller's follow-up flag for an entry.",
-        "operationId": "clear_flag_api_v1_ledger__entry_id__flag_delete",
-        "parameters": [
-          {
-            "name": "entry_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "integer",
-              "title": "Entry Id"
-            }
-          },
-          {
-            "name": "gssg_session",
-            "in": "cookie",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Gssg Session"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/LedgerEntryRead"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/v1/ledger/{entry_id}": {
-      "get": {
-        "tags": [
-          "ledger"
-        ],
-        "summary": "Get Entry",
-        "operationId": "get_entry_api_v1_ledger__entry_id__get",
-        "parameters": [
-          {
-            "name": "entry_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "integer",
-              "title": "Entry Id"
-            }
-          },
-          {
-            "name": "include_deleted",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "boolean",
-              "default": false,
-              "title": "Include Deleted"
-            }
-          },
-          {
-            "name": "gssg_session",
-            "in": "cookie",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Gssg Session"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/LedgerEntryRead"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      },
-      "patch": {
-        "tags": [
-          "ledger"
-        ],
-        "summary": "Update Entry",
-        "operationId": "update_entry_api_v1_ledger__entry_id__patch",
-        "parameters": [
-          {
-            "name": "entry_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "integer",
-              "title": "Entry Id"
-            }
-          },
-          {
-            "name": "gssg_session",
-            "in": "cookie",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Gssg Session"
-            }
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/LedgerEntryUpdate"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/LedgerEntryRead"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      },
-      "delete": {
-        "tags": [
-          "ledger"
-        ],
-        "summary": "Delete Entry",
-        "operationId": "delete_entry_api_v1_ledger__entry_id__delete",
-        "parameters": [
-          {
-            "name": "entry_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "integer",
-              "title": "Entry Id"
-            }
-          },
-          {
-            "name": "gssg_session",
-            "in": "cookie",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Gssg Session"
-            }
-          }
-        ],
-        "responses": {
-          "204": {
-            "description": "Successful Response"
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/v1/ledger/{entry_id}/thread": {
-      "get": {
-        "tags": [
-          "ledger"
-        ],
-        "summary": "Get Thread",
-        "description": "Return other email entries that share the same conversation as ``entry_id``.\n\nMatch key = (channel='email', same counterparty, normalised subject). The\nseed entry is excluded; returned oldest-first.",
-        "operationId": "get_thread_api_v1_ledger__entry_id__thread_get",
-        "parameters": [
-          {
-            "name": "entry_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "integer",
-              "title": "Entry Id"
-            }
-          },
-          {
-            "name": "limit",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "integer",
-              "maximum": 100,
-              "minimum": 1,
-              "default": 50,
-              "title": "Limit"
-            }
-          },
-          {
-            "name": "scope",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "string",
-              "description": "mine (default) | all (admin only)",
-              "default": "mine",
-              "title": "Scope"
-            },
-            "description": "mine (default) | all (admin only)"
-          },
-          {
-            "name": "gssg_session",
-            "in": "cookie",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Gssg Session"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "array",
-                  "items": {
-                    "$ref": "#/components/schemas/LedgerListItem"
-                  },
-                  "title": "Response Get Thread Api V1 Ledger  Entry Id  Thread Get"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/v1/ledger/{entry_id}/attachments": {
-      "post": {
-        "tags": [
-          "ledger"
-        ],
-        "summary": "Add Attachment",
-        "operationId": "add_attachment_api_v1_ledger__entry_id__attachments_post",
-        "parameters": [
-          {
-            "name": "entry_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "integer",
-              "title": "Entry Id"
-            }
-          },
-          {
-            "name": "gssg_session",
-            "in": "cookie",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Gssg Session"
-            }
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "multipart/form-data": {
-              "schema": {
-                "$ref": "#/components/schemas/Body_add_attachment_api_v1_ledger__entry_id__attachments_post"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/LedgerEntryRead"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/v1/ledger/entries/{entry_id}/star": {
-      "post": {
-        "tags": [
-          "ledger"
-        ],
-        "summary": "Toggle Star",
-        "description": "Flip the ★ tag on an entry. Idempotent: a second call removes it.",
-        "operationId": "toggle_star_api_v1_ledger_entries__entry_id__star_post",
-        "parameters": [
-          {
-            "name": "entry_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "integer",
-              "title": "Entry Id"
-            }
-          },
-          {
-            "name": "gssg_session",
-            "in": "cookie",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Gssg Session"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/LedgerEntryRead"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/v1/ledger/entries/{entry_id}/attachments/{attachment_index}/send-to-vault": {
-      "post": {
-        "tags": [
-          "ledger"
-        ],
-        "summary": "Send Attachment To Vault",
-        "operationId": "send_attachment_to_vault_api_v1_ledger_entries__entry_id__attachments__attachment_index__send_to_vault_post",
-        "parameters": [
-          {
-            "name": "entry_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "integer",
-              "title": "Entry Id"
-            }
-          },
-          {
-            "name": "attachment_index",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "integer",
-              "title": "Attachment Index"
-            }
-          },
-          {
-            "name": "gssg_session",
-            "in": "cookie",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Gssg Session"
-            }
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/SendToVaultRequest"
-              }
-            }
-          }
-        },
-        "responses": {
-          "201": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/VaultFileRead"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/v1/ledger/entries/{entry_id}/attachments.zip": {
-      "get": {
-        "tags": [
-          "ledger"
-        ],
-        "summary": "Download Attachments Zip",
-        "description": "Bundle every attachment for an entry into a single zip stream.",
-        "operationId": "download_attachments_zip_api_v1_ledger_entries__entry_id__attachments_zip_get",
-        "parameters": [
-          {
-            "name": "entry_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "integer",
-              "title": "Entry Id"
-            }
-          },
-          {
-            "name": "gssg_session",
-            "in": "cookie",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Gssg Session"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/v1/ledger/{entry_id}/attachments/by-index/{index}": {
-      "get": {
-        "tags": [
-          "ledger"
-        ],
-        "summary": "Download Attachment By Index",
-        "description": "Stream the ``index``-th attachment of an entry.\n\nAddressing by index keeps non-ASCII / spaced filenames out of the URL path\n(they 204 through some proxies). ``index`` is the position in\n``attachment_paths``.\n\n``encoding=base64`` returns the bytes base64-encoded as ``text/plain`` —\nthe PDF preview uses this so the browser never sees a ``%PDF`` magic-byte\nbody (Chrome's PDF stream handler otherwise claims it and the JS ``fetch``\nreceives an empty 204). pdf.js decodes + renders the bytes itself.",
-        "operationId": "download_attachment_by_index_api_v1_ledger__entry_id__attachments_by_index__index__get",
-        "parameters": [
-          {
-            "name": "entry_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "integer",
-              "title": "Entry Id"
-            }
-          },
-          {
-            "name": "index",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "integer",
-              "title": "Index"
-            }
-          },
-          {
-            "name": "disposition",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "string",
-              "pattern": "^(attachment|inline)$",
-              "default": "attachment",
-              "title": "Disposition"
-            }
-          },
-          {
-            "name": "encoding",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string",
-                  "pattern": "^base64$"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Encoding"
-            }
-          },
-          {
-            "name": "gssg_session",
-            "in": "cookie",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Gssg Session"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/v1/ledger/{entry_id}/attachments/{filename}": {
-      "get": {
-        "tags": [
-          "ledger"
-        ],
-        "summary": "Download Attachment",
-        "description": "Stream an attachment file back to the client.\n\nValidates that ``filename`` is one of the entry's recorded attachments\nso a caller can't drop \"../../etc/passwd\" and read arbitrary files.\n\n``disposition=inline`` lets the browser render PDFs/images in place (the\nin-app preview); the default ``attachment`` forces a download.",
-        "operationId": "download_attachment_api_v1_ledger__entry_id__attachments__filename__get",
-        "parameters": [
-          {
-            "name": "entry_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "integer",
-              "title": "Entry Id"
-            }
-          },
-          {
-            "name": "filename",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "title": "Filename"
-            }
-          },
-          {
-            "name": "disposition",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "string",
-              "pattern": "^(attachment|inline)$",
-              "default": "attachment",
-              "title": "Disposition"
-            }
-          },
-          {
-            "name": "gssg_session",
-            "in": "cookie",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Gssg Session"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
     "/api/v1/correspondence/categories": {
       "get": {
         "tags": [
@@ -14177,14 +11258,13 @@
         }
       }
     },
-    "/api/v1/email/send": {
+    "/api/v1/outlook/pairings": {
       "post": {
         "tags": [
-          "email"
+          "outlook"
         ],
-        "summary": "Send Email",
-        "description": "Multipart endpoint. ``to`` / ``cc`` are comma-separated lists of\naddresses; ``files`` carries optional attachments.",
-        "operationId": "send_email_api_v1_email_send_post",
+        "summary": "Issue Pairing",
+        "operationId": "issue_pairing_api_v1_outlook_pairings_post",
         "parameters": [
           {
             "name": "gssg_session",
@@ -14206,9 +11286,9 @@
         "requestBody": {
           "required": true,
           "content": {
-            "multipart/form-data": {
+            "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/Body_send_email_api_v1_email_send_post"
+                "$ref": "#/components/schemas/OutlookPairingCreate"
               }
             }
           }
@@ -14219,7 +11299,833 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/EmailSendResult"
+                  "$ref": "#/components/schemas/OutlookPairingRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/outlook/devices": {
+      "get": {
+        "tags": [
+          "outlook"
+        ],
+        "summary": "Get Devices",
+        "operationId": "get_devices_api_v1_outlook_devices_get",
+        "parameters": [
+          {
+            "name": "gssg_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Gssg Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/OutlookDeviceRead"
+                  },
+                  "title": "Response Get Devices Api V1 Outlook Devices Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/outlook/devices/{device_id}": {
+      "delete": {
+        "tags": [
+          "outlook"
+        ],
+        "summary": "Delete Device",
+        "operationId": "delete_device_api_v1_outlook_devices__device_id__delete",
+        "parameters": [
+          {
+            "name": "device_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Device Id"
+            }
+          },
+          {
+            "name": "gssg_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Gssg Session"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/outlook/handoffs": {
+      "post": {
+        "tags": [
+          "outlook"
+        ],
+        "summary": "Issue Handoff",
+        "operationId": "issue_handoff_api_v1_outlook_handoffs_post",
+        "parameters": [
+          {
+            "name": "gssg_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Gssg Session"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OutlookHandoffCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OutlookHandoffCreated"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/outlook/handoffs/{handoff_id}": {
+      "get": {
+        "tags": [
+          "outlook"
+        ],
+        "summary": "Get Handoff",
+        "operationId": "get_handoff_api_v1_outlook_handoffs__handoff_id__get",
+        "parameters": [
+          {
+            "name": "handoff_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Handoff Id"
+            }
+          },
+          {
+            "name": "gssg_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Gssg Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OutlookHandoffRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/outlook/device/pair": {
+      "post": {
+        "tags": [
+          "outlook-device"
+        ],
+        "summary": "Pair Device",
+        "operationId": "pair_device_api_v1_outlook_device_pair_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OutlookDevicePairRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OutlookDevicePairRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/outlook/device/selection": {
+      "post": {
+        "tags": [
+          "outlook-device"
+        ],
+        "summary": "Select Message",
+        "operationId": "select_message_api_v1_outlook_device_selection_post",
+        "parameters": [
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OutlookSelectionRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OutlookSelectionRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/outlook/device/employees": {
+      "get": {
+        "tags": [
+          "outlook-device"
+        ],
+        "summary": "Search Employees",
+        "operationId": "search_employees_api_v1_outlook_device_employees_get",
+        "parameters": [
+          {
+            "name": "q",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 128
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Q"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 50,
+              "minimum": 1,
+              "default": 20,
+              "title": "Limit"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/OutlookEmployeeSummary"
+                  },
+                  "title": "Response Search Employees Api V1 Outlook Device Employees Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/outlook/device/employees/{employee_id}/photo": {
+      "get": {
+        "tags": [
+          "outlook-device"
+        ],
+        "summary": "Employee Photo",
+        "operationId": "employee_photo_api_v1_outlook_device_employees__employee_id__photo_get",
+        "parameters": [
+          {
+            "name": "employee_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Employee Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/outlook/device/messages/{entry_id}/employees/{employee_id}": {
+      "put": {
+        "tags": [
+          "outlook-device"
+        ],
+        "summary": "Link Employee",
+        "operationId": "link_employee_api_v1_outlook_device_messages__entry_id__employees__employee_id__put",
+        "parameters": [
+          {
+            "name": "entry_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Entry Id"
+            }
+          },
+          {
+            "name": "employee_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Employee Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Link Employee Api V1 Outlook Device Messages  Entry Id  Employees  Employee Id  Put"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "outlook-device"
+        ],
+        "summary": "Unlink Employee",
+        "operationId": "unlink_employee_api_v1_outlook_device_messages__entry_id__employees__employee_id__delete",
+        "parameters": [
+          {
+            "name": "entry_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Entry Id"
+            }
+          },
+          {
+            "name": "employee_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Employee Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/outlook/device/handoffs/redeem": {
+      "post": {
+        "tags": [
+          "outlook-device"
+        ],
+        "summary": "Redeem Device Handoff",
+        "operationId": "redeem_device_handoff_api_v1_outlook_device_handoffs_redeem_post",
+        "parameters": [
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OutlookHandoffRedeemRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OutlookHandoffRedeemRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/outlook/device/handoffs/{handoff_id}/attachments/{index}": {
+      "get": {
+        "tags": [
+          "outlook-device"
+        ],
+        "summary": "Download Handoff Attachment",
+        "operationId": "download_handoff_attachment_api_v1_outlook_device_handoffs__handoff_id__attachments__index__get",
+        "parameters": [
+          {
+            "name": "handoff_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Handoff Id"
+            }
+          },
+          {
+            "name": "index",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Index"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/outlook/device/handoffs/{handoff_id}/complete": {
+      "post": {
+        "tags": [
+          "outlook-device"
+        ],
+        "summary": "Complete Device Handoff",
+        "operationId": "complete_device_handoff_api_v1_outlook_device_handoffs__handoff_id__complete_post",
+        "parameters": [
+          {
+            "name": "handoff_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Handoff Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OutlookHandoffRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/outlook/device/handoffs/{handoff_id}/fail": {
+      "post": {
+        "tags": [
+          "outlook-device"
+        ],
+        "summary": "Fail Device Handoff",
+        "operationId": "fail_device_handoff_api_v1_outlook_device_handoffs__handoff_id__fail_post",
+        "parameters": [
+          {
+            "name": "handoff_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Handoff Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OutlookHandoffFailure"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OutlookHandoffRead"
                 }
               }
             }
@@ -21490,57 +19396,6 @@
         ],
         "title": "ActivityItemRead"
       },
-      "AddressBookContactCreate": {
-        "properties": {
-          "display_name": {
-            "type": "string",
-            "maxLength": 256,
-            "title": "Display Name",
-            "default": ""
-          },
-          "address": {
-            "type": "string",
-            "maxLength": 320,
-            "minLength": 1,
-            "title": "Address"
-          }
-        },
-        "type": "object",
-        "required": [
-          "address"
-        ],
-        "title": "AddressBookContactCreate",
-        "description": "Payload to save a contact. Owner comes from the session, never here."
-      },
-      "AddressBookContactRead": {
-        "properties": {
-          "id": {
-            "type": "integer",
-            "title": "Id"
-          },
-          "display_name": {
-            "type": "string",
-            "title": "Display Name"
-          },
-          "address": {
-            "type": "string",
-            "title": "Address"
-          },
-          "created_at": {
-            "type": "string",
-            "format": "date-time",
-            "title": "Created At"
-          }
-        },
-        "type": "object",
-        "required": [
-          "id",
-          "display_name",
-          "address",
-          "created_at"
-        ],
-        "title": "AddressBookContactRead"
-      },
       "AdjustmentRevokeWrite": {
         "properties": {
           "reason": {
@@ -23008,20 +20863,6 @@
         "title": "AuditEntryRead",
         "description": "One user-management event, projected for the History tab."
       },
-      "Body_add_attachment_api_v1_ledger__entry_id__attachments_post": {
-        "properties": {
-          "upload": {
-            "type": "string",
-            "format": "binary",
-            "title": "Upload"
-          }
-        },
-        "type": "object",
-        "required": [
-          "upload"
-        ],
-        "title": "Body_add_attachment_api_v1_ledger__entry_id__attachments_post"
-      },
       "Body_add_book_attachment_api_v1_books__book_id__attachments_post": {
         "properties": {
           "upload": {
@@ -23214,76 +21055,6 @@
         },
         "type": "object",
         "title": "Body_send_announcement_api_v1_announcements_send_post"
-      },
-      "Body_send_email_api_v1_email_send_post": {
-        "properties": {
-          "to": {
-            "type": "string",
-            "title": "To"
-          },
-          "subject": {
-            "type": "string",
-            "title": "Subject"
-          },
-          "html": {
-            "type": "string",
-            "title": "Html"
-          },
-          "cc": {
-            "type": "string",
-            "title": "Cc",
-            "default": ""
-          },
-          "in_reply_to": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "In Reply To"
-          },
-          "references": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "References"
-          },
-          "use_signature": {
-            "type": "boolean",
-            "title": "Use Signature",
-            "default": true
-          },
-          "files": {
-            "anyOf": [
-              {
-                "items": {
-                  "type": "string",
-                  "format": "binary"
-                },
-                "type": "array"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Files"
-          }
-        },
-        "type": "object",
-        "required": [
-          "to",
-          "subject",
-          "html"
-        ],
-        "title": "Body_send_email_api_v1_email_send_post"
       },
       "Body_stage_attachment_api_v1_documents_attachments_stage_post": {
         "properties": {
@@ -24790,6 +22561,24 @@
         "title": "ConfigurationPatch",
         "description": "Partial typed patch; the router combines it with the current configuration."
       },
+      "CorrespondenceAddress": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "title": "Name",
+            "default": ""
+          },
+          "address": {
+            "type": "string",
+            "title": "Address"
+          }
+        },
+        "type": "object",
+        "required": [
+          "address"
+        ],
+        "title": "CorrespondenceAddress"
+      },
       "CorrespondenceCategoryCreate": {
         "properties": {
           "key": {
@@ -24907,11 +22696,15 @@
         "type": "object",
         "title": "CorrespondenceCategoryUpdate"
       },
-      "CorrespondenceLogItem": {
+      "CorrespondenceItemRead": {
         "properties": {
-          "id": {
+          "entry_id": {
             "type": "integer",
-            "title": "Id"
+            "title": "Entry Id"
+          },
+          "channel": {
+            "type": "string",
+            "title": "Channel"
           },
           "entry_date": {
             "type": "string",
@@ -24922,265 +22715,67 @@
             "type": "string",
             "title": "Direction"
           },
-          "subject": {
-            "type": "string",
-            "title": "Subject"
-          },
           "counterparty": {
             "type": "string",
             "title": "Counterparty"
           },
-          "source_kind": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Source Kind"
+          "subject": {
+            "type": "string",
+            "title": "Subject"
           },
-          "category_id": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Category Id"
+          "to_recipients": {
+            "items": {
+              "$ref": "#/components/schemas/CorrespondenceAddress"
+            },
+            "type": "array",
+            "title": "To Recipients"
           },
-          "related_book_id": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Related Book Id"
+          "cc_recipients": {
+            "items": {
+              "$ref": "#/components/schemas/CorrespondenceAddress"
+            },
+            "type": "array",
+            "title": "Cc Recipients"
           },
-          "related_employee_id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Related Employee Id"
-          },
-          "created_by": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Created By"
-          },
-          "read_at": {
-            "anyOf": [
-              {
-                "type": "string",
-                "format": "date-time"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Read At"
-          }
-        },
-        "type": "object",
-        "required": [
-          "id",
-          "entry_date",
-          "direction",
-          "subject",
-          "counterparty",
-          "source_kind",
-          "category_id",
-          "related_book_id",
-          "related_employee_id",
-          "created_by"
-        ],
-        "title": "CorrespondenceLogItem",
-        "description": "A row in the shared log list — projection of a LedgerEntry."
-      },
-      "CorrespondenceLogRecord": {
-        "properties": {
-          "id": {
+          "attachment_count": {
             "type": "integer",
-            "title": "Id"
+            "title": "Attachment Count"
           },
-          "entry_date": {
+          "link_source": {
             "type": "string",
-            "format": "date",
-            "title": "Entry Date"
-          },
-          "direction": {
-            "type": "string",
-            "title": "Direction"
-          },
-          "subject": {
-            "type": "string",
-            "title": "Subject"
-          },
-          "counterparty": {
-            "type": "string",
-            "title": "Counterparty"
-          },
-          "source_kind": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
+            "enum": [
+              "detected",
+              "manual",
+              "legacy"
             ],
-            "title": "Source Kind"
+            "title": "Link Source"
           },
-          "category_id": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Category Id"
-          },
-          "related_book_id": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Related Book Id"
-          },
-          "related_employee_id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Related Employee Id"
-          },
-          "created_by": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Created By"
-          },
-          "read_at": {
-            "anyOf": [
-              {
-                "type": "string",
-                "format": "date-time"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Read At"
-          },
-          "category_key": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Category Key"
-          },
-          "category_name_en": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Category Name En"
-          },
-          "category_name_ar": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Category Name Ar"
-          },
-          "book_ref_number": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Book Ref Number"
-          },
-          "book_approval_state": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Book Approval State"
+          "can_open_in_outlook": {
+            "type": "boolean",
+            "title": "Can Open In Outlook"
           }
         },
         "type": "object",
         "required": [
-          "id",
+          "entry_id",
+          "channel",
           "entry_date",
           "direction",
-          "subject",
           "counterparty",
-          "source_kind",
-          "category_id",
-          "related_book_id",
-          "related_employee_id",
-          "created_by"
+          "subject",
+          "to_recipients",
+          "cc_recipients",
+          "attachment_count",
+          "link_source",
+          "can_open_in_outlook"
         ],
-        "title": "CorrespondenceLogRecord",
-        "description": "The record view — adds the resolved category + the linked Book's status."
+        "title": "CorrespondenceItemRead"
       },
-      "CorrespondenceLogResponse": {
+      "CorrespondenceListRead": {
         "properties": {
           "items": {
             "items": {
-              "$ref": "#/components/schemas/CorrespondenceLogItem"
+              "$ref": "#/components/schemas/CorrespondenceItemRead"
             },
             "type": "array",
             "title": "Items"
@@ -25195,7 +22790,7 @@
           "items",
           "total"
         ],
-        "title": "CorrespondenceLogResponse"
+        "title": "CorrespondenceListRead"
       },
       "CorrespondenceRuleCreate": {
         "properties": {
@@ -26415,87 +24010,6 @@
         ],
         "title": "DashboardRecentDocument"
       },
-      "DashboardRecentLedger": {
-        "properties": {
-          "id": {
-            "type": "integer",
-            "title": "Id"
-          },
-          "entry_date": {
-            "type": "string",
-            "format": "date",
-            "title": "Entry Date"
-          },
-          "direction": {
-            "type": "string",
-            "title": "Direction"
-          },
-          "channel": {
-            "type": "string",
-            "title": "Channel"
-          },
-          "counterparty": {
-            "type": "string",
-            "title": "Counterparty"
-          },
-          "subject": {
-            "type": "string",
-            "title": "Subject"
-          },
-          "related_employee_id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Related Employee Id"
-          },
-          "related_employee_name_en": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Related Employee Name En"
-          },
-          "related_employee_name_ar": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Related Employee Name Ar"
-          },
-          "created_at": {
-            "type": "string",
-            "format": "date-time",
-            "title": "Created At"
-          }
-        },
-        "type": "object",
-        "required": [
-          "id",
-          "entry_date",
-          "direction",
-          "channel",
-          "counterparty",
-          "subject",
-          "related_employee_id",
-          "related_employee_name_en",
-          "related_employee_name_ar",
-          "created_at"
-        ],
-        "title": "DashboardRecentLedger"
-      },
       "DashboardSummary": {
         "properties": {
           "totals": {
@@ -26521,16 +24035,6 @@
             },
             "type": "array",
             "title": "Recent Documents"
-          },
-          "recent_ledger": {
-            "items": {
-              "$ref": "#/components/schemas/DashboardRecentLedger"
-            },
-            "type": "array",
-            "title": "Recent Ledger"
-          },
-          "email_sync": {
-            "$ref": "#/components/schemas/DashboardSyncStatus"
           }
         },
         "type": "object",
@@ -26538,48 +24042,9 @@
           "totals",
           "on_leave_today",
           "upcoming_leave_ends",
-          "recent_documents",
-          "recent_ledger",
-          "email_sync"
+          "recent_documents"
         ],
         "title": "DashboardSummary"
-      },
-      "DashboardSyncStatus": {
-        "properties": {
-          "last_synced_at": {
-            "anyOf": [
-              {
-                "type": "string",
-                "format": "date-time"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Last Synced At"
-          },
-          "enabled": {
-            "type": "boolean",
-            "title": "Enabled"
-          },
-          "interval_minutes": {
-            "type": "integer",
-            "title": "Interval Minutes"
-          },
-          "incoming_today": {
-            "type": "integer",
-            "title": "Incoming Today"
-          }
-        },
-        "type": "object",
-        "required": [
-          "last_synced_at",
-          "enabled",
-          "interval_minutes",
-          "incoming_today"
-        ],
-        "title": "DashboardSyncStatus",
-        "description": "Email-sync widget payload (Phase 18).\n\n``enabled`` requires both: an EmailAccount row exists AND its\n``sync_interval_minutes > 0``. ``last_synced_at`` is sourced from\n``EmailAccount.last_synced_at`` (populated by the scheduler / manual sync)."
       },
       "DashboardTotals": {
         "properties": {
@@ -26602,16 +24067,6 @@
           "open_violations_count": {
             "type": "integer",
             "title": "Open Violations Count",
-            "default": 0
-          },
-          "draft_count": {
-            "type": "integer",
-            "title": "Draft Count",
-            "default": 0
-          },
-          "book_draft_count": {
-            "type": "integer",
-            "title": "Book Draft Count",
             "default": 0
           }
         },
@@ -26689,15 +24144,11 @@
               "pending",
               "workspace",
               "violations",
-              "drafts",
-              "ledger",
               "on_leave_today",
               "upcoming_leave",
               "recent_docs",
-              "email_sync_status",
               "waiting_approvals",
               "expiring_soon",
-              "recent_ledger",
               "pending_departures"
             ],
             "title": "Id"
@@ -27143,64 +24594,6 @@
           "role"
         ],
         "title": "DocumentRead"
-      },
-      "DraftWrite": {
-        "properties": {
-          "to": {
-            "items": {
-              "type": "string"
-            },
-            "type": "array",
-            "title": "To"
-          },
-          "cc": {
-            "items": {
-              "type": "string"
-            },
-            "type": "array",
-            "title": "Cc"
-          },
-          "subject": {
-            "type": "string",
-            "title": "Subject",
-            "default": ""
-          },
-          "html": {
-            "type": "string",
-            "title": "Html",
-            "default": ""
-          },
-          "in_reply_to": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "In Reply To"
-          },
-          "references": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "References"
-          },
-          "use_signature": {
-            "type": "boolean",
-            "title": "Use Signature",
-            "default": true
-          }
-        },
-        "type": "object",
-        "title": "DraftWrite",
-        "description": "Payload for creating or updating an email draft.\n\nDrafts borrow the LedgerEntry shape (channel='email', direction='outgoing',\ntag='draft'). ``to``/``cc``/``in_reply_to``/``references`` aren't first-\nclass on LedgerEntry, so they're persisted as ``draft_meta`` JSON.\n``subject`` and ``html`` map to ``subject`` and ``notes_html``.\n``use_signature`` is persisted in draft_meta and forwarded to\n``email_service.send_email`` when the draft is promoted to sent."
       },
       "DutyAssignmentEventRead": {
         "properties": {
@@ -27718,18 +25111,6 @@
             "type": "string",
             "title": "Username"
           },
-          "smtp_host": {
-            "type": "string",
-            "title": "Smtp Host"
-          },
-          "smtp_port": {
-            "type": "integer",
-            "title": "Smtp Port"
-          },
-          "smtp_use_tls": {
-            "type": "boolean",
-            "title": "Smtp Use Tls"
-          },
           "sent_folder": {
             "type": "string",
             "title": "Sent Folder"
@@ -27808,9 +25189,6 @@
           "imap_port",
           "use_ssl",
           "username",
-          "smtp_host",
-          "smtp_port",
-          "smtp_use_tls",
           "sent_folder",
           "inbox_folder",
           "enabled",
@@ -27821,7 +25199,7 @@
           "has_password"
         ],
         "title": "EmailAccountRead",
-        "description": "Public view — never includes the password."
+        "description": "Public IMAP recording view; legacy SMTP columns stay private."
       },
       "EmailAccountUpsert": {
         "properties": {
@@ -27860,23 +25238,6 @@
               }
             ],
             "title": "Password"
-          },
-          "smtp_host": {
-            "type": "string",
-            "title": "Smtp Host",
-            "default": "smtp.ionos.com"
-          },
-          "smtp_port": {
-            "type": "integer",
-            "maximum": 65535.0,
-            "minimum": 1.0,
-            "title": "Smtp Port",
-            "default": 587
-          },
-          "smtp_use_tls": {
-            "type": "boolean",
-            "title": "Smtp Use Tls",
-            "default": true
           },
           "sent_folder": {
             "type": "string",
@@ -27918,30 +25279,7 @@
           "username"
         ],
         "title": "EmailAccountUpsert",
-        "description": "Write payload. ``password`` is optional on PATCH — only set when\nrotating credentials."
-      },
-      "EmailSendResult": {
-        "properties": {
-          "sent": {
-            "type": "boolean",
-            "title": "Sent"
-          },
-          "message_id": {
-            "type": "string",
-            "title": "Message Id"
-          },
-          "ledger_entry_id": {
-            "type": "integer",
-            "title": "Ledger Entry Id"
-          }
-        },
-        "type": "object",
-        "required": [
-          "sent",
-          "message_id",
-          "ledger_entry_id"
-        ],
-        "title": "EmailSendResult"
+        "description": "IMAP account write payload."
       },
       "EmailSyncResult": {
         "properties": {
@@ -28021,7 +25359,7 @@
           "interval_minutes"
         ],
         "title": "EmailSyncStatus",
-        "description": "Live sync state for the Ledger status strip.\n\n``syncing`` reflects the module sync lock — true during BOTH a manual\n``POST /email/sync`` and a scheduler tick."
+        "description": "Live IMAP recording state for the settings sync status."
       },
       "EmployeeActivityItemRead": {
         "properties": {
@@ -30127,37 +27465,6 @@
         ],
         "title": "ExtractionResponse"
       },
-      "FlagCountResponse": {
-        "properties": {
-          "count": {
-            "type": "integer",
-            "title": "Count"
-          }
-        },
-        "type": "object",
-        "required": [
-          "count"
-        ],
-        "title": "FlagCountResponse"
-      },
-      "FlagRequest": {
-        "properties": {
-          "due": {
-            "anyOf": [
-              {
-                "type": "string",
-                "format": "date"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Due"
-          }
-        },
-        "type": "object",
-        "title": "FlagRequest"
-      },
       "GatewayQrOut": {
         "properties": {
           "qr": {
@@ -31529,735 +28836,6 @@
         "title": "LeaveUpdate",
         "description": "PATCH payload. Dates are accepted only where the lifecycle allows date\nedits (National Service while Pending — delay/extend)."
       },
-      "LedgerAddress": {
-        "properties": {
-          "name": {
-            "type": "string",
-            "title": "Name",
-            "default": ""
-          },
-          "address": {
-            "type": "string",
-            "title": "Address"
-          }
-        },
-        "type": "object",
-        "required": [
-          "address"
-        ],
-        "title": "LedgerAddress"
-      },
-      "LedgerAttachmentMeta": {
-        "properties": {
-          "index": {
-            "type": "integer",
-            "title": "Index"
-          },
-          "name": {
-            "type": "string",
-            "title": "Name"
-          },
-          "size": {
-            "type": "integer",
-            "title": "Size"
-          }
-        },
-        "type": "object",
-        "required": [
-          "index",
-          "name",
-          "size"
-        ],
-        "title": "LedgerAttachmentMeta",
-        "description": "Per-attachment metadata for the detail view.\n\nPopulated by ``GET /{id}`` from disk; the other endpoints that return\n``LedgerEntryRead`` leave it empty (the drawer only reads the full entry).\n``index`` is the position in ``attachment_paths`` (stable; used to address\nthe file by ``/attachments/by-index/{index}`` so Arabic/spaced filenames\nnever go in the URL path). ``size`` is the on-disk byte count, or 0 when the\nfile is missing."
-      },
-      "LedgerEntryCreate": {
-        "properties": {
-          "entry_date": {
-            "type": "string",
-            "format": "date",
-            "title": "Entry Date"
-          },
-          "direction": {
-            "type": "string",
-            "enum": [
-              "incoming",
-              "outgoing",
-              "internal"
-            ],
-            "title": "Direction"
-          },
-          "channel": {
-            "type": "string",
-            "enum": [
-              "email",
-              "phone",
-              "in_person",
-              "fax",
-              "letter",
-              "other"
-            ],
-            "title": "Channel"
-          },
-          "counterparty": {
-            "type": "string",
-            "maxLength": 255,
-            "minLength": 1,
-            "title": "Counterparty"
-          },
-          "subject": {
-            "type": "string",
-            "maxLength": 255,
-            "minLength": 1,
-            "title": "Subject"
-          },
-          "notes_html": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Notes Html"
-          },
-          "tags": {
-            "items": {
-              "type": "string"
-            },
-            "type": "array",
-            "title": "Tags"
-          },
-          "related_book_id": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Related Book Id"
-          },
-          "related_employee_id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Related Employee Id"
-          },
-          "created_by": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Created By"
-          }
-        },
-        "type": "object",
-        "required": [
-          "entry_date",
-          "direction",
-          "channel",
-          "counterparty",
-          "subject"
-        ],
-        "title": "LedgerEntryCreate",
-        "description": "Fields accepted when creating a new ledger entry."
-      },
-      "LedgerEntryRead": {
-        "properties": {
-          "id": {
-            "type": "integer",
-            "title": "Id"
-          },
-          "entry_date": {
-            "type": "string",
-            "format": "date",
-            "title": "Entry Date"
-          },
-          "direction": {
-            "type": "string",
-            "title": "Direction"
-          },
-          "channel": {
-            "type": "string",
-            "title": "Channel"
-          },
-          "counterparty": {
-            "type": "string",
-            "title": "Counterparty"
-          },
-          "subject": {
-            "type": "string",
-            "title": "Subject"
-          },
-          "notes_html": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Notes Html"
-          },
-          "attachment_paths": {
-            "items": {
-              "type": "string"
-            },
-            "type": "array",
-            "title": "Attachment Paths"
-          },
-          "attachments": {
-            "items": {
-              "$ref": "#/components/schemas/LedgerAttachmentMeta"
-            },
-            "type": "array",
-            "title": "Attachments"
-          },
-          "tags": {
-            "items": {
-              "type": "string"
-            },
-            "type": "array",
-            "title": "Tags"
-          },
-          "inline_images": {
-            "additionalProperties": {
-              "type": "string"
-            },
-            "type": "object",
-            "title": "Inline Images"
-          },
-          "draft_meta": {
-            "anyOf": [
-              {
-                "additionalProperties": {
-                  "anyOf": [
-                    {
-                      "type": "string"
-                    },
-                    {
-                      "type": "boolean"
-                    },
-                    {
-                      "items": {
-                        "type": "string"
-                      },
-                      "type": "array"
-                    },
-                    {
-                      "type": "null"
-                    }
-                  ]
-                },
-                "type": "object"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Draft Meta"
-          },
-          "related_book_id": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Related Book Id"
-          },
-          "related_employee_id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Related Employee Id"
-          },
-          "created_at": {
-            "type": "string",
-            "format": "date-time",
-            "title": "Created At"
-          },
-          "updated_at": {
-            "anyOf": [
-              {
-                "type": "string",
-                "format": "date-time"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Updated At"
-          },
-          "created_by": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Created By"
-          },
-          "created_by_name_en": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Created By Name En"
-          },
-          "created_by_name_ar": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Created By Name Ar"
-          },
-          "deleted_at": {
-            "anyOf": [
-              {
-                "type": "string",
-                "format": "date-time"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Deleted At"
-          },
-          "read_at": {
-            "anyOf": [
-              {
-                "type": "string",
-                "format": "date-time"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Read At"
-          },
-          "to_recipients": {
-            "items": {
-              "$ref": "#/components/schemas/LedgerAddress"
-            },
-            "type": "array",
-            "title": "To Recipients"
-          },
-          "cc_recipients": {
-            "items": {
-              "$ref": "#/components/schemas/LedgerAddress"
-            },
-            "type": "array",
-            "title": "Cc Recipients"
-          },
-          "bcc_recipients": {
-            "items": {
-              "$ref": "#/components/schemas/LedgerAddress"
-            },
-            "type": "array",
-            "title": "Bcc Recipients"
-          },
-          "message_id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Message Id"
-          },
-          "in_reply_to": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "In Reply To"
-          },
-          "email_references": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Email References"
-          },
-          "flagged": {
-            "type": "boolean",
-            "title": "Flagged",
-            "default": false
-          },
-          "followup_due": {
-            "anyOf": [
-              {
-                "type": "string",
-                "format": "date"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Followup Due"
-          }
-        },
-        "type": "object",
-        "required": [
-          "id",
-          "entry_date",
-          "direction",
-          "channel",
-          "counterparty",
-          "subject",
-          "notes_html",
-          "attachment_paths",
-          "tags",
-          "related_book_id",
-          "related_employee_id",
-          "created_at",
-          "updated_at",
-          "created_by",
-          "deleted_at"
-        ],
-        "title": "LedgerEntryRead",
-        "description": "Full row — returned by GET /{id}, POST, and PATCH."
-      },
-      "LedgerEntryUpdate": {
-        "properties": {
-          "entry_date": {
-            "anyOf": [
-              {
-                "type": "string",
-                "format": "date"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Entry Date"
-          },
-          "direction": {
-            "anyOf": [
-              {
-                "type": "string",
-                "enum": [
-                  "incoming",
-                  "outgoing",
-                  "internal"
-                ]
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Direction"
-          },
-          "channel": {
-            "anyOf": [
-              {
-                "type": "string",
-                "enum": [
-                  "email",
-                  "phone",
-                  "in_person",
-                  "fax",
-                  "letter",
-                  "other"
-                ]
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Channel"
-          },
-          "counterparty": {
-            "anyOf": [
-              {
-                "type": "string",
-                "maxLength": 255
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Counterparty"
-          },
-          "subject": {
-            "anyOf": [
-              {
-                "type": "string",
-                "maxLength": 255
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Subject"
-          },
-          "notes_html": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Notes Html"
-          },
-          "tags": {
-            "anyOf": [
-              {
-                "items": {
-                  "type": "string"
-                },
-                "type": "array"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Tags"
-          },
-          "related_book_id": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Related Book Id"
-          },
-          "related_employee_id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Related Employee Id"
-          }
-        },
-        "type": "object",
-        "title": "LedgerEntryUpdate",
-        "description": "All fields optional — partial update (PATCH semantics)."
-      },
-      "LedgerListItem": {
-        "properties": {
-          "id": {
-            "type": "integer",
-            "title": "Id"
-          },
-          "entry_date": {
-            "type": "string",
-            "format": "date",
-            "title": "Entry Date"
-          },
-          "direction": {
-            "type": "string",
-            "title": "Direction"
-          },
-          "channel": {
-            "type": "string",
-            "title": "Channel"
-          },
-          "counterparty": {
-            "type": "string",
-            "title": "Counterparty"
-          },
-          "subject": {
-            "type": "string",
-            "title": "Subject"
-          },
-          "tags": {
-            "items": {
-              "type": "string"
-            },
-            "type": "array",
-            "title": "Tags"
-          },
-          "attachment_count": {
-            "type": "integer",
-            "title": "Attachment Count",
-            "default": 0
-          },
-          "related_book_id": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Related Book Id"
-          },
-          "related_employee_id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Related Employee Id"
-          },
-          "created_at": {
-            "type": "string",
-            "format": "date-time",
-            "title": "Created At"
-          },
-          "updated_at": {
-            "anyOf": [
-              {
-                "type": "string",
-                "format": "date-time"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Updated At"
-          },
-          "deleted_at": {
-            "anyOf": [
-              {
-                "type": "string",
-                "format": "date-time"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Deleted At"
-          },
-          "read_at": {
-            "anyOf": [
-              {
-                "type": "string",
-                "format": "date-time"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Read At"
-          },
-          "snippet": {
-            "type": "string",
-            "title": "Snippet",
-            "default": ""
-          },
-          "flagged": {
-            "type": "boolean",
-            "title": "Flagged",
-            "default": false
-          },
-          "followup_due": {
-            "anyOf": [
-              {
-                "type": "string",
-                "format": "date"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Followup Due"
-          }
-        },
-        "type": "object",
-        "required": [
-          "id",
-          "entry_date",
-          "direction",
-          "channel",
-          "counterparty",
-          "subject",
-          "tags",
-          "related_book_id",
-          "related_employee_id",
-          "created_at",
-          "updated_at",
-          "deleted_at"
-        ],
-        "title": "LedgerListItem",
-        "description": "Slim projection for list / timeline views.\n\nOmits ``notes_html`` (can be large). ``attachment_count`` is exposed\ninstead of ``attachment_paths`` so the timeline can show a paperclip\nglyph without paying the full-paths-of-every-row cost."
-      },
-      "LedgerListResponse": {
-        "properties": {
-          "items": {
-            "items": {
-              "$ref": "#/components/schemas/LedgerListItem"
-            },
-            "type": "array",
-            "title": "Items"
-          },
-          "total": {
-            "type": "integer",
-            "title": "Total"
-          },
-          "limit": {
-            "type": "integer",
-            "title": "Limit"
-          },
-          "offset": {
-            "type": "integer",
-            "title": "Offset"
-          }
-        },
-        "type": "object",
-        "required": [
-          "items",
-          "total",
-          "limit",
-          "offset"
-        ],
-        "title": "LedgerListResponse"
-      },
       "LinkSelfRequest": {
         "properties": {
           "employee_id": {
@@ -32496,19 +29074,6 @@
         "type": "object",
         "title": "ManagerUpdate",
         "description": "Partial update. All fields optional. `sig_path` is NOT client-settable."
-      },
-      "MarkAllReadResponse": {
-        "properties": {
-          "updated": {
-            "type": "integer",
-            "title": "Updated"
-          }
-        },
-        "type": "object",
-        "required": [
-          "updated"
-        ],
-        "title": "MarkAllReadResponse"
       },
       "MigrateRequest": {
         "properties": {
@@ -32764,18 +29329,13 @@
           "scans": {
             "type": "integer",
             "title": "Scans"
-          },
-          "emails": {
-            "type": "integer",
-            "title": "Emails"
           }
         },
         "type": "object",
         "required": [
           "approvals",
           "leaves",
-          "scans",
-          "emails"
+          "scans"
         ],
         "title": "NotificationCounts"
       },
@@ -33265,6 +29825,665 @@
         },
         "type": "object",
         "title": "OrgSupervisorUpdate"
+      },
+      "OutlookAttachmentRef": {
+        "properties": {
+          "kind": {
+            "type": "string",
+            "const": "document_pdf",
+            "title": "Kind"
+          },
+          "document_id": {
+            "type": "integer",
+            "exclusiveMinimum": 0.0,
+            "title": "Document Id"
+          },
+          "filename": {
+            "type": "string",
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Filename"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "kind",
+          "document_id",
+          "filename"
+        ],
+        "title": "OutlookAttachmentRef"
+      },
+      "OutlookComposePayload": {
+        "properties": {
+          "to": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "To"
+          },
+          "cc": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Cc"
+          },
+          "subject": {
+            "type": "string",
+            "maxLength": 255,
+            "title": "Subject"
+          },
+          "body_html": {
+            "type": "string",
+            "maxLength": 500000,
+            "title": "Body Html"
+          },
+          "basket_key": {
+            "type": "string",
+            "maxLength": 160,
+            "title": "Basket Key"
+          },
+          "attachments": {
+            "items": {
+              "$ref": "#/components/schemas/OutlookAttachmentRef"
+            },
+            "type": "array",
+            "maxItems": 50,
+            "title": "Attachments"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "to",
+          "subject",
+          "body_html",
+          "basket_key",
+          "attachments"
+        ],
+        "title": "OutlookComposePayload"
+      },
+      "OutlookDevicePairRead": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "mailbox_address": {
+            "type": "string",
+            "title": "Mailbox Address"
+          },
+          "device_label": {
+            "type": "string",
+            "title": "Device Label"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "last_seen_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Last Seen At"
+          },
+          "revoked_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Revoked At"
+          },
+          "credential": {
+            "type": "string",
+            "title": "Credential"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "mailbox_address",
+          "device_label",
+          "created_at",
+          "last_seen_at",
+          "credential"
+        ],
+        "title": "OutlookDevicePairRead"
+      },
+      "OutlookDevicePairRequest": {
+        "properties": {
+          "token": {
+            "type": "string",
+            "maxLength": 512,
+            "minLength": 1,
+            "title": "Token"
+          },
+          "device_id": {
+            "type": "string",
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Device Id"
+          },
+          "device_label": {
+            "type": "string",
+            "maxLength": 128,
+            "minLength": 1,
+            "title": "Device Label"
+          },
+          "mailbox_address": {
+            "type": "string",
+            "maxLength": 320,
+            "minLength": 3,
+            "title": "Mailbox Address"
+          }
+        },
+        "type": "object",
+        "required": [
+          "token",
+          "device_id",
+          "device_label",
+          "mailbox_address"
+        ],
+        "title": "OutlookDevicePairRequest"
+      },
+      "OutlookDeviceRead": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "mailbox_address": {
+            "type": "string",
+            "title": "Mailbox Address"
+          },
+          "device_label": {
+            "type": "string",
+            "title": "Device Label"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "last_seen_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Last Seen At"
+          },
+          "revoked_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Revoked At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "mailbox_address",
+          "device_label",
+          "created_at",
+          "last_seen_at"
+        ],
+        "title": "OutlookDeviceRead"
+      },
+      "OutlookEmployeeSummary": {
+        "properties": {
+          "employee_id": {
+            "type": "string",
+            "title": "Employee Id"
+          },
+          "name_en": {
+            "type": "string",
+            "title": "Name En"
+          },
+          "name_ar": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name Ar"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "photo_version": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Photo Version"
+          },
+          "recording_pending": {
+            "type": "boolean",
+            "title": "Recording Pending",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "employee_id",
+          "name_en",
+          "status"
+        ],
+        "title": "OutlookEmployeeSummary"
+      },
+      "OutlookHandoffCreate": {
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "compose",
+              "open"
+            ],
+            "title": "Kind"
+          },
+          "payload": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/OutlookComposePayload"
+              },
+              {
+                "$ref": "#/components/schemas/OutlookOpenPayload"
+              }
+            ],
+            "title": "Payload"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "kind",
+          "payload"
+        ],
+        "title": "OutlookHandoffCreate"
+      },
+      "OutlookHandoffCreated": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "compose",
+              "open"
+            ],
+            "title": "Kind"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "pending",
+              "redeemed",
+              "completed",
+              "failed",
+              "expired"
+            ],
+            "title": "Status"
+          },
+          "expires_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Expires At"
+          },
+          "redeemed_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Redeemed At"
+          },
+          "completed_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Completed At"
+          },
+          "failure_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Failure Code"
+          },
+          "payload": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Payload"
+          },
+          "token": {
+            "type": "string",
+            "title": "Token"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "kind",
+          "status",
+          "expires_at",
+          "token"
+        ],
+        "title": "OutlookHandoffCreated"
+      },
+      "OutlookHandoffFailure": {
+        "properties": {
+          "failure_code": {
+            "type": "string",
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Failure Code"
+          }
+        },
+        "type": "object",
+        "required": [
+          "failure_code"
+        ],
+        "title": "OutlookHandoffFailure"
+      },
+      "OutlookHandoffRead": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "compose",
+              "open"
+            ],
+            "title": "Kind"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "pending",
+              "redeemed",
+              "completed",
+              "failed",
+              "expired"
+            ],
+            "title": "Status"
+          },
+          "expires_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Expires At"
+          },
+          "redeemed_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Redeemed At"
+          },
+          "completed_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Completed At"
+          },
+          "failure_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Failure Code"
+          },
+          "payload": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Payload"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "kind",
+          "status",
+          "expires_at"
+        ],
+        "title": "OutlookHandoffRead"
+      },
+      "OutlookHandoffRedeemRead": {
+        "properties": {
+          "handoff_id": {
+            "type": "integer",
+            "title": "Handoff Id"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "compose",
+              "open"
+            ],
+            "title": "Kind"
+          },
+          "payload": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Payload"
+          }
+        },
+        "type": "object",
+        "required": [
+          "handoff_id",
+          "kind",
+          "payload"
+        ],
+        "title": "OutlookHandoffRedeemRead"
+      },
+      "OutlookHandoffRedeemRequest": {
+        "properties": {
+          "token": {
+            "type": "string",
+            "maxLength": 512,
+            "minLength": 1,
+            "title": "Token"
+          }
+        },
+        "type": "object",
+        "required": [
+          "token"
+        ],
+        "title": "OutlookHandoffRedeemRequest"
+      },
+      "OutlookOpenPayload": {
+        "properties": {
+          "ledger_entry_id": {
+            "type": "integer",
+            "exclusiveMinimum": 0.0,
+            "title": "Ledger Entry Id"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "ledger_entry_id"
+        ],
+        "title": "OutlookOpenPayload"
+      },
+      "OutlookPairingCreate": {
+        "properties": {
+          "mailbox_address": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 320,
+                "minLength": 3
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mailbox Address"
+          }
+        },
+        "type": "object",
+        "title": "OutlookPairingCreate",
+        "description": "Optional mailbox override used only to select the user's configured account."
+      },
+      "OutlookPairingRead": {
+        "properties": {
+          "token": {
+            "type": "string",
+            "title": "Token"
+          },
+          "expires_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Expires At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "token",
+          "expires_at"
+        ],
+        "title": "OutlookPairingRead"
+      },
+      "OutlookSelectionRead": {
+        "properties": {
+          "indexed": {
+            "type": "boolean",
+            "title": "Indexed"
+          },
+          "recording_pending": {
+            "type": "boolean",
+            "title": "Recording Pending"
+          },
+          "entry_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Entry Id"
+          },
+          "employees": {
+            "items": {
+              "$ref": "#/components/schemas/OutlookEmployeeSummary"
+            },
+            "type": "array",
+            "title": "Employees"
+          }
+        },
+        "type": "object",
+        "required": [
+          "indexed",
+          "recording_pending",
+          "employees"
+        ],
+        "title": "OutlookSelectionRead"
+      },
+      "OutlookSelectionRequest": {
+        "properties": {
+          "internet_message_id": {
+            "type": "string",
+            "maxLength": 512,
+            "minLength": 1,
+            "title": "Internet Message Id"
+          },
+          "outlook_store_id": {
+            "type": "string",
+            "maxLength": 512,
+            "minLength": 1,
+            "title": "Outlook Store Id"
+          },
+          "outlook_entry_id": {
+            "type": "string",
+            "maxLength": 512,
+            "minLength": 1,
+            "title": "Outlook Entry Id"
+          },
+          "g_numbers": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "maxItems": 100,
+            "title": "G Numbers"
+          }
+        },
+        "type": "object",
+        "required": [
+          "internet_message_id",
+          "outlook_store_id",
+          "outlook_entry_id"
+        ],
+        "title": "OutlookSelectionRequest"
       },
       "PassportSuggestion": {
         "properties": {
@@ -35149,139 +32368,6 @@
         ],
         "title": "RecipientCreate"
       },
-      "RecipientListCreate": {
-        "properties": {
-          "name": {
-            "type": "string",
-            "maxLength": 128,
-            "minLength": 1,
-            "title": "Name"
-          },
-          "members": {
-            "items": {
-              "$ref": "#/components/schemas/RecipientListMember"
-            },
-            "type": "array",
-            "title": "Members"
-          }
-        },
-        "type": "object",
-        "required": [
-          "name"
-        ],
-        "title": "RecipientListCreate",
-        "description": "Payload to create a list. Owner comes from the session, never here."
-      },
-      "RecipientListMember": {
-        "properties": {
-          "field": {
-            "type": "string",
-            "enum": [
-              "to",
-              "cc"
-            ],
-            "title": "Field",
-            "default": "to"
-          },
-          "address": {
-            "type": "string",
-            "maxLength": 320,
-            "minLength": 1,
-            "title": "Address"
-          },
-          "display_name": {
-            "type": "string",
-            "maxLength": 256,
-            "title": "Display Name",
-            "default": ""
-          }
-        },
-        "type": "object",
-        "required": [
-          "address"
-        ],
-        "title": "RecipientListMember",
-        "description": "One recipient in a list — pinned to the To or Cc field on apply."
-      },
-      "RecipientListRead": {
-        "properties": {
-          "id": {
-            "type": "integer",
-            "title": "Id"
-          },
-          "name": {
-            "type": "string",
-            "title": "Name"
-          },
-          "members": {
-            "items": {
-              "$ref": "#/components/schemas/RecipientListMember"
-            },
-            "type": "array",
-            "title": "Members"
-          },
-          "created_at": {
-            "type": "string",
-            "format": "date-time",
-            "title": "Created At"
-          },
-          "updated_at": {
-            "anyOf": [
-              {
-                "type": "string",
-                "format": "date-time"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Updated At"
-          }
-        },
-        "type": "object",
-        "required": [
-          "id",
-          "name",
-          "members",
-          "created_at",
-          "updated_at"
-        ],
-        "title": "RecipientListRead"
-      },
-      "RecipientListUpdate": {
-        "properties": {
-          "name": {
-            "anyOf": [
-              {
-                "type": "string",
-                "maxLength": 128,
-                "minLength": 1
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Name"
-          },
-          "members": {
-            "anyOf": [
-              {
-                "items": {
-                  "$ref": "#/components/schemas/RecipientListMember"
-                },
-                "type": "array"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Members"
-          }
-        },
-        "type": "object",
-        "title": "RecipientListUpdate",
-        "description": "Partial update — rename and/or replace the whole members array."
-      },
       "RecipientRead": {
         "properties": {
           "id": {
@@ -35975,49 +33061,6 @@
         ],
         "title": "ScanInboxList"
       },
-      "SearchHit": {
-        "properties": {
-          "entry": {
-            "$ref": "#/components/schemas/LedgerEntryRead"
-          },
-          "snippet": {
-            "type": "string",
-            "title": "Snippet"
-          },
-          "score": {
-            "type": "number",
-            "title": "Score"
-          }
-        },
-        "type": "object",
-        "required": [
-          "entry",
-          "snippet",
-          "score"
-        ],
-        "title": "SearchHit"
-      },
-      "SearchResponse": {
-        "properties": {
-          "hits": {
-            "items": {
-              "$ref": "#/components/schemas/SearchHit"
-            },
-            "type": "array",
-            "title": "Hits"
-          },
-          "total": {
-            "type": "integer",
-            "title": "Total"
-          }
-        },
-        "type": "object",
-        "required": [
-          "hits",
-          "total"
-        ],
-        "title": "SearchResponse"
-      },
       "SelfShiftRead": {
         "properties": {
           "employee_id": {
@@ -36086,26 +33129,6 @@
           "employee_id"
         ],
         "title": "SelfShiftRead"
-      },
-      "SendToVaultRequest": {
-        "properties": {
-          "employee_id": {
-            "type": "string",
-            "minLength": 1,
-            "title": "Employee Id"
-          },
-          "kind": {
-            "type": "string",
-            "minLength": 1,
-            "title": "Kind"
-          }
-        },
-        "type": "object",
-        "required": [
-          "employee_id",
-          "kind"
-        ],
-        "title": "SendToVaultRequest"
       },
       "ServiceFacetRead": {
         "properties": {
@@ -36505,157 +33528,6 @@
           "boldness"
         ],
         "title": "SignaturePreviewResponse"
-      },
-      "SmartFolderCreate": {
-        "properties": {
-          "name_en": {
-            "type": "string",
-            "maxLength": 128,
-            "minLength": 1,
-            "title": "Name En"
-          },
-          "name_ar": {
-            "type": "string",
-            "maxLength": 128,
-            "minLength": 1,
-            "title": "Name Ar"
-          },
-          "rule_kind": {
-            "type": "string",
-            "const": "subject",
-            "title": "Rule Kind",
-            "default": "subject"
-          },
-          "rule_value": {
-            "type": "string",
-            "maxLength": 255,
-            "minLength": 1,
-            "title": "Rule Value"
-          }
-        },
-        "type": "object",
-        "required": [
-          "name_en",
-          "name_ar",
-          "rule_value"
-        ],
-        "title": "SmartFolderCreate",
-        "description": "Payload to create a folder (confirmed). Owner comes from the session."
-      },
-      "SmartFolderDismiss": {
-        "properties": {
-          "cluster_key": {
-            "type": "string",
-            "maxLength": 255,
-            "minLength": 1,
-            "title": "Cluster Key"
-          }
-        },
-        "type": "object",
-        "required": [
-          "cluster_key"
-        ],
-        "title": "SmartFolderDismiss",
-        "description": "Payload to dismiss a suggestion cluster (per-user)."
-      },
-      "SmartFolderRead": {
-        "properties": {
-          "id": {
-            "type": "integer",
-            "title": "Id"
-          },
-          "name_en": {
-            "type": "string",
-            "title": "Name En"
-          },
-          "name_ar": {
-            "type": "string",
-            "title": "Name Ar"
-          },
-          "count": {
-            "type": "integer",
-            "title": "Count"
-          }
-        },
-        "type": "object",
-        "required": [
-          "id",
-          "name_en",
-          "name_ar",
-          "count"
-        ],
-        "title": "SmartFolderRead",
-        "description": "An active smart folder with its live matching-entry count."
-      },
-      "SmartFolderSuggestion": {
-        "properties": {
-          "cluster_key": {
-            "type": "string",
-            "title": "Cluster Key"
-          },
-          "name_suggestion": {
-            "type": "string",
-            "title": "Name Suggestion"
-          },
-          "count": {
-            "type": "integer",
-            "title": "Count"
-          },
-          "correspondent_count": {
-            "type": "integer",
-            "title": "Correspondent Count"
-          },
-          "sample_subjects": {
-            "items": {
-              "type": "string"
-            },
-            "type": "array",
-            "title": "Sample Subjects"
-          }
-        },
-        "type": "object",
-        "required": [
-          "cluster_key",
-          "name_suggestion",
-          "count",
-          "correspondent_count",
-          "sample_subjects"
-        ],
-        "title": "SmartFolderSuggestion",
-        "description": "A suggested subject cluster the caller could turn into a folder."
-      },
-      "SmartFolderUpdate": {
-        "properties": {
-          "name_en": {
-            "anyOf": [
-              {
-                "type": "string",
-                "maxLength": 128,
-                "minLength": 1
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Name En"
-          },
-          "name_ar": {
-            "anyOf": [
-              {
-                "type": "string",
-                "maxLength": 128,
-                "minLength": 1
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Name Ar"
-          }
-        },
-        "type": "object",
-        "title": "SmartFolderUpdate",
-        "description": "Partial rename — either/both localized names."
       },
       "StaffingRequirementWrite": {
         "properties": {
@@ -37706,91 +34578,6 @@
         ],
         "title": "TransferAdminRequest"
       },
-      "UnreadCountResponse": {
-        "properties": {
-          "count": {
-            "type": "integer",
-            "title": "Count"
-          }
-        },
-        "type": "object",
-        "required": [
-          "count"
-        ],
-        "title": "UnreadCountResponse"
-      },
-      "UnreadRecentItem": {
-        "properties": {
-          "id": {
-            "type": "integer",
-            "title": "Id"
-          },
-          "subject": {
-            "type": "string",
-            "title": "Subject"
-          },
-          "counterparty": {
-            "type": "string",
-            "title": "Counterparty"
-          },
-          "counterparty_name": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Counterparty Name"
-          },
-          "entry_date": {
-            "type": "string",
-            "format": "date",
-            "title": "Entry Date"
-          },
-          "preview": {
-            "type": "string",
-            "title": "Preview"
-          },
-          "attachment_count": {
-            "type": "integer",
-            "title": "Attachment Count"
-          }
-        },
-        "type": "object",
-        "required": [
-          "id",
-          "subject",
-          "counterparty",
-          "counterparty_name",
-          "entry_date",
-          "preview",
-          "attachment_count"
-        ],
-        "title": "UnreadRecentItem"
-      },
-      "UnreadRecentResponse": {
-        "properties": {
-          "items": {
-            "items": {
-              "$ref": "#/components/schemas/UnreadRecentItem"
-            },
-            "type": "array",
-            "title": "Items"
-          },
-          "total_unread": {
-            "type": "integer",
-            "title": "Total Unread"
-          }
-        },
-        "type": "object",
-        "required": [
-          "items",
-          "total_unread"
-        ],
-        "title": "UnreadRecentResponse"
-      },
       "UpdateCheckResult": {
         "properties": {
           "current": {
@@ -37974,64 +34761,6 @@
         ],
         "title": "VaultEntry",
         "description": "Represents one file inside a vault folder.\n\nBuilt directly from filesystem listings since v3 didn't index files in\nSQLite — we follow the same pattern in Phase 03 (vault_files table fills\nup only on POST upload, and the GET tree walks the disk)."
-      },
-      "VaultFileRead": {
-        "properties": {
-          "id": {
-            "type": "integer",
-            "title": "Id"
-          },
-          "employee_id": {
-            "type": "string",
-            "title": "Employee Id"
-          },
-          "kind": {
-            "type": "string",
-            "enum": [
-              "uae_id",
-              "passport",
-              "other",
-              "leaves",
-              "violations"
-            ],
-            "title": "Kind"
-          },
-          "filename": {
-            "type": "string",
-            "title": "Filename"
-          },
-          "path": {
-            "type": "string",
-            "title": "Path"
-          },
-          "size_bytes": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Size Bytes"
-          },
-          "created_at": {
-            "type": "string",
-            "format": "date-time",
-            "title": "Created At"
-          }
-        },
-        "type": "object",
-        "required": [
-          "id",
-          "employee_id",
-          "kind",
-          "filename",
-          "path",
-          "size_bytes",
-          "created_at"
-        ],
-        "title": "VaultFileRead"
       },
       "VaultTree": {
         "properties": {

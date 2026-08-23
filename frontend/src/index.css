@@ -145,27 +145,6 @@
      the bottom-sheet approval dialog so panel slides feel platform-familiar. */
   --ease-ios: cubic-bezier(0.32, 0.72, 0, 1);
 
-  /* Ledger Outlook rail + direction-avatar gradients (from the signed-off
-     prototype docs/prototypes/ledger-outlook-redesign.html :root). The rail is
-     a deeper navy than the app chrome for the Outlook folder-rail feel; the
-     grad pairs colour the direction-keyed message-list avatars (green=incoming,
-     amber=outgoing, blue=internal). Semantic — never hardcode these hex in
-     components. */
-  --rail: #16243a;
-  --rail-2: #1d3150;
-  --rail-3: #243c5f;
-  --rail-text: #c5d2e4;
-  --rail-faint: #7e93b3;
-  --rail-line: #2c405f;
-  --rail-success: #34d399;
-  --rail-warning: #fbbf24;
-  --green-grad-a: #10b981;
-  --green-grad-b: #047857;
-  --amber-grad-a: #f59e0b;
-  --amber-grad-b: #b45309;
-  --blue-grad-a: #3b82f6;
-  --blue-grad-b: #1e3a8a;
-
   /* Tip card (reading-pane empty-state 💡) — the prototype's indigo .tipcard,
      tokenized so the component carries no inline hex. */
   --tip-grad-a: #eef2ff;
@@ -301,24 +280,6 @@
   --org-card: #1a2034;
   --org-conn: #3a4360;
 
-  /* Ledger Outlook rail — already a deep navy in the light theme, so it sits
-     naturally in dark mode; nudge it a touch darker than the dark surface so the
-     rail still reads as a distinct pane. Gradient anchors shift to the brighter
-     dark-palette variants for avatar contrast against the dark list. */
-  --rail: #0e1726;
-  --rail-2: #15233b;
-  --rail-3: #1c2e49;
-  --rail-text: #aebcd2;
-  --rail-faint: #6b7c98;
-  --rail-line: #233048;
-  --rail-success: #34d399;
-  --rail-warning: #fbbf24;
-  --green-grad-a: #34d399;
-  --green-grad-b: #059669;
-  --amber-grad-a: #fbbf24;
-  --amber-grad-b: #d97706;
-  --blue-grad-a: #60a5fa;
-  --blue-grad-b: #2563eb;
 
   /* Tip card — dark indigo so it reads on near-black without glare. */
   --tip-grad-a: #1b1b3a;

@@ -10,17 +10,16 @@
  */
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Settings } from 'lucide-react'
+import { ExternalLink, Settings } from 'lucide-react'
 import { useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 import { NavLink } from 'react-router-dom'
-
 import { AccountMenu } from '@/components/shell/AccountMenu'
 import { api } from '@/lib/api'
 import type { Theme } from '@/lib/api'
 import { useCapabilities } from '@/lib/useCapabilities'
 import { migrateLegacyFontScale, persistFontScale, persistTheme } from '@/lib/theme'
-
+import { openOutlook } from '@/lib/outlookBridge'
 import { AaSlider } from './AaSlider'
 import { IntakeLauncher } from '@/components/intake/IntakeLauncher'
 import { LanguageToggle } from './LanguageToggle'
@@ -115,6 +114,16 @@ export function TopNav({ onLock, onOpenSettings, onSignOut }: TopNavProps): Reac
         ))}
       </nav>
       <div className="topnav-utilities ms-auto flex shrink-0 items-center gap-3.5">
+      <button
+        type="button"
+        onClick={openOutlook}
+        aria-label={t('nav.openOutlook')}
+        title={t('nav.openOutlook')}
+        className="flex shrink-0 items-center gap-2 rounded-lg border border-primary/30 px-3 py-2 text-[0.9em] font-semibold text-primary transition-colors hover:bg-primary-soft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1"
+      >
+        <ExternalLink className="h-[1.1em] w-[1.1em]" strokeWidth={1.8} aria-hidden />
+        <span className="whitespace-nowrap">{t('nav.openOutlook')}</span>
+      </button>
         <AaSlider
           value={fontScale}
           onChange={(v) => {

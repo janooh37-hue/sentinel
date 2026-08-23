@@ -5,15 +5,14 @@
  *   1. Hero card with rotating GSSG crest + welcome message
  *   2. "My Widgets" header + edit affordance
  *   3. 2-up grid: Pending Documents (red progress bar) + Workspace (mountain SVG)
- *   4. 3-up grid: Open Violations · Drafts · Ledger unread (WidgetCard)
+ *   4. Open Violations and other employee/leave widgets
  *   5. "Quick Actions" header + View All
  *   6. 4-up grid: navy-accented ServiceTile rail
  *   7. Recent activity (preserved from Phase 12, restyled)
  *
  * Data source: GET /api/v1/dashboard/summary (Phase 12 endpoint, unchanged).
- * Where the summary doesn't carry a metric needed by a widget (e.g. violations
- * by status, drafts by template), we render the structure with 0 / hidden
- * rows rather than inventing API fields. See task spec §"In Over Your Head".
+ * Where the summary doesn't carry a metric needed by a widget, we render the
+ * structure with 0 / hidden rows rather than inventing API fields.
  */
 
 import { useCallback, useMemo, useState } from 'react'
@@ -29,7 +28,6 @@ import {
   ChevronRight,
   FileText,
   Pencil,
-  ScrollText,
   type LucideIcon,
 } from 'lucide-react'
 
@@ -38,7 +36,6 @@ import type {
   AppSettingsRead,
   DashboardOnLeaveItem,
   DashboardRecentDocument,
-  DashboardRecentLedger,
   DashboardSummary,
   DashboardUpcomingItem,
 } from '@/lib/api'
@@ -50,7 +47,6 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { WidgetCard, type BreakdownRow } from '@/components/ui/widget-card'
 import { WidgetEditDialog } from '@/components/dashboard/WidgetEditDialog'
 import { CustomizeWidgetsDialog } from '@/components/dashboard/CustomizeWidgetsDialog'
-import { EmailSyncStatusWidget } from '@/components/dashboard/widgets/EmailSyncStatusWidget'
 import { BooksAwaitingWidget } from '@/pages/dashboard/widgets/BooksAwaitingWidget'
 import { ExpiringSoonWidget } from '@/pages/dashboard/widgets/ExpiringSoonWidget'
 import { PendingDeparturesWidget } from '@/pages/dashboard/widgets/PendingDeparturesWidget'
@@ -71,7 +67,6 @@ import {
 } from '@/lib/dashboardLayout'
 import { QUICK_ACTION_META } from '@/lib/quickActions'
 import { useIdentity } from '@/lib/useIdentity'
-import { cn } from '@/lib/utils'
 import { PullToRefresh } from '@/components/refresh/PullToRefresh'
 import { RefreshButton } from '@/components/refresh/RefreshButton'
 
@@ -80,7 +75,6 @@ export type DashboardPage =
   | 'application'
   | 'books'
   | 'leaves'
-  | 'ledger'
   | 'settings'
   | 'dashboard'
 
@@ -168,7 +162,7 @@ export function DashboardPage({ onNavigate }: DashboardPageProps): React.JSX.Ele
   // or scrolled row). When a destination doesn't support per-item opening,
   // the query param is silently ignored.
   const openItem = useCallback(
-    (target: 'leaves' | 'books' | 'ledger', id: number | string) => {
+    (target: 'leaves' | 'books', id: number | string) => {
       navigate(`/${target}?open=${id}`)
     },
     [navigate],
@@ -255,20 +249,6 @@ export function DashboardPage({ onNavigate }: DashboardPageProps): React.JSX.Ele
       .map((r) => ({ name: pickName(r, isAr), employee_id: r.employee_id }))
   }, [summary, isAr])
 
-  // Ledger unread counts — derived from the `recent_ledger` snapshot (latest
-  // entries in the summary payload). The summary doesn't carry a strict
-  // "unread" flag, so we use latest-activity by direction as the closest
-  // honest proxy. The big number is the total; breakdown is by direction.
-  const ledgerByDirection = useMemo(() => {
-    const rows = summary?.recent_ledger ?? []
-    const counts = { incoming: 0, outgoing: 0, internal: 0 }
-    for (const r of rows) {
-      if (r.direction === 'incoming') counts.incoming += 1
-      else if (r.direction === 'outgoing') counts.outgoing += 1
-      else counts.internal += 1
-    }
-    return counts
-  }, [summary])
 
   const zones = useMemo(() => visibleByZone(layout.widgets), [layout.widgets])
 
@@ -351,44 +331,6 @@ export function DashboardPage({ onNavigate }: DashboardPageProps): React.JSX.Ele
           />
         )
       }
-      case 'drafts': {
-        const draftCount = summary?.totals.book_draft_count ?? 0
-        return (
-          <WidgetCard
-            header={t('dashboard.widgets.drafts.header')}
-            big={draftCount}
-            delta={
-              draftCount > 0
-                ? { tone: 'warn', label: t('dashboard.widgets.drafts.deltaWarn', { count: draftCount }) }
-                : { tone: 'steady', label: t('dashboard.widgets.drafts.deltaSteady') }
-            }
-            actionLabel={t('dashboard.widgets.drafts.action')}
-            onAction={() => navigate('/books?status=none')}
-          />
-        )
-      }
-      case 'ledger':
-        return (
-          <WidgetCard
-            header={t('dashboard.widgets.ledger.header')}
-            big={ledgerByDirection.incoming + ledgerByDirection.outgoing + ledgerByDirection.internal}
-            delta={
-              ledgerByDirection.incoming > 0
-                ? { tone: 'warn', label: t('dashboard.widgets.ledger.deltaWarn', { count: ledgerByDirection.incoming }) }
-                : { tone: 'steady', label: t('dashboard.widgets.ledger.deltaSteady') }
-            }
-            breakdown={[
-              { color: 'success', label: t('dashboard.widgets.ledger.incoming'), value: ledgerByDirection.incoming },
-              { color: 'accent', label: t('dashboard.widgets.ledger.outgoing'), value: ledgerByDirection.outgoing },
-              { color: 'primary', label: t('dashboard.widgets.ledger.internal'), value: ledgerByDirection.internal },
-            ] satisfies BreakdownRow[]}
-            meta={t('dashboard.widgets.ledger.metaRecent', { count: summary?.recent_ledger.length ?? 0 })}
-            actionLabel={t('dashboard.widgets.ledger.action')}
-            onAction={() => onNavigate('ledger')}
-          />
-        )
-      case 'email_sync_status':
-        return <EmailSyncStatusWidget summary={summary} />
       case 'expiring_soon':
         return <ExpiringSoonWidget />
       case 'pending_departures':
@@ -460,22 +402,6 @@ export function DashboardPage({ onNavigate }: DashboardPageProps): React.JSX.Ele
                     dfLocale={dfLocale}
                     onOpen={() => navigate(`/employees/${encodeURIComponent(doc.employee_id)}`)}
                   />
-                ))}
-              </ul>
-            )}
-          </SectionCard>
-        )
-      case 'recent_ledger':
-        return (
-          <SectionCard icon={ScrollText} title={t('dashboard.recent.ledger')} count={summary?.recent_ledger.length}>
-            {summaryQuery.isPending ? (
-              <PanelSkeleton />
-            ) : !summary || summary.recent_ledger.length === 0 ? (
-              <EmptyState icon={ScrollText} message={t('dashboard.recent.empty')} />
-            ) : (
-              <ul className="flex flex-col">
-                {summary.recent_ledger.slice(0, 5).map((entry) => (
-                  <LedgerRow key={entry.id} entry={entry} dfLocale={dfLocale} onOpen={() => openItem('ledger', entry.id)} />
                 ))}
               </ul>
             )}
@@ -1213,13 +1139,6 @@ function formatStamp(iso: string, dfLocale: Locale | undefined): string {
   }
 }
 
-function formatDate(iso: string, dfLocale: Locale | undefined): string {
-  try {
-    return format(parseISO(iso), 'dd MMM yyyy', { locale: dfLocale })
-  } catch {
-    return iso.slice(0, 10)
-  }
-}
 
 function DocumentRow({
   doc,
@@ -1259,43 +1178,6 @@ function DocumentRow({
         </div>
         <span className="font-mono text-xs text-muted-foreground">
           {formatStamp(doc.created_at, dfLocale)}
-        </span>
-      </button>
-    </li>
-  )
-}
-
-function LedgerRow({
-  entry,
-  dfLocale,
-  onOpen,
-}: {
-  entry: DashboardRecentLedger
-  dfLocale: Locale | undefined
-  onOpen: () => void
-}): React.JSX.Element {
-  const dotClass =
-    entry.direction === 'incoming'
-      ? 'bg-success'
-      : entry.direction === 'outgoing'
-        ? 'bg-accent'
-        : 'bg-primary'
-  return (
-    <li>
-      <button
-        type="button"
-        onClick={onOpen}
-        className="flex w-full items-center gap-3 rounded-md px-2 py-2 text-start text-sm transition-colors hover:bg-surface-tinted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 cursor-pointer"
-      >
-        <div className="flex h-8 w-8 items-center justify-center rounded-md bg-surface-tinted">
-          <span className={cn('h-2.5 w-2.5 rounded-full', dotClass)} />
-        </div>
-        <div className="flex min-w-0 flex-1 flex-col">
-          <span className="truncate font-medium text-foreground">{entry.subject}</span>
-          <span className="truncate text-xs text-muted-foreground">{entry.counterparty}</span>
-        </div>
-        <span className="font-mono text-xs text-muted-foreground">
-          {formatDate(entry.entry_date, dfLocale)}
         </span>
       </button>
     </li>

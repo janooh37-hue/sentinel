@@ -54,7 +54,6 @@ describe('CustomizeWidgetsDialog', () => {
 
     expect(within(groupOf('From Records')).getByText('pending')).toBeInTheDocument()
     expect(within(groupOf('From Leaves')).getByText('on_leave_today')).toBeInTheDocument()
-    expect(within(groupOf('From Ledger')).getByText('recent_ledger')).toBeInTheDocument()
     expect(within(groupOf('From Employees')).getByText('workspace')).toBeInTheDocument()
   })
 

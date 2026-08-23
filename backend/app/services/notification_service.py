@@ -9,7 +9,6 @@ larger scale; for a handful of users the diff loop is correct + trivial.
 
 from __future__ import annotations
 
-import re
 from dataclasses import dataclass
 from datetime import UTC, datetime
 
@@ -21,7 +20,6 @@ from app.schemas.notifications import NotificationCounts
 from app.services import (
     book_service,
     leave_service,
-    ledger_service,
     perm_service,
     scan_inbox_service,
 )
@@ -31,72 +29,20 @@ from app.services import (
 class ActionableItem:
     """One owned, actionable item for Web Push — carries its own deep link."""
 
-    kind: str  # 'approval' (sign) | 'review' | 'scan' | 'email' | 'scanback'
-    ref: str  # opaque, stable per-kind key, e.g. 'book:42'
-    url: str  # frontend deep-link path the notification click navigates to
-    label: str  # short human label (ref number / id) for the body text
-    subject: str | None = None  # richer context for single-item bodies
-    requester: str | None = None  # who submitted it / email sender
-    preview: str | None = None  # short plain-text content preview (emails)
-    attachments: int = 0  # attachment count, for the email body's "size" line
+    kind: str  # 'approval' (sign) | 'review' | 'scan' | 'scanback'
+    ref: str
+    url: str
+    label: str
+    subject: str | None = None
+    requester: str | None = None
 
 
-_TAG_RE = re.compile(r"<[^>]+>")
-_WS_RE = re.compile(r"\s+")
-_ADDR_RE = re.compile(r"\s*<[^>]*>\s*$")
-
-
-def _email_preview(notes_html: str | None, limit: int = 140) -> str:
-    """Flatten an email body's HTML to a single-line plain-text preview.
-
-    Block tags become spaces so words don't run together; remaining tags are
-    stripped and whitespace collapsed. Truncated on a word boundary with an
-    ellipsis so the push body reads like a real mail preview.
-    """
-    if not notes_html:
-        return ""
-    text = re.sub(r"(?i)<\s*(br|/p|/div|/li|/tr|/h[1-6])\s*/?>", " ", notes_html)
-    text = _WS_RE.sub(" ", _TAG_RE.sub("", text)).strip()
-    if len(text) <= limit:
-        return text
-    cut = text[: limit + 1]
-    sp = cut.rfind(" ")
-    return (cut[:sp] if sp > limit * 0.6 else cut[:limit]).rstrip() + "…"
-
-
-def _sender_name(counterparty: str | None) -> str:
-    """Display name for a "Name <addr@host>" counterparty — the name if present,
-    otherwise the bare address. Never the raw "Name <addr>" pair (too long)."""
-    cp = (counterparty or "").strip()
-    if not cp:
-        return "Unknown sender"
-    name = _ADDR_RE.sub("", cp).strip().strip('"')
-    return name or cp
 
 
 def actionable_items(db: Session, user: User) -> list[ActionableItem]:
-    """Per-user OWNED actionable items for Web Push, each with a deep link.
-
-    Mirrors the *owned* categories ``relevant_counts`` exposes (approvals,
-    scans, emails) plus ``scanback``, which ``relevant_counts`` no longer
-    tracks (its count was dropped — nothing read it, and it cost an
-    ``awaiting_scan`` query per connected user per SSE tick; this push path
-    and its ``books.manage`` gate are unaffected) — returns the actual items
-    (with ids) so the notifier pushes each one exactly once and the click
-    deep-links to it. Org-wide
-    **leaves** are intentionally excluded here: they have no owner, so a
-    per-user push would ping every user about every leave. Leaves stay in the
-    in-app bell via ``relevant_counts``.
-
-    Approval-chain items are split by the user's role on the pending step so
-    the copy is correct: ``approval`` (the signing manager → "sign") vs
-    ``review`` (an advisory reviewer → "review"). Assignment to the step IS the
-    authorization to act, so — unlike the books.approve-gated bell count — we
-    notify every assignee, including reviewers who don't hold books.approve.
-    """
+    """Return owned approval, scan, and scan-back actions for Web Push."""
     items: list[ActionableItem] = []
 
-    # Approval chain — books whose current pending step is assigned to this user.
     for book in book_service.list_awaiting(db, user_id=user.id):
         role = book_service.your_step_kind(book, user.id)
         kind = "review" if role == "reviewer" else "approval"
@@ -112,30 +58,10 @@ def actionable_items(db: Session, user: User) -> list[ActionableItem]:
             )
         )
 
-    # Scans — owned inbox items needing action (matches counts()'s "total").
     for state in ("awaiting_confirmation", "unrouted"):
         for s in scan_inbox_service.list_items(db, owner_user_id=user.id, state=state):
             items.append(ActionableItem("scan", f"scan:{s.id}", "/scan-inbox", f"#{s.id}"))
 
-    # Emails — unread received mail in this user's mailbox. Carry the sender,
-    # subject, a content preview and attachment count so the push body says what
-    # the mail actually is, not just "1 unread email".
-    for e in ledger_service.unread_emails(db, owner_user_id=user.id):
-        items.append(
-            ActionableItem(
-                "email",
-                f"email:{e.id}",
-                "/ledger",
-                f"#{e.id}",
-                subject=e.subject,
-                requester=_sender_name(e.counterparty),
-                preview=_email_preview(e.notes_html),
-                attachments=len(e.attachment_paths or []),
-            )
-        )
-
-    # Stranded scan-backs — same books.manage gate as the bell count: a push is
-    # only worth sending to someone who can actually file the scan.
     if perm_service.has_capability(db, user, "books.manage"):
         for book in book_service.list_awaiting_scan(db, user_id=user.id):
             items.append(
@@ -186,32 +112,17 @@ def relevant_counts(
     *,
     precomputed_leaves: int | None = None,
 ) -> NotificationCounts:
-    """Compute per-user notification counts from existing queries.
-
-    - approvals: books whose current pending step is assigned to this user.
-    - leaves:    org-wide leave rows that need someone's action (pending requests,
-                 overdue awaiting-return). No per-user filter — leaves have no owner.
-                 Pass ``precomputed_leaves`` to reuse a value computed earlier in
-                 the same tick (avoids repeating the org-wide paging per user).
-    - scans:     scan-inbox items owned by this user (awaiting_confirmation + unrouted).
-    - emails:    unread incoming email in this user's mailbox.
-
-    This is the Phase 5 contract: Phase 5 Web Push calls the same function.
-    Keep it pure (no side effects, no request objects).
-    """
+    """Compute per-user approval and scan counts from existing queries."""
     today_iso = datetime.now(UTC).date().isoformat()
-    # Only count pending approval steps when the user actually holds books.approve.
-    # Without the cap the bell row is hidden, so a non-zero count here would be
-    # misleading (SSE/push would fire for an action the user can't take).
-    if perm_service.has_capability(db, user, "books.approve"):
-        approvals = len(book_service.list_awaiting(db, user_id=user.id))
-    else:
-        approvals = 0
+    approvals = (
+        len(book_service.list_awaiting(db, user_id=user.id))
+        if perm_service.has_capability(db, user, "books.approve")
+        else 0
+    )
     scans = scan_inbox_service.counts(db, owner_user_id=user.id)["total"]
-    emails = ledger_service.unread_email_count(db, owner_user_id=user.id)
     leaves = (
         precomputed_leaves
         if precomputed_leaves is not None
         else _leaves_needing_action(db, today_iso)
     )
-    return NotificationCounts(approvals=approvals, leaves=leaves, scans=scans, emails=emails)
+    return NotificationCounts(approvals=approvals, leaves=leaves, scans=scans)

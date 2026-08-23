@@ -10,10 +10,9 @@ swallowed by the caller — it never breaks the underlying generation.
 
 from __future__ import annotations
 
-import logging
 from datetime import date
 
-from sqlalchemy import select
+from sqlalchemy import select, text
 from sqlalchemy.orm import Session
 
 from app.api.errors import NotFoundError
@@ -24,7 +23,16 @@ from app.db.models import (
     LedgerEntry,
 )
 
-log = logging.getLogger(__name__)
+DRAFT_TAG = "draft"
+
+
+def tags_contain(tag: str, *, negate: bool = False):
+    keyword = "NOT EXISTS" if negate else "EXISTS"
+    param = "correspondence_no_tag" if negate else "correspondence_tag"
+    return text(
+        f"{keyword} (SELECT 1 FROM json_each(ledger_entries.tags)"
+        f" WHERE json_each.value = :{param})"
+    ).bindparams(**{param: tag})
 
 # Non-email channel for auto-log rows — Phase-1 scoping keeps non-email rows
 # visible to everyone (owner_user_id=NULL OR channel != 'email').

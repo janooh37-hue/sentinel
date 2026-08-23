@@ -21,8 +21,6 @@ class DashboardTotals(BaseModel):
     present_today: int
     forms_this_month: int
     open_violations_count: int = 0
-    draft_count: int = 0
-    book_draft_count: int = 0
 
 
 class DashboardLeaveItem(BaseModel):
@@ -51,31 +49,8 @@ class DashboardRecentDocument(ORMBase):
     created_at: datetime
 
 
-class DashboardRecentLedger(ORMBase):
-    id: int
-    entry_date: date
-    direction: str
-    channel: str
-    counterparty: str
-    subject: str
-    related_employee_id: str | None
-    related_employee_name_en: str | None
-    related_employee_name_ar: str | None
-    created_at: datetime
 
 
-class DashboardSyncStatus(ORMBase):
-    """Email-sync widget payload (Phase 18).
-
-    ``enabled`` requires both: an EmailAccount row exists AND its
-    ``sync_interval_minutes > 0``. ``last_synced_at`` is sourced from
-    ``EmailAccount.last_synced_at`` (populated by the scheduler / manual sync).
-    """
-
-    last_synced_at: datetime | None
-    enabled: bool
-    interval_minutes: int
-    incoming_today: int
 
 
 class DashboardSummary(BaseModel):
@@ -83,16 +58,11 @@ class DashboardSummary(BaseModel):
     on_leave_today: list[DashboardLeaveItem]
     upcoming_leave_ends: list[DashboardUpcomingLeaveItem]
     recent_documents: list[DashboardRecentDocument]
-    recent_ledger: list[DashboardRecentLedger]
-    email_sync: DashboardSyncStatus
 
 
 __all__ = [
     "DashboardLeaveItem",
     "DashboardRecentDocument",
-    "DashboardRecentLedger",
-    "DashboardSummary",
-    "DashboardSyncStatus",
     "DashboardTotals",
     "DashboardUpcomingLeaveItem",
 ]

@@ -54,7 +54,8 @@ function positionArOf(i: EmailBasketItem): string {
   return i.positionAr ?? i.positionEn ?? ''
 }
 
-// ── shared styling (inline so it survives SMTP + the recipient's client) ──────
+// Shared HTML styling so the bilingual Outlook draft keeps its document-grade
+// appearance in the recipient's client.
 
 const HEADER_BLUE = '#4472C4'
 const HEADER_RED = '#C00000'

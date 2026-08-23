@@ -1,16 +1,6 @@
 /**
- * useNotificationStream — shell-level SSE consumer. Mounted ONCE in App's Shell.
- *
- * Opens EventSource('/api/v1/notifications/stream'); on each `counts` event it
- * invalidates the react-query keys behind the bell's four signals and fires a
- * browser Notification for any count that ROSE since the last frame. A
- * low-frequency safety poll keeps the bell fresh if the stream disconnects.
- *
- * Only active when `enabled` is true — pass `status === 'authed'` from Shell
- * to avoid opening the stream before the session resolves.
- *
- * Mirrors the invalidation half of pages/ledger/outlook/useSyncStatus.ts, but
- * shell-level and event-driven instead of polled.
+ * useNotificationStream — shell-level SSE consumer for approval, leave, and
+ * scan reminders. Mail notifications belong to classic Outlook.
  */
 
 import { useEffect, useRef } from 'react'
@@ -23,7 +13,7 @@ import { subscribeToPush } from '@/lib/push'
 const STREAM_URL = '/api/v1/notifications/stream'
 const SAFETY_POLL_MS = 120_000 // fallback only; stream is the live path
 
-type Key = keyof NotificationCounts
+type Key = 'approvals' | 'leaves' | 'scans'
 
 export function useNotificationStream(enabled = true): void {
   const qc = useQueryClient()
@@ -81,10 +71,6 @@ export function useNotificationStream(enabled = true): void {
       void qc.invalidateQueries({ queryKey: ['books', 'awaiting-scan'] })
       void qc.invalidateQueries({ queryKey: ['leaves-list', 'report-all'] })
       void qc.invalidateQueries({ queryKey: ['scan-inbox', 'count'] })
-      void qc.invalidateQueries({ queryKey: ['ledger', 'unread-recent'] })
-      void qc.invalidateQueries({ queryKey: ['ledger'] })
-      void qc.invalidateQueries({ queryKey: ['ledger-unread-count'] })
-      void qc.invalidateQueries({ queryKey: ['ledger-log'] })
       void qc.invalidateQueries({ queryKey: ['notifications', 'counts'] })
     }
 
@@ -95,7 +81,7 @@ export function useNotificationStream(enabled = true): void {
         prevRef.current = next
         return
       }
-      const titles: Record<Key, string> = {
+      const titles: Record<'approvals' | 'leaves' | 'scans', string> = {
         approvals: t('nav.bell.notify.approval', {
           defaultValue: 'A document needs your approval',
         }),
@@ -105,11 +91,8 @@ export function useNotificationStream(enabled = true): void {
         scans: t('nav.bell.notify.scan', {
           defaultValue: 'A scan was attached to a record',
         }),
-        emails: t('nav.bell.notify.email', {
-          defaultValue: 'New email in your inbox',
-        }),
       }
-      ;(['approvals', 'leaves', 'scans', 'emails'] as Key[]).forEach((k) => {
+      ;(['approvals', 'leaves', 'scans'] as Key[]).forEach((k) => {
         if (
           next[k] > prev[k] &&
           typeof Notification !== 'undefined' &&

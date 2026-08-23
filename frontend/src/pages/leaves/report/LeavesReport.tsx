@@ -12,14 +12,14 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
-import { useLocation, useNavigate } from 'react-router-dom'
+import { useLocation } from 'react-router-dom'
 
 import { Button } from '@/components/ui/button'
 import { Skeleton, SkeletonRow } from '@/components/ui/skeleton'
+import { openOutlook } from '@/lib/outlookBridge'
 
 import { actionsFor, displayState } from '../lifecycle'
 import { leaveEmployeeName } from '../leaveEmployeeName'
-import { buildConfirmationEmail } from './confirmEmail'
 import { FigKindBars } from './FigKindBars'
 import { FigMonthColumns } from './FigMonthColumns'
 import { FigOutcomes } from './FigOutcomes'
@@ -46,7 +46,6 @@ export function LeavesReport({
 }: LeavesReportProps): React.JSX.Element {
   const { t, i18n } = useTranslation()
   const location = useLocation()
-  const navigate = useNavigate()
   const qc = useQueryClient()
   const report = useLeaveReport()
   // The `figures` wrapper is a fresh object every render — destructure the
@@ -159,16 +158,8 @@ export function LeavesReport({
   )
 
   const openConfirmCompose = useCallback(() => {
-    const prefill = buildConfirmationEmail(pendingRequests, {
-      subject: t('leaves.report.confirmEmail.subject', { n: pendingRequests.length }),
-      intro: t('leaves.report.confirmEmail.intro'),
-      colName: t('leaves.report.confirmEmail.colName'),
-      colPeriod: t('leaves.report.confirmEmail.colPeriod'),
-      colDays: t('leaves.report.confirmEmail.colDays'),
-      lang: i18n.language,
-    })
-    navigate('/ledger', { state: { composePrefill: prefill } })
-  }, [pendingRequests, t, i18n.language, navigate])
+    openOutlook()
+  }, [])
 
   if (report.isPending) {
     return (

@@ -73,6 +73,7 @@
     "records": "المستندات",
     "permits": "التصاريح",
     "settings": "الإعدادات",
+    "openOutlook": "فتح Outlook",
     "customize": {
       "title": "تخصيص شريط التنقل",
       "hint": "اضغط على موضع، ثم اضغط على ما تريد وضعه فيه.",
@@ -83,8 +84,7 @@
     },
     "signals": {
       "approvals": "الموافقات",
-      "scanback": "النسخ الموقّعة",
-      "ledgerUnread": "غير المقروءة"
+      "scanback": "النسخ الموقّعة"
     },
     "menu": "القائمة",
     "sendToGroup": "الإرسال إلى مجموعة",
@@ -2929,12 +2929,9 @@
       "pending": "المستندات المنجزة",
       "workspace": "بيئة عملي",
       "violations": "المخالفات المفتوحة",
-      "drafts": "المسودات",
-      "ledger": "غير المقروء في السجل",
       "on_leave_today": "في إجازة اليوم",
       "upcoming_leave": "العائدون قريباً",
       "recent_docs": "المستندات الأخيرة",
-      "email_sync_status": "مزامنة البريد",
       "waiting_approvals": "بانتظار الاعتماد",
       "waiting_approvals_cta": "مراجعة",
       "waiting_approvals_aria_zero": "بانتظار الاعتماد: {{count}}. مراجعة.",
@@ -2944,7 +2941,6 @@
       "waiting_approvals_aria_many": "بانتظار الاعتماد: {{count}}. مراجعة.",
       "waiting_approvals_aria_other": "بانتظار الاعتماد: {{count}}. مراجعة.",
       "expiring_soon": "قرب الانتهاء",
-      "recent_ledger": "أحدث المراسلات",
       "pending_departures": "المغادرات المجدولة"
     },
     "quickActionLabels": {
@@ -3262,8 +3258,7 @@
       "newSalaryTransfer": "تحويل راتب جديد",
       "newLeave": "إجازة جديدة (مرضية)",
       "manualTitle": "توجيه يدوي",
-      "openForm": "فتح نموذج",
-      "logLedger": "تسجيل في السجل"
+      "openForm": "فتح نموذج"
     },
     "error": {
       "generic": "فشل المسح — حاول مجدداً",

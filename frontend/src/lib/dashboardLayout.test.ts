@@ -79,3 +79,21 @@ describe('widget source map', () => {
     }
   })
 })
+
+describe('mailbox widgets are removed', () => {
+  it('drops legacy mailbox widgets from saved layouts', () => {
+    const saved = {
+      widgets: [
+        { id: 'ledger', visible: true, order: 0, zone: 'under_workspace' },
+        { id: 'drafts', visible: true, order: 1, zone: 'under_workspace' },
+        { id: 'email_sync_status', visible: true, order: 2, zone: 'under_workspace' },
+        { id: 'recent_ledger', visible: true, order: 3, zone: 'under_workspace' },
+        { id: 'pending', visible: true, order: 4, zone: 'top' },
+      ],
+      quick_actions: [],
+    } as unknown as DashboardLayout
+
+    const ids = resolveLayout(saved).widgets.map((widget) => widget.id)
+    expect(ids).not.toEqual(expect.arrayContaining(['ledger', 'drafts', 'email_sync_status', 'recent_ledger']))
+  })
+})

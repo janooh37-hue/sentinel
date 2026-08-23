@@ -2,11 +2,7 @@
  * EmailSection — IONOS IMAP account and linked-employee identity.
  *
  * Renders account configuration, linked employee identity, and recording
- * health inside the Email integration SectionCard. Classic Outlook owns
- * sending and signatures.
- *
- * IONOS-only: imap_host/smtp_host are baked in at save-time. Password is
- * masked and only sent when the user changes it.
+ * health. Classic Outlook owns sending and signatures.
  */
 
 import { useEffect, useState } from 'react'
@@ -37,9 +33,6 @@ const DEFAULTS: EmailAccountUpsert = {
   use_ssl: true,
   username: '',
   password: '',
-  smtp_host: 'smtp.ionos.com',
-  smtp_port: 587,
-  smtp_use_tls: true,
   sent_folder: 'Sent',
   inbox_folder: 'INBOX',
   enabled: true,
@@ -91,24 +84,23 @@ export function EmailSection(): React.JSX.Element {
 
   useEffect(() => {
     if (accountQuery.data) {
+      // The account query is external state; hydrate the local edit form once it resolves.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setForm({
         email: accountQuery.data.email,
         imap_host: accountQuery.data.imap_host,
         imap_port: accountQuery.data.imap_port,
         use_ssl: accountQuery.data.use_ssl,
         username: accountQuery.data.username,
-        password: '', // never echoed back
-        smtp_host: accountQuery.data.smtp_host,
-        smtp_port: accountQuery.data.smtp_port,
-        smtp_use_tls: accountQuery.data.smtp_use_tls,
+        password: '',
         sent_folder: accountQuery.data.sent_folder,
         inbox_folder: accountQuery.data.inbox_folder,
         enabled: accountQuery.data.enabled,
         sync_interval_minutes: accountQuery.data.sync_interval_minutes,
+        linked_employee_id: accountQuery.data.linked_employee_id ?? null,
       })
     }
   }, [accountQuery.data])
-
   const saveMutation = useMutation({
     mutationFn: (body: EmailAccountUpsert) => api.upsertEmailAccount(body),
     onSuccess: () => {
@@ -141,7 +133,6 @@ export function EmailSection(): React.JSX.Element {
       )
       void qc.invalidateQueries({ queryKey: ['email-account'] })
       void qc.invalidateQueries({ queryKey: ['email-sync-status'] })
-      void qc.invalidateQueries({ queryKey: ['ledger'] })
     },
     onError: (err) =>
       toast.error(apiErrorMessage(err)),
@@ -196,9 +187,6 @@ export function EmailSection(): React.JSX.Element {
       imap_host: 'imap.ionos.com',
       imap_port: 993,
       use_ssl: true,
-      smtp_host: 'smtp.ionos.com',
-      smtp_port: 587,
-      smtp_use_tls: true,
       // Preserve the linked employee — Save shouldn't clear an existing link.
       // The dedicated linkMutation owns changes to this field.
       linked_employee_id: accountQuery.data?.linked_employee_id ?? null,

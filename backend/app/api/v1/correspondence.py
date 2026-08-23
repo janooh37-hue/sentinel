@@ -1,7 +1,7 @@
-"""Correspondence-log admin: categories + rules CRUD — Ledger→Outlook Phase 3.
+"""Correspondence-log admin: categories + rules CRUD.
 
-All routes gated ``settings.edit``. The auto-log rows these rules produce are
-read via the ledger router (``GET /ledger/log``).
+All routes are gated ``settings.edit``. Auto-log rows are retained as
+historical correspondence and exposed through the correspondence APIs.
 """
 
 from __future__ import annotations

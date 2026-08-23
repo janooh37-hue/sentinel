@@ -32,28 +32,22 @@ export const CANVAS_WIDTHS = ['compact', 'wide'] as const
 export const DEFAULT_CANVAS_WIDTH: CanvasWidth = 'compact'
 
 /**
- * Destination each widget reports on, so the editor can be grouped by origin
- * ("which page does this come from?") instead of only by placement. Derived
- * from where the widget's own action navigates — see DashboardPage's
- * `renderWidget` and the widget components' links; keep in step with them.
+ * Destination each widget reports on, so the editor groups by origin
+ * ("which page does it come from?") instead of only by placement.
  */
-export type WidgetSource = 'employees' | 'leaves' | 'records' | 'ledger'
-export const WIDGET_SOURCES = ['employees', 'leaves', 'records', 'ledger'] as const
+export type WidgetSource = 'employees' | 'leaves' | 'records'
+export const WIDGET_SOURCES = ['employees', 'leaves', 'records'] as const
 
-/** All 13 canonical widget ids (order = catalog order in the editor). */
+/** Canonical widget ids (order = catalog order in the editor). */
 export const WIDGET_IDS = [
   'pending',
   'workspace',
   'waiting_approvals',
   'violations',
-  'drafts',
-  'ledger',
-  'email_sync_status',
   'expiring_soon',
   'on_leave_today',
   'upcoming_leave',
   'recent_docs',
-  'recent_ledger',
   'pending_departures',
 ] as const
 
@@ -67,45 +61,24 @@ export const TOP_ELIGIBLE_SET = new Set<string>(TOP_ELIGIBLE_IDS)
 export const WIDGET_SIZE: Record<WidgetId, WidgetSize> = {
   pending: 'metric',
   workspace: 'metric',
-  // Adaptive at render time (glance card in top); panel in lower zones so it
-  // spans the full row when showing the BooksAwaitingWidget list.
   waiting_approvals: 'panel',
   violations: 'metric',
-  drafts: 'metric',
-  ledger: 'metric',
-  email_sync_status: 'metric',
   expiring_soon: 'panel',
   on_leave_today: 'panel',
   upcoming_leave: 'panel',
   recent_docs: 'panel',
-  recent_ledger: 'panel',
   pending_departures: 'panel',
 }
 
-/**
- * Which destination a widget draws from — the editor groups by this so a
- * widget can be found by the page it belongs to. Each entry follows the
- * widget's own action target, not a guess:
- *   • records  — pending/waiting_approvals/drafts all open `/books…`
- *   • employees — workspace, violations, recent_docs, expiring_soon and
- *                 pending_departures all open an employee or `/employees`
- *   • leaves   — on_leave_today, upcoming_leave open a leave
- *   • ledger   — ledger, recent_ledger open a ledger entry; email sync is the
- *                inbound-mail feed behind the ledger inbox
- */
 export const WIDGET_SOURCE: Record<WidgetId, WidgetSource> = {
   pending: 'records',
   workspace: 'employees',
   waiting_approvals: 'records',
   violations: 'employees',
-  drafts: 'records',
-  ledger: 'ledger',
-  email_sync_status: 'ledger',
   expiring_soon: 'employees',
   on_leave_today: 'leaves',
   upcoming_leave: 'leaves',
   recent_docs: 'employees',
-  recent_ledger: 'ledger',
   pending_departures: 'employees',
 }
 
@@ -159,10 +132,10 @@ function zoneOf(w: DashboardWidgetConfig): WidgetZone {
 }
 
 /**
- * Canonical "no saved layout" default — reproduces the pre-rework dashboard:
+ * Canonical "no saved layout" default:
  *   • Top: pending + workspace (visible).
- *   • Under Workspace: violations, drafts, ledger (visible); the rest of the
- *     catalog present-but-hidden so the operator opts in via the editor.
+ *   • Under Workspace: no mailbox widgets; remaining widgets are hidden until
+ *     the operator opts in via the editor.
  *   • Quick actions: the first 4 service tiles visible.
  *   • Canvas: compact (1180px), the incumbent measure.
  */
@@ -174,7 +147,7 @@ export const DEFAULT_LAYOUT: DashboardLayout = {
     if (id === 'waiting_approvals') {
       return { id, visible: false, order, zone: 'top' as WidgetZone }
     }
-    const visible = id === 'violations' || id === 'drafts' || id === 'ledger'
+    const visible = id === 'violations'
     return { id, visible, order, zone: 'under_workspace' as WidgetZone }
   }) as DashboardWidgetConfig[],
   quick_actions: QUICK_ACTION_IDS.map((id, order) => ({

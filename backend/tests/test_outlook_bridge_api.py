@@ -341,3 +341,12 @@ def test_revoked_device_cannot_redeem_handoff(
         ).status_code
         == 401
     )
+def test_mailbox_routes_are_removed_but_sync_and_correspondence_remain(
+    outlook_client: tuple[TestClient, User],
+) -> None:
+    client, _ = outlook_client
+
+    assert client.get("/api/v1/ledger").status_code == 404
+    assert client.post("/api/v1/email/send").status_code == 404
+    assert client.get("/api/v1/email/sync/status").status_code == 200
+    assert client.get("/api/v1/employees/G3082/correspondence").status_code == 200

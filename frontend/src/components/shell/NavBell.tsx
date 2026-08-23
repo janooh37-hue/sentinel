@@ -1,12 +1,4 @@
-/**
- * NavBell — TopNav notifications affordance. Renders a numeric badge over
- * the bell when there are unread incoming emails in the ledger. Backed by
- * `GET /api/v1/ledger/unread-count` (polled every 30s in TopNav).
- *
- * - count undefined or 0 → no badge (bell alone)
- * - count > 0 → small accent pill with the number
- * - count > 99   → "99+" instead of the raw number
- */
+/** Notification bell for approvals, leave actions, scan inbox, and scan-back. */
 
 interface Props {
   count?: number

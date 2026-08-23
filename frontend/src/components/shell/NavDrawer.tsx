@@ -7,9 +7,8 @@
  *   - Secondary links: Settings, and admin-only Access requests
  *   - Chrome controls: AaSlider, LanguageToggle, ThemeToggle
  */
-
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Settings, ShieldCheck, X } from 'lucide-react'
+import { ExternalLink, Settings, ShieldCheck, X } from 'lucide-react'
 import { useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 import { NavLink } from 'react-router-dom'
@@ -25,6 +24,7 @@ import { LanguageToggle } from './LanguageToggle'
 import { NAV_ITEMS } from './navItems'
 import { ThemeToggle } from './ThemeToggle'
 
+import { openOutlook } from '@/lib/outlookBridge'
 interface NavDrawerProps {
   open: boolean
   onOpenChange: (open: boolean) => void
@@ -101,6 +101,18 @@ export function NavDrawer({ open, onOpenChange }: NavDrawerProps): React.JSX.Ele
             </NavLink>
           ))}
         </nav>
+        <button
+          type="button"
+          onClick={() => {
+            openOutlook()
+            close()
+          }}
+          aria-label={t('nav.openOutlook')}
+          className="mx-3 flex items-center gap-3 rounded-lg border border-primary/30 px-3 py-2.5 text-[0.95em] font-semibold text-primary hover:bg-primary-soft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        >
+          <ExternalLink className="h-4.5 w-4.5 shrink-0" strokeWidth={1.8} aria-hidden />
+          {t('nav.openOutlook')}
+        </button>
 
         {/* Secondary links */}
         <div className="flex flex-col gap-0.5 border-t border-border px-3 py-3">

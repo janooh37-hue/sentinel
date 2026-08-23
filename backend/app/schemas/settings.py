@@ -6,36 +6,17 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
-# Known widget / quick-action ids. Add to these lists when the Dashboard
-# component grows a new tile so the API validates instead of silently storing
-# stale ids. Frontend mirrors these in `lib/dashboardLayout.ts`.
-#
-# Widget IDs:
-#   - Top row (fixed, always visible): pending, workspace
-#   - Original bottom row: violations, drafts, ledger
-#   - Promoted section cards: on_leave_today, upcoming_leave
-#   - New widgets:           recent_docs, email_sync_status,
-#                            waiting_approvals, expiring_soon, recent_ledger,
-#                            pending_departures
-#
-# Quick-action IDs are services only: one entry per selectable ``template_id``
-# from `app.core.constants.TEMPLATE_FILES`, so every tile deep-links into a
-# pre-selected form. The section shortcuts (hr/violations/leaves/books) were
-# dropped — the nav owns wayfinding — and the tolerant read path prunes them
-# from layouts saved before the removal.
+# Known dashboard widget ids. Saved layouts are normalized on the frontend,
+# which drops ids removed by the Outlook cutover.
 DASHBOARD_WIDGET_IDS = (
     "pending",
     "workspace",
     "violations",
-    "drafts",
-    "ledger",
     "on_leave_today",
     "upcoming_leave",
     "recent_docs",
-    "email_sync_status",
     "waiting_approvals",
     "expiring_soon",
-    "recent_ledger",
     "pending_departures",
 )
 DASHBOARD_QUICK_ACTION_IDS = (
@@ -63,15 +44,11 @@ DashboardWidgetId = Literal[
     "pending",
     "workspace",
     "violations",
-    "drafts",
-    "ledger",
     "on_leave_today",
     "upcoming_leave",
     "recent_docs",
-    "email_sync_status",
     "waiting_approvals",
     "expiring_soon",
-    "recent_ledger",
     "pending_departures",
 ]
 DashboardQuickActionId = Literal[

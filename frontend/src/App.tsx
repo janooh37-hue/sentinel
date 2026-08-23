@@ -29,9 +29,6 @@ import { ScanBackDock } from './pages/scanBack/ScanBackDock'
 import { ScanBackGate } from './pages/scanBack/ScanBackGate'
 import '@/lib/i18n'
 
-// Code-split the HugeRTE-using pages (Application, Ledger) and the larger
-// list pages — each carries its own ~30-80 KB of feature code that doesn't
-// belong in the initial bundle.
 const ApplicationPage = lazy(() =>
   import('@/pages/application/ApplicationPage').then((m) => ({ default: m.ApplicationPage })),
 )
@@ -46,9 +43,6 @@ const LeavesPage = lazy(() =>
 )
 const PermitsPage = lazy(() =>
   import('@/pages/permits/PermitsPage').then((m) => ({ default: m.PermitsPage })),
-)
-const LedgerPage = lazy(() =>
-  import('@/pages/ledger/LedgerPage').then((m) => ({ default: m.LedgerPage })),
 )
 const SettingsPage = lazy(() =>
   import('@/pages/settings/SettingsPage').then((m) => ({ default: m.SettingsPage })),
@@ -123,10 +117,9 @@ function RefreshShellHost() {
   useRefreshHotkeys()
   return null
 }
-
 /**
- * Maps the legacy page-id navigation prop onto react-router's `useNavigate`
- * so DashboardPage / LedgerPage keep working without a sweeping rewrite.
+ * Maps the page-id navigation prop onto react-router's `useNavigate`
+ * so DashboardPage can keep its existing callbacks without a sweeping rewrite.
  */
 function useNavigatePage(): (page: Page, id?: string) => void {
   const navigate = useNavigate()
@@ -137,12 +130,6 @@ function DashboardRoute(): React.JSX.Element {
   const navigatePage = useNavigatePage()
   return <DashboardPage onNavigate={navigatePage} />
 }
-
-function LedgerRoute(): React.JSX.Element {
-  const navigatePage = useNavigatePage()
-  return <LedgerPage onNavigate={navigatePage} />
-}
-
 function Shell(): React.JSX.Element {
   const { t } = useTranslation()
   const { locked, lock, unlock } = useLockState()
@@ -274,7 +261,6 @@ function Shell(): React.JSX.Element {
                   </RequireCapability>
                 }
               />
-              <Route path="/ledger" element={<LedgerRoute />} />
               <Route path="/settings" element={<SettingsPage />} />
               <Route path="/expiry" element={<ExpiryPage />} />
               <Route

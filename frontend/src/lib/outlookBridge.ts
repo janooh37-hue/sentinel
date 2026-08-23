@@ -87,6 +87,12 @@ export function launchOutlook(protocolUrl: string): void {
   }
 }
 
+/** Open the locally installed classic Outlook app without creating a Sentinel route. */
+export function openOutlook(): void {
+  if (typeof window === 'undefined') return
+  window.open('outlook:', '_self')
+}
+
 function employeeIdIsValid(employeeId: string): boolean {
   const value = employeeId.trim()
   if (!value) return false

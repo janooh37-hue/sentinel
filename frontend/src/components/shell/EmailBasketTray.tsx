@@ -1,13 +1,7 @@
 /**
- * TopNav tray listing open per-kind email baskets. "Send as one email" builds
- * a compose prefill (summary table + all PDFs + learned recipient) and routes
- * to /ledger, where the compose seeds the references and attaches every PDF.
- *
- * Uses DropdownMenu (Radix, portals to body) instead of a hand-rolled popover
- * so the tray escapes overflow/transform stacking contexts. Per-item ✕ and
- * "Clear" are plain <button>s (not DropdownMenuItems) so they do NOT auto-close
- * Outlook and clears the originating group only after the bridge confirms the
- * draft. The temporary protocol launch never falls back to the internal composer.
+ * EmailBasketTray — prepares selected record PDFs for classic Outlook.
+ * The bridge opens Outlook directly and clears the source basket only after
+ * Outlook confirms the handoff.
  */
 import { useState } from 'react'
 import { Mail, X } from 'lucide-react'

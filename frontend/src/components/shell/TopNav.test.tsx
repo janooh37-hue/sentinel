@@ -51,6 +51,15 @@ function renderNav() {
 }
 
 describe('TopNav', () => {
+  it('replaces the duplicate mailbox with an Outlook action', () => {
+    renderNav()
+
+    const nav = screen.getByRole('navigation', { name: 'Menu' })
+    expect(nav.querySelector('a[href="/ledger"]')).toBeNull()
+    expect(screen.queryByRole('link', { name: /ledger/i })).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /open outlook/i })).toBeInTheDocument()
+  })
+
   it('gives every destination an accessible name and an icon to collapse to', () => {
     renderNav()
 
