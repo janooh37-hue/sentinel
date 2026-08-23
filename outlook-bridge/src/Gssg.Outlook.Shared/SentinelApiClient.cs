@@ -6,6 +6,8 @@ using System.Net.Http;
 using System.Runtime.Serialization;
 using System.Runtime.Serialization.Json;
 using System.Text;
+using System.Threading;
+using System.Threading.Tasks;
 
 namespace Gssg.Outlook
 {
@@ -101,7 +103,38 @@ namespace Gssg.Outlook
         [DataMember(Name = "g_numbers")] internal List<string> GNumbers;
     }
 
-    internal sealed class SentinelApiClient : IDisposable
+    [DataContract]
+    internal sealed class OutlookEmployeeSummary
+    {
+        [DataMember(Name = "employee_id")] internal string EmployeeId;
+        [DataMember(Name = "name_en")] internal string NameEn;
+        [DataMember(Name = "name_ar")] internal string NameAr;
+        [DataMember(Name = "status")] internal string Status;
+        [DataMember(Name = "position")] internal string Position;
+        [DataMember(Name = "photo_version")] internal string PhotoVersion;
+        [DataMember(Name = "recording_pending")] internal bool RecordingPending;
+    }
+
+    [DataContract]
+    internal sealed class OutlookSelectionResponse
+    {
+        [DataMember(Name = "indexed")] internal bool Indexed;
+        [DataMember(Name = "recording_pending")] internal bool RecordingPending;
+        [DataMember(Name = "entry_id")] internal int? EntryId;
+        [DataMember(Name = "employees")] internal List<OutlookEmployeeSummary> Employees;
+    }
+
+    internal interface ISelectionApi
+    {
+        Task<OutlookSelectionResponse> ResolveSelectionAsync(SelectionRequest request, CancellationToken cancellationToken);
+        Task<IReadOnlyList<OutlookEmployeeSummary>> SearchEmployeesAsync(string query, CancellationToken cancellationToken);
+        Task LinkEmployeeAsync(int entryId, string employeeId, CancellationToken cancellationToken);
+        Task DismissEmployeeAsync(int entryId, string employeeId, CancellationToken cancellationToken);
+        Task<byte[]> GetEmployeePhotoAsync(string employeeId, CancellationToken cancellationToken);
+        Uri EmployeeProfileUri(string employeeId);
+    }
+
+    internal sealed class SentinelApiClient : IDisposable, ISelectionApi
     {
         private readonly HttpClient client;
         private readonly Uri origin;
@@ -218,6 +251,120 @@ namespace Gssg.Outlook
                     OutlookEntryId = entryId,
                     GNumbers = new List<string>(gNumbers ?? new string[0])
                 });
+        }
+
+        public async Task<OutlookSelectionResponse> ResolveSelectionAsync(
+            SelectionRequest request,
+            CancellationToken cancellationToken)
+        {
+            if (request == null) throw new ArgumentNullException(nameof(request));
+            return await SendAsync<OutlookSelectionResponse>(
+                HttpMethod.Post,
+                "api/v1/outlook/device/selection",
+                credentialStore.Read(),
+                request,
+                cancellationToken).ConfigureAwait(false);
+        }
+
+        public async Task<IReadOnlyList<OutlookEmployeeSummary>> SearchEmployeesAsync(
+            string query,
+            CancellationToken cancellationToken)
+        {
+            var encoded = Uri.EscapeDataString(query ?? string.Empty);
+            var result = await SendAsync<List<OutlookEmployeeSummary>>(
+                HttpMethod.Get,
+                "api/v1/outlook/device/employees?q=" + encoded + "&limit=20",
+                credentialStore.Read(),
+                null,
+                cancellationToken).ConfigureAwait(false);
+            return result ?? new List<OutlookEmployeeSummary>();
+        }
+
+        public async Task LinkEmployeeAsync(
+            int entryId,
+            string employeeId,
+            CancellationToken cancellationToken)
+        {
+            await SendAsync<object>(
+                HttpMethod.Put,
+                "api/v1/outlook/device/messages/" + entryId + "/employees/" +
+                    Uri.EscapeDataString(employeeId ?? string.Empty),
+                credentialStore.Read(),
+                null,
+                cancellationToken).ConfigureAwait(false);
+        }
+
+        public async Task DismissEmployeeAsync(
+            int entryId,
+            string employeeId,
+            CancellationToken cancellationToken)
+        {
+            await SendAsync<object>(
+                HttpMethod.Delete,
+                "api/v1/outlook/device/messages/" + entryId + "/employees/" +
+                    Uri.EscapeDataString(employeeId ?? string.Empty),
+                credentialStore.Read(),
+                null,
+                cancellationToken).ConfigureAwait(false);
+        }
+
+        public async Task<byte[]> GetEmployeePhotoAsync(
+            string employeeId,
+            CancellationToken cancellationToken)
+        {
+            EnsureNotDisposed();
+            using (var request = new HttpRequestMessage(
+                HttpMethod.Get,
+                Endpoint("api/v1/outlook/device/employees/" +
+                    Uri.EscapeDataString(employeeId ?? string.Empty) + "/photo")))
+            {
+                AddBearer(request, credentialStore.Read());
+                using (var response = await client.SendAsync(
+                    request,
+                    HttpCompletionOption.ResponseHeadersRead,
+                    cancellationToken).ConfigureAwait(false))
+                {
+                    EnsureSuccess(response);
+                    return await response.Content.ReadAsByteArrayAsync().ConfigureAwait(false);
+                }
+            }
+        }
+
+        public Uri EmployeeProfileUri(string employeeId)
+        {
+            if (string.IsNullOrWhiteSpace(employeeId))
+                throw new ArgumentException("Employee ID is required.", nameof(employeeId));
+            return Endpoint("employees/" + Uri.EscapeDataString(employeeId.Trim()));
+        }
+
+        private async Task<T> SendAsync<T>(
+            HttpMethod method,
+            string path,
+            string bearer,
+            object body,
+            CancellationToken cancellationToken)
+        {
+            EnsureNotDisposed();
+            using (var request = new HttpRequestMessage(method, Endpoint(path)))
+            {
+                AddBearer(request, bearer);
+                if (body != null)
+                {
+                    request.Content = new ByteArrayContent(Serialize(body));
+                    request.Content.Headers.ContentType =
+                        new System.Net.Http.Headers.MediaTypeHeaderValue("application/json");
+                }
+                using (var response = await client.SendAsync(
+                    request,
+                    HttpCompletionOption.ResponseHeadersRead,
+                    cancellationToken).ConfigureAwait(false))
+                {
+                    EnsureSuccess(response);
+                    if (typeof(T) == typeof(object)) return default(T);
+                    var bytes = await response.Content.ReadAsByteArrayAsync().ConfigureAwait(false);
+                    return Deserialize<T>(bytes);
+                }
+            }
         }
 
         private T Send<T>(HttpMethod method, string path, string bearer, object body)

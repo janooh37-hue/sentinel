@@ -2,13 +2,42 @@
 <Wix xmlns="http://schemas.microsoft.com/wix/2006/wi">
 <?if $(var.Platform) = x64 ?>
 <?define ComponentWin64 = "yes" ?>
+<?define OfficeRegistryWin64 = "yes" ?>
 <?else ?>
 <?define ComponentWin64 = "no" ?>
+<?define OfficeRegistryWin64 = "no" ?>
 <?endif ?>
   <Product Id="*" Name="GSSG Manager Outlook Bridge" Language="1033" Version="1.0.0.0" Manufacturer="GSSG Manager" UpgradeCode="7D207C60-DF08-4D57-B2C5-3D7AA25A3A34">
     <Package InstallerVersion="500" Compressed="yes" InstallScope="perMachine" Platform="$(var.Platform)" />
     <MajorUpgrade DowngradeErrorMessage="A newer GSSG Manager Outlook Bridge is already installed." />
     <MediaTemplate EmbedCab="yes" />
+
+    <Property Id="OUTLOOK_BITNESS">
+      <RegistrySearch
+        Id="OutlookBitness"
+        Root="HKLM"
+        Key="Software\Microsoft\Office\16.0\Outlook"
+        Name="Bitness"
+        Type="raw"
+        Win64="$(var.OfficeRegistryWin64)" />
+      <RegistrySearch
+        Id="ClickToRunBitness"
+        Root="HKLM"
+        Key="Software\Microsoft\Office\ClickToRun\Configuration"
+        Name="Platform"
+        Type="raw"
+        Win64="$(var.OfficeRegistryWin64)" />
+<?if $(var.Platform) = x86 ?>
+      <RegistrySearch
+        Id="ClickToRunBitnessNative"
+        Root="HKLM"
+        Key="Software\Microsoft\Office\ClickToRun\Configuration"
+        Name="Platform"
+        Type="raw"
+        Win64="yes" />
+<?endif ?>
+    </Property>
+    <Condition Message="This installer is for the $(var.Platform) build of classic Outlook 2016 or later. Install the package matching Outlook's Office bitness.">Installed OR OUTLOOK_BITNESS = "$(var.Platform)"</Condition>
 
     <Directory Id="TARGETDIR" Name="SourceDir">
 <?if $(var.Platform) = x64 ?>
@@ -19,21 +48,31 @@
         <Directory Id="GssgManagerFolder" Name="GSSG Manager">
           <Directory Id="INSTALLFOLDER" Name="Outlook Bridge" />
         </Directory>
-<?if $(var.Platform) = x64 ?>
       </Directory>
-<?else ?>
-      </Directory>
-<?endif ?>
     </Directory>
 
     <Feature Id="Complete" Title="GSSG Manager Outlook Bridge" Level="1">
       <ComponentRef Id="LauncherComponent" />
+      <ComponentRef Id="AddInComponent" />
       <ComponentRef Id="ConfigurationComponent" />
       <ComponentRef Id="ProtocolComponent" />
     </Feature>
 
     <Component Id="LauncherComponent" Directory="INSTALLFOLDER" Guid="*" Win64="$(var.ComponentWin64)">
       <File Id="LauncherExe" Source="$(var.Gssg.Outlook.Launcher.TargetPath)" KeyPath="yes" />
+    </Component>
+
+    <Component Id="AddInComponent" Directory="INSTALLFOLDER" Guid="*" Win64="$(var.ComponentWin64)">
+      <File Id="AddInAssembly" Source="$(var.Gssg.Outlook.AddIn.TargetPath)" KeyPath="no" />
+      <File Id="AddInManifest" Source="$(var.Gssg.Outlook.AddIn.TargetDir)Gssg.Outlook.AddIn.vsto" KeyPath="no" />
+      <File Id="AddInApplicationManifest" Source="$(var.Gssg.Outlook.AddIn.TargetDir)Gssg.Outlook.AddIn.dll.manifest" KeyPath="no" />
+      <File Id="SharedAssembly" Source="$(var.Gssg.Outlook.Shared.TargetPath)" KeyPath="no" />
+      <RegistryKey Root="HKLM" Key="Software\Microsoft\Office\Outlook\Addins\Gssg.Outlook.AddIn">
+        <RegistryValue Name="Description" Type="string" Value="GSSG Manager employee context for classic Outlook" KeyPath="yes" />
+        <RegistryValue Name="FriendlyName" Type="string" Value="GSSG Manager employee context" />
+        <RegistryValue Name="LoadBehavior" Type="integer" Value="3" />
+        <RegistryValue Name="Manifest" Type="string" Value="file:///[INSTALLFOLDER]Gssg.Outlook.AddIn.vsto|vstolocal" />
+      </RegistryKey>
     </Component>
 
     <Component Id="ConfigurationComponent" Directory="INSTALLFOLDER" Guid="*" Win64="$(var.ComponentWin64)">

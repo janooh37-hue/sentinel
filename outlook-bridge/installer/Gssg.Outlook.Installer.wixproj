@@ -16,6 +16,16 @@
       <Name>Gssg.Outlook.Launcher</Name>
       <Private>True</Private>
     </ProjectReference>
+    <ProjectReference Include="..\src\Gssg.Outlook.AddIn\Gssg.Outlook.AddIn.csproj">
+      <Project>{7B8F8C4A-9C84-4A8A-9E6A-0C6A8C7A4B21}</Project>
+      <Name>Gssg.Outlook.AddIn</Name>
+      <Private>True</Private>
+    </ProjectReference>
+    <ProjectReference Include="..\src\Gssg.Outlook.Shared\Gssg.Outlook.Shared.csproj">
+      <Project>{3E968C2F-6DB7-4F54-8C77-7D3EC5450A01}</Project>
+      <Name>Gssg.Outlook.Shared</Name>
+      <Private>True</Private>
+    </ProjectReference>
   </ItemGroup>
   <Target Name="ValidateSentinelOrigin" BeforeTargets="Compile">
     <Error Condition=" '$(SentinelOrigin)' == '' " Text="SentinelOrigin is required. Pass /p:SentinelOrigin with the deployment HTTPS origin; the installer never supplies a fallback origin." />

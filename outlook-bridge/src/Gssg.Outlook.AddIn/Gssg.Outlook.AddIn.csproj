@@ -1,0 +1,47 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Library</OutputType>
+    <RootNamespace>Gssg.Outlook.AddIn</RootNamespace>
+    <AssemblyName>Gssg.Outlook.AddIn</AssemblyName>
+    <Platforms>x86;x64</Platforms>
+    <ProjectTypeGuids>{BAA0C2D2-18E2-41B9-852F-F9FC5C5E4B8E};{60DC8134-2A3B-4EDE-BAE9-4A3D0D1D2C6B};{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}</ProjectTypeGuids>
+    <VSTOProject>true</VSTOProject>
+    <OfficeApplication>Outlook</OfficeApplication>
+    <OfficeVersion>16.0</OfficeVersion>
+    <TargetFramework>net48</TargetFramework>
+    <LangVersion>7.3</LangVersion>
+    <GenerateManifests>true</GenerateManifests>
+    <SignManifests>true</SignManifests>
+    <PublishUrl>$(OutputPath)</PublishUrl>
+    <InstallUrl>$(PublishUrl)</InstallUrl>
+    <ManifestCertificateThumbprint Condition="'$(ManifestCertificateThumbprint)' == ''">$(GSSG_VSTO_CERT_THUMBPRINT)</ManifestCertificateThumbprint>
+    <ManifestKeyFile Condition="'$(ManifestKeyFile)' == ''">$(GSSG_VSTO_MANIFEST_KEY_FILE)</ManifestKeyFile>
+    <GenerateAssemblyInfo>true</GenerateAssemblyInfo>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\Gssg.Outlook.Shared\Gssg.Outlook.Shared.csproj" />
+    <InternalsVisibleTo Include="Gssg.Outlook.Tests" />
+    <Reference Include="System.Drawing" />
+    <Reference Include="System.Windows.Forms" />
+    <Reference Include="Microsoft.CSharp" />
+    <Reference Include="Microsoft.Office.Tools" />
+    <Reference Include="Microsoft.Office.Tools.Common" />
+    <Reference Include="Microsoft.Office.Tools.Outlook" />
+    <Reference Include="Microsoft.VisualStudio.Tools.Applications.Runtime" />
+  </ItemGroup>
+  <ItemGroup>
+    <COMReference Include="Microsoft.Office.Interop.Outlook">
+      <Guid>{00062FFF-0000-0000-C000-000000000046}</Guid>
+      <VersionMajor>9</VersionMajor>
+      <VersionMinor>6</VersionMinor>
+      <Lcid>0</Lcid>
+      <WrapperTool>tlbimp</WrapperTool>
+      <EmbedInteropTypes>true</EmbedInteropTypes>
+    </COMReference>
+  </ItemGroup>
+  <Import Project="$(MSBuildExtensionsPath32)\Microsoft\VisualStudio\v$(VisualStudioVersion)\OfficeTools\Microsoft.VisualStudio.Tools.Office.targets"
+          Condition="Exists('$(MSBuildExtensionsPath32)\Microsoft\VisualStudio\v$(VisualStudioVersion)\OfficeTools\Microsoft.VisualStudio.Tools.Office.targets')" />
+  <ItemGroup>
+    <Compile Remove="SelectionController.cs" />
+  </ItemGroup>
+</Project>

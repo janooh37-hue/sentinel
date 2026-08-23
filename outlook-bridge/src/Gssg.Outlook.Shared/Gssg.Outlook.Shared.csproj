@@ -11,6 +11,12 @@
   </ItemGroup>
   <ItemGroup>
     <InternalsVisibleTo Include="Gssg.Outlook.Tests" />
+    <InternalsVisibleTo Include="Gssg.Outlook.AddIn" />
+  </ItemGroup>
+  <ItemGroup>
     <InternalsVisibleTo Include="Gssg.Outlook.Launcher" />
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Include="..\Gssg.Outlook.AddIn\SelectionController.cs" Link="SelectionController.cs" />
   </ItemGroup>
 </Project>
