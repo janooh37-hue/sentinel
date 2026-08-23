@@ -1,4 +1,4 @@
-import { useQuery } from '@tanstack/react-query'
+import { useInfiniteQuery } from '@tanstack/react-query'
 import { FileText, Laptop, Mail, Paperclip } from 'lucide-react'
 import { useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -27,11 +27,19 @@ export function CorrespondenceTab({ employeeId }: Props): React.JSX.Element {
     () => new Intl.DateTimeFormat(i18n.language, { dateStyle: 'medium' }),
     [i18n.language],
   )
-  const query = useQuery({
+  const query = useInfiniteQuery({
     queryKey: ['employee-correspondence', employeeId],
-    queryFn: () => api.listEmployeeCorrespondence(employeeId, { limit: 50, offset: 0 }),
+    initialPageParam: 0,
+    queryFn: ({ pageParam }) => api.listEmployeeCorrespondence(employeeId, { limit: 50, offset: pageParam }),
+    getNextPageParam: (lastPage, pages) => {
+      const loaded = pages.reduce((count, page) => count + page.items.length, 0)
+      return loaded < lastPage.total ? loaded : undefined
+    },
     enabled: employeeId.length > 0,
   })
+  const pages = query.data?.pages ?? []
+  const items = pages.flatMap((page) => page.items)
+  const total = pages[0]?.total ?? 0
 
   async function open(item: CorrespondenceItemRead): Promise<void> {
     try {
@@ -47,13 +55,13 @@ export function CorrespondenceTab({ employeeId }: Props): React.JSX.Element {
   if (query.isError) {
     return <div className="rounded-2xl border border-accent/30 bg-surface p-8 text-center text-accent">{t('employee.correspondence.loadError')}</div>
   }
-  if (query.data.items.length === 0) {
+  if (items.length === 0) {
     return <div className="rounded-2xl bg-surface p-12 text-center text-muted-foreground">{t('employee.correspondence.empty')}</div>
   }
 
   return (
     <div className="space-y-3" aria-label={t('employee.correspondence.title')}>
-      {query.data.items.map((item) => {
+      {items.map((item) => {
         const canOpen = item.channel === 'email' && item.can_open_in_outlook
         const readOnly = !canOpen
         return (
@@ -120,6 +128,19 @@ export function CorrespondenceTab({ employeeId }: Props): React.JSX.Element {
           </article>
         )
       })}
+      <p className="text-end text-xs text-muted-foreground">
+        {t('employee.correspondence.showing', { shown: items.length, total })}
+      </p>
+      {query.hasNextPage && (
+        <button
+          type="button"
+          onClick={() => { void query.fetchNextPage() }}
+          disabled={query.isFetchingNextPage}
+          className="mx-auto block min-h-11 rounded-full border border-border px-4 py-2 text-sm font-semibold text-foreground hover:bg-surface-tinted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:opacity-50"
+        >
+          {query.isFetchingNextPage ? t('common.loading') : t('employee.correspondence.loadMore')}
+        </button>
+      )}
     </div>
   )
 }

@@ -2,10 +2,12 @@ import { useInfiniteQuery, useQueryClient } from '@tanstack/react-query'
 import { useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Link } from 'react-router-dom'
+import { toast } from 'sonner'
 import { EmployeeBadgeCard } from './EmployeeBadgeCard'
 import { EmployeeActivityLookup } from './EmployeeActivityLookup'
-import { api, type EmployeeActivityItemRead, type EmployeeActivityKind, type EmployeeListItem } from '@/lib/api'
+import { api, apiErrorMessage, type EmployeeActivityItemRead, type EmployeeActivityKind, type EmployeeListItem } from '@/lib/api'
 import { openCorrespondenceInOutlook } from '@/lib/outlookBridge'
+import { useIsMobile } from '@/lib/useIsMobile'
 import { pickEmployeeName } from '@/lib/employeeName'
 const PAGE_SIZE = 25
 
@@ -48,10 +50,10 @@ function activityHref(item: EmployeeActivityItemRead): string {
 export interface EmployeeActivitySectionProps {
   onOpenProfile: (employeeId: string) => void
 }
-
 export function EmployeeActivitySection({ onOpenProfile }: EmployeeActivitySectionProps): React.JSX.Element {
   const { t, i18n } = useTranslation()
   const lang = i18n.language.startsWith('ar') ? 'ar' : 'en'
+  const isMobile = useIsMobile()
   const queryClient = useQueryClient()
   const [employee, setEmployee] = useState<EmployeeListItem | null>(null)
   const [kind, setKind] = useState<EmployeeActivityKind | 'all'>('all')
@@ -221,6 +223,7 @@ export function EmployeeActivitySection({ onOpenProfile }: EmployeeActivitySecti
                         dayFormatter={dayFormatter}
                         timeFormatter={timeFormatter}
                         showEmployee={employee == null}
+                        isMobile={isMobile}
                         t={t}
                       />
                     ))}
@@ -244,13 +247,13 @@ export function EmployeeActivitySection({ onOpenProfile }: EmployeeActivitySecti
     </section>
   )
 }
-
 interface ActivityRowProps {
   item: EmployeeActivityItemRead
   lang: 'en' | 'ar'
   dayFormatter: Intl.DateTimeFormat
   timeFormatter: Intl.DateTimeFormat
   showEmployee: boolean
+  isMobile: boolean
   t: (key: string, options?: Record<string, unknown>) => string
 }
 
@@ -260,6 +263,7 @@ function ActivityRow({
   dayFormatter,
   timeFormatter,
   showEmployee,
+  isMobile,
   t,
 }: ActivityRowProps): React.JSX.Element {
   const employeeName = pickEmployeeName(
@@ -307,6 +311,9 @@ function ActivityRow({
       <span className="w-[84px] shrink-0 text-end text-xs tabular-nums text-muted-foreground">
         <span className="sr-only">{dayFormatter.format(date)} · </span>{timeFormatter.format(date)}
       </span>
+      {item.kind === 'ledger' && isMobile && (
+        <span className="sr-only">{t('employees.activity.desktopRequired')}</span>
+      )}
       <span className="sr-only">{t(destinationKey)}</span>
     </>
   )
@@ -315,8 +322,14 @@ function ActivityRow({
     return (
       <button
         type="button"
-        className={`${rowClass} w-full text-start`}
-        onClick={() => { void openCorrespondenceInOutlook(item.source_id, item.employee_id) }}
+        disabled={isMobile}
+        className={`${rowClass} w-full text-start disabled:cursor-not-allowed disabled:opacity-60`}
+        onClick={() => {
+          if (isMobile) return
+          void openCorrespondenceInOutlook(item.source_id, item.employee_id).catch((error: unknown) => {
+            toast.error(apiErrorMessage(error))
+          })
+        }}
       >
         {rowContent}
       </button>

@@ -371,6 +371,7 @@
       "openLeave": "Open leave",
       "openViolation": "Open violation",
       "openLedger": "Open correspondence",
+      "desktopRequired": "Classic Outlook requires the desktop app",
       "loadMore": "Load more activity",
       "loading": "Loading recent activity",
       "showing": "Showing {{shown}} of {{total}} recent entries",
@@ -2272,15 +2273,19 @@
     },
     "activity": {
       "empty": "No recent activity.",
-      "correspondence": "Correspondence"
+      "correspondence": "Correspondence",
+      "desktopRequired": "Classic Outlook requires the desktop app"
     },
     "correspondence": {
       "title": "Correspondence",
       "empty": "No correspondence recorded for this employee.",
       "loadError": "Correspondence could not be loaded.",
+      "showing": "Showing {{shown}} of {{total}} correspondence entries",
+      "loadMore": "Load more correspondence",
       "noSubject": "(No subject)",
-      "noCounterparty": "No counterparty recorded",
-      "to": "{{count}} recipient",
+      "to": "{{count}} recipients",
+      "to_one": "{{count}} recipient",
+      "to_other": "{{count}} recipients",
       "open": "Open in Outlook",
       "desktopRequired": "Classic Outlook requires the desktop app",
       "readOnly": "Read-only historical record",

@@ -6,9 +6,11 @@
 import { AlertTriangle, FileText, MailIcon, Plane } from 'lucide-react'
 import { useMemo, type ComponentType } from 'react'
 import { useTranslation } from 'react-i18next'
+import { toast } from 'sonner'
 
-import type { ActivityItemRead } from '@/lib/api'
+import { apiErrorMessage, type ActivityItemRead } from '@/lib/api'
 import { openCorrespondenceInOutlook } from '@/lib/outlookBridge'
+import { useIsMobile } from '@/lib/useIsMobile'
 
 type Kind = ActivityItemRead['kind']
 
@@ -31,6 +33,7 @@ interface Props {
 
 export function ActivityTab({ activity }: Props): React.JSX.Element {
   const { t, i18n } = useTranslation()
+  const isMobile = useIsMobile()
   const fmt = useMemo(
     () => new Intl.DateTimeFormat(i18n.language, { dateStyle: 'medium', timeStyle: 'short' }),
     [i18n.language],
@@ -59,8 +62,14 @@ export function ActivityTab({ activity }: Props): React.JSX.Element {
             {a.kind === 'ledger' ? (
               <button
                 type="button"
-                className="text-start text-[0.92em] font-medium text-primary underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-                onClick={() => { void openCorrespondenceInOutlook(a.ref_id) }}
+                disabled={isMobile}
+                className="text-start text-[0.92em] font-medium text-primary underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:cursor-not-allowed disabled:opacity-60"
+                onClick={() => {
+                  if (isMobile) return
+                  void openCorrespondenceInOutlook(a.ref_id).catch((error: unknown) => {
+                    toast.error(apiErrorMessage(error))
+                  })
+                }}
               >
                 {a.summary}
               </button>
@@ -71,6 +80,9 @@ export function ActivityTab({ activity }: Props): React.JSX.Element {
               {a.kind === 'ledger' && <span>{t('employee.activity.correspondence')} · </span>}
               {fmt.format(new Date(a.when))}
             </div>
+            {a.kind === 'ledger' && isMobile && (
+              <div className="mt-1 text-xs text-muted-foreground">{t('employee.activity.desktopRequired')}</div>
+            )}
           </div>
         )
       })}

@@ -1,10 +1,9 @@
 /**
- * EmailSection — IONOS IMAP account, signature, linked-employee. TAMM redesign.
+ * EmailSection — IONOS IMAP account and linked-employee identity.
  *
- * Renders three sub-cards inside a single Email integration SectionCard:
- *   1. Account config (email / username / password / folders / sync interval)
- *   2. Linked employee (single FK on EmailAccount.linked_employee_id)
- *   3. Signature (delegated to SignatureSection)
+ * Renders account configuration, linked employee identity, and recording
+ * health inside the Email integration SectionCard. Classic Outlook owns
+ * sending and signatures.
  *
  * IONOS-only: imap_host/smtp_host are baked in at save-time. Password is
  * masked and only sent when the user changes it.
