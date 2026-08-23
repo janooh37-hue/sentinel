@@ -63,7 +63,7 @@ const items: EmployeeActivityItemRead[] = ([
   status: null,
   days: null,
   direction: null,
-  channel: null,
+  channel: item.kind === 'ledger' ? 'email' : null,
   reference: `#${item.source_id}`,
 }))
 
@@ -76,9 +76,12 @@ vi.mock('react-i18next', () => ({
         'employees.activity.openLeave': 'Open leave',
         'employees.activity.openViolation': 'Open violation',
         'employees.activity.openLedger': 'Open correspondence',
+        'employees.activity.readOnly': 'Read-only historical record',
+        'employees.activity.desktopRequired': 'Classic Outlook requires the desktop app',
         'employees.activity.loading': 'Loading recent activity',
         'employees.activity.empty': 'No recent employee activity.',
         'employees.activity.emptyFiltered': 'No activity matches the current filters.',
+        'employees.activity.loadError': 'Recent activity could not be loaded.',
         'employees.activity.retry': 'Retry',
         'employees.activity.loadMore': 'Load more activity',
         'employees.activity.typeLabel': 'Activity type',
@@ -129,6 +132,22 @@ describe('EmployeeActivitySection', () => {
     expect(screen.getByRole('link', { name: /open leave/i })).toHaveAttribute('href', '/leaves?open=22')
     expect(screen.getByRole('link', { name: /open violation/i })).toHaveAttribute('href', '/employees/G300?tab=violations&open=33')
     expect(screen.getByRole('button', { name: /open correspondence/i })).toBeInTheDocument()
+  })
+  it('keeps legacy non-email ledger activity read-only', async () => {
+    const legacyItems = items.map((item) =>
+      item.kind === 'ledger' ? { ...item, channel: 'letter' as const } : item,
+    )
+    vi.mocked(api.listEmployeeActivity).mockResolvedValue({
+      items: legacyItems,
+      total: legacyItems.length,
+      limit: 25,
+      offset: 0,
+    })
+    wrap(<EmployeeActivitySection onOpenProfile={() => {}} />)
+    await screen.findByText('Incoming letter')
+    expect(screen.queryByRole('button', { name: /open correspondence/i })).not.toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: /open correspondence/i })).not.toBeInTheDocument()
+    expect(screen.getByText('Read-only historical record')).toBeInTheDocument()
   })
 
   it('resets to the first page when employee or type changes', async () => {

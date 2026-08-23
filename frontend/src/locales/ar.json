@@ -393,6 +393,7 @@
       "openViolation": "فتح المخالفة",
       "openLedger": "فتح المراسلة",
       "desktopRequired": "يتطلب Outlook الكلاسيكي تطبيق سطح المكتب",
+      "readOnly": "سجل تاريخي للقراءة فقط",
       "loadMore": "تحميل المزيد من الأنشطة",
       "loading": "جارٍ تحميل النشاط الأخير",
       "showing": "عرض {{shown}} من أصل {{total}} من الأنشطة الأخيرة",
@@ -2341,6 +2342,20 @@
   "errors": {
     "generic": "حدث خطأ ما",
     "network": "تعذر الاتصال بالخادم",
+    "outlookBridge": {
+      "generic": "تعذر على Outlook إكمال هذا الإجراء.",
+      "INVALID_PROTOCOL_URL": "رابط Outlook غير صالح.",
+      "DESKTOP_REQUIRED": "يتطلب هذا الإجراء Outlook الكلاسيكي على تطبيق سطح المكتب.",
+      "HANDOFF_TIMEOUT": "لم يُكمل Outlook العملية قبل انتهاء مهلة التسليم.",
+      "HANDOFF_EXPIRED": "انتهت صلاحية تسليم Outlook. حاول مرة أخرى.",
+      "ATTACHMENT_MISSING": "مرفق PDF للمراسلة مفقود.",
+      "ATTACHMENT_DOWNLOAD_FAILED": "تعذر على Outlook تنزيل مرفق المراسلة.",
+      "INVALID_EMPLOYEE_ID": "رقم الموظف ليس رقماً وظيفياً صالحاً.",
+      "INVALID_CORRESPONDENCE_ID": "سجل المراسلة غير صالح.",
+      "OUTLOOK_HANDOFF_FAILED": "تعذر على Outlook إكمال هذا الإجراء.",
+      "OUTLOOK_NOT_PAIRED": "أقرن هذا الحاسوب بـ Outlook الكلاسيكي قبل فتح المراسلات.",
+      "OUTLOOK_DEVICE_REVOKED": "تم إلغاء إقران جهاز Outlook هذا."
+    },
     "boundary": {
       "bodyLead": "فقدت هذه الشاشة اتصالها.",
       "bodyReassure": "لن يضيع أي عمل قمت به",

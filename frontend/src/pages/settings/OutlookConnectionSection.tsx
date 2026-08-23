@@ -3,8 +3,8 @@ import { Laptop, Link2, Loader2, ShieldOff } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 
-import { api, apiErrorMessage, type OutlookDeviceRead } from '@/lib/api'
-import { launchOutlook } from '@/lib/outlookBridge'
+import { api, type OutlookDeviceRead } from '@/lib/api'
+import { launchOutlook, outlookBridgeErrorMessage } from '@/lib/outlookBridge'
 import { useIsMobile } from '@/lib/useIsMobile'
 import { SectionCard } from './SettingsPage'
 
@@ -33,10 +33,10 @@ export function OutlookConnectionSection(): React.JSX.Element {
         launchOutlook(`gssg-outlook://pair/${encodeURIComponent(pairing.token)}`)
         toast.success(t('settings.outlook.pairStarted'))
       } catch (error) {
-        toast.error(apiErrorMessage(error))
+        toast.error(outlookBridgeErrorMessage(error, t))
       }
     },
-    onError: (error) => toast.error(apiErrorMessage(error)),
+    onError: (error) => toast.error(outlookBridgeErrorMessage(error, t)),
   })
 
   const revokeMutation = useMutation({
@@ -45,7 +45,7 @@ export function OutlookConnectionSection(): React.JSX.Element {
       toast.success(t('settings.outlook.revoked'))
       void qc.invalidateQueries({ queryKey: ['outlook-devices'] })
     },
-    onError: (error) => toast.error(apiErrorMessage(error)),
+    onError: (error) => toast.error(outlookBridgeErrorMessage(error, t)),
   })
 
   return (

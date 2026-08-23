@@ -1,7 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import type { BasketPrefill } from './outlookBridge'
-import { prepareBasketInOutlook, launchOutlook } from './outlookBridge'
+import {
+  OutlookBridgeError,
+  outlookBridgeErrorMessage,
+  prepareBasketInOutlook,
+  launchOutlook,
+} from './outlookBridge'
 import { api } from './api'
 import { clearBasket } from './emailBasket'
 
@@ -103,6 +108,12 @@ describe('outlookBridge', () => {
       prepareBasketInOutlook(prefill, { launch: () => {}, pollIntervalMs: 1 }),
     ).rejects.toThrow('ATTACHMENT_DOWNLOAD_FAILED')
     expect(clearBasket).not.toHaveBeenCalled()
+  })
+  it('maps bridge error codes to localized message keys', () => {
+    const error = new OutlookBridgeError('desktop', 'DESKTOP_REQUIRED')
+    expect(outlookBridgeErrorMessage(error, (key) => key)).toBe(
+      'errors.outlookBridge.DESKTOP_REQUIRED',
+    )
   })
 })
 

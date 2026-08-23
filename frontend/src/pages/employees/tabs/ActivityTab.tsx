@@ -8,8 +8,8 @@ import { useMemo, type ComponentType } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 
-import { apiErrorMessage, type ActivityItemRead } from '@/lib/api'
-import { openCorrespondenceInOutlook } from '@/lib/outlookBridge'
+import type { ActivityItemRead } from '@/lib/api'
+import { openCorrespondenceInOutlook, outlookBridgeErrorMessage } from '@/lib/outlookBridge'
 import { useIsMobile } from '@/lib/useIsMobile'
 
 type Kind = ActivityItemRead['kind']
@@ -67,7 +67,7 @@ export function ActivityTab({ activity }: Props): React.JSX.Element {
                 onClick={() => {
                   if (isMobile) return
                   void openCorrespondenceInOutlook(a.ref_id).catch((error: unknown) => {
-                    toast.error(apiErrorMessage(error))
+                    toast.error(outlookBridgeErrorMessage(error, t))
                   })
                 }}
               >

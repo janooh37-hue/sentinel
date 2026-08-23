@@ -4,8 +4,8 @@ import { useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 
-import { api, apiErrorMessage, type CorrespondenceItemRead } from '@/lib/api'
-import { openCorrespondenceInOutlook } from '@/lib/outlookBridge'
+import { api, type CorrespondenceItemRead } from '@/lib/api'
+import { openCorrespondenceInOutlook, outlookBridgeErrorMessage } from '@/lib/outlookBridge'
 import { useIsMobile } from '@/lib/useIsMobile'
 
 interface Props {
@@ -45,7 +45,7 @@ export function CorrespondenceTab({ employeeId }: Props): React.JSX.Element {
     try {
       await openCorrespondenceInOutlook(item.entry_id, employeeId)
     } catch (error) {
-      toast.error(apiErrorMessage(error))
+      toast.error(outlookBridgeErrorMessage(error, t))
     }
   }
 

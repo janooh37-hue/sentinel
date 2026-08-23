@@ -20,11 +20,11 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { Button } from '@/components/ui/button'
-import { api, apiErrorMessage } from '@/lib/api'
+import { api } from '@/lib/api'
 import { useEmailBasket } from '@/hooks/useEmailBasket'
 import { basketLabel, type BasketKey, type EmailBasketItem } from '@/lib/emailBasket'
 import { buildBasketPrefill } from '@/lib/basketEmail'
-import { prepareBasketInOutlook } from '@/lib/outlookBridge'
+import { outlookBridgeErrorMessage, prepareBasketInOutlook } from '@/lib/outlookBridge'
 import { buildRecordBasketItem } from '@/pages/books/recordsBasket'
 import { getRecentRecipientsForForm } from '@/lib/recentRecipients'
 
@@ -54,7 +54,7 @@ export function EmailBasketTray(): React.JSX.Element | null {
       await prepareBasketInOutlook(prefill)
       toast.success(t('basket.tray.sent'))
     } catch (error) {
-      toast.error(apiErrorMessage(error))
+      toast.error(outlookBridgeErrorMessage(error, t))
     } finally {
       setSendingKey(null)
     }

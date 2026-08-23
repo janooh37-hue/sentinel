@@ -24,6 +24,36 @@ export class OutlookBridgeError extends Error {
   }
 }
 
+const LOCALIZED_BRIDGE_CODES = new Set([
+  'INVALID_PROTOCOL_URL',
+  'DESKTOP_REQUIRED',
+  'HANDOFF_TIMEOUT',
+  'HANDOFF_EXPIRED',
+  'ATTACHMENT_MISSING',
+  'ATTACHMENT_DOWNLOAD_FAILED',
+  'INVALID_EMPLOYEE_ID',
+  'INVALID_CORRESPONDENCE_ID',
+  'OUTLOOK_HANDOFF_FAILED',
+  'OUTLOOK_NOT_PAIRED',
+  'OUTLOOK_DEVICE_REVOKED',
+])
+
+export function outlookBridgeErrorCode(error: unknown): string {
+  let code = ''
+  if (error && typeof error === 'object' && 'code' in error) {
+    const value = error.code
+    if (typeof value === 'string') code = value
+  }
+  return LOCALIZED_BRIDGE_CODES.has(code) ? code : 'generic'
+}
+
+export function outlookBridgeErrorMessage(
+  error: unknown,
+  t: (key: string) => string,
+): string {
+  return t(`errors.outlookBridge.${outlookBridgeErrorCode(error)}`)
+}
+
 export interface OutlookPollingOptions {
   pollIntervalMs?: number
   maxWaitMs?: number

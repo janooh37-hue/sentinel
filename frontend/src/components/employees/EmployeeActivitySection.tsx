@@ -5,8 +5,8 @@ import { Link } from 'react-router-dom'
 import { toast } from 'sonner'
 import { EmployeeBadgeCard } from './EmployeeBadgeCard'
 import { EmployeeActivityLookup } from './EmployeeActivityLookup'
-import { api, apiErrorMessage, type EmployeeActivityItemRead, type EmployeeActivityKind, type EmployeeListItem } from '@/lib/api'
-import { openCorrespondenceInOutlook } from '@/lib/outlookBridge'
+import { api, type EmployeeActivityItemRead, type EmployeeActivityKind, type EmployeeListItem } from '@/lib/api'
+import { openCorrespondenceInOutlook, outlookBridgeErrorMessage } from '@/lib/outlookBridge'
 import { useIsMobile } from '@/lib/useIsMobile'
 import { pickEmployeeName } from '@/lib/employeeName'
 const PAGE_SIZE = 25
@@ -281,12 +281,16 @@ function ActivityRow({
   const actionKey = `employees.activity.actions.${item.kind}`
   const actionOptions = item.kind === 'leave' ? { title: item.title, days: item.days ?? 0 } : { title: item.title }
   const action = t(actionKey, actionOptions)
-  const destinationKey = {
-    document: 'employees.activity.openDocument',
-    leave: 'employees.activity.openLeave',
-    violation: 'employees.activity.openViolation',
-    ledger: 'employees.activity.openLedger',
-  }[item.kind]
+  const isEmailLedger = item.kind === 'ledger' && item.channel === 'email'
+  const destinationKey =
+    item.kind === 'ledger' && !isEmailLedger
+      ? 'employees.activity.readOnly'
+      : {
+          document: 'employees.activity.openDocument',
+          leave: 'employees.activity.openLeave',
+          violation: 'employees.activity.openViolation',
+          ledger: 'employees.activity.openLedger',
+        }[item.kind]
   const kindStyle = KIND_STYLES[item.kind]
 
   const rowContent = (
@@ -311,14 +315,14 @@ function ActivityRow({
       <span className="w-[84px] shrink-0 text-end text-xs tabular-nums text-muted-foreground">
         <span className="sr-only">{dayFormatter.format(date)} · </span>{timeFormatter.format(date)}
       </span>
-      {item.kind === 'ledger' && isMobile && (
+      {isEmailLedger && isMobile && (
         <span className="sr-only">{t('employees.activity.desktopRequired')}</span>
       )}
       <span className="sr-only">{t(destinationKey)}</span>
     </>
   )
   const rowClass = 'group flex items-center gap-3.5 border-b border-hairline px-5 py-3.5 last:border-b-0 hover:bg-surface-raised focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary'
-  if (item.kind === 'ledger') {
+  if (isEmailLedger) {
     return (
       <button
         type="button"
@@ -327,13 +331,16 @@ function ActivityRow({
         onClick={() => {
           if (isMobile) return
           void openCorrespondenceInOutlook(item.source_id, item.employee_id).catch((error: unknown) => {
-            toast.error(apiErrorMessage(error))
+            toast.error(outlookBridgeErrorMessage(error, t))
           })
         }}
       >
         {rowContent}
       </button>
     )
+  }
+  if (item.kind === 'ledger') {
+    return <div className={rowClass} aria-disabled="true">{rowContent}</div>
   }
   return (
     <Link to={activityHref(item)} className={rowClass}>
