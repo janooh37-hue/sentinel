@@ -188,8 +188,8 @@ def test_post_word_session_no_classification_rejected(api_db, monkeypatch, tmp_p
     assert resp.json()["error"]["code"] == "CLASSIFICATION_REQUIRED"
 
 
-def test_post_word_session_requires_books_manage(api_db, monkeypatch, tmp_path):
-    """Plain operator (no books.manage) → 403."""
+def test_post_word_session_requires_books_edit(api_db, monkeypatch, tmp_path):
+    """Plain operator (no books.edit) → 403."""
     _seed_gs(api_db)
     user = _make_user(api_db, role="operator")
     c = _client(api_db, user, monkeypatch, tmp_path)
@@ -317,7 +317,7 @@ def test_list_books_batches_edit_sessions(api_db, monkeypatch, tmp_path):
 @pytest.fixture()
 def finished_word_book(api_db, monkeypatch, tmp_path):
     """A finished General Book (BookVersion + Document on disk) via api_db."""
-    # Fixture user != request user: save-as-template deliberately does not check book ownership (books.manage is the gate).
+    # Fixture user != request user: save-as-template deliberately does not check book ownership (books.templates is the gate).
     from datetime import UTC, datetime
 
     from app.config import Settings
@@ -361,13 +361,13 @@ def finished_word_book(api_db, monkeypatch, tmp_path):
 
 
 def _admin_client(api_db, monkeypatch, tmp_path):
-    """books.manage-capable client (admin role)."""
+    """books.write-capable client (admin role)."""
     user = _make_user(api_db, role="admin", email=f"adm_{id(tmp_path)}@test.ae")
     return _client(api_db, user, monkeypatch, tmp_path), user
 
 
 def _plain_client(api_db, monkeypatch, tmp_path):
-    """No books.manage (operator role)."""
+    """No books write caps (operator role)."""
     user = _make_user(api_db, role="operator", email=f"op_{id(tmp_path)}@test.ae")
     return _client(api_db, user, monkeypatch, tmp_path), user
 
@@ -390,7 +390,7 @@ def test_list_word_templates_empty(api_db, monkeypatch, tmp_path):
     assert r.json() == []
 
 
-def test_list_word_templates_requires_books_manage(api_db, monkeypatch, tmp_path):
+def test_list_word_templates_requires_books_templates(api_db, monkeypatch, tmp_path):
     from app.services import book_template_service
 
     tpl_lib = tmp_path / "tpl_lib"

@@ -79,13 +79,13 @@ def _client(db: Session, user: User, monkeypatch, tmp_path: Path) -> TestClient:
 
 
 def _admin_client(api_db, monkeypatch, tmp_path):
-    """books.manage-capable client (admin role)."""
+    """books.templates-capable client (admin role)."""
     user = _make_user(api_db, role="admin")
     return _client(api_db, user, monkeypatch, tmp_path), user
 
 
 def _plain_client(api_db, monkeypatch, tmp_path):
-    """No books.manage (operator role)."""
+    """No books.templates (operator role)."""
     user = _make_user(api_db, role="operator")
     return _client(api_db, user, monkeypatch, tmp_path), user
 
@@ -165,7 +165,7 @@ def test_get_table_missing_template_404(api_db, monkeypatch, tmp_path):
     assert r.status_code == 404
 
 
-def test_get_table_requires_books_manage(api_db, monkeypatch, tmp_path):
+def test_get_table_requires_books_templates(api_db, monkeypatch, tmp_path):
     tpl_lib = tmp_path / "tpl_lib"
     tpl_lib.mkdir()
     monkeypatch.setattr(book_template_service, "templates_dir", lambda: tpl_lib)
@@ -203,7 +203,7 @@ def test_delete_missing_template_404(api_db, monkeypatch, tmp_path):
     assert r.status_code == 404
 
 
-def test_delete_requires_books_manage(api_db, monkeypatch, tmp_path):
+def test_delete_requires_books_templates(api_db, monkeypatch, tmp_path):
     tpl_lib = tmp_path / "tpl_lib"
     tpl_lib.mkdir()
     monkeypatch.setattr(book_template_service, "templates_dir", lambda: tpl_lib)
