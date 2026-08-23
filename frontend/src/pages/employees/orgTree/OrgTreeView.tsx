@@ -12,6 +12,7 @@ import {
   LINE_W_LIN,
   STEM,
   buildForest,
+  compareOrgPeople,
   directReports,
   isBelow,
   layoutForest,
@@ -47,7 +48,7 @@ export function OrgTreeView({ unit }: OrgTreeViewProps): React.JSX.Element {
   const [tracedId, setTracedId] = useState<string | null>(null)
   const [scopeId, setScopeId] = useState<string | null>(null)
   const [editMode, setEditMode] = useState(false)
-  const [picker, setPicker] = useState<{ employee: OrgPerson; anchor: HTMLElement | null } | null>(null)
+  const [picker, setPicker] = useState<{ employee: OrgPerson; anchor: HTMLElement | null; boundsEl: HTMLElement | null } | null>(null)
   const [view, setView] = useState({ scale: 1, tx: 0, ty: 0 })
   const [drag, setDrag] = useState<DragState | null>(null)
   const [isFullscreen, setIsFullscreen] = useState(false)
@@ -77,7 +78,9 @@ export function OrgTreeView({ unit }: OrgTreeViewProps): React.JSX.Element {
     [collapsed, maxLevel, visibleRoots],
   )
   const unlinked = useMemo(
-    () => people.filter((person) => person.supervisor_id === null && person.id !== primaryRootId),
+    () => people
+      .filter((person) => person.supervisor_id === null && person.id !== primaryRootId)
+      .toSorted(compareOrgPeople),
     [people, primaryRootId],
   )
   const lineage = useMemo(
@@ -306,16 +309,16 @@ export function OrgTreeView({ unit }: OrgTreeViewProps): React.JSX.Element {
               const validDrop = drag?.targetId === person.id && !invalidDrop && person.id !== drag.employee.id
               return <div key={person.id} className="org-item" style={{ width: entry.w, height: entry.h, transform: `translate(${mirrorX(entry.x, planeWidth, rtl, entry.w)}px, ${entry.y}px)` }}><article data-person-id={person.id} className={`org-card${traced ? ' is-traced' : ''}${!matching ? ' is-dimmed' : ''}${drag?.employee.id === person.id ? ' is-dragging' : ''}${validDrop ? ' is-drop' : ''}${invalidDrop ? ' is-nodrop' : ''}`} onPointerDown={(event) => startDrag(event, person)} onClick={(event) => { event.stopPropagation(); setTracedId((current) => current === person.id ? null : person.id) }}>
                 <div className="org-card-main"><span className="org-avatar">{initials(person)}</span><div className="min-w-0"><p dir="auto">{person.name_en}</p><small dir="auto">{person.position}</small></div></div><div className="org-card-foot"><span>{person.id}</span><em dir="auto">{person.duty_post}</em>{directReports(people, person.id).length > 0 && <button type="button" data-org-no-drag onClick={(event) => { event.stopPropagation(); setScopeId(person.id) }}>{directReports(people, person.id).length} ▾</button>}</div>
-                {editMode && canEdit && <><GripVertical className="org-grip" size={14} /><button type="button" data-org-no-drag className="org-edit-button" onClick={(event) => { event.stopPropagation(); setPicker({ employee: person, anchor: event.currentTarget.closest<HTMLElement>('.org-card') }) }}><Pencil size={12} /></button></>}
+                {editMode && canEdit && <><GripVertical className="org-grip" size={14} /><button type="button" data-org-no-drag className="org-edit-button" onClick={(event) => { event.stopPropagation(); setPicker({ employee: person, anchor: event.currentTarget.closest<HTMLElement>('.org-card'), boundsEl: viewportRef.current }) }}><Pencil size={12} /></button></>}
               </article>{entry.hasChildren && <button type="button" className="org-collapse-pip" onClick={(event) => { event.stopPropagation(); toggleCollapsed(person.id) }}>{collapsed.has(person.id) ? '+' : '−'}</button>}</div>
             })}
           </div>
         </div>
-        {unlinked.length > 0 && <div className="org-orphan-banner"><b>▲ {t('employees.orgTree.orphanTitle', { count: unlinked.length })}</b><small>{t('employees.orgTree.orphanBody')}</small><span>{unlinked.map((person) => <button key={person.id} type="button" data-org-drag-handle className="org-orphan-chip" onPointerDown={(event) => startDrag(event, person)} onClick={() => editMode && setPicker({ employee: person, anchor: null })}>{person.name_en}</button>)}</span></div>}
+        {unlinked.length > 0 && <div className="org-orphan-banner"><b>▲ {t('employees.orgTree.orphanTitle', { count: unlinked.length })}</b><small>{t('employees.orgTree.orphanBody')}</small><span>{unlinked.map((person) => <button key={person.id} type="button" data-org-drag-handle className="org-orphan-chip" onPointerDown={(event) => startDrag(event, person)} onClick={() => editMode && setPicker({ employee: person, anchor: null, boundsEl: viewportRef.current })}>{person.name_en}</button>)}</span></div>}
         <p className="org-hint">{t(`employees.orgTree.${editMode ? 'hintEdit' : 'hint'}`)}</p>
         <div className="org-zoom-bar"><button type="button" className="org-center-button" onClick={centerOnManager}><Crosshair size={15} />{t('employees.orgTree.centerManager')}</button><button type="button" onClick={() => applyTransform({ ...view, scale: Math.min(2.2, view.scale * 1.15) })} aria-label={t('employees.orgTree.zoomIn')}><ZoomIn size={16} /></button><button type="button" onClick={() => applyTransform({ ...view, scale: Math.max(0.25, view.scale / 1.15) })} aria-label={t('employees.orgTree.zoomOut')}><ZoomOut size={16} /></button><button type="button" onClick={fitView} aria-label={t('employees.orgTree.fitView')}><Shrink size={16} /></button><button type="button" onClick={toggleFullscreen} aria-label={t('employees.orgTree.fullscreen')}>{isFullscreen ? <Minimize2 size={16} /> : <Expand size={16} />}</button></div>
       </div>
-      {picker && <SupervisorPicker employee={picker.employee} candidates={people} anchor={picker.anchor} boundsEl={viewportRef.current} onClose={() => setPicker(null)} onPick={(supervisorId) => { setPicker(null); setSupervisor.mutate({ employeeId: picker.employee.id, supervisorId }) }} />}
+      {picker && <SupervisorPicker employee={picker.employee} candidates={people} anchor={picker.anchor} boundsEl={picker.boundsEl} onClose={() => setPicker(null)} onPick={(supervisorId) => { setPicker(null); setSupervisor.mutate({ employeeId: picker.employee.id, supervisorId }) }} />}
       {drag && createPortal(<div className="org-drag-ghost" style={{ left: drag.x, top: drag.y }}><span className="org-avatar">{initials(drag.employee)}</span><b dir="auto">{drag.employee.name_en}</b></div>, overlayHost)}
     </section>
   )

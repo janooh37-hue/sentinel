@@ -10,18 +10,27 @@ import {
   type OrgPerson,
 } from '../orgTree'
 
-function person(id: string, supervisor_id: string | null = null, position = 'Security Guard'): OrgPerson {
+function person(
+  id: string,
+  supervisor_id: string | null = null,
+  ordering: Pick<OrgPerson, 'designation_en' | 'designation_ar' | 'rank_order'> = {
+    designation_en: null,
+    designation_ar: null,
+    rank_order: null,
+  },
+): OrgPerson {
   return {
     id,
     name_en: id,
     name_ar: null,
-    position,
+    position: 'Security Guard',
     position_ar: null,
     department: null,
     duty_unit: 'Unit A',
     duty_post: 'Main Gate',
     status: 'Active',
     supervisor_id,
+    ...ordering,
   }
 }
 
@@ -88,6 +97,25 @@ describe('orgTree', () => {
 
     expect(layout.nodes.map((node) => node.node.person.id)).toEqual(['G-1', 'G-2'])
     expect(layout.links).toEqual([expect.objectContaining({ parentId: 'G-1', id: 'G-2' })])
+  })
+
+  it('orders reports by rank, designation, then natural employee ID with unranked last', () => {
+    const people = [
+      person('G-100'),
+      person('G-1', 'G-100'),
+      person('G-3', 'G-100', { designation_en: 'Zulu', designation_ar: null, rank_order: 2 }),
+      person('G-10', 'G-100', { designation_en: 'Beta', designation_ar: null, rank_order: 1 }),
+      person('G-11', 'G-100', { designation_en: 'Alpha', designation_ar: null, rank_order: 1 }),
+      person('G-2', 'G-100', { designation_en: 'Alpha', designation_ar: null, rank_order: 1 }),
+    ]
+
+    expect(buildForest(people)[0]?.children.map((node) => node.person.id)).toEqual([
+      'G-2',
+      'G-11',
+      'G-10',
+      'G-3',
+      'G-1',
+    ])
   })
 
   it('recognises descendants but not siblings as below an employee', () => {

@@ -8757,6 +8757,12 @@ export interface components {
             status: string;
             /** Supervisor Id */
             supervisor_id: string | null;
+            /** Designation En */
+            designation_en?: string | null;
+            /** Designation Ar */
+            designation_ar?: string | null;
+            /** Rank Order */
+            rank_order?: number | null;
         };
         /** OrgSupervisorUpdate */
         OrgSupervisorUpdate: {
