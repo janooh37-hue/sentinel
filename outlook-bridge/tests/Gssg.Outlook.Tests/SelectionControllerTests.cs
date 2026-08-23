@@ -126,8 +126,8 @@ namespace Gssg.Outlook.Tests
                 return Task.FromResult<IReadOnlyList<OutlookEmployeeSummary>>(new List<OutlookEmployeeSummary>());
             }
 
-            public virtual Task LinkEmployeeAsync(int entryId, string employeeId, CancellationToken cancellationToken) { return Task.CompletedTask; }
-            public virtual Task DismissEmployeeAsync(int entryId, string employeeId, CancellationToken cancellationToken) { return Task.CompletedTask; }
+            public virtual Task LinkEmployeeAsync(int entryId, string employeeId, string mailboxAddress, CancellationToken cancellationToken) { return Task.CompletedTask; }
+            public virtual Task DismissEmployeeAsync(int entryId, string employeeId, string mailboxAddress, CancellationToken cancellationToken) { return Task.CompletedTask; }
             public virtual Task<byte[]> GetEmployeePhotoAsync(string employeeId, CancellationToken cancellationToken) { return Task.FromResult(new byte[0]); }
             public virtual Uri EmployeeProfileUri(string employeeId) { return new Uri("https://sentinel.example/employees/" + employeeId); }
         }
@@ -143,7 +143,8 @@ namespace Gssg.Outlook.Tests
             {
             }
 
-            public override Task LinkEmployeeAsync(int entryId, string employeeId, CancellationToken cancellationToken)
+            public override Task LinkEmployeeAsync(
+                int entryId, string employeeId, string mailboxAddress, CancellationToken cancellationToken)
             {
                 LastLinkedEntryId = entryId;
                 return Task.CompletedTask;

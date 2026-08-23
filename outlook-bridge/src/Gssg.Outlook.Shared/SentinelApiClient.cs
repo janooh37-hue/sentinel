@@ -41,6 +41,7 @@ namespace Gssg.Outlook
     internal sealed class RedeemHandoffRequest
     {
         [DataMember(Name = "token")] internal string Token;
+        [DataMember(Name = "mailbox_address")] internal string MailboxAddress;
     }
 
     [DataContract]
@@ -93,13 +94,13 @@ namespace Gssg.Outlook
         [DataMember(Name = "failure_code")] internal string FailureCode;
     }
 
-
     [DataContract]
     internal sealed class SelectionRequest
     {
         [DataMember(Name = "internet_message_id")] internal string InternetMessageId;
         [DataMember(Name = "outlook_store_id")] internal string OutlookStoreId;
         [DataMember(Name = "outlook_entry_id")] internal string OutlookEntryId;
+        [DataMember(Name = "mailbox_address")] internal string MailboxAddress;
         [DataMember(Name = "g_numbers")] internal List<string> GNumbers;
     }
 
@@ -123,13 +124,12 @@ namespace Gssg.Outlook
         [DataMember(Name = "entry_id")] internal int? EntryId;
         [DataMember(Name = "employees")] internal List<OutlookEmployeeSummary> Employees;
     }
-
     internal interface ISelectionApi
     {
         Task<OutlookSelectionResponse> ResolveSelectionAsync(SelectionRequest request, CancellationToken cancellationToken);
         Task<IReadOnlyList<OutlookEmployeeSummary>> SearchEmployeesAsync(string query, CancellationToken cancellationToken);
-        Task LinkEmployeeAsync(int entryId, string employeeId, CancellationToken cancellationToken);
-        Task DismissEmployeeAsync(int entryId, string employeeId, CancellationToken cancellationToken);
+        Task LinkEmployeeAsync(int entryId, string employeeId, string mailboxAddress, CancellationToken cancellationToken);
+        Task DismissEmployeeAsync(int entryId, string employeeId, string mailboxAddress, CancellationToken cancellationToken);
         Task<byte[]> GetEmployeePhotoAsync(string employeeId, CancellationToken cancellationToken);
         Uri EmployeeProfileUri(string employeeId);
     }
@@ -176,13 +176,13 @@ namespace Gssg.Outlook
             credentialStore.Write(response.Credential);
         }
 
-        internal RedeemHandoffResponse RedeemHandoff(string token)
+        internal RedeemHandoffResponse RedeemHandoff(string token, string mailboxAddress)
         {
             return Send<RedeemHandoffResponse>(
                 HttpMethod.Post,
                 "api/v1/outlook/device/handoffs/redeem",
                 credentialStore.Read(),
-                new RedeemHandoffRequest { Token = token });
+                new RedeemHandoffRequest { Token = token, MailboxAddress = mailboxAddress });
         }
 
         internal string DownloadAttachment(int handoffId, int index, string fileName)
@@ -238,7 +238,7 @@ namespace Gssg.Outlook
                 new HandoffFailureRequest { FailureCode = failureCode });
         }
 
-        internal void PostSelection(string internetMessageId, string storeId, string entryId, IReadOnlyList<string> gNumbers)
+        internal void PostSelection(string internetMessageId, string storeId, string entryId, string mailboxAddress, IReadOnlyList<string> gNumbers)
         {
             Send<object>(
                 HttpMethod.Post,
@@ -249,6 +249,7 @@ namespace Gssg.Outlook
                     InternetMessageId = internetMessageId,
                     OutlookStoreId = storeId,
                     OutlookEntryId = entryId,
+                    MailboxAddress = mailboxAddress,
                     GNumbers = new List<string>(gNumbers ?? new string[0])
                 });
         }
@@ -283,6 +284,7 @@ namespace Gssg.Outlook
         public async Task LinkEmployeeAsync(
             int entryId,
             string employeeId,
+            string mailboxAddress,
             CancellationToken cancellationToken)
         {
             await SendAsync<object>(
@@ -291,12 +293,14 @@ namespace Gssg.Outlook
                     Uri.EscapeDataString(employeeId ?? string.Empty),
                 credentialStore.Read(),
                 null,
-                cancellationToken).ConfigureAwait(false);
+                cancellationToken,
+                mailboxAddress).ConfigureAwait(false);
         }
 
         public async Task DismissEmployeeAsync(
             int entryId,
             string employeeId,
+            string mailboxAddress,
             CancellationToken cancellationToken)
         {
             await SendAsync<object>(
@@ -305,7 +309,8 @@ namespace Gssg.Outlook
                     Uri.EscapeDataString(employeeId ?? string.Empty),
                 credentialStore.Read(),
                 null,
-                cancellationToken).ConfigureAwait(false);
+                cancellationToken,
+                mailboxAddress).ConfigureAwait(false);
         }
 
         public async Task<byte[]> GetEmployeePhotoAsync(
@@ -342,11 +347,14 @@ namespace Gssg.Outlook
             string path,
             string bearer,
             object body,
-            CancellationToken cancellationToken)
+            CancellationToken cancellationToken,
+            string mailboxAddress = null)
         {
             EnsureNotDisposed();
             using (var request = new HttpRequestMessage(method, Endpoint(path)))
             {
+                if (!string.IsNullOrWhiteSpace(mailboxAddress))
+                    request.Headers.TryAddWithoutValidation("X-Outlook-Mailbox", mailboxAddress);
                 AddBearer(request, bearer);
                 if (body != null)
                 {

@@ -2,10 +2,13 @@
   "valid": [
     { "text": "Employee G123 is assigned", "matches": ["G123"] },
     { "text": "G1234 و g3082", "matches": ["G1234", "G3082"] },
-    { "text": "G3082, G3082", "matches": ["G3082"] }
+    { "text": "G3082, G3082", "matches": ["G3082"] },
+    { "text": "(G3082)/G123", "matches": ["G3082", "G123"] }
   ],
   "invalid": [
     { "text": "AG1234X", "matches": [] },
-    { "text": "G12 G12345", "matches": [] }
+    { "text": "G12 G12345", "matches": [] },
+    { "text": "G3082_employee", "matches": [] },
+    { "text": "éG3082 G3082é", "matches": [] }
   ]
 }

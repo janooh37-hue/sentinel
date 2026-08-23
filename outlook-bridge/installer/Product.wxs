@@ -7,7 +7,7 @@
 <?define ComponentWin64 = "no" ?>
 <?define OfficeRegistryWin64 = "no" ?>
 <?endif ?>
-  <Product Id="*" Name="GSSG Manager Outlook Bridge" Language="1033" Version="1.0.0.0" Manufacturer="GSSG Manager" UpgradeCode="7D207C60-DF08-4D57-B2C5-3D7AA25A3A34">
+  <Product Id="*" Name="GSSG Manager Outlook Bridge" Language="1033" Version="$(var.ProductVersion)" Manufacturer="GSSG Manager" UpgradeCode="7D207C60-DF08-4D57-B2C5-3D7AA25A3A34">
     <Package InstallerVersion="500" Compressed="yes" InstallScope="perMachine" Platform="$(var.Platform)" />
     <MajorUpgrade DowngradeErrorMessage="A newer GSSG Manager Outlook Bridge is already installed." />
     <MediaTemplate EmbedCab="yes" />

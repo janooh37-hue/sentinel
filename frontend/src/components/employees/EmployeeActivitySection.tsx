@@ -282,7 +282,7 @@ function ActivityRow({
   const actionKey = `employees.activity.actions.${translationKind}`
   const actionOptions = item.kind === 'leave' ? { title: item.title, days: item.days ?? 0 } : { title: item.title }
   const action = t(actionKey, actionOptions)
-  const isEmailLedger = item.kind === 'ledger' && item.channel === 'email'
+  const isEmailLedger = item.kind === 'ledger' && item.channel === 'email' && item.can_open_in_outlook !== false
   const destinationKey =
     item.kind === 'ledger' && !isEmailLedger
       ? 'employees.activity.readOnly'

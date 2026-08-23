@@ -64,14 +64,45 @@ class SyncInProgressError(RuntimeError):
 
 # Wider than the document-upload allow-list: emails routinely carry common
 # Office and archive types. Executables are excluded.
-EMAIL_ATTACHMENT_ALLOWED_EXTS: Final[frozenset[str]] = frozenset({
-    ".pdf", ".png", ".jpg", ".jpeg", ".gif", ".webp", ".svg", ".bmp", ".heic",
-    ".docx", ".doc", ".xlsx", ".xls", ".pptx", ".ppt", ".odt", ".ods",
-    ".txt", ".csv", ".rtf", ".md",
-    ".zip", ".7z", ".rar", ".tar", ".gz", ".tgz",
-    ".eml", ".msg", ".ics", ".vcf",
-    ".html", ".htm", ".xml", ".json",
-})
+EMAIL_ATTACHMENT_ALLOWED_EXTS: Final[frozenset[str]] = frozenset(
+    {
+        ".pdf",
+        ".png",
+        ".jpg",
+        ".jpeg",
+        ".gif",
+        ".webp",
+        ".svg",
+        ".bmp",
+        ".heic",
+        ".docx",
+        ".doc",
+        ".xlsx",
+        ".xls",
+        ".pptx",
+        ".ppt",
+        ".odt",
+        ".ods",
+        ".txt",
+        ".csv",
+        ".rtf",
+        ".md",
+        ".zip",
+        ".7z",
+        ".rar",
+        ".tar",
+        ".gz",
+        ".tgz",
+        ".eml",
+        ".msg",
+        ".ics",
+        ".vcf",
+        ".html",
+        ".htm",
+        ".xml",
+        ".json",
+    }
+)
 EMAIL_ATTACHMENT_MAX_BYTES: Final[int] = 25 * 1024 * 1024  # 25 MiB
 
 
@@ -80,8 +111,24 @@ EMAIL_ATTACHMENT_MAX_BYTES: Final[int] = 25 * 1024 * 1024  # 25 MiB
 # rust) drops <script>/<style>, event handlers, and javascript:/data: URLs while
 # keeping common formatting, links, and images.
 _ALLOWED_HTML_TAGS: Final[set[str]] = nh3.ALLOWED_TAGS | {
-    "img", "span", "div", "pre", "table", "thead", "tbody", "tr", "td", "th",
-    "h1", "h2", "h3", "h4", "h5", "h6", "hr", "font",
+    "img",
+    "span",
+    "div",
+    "pre",
+    "table",
+    "thead",
+    "tbody",
+    "tr",
+    "td",
+    "th",
+    "h1",
+    "h2",
+    "h3",
+    "h4",
+    "h5",
+    "h6",
+    "hr",
+    "font",
 }
 _ALLOWED_HTML_ATTRS: Final[dict[str, set[str]]] = {
     **nh3.ALLOWED_ATTRIBUTES,
@@ -112,7 +159,7 @@ _BIDI_ZW = "".join(
         *range(0x200B, 0x2010),  # ZWSP..RLM (U+200B..U+200F)
         *range(0x202A, 0x202F),  # LRE..RLO (U+202A..U+202E)
         *range(0x2066, 0x206A),  # isolates (U+2066..U+2069)
-        0xFEFF,                  # BOM / ZWNBSP
+        0xFEFF,  # BOM / ZWNBSP
     )
 )
 
@@ -332,8 +379,6 @@ def _connect(account: EmailAccount) -> imaplib.IMAP4:
     return conn
 
 
-
-
 def test_connection(account: EmailAccount) -> None:
     """Raises on failure; returns None on success."""
     conn = _connect(account)
@@ -342,6 +387,8 @@ def test_connection(account: EmailAccount) -> None:
     finally:
         with contextlib.suppress(Exception):
             conn.logout()
+
+
 # ─── Sync ───────────────────────────────────────────────────────────────────
 
 
@@ -495,18 +542,16 @@ def _msgid_tag(msg_id: str) -> str:
     return f"{_MSG_ID_TAG_PREFIX}{cleaned}"
 
 
-def _existing_msgids(db: Session) -> dict[str, tuple[int, int]]:
-    """Map ``msgid_tag → (entry_id, current_attachment_count)``.
-
-    Used both for dedup (presence check) and for cheap attachment backfill
-    (an entry with 0 attachments on a re-sync gets its attachments populated
-    even though we skip re-inserting the row).
-    """
-    rows = db.execute(
+def _existing_msgids(db: Session, *, owner_user_id: int | None) -> dict[str, tuple[int, int]]:
+    """Map this mailbox's msgid tags to entries and attachment counts."""
+    stmt = (
         select(LedgerEntry.id, LedgerEntry.tags, LedgerEntry.attachment_paths)
         .where(LedgerEntry.channel == "email")
         .where(LedgerEntry.deleted_at.is_(None))
-    ).all()
+    )
+    if owner_user_id is not None:
+        stmt = stmt.where(LedgerEntry.owner_user_id == owner_user_id)
+    rows = db.execute(stmt).all()
     out: dict[str, tuple[int, int]] = {}
     for entry_id, tags, paths in rows:
         if not tags:
@@ -523,7 +568,7 @@ def _existing_msgids(db: Session) -> dict[str, tuple[int, int]]:
 # IMAP LIST line shape: (flags) "delim" "name"   — names may be quoted or
 # bare; delimiter is usually "/" on most servers and "." on some.
 _LIST_PATTERN = re.compile(
-    r'^\((?P<flags>[^)]*)\)\s+'
+    r"^\((?P<flags>[^)]*)\)\s+"
     r'(?P<delim>"(?:[^"\\]|\\.)*"|NIL|\S+)\s+'
     r'(?P<name>"(?:[^"\\]|\\.)*"|\S+)\s*$'
 )
@@ -547,9 +592,7 @@ def _parse_list_line(line: str) -> tuple[str, str, str] | None:
     return name, m.group("flags").lower(), delim
 
 
-def _discover_folders(
-    conn: imaplib.IMAP4, root: str
-) -> list[str]:
+def _discover_folders(conn: imaplib.IMAP4, root: str) -> list[str]:
     """All selectable folders == ``root`` or under ``root``/<sub>.
 
     Tolerates servers where the delimiter is "." instead of "/". Skips any
@@ -688,9 +731,7 @@ def _build_entry(
     else:
         # Plain text → escape and wrap. Cheap path that avoids importing
         # markdown or html sanitisers for now.
-        escaped = (
-            body.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
-        )
+        escaped = body.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
         notes_html = f"<pre style='white-space:pre-wrap;font-family:inherit;'>{escaped}</pre>"
 
     raw_msg_id = (msg.get("Message-ID") or "").strip() or None
@@ -733,11 +774,7 @@ _DEFAULT_SUBJECT_CLEAN = re.compile(r"^\s*(re|fw|fwd|رد|توجيه)\s*:", re.I
 
 def list_enabled_accounts(db: Session) -> list[EmailAccount]:
     """Every account with ``enabled=True`` — the scheduler iterates these."""
-    return list(
-        db.execute(
-            select(EmailAccount).where(EmailAccount.enabled.is_(True))
-        ).scalars()
-    )
+    return list(db.execute(select(EmailAccount).where(EmailAccount.enabled.is_(True))).scalars())
 
 
 def sync_now(db: Session, owner_user_id: int | None = None) -> EmailSyncResult:
@@ -809,7 +846,7 @@ def _sync_account_locked(db: Session, account: EmailAccount) -> EmailSyncResult:
     imported = 0
     skipped = 0
     errors: list[str] = []
-    existing_msgids = _existing_msgids(db)
+    existing_msgids = _existing_msgids(db, owner_user_id=account.owner_user_id)
 
     try:
         conn = _connect(account)

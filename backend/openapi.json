@@ -11798,6 +11798,15 @@
             }
           },
           {
+            "name": "X-Outlook-Mailbox",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "X-Outlook-Mailbox"
+            }
+          },
+          {
             "name": "authorization",
             "in": "header",
             "required": false,
@@ -11862,6 +11871,15 @@
             "schema": {
               "type": "string",
               "title": "Employee Id"
+            }
+          },
+          {
+            "name": "X-Outlook-Mailbox",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "X-Outlook-Mailbox"
             }
           },
           {
@@ -19385,6 +19403,22 @@
           "ref_id": {
             "type": "integer",
             "title": "Ref Id"
+          },
+          "channel": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Channel"
+          },
+          "can_open_in_outlook": {
+            "type": "boolean",
+            "title": "Can Open In Outlook",
+            "default": false
           }
         },
         "type": "object",
@@ -25464,6 +25498,11 @@
             ],
             "title": "Channel"
           },
+          "can_open_in_outlook": {
+            "type": "boolean",
+            "title": "Can Open In Outlook",
+            "default": false
+          },
           "reference": {
             "type": "string",
             "title": "Reference"
@@ -29861,6 +29900,8 @@
               "type": "string"
             },
             "type": "array",
+            "maxItems": 50,
+            "minItems": 1,
             "title": "To"
           },
           "cc": {
@@ -29868,6 +29909,7 @@
               "type": "string"
             },
             "type": "array",
+            "maxItems": 50,
             "title": "Cc"
           },
           "subject": {
@@ -30060,6 +30102,17 @@
               }
             ],
             "title": "Name Ar"
+          },
+          "position": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Position"
           },
           "status": {
             "type": "string",
@@ -30349,11 +30402,18 @@
             "maxLength": 512,
             "minLength": 1,
             "title": "Token"
+          },
+          "mailbox_address": {
+            "type": "string",
+            "maxLength": 320,
+            "minLength": 3,
+            "title": "Mailbox Address"
           }
         },
         "type": "object",
         "required": [
-          "token"
+          "token",
+          "mailbox_address"
         ],
         "title": "OutlookHandoffRedeemRequest"
       },
@@ -30468,6 +30528,12 @@
             "minLength": 1,
             "title": "Outlook Entry Id"
           },
+          "mailbox_address": {
+            "type": "string",
+            "maxLength": 320,
+            "minLength": 3,
+            "title": "Mailbox Address"
+          },
           "g_numbers": {
             "items": {
               "type": "string"
@@ -30481,7 +30547,8 @@
         "required": [
           "internet_message_id",
           "outlook_store_id",
-          "outlook_entry_id"
+          "outlook_entry_id",
+          "mailbox_address"
         ],
         "title": "OutlookSelectionRequest"
       },
@@ -32277,6 +32344,10 @@
             "type": "string",
             "title": "Direction"
           },
+          "channel": {
+            "type": "string",
+            "title": "Channel"
+          },
           "counterparty": {
             "anyOf": [
               {
@@ -32292,6 +32363,11 @@
             "type": "string",
             "format": "date-time",
             "title": "Created At"
+          },
+          "can_open_in_outlook": {
+            "type": "boolean",
+            "title": "Can Open In Outlook",
+            "default": false
           }
         },
         "type": "object",
@@ -32299,6 +32375,7 @@
           "id",
           "subject",
           "direction",
+          "channel",
           "created_at"
         ],
         "title": "RecentLedgerRead"

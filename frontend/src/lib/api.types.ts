@@ -4455,6 +4455,13 @@ export interface components {
             summary: string;
             /** Ref Id */
             ref_id: number;
+            /** Channel */
+            channel?: string | null;
+            /**
+             * Can Open In Outlook
+             * @default false
+             */
+            can_open_in_outlook: boolean;
         };
         /** AdjustmentRevokeWrite */
         AdjustmentRevokeWrite: {
@@ -6529,6 +6536,11 @@ export interface components {
             direction?: string | null;
             /** Channel */
             channel?: string | null;
+            /**
+             * Can Open In Outlook
+             * @default false
+             */
+            can_open_in_outlook: boolean;
             /** Reference */
             reference: string;
         };
@@ -8014,6 +8026,8 @@ export interface components {
             name_en: string;
             /** Name Ar */
             name_ar?: string | null;
+            /** Position */
+            position?: string | null;
             /** Status */
             status: string;
             /** Photo Version */
@@ -8119,6 +8133,8 @@ export interface components {
         OutlookHandoffRedeemRequest: {
             /** Token */
             token: string;
+            /** Mailbox Address */
+            mailbox_address: string;
         };
         /** OutlookOpenPayload */
         OutlookOpenPayload: {
@@ -8162,6 +8178,8 @@ export interface components {
             outlook_store_id: string;
             /** Outlook Entry Id */
             outlook_entry_id: string;
+            /** Mailbox Address */
+            mailbox_address: string;
             /** G Numbers */
             g_numbers?: string[];
         };
@@ -8757,6 +8775,8 @@ export interface components {
             subject: string;
             /** Direction */
             direction: string;
+            /** Channel */
+            channel: string;
             /** Counterparty */
             counterparty?: string | null;
             /**
@@ -8764,6 +8784,11 @@ export interface components {
              * Format: date-time
              */
             created_at: string;
+            /**
+             * Can Open In Outlook
+             * @default false
+             */
+            can_open_in_outlook: boolean;
         };
         /** RecentViolationRead */
         RecentViolationRead: {
@@ -16522,7 +16547,8 @@ export interface operations {
     link_employee_api_v1_outlook_device_messages__entry_id__employees__employee_id__put: {
         parameters: {
             query?: never;
-            header?: {
+            header: {
+                "X-Outlook-Mailbox": string;
                 authorization?: string | null;
             };
             path: {
@@ -16558,7 +16584,8 @@ export interface operations {
     unlink_employee_api_v1_outlook_device_messages__entry_id__employees__employee_id__delete: {
         parameters: {
             query?: never;
-            header?: {
+            header: {
+                "X-Outlook-Mailbox": string;
                 authorization?: string | null;
             };
             path: {

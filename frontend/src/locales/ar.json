@@ -190,7 +190,10 @@
     "deletedToast": "تم الحذف",
     "errorToast": "حدث خطأ",
     "loadError": "تعذّر التحميل. تحقّق من اتصالك وحاول مرة أخرى.",
-    "retry": "إعادة المحاولة"
+    "retry": "إعادة المحاولة",
+    "attachments": {
+      "renderFailed": "تعذر عرض هذا الملف"
+    }
   },
   "a11y": {
     "skipToContent": "تخطٍّ إلى المحتوى الرئيسي"
@@ -3122,7 +3125,6 @@
         "violations": "المخالفات",
         "documents": "المستندات",
         "books": "السجلات",
-        "ledger": "السجل",
         "email": "البريد",
         "settings": "الإعدادات",
         "submitters": "مقدّمو الطلبات",
@@ -3145,9 +3147,6 @@
         "books.manage": "إنشاء / تعديل / حذف السجلات",
         "books.approve": "اعتماد / رفض السجلات",
         "books.override_state": "فرض حالة السجل",
-        "ledger.view": "عرض السجل",
-        "ledger.edit": "تعديل قيود السجل + المسودّات",
-        "ledger.send": "إرسال البريد من السجل",
         "email.manage": "إدارة صندوق بريدك",
         "settings.view": "عرض الإعدادات",
         "settings.edit": "تغيير الإعدادات",

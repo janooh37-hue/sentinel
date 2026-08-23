@@ -3,11 +3,12 @@
   <PropertyGroup>
     <Configuration Condition=" '$(Configuration)' == '' ">Release</Configuration>
     <Platform Condition=" '$(Platform)' == '' ">x64</Platform>
+    <ProductVersion Condition=" '$(ProductVersion)' == '' ">$(GSSG_OUTLOOK_PRODUCT_VERSION)</ProductVersion>
     <ProjectGuid>{F0D9D3D1-E8A3-4D52-9C10-7F1A97B68C5A}</ProjectGuid>
     <OutputName>Gssg.Outlook.Launcher</OutputName>
     <OutputPath>$(MSBuildThisFileDirectory)..\dist\$(Platform)\</OutputPath>
     <SentinelOrigin Condition=" '$(SentinelOrigin)' == '' ">$(GSSG_SENTINEL_ORIGIN)</SentinelOrigin>
-    <DefineConstants>SentinelOrigin=$(SentinelOrigin);Platform=$(Platform)</DefineConstants>
+    <DefineConstants>SentinelOrigin=$(SentinelOrigin);Platform=$(Platform);ProductVersion=$(ProductVersion)</DefineConstants>
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="Product.wxs" />
@@ -27,6 +28,9 @@
       <Private>True</Private>
     </ProjectReference>
   </ItemGroup>
+  <Target Name="ValidateProductVersion" BeforeTargets="Compile">
+    <Error Condition=" '$(ProductVersion)' == '' " Text="ProductVersion is required; supply a monotonically increasing MSI version with /p:ProductVersion=x.y.z.w." />
+  </Target>
   <Target Name="ValidateSentinelOrigin" BeforeTargets="Compile">
     <Error Condition=" '$(SentinelOrigin)' == '' " Text="SentinelOrigin is required. Pass /p:SentinelOrigin with the deployment HTTPS origin; the installer never supplies a fallback origin." />
   </Target>

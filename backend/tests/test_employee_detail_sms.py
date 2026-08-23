@@ -19,7 +19,7 @@ def test_detail_includes_recent_sms(db_session):
         )
     )
     db_session.commit()
-    detail = eds.get_employee_detail(db_session, "E9")
+    detail = eds.get_employee_detail(db_session, "E9", owner_user_id=1)
     assert detail is not None
     assert len(detail.recent_sms) == 1
     assert detail.recent_sms[0].status == "sent"

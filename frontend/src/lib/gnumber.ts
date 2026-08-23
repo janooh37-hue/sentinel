@@ -12,10 +12,9 @@
  */
 
 /** Pattern body for a G-number (no anchors, no flags). */
-export const G_NUMBER_SOURCE = String.raw`\bG\d{3,4}\b`
+export const G_NUMBER_SOURCE = String.raw`(?<![\p{L}\p{N}_])G\d{3,4}(?![\p{L}\p{N}_])`
 
-/** Build a fresh global+case-insensitive matcher. Returns a new instance each
- * call so stateful `lastIndex` is never shared between unrelated consumers. */
+/** Build a fresh global+case-insensitive matcher. */
 export function gNumberRegex(): RegExp {
-  return new RegExp(G_NUMBER_SOURCE, 'gi')
+  return new RegExp(G_NUMBER_SOURCE, 'giu')
 }

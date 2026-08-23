@@ -206,7 +206,7 @@ function DocPdfCanvasRenderer({
                   defaultValue:
                     "No PDF was generated for this document — download the DOCX instead.",
                 })
-              : t('ledger.attachments.renderFailed', {
+              : t('common.attachments.renderFailed', {
                   defaultValue: "Couldn't render this file",
                 })}
           </span>

@@ -123,19 +123,6 @@ CAPABILITIES: Final[tuple[Capability, ...]] = (
         "Manage security permits",
         "Issue, renew, amend, and revoke security-zone entry permits.",
     ),
-    Capability("ledger.view", "ledger", "View ledger", "Read correspondence ledger entries."),
-    Capability(
-        "ledger.edit",
-        "ledger",
-        "Edit ledger entries + drafts",
-        "Create and edit ledger entries and email drafts.",
-    ),
-    Capability(
-        "ledger.send",
-        "ledger",
-        "Send email from the ledger",
-        "Send email messages from the ledger as yourself.",
-    ),
     Capability("email.manage", "email", "Manage your mailbox", "Link and sync your own mailbox."),
     Capability("settings.view", "settings", "View settings", "See application settings."),
     Capability("settings.edit", "settings", "Change settings", "Change application settings."),
@@ -241,10 +228,6 @@ _OPERATOR_CAPS: Final[frozenset[str]] = frozenset(
         "documents.scan",
         "books.view",
         "permits.view",
-        "ledger.view",
-        "ledger.edit",
-        "ledger.send",  # Phase 3: send as yourself
-        "email.manage",  # Phase 3: link/sync your OWN mailbox
         "settings.view",
         "workforce.self.view",
     }
@@ -262,7 +245,6 @@ _MANAGER_CAPS: Final[frozenset[str]] = (
             "books.manage",
             "books.approve",
             "permits.manage",
-            "ledger.send",
             "submitters.manage",
             "editor_templates.manage",
         }

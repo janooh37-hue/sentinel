@@ -24,6 +24,7 @@ class EmployeeActivityItemRead(ORMBase):
     days: int | None = None
     direction: str | None = None
     channel: str | None = None
+    can_open_in_outlook: bool = False
     reference: str
 
 

@@ -64,6 +64,7 @@ const items: EmployeeActivityItemRead[] = ([
   days: null,
   direction: null,
   channel: item.kind === 'ledger' ? 'email' : null,
+  can_open_in_outlook: item.kind === 'ledger',
   reference: `#${item.source_id}`,
 }))
 

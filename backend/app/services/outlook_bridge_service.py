@@ -22,6 +22,7 @@ from app.db.models import (
     OutlookHandoff,
     OutlookItemLocation,
     OutlookPairing,
+    User,
     VaultFile,
 )
 from app.schemas.outlook_bridge import (
@@ -76,6 +77,13 @@ def _matches(stored: str | None, digest: str) -> bool:
 
 def _mailbox(value: str) -> str:
     return value.strip().casefold()
+
+
+def _assert_current_mailbox(device: OutlookBridgeDevice, mailbox_address: str | None) -> None:
+    if mailbox_address is not None and _mailbox(mailbox_address) != _mailbox(
+        device.mailbox_address
+    ):
+        raise DeviceInvalid("mailbox mismatch")
 
 
 def _account_for(db: Session, owner_user_id: int) -> EmailAccount:
@@ -201,6 +209,9 @@ def authenticate_device(db: Session, raw_credential: str) -> OutlookBridgeDevice
         or row.revoked_at is not None
     ):
         raise DeviceInvalid("invalid or revoked device credential")
+    owner = db.get(User, row.owner_user_id) if row is not None else None
+    if owner is None or owner.status.casefold() != "active" or owner.locked_at is not None:
+        raise DeviceInvalid("device owner is inactive or locked")
     row.last_seen_at = _utcnow()
     db.commit()
     return row
@@ -264,6 +275,8 @@ def create_handoff(
         )
         if entry is None:
             raise HandoffInvalid("email correspondence was not found")
+        if entry.message_id:
+            values["internet_message_id"] = entry.message_id
     else:
         try:
             values = OutlookComposePayload.model_validate(values).model_dump(mode="json")
@@ -320,8 +333,10 @@ def redeem_handoff(
     *,
     raw_token: str,
     device_credential: str,
+    mailbox_address: str | None = None,
 ) -> OutlookHandoff:
     device = authenticate_device(db, device_credential)
+    _assert_current_mailbox(device, mailbox_address)
     row = _handoff_for_token(db, raw_token)
     now = _utcnow()
     if row.owner_user_id != device.owner_user_id:
@@ -330,6 +345,8 @@ def redeem_handoff(
         raise HandoffInvalid("handoff already used")
     if now >= row.expires_at:
         raise HandoffInvalid("handoff expired")
+
+    enriched_payload = _enrich_open_payload(db, row, device) if row.kind == "open" else None
     claimed = db.execute(
         update(OutlookHandoff)
         .where(
@@ -344,25 +361,16 @@ def redeem_handoff(
         db.rollback()
         raise HandoffInvalid("handoff already used or expired")
     row.redeemed_at = now
+    if enriched_payload is not None:
+        row.payload = enriched_payload
     db.commit()
     return row
 
 
-def handoff_payload_for_device(
-    db: Session,
-    *,
-    handoff: OutlookHandoff,
-    device_credential: str,
+def _enrich_open_payload(
+    db: Session, handoff: OutlookHandoff, device: OutlookBridgeDevice
 ) -> dict[str, object]:
-    """Return a redeemed handoff payload enriched with this device's exact location."""
-    device = authenticate_device(db, device_credential)
-    if device.owner_user_id != handoff.owner_user_id:
-        raise HandoffInvalid("handoff does not belong to this device")
-
     payload = dict(handoff.payload or {})
-    if handoff.kind != "open":
-        return payload
-
     entry_id = payload.get("ledger_entry_id")
     if not isinstance(entry_id, int) or entry_id <= 0:
         raise HandoffInvalid("open handoff payload is invalid")
@@ -393,6 +401,31 @@ def handoff_payload_for_device(
     return payload
 
 
+def handoff_payload_for_device(
+    db: Session,
+    *,
+    handoff: OutlookHandoff,
+    device_credential: str,
+) -> dict[str, object]:
+    """Return a redeemed handoff payload enriched with this device's exact location."""
+    device = authenticate_device(db, device_credential)
+    if device.owner_user_id != handoff.owner_user_id:
+        raise HandoffInvalid("handoff does not belong to this device")
+    if handoff.kind != "open":
+        return dict(handoff.payload or {})
+    return _enrich_open_payload(db, handoff, device)
+
+
+def expire_handoff_if_needed(db: Session, row: OutlookHandoff) -> bool:
+    """Erase expired payloads; redeemed rows become terminal failure records."""
+    if _utcnow() < row.expires_at or row.completed_at is not None:
+        return False
+    row.payload = {}
+    if row.redeemed_at is not None:
+        row.completed_at = _utcnow()
+        row.failure_code = "HANDOFF_EXPIRED"
+    db.commit()
+    return True
 
 
 def _finish_handoff(
@@ -432,6 +465,7 @@ def _summary(db: Session, employee: Employee, *, recording_pending: bool) -> Out
         employee_id=employee.id,
         name_en=employee.name_en,
         name_ar=employee.name_ar,
+        position=employee.position,
         status=employee.status,
         photo_version=photo_service.get_photo_version(db, employee.id),
         recording_pending=recording_pending,
@@ -461,9 +495,11 @@ def resolve_selection(
     outlook_store_id: str,
     outlook_entry_id: str,
     g_numbers: list[str] | tuple[str, ...],
+    mailbox_address: str | None = None,
 ) -> OutlookSelectionRead:
     """Resolve a selected message inside the paired owner's mailbox only."""
     device = authenticate_device(db, device_credential)
+    _assert_current_mailbox(device, mailbox_address)
     message_id = internet_message_id.strip()
     entry = db.scalar(
         select(LedgerEntry).where(
@@ -542,9 +578,15 @@ def search_employees(
 
 
 def manual_link(
-    db: Session, *, device_credential: str, entry_id: int, employee_id: str
+    db: Session,
+    *,
+    device_credential: str,
+    entry_id: int,
+    employee_id: str,
+    mailbox_address: str | None = None,
 ) -> CorrespondenceEmployeeLink:
     device = authenticate_device(db, device_credential)
+    _assert_current_mailbox(device, mailbox_address)
     entry = db.scalar(
         select(LedgerEntry).where(
             LedgerEntry.id == entry_id,
@@ -563,9 +605,15 @@ def manual_link(
 
 
 def dismiss_manual_link(
-    db: Session, *, device_credential: str, entry_id: int, employee_id: str
+    db: Session,
+    *,
+    device_credential: str,
+    entry_id: int,
+    employee_id: str,
+    mailbox_address: str | None = None,
 ) -> CorrespondenceEmployeeLink:
     device = authenticate_device(db, device_credential)
+    _assert_current_mailbox(device, mailbox_address)
     entry = db.scalar(
         select(LedgerEntry).where(
             LedgerEntry.id == entry_id,
@@ -622,10 +670,11 @@ __all__ = [
     "create_pairing",
     "dismiss_manual_link",
     "employee_photo_path",
+    "expire_handoff_if_needed",
     "fail_handoff",
     "handoff_for_id",
-    "handoff_payload_for_device",
     "handoff_for_token",
+    "handoff_payload_for_device",
     "manual_link",
     "pairing_for_token",
     "redeem_handoff",

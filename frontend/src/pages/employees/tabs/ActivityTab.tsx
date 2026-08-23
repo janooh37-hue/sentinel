@@ -51,6 +51,7 @@ export function ActivityTab({ activity }: Props): React.JSX.Element {
       <div className="absolute bottom-1 start-3 top-1 w-px bg-border" aria-hidden />
       {activity.map((a, i) => {
         const Icon = ICONS[a.kind] ?? FileText
+        const canOpenInOutlook = a.kind === 'ledger' && a.channel === 'email' && a.can_open_in_outlook !== false
         return (
           <div key={`${a.kind}-${a.ref_id}-${i}`} className="relative mb-5">
             <span
@@ -59,7 +60,7 @@ export function ActivityTab({ activity }: Props): React.JSX.Element {
             >
               <Icon className="h-3.5 w-3.5" />
             </span>
-            {a.kind === 'ledger' ? (
+            {canOpenInOutlook ? (
               <button
                 type="button"
                 disabled={isMobile}
@@ -80,7 +81,7 @@ export function ActivityTab({ activity }: Props): React.JSX.Element {
               {a.kind === 'ledger' && <span>{t('employee.activity.correspondence')} · </span>}
               {fmt.format(new Date(a.when))}
             </div>
-            {a.kind === 'ledger' && isMobile && (
+            {canOpenInOutlook && isMobile && (
               <div className="mt-1 text-xs text-muted-foreground">{t('employee.activity.desktopRequired')}</div>
             )}
           </div>

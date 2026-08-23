@@ -197,9 +197,13 @@ namespace Gssg.Outlook.AddIn
                 using (var actionCancellation = new CancellationTokenSource())
                 {
                     if (dismiss)
-                        await api.DismissEmployeeAsync(snapshot.EntryId.Value, employeeId, actionCancellation.Token).ConfigureAwait(false);
+                        await api.DismissEmployeeAsync(
+                            snapshot.EntryId.Value, employeeId, snapshot.Message.MailboxAddress, actionCancellation.Token
+                        ).ConfigureAwait(false);
                     else
-                        await api.LinkEmployeeAsync(snapshot.EntryId.Value, employeeId, actionCancellation.Token).ConfigureAwait(false);
+                        await api.LinkEmployeeAsync(
+                            snapshot.EntryId.Value, employeeId, snapshot.Message.MailboxAddress, actionCancellation.Token
+                        ).ConfigureAwait(false);
                 }
                 await RefreshCurrentAsync().ConfigureAwait(false);
                 return true;
@@ -223,6 +227,7 @@ namespace Gssg.Outlook.AddIn
                         InternetMessageId = message.InternetMessageId,
                         OutlookStoreId = message.StoreId,
                         OutlookEntryId = message.EntryId,
+                        MailboxAddress = message.MailboxAddress,
                         GNumbers = GNumberDetector.Detect(message.Subject + "\n" + message.Body).ToList()
                     },
                     cancellation.Token).ConfigureAwait(false);

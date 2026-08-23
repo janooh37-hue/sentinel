@@ -173,7 +173,10 @@
     "deletedToast": "Deleted",
     "errorToast": "Something went wrong",
     "loadError": "Couldn't load this. Check your connection and try again.",
-    "retry": "Retry"
+    "retry": "Retry",
+    "attachments": {
+      "renderFailed": "Couldn't render this file"
+    }
   },
   "a11y": {
     "skipToContent": "Skip to main content"
@@ -2937,7 +2940,6 @@
         "violations": "Violations",
         "documents": "Documents",
         "books": "Books",
-        "ledger": "Ledger",
         "email": "Email",
         "settings": "Settings",
         "submitters": "Submitters",
@@ -2960,9 +2962,6 @@
         "books.manage": "Create / edit / delete books",
         "books.approve": "Approve / reject books",
         "books.override_state": "Force a record's state",
-        "ledger.view": "View ledger",
-        "ledger.edit": "Edit ledger entries + drafts",
-        "ledger.send": "Send email from the ledger",
         "email.manage": "Manage your mailbox",
         "settings.view": "View settings",
         "settings.edit": "Change settings",

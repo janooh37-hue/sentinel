@@ -41,8 +41,10 @@ _APPROVED_STATUS = "Approved"
 
 
 def get_employee_detail(
-    db: Session, employee_id: str, *, owner_user_id: int | None = None
+    db: Session, employee_id: str, *, owner_user_id: int
 ) -> sx.EmployeeDetailRead | None:
+    if owner_user_id is None:
+        return None
     emp = db.get(models.Employee, employee_id)
     if emp is None:
         return None
@@ -164,7 +166,9 @@ def get_employee_detail(
     ]
 
     recent_ledger = [
-        sx.RecentLedgerRead.model_validate(le)
+        sx.RecentLedgerRead.model_validate(le).model_copy(
+            update={"can_open_in_outlook": le.channel == "email"}
+        )
         for le in db.scalars(
             select(models.LedgerEntry)
             .join(
@@ -261,6 +265,8 @@ def _build_activity(
                 kind="ledger",
                 summary=le.subject,
                 ref_id=le.id,
+                channel=le.channel,
+                can_open_in_outlook=le.can_open_in_outlook,
             )
         )
     items.sort(key=lambda x: x.when, reverse=True)

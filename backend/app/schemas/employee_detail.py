@@ -61,8 +61,10 @@ class RecentLedgerRead(ORMBase):
     id: int
     subject: str
     direction: str
+    channel: str
     counterparty: str | None = None
     created_at: datetime
+    can_open_in_outlook: bool = False
 
 
 class ActivityItemRead(ORMBase):
@@ -70,6 +72,8 @@ class ActivityItemRead(ORMBase):
     kind: Literal["document", "leave", "violation", "ledger"]
     summary: str
     ref_id: int
+    channel: str | None = None
+    can_open_in_outlook: bool = False
 
 
 class EmployeeDetailRead(BaseModel):

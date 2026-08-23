@@ -12,11 +12,12 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
+import { toast } from 'sonner'
 import { useLocation } from 'react-router-dom'
 
 import { Button } from '@/components/ui/button'
 import { Skeleton, SkeletonRow } from '@/components/ui/skeleton'
-import { openOutlook } from '@/lib/outlookBridge'
+import { openOutlook, outlookBridgeErrorMessage } from '@/lib/outlookBridge'
 
 import { actionsFor, displayState } from '../lifecycle'
 import { leaveEmployeeName } from '../leaveEmployeeName'
@@ -158,8 +159,12 @@ export function LeavesReport({
   )
 
   const openConfirmCompose = useCallback(() => {
-    openOutlook()
-  }, [])
+    try {
+      openOutlook()
+    } catch (error) {
+      toast.error(outlookBridgeErrorMessage(error, t))
+    }
+  }, [t])
 
   if (report.isPending) {
     return (

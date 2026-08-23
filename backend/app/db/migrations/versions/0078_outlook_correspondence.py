@@ -6,12 +6,20 @@ Revises: 0077_timesheet_roster_assignments
 
 from __future__ import annotations
 
+import re
 from collections.abc import Sequence
 
 import sqlalchemy as sa
 from alembic import op
 
-from app.core.gnumber import detect_g_numbers
+_MIGRATION_G_NUMBER_RE = re.compile(r"\bG\d{3,4}\b", re.IGNORECASE)
+
+
+def _migration_g_numbers(text: str) -> tuple[str, ...]:
+    return tuple(
+        dict.fromkeys(match.group(0).upper() for match in _MIGRATION_G_NUMBER_RE.finditer(text))
+    )
+
 
 revision: str = "0078_outlook_correspondence"
 down_revision: str | Sequence[str] | None = "0077_timesheet_roster_assignments"
@@ -82,7 +90,10 @@ def upgrade() -> None:
             "created_at", sa.DateTime(), nullable=False, server_default=sa.func.current_timestamp()
         ),
         sa.Column(
-            "last_seen_at", sa.DateTime(), nullable=False, server_default=sa.func.current_timestamp()
+            "last_seen_at",
+            sa.DateTime(),
+            nullable=False,
+            server_default=sa.func.current_timestamp(),
         ),
         sa.Column("revoked_at", sa.DateTime(), nullable=True),
         sa.UniqueConstraint(
@@ -155,7 +166,10 @@ def upgrade() -> None:
         sa.Column("entry_id", sa.String(length=512), nullable=False),
         sa.Column("internet_message_id", sa.String(length=512), nullable=False),
         sa.Column(
-            "last_verified_at", sa.DateTime(), nullable=False, server_default=sa.func.current_timestamp()
+            "last_verified_at",
+            sa.DateTime(),
+            nullable=False,
+            server_default=sa.func.current_timestamp(),
         ),
         sa.UniqueConstraint(
             "device_id",
@@ -172,21 +186,32 @@ def upgrade() -> None:
     connection = op.get_bind()
     connection.execute(
         sa.text(
+            "DELETE FROM role_permissions WHERE capability IN "
+            "('ledger.view', 'ledger.edit', 'ledger.send')"
+        )
+    )
+    connection.execute(
+        sa.text(
+            "DELETE FROM user_permissions WHERE capability IN "
+            "('ledger.view', 'ledger.edit', 'ledger.send')"
+        )
+    )
+    connection.execute(
+        sa.text(
             "INSERT OR IGNORE INTO correspondence_employee_links "
             "(ledger_entry_id, employee_id, state, source) "
             "SELECT id, related_employee_id, 'linked', 'legacy' "
             "FROM ledger_entries WHERE related_employee_id IS NOT NULL"
         )
     )
+    employee_ids = set(
+        connection.scalars(sa.select(sa.column("id")).select_from(sa.table("employees")))
+    )
 
-    employee_ids = set(connection.scalars(sa.select(sa.column("id")).select_from(sa.table("employees"))))
     for entry_id, subject, notes_html in connection.execute(
-        sa.text(
-            "SELECT id, subject, notes_html FROM ledger_entries "
-            "WHERE channel = 'email'"
-        )
+        sa.text("SELECT id, subject, notes_html FROM ledger_entries WHERE channel = 'email'")
     ):
-        for employee_id in detect_g_numbers(f"{subject or ''}\n{notes_html or ''}"):
+        for employee_id in _migration_g_numbers(f"{subject or ''}\n{notes_html or ''}"):
             if employee_id not in employee_ids:
                 continue
             connection.execute(
@@ -204,7 +229,7 @@ def upgrade() -> None:
             "WHERE source = 'email_attachment' AND ledger_entry_id IS NOT NULL"
         )
     ):
-        for employee_id in detect_g_numbers(raw_text or ""):
+        for employee_id in _migration_g_numbers(raw_text or ""):
             if employee_id not in employee_ids:
                 continue
             connection.execute(

@@ -142,13 +142,15 @@ namespace Gssg.Outlook.Launcher
             object item = null;
             try
             {
-                item = session.GetItemFromID(entryId, storeId);
+                if (!string.IsNullOrWhiteSpace(entryId) && !string.IsNullOrWhiteSpace(storeId))
+                    item = session.GetItemFromID(entryId, storeId);
             }
             catch (COMException)
             {
-                item = FindInPairedStore(storeId, internetMessageId);
+                item = null;
             }
-
+            if (item == null)
+                item = FindInPairedStore(storeId, internetMessageId);
             if (item == null)
                 throw new NativeOutlookException("MESSAGE_NOT_FOUND", "The Outlook message was not found in the paired mailbox.");
 
@@ -175,14 +177,16 @@ namespace Gssg.Outlook.Launcher
                 throw new NativeOutlookException("MESSAGE_NOT_FOUND", "The Outlook message could not be opened.", ex);
             }
         }
-
         private object FindInPairedStore(string storeId, string internetMessageId)
         {
-            if (string.IsNullOrWhiteSpace(storeId) || string.IsNullOrWhiteSpace(internetMessageId)) return null;
+            if (string.IsNullOrWhiteSpace(internetMessageId)) return null;
             foreach (OfficeOutlook.Store store in session.Stores)
             {
-                if (!string.Equals(store.StoreID, storeId, StringComparison.Ordinal)) continue;
-                return SearchFolder(store.GetRootFolder(), internetMessageId);
+                if (!string.IsNullOrWhiteSpace(storeId) &&
+                    !string.Equals(store.StoreID, storeId, StringComparison.Ordinal))
+                    continue;
+                var found = SearchFolder(store.GetRootFolder(), internetMessageId);
+                if (found != null) return found;
             }
             return null;
         }

@@ -44,7 +44,11 @@ def _now() -> datetime:
 
 def _handoff_status(row: OutlookHandoff) -> str:
     if row.completed_at is not None:
-        return "failed" if row.failure_code else "completed"
+        return (
+            "expired"
+            if row.failure_code == "HANDOFF_EXPIRED"
+            else ("failed" if row.failure_code else "completed")
+        )
     if row.redeemed_at is not None:
         return "redeemed"
     if _now() >= row.expires_at:
@@ -227,7 +231,7 @@ def pair_device(
 def select_message(
     payload: OutlookSelectionRequest,
     authorization: Annotated[str | None, Header()] = None,
-    device: Annotated[OutlookBridgeDevice, Depends(require_outlook_device)] = None,  # type: ignore[assignment]
+    device: Annotated[OutlookBridgeDevice, Depends(require_outlook_employee_view)] = None,  # type: ignore[assignment]
     db: Annotated[Session, Depends(get_db)] = None,  # type: ignore[assignment]
 ) -> OutlookSelectionRead:
     try:
@@ -235,6 +239,7 @@ def select_message(
         return outlook_bridge_service.resolve_selection(
             db,
             device_credential=parse_bearer(authorization),
+            mailbox_address=payload.mailbox_address,
             internet_message_id=payload.internet_message_id,
             outlook_store_id=payload.outlook_store_id,
             outlook_entry_id=payload.outlook_entry_id,
@@ -279,14 +284,16 @@ def employee_photo(
 def link_employee(
     entry_id: int,
     employee_id: str,
+    mailbox_address: Annotated[str, Header(alias="X-Outlook-Mailbox")],
     authorization: Annotated[str | None, Header()] = None,
-    _: Annotated[OutlookBridgeDevice, Depends(require_outlook_device)] = None,  # type: ignore[assignment]
+    _: Annotated[OutlookBridgeDevice, Depends(require_outlook_employee_view)] = None,  # type: ignore[assignment]
     db: Annotated[Session, Depends(get_db)] = None,  # type: ignore[assignment]
 ) -> dict[str, object]:
     try:
         row = outlook_bridge_service.manual_link(
             db,
             device_credential=parse_bearer(authorization),
+            mailbox_address=mailbox_address,
             entry_id=entry_id,
             employee_id=employee_id,
         )
@@ -303,14 +310,16 @@ def link_employee(
 def unlink_employee(
     entry_id: int,
     employee_id: str,
+    mailbox_address: Annotated[str, Header(alias="X-Outlook-Mailbox")],
     authorization: Annotated[str | None, Header()] = None,
-    _: Annotated[OutlookBridgeDevice, Depends(require_outlook_device)] = None,  # type: ignore[assignment]
+    _: Annotated[OutlookBridgeDevice, Depends(require_outlook_employee_view)] = None,  # type: ignore[assignment]
     db: Annotated[Session, Depends(get_db)] = None,  # type: ignore[assignment]
 ) -> Response:
     try:
         outlook_bridge_service.dismiss_manual_link(
             db,
             device_credential=parse_bearer(authorization),
+            mailbox_address=mailbox_address,
             entry_id=entry_id,
             employee_id=employee_id,
         )
@@ -332,11 +341,12 @@ def redeem_device_handoff(
     raw_credential = parse_bearer(authorization)
     try:
         row = outlook_bridge_service.redeem_handoff(
-            db, raw_token=payload.token, device_credential=raw_credential
+            db,
+            raw_token=payload.token,
+            device_credential=raw_credential,
+            mailbox_address=payload.mailbox_address,
         )
-        redeemed_payload = outlook_bridge_service.handoff_payload_for_device(
-            db, handoff=row, device_credential=raw_credential
-        )
+        redeemed_payload = dict(row.payload or {})
     except outlook_bridge_service.BridgeInvalid as exc:
         raise _unauthorized("Invalid, expired, or already used Outlook handoff") from exc
     return OutlookHandoffRedeemRead(handoff_id=row.id, kind=row.kind, payload=redeemed_payload)
@@ -357,11 +367,15 @@ def download_handoff_attachment(
         )
     except outlook_bridge_service.HandoffInvalid as exc:
         raise NotFoundError("OUTLOOK_HANDOFF_NOT_FOUND", "Outlook handoff was not found") from exc
-    if row.kind != "compose" or row.redeemed_at is None or row.completed_at is not None:
+    outlook_bridge_service.expire_handoff_if_needed(db, row)
+    if (
+        row.kind != "compose"
+        or row.redeemed_at is None
+        or row.completed_at is not None
+        or _now() >= row.expires_at
+    ):
         raise NotFoundError("OUTLOOK_ATTACHMENT_NOT_FOUND", "Attachment was not found")
     refs = row.payload.get("attachments")
-    if not isinstance(refs, list) or index >= len(refs):
-        raise NotFoundError("OUTLOOK_ATTACHMENT_NOT_FOUND", "Attachment was not found")
     try:
         from app.schemas.outlook_bridge import OutlookAttachmentRef
 

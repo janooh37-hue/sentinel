@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Globalization;
 using System.Linq;
 using Microsoft.Win32;
 using Gssg.Outlook;
@@ -73,50 +74,56 @@ namespace Gssg.Outlook.Launcher
         private static int RunCompose(string token, SentinelApiClient api, CredentialStore credentials)
         {
             RequireCredential(credentials);
-            var handoff = api.RedeemHandoff(token);
-            if (!string.Equals(handoff.Kind, "compose", StringComparison.OrdinalIgnoreCase) || handoff.Payload == null)
-                throw new NativeOutlookException("HANDOFF_INVALID", "The compose handoff was not valid.");
-
+            RedeemHandoffResponse handoff = null;
             try
             {
                 using (var outlook = new OutlookClient())
+                {
+                    var mailbox = outlook.DiscoverActiveMailbox();
+                    handoff = api.RedeemHandoff(token, mailbox.SmtpAddress);
+                    if (!string.Equals(handoff.Kind, "compose", StringComparison.OrdinalIgnoreCase) || handoff.Payload == null)
+                        throw new NativeOutlookException("HANDOFF_INVALID", "The compose handoff was not valid.");
                     outlook.CreateDraft(handoff.Payload, handoff.HandoffId, api);
-            }
-            catch (Exception ex)
-            {
-                TryFail(api, handoff.HandoffId, FailureCode(ex));
-                throw;
-            }
-
-            CompleteOrRecord(api, handoff.HandoffId);
-            Console.WriteLine("Outlook draft created.");
-            return 0;
-        }
-
-        private static int RunOpen(string token, SentinelApiClient api, CredentialStore credentials)
-        {
-            RequireCredential(credentials);
-            var handoff = api.RedeemHandoff(token);
-            try
-            {
-                if (!string.Equals(handoff.Kind, "open", StringComparison.OrdinalIgnoreCase) || handoff.Payload == null)
-                    throw new NativeOutlookException("HANDOFF_INVALID", "The open handoff was not valid.");
-                if (string.IsNullOrWhiteSpace(handoff.Payload.OutlookEntryId) || string.IsNullOrWhiteSpace(handoff.Payload.OutlookStoreId) ||
-                    string.IsNullOrWhiteSpace(handoff.Payload.InternetMessageId))
-                    throw new NativeOutlookException("MESSAGE_NOT_FOUND", "The exact Outlook location was not available for this correspondence.");
-
-                OpenMessageResult result;
-                using (var outlook = new OutlookClient())
-                    result = outlook.OpenMessage(handoff.Payload.OutlookEntryId, handoff.Payload.OutlookStoreId, handoff.Payload.InternetMessageId);
-                api.PostSelection(result.InternetMessageId, result.StoreId, result.EntryId, result.GNumbers);
-                CompleteOrRecord(api, handoff.HandoffId);
-                Console.WriteLine("Opened Outlook message " + result.InternetMessageId + ".");
+                    CompleteOrRecord(api, handoff.HandoffId);
+                }
+                Console.WriteLine("Outlook draft created.");
                 return 0;
             }
             catch (Exception ex)
             {
-                var native = ex as NativeOutlookException;
-                if (native == null || !string.Equals(native.Code, "COMPLETION_RETRY_REQUIRED", StringComparison.Ordinal))
+                if (handoff != null)
+                    TryFail(api, handoff.HandoffId, FailureCode(ex));
+                throw;
+            }
+        }
+        private static int RunOpen(string token, SentinelApiClient api, CredentialStore credentials)
+        {
+            RequireCredential(credentials);
+            RedeemHandoffResponse handoff = null;
+            try
+            {
+                using (var outlook = new OutlookClient())
+                {
+                    var mailbox = outlook.DiscoverActiveMailbox();
+                    handoff = api.RedeemHandoff(token, mailbox.SmtpAddress);
+                    if (!string.Equals(handoff.Kind, "open", StringComparison.OrdinalIgnoreCase) || handoff.Payload == null)
+                        throw new NativeOutlookException("HANDOFF_INVALID", "The open handoff was not valid.");
+                    if (string.IsNullOrWhiteSpace(handoff.Payload.InternetMessageId))
+                        throw new NativeOutlookException("MESSAGE_NOT_FOUND", "The server did not provide an Internet Message-ID for this correspondence.");
+
+                    var result = outlook.OpenMessage(
+                        handoff.Payload.OutlookEntryId,
+                        handoff.Payload.OutlookStoreId,
+                        handoff.Payload.InternetMessageId);
+                    api.PostSelection(result.InternetMessageId, result.StoreId, result.EntryId, mailbox.SmtpAddress, result.GNumbers);
+                    CompleteOrRecord(api, handoff.HandoffId);
+                    Console.WriteLine("Opened Outlook message " + result.InternetMessageId + ".");
+                    return 0;
+                }
+            }
+            catch (Exception ex)
+            {
+                if (handoff != null)
                     TryFail(api, handoff.HandoffId, FailureCode(ex));
                 throw;
             }
@@ -179,7 +186,13 @@ namespace Gssg.Outlook.Launcher
         private static string UserMessage(Exception ex)
         {
             var native = ex as NativeOutlookException;
-            if (native != null) return native.Message;
+            if (native != null)
+            {
+                var localized = FailureCodeMessages.Get(
+                    native.Code,
+                    string.Equals(CultureInfo.CurrentUICulture.TwoLetterISOLanguageName, "ar", StringComparison.OrdinalIgnoreCase));
+                return localized ?? native.Message;
+            }
             var protocol = ex as ProtocolException;
             if (protocol != null) return protocol.Message;
             var api = ex as ApiException;

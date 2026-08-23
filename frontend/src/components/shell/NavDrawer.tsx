@@ -11,6 +11,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { ExternalLink, Settings, ShieldCheck, X } from 'lucide-react'
 import { useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
+import { toast } from 'sonner'
 import { NavLink } from 'react-router-dom'
 
 import { Sheet, SheetClose, SheetContent, SheetTitle } from '@/components/ui/sheet'
@@ -24,7 +25,7 @@ import { LanguageToggle } from './LanguageToggle'
 import { NAV_ITEMS } from './navItems'
 import { ThemeToggle } from './ThemeToggle'
 
-import { openOutlook } from '@/lib/outlookBridge'
+import { openOutlook, outlookBridgeErrorMessage } from '@/lib/outlookBridge'
 interface NavDrawerProps {
   open: boolean
   onOpenChange: (open: boolean) => void
@@ -104,7 +105,11 @@ export function NavDrawer({ open, onOpenChange }: NavDrawerProps): React.JSX.Ele
         <button
           type="button"
           onClick={() => {
-            openOutlook()
+            try {
+              openOutlook()
+            } catch (error) {
+              toast.error(outlookBridgeErrorMessage(error, t))
+            }
             close()
           }}
           aria-label={t('nav.openOutlook')}

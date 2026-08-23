@@ -9,7 +9,8 @@ import {
 } from './outlookBridge'
 import { api } from './api'
 import { clearBasket } from './emailBasket'
-
+import en from '../locales/en.json'
+import ar from '../locales/ar.json'
 vi.mock('./api', async (original) => {
   const actual = await original<typeof import('./api')>()
   return {
@@ -114,6 +115,11 @@ describe('outlookBridge', () => {
     expect(outlookBridgeErrorMessage(error, (key) => key)).toBe(
       'errors.outlookBridge.DESKTOP_REQUIRED',
     )
+  })
+
+  it('keeps the shared PDF render failure key in English and Arabic', () => {
+    expect(en.common.attachments.renderFailed).toBeTruthy()
+    expect(ar.common.attachments.renderFailed).toBeTruthy()
   })
 })
 

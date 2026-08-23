@@ -205,7 +205,10 @@ def test_selection_and_manual_link_are_mailbox_scoped(
             "mailbox_address": "owner@example.test",
         },
     ).json()["credential"]
-    headers = {"Authorization": f"Bearer {credential}"}
+    headers = {
+        "Authorization": f"Bearer {credential}",
+        "X-Outlook-Mailbox": "owner@example.test",
+    }
     selection = client.post(
         "/api/v1/outlook/device/selection",
         headers=headers,
@@ -213,7 +216,7 @@ def test_selection_and_manual_link_are_mailbox_scoped(
             "internet_message_id": "<unknown>",
             "outlook_store_id": "store",
             "outlook_entry_id": "entry",
-            "g_numbers": ["G3082"],
+            "mailbox_address": "owner@example.test",
         },
     )
     assert selection.status_code == 200, selection.text
@@ -281,6 +284,7 @@ def test_open_handoff_redeems_and_erases_payload(
             "internet_message_id": "<message-1>",
             "outlook_store_id": "store-1",
             "outlook_entry_id": "entry-1",
+            "mailbox_address": "owner@example.test",
             "g_numbers": ["G3082"],
         },
     )
@@ -288,7 +292,7 @@ def test_open_handoff_redeems_and_erases_payload(
     redeemed = client.post(
         "/api/v1/outlook/device/handoffs/redeem",
         headers=headers,
-        json={"token": handoff["token"]},
+        json={"token": handoff["token"], "mailbox_address": "owner@example.test"},
     )
     assert redeemed.status_code == 200, redeemed.text
     assert redeemed.json()["payload"] == {
@@ -307,7 +311,7 @@ def test_open_handoff_redeems_and_erases_payload(
         client.post(
             "/api/v1/outlook/device/handoffs/redeem",
             headers=headers,
-            json={"token": handoff["token"]},
+            json={"token": handoff["token"], "mailbox_address": "owner@example.test"},
         ).status_code
         == 401
     )
@@ -337,10 +341,12 @@ def test_revoked_device_cannot_redeem_handoff(
         client.post(
             "/api/v1/outlook/device/handoffs/redeem",
             headers=headers,
-            json={"token": handoff["token"]},
+            json={"token": handoff["token"], "mailbox_address": "owner@example.test"},
         ).status_code
         == 401
     )
+
+
 def test_mailbox_routes_are_removed_but_sync_and_correspondence_remain(
     outlook_client: tuple[TestClient, User],
 ) -> None:

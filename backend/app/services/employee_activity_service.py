@@ -215,6 +215,7 @@ def _ledger(
             detail=row.detail,
             direction=row.direction,
             channel=row.channel,
+            can_open_in_outlook=row.channel == "email",
             reference=f"#{row.source_id}",
         )
         for row in rows

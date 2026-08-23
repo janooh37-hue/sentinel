@@ -7,7 +7,7 @@ namespace Gssg.Outlook
     internal static class GNumberDetector
     {
         private static readonly Regex Pattern = new Regex(
-            @"(?<![A-Za-z0-9])G\d{3,4}(?!\d)",
+            @"\bG\d{3,4}\b",
             RegexOptions.Compiled | RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
 
         internal static IReadOnlyList<string> Detect(string text)

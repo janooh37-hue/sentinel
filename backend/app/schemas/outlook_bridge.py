@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from datetime import datetime
 from typing import Annotated, Literal
 
@@ -13,6 +14,24 @@ from pydantic import (
     field_validator,
     model_validator,
 )
+
+MailboxAddress = Annotated[
+    str, StringConstraints(strip_whitespace=True, min_length=3, max_length=320)
+]
+
+_EMAIL_RE = re.compile(r"[^@\s<>]+@[^@\s<>]+")
+MAX_RECIPIENTS = 50
+
+
+def _validate_recipients(values: list[str], field_name: str) -> list[str]:
+    normalized: list[str] = []
+    for value in values:
+        address = value.strip()
+        if len(address) > 320 or _EMAIL_RE.fullmatch(address) is None:
+            raise ValueError(f"{field_name} contains an invalid email address")
+        normalized.append(address)
+    return normalized
+
 
 MailboxAddress = Annotated[
     str, StringConstraints(strip_whitespace=True, min_length=3, max_length=320)
@@ -78,13 +97,18 @@ class OutlookAttachmentRef(BaseModel):
 
 
 class OutlookComposePayload(BaseModel):
-    to: list[str]
-    cc: list[str] = Field(default_factory=list)
+    to: list[str] = Field(min_length=1, max_length=MAX_RECIPIENTS)
+    cc: list[str] = Field(default_factory=list, max_length=MAX_RECIPIENTS)
     subject: str = Field(max_length=255)
     body_html: str = Field(max_length=500_000)
     basket_key: str = Field(max_length=160)
     attachments: list[OutlookAttachmentRef] = Field(max_length=50)
     model_config = ConfigDict(extra="forbid")
+
+    @field_validator("to", "cc")
+    @classmethod
+    def _validate_addresses(cls, values: list[str], info) -> list[str]:
+        return _validate_recipients(values, info.field_name)
 
 
 class OutlookOpenPayload(BaseModel):
@@ -123,12 +147,14 @@ class OutlookHandoffCreated(OutlookHandoffRead):
 
 class OutlookHandoffRedeemRequest(BaseModel):
     token: str = Field(min_length=1, max_length=512)
+    mailbox_address: MailboxAddress
 
 
 class OutlookSelectionRequest(BaseModel):
     internet_message_id: str = Field(min_length=1, max_length=512)
     outlook_store_id: str = Field(min_length=1, max_length=512)
     outlook_entry_id: str = Field(min_length=1, max_length=512)
+    mailbox_address: MailboxAddress
     g_numbers: list[str] = Field(default_factory=list, max_length=100)
 
     @field_validator("g_numbers")
@@ -141,6 +167,7 @@ class OutlookEmployeeSummary(BaseModel):
     employee_id: str
     name_en: str
     name_ar: str | None = None
+    position: str | None = None
     status: str
     photo_version: str | None = None
     recording_pending: bool = False
