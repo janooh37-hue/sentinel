@@ -4,3 +4,5 @@ Nothing here may ever be selected as a production fallback: the production
 provider resolver stays explicitly ``not_configured`` until a real installed
 BioTime adapter exists.
 """
+
+__all__ = ["attendance_provider"]
