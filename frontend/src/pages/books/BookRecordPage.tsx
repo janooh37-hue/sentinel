@@ -329,11 +329,11 @@ export function BookRecordPage(): React.JSX.Element {
   // assigned approver is, so an operator handling requests for others can
   // close out the paper flow (print → sign → scan) from the record page.
   const addScan = useAddScan(book?.id ?? null)
-  const showFileSigned = canFileSignedCopy(state, { canManage: canEdit, canScan })
+  const showFileSigned = canFileSignedCopy(state, { canEdit, canScan })
   // "Send for approval" (digital route): submit a draft, or re-route a still
   // pending request to a different signing manager. Both routes are offered
   // side by side so the operator picks per request.
-  const showSendForApproval = canSendForApproval(state, { canManage: canSubmitBook })
+  const showSendForApproval = canSendForApproval(state, { canSubmitBook })
 
   const stations = useMemo(
     () =>
@@ -349,7 +349,8 @@ export function BookRecordPage(): React.JSX.Element {
   const isAssignee = isApproverAssignee(currentSteps, user?.id)
   const myReview = myPendingReviewerStep(currentSteps, user?.id)
   const action = footerActionFor(state, {
-    canManage: canEdit,
+    canRevise: canEdit,
+    canSubmitBook,
     canApprove,
     isAssignee,
     isReviewer: myReview != null,

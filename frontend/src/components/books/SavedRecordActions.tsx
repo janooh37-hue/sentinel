@@ -44,7 +44,7 @@ export function SavedRecordActions({
   const printable = Boolean(
     current?.signed_pdf_url || current?.pdf_url || bookQuery.data?.imported_doc?.pdf_url,
   )
-  const canSubmit = state === 'none' && canSendForApproval(state, { canManage: has('books.submit') })
+  const canSubmit = state === 'none' && canSendForApproval(state, { canSubmitBook: has('books.submit') })
   const print = () => {
     const opened = window.open(`/books/${bookId}?print=1`, '_blank')
     if (opened) opened.opener = null

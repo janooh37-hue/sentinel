@@ -696,8 +696,8 @@ export function BooksPage(): React.JSX.Element {
                 <EmptyState
                   icon={BookOpen}
                   message={hasFilters ? t('books.empty') : t('books.emptyUnfiltered')}
-                  actionLabel={hasFilters ? undefined : t('books.newEntry')}
-                  onAction={hasFilters ? undefined : () => setNewBookOpen(true)}
+                  actionLabel={!hasFilters && canCreate ? t('books.newEntry') : undefined}
+                  onAction={!hasFilters && canCreate ? () => setNewBookOpen(true) : undefined}
                 />
               </div>
             ) : (

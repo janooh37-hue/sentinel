@@ -12,15 +12,22 @@ export type FooterAction = 'decide' | 'revise' | 'submit' | 'review' | 'none'
  *
  * - `pending` + caller is the assignee approver → `decide` (approve/reject/return/note)
  * - `pending` + caller is an advisory reviewer → `review`
- * - `returned`/`rejected` + `books.edit` → `revise`
- * - `none` + submit/edit authority (`books.submit`) → `submit`
+ * - `returned`/`rejected` + revise authority (`books.edit`, `canRevise`) → `revise`
+ * - `none` + submit authority (`books.submit`, `canSubmitBook`) → `submit`
+ *   (independent of `canRevise`: submitting a draft does not require edit rights)
  * - `awaiting_scan` → no footer action (the scan-back upload is the move,
  *   driven from the Records pane / ＋Add-scan — not a drawer decision)
  * - otherwise read-only (`none`)
  */
 export function footerActionFor(
   state: string,
-  caps: { canManage: boolean; canApprove: boolean; isAssignee: boolean; isReviewer?: boolean },
+  caps: {
+    canRevise: boolean
+    canSubmitBook: boolean
+    canApprove: boolean
+    isAssignee: boolean
+    isReviewer?: boolean
+  },
 ): FooterAction {
   if (state === 'awaiting_scan') return 'none'
   if (state === 'pending') {
@@ -28,8 +35,8 @@ export function footerActionFor(
     if (caps.isReviewer) return 'review'
     return 'none'
   }
-  if ((state === 'returned' || state === 'rejected') && caps.canManage) return 'revise'
-  if (state === 'none' && caps.canManage) return 'submit'
+  if ((state === 'returned' || state === 'rejected') && caps.canRevise) return 'revise'
+  if (state === 'none' && caps.canSubmitBook) return 'submit'
   return 'none'
 }
 
@@ -45,10 +52,10 @@ export function footerActionFor(
  */
 export function canFileSignedCopy(
   state: string,
-  caps: { canManage: boolean; canScan: boolean },
+  caps: { canEdit: boolean; canScan: boolean },
 ): boolean {
   return (
-    caps.canManage &&
+    caps.canEdit &&
     caps.canScan &&
     (state === 'none' || state === 'pending' || state === 'awaiting_scan')
   )
@@ -61,6 +68,6 @@ export function canFileSignedCopy(
  * `none`/`pending` but rejects `awaiting_scan` ("file the scan instead") and an
  * already-approved version. Requires `books.submit`.
  */
-export function canSendForApproval(state: string, caps: { canManage: boolean }): boolean {
-  return caps.canManage && (state === 'none' || state === 'pending')
+export function canSendForApproval(state: string, caps: { canSubmitBook: boolean }): boolean {
+  return caps.canSubmitBook && (state === 'none' || state === 'pending')
 }
