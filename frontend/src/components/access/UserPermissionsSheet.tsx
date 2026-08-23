@@ -185,7 +185,7 @@ function DomainGroup({
               size="header"
               value={uniform ?? 'default'}
               disabled={saving === `domain:${domain}`}
-              groupLabel={t('access.permissions.bulkApply')}
+              groupLabel={t('access.permissions.bulkApply', { defaultValue: 'Apply to all' })}
               onChange={(next) => onBulk(caps, next)}
             />
           )}
@@ -284,7 +284,7 @@ export function UserPermissionsSheet({
       api.setUserPermissionsBulk(user.id, items),
     onSuccess: (data) => {
       queryClient.setQueryData(['user-permissions', user.id], data)
-      toast.success(t('access.permissions.savedBulk'))
+      toast.success(t('access.permissions.savedBulk', { defaultValue: 'Permissions updated.' }))
     },
     onError: () => toast.error(t('access.permissions.saveError')),
     onSettled: () => setSaving(null),
