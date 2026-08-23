@@ -31,10 +31,8 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { RecipientChipsInput } from '@/components/ledger/RecipientChipsInput'
 import { RecipientListsMenu } from '@/components/ledger/RecipientListsMenu'
-import {
-  ReferencePicker,
-  type ComposeReference,
-} from '@/components/ledger/ReferencePicker'
+import { ReferencePicker } from '@/components/ledger/ReferencePicker'
+import type { ComposeReference } from '@/lib/composeReference'
 import { RichEditor } from '@/components/ui/rich-editor'
 import type { ComposeWindowControls } from './outlook/ComposeWindow'
 import {

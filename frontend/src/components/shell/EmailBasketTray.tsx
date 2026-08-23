@@ -6,11 +6,13 @@
  * Uses DropdownMenu (Radix, portals to body) instead of a hand-rolled popover
  * so the tray escapes overflow/transform stacking contexts. Per-item ✕ and
  * "Clear" are plain <button>s (not DropdownMenuItems) so they do NOT auto-close
- * the menu on click. "Send" navigates away, so closing there is fine.
+ * Outlook and clears the originating group only after the bridge confirms the
+ * draft. The temporary protocol launch never falls back to the internal composer.
  */
+import { useState } from 'react'
 import { Mail, X } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
-import { useNavigate } from 'react-router-dom'
+import { toast } from 'sonner'
 
 import {
   DropdownMenu,
@@ -18,45 +20,44 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { Button } from '@/components/ui/button'
-import { api } from '@/lib/api'
+import { api, apiErrorMessage } from '@/lib/api'
 import { useEmailBasket } from '@/hooks/useEmailBasket'
 import { basketLabel, type BasketKey, type EmailBasketItem } from '@/lib/emailBasket'
 import { buildBasketPrefill } from '@/lib/basketEmail'
+import { prepareBasketInOutlook } from '@/lib/outlookBridge'
 import { buildRecordBasketItem } from '@/pages/books/recordsBasket'
 import { getRecentRecipientsForForm } from '@/lib/recentRecipients'
 
 export function EmailBasketTray(): React.JSX.Element | null {
   const { t: tRaw, i18n } = useTranslation()
-  // basketLabel expects a simple (k, o?) => string; cast the i18next TFunction.
   const t = tRaw as (k: string, o?: object) => string
-  const navigate = useNavigate()
   const { baskets, remove, clear, totalCount } = useEmailBasket()
+  const [sendingKey, setSendingKey] = useState<BasketKey | null>(null)
 
   if (totalCount === 0) return null
 
   const send = async (key: BasketKey, items: EmailBasketItem[]): Promise<void> => {
-    // Re-enrich each item fresh at send time. A basket entry's employee/leave
-    // data (designation, nationality, dates, …) is captured when it's ADDED, so
-    // items added before the enrichment fix — or before the employee record was
-    // complete — would otherwise send blank. Rebuild from current data via
-    // getBook + buildRecordBasketItem; fall back to the stored item if the
-    // lookup fails (deleted book / offline). Subject + body are fixed
-    // official-letter templates owned by buildBasketPrefill.
-    const refreshed = await Promise.all(
-      items.map(async (it) => {
-        try {
-          const fresh = await buildRecordBasketItem(await api.getBook(it.bookId))
-          return fresh ?? it
-        } catch {
-          return it
-        }
-      }),
-    )
-    const prefill = buildBasketPrefill(refreshed, getRecentRecipientsForForm(key))
-    // Keep the basket's stored key so the correct (possibly mis-keyed, stale)
-    // basket is the one cleared on a successful send.
-    prefill.basketKey = key
-    navigate('/ledger', { state: { composePrefill: prefill } })
+    setSendingKey(key)
+    try {
+      const refreshed = await Promise.all(
+        items.map(async (it) => {
+          try {
+            const fresh = await buildRecordBasketItem(await api.getBook(it.bookId))
+            return fresh ?? it
+          } catch {
+            return it
+          }
+        }),
+      )
+      const prefill = buildBasketPrefill(refreshed, getRecentRecipientsForForm(key))
+      prefill.basketKey = key
+      await prepareBasketInOutlook(prefill)
+      toast.success(t('basket.tray.sent'))
+    } catch (error) {
+      toast.error(apiErrorMessage(error))
+    } finally {
+      setSendingKey(null)
+    }
   }
 
   return (
@@ -121,9 +122,10 @@ export function EmailBasketTray(): React.JSX.Element | null {
                 <Button
                   type="button"
                   size="sm"
+                  disabled={sendingKey === key}
                   onClick={() => void send(key, items)}
                 >
-                  {t('basket.tray.send')}
+                  {sendingKey === key ? t('basket.tray.sending') : t('basket.tray.send')}
                 </Button>
                 <Button
                   type="button"

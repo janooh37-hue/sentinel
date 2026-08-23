@@ -1127,13 +1127,15 @@
       "title": "سلال البريد",
       "empty": "لم تُجمع أي مستندات بعد",
       "send": "إرسال كبريد واحد",
+      "sending": "جارٍ فتح Outlook…",
+      "sent": "تم فتح المسودة في Outlook",
       "clear": "مسح",
       "remove": "إزالة",
       "count_zero": "لا مستندات",
       "count_one": "مستند واحد",
       "count_two": "مستندان",
       "count_few": "{{count}} مستندات",
-      "count_many": "{{count}} مستندات",
+      "count_many": "{{count}} مستندًا",
       "count_other": "{{count}} مستندات",
       "added": "أُضيف إلى سلة {{kind}}",
       "alreadyIn": "موجود بالفعل في سلة {{kind}}"
@@ -2146,14 +2148,35 @@
       "openInExplorer": "فتح في المستكشف",
       "openExplorerNote": "يفتح عبر pywebview عند تشغيله كتطبيق"
     },
+    "outlook": {
+      "title": "Outlook الكلاسيكي",
+      "description": "اربط حساب Sentinel بـ Outlook الكلاسيكي على هذا الحاسوب.",
+      "classicOnly": "يستخدم هذا الاتصال Outlook الكلاسيكي لنظام Windows. لا يدعم Outlook على الويب أو Outlook الجديد.",
+      "desktopRequired": "يتطلب الاقتران وفتح المراسلات تطبيق Sentinel المكتبي وOutlook الكلاسيكي.",
+      "devices": "الأجهزة المقترنة",
+      "devicesHint": "يمكن للأجهزة المدرجة هنا فقط فتح المراسلات أو إنشاء المسودات لهذا الحساب.",
+      "pair": "إقران هذا الحاسوب",
+      "pairStarted": "بدأ الاقتران في Outlook",
+      "revoke": "إلغاء إقران الجهاز",
+      "revoked": "تم إلغاء إقران الجهاز",
+      "revokedLabel": "ملغى",
+      "lastSeen": "آخر ظهور {{date}}",
+      "empty": "لا توجد أجهزة Outlook مقترنة.",
+      "loadError": "تعذر تحميل الأجهزة المقترنة.",
+      "linkSource": {
+        "detected": "رابط مكتشف",
+        "manual": "رابط يدوي",
+        "legacy": "رابط قديم"
+      }
+    },
     "email": {
       "heading": "تكامل البريد الإلكتروني",
-      "description": "اربط حساب البريد الإلكتروني (IMAP) لاستيراد الرسائل تلقائياً إلى السجل العام كقيود واردة وصادرة. كلمة المرور تُشفَّر محلياً على هذا الجهاز.",
+      "description": "اربط صندوق IONOS عبر IMAP لتسجيل الرسائل الواردة في المراسلات. يتولى Outlook الإرسال والتوقيعات.",
       "syncIntervalSuffix": "دقيقة (٠ لإيقاف)",
       "adminBadge": "مدير",
       "ionosOnly": "يستخدم GSSG بريد IONOS فقط. لا يتم دعم مزودي البريد الآخرين.",
       "linkHeading": "اربط سجل الموظف الخاص بك",
-      "linkHint": "يجعل التطبيق يضع اسمك تلقائياً كمقدم وموقّع على النماذج.",
+      "linkHint": "مطلوب لتحديد هوية الاقتران والإعدادات الافتراضية للنماذج.",
       "linkButton": "ربط",
       "skipLink": "تخطي",
       "linkedHeading": "الموظف المرتبط",
@@ -2161,6 +2184,10 @@
       "linkAdminOnly": "يمكن لمسؤول التطبيق فقط تغيير الموظف المرتبط",
       "linkSuccess": "تم الربط باسم {{name}} ({{id}})",
       "linkAdminGranted": "تم الربط باسم {{name}} ({{id}}) — مدير",
+      "recordingHealth": "سلامة التسجيل",
+      "recordingHealthy": "سليم",
+      "recordingSyncing": "جارٍ المزامنة",
+      "recordingError": "يحتاج إلى انتباه",
       "confirmDelete": "إزالة حساب البريد الإلكتروني؟",
       "confirmDeleteDesc": "سيؤدي هذا إلى إزالة حساب البريد الإلكتروني وإيقاف المزامنة."
     },
@@ -2371,14 +2398,6 @@
     "clear": "مسح",
     "upload": "رفع صورة…",
     "saveToProfile": "حفظ في الملف الشخصي",
-    "removed": "تمت إزالة التوقيع",
-    "saved": "تم حفظ التوقيع",
-    "remove": "إزالة",
-    "removeConfirmTitle": "إزالة التوقيع المحفوظ؟",
-    "removeConfirmBody": "لن تتضمن النماذج توقيعًا لهذا الموظف حتى يتم حفظ توقيع جديد.",
-    "uploadBadType": "اختر صورة PNG أو JPG",
-    "submitterTitle": "مقدّم الطلب يوقّع الصفحة 1",
-    "submitterSigns": "في الطلب (الصفحة 1)، يُستخدم توقيع {{name}} بدلاً من توقيع الموظف.",
     "submitterNoSig": "لا يوجد توقيع محفوظ لـ {{name}} — ستُطبع خانة التوقيع في الصفحة 1 فارغة.",
     "submitterNotLinked": "{{name}} غير مرتبط بموظف — ستُطبع خانة التوقيع في الصفحة 1 فارغة.",
     "submitterAppliesP2": "ينطبق التوقيع أدناه على التعهّد (الصفحة 2)."
@@ -2393,6 +2412,7 @@
       "violations": "المخالفات",
       "activity": "النشاط",
       "messages": "الرسائل",
+      "correspondence": "المراسلات",
       "showingRecent": "عرض {{shown}} من {{total}}",
       "attendance": "الحضور"
     },
@@ -2422,7 +2442,29 @@
       "empty": "لا توجد مخالفات — سجل نظيف."
     },
     "activity": {
-      "empty": "لا توجد أنشطة حديثة."
+      "empty": "لا توجد أنشطة حديثة.",
+      "correspondence": "المراسلات"
+    },
+    "correspondence": {
+      "title": "المراسلات",
+      "empty": "لا توجد مراسلات مسجلة لهذا الموظف.",
+      "loadError": "تعذر تحميل المراسلات.",
+      "noSubject": "(بلا موضوع)",
+      "noCounterparty": "لا يوجد طرف مقابل مسجل",
+      "to": "{{count}} مستلم",
+      "open": "فتح في Outlook",
+      "desktopRequired": "يتطلب Outlook الكلاسيكي تطبيق سطح المكتب",
+      "readOnly": "سجل تاريخي للقراءة فقط",
+      "direction": {
+        "incoming": "وارد",
+        "outgoing": "صادر",
+        "internal": "داخلي"
+      },
+      "linkSource": {
+        "detected": "رابط مكتشف",
+        "manual": "رابط يدوي",
+        "legacy": "رابط قديم"
+      }
     },
     "messages": {
       "empty": "لا توجد رسائل مُرسَلة بعد.",

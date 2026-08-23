@@ -5,8 +5,8 @@ import { Link } from 'react-router-dom'
 import { EmployeeBadgeCard } from './EmployeeBadgeCard'
 import { EmployeeActivityLookup } from './EmployeeActivityLookup'
 import { api, type EmployeeActivityItemRead, type EmployeeActivityKind, type EmployeeListItem } from '@/lib/api'
+import { openCorrespondenceInOutlook } from '@/lib/outlookBridge'
 import { pickEmployeeName } from '@/lib/employeeName'
-
 const PAGE_SIZE = 25
 
 const KIND_STYLES: Record<EmployeeActivityKind, { soft: string; color: string; icon: React.JSX.Element }> = {
@@ -41,7 +41,7 @@ function activityHref(item: EmployeeActivityItemRead): string {
     case 'violation':
       return `/employees/${encodeURIComponent(item.employee_id)}?tab=violations&open=${item.source_id}`
     case 'ledger':
-      return `/ledger?open=${item.source_id}`
+      return `/employees/${encodeURIComponent(item.employee_id)}?tab=correspondence`
   }
 }
 
@@ -285,11 +285,8 @@ function ActivityRow({
   }[item.kind]
   const kindStyle = KIND_STYLES[item.kind]
 
-  return (
-    <Link
-      to={activityHref(item)}
-      className="group flex items-center gap-3.5 border-b border-hairline px-5 py-3.5 last:border-b-0 hover:bg-surface-raised focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary"
-    >
+  const rowContent = (
+    <>
       <span aria-hidden className="grid h-9 w-9 shrink-0 place-items-center rounded-[11px]" style={{ background: kindStyle.soft, color: kindStyle.color }}>
         {kindStyle.icon}
       </span>
@@ -311,6 +308,23 @@ function ActivityRow({
         <span className="sr-only">{dayFormatter.format(date)} · </span>{timeFormatter.format(date)}
       </span>
       <span className="sr-only">{t(destinationKey)}</span>
+    </>
+  )
+  const rowClass = 'group flex items-center gap-3.5 border-b border-hairline px-5 py-3.5 last:border-b-0 hover:bg-surface-raised focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary'
+  if (item.kind === 'ledger') {
+    return (
+      <button
+        type="button"
+        className={`${rowClass} w-full text-start`}
+        onClick={() => { void openCorrespondenceInOutlook(item.source_id, item.employee_id) }}
+      >
+        {rowContent}
+      </button>
+    )
+  }
+  return (
+    <Link to={activityHref(item)} className={rowClass}>
+      {rowContent}
     </Link>
   )
 }

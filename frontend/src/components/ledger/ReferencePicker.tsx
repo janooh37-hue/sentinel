@@ -33,20 +33,9 @@ import type { BookRead, EmployeeListItem } from '@/lib/api'
 import { currentBookDocId } from '@/lib/bookDocument'
 import { pickEmployeeName } from '@/lib/employeeName'
 import { cn } from '@/lib/utils'
+import type { ComposeReference } from '@/lib/composeReference'
 
-/** A reference attached to a compose — links the sent entry + a body token. */
-export type ComposeReference =
-  | {
-      kind: 'book'
-      id: number
-      label: string
-      token: string
-      /** Backing document id (for the attach-PDF toggle); undefined if none. */
-      docId?: number
-      /** Suggested attachment filename when the PDF is attached. */
-      fileName?: string
-    }
-  | { kind: 'employee'; id: string; label: string; token: string }
+export type { ComposeReference } from '@/lib/composeReference'
 
 export interface ReferencePickerProps {
   /** Element the panel anchors under (the ＋ Add reference control). */

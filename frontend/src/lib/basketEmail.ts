@@ -15,7 +15,7 @@
  * References carry docId + a sane fileName so the compose attaches every PDF
  * named {ref}_{form}_{employee}.pdf.
  */
-import type { ComposeReference } from '@/components/ledger/ReferencePicker'
+import type { ComposeReference } from './composeReference'
 
 import { basketKey, filenameForItem, type BasketKey, type EmailBasketItem } from './emailBasket'
 
@@ -392,6 +392,7 @@ export function buildBasketPrefill(
     token: i.ref,
     docId: i.docId,
     fileName: filenameForItem(i),
+    employeeId: i.employeeId,
   }))
   return {
     to,

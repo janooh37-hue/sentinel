@@ -19,6 +19,7 @@ import { useCapabilities } from '@/lib/useCapabilities'
 import { copyToClipboard } from '@/lib/clipboard'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import { EmailSection } from './EmailSection'
+import { OutlookConnectionSection } from './OutlookConnectionSection'
 import { ManagersSection } from './ManagersSection'
 import { DesignationCatalog } from './DesignationCatalog'
 import { SigningSignatureSection } from './SigningSignatureSection'
@@ -689,6 +690,7 @@ type SettingsPanelId =
   | 'submitters'
   | 'designations'
   | 'managers'
+  | 'outlook'
   | 'email'
   | 'sms'
   | 'access'
@@ -766,6 +768,11 @@ export function SettingsPage(): React.JSX.Element {
       title: t('settings.managers.title'),
       description: t('settings.managers.description'),
     },
+    outlook: {
+      id: 'outlook',
+      title: t('settings.outlook.title'),
+      description: t('settings.outlook.description'),
+    },
     email: {
       id: 'email',
       title: t('settings.email.heading'),
@@ -823,7 +830,7 @@ export function SettingsPage(): React.JSX.Element {
       group: 'operations',
       label: t('settings.navigation.communications'),
       panels: [
-        ...(has('email.manage') ? [panels.email] : []),
+        ...(has('email.manage') ? [panels.email, panels.outlook] : []),
         ...(has('settings.edit') ? [panels.sms] : []),
       ],
     },
@@ -890,6 +897,8 @@ export function SettingsPage(): React.JSX.Element {
         return <DesignationCatalog />
       case 'managers':
         return <ManagersSection />
+      case 'outlook':
+        return <OutlookConnectionSection />
       case 'email':
         return <EmailSection />
       case 'sms':

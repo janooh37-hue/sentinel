@@ -1026,6 +1026,8 @@
       "title": "Email baskets",
       "empty": "No documents collected yet",
       "send": "Send as one email",
+      "sending": "Opening Outlook…",
+      "sent": "Draft opened in Outlook",
       "clear": "Clear",
       "remove": "Remove",
       "count_one": "{{count}} document",
@@ -1975,14 +1977,35 @@
       "openInExplorer": "Open in Explorer",
       "openExplorerNote": "Opens via pywebview bridge when running packaged"
     },
+    "outlook": {
+      "title": "Classic Outlook",
+      "description": "Pair this Sentinel account with classic Outlook on this Windows PC.",
+      "classicOnly": "This connection uses classic Outlook for Windows. The web and new Outlook clients are not supported.",
+      "desktopRequired": "Pairing and opening correspondence require the Sentinel desktop app and classic Outlook.",
+      "devices": "Paired devices",
+      "devicesHint": "Only devices listed here can open correspondence or create drafts for this account.",
+      "pair": "Pair this PC",
+      "pairStarted": "Pairing started in Outlook",
+      "revoke": "Revoke device",
+      "revoked": "Device revoked",
+      "revokedLabel": "Revoked",
+      "lastSeen": "Last seen {{date}}",
+      "empty": "No Outlook devices are paired.",
+      "loadError": "Paired devices could not be loaded.",
+      "linkSource": {
+        "detected": "Detected link",
+        "manual": "Manual link",
+        "legacy": "Legacy link"
+      }
+    },
     "email": {
       "heading": "Email integration",
-      "description": "Connect an IMAP mailbox so incoming and outgoing messages are auto-imported into the General Ledger. Password is encrypted locally on this machine.",
+      "description": "Connect an IONOS IMAP mailbox so incoming messages are recorded in Correspondence. Outlook owns sending and signatures.",
       "syncIntervalSuffix": "minutes (0 to disable)",
       "adminBadge": "Admin",
       "ionosOnly": "GSSG uses IONOS for email. Other providers are not supported.",
       "linkHeading": "Link your employee record",
-      "linkHint": "Helps the app default the submitter and signer on every form you fill in.",
+      "linkHint": "Required for pairing identity and form defaults.",
       "linkButton": "Link",
       "skipLink": "Skip",
       "linkedHeading": "Linked employee",
@@ -1990,6 +2013,10 @@
       "linkAdminOnly": "Only the app admin can change the linked employee",
       "linkSuccess": "Linked as {{name}} ({{id}})",
       "linkAdminGranted": "Linked as {{name}} ({{id}}) — admin",
+      "recordingHealth": "Recording health",
+      "recordingHealthy": "Healthy",
+      "recordingSyncing": "Syncing",
+      "recordingError": "Needs attention",
       "confirmDelete": "Remove email account?",
       "confirmDeleteDesc": "This will remove the email account and stop syncing."
     },
@@ -2214,6 +2241,7 @@
       "violations": "Violations",
       "activity": "Activity",
       "messages": "Messages",
+      "correspondence": "Correspondence",
       "showingRecent": "Showing {{shown}} of {{total}}",
       "attendance": "Attendance"
     },
@@ -2243,7 +2271,29 @@
       "empty": "No violations on file — clean record."
     },
     "activity": {
-      "empty": "No recent activity."
+      "empty": "No recent activity.",
+      "correspondence": "Correspondence"
+    },
+    "correspondence": {
+      "title": "Correspondence",
+      "empty": "No correspondence recorded for this employee.",
+      "loadError": "Correspondence could not be loaded.",
+      "noSubject": "(No subject)",
+      "noCounterparty": "No counterparty recorded",
+      "to": "{{count}} recipient",
+      "open": "Open in Outlook",
+      "desktopRequired": "Classic Outlook requires the desktop app",
+      "readOnly": "Read-only historical record",
+      "direction": {
+        "incoming": "Incoming",
+        "outgoing": "Outgoing",
+        "internal": "Internal"
+      },
+      "linkSource": {
+        "detected": "Detected link",
+        "manual": "Manual link",
+        "legacy": "Legacy link"
+      }
     },
     "messages": {
       "empty": "No messages sent yet.",

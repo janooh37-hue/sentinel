@@ -30,7 +30,6 @@ import { useIdentity } from '@/lib/useIdentity'
 import { useAuth } from '@/lib/authContext'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import { EmployeePicker } from '@/pages/application/EmployeePicker'
-import { SignatureSection } from './SignatureSection'
 
 const DEFAULTS: EmailAccountUpsert = {
   email: '',
@@ -74,6 +73,12 @@ export function EmailSection(): React.JSX.Element {
     queryKey: ['email-account'],
     queryFn: () => api.getEmailAccount(),
     staleTime: 5_000,
+  })
+  const syncStatusQuery = useQuery({
+    queryKey: ['email-sync-status'],
+    queryFn: () => api.getEmailSyncStatus(),
+    enabled: accountQuery.data != null,
+    refetchInterval: 30_000,
   })
 
   const { identity, isAdmin } = useIdentity()
@@ -136,6 +141,7 @@ export function EmailSection(): React.JSX.Element {
         }),
       )
       void qc.invalidateQueries({ queryKey: ['email-account'] })
+      void qc.invalidateQueries({ queryKey: ['email-sync-status'] })
       void qc.invalidateQueries({ queryKey: ['ledger'] })
     },
     onError: (err) =>
@@ -395,6 +401,31 @@ export function EmailSection(): React.JSX.Element {
           )}
         </div>
       )}
+      {hasAccount && syncStatusQuery.data && (
+        <div className="mt-3 flex flex-wrap items-center gap-2 rounded-lg border border-hairline bg-surface-raised px-3.5 py-2.5 text-[0.82em]">
+          <span className="font-semibold text-foreground">{t('settings.email.recordingHealth')}</span>
+          <span
+            className={
+              syncStatusQuery.data.last_sync_error
+                ? 'text-accent'
+                : syncStatusQuery.data.syncing
+                  ? 'text-warning'
+                  : 'text-success'
+            }
+          >
+            {syncStatusQuery.data.last_sync_error
+              ? t('settings.email.recordingError')
+              : syncStatusQuery.data.syncing
+                ? t('settings.email.recordingSyncing')
+                : t('settings.email.recordingHealthy')}
+          </span>
+          {syncStatusQuery.data.last_sync_error && (
+            <span className="text-muted-foreground" dir="auto">
+              {syncStatusQuery.data.last_sync_error}
+            </span>
+          )}
+        </div>
+      )}
 
       {/* Actions */}
       <div className="mt-5 flex flex-wrap items-center gap-2.5 border-t border-hairline pt-4">
@@ -545,12 +576,6 @@ export function EmailSection(): React.JSX.Element {
         </div>
       )}
 
-      {/* Signature sub-card */}
-      {hasAccount && (
-        <div className="mt-5">
-          <SignatureSection />
-        </div>
-      )}
 
       <ConfirmDialog
         open={deleteConfirmOpen}

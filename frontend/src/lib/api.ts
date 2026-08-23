@@ -157,6 +157,72 @@ export type RecentLeaveRead = components['schemas']['RecentLeaveRead']
 export type RecentViolationRead = components['schemas']['RecentViolationRead']
 export type RecentLedgerRead = components['schemas']['RecentLedgerRead']
 export type ActivityItemRead = components['schemas']['ActivityItemRead']
+export interface CorrespondenceAddress {
+  name: string
+  address: string
+}
+export interface CorrespondenceItemRead {
+  entry_id: number
+  channel: string
+  entry_date: string
+  direction: string
+  counterparty: string
+  subject: string
+  to_recipients: CorrespondenceAddress[]
+  cc_recipients: CorrespondenceAddress[]
+  attachment_count: number
+  link_source: 'detected' | 'manual' | 'legacy'
+  can_open_in_outlook: boolean
+}
+export interface CorrespondenceListRead {
+  items: CorrespondenceItemRead[]
+  total: number
+}
+
+export interface OutlookDeviceRead {
+  id: string
+  mailbox_address: string
+  device_label: string
+  created_at: string
+  last_seen_at: string
+  revoked_at: string | null
+}
+export interface OutlookPairingRead {
+  token: string
+  expires_at: string
+}
+export interface OutlookHandoffRead {
+  id: number
+  kind: 'compose' | 'open'
+  status: 'pending' | 'redeemed' | 'completed' | 'failed' | 'expired'
+  expires_at?: string
+  redeemed_at?: string | null
+  completed_at?: string | null
+  failure_code?: string | null
+  payload?: Record<string, unknown> | null
+}
+export interface OutlookHandoffCreated extends OutlookHandoffRead {
+  token: string
+  protocol_url?: string
+}
+export interface OutlookAttachmentRef {
+  kind: 'document_pdf'
+  document_id: number
+  filename: string
+}
+export type OutlookHandoffCreate =
+  | {
+      kind: 'compose'
+      payload: {
+        to: string[]
+        cc: string[]
+        subject: string
+        body_html: string
+        basket_key: string
+        attachments: OutlookAttachmentRef[]
+      }
+    }
+  | { kind: 'open'; payload: { ledger_entry_id: number } }
 
 export type ViolationRead = components['schemas']['ViolationRead']
 export type ViolationCreate = components['schemas']['ViolationCreate']
@@ -1081,6 +1147,14 @@ export const api = {
     ),
   getEmployeeDetail: (id: string) =>
     request<EmployeeDetailRead>('GET', `/employees/${encodeURIComponent(id)}/detail`),
+  listEmployeeCorrespondence: (
+    employeeId: string,
+    params: { limit?: number; offset?: number } = {},
+  ) =>
+    request<CorrespondenceListRead>(
+      'GET',
+      `/employees/${encodeURIComponent(employeeId)}/correspondence${qs({ ...params })}`,
+    ),
   getEmployeesCompleteness: () =>
     request<CompletenessSummaryOut>('GET', '/employees/completeness'),
   createEmployee: (payload: EmployeeCreate) =>
@@ -1901,6 +1975,17 @@ export const api = {
       `/ledger/entries/${entryId}/attachments/${attachmentIndex}/send-to-vault`,
       { employee_id: employeeId, kind },
     ),
+
+  // --- classic Outlook bridge ---
+  createOutlookPairing: (body: { mailbox_address?: string } = {}) =>
+    request<OutlookPairingRead>('POST', '/outlook/pairings', body),
+  listOutlookDevices: () => request<OutlookDeviceRead[]>('GET', '/outlook/devices'),
+  revokeOutlookDevice: (deviceId: string) =>
+    request<void>('DELETE', `/outlook/devices/${encodeURIComponent(deviceId)}`),
+  createOutlookHandoff: (body: OutlookHandoffCreate) =>
+    request<OutlookHandoffCreated>('POST', '/outlook/handoffs', body),
+  getOutlookHandoff: (id: number) =>
+    request<OutlookHandoffRead>('GET', `/outlook/handoffs/${id}`),
 
   // --- settings (Phase 08) ---
   getSettings: () => request<AppSettingsRead>('GET', '/settings'),

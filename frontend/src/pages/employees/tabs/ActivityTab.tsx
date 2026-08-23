@@ -8,6 +8,7 @@ import { useMemo, type ComponentType } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import type { ActivityItemRead } from '@/lib/api'
+import { openCorrespondenceInOutlook } from '@/lib/outlookBridge'
 
 type Kind = ActivityItemRead['kind']
 
@@ -55,8 +56,21 @@ export function ActivityTab({ activity }: Props): React.JSX.Element {
             >
               <Icon className="h-3.5 w-3.5" />
             </span>
-            <div className="text-[0.92em] font-medium text-foreground">{a.summary}</div>
-            <div className="mt-0.5 font-mono text-[0.78em] text-muted-foreground">{fmt.format(new Date(a.when))}</div>
+            {a.kind === 'ledger' ? (
+              <button
+                type="button"
+                className="text-start text-[0.92em] font-medium text-primary underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                onClick={() => { void openCorrespondenceInOutlook(a.ref_id) }}
+              >
+                {a.summary}
+              </button>
+            ) : (
+              <div className="text-[0.92em] font-medium text-foreground">{a.summary}</div>
+            )}
+            <div className="mt-0.5 font-mono text-[0.78em] text-muted-foreground">
+              {a.kind === 'ledger' && <span>{t('employee.activity.correspondence')} · </span>}
+              {fmt.format(new Date(a.when))}
+            </div>
           </div>
         )
       })}

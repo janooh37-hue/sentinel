@@ -37,6 +37,7 @@ import { ArrowLeft, FolderOpen, Users } from 'lucide-react'
 
 import { api } from '@/lib/api'
 import type { LedgerEntryRead, LedgerListItem, LedgerSearchResponse } from '@/lib/api'
+import type { ComposeReference } from '@/lib/composeReference'
 import { useIsMobile } from '@/lib/useIsMobile'
 import { Sheet, SheetContent, SheetTitle, SheetTrigger } from '@/components/ui/sheet'
 import { LedgerEmailCompose } from '../LedgerEmailCompose'
@@ -91,7 +92,7 @@ interface ComposeState {
     cc?: string[]
     subject?: string
     bodyHtml?: string
-    references?: import('@/components/ledger/ReferencePicker').ComposeReference[]
+    references?: ComposeReference[]
     attachRefPdf?: boolean
     basketKey?: string
   }

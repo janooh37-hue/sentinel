@@ -16,6 +16,7 @@ export type Tab =
   | 'activity'
   | 'messages'
   | 'attendance'
+  | 'correspondence'
 
 interface Counts {
   documents: number
@@ -24,6 +25,8 @@ interface Counts {
   activity: number
   messages: number
   profileGaps: number
+  /** Correspondence count comes from the legacy ledger_count projection. */
+  correspondence?: number
   /** Attendance days needing a decision; null hides the chip's badge. */
   attendance: number | null
 }
@@ -39,6 +42,7 @@ const ORDER: Tab[] = [
   'documents',
   'leaves',
   'messages',
+  'correspondence',
   'activity',
   'attendance',
   'violations',
@@ -60,6 +64,7 @@ export function EmployeeTabChips({ active, counts, onChange }: Props): React.JSX
         else if (tab === 'documents') badge = counts.documents
         else if (tab === 'leaves') badge = counts.leaves
         else if (tab === 'messages') badge = counts.messages
+        else if (tab === 'correspondence') badge = counts.correspondence ?? counts.activity
         else if (tab === 'activity') badge = counts.activity
         else if (tab === 'attendance') badge = counts.attendance
         else if (tab === 'violations') badge = counts.violations

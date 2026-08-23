@@ -1,15 +1,8 @@
 /**
- * Pure helpers for the attach-reference-PDF toggle. The async fetch + Map state
- * live in LedgerEmailCompose; this module holds the DOM-free decisions so they
- * can be unit-tested.
+ * The set of backing-document ids selected for a compose attachment toggle.
+ * Book references that carry a `docId` are deduped in order-stable fashion.
  */
-import type { ComposeReference } from '@/components/ledger/ReferencePicker'
-
-/**
- * The set of backing-document ids whose PDF should be attached: book references
- * that carry a `docId`, when the toggle is on. Deduped, order-stable. Empty when
- * the toggle is off.
- */
+import type { ComposeReference } from './composeReference'
 export function desiredRefPdfDocIds(
   references: ComposeReference[],
   attachRefPdf: boolean,

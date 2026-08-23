@@ -128,7 +128,7 @@ describe('EmployeeActivitySection', () => {
     expect(screen.getByRole('link', { name: /open document/i })).toHaveAttribute('href', '/books?open=71')
     expect(screen.getByRole('link', { name: /open leave/i })).toHaveAttribute('href', '/leaves?open=22')
     expect(screen.getByRole('link', { name: /open violation/i })).toHaveAttribute('href', '/employees/G300?tab=violations&open=33')
-    expect(screen.getByRole('link', { name: /open correspondence/i })).toHaveAttribute('href', '/ledger?open=44')
+    expect(screen.getByRole('button', { name: /open correspondence/i })).toBeInTheDocument()
   })
 
   it('resets to the first page when employee or type changes', async () => {
@@ -238,9 +238,9 @@ describe('EmployeeActivitySection', () => {
   })
   it('renders each source title once while keeping the localized structural action', async () => {
     wrap(<EmployeeActivitySection onOpenProfile={() => {}} />)
-    for (const title of items.map((item) => item.title)) {
-      const row = await screen.findByRole('link', { name: new RegExp(title, 'i') })
-      expect((row.textContent ?? '').split(title).length - 1).toBe(1)
+    for (const item of items) {
+      const row = await screen.findByRole(item.kind === 'ledger' ? 'button' : 'link', { name: new RegExp(item.title, 'i') })
+      expect((row.textContent ?? '').split(item.title).length - 1).toBe(1)
     }
     expect(screen.getByText('Generated document')).toBeInTheDocument()
     expect(screen.getByText('Recorded violation')).toBeInTheDocument()
