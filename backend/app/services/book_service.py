@@ -1261,6 +1261,7 @@ def _my_log_step(book: Book, user_id: int) -> BookApprovalStep | None:
     """
     pending: BookApprovalStep | None = None
     decided: BookApprovalStep | None = None
+    decided_stamp: datetime | None = None
     for version in reversed(book.versions):  # newest first
         for step in version.approval_steps:
             if step.assignee_user_id != user_id:
@@ -1268,9 +1269,10 @@ def _my_log_step(book: Book, user_id: int) -> BookApprovalStep | None:
             if step.state == "pending" and pending is None:
                 pending = step
             if step.decided_at is not None and (
-                decided is None or step.decided_at > decided.decided_at
+                decided_stamp is None or step.decided_at > decided_stamp
             ):
                 decided = step
+                decided_stamp = step.decided_at
         if pending is not None:
             break  # nothing on an older version can outrank a live pending step
     return pending if pending is not None else decided
@@ -1323,7 +1325,7 @@ def _build_approval_log_item(
         decided_at=(
             max(decided_stamps).replace(tzinfo=UTC) if verdict and decided_stamps else None
         ),
-        verdict=verdict,  # type: ignore[arg-type]  # guarded by _APPROVAL_VERDICTS
+        verdict=verdict,
         document_id=version.document_id if version is not None else None,
     )
     if my_step is not None:
