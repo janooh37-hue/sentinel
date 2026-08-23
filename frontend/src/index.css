@@ -1548,9 +1548,11 @@ body {
 .org-card-main { display: flex; min-width: 0; align-items: center; gap: 9px; }
 .org-avatar, .org-picker-avatar { display: grid; flex: none; place-items: center; border-radius: 999px; font-weight: 700; }
 .org-card .org-avatar { width: 32px; height: 32px; background: rgb(255 255 255 / 14%); font-size: .78em; }
-.org-card p, .org-card small { display: block; overflow: hidden; margin: 0; white-space: nowrap; text-overflow: ellipsis; }
-.org-card p { font-size: .9em; font-weight: 600; line-height: 1.2; }
-.org-card small { margin-block-start: 2px; color: #a8bcd4; font-size: .75em; line-height: 1.15; }
+/* Names are the one thing on this card that must never lose information —
+   two lines beats a silently truncated surname. Position/duty stay single-line
+   (shorter, less identity-critical) and carry a `title` for the full text. */
+.org-card p { display: -webkit-box; overflow: hidden; margin: 0; -webkit-box-orient: vertical; -webkit-line-clamp: 2; font-size: .9em; font-weight: 600; line-height: 1.2; }
+.org-card small { display: block; overflow: hidden; margin: 0; margin-block-start: 2px; white-space: nowrap; text-overflow: ellipsis; color: #a8bcd4; font-size: .75em; line-height: 1.15; }
 .org-card-foot { display: flex; min-width: 0; align-items: center; gap: 7px; color: #93a7bf; font-family: var(--font-mono); font-size: .66em; }
 .org-card-foot > span, .org-card-foot > button { border-radius: 5px; background: rgb(255 255 255 / 8%); padding: 1px 5px; }
 .org-card-foot > button { margin-inline-start: auto; border: 0; color: #cfe0f0; cursor: pointer; }
@@ -1609,9 +1611,14 @@ body {
 .org-picker-id { font-family: var(--font-mono); font-size: .72em; }
 .org-picker-root b { color: var(--accent); }
 .org-drag-ghost { position: fixed; z-index: 60; display: flex; width: var(--node-w, 200px); height: var(--node-h, 72px); align-items: center; gap: 9px; transform: translate(-50%, -50%) rotate(-1.5deg); border-radius: var(--radius-md); background: var(--org-card); padding: 11px 12px; color: #fff; pointer-events: none; filter: drop-shadow(0 12px 24px rgb(13 40 69 / 30%)); }
-/* Fullscreen: the rail+chart card becomes the screen. Every wrapper in the
-   chain (card -> grid -> section) has to stretch too, or the chart keeps its
-   520px min-height and leaves the bottom of the screen blank. */
+/* Fullscreen: the rail+chart card becomes the screen. Tag-scoped on purpose:
+   a blanket `> div` here previously also matched the org-drag-ghost/org-popover
+   portals (they mount as direct children of this same fullscreen host), and
+   `height:100%` on a position:fixed div resolves against the viewport — so a
+   drag in fullscreen stretched the drag ghost into a full-height navy bar.
+   `nav`/`section` are the only two real children (UnitRail, the chart section);
+   CSS Grid's default item stretch already sizes them without this rule, but it
+   stays as an explicit belt-and-suspenders that can never again catch a portal. */
 [data-org-tree-fullscreen-host]:fullscreen { height: 100%; border: 0; border-radius: 0; box-shadow: none; }
-[data-org-tree-fullscreen-host]:fullscreen > div { height: 100%; align-items: stretch; }
+[data-org-tree-fullscreen-host]:fullscreen > nav, [data-org-tree-fullscreen-host]:fullscreen > section { height: 100%; align-items: stretch; }
 [data-org-tree-fullscreen-host]:fullscreen .org-tree-view { height: 100%; }

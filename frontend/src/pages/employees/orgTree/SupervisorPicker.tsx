@@ -142,6 +142,7 @@ export function SupervisorPicker({
             <button
               key={candidate.id}
               type="button"
+              title={`${pickEmployeeName(candidate, lang)} — ${candidate.id}`}
               className={`org-picker-option${invalid ? ' is-disabled' : ''}`}
               disabled={invalid}
               onClick={() => onPick(candidate.id)}
