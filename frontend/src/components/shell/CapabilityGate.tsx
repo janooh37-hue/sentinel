@@ -77,8 +77,8 @@ function GateInner({
   // own click never fires — the wrapper intercepts and opens the dialog.
   if (requestable && !SENSITIVE_CAPS.has(cap)) {
     const catalogEntry = catalogQuery.data?.find((c) => c.id === cap)
-    const label = catalogEntry?.label ?? cap
-    const description = catalogEntry?.description ?? ''
+    const label = t(`access.permissions.caps.${cap}`, { defaultValue: catalogEntry?.label ?? cap })
+    const description = t(`perms.caps.${cap}.desc`, { defaultValue: catalogEntry?.description ?? '' })
 
     return (
       <>

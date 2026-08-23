@@ -129,11 +129,12 @@ describe('UserPermissionsSheet', () => {
   it('renders capability descriptions in the editor', async () => {
     renderSheet()
 
-    // Wait for the capability descriptions to appear (data loads asynchronously).
-    const desc1 = await screen.findByText('Allows approving or rejecting submitted books for sign-off.')
+    // Localized descriptions (perms.caps.<id>.desc, landed by Task 9) take
+    // priority over the catalog description, which is only the defaultValue.
+    const desc1 = await screen.findByText('Approve, sign, or reject documents in the approval queue.')
     expect(desc1).toBeInTheDocument()
 
-    const desc2 = await screen.findByText('Read-only access to employee leave records.')
+    const desc2 = await screen.findByText('See leave records and their status.')
     expect(desc2).toBeInTheDocument()
   })
 

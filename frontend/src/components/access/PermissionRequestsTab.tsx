@@ -104,7 +104,7 @@ function PermissionRequestCard({
               {req.requester_name ?? `#${req.user_id}`}
             </span>
             <span className="rounded-full bg-surface-tinted px-2 py-0.5 text-[0.72em] font-medium text-muted-foreground">
-              {req.capability_label}
+              {t(`access.permissions.caps.${req.capability}`, { defaultValue: req.capability_label })}
             </span>
           </div>
           {capDesc && (
