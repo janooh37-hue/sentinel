@@ -1569,7 +1569,7 @@ export const api = {
   /** GET /books/awaiting — books pending the signed-in user's decision. */
   listAwaitingBooks: () => request<BookRead[]>('GET', '/books/awaiting'),
   /** GET /books/awaiting-scan — records stranded at `awaiting_scan` past 24h.
-   * `scope='all'` returns everyone's (both scopes need books.manage). */
+   * `scope='all'` returns everyone's (both scopes need books.edit). */
   listAwaitingScanBooks: (scope: 'mine' | 'all' = 'mine') =>
     request<BookRead[]>('GET', `/books/awaiting-scan?scope=${scope}`),
   /** GET /books/approvers — valid approver candidates for the submit picker. */
@@ -1648,25 +1648,25 @@ export const api = {
     return multipart<BookRead>(`/books/${bookId}/attachments`, form)
   },
   /** DELETE /books/{id}/attachments/{index} — remove a plain attachment (undo a
-   * wrongly-uploaded scan). books.manage. */
+   * wrongly-uploaded scan). books.edit. */
   deleteBookAttachment: (bookId: number, index: number) =>
     request<BookRead>('DELETE', `/books/${bookId}/attachments/${index}`),
   /** PUT /books/{id}/attachments/{index} — replace a plain attachment's bytes,
-   * keeping its index. books.manage. */
+   * keeping its index. books.edit. */
   replaceBookAttachment: (bookId: number, index: number, file: File) => {
     const form = new FormData()
     form.append('file', file)
     return multipart<BookRead>(`/books/${bookId}/attachments/${index}`, form, 'PUT')
   },
   /** PUT /books/{id}/signed-copy — replace the signed copy's bytes, keeping the
-   * record approved. books.manage. */
+   * record approved. books.edit. */
   replaceSignedCopy: (bookId: number, file: File) => {
     const form = new FormData()
     form.append('file', file)
     return multipart<BookRead>(`/books/${bookId}/signed-copy`, form, 'PUT')
   },
   /** DELETE /books/{id}/signed-copy — unfile the signed copy and revert the
-   * record's approval state. books.manage. */
+   * record's approval state. books.edit. */
   unfileSignedCopy: (bookId: number) =>
     request<BookRead>('DELETE', `/books/${bookId}/signed-copy`),
   /** Build a side-effect-free preview of the proposed fixed-base-first package. */
@@ -2038,6 +2038,12 @@ export const api = {
       capability,
       effect,
     }),
+  /** Apply a batch of overrides in one call (admin matrix save); each item's
+   * effect null reverts that capability to the role default. */
+  setUserPermissionsBulk: (
+    id: number,
+    items: Array<{ capability: string; effect: PermissionEffect | null }>,
+  ) => request<UserPermissionRead>('PUT', `/auth/users/${id}/permissions/bulk`, { items }),
 
   // --- permission requests (Task 10) ---
   /** Submit a capability request for the signed-in user.

@@ -4,8 +4,8 @@
  *
  * Footer (see `footerActionFor`):
  *  - caller owns the current pending step → approve/reject/return/note (`decide`)
- *  - state returned/rejected + `books.manage` → Revise & regenerate (`revise`)
- *  - state none + `books.manage` → Submit for approval (`submit`)
+ *  - state returned/rejected + `books.edit` → Revise & regenerate (`revise`)
+ *  - state none + `books.edit` → Submit for approval (`submit`)
  *  - otherwise read-only
  *
  * Replaces the approval-only BookApprovalSheet; the approval bar behaviour
@@ -211,7 +211,7 @@ export function BookDetailDrawer({ bookId, onClose, onSubmitForApproval }: Props
   const { has } = useCapabilities()
   const { user } = useAuth()
   const canApprove = has('books.approve')
-  const canManage = has('books.manage')
+  const canManage = has('books.edit')
   // Revise regenerates via POST /documents/generate, which requires this cap;
   // without it the committed Save would 403.
   const canGenerate = has('documents.generate')

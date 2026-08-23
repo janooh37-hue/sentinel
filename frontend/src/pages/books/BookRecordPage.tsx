@@ -265,9 +265,10 @@ export function BookRecordPage(): React.JSX.Element {
   const { user } = useAuth()
   const { has } = useCapabilities()
   const canApprove = has('books.approve')
-  const canManage = has('books.manage')
+  const canEdit = has('books.edit')
+  const canSubmitBook = has('books.submit')
   // Filing a physically-signed scan back uses the same gate as the Records
-  // pane's ＋Add-scan (books.manage + documents.scan).
+  // pane's ＋Add-scan (books.edit + documents.scan).
   const canScan = has('documents.scan')
   // Revise regenerates via POST /documents/generate, which requires this cap;
   // without it the committed Save would 403.
@@ -328,11 +329,11 @@ export function BookRecordPage(): React.JSX.Element {
   // assigned approver is, so an operator handling requests for others can
   // close out the paper flow (print → sign → scan) from the record page.
   const addScan = useAddScan(book?.id ?? null)
-  const showFileSigned = canFileSignedCopy(state, { canManage, canScan })
+  const showFileSigned = canFileSignedCopy(state, { canManage: canEdit, canScan })
   // "Send for approval" (digital route): submit a draft, or re-route a still
   // pending request to a different signing manager. Both routes are offered
   // side by side so the operator picks per request.
-  const showSendForApproval = canSendForApproval(state, { canManage })
+  const showSendForApproval = canSendForApproval(state, { canManage: canSubmitBook })
 
   const stations = useMemo(
     () =>
@@ -348,7 +349,7 @@ export function BookRecordPage(): React.JSX.Element {
   const isAssignee = isApproverAssignee(currentSteps, user?.id)
   const myReview = myPendingReviewerStep(currentSteps, user?.id)
   const action = footerActionFor(state, {
-    canManage,
+    canManage: canEdit,
     canApprove,
     isAssignee,
     isReviewer: myReview != null,
@@ -687,8 +688,8 @@ export function BookRecordPage(): React.JSX.Element {
             </a>
           )}
           {/* Fix a wrongly-filed signed copy: replace bytes (keep approval) or
-              remove it (revert the record). books.manage only. */}
-          {state === 'approved' && current?.signed_pdf_url && canManage && (
+              remove it (revert the record). books.edit only. */}
+          {state === 'approved' && current?.signed_pdf_url && canEdit && (
             <>
               <HeaderBtn
                 icon={<RefreshCw className="h-3.5 w-3.5" />}

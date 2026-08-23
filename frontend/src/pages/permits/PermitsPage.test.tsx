@@ -7,7 +7,11 @@ import { statusTone, zoneTone, fmtDate } from './permitUtils'
 import { PermitsPage } from './PermitsPage'
 
 vi.mock('@/lib/useCapabilities', () => ({
-  useCapabilities: () => ({ capabilities: new Set(['permits.view', 'permits.manage']), isLoading: false, has: () => true }),
+  useCapabilities: () => ({
+    capabilities: new Set(['permits.view', 'permits.create', 'permits.edit', 'permits.revoke', 'permits.delete']),
+    isLoading: false,
+    has: () => true,
+  }),
 }))
 
 vi.mock('@/lib/api', async (importOriginal) => {

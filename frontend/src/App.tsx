@@ -260,7 +260,7 @@ function Shell(): React.JSX.Element {
               <Route
                 path="/scan-back"
                 element={
-                  <RequireCapability cap="books.manage">
+                  <RequireCapability cap="books.edit">
                     <ScanBackPage />
                   </RequireCapability>
                 }

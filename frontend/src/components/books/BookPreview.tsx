@@ -34,7 +34,7 @@ export function BookPreview({ bookId, onClose, onSubmitForApproval }: Props): Re
   const { t, i18n } = useTranslation()
   const isAr = i18n.language.startsWith('ar')
   const { has } = useCapabilities()
-  const canManage = has('books.manage')
+  const canManage = has('books.edit')
   const navigate = useNavigate()
   const qc = useQueryClient()
   const [confirming, setConfirming] = useState<{ bookId: number | null; value: boolean }>({ bookId, value: false })

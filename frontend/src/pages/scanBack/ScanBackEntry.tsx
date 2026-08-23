@@ -4,7 +4,7 @@
  * line, not a seventh place to go.
  *
  * Only renders when something is actually stranded (and only for the
- * `books.manage` holders who can file a scan), so it reads as work to do
+ * `books.edit` holders who can file a scan), so it reads as work to do
  * rather than permanent furniture.
  *
  * Wording reuses the bell's counted phrase and the queue's own "view all" —

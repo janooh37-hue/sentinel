@@ -11,7 +11,7 @@ const hasCapability = vi.hoisted(() => vi.fn(() => true))
 const mobileState = vi.hoisted(() => ({ value: false }))
 
 vi.mock('@/lib/useCapabilities', () => ({
-  useCapabilities: () => ({ capabilities: new Set(['books.manage']), isLoading: false, has: hasCapability }),
+  useCapabilities: () => ({ capabilities: new Set(['books.edit']), isLoading: false, has: hasCapability }),
 }))
 vi.mock('@/lib/useIsMobile', () => ({
   useIsMobile: () => mobileState.value,
@@ -115,7 +115,7 @@ describe('PermitDocumentVersions', () => {
     expect(row?.querySelector('a[href="/v2.pdf"]')).toBeNull()
   })
 
-  it('shows Word actions for books.manage', async () => {
+  it('shows Word actions for books.edit', async () => {
     render(<PermitDocumentVersions bookId={9} />, { wrapper: wrapper() })
     await waitFor(() => expect(screen.getByRole('button', { name: /edit in word/i })).toBeInTheDocument())
   })

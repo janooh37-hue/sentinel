@@ -66,7 +66,7 @@ export function RecordPane({
   const { t } = useTranslation()
   const serviceLabel = useServiceLabel()
   const { has } = useCapabilities()
-  const canManage = has('books.manage')
+  const canManage = has('books.edit')
   const canScanCap = has('documents.scan')
   const canScan = canScanCap && canManage
   const fileRef = useRef<HTMLInputElement | null>(null)
@@ -327,7 +327,7 @@ export function RecordPane({
         }}
       />
 
-      {/* Delete a scan / unfile a signed copy (books.manage). A signed copy warns
+      {/* Delete a scan / unfile a signed copy (books.edit). A signed copy warns
           that it reverts the record's approval. */}
       <ConfirmDialog
         open={deleteTarget !== null}

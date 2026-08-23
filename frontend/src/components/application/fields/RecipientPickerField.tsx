@@ -2,7 +2,7 @@
  * RecipientPickerField — searchable combobox for General Book recipient selection.
  *
  * Fetches GET /api/v1/general-book/recipients via TanStack Query.
- * A gear button (books.manage capability) opens RecipientManagerDialog for
+ * A gear button (books.edit capability) opens RecipientManagerDialog for
  * add/delete. Inline "+ Add recipient" option in the dropdown lets users
  * add a new recipient without leaving the form.
  *
@@ -214,8 +214,8 @@ export function RecipientPickerField({
                 </Button>
               )}
 
-              {/* Manage button — requires books.manage capability */}
-              <CapabilityGate cap="books.manage" requestable>
+              {/* Manage button — requires books.edit capability */}
+              <CapabilityGate cap="books.edit" requestable>
                 <Button
                   type="button"
                   variant="secondary"

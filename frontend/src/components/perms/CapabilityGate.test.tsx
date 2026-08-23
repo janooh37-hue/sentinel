@@ -74,7 +74,7 @@ describe('CapabilityGate lock mode — no nested interactive elements', () => {
 
     render(
       <Wrapper>
-        <CapabilityGate cap="books.manage" requestable>
+        <CapabilityGate cap="books.edit" requestable>
           <button type="button">Manage</button>
         </CapabilityGate>
       </Wrapper>,
@@ -96,14 +96,14 @@ describe('CapabilityGate lock mode — no nested interactive elements', () => {
 
   it('renders children directly when user has the cap (no lock wrapper)', () => {
     mockUseCapabilities.mockReturnValue({
-      capabilities: new Set(['books.manage']),
+      capabilities: new Set(['books.edit']),
       isLoading: false,
-      has: (cap: string) => cap === 'books.manage',
+      has: (cap: string) => cap === 'books.edit',
     })
 
     render(
       <Wrapper>
-        <CapabilityGate cap="books.manage" requestable>
+        <CapabilityGate cap="books.edit" requestable>
           <button type="button">Manage</button>
         </CapabilityGate>
       </Wrapper>,
