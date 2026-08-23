@@ -6,6 +6,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { api } from '@/lib/api'
 import { openCorrespondenceInOutlook } from '@/lib/outlookBridge'
+import { useIsMobile } from '@/lib/useIsMobile'
 import { CorrespondenceTab } from './CorrespondenceTab'
 
 vi.mock('@/lib/api', async (original) => {
@@ -15,10 +16,14 @@ vi.mock('@/lib/api', async (original) => {
     api: { ...actual.api, listEmployeeCorrespondence: vi.fn() },
   }
 })
+vi.mock('@/lib/useIsMobile', () => ({ useIsMobile: vi.fn() }))
 vi.mock('@/lib/outlookBridge', () => ({ openCorrespondenceInOutlook: vi.fn() }))
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
-    t: (key: string) => key,
+    t: (key: string) =>
+      key === 'employee.correspondence.desktopRequired'
+        ? 'Classic Outlook requires the desktop app'
+        : key,
     i18n: { language: 'en' },
   }),
 }))
@@ -65,6 +70,7 @@ function renderTab() {
 
 describe('CorrespondenceTab', () => {
   beforeEach(() => {
+    vi.mocked(useIsMobile).mockReturnValue(false)
     vi.mocked(api.listEmployeeCorrespondence).mockResolvedValue({ items, total: items.length })
     vi.mocked(openCorrespondenceInOutlook).mockResolvedValue({ status: 'completed', id: 44, kind: 'open' })
   })
@@ -88,5 +94,12 @@ describe('CorrespondenceTab', () => {
     const legacy = await screen.findByText('Legacy letter')
     expect(legacy.closest('article')).toHaveAttribute('data-read-only', 'true')
     expect(screen.queryByRole('button', { name: 'employee.correspondence.open legacy letter' })).not.toBeInTheDocument()
+  })
+
+  it('shows localized desktop-required copy on mobile instead of a raw key', async () => {
+    vi.mocked(useIsMobile).mockReturnValue(true)
+    renderTab()
+    expect(await screen.findByText('Classic Outlook requires the desktop app')).toBeInTheDocument()
+    expect(screen.queryByText('employee.correspondence.desktopRequired')).not.toBeInTheDocument()
   })
 })

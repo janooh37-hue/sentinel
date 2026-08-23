@@ -2016,6 +2016,7 @@
       "to_many": "{{count}} مستلماً",
       "to_other": "{{count}} مستلم",
       "open": "فتح في Outlook",
+      "desktopRequired": "يتطلب Outlook الكلاسيكي تطبيق سطح المكتب",
       "attachments": {
         "renderFailed": "تعذر عرض هذا الملف"
       },

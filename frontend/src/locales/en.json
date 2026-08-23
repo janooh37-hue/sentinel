@@ -1896,6 +1896,7 @@
       "to_many": "{{count}} recipients",
       "to_other": "{{count}} recipients",
       "open": "Open in Outlook",
+      "desktopRequired": "Classic Outlook requires the desktop app",
       "attachments": {
         "renderFailed": "Couldn't render this file"
       },
