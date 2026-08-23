@@ -15,7 +15,7 @@ from __future__ import annotations
 
 from datetime import date, datetime
 
-from sqlalchemy import and_, func, select
+from sqlalchemy import and_, func, or_, select
 from sqlalchemy.orm import Session
 
 from app.core.employee_completeness import completeness as _completeness
@@ -24,7 +24,7 @@ from app.db import models
 from app.schemas import employee_detail as sx
 from app.schemas.employee import EmployeeRead
 from app.schemas.employee_completeness import CompletenessRead
-from app.services import photo_service
+from app.services import ledger_service, photo_service
 
 # Cap each recent-* array. The Employee Detail page paginates the per-tab
 # views via dedicated endpoints; this aggregate is for the at-a-glance hero.
@@ -40,7 +40,9 @@ DEFAULT_LEAVE_ALLOWANCE_DAYS = 30
 _APPROVED_STATUS = "Approved"
 
 
-def get_employee_detail(db: Session, employee_id: str) -> sx.EmployeeDetailRead | None:
+def get_employee_detail(
+    db: Session, employee_id: str, *, owner_user_id: int | None = None
+) -> sx.EmployeeDetailRead | None:
     emp = db.get(models.Employee, employee_id)
     if emp is None:
         return None
@@ -75,12 +77,27 @@ def get_employee_detail(db: Session, employee_id: str) -> sx.EmployeeDetailRead 
             select(func.count(models.Violation.id)).where(models.Violation.employee_id == emp.id)
         ).scalar_one()
     )
-
+    ledger_filters = [
+        models.CorrespondenceEmployeeLink.employee_id == emp.id,
+        models.CorrespondenceEmployeeLink.state == "linked",
+        models.LedgerEntry.deleted_at.is_(None),
+        ledger_service._tags_contain(ledger_service.DRAFT_TAG, negate=True),
+    ]
+    if owner_user_id is not None:
+        ledger_filters.append(
+            or_(
+                models.LedgerEntry.channel != "email",
+                models.LedgerEntry.owner_user_id == owner_user_id,
+            )
+        )
     ledger_count = int(
         db.execute(
             select(func.count(models.LedgerEntry.id))
-            .where(models.LedgerEntry.related_employee_id == emp.id)
-            .where(models.LedgerEntry.deleted_at.is_(None))
+            .join(
+                models.CorrespondenceEmployeeLink,
+                models.CorrespondenceEmployeeLink.ledger_entry_id == models.LedgerEntry.id,
+            )
+            .where(*ledger_filters)
         ).scalar_one()
     )
 
@@ -150,9 +167,12 @@ def get_employee_detail(db: Session, employee_id: str) -> sx.EmployeeDetailRead 
         sx.RecentLedgerRead.model_validate(le)
         for le in db.scalars(
             select(models.LedgerEntry)
-            .where(models.LedgerEntry.related_employee_id == emp.id)
-            .where(models.LedgerEntry.deleted_at.is_(None))
-            .order_by(models.LedgerEntry.created_at.desc())
+            .join(
+                models.CorrespondenceEmployeeLink,
+                models.CorrespondenceEmployeeLink.ledger_entry_id == models.LedgerEntry.id,
+            )
+            .where(*ledger_filters)
+            .order_by(models.LedgerEntry.created_at.desc(), models.LedgerEntry.id.desc())
             .limit(RECENT_LIMIT)
         )
     ]

@@ -26,19 +26,21 @@ def api_db(monkeypatch: pytest.MonkeyPatch, tmp_path: pytest.TempPathFactory) ->
     monkeypatch.setattr(session_mod, "SessionLocal", TestSession)
     db = TestSession()
     perm_service.seed_role_defaults(db)
-    db.add_all([
-        Employee(id="G100", name_en="ALPHA EMPLOYEE", name_ar="موظف ألف", status="Active"),
-        BookCategory(id="HR", name_en="HR", prefix="HR"),
-        Book(id=71, category_id="HR", ref_number="HR-0071", employee_id="G100"),
-        Document(
-            id=11,
-            employee_id="G100",
-            template_id="Employment Certificate",
-            ref_number="HR-0071",
-            docx_path="output/fake.docx",
-            submission_id="00000000-0000-0000-0000-000000000011",
-        ),
-    ])
+    db.add_all(
+        [
+            Employee(id="G100", name_en="ALPHA EMPLOYEE", name_ar="موظف ألف", status="Active"),
+            BookCategory(id="HR", name_en="HR", prefix="HR"),
+            Book(id=71, category_id="HR", ref_number="HR-0071", employee_id="G100"),
+            Document(
+                id=11,
+                employee_id="G100",
+                template_id="Employment Certificate",
+                ref_number="HR-0071",
+                docx_path="output/fake.docx",
+                submission_id="00000000-0000-0000-0000-000000000011",
+            ),
+        ]
+    )
     db.commit()
     try:
         yield db
@@ -71,6 +73,7 @@ def operator_client(api_db: Session) -> TestClient:
     api_db.add(UserPermission(user_id=user.id, capability="employees.view", effect="deny"))
     api_db.commit()
     return _client(api_db, user)
+
 
 def test_activity_static_route_wins_over_employee_id_route(manager_client: TestClient):
     response = manager_client.get("/api/v1/employees/activity")

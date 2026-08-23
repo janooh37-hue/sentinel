@@ -32,6 +32,7 @@ from app.core.employee_completeness import TRACKED_FIELDS, missing_fields
 from app.core.vault_manager import Vault
 from app.db.models import Employee, User, VaultFile
 from app.db.session import get_db
+from app.schemas import correspondence as correspondence_schemas
 from app.schemas import employee_activity as activity_schemas
 from app.schemas import employee_detail as detail_schemas
 from app.schemas.employee import (
@@ -46,6 +47,7 @@ from app.schemas.leave import LeaveBalanceRead, LeaveRead
 from app.schemas.vault_file import VaultEntry, VaultTree
 from app.schemas.violation import ViolationCreate, ViolationRead, ViolationUpdate
 from app.services import (
+    correspondence_link_service,
     employee_activity_service,
     employee_detail_service,
     employee_service,
@@ -210,13 +212,39 @@ def update_employee(
 def get_employee_detail(
     employee_id: str,
     db: Annotated[Session, Depends(get_db)],
-    _user: Annotated[User, Depends(require_capability("employees.view"))],
+    current_user: Annotated[User, Depends(require_capability("employees.view"))],
 ) -> detail_schemas.EmployeeDetailRead:
     """Aggregate everything tied to an employee — for the Employee Detail page."""
-    detail = employee_detail_service.get_employee_detail(db, employee_id)
+    detail = employee_detail_service.get_employee_detail(
+        db, employee_id, owner_user_id=current_user.id
+    )
     if detail is None:
         raise HTTPException(status_code=404, detail="Employee not found")
     return detail
+
+
+@router.get(
+    "/{employee_id}/correspondence",
+    response_model=correspondence_schemas.CorrespondenceListRead,
+)
+def list_employee_correspondence(
+    employee_id: str,
+    db: Annotated[Session, Depends(get_db)],
+    current_user: Annotated[User, Depends(require_capability("employees.view"))],
+    limit: int = Query(
+        correspondence_link_service.DEFAULT_LIMIT,
+        ge=1,
+        le=correspondence_link_service.MAX_LIMIT,
+    ),
+    offset: int = Query(0, ge=0),
+) -> correspondence_schemas.CorrespondenceListRead:
+    return correspondence_link_service.list_employee_correspondence(
+        db,
+        employee_id=employee_id,
+        owner_user_id=current_user.id,
+        limit=limit,
+        offset=offset,
+    )
 
 
 # --- Leaves (read-only list + balance) ---------------------------------------

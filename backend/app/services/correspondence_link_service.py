@@ -3,10 +3,19 @@ from __future__ import annotations
 from collections.abc import Collection
 from datetime import UTC, datetime
 
-from sqlalchemy import select
+from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
-from app.db.models import CorrespondenceEmployeeLink, Employee
+from app.db.models import CorrespondenceEmployeeLink, Employee, LedgerEntry
+from app.schemas.correspondence import (
+    CorrespondenceAddress,
+    CorrespondenceItemRead,
+    CorrespondenceListRead,
+)
+from app.services import ledger_service
+
+DEFAULT_LIMIT = 25
+MAX_LIMIT = 100
 
 
 def _utcnow() -> datetime:
@@ -14,7 +23,9 @@ def _utcnow() -> datetime:
 
 
 def _normalise_employee_ids(employee_ids: Collection[str]) -> tuple[str, ...]:
-    return tuple(dict.fromkeys(employee_id.strip().upper() for employee_id in employee_ids if employee_id))
+    return tuple(
+        dict.fromkeys(employee_id.strip().upper() for employee_id in employee_ids if employee_id)
+    )
 
 
 def _require_employee(db: Session, employee_id: str) -> str:
@@ -32,9 +43,7 @@ def sync_detected_links(
         db.flush()
         return []
 
-    real_ids = set(
-        db.scalars(select(Employee.id).where(Employee.id.in_(normalized_ids))).all()
-    )
+    real_ids = set(db.scalars(select(Employee.id).where(Employee.id.in_(normalized_ids))).all())
     valid_ids = tuple(employee_id for employee_id in normalized_ids if employee_id in real_ids)
     if not valid_ids:
         db.flush()
@@ -71,6 +80,69 @@ def get_link(db: Session, *, entry_id: int, employee_id: str) -> CorrespondenceE
             CorrespondenceEmployeeLink.ledger_entry_id == entry_id,
             CorrespondenceEmployeeLink.employee_id == employee_id.strip().upper(),
         )
+    )
+
+
+def list_employee_correspondence(
+    db: Session,
+    *,
+    employee_id: str,
+    owner_user_id: int,
+    limit: int,
+    offset: int,
+) -> CorrespondenceListRead:
+    normalized_employee_id = employee_id.strip().upper()
+    filters = (
+        CorrespondenceEmployeeLink.employee_id == normalized_employee_id,
+        CorrespondenceEmployeeLink.state == "linked",
+        LedgerEntry.deleted_at.is_(None),
+        ledger_service._tags_contain(ledger_service.DRAFT_TAG, negate=True),
+        or_(LedgerEntry.channel != "email", LedgerEntry.owner_user_id == owner_user_id),
+    )
+    total = int(
+        db.scalar(
+            select(func.count())
+            .select_from(CorrespondenceEmployeeLink)
+            .join(LedgerEntry, CorrespondenceEmployeeLink.ledger_entry_id == LedgerEntry.id)
+            .where(*filters)
+        )
+        or 0
+    )
+    rows = db.execute(
+        select(CorrespondenceEmployeeLink, LedgerEntry)
+        .join(LedgerEntry, CorrespondenceEmployeeLink.ledger_entry_id == LedgerEntry.id)
+        .where(*filters)
+        .order_by(
+            CorrespondenceEmployeeLink.created_at.desc(),
+            CorrespondenceEmployeeLink.id.desc(),
+        )
+        .offset(offset)
+        .limit(limit)
+    ).all()
+    return CorrespondenceListRead(
+        items=[
+            CorrespondenceItemRead(
+                entry_id=entry.id,
+                channel=entry.channel,
+                entry_date=entry.entry_date,
+                direction=entry.direction,
+                counterparty=entry.counterparty,
+                subject=entry.subject,
+                to_recipients=[
+                    CorrespondenceAddress.model_validate(address)
+                    for address in (entry.to_recipients or [])
+                ],
+                cc_recipients=[
+                    CorrespondenceAddress.model_validate(address)
+                    for address in (entry.cc_recipients or [])
+                ],
+                attachment_count=len(entry.attachment_paths or []),
+                link_source=link.source,
+                can_open_in_outlook=entry.channel == "email",
+            )
+            for link, entry in rows
+        ],
+        total=total,
     )
 
 

@@ -5,7 +5,15 @@ from itertools import chain
 from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
-from app.db.models import Book, Document, Employee, Leave, LedgerEntry, Violation
+from app.db.models import (
+    Book,
+    CorrespondenceEmployeeLink,
+    Document,
+    Employee,
+    Leave,
+    LedgerEntry,
+    Violation,
+)
 from app.schemas.employee_activity import (
     EmployeeActivityItemRead,
     EmployeeActivityKind,
@@ -53,7 +61,9 @@ def _documents(
     )
     if employee_id is not None:
         stmt = stmt.where(Document.employee_id == employee_id)
-    rows = db.execute(stmt.order_by(Document.created_at.desc(), Document.id.desc()).limit(requested)).all()
+    rows = db.execute(
+        stmt.order_by(Document.created_at.desc(), Document.id.desc()).limit(requested)
+    ).all()
     total = int(rows[0].source_total) if rows else 0
     return [
         EmployeeActivityItemRead(
@@ -92,7 +102,9 @@ def _leaves(
     )
     if employee_id is not None:
         stmt = stmt.where(Leave.employee_id == employee_id)
-    rows = db.execute(stmt.order_by(Leave.created_at.desc(), Leave.id.desc()).limit(requested)).all()
+    rows = db.execute(
+        stmt.order_by(Leave.created_at.desc(), Leave.id.desc()).limit(requested)
+    ).all()
     total = int(rows[0].source_total) if rows else 0
     return [
         EmployeeActivityItemRead(
@@ -115,24 +127,23 @@ def _leaves(
 def _violations(
     db: Session, *, employee_id: str | None, requested: int
 ) -> tuple[list[EmployeeActivityItemRead], int]:
-    stmt = (
-        select(
-            Violation.id.label("source_id"),
-            Violation.id.label("target_id"),
-            Violation.created_at.label("occurred_at"),
-            Violation.violation_type.label("title"),
-            Violation.description.label("detail"),
-            Violation.status,
-            Employee.id.label("employee_id"),
-            Employee.name_en.label("employee_name_en"),
-            Employee.name_ar.label("employee_name_ar"),
-            func.count().over().label("source_total"),
-        )
-        .join(Employee, Violation.employee_id == Employee.id)
-    )
+    stmt = select(
+        Violation.id.label("source_id"),
+        Violation.id.label("target_id"),
+        Violation.created_at.label("occurred_at"),
+        Violation.violation_type.label("title"),
+        Violation.description.label("detail"),
+        Violation.status,
+        Employee.id.label("employee_id"),
+        Employee.name_en.label("employee_name_en"),
+        Employee.name_ar.label("employee_name_ar"),
+        func.count().over().label("source_total"),
+    ).join(Employee, Violation.employee_id == Employee.id)
     if employee_id is not None:
         stmt = stmt.where(Violation.employee_id == employee_id)
-    rows = db.execute(stmt.order_by(Violation.created_at.desc(), Violation.id.desc()).limit(requested)).all()
+    rows = db.execute(
+        stmt.order_by(Violation.created_at.desc(), Violation.id.desc()).limit(requested)
+    ).all()
     total = int(rows[0].source_total) if rows else 0
     return [
         EmployeeActivityItemRead(
@@ -173,16 +184,20 @@ def _ledger(
             Employee.name_ar.label("employee_name_ar"),
             func.count().over().label("source_total"),
         )
-        .join(Employee, LedgerEntry.related_employee_id == Employee.id)
+        .join(
+            CorrespondenceEmployeeLink,
+            CorrespondenceEmployeeLink.ledger_entry_id == LedgerEntry.id,
+        )
+        .join(Employee, CorrespondenceEmployeeLink.employee_id == Employee.id)
         .where(
-            LedgerEntry.related_employee_id.is_not(None),
+            CorrespondenceEmployeeLink.state == "linked",
             LedgerEntry.deleted_at.is_(None),
             ledger_service._tags_contain(ledger_service.DRAFT_TAG, negate=True),
             or_(LedgerEntry.channel != "email", LedgerEntry.owner_user_id == owner_user_id),
         )
     )
     if employee_id is not None:
-        stmt = stmt.where(LedgerEntry.related_employee_id == employee_id)
+        stmt = stmt.where(CorrespondenceEmployeeLink.employee_id == employee_id)
     rows = db.execute(
         stmt.order_by(LedgerEntry.created_at.desc(), LedgerEntry.id.desc()).limit(requested)
     ).all()

@@ -3,12 +3,37 @@
 from __future__ import annotations
 
 from datetime import date, datetime
+from typing import Literal
 
 from pydantic import BaseModel, Field
 
 from app.schemas._base import ORMBase
 
 _TRIGGERS = ("document_generated", "book_signed", "intake_classified", "email_sent")
+
+
+class CorrespondenceAddress(BaseModel):
+    name: str = ""
+    address: str
+
+
+class CorrespondenceItemRead(BaseModel):
+    entry_id: int
+    channel: str
+    entry_date: date
+    direction: str
+    counterparty: str
+    subject: str
+    to_recipients: list[CorrespondenceAddress]
+    cc_recipients: list[CorrespondenceAddress]
+    attachment_count: int
+    link_source: Literal["detected", "manual", "legacy"]
+    can_open_in_outlook: bool
+
+
+class CorrespondenceListRead(BaseModel):
+    items: list[CorrespondenceItemRead]
+    total: int
 
 
 class CorrespondenceCategoryCreate(BaseModel):
@@ -86,9 +111,12 @@ class CorrespondenceLogRecord(CorrespondenceLogItem):
 
 
 __all__ = [
+    "CorrespondenceAddress",
     "CorrespondenceCategoryCreate",
     "CorrespondenceCategoryRead",
     "CorrespondenceCategoryUpdate",
+    "CorrespondenceItemRead",
+    "CorrespondenceListRead",
     "CorrespondenceLogItem",
     "CorrespondenceLogRecord",
     "CorrespondenceRuleCreate",
