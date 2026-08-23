@@ -47,7 +47,9 @@ from app.db.models import (
     User,
 )
 from app.db.repos.refs_repo import allocate_ref_with_retry
+from app.schemas._base import DUBAI
 from app.schemas.book import (
+    ApprovalLogItem,
     ApproverOptionRead,
     BookApprovalStepRead,
     BookCreate,
@@ -1231,6 +1233,232 @@ def your_step_kind(book: Book, user_id: int) -> str | None:
     if any(s.kind == "reviewer" and s.assignee_user_id == user_id for s in pending):
         return "reviewer"
     return None
+
+
+# ---------------------------------------------------------------------------
+# Approvals log (#31) — GET /books/approval-log?scope=sent|received
+# ---------------------------------------------------------------------------
+
+# How long a decided step keeps showing in the caller's received log.
+APPROVAL_LOG_RECEIVED_WINDOW_DAYS = 30
+
+_APPROVAL_VERDICTS: frozenset[str] = frozenset({"approved", "rejected", "returned"})
+
+
+def _approval_verdict_of(book: Book) -> str | None:
+    """approved | rejected | returned once the record sits in a decided state;
+    None while it is still moving through the chain."""
+    return book.approval_state if book.approval_state in _APPROVAL_VERDICTS else None
+
+
+def _my_log_step(book: Book, user_id: int) -> BookApprovalStep | None:
+    """The caller's most relevant step on this record.
+
+    A pending step on the current version wins (it is what awaits them);
+    otherwise their most recently decided step anywhere in the record's history
+    — resubmissions move chains to fresh versions, and the old verdict is still
+    the caller's relationship to the record.
+    """
+    pending: BookApprovalStep | None = None
+    decided: BookApprovalStep | None = None
+    for version in reversed(book.versions):  # newest first
+        for step in version.approval_steps:
+            if step.assignee_user_id != user_id:
+                continue
+            if step.state == "pending" and pending is None:
+                pending = step
+            if step.decided_at is not None and (
+                decided is None or step.decided_at > decided.decided_at
+            ):
+                decided = step
+        if pending is not None:
+            break  # nothing on an older version can outrank a live pending step
+    return pending if pending is not None else decided
+
+
+def _build_approval_log_item(
+    book: Book,
+    *,
+    names_by_id: dict[int, str],
+    manager_user_by_id: dict[int, int],
+    my_step: BookApprovalStep | None = None,
+) -> ApprovalLogItem:
+    """Flatten one Book row (+ preloaded category/versions/steps) into a log row.
+
+    All name resolution happened upstream in batch; this only shapes the payload.
+    Timestamps are tagged with their real zone here: step stamps are naive UTC,
+    while ``Book.created_at`` is local wall-clock (see LOCAL_WALLCLOCK_FIELDS).
+    """
+    version = _current_version(book)
+    steps = list(version.approval_steps) if version is not None else []
+    approver_steps = [s for s in steps if (s.kind or "approver") == "approver"]
+    reviewer_steps = [s for s in steps if s.kind == "reviewer"]
+    verdict = _approval_verdict_of(book)
+    decided_stamps = [s.decided_at for s in approver_steps if s.decided_at is not None]
+    submitted_at: datetime | None = None
+    if steps and steps[0].created_at is not None:
+        submitted_at = min(s.created_at for s in steps if s.created_at is not None)
+        submitted_at = submitted_at.replace(tzinfo=UTC)
+    elif book.created_at is not None:
+        submitted_at = book.created_at.replace(tzinfo=DUBAI)
+    doc_manager_user_id = manager_user_by_id.get(book.doc_manager_id or 0)
+    category = book.category
+    item = ApprovalLogItem(
+        book_id=book.id,
+        ref_number=book.ref_number,
+        subject=derive_subject(book),
+        category_name_ar=category.name_ar if category is not None else None,
+        category_name_en=category.name_en if category is not None else None,
+        status=book.approval_state,
+        priority=book.priority,
+        submitted_by_user_id=book.submitted_by_user_id,
+        submitted_by_name=names_by_id.get(book.submitted_by_user_id or 0),
+        doc_manager_user_id=doc_manager_user_id,
+        doc_manager_name=(
+            names_by_id.get(doc_manager_user_id) if doc_manager_user_id is not None else None
+        ),
+        approver_name=next((names_by_id.get(s.assignee_user_id) for s in approver_steps), None),
+        reviewer_names=[names_by_id.get(s.assignee_user_id, "") for s in reviewer_steps],
+        submitted_at=submitted_at,
+        decided_at=(
+            max(decided_stamps).replace(tzinfo=UTC) if verdict and decided_stamps else None
+        ),
+        verdict=verdict,  # type: ignore[arg-type]  # guarded by _APPROVAL_VERDICTS
+        document_id=version.document_id if version is not None else None,
+    )
+    if my_step is not None:
+        item.your_step_kind = my_step.kind or "approver"
+        item.your_step_state = my_step.state
+        item.your_step_decided_at = (
+            my_step.decided_at.replace(tzinfo=UTC) if my_step.decided_at is not None else None
+        )
+    return item
+
+
+def _resolve_log_names(db: Session, rows: list[Book]) -> tuple[dict[int, str], dict[int, int]]:
+    """Batch-resolve every display name a log page needs, plus the Manager→user
+    map for the doc-manager column: two queries for people, one for managers —
+    regardless of page size."""
+    user_ids: set[int] = set()
+    manager_ids: set[int] = set()
+    for book in rows:
+        if book.submitted_by_user_id is not None:
+            user_ids.add(book.submitted_by_user_id)
+        if book.doc_manager_id is not None:
+            manager_ids.add(book.doc_manager_id)
+        for version in book.versions:
+            for step in version.approval_steps:
+                user_ids.add(step.assignee_user_id)
+    manager_user_by_id: dict[int, int] = {}
+    if manager_ids:
+        managers = db.execute(select(Manager).where(Manager.id.in_(manager_ids))).scalars().all()
+        for mgr in managers:
+            if mgr.user_id is not None:
+                manager_user_by_id[mgr.id] = mgr.user_id
+                user_ids.add(mgr.user_id)
+    return resolve_names_by_ids(db, user_ids), manager_user_by_id
+
+
+def approval_log_sent(
+    db: Session, *, user_id: int, limit: int, offset: int
+) -> tuple[list[ApprovalLogItem], int]:
+    """Books the caller submitted for approval, newest first — their outbox."""
+    total = db.execute(
+        select(func.count())
+        .select_from(Book)
+        .where(Book.deleted_at.is_(None), Book.submitted_by_user_id == user_id)
+    ).scalar_one()
+    stmt = (
+        select(Book)
+        .options(
+            selectinload(Book.category),
+            selectinload(Book.versions).selectinload(BookVersion.approval_steps),
+        )
+        .where(Book.deleted_at.is_(None), Book.submitted_by_user_id == user_id)
+        .order_by(Book.created_at.desc(), Book.id.desc())
+        .limit(limit)
+        .offset(offset)
+    )
+    rows = list(db.execute(stmt).scalars().all())
+    names_by_id, manager_user_by_id = _resolve_log_names(db, rows)
+    items = [
+        _build_approval_log_item(
+            book, names_by_id=names_by_id, manager_user_by_id=manager_user_by_id
+        )
+        for book in rows
+    ]
+    return items, total
+
+
+def approval_log_received(
+    db: Session, *, user_id: int, limit: int, offset: int
+) -> tuple[list[ApprovalLogItem], int]:
+    """The caller's inbox: records whose current pending step is theirs (the
+    ``list_awaiting`` semantics) plus records where their own decided step falls
+    inside the last ``APPROVAL_LOG_RECEIVED_WINDOW_DAYS`` days. Newest activity
+    first."""
+    pending_books = list_awaiting(db, user_id=user_id)
+    cutoff = datetime.now(UTC).replace(tzinfo=None) - timedelta(
+        days=APPROVAL_LOG_RECEIVED_WINDOW_DAYS
+    )
+    decided_book_ids = list(
+        db.execute(
+            select(BookApprovalStep.book_id)
+            .join(Book, Book.id == BookApprovalStep.book_id)
+            .where(
+                BookApprovalStep.assignee_user_id == user_id,
+                BookApprovalStep.state != "pending",
+                BookApprovalStep.decided_at.is_not(None),
+                BookApprovalStep.decided_at >= cutoff,
+                Book.deleted_at.is_(None),
+            )
+        )
+        .scalars()
+        .all()
+    )
+    # One ordered id list: pending first (they are the actionable rows), then the
+    # recently-decided ones not already covered.
+    seen = {b.id for b in pending_books}
+    book_ids = [b.id for b in pending_books] + [i for i in decided_book_ids if i not in seen]
+    if not book_ids:
+        return [], 0
+    rows_by_id = {
+        b.id: b
+        for b in db.execute(
+            select(Book)
+            .options(
+                selectinload(Book.category),
+                selectinload(Book.versions).selectinload(BookVersion.approval_steps),
+            )
+            .where(Book.id.in_(book_ids))
+        )
+        .scalars()
+        .all()
+    }
+    ordered = [rows_by_id[i] for i in book_ids if i in rows_by_id]
+
+    def _activity_key(book: Book) -> datetime:
+        step = _my_log_step(book, user_id)
+        stamp: datetime | None = None
+        if step is not None:
+            stamp = step.decided_at or step.created_at
+        if stamp is None:
+            stamp = book.created_at
+        return stamp or datetime.min
+
+    ordered.sort(key=_activity_key, reverse=True)
+    page = ordered[offset : offset + limit]
+    names_by_id, manager_user_by_id = _resolve_log_names(db, page)
+    items = [
+        _build_approval_log_item(
+            book,
+            names_by_id=names_by_id,
+            manager_user_by_id=manager_user_by_id,
+            my_step=_my_log_step(book, user_id),
+        )
+        for book in page
+    ]
+    return items, len(ordered)
 
 
 def _resolve_user_name(db: Session, user: User) -> str:
