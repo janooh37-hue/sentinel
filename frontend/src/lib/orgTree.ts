@@ -36,8 +36,8 @@ export interface OrgLayout {
   levels: Array<{ y: number; h: number; level: number }>
 }
 
-export const NODE_W = 200
-export const NODE_H = 72
+export const NODE_W = 224
+export const NODE_H = 92
 export const SIBLING_GAP = 14
 export const ROOT_GAP = 44
 export const LEVEL_GAP = 46
