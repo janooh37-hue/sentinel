@@ -243,6 +243,8 @@ Do not create a fresh WAHA session. The existing `podman-uosserver` distribution
 
 On the transfer disk or protected share, use one root directory. This runbook uses `D:\GSSG-Transfer`. If `D:` is not the encrypted transfer disk, change this one value before running any copy command.
 
+Use BitLocker-protected NTFS storage or an administrator-only NTFS share. FAT32 cannot hold a large WSL export, and filesystems without Windows ACL support cannot preserve Caddy private-key permissions.
+
 ```powershell
 $TransferRoot = 'D:\GSSG-Transfer'
 New-Item -ItemType Directory -Force $TransferRoot | Out-Null
@@ -271,9 +273,10 @@ From `GSSGIT`, copy a clean installation input:
 $Source = 'C:\Users\Admin\sentinel'
 $Dest = Join-Path $TransferRoot 'sentinel'
 robocopy $Source $Dest /E /COPY:DAT /DCOPY:DAT /XJ /R:2 /W:2 `
-  /XD venv frontend\node_modules frontend\dist backend\app\static `
-      .worktrees .pytest_cache .mypy_cache .ruff_cache .playwright-cli `
-      .playwright-mcp .tmp `
+  /XD "$Source\venv" "$Source\frontend\node_modules" "$Source\frontend\dist" `
+      "$Source\backend\app\static" "$Source\.worktrees" "$Source\.pytest_cache" `
+      "$Source\.mypy_cache" "$Source\.ruff_cache" "$Source\.playwright-cli" `
+      "$Source\.playwright-mcp" "$Source\.tmp" `
   /XF *.pyc
 if ($LASTEXITCODE -ge 8) { throw "robocopy source failed with exit code $LASTEXITCODE" }
 ```
@@ -311,6 +314,13 @@ Take an early protected copy of Caddy's CA state:
 $EarlyCaddy = Join-Path $TransferRoot 'caddy-data'
 robocopy C:\Tools\caddy\data $EarlyCaddy /E /COPY:DATS /DCOPY:DAT /XJ /R:2 /W:2
 if ($LASTEXITCODE -ge 8) { throw "early Caddy state copy failed with exit code $LASTEXITCODE" }
+```
+
+```powershell
+$CaddyRoot = 'C:\Tools\caddy\data\pki\authorities\local\root.crt'
+if (-not (Test-Path $CaddyRoot)) { throw 'Caddy root CA is missing' }
+(Get-FileHash $CaddyRoot -Algorithm SHA256).Hash |
+  Set-Content (Join-Path $TransferRoot 'caddy-root-sha256.txt') -NoNewline
 ```
 
 The final cutover repeats this copy while old Caddy is stopped.
@@ -361,7 +371,7 @@ py -3.12 -m venv venv
 .\venv\Scripts\python.exe -m pip install --upgrade pip
 .\venv\Scripts\python.exe -m pip install -r requirements.txt
 pnpm -C frontend install --frozen-lockfile
-pnpm -C frontend run build
+.\scripts\mng.ps1 build
 ```
 
 Do not copy `venv`, `node_modules`, or generated static assets from `GSSGIT`.
@@ -412,6 +422,14 @@ Remove-Item C:\Tools\caddy\data -Recurse -Force -ErrorAction SilentlyContinue
 Copy-Item D:\GSSG-Transfer\caddy-data C:\Tools\caddy\data -Recurse -Force
 ```
 
+Verify that the trusted CA identity survived the copy:
+
+```powershell
+$ExpectedCaHash = (Get-Content D:\GSSG-Transfer\caddy-root-sha256.txt -Raw).Trim()
+$ActualCaHash = (Get-FileHash C:\Tools\caddy\data\pki\authorities\local\root.crt -Algorithm SHA256).Hash
+if ($ActualCaHash -cne $ExpectedCaHash) { throw 'Restored Caddy root CA does not match GSSGIT' }
+```
+
 Restore the tunnel credential:
 
 ```powershell
@@ -451,8 +469,9 @@ If the installed WSL version lacks `--manage`, stop and update WSL rather than r
 Confirm `deploy\openwa\.env` and root `.env` contain matching API keys without printing either value:
 
 ```powershell
-$OpenWaKey = (Select-String deploy\openwa\.env '^\s*OPENWA_API_KEY\s*=\s*(.+)$').Matches[0].Groups[1].Value.Trim()
-$BackendKey = (Select-String .env '^\s*GSSG_OPENWA_API_KEY\s*=\s*(.+)$').Matches[0].Groups[1].Value.Trim()
+Set-Location C:\Users\Admin\sentinel
+$OpenWaKey = (Select-String -Path deploy\openwa\.env -Pattern '^\s*OPENWA_API_KEY\s*=\s*(.+)$').Matches[0].Groups[1].Value.Trim()
+$BackendKey = (Select-String -Path .env -Pattern '^\s*GSSG_OPENWA_API_KEY\s*=\s*(.+)$').Matches[0].Groups[1].Value.Trim()
 if (-not $OpenWaKey -or $OpenWaKey -cne $BackendKey) { throw 'OpenWA API keys are absent or do not match' }
 Remove-Variable OpenWaKey, BackendKey
 ```
@@ -536,6 +555,8 @@ Do not point `gssg.lan` or `gssg.app` to `GSSGAPP` during staging.
 
 Perform these steps in order. Do not parallelize them.
 
+Use elevated PowerShell on both PCs for service, scheduled-task, firewall, and WSL operations.
+
 ## 6.1 Freeze the old application
 
 1. Announce a write freeze.
@@ -551,11 +572,14 @@ Get-CimInstance Win32_Process -Filter "Name='python.exe'" |
 
 The process query must return nothing.
 
-3. Stop public and local application routing on `GSSGIT`:
+3. Stop public and local application routing on `GSSGIT`, then disable all three auto-start services so a Windows Update reboot cannot resurrect the stale application:
 
 ```powershell
 Stop-Service Cloudflared
 Stop-Service Caddy
+Set-Service GSSGManager -StartupType Disabled
+Set-Service Cloudflared -StartupType Disabled
+Set-Service Caddy -StartupType Disabled
 ```
 
 4. Stop WAHA and its task on `GSSGIT`:
@@ -566,7 +590,7 @@ wsl.exe -d podman-uosserver -- podman stop waha
 wsl.exe --terminate podman-uosserver
 ```
 
-5. Confirm `GSSGManager`, `Cloudflared`, and `Caddy` are stopped. Do not stop Windows file sharing or the explicitly retained N8N tasks.
+5. Confirm `GSSGManager`, `Cloudflared`, and `Caddy` are stopped and disabled. Do not stop Windows file sharing or the explicitly retained N8N tasks.
 
 ## 6.2 Take the final data and external-state copy
 
@@ -832,9 +856,32 @@ An integration that was disabled before migration may remain disabled. Every int
 
 ## Before `GSSGAPP` accepts writes
 
-1. Stop `GSSGManager`, Caddy, Cloudflared, and WAHA on `GSSGAPP`.
-2. Repoint `gssg.lan` to `GSSGIT`.
-3. Start the old Caddy, backend, Cloudflared connector, and WAHA task on `GSSGIT`.
+1. On `GSSGAPP`, stop and disable every application component so a reboot cannot reactivate the destination during rollback:
+
+```powershell
+Stop-Service GSSGManager, Caddy, Cloudflared
+Set-Service GSSGManager -StartupType Disabled
+Set-Service Caddy -StartupType Disabled
+Set-Service Cloudflared -StartupType Disabled
+Disable-ScheduledTask -TaskName WAHA-WhatsApp-Gateway
+wsl.exe -d podman-uosserver -- podman stop waha
+wsl.exe --terminate podman-uosserver
+```
+
+2. On `GSSGIT`, restore and start the source components:
+
+```powershell
+Set-Service GSSGManager -StartupType Automatic
+Set-Service Caddy -StartupType Automatic
+Set-Service Cloudflared -StartupType Automatic
+Enable-ScheduledTask -TaskName WAHA-WhatsApp-Gateway
+Start-Service GSSGManager
+Start-Service Caddy
+Start-Service Cloudflared
+Start-ScheduledTask -TaskName WAHA-WhatsApp-Gateway
+```
+
+3. Repoint `gssg.lan` to `GSSGIT`.
 4. Verify office/public health and representative records.
 
 ## After `GSSGAPP` accepts writes
@@ -842,15 +889,43 @@ An integration that was disabled before migration may remain disabled. Every int
 DNS-only rollback is forbidden because it loses or forks production data.
 
 1. Announce a write freeze.
-2. Stop `GSSGManager`, Cloudflared, Caddy, WAHA, schedulers, and notification senders on `GSSGAPP`.
+2. On `GSSGAPP`, stop and disable every application component:
+
+```powershell
+Stop-Service GSSGManager, Caddy, Cloudflared
+Set-Service GSSGManager -StartupType Disabled
+Set-Service Caddy -StartupType Disabled
+Set-Service Cloudflared -StartupType Disabled
+Disable-ScheduledTask -TaskName WAHA-WhatsApp-Gateway
+wsl.exe -d podman-uosserver -- podman stop waha
+wsl.exe --terminate podman-uosserver
+```
+
 3. Confirm no `serve.py` process remains.
 4. Copy the complete latest `GSSGAPP\data` directory back to `GSSGIT`, preserving hidden files, keys, attachments, SQLite WAL/SHM files, ACLs, and timestamps.
 5. Confirm `.email_key`, `.vapid_key`, and database size on `GSSGIT`.
 6. Apply only migrations required by the code commit that will run on `GSSGIT`.
-7. Start the old backend locally and verify health and representative records.
-8. Repoint `gssg.lan` and restart the old Cloudflared connector.
-9. Enable WAHA, schedulers, email sync, and notifications only on `GSSGIT`.
-10. Repeat the production verification matrix.
+7. On `GSSGIT`, restore automatic startup and start only the backend:
+
+```powershell
+Set-Service GSSGManager -StartupType Automatic
+Set-Service Caddy -StartupType Automatic
+Set-Service Cloudflared -StartupType Automatic
+Start-Service GSSGManager
+```
+
+8. Verify the old backend over loopback and inspect representative records.
+9. Repoint `gssg.lan`, then restore routing and WAHA:
+
+```powershell
+Start-Service Caddy
+Start-Service Cloudflared
+Enable-ScheduledTask -TaskName WAHA-WhatsApp-Gateway
+Start-ScheduledTask -TaskName WAHA-WhatsApp-Gateway
+```
+
+10. Confirm schedulers, email sync, and notifications are active only on `GSSGIT`.
+11. Repeat the production verification matrix.
 
 Never enable notification workers on both hosts during rollback.
 

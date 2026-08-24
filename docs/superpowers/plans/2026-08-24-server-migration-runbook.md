@@ -207,11 +207,11 @@ py -3.12 -m venv venv
 .\venv\Scripts\python.exe -m pip install --upgrade pip
 .\venv\Scripts\python.exe -m pip install -r requirements.txt
 pnpm -C frontend install --frozen-lockfile
-pnpm -C frontend run build
+.\scripts\mng.ps1 build
 .\venv\Scripts\python.exe -m alembic upgrade head
 ```
 
-Require checking `frontend/package.json` still declares pnpm 11.6.0 before installation. Explain that frontend build output is generated locally and is not committed.
+Require checking `frontend/package.json` still declares pnpm 11.6.0 before installation. Explain that `mng build` generates `frontend\dist` and copies it into `backend\app\static`; generated output is local and is not committed.
 
 Run `scripts\secure_key_acls.ps1` after final secret and key restoration, using the script's supported parameters and an elevated shell.
 
@@ -280,7 +280,7 @@ powershell -ExecutionPolicy Bypass -File .\scripts\install-cloudflared-service.p
 powershell -ExecutionPolicy Bypass -File .\scripts\install-backup-task.ps1 -Dest D:\GSSG-Backups
 ```
 
-State that the first three services remain stopped until their phase is reached in cutover. If the backup destination is not `D:\GSSG-Backups`, use the actual second-disk or secured network destination recorded during preparation.
+State that these installers start their service or task. Do not execute the GSSG, Caddy, Cloudflared, or WAHA installers during staging. Run each only at its named cutover step after the old conflicting component is stopped and disabled. If the backup destination is not `D:\GSSG-Backups`, use the actual second-disk or secured network destination recorded during preparation.
 
 Immediately after installing `GSSGManager`, open the NSSM editor and set **Log on** to `.\Admin` interactively. Never include the password in the runbook or an agent command. Verify NSSM reports:
 
@@ -300,8 +300,8 @@ Write a numbered, check-off sequence with no parallel production steps:
 1. Announce write freeze and stop user activity.
 2. Stop `GSSGManager` on `GSSGIT`.
 3. Confirm no Python command line contains `serve.py`.
-4. Stop Cloudflared on `GSSGIT`.
-5. Stop WAHA and terminate `podman-uosserver` on `GSSGIT`.
+4. Stop Caddy and Cloudflared on `GSSGIT`, then set `GSSGManager`, Caddy, and Cloudflared startup type to `Disabled` so a reboot cannot resurrect stale application services.
+5. Disable `WAHA-WhatsApp-Gateway`, stop WAHA, and terminate `podman-uosserver` on `GSSGIT`.
 6. Take the final Sentinel `data` copy, preserving hidden files, ACLs, timestamps, SQLite database, WAL, SHM, attachments, and keys.
 7. Take the final WSL export if WhatsApp state changed after the early export; replace the staged import on `GSSGAPP` with this final export before starting WAHA.
 8. Restore final `data` to `GSSGAPP`.
@@ -312,7 +312,7 @@ Write a numbered, check-off sequence with no parallel production steps:
 13. Start the new Cloudflared connector and verify public HTTPS.
 14. Start WAHA and production scheduling/notifications.
 15. Run the verification matrix.
-16. Leave the old GSSG backend, old Caddy application routing, old Cloudflared connector, and old WAHA notification role disabled; leave Windows file sharing and approved `N8Nionos` tasks running.
+16. Confirm the old GSSG backend, old Caddy application routing, old Cloudflared connector, and old WAHA notification role remain stopped and disabled across reboot; leave Windows file sharing and approved `N8Nionos` tasks running.
 
 Require recording the cutover timestamp and final source/destination database file sizes. Do not declare success merely because the Windows services are running.
 
@@ -338,7 +338,7 @@ Create a table with `Surface`, `Command or action`, `Expected evidence`, and `Re
 - Backup scheduled task creates a readable SQLite backup in the external destination.
 - Reboot restores backend, Caddy, Cloudflared, WAHA, and scheduled backup behavior.
 - File shares on `GSSGIT` remain accessible.
-- Old `GSSGManager` and old `Cloudflared` remain stopped.
+- Old `GSSGManager`, Caddy, Cloudflared, and `WAHA-WhatsApp-Gateway` remain stopped and disabled across reboot.
 
 State that failed optional integrations may remain disabled only when they were disabled before migration; enabled production features must pass before ending the write freeze.
 
