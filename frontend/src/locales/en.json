@@ -2744,10 +2744,11 @@
         "allDepartments": "All departments",
         "empty": "No coverage groups are available for this level.",
         "pendingVerification": "Pending verification",
+        "loadMore": "Load more",
         "level": {
-          "department": "Departments",
-          "duty_unit": "Duty units",
-          "duty_post": "Duty posts"
+          "organization": "Departments",
+          "department": "Duty units",
+          "duty_unit": "Duty posts"
         },
         "metrics": {
           "scheduled": "Scheduled",

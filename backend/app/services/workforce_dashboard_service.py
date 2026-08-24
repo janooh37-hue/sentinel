@@ -688,7 +688,6 @@ def get_coverage_children(
     parent_kind: str,
     department: str | None = None,
     duty_unit: str | None = None,
-    duty_post: str | None = None,
     now: datetime | None = None,
 ) -> list[dict[str, Any]]:
     """Return child aggregates only, never names or employee identifiers."""
@@ -700,11 +699,10 @@ def get_coverage_children(
     ]
     # Each branch selects a different hierarchy depth, so the grouping key is
     # a variable-length tuple of snapshot column names.
-    child_kind: str
-    fields: tuple[str, ...]
-    if parent_kind == "department":
-        if department is not None:
-            cases = [case for case in cases if case.department_snapshot == department]
+    if parent_kind == "organization":
+        child_kind, fields = "department", ("department_snapshot",)
+    elif parent_kind == "department":
+        cases = [case for case in cases if case.department_snapshot == department]
         child_kind, fields = "duty_unit", ("department_snapshot", "duty_unit_snapshot")
     elif parent_kind == "duty_unit":
         cases = [
@@ -713,17 +711,8 @@ def get_coverage_children(
             if case.department_snapshot == department and case.duty_unit_snapshot == duty_unit
         ]
         child_kind, fields = "duty_post", ("department_snapshot", "duty_unit_snapshot", "duty_post_snapshot")
-    elif parent_kind == "duty_post":
-        cases = [
-            case
-            for case in cases
-            if case.department_snapshot == department
-            and case.duty_unit_snapshot == duty_unit
-            and case.duty_post_snapshot == duty_post
-        ]
-        child_kind, fields = "duty_post", ("department_snapshot", "duty_unit_snapshot", "duty_post_snapshot")
     else:
-        raise ValueError("parent_kind must be department, duty_unit, or duty_post")
+        raise ValueError("parent_kind must be organization, department, or duty_unit")
     live = _live_leaves(db, operational_date=operational_date)
     health = _stream_health(db, now=datetime.now(UTC))
     buckets: dict[tuple[str | None, ...], list[AttendanceCase]] = defaultdict(list)

@@ -18001,7 +18001,7 @@
             "required": true,
             "schema": {
               "type": "string",
-              "pattern": "^(department|duty_unit|duty_post)$",
+              "pattern": "^(organization|department|duty_unit)$",
               "title": "Parent Kind"
             }
           },
@@ -18035,22 +18035,6 @@
                 }
               ],
               "title": "Duty Unit"
-            }
-          },
-          {
-            "name": "duty_post",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Duty Post"
             }
           },
           {

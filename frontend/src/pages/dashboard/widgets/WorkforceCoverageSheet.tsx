@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { useQuery } from '@tanstack/react-query'
+import { useInfiniteQuery } from '@tanstack/react-query'
 import { ArrowLeft, ChevronRight, CircleAlert, Users } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 
@@ -30,36 +30,39 @@ export function WorkforceCoverageSheet({
   const { t } = useTranslation()
   const [selection, setSelection] = useState<CoverageSelection>(INITIAL_SELECTION)
   const parentKind = selection.department == null
-    ? 'department'
+    ? 'organization'
     : selection.dutyUnit == null
-      ? 'duty_unit'
-      : 'duty_post'
+      ? 'department'
+      : 'duty_unit'
 
   useEffect(() => {
     if (!open) setSelection(INITIAL_SELECTION)
   }, [open])
 
-  const coverageQuery = useQuery({
+  const coverageQuery = useInfiniteQuery({
     queryKey: ['workforce', 'coverage', operationalDate, parentKind, selection.department, selection.dutyUnit],
-    queryFn: () =>
+    queryFn: ({ pageParam }) =>
       api.getWorkforceCoverage({
         operational_date: operationalDate,
         parent_kind: parentKind,
         ...(selection.department == null ? {} : { department: selection.department }),
         ...(selection.dutyUnit == null ? {} : { duty_unit: selection.dutyUnit }),
+        ...(pageParam == null ? {} : { cursor: pageParam }),
       }),
+    initialPageParam: null as string | null,
+    getNextPageParam: (page) => page.next_cursor ?? undefined,
     enabled: open,
     staleTime: 60_000,
   })
 
-  const rows = coverageQuery.data?.items ?? []
+  const rows = coverageQuery.data?.pages.flatMap((page) => page.items) ?? []
   const levelTitle = t(`dashboard.workforcePulse.coverage.level.${parentKind}`)
   const canGoBack = selection.department != null
 
   const selectRow = (row: WorkforceCoverageRow) => {
-    if (parentKind === 'department' && row.department) {
+    if (parentKind === 'organization' && row.department) {
       setSelection({ department: row.department, dutyUnit: null })
-    } else if (parentKind === 'duty_unit' && row.duty_unit) {
+    } else if (parentKind === 'department' && row.duty_unit) {
       setSelection({ department: selection.department, dutyUnit: row.duty_unit })
     }
   }
@@ -154,28 +157,43 @@ export function WorkforceCoverageSheet({
             ) : rows.length === 0 ? (
               <EmptyState icon={Users} message={t('dashboard.workforcePulse.coverage.empty')} className="py-12" />
             ) : (
-              <ul className="space-y-2" aria-label={levelTitle}>
-                {rows.map((row) => {
-                  const name = rowName(row)
-                  const isNavigable = parentKind !== 'duty_post' && row.child_count > 0
-                  return (
-                    <li key={`${row.kind}:${name}`} className="rounded-xl border border-hairline bg-surface-raised">
-                      {isNavigable ? (
-                        <button
-                          type="button"
-                          aria-label={name}
-                          onClick={() => selectRow(row)}
-                          className="block w-full rounded-xl p-3.5 text-start transition-colors hover:bg-surface-tinted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:p-4"
-                        >
-                          <CoverageRow row={row} name={name} expandable />
-                        </button>
-                      ) : (
-                        <div className="p-3.5 sm:p-4"><CoverageRow row={row} name={name} /></div>
-                      )}
-                    </li>
-                  )
-                })}
-              </ul>
+              <div className="space-y-3">
+                <ul className="space-y-2" aria-label={levelTitle}>
+                  {rows.map((row) => {
+                    const name = rowName(row)
+                    const isNavigable = parentKind !== 'duty_unit' && row.child_count > 0
+                    return (
+                      <li key={`${row.kind}:${name}`} className="rounded-xl border border-hairline bg-surface-raised">
+                        {isNavigable ? (
+                          <button
+                            type="button"
+                            aria-label={name}
+                            onClick={() => selectRow(row)}
+                            className="block w-full rounded-xl p-3.5 text-start transition-colors hover:bg-surface-tinted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:p-4"
+                          >
+                            <CoverageRow row={row} name={name} expandable />
+                          </button>
+                        ) : (
+                          <div className="p-3.5 sm:p-4"><CoverageRow row={row} name={name} /></div>
+                        )}
+                      </li>
+                    )
+                  })}
+                </ul>
+                {coverageQuery.hasNextPage ? (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="w-full"
+                    onClick={() => void coverageQuery.fetchNextPage()}
+                    disabled={coverageQuery.isFetchingNextPage}
+                  >
+                    {coverageQuery.isFetchingNextPage
+                      ? t('common.loading')
+                      : t('dashboard.workforcePulse.coverage.loadMore')}
+                  </Button>
+                ) : null}
+              </div>
             )}
           </main>
         </div>

@@ -2935,10 +2935,11 @@
         "allDepartments": "كل الإدارات",
         "empty": "لا توجد مجموعات تغطية لهذا المستوى.",
         "pendingVerification": "بانتظار التحقق",
+        "loadMore": "عرض المزيد",
         "level": {
-          "department": "الإدارات",
-          "duty_unit": "وحدات الواجب",
-          "duty_post": "مواقع الواجب"
+          "organization": "الإدارات",
+          "department": "وحدات الواجب",
+          "duty_unit": "مواقع الواجب"
         },
         "metrics": {
           "scheduled": "المجدول",

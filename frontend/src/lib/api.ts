@@ -42,10 +42,9 @@ export type WorkforceCoveragePage = components['schemas']['CursorPage_CoverageRo
 
 export interface WorkforceCoverageParams {
   operational_date: string
-  parent_kind: 'department' | 'duty_unit' | 'duty_post'
+  parent_kind: 'organization' | 'department' | 'duty_unit'
   department?: string
   duty_unit?: string
-  duty_post?: string
   limit?: number
   cursor?: string
 }

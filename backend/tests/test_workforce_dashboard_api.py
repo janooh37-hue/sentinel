@@ -294,7 +294,7 @@ def test_aggregate_dashboard_routes_require_dashboard_capability(
         analytics = client.get("/api/v1/workforce/dashboard/analytics")
         coverage = client.get(
             "/api/v1/workforce/dashboard/coverage",
-            params={"operational_date": TODAY.isoformat(), "parent_kind": "department"},
+            params={"operational_date": TODAY.isoformat(), "parent_kind": "organization"},
         )
 
     assert analytics.status_code == 403
@@ -308,6 +308,7 @@ def test_dashboard_scope_filters_can_narrow_but_never_widen_a_manager_scope(
 
     manager = _create_user(workforce_api_db, email="scoped-manager@test.ae", role="manager")
     _grant(workforce_api_db, manager, "workforce.dashboard.view")
+    _seed_coverage_cases(workforce_api_db, manager)
     workforce_api_db.add(
         UserWorkforceScope(
             user_id=manager.id,
@@ -321,14 +322,11 @@ def test_dashboard_scope_filters_can_narrow_but_never_widen_a_manager_scope(
     with _client_for(workforce_api_db, manager) as client:
         response = client.get(
             "/api/v1/workforce/dashboard/coverage",
-            params={
-                "operational_date": TODAY.isoformat(),
-                "parent_kind": "department",
-                "department": "Personnel",
-            },
+            params={"operational_date": TODAY.isoformat(), "parent_kind": "organization"},
         )
 
-    assert response.status_code == 403
+    assert response.status_code == 200
+    assert [row["department"] for row in response.json()["items"]] == ["Operations"]
 
 
 def test_coverage_children_are_bounded_paginated_and_never_person_records(
@@ -346,6 +344,10 @@ def test_coverage_children_are_bounded_paginated_and_never_person_records(
                 "department": "Operations",
                 "limit": 501,
             },
+        )
+        root = client.get(
+            "/api/v1/workforce/dashboard/coverage",
+            params={"operational_date": TODAY.isoformat(), "parent_kind": "organization"},
         )
         first = client.get(
             "/api/v1/workforce/dashboard/coverage",
@@ -371,6 +373,8 @@ def test_coverage_children_are_bounded_paginated_and_never_person_records(
         )
 
     assert rejected_limit.status_code == 422
+    assert root.status_code == 200
+    assert [row["kind"] for row in root.json()["items"]] == ["department"]
     assert set(first_page) == {"items", "next_cursor"}
     assert len(first_page["items"]) == 1
     assert first_page["next_cursor"]
@@ -382,6 +386,29 @@ def test_coverage_children_are_bounded_paginated_and_never_person_records(
     assert "G-COVERAGE-B" not in rendered
     assert "Coverage A" not in rendered
     assert "Coverage B" not in rendered
+
+
+def test_coverage_requires_the_matching_parent_filters(workforce_api_db: Session) -> None:
+    admin = _create_user(workforce_api_db, email="coverage-validation@test.ae", role="admin")
+    _seed_coverage_cases(workforce_api_db, admin)
+
+    with _client_for(workforce_api_db, admin) as client:
+        organization_with_parent = client.get(
+            "/api/v1/workforce/dashboard/coverage",
+            params={"operational_date": TODAY.isoformat(), "parent_kind": "organization", "department": "Operations"},
+        )
+        department_without_parent = client.get(
+            "/api/v1/workforce/dashboard/coverage",
+            params={"operational_date": TODAY.isoformat(), "parent_kind": "department"},
+        )
+        post_without_unit = client.get(
+            "/api/v1/workforce/dashboard/coverage",
+            params={"operational_date": TODAY.isoformat(), "parent_kind": "duty_unit", "department": "Operations"},
+        )
+
+    assert organization_with_parent.status_code == 422
+    assert department_without_parent.status_code == 422
+    assert post_without_unit.status_code == 422
 
 
 def test_analytics_folds_small_nationality_groups_without_person_leakage(

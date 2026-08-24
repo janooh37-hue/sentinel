@@ -20616,7 +20616,6 @@ export interface operations {
                 parent_kind: string;
                 department?: string | null;
                 duty_unit?: string | null;
-                duty_post?: string | null;
                 limit?: number;
                 cursor?: string | null;
             };

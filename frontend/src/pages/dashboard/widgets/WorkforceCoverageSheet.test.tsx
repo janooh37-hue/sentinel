@@ -20,7 +20,7 @@ vi.mock('@/lib/api', async (importOriginal) => {
 })
 
 function pageFor(params: WorkforceCoverageParams) {
-  if (params.parent_kind === 'department') {
+  if (params.parent_kind === 'organization') {
     return {
       items: [
         { kind: 'department' as const, department: 'Security', scheduled: 12, excused: 1, expected: 11, evaluated_count: 11, pending_or_error_excluded_count: 0, working: 10, child_count: 1 },
@@ -28,7 +28,7 @@ function pageFor(params: WorkforceCoverageParams) {
       ],
     }
   }
-  if (params.parent_kind === 'duty_unit') {
+  if (params.parent_kind === 'department') {
     return {
       items: [{ kind: 'duty_unit' as const, department: params.department, duty_unit: `${params.department} Gate`, scheduled: 4, excused: 0, expected: 4, evaluated_count: 4, pending_or_error_excluded_count: 0, working: 4, child_count: 1 }],
     }
@@ -70,10 +70,10 @@ describe('WorkforceCoverageSheet', () => {
 
     const user = userEvent.setup()
     await user.click(await screen.findByRole('button', { name: 'Security' }))
-    await waitFor(() => expect(api.getWorkforceCoverage).toHaveBeenLastCalledWith(expect.objectContaining({ parent_kind: 'duty_unit', department: 'Security' })))
+    await waitFor(() => expect(api.getWorkforceCoverage).toHaveBeenLastCalledWith(expect.objectContaining({ parent_kind: 'department', department: 'Security' })))
 
     await user.click(await screen.findByRole('button', { name: 'Security Gate' }))
-    await waitFor(() => expect(api.getWorkforceCoverage).toHaveBeenLastCalledWith(expect.objectContaining({ parent_kind: 'duty_post', department: 'Security', duty_unit: 'Security Gate' })))
+    await waitFor(() => expect(api.getWorkforceCoverage).toHaveBeenLastCalledWith(expect.objectContaining({ parent_kind: 'duty_unit', department: 'Security', duty_unit: 'Security Gate' })))
     expect(await screen.findByText('North gate')).toBeInTheDocument()
     expect(screen.queryByText('G1001')).not.toBeInTheDocument()
   })
@@ -89,12 +89,29 @@ describe('WorkforceCoverageSheet', () => {
 
     await user.click(screen.getByRole('button', { name: 'All departments' }))
     await user.click(await screen.findByRole('button', { name: 'Operations' }))
-    await waitFor(() => expect(api.getWorkforceCoverage).toHaveBeenLastCalledWith(expect.objectContaining({ parent_kind: 'duty_unit', department: 'Operations' })))
+    await waitFor(() => expect(api.getWorkforceCoverage).toHaveBeenLastCalledWith(expect.objectContaining({ parent_kind: 'department', department: 'Operations' })))
   })
 
   it('labels withheld working totals as pending verification rather than zero', async () => {
     renderSheet(true)
     expect(await screen.findByText('Pending verification')).toBeInTheDocument()
     expect(screen.queryByText('On duty 0')).not.toBeInTheDocument()
+  })
+
+  it('loads the next cursor page only when requested', async () => {
+    const root = pageFor({ operational_date: '2026-08-24', parent_kind: 'organization' })
+    vi.mocked(api.getWorkforceCoverage)
+      .mockReset()
+      .mockResolvedValueOnce({ items: root.items.slice(0, 1), next_cursor: 'page-two' })
+      .mockResolvedValueOnce({ items: root.items.slice(1), next_cursor: null })
+
+    renderSheet(true)
+    const user = userEvent.setup()
+
+    expect(await screen.findByRole('button', { name: 'Security' })).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Load more' }))
+
+    await waitFor(() => expect(api.getWorkforceCoverage).toHaveBeenLastCalledWith(expect.objectContaining({ parent_kind: 'organization', cursor: 'page-two' })))
+    expect(await screen.findByRole('button', { name: 'Operations' })).toBeInTheDocument()
   })
 })

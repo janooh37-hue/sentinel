@@ -329,10 +329,44 @@ def get_dashboard_analytics(user: Annotated[User, Depends(require_capability("wo
 
 
 @router.get("/dashboard/coverage", response_model=CursorPage[CoverageRowRead])
-def get_dashboard_coverage(operational_date: date, parent_kind: Annotated[str, Query(pattern="^(department|duty_unit|duty_post)$")], user: Annotated[User, Depends(require_capability("workforce.dashboard.view"))], db: Annotated[Session, Depends(get_db)], department: str | None = None, duty_unit: str | None = None, duty_post: str | None = None, limit: Annotated[int, Query(ge=1, le=_MAX_LIMIT)] = 100, cursor: str | None = None) -> dict[str, Any]:
-    scope = _assert_scope_filter(_scope(db, user), department=department, duty_unit=duty_unit, duty_post=duty_post)
-    rows = workforce_dashboard_service.get_coverage_children(db, scope=scope, operational_date=operational_date, parent_kind=parent_kind, department=department, duty_unit=duty_unit, duty_post=duty_post)
-    items, next_cursor = _cursor_page(rows, endpoint="coverage", scope=scope, filters={"operational_date": operational_date, "parent_kind": parent_kind, "department": department, "duty_unit": duty_unit, "duty_post": duty_post}, limit=limit, cursor=cursor)
+def get_dashboard_coverage(
+    operational_date: date,
+    parent_kind: Annotated[str, Query(pattern="^(organization|department|duty_unit)$")],
+    user: Annotated[User, Depends(require_capability("workforce.dashboard.view"))],
+    db: Annotated[Session, Depends(get_db)],
+    department: str | None = None,
+    duty_unit: str | None = None,
+    limit: Annotated[int, Query(ge=1, le=_MAX_LIMIT)] = 100,
+    cursor: str | None = None,
+) -> dict[str, Any]:
+    if parent_kind == "organization" and (department is not None or duty_unit is not None):
+        raise ValidationFailedError("WORKFORCE_COVERAGE_PARENT_INVALID", "Organization coverage cannot include a parent filter.")
+    if parent_kind == "department" and (department is None or duty_unit is not None):
+        raise ValidationFailedError("WORKFORCE_COVERAGE_PARENT_INVALID", "Duty-unit coverage requires only a department filter.")
+    if parent_kind == "duty_unit" and (department is None or duty_unit is None):
+        raise ValidationFailedError("WORKFORCE_COVERAGE_PARENT_INVALID", "Duty-post coverage requires department and duty-unit filters.")
+    scope = _assert_scope_filter(_scope(db, user), department=department, duty_unit=duty_unit, duty_post=None)
+    rows = workforce_dashboard_service.get_coverage_children(
+        db,
+        scope=scope,
+        operational_date=operational_date,
+        parent_kind=parent_kind,
+        department=department,
+        duty_unit=duty_unit,
+    )
+    items, next_cursor = _cursor_page(
+        rows,
+        endpoint="coverage",
+        scope=scope,
+        filters={
+            "operational_date": operational_date,
+            "parent_kind": parent_kind,
+            "department": department,
+            "duty_unit": duty_unit,
+        },
+        limit=limit,
+        cursor=cursor,
+    )
     return {"items": items, "next_cursor": next_cursor}
 
 

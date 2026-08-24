@@ -39,14 +39,14 @@ describe('Workforce Pulse API client', () => {
   it('forwards hierarchy coverage filters', async () => {
     await api.getWorkforceCoverage({
       operational_date: '2026-08-24',
-      parent_kind: 'duty_post',
+      parent_kind: 'duty_unit',
       department: 'Security',
       duty_unit: 'Main Gate',
       limit: 100,
     })
 
     expect(fetchMock).toHaveBeenLastCalledWith(
-      '/api/v1/workforce/dashboard/coverage?operational_date=2026-08-24&parent_kind=duty_post&department=Security&duty_unit=Main+Gate&limit=100',
+      '/api/v1/workforce/dashboard/coverage?operational_date=2026-08-24&parent_kind=duty_unit&department=Security&duty_unit=Main+Gate&limit=100',
       expect.objectContaining({ method: 'GET' }),
     )
   })
