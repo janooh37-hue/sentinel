@@ -8,6 +8,7 @@ Local/LAN HR and document console: FastAPI/Python 3.12 backend, React/Vite/TypeS
 - Never deploy changes that are not committed and pushed to `origin/main`; a later `mng update` would overwrite them.
 - Do not commit secrets, `data/`, local PII, generated static assets, or accidental Word resaves of `backend/templates/*.docx`.
 - Do not expose Codex app-server transports directly to the LAN or internet. Use Codex Remote Control's authenticated relay, or SSH/VPN for remote hosts.
+- Before moving production to another Windows host, read and follow `SERVER-MIGRATION.md`. Never start the destination backend, scheduler, notification senders, or Cloudflare connector against a copied production database while the source application is still writable.
 
 ## Commands
 
