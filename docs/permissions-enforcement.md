@@ -188,8 +188,8 @@ Removed-id verification from the same tree: `require_capability("books.manage")`
 `("violations.manage")`, and `("permits.manage")` occur at **zero** route gates — the
 only remaining mentions of those ids are historical (migration `0018_permissions.py`)
 and the expansion map itself (migration `0078`). The three narrowed survivors gate only
-their profile-scope routes: `employees.edit` ×8, `leaves.edit` ×4, `ledger.edit` ×10.
-All other gates reference atomic ids (`books.edit` ×20, `books.templates` ×5,
+their profile-scope routes: `employees.edit` ×7, `leaves.edit` ×4, `ledger.edit` ×10.
+All other gates reference atomic ids (`books.edit` ×21, `books.templates` ×3,
 `books.create`/`books.submit`/`books.delete` ×1 each, `permits.edit` ×15,
 `permits.create`/`permits.revoke`/`permits.delete` ×1 each, `violations.create`/
 `violations.edit`/`violations.delete` ×1 each, etc.).
