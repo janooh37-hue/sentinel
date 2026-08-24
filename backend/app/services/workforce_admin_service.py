@@ -313,14 +313,33 @@ def _active_adjustment(db: Session, case_id: int) -> AttendanceAdjustment | None
     return next((row for row in rows if row.revoked_at is None and row.id not in superseded), None)
 
 
+def attendance_case_etag(db: Session, case_id: int) -> str:
+    latest = _latest_evaluation(db, case_id)
+    active = _active_adjustment(db, case_id)
+    return etag_for(
+        {
+            "case_id": case_id,
+            "automatic_evaluation_id": latest.id,
+            "automatic_revision": latest.revision,
+            "active_adjustment_id": active.id if active else None,
+            "active_adjustment_revoked_at": active.revoked_at if active else None,
+        }
+    )
+
+
+
+
 def apply_adjustment(db: Session, *, case_id: int, payload: Mapping[str, object], if_match: str | None, actor: User) -> AttendanceAdjustment:
     case = db.get(AttendanceCase, case_id)
     if case is None:
         raise NotFoundError("ATTENDANCE_CASE_NOT_FOUND", "Attendance case was not found.")
     current = _active_adjustment(db, case_id)
     latest = _latest_evaluation(db, case_id)
-    version = row_etag(current or latest, extra={"case_id": case_id, "automatic_revision": latest.revision})
-    require_if_match(if_match, version, code="ATTENDANCE_CASE_VERSION_CONFLICT")
+    require_if_match(
+        if_match,
+        attendance_case_etag(db, case_id),
+        code="ATTENDANCE_CASE_VERSION_CONFLICT",
+    )
     values = dict(payload)
     adjustment = AttendanceAdjustment(
         attendance_case_id=case_id,
@@ -358,7 +377,11 @@ def revoke_adjustment(db: Session, *, case_id: int, adjustment_id: int, reason: 
     row = db.get(AttendanceAdjustment, adjustment_id)
     if row is None or row.attendance_case_id != case_id:
         raise NotFoundError("ATTENDANCE_ADJUSTMENT_NOT_FOUND", "Attendance adjustment was not found.")
-    require_if_match(if_match, row_etag(row), code="ATTENDANCE_CASE_VERSION_CONFLICT")
+    require_if_match(
+        if_match,
+        attendance_case_etag(db, case_id),
+        code="ATTENDANCE_CASE_VERSION_CONFLICT",
+    )
     if row.revoked_at is not None:
         raise ConflictError("ATTENDANCE_CASE_VERSION_CONFLICT", "Attendance adjustment is already revoked.")
     row.revoked_at = _utc_naive(now or datetime.now(UTC))
@@ -369,6 +392,7 @@ def revoke_adjustment(db: Session, *, case_id: int, adjustment_id: int, reason: 
 
 __all__ = [
     "apply_adjustment",
+    "attendance_case_etag",
     "approve_attendance_policy",
     "create_attendance_policy",
     "create_crew",

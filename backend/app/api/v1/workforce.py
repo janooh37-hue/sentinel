@@ -599,8 +599,10 @@ def get_employee_attendance_history(
 
 
 @router.get("/attendance/cases/{case_id}", response_model=AttendanceCaseRead)
-def get_attendance_case(case_id: int, user: Annotated[User, Depends(require_capability("workforce.attendance.review"))], people_user: Annotated[User, Depends(require_capability("workforce.people.view"))], db: Annotated[Session, Depends(get_db)]) -> dict[str, Any]:
-    return workforce_read_service.get_attendance_case(db, scope=_scope(db, user), case_id=case_id)
+def get_attendance_case(case_id: int, response: Response, user: Annotated[User, Depends(require_capability("workforce.attendance.review"))], people_user: Annotated[User, Depends(require_capability("workforce.people.view"))], db: Annotated[Session, Depends(get_db)]) -> dict[str, Any]:
+    case = workforce_read_service.get_attendance_case(db, scope=_scope(db, user), case_id=case_id)
+    _set_etag(response, workforce_admin_service.attendance_case_etag(db, case_id))
+    return case
 
 
 @router.post("/attendance/cases/{case_id}/adjustments", status_code=status.HTTP_201_CREATED)
@@ -608,7 +610,7 @@ def create_attendance_adjustment(*, case_id: int, body: AttendanceAdjustmentWrit
     workforce_read_service.get_attendance_case(db, scope=_scope(db, user), case_id=case_id)
     row = workforce_admin_service.apply_adjustment(db, case_id=case_id, payload=body.model_dump(mode="python"), if_match=if_match, actor=user)
     db.commit()
-    _set_etag(response, workforce_admin_service.row_etag(row))
+    _set_etag(response, workforce_admin_service.attendance_case_etag(db, case_id))
     return {"id": row.id, "case_id": case_id}
 
 
@@ -617,7 +619,7 @@ def revoke_attendance_adjustment(*, case_id: int, adjustment_id: int, body: Adju
     workforce_read_service.get_attendance_case(db, scope=_scope(db, user), case_id=case_id)
     row = workforce_admin_service.revoke_adjustment(db, case_id=case_id, adjustment_id=adjustment_id, reason=body.reason, if_match=if_match, actor=user)
     db.commit()
-    _set_etag(response, workforce_admin_service.row_etag(row))
+    _set_etag(response, workforce_admin_service.attendance_case_etag(db, case_id))
     return {"id": row.id, "revoked_at": row.revoked_at}
 
 

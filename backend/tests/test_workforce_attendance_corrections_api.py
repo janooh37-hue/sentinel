@@ -146,16 +146,11 @@ def test_case_denies_out_of_scope_user_without_disclosing_evidence(api_db) -> No
 def test_adjustment_audits_persist_create_and_revoke_reasons(api_db) -> None:
     fixture = build_attendance_day(api_db, operational_date=DAY, posts=[("Gate 1", 1)])
     case = next(case for case in fixture.cases if case.shift_code_snapshot == "morning")
-    evaluation = api_db.query(AttendanceEvaluation).filter_by(
-        attendance_case_id=case.id, revision=1
-    ).one()
     created = workforce_admin_service.apply_adjustment(
         api_db,
         case_id=case.id,
         payload={"replacement_presence_state": "completed", "reason": "Supervisor register"},
-        if_match=workforce_admin_service.row_etag(
-            evaluation, extra={"case_id": case.id, "automatic_revision": evaluation.revision}
-        ),
+        if_match=workforce_admin_service.attendance_case_etag(api_db, case.id),
         actor=fixture.admin,
     )
     revoked = workforce_admin_service.revoke_adjustment(
@@ -163,7 +158,7 @@ def test_adjustment_audits_persist_create_and_revoke_reasons(api_db) -> None:
         case_id=case.id,
         adjustment_id=created.id,
         reason="Duplicate register entry",
-        if_match=workforce_admin_service.row_etag(created),
+        if_match=workforce_admin_service.attendance_case_etag(api_db, case.id),
         actor=fixture.admin,
     )
 
@@ -327,3 +322,49 @@ def test_case_uses_persisted_evaluation_sources_after_mapping_changes(api_db) ->
     assert response.json()["punches"] == [
         {"occurred_at": "2026-08-24T04:09:00Z", "device_name": "Historical Terminal"}
     ]
+
+
+def test_case_etag_serializes_adjustments_across_reload_and_rejects_stale_writes(api_db) -> None:
+    fixture = build_attendance_day(api_db, operational_date=DAY, posts=[("Gate 1", 1)])
+    case = next(case for case in fixture.cases if case.shift_code_snapshot == "morning")
+    client = _client(api_db, fixture.admin)
+
+    case_response = client.get(f"/api/v1/workforce/attendance/cases/{case.id}")
+    assert case_response.status_code == 200, case_response.text
+    version_1 = case_response.headers["etag"]
+
+    missing = client.post(
+        f"/api/v1/workforce/attendance/cases/{case.id}/adjustments",
+        json={"replacement_presence_state": "completed", "reason": "Missing version"},
+    )
+    assert missing.status_code == 409
+    assert missing.json()["error"]["code"] == "ATTENDANCE_CASE_VERSION_CONFLICT"
+    assert client.get(f"/api/v1/workforce/attendance/cases/{case.id}").headers["etag"] == version_1
+
+    created = client.post(
+        f"/api/v1/workforce/attendance/cases/{case.id}/adjustments",
+        headers={"If-Match": version_1},
+        json={"replacement_presence_state": "completed", "reason": "Supervisor register"},
+    )
+    assert created.status_code == 201, created.text
+    version_2 = created.headers["etag"]
+    assert version_2 != version_1
+
+    stale = client.post(
+        f"/api/v1/workforce/attendance/cases/{case.id}/adjustments",
+        headers={"If-Match": version_1},
+        json={"replacement_presence_state": "absent", "reason": "Stale review"},
+    )
+    assert stale.status_code == 409
+    assert stale.json()["error"]["code"] == "ATTENDANCE_CASE_VERSION_CONFLICT"
+
+    reloaded = client.get(f"/api/v1/workforce/attendance/cases/{case.id}")
+    assert reloaded.status_code == 200, reloaded.text
+    assert reloaded.headers["etag"] == version_2
+    revoked = client.post(
+        f"/api/v1/workforce/attendance/cases/{case.id}/adjustments/{created.json()['id']}/revoke",
+        headers={"If-Match": reloaded.headers["etag"]},
+        json={"reason": "Correction entered against wrong person"},
+    )
+    assert revoked.status_code == 200, revoked.text
+    assert revoked.headers["etag"] != reloaded.headers["etag"]
