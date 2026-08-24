@@ -29,11 +29,19 @@ const CASE = {
   crew_code_snapshot: 'A',
   crew_name_snapshot: 'Alpha Crew',
   shift_code_snapshot: 'morning',
-  organization_snapshot_state: 'active',
   punches: [{ occurred_at: '2026-08-19T00:58:00', device_name: 'Main Gate Terminal' }],
-  effective: { presence_state: 'late', late_minutes: 12 },
+  effective: {
+    presence_state: 'completed',
+    reason_code: 'PUNCH_OUT_RECORDED',
+    first_in_at: '2026-08-19T01:00:00',
+    latest_in_at: '2026-08-19T01:05:00',
+    final_out_at: '2026-08-19T09:00:00',
+    late_minutes: 5,
+    early_exit_minutes: 2,
+    missing_checkout: false,
+  },
   evaluations: [
-    { id: 8, revision: 1, presence_state: 'late', reason_code: 'late_arrival', evaluated_at: '2026-08-19T09:01:00' },
+    { id: 8, revision: 1, presence_state: 'completed', reason_code: 'PUNCH_OUT_RECORDED', evaluated_at: '2026-08-19T09:01:00' },
   ],
   adjustments: [
     {
@@ -87,6 +95,11 @@ describe('AttendanceCorrectionDrawer', () => {
     expect(screen.getByText('2026-08-19T01:01:00')).toBeInTheDocument()
     expect(screen.getByText('2026-08-19T01:12:00')).toBeInTheDocument()
     expect(screen.getByText('2026-08-19T09:04:00')).toBeInTheDocument()
+    expect(screen.getByText('2026-08-19T01:00:00')).toBeInTheDocument()
+    expect(screen.getByText('2026-08-19T01:05:00')).toBeInTheDocument()
+    expect(screen.getByText('2026-08-19T09:00:00')).toBeInTheDocument()
+    expect(screen.getByText('5')).toBeInTheDocument()
+    expect(screen.getAllByText('2')).not.toHaveLength(0)
     expect(screen.getByText('Base evaluation')).toBeInTheDocument()
     expect(screen.getByText('Supersedes correction')).toBeInTheDocument()
     const dialog = screen.getByRole('dialog')
@@ -109,7 +122,7 @@ describe('AttendanceCorrectionDrawer', () => {
     i18n.addResourceBundle('ar', 'translation', ar, true, true)
     await i18n.changeLanguage('ar')
     getAttendanceCase.mockResolvedValue({
-      data: { ...CASE, name_ar: 'أحمد علي', effective: { presence_state: 'completed', reason_code: 'late_arrival' } },
+      data: { ...CASE, name_ar: 'أحمد علي' },
       etag: 'case-v1',
     })
     renderDrawer()
@@ -117,6 +130,6 @@ describe('AttendanceCorrectionDrawer', () => {
     expect(await screen.findByText('أحمد علي')).toBeInTheDocument()
     expect(screen.queryByText('Ahmed Ali')).not.toBeInTheDocument()
     expect(screen.getAllByText('مكتمل')).not.toHaveLength(0)
-    expect(screen.getByRole('dialog')).toHaveTextContent('تم إنشاء التصحيح')
+    expect(screen.getByRole('dialog')).toHaveTextContent('تم تسجيل الخروج')
   })
 })

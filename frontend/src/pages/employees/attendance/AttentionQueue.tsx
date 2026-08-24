@@ -36,6 +36,13 @@ export function AttentionQueue({
   const reviewingExceptions = exceptionRows !== undefined
   const queue = reviewingExceptions ? exceptionRows : registerQueue
 
+  const reasonLabel = (code: string | null | undefined): string =>
+    code
+      ? t(`attendance.review.reasons.${code.toLowerCase()}`, {
+          defaultValue: code.replaceAll('_', ' ').toLowerCase().replace(/^./, (letter) => letter.toUpperCase()),
+        })
+      : t('attendance.state.pending')
+
   return (
     <aside className="rounded-2xl border border-hairline bg-surface" data-testid="attendance-attention-queue">
       <header className="flex items-center gap-2.5 border-b border-hairline px-4 py-3">
@@ -54,12 +61,12 @@ export function AttentionQueue({
           {queue.map((row) => {
             const name = pickEmployeeName({ name_en: row.name_en, name_ar: row.name_ar ?? null }, i18n.language)
             const state = row.missing_checkout
-              ? t('attendance.state.unpaired')
-              : row.presence_state === 'absent'
-                ? t('attendance.state.absent')
+              ? t('attendance.review.reasons.missing_checkout')
+              : row.early_exit_minutes
+                ? t('attendance.review.reasons.early_exit')
                 : row.late_minutes
                   ? t('attendance.pastGrace', { minutes: row.late_minutes })
-                  : row.reason_code ?? t('attendance.state.pending')
+                  : reasonLabel(row.reason_code)
             return (
               <li key={row.case_id} className="border-b border-hairline px-4 py-2.5 last:border-b-0">
                 <div className="flex items-center gap-2.5">

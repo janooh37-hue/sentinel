@@ -63,8 +63,9 @@ export function AttendanceCorrectionDrawer({ caseId, onClose }: Props): React.JS
 
   const codeLabel = (group: string, value: string | null | undefined): string => {
     if (!value) return '—'
-    return t(`attendance.review.${group}.${value}`, {
-      defaultValue: value.replaceAll('_', ' ').replace(/^./, (letter) => letter.toUpperCase()),
+    const key = value.toLowerCase()
+    return t(`attendance.review.${group}.${key}`, {
+      defaultValue: value.replaceAll('_', ' ').toLowerCase().replace(/^./, (letter) => letter.toUpperCase()),
     })
   }
   return (
@@ -124,6 +125,13 @@ export function AttendanceCorrectionDrawer({ caseId, onClose }: Props): React.JS
                       [t('attendance.review.shift'), attendanceCase.shift_code_snapshot],
                       [t('attendance.review.scheduledWindow'), `${attendanceCase.scheduled_start_at} — ${attendanceCase.scheduled_end_at}`],
                       [t('attendance.review.effectiveResult'), codeLabel('presence', attendanceCase.effective?.presence_state as string | undefined)],
+                      [t('attendance.review.reason'), codeLabel('reasons', attendanceCase.effective?.reason_code as string | undefined)],
+                      [t('attendance.review.firstIn'), attendanceCase.effective?.first_in_at],
+                      [t('attendance.review.latestIn'), attendanceCase.effective?.latest_in_at],
+                      [t('attendance.review.finalOut'), attendanceCase.effective?.final_out_at],
+                      [t('attendance.review.lateMinutes'), attendanceCase.effective?.late_minutes],
+                      [t('attendance.review.earlyExitMinutes'), attendanceCase.effective?.early_exit_minutes],
+                      [t('attendance.review.missingCheckout'), attendanceCase.effective?.missing_checkout === undefined ? null : t(attendanceCase.effective?.missing_checkout ? 'common.yes' : 'common.no')],
                     ]}
                   />
                   <ul className="mt-3 divide-y divide-hairline rounded-lg border border-hairline">
@@ -163,7 +171,7 @@ export function AttendanceCorrectionDrawer({ caseId, onClose }: Props): React.JS
                             [t('attendance.review.finalOut'), adjustment.replacement_final_out_at],
                             [t('attendance.review.lateMinutes'), adjustment.replacement_late_minutes],
                             [t('attendance.review.earlyExitMinutes'), adjustment.replacement_early_exit_minutes],
-                            [t('attendance.review.missingCheckout'), adjustment.replacement_missing_checkout],
+                            [t('attendance.review.missingCheckout'), adjustment.replacement_missing_checkout === null || adjustment.replacement_missing_checkout === undefined ? null : t(adjustment.replacement_missing_checkout ? 'common.yes' : 'common.no')],
                           ]}
                         />
                         <p className="mt-2 text-muted-foreground">{adjustment.created_at}{adjustment.revoked_at ? ` · ${t('attendance.review.revoked')} ${adjustment.revoked_at}` : ''}</p>

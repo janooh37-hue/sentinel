@@ -4454,6 +4454,7 @@
       "lateMinutes": "دقائق التأخير",
       "earlyExitMinutes": "دقائق الخروج المبكر",
       "missingCheckout": "خروج مفقود",
+      "reason": "السبب",
       "revoked": "أُلغي",
       "exceptionsFailed": "تعذر تحميل استثناءات المراجعة. تُعرض قائمة التنبيه المشتقة.",
       "presence": {
@@ -4467,6 +4468,15 @@
         "late": "متأخر"
       },
       "reasons": {
+        "punch_out_recorded": "تم تسجيل الخروج",
+        "no_in_after_threshold": "لا دخول بعد الحد الزمني",
+        "scheduled_before_absence_boundary": "بانتظار حد الغياب",
+        "punch_recorded_directionless": "تم تسجيل بصمة",
+        "punch_in_active": "بصمة أثناء الدوام",
+        "shift_ended": "انتهت الوردية",
+        "sync_stale": "بيانات المزامنة قديمة",
+        "policy_missing": "سياسة الحضور مفقودة",
+        "punch_sequence_invalid": "تسلسل البصمات غير صالح",
         "late_arrival": "تأخر الوصول",
         "missing_checkout": "خروج مفقود",
         "early_exit": "خروج مبكر"

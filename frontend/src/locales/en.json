@@ -4160,6 +4160,7 @@
       "lateMinutes": "Late minutes",
       "earlyExitMinutes": "Early exit minutes",
       "missingCheckout": "Missing checkout",
+      "reason": "Reason",
       "revoked": "revoked",
       "exceptionsFailed": "Review exceptions unavailable. Showing the derived attention queue.",
       "presence": {
@@ -4173,6 +4174,15 @@
         "late": "Late"
       },
       "reasons": {
+        "punch_out_recorded": "Exit recorded",
+        "no_in_after_threshold": "No arrival after threshold",
+        "scheduled_before_absence_boundary": "Awaiting absence threshold",
+        "punch_recorded_directionless": "Punch recorded",
+        "punch_in_active": "On-duty punch",
+        "shift_ended": "Shift ended",
+        "sync_stale": "Sync data is stale",
+        "policy_missing": "Policy is missing",
+        "punch_sequence_invalid": "Punch sequence is invalid",
         "late_arrival": "Late arrival",
         "missing_checkout": "Missing checkout",
         "early_exit": "Early exit"
