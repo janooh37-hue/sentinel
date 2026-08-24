@@ -2878,6 +2878,43 @@
       "maxVisibleHint": "الحد الأقصى {{count}} أدوات معروضة في وقت واحد",
       "quickActionsMaxVisibleHint": "الحد الأقصى {{count}} إجراءات سريعة معروضة في وقت واحد"
     },
+    "workforcePulse": {
+      "title": "نبض القوى العاملة",
+      "openCoverage": "فتح التغطية",
+      "self": {
+        "heading": "ورديتي"
+      },
+      "aggregate": {
+        "heading": "الوردية الحالية"
+      },
+      "metrics": {
+        "scheduled": "المجدول",
+        "working": "على رأس العمل",
+        "coverage": "التغطية"
+      },
+      "noScope": {
+        "title": "لم يتم تعيين نطاق للقوى العاملة",
+        "detail": "اطلب من المسؤول تعيين نطاق للقوى العاملة."
+      },
+      "setup": {
+        "title": "يلزم إعداد {{missing}}",
+        "detail": "بيانات القوى العاملة غير متاحة حتى يتم إعداد {{missing}}.",
+        "missing": {
+          "schedules": "الجداول",
+          "policy": "السياسة",
+          "mappings": "التعيينات",
+          "integration": "التكامل"
+        }
+      },
+      "stale": {
+        "title": "مصدر الحضور قديم",
+        "detail": "بيانات الحضور الحالية ليست حديثة بما يكفي للعرض."
+      },
+      "withheld": {
+        "title": "بانتظار التحقق",
+        "detail": "لا يزال التحقق من الحضور قيد التنفيذ."
+      }
+    },
     "widgetLabels": {
       "pending": "المستندات المنجزة",
       "workspace": "بيئة عملي",
@@ -2898,7 +2935,8 @@
       "waiting_approvals_aria_other": "بانتظار الاعتماد: {{count}}. مراجعة.",
       "expiring_soon": "قرب الانتهاء",
       "recent_ledger": "أحدث المراسلات",
-      "pending_departures": "المغادرات المجدولة"
+      "pending_departures": "المغادرات المجدولة",
+      "workforce_pulse": "نبض القوى العاملة"
     },
     "quickActionLabels": {
       "general_book": "السجل العام",

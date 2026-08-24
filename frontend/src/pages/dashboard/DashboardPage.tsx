@@ -56,6 +56,7 @@ import { BooksAwaitingWidget } from '@/pages/dashboard/widgets/BooksAwaitingWidg
 import { ExpiringSoonWidget } from '@/pages/dashboard/widgets/ExpiringSoonWidget'
 import { PendingDeparturesWidget } from '@/pages/dashboard/widgets/PendingDeparturesWidget'
 import { WaitingApprovalsCard } from '@/pages/dashboard/widgets/WaitingApprovalsCard'
+import { WorkforcePulseWidget } from '@/pages/dashboard/widgets/WorkforcePulseWidget'
 import {
   DEFAULT_CANVAS_WIDTH,
   DEFAULT_LAYOUT,
@@ -206,6 +207,7 @@ export function DashboardPage({ onNavigate }: DashboardPageProps): React.JSX.Ele
 
   const [widgetDialogOpen, setWidgetDialogOpen] = useState(false)
   const [quickActionsDialogOpen, setQuickActionsDialogOpen] = useState(false)
+  const [, setCoverageOpen] = useState(false)
 
   // Labels for every widget id — fed into the Customize dialog.
   const widgetLabels = useMemo<Record<WidgetId, string>>(() => {
@@ -394,6 +396,8 @@ export function DashboardPage({ onNavigate }: DashboardPageProps): React.JSX.Ele
         return <ExpiringSoonWidget />
       case 'pending_departures':
         return <PendingDeparturesWidget />
+      case 'workforce_pulse':
+        return <WorkforcePulseWidget onOpenCoverage={() => setCoverageOpen(true)} />
       case 'on_leave_today':
         return (
           <SectionCard icon={CalendarCheck} title={t('dashboard.onLeave.title')} count={summary?.on_leave_today.length}>

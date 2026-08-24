@@ -2687,6 +2687,43 @@
       "maxVisibleHint": "Max {{count}} widgets visible at a time",
       "quickActionsMaxVisibleHint": "Max {{count}} quick actions visible at a time"
     },
+    "workforcePulse": {
+      "title": "Workforce Pulse",
+      "openCoverage": "Open coverage",
+      "self": {
+        "heading": "My shift"
+      },
+      "aggregate": {
+        "heading": "Current shift"
+      },
+      "metrics": {
+        "scheduled": "Scheduled",
+        "working": "On duty",
+        "coverage": "Coverage"
+      },
+      "noScope": {
+        "title": "No Workforce scope assigned",
+        "detail": "Ask an administrator to assign a Workforce scope."
+      },
+      "setup": {
+        "title": "{{missing}} setup required",
+        "detail": "Workforce data is unavailable until {{missing}} is configured.",
+        "missing": {
+          "schedules": "Schedule",
+          "policy": "Policy",
+          "mappings": "Mapping",
+          "integration": "Integration"
+        }
+      },
+      "stale": {
+        "title": "Attendance source is stale",
+        "detail": "Current attendance data is not fresh enough to show."
+      },
+      "withheld": {
+        "title": "Pending verification",
+        "detail": "Attendance verification is still in progress."
+      }
+    },
     "widgetLabels": {
       "pending": "Documents Completed",
       "workspace": "My Workspace",
@@ -2703,7 +2740,8 @@
       "waiting_approvals_aria_other": "Waiting approvals: {{count}}. Review.",
       "expiring_soon": "Expiring Soon",
       "recent_ledger": "Recent Ledger",
-      "pending_departures": "Pending Departures"
+      "pending_departures": "Pending Departures",
+      "workforce_pulse": "Workforce Pulse"
     },
     "quickActionLabels": {
       "general_book": "General Book",
