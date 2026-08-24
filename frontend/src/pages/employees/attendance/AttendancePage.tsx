@@ -127,10 +127,9 @@ export function AttendancePage(): React.JSX.Element {
     })
   }, [allRows, i18n.language, search, shiftCode])
 
-  const attention = useMemo(
-    () => allRows.filter((row) => needsDecision(rowState(row, { now }))).length,
-    [allRows, now],
-  )
+  const attention = exceptionsQuery.isSuccess
+    ? exceptionsQuery.data.items.length
+    : allRows.filter((row) => needsDecision(rowState(row, { now }))).length
 
   const dayStrip = useMemo<DayStripEntry[]>(() => {
     const entries: DayStripEntry[] = []

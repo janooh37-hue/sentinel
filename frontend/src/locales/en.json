@@ -4185,7 +4185,16 @@
         "punch_sequence_invalid": "Punch sequence is invalid",
         "late_arrival": "Late arrival",
         "missing_checkout": "Missing checkout",
-        "early_exit": "Early exit"
+        "early_exit": "Early exit",
+        "identity_conflict": "Identity conflict",
+        "identity_unverified": "Identity is unverified",
+        "employment_status_unknown": "Employment status is unknown",
+        "punch_out_only_inferred": "Exit-only punch inferred",
+        "punch_order_inferred": "Punch order inferred",
+        "attendance_adjustment_changed": "Attendance adjustment changed",
+        "leave_national_service": "National service leave",
+        "leave_sick": "Sick leave",
+        "leave_annual": "Annual leave"
       },
       "auditActions": {
         "created": "Correction created",
