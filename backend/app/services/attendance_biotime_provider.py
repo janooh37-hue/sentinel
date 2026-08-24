@@ -43,7 +43,7 @@ from __future__ import annotations
 import logging
 from collections.abc import Iterator
 from dataclasses import dataclass, field
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Any
 from zoneinfo import ZoneInfo
 
@@ -98,6 +98,11 @@ def _format_wall_time(moment: datetime, zone: ZoneInfo) -> str:
     """Render a UTC bound as the site-local wall time the server compares against."""
     aware = moment if moment.tzinfo is not None else moment.replace(tzinfo=UTC)
     return aware.astimezone(zone).strftime(_WALL_FORMAT)
+
+
+def _format_start_time(moment: datetime, zone: ZoneInfo) -> str:
+    """Overlap one second because BioTime excludes records equal to either bound."""
+    return _format_wall_time(moment - timedelta(seconds=1), zone)
 
 
 def _page_number(cursor: str | None) -> int:
@@ -318,7 +323,7 @@ class BioTimeAttendanceProvider:
     ) -> ProviderPage[ProviderPunch]:
         window: dict[str, Any] = {"end_time": _format_wall_time(until, self._zone)}
         if since is not None:
-            window["start_time"] = _format_wall_time(since, self._zone)
+            window["start_time"] = _format_start_time(since, self._zone)
         rows, exhausted, next_cursor = self._read_page(
             _PUNCH_PATH, cursor=cursor, extra=window
         )
@@ -362,7 +367,7 @@ class BioTimeAttendanceProvider:
             _PUNCH_PATH,
             cursor=cursor,
             extra={
-                "start_time": _format_wall_time(since, self._zone),
+                "start_time": _format_start_time(since, self._zone),
                 "end_time": _format_wall_time(until, self._zone),
                 "emp_code": external_employee_code,
             },
