@@ -382,6 +382,7 @@
       "leave": "الإجازات",
       "violation": "المخالفات",
       "ledger": "المراسلات",
+      "duty_location": "موقع العمل",
       "employee": "الموظف",
       "activity": "النشاط",
       "type": "النوع",
@@ -392,6 +393,14 @@
       "openLeave": "فتح الإجازة",
       "openViolation": "فتح المخالفة",
       "openLedger": "فتح المراسلة",
+      "dutyLocation": {
+        "label": "موقع العمل",
+        "initial_placement": "التعيين الأولي",
+        "transfer": "تم النقل",
+        "unassigned": "غير محدد",
+        "openEmployeeActivity": "فتح نشاط الموظف",
+        "historyBegins": "يبدأ السجل من"
+      },
       "loadMore": "تحميل المزيد من الأنشطة",
       "loading": "جارٍ تحميل النشاط الأخير",
       "showing": "عرض {{shown}} من أصل {{total}} من الأنشطة الأخيرة",

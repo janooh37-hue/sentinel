@@ -112,7 +112,7 @@ export function leaveBalanceLabel(stats: EmployeeStatsRead): string {
 
 /** Emoji prefix for a recent-activity row, by its unified kind. */
 export function activityEmoji(
-  kind: 'document' | 'leave' | 'violation' | 'ledger',
+  kind: 'document' | 'leave' | 'violation' | 'ledger' | 'duty_location',
 ): string {
   switch (kind) {
     case 'document':
@@ -123,5 +123,7 @@ export function activityEmoji(
       return '⚠️'
     case 'ledger':
       return '✉️'
+    case 'duty_location':
+      return '📍'
   }
 }

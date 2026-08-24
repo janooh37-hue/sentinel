@@ -361,6 +361,7 @@
       "leave": "Leave",
       "violation": "Violations",
       "ledger": "Correspondence",
+      "duty_location": "Duty location",
       "employee": "Employee",
       "activity": "Activity",
       "type": "Type",
@@ -371,6 +372,14 @@
       "openLeave": "Open leave",
       "openViolation": "Open violation",
       "openLedger": "Open correspondence",
+      "dutyLocation": {
+        "label": "Duty location",
+        "initial_placement": "Initial placement",
+        "transfer": "Transferred",
+        "unassigned": "Unassigned",
+        "openEmployeeActivity": "Open employee activity",
+        "historyBegins": "History begins at"
+      },
       "loadMore": "Load more activity",
       "loading": "Loading recent activity",
       "showing": "Showing {{shown}} of {{total}} recent entries",

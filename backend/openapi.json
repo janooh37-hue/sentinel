@@ -2243,7 +2243,8 @@
                     "document",
                     "leave",
                     "violation",
-                    "ledger"
+                    "ledger",
+                    "duty_location"
                   ],
                   "type": "string"
                 },
@@ -7134,7 +7135,7 @@
           "books"
         ],
         "summary": "List Word Templates",
-        "description": "Shared General Book boilerplate library (Word path).",
+        "description": "Shared General Book boilerplate library (Word path). Readable by record\ncomposers; renaming/deleting stays on ``books.templates``.",
         "operationId": "list_word_templates_api_v1_books_word_templates_get",
         "parameters": [
           {
@@ -7307,7 +7308,7 @@
           "books"
         ],
         "summary": "Get Word Template Table Schema",
-        "description": "Return table detection result for a shared General Book template.",
+        "description": "Return table detection result for a shared General Book template\n(read — same gate as the template list).",
         "operationId": "get_word_template_table_schema_api_v1_books_word_templates__name__table_get",
         "parameters": [
           {
@@ -12888,6 +12889,7 @@
           "ledger"
         ],
         "summary": "Send Attachment To Vault",
+        "description": "File a ledger attachment into an employee's document vault (vault-write\ngate — profile edits don't cover vault contents).",
         "operationId": "send_attachment_to_vault_api_v1_ledger_entries__entry_id__attachments__attachment_index__send_to_vault_post",
         "parameters": [
           {
@@ -21624,7 +21626,8 @@
               "document",
               "leave",
               "violation",
-              "ledger"
+              "ledger",
+              "duty_location"
             ],
             "title": "Kind"
           },
@@ -21635,6 +21638,98 @@
           "ref_id": {
             "type": "integer",
             "title": "Ref Id"
+          },
+          "event_type": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "initial_placement",
+                  "transfer"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Event Type"
+          },
+          "from_department": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "From Department"
+          },
+          "from_unit": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "From Unit"
+          },
+          "from_post": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "From Post"
+          },
+          "to_department": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "To Department"
+          },
+          "to_unit": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "To Unit"
+          },
+          "to_post": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "To Post"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
           }
         },
         "type": "object",
@@ -28428,7 +28523,8 @@
               "document",
               "leave",
               "violation",
-              "ledger"
+              "ledger",
+              "duty_location"
             ],
             "title": "Kind"
           },
@@ -28526,6 +28622,98 @@
           "reference": {
             "type": "string",
             "title": "Reference"
+          },
+          "event_type": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "initial_placement",
+                  "transfer"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Event Type"
+          },
+          "from_department": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "From Department"
+          },
+          "from_unit": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "From Unit"
+          },
+          "from_post": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "From Post"
+          },
+          "to_department": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "To Department"
+          },
+          "to_unit": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "To Unit"
+          },
+          "to_post": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "To Post"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
           }
         },
         "type": "object",

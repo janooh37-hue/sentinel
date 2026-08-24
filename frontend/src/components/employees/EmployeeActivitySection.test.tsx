@@ -87,6 +87,12 @@ vi.mock('react-i18next', () => ({
         'employees.activity.leave': 'Leave',
         'employees.activity.violation': 'Violations',
         'employees.activity.ledger': 'Correspondence',
+        'employees.activity.duty_location': 'Duty location',
+        'employees.activity.dutyLocation.transfer': 'Transferred',
+        'employees.activity.dutyLocation.initial_placement': 'Initial placement',
+        'employees.activity.dutyLocation.unassigned': 'Unassigned',
+        'employees.activity.dutyLocation.historyBegins': 'History begins at',
+        'employees.activity.dutyLocation.openEmployeeActivity': 'Open employee activity',
         'employees.activity.employee': 'Employee',
         'employees.activity.activity': 'Activity',
         'employees.activity.type': 'Type',
@@ -98,7 +104,7 @@ vi.mock('react-i18next', () => ({
       if (key === 'employees.activity.actions.document') return 'Generated document'
       if (key === 'employees.activity.actions.leave') return `Leave record · ${options?.days} days`
       if (key === 'employees.activity.actions.violation') return 'Recorded violation'
-      if (key === 'employees.activity.actions.ledger') return 'Recorded correspondence'
+      if (key === 'employees.activity.actions.duty_location') return 'Duty location update'
       return values[key] ?? key
     },
   }),
@@ -129,6 +135,33 @@ describe('EmployeeActivitySection', () => {
     expect(screen.getByRole('link', { name: /open leave/i })).toHaveAttribute('href', '/leaves?open=22')
     expect(screen.getByRole('link', { name: /open violation/i })).toHaveAttribute('href', '/employees/G300?tab=violations&open=33')
     expect(screen.getByRole('link', { name: /open correspondence/i })).toHaveAttribute('href', '/ledger?open=44')
+  })
+
+  it('filters and links duty location history to the employee Activity tab', async () => {
+    const dutyLocationItem: EmployeeActivityItemRead = {
+      ...items[0],
+      kind: 'duty_location',
+      source_id: 55,
+      target_id: 55,
+      employee_id: 'G500',
+      title: 'Transferred',
+      event_type: 'transfer',
+      from_unit: 'Administration',
+      from_post: 'Main Gate',
+      to_unit: 'Operations',
+      to_post: 'Control Room',
+      reason: 'Operational coverage',
+    }
+    vi.mocked(api.listEmployeeActivity).mockResolvedValue({ items: [dutyLocationItem], total: 1, limit: 25, offset: 0 })
+
+    wrap(<EmployeeActivitySection onOpenProfile={() => {}} />)
+    await screen.findByText('Transferred')
+    await userEvent.click(within(screen.getByRole('group', { name: /activity type/i })).getByRole('button', { name: 'Duty location' }))
+
+    await waitFor(() => expect(api.listEmployeeActivity).toHaveBeenLastCalledWith(
+      expect.objectContaining({ kind: 'duty_location' }),
+    ))
+    expect(screen.getByRole('link', { name: /open employee activity/i })).toHaveAttribute('href', '/employees/G500?tab=activity')
   })
 
   it('resets to the first page when employee or type changes', async () => {

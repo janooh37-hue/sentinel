@@ -1739,7 +1739,8 @@ export interface paths {
         };
         /**
          * List Word Templates
-         * @description Shared General Book boilerplate library (Word path).
+         * @description Shared General Book boilerplate library (Word path). Readable by record
+         *     composers; renaming/deleting stays on ``books.templates``.
          */
         get: operations["list_word_templates_api_v1_books_word_templates_get"];
         put?: never;
@@ -1783,7 +1784,8 @@ export interface paths {
         };
         /**
          * Get Word Template Table Schema
-         * @description Return table detection result for a shared General Book template.
+         * @description Return table detection result for a shared General Book template
+         *     (read — same gate as the template list).
          */
         get: operations["get_word_template_table_schema_api_v1_books_word_templates__name__table_get"];
         put?: never;
@@ -3023,7 +3025,11 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Send Attachment To Vault */
+        /**
+         * Send Attachment To Vault
+         * @description File a ledger attachment into an employee's document vault (vault-write
+         *     gate — profile edits don't cover vault contents).
+         */
         post: operations["send_attachment_to_vault_api_v1_ledger_entries__entry_id__attachments__attachment_index__send_to_vault_post"];
         delete?: never;
         options?: never;
@@ -4867,11 +4873,27 @@ export interface components {
              * Kind
              * @enum {string}
              */
-            kind: "document" | "leave" | "violation" | "ledger";
+            kind: "document" | "leave" | "violation" | "ledger" | "duty_location";
             /** Summary */
             summary: string;
             /** Ref Id */
             ref_id: number;
+            /** Event Type */
+            event_type?: ("initial_placement" | "transfer") | null;
+            /** From Department */
+            from_department?: string | null;
+            /** From Unit */
+            from_unit?: string | null;
+            /** From Post */
+            from_post?: string | null;
+            /** To Department */
+            to_department?: string | null;
+            /** To Unit */
+            to_unit?: string | null;
+            /** To Post */
+            to_post?: string | null;
+            /** Reason */
+            reason?: string | null;
         };
         /**
          * AddressBookContactCreate
@@ -7213,7 +7235,7 @@ export interface components {
              * Kind
              * @enum {string}
              */
-            kind: "document" | "leave" | "violation" | "ledger";
+            kind: "document" | "leave" | "violation" | "ledger" | "duty_location";
             /** Source Id */
             source_id: number;
             /** Target Id */
@@ -7243,6 +7265,22 @@ export interface components {
             channel?: string | null;
             /** Reference */
             reference: string;
+            /** Event Type */
+            event_type?: ("initial_placement" | "transfer") | null;
+            /** From Department */
+            from_department?: string | null;
+            /** From Unit */
+            from_unit?: string | null;
+            /** From Post */
+            from_post?: string | null;
+            /** To Department */
+            to_department?: string | null;
+            /** To Unit */
+            to_unit?: string | null;
+            /** To Post */
+            to_post?: string | null;
+            /** Reason */
+            reason?: string | null;
         };
         /** EmployeeActivityListRead */
         EmployeeActivityListRead: {
@@ -12403,7 +12441,7 @@ export interface operations {
         parameters: {
             query?: {
                 employee_id?: string | null;
-                kind?: ("document" | "leave" | "violation" | "ledger") | null;
+                kind?: ("document" | "leave" | "violation" | "ledger" | "duty_location") | null;
                 limit?: number;
                 offset?: number;
             };
