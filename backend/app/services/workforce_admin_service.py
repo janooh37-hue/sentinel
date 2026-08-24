@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import hashlib
 import json
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from datetime import UTC, datetime
 
 from sqlalchemy import select
@@ -301,32 +301,53 @@ def _latest_evaluation(db: Session, case_id: int) -> AttendanceEvaluation:
     return row
 
 
+
+
+
+
+def active_attendance_adjustment(
+    rows: Sequence[AttendanceAdjustment],
+) -> AttendanceAdjustment | None:
+    unrevoked = [row for row in rows if row.revoked_at is None]
+    superseded = {
+        row.supersedes_adjustment_id
+        for row in unrevoked
+        if row.supersedes_adjustment_id is not None
+    }
+    return next((row for row in reversed(unrevoked) if row.id not in superseded), None)
+
+
 def _active_adjustment(db: Session, case_id: int) -> AttendanceAdjustment | None:
     rows = list(
         db.scalars(
             select(AttendanceAdjustment)
             .where(AttendanceAdjustment.attendance_case_id == case_id)
-            .order_by(AttendanceAdjustment.created_at.desc())
+            .order_by(AttendanceAdjustment.created_at, AttendanceAdjustment.id)
         )
     )
-    superseded = {row.supersedes_adjustment_id for row in rows if row.supersedes_adjustment_id is not None}
-    return next((row for row in rows if row.revoked_at is None and row.id not in superseded), None)
+    return active_attendance_adjustment(rows)
 
 
-def attendance_case_etag(db: Session, case_id: int) -> str:
-    latest = _latest_evaluation(db, case_id)
-    active = _active_adjustment(db, case_id)
+def attendance_case_etag_for(
+    *, case_id: int, latest: AttendanceEvaluation | None, active: AttendanceAdjustment | None
+) -> str:
     return etag_for(
         {
             "case_id": case_id,
-            "automatic_evaluation_id": latest.id,
-            "automatic_revision": latest.revision,
+            "automatic_evaluation_id": latest.id if latest else None,
+            "automatic_revision": latest.revision if latest else None,
             "active_adjustment_id": active.id if active else None,
             "active_adjustment_revoked_at": active.revoked_at if active else None,
         }
     )
 
 
+def attendance_case_etag(db: Session, case_id: int) -> str:
+    return attendance_case_etag_for(
+        case_id=case_id,
+        latest=_latest_evaluation(db, case_id),
+        active=_active_adjustment(db, case_id),
+    )
 
 
 def apply_adjustment(db: Session, *, case_id: int, payload: Mapping[str, object], if_match: str | None, actor: User) -> AttendanceAdjustment:
@@ -392,7 +413,9 @@ def revoke_adjustment(db: Session, *, case_id: int, adjustment_id: int, reason: 
 
 __all__ = [
     "apply_adjustment",
+    "active_attendance_adjustment",
     "attendance_case_etag",
+    "attendance_case_etag_for",
     "approve_attendance_policy",
     "create_attendance_policy",
     "create_crew",

@@ -600,9 +600,11 @@ def get_employee_attendance_history(
 
 @router.get("/attendance/cases/{case_id}", response_model=AttendanceCaseRead)
 def get_attendance_case(case_id: int, response: Response, user: Annotated[User, Depends(require_capability("workforce.attendance.review"))], people_user: Annotated[User, Depends(require_capability("workforce.people.view"))], db: Annotated[Session, Depends(get_db)]) -> dict[str, Any]:
-    case = workforce_read_service.get_attendance_case(db, scope=_scope(db, user), case_id=case_id)
-    _set_etag(response, workforce_admin_service.attendance_case_etag(db, case_id))
-    return case
+    snapshot = workforce_read_service.get_attendance_case_snapshot(
+        db, scope=_scope(db, user), case_id=case_id
+    )
+    _set_etag(response, snapshot.etag)
+    return snapshot.body
 
 
 @router.post("/attendance/cases/{case_id}/adjustments", status_code=status.HTTP_201_CREATED)

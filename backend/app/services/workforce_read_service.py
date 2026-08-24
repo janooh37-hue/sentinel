@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import json
-
+from dataclasses import dataclass
 from datetime import UTC, date, datetime, timedelta
 from math import floor
 from typing import Any
@@ -34,6 +34,10 @@ from app.db.workforce_models import (
 from app.services import attendance_profile_service
 from app.services.attendance_evaluation_service import effective_policy
 from app.services.workforce_scope_service import scope_allows
+from app.services.workforce_admin_service import (
+    active_attendance_adjustment,
+    attendance_case_etag_for,
+)
 
 
 def _latest_evaluations(db: Session, case_ids: list[int]) -> dict[int, AttendanceEvaluation]:
@@ -528,7 +532,15 @@ def _adjustment_audit_read(
     return result
 
 
-def get_attendance_case(db: Session, *, scope: Any, case_id: int) -> dict[str, Any]:
+@dataclass(frozen=True)
+class AttendanceCaseSnapshot:
+    body: dict[str, Any]
+    etag: str
+
+
+def get_attendance_case_snapshot(
+    db: Session, *, scope: Any, case_id: int
+) -> AttendanceCaseSnapshot:
     case = db.get(AttendanceCase, case_id)
     if case is None:
         raise NotFoundError("ATTENDANCE_CASE_NOT_FOUND", "Attendance case was not found.")
@@ -551,15 +563,7 @@ def get_attendance_case(db: Session, *, scope: Any, case_id: int) -> dict[str, A
         )
     )
     latest = evaluations[-1] if evaluations else None
-    active = next(
-        (
-            adjustment
-            for adjustment in reversed(adjustments)
-            if adjustment.revoked_at is None
-            and not any(other.supersedes_adjustment_id == adjustment.id for other in adjustments)
-        ),
-        None,
-    )
+    active = active_attendance_adjustment(adjustments)
     effective: dict[str, Any] | None = _evaluation_read(latest) if latest else None
     if effective is not None and active is not None:
         replacements = {
@@ -574,7 +578,7 @@ def get_attendance_case(db: Session, *, scope: Any, case_id: int) -> dict[str, A
         effective.update({key: value for key, value in replacements.items() if value is not None})
         effective["adjustment_id"] = active.id
     employee = _employee_row(db, case.employee_id)
-    return {
+    body = {
         "id": case.id,
         "employee_id": case.employee_id,
         "name_en": employee.name_en if employee else "",
@@ -595,6 +599,14 @@ def get_attendance_case(db: Session, *, scope: Any, case_id: int) -> dict[str, A
         "adjustments": [_adjustment_read(row) for row in adjustments],
         "adjustment_audit": _adjustment_audit_read(db, adjustments),
     }
+    return AttendanceCaseSnapshot(
+        body=body,
+        etag=attendance_case_etag_for(case_id=case.id, latest=latest, active=active),
+    )
+
+
+def get_attendance_case(db: Session, *, scope: Any, case_id: int) -> dict[str, Any]:
+    return get_attendance_case_snapshot(db, scope=scope, case_id=case_id).body
 
 
 def list_duty_assignment_events(db: Session, *, scope: Any) -> list[dict[str, Any]]:

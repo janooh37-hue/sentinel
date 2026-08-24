@@ -12,7 +12,8 @@ from app.db.workforce_models import (
     AttendanceEvaluationPunchSource,
     AttendancePunchAssignment,
 )
-from app.services import perm_service, workforce_admin_service
+from app.services import perm_service, workforce_admin_service, workforce_read_service
+from app.services.workforce_scope_service import resolve_workforce_scope
 from tests.conftest import make_user
 from tests.factories.attendance import add_punch, build_attendance_day, local
 from tests.test_workforce_api_permissions import _client
@@ -368,3 +369,73 @@ def test_case_etag_serializes_adjustments_across_reload_and_rejects_stale_writes
     )
     assert revoked.status_code == 200, revoked.text
     assert revoked.headers["etag"] != reloaded.headers["etag"]
+
+
+def test_case_etag_reveals_active_predecessor_after_revoking_superseder(api_db) -> None:
+    fixture = build_attendance_day(api_db, operational_date=DAY, posts=[("Gate 1", 1)])
+    case = next(case for case in fixture.cases if case.shift_code_snapshot == "morning")
+    client = _client(api_db, fixture.admin)
+    version_1 = client.get(f"/api/v1/workforce/attendance/cases/{case.id}").headers["etag"]
+
+    first = client.post(
+        f"/api/v1/workforce/attendance/cases/{case.id}/adjustments",
+        headers={"If-Match": version_1},
+        json={"replacement_presence_state": "completed", "reason": "First register"},
+    )
+    assert first.status_code == 201, first.text
+    second = client.post(
+        f"/api/v1/workforce/attendance/cases/{case.id}/adjustments",
+        headers={"If-Match": first.headers["etag"]},
+        json={"replacement_presence_state": "absent", "reason": "Superseding register"},
+    )
+    assert second.status_code == 201, second.text
+    version_3 = second.headers["etag"]
+
+    revoked = client.post(
+        f"/api/v1/workforce/attendance/cases/{case.id}/adjustments/{second.json()['id']}/revoke",
+        headers={"If-Match": version_3},
+        json={"reason": "Second register was incorrect"},
+    )
+    assert revoked.status_code == 200, revoked.text
+    assert revoked.headers["etag"] != version_3
+
+    revealed = client.get(f"/api/v1/workforce/attendance/cases/{case.id}")
+    assert revealed.status_code == 200, revealed.text
+    assert revealed.headers["etag"] == revoked.headers["etag"]
+    assert revealed.json()["effective"]["adjustment_id"] == first.json()["id"]
+
+    stale = client.post(
+        f"/api/v1/workforce/attendance/cases/{case.id}/adjustments",
+        headers={"If-Match": version_3},
+        json={"replacement_presence_state": "completed", "reason": "Stale second review"},
+    )
+    assert stale.status_code == 409
+    assert stale.json()["error"]["code"] == "ATTENDANCE_CASE_VERSION_CONFLICT"
+
+
+def test_case_snapshot_pairs_evidence_body_with_its_concurrency_version(api_db) -> None:
+    fixture = build_attendance_day(api_db, operational_date=DAY, posts=[("Gate 1", 1)])
+    case = next(case for case in fixture.cases if case.shift_code_snapshot == "morning")
+    first = workforce_admin_service.apply_adjustment(
+        api_db,
+        case_id=case.id,
+        payload={"replacement_presence_state": "completed", "reason": "First register"},
+        if_match=workforce_admin_service.attendance_case_etag(api_db, case.id),
+        actor=fixture.admin,
+    )
+    snapshot = workforce_read_service.get_attendance_case_snapshot(
+        api_db,
+        scope=resolve_workforce_scope(api_db, fixture.admin),
+        case_id=case.id,
+    )
+
+    workforce_admin_service.apply_adjustment(
+        api_db,
+        case_id=case.id,
+        payload={"replacement_presence_state": "absent", "reason": "Later register"},
+        if_match=snapshot.etag,
+        actor=fixture.admin,
+    )
+
+    assert snapshot.body["effective"]["adjustment_id"] == first.id
+    assert snapshot.etag != workforce_admin_service.attendance_case_etag(api_db, case.id)
