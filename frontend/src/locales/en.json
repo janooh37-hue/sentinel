@@ -1054,7 +1054,6 @@
     "eyebrow": "Operations",
     "pageMeta": "{{total}} entries · ref-number log",
     "stampPreview": "Stamp preview",
-    "newEntry": "New entry",
     "empty": "No book entries match these filters.",
     "confirmDelete": "Soft-delete this entry? It stays in records; ref number is not reused.",
     "bulk": {
@@ -1117,6 +1116,18 @@
       "printUnavailable": "PDF unavailable — open the record for the DOCX fallback."
     },
     "emptyUnfiltered": "No book entries yet",
+    "approvals": {
+      "title": "Approvals",
+      "tabSent": "Sent by me",
+      "tabReceived": "Awaiting my review",
+      "count_one": "{{count}} record",
+      "count_other": "{{count}} records",
+      "decidedAt": "Decided",
+      "emptySent": "You haven't sent any records for approval yet.",
+      "emptyReceived": "Nothing awaiting your review, and no verdicts from the last 30 days.",
+      "emptyFiltered": "No records match this filter.",
+      "viewFullLog": "View full log"
+    },
     "approval": {
       "awaitingTitle": "Books · awaiting your approval",
       "awaitingEmpty": "Nothing awaiting your approval",

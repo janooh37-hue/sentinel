@@ -1162,7 +1162,6 @@
     "eyebrow": "العمليات",
     "pageMeta": "{{total}} إدخال · سجل الأرقام المرجعية",
     "stampPreview": "معاينة الختم",
-    "newEntry": "إدخال جديد",
     "empty": "لا توجد إدخالات تطابق هذه المرشحات.",
     "confirmDelete": "حذف مؤقت لهذا الإدخال؟ يبقى في السجلات ولا يُعاد استخدام الرقم المرجعي.",
     "bulk": {
@@ -1225,6 +1224,22 @@
       "printUnavailable": "ملف PDF غير متاح — افتح السجل لاستخدام ملف DOCX البديل."
     },
     "emptyUnfiltered": "لا توجد إدخالات بعد",
+    "approvals": {
+      "title": "الاعتمادات",
+      "tabSent": "المرسل مني",
+      "tabReceived": "بانتظار مراجعتي",
+      "count_zero": "لا سجلات",
+      "count_one": "سجل واحد",
+      "count_two": "سجلان",
+      "count_few": "{{count}} سجلات",
+      "count_many": "{{count}} سجلاً",
+      "count_other": "{{count}} سجل",
+      "decidedAt": "تاريخ القرار",
+      "emptySent": "لم ترسل أي سجل للاعتماد بعد.",
+      "emptyReceived": "لا يوجد ما ينتظر مراجعتك، ولا قرارات لك خلال الثلاثين يومًا الماضية.",
+      "emptyFiltered": "لا توجد سجلات تطابق هذا المرشح.",
+      "viewFullLog": "عرض السجل الكامل"
+    },
     "approval": {
       "awaitingTitle": "الدفاتر · في انتظار موافقتك",
       "awaitingEmpty": "لا يوجد ما ينتظر موافقتك",

@@ -1995,6 +1995,31 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/books/approval-log": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Approval Log
+         * @description The approvals log — ``scope=sent`` (records I submitted) or
+         *     ``scope=received`` (my pending decisions + my verdicts from the last 30
+         *     days). Paged like GET /books; rows are flattened ApprovalLogItem payloads.
+         *
+         *     Declared before ``/{book_id}`` so the literal ``approval-log`` segment isn't
+         *     swallowed by the int path param — same reason as ``/awaiting`` above.
+         */
+        get: operations["get_approval_log_api_v1_books_approval_log_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/books/approvers": {
         parameters: {
             query?: never;
@@ -5005,6 +5030,80 @@ export interface components {
             /** Signature Boldness */
             signature_boldness?: number | null;
             dashboard_layout?: components["schemas"]["DashboardLayout"] | null;
+        };
+        /**
+         * ApprovalLogItem
+         * @description One flattened approvals-log row (either scope).
+         *
+         *     Carries exactly what an operator needs to recognise the record and where it
+         *     sits in the chain — ref, subject, category, state, the people involved, the
+         *     two timestamps, the verdict, and the current version's ``document_id`` so
+         *     the client can paint a page-1 thumbnail without fetching the detail payload.
+         *
+         *     Inherits ORMBase so every timestamp serializes with an offset (the
+         *     test_schema_utc_serialization guard). The service tags each stamp with its
+         *     real zone before construction — step stamps as UTC, the off-chain
+         *     ``Book.created_at`` fallback as Dubai wall-clock — and aware values pass
+         *     through ORMBase's validator untouched.
+         */
+        ApprovalLogItem: {
+            /** Book Id */
+            book_id: number;
+            /** Ref Number */
+            ref_number: string;
+            /** Subject */
+            subject?: string | null;
+            /** Category Name Ar */
+            category_name_ar?: string | null;
+            /** Category Name En */
+            category_name_en?: string | null;
+            /** Status */
+            status: string;
+            /**
+             * Priority
+             * @default Normal
+             */
+            priority: string;
+            /** Submitted By User Id */
+            submitted_by_user_id?: number | null;
+            /** Submitted By Name */
+            submitted_by_name?: string | null;
+            /** Doc Manager User Id */
+            doc_manager_user_id?: number | null;
+            /** Doc Manager Name */
+            doc_manager_name?: string | null;
+            /** Approver Name */
+            approver_name?: string | null;
+            /** Reviewer Names */
+            reviewer_names?: string[];
+            /** Submitted At */
+            submitted_at?: string | null;
+            /** Decided At */
+            decided_at?: string | null;
+            /** Verdict */
+            verdict?: ("approved" | "rejected" | "returned") | null;
+            /** Document Id */
+            document_id?: number | null;
+            /** Your Step Kind */
+            your_step_kind?: string | null;
+            /** Your Step State */
+            your_step_state?: string | null;
+            /** Your Step Decided At */
+            your_step_decided_at?: string | null;
+        };
+        /**
+         * ApprovalLogResponse
+         * @description Paged approvals log — mirrors the BookListResponse envelope shape.
+         */
+        ApprovalLogResponse: {
+            /** Items */
+            items: components["schemas"]["ApprovalLogItem"][];
+            /** Total */
+            total: number;
+            /** Limit */
+            limit: number;
+            /** Offset */
+            offset: number;
         };
         /** ApproveRequest */
         ApproveRequest: {
@@ -15357,6 +15456,41 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["BookRead"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_approval_log_api_v1_books_approval_log_get: {
+        parameters: {
+            query?: {
+                scope?: "sent" | "received";
+                limit?: number;
+                offset?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApprovalLogResponse"];
                 };
             };
             /** @description Validation Error */

@@ -36,6 +36,7 @@ from app.core.classifications import CLASSIFICATIONS
 from app.db.models import Book, BookEditSession, BookVersion, Document, User
 from app.db.session import get_db
 from app.schemas.book import (
+    ApprovalLogResponse,
     ApproverOptionRead,
     BookAnnotationCreate,
     BookAnnotationRead,
@@ -72,6 +73,7 @@ from app.services import (
     book_service,
     book_template_service,
     included_papers_service,
+    perm_service,
     word_book_service,
 )
 from app.services.book_service import LIST_DEFAULT_LIMIT, LIST_MAX_LIMIT
@@ -525,6 +527,54 @@ def list_awaiting_scan(
     """
     rows = book_service.list_awaiting_scan(db, user_id=None if scope == "all" else user.id)
     return [BookRead.model_validate(r) for r in rows]
+
+
+def _approval_log_gate(
+    db: Annotated[Session, Depends(get_db)],
+    user: Annotated[User, Depends(get_current_user)],
+    scope: Annotated[Literal["sent", "received"], Query()] = "received",
+) -> User:
+    """Per-scope authority for the approvals log.
+
+    ``received`` mirrors GET /books/awaiting — you need ``books.approve`` to
+    have a decision queue at all. ``sent`` is any authenticated user: everyone
+    who can submit owns their outbox. Declared as a dependency (not inline in
+    the handler) so the OpenAPI security picture matches require_capability's.
+    """
+    if scope == "received" and not perm_service.has_capability(db, user, "books.approve"):
+        raise AppError(
+            "FORBIDDEN",
+            "Missing capability: books.approve",
+            http_status=403,
+            details={"capability": "books.approve"},
+        )
+    return user
+
+
+@router.get("/approval-log", response_model=ApprovalLogResponse)
+def get_approval_log(
+    db: Annotated[Session, Depends(get_db)],
+    user: Annotated[User, Depends(_approval_log_gate)],
+    scope: Annotated[Literal["sent", "received"], Query()] = "received",
+    limit: int = Query(LIST_DEFAULT_LIMIT, ge=1, le=LIST_MAX_LIMIT),
+    offset: int = Query(0, ge=0),
+) -> ApprovalLogResponse:
+    """The approvals log — ``scope=sent`` (records I submitted) or
+    ``scope=received`` (my pending decisions + my verdicts from the last 30
+    days). Paged like GET /books; rows are flattened ApprovalLogItem payloads.
+
+    Declared before ``/{book_id}`` so the literal ``approval-log`` segment isn't
+    swallowed by the int path param — same reason as ``/awaiting`` above.
+    """
+    if scope == "sent":
+        items, total = book_service.approval_log_sent(
+            db, user_id=user.id, limit=limit, offset=offset
+        )
+    else:
+        items, total = book_service.approval_log_received(
+            db, user_id=user.id, limit=limit, offset=offset
+        )
+    return ApprovalLogResponse(items=items, total=total, limit=limit, offset=offset)
 
 
 @router.get("/approvers", response_model=list[ApproverOptionRead])

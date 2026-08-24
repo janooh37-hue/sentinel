@@ -38,6 +38,9 @@ const ApplicationPage = lazy(() =>
 const BooksPage = lazy(() =>
   import('@/pages/books/BooksPage').then((m) => ({ default: m.BooksPage })),
 )
+const ApprovalsPage = lazy(() =>
+  import('@/pages/books/ApprovalsPage').then((m) => ({ default: m.ApprovalsPage })),
+)
 const BookRecordPage = lazy(() =>
   import('@/pages/books/BookRecordPage').then((m) => ({ default: m.BookRecordPage })),
 )
@@ -256,6 +259,9 @@ function Shell(): React.JSX.Element {
               <Route path="/employees/:id" element={<EmployeeDetailPage />} />
               <Route path="/application" element={<ApplicationPage />} />
               <Route path="/books" element={<BooksPage />} />
+              {/* Static segment outranks /books/:id in react-router's ranking —
+                  same pattern as /employees/timesheet. */}
+              <Route path="/books/approvals" element={<ApprovalsPage />} />
               <Route path="/books/:id" element={<BookRecordPage />} />
               <Route
                 path="/scan-back"

@@ -670,6 +670,9 @@ export type IncludedPapersPreviewRead = components['schemas']['IncludedPapersPre
 export type IncludedPapersRequest = components['schemas']['IncludedPapersRequest']
 export type BookFacetsResponse = components['schemas']['BookFacetsResponse']
 export type ServiceFacetRead = components['schemas']['ServiceFacetRead']
+// Approvals log (#31) — GET /books/approval-log?scope=sent|received
+export type ApprovalLogItem = components['schemas']['ApprovalLogItem']
+export type ApprovalLogResponse = components['schemas']['ApprovalLogResponse']
 
 // Annotation overlay (Slice 3). Hand-typed mirror of schemas.book.BookAnnotationRead
 // until gen:api folds it into the generated schema.
@@ -1568,6 +1571,13 @@ export const api = {
   // --- books approval (feat/mobile-and-approval) ---
   /** GET /books/awaiting — books pending the signed-in user's decision. */
   listAwaitingBooks: () => request<BookRead[]>('GET', '/books/awaiting'),
+  /** GET /books/approval-log — the approvals log. `scope=sent` lists records I
+   *  submitted (any authenticated user); `scope=received` lists my pending
+   *  decisions + my verdicts from the last 30 days (needs books.approve). */
+  listApprovalLog: (
+    scope: 'sent' | 'received',
+    params: { limit?: number; offset?: number } = {},
+  ) => request<ApprovalLogResponse>('GET', `/books/approval-log${qs({ scope, ...params })}`),
   /** GET /books/awaiting-scan — records stranded at `awaiting_scan` past 24h.
    * `scope='all'` returns everyone's (both scopes need books.edit). */
   listAwaitingScanBooks: (scope: 'mine' | 'all' = 'mine') =>
