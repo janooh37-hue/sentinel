@@ -459,10 +459,18 @@ def _case_punches(db: Session, case: AttendanceCase) -> list[dict[str, Any]]:
         {"occurred_at": _as_utc_aware(row.occurred_at), "device_name": row.device_name}
         for row in db.scalars(
             select(AttendancePunch)
+            .outerjoin(
+                AttendancePunchAssignment,
+                AttendancePunchAssignment.punch_id == AttendancePunch.id,
+            )
             .where(
                 AttendancePunch.provider_person_id == person.id,
                 AttendancePunch.occurred_at >= window_start,
                 AttendancePunch.occurred_at <= window_end,
+                or_(
+                    AttendancePunchAssignment.punch_id.is_(None),
+                    AttendancePunchAssignment.attendance_case_id == case.id,
+                ),
             )
             .order_by(AttendancePunch.occurred_at, AttendancePunch.id)
         )
@@ -503,15 +511,21 @@ def _adjustment_audit_read(
         .order_by(AuditLog.ts, AuditLog.id)
     )
     result: list[dict[str, Any]] = []
+    adjustment_reasons = {row.id: row.reason for row in adjustments}
     for row in rows:
-        reason = _audit_reason(row)
-        if reason is None or row.entity_id is None:
+        if row.entity_id is None:
             continue
         try:
             adjustment_id = int(row.entity_id)
         except ValueError:
             continue
         if adjustment_id not in adjustment_ids:
+            continue
+        action = row.action.rsplit(".", maxsplit=1)[-1]
+        reason = _audit_reason(row)
+        if reason is None and action == "created":
+            reason = adjustment_reasons[adjustment_id]
+        if reason is None:
             continue
         result.append(
             {

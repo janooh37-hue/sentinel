@@ -3,10 +3,10 @@
 from __future__ import annotations
 
 import json
-from datetime import date, datetime, time
+from datetime import date, datetime, time, timedelta
 
 from app.db.models import AuditLog
-from app.db.workforce_models import AttendanceAdjustment, AttendanceEvaluation
+from app.db.workforce_models import AttendanceAdjustment, AttendanceEvaluation, AttendancePunchAssignment
 from app.services import perm_service, workforce_admin_service
 from tests.conftest import make_user
 from tests.factories.attendance import add_punch, build_attendance_day, local
@@ -166,4 +166,96 @@ def test_adjustment_audits_persist_create_and_revoke_reasons(api_db) -> None:
     assert [json.loads(entry.payload)["after"]["reason"] for entry in entries] == [
         "Supervisor register",
         "Duplicate register entry",
+    ]
+
+
+def test_case_punches_exclude_events_assigned_to_an_overlapping_case(api_db) -> None:
+    fixture = build_attendance_day(api_db, operational_date=DAY, posts=[("Gate 1", 1)])
+    employee = fixture.employees[0]
+    target_case = next(
+        row
+        for row in fixture.cases
+        if row.employee_id == employee.id and row.shift_code_snapshot == "morning"
+    )
+    other_case = next(
+        row for row in fixture.cases if row.employee_id == employee.id and row.id != target_case.id
+    )
+    # A minute offset preserves the uniqueness constraint while making their
+    # evidence windows overlap completely.
+    other_case.scheduled_start_at = target_case.scheduled_start_at + timedelta(minutes=1)
+    other_case.scheduled_end_at = target_case.scheduled_end_at
+    person = fixture.provider_people[employee.id]
+    owned = add_punch(api_db, provider_person=person, occurred_at=local(DAY, time(8, 5)))
+    add_punch(api_db, provider_person=person, occurred_at=local(DAY, time(8, 6)))
+    assigned_elsewhere = add_punch(api_db, provider_person=person, occurred_at=local(DAY, time(8, 7)))
+    api_db.add_all(
+        [
+            AttendancePunchAssignment(
+                punch_id=owned.id, attendance_case_id=target_case.id, algorithm_version="test"
+            ),
+            AttendancePunchAssignment(
+                punch_id=assigned_elsewhere.id,
+                attendance_case_id=other_case.id,
+                algorithm_version="test",
+            ),
+        ]
+    )
+    api_db.commit()
+
+    response = _client(api_db, fixture.admin).get(
+        f"/api/v1/workforce/attendance/cases/{target_case.id}"
+    )
+
+    assert response.status_code == 200, response.text
+    assert [row["occurred_at"] for row in response.json()["punches"]] == [
+        "2026-08-24T04:05:00Z",
+        "2026-08-24T04:06:00Z",
+    ]
+
+
+def test_case_keeps_legacy_created_audit_with_adjustment_reason_fallback(api_db) -> None:
+    fixture = build_attendance_day(api_db, operational_date=DAY, posts=[("Gate 1", 1)])
+    case = next(case for case in fixture.cases if case.shift_code_snapshot == "morning")
+    evaluation = api_db.query(AttendanceEvaluation).filter_by(
+        attendance_case_id=case.id, revision=1
+    ).one()
+    adjustment = AttendanceAdjustment(
+        attendance_case_id=case.id,
+        base_evaluation_id=evaluation.id,
+        reason="Legacy supervisor register",
+        created_by_user_id=fixture.admin.id,
+        created_at=datetime(2026, 8, 24, 12, 2),
+    )
+    api_db.add(adjustment)
+    api_db.flush()
+    api_db.add_all(
+        [
+            AuditLog(
+                actor="legacy-creator",
+                action="workforce.attendance_adjustment.created",
+                entity_type="attendance_adjustment",
+                entity_id=str(adjustment.id),
+                payload=json.dumps({"after": {"case_id": case.id}}),
+                ts=datetime(2026, 8, 24, 12, 2),
+            ),
+            AuditLog(
+                actor="legacy-revoker",
+                action="workforce.attendance_adjustment.revoked",
+                entity_type="attendance_adjustment",
+                entity_id=str(adjustment.id),
+                payload=json.dumps({"after": {"reason": "Legacy revocation"}}),
+                ts=datetime(2026, 8, 24, 12, 3),
+            ),
+        ]
+    )
+    api_db.commit()
+
+    response = _client(api_db, fixture.admin).get(f"/api/v1/workforce/attendance/cases/{case.id}")
+
+    assert response.status_code == 200, response.text
+    audit = response.json()["adjustment_audit"]
+    assert [row["action"] for row in audit] == ["created", "revoked"]
+    assert [row["reason"] for row in audit] == [
+        "Legacy supervisor register",
+        "Legacy revocation",
     ]
