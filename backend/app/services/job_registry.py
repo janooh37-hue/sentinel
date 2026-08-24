@@ -16,6 +16,7 @@ import dataclasses
 import threading
 import uuid
 from dataclasses import dataclass, field
+from datetime import date
 from typing import Literal
 
 JobStatus = Literal["queued", "running", "done", "failed"]
@@ -65,6 +66,9 @@ class _Job:
     # P04-J: list of generated document items (primary + companions).
     submission_id: str | None = None
     documents: list[JobDocumentItem] = field(default_factory=list)
+    #: Days whose recorded absences the generated leave overwrote (sick/annual
+    #: leaves supersede absences). Empty for every other template.
+    superseded_absence_dates: list[date] = field(default_factory=list)
     error_code: str | None = None
     error_message: str | None = None
 
@@ -104,6 +108,7 @@ def set_done(
     book_id: int | None,
     submission_id: str,
     documents: list[JobDocumentItem],
+    superseded_absence_dates: list[date] | None = None,
 ) -> None:
     with _lock:
         job = _jobs.get(job_id)
@@ -112,6 +117,7 @@ def set_done(
             job.book_id = book_id
             job.submission_id = submission_id
             job.documents = documents
+            job.superseded_absence_dates = list(superseded_absence_dates or [])
 
 
 def set_failed(job_id: str, *, error_code: str, error_message: str) -> None:

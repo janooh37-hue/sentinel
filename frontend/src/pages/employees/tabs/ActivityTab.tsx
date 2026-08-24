@@ -1,9 +1,9 @@
 /**
  * Activity tab — chronological timeline merging documents, leaves,
- * violations, and ledger entries.
+ * violations, absences, and ledger entries.
  */
 
-import { AlertTriangle, FileText, MailIcon, Plane } from 'lucide-react'
+import { AlertTriangle, FileText, MailIcon, Plane, UserX } from 'lucide-react'
 import { useMemo, type ComponentType } from 'react'
 import { useTranslation } from 'react-i18next'
 
@@ -16,12 +16,14 @@ const ICONS: Record<Kind, ComponentType<{ className?: string }>> = {
   leave: Plane,
   violation: AlertTriangle,
   ledger: MailIcon,
+  absence: UserX,
 }
 const COLORS: Record<Kind, string> = {
   document: 'bg-primary',
   leave: 'bg-success',
   violation: 'bg-accent',
   ledger: 'bg-primary',
+  absence: 'bg-destructive',
 }
 
 interface Props {

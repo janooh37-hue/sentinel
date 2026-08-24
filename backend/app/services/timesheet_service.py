@@ -1394,36 +1394,6 @@ def set_filler(
     _finish(db, commit=commit)
 
 
-def delete_absences_covered_by(
-    db: Session, employee_id: str, start: date, end: date, *, commit: bool = True
-) -> int:
-    """Drop the absences a leave now covers, and say how many went.
-
-    A sick certificate produced after the fact supersedes the absence it explains,
-    so the row is removed rather than left to argue with the leave. Allowed on a
-    closed month on purpose: the absence is the employee's record, while the sheet
-    that went out is protected by its snapshot.
-
-    ``commit=False`` is what document generation passes: the supersede belongs to
-    the same unit of work as the leave row that caused it, so a later failure in
-    the generation pipeline takes both back.
-    """
-
-    rows = list(
-        db.execute(
-            select(Absence).where(
-                Absence.employee_id == employee_id,
-                Absence.date >= start,
-                Absence.date <= end,
-            )
-        ).scalars()
-    )
-    for row in rows:
-        db.delete(row)
-    _finish(db, commit=commit)
-    return len(rows)
-
-
 def acknowledge_start(
     db: Session, year: int, month: int, employee_id: str, *, user_id: int | None = None
 ) -> None:

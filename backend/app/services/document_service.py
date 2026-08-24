@@ -63,7 +63,7 @@ from app.db.models import (
 from app.db.repos.classified_refs_repo import allocate_classified_serial
 from app.db.repos.refs_repo import allocate_ref_with_retry
 from app.schemas.employee import EMPLOYEE_STATUS_ACTIVE, EMPLOYEE_STATUS_RESIGNED
-from app.services import timesheet_service
+from app.services import absence_service
 from app.services._pdf_executor import convert_docx_to_pdf as convert_docx_to_pdf
 
 if TYPE_CHECKING:
@@ -225,6 +225,10 @@ class GenerationResult:
     violation_id: int | None
     documents: list[GenerationDocumentResult] = field(default_factory=list)
     book_id: int | None = None
+    #: Days whose recorded absences this leave overwrote (sick/annual only).
+    #: Surfaced on the job-status payload so the operator who uploaded the
+    #: certificate sees the overwrite announced.
+    superseded_absences: list[date] = field(default_factory=list)
 
     @property
     def document_id(self) -> int:
@@ -1740,6 +1744,8 @@ def generate_document(
     # 12. Leave forms — insert Leave row (primary only)
     # ------------------------------------------------------------------
     leave_id: int | None = None
+    #: Days whose absence rows a generated sick/annual leave overwrote.
+    superseded_absences: list[date] = []
     if return_for_leave_id is not None:
         # Return-form filing: attach to the existing leave; no new register row.
         doc_row.leave_id = return_for_leave_id
@@ -1782,7 +1788,7 @@ def generate_document(
         ):
             # ``commit=False``: this is part of the document's unit of work, so a
             # failure in step 13 or later takes the supersede back with the rest.
-            timesheet_service.delete_absences_covered_by(
+            superseded_absences = absence_service.delete_absences_covered_by(
                 db, employee_id, leave_row.start_date, leave_row.end_date, commit=False
             )
 
@@ -1923,6 +1929,7 @@ def generate_document(
         violation_id=violation_id,
         documents=doc_results,
         book_id=_logged_book.id if _logged_book is not None else None,
+        superseded_absences=superseded_absences,
     )
 
 

@@ -12,6 +12,7 @@ export type Tab =
   | 'documents'
   | 'profile'
   | 'leaves'
+  | 'absences'
   | 'violations'
   | 'activity'
   | 'messages'
@@ -20,6 +21,8 @@ export type Tab =
 interface Counts {
   documents: number
   leaves: string
+  /** Absence days recorded this calendar year (stats.absence_days). */
+  absences: number
   violations: number
   activity: number
   messages: number
@@ -38,6 +41,7 @@ const ORDER: Tab[] = [
   'profile',
   'documents',
   'leaves',
+  'absences',
   'messages',
   'activity',
   'attendance',
@@ -59,6 +63,7 @@ export function EmployeeTabChips({ active, counts, onChange }: Props): React.JSX
         if (tab === 'profile') badge = counts.profileGaps > 0 ? counts.profileGaps : null
         else if (tab === 'documents') badge = counts.documents
         else if (tab === 'leaves') badge = counts.leaves
+        else if (tab === 'absences') badge = counts.absences
         else if (tab === 'messages') badge = counts.messages
         else if (tab === 'activity') badge = counts.activity
         else if (tab === 'attendance') badge = counts.attendance

@@ -29,6 +29,7 @@ import { EmployeeIdCard } from './EmployeeIdCard'
 import type { Tab } from './EmployeeTabChips'
 import { EmployeeTabChips } from './EmployeeTabChips'
 import { StatusDialog } from './StatusDialog'
+import { AbsencesTab } from './tabs/AbsencesTab'
 import { ActivityTab } from './tabs/ActivityTab'
 import { AttendanceTab } from './tabs/AttendanceTab'
 import { DocumentsTab } from './tabs/DocumentsTab'
@@ -41,6 +42,7 @@ const VALID_TABS = new Set<Tab>([
   'profile',
   'documents',
   'leaves',
+  'absences',
   'messages',
   'activity',
   'attendance',
@@ -292,6 +294,7 @@ export function EmployeeDetailPage(): React.JSX.Element {
               counts={{
                 documents: data.stats.documents,
                 leaves: `${data.stats.leaves_taken_days}d`,
+                absences: data.stats.absence_days,
                 violations: data.stats.violations,
                 activity: data.stats.ledger_count,
                 // The chip carries no count: the number that matters is per day,
@@ -319,6 +322,9 @@ export function EmployeeDetailPage(): React.JSX.Element {
             )}
             {tab === 'leaves' && (
               <LeavesTab employeeId={data.employee.id} leaves={data.recent_leaves} />
+            )}
+            {tab === 'absences' && (
+              <AbsencesTab employeeId={data.employee.id} absences={data.recent_absences} />
             )}
             {tab === 'violations' && (
               <ViolationsTab

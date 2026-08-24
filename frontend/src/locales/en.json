@@ -2229,7 +2229,8 @@
       "activity": "Activity",
       "messages": "Messages",
       "showingRecent": "Showing {{shown}} of {{total}}",
-      "attendance": "Attendance"
+      "attendance": "Attendance",
+      "absences": "Absences"
     },
     "stats": {
       "documents": "Documents",
@@ -2980,6 +2981,31 @@
       "unsupportedType": "Only images and PDF files are accepted",
       "tooLarge": "File exceeds the {{max}} limit"
     }
+  },
+  "absences": {
+    "tile": {
+      "name": "Employee Absence"
+    },
+    "title": "Employee Absence",
+    "subtitle": "Record the days an employee was absent without leave. No document is created — the record lands on the employee and the time sheet picks it up.",
+    "form": {
+      "start": "First day",
+      "end": "Last day",
+      "note": "Note (optional)",
+      "notePlaceholder": "e.g. no call, no show",
+      "save": "Record absence"
+    },
+    "saved": "Recorded {{count}} absence day(s).",
+    "savedWithSkips": "Recorded {{count}} day(s); skipped {{skipped}} day(s) outside the employee's service window.",
+    "nothingToSave": "Every day in that range is already recorded.",
+    "pickEmployee": "Pick an employee to record or review absences.",
+    "list": {
+      "title": "Recorded absences",
+      "empty": "No absences recorded for this employee.",
+      "confirmDelete": "Remove the absence on {{date}}?"
+    },
+    "deleted": "Absence removed.",
+    "overwritten": "This leave overwrote {{count}} recorded absence day(s) ({{from}} → {{to}})."
   },
   "dutyLocations": {
     "tile": {

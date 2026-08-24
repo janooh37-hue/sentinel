@@ -602,6 +602,28 @@ export function ApplicationPage(): React.JSX.Element {
       setPreviewJobStatus(job.status)
       const saved = savedGenerationFromJob(job)
       void qc.invalidateQueries({ queryKey: ['books'] })
+      // A generated sick/annual leave supersedes the absence days it covers.
+      // The rows are deleted on the FIRST job that covers them (usually the
+      // preview), so this announcement is not gated on the committed save.
+      const superseded = job.superseded_absence_dates ?? []
+      const [firstDay, lastDay] = [superseded[0], superseded[superseded.length - 1]]
+      if (firstDay && lastDay) {
+        const dayFmt = (iso: string): string =>
+          new Date(`${iso}T00:00:00`).toLocaleDateString(i18n.language, {
+            year: 'numeric',
+            month: 'short',
+            day: 'numeric',
+          })
+        toast.warning(
+          t('absences.overwritten', {
+            count: superseded.length,
+            from: dayFmt(firstDay),
+            to: dayFmt(lastDay),
+          }),
+        )
+        void qc.invalidateQueries({ queryKey: ['employee-absences'] })
+        void qc.invalidateQueries({ queryKey: ['employee-detail'] })
+      }
       if (pendingCommitRef.current && selectedTemplate) {
         if (saved) {
           setLastSaved({ ...saved, notification: pendingNotificationRef.current })
@@ -626,7 +648,7 @@ export function ApplicationPage(): React.JSX.Element {
         if (saved) setReviseBookId(null)
       }
     },
-    [qc, selectedTemplate, t],
+    [qc, selectedTemplate, t, i18n.language],
   )
 
   const handleSelectTemplate = useCallback((id: string) => {
@@ -828,6 +850,10 @@ export function ApplicationPage(): React.JSX.Element {
   const dlTitle = t('dutyLocations.tile.name')
   const dlMatchesQuery =
     !query.trim() || dlTitle.toLowerCase().includes(query.trim().toLowerCase())
+  // Employee Absence synthetic tile — record-only service (no DOCX form).
+  const absTitle = t('absences.tile.name')
+  const absMatchesQuery =
+    !query.trim() || absTitle.toLowerCase().includes(query.trim().toLowerCase())
 
   return (
     <div className="flex flex-1 flex-col overflow-auto bg-background">
@@ -880,7 +906,7 @@ export function ApplicationPage(): React.JSX.Element {
                     <Skeleton key={i} className="h-[120px] w-full rounded-2xl" />
                   ))}
                 </div>
-              ) : galleryItems.length === 0 && !nsMatchesQuery && !dlMatchesQuery ? (
+              ) : galleryItems.length === 0 && !nsMatchesQuery && !dlMatchesQuery && !absMatchesQuery ? (
                 <p className="py-12 text-center text-[0.86em] text-muted-foreground">
                   {t('application.noServicesMatch')}
                 </p>
@@ -902,6 +928,15 @@ export function ApplicationPage(): React.JSX.Element {
                       category={t('dutyLocations.tile.category')}
                       emoji="🚚"
                       onSelect={() => navigate('/duty-locations')}
+                    />
+                  )}
+                  {absMatchesQuery && (
+                    <ServiceCell
+                      key="employee-absence"
+                      name={absTitle}
+                      category={t('dutyLocations.tile.category')}
+                      emoji="🚫"
+                      onSelect={() => navigate('/absences')}
                     />
                   )}
                   {galleryItems.map((tpl) => (

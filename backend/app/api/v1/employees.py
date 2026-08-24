@@ -34,6 +34,7 @@ from app.db.models import Employee, User, VaultFile
 from app.db.session import get_db
 from app.schemas import employee_activity as activity_schemas
 from app.schemas import employee_detail as detail_schemas
+from app.schemas.absence import AbsenceCreate, AbsenceCreateResult, AbsenceRead
 from app.schemas.employee import (
     EmployeeCreate,
     EmployeeListItem,
@@ -46,6 +47,7 @@ from app.schemas.leave import LeaveBalanceRead, LeaveRead
 from app.schemas.vault_file import VaultEntry, VaultTree
 from app.schemas.violation import ViolationCreate, ViolationRead, ViolationUpdate
 from app.services import (
+    absence_service,
     employee_activity_service,
     employee_detail_service,
     employee_service,
@@ -288,6 +290,57 @@ def delete_violation(
     _user: Annotated[User, Depends(require_capability("violations.manage"))],
 ) -> Response:
     violation_service.delete(db, violation_id)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+# --- Absences --------------------------------------------------------------- #
+# A day-level record on the employee, recorded the same way a sick leave is. #
+# The time sheet only reads it; nothing here is timesheet-owned.             #
+
+
+@router.get("/{employee_id}/absences", response_model=list[AbsenceRead])
+def list_employee_absences(
+    employee_id: str,
+    db: Annotated[Session, Depends(get_db)],
+    _user: Annotated[User, Depends(require_capability("leaves.view"))],
+) -> list[AbsenceRead]:
+    rows = absence_service.list_for_employee(db, employee_id)
+    return [AbsenceRead.model_validate(r) for r in rows]
+
+
+@router.post(
+    "/{employee_id}/absences",
+    response_model=AbsenceCreateResult,
+    status_code=status.HTTP_201_CREATED,
+)
+def create_employee_absences(
+    employee_id: str,
+    payload: AbsenceCreate,
+    db: Annotated[Session, Depends(get_db)],
+    user: Annotated[User, Depends(require_capability("leaves.edit"))],
+) -> AbsenceCreateResult:
+    result = absence_service.add_range(
+        db,
+        employee_id,
+        start=payload.start_date,
+        end=payload.end_date,
+        note=payload.note,
+        user_id=user.id,
+    )
+    return AbsenceCreateResult(
+        created=[AbsenceRead.model_validate(r) for r in result.created],
+        skipped_off_roster=result.skipped_off_roster,
+    )
+
+
+@router.delete("/{employee_id}/absences/{absence_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_employee_absence(
+    employee_id: str,
+    absence_id: int,
+    db: Annotated[Session, Depends(get_db)],
+    _user: Annotated[User, Depends(require_capability("leaves.edit"))],
+) -> Response:
+    absence_service.delete(db, employee_id, absence_id)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 

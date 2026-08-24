@@ -64,6 +64,9 @@ const AttendancePage = lazy(() =>
     default: m.AttendancePage,
   })),
 )
+const AbsencesPage = lazy(() =>
+  import('@/pages/absences/AbsencesPage').then((m) => ({ default: m.AbsencesPage })),
+)
 const EmployeesOrgTreePage = lazy(() =>
   import('@/pages/employees/orgTree/EmployeesOrgTreePage').then((m) => ({
     default: m.EmployeesOrgTreePage,
@@ -272,6 +275,14 @@ function Shell(): React.JSX.Element {
                 }
               />
               <Route path="/leaves" element={<LeavesPage />} />
+              <Route
+                path="/absences"
+                element={
+                  <RequireCapability cap="leaves.view">
+                    <AbsencesPage />
+                  </RequireCapability>
+                }
+              />
               <Route
                 path="/permits"
                 element={
