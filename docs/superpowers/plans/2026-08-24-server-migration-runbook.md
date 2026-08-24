@@ -252,7 +252,7 @@ GSSG_SECURE_COOKIES=1
 GSSG_PUBLIC_BASE_URL=https://gssg.lan
 ```
 
-Preserve all existing secret/integration values without copying them into the runbook. Require consolidating effective BioTime variables into the root `.env`, because `backend/app/config.py` loads the repository-root `.env`; do not assume `backend/.env` is loaded.
+Preserve all existing secret/integration values without copying them into the runbook. State that `backend/app/config.py` loads the repository-root `.env`, not `backend/.env`. Do not automatically move BioTime credentials into root `.env`: that could enable a second provider beside the retained N8N worker. Preserve current attendance ownership and require a separate reviewed change before enabling built-in BioTime sync.
 
 Create narrowly scoped firewall rules for TCP 80 and 443 from `LocalSubnet`. Retain TCP 8765 from `LocalSubnet` only if direct backend access is intentionally required. Do not recreate broad Python or Node inbound rules.
 
