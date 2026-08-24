@@ -2,7 +2,7 @@
 
 ## Goal
 
-Make the existing Outlook correspondence replacement branch merge-ready by correcting the three regressions found in the final scoped re-review, then install and use the native Windows toolchain on this workstation to verify the .NET Framework 4.8 launcher, VSTO add-in, and x86/x64 MSI packages.
+Make the existing Outlook correspondence replacement branch merge-ready by correcting the three regressions found in the final scoped re-review, then verify the .NET Framework 4.8 launcher, VSTO add-in, and x86/x64 MSI packages on a separate Windows execution PC.
 
 ## Context
 
@@ -28,17 +28,21 @@ The launcher must distinguish an Outlook action failure from a completion-report
 
 `email.manage` remains an active capability because IMAP account management and Outlook device pairing still depend on it. Restore it to `_OPERATOR_CAPS`; `_MANAGER_CAPS` inherits it. Obsolete `ledger.view`, `ledger.edit`, and `ledger.send` remain removed from the capability catalog and presets.
 
-### Native build environment
+### Execution PC and build environment
 
-Install on this workstation:
+This repository session produces the implementation plan only. The operator will execute that plan on another Windows PC using the same feature branch and an isolated Git worktree.
+
+The execution PC must provide:
 
 - Visual Studio 2022 Build Tools with MSBuild;
 - .NET Framework 4.8 targeting pack and desktop build tools;
 - Office/VSTO build targets;
-- Windows SDK with SignTool; and
-- the WiX toolset version required by `Gssg.Outlook.Installer.wixproj`.
+- Windows SDK with SignTool;
+- the WiX toolset version required by `Gssg.Outlook.Installer.wixproj`;
+- classic Outlook 2016 or later in the Office bitnesses under test; and
+- access to the signing certificate through `%GSSG_CODESIGN_THUMBPRINT%`.
 
-Installation is workstation configuration only. No product dependency or runtime downloader is added.
+Tool installation is workstation configuration only. The plan must include detection and installation commands, verification commands, expected outputs, restart/resume guidance, and exact failure gates so the execution PC can start from a clean session. No product dependency or runtime downloader is added.
 
 ## Non-goals
 
@@ -87,4 +91,4 @@ Run, in order:
 
 ## Completion Criteria
 
-The follow-up is complete when the three source regressions have reviewed behavioral coverage, the branch-wide review has no Critical or Important findings, both native bitnesses build and pass tests locally, signed artifacts verify, launcher/classic Outlook smoke tests pass, and all remaining production-only gates are explicitly recorded for the deployment operator.
+The follow-up is complete when the three source regressions have reviewed behavioral coverage, the branch-wide review has no Critical or Important findings, both native bitnesses build and pass tests on the execution PC, signed artifacts verify, launcher/classic Outlook smoke tests pass, and all production-only gates are explicitly recorded for the deployment operator.
