@@ -5231,6 +5231,57 @@ export interface components {
              */
             hint_ar: string;
         };
+        /** AttendanceAdjustmentAuditRead */
+        AttendanceAdjustmentAuditRead: {
+            /** Adjustment Id */
+            adjustment_id: number;
+            /**
+             * Action
+             * @enum {string}
+             */
+            action: "created" | "revoked";
+            /** Actor */
+            actor?: string | null;
+            /**
+             * Occurred At
+             * Format: date-time
+             */
+            occurred_at: string;
+            /** Reason */
+            reason: string;
+        };
+        /** AttendanceAdjustmentRead */
+        AttendanceAdjustmentRead: {
+            /** Id */
+            id: number;
+            /** Base Evaluation Id */
+            base_evaluation_id: number;
+            /** Replacement Presence State */
+            replacement_presence_state?: ("scheduled" | "on_duty" | "completed" | "absent" | "excused_leave" | "off" | "unknown") | null;
+            /** Replacement First In At */
+            replacement_first_in_at?: string | null;
+            /** Replacement Latest In At */
+            replacement_latest_in_at?: string | null;
+            /** Replacement Final Out At */
+            replacement_final_out_at?: string | null;
+            /** Replacement Late Minutes */
+            replacement_late_minutes?: number | null;
+            /** Replacement Early Exit Minutes */
+            replacement_early_exit_minutes?: number | null;
+            /** Replacement Missing Checkout */
+            replacement_missing_checkout?: boolean | null;
+            /** Reason */
+            reason: string;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Revoked At */
+            revoked_at?: string | null;
+            /** Supersedes Adjustment Id */
+            supersedes_adjustment_id?: number | null;
+        };
         /** AttendanceAdjustmentWrite */
         AttendanceAdjustmentWrite: {
             /** Replacement Presence State */
@@ -5250,12 +5301,26 @@ export interface components {
             /** Reason */
             reason: string;
         };
+        /** AttendanceCasePunchRead */
+        AttendanceCasePunchRead: {
+            /**
+             * Occurred At
+             * Format: date-time
+             */
+            occurred_at: string;
+            /** Device Name */
+            device_name?: string | null;
+        };
         /** AttendanceCaseRead */
         AttendanceCaseRead: {
             /** Id */
             id: number;
             /** Employee Id */
             employee_id: string;
+            /** Name En */
+            name_en: string;
+            /** Name Ar */
+            name_ar?: string | null;
             /**
              * Operational Date
              * Format: date
@@ -5271,36 +5336,34 @@ export interface components {
              * Format: date-time
              */
             scheduled_end_at: string;
+            /** Department Snapshot */
+            department_snapshot?: string | null;
+            /** Duty Unit Snapshot */
+            duty_unit_snapshot?: string | null;
+            /** Duty Post Snapshot */
+            duty_post_snapshot?: string | null;
+            /** Crew Code Snapshot */
+            crew_code_snapshot?: string | null;
+            /** Crew Name Snapshot */
+            crew_name_snapshot?: string | null;
+            /** Shift Code Snapshot */
+            shift_code_snapshot: string;
+            /** Organization Snapshot State */
+            organization_snapshot_state: string;
+            /** Punches */
+            punches?: components["schemas"]["AttendanceCasePunchRead"][];
             /** Effective */
             effective?: {
                 [key: string]: unknown;
             } | null;
             /** Evaluations */
-            evaluations: {
-                [key: string]: unknown;
-            }[];
+            evaluations?: components["schemas"]["AttendanceEvaluationRead"][];
             /** Adjustments */
-            adjustments: {
-                [key: string]: unknown;
-            }[];
+            adjustments?: components["schemas"]["AttendanceAdjustmentRead"][];
+            /** Adjustment Audit */
+            adjustment_audit?: components["schemas"]["AttendanceAdjustmentAuditRead"][];
         };
-        /**
-         * AttendanceDayRowRead
-         * @description One person's scheduled shift on one operational date, with punch facts.
-         *
-         *     ``first_punch_at`` / ``last_punch_at`` are the earliest and latest punches
-         *     inside this case's policy match window. They are timestamps of events, not a
-         *     check-in and a check-out: this provider reports no direction, so a single
-         *     punch yields ``punch_count == 1`` with both bounds equal, and a client must
-         *     present it as "seen at", never as a span.
-         *
-         *     ``judgment_due_at`` is when the duty stops running and a lone punch may be
-         *     called unpaired: before that instant one punch is an arrival still waiting for
-         *     its departure, not an exception. ``absence_due_at`` is the earlier boundary,
-         *     twice the grace past the start, after which a case with no punch at all is an
-         *     absence. ``grace_minutes`` is the policy's own grace, published so a client
-         *     names the same arrival late as the evaluator does instead of guessing.
-         */
+        /** AttendanceDayRowRead */
         AttendanceDayRowRead: {
             /** Employee Id */
             employee_id: string;
@@ -5326,6 +5389,8 @@ export interface components {
             scheduled_start_at?: string | null;
             /** Scheduled End At */
             scheduled_end_at?: string | null;
+            /** Case Id */
+            case_id: number;
             /** First Punch At */
             first_punch_at?: string | null;
             /** Last Punch At */
@@ -5348,6 +5413,34 @@ export interface components {
             absence_due_at?: string | null;
             /** Grace Minutes */
             grace_minutes?: number | null;
+        };
+        /** AttendanceEvaluationRead */
+        AttendanceEvaluationRead: {
+            /** Id */
+            id: number;
+            /** Revision */
+            revision: number;
+            /** Presence State */
+            presence_state?: ("scheduled" | "on_duty" | "completed" | "absent" | "excused_leave" | "off" | "unknown") | null;
+            /** Reason Code */
+            reason_code?: string | null;
+            /** First In At */
+            first_in_at?: string | null;
+            /** Latest In At */
+            latest_in_at?: string | null;
+            /** Final Out At */
+            final_out_at?: string | null;
+            /** Late Minutes */
+            late_minutes?: number | null;
+            /** Early Exit Minutes */
+            early_exit_minutes?: number | null;
+            /** Missing Checkout */
+            missing_checkout?: boolean | null;
+            /**
+             * Evaluated At
+             * Format: date-time
+             */
+            evaluated_at: string;
         };
         /** AttendanceExceptionRead */
         AttendanceExceptionRead: {
@@ -5375,6 +5468,8 @@ export interface components {
             scheduled_start_at?: string | null;
             /** Scheduled End At */
             scheduled_end_at?: string | null;
+            /** Case Id */
+            case_id: number;
             /** Late Minutes */
             late_minutes?: number | null;
             /** Early Exit Minutes */

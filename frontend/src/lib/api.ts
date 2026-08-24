@@ -39,6 +39,35 @@ export type WorkforceAccess = components['schemas']['WorkforceAccessRead']
 export type WorkforceSnapshot = components['schemas']['WorkforceSnapshotRead']
 export type WorkforceCoverageRow = components['schemas']['CoverageRowRead']
 export type WorkforceCoveragePage = components['schemas']['CursorPage_CoverageRowRead_']
+export type AttendanceException = components['schemas']['AttendanceExceptionRead']
+export type AttendanceExceptionPage = components['schemas']['CursorPage_AttendanceExceptionRead_']
+export type AttendanceCase = components['schemas']['AttendanceCaseRead']
+export type AttendanceAdjustmentWrite = components['schemas']['AttendanceAdjustmentWrite']
+export type AdjustmentRevokeWrite = components['schemas']['AdjustmentRevokeWrite']
+
+export interface Versioned<T> {
+  data: T
+  etag: string
+}
+
+export interface AttendanceAdjustmentCreated {
+  id: number
+  case_id: number
+}
+
+export interface AttendanceAdjustmentRevoked {
+  id: number
+  revoked_at: string | null
+}
+
+export interface ListAttendanceExceptionsParams {
+  operational_date?: string
+  presence?: string
+  exception?: string
+  limit?: number
+  cursor?: string
+}
+
 
 export interface WorkforceCoverageParams {
   operational_date: string
@@ -952,6 +981,33 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
   }
   return unwrap<T>(await fetch(`${BASE}${path}`, init))
 }
+export async function requestVersioned<T>(
+  method: string,
+  path: string,
+  body?: unknown,
+  etag?: string,
+): Promise<Versioned<T>> {
+  const headers: Record<string, string> = {}
+  if (body !== undefined) headers['content-type'] = 'application/json'
+  if (etag) headers['If-Match'] = etag
+  const res = await fetch(`${BASE}${path}`, {
+    method,
+    cache: 'no-store',
+    credentials: 'same-origin',
+    headers,
+    body: body === undefined ? undefined : JSON.stringify(body),
+  })
+  const data = await unwrap<T>(res)
+  const nextEtag = res.headers.get('etag')
+  if (!nextEtag) throw new ApiError(500, 'MISSING_ETAG', 'Versioned response omitted ETag')
+  return { data, etag: nextEtag }
+}
+
+function requireEtag(etag: string): string {
+  if (!etag.trim()) throw new ApiError(400, 'MISSING_ETAG', 'A current case ETag is required')
+  return etag
+}
+
 
 async function multipart<T>(path: string, form: FormData, method = 'POST'): Promise<T> {
   return unwrap<T>(
@@ -1083,6 +1139,33 @@ export const api = {
   getEmployee: (id: string) => request<EmployeeRead>('GET', `/employees/${encodeURIComponent(id)}`),
   listAttendanceDay: (params: ListAttendanceDayParams) =>
     request<AttendanceDayPage>('GET', `/workforce/attendance/day${qs({ ...params })}`),
+  listAttendanceExceptions: (params: ListAttendanceExceptionsParams = {}) =>
+    request<AttendanceExceptionPage>('GET', `/workforce/attendance/exceptions${qs({ ...params })}`),
+  getAttendanceCase: (caseId: number) =>
+    requestVersioned<AttendanceCase>('GET', `/workforce/attendance/cases/${caseId}`),
+  createAttendanceAdjustment: async (
+    caseId: number,
+    etag: string,
+    payload: AttendanceAdjustmentWrite,
+  ) =>
+    requestVersioned<AttendanceAdjustmentCreated>(
+      'POST',
+      `/workforce/attendance/cases/${caseId}/adjustments`,
+      payload,
+      requireEtag(etag),
+    ),
+  revokeAttendanceAdjustment: async (
+    caseId: number,
+    adjustmentId: number,
+    etag: string,
+    payload: AdjustmentRevokeWrite,
+  ) =>
+    requestVersioned<AttendanceAdjustmentRevoked>(
+      'POST',
+      `/workforce/attendance/cases/${caseId}/adjustments/${adjustmentId}/revoke`,
+      payload,
+      requireEtag(etag),
+    ),
   getEmployeeAttendance: (employeeId: string, params: EmployeeAttendanceParams) =>
     request<EmployeeAttendanceRange>(
       'GET',
