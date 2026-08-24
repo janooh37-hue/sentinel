@@ -356,7 +356,8 @@ ALL_CAPABILITIES: Final[frozenset[str]] = CAPABILITY_IDS
 
 # ─── Role presets ───────────────────────────────────────────────────────────────
 # Operator: read-only across the app + the daily-work write surfaces (document
-# generation, ledger entries/drafts). Manager: adds the management writes.
+# generation, ledger entries/drafts incl. their deletion — ledger.delete was
+# held pre-split and is preserved). Manager: adds the management writes.
 # Admin: everything.
 _OPERATOR_CAPS: Final[frozenset[str]] = frozenset(
     {
@@ -373,6 +374,7 @@ _OPERATOR_CAPS: Final[frozenset[str]] = frozenset(
         "ledger.create",
         "ledger.edit",
         "ledger.send",
+        "ledger.delete",
         "email.manage",
         "settings.view",
         "workforce.self.view",

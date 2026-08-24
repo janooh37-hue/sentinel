@@ -189,6 +189,15 @@ def set_user_overrides(
         raise AppError(
             "FORBIDDEN_OVERRIDE", "You cannot change your own permissions.", http_status=400
         )
+    # Collapse duplicate capabilities keeping the LAST occurrence. Production
+    # sessions run autoflush=False, so two items for one capability would both
+    # reach db.add() before any flush assigns the first a PK → IntegrityError
+    # at commit (500) or silently partial application. dict keeps insertion
+    # order, so non-duplicate batches are unchanged.
+    collapsed: dict[str, tuple[str | None, datetime | None]] = {}
+    for capability, effect, expires_at in items:
+        collapsed[capability] = (effect, expires_at)
+    items = [(cap, eff, exp) for cap, (eff, exp) in collapsed.items()]
     for capability, effect, _expires in items:
         if capability not in CAPABILITY_IDS:
             raise AppError("UNKNOWN_CAPABILITY", f"Unknown capability {capability!r}")

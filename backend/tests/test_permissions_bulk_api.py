@@ -12,7 +12,7 @@ from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user
-from app.db.models import User
+from app.db.models import User, UserPermission
 from app.db.session import get_db
 from app.main import create_app
 from app.services import perm_service
@@ -70,6 +70,32 @@ def test_bulk_is_all_or_nothing(api_db):
     assert r.status_code == 400
     # nothing applied
     assert perm_service.get_user_overrides(api_db, target.id) == {}
+
+
+def test_bulk_duplicate_capability_keeps_last(api_db):
+    """A capability repeated in one batch collapses to its last item — one row,
+    final effect wins (autoflush=False would otherwise double-insert)."""
+    admin = _user(api_db, "admin", "ad5@x.ae")
+    target = _user(api_db, "manager", "tgt5@x.ae")
+    r = _client(api_db, admin).put(
+        f"/api/v1/auth/users/{target.id}/permissions/bulk",
+        json={
+            "items": [
+                {"capability": "books.delete", "effect": "deny"},
+                {"capability": "books.delete", "effect": "grant"},
+            ]
+        },
+    )
+    assert r.status_code == 200, r.text
+    data = r.json()
+    assert data["overrides"].get("books.delete") == "grant"
+    rows = (
+        api_db.query(UserPermission)
+        .filter(UserPermission.user_id == target.id, UserPermission.capability == "books.delete")
+        .all()
+    )
+    assert len(rows) == 1
+    assert rows[0].effect == "grant"
 
 
 def test_bulk_cannot_grant_sensitive(api_db):

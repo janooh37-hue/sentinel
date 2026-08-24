@@ -833,8 +833,10 @@ def send_attachment_to_vault(
     attachment_index: int,
     payload: SendToVaultRequest,
     db: Annotated[Session, Depends(get_db)],
-    _user: Annotated[User, Depends(require_capability("employees.edit"))],
+    _user: Annotated[User, Depends(require_capability("employees.vault.manage"))],
 ) -> VaultFileRead:
+    """File a ledger attachment into an employee's document vault (vault-write
+    gate — profile edits don't cover vault contents)."""
     row = vault_service.import_from_ledger_attachment(
         db,
         entry_id=entry_id,

@@ -62,13 +62,26 @@ def test_operator_cannot_create_book(api_db):
     assert r.json()["error"]["details"]["capability"] == "books.create"
 
 
-def test_word_templates_need_templates_cap(api_db):
-    u = _user(api_db, "manager", "tpl@x.ae")
-    api_db.add(UserPermission(user_id=u.id, capability="books.templates", effect="deny"))
-    api_db.commit()
+def test_word_template_reads_need_books_edit(api_db):
+    """GET reads re-gated to books.edit (composers); operator holds neither."""
+    u = _user(api_db, "operator", "tpl@x.ae")
     r = _client(api_db, u).get("/api/v1/books/word-templates")
     assert r.status_code == 403
+    assert r.json()["error"]["details"]["capability"] == "books.edit"
+
+
+def test_word_template_writes_stay_on_templates_cap(api_db):
+    """Rename/delete keep answering to books.templates even with books.edit."""
+    u = _user(api_db, "manager", "tplw@x.ae")
+    api_db.add(UserPermission(user_id=u.id, capability="books.templates", effect="deny"))
+    api_db.commit()
+    c = _client(api_db, u)
+    r = c.patch("/api/v1/books/word-templates/base.docx", json={"new_name": "x"})
+    assert r.status_code == 403
     assert r.json()["error"]["details"]["capability"] == "books.templates"
+    r2 = c.delete("/api/v1/books/word-templates/base.docx")
+    assert r2.status_code == 403
+    assert r2.json()["error"]["details"]["capability"] == "books.templates"
 
 
 def test_scanback_filing_needs_books_edit(api_db):

@@ -124,13 +124,18 @@ def test_ledger_creates_use_ledger_create(api_db):
 
 
 def test_ledger_delete_is_its_own_gate(api_db):
-    u = _user(api_db, "operator", "ld@x.ae")
-    api_db.add(UserPermission(user_id=u.id, capability="ledger.create", effect="grant"))
+    """Deny ledger.delete: deletes close while create stays open.
+
+    (Operators carry ledger.delete by default post-split — full preservation —
+    so the gate is pinpointed via a deny rather than role absence.)
+    """
+    u = _user(api_db, "manager", "ld@x.ae")
+    api_db.add(UserPermission(user_id=u.id, capability="ledger.delete", effect="deny"))
     api_db.commit()
     c = _client(api_db, u)
-    # create passes for the operator…
+    # create unaffected by the delete deny…
     assert c.post("/api/v1/ledger", json={}).status_code in (201, 422)
-    # …but delete stays closed (operator has no ledger.delete).
+    # …but delete is closed by its own atomic id.
     r = c.delete("/api/v1/ledger/999999")
     assert r.status_code == 403
     assert r.json()["error"]["details"]["capability"] == "ledger.delete"

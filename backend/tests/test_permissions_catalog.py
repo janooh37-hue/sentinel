@@ -90,7 +90,8 @@ def test_manager_preset_resolves_atomic_equivalents():
 def test_operator_preset_keeps_ledger_writes_atomically():
     o = ROLE_DEFAULTS["operator"]
     assert {"ledger.create", "ledger.edit"} <= o
-    assert "ledger.delete" not in o
+    # operators deleted entries/drafts before the split — full preservation.
+    assert "ledger.delete" in o
 
 
 def test_admin_preset_is_all():

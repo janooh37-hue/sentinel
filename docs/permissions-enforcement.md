@@ -28,8 +28,8 @@ built on top of this model see
 
 | Role | Resolves to | Contents |
 | --- | --- | --- |
-| `operator` | 16 caps | read-only across the app (`app.access`, `employees.view`, `leaves.view`, `timesheet.view`, `violations.view`, `books.view`, `permits.view`, `ledger.view`, `settings.view`) plus the daily-work writes: `documents.generate`, `documents.scan`, `ledger.create`/`ledger.edit`/`ledger.send`, and `email.manage` for the user's own mailbox, plus `workforce.self.view` for their own record |
-| `manager` | 39 caps | operator preset minus `workforce.self.view`, plus the atomic management writes: `employees.create`/`employees.edit`/`employees.vault.manage`/`employees.notify`, `leaves.create`/`leaves.edit`/`leaves.delete`, `violations.create`/`violations.edit`/`violations.delete`, `books.create`/`books.edit`/`books.submit`/`books.templates`/`books.approve`/`books.delete`, `permits.create`/`permits.edit`/`permits.revoke`/`permits.delete`, `ledger.delete`, `timesheet.edit`, `submitters.manage`, `editor_templates.manage`. The literal `frozenset` of additions lists 24 ids; unioned with operator's 16 minus the dropped self-view that resolves to 39. Workforce administration still needs an explicit grant + scope |
+| `operator` | 17 caps | read-only across the app (`app.access`, `employees.view`, `leaves.view`, `timesheet.view`, `violations.view`, `books.view`, `permits.view`, `ledger.view`, `settings.view`) plus the daily-work writes: `documents.generate`, `documents.scan`, `ledger.create`/`ledger.edit`/`ledger.send`/`ledger.delete` (deletion restored post-split review — operators held it pre-split), and `email.manage` for the user's own mailbox, plus `workforce.self.view` for their own record |
+| `manager` | 39 caps | operator preset minus `workforce.self.view`, plus the atomic management writes: `employees.create`/`employees.edit`/`employees.vault.manage`/`employees.notify`, `leaves.create`/`leaves.edit`/`leaves.delete`, `violations.create`/`violations.edit`/`violations.delete`, `books.create`/`books.edit`/`books.submit`/`books.templates`/`books.approve`/`books.delete`, `permits.create`/`permits.edit`/`permits.revoke`/`permits.delete`, `ledger.delete`, `timesheet.edit`, `submitters.manage`, `editor_templates.manage`. The literal `frozenset` of additions lists 24 ids; unioned with operator's 17 minus the dropped self-view that resolves to 39. Workforce administration still needs an explicit grant + scope |
 | `admin` | all 52 | `ALL_CAPABILITIES` |
 
 **Admin-only by default, but delegable.** `books.override_state` (added 2026-08-14) is
@@ -286,3 +286,16 @@ removed id; backend gate tests for the new atomic gates live in
 `backend/tests/test_granular_*_gates.py`, the row-expansion behaviour in
 `backend/tests/test_migration_0078_expansion.py`, and the bulk endpoint in
 `backend/tests/test_permissions_bulk_api.py`.
+
+**Post-review alignments (2026-08-24, whole-branch review).** Four access-preservation /
+verb-object corrections landed after the initial split: (1) `ledger.delete` was restored
+to the operator preset — operators could delete entries/drafts before the split and the
+expansion must not silently narrow anyone (operator resolves to 17 caps now); (2) the
+ledger send-to-vault route moved from `employees.edit` to `employees.vault.manage`,
+matching every other vault-write gate; (3) `POST /books/word-sessions` moved from
+`books.edit` to `books.create` — it mints a new record — while finish/reopen/preview/
+discard keep `books.edit`; (4) the two word-template GETs (`/books/word-templates` and
+`/{name}/table`) dropped from `books.templates` to `books.edit` so record composers can
+read the library without holding template-admin; rename/delete/save-as-template stay on
+`books.templates`. A bulk-endpoint hardening collapses duplicate capability items in one
+batch (last occurrence wins) so autoflush=False sessions can't double-insert.

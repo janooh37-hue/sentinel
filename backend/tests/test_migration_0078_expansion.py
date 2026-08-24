@@ -10,12 +10,15 @@ rows, upgrades to 0078, and asserts the expansion:
 from __future__ import annotations
 
 from datetime import datetime
+from pathlib import Path
 
 from alembic import command
 from alembic.config import Config
 from sqlalchemy import create_engine, text
 
-ALEMBIC_INI = "alembic.ini"
+# Anchored so the suite runs from any CWD (bare "alembic.ini" only resolved
+# when pytest was launched from the repo root).
+ALEMBIC_INI = str(Path(__file__).parents[2] / "alembic.ini")
 
 
 def _cfg(db_url: str) -> Config:
@@ -57,6 +60,15 @@ def test_0078_expands_bundled_rows(tmp_path):
                 "VALUES (2,'permits.manage','deny',NULL)"
             )
         )
+        # self-child preservation: a grant on an id that survives narrowed
+        # (employees.edit) must keep its exact row AND gain the siblings.
+        c.execute(
+            text(
+                "INSERT INTO user_permissions(user_id, capability, effect, expires_at) "
+                "VALUES (4,'employees.edit','grant',:emp_exp)"
+            ),
+            {"emp_exp": datetime(2031, 6, 15)},
+        )
         # a pending request for an old id
         c.execute(
             text(
@@ -85,6 +97,22 @@ def test_0078_expands_bundled_rows(tmp_path):
         denies = {
             r for (r,) in c.execute(text("SELECT capability FROM user_permissions WHERE user_id=2"))
         }
+        emp_grants = dict(
+            c.execute(
+                text(
+                    "SELECT capability, effect FROM user_permissions "
+                    "WHERE user_id=4 AND capability LIKE 'employees.%'"
+                )
+            ).all()
+        )
+        emp_expiries = dict(
+            c.execute(
+                text(
+                    "SELECT capability, expires_at FROM user_permissions "
+                    "WHERE user_id=4 AND capability LIKE 'employees.%'"
+                )
+            ).all()
+        )
         req = c.execute(
             text("SELECT capability FROM permission_requests WHERE user_id=3")
         ).scalar_one()
@@ -117,6 +145,13 @@ def test_0078_expands_bundled_rows(tmp_path):
 
     # deny expanded
     assert denies == {"permits.create", "permits.edit", "permits.revoke", "permits.delete"}
+
+    # self-child: the surviving employees.edit row is untouched (same grant +
+    # same distinct expiry) while its expanded siblings appear beside it.
+    assert set(emp_grants) == {"employees.create", "employees.edit", "employees.vault.manage"}
+    assert all(effect == "grant" for effect in emp_grants.values())
+    emp_expected_expiry = datetime(2031, 6, 15)
+    assert emp_expiries["employees.edit"] in (emp_expected_expiry, str(emp_expected_expiry))
 
     # pending request re-pointed to primary child
     assert req == "books.edit"

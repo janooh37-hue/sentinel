@@ -188,8 +188,8 @@ def test_post_word_session_no_classification_rejected(api_db, monkeypatch, tmp_p
     assert resp.json()["error"]["code"] == "CLASSIFICATION_REQUIRED"
 
 
-def test_post_word_session_requires_books_edit(api_db, monkeypatch, tmp_path):
-    """Plain operator (no books.edit) → 403."""
+def test_post_word_session_requires_books_create(api_db, monkeypatch, tmp_path):
+    """Plain operator (no books.create) → 403 — creating a book is a create."""
     _seed_gs(api_db)
     user = _make_user(api_db, role="operator")
     c = _client(api_db, user, monkeypatch, tmp_path)
@@ -198,6 +198,7 @@ def test_post_word_session_requires_books_edit(api_db, monkeypatch, tmp_path):
         json={"classification_code": "5/1", "subject": "Should fail"},
     )
     assert resp.status_code == 403, resp.text
+    assert resp.json()["error"]["details"]["capability"] == "books.create"
 
 
 # ---------------------------------------------------------------------------
@@ -390,7 +391,8 @@ def test_list_word_templates_empty(api_db, monkeypatch, tmp_path):
     assert r.json() == []
 
 
-def test_list_word_templates_requires_books_templates(api_db, monkeypatch, tmp_path):
+def test_list_word_templates_requires_books_edit(api_db, monkeypatch, tmp_path):
+    """Template reads are composer-level (books.edit); operator lacks it."""
     from app.services import book_template_service
 
     tpl_lib = tmp_path / "tpl_lib"

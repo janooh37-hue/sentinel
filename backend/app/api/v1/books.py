@@ -157,9 +157,10 @@ def book_facets(
 
 @router.get("/word-templates", response_model=list[WordTemplateRead])
 def list_word_templates(
-    _user: Annotated[User, Depends(require_capability("books.templates"))],
+    _user: Annotated[User, Depends(require_capability("books.edit"))],
 ) -> list[WordTemplateRead]:
-    """Shared General Book boilerplate library (Word path)."""
+    """Shared General Book boilerplate library (Word path). Readable by record
+    composers; renaming/deleting stays on ``books.templates``."""
     return [
         WordTemplateRead(name=t.name, modified_at=t.modified_at, kind=t.kind)
         for t in book_template_service.list_templates()
@@ -180,9 +181,10 @@ def rename_word_template(
 @router.get("/word-templates/{name}/table", response_model=WordTemplateTableRead)
 def get_word_template_table_schema(
     name: str,
-    _user: Annotated[User, Depends(require_capability("books.templates"))],
+    _user: Annotated[User, Depends(require_capability("books.edit"))],
 ) -> WordTemplateTableRead:
-    """Return table detection result for a shared General Book template."""
+    """Return table detection result for a shared General Book template
+    (read — same gate as the template list)."""
     has_table, columns = book_template_service.table_schema_for(name)
     return WordTemplateTableRead(has_table=has_table, columns=columns)
 
@@ -201,7 +203,7 @@ def delete_word_template(
 def create_word_session(
     payload: WordBookCreate,
     db: Annotated[Session, Depends(get_db)],
-    user: Annotated[User, Depends(require_capability("books.edit"))],
+    user: Annotated[User, Depends(require_capability("books.create"))],
 ) -> WordSessionRead:
     """Create a General Book, or a no-ref Report when a signer is given, with a
     Word-editable working docx."""
