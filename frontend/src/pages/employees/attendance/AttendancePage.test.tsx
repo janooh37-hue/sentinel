@@ -292,6 +292,16 @@ describe('AttendancePage', () => {
 
   })
 
+  it('keeps the derived attention queue visible when review exceptions fail', async () => {
+    listAttendanceExceptions.mockRejectedValue(new Error('network unavailable'))
+    renderPage()
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('Review exceptions unavailable')
+    const queue = screen.getByTestId('attendance-attention-queue')
+    expect(within(queue).getByText('Faisal Hamad')).toBeInTheDocument()
+    expect(within(queue).queryByRole('button', { name: /Review Ahmed Ali/i })).not.toBeInTheDocument()
+  })
+
   it('does not request review exceptions for non-reviewers', async () => {
     hasCapability.mockImplementation((cap) => cap !== 'workforce.attendance.review')
     renderPage()

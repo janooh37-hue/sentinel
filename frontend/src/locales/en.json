@@ -4151,7 +4151,36 @@
       "shift": "Captured shift",
       "scheduledWindow": "Scheduled window",
       "effectiveResult": "Effective result",
+      "baseEvaluation": "Base evaluation",
+      "supersedes": "Supersedes correction",
+      "replacementPresence": "Presence",
+      "firstIn": "First in",
+      "latestIn": "Latest in",
+      "finalOut": "Final out",
+      "lateMinutes": "Late minutes",
+      "earlyExitMinutes": "Early exit minutes",
+      "missingCheckout": "Missing checkout",
       "revoked": "revoked",
+      "exceptionsFailed": "Review exceptions unavailable. Showing the derived attention queue.",
+      "presence": {
+        "scheduled": "Scheduled",
+        "on_duty": "On duty",
+        "completed": "Completed",
+        "absent": "Absent",
+        "excused_leave": "Excused leave",
+        "off": "Off",
+        "unknown": "Unknown",
+        "late": "Late"
+      },
+      "reasons": {
+        "late_arrival": "Late arrival",
+        "missing_checkout": "Missing checkout",
+        "early_exit": "Early exit"
+      },
+      "auditActions": {
+        "created": "Correction created",
+        "revoked": "Correction revoked"
+      },
       "loadFailed": "Attendance case could not be loaded."
     },
     "hero": {

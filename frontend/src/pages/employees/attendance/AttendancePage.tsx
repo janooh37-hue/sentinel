@@ -281,12 +281,17 @@ export function AttendancePage(): React.JSX.Element {
         <div className="grid gap-3.5 lg:grid-cols-[minmax(0,1fr)_320px]">
           <div className="min-w-0">{body()}</div>
           <div className="mt-3 lg:mt-3">
+            {exceptionsQuery.isError && (
+              <p role="alert" className="mb-2 rounded-xl border border-warning/30 bg-warning/10 px-3 py-2 text-[0.75em] text-warning">
+                {t('attendance.review.exceptionsFailed')}
+              </p>
+            )}
             <AttentionQueue
               rows={allRows}
-              exceptionRows={canReview && !exceptionsQuery.isPending ? exceptionsQuery.data?.items ?? [] : undefined}
+              exceptionRows={exceptionsQuery.isSuccess ? exceptionsQuery.data.items : undefined}
               now={now}
               onOpenEmployee={openEmployee}
-              onReviewCase={canReview ? setSelectedCaseId : undefined}
+              onReviewCase={exceptionsQuery.isSuccess ? setSelectedCaseId : undefined}
             />
           </div>
         </div>

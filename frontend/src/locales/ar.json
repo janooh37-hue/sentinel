@@ -4445,7 +4445,36 @@
       "shift": "الوردية المسجلة",
       "scheduledWindow": "الوقت المجدول",
       "effectiveResult": "النتيجة النهائية",
+      "baseEvaluation": "التقييم الأساسي",
+      "supersedes": "يستبدل التصحيح",
+      "replacementPresence": "الحالة",
+      "firstIn": "أول دخول",
+      "latestIn": "آخر دخول",
+      "finalOut": "الخروج النهائي",
+      "lateMinutes": "دقائق التأخير",
+      "earlyExitMinutes": "دقائق الخروج المبكر",
+      "missingCheckout": "خروج مفقود",
       "revoked": "أُلغي",
+      "exceptionsFailed": "تعذر تحميل استثناءات المراجعة. تُعرض قائمة التنبيه المشتقة.",
+      "presence": {
+        "scheduled": "مجدول",
+        "on_duty": "على رأس العمل",
+        "completed": "مكتمل",
+        "absent": "غائب",
+        "excused_leave": "إجازة معتمدة",
+        "off": "إجازة",
+        "unknown": "غير معروف",
+        "late": "متأخر"
+      },
+      "reasons": {
+        "late_arrival": "تأخر الوصول",
+        "missing_checkout": "خروج مفقود",
+        "early_exit": "خروج مبكر"
+      },
+      "auditActions": {
+        "created": "تم إنشاء التصحيح",
+        "revoked": "تم إلغاء التصحيح"
+      },
       "loadFailed": "تعذر تحميل حالة الحضور."
     },
     "hero": {

@@ -5,6 +5,7 @@ import { useEffect, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { api } from '@/lib/api'
+import { pickEmployeeName } from '@/lib/employeeName'
 import { cn } from '@/lib/utils'
 
 interface Props {
@@ -41,7 +42,7 @@ function Facts({ items }: { items: ReadonlyArray<readonly [string, unknown]> }):
 }
 
 export function AttendanceCorrectionDrawer({ caseId, onClose }: Props): React.JSX.Element {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   const priorFocusRef = useRef<HTMLElement | null>(null)
   const caseQuery = useQuery({
     queryKey: ['attendance-case', caseId] as const,
@@ -59,6 +60,13 @@ export function AttendanceCorrectionDrawer({ caseId, onClose }: Props): React.JS
   const restoreFocus = (): void => {
     priorFocusRef.current?.focus()
   }
+
+  const codeLabel = (group: string, value: string | null | undefined): string => {
+    if (!value) return '—'
+    return t(`attendance.review.${group}.${value}`, {
+      defaultValue: value.replaceAll('_', ' ').replace(/^./, (letter) => letter.toUpperCase()),
+    })
+  }
   return (
     <Dialog.Root open={caseId !== null} onOpenChange={(open) => { if (!open) onClose() }}>
       <Dialog.Portal>
@@ -71,15 +79,17 @@ export function AttendanceCorrectionDrawer({ caseId, onClose }: Props): React.JS
             restoreFocus()
           }}
           className={cn(
-            'drawer-end fixed inset-x-0 bottom-0 z-50 flex max-h-[92dvh] flex-col rounded-t-2xl bg-surface shadow-2xl focus-visible:outline-none',
-            'md:inset-y-0 md:start-auto md:end-0 md:bottom-auto md:max-h-none md:h-dvh md:w-full md:max-w-xl md:rounded-none md:rounded-s-2xl',
+            'drawer-end fixed inset-0 z-50 flex h-dvh max-h-none flex-col rounded-none bg-surface shadow-2xl focus-visible:outline-none',
+            'md:inset-y-0 md:start-auto md:end-0 md:h-dvh md:w-full md:max-w-xl md:rounded-none md:rounded-s-2xl',
           )}
         >
           <span aria-hidden className="mx-auto mt-2.5 h-1 w-10 shrink-0 rounded-full bg-hairline md:hidden" />
           <header className="flex items-center gap-3 border-b border-hairline px-5 py-3.5">
             <div className="min-w-0 flex-1">
               <Dialog.Title className="truncate text-[0.95em] font-bold">
-                {attendanceCase?.name_en ?? t('attendance.review.title')}
+                {attendanceCase
+                  ? pickEmployeeName({ name_en: attendanceCase.name_en, name_ar: attendanceCase.name_ar ?? null }, i18n.language)
+                  : t('attendance.review.title')}
               </Dialog.Title>
               {attendanceCase && (
                 <p className="mt-0.5 font-mono text-[0.7em] text-muted-foreground">
@@ -113,7 +123,7 @@ export function AttendanceCorrectionDrawer({ caseId, onClose }: Props): React.JS
                       [t('attendance.review.crew'), attendanceCase.crew_name_snapshot ?? attendanceCase.crew_code_snapshot],
                       [t('attendance.review.shift'), attendanceCase.shift_code_snapshot],
                       [t('attendance.review.scheduledWindow'), `${attendanceCase.scheduled_start_at} — ${attendanceCase.scheduled_end_at}`],
-                      [t('attendance.review.effectiveResult'), attendanceCase.effective?.presence_state ?? attendanceCase.effective?.reason_code],
+                      [t('attendance.review.effectiveResult'), codeLabel('presence', attendanceCase.effective?.presence_state as string | undefined)],
                     ]}
                   />
                   <ul className="mt-3 divide-y divide-hairline rounded-lg border border-hairline">
@@ -131,8 +141,8 @@ export function AttendanceCorrectionDrawer({ caseId, onClose }: Props): React.JS
                     {(attendanceCase.evaluations ?? []).map((evaluation) => (
                       <li key={evaluation.id} className="rounded-lg bg-surface-tinted px-3 py-2 text-[0.78em]">
                         <span className="font-mono text-muted-foreground">r{evaluation.revision}</span>{' '}
-                        <span className="font-semibold">{display(evaluation.presence_state)}</span>
-                        <span className="text-muted-foreground"> · {display(evaluation.reason_code)} · {evaluation.evaluated_at}</span>
+                        <span className="font-semibold">{codeLabel('presence', evaluation.presence_state)}</span>
+                        <span className="text-muted-foreground"> · {codeLabel('reasons', evaluation.reason_code)} · {evaluation.evaluated_at}</span>
                       </li>
                     ))}
                   </ol>
@@ -143,13 +153,26 @@ export function AttendanceCorrectionDrawer({ caseId, onClose }: Props): React.JS
                     {(attendanceCase.adjustments ?? []).map((adjustment) => (
                       <li key={adjustment.id} className="rounded-lg bg-surface-tinted px-3 py-2 text-[0.78em]">
                         <p className="font-medium">{adjustment.reason}</p>
-                        <p className="mt-0.5 text-muted-foreground">{adjustment.created_at}{adjustment.revoked_at ? ` · ${t('attendance.review.revoked')} ${adjustment.revoked_at}` : ''}</p>
+                        <Facts
+                          items={[
+                            [t('attendance.review.baseEvaluation'), adjustment.base_evaluation_id],
+                            [t('attendance.review.supersedes'), adjustment.supersedes_adjustment_id],
+                            [t('attendance.review.replacementPresence'), codeLabel('presence', adjustment.replacement_presence_state)],
+                            [t('attendance.review.firstIn'), adjustment.replacement_first_in_at],
+                            [t('attendance.review.latestIn'), adjustment.replacement_latest_in_at],
+                            [t('attendance.review.finalOut'), adjustment.replacement_final_out_at],
+                            [t('attendance.review.lateMinutes'), adjustment.replacement_late_minutes],
+                            [t('attendance.review.earlyExitMinutes'), adjustment.replacement_early_exit_minutes],
+                            [t('attendance.review.missingCheckout'), adjustment.replacement_missing_checkout],
+                          ]}
+                        />
+                        <p className="mt-2 text-muted-foreground">{adjustment.created_at}{adjustment.revoked_at ? ` · ${t('attendance.review.revoked')} ${adjustment.revoked_at}` : ''}</p>
                       </li>
                     ))}
                     {(attendanceCase.adjustment_audit ?? []).map((audit) => (
                       <li key={`${audit.adjustment_id}-${audit.action}-${audit.occurred_at}`} className="rounded-lg border border-hairline px-3 py-2 text-[0.78em]">
                         <span className="font-semibold">{display(audit.actor)}</span>
-                        <span className="text-muted-foreground"> · {audit.action} · {audit.occurred_at} · {audit.reason}</span>
+                        <span className="text-muted-foreground"> · {codeLabel('auditActions', audit.action)} · {audit.occurred_at} · {audit.reason}</span>
                       </li>
                     ))}
                   </ol>
