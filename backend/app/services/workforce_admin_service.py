@@ -338,7 +338,19 @@ def apply_adjustment(db: Session, *, case_id: int, payload: Mapping[str, object]
     )
     db.add(adjustment)
     db.flush()
-    _audit(db, user=actor, action="workforce.attendance_adjustment.created", entity_type="attendance_adjustment", entity_id=adjustment.id, before={"superseded_adjustment_id": current.id if current else None}, after={"case_id": case_id, "base_evaluation_id": latest.id})
+    _audit(
+        db,
+        user=actor,
+        action="workforce.attendance_adjustment.created",
+        entity_type="attendance_adjustment",
+        entity_id=adjustment.id,
+        before={"superseded_adjustment_id": current.id if current else None},
+        after={
+            "case_id": case_id,
+            "base_evaluation_id": latest.id,
+            "reason": adjustment.reason,
+        },
+    )
     return adjustment
 
 

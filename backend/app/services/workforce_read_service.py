@@ -1,6 +1,8 @@
 """Scoped person-level workforce reads and non-secret integration projections."""
 from __future__ import annotations
 
+import json
+
 from datetime import UTC, date, datetime, timedelta
 from math import floor
 from typing import Any
@@ -10,7 +12,7 @@ from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
 from app.api.errors import NotFoundError, ValidationFailedError
-from app.db.models import Employee
+from app.db.models import AuditLog, Employee
 from app.db.workforce_models import (
     AttendanceAdjustment,
     AttendanceCase,
@@ -442,6 +444,85 @@ def _adjustment_read(row: AttendanceAdjustment) -> dict[str, Any]:
         "revoked_at": row.revoked_at,
         "supersedes_adjustment_id": row.supersedes_adjustment_id,
     }
+def _case_punches(db: Session, case: AttendanceCase) -> list[dict[str, Any]]:
+    """Return stored provider events in the evaluator's evidence window.
+
+    The terminal does not supply reliable direction, so this is deliberately a
+    source-event projection rather than an arrival/departure interpretation.
+    """
+    person = _verified_people(db, {case.employee_id}).get(case.employee_id)
+    policy = effective_policy(db, case)
+    if person is None or policy is None:
+        return []
+    window_start, window_end = _punch_window(db, case, policy)
+    return [
+        {"occurred_at": _as_utc_aware(row.occurred_at), "device_name": row.device_name}
+        for row in db.scalars(
+            select(AttendancePunch)
+            .where(
+                AttendancePunch.provider_person_id == person.id,
+                AttendancePunch.occurred_at >= window_start,
+                AttendancePunch.occurred_at <= window_end,
+            )
+            .order_by(AttendancePunch.occurred_at, AttendancePunch.id)
+        )
+    ]
+
+
+def _audit_reason(row: AuditLog) -> str | None:
+    """Read an explicitly recorded adjustment reason without interpreting payloads."""
+    if not row.payload:
+        return None
+    try:
+        payload = json.loads(row.payload)
+    except (TypeError, json.JSONDecodeError):
+        return None
+    after = payload.get("after") if isinstance(payload, dict) else None
+    reason = after.get("reason") if isinstance(after, dict) else None
+    return reason.strip() if isinstance(reason, str) and reason.strip() else None
+
+
+def _adjustment_audit_read(
+    db: Session, adjustments: list[AttendanceAdjustment]
+) -> list[dict[str, Any]]:
+    adjustment_ids = {row.id for row in adjustments}
+    if not adjustment_ids:
+        return []
+    rows = db.scalars(
+        select(AuditLog)
+        .where(
+            AuditLog.entity_type == "attendance_adjustment",
+            AuditLog.entity_id.in_([str(adjustment_id) for adjustment_id in adjustment_ids]),
+            AuditLog.action.in_(
+                (
+                    "workforce.attendance_adjustment.created",
+                    "workforce.attendance_adjustment.revoked",
+                )
+            ),
+        )
+        .order_by(AuditLog.ts, AuditLog.id)
+    )
+    result: list[dict[str, Any]] = []
+    for row in rows:
+        reason = _audit_reason(row)
+        if reason is None or row.entity_id is None:
+            continue
+        try:
+            adjustment_id = int(row.entity_id)
+        except ValueError:
+            continue
+        if adjustment_id not in adjustment_ids:
+            continue
+        result.append(
+            {
+                "adjustment_id": adjustment_id,
+                "action": row.action.rsplit(".", maxsplit=1)[-1],
+                "actor": row.actor,
+                "occurred_at": _as_utc_aware(row.ts),
+                "reason": reason,
+            }
+        )
+    return result
 
 
 def get_attendance_case(db: Session, *, scope: Any, case_id: int) -> dict[str, Any]:
@@ -463,7 +544,7 @@ def get_attendance_case(db: Session, *, scope: Any, case_id: int) -> dict[str, A
         db.scalars(
             select(AttendanceAdjustment)
             .where(AttendanceAdjustment.attendance_case_id == case.id)
-            .order_by(AttendanceAdjustment.created_at)
+            .order_by(AttendanceAdjustment.created_at, AttendanceAdjustment.id)
         )
     )
     latest = evaluations[-1] if evaluations else None
@@ -489,15 +570,27 @@ def get_attendance_case(db: Session, *, scope: Any, case_id: int) -> dict[str, A
         }
         effective.update({key: value for key, value in replacements.items() if value is not None})
         effective["adjustment_id"] = active.id
+    employee = _employee_row(db, case.employee_id)
     return {
         "id": case.id,
         "employee_id": case.employee_id,
+        "name_en": employee.name_en if employee else "",
+        "name_ar": employee.name_ar if employee else None,
         "operational_date": case.operational_date,
         "scheduled_start_at": case.scheduled_start_at,
         "scheduled_end_at": case.scheduled_end_at,
+        "department_snapshot": case.department_snapshot,
+        "duty_unit_snapshot": case.duty_unit_snapshot,
+        "duty_post_snapshot": case.duty_post_snapshot,
+        "crew_code_snapshot": case.crew_code_snapshot,
+        "crew_name_snapshot": case.crew_name_snapshot,
+        "shift_code_snapshot": case.shift_code_snapshot,
+        "organization_snapshot_state": case.organization_snapshot_state,
+        "punches": _case_punches(db, case),
         "effective": effective,
         "evaluations": [_evaluation_read(row) for row in evaluations],
         "adjustments": [_adjustment_read(row) for row in adjustments],
+        "adjustment_audit": _adjustment_audit_read(db, adjustments),
     }
 
 
