@@ -61,7 +61,6 @@ export function BooksPage(): React.JSX.Element {
   const isAr = i18n.language.startsWith('ar')
   const qc = useQueryClient()
   const { has } = useCapabilities()
-  const canCreate = has('books.create')
   const canDelete = has('books.delete')
   const canSubmit = has('books.submit')
   const navigate = useNavigate()
