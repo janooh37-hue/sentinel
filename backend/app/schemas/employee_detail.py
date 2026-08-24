@@ -67,9 +67,17 @@ class RecentLedgerRead(ORMBase):
 
 class ActivityItemRead(ORMBase):
     when: datetime
-    kind: Literal["document", "leave", "violation", "ledger"]
+    kind: Literal["document", "leave", "violation", "ledger", "duty_location"]
     summary: str
     ref_id: int
+    event_type: Literal["initial_placement", "transfer"] | None = None
+    from_department: str | None = None
+    from_unit: str | None = None
+    from_post: str | None = None
+    to_department: str | None = None
+    to_unit: str | None = None
+    to_post: str | None = None
+    reason: str | None = None
 
 
 class EmployeeDetailRead(BaseModel):
