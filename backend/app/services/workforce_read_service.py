@@ -188,6 +188,21 @@ def _judgment_due_at(case: AttendanceCase, policy: Any) -> datetime | None:
     return case.scheduled_end_at + timedelta(minutes=policy.match_after_minutes)
 
 
+def _absence_due_at(case: AttendanceCase, policy: Any) -> datetime | None:
+    """The instant a no-show becomes an absence: twice the grace, by policy.
+
+    Published beside ``judgment_due_at`` because the two boundaries answer
+    different questions and fall at different times. Arrival is settled early -
+    the site calls a person absent once the absence boundary passes with no punch
+    - while pairing a lone punch has to wait for the duty to be over. A client
+    that had only the later boundary would show a rest-of-the-shift blank where
+    the evaluator already says "absent".
+    """
+    if policy is None:
+        return None
+    return case.scheduled_start_at + timedelta(minutes=policy.absence_after_minutes)
+
+
 def _punch_bounds(
     db: Session, *, case: AttendanceCase, person: AttendanceProviderPerson | None, policy: Any
 ) -> tuple[datetime | None, datetime | None, int]:
@@ -288,6 +303,8 @@ def list_attendance_day(
                 "late_minutes": _late_minutes(case, first_at),
                 "on_leave": presence_state == "excused_leave",
                 "judgment_due_at": _judgment_due_at(case, policy),
+                "grace_minutes": policy.grace_minutes if policy is not None else None,
+                "absence_due_at": _absence_due_at(case, policy),
             }
         )
     return sorted(result, key=lambda row: (row["scheduled_start_at"], row["employee_id"]))
@@ -362,6 +379,9 @@ def employee_attendance_range(
                 "reason_code": evaluation.reason_code if evaluation else None,
                 "late_minutes": _late_minutes(case, first_at),
                 "punch_count": count,
+                "grace_minutes": policy.grace_minutes if policy is not None else None,
+                "absence_due_at": _absence_due_at(case, policy),
+                "judgment_due_at": _judgment_due_at(case, policy),
                 "punches": punches,
             }
         )

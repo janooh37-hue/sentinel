@@ -20,6 +20,7 @@ import { copyToClipboard } from '@/lib/clipboard'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import { EmailSection } from './EmailSection'
 import { ManagersSection } from './ManagersSection'
+import { DesignationCatalog } from './DesignationCatalog'
 import { SigningSignatureSection } from './SigningSignatureSection'
 import { MigrationWizard, MIGRATION_SKIPPED_KEY } from '@/pages/system/MigrationWizard'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -686,6 +687,7 @@ type SettingsPanelId =
   | 'signing'
   | 'defaults'
   | 'submitters'
+  | 'designations'
   | 'managers'
   | 'email'
   | 'sms'
@@ -754,6 +756,11 @@ export function SettingsPage(): React.JSX.Element {
       title: t('settings.submitters.title'),
       description: t('settings.submitters.description'),
     },
+    designations: {
+      id: 'designations',
+      title: t('timesheet.designations.title'),
+      description: t('timesheet.designations.description'),
+    },
     managers: {
       id: 'managers',
       title: t('settings.managers.title'),
@@ -805,6 +812,10 @@ export function SettingsPage(): React.JSX.Element {
       panels: [
         ...(has('settings.edit') ? [panels.defaults, panels.managers] : []),
         ...(has('submitters.manage') ? [panels.submitters] : []),
+        // The catalog's only effect is the order the two monthly workbooks
+        // print, so it belongs with the other "what our paperwork says"
+        // panels. `timesheet.edit` per amendment A3: managers only.
+        ...(has('timesheet.edit') ? [panels.designations] : []),
       ],
     },
     {
@@ -875,6 +886,8 @@ export function SettingsPage(): React.JSX.Element {
         ) : settingsSkeleton
       case 'submitters':
         return <SubmittersSection />
+      case 'designations':
+        return <DesignationCatalog />
       case 'managers':
         return <ManagersSection />
       case 'email':

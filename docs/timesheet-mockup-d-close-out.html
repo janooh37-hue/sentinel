@@ -1,0 +1,996 @@
+<!doctype html>
+<html lang="en" dir="ltr" data-theme="light" data-density="default">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Monthly time sheet · D · Close-out Flow</title>
+<link rel="stylesheet" href="timesheet-mockups.css">
+<style>
+/* ============================================================================
+   Direction D — Close-out Flow. Direction-only CSS.
+   ----------------------------------------------------------------------------
+   The month is a once-a-month ritual, so the page is a numbered close-out: a
+   sticky spine of four steps on the reading-start side, one step card open at
+   a time. Nothing here restates the kernel — tokens, buttons, chips, ribbon,
+   sheet, .pf, .readout and .seal all come from timesheet-mockups.css. What is
+   added is the spine, the step disclosure, and the two document cards.
+   Logical properties only; no direction-only hex anywhere.
+   ========================================================================= */
+
+[hidden] { display: none !important; }
+
+/* Arabic must never be letter-spaced — the tracking pulls joined letters
+   apart. The kernel already neutralises its own .eyebrow / .ribbon > .lbl via
+   :lang(ar); these are direction-local labels, so they need the same rule.
+   :lang(ar), not html[lang="ar"], so a Latin string inside an Arabic page keeps
+   its tracking. */
+.glbl:lang(ar),
+.barlbl:lang(ar),
+.spine > .lbl:lang(ar) { letter-spacing: 0; text-transform: none; }
+
+/* ---------------------------------------------------------------- masthead */
+.status { align-self: center; }
+.headtools { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-inline-start: auto; }
+
+.bar { margin-block-start: 2px; }
+.stamp { font-family: var(--font-mono); font-size: 13.5px; font-weight: 600; letter-spacing: -0.2px; }
+.dims { font-size: 11.5px; color: var(--text-muted); }
+.barlbl {
+  font-size: 11px; font-weight: 600; letter-spacing: 0.14em; text-transform: uppercase;
+  color: var(--text-faint);
+}
+.zoomwrap { display: flex; align-items: center; gap: 8px; margin-inline-start: auto; }
+
+/* ------------------------------------------------------- the flow: 2 tracks */
+.flow {
+  display: grid;
+  grid-template-columns: 240px minmax(0, 1fr);
+  gap: 18px;
+  align-items: start;
+  margin-block-start: 16px;
+}
+
+.spine { position: sticky; inset-block-start: 56px; }
+.spine > .lbl {
+  display: block; margin-block-end: 8px; padding-inline-start: 13px;
+  font-size: 11px; font-weight: 600; letter-spacing: 0.14em; text-transform: uppercase;
+  color: var(--text-faint);
+}
+.spine ol { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
+.spine li { position: relative; }
+
+/* The spine itself: a hairline threading marker N to marker N+1. Measured off
+   the button box (11px padding + 1px border + 28px marker), so it never
+   depends on how tall a step's label wraps. */
+.spine li:not(:last-child)::before {
+  content: "";
+  position: absolute;
+  inset-block-start: 40px;
+  inset-block-end: -13px;
+  inset-inline-start: 26.5px;
+  inline-size: 1px;
+  background: var(--border);
+}
+
+.snav {
+  display: grid; grid-template-columns: 28px minmax(0, 1fr); gap: 11px; align-items: start;
+  inline-size: 100%; font: inherit; text-align: start;
+  padding: 11px 12px;
+  border: 1px solid transparent; border-radius: var(--radius-md);
+  background: none; color: var(--text); cursor: pointer;
+  transition: background-color var(--motion-fast) linear, border-color var(--motion-fast) linear;
+}
+.snav:hover { background: var(--surface); border-color: var(--border); }
+.snav[aria-current] { background: var(--surface); border-color: var(--border-strong); box-shadow: var(--shadow-sm); }
+
+/* State is carried by SHAPE — filled disc, thick ring, dashed ring — and by a
+   word. The fill is never the only signal. */
+.mk {
+  display: grid; place-items: center; inline-size: 28px; block-size: 28px;
+  border-radius: var(--radius-pill);
+  font-family: var(--font-mono); font-size: 12px; font-weight: 600;
+}
+.snav[data-state="done"] .mk    { background: var(--success); color: var(--surface); border: 2px solid var(--success); }
+.snav[data-state="now"] .mk     { background: var(--primary-soft); color: var(--text); border: 2px solid var(--primary); }
+.snav[data-state="waiting"] .mk { background: transparent; color: var(--text-muted); border: 1px dashed var(--border-strong); }
+
+.snav .ttl { font-size: 13px; font-weight: 600; }
+.snav .st { display: flex; flex-wrap: wrap; align-items: baseline; gap: 5px; margin-block-start: 1px; font-size: 11.5px; }
+.snav .sw { font-weight: 600; color: var(--text); }
+.snav[data-state="done"] .sw { color: var(--success); }
+.snav[data-state="waiting"] .sw { color: var(--text-muted); }
+.snav .dt { font-family: var(--font-mono); font-size: 11px; color: var(--text-muted); }
+.snav .dt::before { content: "· "; }
+
+/* --------------------------------------------------------- the step cards */
+/* minmax(0,1fr) + min-inline-size:0 on BOTH the track and the item: a grid
+   item's automatic minimum size is its min-content width, so without this the
+   1610px sheet shoves the whole card out of its column and the page — not the
+   .sheetwrap — becomes the horizontal scroller. */
+.steps { display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; min-inline-size: 0; }
+.step { scroll-margin-block-start: 56px; min-inline-size: 0; }
+.step:not([data-open="1"]) { background: var(--surface-raised); box-shadow: none; }
+.step h2 { margin: 0; }
+
+.headbtn {
+  display: flex; align-items: center; gap: 12px; inline-size: 100%;
+  font: inherit; font-size: 15px; font-weight: 600; text-align: start;
+  padding: 13px 16px;
+  border: 0; border-radius: var(--radius-card);
+  background: none; color: var(--text); cursor: pointer;
+}
+.headbtn .ord {
+  flex: none; display: grid; place-items: center; inline-size: 22px; block-size: 22px;
+  border-radius: 6px; background: var(--surface-tinted); color: var(--text-muted);
+  font-family: var(--font-mono); font-size: 11px; font-weight: 700;
+}
+.headbtn .ttl { min-inline-size: 0; }
+.headbtn .chip { flex: none; margin-inline-start: auto; }
+.step[data-open="1"] > .body { border-block-start: 1px solid var(--hairline); }
+
+@keyframes step-open {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: none; }
+}
+.step[data-open="1"] > .body { animation: step-open var(--motion-entrance) var(--ease-out-expo); }
+@media (prefers-reduced-motion: reduce) {
+  .step[data-open="1"] > .body { animation: none; }
+}
+
+.lede { margin: 0 0 12px; font-size: 12.5px; color: var(--text-muted); max-inline-size: 72ch; }
+.glbl {
+  margin: 0 0 7px;
+  font-size: 11px; font-weight: 600; letter-spacing: 0.14em; text-transform: uppercase;
+  color: var(--text-faint);
+}
+.grp + .grp { margin-block-start: 14px; }
+
+/* ------------------------------------------------------------ ① the checks */
+.pf { list-style: none; margin: 0; padding: 0; }
+.pf .item { flex-wrap: wrap; cursor: default; }
+.pf .item .who { flex: none; }
+.pf .item .msg { min-inline-size: 0; }
+.acts { display: flex; align-items: center; gap: 9px; margin-inline-start: auto; }
+.acts .go { margin-inline-start: 0; }
+
+/* The all-clear notice, built the same way as .pf .item.stop / .warn but on
+   the success tokens, so the three outcomes read as one family. It carries the
+   next action rather than only congratulating the operator. */
+.clear {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 10px;
+  padding: 11px 13px;
+  border: 1px solid color-mix(in oklab, var(--success) 34%, var(--border));
+  border-inline-start: 3px solid var(--success);
+  border-radius: var(--radius-sm);
+  background: color-mix(in oklab, var(--success-soft) 55%, var(--surface));
+  font-size: 12.5px;
+}
+.clear .tick { flex: none; color: var(--success); font-weight: 700; }
+.clear .msg { min-inline-size: 0; }
+
+/* ------------------------------------------------------- ② the corrections */
+.tbar { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-block-end: 11px; }
+.tbar .spread { margin-inline-start: auto; }
+.ribbon { margin-block-end: 11px; }
+.note { margin: 0 0 11px; font-size: 12px; color: var(--text-muted); max-inline-size: 72ch; }
+
+/* -------------------------------------------------------------- ③ the posts */
+.postrow { display: flex; flex-wrap: wrap; align-items: center; gap: 18px; }
+.postrow .readout { gap: 8px; }
+.postnote { margin: 11px 0 0; font-size: 12px; color: var(--text-muted); max-inline-size: 72ch; }
+.blocks { display: grid; gap: 7px; margin-block-start: 12px; }
+.blk {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 10px;
+  padding: 9px 11px;
+  border: 1px solid var(--border); border-inline-start: 3px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--surface-raised);
+  font-size: 12.5px;
+}
+.blk .rng { flex: none; font-family: var(--font-mono); font-size: 11.5px; color: var(--text-muted); }
+.blk .lbl { min-inline-size: 0; }
+.blk .fill { display: flex; gap: 4px; margin-inline-start: auto; }
+.blk .fill span {
+  display: grid; place-items: center; inline-size: 24px; block-size: 20px;
+  border-radius: 4px; border: 1px solid color-mix(in oklab, var(--text) 14%, transparent);
+  font-family: var(--font-mono); font-size: 10.5px; font-weight: 600;
+}
+
+/* ----------------------------------------------------------- ④ the release */
+.docs { display: grid; grid-template-columns: repeat(auto-fit, minmax(258px, 1fr)); gap: 12px; margin-block-start: 12px; }
+.doc { display: grid; align-content: start; gap: 7px; padding: 14px 15px; background: var(--surface-raised); }
+.doc.lead { border-inline-start: 3px solid var(--primary); }
+.doc.second { border-inline-start: 3px solid var(--border-strong); }
+.doc h3 { margin: 0; }
+.doc .fname {
+  margin: 0; font-family: var(--font-mono); font-size: 13px; font-weight: 600;
+  color: var(--text); overflow-wrap: anywhere;
+}
+.doc .rcpt { margin: 0; font-size: 12px; color: var(--text-muted); }
+.doc .act { margin-block-start: 5px; display: flex; }
+.doc .seal { justify-self: start; }
+.reopen { margin-block-start: 14px; }
+
+/* ------------------------------------------------------------- responsive */
+@media (max-width: 900px) {
+  .flow { grid-template-columns: minmax(0, 1fr); }
+  .spine { position: static; margin-block-end: 4px; }
+  .spine ol { grid-template-columns: repeat(auto-fit, minmax(196px, 1fr)); }
+  .spine li:not(:last-child)::before { display: none; }
+}
+</style>
+</head>
+<body>
+<div id="review"></div>
+<header id="chrome"></header>
+
+<main class="page">
+  <div class="masthead">
+    <div>
+      <p class="eyebrow" id="eyebrow"></p>
+      <h1 id="title"></h1>
+      <p id="lede"></p>
+    </div>
+    <div class="monthmark" id="monthmark"></div>
+    <div class="headtools">
+      <span class="chip status" id="status"></span>
+      <span class="seg" role="group" id="roster">
+        <button type="button" data-sheet="main"></button>
+        <button type="button" data-sheet="drivers"></button>
+      </span>
+    </div>
+  </div>
+
+  <div class="bar">
+    <button type="button" class="icobtn" id="prev"></button>
+    <span class="stamp" id="stamp"></span>
+    <button type="button" class="icobtn" id="next"></button>
+    <span class="rule" aria-hidden="true"></span>
+    <span class="dims" id="dims"></span>
+    <span class="zoomwrap">
+      <span class="barlbl" id="zoomlbl"></span>
+      <span class="seg" role="group" id="zoom">
+        <button type="button" data-d="compact"></button>
+        <button type="button" data-d="default"></button>
+        <button type="button" data-d="roomy"></button>
+      </span>
+    </span>
+  </div>
+
+  <div class="flow">
+    <nav class="spine" id="spine">
+      <span class="lbl" id="spinelbl"></span>
+      <ol id="spinelist"></ol>
+    </nav>
+
+    <div class="steps">
+      <!-- ① checks -->
+      <section class="card step" id="step-1" data-open="1" aria-labelledby="t1">
+        <h2 id="t1">
+          <button type="button" class="headbtn" data-goto="1" aria-expanded="true">
+            <span class="ord" aria-hidden="true">1</span>
+            <span class="ttl"></span>
+            <span class="chip"></span>
+          </button>
+        </h2>
+        <div class="body">
+          <p class="lede"></p>
+          <p class="clear" id="allclear" role="status" tabindex="-1" hidden>
+            <span class="tick" aria-hidden="true">✓</span>
+            <span class="msg"></span>
+            <span class="acts">
+              <button type="button" class="linkbtn go" id="torelease"></button>
+            </span>
+          </p>
+          <div class="grp" id="grp-stop">
+            <h3 class="glbl"></h3>
+            <ul class="pf" id="pf-stop"></ul>
+          </div>
+          <div class="grp" id="grp-warn">
+            <h3 class="glbl"></h3>
+            <ul class="pf" id="pf-warn"></ul>
+          </div>
+        </div>
+      </section>
+
+      <!-- ② corrections -->
+      <section class="card step" id="step-2" aria-labelledby="t2">
+        <h2 id="t2">
+          <button type="button" class="headbtn" data-goto="2" aria-expanded="false">
+            <span class="ord" aria-hidden="true">2</span>
+            <span class="ttl"></span>
+            <span class="chip"></span>
+          </button>
+        </h2>
+        <div class="body" hidden>
+          <p class="lede"></p>
+          <div class="tbar">
+            <span class="barlbl" id="prevlbl"></span>
+            <span class="seg" role="group" id="variant">
+              <button type="button" data-v="attendance"></button>
+              <button type="button" data-v="statistics"></button>
+            </span>
+            <span class="chip spread" id="editchip"></span>
+            <button type="button" class="btn btn-outline btn-sm" id="undo"></button>
+          </div>
+          <div class="ribbon" id="ribbon"></div>
+          <p class="note" id="gridnote"></p>
+          <div class="sheetwrap" id="sheet"></div>
+        </div>
+      </section>
+
+      <!-- ③ contracted posts -->
+      <section class="card step" id="step-3" aria-labelledby="t3">
+        <h2 id="t3">
+          <button type="button" class="headbtn" data-goto="3" aria-expanded="false">
+            <span class="ord" aria-hidden="true">3</span>
+            <span class="ttl"></span>
+            <span class="chip"></span>
+          </button>
+        </h2>
+        <div class="body" hidden>
+          <p class="lede"></p>
+          <div class="postrow">
+            <span class="field">
+              <label for="postcount" id="postlbl"></label>
+              <input id="postcount" type="number" min="0" step="1" inputmode="numeric">
+            </span>
+            <span class="readout" role="status">
+              <span class="big" id="implied"></span>
+              <span class="cap" id="impliedcap"></span>
+            </span>
+            <span class="chip" id="driftchip"></span>
+          </div>
+          <p class="postnote" id="postnote"></p>
+          <div class="blocks" id="blocks"></div>
+        </div>
+      </section>
+
+      <!-- ④ release -->
+      <section class="card step" id="step-4" aria-labelledby="t4">
+        <h2 id="t4">
+          <button type="button" class="headbtn" data-goto="4" aria-expanded="false">
+            <span class="ord" aria-hidden="true">4</span>
+            <span class="ttl"></span>
+            <span class="chip"></span>
+          </button>
+        </h2>
+        <div class="body" hidden>
+          <p class="lede" id="freeze"></p>
+          <ul class="pf" id="stopnote" hidden>
+            <li class="item stop">
+              <span class="msg" id="stopmsg"></span>
+              <span class="acts">
+                <button type="button" class="linkbtn go" id="tochecks"></button>
+              </span>
+            </li>
+          </ul>
+          <div class="docs">
+            <article class="card doc lead">
+              <h3 class="eyebrow" id="doc1lbl"></h3>
+              <p class="fname"><span class="filename" id="file1"></span></p>
+              <p class="rcpt" id="doc1rcpt"></p>
+              <span class="seal" id="seal1" hidden>
+                <span class="ring" aria-hidden="true">✓</span><span class="msg"></span>
+              </span>
+              <span class="act"><button type="button" class="btn btn-primary" id="dl1"></button></span>
+            </article>
+            <article class="card doc second">
+              <h3 class="eyebrow" id="doc2lbl"></h3>
+              <p class="fname"><span class="filename" id="file2"></span></p>
+              <p class="rcpt" id="doc2rcpt"></p>
+              <span class="seal" id="seal2" hidden>
+                <span class="ring" aria-hidden="true">✓</span><span class="msg"></span>
+              </span>
+              <span class="act"><button type="button" class="btn btn-outline" id="dl2"></button></span>
+            </article>
+          </div>
+          <div class="reopen" id="reopenwrap" hidden>
+            <button type="button" class="btn btn-danger btn-sm" id="reopen"></button>
+            <ul class="pf" id="reopenconfirm" hidden>
+              <li class="item warn">
+                <span class="msg" id="reopenwarn"></span>
+                <span class="acts">
+                  <button type="button" class="btn btn-danger btn-sm" id="reopenyes"></button>
+                  <button type="button" class="btn btn-outline btn-sm" id="reopenno"></button>
+                </span>
+              </li>
+            </ul>
+          </div>
+        </div>
+      </section>
+    </div>
+  </div>
+
+  <p class="footnote" id="footnote"></p>
+</main>
+
+<script src="timesheet-mockups.js"></script>
+<script>
+;(() => {
+  /* ------------------------------------------------------------- strings */
+  const L = (en, ar) => (TS.state.lang === 'ar' ? ar : en)
+
+  /* Arabic counts the noun by number: 1 singular, 2 dual, 3–10 plural, 11+
+     singular accusative. Worth getting right — this copy is read by the people
+     who sign the workbook. Numerals stay Western throughout. */
+  function nCorrections(n) {
+    if (TS.state.lang !== 'ar') {
+      return n === 0 ? 'no corrections' : n === 1 ? '1 correction' : `${n} corrections`
+    }
+    if (n === 0) return 'لا تصحيحات'
+    if (n === 1) return 'تصحيح واحد'
+    if (n === 2) return 'تصحيحان'
+    if (n <= 10) return `${n} تصحيحات`
+    return `${n} تصحيحًا`
+  }
+
+  function nPosts(n) {
+    if (TS.state.lang !== 'ar') return n === 1 ? '1 post' : `${n} posts`
+    if (n === 1) return 'نقطة واحدة'
+    if (n === 2) return 'نقطتان'
+    if (n <= 10) return `${n} نقاط`
+    return `${n} نقطة`
+  }
+
+  function nRows(n) {
+    if (TS.state.lang !== 'ar') return n === 1 ? '1 row' : `${n} rows`
+    if (n === 1) return 'صف واحد'
+    if (n === 2) return 'صفان'
+    if (n <= 10) return `${n} صفوف`
+    return `${n} صفًا`
+  }
+
+  const STEPS = [
+    {
+      n: 1,
+      title: () => TS.t('issues'),
+      lede: () => L(
+        'Fix what blocks the workbooks, then read what is only worth a look. Checks are raised per workbook.',
+        'أصلح ما يمنع إصدار الملفين، ثم راجع ما يستحق الانتباه. الفحوصات تُرصد لكل ملف على حدة.',
+      ),
+    },
+    {
+      n: 2,
+      title: () => L('Corrections', 'التصحيحات'),
+      lede: () => L(
+        'The grid follows the records. This is where a record that is wrong gets overridden — the correction stays on the sheet, the record is fixed separately.',
+        'الشبكة تتبع السجلات. هنا يُتجاوز السجل الخاطئ — يبقى التصحيح على الكشف، ويُصحَّح السجل على حدة.',
+      ),
+    },
+    {
+      n: 3,
+      title: () => TS.t('posts'),
+      lede: () => L(
+        'The contracted count splits the roster: what the client is billed for, and what sits above it.',
+        'العدد التعاقدي يقسم الكشف: ما يُحاسب عليه العميل، وما يزيد عنه.',
+      ),
+    },
+    {
+      n: 4,
+      title: () => L('Release', 'الإصدار'),
+      lede: () => L('Release the two workbooks.', 'أصدر الملفين.'),
+    },
+  ]
+
+  /* ------------------------------------------------------- local UI state */
+  let step = 1
+  let confirmReopen = false
+  let lastMonth = TS.state.month
+  let ribbonLang = null
+  /* One-shot focus intent, consumed at the end of paint(). A repaint destroys
+     the button that was just clicked — a resolved check, the reopen confirm —
+     and without this the kernel's cell-focus restore would pull the caret into
+     the grid instead of leaving it where the operator is working. */
+  let pendingFocus = null
+
+  const $ = (id) => document.getElementById(id)
+  const setText = (el, s) => { if (el.textContent !== s) el.textContent = s }
+  const reduced = () => window.matchMedia('(prefers-reduced-motion: reduce)').matches
+
+  /* ------------------------------------------------------- step readings */
+  const drift = () => TS.impliedPosts() > TS.state.postCount + 1e-9
+
+  /** A step is `done` when its own condition holds, `now` when it is the open
+   *  step, `waiting` otherwise. Nothing is gated: ④ is reachable at any time —
+   *  it just states its blocking reason and disables the downloads. */
+  function stateOf(n) {
+    const stops = TS.blocking().length
+    const warns = TS.warnings().length
+    const closed = TS.state.closed
+    let done = false
+    let detail = ''
+    if (n === 1) {
+      done = stops === 0 && warns === 0
+      detail = done
+        ? L('all checks passed', 'اجتازت جميع الفحوصات')
+        : stops
+          ? L(`${stops} to fix`, `${stops} للإصلاح`)
+          : L(`${warns} to review`, `${warns} للمراجعة`)
+    } else if (n === 2) {
+      done = closed
+      detail = nCorrections(TS.editCount())
+    } else if (n === 3) {
+      done = TS.state.postCount >= 1
+      detail = done ? nPosts(TS.state.postCount) : TS.t('notSet')
+    } else {
+      done = closed
+      detail = closed
+        ? L('released', 'تم الإصدار')
+        : stops
+          ? L('blocked', 'متوقف')
+          : L('2 files ready', 'ملفان جاهزان')
+    }
+    const key = done ? 'done' : n === step ? 'now' : 'waiting'
+    const word = { done: L('Done', 'تم'), now: L('Now', 'الآن'), waiting: L('Waiting', 'بالانتظار') }[key]
+    return { key, word, detail }
+  }
+
+  /* ------------------------------------------------------------ the spine */
+  function paintSpine() {
+    setText($('spinelbl'), L('Close-out', 'الإغلاق'))
+    $('spine').setAttribute('aria-label', L('Close-out steps', 'خطوات الإغلاق'))
+    const list = $('spinelist')
+    list.textContent = ''
+    STEPS.forEach((s) => {
+      const st = stateOf(s.n)
+      const li = document.createElement('li')
+      const b = document.createElement('button')
+      b.type = 'button'
+      b.className = 'snav'
+      b.dataset.state = st.key
+      if (s.n === step) b.setAttribute('aria-current', 'step')
+      const mark = document.createElement('span')
+      mark.className = 'mk'
+      mark.setAttribute('aria-hidden', 'true')
+      mark.textContent = String(s.n)
+      const text = document.createElement('span')
+      const title = document.createElement('span')
+      title.className = 'ttl'
+      title.textContent = s.title()
+      const stateLine = document.createElement('span')
+      stateLine.className = 'st'
+      const word = document.createElement('span')
+      word.className = 'sw'
+      word.textContent = st.key === 'done' ? `✓ ${st.word}` : st.word
+      const detail = document.createElement('span')
+      detail.className = 'dt'
+      detail.textContent = st.detail
+      stateLine.append(word, detail)
+      text.append(title, stateLine)
+      b.append(mark, text)
+      b.addEventListener('click', (e) => goTo(s.n, e.detail === 0))
+      li.append(b)
+      list.append(li)
+    })
+  }
+
+  /* `fromKey` is true when the click came from Enter/Space (detail 0). Only
+     then is focus moved into the opened step: a keyboard user would otherwise
+     be stranded on a control whose panel just changed, while a mouse user
+     would get a focus ring drawn around a card they merely clicked. */
+  function goTo(n, fromKey) {
+    step = n
+    confirmReopen = false
+    paint()
+    const card = $(`step-${n}`)
+    if (fromKey) card.querySelector('.headbtn').focus({ preventScroll: true })
+    card.scrollIntoView({ behavior: reduced() ? 'auto' : 'smooth', block: 'start' })
+  }
+
+  /* ------------------------------------------------------------ ① checks */
+  function checkItem(item) {
+    const li = document.createElement('li')
+    li.className = `item ${item.level}`
+    const who = document.createElement('span')
+    who.className = 'who'
+    who.textContent = item.who
+    const msg = document.createElement('span')
+    msg.className = 'msg'
+    msg.textContent = TS.state.lang === 'ar' ? item.ar : item.en
+    const acts = document.createElement('span')
+    acts.className = 'acts'
+
+    const resolve = document.createElement('button')
+    resolve.type = 'button'
+    resolve.className = 'btn btn-outline btn-sm rsv'
+    resolve.textContent = TS.t('resolve')
+    resolve.addEventListener('click', () => {
+      TS.resolve(item)
+      TS.toast(`${item.who} — ${TS.t('resolved')}`)
+      pendingFocus = () =>
+        $('pf-stop').querySelector('.rsv') || $('pf-warn').querySelector('.rsv') || $('allclear')
+    })
+
+    const open = document.createElement('button')
+    open.type = 'button'
+    open.className = 'linkbtn go'
+    open.textContent = L('Open employee', 'فتح سجل الموظف')
+    open.addEventListener('click', () =>
+      TS.toast(L(
+        `${item.who} · the employee record opens in a new tab`,
+        `${item.who} · يُفتح سجل الموظف في تبويب جديد`,
+      )),
+    )
+
+    acts.append(resolve, open)
+    li.append(who, msg, acts)
+    return li
+  }
+
+  function paintChecks() {
+    const stops = TS.blocking()
+    const warns = TS.warnings()
+
+    const clear = $('allclear')
+    clear.hidden = stops.length + warns.length > 0
+    setText(clear.querySelector('.msg'), TS.t('allClear'))
+    setText($('torelease'), L('Go to release', 'الانتقال إلى الإصدار'))
+
+    const fill = (host, items) => {
+      host.textContent = ''
+      items.forEach((item) => host.append(checkItem(item)))
+    }
+    fill($('pf-stop'), stops)
+    fill($('pf-warn'), warns)
+    $('grp-stop').hidden = stops.length === 0
+    $('grp-warn').hidden = warns.length === 0
+    setText($('grp-stop').querySelector('.glbl'), TS.t('blocking'))
+    setText($('grp-warn').querySelector('.glbl'), TS.t('warning'))
+  }
+
+  /* ------------------------------------------------------- ② corrections */
+  function paintCorrections() {
+    const closed = TS.state.closed
+    const stats = TS.state.variant === 'statistics'
+
+    setText($('prevlbl'), L('Preview', 'المعاينة'))
+    $('variant').setAttribute('aria-label', L('Preview', 'المعاينة'))
+    $('variant').querySelectorAll('button').forEach((b) => {
+      setText(b, TS.t(b.dataset.v === 'attendance' ? 'attendance' : 'statistics'))
+      b.setAttribute('aria-pressed', String(TS.state.variant === b.dataset.v))
+    })
+
+    const n = TS.editCount()
+    const chip = $('editchip')
+    /* nCorrections carries the noun, so the kernel's ready-made
+       "corrections this month" phrase cannot be reused here — it would read
+       "1 corrections this month". */
+    setText(chip, L(`${nCorrections(n)} this month`, `${nCorrections(n)} هذا الشهر`))
+    chip.className = `chip spread${n ? ' info' : ''}`
+
+    const undo = $('undo')
+    setText(undo, TS.t('undo'))
+    undo.hidden = closed || stats
+    undo.disabled = n === 0
+
+    /* No edit affordances once the month is closed, and none while the client
+       sheet is on screen — that sheet is derived, not typed. */
+    const ribbon = $('ribbon')
+    ribbon.hidden = closed || stats
+    if (!ribbon.hidden) {
+      /* Rebuilt only when the language changes: re-rendering it on every paint
+         would throw away the focus of whoever just armed a code. */
+      if (ribbonLang !== TS.state.lang) {
+        TS.renderRibbon(ribbon, { label: TS.t('codes') })
+        ribbonLang = TS.state.lang
+      }
+      ribbon.querySelectorAll('.swatch').forEach((b, i) =>
+        b.setAttribute('aria-pressed', String(TS.state.brush === TS.CODES[i].code)),
+      )
+    }
+
+    setText($('gridnote'), closed
+      ? TS.t('closedNote')
+      : stats
+        ? L(
+            'The client sheet is derived. Corrections are made on the attendance sheet.',
+            'إحصائية العميل مشتقة. تُجرى التصحيحات على كشف الحضور.',
+          )
+        : L(
+            'Click a cell to pick a code, or arm a code from the ribbon and paint. Shift-click paints a range on one employee.',
+            'انقر خلية لاختيار رمز، أو فعّل رمزًا من الشريط وابدأ التلوين. النقر مع Shift يلوّن مدى على موظف واحد.',
+          ))
+
+    TS.renderSheet($('sheet'), {})
+  }
+
+  /* --------------------------------------------------- ③ contracted posts */
+  function paintPosts() {
+    const stats = TS.state.variant === 'statistics'
+    const input = $('postcount')
+    setText($('postlbl'), TS.t('posts'))
+    input.max = String(TS.rows.length)
+    /* Never overwrite the field the operator is typing into. */
+    if (document.activeElement !== input) input.value = String(TS.state.postCount)
+
+    setText($('implied'), TS.impliedPosts().toFixed(1))
+    setText($('impliedcap'), `${TS.t('impliedPosts')} · ${
+      stats
+        ? L('from the client statistics sheet', 'من إحصائية العميل')
+        : L('from the attendance sheet', 'من كشف الحضور')
+    }`)
+
+    const off = drift()
+    const chip = $('driftchip')
+    chip.className = `chip ${off ? 'stop' : 'ok'}`
+    setText(chip, off ? TS.t('impliedDrift') : TS.t('impliedOk'))
+
+    setText($('postnote'), stats
+      ? L(
+          'This is the figure the client workbook will carry, and it must never read above the contracted count.',
+          'هذا هو الرقم الذي سيحمله ملف العميل، ويجب ألا يقرأ أبدًا أعلى من العدد التعاقدي.',
+        )
+      : L(
+          'The attendance sheet counts everyone on post, which is not the figure the client is billed for. Switch the preview in step 2 to the client statistics sheet to read the billed count.',
+          'كشف الحضور يحصي كل من على النقاط، وهذا ليس الرقم الذي يُحاسب عليه العميل. بدّل المعاينة في الخطوة 2 إلى إحصائية العميل لقراءة الرقم المُحاسب عليه.',
+        ))
+
+    const host = $('blocks')
+    host.textContent = ''
+    const block = (which) => {
+      const rows = TS.rows.filter((r) => r.block === which)
+      const row = document.createElement('div')
+      row.className = 'blk'
+      const range = document.createElement('span')
+      range.className = 'rng'
+      if (rows.length) {
+        /* A digit pair around an en-dash reorders in an RTL paragraph, so it
+           takes the kernel's .num leaf treatment (direction:ltr + isolate). */
+        const span = document.createElement('span')
+        span.className = 'num'
+        span.textContent = `${rows[0].no}–${rows[rows.length - 1].no}`
+        range.append(span)
+      } else {
+        range.textContent = L('none', 'لا يوجد')
+      }
+      const label = document.createElement('span')
+      label.className = 'lbl'
+      label.textContent = TS.t(which === 1 ? 'block1' : 'block2')
+      const fill = document.createElement('span')
+      fill.className = 'fill'
+      /* An empty block advertises no code: with the contracted count at 0 the
+         whole roster is block 2, and block 1 must not still show a P. */
+      const slugs = rows.length === 0
+        ? []
+        : which === 1
+          ? ['P']
+          : [...new Set(rows.map((r) => TS.slugOf(r.filler)))]
+      slugs.forEach((slug) => {
+        const glyph = document.createElement('span')
+        glyph.dataset.code = slug
+        glyph.textContent = slug === '-' ? '–' : slug
+        const code = TS.CODES.find((c) => c.slug === slug)
+        glyph.setAttribute('aria-label', code ? code[TS.state.lang] || code.en : slug)
+        fill.append(glyph)
+      })
+      row.append(range, label, fill)
+      return row
+    }
+    host.append(block(1), block(2))
+  }
+
+  /* ------------------------------------------------------------ ④ release */
+  function paintRelease() {
+    const closed = TS.state.closed
+    const stops = TS.blocking().length
+    const label = TS.monthLabel()
+
+    setText($('freeze'), closed ? TS.t('closedNote') : TS.t('firstDownload'))
+
+    $('stopnote').hidden = stops === 0
+    setText($('stopmsg'), L(
+      `${stops} of the checks must be fixed before either workbook can be downloaded.`,
+      `يجب إصلاح ${stops} من الفحوصات المانعة قبل تنزيل أي من الملفين.`,
+    ))
+    setText($('tochecks'), L('Go to checks', 'الانتقال إلى الفحوصات'))
+
+    setText($('doc1lbl'), TS.t('attendance'))
+    setText($('doc2lbl'), TS.t('statistics'))
+    setText($('file1'), label.file)
+    setText($('file2'), label.fileStats)
+    setText($('doc1rcpt'), L(
+      'Goes to HR. Every code as recorded — leave, sickness and absence all visible.',
+      'يذهب إلى الموارد البشرية. كل رمز كما سُجّل — الإجازة والمرض والغياب ظاهرة.',
+    ))
+    setText($('doc2rcpt'), L(
+      'Goes to the client. A contracted post reads P for every day it was covered.',
+      'يذهب إلى العميل. النقطة التعاقدية تُقرأ P عن كل يوم كانت مشغولة فيه.',
+    ))
+
+    const again = L('Download again', 'تنزيل مرة أخرى')
+    const wire = (id, key, sealId) => {
+      const button = $(id)
+      setText(button, closed ? again : TS.t(key))
+      button.disabled = stops > 0
+      button.setAttribute('aria-label', closed ? `${TS.t(key)} — ${again}` : TS.t(key))
+      if (stops > 0) button.setAttribute('aria-describedby', 'stopmsg')
+      else button.removeAttribute('aria-describedby')
+      const seal = $(sealId)
+      seal.hidden = !closed
+      setText(seal.querySelector('.msg'), L('Released', 'تم الإصدار'))
+    }
+    wire('dl1', 'downloadAttendance', 'seal1')
+    wire('dl2', 'downloadStatistics', 'seal2')
+
+    $('reopenwrap').hidden = !closed
+    setText($('reopen'), TS.t('reopen'))
+    $('reopen').hidden = confirmReopen
+    $('reopenconfirm').hidden = !confirmReopen
+    setText($('reopenwarn'), L(
+      'A new download supersedes the workbook already sent. The reopening is recorded.',
+      'أي تنزيل جديد يلغي الملف المُرسل. تُسجَّل عملية إعادة الفتح.',
+    ))
+    setText($('reopenyes'), L('Reopen', 'إعادة الفتح'))
+    setText($('reopenno'), TS.t('cancel'))
+  }
+
+  /* -------------------------------------------------------------- chrome */
+  function paintHead() {
+    const label = TS.monthLabel()
+    setText($('eyebrow'), TS.t('eyebrow'))
+    setText($('title'), TS.t('title'))
+    setText($('lede'), TS.t('lede'))
+
+    /* In English the caption carries the Arabic month name, because that is the
+       name the released file will bear. In Arabic that caption would only
+       restate the datum, so it is dropped rather than mirrored into English. */
+    const mark = $('monthmark')
+    mark.textContent = TS.state.lang === 'ar' ? label.ar : label.en
+    if (TS.state.lang !== 'ar') {
+      const caption = document.createElement('small')
+      caption.textContent = label.ar
+      mark.append(caption)
+    }
+
+    const status = $('status')
+    status.className = `chip status ${TS.state.closed ? 'ok' : 'info'}`
+    setText(status, TS.t(TS.state.closed ? 'closed' : 'open'))
+
+    $('roster').setAttribute('aria-label', L('Workbook', 'الملف'))
+    $('roster').querySelectorAll('button').forEach((b) => {
+      setText(b, TS.t(b.dataset.sheet === 'main' ? 'main' : 'drivers'))
+      b.setAttribute('aria-pressed', String(TS.state.sheet === b.dataset.sheet))
+    })
+
+    const ar = TS.state.lang === 'ar'
+    const prev = $('prev')
+    const next = $('next')
+    /* The glyph points toward the reading start, so it stays truthful once the
+       flex row mirrors under dir="rtl". */
+    setText(prev, ar ? '▶' : '◀')
+    setText(next, ar ? '◀' : '▶')
+    prev.setAttribute('aria-label', TS.t('prevMonth'))
+    next.setAttribute('aria-label', TS.t('nextMonth'))
+    prev.disabled = TS.state.month <= 6
+    next.disabled = TS.state.month >= 8
+    setText($('stamp'), label.stamp)
+
+    const rows = TS.rows.length
+    const cells = rows * label.days
+    setText($('dims'), L(
+      `${nRows(rows)} · ${label.days} days · ${cells} cells`,
+      `${nRows(rows)} · ${label.days} يومًا · ${cells} خلية`,
+    ))
+
+    setText($('zoomlbl'), TS.t('density'))
+    $('zoom').setAttribute('aria-label', TS.t('density'))
+    const zoomName = {
+      compact: L('Compact', 'مصغّر'),
+      default: L('Default', 'افتراضي'),
+      roomy: L('Roomy', 'موسّع'),
+    }
+    $('zoom').querySelectorAll('button').forEach((b) => {
+      setText(b, zoomName[b.dataset.d])
+      b.setAttribute('aria-pressed', String(TS.state.density === b.dataset.d))
+    })
+
+    /* Derived and sheet-aware: the fixture's scale is retuned upstream, and the
+       275/249 live ratio belongs to the All staff workbook only — quoting it on
+       the drivers file would be a lie. */
+    const scale = TS.state.sheet === 'main'
+      ? L(
+          `this workbook carries ${nRows(rows)} against ${nPosts(TS.state.postCount)}, the live ratio at a scale that fits one screen; live, 275 rows and 249 posts. Drivers is a second workbook with its own roster and contracted count, and no outstanding checks.`,
+          `هذا الملف يحتوي ${nRows(rows)} مقابل ${nPosts(TS.state.postCount)}، وهي النسبة الفعلية بمقياس يظهر في شاشة واحدة؛ الكشف الفعلي 275 صفًا و249 نقطة. كشف السائقين ملف ثانٍ له كشفه وعدده التعاقدي، ولا فحوصات معلّقة عليه.`,
+        )
+      : L(
+          `the drivers workbook carries ${nRows(rows)} against ${nPosts(TS.state.postCount)}, off the same template as All staff.`,
+          `ملف السائقين يحتوي ${nRows(rows)} مقابل ${nPosts(TS.state.postCount)}، من قالب كشف جميع العاملين نفسه.`,
+        )
+    $('footnote').innerHTML = L(
+      `Sample fixture — ${scale} Step to August and preview the client statistics sheet to see the implied count read above contract. Focus a cell and type a code letter (<code>p a s b t n</code>), or arm a code from the ribbon and shift-click to paint a range.`,
+      `بيانات نموذجية — ${scale} انتقل إلى أغسطس وعاين إحصائية العميل لترى النقاط المحتسبة تقرأ أعلى من التعاقد. ركّز على خلية واكتب حرف الرمز (<code>p a s b t n</code>)، أو فعّل رمزًا من الشريط وانقر مع Shift لتلوين مدى.`,
+    )
+  }
+
+  /* ---------------------------------------------------------- the repaint */
+  function paint() {
+    /* Landing on an already-closed month lands on its release step. */
+    if (TS.state.month !== lastMonth) {
+      lastMonth = TS.state.month
+      step = TS.state.closed ? 4 : 1
+      confirmReopen = false
+    }
+
+    TS.renderChrome($('chrome'))
+    paintHead()
+    paintSpine()
+
+    STEPS.forEach((s) => {
+      const card = $(`step-${s.n}`)
+      const open = s.n === step
+      const head = card.querySelector('.headbtn')
+      const body = card.querySelector('.body')
+      card.dataset.open = open ? '1' : '0'
+      body.hidden = !open
+      head.setAttribute('aria-expanded', String(open))
+      setText(head.querySelector('.ttl'), s.title())
+      const st = stateOf(s.n)
+      const chip = head.querySelector('.chip')
+      chip.className = `chip ${st.key === 'done' ? 'ok' : st.key === 'now' ? 'info' : ''}`
+      setText(chip, `${st.word} · ${st.detail}`)
+      if (open) setText(body.querySelector('.lede'), s.lede())
+    })
+
+    if (step === 1) paintChecks()
+    if (step === 2) paintCorrections()
+    if (step === 3) paintPosts()
+    if (step === 4) paintRelease()
+
+    /* Deliberate, one-shot, and only after a mutation asked for it — so it
+       never fights the kernel's own cell-focus restore. */
+    if (pendingFocus) {
+      const target = pendingFocus()
+      pendingFocus = null
+      target?.focus({ preventScroll: true })
+    }
+  }
+
+  /* ------------------------------------------------------------- wiring */
+  document.querySelectorAll('.headbtn').forEach((b) =>
+    b.addEventListener('click', (e) => goTo(Number(b.dataset.goto), e.detail === 0)),
+  )
+  $('prev').addEventListener('click', () => TS.setMonth(-1))
+  $('next').addEventListener('click', () => TS.setMonth(1))
+  $('zoom').querySelectorAll('button').forEach((b) =>
+    b.addEventListener('click', () => TS.setDensity(b.dataset.d)),
+  )
+  $('roster').querySelectorAll('button').forEach((b) =>
+    b.addEventListener('click', () => TS.setSheet(b.dataset.sheet)),
+  )
+  $('variant').querySelectorAll('button').forEach((b) =>
+    b.addEventListener('click', () => TS.setVariant(b.dataset.v)),
+  )
+  $('undo').addEventListener('click', () => TS.undo())
+  $('postcount').addEventListener('input', (e) => TS.setPostCount(e.target.value))
+  $('torelease').addEventListener('click', (e) => goTo(4, e.detail === 0))
+  $('tochecks').addEventListener('click', (e) => goTo(1, e.detail === 0))
+  $('dl1').addEventListener('click', () => TS.download('attendance'))
+  $('dl2').addEventListener('click', () => TS.download('statistics'))
+  $('reopen').addEventListener('click', () => {
+    confirmReopen = true
+    paint()
+    $('reopenyes').focus()
+  })
+  $('reopenno').addEventListener('click', () => {
+    confirmReopen = false
+    paint()
+    $('reopen').focus()
+  })
+  $('reopenyes').addEventListener('click', () => {
+    confirmReopen = false
+    /* The reopen button is gone once the month is open again, so focus lands on
+       the step that just changed rather than falling to the body — where the
+       kernel's cell-focus restore would pull it into the grid. */
+    pendingFocus = () => $('step-4').querySelector('.headbtn')
+    TS.reopenMonth()
+  })
+
+  TS.renderReview($('review'), 'd', 'The month as a four-step close-out with an explicit release')
+  TS.on('render', paint)
+  TS.on('change', paint)
+  paint()
+})()
+</script>
+</body>
+</html>

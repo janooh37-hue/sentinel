@@ -47,6 +47,9 @@ CODE_NATIONAL: Final[str] = "TR"
 CODE_NEW: Final[str] = "NG"
 CODE_OFF_ROSTER: Final[str] = "-"
 
+#: The English leave type used when form generation lost the original label.
+UNKNOWN_LEAVE: Final[str] = "Unknown"
+
 #: Every code the renderer may emit, in legend order.
 EMITTED_CODES: Final[tuple[str, ...]] = (
     CODE_PRESENT,
@@ -102,7 +105,7 @@ def leave_code(leave_type: str) -> str | None:
     """
 
     english = english_part(leave_type)
-    if english == "Unknown":
+    if english == UNKNOWN_LEAVE:
         return CODE_ANNUAL
     return LEAVE_TYPE_CODES.get(english)
 

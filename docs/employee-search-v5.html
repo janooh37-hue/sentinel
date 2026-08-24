@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>تصميم ٥ — البطاقة الطافية · GSSG Manager</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Arabic:wght@400;500;700&family=IBM+Plex+Mono:wght@400;500;600;700&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  /* ─── GSSG design tokens (mirrors frontend/src/index.css) ─── */
+  :root {
+    --bg:#f5f4f1; --surface:#ffffff; --surface-raised:#fafaf6; --surface-tinted:#f0eee8;
+    --primary:#0d2845; --primary-hover:#1d3a5e; --primary-soft:#e8edf3; --on-primary:#ffffff;
+    --accent:#c8102e; --accent-hover:#a30d24; --accent-soft:#fbe5e8;
+    --success:#047857; --success-soft:#d6f0e4;
+    --warning:#92400e; --warning-soft:#fbedd8;
+    --info:#1d4ed8; --info-soft:#e0e8f8;
+    --text:#1c1f24; --text-muted:#5a6068; --text-faint:#8b9098;
+    --border:#e6e4dd; --border-strong:#d4d1c8; --hairline:#efece5;
+    --hero-grad:linear-gradient(135deg,#0a1f3a 0%,#0d2845 50%,#1d3a5e 100%);
+    --r-sm:8px; --r-md:12px; --r-lg:16px; --r-pill:99px;
+    --sans:"Noto Sans Arabic","Inter",system-ui,sans-serif;
+    --mono:"IBM Plex Mono",ui-monospace,Consolas,"Noto Sans Arabic",monospace;
+  }
+  * { box-sizing:border-box; margin:0; padding:0; }
+  body { background:var(--bg); color:var(--text); font-family:var(--sans); font-size:16px; line-height:1.55; }
+  .mono { font-family:var(--mono); }
+
+  /* ─── Faux app chrome ─── */
+  .appbar { background:var(--surface); border-bottom:1px solid var(--hairline); }
+  .appbar-in { max-width:1180px; margin:0 auto; padding:0 32px; height:60px; display:flex; align-items:center; gap:28px; }
+  .brand { display:flex; align-items:center; gap:10px; }
+  .brand-logo { width:34px; height:34px; border-radius:50%; background:var(--hero-grad); display:grid; place-items:center; color:#fff; font-weight:800; font-size:11px; font-family:"Inter",sans-serif; }
+  .brand b { font-size:15px; font-family:"Inter",sans-serif; }
+  .brand span { display:block; font-size:10.5px; color:var(--text-muted); line-height:1.2; }
+  .nav { display:flex; gap:4px; margin-inline-start:8px; }
+  .nav a { padding:19px 13px; font-size:13.5px; color:var(--text-muted); text-decoration:none; border-bottom:2px solid transparent; }
+  .nav a.on { color:var(--primary); font-weight:700; border-bottom-color:var(--primary); }
+  .appbar-tools { margin-inline-start:auto; display:flex; gap:10px; }
+  .tool-dot { width:32px; height:32px; border-radius:50%; background:var(--surface-tinted); }
+
+  .tag-row { max-width:1180px; margin:0 auto; padding:0 32px; }
+  .design-tag { display:inline-flex; align-items:center; gap:8px; margin-top:18px; padding:5px 12px; border-radius:var(--r-pill); background:var(--primary); color:#fff; font-size:11.5px; font-weight:700; letter-spacing:.06em; }
+  .design-tag i { font-style:normal; opacity:.65; font-weight:500; }
+
+  /* ─── [v3] hero band — taller, card floats over its lower edge ─── */
+  .heroband { position:relative; overflow:visible; background:var(--hero-grad); color:#fff; margin-top:14px; padding-bottom:96px; }
+  .hero-clip { position:absolute; inset:0; overflow:hidden; }
+  .hero-clip::before { content:""; position:absolute; inset-inline-end:-90px; top:-110px; width:320px; height:320px; border-radius:50%; background:rgba(255,255,255,.045); }
+  .hero-clip::after { content:""; position:absolute; inset-inline-start:8%; bottom:-140px; width:260px; height:260px; border-radius:50%; background:rgba(255,255,255,.035); }
+  .heroband-in { position:relative; z-index:2; max-width:720px; margin:0 auto; padding:36px 32px 0; text-align:center; }
+  .heroband .eyebrow { font-size:11px; font-weight:600; letter-spacing:.22em; text-transform:uppercase; opacity:.65; }
+  .heroband h1 { font-size:26px; font-weight:700; margin:8px 0 4px; }
+  .heroband p { font-size:13.5px; opacity:.75; }
+  .searchbox { display:flex; align-items:center; gap:12px; background:#fff; border-radius:var(--r-pill); padding:0 20px; height:54px; margin-top:20px; box-shadow:0 18px 44px -18px rgba(0,0,0,.5); }
+  .searchbox svg { flex:none; color:var(--text-faint); }
+  .searchbox input { flex:1; min-width:0; border:0; outline:0; font:inherit; font-size:16px; color:var(--text); background:transparent; }
+  .searchbox input::placeholder { color:var(--text-faint); }
+  .searchbox .go { flex:none; border:0; cursor:pointer; font:inherit; font-size:13px; font-weight:700; color:#fff; background:var(--accent); border-radius:var(--r-pill); padding:8px 20px; }
+  .searchbox .go:hover { background:var(--accent-hover); }
+
+  .page { max-width:1180px; margin:0 auto; padding:0 32px 80px; }
+
+  /* ─── [v3] wide ID card, floating half over the hero ─── */
+  .idcard { position:relative; z-index:5; max-width:860px; margin:-76px auto 0; overflow:hidden; border-radius:18px; background:var(--hero-grad); color:#fff; padding:22px 26px; box-shadow:0 26px 54px -20px rgba(10,31,58,.6); display:flex; align-items:center; gap:22px; }
+  .idcard::before { content:""; position:absolute; inset-inline-end:-40px; bottom:-70px; width:190px; height:190px; border-radius:50%; background:rgba(255,255,255,.05); }
+  .idcard .photo { flex:none; width:88px; height:88px; border-radius:14px; background:rgba(255,255,255,.14); box-shadow:0 0 0 2px rgba(255,255,255,.22); display:grid; place-items:center; font-size:28px; font-weight:700; }
+  .idcard .who { flex:1; min-width:0; }
+  .idcard h2 { font-size:20px; font-weight:700; line-height:1.3; }
+  .idcard .en { font-family:"Inter",sans-serif; font-size:10.5px; letter-spacing:.09em; text-transform:uppercase; opacity:.55; margin-top:2px; }
+  .idcard .meta { display:flex; flex-wrap:wrap; align-items:center; gap:10px; margin-top:8px; font-size:12.5px; opacity:.92; }
+  .idcard .g { font-family:var(--mono); letter-spacing:.1em; }
+  .pill { display:inline-flex; align-items:center; gap:6px; border-radius:var(--r-pill); padding:2.5px 10px; font-size:11px; font-weight:700; }
+  .pill i { font-style:normal; width:6px; height:6px; border-radius:50%; background:currentColor; }
+  .pill.ok { background:rgba(52,211,153,.18); color:#6ee7b7; }
+  .idcard .side { flex:none; text-align:center; }
+  .ring { position:relative; width:72px; height:72px; margin:0 auto; }
+  .ring svg { transform:rotate(-90deg); }
+  .ring .val { position:absolute; inset:0; display:grid; place-items:center; font-family:var(--mono); font-size:14px; font-weight:700; }
+  .idcard .side .cap { font-size:10.5px; opacity:.75; margin-top:4px; }
+  .id-actions { display:flex; flex-direction:column; gap:7px; flex:none; }
+  .btn { display:inline-flex; justify-content:center; align-items:center; gap:7px; border:0; cursor:pointer; font:inherit; font-size:12px; font-weight:600; border-radius:var(--r-pill); padding:7px 16px; white-space:nowrap; }
+  .btn.pri { background:var(--surface); color:var(--primary); }
+  .btn.ghost { background:rgba(255,255,255,.12); color:#fff; border:1px solid rgba(255,255,255,.25); }
+  @media (max-width:860px){ .idcard { flex-wrap:wrap; } }
+
+  /* ─── [v2] missing-data banner ─── */
+  .gaps { display:flex; align-items:flex-start; gap:13px; max-width:860px; margin:18px auto 26px; background:var(--warning-soft); border:1px solid #f0ddb8; border-radius:var(--r-md); padding:14px 16px; }
+  .gaps .ic { flex:none; width:32px; height:32px; border-radius:50%; background:#fff; display:grid; place-items:center; color:var(--warning); }
+  .gaps b { display:block; font-size:13.5px; color:var(--warning); }
+  .gaps p { font-size:12.5px; color:#7a5010; margin:2px 0 9px; }
+  .gchips { display:flex; flex-wrap:wrap; gap:7px; }
+  .gchip { display:inline-flex; align-items:center; gap:5px; border:1px dashed #ddba7a; background:#fff; color:var(--warning); border-radius:var(--r-pill); font-size:12px; font-weight:600; padding:4px 11px; cursor:pointer; }
+  .gchip:hover { border-style:solid; }
+  .gaps .fixall { margin-inline-start:auto; align-self:center; flex:none; background:var(--primary); color:#fff; border:0; cursor:pointer; font:inherit; font-size:12.5px; font-weight:600; border-radius:var(--r-pill); padding:8px 16px; }
+  .gaps .fixall:hover { background:var(--primary-hover); }
+
+  /* ─── [v1] section cards — 2×2, with mini progress bar per card ─── */
+  .cards { display:grid; grid-template-columns:1fr 1fr; gap:16px; }
+  @media (max-width:860px){ .cards { grid-template-columns:1fr; } }
+  .card { background:var(--surface); border:1px solid var(--hairline); border-radius:var(--r-lg); padding:18px 20px; }
+  .card h3 { display:flex; align-items:center; gap:9px; font-size:11.5px; font-weight:700; letter-spacing:.14em; text-transform:uppercase; color:var(--text-muted); }
+  .card h3 .n { font-family:var(--mono); font-size:10.5px; letter-spacing:0; margin-inline-start:auto; color:var(--text-faint); }
+  .minibar { display:flex; gap:3px; margin:9px 0 6px; }
+  .minibar i { flex:1; height:4px; border-radius:2px; background:var(--primary); }
+  .minibar i.gap { background:var(--warning-soft); box-shadow:inset 0 0 0 1px #e8cf9e; }
+  .frow { display:grid; grid-template-columns:125px 1fr; align-items:baseline; gap:12px; padding:9px 2px; border-bottom:1px solid var(--hairline); }
+  .frow:last-child { border-bottom:0; }
+  .frow .k { font-size:11px; font-weight:600; letter-spacing:.07em; text-transform:uppercase; color:var(--text-muted); }
+  .frow .v { font-size:14px; min-width:0; overflow-wrap:break-word; }
+  .frow .v.m { font-family:var(--mono); font-size:13px; }
+  .frow.miss { background:linear-gradient(to left,transparent,rgba(251,237,216,.55)); border-radius:var(--r-sm); }
+  .frow.miss .v { display:flex; align-items:center; gap:10px; }
+  .frow.miss .none { font-size:12.5px; color:var(--warning); font-weight:600; }
+  .addlink { display:inline-flex; align-items:center; gap:4px; border:1px dashed var(--border-strong); background:var(--surface); border-radius:var(--r-pill); font-size:11px; font-weight:600; color:var(--info); padding:2px 10px; cursor:pointer; }
+  .addlink:hover { border-color:var(--info); }
+  .exp-warn { display:inline-flex; align-items:center; gap:5px; background:var(--warning-soft); color:var(--warning); font-size:10.5px; font-weight:700; border-radius:var(--r-pill); padding:2px 9px; margin-inline-start:8px; }
+</style>
+</head>
+<body>
+
+<header class="appbar"><div class="appbar-in">
+  <div class="brand">
+    <div class="brand-logo">GSSG</div>
+    <div><b>GSSG</b><span>المجموعة العالمية للخدمات الأمنية</span></div>
+  </div>
+  <nav class="nav">
+    <a href="#">لوحة التحكم</a><a href="#" class="on">الموظفون</a><a href="#">المراسلات</a><a href="#">الإجازات</a><a href="#">الخدمات</a><a href="#">المستندات</a>
+  </nav>
+  <div class="appbar-tools"><div class="tool-dot"></div><div class="tool-dot"></div><div class="tool-dot"></div></div>
+</div></header>
+
+<div class="tag-row"><div class="design-tag">تصميم ٥ <i>·</i> البطاقة الطافية — بطاقة عريضة فوق البحث</div></div>
+
+<!-- [v3] hero search -->
+<section class="heroband">
+  <div class="hero-clip"></div>
+  <div class="heroband-in">
+    <div class="eyebrow">العمليات · الموظفون</div>
+    <h1>عن مَن تبحث؟</h1>
+    <p>نشط، في إجازة، أو منتهي الخدمة — كل ملف يظهر في البحث</p>
+    <div class="searchbox">
+      <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.3-3.3"/></svg>
+      <input type="text" placeholder="اكتب الاسم أو الرقم الوظيفي…" value="عبدالله على سالم">
+      <button class="go">بحث</button>
+    </div>
+  </div>
+</section>
+
+<div class="page">
+
+  <!-- [v3] wide floating ID card with ring -->
+  <div class="idcard">
+    <div class="photo">عب</div>
+    <div class="who">
+      <h2>عبدالله على سالم خميس العبرى</h2>
+      <div class="en">Abdulla Ali Salem Khamis Alabri</div>
+      <div class="meta">
+        <span class="g">G-3190</span><span>·</span>
+        <span>قائم بأعمال مساعد مشرف — العمليات</span><span>·</span>
+        <span class="pill ok"><i></i>نشط</span>
+      </div>
+    </div>
+    <div class="side">
+      <div class="ring">
+        <svg width="72" height="72" viewBox="0 0 72 72">
+          <circle cx="36" cy="36" r="30" fill="none" stroke="rgba(255,255,255,.15)" stroke-width="6"/>
+          <circle cx="36" cy="36" r="30" fill="none" stroke="#fbbf24" stroke-width="6" stroke-linecap="round" stroke-dasharray="121 188"/>
+        </svg>
+        <div class="val">٩/١٤</div>
+      </div>
+      <div class="cap">اكتمال الملف</div>
+    </div>
+    <div class="id-actions">
+      <button class="btn pri">إنشاء مستند</button>
+      <button class="btn ghost">إضافة إجازة</button>
+      <button class="btn ghost">تعديل البيانات</button>
+    </div>
+  </div>
+
+  <!-- [v2] missing-data banner -->
+  <div class="gaps">
+    <div class="ic">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 9v4"/><path d="M12 17h.01"/><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/></svg>
+    </div>
+    <div>
+      <b>٥ بيانات ناقصة</b>
+      <p>إكمالها يجعل النماذج والمخاطبات تُنشأ مباشرةً دون الرجوع للملف الورقي.</p>
+      <div class="gchips">
+        <button class="gchip">+ الجنسية</button>
+        <button class="gchip">+ تاريخ الميلاد</button>
+        <button class="gchip">+ رقم الجواز</button>
+        <button class="gchip">+ انتهاء الجواز</button>
+        <button class="gchip">+ الآيبان</button>
+      </div>
+    </div>
+    <button class="fixall">أكمل البيانات الآن</button>
+  </div>
+
+  <!-- [v1] section cards with per-card completeness -->
+  <div class="cards">
+
+    <div class="card">
+      <h3>البيانات الشخصية <span class="n">4/6</span></h3>
+      <div class="minibar"><i></i><i></i><i></i><i></i><i class="gap"></i><i class="gap"></i></div>
+      <div class="frow"><div class="k">الاسم عربي</div><div class="v">عبدالله على سالم خميس العبرى</div></div>
+      <div class="frow"><div class="k">الاسم إنجليزي</div><div class="v" style="font-family:'Inter'">ABDULLA ALI SALEM KHAMIS ALABRI</div></div>
+      <div class="frow miss"><div class="k">الجنسية</div><div class="v"><span class="none">غير مسجّلة</span><button class="addlink">+ أضف الآن</button></div></div>
+      <div class="frow miss"><div class="k">تاريخ الميلاد</div><div class="v"><span class="none">غير مسجّل</span><button class="addlink">+ أضف الآن</button></div></div>
+      <div class="frow"><div class="k">رقم التواصل</div><div class="v m">0501234567</div></div>
+      <div class="frow"><div class="k">لغة الرسائل</div><div class="v">العربية</div></div>
+    </div>
+
+    <div class="card">
+      <h3>وثائق الهوية <span class="n">2/4</span></h3>
+      <div class="minibar"><i></i><i></i><i class="gap"></i><i class="gap"></i></div>
+      <div class="frow"><div class="k">الهوية الإماراتية</div><div class="v m">784-1990-1234567-1</div></div>
+      <div class="frow"><div class="k">انتهاء الهوية</div><div class="v m">2026-09-14<span class="exp-warn">⚠ ٦٨ يوماً</span></div></div>
+      <div class="frow miss"><div class="k">رقم الجواز</div><div class="v"><span class="none">غير مسجّل</span><button class="addlink">+ أضف الآن</button></div></div>
+      <div class="frow miss"><div class="k">انتهاء الجواز</div><div class="v"><span class="none">غير مسجّل</span><button class="addlink">+ أضف الآن</button></div></div>
+    </div>
+
+    <div class="card">
+      <h3>بيانات العمل <span class="n">6/6</span></h3>
+      <div class="minibar"><i></i><i></i><i></i><i></i><i></i><i></i></div>
+      <div class="frow"><div class="k">المسمى الوظيفي</div><div class="v">قائم بأعمال مساعد مشرف</div></div>
+      <div class="frow"><div class="k">القسم</div><div class="v">العمليات</div></div>
+      <div class="frow"><div class="k">الوحدة</div><div class="v">وحدة أبوظبي</div></div>
+      <div class="frow"><div class="k">النقطة</div><div class="v">برج المها</div></div>
+      <div class="frow"><div class="k">تاريخ الالتحاق</div><div class="v m">2019-03-12</div></div>
+      <div class="frow"><div class="k">الالتحاق بالشركة</div><div class="v m">2019-03-12</div></div>
+    </div>
+
+    <div class="card">
+      <h3>البيانات المالية <span class="n">0/1</span></h3>
+      <div class="minibar"><i class="gap"></i></div>
+      <div class="frow miss"><div class="k">الآيبان</div><div class="v"><span class="none">غير مسجّل</span><button class="addlink">+ أضف الآن</button></div></div>
+    </div>
+
+  </div>
+</div>
+</body>
+</html>

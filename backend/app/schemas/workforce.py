@@ -364,9 +364,12 @@ class AttendanceDayRowRead(RosterRowRead):
     punch yields ``punch_count == 1`` with both bounds equal, and a client must
     present it as "seen at", never as a span.
 
-    ``judgment_due_at`` is when the duty stops running and the evaluator is
-    willing to call it: before that instant a missing punch is an arrival still
-    pending, not an exception, and a client must not flag it.
+    ``judgment_due_at`` is when the duty stops running and a lone punch may be
+    called unpaired: before that instant one punch is an arrival still waiting for
+    its departure, not an exception. ``absence_due_at`` is the earlier boundary,
+    twice the grace past the start, after which a case with no punch at all is an
+    absence. ``grace_minutes`` is the policy's own grace, published so a client
+    names the same arrival late as the evaluator does instead of guessing.
     """
 
     first_punch_at: datetime | None = None
@@ -375,6 +378,8 @@ class AttendanceDayRowRead(RosterRowRead):
     late_minutes: int | None = Field(default=None, ge=0)
     on_leave: bool = False
     judgment_due_at: datetime | None = None
+    absence_due_at: datetime | None = None
+    grace_minutes: int | None = Field(default=None, ge=0)
 
 
 class EmployeeAttendancePunchRead(ORMBase):
@@ -404,6 +409,12 @@ class EmployeeAttendanceDayRead(ORMBase):
     reason_code: str | None = None
     late_minutes: int | None = Field(default=None, ge=0)
     punch_count: int = Field(default=0, ge=0)
+    #: Same contract as ``AttendanceDayRowRead``: the two judgment boundaries and
+    #: the policy grace, so one employee's month is classified by exactly the
+    #: rules the register applies to the day.
+    absence_due_at: datetime | None = None
+    judgment_due_at: datetime | None = None
+    grace_minutes: int | None = Field(default=None, ge=0)
     punches: list[EmployeeAttendancePunchRead] = Field(default_factory=list)
 
 

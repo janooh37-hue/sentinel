@@ -670,6 +670,9 @@ export type IncludedPapersPreviewRead = components['schemas']['IncludedPapersPre
 export type IncludedPapersRequest = components['schemas']['IncludedPapersRequest']
 export type BookFacetsResponse = components['schemas']['BookFacetsResponse']
 export type ServiceFacetRead = components['schemas']['ServiceFacetRead']
+// Approvals log (#31) — GET /books/approval-log?scope=sent|received
+export type ApprovalLogItem = components['schemas']['ApprovalLogItem']
+export type ApprovalLogResponse = components['schemas']['ApprovalLogResponse']
 
 // Annotation overlay (Slice 3). Hand-typed mirror of schemas.book.BookAnnotationRead
 // until gen:api folds it into the generated schema.
@@ -848,6 +851,36 @@ export interface DashboardSummary {
   email_sync: DashboardEmailSync
 }
 
+// Monthly time sheet (site JD 908) — one month of one workbook, plus the two
+// deliverables it produces. `sheet` on the response is the generated `string`,
+// not the union: the union is what the CALLER may ask for.
+export type TimesheetGridResponse = components['schemas']['TimesheetGridResponse']
+export type TimesheetRow = components['schemas']['TimesheetRow']
+export type TimesheetIssue = components['schemas']['TimesheetIssue']
+export type TimesheetRemoved = components['schemas']['TimesheetRemoved']
+export type TimesheetDesignationRead = components['schemas']['TimesheetDesignationRead']
+export type TimesheetDesignationCreate = components['schemas']['TimesheetDesignationCreate']
+export type TimesheetDesignationUpdate = components['schemas']['TimesheetDesignationUpdate']
+export type TimesheetRosterBatch = components['schemas']['TimesheetRosterBatch']
+export type TimesheetCellUpdate = components['schemas']['TimesheetCellUpdate']
+export type TimesheetPeriodPatch = components['schemas']['TimesheetPeriodPatch']
+export type TimesheetFillerUpdate = components['schemas']['TimesheetFillerUpdate']
+export type TimesheetSheet = 'main' | 'drivers'
+export type TimesheetVariant = 'attendance' | 'statistics'
+
+/** The month coordinates every time-sheet call needs. */
+export interface TimesheetMonth {
+  year: number
+  month: number
+  sheet?: TimesheetSheet
+}
+
+/** A file the caller is expected to save, not preview. */
+export interface DownloadedFile {
+  blob: Blob
+  filename: string
+}
+
 interface ErrorEnvelope {
   error?: {
     code?: string
@@ -942,6 +975,62 @@ async function fetchPermitBlob(path: string): Promise<Blob> {
     throw new ApiError(res.status, `HTTP_${res.status}`, res.statusText || 'Failed to load document')
   }
   return base64ToBlob(await res.text())
+}
+
+/**
+ * The name the server chose for a download. The workbook filenames are Arabic,
+ * so FastAPI sends them RFC 5987 encoded (`filename*=UTF-8''%D9%83…`); the
+ * plain `filename="…"` form is the ASCII fallback some servers send alongside.
+ */
+function filenameFrom(header: string | null): string | null {
+  if (!header) return null
+  const encoded = /filename\*=UTF-8''([^;]+)/i.exec(header)
+  if (encoded) {
+    try {
+      return decodeURIComponent(encoded[1].trim())
+    } catch {
+      // Malformed percent-escapes: fall through to the plain form.
+    }
+  }
+  // The `=` is a mandatory literal, so this pattern never saw `filename*=` in
+  // the first place — the RFC 5987 header already falls through to the caller's
+  // fallback. `(?!\*)` is a cheap guard, not a fix: it rejects a plain form
+  // whose VALUE starts with `*`, so a header like `filename=*=UTF-8''…` stays on
+  // the fallback path, and so does anything else if the `=` is ever loosened.
+  const plain = /filename=(?!\*)"?([^";]+)"?/i.exec(header)
+  return plain ? plain[1].trim() : null
+}
+
+/**
+ * Fetch a response meant to land on disk as a file.
+ *
+ * Distinct from `fetchPermitBlob`, which is an inline PREVIEW helper: it asks
+ * for base64 and hands back a typeless Blob for `window.open`. An `.xlsx` has
+ * to be saved with its own name, and the name lives in `content-disposition` —
+ * readable here only because the request is same-origin.
+ */
+async function fetchAttachment(path: string, fallbackName: string): Promise<DownloadedFile> {
+  const res = await fetch(`${BASE}${path}`, { cache: 'no-store', credentials: 'same-origin' })
+  if (!res.ok) {
+    // An error body is the usual JSON envelope, not a workbook.
+    const text = await res.text().catch(() => '')
+    let envelope: ErrorEnvelope['error']
+    try {
+      envelope = (JSON.parse(text) as ErrorEnvelope | undefined)?.error
+    } catch {
+      envelope = undefined
+    }
+    throw new ApiError(
+      res.status,
+      envelope?.code ?? `HTTP_${res.status}`,
+      envelope?.message ?? res.statusText,
+      envelope?.details ?? {},
+    )
+  }
+  return {
+    blob: await res.blob(),
+    filename: filenameFrom(res.headers.get('content-disposition')) ?? fallbackName,
+  }
 }
 
 export interface ListEmployeesParams {
@@ -1482,8 +1571,15 @@ export const api = {
   // --- books approval (feat/mobile-and-approval) ---
   /** GET /books/awaiting — books pending the signed-in user's decision. */
   listAwaitingBooks: () => request<BookRead[]>('GET', '/books/awaiting'),
+  /** GET /books/approval-log — the approvals log. `scope=sent` lists records I
+   *  submitted (any authenticated user); `scope=received` lists my pending
+   *  decisions + my verdicts from the last 30 days (needs books.approve). */
+  listApprovalLog: (
+    scope: 'sent' | 'received',
+    params: { limit?: number; offset?: number } = {},
+  ) => request<ApprovalLogResponse>('GET', `/books/approval-log${qs({ scope, ...params })}`),
   /** GET /books/awaiting-scan — records stranded at `awaiting_scan` past 24h.
-   * `scope='all'` returns everyone's (both scopes need books.manage). */
+   * `scope='all'` returns everyone's (both scopes need books.edit). */
   listAwaitingScanBooks: (scope: 'mine' | 'all' = 'mine') =>
     request<BookRead[]>('GET', `/books/awaiting-scan?scope=${scope}`),
   /** GET /books/approvers — valid approver candidates for the submit picker. */
@@ -1562,25 +1658,25 @@ export const api = {
     return multipart<BookRead>(`/books/${bookId}/attachments`, form)
   },
   /** DELETE /books/{id}/attachments/{index} — remove a plain attachment (undo a
-   * wrongly-uploaded scan). books.manage. */
+   * wrongly-uploaded scan). books.edit. */
   deleteBookAttachment: (bookId: number, index: number) =>
     request<BookRead>('DELETE', `/books/${bookId}/attachments/${index}`),
   /** PUT /books/{id}/attachments/{index} — replace a plain attachment's bytes,
-   * keeping its index. books.manage. */
+   * keeping its index. books.edit. */
   replaceBookAttachment: (bookId: number, index: number, file: File) => {
     const form = new FormData()
     form.append('file', file)
     return multipart<BookRead>(`/books/${bookId}/attachments/${index}`, form, 'PUT')
   },
   /** PUT /books/{id}/signed-copy — replace the signed copy's bytes, keeping the
-   * record approved. books.manage. */
+   * record approved. books.edit. */
   replaceSignedCopy: (bookId: number, file: File) => {
     const form = new FormData()
     form.append('file', file)
     return multipart<BookRead>(`/books/${bookId}/signed-copy`, form, 'PUT')
   },
   /** DELETE /books/{id}/signed-copy — unfile the signed copy and revert the
-   * record's approval state. books.manage. */
+   * record's approval state. books.edit. */
   unfileSignedCopy: (bookId: number) =>
     request<BookRead>('DELETE', `/books/${bookId}/signed-copy`),
   /** Build a side-effect-free preview of the proposed fixed-base-first package. */
@@ -1952,6 +2048,12 @@ export const api = {
       capability,
       effect,
     }),
+  /** Apply a batch of overrides in one call (admin matrix save); each item's
+   * effect null reverts that capability to the role default. */
+  setUserPermissionsBulk: (
+    id: number,
+    items: Array<{ capability: string; effect: PermissionEffect | null }>,
+  ) => request<UserPermissionRead>('PUT', `/auth/users/${id}/permissions/bulk`, { items }),
 
   // --- permission requests (Task 10) ---
   /** Submit a capability request for the signed-in user.
@@ -2001,6 +2103,83 @@ export const api = {
       'POST',
       '/documents/inmate-violations/approved-imports',
       body,
+    ),
+
+  // --- monthly time sheet (site JD 908) ---
+  /** The printable designation catalog, in the rank order both workbooks
+   *  print. `timesheet.view` — reading the print order is not a write. */
+  listDesignations: () =>
+    request<TimesheetDesignationRead[]>('GET', '/timesheet/designations'),
+  createTimesheetDesignation: (input: TimesheetDesignationCreate) =>
+    request<TimesheetDesignationRead>('POST', '/timesheet/designations', input),
+  updateTimesheetDesignation: (id: number, input: TimesheetDesignationUpdate) =>
+    request<TimesheetDesignationRead>(
+      'PATCH',
+      `/timesheet/designations/${encodeURIComponent(String(id))}`,
+      input,
+    ),
+  setTimesheetRoster: (p: { year: number; month: number } & TimesheetRosterBatch) =>
+    request<void>('PUT', `/timesheet/${p.year}/${p.month}/roster`, {
+      assignments: p.assignments,
+    }),
+  /** Re-rank the whole catalog. `timesheet.edit`, and the payload must be
+   *  EVERY id exactly once — a partial list is refused with
+   *  `DESIGNATION_ORDER_INCOMPLETE`. Answers with the catalog as re-ranked. */
+  reorderDesignations: (ids: number[]) =>
+    request<TimesheetDesignationRead[]>('PUT', '/timesheet/designations/order', { ids }),
+  getTimesheet: (p: TimesheetMonth) =>
+    request<TimesheetGridResponse>(
+      'GET',
+      `/timesheet/${p.year}/${p.month}${qs({ sheet: p.sheet })}`,
+    ),
+  /** Every month write answers with the REFRESHED grid (200, not 204), so a
+   *  caller never needs a second fetch to see the effect of its own write. */
+  setTimesheetCell: (p: TimesheetMonth, payload: TimesheetCellUpdate) =>
+    request<TimesheetGridResponse>(
+      'PUT',
+      `/timesheet/${p.year}/${p.month}/cell${qs({ sheet: p.sheet })}`,
+      payload,
+    ),
+  patchTimesheetPeriod: (p: TimesheetMonth, payload: TimesheetPeriodPatch) =>
+    request<TimesheetGridResponse>(
+      'PATCH',
+      `/timesheet/${p.year}/${p.month}${qs({ sheet: p.sheet })}`,
+      payload,
+    ),
+  closeTimesheetMonth: (p: TimesheetMonth) =>
+    request<TimesheetGridResponse>(
+      'POST',
+      `/timesheet/${p.year}/${p.month}/close${qs({ sheet: p.sheet })}`,
+    ),
+  reopenTimesheetMonth: (p: TimesheetMonth) =>
+    request<TimesheetGridResponse>(
+      'POST',
+      `/timesheet/${p.year}/${p.month}/reopen${qs({ sheet: p.sheet })}`,
+    ),
+  /** Accepting a joiner's starting point is an acknowledgement, not a
+   *  correction: it writes no override row and answers 204. */
+  acknowledgeTimesheetStart: (p: TimesheetMonth, employeeId: string) =>
+    request<void>('POST', `/timesheet/${p.year}/${p.month}/start-ack`, {
+      employee_id: employeeId,
+    }),
+  /** Producing a month's workbook FREEZES the month. */
+  fetchTimesheetExport: (
+    p: TimesheetMonth & { variant: TimesheetVariant },
+    fallbackName: string,
+  ) =>
+    fetchAttachment(
+      `/timesheet/${p.year}/${p.month}/export${qs({ sheet: p.sheet, variant: p.variant })}`,
+      fallbackName,
+    ),
+  /** One employee's own sheet. Freezes nothing; `months: 2` is the departure
+   *  handover — the month named plus the one before it, in one workbook. */
+  fetchTimesheetEmployeeExport: (
+    p: { employeeId: string; year: number; month: number; months?: 1 | 2 },
+    fallbackName: string,
+  ) =>
+    fetchAttachment(
+      `/timesheet/employee/${encodeURIComponent(p.employeeId)}/${p.year}/${p.month}/export${qs({ months: p.months })}`,
+      fallbackName,
     ),
 
   // --- notifications (Phase 4 LAN) ---

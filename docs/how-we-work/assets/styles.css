@@ -1,0 +1,83 @@
+/* How We Work — print design system. A4 portrait, GSSG identity. */
+@page { size: A4; margin: 0; }
+:root {
+  --navy: #0d2845; --navy-2: #1d3a5e; --navy-soft: #e8edf3;
+  --red: #c8102e; --bg: #f5f4f1; --surface: #ffffff;
+  --text: #1c1f24; --muted: #5a6068; --border: #e6e4dd;
+}
+* { box-sizing: border-box; margin: 0; }
+html { font-size: 10.5pt; }
+body { font-family: "Segoe UI", system-ui, sans-serif; color: var(--text); background: var(--bg); }
+[dir="rtl"] body, body[dir="rtl"] { font-family: "Noto Naskh Arabic", "Sakkal Majalla", "Traditional Arabic", serif; }
+h1, h2, h3 { font-family: Georgia, "Times New Roman", serif; color: var(--navy); font-weight: 600; }
+[dir="rtl"] h1, [dir="rtl"] h2, [dir="rtl"] h3 { font-family: inherit; font-weight: 700; }
+
+.page { width: 210mm; height: 297mm; padding: 22mm 20mm 18mm; background: var(--bg);
+        position: relative; overflow: hidden; page-break-after: always; }
+.doc-footer { position: absolute; bottom: 10mm; inset-inline: 20mm; display: flex;
+              justify-content: space-between; font-size: 8pt; color: var(--muted);
+              border-top: 0.4pt solid var(--border); padding-top: 3mm; }
+
+/* Cover */
+.cover { background: var(--navy); color: #fff; display: flex; flex-direction: column;
+         justify-content: center; align-items: center; text-align: center; gap: 10mm; }
+.cover img { width: 42mm; }
+.cover h1 { color: #fff; font-size: 26pt; }
+.cover .subtitle { font-size: 13pt; color: var(--navy-soft); }
+.cover .byline { position: absolute; bottom: 24mm; font-size: 10pt; color: var(--navy-soft); }
+
+/* Index */
+.index-list { list-style: none; margin-top: 12mm; }
+.index-list li { display: flex; align-items: baseline; gap: 3mm; font-size: 12pt; padding: 3.2mm 0; }
+.index-list .leader { flex: 1; border-bottom: 1pt dotted var(--navy-2); opacity: .45; }
+.index-list .pageno { color: var(--navy); font-variant-numeric: tabular-nums; }
+
+/* Two paths */
+.paths { display: flex; flex-direction: column; gap: 16mm; margin-top: 18mm; }
+.path { display: flex; align-items: center; }
+.path .stop { flex: 1; text-align: center; font-size: 8.5pt; position: relative; padding-top: 7mm; }
+.path .stop::before { content: ""; position: absolute; top: 0; left: 50%; transform: translateX(-50%);
+                      width: 3.2mm; height: 3.2mm; border-radius: 50%; }
+.path .stop::after { content: ""; position: absolute; top: 1.4mm; inset-inline-start: calc(50% + 2mm);
+                     width: calc(100% - 4mm); height: 0.5mm; }
+.path .stop:last-child::after { display: none; }
+.path-old .stop { color: var(--muted); }
+.path-old .stop::before { background: #b9b6ad; } .path-old .stop::after { background: #d4d1c8; }
+.path-new .stop { color: var(--navy); font-weight: 600; font-size: 10pt; }
+.path-new .stop::before { background: var(--navy); } .path-new .stop::after { background: var(--navy-2); }
+
+/* Step pages */
+.step-num { font-family: "Segoe UI", system-ui, sans-serif; font-weight: 600; font-size: 30pt; color: var(--navy); opacity: .18; }
+.step-page h2 { font-size: 17pt; margin: 2mm 0 5mm; }
+.step-page p { font-size: 11pt; line-height: 1.65; max-width: 150mm; }
+.progress-rail { position: absolute; top: 40mm; inset-inline-end: 8mm; display: flex;
+                 flex-direction: column; gap: 2.4mm; }
+.progress-rail i { width: 1.8mm; height: 1.8mm; border-radius: 50%; background: var(--border); }
+.progress-rail i.on { background: var(--navy); }
+.footnote { margin-top: 5mm; font-size: 9pt; font-style: italic; color: var(--muted); }
+
+/* Screenshots */
+.shot { margin-top: 7mm; background: var(--surface); border: 0.6pt solid var(--navy-soft);
+        border-radius: 2mm; padding: 2.5mm; box-shadow: 0 1mm 3mm rgba(13,40,69,.08); position: relative; }
+.shot img { width: 100%; display: block; border-radius: 1mm; }
+.shot-caption { font-size: 8.5pt; color: var(--muted); margin-top: 2mm; text-align: center; }
+.ring { position: absolute; border: 0.8mm solid var(--red); border-radius: 50%; pointer-events: none; }
+.phone-frame { width: 62mm; margin: 7mm auto 0; border: 1.6mm solid var(--navy); border-radius: 7mm;
+               padding: 1.6mm; background: #000; }
+.phone-frame img { border-radius: 5mm; width: 100%; display: block; }
+
+/* Catalog + looking ahead */
+.catalog-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4mm; margin-top: 10mm; }
+.catalog-grid .tile { background: var(--surface); border: 0.5pt solid var(--border); border-radius: 2mm;
+                      padding: 5mm 3mm; text-align: center; font-size: 9pt; }
+.catalog-grid .tile .emoji { display: block; font-size: 16pt; margin-bottom: 2mm; }
+.ahead-list { margin-top: 8mm; display: flex; flex-direction: column; gap: 6mm; }
+.ahead-list .idea { border-inline-start: 1mm solid var(--navy-soft); padding-inline-start: 5mm; }
+.ahead-list .idea h3 { font-size: 12pt; margin-bottom: 1.5mm; }
+.ahead-list .idea p { font-size: 10.5pt; line-height: 1.6; color: var(--text); }
+@font-face { font-family: "Noto Naskh Arabic"; src: url("fonts/naskh-400.woff2") format("woff2");
+             font-weight: 400; }
+@font-face { font-family: "Noto Naskh Arabic"; src: url("fonts/naskh-700.woff2") format("woff2");
+             font-weight: 700; }
+/* added by final-fix: lining figures for step numerals */
+/* final-fix: Georgia old-style figures made "01" read as "O1"; sans stack gives lining digits (and clean Arabic-Indic in AR) */

@@ -1,0 +1,337 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>الدفتر العام — الحالة المثالية · General Book best-case mockup</title>
+<style>
+  :root{
+    --bg:#eef1f5; --card:#ffffff; --ink:#1a2230; --muted:#667085; --line:#e2e6ec;
+    --accent:#4f46e5; --accent-soft:#eef0ff; --ok:#067647; --ok-soft:#eafaf0;
+    --warn:#b54708; --warn-soft:#fff5e9; --gold:#9a7b3f; --paper:#ffffff;
+    --pin:#9333ea; --radius:14px; --shadow:0 1px 2px rgba(16,24,40,.06),0 8px 24px rgba(16,24,40,.06);
+    --mono:"SF Mono",ui-monospace,"Cascadia Mono",Consolas,monospace;
+    --ar:"Segoe UI","Noto Naskh Arabic",Tahoma,"Geeza Pro",system-ui,sans-serif;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--ar);
+    line-height:1.55;-webkit-font-smoothing:antialiased}
+  .bar{position:sticky;top:0;z-index:30;display:flex;align-items:center;gap:14px;
+    padding:12px 22px;background:rgba(255,255,255,.85);backdrop-filter:blur(8px);
+    border-bottom:1px solid var(--line)}
+  .bar h1{font-size:16px;margin:0;font-weight:700;letter-spacing:-.2px}
+  .bar .sub{font-size:12px;color:var(--muted);font-weight:500}
+  .bar .spacer{margin-inline-start:auto}
+  .toggle{display:inline-flex;align-items:center;gap:8px;font-size:12.5px;font-weight:600;
+    color:var(--accent);background:var(--accent-soft);border:1px solid #dcdcff;
+    padding:7px 12px;border-radius:999px;cursor:pointer;user-select:none}
+  .toggle.off{color:var(--muted);background:#f3f5f8;border-color:var(--line)}
+  main{max-width:1180px;margin:26px auto;padding:0 22px 80px;
+    display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.05fr);gap:26px}
+  @media(max-width:900px){main{grid-template-columns:1fr}}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);
+    box-shadow:var(--shadow);position:relative}
+  .card .hd{padding:16px 18px 0;display:flex;align-items:baseline;gap:10px}
+  .card .hd h2{font-size:14px;margin:0;font-weight:700}
+  .card .hd .tag{font-size:11px;color:var(--muted);font-weight:600}
+  .card .bd{padding:16px 18px 18px}
+  label.field{display:block;margin-bottom:14px}
+  label.field .lab{font-size:12.5px;font-weight:600;color:#344054;margin-bottom:6px;display:flex;gap:8px;align-items:center}
+  .req{color:var(--warn);font-size:11px}
+  select,input[type=text]{width:100%;font:inherit;font-size:13.5px;padding:9px 11px;
+    border:1px solid #cfd6df;border-radius:9px;background:#fdfdfe;color:var(--ink)}
+  select:focus,input:focus{outline:2px solid var(--accent-soft);border-color:var(--accent)}
+  .opt-table::after{content:"جدول";}
+  .badge{display:inline-block;font-size:10.5px;font-weight:700;padding:1px 7px;border-radius:6px;
+    background:var(--accent-soft);color:var(--accent);margin-inline-start:6px;vertical-align:middle}
+  .badge.gray{background:#f0f2f5;color:var(--muted)}
+  .hint{font-size:11.5px;color:var(--muted);margin-top:5px}
+  /* grid */
+  .grid-wrap{border:1px dashed #c9cfda;border-radius:12px;padding:12px;background:#fafbfd;margin-top:4px}
+  .grid-top{display:flex;align-items:center;gap:8px;margin-bottom:10px}
+  .grid-top .t{font-size:12.5px;font-weight:700}
+  .grid-top .sp{margin-inline-start:auto;display:flex;gap:8px}
+  .btn{font:inherit;font-size:12px;font-weight:600;border-radius:8px;padding:6px 11px;cursor:pointer;
+    border:1px solid #cfd6df;background:#fff;color:#344054;display:inline-flex;gap:6px;align-items:center}
+  .btn:hover{background:#f5f7fa}
+  .btn.pri{background:var(--accent);border-color:var(--accent);color:#fff}
+  .btn.pri:hover{background:#4338ca}
+  .btn[disabled]{opacity:.5;cursor:not-allowed}
+  table.grid{width:100%;border-collapse:collapse;font-size:12.5px;background:#fff;border-radius:8px;overflow:hidden}
+  table.grid th{background:#3a4557;color:#fff;font-weight:700;font-size:12px;padding:8px 9px;text-align:center;white-space:nowrap}
+  table.grid td{border:1px solid #e6eaf0;padding:0}
+  table.grid td.idx{background:#f6f8fb;color:var(--muted);text-align:center;width:38px;font-weight:600}
+  table.grid td input{border:0;border-radius:0;background:transparent;padding:8px 9px;text-align:center}
+  table.grid td input:focus{outline:2px solid var(--accent-soft);background:#fbfbff}
+  .rowdel{border:0;background:transparent;color:#c0c6d0;cursor:pointer;font-size:15px;padding:0 4px}
+  .rowdel:hover{color:var(--warn)}
+  .word-note{display:flex;gap:9px;align-items:flex-start;margin-top:12px;padding:10px 12px;
+    background:var(--warn-soft);border:1px solid #f4d9b4;border-radius:10px;font-size:12px;color:#7a4a10}
+  .word-note b{color:#8a3f00}
+  .modebar{display:inline-flex;background:#f0f2f5;border-radius:10px;padding:3px;gap:2px;margin-bottom:16px}
+  .modebar button{font:inherit;font-size:12.5px;font-weight:600;border:0;background:transparent;color:var(--muted);
+    padding:6px 14px;border-radius:8px;cursor:pointer}
+  .modebar button.on{background:#fff;color:var(--ink);box-shadow:var(--shadow)}
+  .modebar button.gone{position:relative}
+  /* paper */
+  .paper{background:var(--paper);border:1px solid #dbe0e8;border-radius:6px;box-shadow:var(--shadow);
+    padding:30px 34px 22px;min-height:560px;display:flex;flex-direction:column;font-size:13px}
+  .letter{display:flex;align-items:center;gap:12px;border-bottom:2px solid var(--gold);padding-bottom:12px;margin-bottom:6px}
+  .crest{width:44px;height:44px;border-radius:50%;border:2px solid var(--gold);display:flex;align-items:center;
+    justify-content:center;color:var(--gold);font-weight:800;font-size:11px}
+  .letter .org{font-weight:800;color:#3a3320;font-size:14px}
+  .letter .org small{display:block;font-weight:600;color:var(--muted);font-size:10.5px;letter-spacing:.3px}
+  .meta-line{display:flex;align-items:center;gap:8px;padding:4px 0}
+  .meta-line .k{font-weight:700;color:#2b3444}
+  .meta-line .v{font-family:var(--mono);letter-spacing:.5px}
+  .ref-line .v{margin-inline-start:8px} /* value continues directly after the label */
+  .subj{margin:14px 0 6px;font-weight:800;text-align:center;font-size:14px}
+  .body-lines{color:#48505e}
+  .body-lines p{margin:6px 0}
+  table.doc{width:100%;border-collapse:collapse;margin:12px 0;font-size:12px}
+  table.doc th{background:#3a4557;color:#fff;padding:6px 8px;border:1px solid #2c3444;font-weight:700}
+  table.doc td{border:1px solid #b9c0cc;padding:6px 8px;text-align:center;color:#333}
+  table.doc td:empty::after{content:"\00a0"}
+  .paper .foot{margin-top:auto;border-top:1px solid #e5e8ee;padding-top:8px;text-align:center;
+    font-family:var(--mono);font-size:11px;color:#556}
+  /* handoff */
+  .hand{margin-top:22px}
+  .hand .reserved{display:flex;align-items:center;gap:14px;padding:14px 16px;background:#fff5f5;
+    border:1px solid #f3c6c6;border-radius:12px}
+  .hand .reserved .r{font-family:var(--mono);font-size:26px;font-weight:800;color:#c01c1c;letter-spacing:1px}
+  .hand .reserved .cap{font-size:11.5px;color:var(--muted);font-weight:600}
+  .filename{margin-top:12px;font-size:12px;color:#344054;background:#f6f8fb;border:1px solid var(--line);
+    border-radius:10px;padding:10px 12px}
+  .filename code{font-family:var(--mono);color:#1a2230;background:#fff;padding:2px 6px;border-radius:6px;border:1px solid var(--line)}
+  .actions{display:flex;gap:10px;margin-top:14px;flex-wrap:wrap}
+  /* spec pins */
+  .pin{position:absolute;z-index:10;background:var(--pin);color:#fff;font-size:10.5px;font-weight:800;
+    border-radius:999px;padding:2px 8px;box-shadow:0 2px 6px rgba(147,51,234,.4);cursor:default;white-space:nowrap;
+    display:none}
+  body.notes .pin{display:inline-flex;align-items:center;gap:5px}
+  .pin .tip{display:none}
+  .pin:hover .tip{display:block;position:absolute;top:120%;inset-inline-start:0;background:#241533;color:#fff;
+    font-weight:500;font-size:11px;line-height:1.4;padding:8px 10px;border-radius:8px;width:220px;box-shadow:var(--shadow);z-index:20}
+  /* legend */
+  .legend{grid-column:1/-1;margin-top:6px;background:var(--card);border:1px solid var(--line);
+    border-radius:var(--radius);box-shadow:var(--shadow);padding:18px 20px}
+  .legend h3{margin:0 0 12px;font-size:14px}
+  .legend ul{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:12px}
+  .legend li{display:flex;gap:10px;font-size:12.5px;color:#3a4453}
+  .mtag{flex:none;width:34px;height:22px;border-radius:6px;background:var(--pin);color:#fff;font-weight:800;
+    font-size:11px;display:flex;align-items:center;justify-content:center}
+  .legend b{color:var(--ink)}
+  .foot-note{grid-column:1/-1;color:var(--muted);font-size:11.5px;text-align:center;margin-top:4px}
+</style>
+</head>
+<body>
+  <div class="bar">
+    <h1>الدفتر العام — الحالة المثالية</h1>
+    <span class="sub">General Book · best-case end-to-end flow</span>
+    <span class="spacer"></span>
+    <span class="toggle off" id="notesBtn" onclick="toggleNotes()">◍ إظهار ملاحظات المواصفة</span>
+  </div>
+
+  <main>
+    <!-- ================= FORM (right in RTL) ================= -->
+    <section class="card" id="formCard">
+      <span class="pin" style="top:-11px;inset-inline-start:16px">M5
+        <span class="tip">HugeRTE مخفي للدفتر العام: لا يوجد سوى مسار Word. زر «الكتابة هنا» أُزيل — قابل للعودة بشرط واحد.</span>
+      </span>
+      <div class="hd"><h2>إنشاء دفتر عام</h2><span class="tag">Word-only</span></div>
+      <div class="bd">
+        <div class="modebar" title="M5">
+          <button class="on">✍ الكتابة في Word</button>
+          <button class="gone" disabled>الكتابة هنا (محرّر) — مُزال</button>
+        </div>
+
+        <label class="field">
+          <span class="lab">التبويب <span class="req">مطلوب</span></span>
+          <select id="tab"><option>15 — موارد بشرية</option><option>5 — إداري / Administrative</option><option>3 — مالي</option></select>
+          <span class="hint">منه تُشتق السلسلة من السجل السرّي.</span>
+        </label>
+
+        <label class="field">
+          <span class="lab">الموضوع <span class="req">مطلوب</span></span>
+          <input type="text" id="subject" value="كشف مستحقات دورة تدريبية" oninput="render()" />
+        </label>
+
+        <label class="field">
+          <span class="lab">القالب</span>
+          <div style="display:flex;gap:8px;align-items:center">
+            <select id="tpl" onchange="render()" style="flex:1">
+              <option value="0">قالب بجدول (أساسي) ▦</option>
+              <option value="1">كشف مستحقات (مخصّص) ▦</option>
+              <option value="2">قالب نصّي (أساسي)</option>
+            </select>
+            <button class="btn" title="حفظ / تحميل / إعادة تسمية / حذف قالب مخصّص">⚙ إدارة القوالب</button>
+          </div>
+          <span class="hint">قالبان أساسيان (نصّي / بجدول) + قوالب مخصّصة تُحفظ وتُحمّل وتُعاد تسميتها وتُحذف.</span>
+        </label>
+
+        <!-- grid -->
+        <div id="gridHost"></div>
+      </div>
+    </section>
+
+    <!-- ================= PREVIEW (left in RTL) ================= -->
+    <section class="card">
+      <div class="hd"><h2>معاينة الورقة</h2><span class="tag">A4 · مباشرة</span></div>
+      <div class="bd">
+        <div class="paper" id="paper">
+          <div class="letter">
+            <div class="crest">GSSG</div>
+            <div class="org">جمعية الخدمات · GSSG
+              <small>ترويسة رسمية · Official letterhead</small></div>
+          </div>
+
+          <div class="meta-line ref-line" style="position:relative">
+            <span class="pin" style="top:-13px;inset-inline-start:0">M1
+              <span class="tip">بدون GSSG. يُخزَّن ‎1/15/141‎ ويُعرض ‎141/15/1‎ — يكمل مباشرةً بعد «الرقم:» والمقاطع معكوسة بعلامة RTL، بنفس خط التاريخ.</span>
+            </span>
+            <span class="k">الرقم:</span>
+            <span class="v" id="refv">141/15/1</span>
+          </div>
+          <div class="meta-line">
+            <span class="k">التاريخ:</span>
+            <span class="v">20-07-2026</span>
+          </div>
+
+          <div class="subj" id="psubj">كشف مستحقات دورة تدريبية</div>
+
+          <div class="body-lines">
+            <p>تحية طيبة وبعد،،</p>
+            <p>نرفق لكم البيان التالي:</p>
+          </div>
+
+          <div style="position:relative">
+            <span class="pin" style="top:-13px;inset-inline-start:0">M4
+              <span class="tip">صف الترويسة يبقى كما هو + صف واحد مُرمَّز ‏{%tr%}‎. الشبكة: إضافة صف والكتابة فقط — الأعمدة/إعادة التسمية/الدمج في Word. الجداول الطويلة تنتقل للصفحة الثانية مع تكرار الترويسة.</span>
+            </span>
+            <table class="doc" id="docTable"></table>
+          </div>
+
+          <div class="body-lines"><p>وتفضلوا بقبول فائق الاحترام،،</p></div>
+
+          <div class="foot" style="position:relative">
+            <span class="pin" style="top:-15px;inset-inline-start:0">M3
+              <span class="tip">رقم المُنشئ (G) يُحقن في التذييل بنفس موضع/حجم القالب الرسمي، على كل الصفحات — حتى للقوالب المستوردة.</span>
+            </span>
+            أُعدّ بواسطة · G-1234
+          </div>
+        </div>
+
+        <!-- handoff -->
+        <div class="hand">
+          <div class="reserved">
+            <div>
+              <div class="cap">الرقم المحجوز</div>
+              <div class="r">1/15/141</div>
+            </div>
+            <div style="margin-inline-start:auto;text-align:end">
+              <div class="cap">جاهز للفتح في Word</div>
+              <button class="btn pri" style="margin-top:6px">📄 فتح في Word</button>
+            </div>
+          </div>
+          <div class="filename" style="position:relative">
+            <span class="pin" style="top:-13px;inset-inline-start:12px">M2
+              <span class="tip">اسم التنزيل يحمل الموضوع + تاريخ ISO. اسم WebDAV/Word يبقى ASCII بالرقم فقط حتى لا ينكسر Word.</span>
+            </span>
+            اسم ملف التنزيل: <code id="fname">1-15-141 — كشف مستحقات دورة تدريبية — 2026-07-20.docx</code>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ================= LEGEND ================= -->
+    <div class="legend">
+      <h3>خريطة المواصفة · Spec map</h3>
+      <ul>
+        <li><span class="mtag">M1</span><span><b>سطر الرقم:</b> حذف GSSG (كتب جديدة فقط، القارئ يقبل الشكلين)، الخط يطابق التاريخ، يُعرض ‎141/15/1‎ مباشرةً بعد «الرقم:» (المقاطع معكوسة بعلامة RTL).</span></li>
+        <li><span class="mtag">M2</span><span><b>اسم الملف:</b> الموضوع + تاريخ ISO في اسم التنزيل فقط (طبقة الخدمة)، مع تعقيم يمنع حقن الترويسة.</span></li>
+        <li><span class="mtag">M3</span><span><b>التذييل:</b> رقم المُنشئ (G) في القوالب المستوردة بنفس موضع/حجم الرسمي على كل الصفحات.</span></li>
+        <li><span class="mtag">M4</span><span><b>القوالب ذات الجدول:</b> ترويسة + صف مُرمَّز واحد؛ شبكة إدخال (‎useFieldArray‎) بعناوين الأعمدة، إضافة صف، ثم المتابعة في Word.</span></li>
+        <li><span class="mtag">M5</span><span><b>إخفاء HugeRTE:</b> الدفتر العام يصبح Word فقط؛ بقية النماذج دون مساس، والتغيير قابل للعكس.</span></li>
+      </ul>
+      <p class="hint" style="margin-top:12px">ملاحظات مؤجلة: <b>إضافة عمود</b> تتم في Word (تغيير بنيوي للجدول)؛ بعد بذر الصفوف وفتح Word تصبح تعديلات الجدول في Word فقط (الشبكة تبذر ولا تُعيد القراءة). — راجع قسم المخاطر في المواصفة.</p>
+    </div>
+    <p class="foot-note">نموذج توضيحي للحالة المثالية — يرافق المواصفة <code>2026-07-20-general-book-ref-table-cleanup-design.md</code>. ليس كود إنتاج.</p>
+  </main>
+
+<script>
+const TEMPLATES = [
+  {name:"قالب بجدول (أساسي)", table:true,  cols:["م","البيان","التاريخ","ملاحظات"]},
+  {name:"كشف مستحقات (مخصّص)", table:true,  cols:["م","البيان","المبلغ","التاريخ"]},
+  {name:"قالب نصّي (أساسي)",   table:false, cols:[]},
+];
+// rows: array of arrays (logical cell order, cell[0]..cell[N]); visually RTL (c0 rightmost)
+let rows = [["1","بدل انتقال","250","10-07-2026"],["2","بدل إقامة","400","11-07-2026"]];
+
+function currentTpl(){ return TEMPLATES[+document.getElementById('tpl').value]; }
+
+function renderGrid(){
+  const host = document.getElementById('gridHost');
+  const tpl = currentTpl();
+  if(!tpl.table){
+    host.innerHTML = `<div class="word-note"><span>📝</span><div>
+      <b>قالب نصّي — لا يحتوي جدولاً.</b> يُطبَّع كنصّ عادي (الرقم/التاريخ/التذييل فقط)؛ لا تظهر أي شبكة.</div></div>`;
+    return;
+  }
+  // fit existing rows to this template's column count
+  const n = tpl.cols.length;
+  rows = rows.map(r=>{const c=r.slice(0,n); while(c.length<n)c.push(''); return c;});
+  const head = tpl.cols.map(c=>`<th>${c}</th>`).join('');
+  const body = rows.map((r,ri)=>{
+    const cells = r.map((v,ci)=>`<td><input value="${v.replace(/"/g,'&quot;')}" oninput="rows[${ri}][${ci}]=this.value;render()"></td>`).join('');
+    return `<tr>${cells}<td class="idx"><button class="rowdel" title="حذف الصف" onclick="delRow(${ri})">✕</button></td></tr>`;
+  }).join('');
+  host.innerHTML = `
+    <div class="grid-wrap">
+      <div class="grid-top">
+        <span class="t">جدول الدفتر</span>
+        <span class="badge">أعمدة القالب</span>
+        <span class="sp">
+          <button class="btn" onclick="addRow()">＋ إضافة صف</button>
+          <button class="btn" disabled title="تغيير بنيوي — يُحرّر في Word">＋ إضافة عمود</button>
+        </span>
+      </div>
+      <table class="grid"><thead><tr>${head}<th style="width:38px"></th></tr></thead><tbody>${body}</tbody></table>
+      <div class="word-note"><span>↔</span><div>
+        العناوين مأخوذة من صف ترويسة القالب لتعرف ما يجب ملؤه. الأعمدة معروضة من اليمين (c0) لتطابق الورقة المطبوعة.
+        <b>أو</b> افتح في Word وحرّر الجدول مباشرةً — الصفوف تُبذَر ثم يكمل Word.</div></div>
+    </div>`;
+}
+
+function renderDoc(){
+  const tpl = currentTpl();
+  const t = document.getElementById('docTable');
+  if(!tpl.table){ t.style.display='none'; return; }
+  t.style.display='';
+  const head = tpl.cols.map(c=>`<th>${c}</th>`).join('');
+  const body = rows.map(r=>`<tr>${r.map(v=>`<td>${(v||'').replace(/</g,'&lt;')}</td>`).join('')}</tr>`).join('');
+  t.innerHTML = `<thead><tr>${head}</tr></thead><tbody>${body}</tbody>`;
+}
+
+function fname(){
+  const subj = (document.getElementById('subject').value||'').trim() || 'دفتر';
+  return `1-15-141 — ${subj} — 2026-07-20.docx`;
+}
+
+function render(){
+  renderGrid();
+  renderDoc();
+  document.getElementById('psubj').textContent = document.getElementById('subject').value || '—';
+  document.getElementById('fname').textContent = fname();
+}
+function addRow(){ const n=currentTpl().cols.length; rows.push(Array(n).fill('')); render(); }
+function delRow(i){ rows.splice(i,1); if(!rows.length) rows.push(Array(currentTpl().cols.length).fill('')); render(); }
+function toggleNotes(){
+  const on = document.body.classList.toggle('notes');
+  const b = document.getElementById('notesBtn');
+  b.classList.toggle('off', !on);
+  b.textContent = on ? '◉ إخفاء ملاحظات المواصفة' : '◍ إظهار ملاحظات المواصفة';
+}
+render();
+</script>
+</body>
+</html>

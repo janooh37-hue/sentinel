@@ -1,0 +1,31 @@
+{
+  "description": "Production safety and focused checks for GSSG Manager.",
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "^Bash$",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "powershell -NoProfile -ExecutionPolicy Bypass -File \"C:\\Users\\Admin\\sentinel\\.codex\\hooks\\pre-deploy.ps1\"",
+            "timeout": 15,
+            "statusMessage": "Checking production deploy safety"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "apply_patch|Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "powershell -NoProfile -ExecutionPolicy Bypass -File \"C:\\Users\\Admin\\sentinel\\.codex\\hooks\\post-edit.ps1\"",
+            "timeout": 90,
+            "statusMessage": "Checking edited files"
+          }
+        ]
+      }
+    ]
+  }
+}

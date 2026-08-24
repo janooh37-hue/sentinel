@@ -22,6 +22,7 @@ import type { ExtractionResponse } from '@/lib/extraction'
 import { EmployeeForm } from '@/components/employees/EmployeeForm'
 import { pickEmployeeName } from '@/lib/employeeName'
 import { recordRecentEmployee } from '@/lib/employeeRecents'
+import { useEmployeeSheetDownload } from '@/pages/timesheet/useTimesheet'
 
 import { EmployeeGapsCard } from './EmployeeGapsCard'
 import { EmployeeIdCard } from './EmployeeIdCard'
@@ -91,6 +92,9 @@ export function EmployeeDetailPage(): React.JSX.Element {
   const handleFixHandled = useCallback(() => setFixField(null), [])
   const qc = useQueryClient()
   const keydownListenerRef = useRef<((e: KeyboardEvent) => void) | null>(null)
+  // One employee's own sheet. `download` never rejects — `onError` has already
+  // shown the operator the server's message — so `void` is the whole handler.
+  const employeeSheet = useEmployeeSheetDownload()
 
   // Consume injected extraction from the intake flow (Task 5). Clear history
   // state after consuming so a refresh doesn't re-open the panel.
@@ -258,6 +262,9 @@ export function EmployeeDetailPage(): React.JSX.Element {
               }
               onGenerate={() =>
                 navigate(`/application?employee_id=${encodeURIComponent(data.employee.id)}`)
+              }
+              onTimesheet={(span) =>
+                void employeeSheet.download({ employeeId: data.employee.id, ...span })
               }
               onChangeStatus={editing || initialExtraction ? undefined : () => setStatusOpen(true)}
             />

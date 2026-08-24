@@ -1,7 +1,7 @@
 """Employee supervisor hierarchy column.
 
-Revision ID: 0073_employee_supervisor
-Revises: 0072_punch_profiles
+Revision ID: 0074_employee_supervisor
+Revises: 0073_absence_after_twice_grace
 Create Date: 2026-08-20
 
 employees:
@@ -17,8 +17,8 @@ from collections.abc import Sequence
 import sqlalchemy as sa
 from alembic import op
 
-revision: str = "0073_employee_supervisor"
-down_revision: str | Sequence[str] | None = "0072_punch_profiles"
+revision: str = "0074_employee_supervisor"
+down_revision: str | Sequence[str] | None = "0073_absence_after_twice_grace"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 

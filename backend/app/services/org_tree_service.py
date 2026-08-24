@@ -3,16 +3,67 @@
 from __future__ import annotations
 
 import json
+from datetime import date
 
 from fastapi import HTTPException
-from sqlalchemy import select
+from sqlalchemy import and_, func, select
 from sqlalchemy.orm import Session
 
-from app.db.models import AuditLog, Employee, User
+from app.db.models import (
+    AuditLog,
+    Employee,
+    TimesheetDesignation,
+    TimesheetRosterAssignment,
+    User,
+)
 
 
-def list_nodes(db: Session) -> list[Employee]:
-    return list(db.scalars(select(Employee).order_by(Employee.id)))
+def list_nodes(db: Session) -> list[tuple[Employee, TimesheetDesignation | None]]:
+    month_start = date.today().replace(day=1)
+    latest = (
+        select(
+            TimesheetRosterAssignment.employee_id,
+            func.max(TimesheetRosterAssignment.effective_from).label("effective_from"),
+        )
+        .where(TimesheetRosterAssignment.effective_from <= month_start)
+        .group_by(TimesheetRosterAssignment.employee_id)
+        .subquery()
+    )
+    rows = db.execute(
+        select(Employee, TimesheetDesignation)
+        .outerjoin(latest, latest.c.employee_id == Employee.id)
+        .outerjoin(
+            TimesheetRosterAssignment,
+            and_(
+                TimesheetRosterAssignment.employee_id == latest.c.employee_id,
+                TimesheetRosterAssignment.effective_from == latest.c.effective_from,
+            ),
+        )
+        .outerjoin(
+            TimesheetDesignation,
+            TimesheetDesignation.id == TimesheetRosterAssignment.designation_id,
+        )
+        .order_by(Employee.id)
+    )
+    return [(employee, designation) for employee, designation in rows]
+
+
+def get_current_designation(db: Session, employee_id: str) -> TimesheetDesignation | None:
+    month_start = date.today().replace(day=1)
+    return db.scalar(
+        select(TimesheetDesignation)
+        .select_from(TimesheetRosterAssignment)
+        .outerjoin(
+            TimesheetDesignation,
+            TimesheetDesignation.id == TimesheetRosterAssignment.designation_id,
+        )
+        .where(
+            TimesheetRosterAssignment.employee_id == employee_id,
+            TimesheetRosterAssignment.effective_from <= month_start,
+        )
+        .order_by(TimesheetRosterAssignment.effective_from.desc())
+        .limit(1)
+    )
 
 
 def set_supervisor(
@@ -36,6 +87,7 @@ def set_supervisor(
     current = supervisor
     seen: set[str] = set()
     while current is not None and current.id not in seen:
+        assert supervisor is not None
         if current.id == employee_id:
             raise HTTPException(
                 status_code=409,
@@ -43,9 +95,7 @@ def set_supervisor(
             )
         seen.add(current.id)
         current = (
-            db.get(Employee, current.supervisor_id)
-            if current.supervisor_id is not None
-            else None
+            db.get(Employee, current.supervisor_id) if current.supervisor_id is not None else None
         )
 
     previous = employee.supervisor_id

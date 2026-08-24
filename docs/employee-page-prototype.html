@@ -1,0 +1,771 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>النموذج التفاعلي — صفحة الموظفين · GSSG Manager</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Arabic:wght@400;500;700&family=IBM+Plex+Mono:wght@400;500;600;700&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  /* ─── GSSG design tokens (mirrors frontend/src/index.css) ─── */
+  :root {
+    --bg:#f5f4f1; --surface:#ffffff; --surface-raised:#fafaf6; --surface-tinted:#f0eee8;
+    --primary:#0d2845; --primary-hover:#1d3a5e; --primary-soft:#e8edf3; --on-primary:#ffffff;
+    --accent:#c8102e; --accent-hover:#a30d24; --accent-soft:#fbe5e8;
+    --success:#047857; --success-soft:#d6f0e4;
+    --warning:#92400e; --warning-soft:#fbedd8;
+    --info:#1d4ed8; --info-soft:#e0e8f8;
+    --text:#1c1f24; --text-muted:#5a6068; --text-faint:#8b9098;
+    --border:#e6e4dd; --border-strong:#d4d1c8; --hairline:#efece5;
+    --hero-grad:linear-gradient(135deg,#0a1f3a 0%,#0d2845 50%,#1d3a5e 100%);
+    --r-sm:8px; --r-md:12px; --r-lg:16px; --r-pill:99px;
+    --sans:"Noto Sans Arabic","Inter",system-ui,sans-serif;
+    --mono:"IBM Plex Mono",ui-monospace,Consolas,"Noto Sans Arabic",monospace;
+    --ease:cubic-bezier(0.16,1,0.3,1);
+  }
+  * { box-sizing:border-box; margin:0; padding:0; }
+  body { background:var(--bg); color:var(--text); font-family:var(--sans); font-size:16px; line-height:1.55; }
+  .mono { font-family:var(--mono); }
+  .hidden { display:none !important; }
+
+  /* ─── Faux app chrome ─── */
+  .appbar { background:var(--surface); border-bottom:1px solid var(--hairline); }
+  .appbar-in { max-width:1180px; margin:0 auto; padding:0 32px; height:60px; display:flex; align-items:center; gap:28px; }
+  .brand { display:flex; align-items:center; gap:10px; }
+  .brand-logo { width:34px; height:34px; border-radius:50%; background:var(--hero-grad); display:grid; place-items:center; color:#fff; font-weight:800; font-size:11px; font-family:"Inter",sans-serif; }
+  .brand b { font-size:15px; font-family:"Inter",sans-serif; }
+  .brand span { display:block; font-size:10.5px; color:var(--text-muted); line-height:1.2; }
+  .nav { display:flex; gap:4px; margin-inline-start:8px; }
+  .nav a { padding:19px 13px; font-size:13.5px; color:var(--text-muted); text-decoration:none; border-bottom:2px solid transparent; }
+  .nav a.on { color:var(--primary); font-weight:700; border-bottom-color:var(--primary); }
+  .appbar-tools { margin-inline-start:auto; display:flex; gap:10px; }
+  .tool-dot { width:32px; height:32px; border-radius:50%; background:var(--surface-tinted); }
+
+  /* ══════════ STATE A — big search (first open / new search) ══════════ */
+  .heroband { position:relative; overflow:visible; background:var(--hero-grad); color:#fff; }
+  .hero-clip { position:absolute; inset:0; overflow:hidden; }
+  .hero-clip::before { content:""; position:absolute; inset-inline-end:-90px; top:-110px; width:320px; height:320px; border-radius:50%; background:rgba(255,255,255,.045); }
+  .hero-clip::after { content:""; position:absolute; inset-inline-start:8%; bottom:-140px; width:260px; height:260px; border-radius:50%; background:rgba(255,255,255,.035); }
+  .heroband-in { position:relative; z-index:2; max-width:720px; margin:0 auto; padding:46px 32px 8px; text-align:center; }
+  .heroband .eyebrow { font-size:11px; font-weight:600; letter-spacing:.22em; text-transform:uppercase; opacity:.65; }
+  .heroband h1 { font-size:27px; font-weight:700; letter-spacing:-.01em; margin:8px 0 4px; }
+  .heroband p { font-size:13.5px; opacity:.75; }
+  .searchwrap { position:relative; margin-top:22px; text-align:start; }
+  .searchbox { display:flex; align-items:center; gap:12px; background:#fff; border-radius:var(--r-pill); padding:0 20px; height:56px; box-shadow:0 18px 44px -18px rgba(0,0,0,.5); }
+  .searchbox svg { flex:none; color:var(--text-faint); }
+  .searchbox input { flex:1; min-width:0; border:0; outline:0; font:inherit; font-size:16px; color:var(--text); background:transparent; }
+  .searchbox input::placeholder { color:var(--text-faint); }
+  .searchbox .go { flex:none; border:0; cursor:pointer; font:inherit; font-size:13px; font-weight:700; color:#fff; background:var(--accent); border-radius:var(--r-pill); padding:8px 20px; }
+  .searchbox .go:hover { background:var(--accent-hover); }
+  .backlink { display:inline-flex; align-items:center; gap:6px; margin-top:16px; border:0; background:none; cursor:pointer; font:inherit; font-size:12.5px; font-weight:600; color:rgba(255,255,255,.75); }
+  .backlink:hover { color:#fff; }
+
+  /* ─── Hero filler: glass cards under the big search ─── */
+  .herocards-wrap { position:relative; z-index:2; max-width:1020px; margin:0 auto; padding:0 32px 46px; }
+  .herocards { display:grid; grid-template-columns:repeat(3,1fr); gap:14px; margin-top:26px; text-align:start; }
+  @media (max-width:820px){ .herocards { grid-template-columns:1fr; } }
+  .hcard { background:rgba(255,255,255,.07); border:1px solid rgba(255,255,255,.14); border-radius:var(--r-lg); padding:15px 17px; backdrop-filter:blur(2px); }
+  .hcard .hc-head { display:flex; align-items:center; gap:9px; margin-bottom:11px; }
+  .hcard .hc-ic { flex:none; width:28px; height:28px; border-radius:9px; background:rgba(255,255,255,.12); display:grid; place-items:center; color:rgba(255,255,255,.85); }
+  .hcard .hc-ic.warn { background:rgba(251,191,36,.18); color:#fbbf24; }
+  .hcard h4 { font-size:12px; font-weight:700; letter-spacing:.08em; opacity:.85; }
+  .hcard .hc-n { margin-inline-start:auto; font-family:var(--mono); font-size:11px; font-weight:700; background:rgba(255,255,255,.12); border-radius:var(--r-pill); padding:1px 8px; opacity:.9; }
+  .hcard .hc-n.warn { background:rgba(251,191,36,.18); color:#fbbf24; opacity:1; }
+  .rchips { display:flex; flex-direction:column; gap:6px; }
+  .rchip { display:flex; align-items:center; gap:9px; width:100%; border:0; cursor:pointer; font:inherit; text-align:start; background:rgba(255,255,255,.06); border:1px solid rgba(255,255,255,.1); border-radius:var(--r-md); padding:6px 10px; color:#fff; transition:background .15s; }
+  .rchip:hover { background:rgba(255,255,255,.14); }
+  .rchip .ra { flex:none; width:26px; height:26px; border-radius:50%; background:rgba(255,255,255,.15); display:grid; place-items:center; font-size:10.5px; font-weight:700; }
+  .rchip .rn { flex:1; min-width:0; font-size:12px; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .rchip .rg { font-family:var(--mono); font-size:10.5px; opacity:.6; }
+  .rchip .rx { font-size:10.5px; font-weight:700; color:#fbbf24; white-space:nowrap; }
+  .hcard .hc-foot { margin-top:10px; }
+  .hcard .hc-foot a { font-size:11.5px; font-weight:600; color:rgba(255,255,255,.75); text-decoration:none; }
+  .hcard .hc-foot a:hover { color:#fff; }
+  .hcard .hc-sum { font-size:12px; opacity:.75; line-height:1.6; margin-bottom:10px; }
+  .hcard .hc-sum b { opacity:1; }
+
+  /* results dropdown */
+  .results { position:absolute; inset-inline:0; top:calc(100% + 8px); background:var(--surface); color:var(--text); border:1px solid var(--border); border-radius:var(--r-lg); box-shadow:0 24px 60px -24px rgba(13,40,69,.55); overflow:hidden; z-index:30; }
+  .results-head { display:flex; justify-content:space-between; padding:10px 18px 8px; font-size:11px; font-weight:600; letter-spacing:.1em; color:var(--text-faint); text-transform:uppercase; border-bottom:1px solid var(--hairline); }
+  .rrow { display:flex; align-items:center; gap:12px; width:100%; border:0; background:none; font:inherit; text-align:start; cursor:pointer; padding:11px 18px; transition:background .12s; }
+  .rrow:hover { background:var(--surface-raised); }
+  .rrow + .rrow { border-top:1px solid var(--hairline); }
+  .avatar { flex:none; width:38px; height:38px; border-radius:50%; background:var(--primary-soft); color:var(--primary); display:grid; place-items:center; font-family:var(--mono); font-size:12px; font-weight:700; }
+  .rrow .who { flex:1; min-width:0; }
+  .rrow .nm { font-size:14.5px; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .rrow .mt { display:flex; gap:8px; font-size:12px; color:var(--text-muted); }
+  .rrow .mt .g { font-family:var(--mono); font-size:11.5px; }
+  .spill { flex:none; display:inline-flex; align-items:center; gap:6px; border-radius:var(--r-pill); padding:3px 10px; font-size:11.5px; font-weight:700; }
+  .spill i { font-style:normal; width:6px; height:6px; border-radius:50%; background:currentColor; }
+  .spill.ok { background:var(--success-soft); color:var(--success); }
+  .spill.leave { background:var(--warning-soft); color:var(--warning); }
+  .spill.off { background:var(--surface-tinted); color:var(--text-muted); }
+  .results-foot { padding:9px 18px; font-size:12px; color:var(--text-faint); background:var(--surface-raised); border-top:1px solid var(--hairline); display:flex; justify-content:space-between; }
+  .results-foot a { color:var(--info); text-decoration:none; font-weight:600; }
+  .noresults { padding:22px 18px; font-size:13px; color:var(--text-muted); text-align:center; }
+  .noresults .mknew { display:inline-flex; align-items:center; gap:6px; margin-top:10px; border:0; cursor:pointer; font:inherit; font-size:12.5px; font-weight:700; color:#fff; background:var(--primary); border-radius:var(--r-pill); padding:8px 18px; }
+  .noresults .mknew:hover { background:var(--primary-hover); }
+
+  /* "new employee" action under the big search */
+  .newemp-row { display:flex; justify-content:center; margin-top:16px; }
+  .newemp { display:inline-flex; align-items:center; gap:8px; border:1px solid rgba(255,255,255,.3); cursor:pointer; font:inherit; font-size:13px; font-weight:600; color:#fff; background:rgba(255,255,255,.1); border-radius:var(--r-pill); padding:9px 20px; transition:background .15s; }
+  .newemp:hover { background:rgba(255,255,255,.18); }
+  .newemp .pl { display:grid; place-items:center; width:18px; height:18px; border-radius:50%; background:var(--accent); font-size:13px; font-weight:800; line-height:1; }
+
+  /* ══════════ STATE B — compact band (profile open) ══════════ */
+  .bandmini { position:relative; overflow:hidden; background:var(--hero-grad); color:#fff; }
+  .bandmini::before { content:""; position:absolute; inset-inline-end:-90px; top:-140px; width:300px; height:300px; border-radius:50%; background:rgba(255,255,255,.045); }
+  .bandmini-in { position:relative; z-index:2; max-width:1180px; margin:0 auto; padding:20px 32px; display:flex; align-items:center; gap:26px; }
+  .bandmini .tl .eyebrow { font-size:10.5px; font-weight:600; letter-spacing:.22em; text-transform:uppercase; opacity:.65; }
+  .bandmini .tl h1 { font-size:19px; font-weight:700; margin-top:2px; white-space:nowrap; }
+  .minisearch { flex:1; display:flex; align-items:center; gap:11px; background:rgba(255,255,255,.1); border:1px solid rgba(255,255,255,.22); border-radius:var(--r-pill); padding:0 18px; height:44px; cursor:text; transition:background .15s; }
+  .minisearch:hover, .minisearch:focus-within { background:rgba(255,255,255,.16); }
+  .minisearch svg { flex:none; color:rgba(255,255,255,.6); }
+  .minisearch input { flex:1; min-width:0; border:0; outline:0; background:transparent; font:inherit; font-size:13.5px; color:#fff; }
+  .minisearch input::placeholder { color:rgba(255,255,255,.65); }
+  .minisearch kbd { font-family:var(--mono); font-size:10.5px; color:rgba(255,255,255,.5); border:1px solid rgba(255,255,255,.25); border-radius:6px; padding:2px 7px; }
+  @media (max-width:860px){ .bandmini-in { flex-wrap:wrap; gap:12px; } }
+
+  .page { max-width:1180px; margin:0 auto; padding:24px 32px 80px; }
+
+  /* ─── Layout: sticky sidebar + main ─── */
+  .layout { display:grid; grid-template-columns:350px 1fr; gap:20px; align-items:start; }
+  @media (max-width:920px){ .layout { grid-template-columns:1fr; } }
+  .sidebar { position:sticky; top:20px; display:flex; flex-direction:column; gap:16px; }
+
+  /* ─── Employee ID card (stays visible while browsing the file) ─── */
+  .idcard { position:relative; overflow:hidden; border-radius:18px; background:var(--hero-grad); color:#fff; padding:22px 24px 20px; box-shadow:0 22px 48px -20px rgba(10,31,58,.55); }
+  .idcard::before { content:""; position:absolute; inset-inline-end:-40px; bottom:-70px; width:190px; height:190px; border-radius:50%; background:rgba(255,255,255,.05); }
+  .idcard .card-head { display:flex; justify-content:space-between; align-items:center; font-size:10px; letter-spacing:.2em; text-transform:uppercase; opacity:.6; margin-bottom:16px; }
+  .idcard .photo { width:80px; height:80px; border-radius:14px; background:rgba(255,255,255,.14); box-shadow:0 0 0 2px rgba(255,255,255,.22); display:grid; place-items:center; font-size:26px; font-weight:700; }
+  .idcard .row { display:flex; gap:15px; align-items:center; }
+  .idcard h2 { font-size:18px; font-weight:700; line-height:1.3; }
+  .idcard .en { font-family:"Inter",sans-serif; font-size:10px; letter-spacing:.09em; text-transform:uppercase; opacity:.55; margin-top:2px; }
+  .idcard .gnum { font-family:var(--mono); font-size:14px; font-weight:600; letter-spacing:.12em; margin-top:7px; }
+  .idcard .facts { display:grid; grid-template-columns:1fr 1fr; gap:10px 16px; margin-top:16px; padding-top:13px; border-top:1px solid rgba(255,255,255,.14); }
+  .idcard .f .fk { font-size:9.5px; letter-spacing:.16em; text-transform:uppercase; opacity:.55; }
+  .idcard .f .fv { font-size:12.5px; font-weight:600; margin-top:1px; }
+  .pill { display:inline-flex; align-items:center; gap:6px; border-radius:var(--r-pill); padding:2.5px 10px; font-size:11px; font-weight:700; }
+  .pill i { font-style:normal; width:6px; height:6px; border-radius:50%; background:currentColor; }
+  .pill.ok { background:rgba(52,211,153,.18); color:#6ee7b7; }
+  .id-actions { display:flex; gap:8px; margin-top:15px; }
+  .btn { flex:1; display:inline-flex; justify-content:center; align-items:center; border:0; cursor:pointer; font:inherit; font-size:11.5px; font-weight:600; border-radius:var(--r-pill); padding:8px 8px; white-space:nowrap; }
+  .btn.pri { background:var(--surface); color:var(--primary); }
+  .btn.ghost { background:rgba(255,255,255,.12); color:#fff; border:1px solid rgba(255,255,255,.25); }
+
+  /* ─── Missing-data checklist (sidebar) ─── */
+  .gaps { background:var(--warning-soft); border:1px solid #f0ddb8; border-radius:var(--r-lg); padding:16px 18px; }
+  .gaps .head { display:flex; align-items:center; gap:10px; }
+  .gaps .ic { flex:none; width:30px; height:30px; border-radius:50%; background:#fff; display:grid; place-items:center; color:var(--warning); }
+  .gaps b { font-size:13.5px; color:var(--warning); }
+  .gaps p { font-size:12px; color:#7a5010; margin:8px 0 10px; }
+  .glist { display:flex; flex-direction:column; gap:6px; }
+  .gitem { display:flex; align-items:center; gap:9px; background:#fff; border:1px dashed #ddba7a; border-radius:var(--r-md); padding:7px 12px; font-size:12.5px; font-weight:600; color:var(--warning); cursor:pointer; }
+  .gitem:hover { border-style:solid; }
+  .gitem .plus { margin-inline-start:auto; color:var(--info); font-size:11.5px; font-weight:700; }
+  .gaps .fixall { width:100%; margin-top:11px; background:var(--primary); color:#fff; border:0; cursor:pointer; font:inherit; font-size:12.5px; font-weight:600; border-radius:var(--r-pill); padding:9px; }
+  .gaps .fixall:hover { background:var(--primary-hover); }
+
+  /* ─── Main column: tab chips + tab panes ─── */
+  .main { min-width:0; }
+  .tabchips { display:flex; flex-wrap:wrap; gap:8px; margin-bottom:14px; }
+  .tchip { display:inline-flex; align-items:center; gap:7px; border:0; cursor:pointer; font:inherit; font-size:13px; font-weight:600; color:var(--text-muted); background:var(--surface); border:1px solid var(--hairline); border-radius:var(--r-pill); padding:8px 16px; transition:background .15s, color .15s; }
+  .tchip:hover { background:var(--surface-tinted); color:var(--text); }
+  .tchip.on { background:var(--primary); border-color:var(--primary); color:#fff; }
+  .tchip .b { font-family:var(--mono); font-size:10.5px; font-weight:700; background:var(--surface-tinted); color:var(--text-muted); border-radius:var(--r-pill); padding:1px 7px; }
+  .tchip.on .b { background:rgba(255,255,255,.18); color:#fff; }
+  .tchip .b.warn { background:var(--warning-soft); color:var(--warning); }
+
+  .pane { display:flex; flex-direction:column; gap:16px; animation:rise .22s var(--ease); }
+  @keyframes rise { from { opacity:0; transform:translateY(8px); } to { opacity:1; transform:none; } }
+  @media (prefers-reduced-motion:reduce){ .pane { animation:none; } }
+
+  /* section cards */
+  .card { background:var(--surface); border:1px solid var(--hairline); border-radius:var(--r-lg); padding:18px 22px; }
+  .card h3 { display:flex; align-items:center; gap:9px; font-size:11.5px; font-weight:700; letter-spacing:.14em; text-transform:uppercase; color:var(--text-muted); margin-bottom:4px; }
+  .card h3 .n { font-family:var(--mono); font-size:10.5px; letter-spacing:0; margin-inline-start:auto; color:var(--text-faint); }
+  .card h3 .n.warn { color:var(--warning); background:var(--warning-soft); border-radius:var(--r-pill); padding:1px 8px; }
+  .card h3 .n.full { color:var(--success); background:var(--success-soft); border-radius:var(--r-pill); padding:1px 8px; }
+  .grid2 { display:grid; grid-template-columns:repeat(auto-fit,minmax(300px,1fr)); column-gap:32px; }
+  .frow { display:grid; grid-template-columns:125px 1fr; align-items:baseline; gap:12px; padding:9px 2px; border-bottom:1px solid var(--hairline); }
+  .frow .k { font-size:11px; font-weight:600; letter-spacing:.07em; text-transform:uppercase; color:var(--text-muted); }
+  .frow .v { font-size:14px; min-width:0; overflow-wrap:break-word; }
+  .frow .v.m { font-family:var(--mono); font-size:13px; }
+  .frow.miss { background:linear-gradient(to left,transparent,rgba(251,237,216,.55)); border-radius:var(--r-sm); }
+  .frow.miss .v { display:flex; align-items:center; gap:10px; }
+  .frow.miss .none { font-size:12.5px; color:var(--warning); font-weight:600; }
+  .addlink { display:inline-flex; align-items:center; gap:4px; border:1px dashed var(--border-strong); background:var(--surface); border-radius:var(--r-pill); font-size:11px; font-weight:600; color:var(--info); padding:2px 10px; cursor:pointer; }
+  .addlink:hover { border-color:var(--info); }
+  .exp-warn { display:inline-flex; align-items:center; gap:5px; background:var(--warning-soft); color:var(--warning); font-size:10.5px; font-weight:700; border-radius:var(--r-pill); padding:2px 9px; margin-inline-start:8px; }
+
+  /* documents tab */
+  .doctiles { display:grid; grid-template-columns:repeat(auto-fill,minmax(210px,1fr)); gap:12px; margin-top:8px; }
+  .dtile { display:flex; flex-direction:column; gap:8px; background:var(--surface-raised); border:1px solid var(--hairline); border-radius:var(--r-md); padding:14px 15px; cursor:pointer; transition:border-color .15s; }
+  .dtile:hover { border-color:var(--border-strong); }
+  .dtile .dt-head { display:flex; align-items:center; gap:9px; }
+  .dtile .dt-ic { flex:none; width:32px; height:32px; border-radius:9px; background:var(--primary-soft); color:var(--primary); display:grid; place-items:center; }
+  .dtile b { font-size:12.5px; }
+  .dtile .dt-meta { font-family:var(--mono); font-size:10.5px; color:var(--text-faint); }
+  .dtile.missing { border:1.5px dashed var(--border-strong); background:var(--surface); }
+  .dtile.missing .dt-ic { background:var(--warning-soft); color:var(--warning); }
+  .dtile.missing b { color:var(--warning); }
+  .dtile.missing .up { border:1px dashed var(--border-strong); background:var(--surface); color:var(--info); border-radius:var(--r-sm); font:inherit; font-size:11.5px; font-weight:600; padding:6px; cursor:pointer; }
+  .doclist { margin-top:8px; }
+  .drow { display:flex; align-items:center; gap:12px; padding:11px 2px; border-bottom:1px solid var(--hairline); }
+  .drow:last-child { border-bottom:0; }
+  .drow .d-ic { flex:none; width:34px; height:34px; border-radius:9px; background:var(--primary-soft); color:var(--primary); display:grid; place-items:center; }
+  .drow .d-who { flex:1; min-width:0; }
+  .drow b { font-size:13.5px; font-weight:600; }
+  .drow .d-mt { display:flex; gap:8px; font-size:11.5px; color:var(--text-muted); }
+  .drow .d-mt .g { font-family:var(--mono); font-size:11px; }
+  .dpill { flex:none; display:inline-flex; align-items:center; gap:5px; border-radius:var(--r-pill); padding:2.5px 10px; font-size:11px; font-weight:700; }
+  .dpill.ok { background:var(--success-soft); color:var(--success); }
+  .dpill.wait { background:var(--info-soft); color:var(--info); }
+
+  /* activity tab */
+  .timeline { position:relative; margin:10px 4px 2px; padding-inline-start:22px; }
+  .timeline::before { content:""; position:absolute; inset-block:6px; inset-inline-start:5px; width:2px; background:var(--hairline); }
+  .tl-item { position:relative; padding-bottom:18px; }
+  .tl-item:last-child { padding-bottom:2px; }
+  .tl-item::before { content:""; position:absolute; inset-inline-start:-22px; top:5px; width:12px; height:12px; border-radius:50%; background:var(--surface); border:3px solid var(--primary); }
+  .tl-item.warn::before { border-color:#d97706; }
+  .tl-item.ok::before { border-color:var(--success); }
+  .tl-item .tt { font-size:13.5px; font-weight:600; }
+  .tl-item .tt a { color:var(--info); text-decoration:none; }
+  .tl-item .tm { display:flex; gap:8px; font-size:11.5px; color:var(--text-faint); margin-top:2px; }
+  .tl-item .tm .d { font-family:var(--mono); }
+
+  /* leaves tab */
+  .meters { display:grid; grid-template-columns:repeat(auto-fit,minmax(180px,1fr)); gap:12px; margin-top:8px; }
+  .meter { background:var(--surface-raised); border:1px solid var(--hairline); border-radius:var(--r-md); padding:13px 15px; }
+  .meter .mk { font-size:11px; font-weight:600; letter-spacing:.07em; text-transform:uppercase; color:var(--text-muted); }
+  .meter .mv { font-family:var(--mono); font-size:19px; font-weight:700; color:var(--primary); margin-top:3px; }
+  .meter .mv span { font-size:11px; color:var(--text-faint); font-weight:500; }
+  .meter .bar { height:6px; border-radius:var(--r-pill); background:var(--surface-tinted); overflow:hidden; margin-top:8px; }
+  .meter .bar i { display:block; height:100%; border-radius:var(--r-pill); background:var(--primary); }
+
+  /* messages tab */
+  .msgrow { display:flex; align-items:flex-start; gap:12px; padding:12px 2px; border-bottom:1px solid var(--hairline); }
+  .msgrow:last-child { border-bottom:0; }
+  .chpill { flex:none; display:inline-flex; align-items:center; border-radius:var(--r-pill); padding:2.5px 10px; font-size:10.5px; font-weight:700; margin-top:2px; }
+  .chpill.sms { background:var(--info-soft); color:var(--info); }
+  .msgrow .m-body { flex:1; min-width:0; }
+  .msgrow .m-txt { font-size:13px; color:var(--text); }
+  .msgrow .m-mt { display:flex; gap:8px; font-size:11px; color:var(--text-faint); margin-top:3px; }
+  .msgrow .m-mt .d { font-family:var(--mono); }
+
+  /* empty state */
+  .empty { display:flex; flex-direction:column; align-items:center; gap:8px; padding:34px 20px; color:var(--text-faint); font-size:13px; }
+  .empty svg { opacity:.5; }
+</style>
+</head>
+<body>
+
+<header class="appbar"><div class="appbar-in">
+  <div class="brand">
+    <div class="brand-logo">GSSG</div>
+    <div><b>GSSG</b><span>المجموعة العالمية للخدمات الأمنية</span></div>
+  </div>
+  <nav class="nav">
+    <a href="#">لوحة التحكم</a><a href="#" class="on">الموظفون</a><a href="#">المراسلات</a><a href="#">الإجازات</a><a href="#">الخدمات</a><a href="#">المستندات</a>
+  </nav>
+  <div class="appbar-tools"><div class="tool-dot"></div><div class="tool-dot"></div><div class="tool-dot"></div></div>
+</div></header>
+
+<!-- ══════════ STATE A: big search (first open / new search) ══════════ -->
+<section class="heroband" id="stateSearch">
+  <div class="hero-clip"></div>
+  <div class="heroband-in">
+    <div class="eyebrow">العمليات · الموظفون</div>
+    <h1>عن مَن تبحث؟</h1>
+    <p>نشط، في إجازة، أو منتهي الخدمة — كل ملف يظهر في البحث</p>
+    <div class="searchwrap">
+      <div class="searchbox">
+        <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.3-3.3"/></svg>
+        <input type="text" id="bigInput" placeholder="اكتب الاسم أو الرقم الوظيفي…" autocomplete="off">
+        <button class="go">بحث</button>
+      </div>
+      <div class="results hidden" id="results">
+        <div class="results-head"><span>النتائج</span><span id="resCount"></span></div>
+        <div id="resList"></div>
+        <div class="results-foot"><span>كل الحالات تظهر في النتائج</span><a href="#">تصفية حسب الحالة ↓</a></div>
+      </div>
+    </div>
+    <!-- New employee entry point -->
+    <div class="newemp-row">
+      <button class="newemp" type="button">
+        <span class="pl">+</span>
+        موظف جديد — إنشاء ملف
+      </button>
+    </div>
+
+    <button class="backlink hidden" id="backToProfile">→ عودة إلى ملف عبدالله (G3190)</button>
+  </div>
+
+  <!-- Hero filler: recent files / expiring docs / incomplete files -->
+  <div class="herocards-wrap">
+    <div class="herocards">
+
+      <div class="hcard">
+        <div class="hc-head">
+          <div class="hc-ic">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/></svg>
+          </div>
+          <h4>آخر الملفات المفتوحة</h4>
+        </div>
+        <div class="rchips">
+          <button class="rchip" onclick="openProfile()">
+            <span class="ra">عب</span><span class="rn">عبدالله على سالم خميس العبرى</span><span class="rg">G3190</span>
+          </button>
+          <button class="rchip" onclick="openProfile()">
+            <span class="ra">اح</span><span class="rn">احمد عماد عثمان الهرش</span><span class="rg">G3260</span>
+          </button>
+          <button class="rchip" onclick="openProfile()">
+            <span class="ra">عا</span><span class="rn">عادل محمد ناصر الجفه</span><span class="rg">G3254</span>
+          </button>
+        </div>
+      </div>
+
+      <div class="hcard">
+        <div class="hc-head">
+          <div class="hc-ic warn">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 9v4"/><path d="M12 17h.01"/><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/></svg>
+          </div>
+          <h4>وثائق تنتهي قريباً</h4>
+          <span class="hc-n warn">٥</span>
+        </div>
+        <div class="rchips">
+          <button class="rchip" onclick="openProfile()">
+            <span class="ra">عب</span><span class="rn">عبدالله العبرى — الهوية</span><span class="rx">٦٨ يوماً</span>
+          </button>
+          <button class="rchip">
+            <span class="ra">مح</span><span class="rn">محمد الكعبى — الجواز</span><span class="rx">٣٤ يوماً</span>
+          </button>
+        </div>
+        <div class="hc-foot"><a href="#">عرض كل الوثائق المنتهية ←</a></div>
+      </div>
+
+      <div class="hcard">
+        <div class="hc-head">
+          <div class="hc-ic warn">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 4-6 8-6s8 2 8 6"/></svg>
+          </div>
+          <h4>ملفات ناقصة البيانات</h4>
+          <span class="hc-n warn">١٢</span>
+        </div>
+        <div class="hc-sum">أكثر البيانات نقصاً: <b>الجنسية</b>، <b>الآيبان</b>، <b>تاريخ الميلاد</b>. إكمالها يجهّز النماذج والمخاطبات مباشرة.</div>
+        <div class="hc-foot"><a href="#">ابدأ إكمال الملفات ←</a></div>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+<!-- ══════════ STATE B: compact band (profile open) ══════════ -->
+<section class="bandmini hidden" id="stateBand">
+  <div class="bandmini-in">
+    <div class="tl">
+      <div class="eyebrow">العمليات</div>
+      <h1>ملف موظف</h1>
+    </div>
+    <div class="minisearch" id="miniSearch">
+      <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.3-3.3"/></svg>
+      <input type="text" id="miniInput" placeholder="بحث جديد — اكتب الاسم أو الرقم الوظيفي…" autocomplete="off">
+      <kbd>Ctrl K</kbd>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════ Profile ══════════ -->
+<div class="page hidden" id="stateProfile">
+  <div class="layout">
+
+    <!-- Sidebar: ID card + missing data — visible in every tab -->
+    <aside class="sidebar">
+
+      <div class="idcard">
+        <div class="card-head"><span>بطاقة موظف · GSSG</span><span class="mono">EMP FILE</span></div>
+        <div class="row">
+          <div class="photo">عب</div>
+          <div>
+            <h2>عبدالله على سالم خميس العبرى</h2>
+            <div class="en">Abdulla Ali Salem Khamis Alabri</div>
+            <div class="gnum">G-3190</div>
+          </div>
+        </div>
+        <div class="facts">
+          <div class="f"><div class="fk">المسمى الوظيفي</div><div class="fv">قائم بأعمال مساعد مشرف</div></div>
+          <div class="f"><div class="fk">الحالة</div><div class="fv"><span class="pill ok"><i></i>نشط</span></div></div>
+          <div class="f"><div class="fk">القسم</div><div class="fv">العمليات</div></div>
+          <div class="f"><div class="fk">الوحدة</div><div class="fv">وحدة أبوظبي</div></div>
+        </div>
+        <div class="id-actions">
+          <button class="btn pri">إنشاء مستند</button>
+          <button class="btn ghost">إضافة إجازة</button>
+          <button class="btn ghost">تعديل</button>
+        </div>
+      </div>
+
+      <div class="gaps">
+        <div class="head">
+          <div class="ic">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 9v4"/><path d="M12 17h.01"/><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/></svg>
+          </div>
+          <b>٥ بيانات ناقصة — اكتمال ٩/١٤</b>
+        </div>
+        <p>إكمالها يجعل النماذج والمخاطبات تُنشأ مباشرةً دون الرجوع للملف الورقي.</p>
+        <div class="glist">
+          <div class="gitem">الجنسية <span class="plus">+ أضف</span></div>
+          <div class="gitem">تاريخ الميلاد <span class="plus">+ أضف</span></div>
+          <div class="gitem">رقم الجواز <span class="plus">+ أضف</span></div>
+          <div class="gitem">انتهاء الجواز <span class="plus">+ أضف</span></div>
+          <div class="gitem">الآيبان <span class="plus">+ أضف</span></div>
+        </div>
+        <button class="fixall">أكمل البيانات الآن</button>
+      </div>
+
+    </aside>
+
+    <!-- Main: tab chips + panes -->
+    <main class="main">
+
+      <div class="tabchips" role="tablist">
+        <button class="tchip on" data-tab="personal" role="tab">البيانات الشخصية <span class="b warn">٥ ناقصة</span></button>
+        <button class="tchip" data-tab="docs" role="tab">المستندات <span class="b">٧</span></button>
+        <button class="tchip" data-tab="leaves" role="tab">الإجازات <span class="b">٣</span></button>
+        <button class="tchip" data-tab="messages" role="tab">الرسائل <span class="b">٢</span></button>
+        <button class="tchip" data-tab="activity" role="tab">النشاط</button>
+        <button class="tchip" data-tab="violations" role="tab">المخالفات <span class="b">٠</span></button>
+      </div>
+
+      <!-- ── Tab: personal ── -->
+      <div class="pane" id="tab-personal">
+
+        <div class="card">
+          <h3>البيانات الشخصية <span class="n warn">ناقص ٢</span></h3>
+          <div class="grid2">
+            <div>
+              <div class="frow"><div class="k">الاسم عربي</div><div class="v">عبدالله على سالم خميس العبرى</div></div>
+              <div class="frow miss"><div class="k">الجنسية</div><div class="v"><span class="none">غير مسجّلة</span><button class="addlink">+ أضف الآن</button></div></div>
+              <div class="frow"><div class="k">رقم التواصل</div><div class="v m">0501234567</div></div>
+            </div>
+            <div>
+              <div class="frow"><div class="k">الاسم إنجليزي</div><div class="v" style="font-family:'Inter'">ABDULLA ALI SALEM KHAMIS ALABRI</div></div>
+              <div class="frow miss"><div class="k">تاريخ الميلاد</div><div class="v"><span class="none">غير مسجّل</span><button class="addlink">+ أضف الآن</button></div></div>
+              <div class="frow"><div class="k">لغة الرسائل</div><div class="v">العربية</div></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <h3>وثائق الهوية <span class="n warn">ناقص ٢</span></h3>
+          <div class="grid2">
+            <div>
+              <div class="frow"><div class="k">الهوية الإماراتية</div><div class="v m">784-1990-1234567-1</div></div>
+              <div class="frow miss"><div class="k">رقم الجواز</div><div class="v"><span class="none">غير مسجّل</span><button class="addlink">+ أضف الآن</button></div></div>
+            </div>
+            <div>
+              <div class="frow"><div class="k">انتهاء الهوية</div><div class="v m">2026-09-14<span class="exp-warn">⚠ ٦٨ يوماً</span></div></div>
+              <div class="frow miss"><div class="k">انتهاء الجواز</div><div class="v"><span class="none">غير مسجّل</span><button class="addlink">+ أضف الآن</button></div></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <h3>بيانات العمل <span class="n full">مكتملة</span></h3>
+          <div class="grid2">
+            <div>
+              <div class="frow"><div class="k">المسمى الوظيفي</div><div class="v">قائم بأعمال مساعد مشرف</div></div>
+              <div class="frow"><div class="k">الوحدة</div><div class="v">وحدة أبوظبي</div></div>
+              <div class="frow"><div class="k">تاريخ الالتحاق</div><div class="v m">2019-03-12</div></div>
+            </div>
+            <div>
+              <div class="frow"><div class="k">القسم</div><div class="v">العمليات</div></div>
+              <div class="frow"><div class="k">النقطة</div><div class="v">برج المها</div></div>
+              <div class="frow"><div class="k">الالتحاق بالشركة</div><div class="v m">2019-03-12</div></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <h3>البيانات المالية <span class="n warn">ناقص ١</span></h3>
+          <div class="grid2">
+            <div>
+              <div class="frow miss"><div class="k">الآيبان</div><div class="v"><span class="none">غير مسجّل</span><button class="addlink">+ أضف الآن</button></div></div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- ── Tab: documents ── -->
+      <div class="pane hidden" id="tab-docs">
+
+        <div class="card">
+          <h3>وثائق المستودع <span class="n">٣ ملفات</span></h3>
+          <div class="doctiles">
+            <div class="dtile">
+              <div class="dt-head">
+                <div class="dt-ic"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="9" cy="10" r="2"/><path d="M15 8h4M15 12h4M7 16h10"/></svg></div>
+                <b>الهوية الإماراتية</b>
+              </div>
+              <div class="dt-meta">eid-scan.pdf · 2025-11-02</div>
+            </div>
+            <div class="dtile missing">
+              <div class="dt-head">
+                <div class="dt-ic"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 3h9l5 5v13H6z"/><path d="M15 3v5h5"/></svg></div>
+                <b>جواز السفر — غير مرفوع</b>
+              </div>
+              <button class="up">+ رفع نسخة الجواز</button>
+            </div>
+            <div class="dtile">
+              <div class="dt-head">
+                <div class="dt-ic"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 3h9l5 5v13H6z"/><path d="M15 3v5h5"/></svg></div>
+                <b>عقد العمل</b>
+              </div>
+              <div class="dt-meta">contract-2019.pdf · 2019-03-12</div>
+            </div>
+            <div class="dtile">
+              <div class="dt-head">
+                <div class="dt-ic"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 3h9l5 5v13H6z"/><path d="M15 3v5h5"/></svg></div>
+                <b>صورة شخصية</b>
+              </div>
+              <div class="dt-meta">photo.jpg · 2024-06-20</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <h3>مستندات صادرة <span class="n">٤ مستندات</span></h3>
+          <div class="doclist">
+            <div class="drow">
+              <div class="d-ic"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 3h9l5 5v13H6z"/><path d="M15 3v5h5"/></svg></div>
+              <div class="d-who"><b>كتاب مباشرة عمل بعد إجازة</b>
+              <div class="d-mt"><span class="g">6-0231</span><span>·</span><span>2026-06-30</span></div></div>
+              <span class="dpill ok">موقّع</span>
+            </div>
+            <div class="drow">
+              <div class="d-ic"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 3h9l5 5v13H6z"/><path d="M15 3v5h5"/></svg></div>
+              <div class="d-who"><b>نموذج إجازة سنوية</b>
+              <div class="d-mt"><span class="g">6-0198</span><span>·</span><span>2026-05-14</span></div></div>
+              <span class="dpill ok">موقّع</span>
+            </div>
+            <div class="drow">
+              <div class="d-ic"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 3h9l5 5v13H6z"/><path d="M15 3v5h5"/></svg></div>
+              <div class="d-who"><b>شهادة راتب — للبنك</b>
+              <div class="d-mt"><span class="g">HR-0112</span><span>·</span><span>2026-07-06</span></div></div>
+              <span class="dpill wait">بانتظار الاعتماد</span>
+            </div>
+            <div class="drow">
+              <div class="d-ic"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 3h9l5 5v13H6z"/><path d="M15 3v5h5"/></svg></div>
+              <div class="d-who"><b>كتاب نقل نقطة عمل</b>
+              <div class="d-mt"><span class="g">6-0104</span><span>·</span><span>2026-02-18</span></div></div>
+              <span class="dpill ok">موقّع</span>
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- ── Tab: leaves ── -->
+      <div class="pane hidden" id="tab-leaves">
+
+        <div class="card">
+          <h3>أرصدة الإجازات <span class="n">2026</span></h3>
+          <div class="meters">
+            <div class="meter">
+              <div class="mk">سنوية</div>
+              <div class="mv">١٨ <span>/ ٣٠ يوماً متبقٍ</span></div>
+              <div class="bar"><i style="width:60%"></i></div>
+            </div>
+            <div class="meter">
+              <div class="mk">مرضية</div>
+              <div class="mv">١٢ <span>/ ١٥ يوماً متبقٍ</span></div>
+              <div class="bar"><i style="width:80%"></i></div>
+            </div>
+            <div class="meter">
+              <div class="mk">طارئة</div>
+              <div class="mv">٥ <span>/ ٥ أيام متبقية</span></div>
+              <div class="bar"><i style="width:100%"></i></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <h3>سجل الإجازات <span class="n">٣ سجلات</span></h3>
+          <div class="doclist">
+            <div class="drow">
+              <div class="d-ic"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M8 3v4M16 3v4M3 11h18"/></svg></div>
+              <div class="d-who"><b>إجازة سنوية — ١٢ يوماً</b>
+              <div class="d-mt"><span class="g">2026-06-15 ← 2026-06-26</span></div></div>
+              <span class="dpill ok">معتمدة — تمت المباشرة</span>
+            </div>
+            <div class="drow">
+              <div class="d-ic"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M8 3v4M16 3v4M3 11h18"/></svg></div>
+              <div class="d-who"><b>إجازة مرضية — ٣ أيام</b>
+              <div class="d-mt"><span class="g">2026-03-02 ← 2026-03-04</span></div></div>
+              <span class="dpill ok">معتمدة</span>
+            </div>
+            <div class="drow">
+              <div class="d-ic"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M8 3v4M16 3v4M3 11h18"/></svg></div>
+              <div class="d-who"><b>إجازة طارئة — يومان</b>
+              <div class="d-mt"><span class="g">2025-12-08 ← 2025-12-09</span></div></div>
+              <span class="dpill ok">معتمدة</span>
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- ── Tab: messages ── -->
+      <div class="pane hidden" id="tab-messages">
+        <div class="card">
+          <h3>الرسائل المرسلة <span class="n">٢ رسالة</span></h3>
+          <div class="msgrow">
+            <span class="chpill sms">SMS</span>
+            <div class="m-body">
+              <div class="m-txt">عزيزي عبدالله على سالم، تم اعتماد إجازتك السنوية من 2026-06-15 إلى 2026-06-26. مكتب الإدارة — GSSG</div>
+              <div class="m-mt"><span class="d">2026-06-10 14:22</span><span>·</span><span>تم التسليم</span></div>
+            </div>
+          </div>
+          <div class="msgrow">
+            <span class="chpill sms">SMS</span>
+            <div class="m-body">
+              <div class="m-txt">عزيزي عبدالله على سالم، نذكّرك بموعد المباشرة يوم 2026-06-27. مكتب الإدارة — GSSG</div>
+              <div class="m-mt"><span class="d">2026-06-26 09:00</span><span>·</span><span>تم التسليم</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ── Tab: activity ── -->
+      <div class="pane hidden" id="tab-activity">
+        <div class="card">
+          <h3>سجل النشاط <span class="n">آخر ٩٠ يوماً</span></h3>
+          <div class="timeline">
+            <div class="tl-item wait">
+              <div class="tt">أُنشئت <a href="#">شهادة راتب — للبنك</a> وبانتظار الاعتماد</div>
+              <div class="tm"><span class="d">2026-07-06 11:40</span><span>·</span><span>بواسطة أحمد — الموارد البشرية</span></div>
+            </div>
+            <div class="tl-item ok">
+              <div class="tt">أُرسلت رسالة SMS — تذكير المباشرة</div>
+              <div class="tm"><span class="d">2026-06-26 09:00</span><span>·</span><span>تلقائي</span></div>
+            </div>
+            <div class="tl-item ok">
+              <div class="tt">وُقّع <a href="#">كتاب مباشرة عمل بعد إجازة</a></div>
+              <div class="tm"><span class="d">2026-06-30 08:15</span><span>·</span><span>مدير العمليات</span></div>
+            </div>
+            <div class="tl-item">
+              <div class="tt">اعتُمدت إجازة سنوية — ١٢ يوماً</div>
+              <div class="tm"><span class="d">2026-06-10 14:20</span><span>·</span><span>سلسلة الاعتماد اكتملت</span></div>
+            </div>
+            <div class="tl-item warn">
+              <div class="tt">تنبيه: الهوية الإماراتية تنتهي خلال ٩٠ يوماً</div>
+              <div class="tm"><span class="d">2026-06-16 07:00</span><span>·</span><span>مراقب الانتهاء</span></div>
+            </div>
+            <div class="tl-item">
+              <div class="tt">عُدّلت بيانات — النقطة: برج المها</div>
+              <div class="tm"><span class="d">2026-04-03 13:05</span><span>·</span><span>بواسطة أحمد — الموارد البشرية</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ── Tab: violations ── -->
+      <div class="pane hidden" id="tab-violations">
+        <div class="card">
+          <h3>المخالفات <span class="n full">لا شيء</span></h3>
+          <div class="empty">
+            <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M9 12l2 2 4-4"/><circle cx="12" cy="12" r="9"/></svg>
+            لا توجد مخالفات مسجلة لهذا الموظف
+          </div>
+        </div>
+      </div>
+
+    </main>
+  </div>
+</div>
+
+<script>
+  // ─── Mock roster for the search dropdown ───
+  const ROSTER = [
+    { id:'G3190', name:'عبدالله على سالم خميس العبرى', pos:'قائم بأعمال مساعد مشرف', st:'ok',    stLbl:'نشط' },
+    { id:'G3103', name:'عبدالله سيدى محمد محمود ابراهيم', pos:'حارس أمن',            st:'ok',    stLbl:'نشط' },
+    { id:'G3192', name:'عبدالله ناصر صالح مقبل الهاشمى', pos:'حارس أمن',             st:'leave', stLbl:'في إجازة' },
+    { id:'G3085', name:'عبدالله اباه',                    pos:'حارس أمن',             st:'off',   stLbl:'مستقيل' },
+    { id:'G3260', name:'احمد عماد عثمان الهرش',           pos:'حارس أمن',             st:'ok',    stLbl:'نشط' },
+    { id:'G3254', name:'عادل محمد ناصر الجفه',            pos:'حارس أمن',             st:'ok',    stLbl:'نشط' },
+  ];
+
+  const elSearch  = document.getElementById('stateSearch');
+  const elBand    = document.getElementById('stateBand');
+  const elProfile = document.getElementById('stateProfile');
+  const bigInput  = document.getElementById('bigInput');
+  const results   = document.getElementById('results');
+  const resList   = document.getElementById('resList');
+  const resCount  = document.getElementById('resCount');
+  const backLink  = document.getElementById('backToProfile');
+  let profileLoaded = false;
+
+  // ─── Search dropdown (filters the mock roster) ───
+  function renderResults(q) {
+    const needle = q.trim();
+    if (!needle) { results.classList.add('hidden'); return; }
+    const hits = ROSTER.filter(r => r.name.includes(needle) || r.id.includes(needle.toUpperCase()));
+    resList.innerHTML = hits.length
+      ? hits.map(r => `
+        <button class="rrow" onclick="openProfile()">
+          <span class="avatar">${r.name.slice(0,2)}</span>
+          <span class="who"><span class="nm">${r.name}</span>
+          <span class="mt"><span class="g">${r.id}</span><span>·</span><span>${r.pos}</span></span></span>
+          <span class="spill ${r.st}"><i></i>${r.stLbl}</span>
+        </button>`).join('')
+      : `<div class="noresults">لا نتائج مطابقة — جرّب جزءاً من الاسم أو الرقم الوظيفي<br>
+           <button class="mknew" type="button">+ إنشاء ملف موظف جديد</button></div>`;
+    resCount.textContent = hits.length ? `${hits.length} نتيجة` : '';
+    results.classList.remove('hidden');
+  }
+  bigInput.addEventListener('input', () => renderResults(bigInput.value));
+  bigInput.addEventListener('focus', () => renderResults(bigInput.value));
+  document.addEventListener('click', (e) => {
+    if (!e.target.closest('.searchwrap')) results.classList.add('hidden');
+  });
+
+  // ─── State transitions ───
+  function openProfile() {
+    profileLoaded = true;
+    elSearch.classList.add('hidden');
+    results.classList.add('hidden');
+    elBand.classList.remove('hidden');
+    elProfile.classList.remove('hidden');
+    window.scrollTo({ top: 0 });
+  }
+  function newSearch() {
+    elBand.classList.add('hidden');
+    elProfile.classList.add('hidden');
+    elSearch.classList.remove('hidden');
+    backLink.classList.toggle('hidden', !profileLoaded);
+    bigInput.value = '';
+    bigInput.focus();
+  }
+  // Mini search is a real input: one press clears it and hands over to the big search.
+  const miniInput = document.getElementById('miniInput');
+  miniInput.addEventListener('focus', () => { miniInput.value = ''; miniInput.blur(); newSearch(); });
+  backLink.addEventListener('click', openProfile);
+  document.addEventListener('keydown', (e) => {
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') { e.preventDefault(); newSearch(); }
+    if (e.key === 'Escape' && profileLoaded && !elSearch.classList.contains('hidden')) openProfile();
+  });
+
+  // ─── Tab chips ───
+  document.querySelectorAll('.tchip').forEach(chip => {
+    chip.addEventListener('click', () => {
+      document.querySelectorAll('.tchip').forEach(c => c.classList.remove('on'));
+      chip.classList.add('on');
+      document.querySelectorAll('.pane').forEach(p => p.classList.add('hidden'));
+      document.getElementById('tab-' + chip.dataset.tab).classList.remove('hidden');
+    });
+  });
+</script>
+</body>
+</html>

@@ -14,6 +14,7 @@ from datetime import date
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.core.constants import ARABIC_MONTHS
 from app.db.models import DutySupervisor, Employee, Leave
 from app.services import duty_supervisor_service, leave_service, notify_dispatch
 from app.services import notify_format as nf
@@ -25,7 +26,7 @@ def month_bounds(d: date) -> tuple[date, date]:
 
 
 def _month_name(d: date, lang: str) -> str:
-    table = nf.AR_MONTHS if lang == "ar" else nf.EN_MONTHS
+    table = ARABIC_MONTHS if lang == "ar" else nf.EN_MONTHS
     return f"{table[d.month - 1]} {d.year}"
 
 

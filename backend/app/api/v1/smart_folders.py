@@ -78,7 +78,7 @@ def list_suggestions(
 def create_smart_folder(
     payload: SmartFolderCreate,
     db: Annotated[Session, Depends(get_db)],
-    current_user: Annotated[User, Depends(require_capability("ledger.edit"))],
+    current_user: Annotated[User, Depends(require_capability("ledger.create"))],
 ) -> SmartFolderRead:
     folder = smart_folder_service.create(db, user_id=current_user.id, payload=payload)
     return _to_read(db, folder, current_user.id)

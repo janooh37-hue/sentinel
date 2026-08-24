@@ -8,7 +8,11 @@ import { api } from '@/lib/api'
 import { PermitDetailDialog } from './PermitDetailDialog'
 
 vi.mock('@/lib/useCapabilities', () => ({
-  useCapabilities: () => ({ capabilities: new Set(['permits.manage']), isLoading: false, has: () => true }),
+  useCapabilities: () => ({
+    capabilities: new Set(['permits.create', 'permits.edit', 'permits.revoke', 'permits.delete']),
+    isLoading: false,
+    has: () => true,
+  }),
 }))
 
 vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }))

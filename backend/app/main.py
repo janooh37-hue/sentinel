@@ -36,8 +36,8 @@ from app.api.v1 import ledger as ledger_v1
 from app.api.v1 import managers as managers_v1
 from app.api.v1 import notifications as notifications_v1
 from app.api.v1 import notify as notify_v1
-from app.api.v1 import permissions as permissions_v1
 from app.api.v1 import org_tree as org_tree_v1
+from app.api.v1 import permissions as permissions_v1
 from app.api.v1 import permits as permits_v1
 from app.api.v1 import push as push_v1
 from app.api.v1 import recipients as recipients_v1
@@ -48,6 +48,7 @@ from app.api.v1 import smart_folders as smart_folders_v1
 from app.api.v1 import submitters as submitters_v1
 from app.api.v1 import system as system_v1
 from app.api.v1 import templates as templates_v1
+from app.api.v1 import timesheet as timesheet_v1
 from app.config import get_settings
 from app.logging import configure_logging
 from app.services import scheduler_service
@@ -127,13 +128,17 @@ async def _lifespan(_app: FastAPI) -> AsyncIterator[None]:
     # reach already-deployed DBs without a manual migration.
     try:
         from app.db.session import SessionLocal
-        from app.services import correspondence_service, perm_service
+        from app.services import correspondence_service, perm_service, timesheet_service
 
         with SessionLocal() as _db:
             perm_service.seed_role_defaults(_db)
             correspondence_service.seed_defaults(_db)
+            # The printable time-sheet designations. Seeded by migration 0070, so
+            # this only matters to a DB that predates it — and to the reorder
+            # feature, which must never lose a row the catalog needs.
+            timesheet_service.seed_designations(_db)
     except Exception:
-        log.warning("role-default seeding at startup failed", exc_info=True)
+        log.warning("startup seeding failed", exc_info=True)
     scheduler_service.start()
     try:
         yield
@@ -180,6 +185,7 @@ def create_app() -> FastAPI:
     app.include_router(employees_v1.router, prefix="/api/v1", dependencies=auth_gate)
     app.include_router(employees_v1.violations_router, prefix="/api/v1", dependencies=auth_gate)
     app.include_router(leaves_v1.router, prefix="/api/v1", dependencies=auth_gate)
+    app.include_router(timesheet_v1.router, prefix="/api/v1", dependencies=auth_gate)
     app.include_router(templates_v1.router, prefix="/api/v1", dependencies=auth_gate)
     app.include_router(documents_v1.documents_router, prefix="/api/v1", dependencies=auth_gate)
     app.include_router(documents_v1.jobs_router, prefix="/api/v1", dependencies=auth_gate)

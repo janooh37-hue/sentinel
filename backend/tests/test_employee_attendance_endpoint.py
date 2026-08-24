@@ -12,7 +12,7 @@ Contract under test:
 
 from __future__ import annotations
 
-from datetime import date, time
+from datetime import date, time, timedelta
 
 import pytest
 
@@ -63,6 +63,37 @@ def test_range_returns_one_entry_per_scheduled_day_with_its_punches(db_session) 
     assert "direction" not in punched[0]["punches"][0], (
         "this provider reports no direction, so the payload must not imply one"
     )
+
+
+def test_each_day_publishes_the_grace_and_both_judgment_boundaries(db_session) -> None:
+    """A client must judge by the policy, never by a constant of its own.
+
+    `absence_due_at` is the earlier boundary — twice the grace past the start —
+    and `judgment_due_at` the later one. Without both, a month grid cannot tell a
+    duty still waiting for its arrival from a start that was never answered, and
+    a hardcoded grace would draw the late line somewhere the evaluator does not.
+    """
+    fixture = build_attendance_day(
+        db_session,
+        operational_date=DAY,
+        posts=[("البوابة الرئيسية", 1)],
+        punches={None: [time(4, 52)]},
+    )
+    scope = resolve_workforce_scope(db_session, fixture.admin)
+
+    payload = workforce_read_service.employee_attendance_range(
+        db_session,
+        scope=scope,
+        employee_id=fixture.employees[0].id,
+        from_date=DAY,
+        to_date=DAY,
+    )
+
+    assert payload["days"], "the factory rosters this employee on the day under test"
+    for day in payload["days"]:
+        assert day["grace_minutes"] == 30
+        assert day["absence_due_at"] == day["scheduled_start_at"] + timedelta(minutes=60)
+        assert day["judgment_due_at"] == day["scheduled_end_at"] + timedelta(minutes=120)
 
 
 def test_self_view_reads_own_record_only(api_db) -> None:

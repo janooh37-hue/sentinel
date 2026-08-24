@@ -66,9 +66,12 @@ export function RecordPane({
   const { t } = useTranslation()
   const serviceLabel = useServiceLabel()
   const { has } = useCapabilities()
-  const canManage = has('books.manage')
+  const canEdit = has('books.edit')
+  // Submit-for-approval is its own authority (atomic `books.submit`), separate
+  // from edit — the "Send for approval" pane button keys off this.
+  const canSubmitBook = has('books.submit')
   const canScanCap = has('documents.scan')
-  const canScan = canScanCap && canManage
+  const canScan = canScanCap && canEdit
   const fileRef = useRef<HTMLInputElement | null>(null)
   const replaceRef = useRef<HTMLInputElement | null>(null)
   const addScan = useAddScan(book?.id ?? null)
@@ -143,10 +146,10 @@ export function RecordPane({
   // Same gate as the record page (BookRecordPage): an admin files the
   // physically-signed scan back for a request out for signature (pending) or
   // at the printer (awaiting_scan). Shared helper keeps both surfaces aligned.
-  const showFileSigned = canFileSignedCopy(state, { canManage, canScan: canScanCap })
+  const showFileSigned = canFileSignedCopy(state, { canEdit, canScan: canScanCap })
   // Send for approval (digital route): submit a draft or re-route a pending
   // request — offered next to Scan signed copy so both routes are available.
-  const showSendForApproval = canSendForApproval(state, { canManage })
+  const showSendForApproval = canSendForApproval(state, { canSubmitBook })
   const canManageIncludedPapers =
     book.current_template_id != null && isIncludedPapersOwner(book, user?.id)
   const includedDocumentId = includedDetail.data
@@ -211,9 +214,9 @@ export function RecordPane({
           baseWidth={400}
           onOpenFull={() => setFullOpen(true)}
           addScanSlot={addScanSlot}
-          onDeletePaper={canManage ? setDeleteTarget : undefined}
+          onDeletePaper={canEdit ? setDeleteTarget : undefined}
           onReplacePaper={
-            canManage
+            canEdit
               ? (p) => {
                   setReplaceTarget(p)
                   replaceRef.current?.click()
@@ -327,7 +330,7 @@ export function RecordPane({
         }}
       />
 
-      {/* Delete a scan / unfile a signed copy (books.manage). A signed copy warns
+      {/* Delete a scan / unfile a signed copy (books.edit). A signed copy warns
           that it reverts the record's approval. */}
       <ConfirmDialog
         open={deleteTarget !== null}
@@ -428,9 +431,9 @@ export function RecordPane({
                   baseWidth={620}
                   isOverlay
                   onClose={() => setFullOpen(false)}
-                  onDeletePaper={canManage ? setDeleteTarget : undefined}
+                  onDeletePaper={canEdit ? setDeleteTarget : undefined}
                   onReplacePaper={
-                    canManage
+                    canEdit
                       ? (p) => {
                           setReplaceTarget(p)
                           replaceRef.current?.click()

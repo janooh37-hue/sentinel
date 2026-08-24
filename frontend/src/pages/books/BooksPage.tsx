@@ -19,7 +19,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useNavigate, useSearchParams } from 'react-router-dom'
-import { ArrowDownLeft, ArrowUpRight, BookOpen, ChevronRight, Plus, Send, Trash2 } from 'lucide-react'
+import { ArrowDownLeft, ArrowUpRight, BookOpen, ChevronRight, Send, Stamp, Trash2 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 
@@ -32,13 +32,10 @@ import { EmptyState } from '@/components/ui/empty-state'
 import { Input } from '@/components/ui/input'
 import { SkeletonRow } from '@/components/ui/skeleton'
 import { BooksFilterBar, type BooksFilters } from './BooksFilterBar'
-import { NewBookDialog } from './NewBookDialog'
 import { SubmitForApprovalDialog } from '@/components/books/SubmitForApprovalDialog'
 import { BookPreview } from '@/components/books/BookPreview'
 import { BookStatusChips } from '@/components/books/BookStatusChips'
 import { BookWordActions } from '@/components/books/BookWordActions'
-import type { BookCreate } from '@/lib/api'
-import { useShortcutAction } from '@/lib/useKeyboardShortcuts'
 import { useIsMobile } from '@/lib/useIsMobile'
 import { useCapabilities } from '@/lib/useCapabilities'
 import { cn } from '@/lib/utils'
@@ -64,7 +61,8 @@ export function BooksPage(): React.JSX.Element {
   const isAr = i18n.language.startsWith('ar')
   const qc = useQueryClient()
   const { has } = useCapabilities()
-  const canManage = has('books.manage')
+  const canDelete = has('books.delete')
+  const canSubmit = has('books.submit')
   const navigate = useNavigate()
   const isMobile = useIsMobile()
   const isDesktop = !isMobile
@@ -77,7 +75,6 @@ export function BooksPage(): React.JSX.Element {
   const setFilters = (next: BooksFilters | ((prev: BooksFilters) => BooksFilters)): void => {
     setRawFilters(typeof next === 'function' ? (prev) => next(normalizeFilters(prev)) : next)
   }
-  const [newBookOpen, setNewBookOpen] = useState(false)
   const [submitBookId, setSubmitBookId] = useState<number | null>(null)
   const [previewBookId, setPreviewBookId] = useState<number | null>(null)
 
@@ -236,11 +233,6 @@ export function BooksPage(): React.JSX.Element {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pendingOpenId, listQuery.isSuccess])
   /* eslint-enable react-hooks/set-state-in-effect */
-
-  useShortcutAction(
-    'newItem',
-    useCallback(() => setNewBookOpen(true), []),
-  )
 
   // ── Mobile: client-side filtering with the old server-side predicates ──────
   // Predicate lives in booksFiltersUtils.ts (single source of truth, unit-tested
@@ -416,16 +408,6 @@ export function BooksPage(): React.JSX.Element {
     setSelectedId(desktopRows[0].id)
   }
 
-  const createMutation = useMutation({
-    mutationFn: (body: BookCreate) => api.createBook(body),
-    onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: ['books'] })
-      setNewBookOpen(false)
-      toast.success(t('books.toast.created'))
-    },
-    onError: (err) => toast.error(apiErrorMessage(err)),
-  })
-
   return (
     <div className="flex h-full flex-1 flex-col overflow-hidden bg-background">
       {isDesktop ? (
@@ -442,11 +424,11 @@ export function BooksPage(): React.JSX.Element {
               <RefreshButton />
               <button
                 type="button"
-                onClick={() => setNewBookOpen(true)}
-                className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-primary px-4 py-2 text-[0.85em] font-semibold text-primary-foreground transition-colors hover:bg-primary-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
+                onClick={() => navigate('/books/approvals')}
+                className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-hairline bg-surface-tinted px-4 py-2 text-[0.85em] font-semibold text-foreground transition-colors hover:border-primary hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
               >
-                <Plus className="h-3.5 w-3.5" strokeWidth={2.5} />
-                {t('books.newEntry')}
+                <Stamp className="h-3.5 w-3.5" strokeWidth={2} />
+                {t('books.approvals.title')}
               </button>
             </div>
           </header>
@@ -588,7 +570,7 @@ export function BooksPage(): React.JSX.Element {
                       >
                         {t('basket.addN', { count: selectedForBasket.size })}
                       </button>
-                      {canManage && (
+                      {canDelete && (
                         <button
                           type="button"
                           onClick={() => setConfirmDeleteOpen(true)}
@@ -642,11 +624,11 @@ export function BooksPage(): React.JSX.Element {
                 <RefreshButton />
                 <button
                   type="button"
-                  onClick={() => setNewBookOpen(true)}
-                  className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-primary px-4 py-2 text-[0.85em] font-semibold text-primary-foreground transition-colors hover:bg-primary-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
+                  onClick={() => navigate('/books/approvals')}
+                  className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-hairline bg-surface-tinted px-4 py-2 text-[0.85em] font-semibold text-foreground transition-colors hover:border-primary hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
                 >
-                  <Plus className="h-3.5 w-3.5" strokeWidth={2.5} />
-                  {t('books.newEntry')}
+                  <Stamp className="h-3.5 w-3.5" strokeWidth={2} />
+                  {t('books.approvals.title')}
                 </button>
               </div>
             </div>
@@ -690,8 +672,6 @@ export function BooksPage(): React.JSX.Element {
                 <EmptyState
                   icon={BookOpen}
                   message={hasFilters ? t('books.empty') : t('books.emptyUnfiltered')}
-                  actionLabel={hasFilters ? undefined : t('books.newEntry')}
-                  onAction={hasFilters ? undefined : () => setNewBookOpen(true)}
                 />
               </div>
             ) : (
@@ -701,7 +681,7 @@ export function BooksPage(): React.JSX.Element {
                     key={row.id}
                     row={row}
                     isAr={isAr}
-                    canManage={canManage}
+                    canSubmit={canSubmit}
                     highlighted={row.id === highlightedId}
                     onSubmit={() => setSubmitBookId(row.id)}
                     onOpen={() => openBook(row)}
@@ -714,17 +694,6 @@ export function BooksPage(): React.JSX.Element {
           </PullToRefresh>
           </div>
         </>
-      )}
-
-      {newBookOpen && (
-        <NewBookDialog
-          categories={categories}
-          onSubmit={async (body) => {
-            await createMutation.mutateAsync(body)
-          }}
-          onClose={() => setNewBookOpen(false)}
-          submitting={createMutation.isPending}
-        />
       )}
 
       {submitBookId !== null && (
@@ -821,7 +790,7 @@ function DirectionPill({
 interface BookMobileCardProps {
   row: BookRead
   isAr: boolean
-  canManage: boolean
+  canSubmit: boolean
   highlighted: boolean
   onSubmit: () => void
   onOpen: () => void
@@ -831,7 +800,7 @@ interface BookMobileCardProps {
 function BookMobileCard({
   row,
   isAr,
-  canManage,
+  canSubmit,
   highlighted,
   onSubmit,
   onOpen,
@@ -872,7 +841,7 @@ function BookMobileCard({
         ) : (
           <>
             <ApprovalStatePill state="none" t={t} />
-            {canManage ? (
+            {canSubmit ? (
               <button
                 type="button"
                 onClick={(e) => { e.stopPropagation(); onSubmit() }}

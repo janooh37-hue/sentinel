@@ -2,8 +2,8 @@
  * AttendanceHeroCard — the live signal in the Employees hero.
  *
  * Behaviours pinned here:
- *   1. It renders seen / late / unpaired from the day payload.
- *   2. It lists the two worst rows, ordered no-punch → single-punch → late.
+ *   1. It renders seen / late / absent / unpaired from the day payload.
+ *   2. It lists the two worst rows, ordered absent → unpaired → late.
  *   3A clean day renders the clean state and no count badge.
  *   4. Without the capabilities it renders nothing AND never issues the request,
  *      which is the whole point of gating: /workforce/attendance/day would 403.
@@ -30,9 +30,11 @@ import { AttendanceHeroCard } from './AttendanceHeroCard'
 
 const START = '2026-08-19T01:00:00'
 const END = '2026-08-19T09:00:00'
-// The verdict is due when the case's match window closes: the card counts
-// exceptions only for duties that are over.
+// Judged by the policy the server publishes on every row: thirty minutes of
+// grace, an absence boundary at twice that, and a pairing verdict due when the
+// case's match window closes.
 const DUE = '2026-08-19T11:00:00'
+const ABSENCE_DUE = '2026-08-19T02:00:00'
 
 function row(overrides: Record<string, unknown> = {}) {
   return {
@@ -52,6 +54,8 @@ function row(overrides: Record<string, unknown> = {}) {
     last_punch_at: '2026-08-19T09:06:00',
     punch_count: 2,
     late_minutes: 0,
+    grace_minutes: 30,
+    absence_due_at: ABSENCE_DUE,
     judgment_due_at: DUE,
     on_leave: false,
     ...overrides,
@@ -86,7 +90,7 @@ describe('AttendanceHeroCard', () => {
         row({ employee_id: 'G-9002', name_en: 'Late Person', late_minutes: 62 }),
         row({
           employee_id: 'G-9003',
-          name_en: 'Missing Person',
+          name_en: 'Absent Person',
           punch_count: 0,
           first_punch_at: null,
           last_punch_at: null,
@@ -99,14 +103,15 @@ describe('AttendanceHeroCard', () => {
     renderCard()
 
     await waitFor(() => expect(screen.getByTestId('attendance-hero-count')).toHaveTextContent('3'))
-    // seen = 3 of 4 (one has no punch), late = 1, unpaired = 2 (missing + single).
+    // seen = 3 of 4 (one never punched), late = 1, absent = 1, unpaired = 1.
     // i18n resolves real copy in this suite, so assert on stable test ids.
     expect(screen.getByTestId('attendance-hero-seen')).toHaveTextContent('3')
     expect(screen.getByTestId('attendance-hero-late')).toHaveTextContent('1')
-    expect(screen.getByTestId('attendance-hero-unpaired')).toHaveTextContent('2')
+    expect(screen.getByTestId('attendance-hero-absent')).toHaveTextContent('1')
+    expect(screen.getByTestId('attendance-hero-unpaired')).toHaveTextContent('1')
 
     const names = screen.getAllByText(/Person|Ahmed/).map((n) => n.textContent)
-    expect(names.slice(0, 2)).toEqual(['Missing Person', 'Single Person'])
+    expect(names.slice(0, 2)).toEqual(['Absent Person', 'Single Person'])
   })
 
   it('renders the clean state with no badge when nothing needs a decision', async () => {

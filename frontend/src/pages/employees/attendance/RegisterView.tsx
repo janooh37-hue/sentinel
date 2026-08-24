@@ -14,9 +14,11 @@ import { useTranslation } from 'react-i18next'
 
 import { pickEmployeeName } from '@/lib/employeeName'
 
-import type { AttendanceRow, RowState } from './attendanceModel'
+import type { AttendanceRow, RowState, StateInput } from './attendanceModel'
 import {
   groupByUnitAndPost,
+  isUnpaired,
+  minutesPastGrace,
   needsDecision,
   orderByAttention,
   postSummary,
@@ -33,11 +35,15 @@ interface Props {
   onOpenEmployee: (employeeId: string) => void
 }
 
+// Green, yellow, amber, red: the ladder reads as escalation before a single
+// label is read. Unpaired is red too, but a different red - it is a hole in the
+// record rather than a person who did not come.
 const BEAD: Record<RowState, string> = {
   verified: 'bg-success',
+  grace: 'bg-caution',
   late: 'bg-warning',
-  single: 'bg-destructive',
-  missing: 'bg-accent',
+  unpaired: 'bg-destructive',
+  absent: 'bg-accent',
   leave: 'bg-info',
   pending: 'bg-faint',
 }
@@ -65,10 +71,11 @@ export function RegisterView({
         const shift = shiftCode
         const summary = postSummary(unitRows, input)
         const late = unitRows.filter((row) => rowState(row, input) === 'late').length
-        const unpaired = unitRows.filter((row) => {
-          const state = rowState(row, input)
-          return state === 'single' || state === 'missing'
-        }).length
+        const absent = unitRows.filter((row) => rowState(row, input) === 'absent').length
+        // Counted off the pairing fact, not off the state: a person who arrived
+        // late and never punched out is one late arrival AND one missing pair,
+        // and the register has to be able to say both.
+        const unpaired = unitRows.filter((row) => isUnpaired(row, input)).length
         // Posts needing attention first, then by size: the eye should land on
         // trouble before it reads a single name.
         const ordered = [...posts.entries()].sort((a, b) => {
@@ -108,7 +115,12 @@ export function RegisterView({
                 <Stat label={t('attendance.register.assigned')} value={unitRows.length} />
                 <Stat label={t('attendance.register.seen')} value={summary.seen} />
                 <Stat label={t('attendance.register.late')} value={late} tone="text-warning" />
-                <Stat label={t('attendance.register.unpaired')} value={unpaired} tone="text-accent" />
+                <Stat label={t('attendance.register.absent')} value={absent} tone="text-accent" />
+                <Stat
+                  label={t('attendance.register.unpaired')}
+                  value={unpaired}
+                  tone="text-destructive"
+                />
                 <Stat label={t('attendance.register.leave')} value={summary.leave} tone="text-info" />
               </dl>
             </header>
@@ -177,14 +189,14 @@ export function RegisterView({
                           </span>
                           <span
                             className={`shrink-0 font-mono text-[0.92em] ${
-                              state === 'missing' || state === 'single'
+                              state === 'absent' || state === 'unpaired'
                                 ? 'font-bold text-accent'
                                 : state === 'late'
                                   ? 'font-bold text-warning'
                                   : 'text-faint'
                             }`}
                           >
-                            {timeLabel(row, state, t)}
+                            {timeLabel(row, state, input, t)}
                           </span>
                         </button>
                       )
@@ -227,16 +239,19 @@ function Stat({
 function timeLabel(
   row: AttendanceRow,
   state: RowState,
+  input: StateInput,
   t: (key: string, options?: Record<string, unknown>) => string,
 ): string {
   if (state === 'leave') return t('attendance.register.leave')
   if (state === 'pending') return t('attendance.register.duePunch', { time: siteTime(row.scheduled_start_at) })
-  if (state === 'missing') return t('attendance.register.noPunch')
-  if (state === 'single') return t('attendance.register.onlyPunch', { time: siteTime(row.first_punch_at) })
+  if (state === 'absent') return t('attendance.register.noPunch')
+  if (state === 'unpaired') return t('attendance.register.onlyPunch', { time: siteTime(row.first_punch_at) })
   if (state === 'late') {
+    // Minutes PAST THE GRACE, which is what "late" means here. The raw offset
+    // from the start would print +44m for someone the policy counts 14 late.
     return t('attendance.register.latePunch', {
       time: siteTime(row.first_punch_at),
-      minutes: row.late_minutes ?? 0,
+      minutes: minutesPastGrace(row, input),
     })
   }
   return siteTime(row.first_punch_at)

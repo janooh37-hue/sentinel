@@ -37,7 +37,7 @@ from sqlalchemy.orm import Session
 
 from app.api.errors import AppError, NotFoundError, ValidationFailedError
 from app.config import get_settings
-from app.core import form_policy, leave_lifecycle
+from app.core import form_policy, leave_lifecycle, timesheet_codes
 from app.core import signature as signature_core
 from app.core.book_text import build_search_text, html_to_text
 from app.core.classifications import classified_ref, get_classification
@@ -63,6 +63,7 @@ from app.db.models import (
 from app.db.repos.classified_refs_repo import allocate_classified_serial
 from app.db.repos.refs_repo import allocate_ref_with_retry
 from app.schemas.employee import EMPLOYEE_STATUS_ACTIVE, EMPLOYEE_STATUS_RESIGNED
+from app.services import timesheet_service
 from app.services._pdf_executor import convert_docx_to_pdf as convert_docx_to_pdf
 
 if TYPE_CHECKING:
@@ -1766,6 +1767,24 @@ def generate_document(
             db.flush()
             doc_row.leave_id = leave_row.id
             leave_id = leave_row.id
+
+        # A generated sick or annual leave supersedes the manual absences it now
+        # explains: the employee produced the paper, so the AB rows are removed
+        # rather than left to argue with the leave on the time sheet. Outside the
+        # if/else on purpose — the dedup branch above reuses an existing row and
+        # never calls ``db.add``, and a re-generated certificate is exactly when
+        # an operator expects the correction to land. Gated on ``leave_code``, not
+        # a string compare, because the same column holds ``"Sick Leave"``,
+        # ``"Sick Leave - الإجازة المرضية"`` and ``"Sick"``.
+        if timesheet_codes.leave_code(leave_row.leave_type) in (
+            timesheet_codes.CODE_SICK,
+            timesheet_codes.CODE_ANNUAL,
+        ):
+            # ``commit=False``: this is part of the document's unit of work, so a
+            # failure in step 13 or later takes the supersede back with the rest.
+            timesheet_service.delete_absences_covered_by(
+                db, employee_id, leave_row.start_date, leave_row.end_date, commit=False
+            )
 
     # ------------------------------------------------------------------
     # 13. Violation form — insert Violation row

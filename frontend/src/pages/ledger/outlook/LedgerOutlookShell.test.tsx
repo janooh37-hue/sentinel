@@ -87,7 +87,10 @@ describe('LedgerOutlookShell activity deep links', () => {
     vi.mocked(api.getLedgerEntry).mockResolvedValue(entry(42) as unknown as LedgerEntryRead)
     renderShell('/ledger?open=42&keep=1')
     await waitFor(() => expect(screen.getByTestId('reading-pane')).toHaveTextContent('42'))
-    expect(screen.getByTestId('location')).toHaveTextContent('?keep=1')
+    // `open` is consumed by an effect that lands on a later commit than the
+    // reading pane's render, so this needs its own wait — asserted immediately
+    // it passes only while the machine is fast enough.
+    await waitFor(() => expect(screen.getByTestId('location')).toHaveTextContent('?keep=1'))
   })
 
   it('hydrates an off-list outgoing target independently of the current list', async () => {
@@ -96,7 +99,7 @@ describe('LedgerOutlookShell activity deep links', () => {
     renderShell('/ledger?open=42&keep=1')
     await waitFor(() => expect(screen.getByTestId('reading-pane')).toHaveTextContent('42'))
     expect(api.getLedgerEntry).toHaveBeenCalledWith(42)
-    expect(screen.getByTestId('location')).toHaveTextContent('?keep=1')
+    await waitFor(() => expect(screen.getByTestId('location')).toHaveTextContent('?keep=1'))
   })
 
   it('renders an exact-target error and retries without consuming open', async () => {
@@ -110,6 +113,6 @@ describe('LedgerOutlookShell activity deep links', () => {
     expect(screen.getByTestId('location')).toHaveTextContent('?open=42&keep=1')
     await userEvent.click(retry)
     await waitFor(() => expect(screen.getByTestId('reading-pane')).toHaveTextContent('42'))
-    expect(screen.getByTestId('location')).toHaveTextContent('?keep=1')
+    await waitFor(() => expect(screen.getByTestId('location')).toHaveTextContent('?keep=1'))
   })
 })

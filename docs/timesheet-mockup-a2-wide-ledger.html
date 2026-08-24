@@ -1,0 +1,850 @@
+<!doctype html>
+<html lang="en" dir="ltr" data-theme="light" data-density="default">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Monthly time sheet — A2 · Wide Ledger</title>
+<link rel="stylesheet" href="timesheet-mockups.css" />
+<style>
+/* ============================================================================
+   A2 — Wide Ledger. Direction A, revised against review:
+     1. edge-to-edge: the grid takes the whole screen, day cells grow with it
+     2. every day carries a body, so the month reads as a field of codes (from C)
+     3. drag to fill across days and rows
+     4. hover or focus a row -> that employee's per-code counts
+     5. select one employee -> extract his sheet for two months
+     6. a manual red block for days outside the billing window
+     7. the AK..AP totals columns come off the screen (the workbook keeps them)
+   Nothing here restates the kernel: tokens, buttons, ribbon, sheet, picker,
+   drag preview and row tally all live in timesheet-mockups.css/.js.
+   ========================================================================= */
+
+/* 1 — edge to edge. The frozen identity block measures 568px (38 + 74 + 196 +
+   87 + 168 plus borders) and the page keeps 16px gutters, so 600px is what the
+   day columns cannot have; the rest is divided by 31 and the grid ends where
+   the screen ends. Clamped: never below the readable 26px, never above 46px
+   (past that a row stops reading as one line).
+
+   `:root`, not `html`: the kernel declares --cell on :root (0,1,0), which
+   outranks a bare html selector (0,0,1) whatever the source order. */
+:root {
+  --cell: clamp(26px, calc((100vw - 600px) / 31), 46px);
+}
+
+html[data-density="compact"] { --cell: clamp(22px, calc((100vw - 600px) / 31), 34px); --row: 24px; --cell-font: 10px; }
+html[data-density="roomy"]   { --cell: clamp(34px, calc((100vw - 600px) / 31), 58px); --row: 38px; --cell-font: 13px; }
+
+.page {
+  max-inline-size: none;
+  padding: 18px 16px 70px;
+}
+
+.sheetwrap { max-block-size: 68vh; }
+
+/* 2 — cell by code. The kernel leaves P transparent because the letter carries
+   it; wide open, a transparent P makes the month read as a page of text rather
+   than a field you can scan. A quiet body per working day fixes that and still
+   lets the five exception fills carry all the weight. */
+.sheetwrap button.cell[data-code="P"] { background: var(--surface-tinted); color: var(--text-muted); }
+[data-theme="dark"] .sheetwrap button.cell[data-code="P"] { background: var(--surface-raised); }
+.sheetwrap button.cell[data-code="-"] { box-shadow: inset 0 0 0 1px var(--border); }
+
+/* the quoted workbook header — unchanged from A, the template is untouched */
+.docmast {
+  display: grid;
+  grid-template-columns: 58px minmax(0, 1fr) auto;
+  gap: 14px;
+  align-items: start;
+  padding: 13px 16px;
+  border-block-end: 1px solid var(--hairline);
+  background: var(--surface-raised);
+}
+
+.docmast .crest {
+  display: grid;
+  place-items: center;
+  inline-size: 58px;
+  block-size: 44px;
+  border: 1px solid var(--border-strong);
+  border-radius: 4px;
+  background: var(--surface);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--primary);
+  letter-spacing: 0.08em;
+}
+
+.docmast .quote {
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  line-height: 1.65;
+  color: var(--text-muted);
+  white-space: pre;
+  overflow-x: auto;
+}
+
+.docmast .quote b { color: var(--text); font-weight: 600; }
+.docmast .quote .var { color: var(--primary); font-weight: 600; }
+.docmast .stamp { display: grid; gap: 3px; text-align: end; font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--text-faint); }
+.docmast .stamp span { border: 1px dashed var(--border-strong); border-radius: 4px; padding: 3px 8px; }
+
+.quotelbl {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+  margin-block-end: 6px;
+}
+
+.quotelbl::before { content: ""; inline-size: 14px; block-size: 1px; background: var(--border-strong); }
+
+.ribbonrow { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin-block: 12px 10px; }
+.hint { font-size: 12px; color: var(--text-muted); }
+.hint kbd { font-family: var(--font-mono); font-size: 10px; padding: 1px 5px; border-radius: 5px; background: var(--surface-tinted); border: 1px solid var(--border); }
+.editmeta { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+
+/* the three panels under the grid: month tally, employee extract, release */
+.underside {
+  display: grid;
+  grid-template-columns: minmax(260px, 1fr) minmax(320px, 1.3fr) minmax(300px, 1.2fr);
+  gap: 14px;
+  margin-block-start: 14px;
+  align-items: start;
+}
+
+@media (max-width: 1100px) { .underside { grid-template-columns: 1fr; } }
+
+/* 3 — cells by code, the whole workbook (C's tally, kept as a panel) */
+.tally { display: grid; gap: 5px; }
+.tally .line { display: grid; grid-template-columns: 26px 1fr 40px 68px; gap: 8px; align-items: center; font-size: 12px; }
+.tally .glyph {
+  display: grid;
+  place-items: center;
+  block-size: 18px;
+  border-radius: 3px;
+  border: 1px solid color-mix(in oklab, var(--text) 14%, transparent);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 600;
+}
+.tally .n { font-family: var(--font-mono); font-size: 12px; text-align: end; font-variant-numeric: tabular-nums; }
+.tally .bar { block-size: 6px; border-radius: var(--radius-pill); background: var(--surface-tinted); overflow: hidden; }
+.tally .bar i { display: block; block-size: 100%; background: var(--primary); }
+.tally .line.zero { opacity: 0.4; }
+
+/* 5 — the employee extract */
+.extract { display: grid; gap: 11px; }
+.extract .pick { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.extract select {
+  font: inherit;
+  font-size: 12.5px;
+  padding: 7px 9px;
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  max-inline-size: 100%;
+}
+.extract .who { display: grid; gap: 3px; padding: 10px 12px; background: var(--surface-raised); border: 1px solid var(--hairline); border-radius: var(--radius-md); }
+.extract .who b { font-size: 13px; }
+.extract .who small { font-size: 11.5px; color: var(--text-muted); }
+.extract .span { display: grid; gap: 4px; font-size: 12px; color: var(--text-muted); }
+.extract .span .files { display: grid; gap: 2px; font-family: var(--font-mono); font-size: 11px; color: var(--text-faint); }
+.extract .block { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding-block-start: 9px; border-block-start: 1px solid var(--hairline); }
+.extract .block .why { flex-basis: 100%; font-size: 11.5px; color: var(--text-muted); }
+
+/* release strip */
+.release { display: grid; gap: 11px; }
+.release .why { font-size: 12px; color: var(--text-muted); }
+.release .acts { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+.release .files { display: grid; gap: 2px; font-size: 11px; color: var(--text-faint); }
+.confirm { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; font-size: 12px; color: var(--accent); }
+
+.paperlegend { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 9px 12px; margin-block-start: 14px; }
+.paperlegend .swatchmini { display: inline-flex; align-items: center; gap: 6px; font-size: 11px; color: #1c1f24; }
+.paperlegend .glyph {
+  display: grid;
+  place-items: center;
+  inline-size: 26px;
+  block-size: 18px;
+  border: 1px solid #c9c9c9;
+  border-radius: 3px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 600;
+}
+.paperlegend .cap { font-size: 10px; font-weight: 600; letter-spacing: 0.12em; text-transform: uppercase; color: #6b7280; margin-inline-end: 4px; }
+.paperlegend .trailing { margin-inline-start: auto; color: #6b7280; }
+
+.mastblock { display: flex; flex-direction: column; align-items: flex-end; gap: 8px; }
+.mastchips { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.statline { display: flex; flex-wrap: wrap; align-items: center; gap: 16px; }
+.statline .explain { font-size: 12px; color: var(--text-muted); max-inline-size: 60ch; }
+
+/* Arabic is not letter-spaced; :lang(ar) so Latin strings inside an Arabic page
+   keep their tracking (the attendance designations print in English). */
+.quotelbl:lang(ar) { letter-spacing: 0; text-transform: none; }
+</style>
+</head>
+<body>
+<div id="review"></div>
+<header id="chrome"></header>
+
+<main class="page">
+  <div class="masthead">
+    <div>
+      <div class="eyebrow" id="eyebrow"></div>
+      <h1 id="title"></h1>
+      <p id="lede"></p>
+    </div>
+    <div class="spread" id="mastright"></div>
+  </div>
+
+  <div class="bar" id="controls"></div>
+
+  <div class="ribbonrow">
+    <div class="ribbon" id="ribbon"></div>
+    <span class="hint" id="hint"></span>
+    <div class="spread editmeta" id="editmeta"></div>
+  </div>
+
+  <section class="card" id="pfcard">
+    <header><h2 id="pftitle"></h2><p id="pfsub"></p></header>
+    <div class="body"><div class="pf" id="pflist"></div></div>
+  </section>
+
+  <section class="card" style="margin-block-start:14px">
+    <div class="docmast" id="docmast"></div>
+    <div class="sheetwrap" id="sheet"></div>
+  </section>
+
+  <section class="card" id="statcard" hidden style="margin-block-start:14px">
+    <header><h2 id="stattitle"></h2></header>
+    <div class="body statline" id="statbody"></div>
+  </section>
+
+  <div class="underside">
+    <section class="card">
+      <header><h2 id="tallytitle"></h2><p id="tallysub"></p></header>
+      <div class="body"><div class="tally" id="tally"></div></div>
+    </section>
+
+    <section class="card">
+      <header><h2 id="extitle"></h2><p id="exsub"></p></header>
+      <div class="body extract" id="extract"></div>
+    </section>
+
+    <section class="card">
+      <header><h2 id="reltitle"></h2></header>
+      <div class="body release" id="release"></div>
+    </section>
+  </div>
+
+  <div class="paper paperlegend" id="paperlegend"></div>
+  <p class="footnote" id="footnote"></p>
+</main>
+
+<script src="timesheet-mockups.js"></script>
+<script>
+  /* The red block is this direction's; the earlier mockups keep the seven
+     emitted codes they were reviewed with. */
+  TS.state.blockCode = true
+
+  const L = (en, ar) => (TS.state.lang === 'ar' ? ar : en)
+  const el = (id) => document.getElementById(id)
+  const rowById = (id) => TS.rows.find((r) => r.id === id)
+  let confirming = false
+  let showWarnings = false
+  let billStart = 23
+
+  /* ------------------------------------------------------------- masthead */
+  function mastright() {
+    const m = TS.monthLabel()
+    const stops = TS.blocking().length
+    const warns = TS.warnings().length
+    const chip = stops
+      ? `<span class="chip stop"><span class="num">${stops}</span> ${L('to fix', 'للإصلاح')}</span>`
+      : warns
+        ? `<span class="chip warn"><span class="num">${warns}</span> ${L('to review', 'للمراجعة')}</span>`
+        : `<span class="chip ok">${L('All checks passed', 'اجتازت الفحوصات')}</span>`
+    el('mastright').innerHTML =
+      `<div class="mastblock">` +
+      `<div class="monthmark"><span class="num">${m.stamp}</span><small>${m.ar}</small></div>` +
+      `<div class="mastchips">${chip}` +
+      (TS.state.closed
+        ? `<span class="chip info">${TS.t('closed')}</span>`
+        : `<span class="chip">${TS.t('open')} · <span class="num">${m.days}</span> ${L('days', 'يوماً')}</span>`) +
+      `</div></div>`
+  }
+
+  function controls() {
+    const m = TS.monthLabel()
+    el('controls').innerHTML =
+      `<button type="button" class="icobtn" data-act="prev" aria-label="${TS.t('prevMonth')}">‹</button>` +
+      `<b class="mono" style="font-size:13px">${TS.state.lang === 'ar' ? m.ar : m.en}</b>` +
+      `<button type="button" class="icobtn" data-act="next" aria-label="${TS.t('nextMonth')}">›</button>` +
+      `<span class="rule"></span>` +
+      `<div class="seg" role="group" aria-label="${L('Roster', 'الكشف')}">` +
+      `<button type="button" data-sheet="main" aria-pressed="${TS.state.sheet === 'main'}">${TS.t('main')}</button>` +
+      `<button type="button" data-sheet="drivers" aria-pressed="${TS.state.sheet === 'drivers'}">${TS.t('drivers')}</button></div>` +
+      `<div class="seg" role="group" aria-label="${L('Deliverable', 'المخرج')}">` +
+      `<button type="button" data-variant="attendance" aria-pressed="${TS.state.variant === 'attendance'}">${TS.t('attendance')}</button>` +
+      `<button type="button" data-variant="statistics" aria-pressed="${TS.state.variant === 'statistics'}">${TS.t('statistics')}</button></div>` +
+      `<span class="rule"></span>` +
+      `<span class="field">${TS.t('density')}<span class="seg" role="group" aria-label="${TS.t('density')}">` +
+      ['compact', 'default', 'roomy']
+        .map(
+          (d, i) =>
+            `<button type="button" data-density="${d}" aria-pressed="${TS.state.density === d}" aria-label="${
+              [L('Compact', 'مضغوط'), L('Default', 'افتراضي'), L('Roomy', 'مريح')][i]
+            }">${['S', 'M', 'L'][i]}</button>`,
+        )
+        .join('') +
+      `</span></span>`
+    el('controls').querySelector('[data-act="prev"]').onclick = () => TS.setMonth(-1)
+    el('controls').querySelector('[data-act="next"]').onclick = () => TS.setMonth(1)
+    el('controls').querySelectorAll('[data-sheet]').forEach((b) => (b.onclick = () => TS.setSheet(b.dataset.sheet)))
+    el('controls').querySelectorAll('[data-variant]').forEach((b) => (b.onclick = () => TS.setVariant(b.dataset.variant)))
+    el('controls').querySelectorAll('[data-density]').forEach((b) => (b.onclick = () => TS.setDensity(b.dataset.density)))
+  }
+
+  function ribbonrow() {
+    TS.renderRibbon(el('ribbon'), { keys: !TS.state.closed && TS.state.variant === 'attendance' })
+    el('hint').innerHTML = TS.state.closed
+      ? TS.t('closedNote')
+      : TS.state.variant === 'statistics'
+        ? L(
+            'The statistics grid is derived — correct the attendance grid, not this one.',
+            'شبكة الإحصائية مشتقة — صحّح شبكة الحضور لا هذه.',
+          )
+        : L(
+            'Arm a code, then <b>drag</b> across days or rows to fill. A day letter (<kbd>p</kbd> <kbd>a</kbd> <kbd>s</kbd> <kbd>b</kbd> <kbd>t</kbd> <kbd>n</kbd> <kbd>x</kbd>) paints the focused cell. Click a name to extract that employee.',
+            'فعّل رمزاً ثم <b>اسحب</b> على الأيام أو الصفوف للتلوين. حرف الرمز (<kbd>p</kbd> <kbd>a</kbd> <kbd>s</kbd> <kbd>b</kbd> <kbd>t</kbd> <kbd>n</kbd> <kbd>x</kbd>) يلوّن الخلية المحددة. انقر على اسم لاستخراج كشف الموظف.',
+          )
+
+    const n = TS.editCount()
+    const host = el('editmeta')
+    if (TS.state.closed) {
+      host.innerHTML = `<span class="chip info">${TS.t('closedNote')}</span>`
+      return
+    }
+    host.innerHTML =
+      `<span class="chip"><span class="num">${n}</span> ${TS.t('edited')}</span>` +
+      `<button type="button" class="linkbtn" data-act="undo"${n ? '' : ' disabled aria-disabled="true"'}>↩ ${TS.t('undo')}</button>`
+    if (n) host.querySelector('[data-act="undo"]').onclick = () => TS.undo()
+  }
+
+  /* ------------------------------------------------------------ preflight */
+  function preflight() {
+    const stops = TS.blocking()
+    const warns = TS.warnings()
+    el('pftitle').textContent = TS.t('issues')
+    el('pfsub').textContent = stops.length
+      ? `${stops.length} ${TS.t('blocking')} · ${warns.length} ${TS.t('warning')}`
+      : warns.length
+        ? `${TS.t('allClear')} · ${warns.length} ${TS.t('warning')}`
+        : TS.t('allClear')
+
+    const host = el('pflist')
+    host.textContent = ''
+    if (!stops.length) {
+      const line = document.createElement('p')
+      line.style.cssText = 'margin:0;font-size:12.5px;color:var(--success)'
+      line.textContent = `✓ ${TS.t('allClear')}`
+      host.append(line)
+    }
+    const item = (entry) => {
+      const row = document.createElement('button')
+      row.type = 'button'
+      row.className = `item ${entry.level}`
+      row.innerHTML =
+        `<span class="chip ${entry.level === 'stop' ? 'stop' : 'warn'}">${
+          entry.level === 'stop' ? TS.t('blocking') : TS.t('warning')
+        }</span><span class="who">${entry.who}</span>` +
+        `<span>${TS.state.lang === 'ar' ? entry.ar : entry.en}</span>` +
+        `<span class="go">${L('Open employee', 'فتح ملف الموظف')}</span>`
+      row.onclick = () => (TS.resolve(entry), TS.toast(`${entry.who} — ${TS.t('resolved')}`))
+      return row
+    }
+    stops.forEach((entry) => host.append(item(entry)))
+    if (warns.length) {
+      const toggle = document.createElement('button')
+      toggle.type = 'button'
+      toggle.className = 'linkbtn'
+      toggle.setAttribute('aria-expanded', String(showWarnings))
+      toggle.textContent = `${showWarnings ? '▾' : '▸'} ${warns.length} ${TS.t('warning')}`
+      toggle.onclick = () => ((showWarnings = !showWarnings), TS.emit())
+      host.append(toggle)
+      if (showWarnings) warns.forEach((entry) => host.append(item(entry)))
+    }
+  }
+
+  /* -------------------------------------------------- the quoted header */
+  function docmast() {
+    const stamp = `${['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'][TS.state.month - 1]}-${TS.state.year}`
+    el('docmast').innerHTML =
+      `<div class="crest">GSSG</div>` +
+      `<div><span class="quotelbl">${L('Header as it prints', 'الترويسة كما تُطبع')}</span>` +
+      `<div class="quote"><b>Global Security Service Group- MONTHLY  TIME SHEET</b>\n` +
+      `Client : JUDICIAL DEPARTMENT        Site Name :   JD 908\n` +
+      `Clent Code : P0331_JD_PRN_908EXT    GSSG-HR\n` +
+      `For the Month of :<span class="var">${stamp}</span></div></div>` +
+      `<div class="stamp"><span>Date Of Issued</span><span>Issue No</span><span>Révision</span></div>`
+  }
+
+  /* --------------------------------------------------------- statistics */
+  function statpanel() {
+    const stats = TS.state.variant === 'statistics'
+    el('statcard').hidden = !stats
+    if (!stats) return
+    const implied = TS.impliedPosts()
+    const drift = implied > TS.state.postCount
+    el('stattitle').textContent = TS.t('statistics')
+    el('statbody').innerHTML =
+      `<span class="field"><label for="posts">${TS.t('posts')}</label>` +
+      `<input id="posts" type="number" min="0" max="26" value="${TS.state.postCount}"></span>` +
+      `<span class="readout"><span class="big">${implied.toFixed(1)}</span>` +
+      `<span class="cap">${TS.t('impliedPosts')}<br>${drift ? TS.t('impliedDrift') : TS.t('impliedOk')}</span></span>` +
+      `<span class="chip num ${drift ? 'stop' : 'ok'}">${drift ? '▲' : '✓'} ${implied.toFixed(1)} / ${TS.state.postCount}</span>` +
+      `<span class="explain">${L(
+        'Block 1 is the contracted posts and prints as manned; block 2 is surplus headcount on its filler code. A red-blocked day survives both — an unbilled day is never presented as a manned post.',
+        'الكتلة 1 هي النقاط التعاقدية وتُطبع مشغولة؛ الكتلة 2 عدد زائد برمزه التعويضي. اليوم المحجوب بالأحمر يبقى كما هو في الحالتين — فاليوم غير المفوتر لا يُعرض أبداً كنقطة مشغولة.',
+      )}</span>`
+    el('statbody').querySelector('#posts').onchange = (e) => TS.setPostCount(e.target.value)
+  }
+
+  /* ------------------------------------------- cells by code (from C) */
+  function tally() {
+    const counts = TS.monthTally()
+    const total = Object.values(counts).reduce((a, b) => a + b, 0) || 1
+    el('tallytitle').textContent = L('Cells by code', 'الخلايا حسب الرمز')
+    el('tallysub').textContent = `${total} ${L('cells this month', 'خلية هذا الشهر')} · ${
+      TS.state.variant === 'attendance' ? TS.t('attendance') : TS.t('statistics')
+    }`
+    el('tally').innerHTML = TS.allCodes()
+      .map((c) => {
+        const n = counts[c.slug] || 0
+        return (
+          `<div class="line${n ? '' : ' zero'}">` +
+          `<span class="glyph" data-code="${c.slug}">${c.slug === '-' ? '–' : c.slug}</span>` +
+          `<span>${TS.state.lang === 'ar' ? c.ar : c.en}</span>` +
+          `<span class="n">${n}</span>` +
+          `<span class="bar"><i style="inline-size:${((n / total) * 100).toFixed(1)}%"></i></span></div>`
+        )
+      })
+      .join('')
+  }
+
+  /* ------------------------------------- the employee two-month extract */
+  /** Departure day, read off the first off-roster day of the month. */
+  function departure(row) {
+    const first = row.codes.findIndex((c) => c === '-')
+    return first === -1 ? null : first // 0-based index == last worked day number
+  }
+
+  function extract() {
+    const sel = TS.state.selected
+    const row = sel ? rowById(sel) : null
+    const prev = TS.state.month - 1
+    el('extitle').textContent = L('Employee sheet', 'كشف موظف')
+    el('exsub').textContent = L(
+      'For a resignation or termination handover.',
+      'لتسليم حالة استقالة أو انتهاء خدمة.',
+    )
+
+    const options = TS.rows
+      .map((r) => `<option value="${r.id}"${r.id === sel ? ' selected' : ''}>${r.id} · ${r.name}</option>`)
+      .join('')
+
+    const leftOn = row ? departure(row) : null
+    const who = row
+      ? `<div class="who"><b>${row.name}</b>` +
+        `<small class="mono">${row.id}</small>` +
+        `<small>${row.desig.en} · ${row.nat}</small>` +
+        `<small>${
+          leftOn
+            ? L(
+                `Off roster from day ${leftOn + 1} — last worked day ${leftOn}.`,
+                `خارج الكشف من اليوم ${leftOn + 1} — آخر يوم عمل ${leftOn}.`,
+              )
+            : L('Still on the roster for the whole month.', 'ما زال على الكشف طوال الشهر.')
+        }</small></div>`
+      : ''
+
+    const files = row
+      ? `<div class="files">` +
+        `<span class="filename">كشف حضور ${row.name} ${TS.monthName(prev, 'ar')}.xlsx</span>` +
+        `<span class="filename">كشف حضور ${row.name} ${TS.monthName(TS.state.month, 'ar')}.xlsx</span></div>`
+      : ''
+
+    el('extract').innerHTML =
+      `<div class="pick"><label class="vh" for="emp">${L('Employee', 'الموظف')}</label>` +
+      `<select id="emp"><option value="">${L('Select an employee…', 'اختر موظفاً…')}</option>${options}</select></div>` +
+      who +
+      `<div class="span"><span>${L(
+        `Two workbooks: ${TS.monthName(prev)} and ${TS.monthName(TS.state.month)} ${TS.state.year}. HR asked for the month of departure and the month before it.`,
+        `ملفان: ${TS.monthName(prev)} و${TS.monthName(TS.state.month)} ${TS.state.year}. طلبت الموارد البشرية شهر انتهاء الخدمة والشهر السابق له.`,
+      )}</span>${files}</div>` +
+      `<div class="block"><span class="field"><label for="billday">${L('Bill starts on day', 'تبدأ الفوترة في اليوم')}</label>` +
+      `<input id="billday" type="number" min="1" max="31" value="${billStart}"></span>` +
+      `<button type="button" class="btn btn-outline btn-sm" data-act="block"${row && !TS.state.closed ? '' : ' disabled'}>` +
+      `<span class="glyph" data-code="X" aria-hidden="true" style="padding:0 4px;border-radius:3px">X</span> ${L(
+        `Red block 1–${billStart - 1} of ${TS.monthName(TS.state.month)}`,
+        `حجب 1–${billStart - 1} من ${TS.monthName(TS.state.month)}`,
+      )}</button>` +
+      `<span class="why">${L(
+        'Applies to the month on screen — step back a month to block the earlier one. Roster edges are left alone, and a blocked day survives into the client statistics instead of being billed as a manned post.',
+        'يُطبّق على الشهر المعروض — ارجع شهراً لحجب الشهر السابق. لا تُمسّ حدود الكشف، واليوم المحجوب يبقى كما هو في إحصائية العميل بدل أن يُفوتر كنقطة مشغولة.',
+      )}</span></div>` +
+      `<button type="button" class="btn btn-primary" data-act="export"${row ? '' : ' disabled'}>↓ ${L(
+        'Export employee sheet · 2 months',
+        'تنزيل كشف الموظف · شهران',
+      )}</button>`
+
+    el('extract').querySelector('#emp').onchange = (e) => {
+      TS.state.selected = e.target.value || null
+      TS.emit()
+    }
+    el('extract').querySelector('#billday').onchange = (e) => {
+      billStart = Math.max(1, Math.min(31, Number(e.target.value) || 1))
+      TS.emit()
+    }
+    const block = el('extract').querySelector('[data-act="block"]')
+    if (row && !TS.state.closed) {
+      /* Read the selection at click time, never from this closure: a change
+         event repaints on the next task, so a click that lands in between would
+         otherwise write to the previously selected employee. */
+      block.onclick = () => {
+        const target = rowById(TS.state.selected)
+        if (!target) return
+        let n = 0
+        for (let d = 1; d < billStart; d += 1) {
+          const code = TS.rawCode(target, d)
+          /* A roster edge outranks the block: NG and `-` mean he was not on the
+             roster at all that day, which is a stronger statement than "on the
+             roster but outside the billing window". */
+          if (code === null || code === 'NG' || code === '-') continue
+          TS.setCell(target.id, d, 'X')
+          n += 1
+        }
+        TS.toast(
+          n
+            ? L(
+                `${target.id} · ${n} days red blocked in ${TS.monthName(TS.state.month)}`,
+                `${target.id} · حُجب ${n} يوماً في ${TS.monthName(TS.state.month)}`,
+              )
+            : L('Nothing to block — those days are roster edges.', 'لا شيء للحجب — تلك الأيام حدود كشف.'),
+        )
+      }
+    }
+    const go = el('extract').querySelector('[data-act="export"]')
+    if (row) {
+      go.onclick = () => {
+        const target = rowById(TS.state.selected)
+        if (!target) return
+        TS.toast(
+          L(
+            `Preparing 2 workbooks for ${target.id}: ${TS.monthName(prev)} + ${TS.monthName(TS.state.month)}`,
+            `جاري تجهيز ملفين لـ ${target.id}: ${TS.monthName(prev)} + ${TS.monthName(TS.state.month)}`,
+          ),
+        )
+      }
+    }
+  }
+
+  /* -------------------------------------------------------------- release */
+  function release() {
+    const m = TS.monthLabel()
+    const blocked = TS.blocking().length > 0 && !TS.state.closed
+    el('reltitle').textContent = L('Release the month', 'إصدار الشهر')
+    el('release').innerHTML =
+      (TS.state.closed
+        ? `<span class="seal"><span class="ring">✓</span>${TS.t('closed')} · ${TS.state.lang === 'ar' ? m.ar : m.en}</span>`
+        : '') +
+      `<div class="files"><code class="filename">${m.file}</code><code class="filename">${m.fileStats}</code></div>` +
+      `<span class="why">${
+        TS.state.closed
+          ? TS.t('closedNote')
+          : blocked
+            ? L(
+                'Two checks must be fixed before either workbook can be produced.',
+                'يجب إصلاح فحصين قبل إنتاج أي من الملفين.',
+              )
+            : TS.t('firstDownload')
+      }</span>` +
+      `<div class="acts">` +
+      `<button type="button" class="btn btn-primary" data-act="dl-att"${blocked ? ' disabled' : ''}>↓ ${TS.t('downloadAttendance')}</button>` +
+      `<button type="button" class="btn btn-outline" data-act="dl-stat"${blocked ? ' disabled' : ''}>↓ ${TS.t('downloadStatistics')}</button>` +
+      (TS.state.closed
+        ? confirming
+          ? `<span class="confirm">${L('Reopen and supersede the sent file?', 'إعادة الفتح وإلغاء الملف المُرسل؟')}` +
+            `<button type="button" class="btn btn-danger btn-sm" data-act="reopen-yes">${TS.t('reopen')}</button>` +
+            `<button type="button" class="btn btn-outline btn-sm" data-act="reopen-no">${TS.t('cancel')}</button></span>`
+          : `<button type="button" class="btn btn-danger btn-sm" data-act="reopen">${TS.t('reopen')}</button>`
+        : '') +
+      `</div>`
+    el('release').querySelector('[data-act="dl-att"]').onclick = () => TS.download('attendance')
+    el('release').querySelector('[data-act="dl-stat"]').onclick = () => TS.download('statistics')
+    const ask = el('release').querySelector('[data-act="reopen"]')
+    if (ask) ask.onclick = () => ((confirming = true), TS.emit())
+    const yes = el('release').querySelector('[data-act="reopen-yes"]')
+    if (yes) yes.onclick = () => ((confirming = false), TS.reopenMonth())
+    const no = el('release').querySelector('[data-act="reopen-no"]')
+    if (no) no.onclick = () => ((confirming = false), TS.emit())
+  }
+
+  function paperlegend() {
+    el('paperlegend').innerHTML =
+      `<span class="cap">${L('As printed', 'كما تُطبع')}</span>` +
+      TS.allCodes()
+        .map(
+          (c) =>
+            `<span class="swatchmini"><span class="glyph" data-code="${c.slug}">${
+              c.slug === '-' ? '–' : c.slug
+            }</span>${TS.state.lang === 'ar' ? c.ar : c.en}</span>`,
+        )
+        .join('') +
+      `<span class="swatchmini trailing">SL␣ ${L(
+        'carries a trailing space — the client sheet totals it with COUNTIF($AO$5)',
+        'ينتهي بمسافة — تحتسبه ورقة العميل بدالة COUNTIF($AO$5)',
+      )}</span>`
+  }
+
+  function footnote() {
+    el('footnote').innerHTML = L(
+      'Sample data: 26 invented rows against 24 contracted posts, the live ratio (275 / 249) at a scale that fits one screen. The <b>AK..AP totals block still prints in the workbook</b> — Total day, Off, AB, AL, SL␣, TR — it is only off the screen; hover a row for the same counts. The header block is a verbatim quotation of the template, misspellings included. The red block <b>X</b> is a new cell value: the workbook needs one more legend row and one more conditional format before it can be sent.',
+      'بيانات نموذجية: 26 صفاً مقابل 24 نقطة تعاقدية، وهي نسبة النظام الفعلي (275 / 249) بمقياس يظهر في شاشة واحدة. <b>كتلة المجاميع AK..AP ما زالت تُطبع في الملف</b> — أيام العمل والراحة والغياب والإجازات والخدمة الوطنية — وأُزيلت من الشاشة فقط؛ مرّر المؤشر على أي صف لترى الأعداد نفسها. كتلة الترويسة نقل حرفي من القالب بما فيها الأخطاء الإملائية. الرمز الأحمر <b>X</b> قيمة خلية جديدة: يحتاج الملف صفاً إضافياً في مفتاح الرموز وتنسيقاً شرطياً إضافياً قبل إرساله.',
+    )
+  }
+
+  /* ============================ 3 — drag to fill ========================= */
+  /* Commit once, on release. A repaint mid-gesture would tear the cell out from
+     under the pointer, so pointermove only paints the preview attribute. */
+  let drag = null
+  let justDragged = false
+  let tag = null
+
+  const cellAt = (target) => target?.closest?.('button.cell[data-row]')
+  const rowIndex = (id) => TS.rows.findIndex((r) => r.id === id)
+
+  function clearPreview() {
+    el('sheet').querySelectorAll('button.cell[data-preview]').forEach((c) => delete c.dataset.preview)
+  }
+
+  function previewRect(toRow, toDay) {
+    clearPreview()
+    const a = rowIndex(drag.row)
+    const b = rowIndex(toRow)
+    const [r1, r2] = a <= b ? [a, b] : [b, a]
+    const [d1, d2] = drag.day <= toDay ? [drag.day, toDay] : [toDay, drag.day]
+    const cells = []
+    for (let r = r1; r <= r2; r += 1) {
+      for (let d = d1; d <= d2; d += 1) {
+        const node = el('sheet').querySelector(`button.cell[data-row="${TS.rows[r].id}"][data-day="${d}"]`)
+        if (node) {
+          node.dataset.preview = '1'
+          cells.push({ row: TS.rows[r].id, day: d })
+        }
+      }
+    }
+    drag.cells = cells
+  }
+
+  function showTag(x, y) {
+    if (!tag) {
+      tag = document.createElement('div')
+      tag.className = 'dragtag'
+      document.body.append(tag)
+    }
+    tag.textContent = `${drag.cells.length} → ${TS.slugOf(drag.code)}`
+    tag.style.left = `${x + 14}px`
+    tag.style.top = `${y + 14}px`
+  }
+
+  function endDrag(commit) {
+    if (!drag) return
+    const { cells, code } = drag
+    drag = null
+    document.documentElement.removeAttribute('data-dragging')
+    tag?.remove()
+    tag = null
+    clearPreview()
+    if (!commit || cells.length < 2) return
+    cells.forEach(({ row, day }) => TS.setCell(row, day, code))
+    justDragged = true
+    TS.toast(
+      L(
+        `${cells.length} cells → ${TS.slugOf(code)}`,
+        `${cells.length} خلية → ${TS.slugOf(code)}`,
+      ),
+    )
+  }
+
+  el('sheet').addEventListener('pointerdown', (e) => {
+    if (e.button !== 0) return
+    const cell = cellAt(e.target)
+    if (!cell || TS.state.closed || TS.state.variant !== 'attendance') return
+    const row = rowById(cell.dataset.row)
+    const day = Number(cell.dataset.day)
+    /* With a code armed the drag fills that code; with nothing armed it fills
+       the cell you started from, which is the spreadsheet reflex. */
+    const code = TS.state.brush ?? TS.rawCode(row, day)
+    if (!code) return
+    drag = { row: cell.dataset.row, day, code, cells: [] }
+    document.documentElement.dataset.dragging = '1'
+    previewRect(cell.dataset.row, day)
+  })
+
+  document.addEventListener('pointermove', (e) => {
+    if (!drag) return
+    const cell = cellAt(document.elementFromPoint(e.clientX, e.clientY))
+    if (cell) previewRect(cell.dataset.row, Number(cell.dataset.day))
+    showTag(e.clientX, e.clientY)
+  })
+
+  document.addEventListener('pointerup', () => endDrag(true))
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && drag) endDrag(false)
+  })
+
+  /* A drag ends in a click on the last cell; the kernel would treat it as a
+     single paint or open the picker. Swallow exactly that one click. */
+  el('sheet').addEventListener(
+    'click',
+    (e) => {
+      if (justDragged) {
+        justDragged = false
+        e.stopPropagation()
+        e.preventDefault()
+        return
+      }
+      /* The statistics grid is derived: block edits here rather than letting a
+         correction land on a cell the renderer will overwrite. */
+      if (TS.state.variant === 'statistics' && cellAt(e.target)) {
+        e.stopPropagation()
+        e.preventDefault()
+        TS.toast(
+          L('Correct the attendance grid — this one is derived.', 'صحّح شبكة الحضور — هذه مشتقة.'),
+          'warn',
+        )
+      }
+    },
+    true,
+  )
+
+  /* ==================== 4 — per-row counts on hover / focus ============== */
+  let tallyBox = null
+  let tallyRow = null
+
+  function hideRowTally() {
+    tallyBox?.remove()
+    tallyBox = null
+    tallyRow = null
+  }
+
+  /** Anchor the box to the row: above it when there is room, otherwise below. */
+  function placeRowTally(tr) {
+    const box = tr.getBoundingClientRect()
+    const size = tallyBox.getBoundingClientRect()
+    const rtl = document.documentElement.dir === 'rtl'
+    const x = rtl ? box.right - size.width : box.left
+    tallyBox.style.left = `${Math.max(8, Math.min(x, window.innerWidth - size.width - 8))}px`
+    const above = box.top - size.height - 6
+    tallyBox.style.top = `${above > 60 ? above : box.bottom + 6}px`
+  }
+
+  function showRowTally(tr) {
+    if (!tr || drag) return
+    if (tallyRow === tr.dataset.row && tallyBox) return placeRowTally(tr)
+    hideRowTally()
+    const row = rowById(tr.dataset.row)
+    if (!row) return
+    const counts = TS.codeTally(row)
+    tallyBox = document.createElement('div')
+    tallyBox.className = 'rowtally'
+    tallyBox.setAttribute('role', 'status')
+    tallyBox.innerHTML =
+      `<span class="who"><b>${row.id}</b> ${row.name}</span>` +
+      TS.allCodes()
+        .map(
+          (c) =>
+            `<span class="pair${counts[c.slug] ? '' : ' zero'}" title="${
+              TS.state.lang === 'ar' ? c.ar : c.en
+            }"><span class="glyph" data-code="${c.slug}">${c.slug === '-' ? '–' : c.slug}</span>${counts[c.slug]}</span>`,
+        )
+        .join('')
+    document.body.append(tallyBox)
+    tallyRow = tr.dataset.row
+    placeRowTally(tr)
+  }
+
+  el('sheet').addEventListener('pointerover', (e) => showRowTally(e.target.closest?.('tr[data-row]')))
+  el('sheet').addEventListener('pointerleave', hideRowTally)
+  el('sheet').addEventListener('focusin', (e) => showRowTally(e.target.closest?.('tr[data-row]')))
+
+  /* Focusing a cell scrolls the sheet, which used to destroy the tally the
+     focus had just opened. Follow the row instead, and only drop the box when
+     its row has left the viewport. */
+  window.addEventListener(
+    'scroll',
+    () => {
+      if (!tallyBox || !tallyRow) return
+      const tr = el('sheet').querySelector(`tr[data-row="${tallyRow}"]`)
+      const box = tr?.getBoundingClientRect()
+      if (!box || box.bottom < 80 || box.top > window.innerHeight - 20) return hideRowTally()
+      placeRowTally(tr)
+    },
+    true,
+  )
+
+  /* Clicking a name selects that employee for the extract. The <select> is the
+     accessible control; this is the shortcut for people already in the grid. */
+  el('sheet').addEventListener('click', (e) => {
+    const cell = e.target.closest?.('td.c-name, td.c-id, td.c-no')
+    if (!cell) return
+    const id = cell.closest('tr')?.dataset.row
+    if (!id) return
+    TS.state.selected = TS.state.selected === id ? null : id
+    TS.emit()
+  })
+
+  /* ------------------------------------------------------------- painting */
+  function paint() {
+    TS.renderChrome(el('chrome'))
+    el('eyebrow').textContent = TS.t('eyebrow')
+    el('title').textContent = TS.t('title')
+    el('lede').textContent = TS.t('lede')
+    mastright()
+    controls()
+    ribbonrow()
+    preflight()
+    docmast()
+    /* 7 — no AK..AP columns on screen; the workbook still carries them. */
+    TS.renderSheet(el('sheet'), { totals: false })
+    if (TS.state.selected) {
+      el('sheet').querySelector(`tr[data-row="${TS.state.selected}"]`)?.classList.add('armed')
+    }
+    statpanel()
+    tally()
+    extract()
+    release()
+    paperlegend()
+    footnote()
+  }
+
+  TS.renderReview(
+    el('review'),
+    'a2',
+    'Screen-wide ledger · drag to fill · row counts on hover · red block · two-month employee extract',
+  )
+  TS.on('render', paint)
+  TS.on('change', paint)
+  paint()
+</script>
+</body>
+</html>

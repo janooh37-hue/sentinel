@@ -170,6 +170,12 @@ class SetPermissionRequest(BaseModel):
     expires_at: datetime | None = None
 
 
+class SetPermissionBulkRequest(BaseModel):
+    """Apply several override changes in one all-or-nothing call."""
+
+    items: list[SetPermissionRequest] = Field(min_length=1, max_length=200)
+
+
 __all__ = [
     "AdminUserRead",
     "ApproveRequest",
@@ -182,6 +188,7 @@ __all__ = [
     "RejectRequest",
     "ResetPasswordRequest",
     "SessionUser",
+    "SetPermissionBulkRequest",
     "SetPermissionRequest",
     "SetRoleRequest",
     "UserPermissionRead",

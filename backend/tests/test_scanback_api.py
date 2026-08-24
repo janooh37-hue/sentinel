@@ -1,6 +1,6 @@
 """TDD: the /books/awaiting-scan route and the scanback Web Push item.
 
-Both are gated on books.manage — the same capability POST /attachments needs.
+Both are gated on books.edit — the same capability POST /attachments needs.
 A user who can generate a document but not file its signed copy must get an
 empty list and no push, not a nag whose drop target 403s.
 """
@@ -108,8 +108,8 @@ def test_scope_all_shows_other_peoples(api_db):
     ]
 
 
-def test_route_is_books_manage_gated(api_db):
-    """An operator (books.view + documents.scan by role, no books.manage) is refused."""
+def test_route_is_books_edit_gated(api_db):
+    """An operator (books.view + documents.scan by role, no books.edit) is refused."""
     op = _user(api_db, email="op@x.ae", role="operator")
     r = _client(api_db, op).get("/api/v1/books/awaiting-scan")
     assert r.status_code == 403
@@ -121,16 +121,16 @@ def test_awaiting_scan_is_not_swallowed_by_the_int_path_param(api_db):
     assert _client(api_db, mgr).get("/api/v1/books/awaiting-scan").status_code == 200
 
 
-def test_actionable_items_scanback_is_zero_without_books_manage(api_db):
-    """Same gate as the bell count: a push must never nag someone who would
-    get a 403 filing the upload it points at."""
+def test_actionable_items_scanback_is_zero_without_books_edit(api_db):
+    """Same books.edit gate as the scan-back list: a push must never nag someone
+    who would get a 403 filing the upload it points at."""
     op = _user(api_db, email="op@x.ae", role="operator")
     _stranded(api_db, ref="GS-0006", owner_id=op.id)
     items = notification_service.actionable_items(api_db, op)
     assert [i for i in items if i.kind == "scanback"] == []
 
 
-def test_actionable_items_scanback_shape_with_books_manage(api_db):
+def test_actionable_items_scanback_shape_with_books_edit(api_db):
     mgr = _user(api_db, email="m2@x.ae", role="manager")
     book = _stranded(api_db, ref="GS-0007", owner_id=mgr.id)
     items = [i for i in notification_service.actionable_items(api_db, mgr) if i.kind == "scanback"]

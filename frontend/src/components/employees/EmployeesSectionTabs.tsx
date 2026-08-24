@@ -1,18 +1,23 @@
 /**
  * EmployeesSectionTabs — the Employees section switcher.
  *
- * Rendered at the foot of the navy band by the Directory (`EmployeeLookupPage`),
- * Attendance (`AttendancePage`) and ORG-tree (`EmployeesOrgTreePage`) pages,
- * which is where Sentinel already puts section switching. Deliberately not a
- * top-nav destination: the top nav is a single row at every width and its budget
- * is spent (see the tiers in index.css), and the mobile dock builds its
- * catalogue from NAV_ITEMS.
+ * Rendered at the foot of the navy band by every page in the section —
+ * Directory (`EmployeeLookupPage`), Attendance (`AttendancePage`), Organization
+ * (`EmployeesOrgTreePage`) and the Time Sheet (`TimesheetPage`) — which is where
+ * Sentinel already puts section switching. Deliberately not a top-nav
+ * destination: the top nav is a single row at every width and its budget is
+ * spent (see the tiers in index.css), and the mobile dock builds its catalogue
+ * from NAV_ITEMS.
  *
  * Active state comes from `NavLink`, not from a prop: the route *is* the active
  * tab, and `NavLink` already owns both the styling hook and `aria-current`.
  *
  * The Attendance tab is capability-gated and carries the live count of rows
  * needing a decision, so a clean day shows no badge at all.
+ *
+ * One label per tab, in the active language only. Two tabs used to carry their
+ * Arabic name beside the English one, which made a bidi hazard of every label
+ * to supply a translation the language switch already gives.
  */
 
 import { useTranslation } from 'react-i18next'
@@ -52,11 +57,6 @@ export function EmployeesSectionTabs({ attentionCount = null }: Props): React.JS
           {({ isActive }) => (
             <>
               {t('employees.sectionTabs.attendance')}
-              {/* Arabic beside Latin needs bidi isolation, or a following number
-                  or clock range is reordered by the bidi algorithm. */}
-              <span dir="rtl" className="isolate-bidi text-[0.86em] font-normal opacity-70">
-                {t('employees.sectionTabs.attendanceAr')}
-              </span>
               {attentionCount != null && attentionCount > 0 && (
                 <span
                   data-testid="attendance-attention-badge"
@@ -75,15 +75,18 @@ export function EmployeesSectionTabs({ attentionCount = null }: Props): React.JS
       {has('employees.view') && (
         <NavLink to="/employees/org-tree" className={tabClass}>
           {t('employees.sectionTabs.orgTree')}
-          <span dir="rtl" className="isolate-bidi text-[0.86em] font-normal opacity-70">
-            {t('employees.sectionTabs.orgTreeAr')}
-          </span>
         </NavLink>
       )}
 
       <NavLink to="/duty-locations" className={tabClass}>
         {t('employees.sectionTabs.dutyLocations')}
       </NavLink>
+
+      {has('timesheet.view') && (
+        <NavLink to="/employees/timesheet" className={tabClass}>
+          {t('employees.sectionTabs.timesheet')}
+        </NavLink>
+      )}
     </nav>
   )
 }

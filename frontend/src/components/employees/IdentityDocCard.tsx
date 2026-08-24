@@ -2,7 +2,8 @@
  * IdentityDocCard — one identity document (Emirates ID or passport) on the
  * Profile tab. Shows the record NUMBER (read-only) over realistic card art; the
  * uploaded scan is opened in a local DocumentViewerDialog on click, with
- * Replace/Delete on hover (editors). No scan → an "Add scan" affordance.
+ * Replace/Delete on hover (vault managers — employees.vault.manage, not
+ * profile-edit). No scan → an "Add scan" affordance.
  */
 
 import { useState } from 'react'
@@ -28,7 +29,8 @@ export interface IdentityDocCardProps {
   kind: 'uae_id' | 'passport'
   docNumber: string | null
   entry: VaultEntry | null
-  canEdit: boolean
+  /** Vault writes key off employees.vault.manage (threaded from ProfileTab). */
+  canManageVault: boolean
   onChanged: () => void
 }
 
@@ -37,7 +39,7 @@ export function IdentityDocCard({
   kind,
   docNumber,
   entry,
-  canEdit,
+  canManageVault,
   onChanged,
 }: IdentityDocCardProps): React.JSX.Element {
   const { t } = useTranslation()
@@ -92,8 +94,8 @@ export function IdentityDocCard({
         onClick={entry ? () => setViewerOpen(true) : undefined}
       />
 
-      {/* Hover actions for a present scan (editors only) */}
-      {entry && canEdit && (
+      {/* Hover actions for a present scan (vault managers only) */}
+      {entry && canManageVault && (
         <div className="absolute end-2 top-2 flex gap-1 opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100">
           <label className="inline-flex h-7 w-7 cursor-pointer items-center justify-center rounded-full bg-white/90 text-foreground shadow ring-1 ring-black/5 hover:bg-white">
             <RefreshCw className="h-3.5 w-3.5" aria-hidden />
@@ -112,8 +114,8 @@ export function IdentityDocCard({
         </div>
       )}
 
-      {/* Add-scan affordance when there is no scan (editors only) */}
-      {!entry && canEdit && (
+      {/* Add-scan affordance when there is no scan (vault managers only) */}
+      {!entry && canManageVault && (
         <div className="mt-2">
           <FileUploadZone
             accept={ACCEPT}

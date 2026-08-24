@@ -26,9 +26,10 @@ interface Props {
 
 const TILE: Record<RowState, string> = {
   verified: 'bg-emerald-400/15 text-emerald-200 ring-1 ring-emerald-400/40',
+  grace: 'bg-yellow-400/15 text-yellow-100 ring-1 ring-yellow-300/60',
   late: 'bg-amber-400/20 text-amber-100 ring-[1.5px] ring-amber-300',
-  single: 'bg-rose-500/20 text-rose-100 ring-[1.5px] ring-rose-400',
-  missing: 'bg-accent text-white ring-2 ring-accent/40',
+  unpaired: 'bg-rose-500/20 text-rose-100 ring-[1.5px] ring-rose-400',
+  absent: 'bg-accent text-white ring-2 ring-accent/40',
   leave: 'bg-blue-500/20 text-blue-100 ring-1 ring-blue-300/50',
   pending: 'bg-white/5 text-rail-faint ring-1 ring-white/10',
 }

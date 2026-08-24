@@ -40,7 +40,7 @@ export function useWaitingSignals(enabled: boolean): Partial<Record<WaitingSigna
   const scanBackQuery = useQuery({
     queryKey: ['books', 'awaiting-scan', 'mine'],
     queryFn: () => api.listAwaitingScanBooks('mine'),
-    enabled: authenticated && capabilities?.includes('books.manage') === true,
+    enabled: authenticated && capabilities?.includes('books.edit') === true,
     staleTime: STALE_TIME,
     refetchInterval: REFRESH_INTERVAL,
   })

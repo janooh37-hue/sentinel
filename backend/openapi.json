@@ -1517,6 +1517,75 @@
         }
       }
     },
+    "/api/v1/auth/users/{user_id}/permissions/bulk": {
+      "put": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "Set User Permissions Bulk",
+        "description": "Apply several override changes in one all-or-nothing call.",
+        "operationId": "set_user_permissions_bulk_api_v1_auth_users__user_id__permissions_bulk_put",
+        "parameters": [
+          {
+            "name": "user_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "User Id"
+            }
+          },
+          {
+            "name": "gssg_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Gssg Session"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetPermissionBulkRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserPermissionRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/announcements/groups": {
       "get": {
         "tags": [
@@ -4285,6 +4354,1029 @@
         }
       }
     },
+    "/api/v1/timesheet/designations": {
+      "post": {
+        "tags": [
+          "timesheet"
+        ],
+        "summary": "Create Designation",
+        "operationId": "create_designation_api_v1_timesheet_designations_post",
+        "parameters": [
+          {
+            "name": "gssg_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Gssg Session"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TimesheetDesignationCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TimesheetDesignationRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "timesheet"
+        ],
+        "summary": "List Designations",
+        "operationId": "list_designations_api_v1_timesheet_designations_get",
+        "parameters": [
+          {
+            "name": "gssg_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Gssg Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/TimesheetDesignationRead"
+                  },
+                  "title": "Response List Designations Api V1 Timesheet Designations Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/timesheet/designations/{designation_id}": {
+      "patch": {
+        "tags": [
+          "timesheet"
+        ],
+        "summary": "Rename Designation",
+        "operationId": "rename_designation_api_v1_timesheet_designations__designation_id__patch",
+        "parameters": [
+          {
+            "name": "designation_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Designation Id"
+            }
+          },
+          {
+            "name": "gssg_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Gssg Session"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TimesheetDesignationUpdate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TimesheetDesignationRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/timesheet/designations/order": {
+      "put": {
+        "tags": [
+          "timesheet"
+        ],
+        "summary": "Reorder Designations",
+        "operationId": "reorder_designations_api_v1_timesheet_designations_order_put",
+        "parameters": [
+          {
+            "name": "gssg_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Gssg Session"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TimesheetDesignationOrder"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/TimesheetDesignationRead"
+                  },
+                  "title": "Response Reorder Designations Api V1 Timesheet Designations Order Put"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/timesheet/{year}/{month}/roster": {
+      "put": {
+        "tags": [
+          "timesheet"
+        ],
+        "summary": "Set Roster",
+        "operationId": "set_roster_api_v1_timesheet__year___month__roster_put",
+        "parameters": [
+          {
+            "name": "year",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "maximum": 2100,
+              "minimum": 2000,
+              "title": "Year"
+            }
+          },
+          {
+            "name": "month",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "maximum": 12,
+              "minimum": 1,
+              "title": "Month"
+            }
+          },
+          {
+            "name": "gssg_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Gssg Session"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TimesheetRosterBatch"
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/timesheet/{year}/{month}": {
+      "get": {
+        "tags": [
+          "timesheet"
+        ],
+        "summary": "Get Month",
+        "operationId": "get_month_api_v1_timesheet__year___month__get",
+        "parameters": [
+          {
+            "name": "year",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "maximum": 2100,
+              "minimum": 2000,
+              "title": "Year"
+            }
+          },
+          {
+            "name": "month",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "maximum": 12,
+              "minimum": 1,
+              "title": "Month"
+            }
+          },
+          {
+            "name": "sheet",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "enum": [
+                "main",
+                "drivers"
+              ],
+              "type": "string",
+              "default": "main",
+              "title": "Sheet"
+            }
+          },
+          {
+            "name": "gssg_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Gssg Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TimesheetGridResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "timesheet"
+        ],
+        "summary": "Patch Month",
+        "description": "The post count and any filler choices, applied as one unit.\n\nBoth writers are handed ``commit=False`` and the transaction is closed once\nhere: each of them commits on its own by default, so a bad filler halfway\ndown the list would otherwise persist the post count and the fillers before\nit and still answer with a failure.",
+        "operationId": "patch_month_api_v1_timesheet__year___month__patch",
+        "parameters": [
+          {
+            "name": "year",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "maximum": 2100,
+              "minimum": 2000,
+              "title": "Year"
+            }
+          },
+          {
+            "name": "month",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "maximum": 12,
+              "minimum": 1,
+              "title": "Month"
+            }
+          },
+          {
+            "name": "sheet",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "enum": [
+                "main",
+                "drivers"
+              ],
+              "type": "string",
+              "default": "main",
+              "title": "Sheet"
+            }
+          },
+          {
+            "name": "gssg_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Gssg Session"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TimesheetPeriodPatch"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TimesheetGridResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/timesheet/{year}/{month}/cell": {
+      "put": {
+        "tags": [
+          "timesheet"
+        ],
+        "summary": "Set Cell",
+        "operationId": "set_cell_api_v1_timesheet__year___month__cell_put",
+        "parameters": [
+          {
+            "name": "year",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "maximum": 2100,
+              "minimum": 2000,
+              "title": "Year"
+            }
+          },
+          {
+            "name": "month",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "maximum": 12,
+              "minimum": 1,
+              "title": "Month"
+            }
+          },
+          {
+            "name": "sheet",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "enum": [
+                "main",
+                "drivers"
+              ],
+              "type": "string",
+              "default": "main",
+              "title": "Sheet"
+            }
+          },
+          {
+            "name": "gssg_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Gssg Session"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TimesheetCellUpdate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TimesheetGridResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/timesheet/{year}/{month}/close": {
+      "post": {
+        "tags": [
+          "timesheet"
+        ],
+        "summary": "Close Month",
+        "operationId": "close_month_api_v1_timesheet__year___month__close_post",
+        "parameters": [
+          {
+            "name": "year",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "maximum": 2100,
+              "minimum": 2000,
+              "title": "Year"
+            }
+          },
+          {
+            "name": "month",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "maximum": 12,
+              "minimum": 1,
+              "title": "Month"
+            }
+          },
+          {
+            "name": "sheet",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "enum": [
+                "main",
+                "drivers"
+              ],
+              "type": "string",
+              "default": "main",
+              "title": "Sheet"
+            }
+          },
+          {
+            "name": "gssg_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Gssg Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TimesheetGridResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/timesheet/{year}/{month}/reopen": {
+      "post": {
+        "tags": [
+          "timesheet"
+        ],
+        "summary": "Reopen Month",
+        "operationId": "reopen_month_api_v1_timesheet__year___month__reopen_post",
+        "parameters": [
+          {
+            "name": "year",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "maximum": 2100,
+              "minimum": 2000,
+              "title": "Year"
+            }
+          },
+          {
+            "name": "month",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "maximum": 12,
+              "minimum": 1,
+              "title": "Month"
+            }
+          },
+          {
+            "name": "sheet",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "enum": [
+                "main",
+                "drivers"
+              ],
+              "type": "string",
+              "default": "main",
+              "title": "Sheet"
+            }
+          },
+          {
+            "name": "gssg_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Gssg Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TimesheetGridResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/timesheet/{year}/{month}/start-ack": {
+      "post": {
+        "tags": [
+          "timesheet"
+        ],
+        "summary": "Acknowledge Start",
+        "description": "Accept a mid-month joiner's starting point.\n\nIdempotent, and deliberately allowed on a closed month: it changes no cell,\nso refusing it after the seal would strand the flag forever.",
+        "operationId": "acknowledge_start_api_v1_timesheet__year___month__start_ack_post",
+        "parameters": [
+          {
+            "name": "year",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "maximum": 2100,
+              "minimum": 2000,
+              "title": "Year"
+            }
+          },
+          {
+            "name": "month",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "maximum": 12,
+              "minimum": 1,
+              "title": "Month"
+            }
+          },
+          {
+            "name": "gssg_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Gssg Session"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TimesheetStartAckRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/timesheet/{year}/{month}/export": {
+      "get": {
+        "tags": [
+          "timesheet"
+        ],
+        "summary": "Export Month",
+        "description": "Both deliverables come from here — and downloading one freezes the month.\n\nThe preflight runs before the seal, so a refused download freezes nothing.\nThe grid built for the check is the one rendered: ``close_month`` snapshots\nexactly it, so re-rendering after the seal would be the same bytes twice.",
+        "operationId": "export_month_api_v1_timesheet__year___month__export_get",
+        "parameters": [
+          {
+            "name": "year",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "maximum": 2100,
+              "minimum": 2000,
+              "title": "Year"
+            }
+          },
+          {
+            "name": "month",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "maximum": 12,
+              "minimum": 1,
+              "title": "Month"
+            }
+          },
+          {
+            "name": "sheet",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "enum": [
+                "main",
+                "drivers"
+              ],
+              "type": "string",
+              "default": "main",
+              "title": "Sheet"
+            }
+          },
+          {
+            "name": "variant",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "enum": [
+                "attendance",
+                "statistics"
+              ],
+              "type": "string",
+              "default": "attendance",
+              "title": "Variant"
+            }
+          },
+          {
+            "name": "gssg_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Gssg Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/timesheet/employee/{employee_id}/{year}/{month}/export": {
+      "get": {
+        "tags": [
+          "timesheet"
+        ],
+        "summary": "Export Employee",
+        "description": "One employee's own sheet. Freezes nothing, so ``timesheet.view`` is enough.\n\n``months=2`` is the resignation and termination handover HR asked for: the\nmonth of departure and the one before it, earlier sheet first, named for the\nlater month. ``render_single`` cannot produce a second sheet, so the span\nrenderer takes both grids.\n\nThe span renderer tolerates a month he was not on the roster for, and the\nname follows it: someone who finished in the **earlier** month is exactly the\nhandover this parameter exists for, so the later month's name is used\nwhenever it can be resolved and the earlier grid names the file otherwise.\nA man on neither month still 404s, out of ``render_single_span``.",
+        "operationId": "export_employee_api_v1_timesheet_employee__employee_id___year___month__export_get",
+        "parameters": [
+          {
+            "name": "employee_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Employee Id"
+            }
+          },
+          {
+            "name": "year",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "maximum": 2100,
+              "minimum": 2000,
+              "title": "Year"
+            }
+          },
+          {
+            "name": "month",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "maximum": 12,
+              "minimum": 1,
+              "title": "Month"
+            }
+          },
+          {
+            "name": "months",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 2,
+              "minimum": 1,
+              "default": 1,
+              "title": "Months"
+            }
+          },
+          {
+            "name": "gssg_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Gssg Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/templates": {
       "get": {
         "tags": [
@@ -6583,7 +7675,7 @@
           "books"
         ],
         "summary": "Save Book As Template",
-        "description": "Copy a finished General Book into the shared template library\n(retokenized + validated; content becomes visible to all books.manage users).",
+        "description": "Copy a finished General Book into the shared template library\n(retokenized + validated; content becomes visible to all books.templates users).",
         "operationId": "save_book_as_template_api_v1_books__book_id__save_as_template_post",
         "parameters": [
           {
@@ -7018,7 +8110,7 @@
           "books"
         ],
         "summary": "List Awaiting Scan",
-        "description": "Records stranded at ``awaiting_scan`` past 24h, oldest first.\n\n``scope=mine`` (default) is the caller's own; ``scope=all`` is everyone's,\nso an admin can clear records stranded by a user who lacks books.manage.\n\nDeclared before ``/{book_id}`` so the literal ``awaiting-scan`` segment isn't\nswallowed by the int path param — same reason as ``/awaiting`` above.\nAuthority is ``books.manage``: the same capability filing the scan requires.",
+        "description": "Records stranded at ``awaiting_scan`` past 24h, oldest first.\n\n``scope=mine`` (default) is the caller's own; ``scope=all`` is everyone's,\nso an admin can clear records stranded by a user who lacks books.edit.\n\nDeclared before ``/{book_id}`` so the literal ``awaiting-scan`` segment isn't\nswallowed by the int path param — same reason as ``/awaiting`` above.\nAuthority is ``books.edit``: the same capability filing the scan requires.",
         "operationId": "list_awaiting_scan_api_v1_books_awaiting_scan_get",
         "parameters": [
           {
@@ -7060,6 +8152,93 @@
                     "$ref": "#/components/schemas/BookRead"
                   },
                   "title": "Response List Awaiting Scan Api V1 Books Awaiting Scan Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/books/approval-log": {
+      "get": {
+        "tags": [
+          "books"
+        ],
+        "summary": "Get Approval Log",
+        "description": "The approvals log — ``scope=sent`` (records I submitted) or\n``scope=received`` (my pending decisions + my verdicts from the last 30\ndays). Paged like GET /books; rows are flattened ApprovalLogItem payloads.\n\nDeclared before ``/{book_id}`` so the literal ``approval-log`` segment isn't\nswallowed by the int path param — same reason as ``/awaiting`` above.",
+        "operationId": "get_approval_log_api_v1_books_approval_log_get",
+        "parameters": [
+          {
+            "name": "scope",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "enum": [
+                "sent",
+                "received"
+              ],
+              "type": "string",
+              "default": "received",
+              "title": "Scope"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 500,
+              "minimum": 1,
+              "default": 100,
+              "title": "Limit"
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "default": 0,
+              "title": "Offset"
+            }
+          },
+          {
+            "name": "gssg_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Gssg Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApprovalLogResponse"
                 }
               }
             }
@@ -7510,7 +8689,7 @@
           "books"
         ],
         "summary": "Get Version Fields",
-        "description": "Return the raw stored ``fields`` blob for one book version — backs the\nApplicationPage revise-mode prefill. Deliberately not on ``BookRead`` (the\ndetail payload only exposes ``has_fields``).\n\nRequires ``books.manage`` (not ``books.view``) because this backs the\nrevise/edit write-path: the caller fetches these fields in order to submit\na revised generation, which is a managed write operation.",
+        "description": "Return the raw stored ``fields`` blob for one book version — backs the\nApplicationPage revise-mode prefill. Deliberately not on ``BookRead`` (the\ndetail payload only exposes ``has_fields``).\n\nRequires ``books.edit`` (not ``books.view``) because this backs the\nrevise/edit write-path: the caller fetches these fields in order to submit\na revised generation, which is a managed write operation.",
         "operationId": "get_version_fields_api_v1_books__book_id__versions__version_id__fields_get",
         "parameters": [
           {
@@ -8453,7 +9632,7 @@
           "books"
         ],
         "summary": "Add Book Attachment",
-        "description": "File an attachment. ``awaiting_scan`` books flip silently (the scan is the\nsignature). For a ``none``/``pending`` book, ``as_signed=true`` records the\nupload as the signed copy and approves the record; otherwise it is filed as a\nplain attachment. Authority is ``books.manage`` for every path.",
+        "description": "File an attachment. ``awaiting_scan`` books flip silently (the scan is the\nsignature). For a ``none``/``pending`` book, ``as_signed=true`` records the\nupload as the signed copy and approves the record; otherwise it is filed as a\nplain attachment. Authority is ``books.edit`` for every path.",
         "operationId": "add_book_attachment_api_v1_books__book_id__attachments_post",
         "parameters": [
           {
@@ -21011,6 +22190,247 @@
         "title": "AppSettingsUpdate",
         "description": "PATCH semantics — every field is optional."
       },
+      "ApprovalLogItem": {
+        "properties": {
+          "book_id": {
+            "type": "integer",
+            "title": "Book Id"
+          },
+          "ref_number": {
+            "type": "string",
+            "title": "Ref Number"
+          },
+          "subject": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Subject"
+          },
+          "category_name_ar": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Category Name Ar"
+          },
+          "category_name_en": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Category Name En"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "priority": {
+            "type": "string",
+            "title": "Priority",
+            "default": "Normal"
+          },
+          "submitted_by_user_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Submitted By User Id"
+          },
+          "submitted_by_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Submitted By Name"
+          },
+          "doc_manager_user_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Doc Manager User Id"
+          },
+          "doc_manager_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Doc Manager Name"
+          },
+          "approver_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Approver Name"
+          },
+          "reviewer_names": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Reviewer Names"
+          },
+          "submitted_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Submitted At"
+          },
+          "decided_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decided At"
+          },
+          "verdict": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "approved",
+                  "rejected",
+                  "returned"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Verdict"
+          },
+          "document_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Document Id"
+          },
+          "your_step_kind": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Your Step Kind"
+          },
+          "your_step_state": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Your Step State"
+          },
+          "your_step_decided_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Your Step Decided At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "book_id",
+          "ref_number",
+          "status"
+        ],
+        "title": "ApprovalLogItem",
+        "description": "One flattened approvals-log row (either scope).\n\nCarries exactly what an operator needs to recognise the record and where it\nsits in the chain — ref, subject, category, state, the people involved, the\ntwo timestamps, the verdict, and the current version's ``document_id`` so\nthe client can paint a page-1 thumbnail without fetching the detail payload.\n\nInherits ORMBase so every timestamp serializes with an offset (the\ntest_schema_utc_serialization guard). The service tags each stamp with its\nreal zone before construction — step stamps as UTC, the off-chain\n``Book.created_at`` fallback as Dubai wall-clock — and aware values pass\nthrough ORMBase's validator untouched."
+      },
+      "ApprovalLogResponse": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ApprovalLogItem"
+            },
+            "type": "array",
+            "title": "Items"
+          },
+          "total": {
+            "type": "integer",
+            "title": "Total"
+          },
+          "limit": {
+            "type": "integer",
+            "title": "Limit"
+          },
+          "offset": {
+            "type": "integer",
+            "title": "Offset"
+          }
+        },
+        "type": "object",
+        "required": [
+          "items",
+          "total",
+          "limit",
+          "offset"
+        ],
+        "title": "ApprovalLogResponse",
+        "description": "Paged approvals log — mirrors the BookListResponse envelope shape."
+      },
       "ApproveRequest": {
         "properties": {
           "role": {
@@ -21610,6 +23030,30 @@
               }
             ],
             "title": "Judgment Due At"
+          },
+          "absence_due_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Absence Due At"
+          },
+          "grace_minutes": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Grace Minutes"
           }
         },
         "additionalProperties": false,
@@ -21619,7 +23063,7 @@
           "name_en"
         ],
         "title": "AttendanceDayRowRead",
-        "description": "One person's scheduled shift on one operational date, with punch facts.\n\n``first_punch_at`` / ``last_punch_at`` are the earliest and latest punches\ninside this case's policy match window. They are timestamps of events, not a\ncheck-in and a check-out: this provider reports no direction, so a single\npunch yields ``punch_count == 1`` with both bounds equal, and a client must\npresent it as \"seen at\", never as a span.\n\n``judgment_due_at`` is when the duty stops running and the evaluator is\nwilling to call it: before that instant a missing punch is an arrival still\npending, not an exception, and a client must not flag it."
+        "description": "One person's scheduled shift on one operational date, with punch facts.\n\n``first_punch_at`` / ``last_punch_at`` are the earliest and latest punches\ninside this case's policy match window. They are timestamps of events, not a\ncheck-in and a check-out: this provider reports no direction, so a single\npunch yields ``punch_count == 1`` with both bounds equal, and a client must\npresent it as \"seen at\", never as a span.\n\n``judgment_due_at`` is when the duty stops running and a lone punch may be\ncalled unpaired: before that instant one punch is an arrival still waiting for\nits departure, not an exception. ``absence_due_at`` is the earlier boundary,\ntwice the grace past the start, after which a case with no punch at all is an\nabsence. ``grace_minutes`` is the policy's own grace, published so a client\nnames the same arrival late as the evaluator does instead of guessing."
       },
       "AttendanceExceptionRead": {
         "properties": {
@@ -27219,6 +28663,42 @@
             "title": "Punch Count",
             "default": 0
           },
+          "absence_due_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Absence Due At"
+          },
+          "judgment_due_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Judgment Due At"
+          },
+          "grace_minutes": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Grace Minutes"
+          },
           "punches": {
             "items": {
               "$ref": "#/components/schemas/EmployeeAttendancePunchRead"
@@ -32116,6 +33596,39 @@
               }
             ],
             "title": "Supervisor Id"
+          },
+          "designation_en": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Designation En"
+          },
+          "designation_ar": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Designation Ar"
+          },
+          "rank_order": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rank Order"
           }
         },
         "type": "object",
@@ -35128,6 +36641,25 @@
         "title": "SessionUser",
         "description": "The signed-in user, shaped for the frontend auth context."
       },
+      "SetPermissionBulkRequest": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/SetPermissionRequest"
+            },
+            "type": "array",
+            "maxItems": 200,
+            "minItems": 1,
+            "title": "Items"
+          }
+        },
+        "type": "object",
+        "required": [
+          "items"
+        ],
+        "title": "SetPermissionBulkRequest",
+        "description": "Apply several override changes in one all-or-nothing call."
+      },
       "SetPermissionRequest": {
         "properties": {
           "capability": {
@@ -35981,6 +37513,599 @@
           "notifies_employee"
         ],
         "title": "TemplateMeta"
+      },
+      "TimesheetCellUpdate": {
+        "properties": {
+          "employee_id": {
+            "type": "string",
+            "title": "Employee Id"
+          },
+          "day": {
+            "type": "integer",
+            "maximum": 31.0,
+            "minimum": 1.0,
+            "title": "Day"
+          },
+          "code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Code"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          }
+        },
+        "type": "object",
+        "required": [
+          "employee_id",
+          "day"
+        ],
+        "title": "TimesheetCellUpdate",
+        "description": "Force one cell. ``code: null`` clears it back to the derived value."
+      },
+      "TimesheetDesignationCreate": {
+        "properties": {
+          "name_en": {
+            "type": "string",
+            "maxLength": 128,
+            "minLength": 1,
+            "title": "Name En"
+          },
+          "name_ar": {
+            "type": "string",
+            "maxLength": 128,
+            "minLength": 1,
+            "title": "Name Ar"
+          },
+          "sheet": {
+            "type": "string",
+            "enum": [
+              "main",
+              "drivers"
+            ],
+            "title": "Sheet"
+          }
+        },
+        "type": "object",
+        "required": [
+          "name_en",
+          "name_ar",
+          "sheet"
+        ],
+        "title": "TimesheetDesignationCreate",
+        "description": "A user-created catalog designation."
+      },
+      "TimesheetDesignationOrder": {
+        "properties": {
+          "ids": {
+            "items": {
+              "type": "integer"
+            },
+            "type": "array",
+            "title": "Ids"
+          }
+        },
+        "type": "object",
+        "required": [
+          "ids"
+        ],
+        "title": "TimesheetDesignationOrder",
+        "description": "The full designation catalog in its new order — every id, exactly once."
+      },
+      "TimesheetDesignationRead": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "name_en": {
+            "type": "string",
+            "title": "Name En"
+          },
+          "name_ar": {
+            "type": "string",
+            "title": "Name Ar"
+          },
+          "rank_order": {
+            "type": "integer",
+            "title": "Rank Order"
+          },
+          "sheet": {
+            "type": "string",
+            "title": "Sheet"
+          },
+          "active": {
+            "type": "boolean",
+            "title": "Active"
+          },
+          "system_key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "System Key"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "name_en",
+          "name_ar",
+          "rank_order",
+          "sheet",
+          "active",
+          "system_key"
+        ],
+        "title": "TimesheetDesignationRead",
+        "description": "One printable designation from the catalog."
+      },
+      "TimesheetDesignationUpdate": {
+        "properties": {
+          "name_en": {
+            "type": "string",
+            "maxLength": 128,
+            "minLength": 1,
+            "title": "Name En"
+          },
+          "name_ar": {
+            "type": "string",
+            "maxLength": 128,
+            "minLength": 1,
+            "title": "Name Ar"
+          }
+        },
+        "type": "object",
+        "required": [
+          "name_en",
+          "name_ar"
+        ],
+        "title": "TimesheetDesignationUpdate",
+        "description": "The two printable names changed by a catalog rename."
+      },
+      "TimesheetFillerUpdate": {
+        "properties": {
+          "employee_id": {
+            "type": "string",
+            "title": "Employee Id"
+          },
+          "code": {
+            "type": "string",
+            "title": "Code"
+          }
+        },
+        "type": "object",
+        "required": [
+          "employee_id",
+          "code"
+        ],
+        "title": "TimesheetFillerUpdate",
+        "description": "The code statistics block 2 prints for one employee."
+      },
+      "TimesheetGridResponse": {
+        "properties": {
+          "year": {
+            "type": "integer",
+            "title": "Year"
+          },
+          "month": {
+            "type": "integer",
+            "title": "Month"
+          },
+          "days_in_month": {
+            "type": "integer",
+            "title": "Days In Month"
+          },
+          "sheet": {
+            "type": "string",
+            "title": "Sheet"
+          },
+          "post_count": {
+            "type": "integer",
+            "title": "Post Count"
+          },
+          "rows": {
+            "items": {
+              "$ref": "#/components/schemas/TimesheetRow"
+            },
+            "type": "array",
+            "title": "Rows"
+          },
+          "blocking": {
+            "items": {
+              "$ref": "#/components/schemas/TimesheetIssue"
+            },
+            "type": "array",
+            "title": "Blocking"
+          },
+          "warnings": {
+            "items": {
+              "$ref": "#/components/schemas/TimesheetIssue"
+            },
+            "type": "array",
+            "title": "Warnings"
+          },
+          "removed": {
+            "items": {
+              "$ref": "#/components/schemas/TimesheetRemoved"
+            },
+            "type": "array",
+            "title": "Removed"
+          },
+          "closed_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Closed At"
+          },
+          "closed_by": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Closed By"
+          }
+        },
+        "type": "object",
+        "required": [
+          "year",
+          "month",
+          "days_in_month",
+          "sheet",
+          "post_count",
+          "rows",
+          "blocking",
+          "warnings",
+          "removed",
+          "closed_at",
+          "closed_by"
+        ],
+        "title": "TimesheetGridResponse",
+        "description": "One month of one workbook, live or sealed."
+      },
+      "TimesheetIssue": {
+        "properties": {
+          "employee_id": {
+            "type": "string",
+            "title": "Employee Id"
+          },
+          "kind": {
+            "type": "string",
+            "title": "Kind"
+          },
+          "detail": {
+            "type": "string",
+            "title": "Detail"
+          }
+        },
+        "type": "object",
+        "required": [
+          "employee_id",
+          "kind",
+          "detail"
+        ],
+        "title": "TimesheetIssue",
+        "description": "One preflight finding. Blocking stops a download; a warning never does.\n\nReported per employee, never nested inside a row: ``warnings`` is recomputed\nlive even on a closed month, so an ``employee_id`` here may name someone with\nno row in the same response (a departure, or someone hired after the seal)."
+      },
+      "TimesheetPeriodPatch": {
+        "properties": {
+          "post_count": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Post Count"
+          },
+          "fillers": {
+            "items": {
+              "$ref": "#/components/schemas/TimesheetFillerUpdate"
+            },
+            "type": "array",
+            "title": "Fillers"
+          }
+        },
+        "type": "object",
+        "title": "TimesheetPeriodPatch",
+        "description": "The month's contracted post count and any block-2 filler choices."
+      },
+      "TimesheetRemoved": {
+        "properties": {
+          "employee_id": {
+            "type": "string",
+            "title": "Employee Id"
+          },
+          "name_en": {
+            "type": "string",
+            "title": "Name En"
+          },
+          "end_date": {
+            "type": "string",
+            "format": "date",
+            "title": "End Date"
+          },
+          "last_day": {
+            "type": "integer",
+            "title": "Last Day"
+          },
+          "month": {
+            "type": "integer",
+            "title": "Month"
+          },
+          "year": {
+            "type": "integer",
+            "title": "Year"
+          }
+        },
+        "type": "object",
+        "required": [
+          "employee_id",
+          "name_en",
+          "end_date",
+          "last_day",
+          "month",
+          "year"
+        ],
+        "title": "TimesheetRemoved",
+        "description": "Someone who finished last month and is therefore off this roster."
+      },
+      "TimesheetRosterAssignmentWrite": {
+        "properties": {
+          "employee_id": {
+            "type": "string",
+            "maxLength": 16,
+            "minLength": 1,
+            "title": "Employee Id"
+          },
+          "designation_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Designation Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "employee_id",
+          "designation_id"
+        ],
+        "title": "TimesheetRosterAssignmentWrite",
+        "description": "One employee's designation from an effective month onward."
+      },
+      "TimesheetRosterBatch": {
+        "properties": {
+          "assignments": {
+            "items": {
+              "$ref": "#/components/schemas/TimesheetRosterAssignmentWrite"
+            },
+            "type": "array",
+            "minItems": 1,
+            "title": "Assignments"
+          }
+        },
+        "type": "object",
+        "required": [
+          "assignments"
+        ],
+        "title": "TimesheetRosterBatch",
+        "description": "A non-empty atomic month roster update."
+      },
+      "TimesheetRow": {
+        "properties": {
+          "employee_id": {
+            "type": "string",
+            "title": "Employee Id"
+          },
+          "row_no": {
+            "type": "integer",
+            "title": "Row No"
+          },
+          "name_en": {
+            "type": "string",
+            "title": "Name En"
+          },
+          "nationality_en": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Nationality En"
+          },
+          "designation_en": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Designation En"
+          },
+          "designation_ar": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Designation Ar"
+          },
+          "rank_order": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rank Order"
+          },
+          "codes": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "type": "array",
+            "title": "Codes"
+          },
+          "stat_codes": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "type": "array",
+            "title": "Stat Codes"
+          },
+          "stat_block": {
+            "type": "integer",
+            "title": "Stat Block"
+          },
+          "stat_filler": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Stat Filler"
+          },
+          "joined_day": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Joined Day"
+          },
+          "left_day": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Left Day"
+          },
+          "start_confirmed": {
+            "type": "boolean",
+            "title": "Start Confirmed"
+          },
+          "notes": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object",
+            "title": "Notes"
+          },
+          "designation_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Designation Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "employee_id",
+          "row_no",
+          "name_en",
+          "nationality_en",
+          "designation_en",
+          "designation_ar",
+          "rank_order",
+          "codes",
+          "stat_codes",
+          "stat_block",
+          "stat_filler",
+          "joined_day",
+          "left_day",
+          "start_confirmed",
+          "notes"
+        ],
+        "title": "TimesheetRow",
+        "description": "One printed row: the identity block, 31 cells, and both statistics."
+      },
+      "TimesheetStartAckRequest": {
+        "properties": {
+          "employee_id": {
+            "type": "string",
+            "title": "Employee Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "employee_id"
+        ],
+        "title": "TimesheetStartAckRequest",
+        "description": "Accept a mid-month joiner's starting point. Changes no cell."
       },
       "TransferAdminRequest": {
         "properties": {

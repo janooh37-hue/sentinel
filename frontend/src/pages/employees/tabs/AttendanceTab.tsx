@@ -23,10 +23,14 @@ import { api } from '@/lib/api'
 import type { EmployeeAttendanceDay, EmployeeAttendanceHistoryDay } from '@/lib/api'
 import { useCapabilities } from '@/lib/useCapabilities'
 import {
-  DEFAULT_GRACE_MINUTES,
+  graceFor,
+  isUnpaired,
+  minutesPastGrace,
   parseInstant,
+  rowState,
   siteTime,
 } from '@/pages/employees/attendance/attendanceModel'
+import type { RowState } from '@/pages/employees/attendance/attendanceModel'
 
 interface Props {
   employeeId: string
@@ -40,7 +44,15 @@ interface Props {
   initialMonth?: string
 }
 
-type DayOutcome = 'verified' | 'late' | 'exception' | 'leave' | 'seen' | 'off'
+/**
+ * What one month cell shows.
+ *
+ * The judged states come straight from the shared ladder, so a day in this file
+ * is coloured by exactly the rule the register applies to the same case.
+ * `seen` and `off` are calendar facts this view adds: a day the device saw with
+ * no roster behind it, and a day nobody was rostered at all.
+ */
+type DayOutcome = RowState | 'seen' | 'off'
 
 const SHIFT_LETTER: Record<string, string> = {
   morning: 'M',
@@ -51,12 +63,26 @@ const SHIFT_LETTER: Record<string, string> = {
 
 const CELL: Record<DayOutcome, string> = {
   verified: 'bg-success-soft border-success/25',
+  grace: 'bg-caution-soft border-caution/40',
   late: 'bg-warning-soft border-warning/25',
-  exception: 'bg-accent-soft border-accent/25',
+  unpaired: 'bg-destructive/10 border-destructive/30',
+  absent: 'bg-accent-soft border-accent/40',
   leave: 'bg-info-soft border-info/25',
+  pending: 'border-dashed border-border-strong bg-transparent',
   seen: 'border-dashed border-info/40 bg-info-soft/40',
   off: 'border-dashed border-border-strong bg-transparent text-faint',
 }
+
+/** Worst first: one cell can hold two shifts, and trouble must win the colour. */
+const CELL_ORDER: readonly DayOutcome[] = [
+  'absent',
+  'unpaired',
+  'late',
+  'grace',
+  'verified',
+  'pending',
+  'leave',
+]
 
 /**
  * The device record is read from the start of the year, not from the roster's
@@ -78,12 +104,25 @@ function monthBounds(iso: string): { from: string; to: string; year: number; mon
   }
 }
 
-function dayOutcome(day: EmployeeAttendanceDay, graceMinutes: number): DayOutcome {
-  if (day.presence_state === 'excused_leave') return 'leave'
-  if (day.punch_count === 0) return 'exception'
-  if (day.punch_count === 1) return 'exception'
-  if ((day.late_minutes ?? 0) > graceMinutes) return 'late'
-  return 'verified'
+/**
+ * Judge one day of this employee's month.
+ *
+ * `now` is the wall clock rather than the month being viewed: the boundaries the
+ * server publishes decide whether a case is still running, and the current month
+ * is the only one that can contain a duty in progress.
+ */
+function dayOutcome(day: EmployeeAttendanceDay, now: Date): DayOutcome {
+  return rowState(day, { now })
+}
+
+/** The worst outcome among the shifts a single calendar day holds. */
+function worstOutcome(days: readonly EmployeeAttendanceDay[], now: Date): DayOutcome | null {
+  let worst: DayOutcome | null = null
+  for (const day of days) {
+    const outcome = dayOutcome(day, now)
+    if (worst === null || CELL_ORDER.indexOf(outcome) < CELL_ORDER.indexOf(worst)) worst = outcome
+  }
+  return worst
 }
 
 export function AttendanceTab({
@@ -187,25 +226,54 @@ export function AttendanceTab({
     return map
   }, [history.data])
 
+  // One clock for the whole render, taken from the instant the payload was
+  // produced - the same rule the register's counts use. The tiles and the grid
+  // then agree about whether a duty was still running when the server answered,
+  // and the memo below has a dependency that only moves when the data does.
+  // `dataUpdatedAt` is 0 before the first payload; with no days there is nothing
+  // to judge, so the epoch value never decides anything.
+  const judgedAt = useMemo(() => new Date(query.dataUpdatedAt), [query.dataUpdatedAt])
+
+  // Every number here is judged by the shared ladder, so the tiles, the month
+  // grid and the register can never disagree about one day. Leave and duties
+  // still running leave the denominator: punctuality is a share of the shifts
+  // this person has actually been judged on.
   const kpis = useMemo(() => {
+    const now = judgedAt
+    let judged = 0
     let onTime = 0
+    let late = 0
+    let absent = 0
+    let unpaired = 0
     let lateMinutes = 0
-    let missing = 0
+    let worked = 0
     for (const day of days) {
-      const outcome = dayOutcome(day, DEFAULT_GRACE_MINUTES)
-      if (outcome === 'verified') onTime += 1
-      if (outcome === 'exception') missing += 1
-      lateMinutes += day.late_minutes ?? 0
+      const outcome = dayOutcome(day, now)
+      if (outcome === 'leave' || outcome === 'pending') continue
+      judged += 1
+      if (day.punch_count > 0) worked += 1
+      if (isUnpaired(day, { now })) unpaired += 1
+      if (outcome === 'absent') {
+        absent += 1
+        continue
+      }
+      // Minutes past the GRACE, not past the start: the grace exists so an
+      // arrival inside it costs nothing.
+      lateMinutes += minutesPastGrace(day)
+      if (outcome === 'late') late += 1
+      else onTime += 1
     }
-    const scheduled = days.filter((day) => day.presence_state !== 'excused_leave').length
     return {
-      scheduled,
+      judged,
       onTime,
-      missing,
+      late,
+      absent,
+      unpaired,
       lateMinutes,
-      punctuality: scheduled === 0 ? null : Math.round((onTime / scheduled) * 100),
+      worked,
+      punctuality: judged === 0 ? null : Math.round((onTime / judged) * 100),
     }
-  }, [days])
+  }, [days, judgedAt])
 
   if (!allowed) {
     return (
@@ -229,19 +297,49 @@ export function AttendanceTab({
     return seen.punch_count > judged ? { device: seen.punch_count, judged } : null
   })()
   const firstWeekday = new Date(bounds.year, bounds.month - 1, 1).getDay()
+  // 4 Jan 1970 was a Sunday, so index 0 lines up with `getDay()` and with the
+  // padding cells that push the 1st into its column.
+  const weekdays = Array.from({ length: 7 }, (_, index) =>
+    new Date(Date.UTC(1970, 0, 4 + index)).toLocaleDateString(i18n.language, {
+      weekday: 'short',
+      timeZone: 'UTC',
+    }),
+  )
 
   return (
     <div className="grid gap-3.5">
-      <div className="grid grid-cols-2 gap-2.5 md:grid-cols-4">
+      <div className="grid grid-cols-2 gap-2.5 md:grid-cols-5">
         <Kpi
+          id="punctuality"
           label={t('attendance.tab.punctuality')}
           value={kpis.punctuality === null ? '—' : `${kpis.punctuality}%`}
-          detail={`${kpis.onTime}/${kpis.scheduled}`}
+          detail={`${kpis.onTime}/${kpis.judged}`}
           tone="text-success"
         />
-        <Kpi label={t('attendance.tab.lateMinutes')} value={String(kpis.lateMinutes)} tone="text-warning" />
-        <Kpi label={t('attendance.tab.missingPunches')} value={String(kpis.missing)} tone="text-accent" />
-        <Kpi label={t('attendance.tab.shiftsWorked')} value={String(kpis.scheduled)} />
+        <Kpi
+          id="late-minutes"
+          label={t('attendance.tab.lateMinutes')}
+          value={String(kpis.lateMinutes)}
+          detail={String(kpis.late)}
+          tone="text-warning"
+        />
+        <Kpi
+          id="absent"
+          label={t('attendance.tab.absentDays')}
+          value={String(kpis.absent)}
+          tone="text-accent"
+        />
+        <Kpi
+          id="missing-punches"
+          label={t('attendance.tab.missingPunches')}
+          value={String(kpis.unpaired)}
+          tone="text-destructive"
+        />
+        <Kpi
+          id="shifts-worked"
+          label={t('attendance.tab.shiftsWorked')}
+          value={String(kpis.worked)}
+        />
       </div>
 
       {recordMonths.length > 0 && (
@@ -341,52 +439,68 @@ export function AttendanceTab({
               : t('attendance.tab.noSchedule')}
           </p>
         ) : (
-          <div className="grid grid-cols-7 gap-1.5 p-3" data-testid="attendance-month-grid">
-            {Array.from({ length: firstWeekday }, (_, index) => (
-              <div key={`pad-${index}`} />
-            ))}
-            {Array.from({ length: lastDay }, (_, index) => {
-              const dayNumber = index + 1
-              const iso = `${bounds.from.slice(0, 8)}${String(dayNumber).padStart(2, '0')}`
-              const entries = byDate.get(iso) ?? []
-              const seen = sightings.get(iso)
-              const outcome: DayOutcome =
-                entries.length === 0
-                  ? seen
-                    ? 'seen'
-                    : 'off'
-                  : entries.some((day) => dayOutcome(day, DEFAULT_GRACE_MINUTES) === 'exception')
-                    ? 'exception'
-                    : entries.some((day) => dayOutcome(day, DEFAULT_GRACE_MINUTES) === 'late')
-                      ? 'late'
-                      : entries.every((day) => dayOutcome(day, DEFAULT_GRACE_MINUTES) === 'leave')
-                        ? 'leave'
-                        : 'verified'
-              return (
-                <button
-                  key={iso}
-                  type="button"
-                  data-testid="attendance-month-cell"
-                  data-outcome={outcome}
-                  aria-pressed={selected === iso}
-                  disabled={entries.length === 0 && seen === undefined}
-                  onClick={() => setSelected(iso)}
-                  className={`min-h-[58px] rounded-xl border p-1.5 text-start ${CELL[outcome]} ${
-                    selected === iso ? 'outline outline-2 outline-primary' : ''
-                  }`}
+          <>
+            {/* Weekday header. In RTL the grid itself flows right-to-left, so
+              * these labels sit over the same columns the day cells land in
+              * without a single directional override. */}
+            <div
+              className="grid grid-cols-7 gap-1.5 px-3 pt-3"
+              data-testid="attendance-month-weekdays"
+            >
+              {weekdays.map((name) => (
+                <div
+                  key={name}
+                  // `uppercase` does nothing to Arabic and letter-spacing breaks
+                  // its cursive joining, so both are LTR-only.
+                  className="truncate text-center text-[0.64em] font-bold text-faint ltr:uppercase ltr:tracking-[.08em]"
                 >
-                  <span className="font-mono text-[0.72em] text-muted-foreground">{dayNumber}</span>
-                  <span className="mt-1 block text-[0.68em] font-bold">
-                    {entries.length > 0
-                      ? entries.map((day) => SHIFT_LETTER[day.shift_code ?? ''] ?? '?').join(' ')
-                      : seen
-                        ? t('attendance.tab.seenCount', { count: seen.punch_count })
-                        : t('attendance.tab.restDay')}
-                  </span>
-                </button>
-              )
-            })}
-          </div>
+                  {name}
+                </div>
+              ))}
+            </div>
+
+            <div
+              className="grid grid-cols-7 gap-1.5 px-3 pb-3 pt-1.5"
+              data-testid="attendance-month-grid"
+            >
+              {Array.from({ length: firstWeekday }, (_, index) => (
+                <div key={`pad-${index}`} />
+              ))}
+              {Array.from({ length: lastDay }, (_, index) => {
+                const dayNumber = index + 1
+                const iso = `${bounds.from.slice(0, 8)}${String(dayNumber).padStart(2, '0')}`
+                const entries = byDate.get(iso) ?? []
+                const seen = sightings.get(iso)
+                const judged = worstOutcome(entries, judgedAt)
+                const outcome: DayOutcome = judged ?? (seen ? 'seen' : 'off')
+                return (
+                  <button
+                    key={iso}
+                    type="button"
+                    data-testid="attendance-month-cell"
+                    data-outcome={outcome}
+                    aria-pressed={selected === iso}
+                    disabled={entries.length === 0 && seen === undefined}
+                    onClick={() => setSelected(iso)}
+                    className={`min-h-[58px] rounded-xl border p-1.5 text-start ${CELL[outcome]} ${
+                      selected === iso ? 'outline outline-2 outline-primary' : ''
+                    }`}
+                  >
+                    <span className="font-mono text-[0.72em] text-muted-foreground">
+                      {dayNumber}
+                    </span>
+                    <span className="mt-1 block text-[0.68em] font-bold">
+                      {entries.length > 0
+                        ? entries.map((day) => SHIFT_LETTER[day.shift_code ?? ''] ?? '?').join(' ')
+                        : seen
+                          ? t('attendance.tab.seenCount', { count: seen.punch_count })
+                          : t('attendance.tab.restDay')}
+                    </span>
+                  </button>
+                )
+              })}
+            </div>
+          </>
         )}
       </section>
 
@@ -415,18 +529,23 @@ export function AttendanceTab({
 }
 
 function Kpi({
+  id,
   label,
   value,
   detail,
   tone,
 }: {
+  id: string
   label: string
   value: string
   detail?: string
   tone?: string
 }): React.JSX.Element {
   return (
-    <div className="rounded-2xl border border-hairline bg-surface px-3.5 py-3">
+    <div
+      data-testid={`attendance-kpi-${id}`}
+      className="rounded-2xl border border-hairline bg-surface px-3.5 py-3"
+    >
       <div className="text-[0.66em] font-bold uppercase tracking-[.1em] text-faint">{label}</div>
       <div className={`mt-1 font-mono text-[1.6em] font-extrabold tabular-nums ${tone ?? ''}`}>
         {value}
@@ -484,6 +603,13 @@ function DayTimeline({ day }: { day: EmployeeAttendanceDay }): React.JSX.Element
   const { t } = useTranslation()
   const start = parseInstant(day.scheduled_start_at)
   const end = parseInstant(day.scheduled_end_at)
+  const grace = graceFor(day)
+  const graceEnd = start === null ? null : start + grace * 60_000
+  // The instant this start would have become an absence. Drawn because it is the
+  // other half of the site's rule: everything left of it is an arrival, however
+  // late, and a start that reached it with no punch is an absence.
+  const absenceAt = parseInstant(day.absence_due_at)
+  const pastGrace = minutesPastGrace(day)
   // Axis: 45 minutes before the start to 45 after the end, so an early arrival
   // and a late exit both land on it.
   const axisFrom = (start ?? 0) - 45 * 60_000
@@ -501,7 +627,7 @@ function DayTimeline({ day }: { day: EmployeeAttendanceDay }): React.JSX.Element
           {siteTime(day.scheduled_start_at)} – {siteTime(day.scheduled_end_at)}
         </span>
         <span className="ms-auto text-[0.72em] text-muted-foreground">
-          {t('attendance.tab.grace', { minutes: DEFAULT_GRACE_MINUTES })}
+          {t('attendance.tab.grace', { minutes: grace })}
         </span>
       </header>
 
@@ -521,11 +647,19 @@ function DayTimeline({ day }: { day: EmployeeAttendanceDay }): React.JSX.Element
                 className="absolute top-[52px] h-3"
                 style={{
                   left: `${pct(start)}%`,
-                  width: `${pct(start + DEFAULT_GRACE_MINUTES * 60_000) - pct(start)}%`,
+                  width: `${pct(graceEnd ?? start) - pct(start)}%`,
                   background:
                     'repeating-linear-gradient(45deg, var(--warning-soft) 0 4px, transparent 4px 8px)',
                 }}
               />
+              {absenceAt !== null && (
+                <i
+                  aria-hidden
+                  data-testid="attendance-day-absence"
+                  className="absolute top-[46px] h-6 w-[2px] bg-accent/70"
+                  style={{ left: `${pct(absenceAt)}%` }}
+                />
+              )}
             </>
           )}
           {day.punches.map((punch) => {
@@ -535,7 +669,11 @@ function DayTimeline({ day }: { day: EmployeeAttendanceDay }): React.JSX.Element
               <span
                 key={punch.occurred_at}
                 data-testid="attendance-day-punch"
-                className="absolute top-0 -ms-12 w-24 text-center"
+                // Centred with a transform, not a logical margin: a negative
+                // `-ms-12` is absorbed by the solved-for `right` under RTL, so
+                // the label drifted half its width away from its own tick while
+                // the grace band and the absence line stayed put.
+                className="absolute top-0 w-24 -translate-x-1/2 text-center"
                 style={{ left: `${Math.min(100, Math.max(0, pct(at)))}%` }}
               >
                 <b className="block font-mono text-[0.7em] font-bold">{siteTime(punch.occurred_at)}</b>
@@ -549,8 +687,13 @@ function DayTimeline({ day }: { day: EmployeeAttendanceDay }): React.JSX.Element
 
       <p className="flex flex-wrap gap-2.5 border-t border-hairline px-4 py-2.5 text-[0.72em] text-muted-foreground">
         <span>{t('attendance.tab.punchesUnknownDirection', { count: day.punch_count })}</span>
-        {day.late_minutes != null && day.late_minutes > 0 && (
-          <span className="font-mono font-bold text-warning">+{day.late_minutes}m</span>
+        {pastGrace > 0 && (
+          <span className="font-mono font-bold text-warning">
+            {t('attendance.pastGrace', { minutes: pastGrace })}
+          </span>
+        )}
+        {day.presence_state === 'absent' && (
+          <span className="font-bold text-accent">{t('attendance.state.absent')}</span>
         )}
       </p>
     </section>

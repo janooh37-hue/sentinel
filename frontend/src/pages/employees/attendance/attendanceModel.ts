@@ -1,14 +1,17 @@
 /**
  * Pure helpers behind every Attendance view.
  *
- * The Register, the Board and the Timeline are three projections of one day
- * payload (`GET /workforce/attendance/day`), so every rule that decides what a
- * row *means* lives here once, with no React and no i18n.
+ * The Register, the Board, the Timeline and one employee's month are
+ * projections of the same judged day, so every rule that decides what a row
+ * *means* lives here once, with no React and no i18n.
  *
- * Two rules are load-bearing and easy to get wrong:
- *   • a duty is judged only after `judgment_due_at`, so a running shift is
- *     `pending` or `verified`, never `missing` — a night shift before 21:00 is
- *     not an absence, and neither is a morning shift at 08:00;
+ * Three rules are load-bearing and easy to get wrong:
+ *   • the arrival ladder is the site's own: inside the grace is noted, past the
+ *     grace is late, and a start that reaches twice the grace with no punch at
+ *     all is an absence. Both boundaries arrive from the server per row, so the
+ *     register can never judge by a different clock than the evaluator;
+ *   • pairing a lone punch waits for `judgment_due_at`, so the guard who has
+ *     arrived and not yet left is never an exception mid-duty;
  *   • approved leave leaves the denominator, so a post of 4 with one person on
  *     leave is at full strength on 3 (`3/3 +1 leave`), never short-handed on 4.
  */
@@ -17,20 +20,58 @@ import type { AttendanceDayRow } from '@/lib/api'
 
 export type AttendanceRow = AttendanceDayRow
 
-/** What a row means once policy and clock are applied. */
-export type RowState = 'verified' | 'late' | 'single' | 'missing' | 'leave' | 'pending'
+/**
+ * What a row means once policy and clock are applied.
+ *
+ * `grace`, `late` and `absent` are the site's arrival ladder in order of
+ * escalation. `unpaired` is not on that ladder: it is a punch that never got
+ * its pair, which is a gap in the record rather than a lateness.
+ */
+export type RowState =
+  | 'verified'
+  | 'grace'
+  | 'late'
+  | 'unpaired'
+  | 'absent'
+  | 'leave'
+  | 'pending'
 
 export const ROW_STATE_ORDER: readonly RowState[] = [
-  'missing',
-  'single',
+  'absent',
+  'unpaired',
   'late',
+  'grace',
   'verified',
   'leave',
   'pending',
 ]
 
-/** Minutes past the scheduled start beyond which an arrival counts as late. */
+/**
+ * Grace for a row that carries no policy of its own.
+ *
+ * Every judged row publishes `grace_minutes`, so this only covers a row whose
+ * policy is missing. It matches the seeded default deliberately: a fallback that
+ * differed from the installed policy would be a second, invisible rule.
+ */
 export const DEFAULT_GRACE_MINUTES = 30
+
+/**
+ * The judged day the ladder needs.
+ *
+ * Satisfied by both payloads that carry a verdict — a register row from
+ * `GET /workforce/attendance/day` and a day from one employee's month — so the
+ * whole product classifies attendance with one function instead of two that
+ * drift.
+ */
+export interface JudgedDay {
+  presence_state?: string | null
+  punch_count: number
+  late_minutes?: number | null
+  grace_minutes?: number | null
+  absence_due_at?: string | null
+  judgment_due_at?: string | null
+  on_leave?: boolean
+}
 
 export interface StateInput {
   /**
@@ -38,37 +79,66 @@ export interface StateInput {
    *
    * Judgment is decided PER ROW, never per day: on the rotation's double day a
    * company works the morning and the night window, so a whole-day flag would
-   * declare the not-yet-finished night shift absent. That is the most damaging
+   * declare the not-yet-started night shift absent. That is the most damaging
    * mistake this module can make, because it manufactures absences for people
-   * whose duty is not over.
+   * whose duty has not begun.
    */
   now: Date
+  /** Fallback grace, used only for a row the server sent none for. */
   graceMinutes?: number
 }
 
-export function rowState(row: AttendanceRow, { now, graceMinutes = DEFAULT_GRACE_MINUTES }: StateInput): RowState {
-  if (row.on_leave || row.presence_state === 'excused_leave') return 'leave'
-  // `judgment_due_at` is the server's own boundary - the case's match window
-  // close - so the register never flags a person the evaluator is still
-  // withholding judgment on. A duty in progress has no verdict: the guard who
-  // has not arrived yet is not an absence, and one punch is an arrival, not a
-  // missing checkout. A flag raised at 08:00 against a shift ending at 15:00 is
-  // noise a supervisor cannot act on, and a row with no boundary has no policy
-  // behind it and is never judged at all.
+/** The grace this row was actually judged against. */
+export function graceFor(row: JudgedDay, fallback?: number): number {
+  return row.grace_minutes ?? fallback ?? DEFAULT_GRACE_MINUTES
+}
+
+/**
+ * Minutes past the grace, from the raw arrival offset the API publishes.
+ *
+ * `late_minutes` counts from the scheduled start, so the grace comes off before
+ * a number is shown: arriving 08:44 against an 08:00 start with thirty minutes
+ * of grace is fourteen minutes late, not forty-four.
+ */
+export function minutesPastGrace(row: JudgedDay, input?: { graceMinutes?: number }): number {
+  return Math.max(0, (row.late_minutes ?? 0) - graceFor(row, input?.graceMinutes))
+}
+
+/** One punch and a duty that is over: the pair never arrived. */
+export function isUnpaired(row: JudgedDay, { now }: StateInput): boolean {
   const due = parseInstant(row.judgment_due_at)
-  if (due === null || due > now.getTime()) return row.punch_count > 0 ? 'verified' : 'pending'
-  if (row.punch_count === 0) return 'missing'
-  if (row.punch_count === 1) return 'single'
-  if ((row.late_minutes ?? 0) > graceMinutes) return 'late'
-  return 'verified'
+  return row.punch_count === 1 && due !== null && due <= now.getTime()
 }
 
-/** True when a row needs a human decision. */
+export function rowState(row: JudgedDay, input: StateInput): RowState {
+  if (row.on_leave || row.presence_state === 'excused_leave') return 'leave'
+  if (row.punch_count === 0) {
+    // The one verdict that lands mid-duty. `absence_due_at` is the server's own
+    // boundary — twice the grace past the start — so the register calls an
+    // absence at the same instant the evaluator does, without waiting for the
+    // next evaluation to be written. An evaluator that has already ruled
+    // `absent` outranks the boundary: a row with no policy has no boundary at
+    // all, and softening a recorded absence into "not here yet" would hide it.
+    // The verdict is provisional on both sides: a punch arriving later
+    // re-evaluates the case into a late arrival.
+    const absenceDue = parseInstant(row.absence_due_at)
+    const reached = absenceDue !== null && absenceDue <= input.now.getTime()
+    return reached || row.presence_state === 'absent' ? 'absent' : 'pending'
+  }
+  // Lateness outranks pairing on purpose: a lone punch hours past the absence
+  // boundary is a very late arrival, and labelling it "unpaired" would hide the
+  // hours behind a missing-punch note.
+  if (minutesPastGrace(row, input) > 0) return 'late'
+  if (isUnpaired(row, input)) return 'unpaired'
+  return (row.late_minutes ?? 0) > 0 ? 'grace' : 'verified'
+}
+
+/** True when a row needs a human decision. Arriving inside the grace is not one. */
 export function needsDecision(state: RowState): boolean {
-  return state === 'missing' || state === 'single' || state === 'late'
+  return state === 'absent' || state === 'unpaired' || state === 'late'
 }
 
-/** Worst first: no punch, then single punch, then late by descending minutes. */
+/** Worst first: absent, then unpaired, then late by descending minutes. */
 export function orderByAttention(rows: readonly AttendanceRow[], input: StateInput): AttendanceRow[] {
   return [...rows].sort((a, b) => {
     const rank = ROW_STATE_ORDER.indexOf(rowState(a, input)) - ROW_STATE_ORDER.indexOf(rowState(b, input))

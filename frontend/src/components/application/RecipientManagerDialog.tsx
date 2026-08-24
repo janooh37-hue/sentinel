@@ -3,7 +3,7 @@
  *
  * Mirrors SubmitterManagerDialog in structure and design tokens.
  * Uses GET/POST/DELETE /api/v1/general-book/recipients.
- * Requires `books.manage` capability for write operations.
+ * Requires `books.edit` capability for write operations.
  */
 
 import { useState } from 'react'

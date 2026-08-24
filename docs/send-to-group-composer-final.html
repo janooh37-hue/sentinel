@@ -1,0 +1,432 @@
+<!doctype html>
+<html lang="en" dir="ltr">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Send to Group — composer (final): text-first, phone view as extra</title>
+<style>
+  :root{
+    --navy:#0d2845; --navy-2:#1d3a5e; --navy-soft:#e8edf3;
+    --red:#c8102e; --red-soft:#fbe5e8;
+    --page:#eef0f2; --surface:#ffffff; --raised:#fafaf6; --tinted:#f0eee8;
+    --line:#e6e4dd; --line-strong:#d4d1c8;
+    --ink:#0f172a; --muted:#64748b; --faint:#94a3b8;
+    --wa:#25d366; --wa-deep:#075e54; --wa-header:#008069; --wa-bubble:#d9fdd3;
+    --wa-chat:#e5ddd5; --wa-blue:#53bdeb;
+    --green:#059669; --green-soft:#ecfdf5;
+    --radius:14px;
+    --shadow-sm:0 1px 2px rgba(15,23,42,.05);
+    --shadow:0 1px 2px rgba(15,23,42,.06),0 10px 30px rgba(15,23,42,.07);
+    --shadow-lg:0 10px 40px rgba(13,40,69,.16);
+    --font:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Noto Sans Arabic",system-ui,sans-serif;
+  }
+  html.dark{
+    --navy:#5778cf; --navy-2:#7491db; --navy-soft:#1c2849;
+    --red:#ef4858; --red-soft:#3a1820;
+    --page:#0d1220; --surface:#131826; --raised:#1a2034; --tinted:#1f263b;
+    --line:#2a3148; --line-strong:#3a4360;
+    --ink:#e8eaf0; --muted:#8b93a7; --faint:#5b6480;
+    --wa-chat:#0b141a; --wa-bubble:#005c4b; --wa-header:#1f2c33;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--page);color:var(--ink);font-family:var(--font);
+    -webkit-font-smoothing:antialiased;font-size:15px;line-height:1.45}
+  button{font-family:inherit;cursor:pointer}
+  h1,h2,h3,h4,p{margin:0}
+
+  /* review chrome (mobile friendly) */
+  .review-bar{position:sticky;top:0;z-index:90;display:flex;align-items:center;gap:10px;
+    padding:10px 14px;background:var(--navy);color:#fff;box-shadow:var(--shadow-sm);flex-wrap:wrap}
+  .review-bar .brandmark{font-weight:700;font-size:13px;display:flex;align-items:center;gap:9px}
+  .review-bar .dotmark{width:9px;height:9px;border-radius:50%;background:var(--red);box-shadow:0 0 0 4px rgba(200,16,46,.25)}
+  .review-bar .spacer{margin-inline-start:auto}
+  .toggles{display:flex;gap:6px}
+  .toggles button{border:1px solid rgba(255,255,255,.22);background:transparent;color:#dbe4f2;padding:6px 12px;border-radius:9px;font-size:12.5px;font-weight:600}
+  .toggles button.on{background:#fff;color:var(--navy);border-color:#fff}
+
+  .stage{max-width:1360px;margin:0 auto;padding:22px 18px 80px}
+  .caption{font-size:12px;color:var(--muted);text-align:center;margin:0 auto 18px;max-width:780px}
+  .caption b{color:var(--ink)}
+
+  /* page head */
+  .phead{display:flex;align-items:flex-start;gap:14px;margin-bottom:18px;flex-wrap:wrap}
+  .phead .titles h1{font-size:21px;letter-spacing:-.01em;font-weight:700}
+  .phead .titles p{color:var(--muted);font-size:13px;margin-top:3px}
+  .phead .headright{margin-inline-start:auto;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+  .conn-pill{display:inline-flex;align-items:center;gap:8px;background:var(--green-soft);color:var(--green);font-size:12px;font-weight:600;border-radius:999px;padding:7px 12px;border:1px solid #a7f3d0}
+  html.dark .conn-pill{background:rgba(5,150,105,.14);border-color:rgba(5,150,105,.4)}
+  .conn-pill .live{width:8px;height:8px;border-radius:50%;background:var(--green);position:relative}
+  .conn-pill .live::after{content:"";position:absolute;inset:-4px;border-radius:50%;border:1px solid var(--green);opacity:.5;animation:pulse 2s ease-out infinite}
+  @keyframes pulse{to{transform:scale(2);opacity:0}}
+  .conn-num{font-variant-numeric:tabular-nums;color:var(--wa-deep);font-weight:700}
+  html.dark .conn-num{color:#6ee7b7}
+  .ghost-btn{border:1px solid var(--line-strong);background:var(--surface);color:var(--ink);border-radius:10px;padding:8px 12px;font-size:12.5px;font-weight:600;display:inline-flex;gap:7px;align-items:center}
+  .ghost-btn:hover{background:var(--tinted)}
+
+  /* ── 3-column layout; third column collapses in phone mode ── */
+  .cols{display:grid;grid-template-columns:minmax(290px,350px) 1fr 340px;gap:18px;align-items:start;
+    transition:grid-template-columns .55s cubic-bezier(.35,.1,.25,1)}
+  .cols.phonemode{grid-template-columns:minmax(290px,350px) 1fr 0px;gap:18px 0px}
+  .cols.phonemode .leftgap{gap:18px}
+  .pv-col{display:flex;flex-direction:column;align-items:center;gap:12px;position:sticky;top:64px;
+    overflow:hidden;min-width:0;transition:opacity .4s ease,transform .5s ease}
+  .cols.phonemode .pv-col{opacity:0;transform:translateX(30px) scale(.95);pointer-events:none}
+  [dir=rtl] .cols.phonemode .pv-col{transform:translateX(-30px) scale(.95)}
+  .leftcol{display:flex;flex-direction:column;gap:14px}
+  @media(max-width:1080px){
+    .cols,.cols.phonemode{grid-template-columns:1fr;gap:16px}
+    .pv-col{position:static;order:3}
+    .cols.phonemode .pv-col{display:none}
+  }
+
+  /* card + primitives */
+  .card{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow-sm)}
+  .card-hd{display:flex;align-items:center;gap:10px;padding:14px 16px;border-bottom:1px solid var(--line)}
+  .card-hd h3{font-size:13.5px;font-weight:700}
+  .card-hd .sub{font-size:12px;color:var(--muted);font-weight:500}
+  .field-label{font-size:13px;font-weight:700;display:block}
+  .searchbox{position:relative}
+  .searchbox input{width:100%;border:1px solid var(--line);background:var(--tinted);border-radius:10px;padding:9px 12px;padding-inline-start:34px;font-size:13px;color:var(--ink)}
+  .searchbox input:focus{outline:none;border-color:var(--navy);background:var(--surface)}
+  .searchbox .mag{position:absolute;inset-inline-start:11px;top:50%;transform:translateY(-50%);color:var(--faint);font-size:14px}
+  .rlist{list-style:none;margin:0;padding:2px 8px 10px}
+  .rrow{display:flex;align-items:center;gap:12px;padding:10px 12px;border-radius:11px;border:1px solid transparent;transition:.12s}
+  .rrow:hover{background:var(--tinted)}
+  .rrow.sel{background:var(--navy-soft);border-color:color-mix(in oklab,var(--navy) 22%,transparent)}
+  .rrow .box{width:19px;height:19px;border-radius:6px;border:2px solid var(--line-strong);flex:0 0 auto;display:grid;place-items:center;color:#fff;font-size:12px;font-weight:800}
+  .rrow.sel .box{background:var(--navy);border-color:var(--navy)}
+  .rrow .avatar{width:34px;height:34px;border-radius:10px;flex:0 0 auto;display:grid;place-items:center;background:linear-gradient(135deg,#25d366,#128c4b);color:#fff;font-weight:700;font-size:13px}
+  .rrow .meta{min-width:0}
+  .rrow .nm{font-size:13.5px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .rrow .mt{font-size:11.5px;color:var(--muted)}
+  .reach{background:linear-gradient(135deg,var(--navy),var(--navy-2));color:#fff;border-radius:13px;padding:13px 16px;display:flex;align-items:center;gap:14px;box-shadow:var(--shadow)}
+  .reach .big{font-size:28px;font-weight:800;line-height:1;font-variant-numeric:tabular-nums}
+  .reach .lbl{font-size:10.5px;letter-spacing:.05em;text-transform:uppercase;color:#a9bcd8;font-weight:700}
+  .reach .split{width:1px;align-self:stretch;background:rgba(255,255,255,.16)}
+  .reach .side{font-size:12px;color:#c7d2e5;line-height:1.45}
+  .reach .side b{color:#fff;font-size:14px;display:block}
+  .reach .wa-glow{margin-inline-start:auto;width:34px;height:34px;border-radius:11px;background:rgba(37,211,102,.18);display:grid;place-items:center;color:#5df08f;font-size:17px}
+
+  /* view switch */
+  .vswitch{display:inline-flex;background:var(--tinted);border:1px solid var(--line);border-radius:11px;padding:4px;gap:4px}
+  .vswitch button{border:0;background:transparent;border-radius:8px;padding:7px 14px;font-size:12.5px;font-weight:700;color:var(--muted);display:inline-flex;gap:7px;align-items:center;transition:.15s}
+  .vswitch button.on{background:var(--surface);box-shadow:var(--shadow-sm)}
+  .vswitch button.txt.on{color:var(--ink)}
+  .vswitch button.ph.on{color:var(--wa-deep)}
+  html.dark .vswitch button.ph.on{color:#6ee7b7}
+
+  /* ── composer morph: text-first (default) -> phone mode (extra) ── */
+  .composer{padding:18px}
+  .compose-hd{display:flex;align-items:center;gap:12px;margin-bottom:14px;flex-wrap:wrap}
+  .compose-hd .vswitch{margin-inline-start:auto}
+
+  .pvzone{position:relative;perspective:1200px;height:0;opacity:0;overflow:hidden;
+    transition:height .55s cubic-bezier(.35,.1,.25,1),opacity .45s ease,margin .55s ease;margin:0}
+  .phonemode .pvzone{height:min(54vh,480px);opacity:1;overflow:visible}
+  /* WhatsApp Web / desktop-style chat window */
+  .bigphone{height:100%;width:100%;border:1px solid var(--line);border-bottom:0;border-radius:12px 12px 0 0;overflow:hidden;
+    box-shadow:var(--shadow);position:relative;
+    transform-origin:top center;transform:rotateX(-10deg) scale(.97);transition:transform .55s cubic-bezier(.35,.1,.25,1)}
+  .phonemode .bigphone{transform:none}
+  .bigscreen{display:flex;flex-direction:column;height:100%;
+    background:#efeae2;background-image:radial-gradient(rgba(0,0,0,.03) 1px,transparent 1px);background-size:14px 14px}
+  html.dark .bigscreen{background:#0b141a;background-image:radial-gradient(rgba(255,255,255,.03) 1px,transparent 1px)}
+  /* WA Web header is gray, not green */
+  .bigscreen .wa-top{background:#f0f2f5;color:#111b21}
+  html.dark .bigscreen .wa-top{background:#202c33;color:#e9edef}
+  .bigscreen .wa-top .gs{opacity:.6}
+  .bigscreen .wa-top .gav{background:linear-gradient(135deg,#25d366,#128c4b);color:#fff}
+  .bigscreen .wa-body .bubble{max-width:62%}
+  /* WA Web composer bar: hugs the chat window, holds the real text box */
+  .txtbar{display:block;transition:padding .4s ease,background .4s ease}
+  .txtbar .barico{display:none;font-size:19px;color:#54656f;flex:0 0 auto;user-select:none}
+  html.dark .txtbar .barico{color:#8696a0}
+  .phonemode .txtbar{display:flex;gap:11px;align-items:center;background:#f0f2f5;border:1px solid var(--line);border-top:0;
+    border-radius:0 0 12px 12px;padding:9px 13px;margin-bottom:12px}
+  html.dark .phonemode .txtbar{background:#202c33}
+  .phonemode .txtbar .barico{display:inline}
+
+  .wa-top{background:var(--wa-header);color:#fff;display:flex;align-items:center;gap:11px;padding:12px 14px}
+  html.dark .wa-top{background:#1f2c33}
+  .wa-top .back{font-size:17px;opacity:.9}
+  .wa-top .gav{width:32px;height:32px;border-radius:50%;background:rgba(255,255,255,.2);display:grid;place-items:center;font-weight:700;font-size:12px}
+  .wa-top .gn{font-size:13.5px;font-weight:600}
+  .wa-top .gs{font-size:10.5px;opacity:.85}
+  .wa-body{flex:1;padding:16px 14px;display:flex;flex-direction:column;gap:9px;justify-content:flex-end;overflow:auto}
+  .wa-date{align-self:center;background:#ffffffc9;color:#54656f;font-size:10.5px;font-weight:600;border-radius:7px;padding:4px 10px;box-shadow:var(--shadow-sm)}
+  html.dark .wa-date{background:#182229;color:#8696a0}
+  .bubble{align-self:flex-end;max-width:80%;background:var(--wa-bubble);border-radius:9px 9px 2px 9px;padding:7px 9px 5px;font-size:13.5px;color:#111b21;box-shadow:0 1px .5px rgba(0,0,0,.13)}
+  /* long broadcasts fill the phone width like real WhatsApp — no wasted gutter */
+  .phone .bubble{max-width:94%;width:fit-content}
+  html.dark .bubble{color:#e9edef}
+  .bubble .doc{display:flex;align-items:center;gap:10px;background:rgba(0,0,0,.05);border-radius:7px;padding:9px;margin-bottom:6px}
+  html.dark .bubble .doc{background:rgba(255,255,255,.06)}
+  .bubble .doc .di{width:32px;height:38px;border-radius:5px;background:#fff;color:var(--red);display:grid;place-items:center;font-size:9px;font-weight:800;flex:0 0 auto}
+  .bubble .doc .dn{font-size:12px;font-weight:600;line-height:1.3}
+  .bubble .doc .ds{font-size:10.5px;color:#667781}
+  .mention{color:#027eb5;font-weight:600}
+  html.dark .mention{color:#53bdeb}
+  .bubble .time{font-size:10px;color:#667781;display:inline-flex;align-items:center;gap:3px;float:inline-end;margin-top:2px;margin-inline-start:8px}
+  html.dark .bubble .time{color:#8696a0}
+  .bubble .ticks{color:var(--wa-blue);font-size:12px}
+
+  /* the ONE text box: big editor (default) -> input bar (phone mode) */
+  textarea.compose{width:100%;border:1px solid var(--line-strong);background:var(--surface);color:var(--ink);
+    padding:12px 14px;font-size:14px;font-family:inherit;line-height:1.5;resize:none;display:block;
+    height:200px;border-radius:12px;overflow:auto;
+    transition:height .55s cubic-bezier(.35,.1,.25,1),border-radius .55s ease}
+  .phonemode textarea.compose{height:44px;border-radius:9px;overflow:hidden;flex:1;border-color:transparent;background:#fff;padding:10px 13px}
+  html.dark .phonemode textarea.compose{background:#2a3942}
+  textarea.compose:focus{outline:none;border-color:var(--navy);box-shadow:0 0 0 3px var(--navy-soft)}
+
+  /* side phone (default view) */
+  .phone{width:100%;max-width:280px;border-radius:34px;background:#0b141a;padding:10px;box-shadow:var(--shadow-lg);position:relative}
+  .phone::before{content:"";position:absolute;top:10px;left:50%;transform:translateX(-50%);
+    width:34%;height:20px;background:#0b141a;border-radius:0 0 12px 12px;z-index:2} /* notch */
+  .phone .wa-top{padding-top:30px} /* clears the notch */
+  .phone .screen{border-radius:24px;overflow:hidden;background:var(--wa-chat);background-image:radial-gradient(rgba(0,0,0,.03) 1px,transparent 1px);background-size:14px 14px;aspect-ratio:390/844;height:auto;display:flex;flex-direction:column}
+  html.dark .phone .screen{background-image:radial-gradient(rgba(255,255,255,.03) 1px,transparent 1px)}
+  .preview-tag{display:inline-flex;align-items:center;gap:7px;font-size:11.5px;font-weight:700;color:var(--wa-deep);background:var(--green-soft);border:1px solid #a7f3d0;border-radius:999px;padding:5px 11px;white-space:nowrap}
+  html.dark .preview-tag{background:rgba(5,150,105,.14);color:#6ee7b7;border-color:rgba(5,150,105,.4)}
+
+  /* mentions with insert-mode switch */
+  .mentionbar{margin-top:12px;padding:11px 13px;border:1px dashed var(--line-strong);border-radius:11px;background:var(--tinted)}
+  .mentionbar .lab{font-size:11.5px;color:var(--muted);font-weight:600;margin-bottom:9px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+  .mmode{display:inline-flex;background:var(--surface);border:1px solid var(--line-strong);border-radius:999px;padding:3px;gap:3px;margin-inline-start:auto}
+  .mmode button{border:0;background:transparent;border-radius:999px;padding:4px 11px;font-size:11.5px;font-weight:700;color:var(--muted);display:inline-flex;gap:5px;align-items:center;transition:.15s}
+  .mmode button.on{background:var(--navy);color:#fff}
+  .mmode button.tag.on{background:var(--wa-deep)}
+  .mnote{font-size:11px;color:var(--muted);margin-top:7px}
+  .mnote b{color:var(--wa-deep)}
+  html.dark .mnote b{color:#6ee7b7}
+  .chips{display:flex;gap:7px;flex-wrap:wrap}
+  .chip{border:1px solid var(--line-strong);background:var(--surface);border-radius:999px;padding:5px 11px;font-size:12px;font-weight:600;display:inline-flex;gap:7px;align-items:center;color:var(--ink)}
+  .chip .g{width:6px;height:6px;border-radius:50%;background:var(--wa)}
+  .chip:hover{border-color:var(--navy);color:var(--navy)}
+
+  /* attach + send */
+  .segbar{display:flex;gap:8px;flex-wrap:wrap}
+  .seg{border:1px solid var(--line-strong);background:var(--surface);border-radius:10px;padding:9px 13px;font-size:13px;font-weight:600;color:var(--muted);display:inline-flex;align-items:center;gap:8px}
+  .seg.on{border-color:var(--navy);color:var(--navy);background:var(--navy-soft)}
+  .attach-card{margin-top:12px;display:flex;align-items:center;gap:12px;border:1px solid var(--line);background:var(--raised);border-radius:11px;padding:11px 13px;flex-wrap:wrap}
+  .attach-card .fic{width:38px;height:44px;border-radius:7px;background:var(--red-soft);color:var(--red);display:grid;place-items:center;font-size:11px;font-weight:800;flex:0 0 auto}
+  .attach-card .an{font-size:13px;font-weight:600}
+  .attach-card .as{font-size:11.5px;color:var(--muted)}
+  .attach-card .actions{margin-inline-start:auto;display:flex;gap:7px}
+  .mini-btn{border:1px solid var(--line-strong);background:var(--surface);border-radius:8px;padding:6px 11px;font-size:12px;font-weight:600;color:var(--ink)}
+  .mini-btn.danger{color:var(--red);border-color:color-mix(in oklab,var(--red) 40%,transparent)}
+  .send-btn{background:var(--navy);color:#fff;border:0;border-radius:12px;padding:12px 22px;font-size:14px;font-weight:700;display:inline-flex;align-items:center;gap:10px;box-shadow:0 6px 18px rgba(13,40,69,.28)}
+  .send-btn:hover{background:var(--navy-2)}
+  .send-btn .wa{width:22px;height:22px;border-radius:6px;background:var(--wa);display:grid;place-items:center;color:#0b3d24;font-size:13px}
+  .hint{font-size:12px;color:var(--muted)}
+  .send-row{display:flex;align-items:center;gap:12px;margin-top:20px;border-top:1px solid var(--line);padding-top:16px;flex-wrap:wrap}
+
+  @media (prefers-reduced-motion: reduce){
+    *{animation:none!important;transition:none!important}
+  }
+</style>
+</head>
+<body>
+
+<div class="review-bar">
+  <span class="brandmark"><span class="dotmark"></span> GSSG · <b>Send to Group</b> — composer final</span>
+  <span class="spacer"></span>
+  <div class="toggles">
+    <button id="rtlToggle">العربية / RTL</button>
+    <button id="darkToggle">Dark</button>
+  </div>
+</div>
+
+<main class="stage">
+  <p class="caption"><b>Normal</b> (default): full text editor with a live iPhone-14-proportioned preview standing beside it. <b>Extended view</b>: the side phone fades away while a WhatsApp <b>Web/desktop-style</b> chat window unfolds — and the editor melts into its composer bar at the bottom, exactly like typing in WhatsApp Web. Mention chips have a switch: <b>@ Mention</b> (notifies him — we hold his number) or <b>Plain name</b> (text only).</p>
+
+  <div class="phead">
+    <div class="titles">
+      <h1 data-en="Send to Group" data-ar="إرسال إلى مجموعة">Send to Group</h1>
+      <p data-en="Broadcast a message or a record to your WhatsApp groups." data-ar="بثّ رسالة أو مستند إلى مجموعات واتساب.">Broadcast a message or a record to your WhatsApp groups.</p>
+    </div>
+    <div class="headright">
+      <span class="conn-pill"><span class="live"></span> <span data-en="Connected" data-ar="متصل">Connected</span> · <span class="conn-num">+971 50 905 9931</span></span>
+      <button class="ghost-btn"><span>⟳</span> <span data-en="Re-scan" data-ar="مسح جديد">Re-scan</span></button>
+    </div>
+  </div>
+
+  <div class="cols" id="cols">
+    <!-- recipients -->
+    <div class="leftcol">
+      <div class="card">
+        <div class="card-hd"><h3 data-en="Recipients" data-ar="المستلمون">Recipients</h3><span class="sub" data-en="7 groups available" data-ar="٧ مجموعات متاحة">7 groups available</span></div>
+        <div style="padding:12px 14px 4px">
+          <div class="searchbox"><span class="mag">🔍</span><input placeholder="Search groups…" data-en-ph="Search groups…" data-ar-ph="ابحث في المجموعات…"></div>
+        </div>
+        <ul class="rlist">
+          <li class="rrow sel"><span class="box">✓</span><span class="avatar">DO</span><span class="meta"><div class="nm" data-en="Duty Officers — Terminal 1" data-ar="ضباط المناوبة — صالة ١">Duty Officers — Terminal 1</div><div class="mt" data-en="24 members" data-ar="٢٤ عضواً">24 members</div></span></li>
+          <li class="rrow sel"><span class="box">✓</span><span class="avatar">SE</span><span class="meta"><div class="nm" data-en="Supervisors — East Gate" data-ar="المشرفون — البوابة الشرقية">Supervisors — East Gate</div><div class="mt" data-en="12 members" data-ar="١٢ عضواً">12 members</div></span></li>
+          <li class="rrow"><span class="box"></span><span class="avatar">HR</span><span class="meta"><div class="nm" data-en="HR Announcements" data-ar="إعلانات الموارد البشرية">HR Announcements</div><div class="mt" data-en="148 members" data-ar="١٤٨ عضواً">148 members</div></span></li>
+          <li class="rrow"><span class="box"></span><span class="avatar">FS</span><span class="meta"><div class="nm" data-en="Fire & Safety Team" data-ar="فريق السلامة والإطفاء">Fire &amp; Safety Team</div><div class="mt" data-en="31 members" data-ar="٣١ عضواً">31 members</div></span></li>
+          <li class="rrow"><span class="box"></span><span class="avatar">NC</span><span class="meta"><div class="nm" data-en="Night Shift — Cargo" data-ar="الوردية الليلية — الشحن">Night Shift — Cargo</div><div class="mt" data-en="40 members" data-ar="٤٠ عضواً">40 members</div></span></li>
+          <li class="rrow"><span class="box"></span><span class="avatar">MG</span><span class="meta"><div class="nm" data-en="Management" data-ar="الإدارة">Management</div><div class="mt" data-en="9 members" data-ar="٩ أعضاء">9 members</div></span></li>
+        </ul>
+      </div>
+      <div class="reach">
+        <div><div class="big">36</div><div class="lbl" data-en="People reached" data-ar="عدد المستلمين">People reached</div></div>
+        <div class="split"></div>
+        <div class="side"><b>2</b><span data-en="groups selected" data-ar="مجموعات محددة">groups selected</span></div>
+        <div class="wa-glow">✦</div>
+      </div>
+    </div>
+
+    <!-- compose card -->
+    <div class="card composer" id="composer">
+      <div class="compose-hd">
+        <label class="field-label" data-en="Message" data-ar="الرسالة">Message</label>
+        <div class="vswitch" id="vswitch">
+          <button class="txt on" data-v="text">✏️ <span data-en="Normal" data-ar="عادي">Normal</span></button>
+          <button class="ph" data-v="phone">📱 <span data-en="Extended view" data-ar="عرض موسّع">Extended view</span></button>
+        </div>
+      </div>
+
+      <!-- chat surface unfolds here in phone mode -->
+      <div class="pvzone">
+        <div class="bigphone"><div class="bigscreen">
+          <div class="wa-top"><span class="back">‹</span><span class="gav">DO</span><div><div class="gn" data-en="Duty Officers — Terminal 1" data-ar="ضباط المناوبة — صالة ١">Duty Officers — Terminal 1</div><div class="gs" data-en="You, +23 others" data-ar="أنت، و٢٣ آخرين">You, +23 others</div></div></div>
+          <div class="wa-body">
+            <span class="wa-date" data-en="TODAY" data-ar="اليوم">TODAY</span>
+            <div class="bubble" style="min-width:55%">
+              <div class="doc"><span class="di">PDF</span><div><div class="dn">GSSG-2026-0417.pdf</div><div class="ds" data-en="2 pages · 480 KB" data-ar="صفحتان · ٤٨٠ ك.ب">2 pages · 480 KB</div></div></div>
+              <span dir="auto" class="live-text" style="display:block;min-height:1.4em"></span>
+              <span class="time">14:32 <span class="ticks">✓✓</span></span>
+            </div>
+          </div>
+        </div></div>
+      </div>
+
+      <!-- the ONE text box (becomes the WA Web composer bar in Extended view) -->
+      <div class="txtbar">
+        <span class="barico" aria-hidden>😊</span>
+        <span class="barico" aria-hidden>📎</span>
+        <textarea id="msg" class="compose" dir="auto" placeholder="Type your message…" data-en-ph="Type your message…" data-ar-ph="اكتب رسالتك…">Reminder: updated duty roster attached. Confirm receipt by 14:00. @Omar Al-Rashid — you're on the 02:00 gate rotation.</textarea>
+        <span class="barico" aria-hidden>🎤</span>
+      </div>
+
+      <div class="mentionbar">
+        <div class="lab">
+          <span>@</span> <span data-en="Add an employee" data-ar="أضف موظفاً">Add an employee</span>
+          <div class="mmode" id="mmode">
+            <button class="tag on" data-m="tag">@ <span data-en="Mention — notifies him" data-ar="إشارة — يصله تنبيه">Mention — notifies him</span></button>
+            <button class="plain" data-m="plain"><span data-en="Plain name" data-ar="اسم فقط">Plain name</span></button>
+          </div>
+        </div>
+        <div class="chips">
+          <button class="chip" data-name="Omar Al-Rashid"><span class="g"></span> Omar Al-Rashid · G-2214</button>
+          <button class="chip" data-name="Fatima Nasser"><span class="g"></span> Fatima Nasser · G-1908</button>
+          <button class="chip" data-name="Yusuf Karim"><span class="g"></span> Yusuf Karim · G-3051</button>
+          <button class="chip" style="border-style:dashed">＋ <span data-en="Search…" data-ar="بحث…">Search…</span></button>
+        </div>
+        <p class="mnote" id="mnote"><b>@ Mention:</b> <span data-en="his number is linked, so WhatsApp tags him and he gets a personal notification. Plain name just types the name." data-ar="رقمه مرتبط، فيُشار إليه في واتساب ويصله تنبيه شخصي. «اسم فقط» يكتب الاسم دون إشارة.">his number is linked, so WhatsApp tags him and he gets a personal notification. Plain name just types the name.</span></p>
+      </div>
+
+      <div style="height:16px"></div>
+      <label class="field-label" style="margin-bottom:8px" data-en="Attachment" data-ar="مرفق">Attachment</label>
+      <div class="segbar">
+        <button class="seg"><span data-en="None" data-ar="بدون">None</span></button>
+        <button class="seg on">📄 <span data-en="Record" data-ar="سجل">Record</span></button>
+        <button class="seg">📎 <span data-en="Upload file" data-ar="رفع ملف">Upload file</span></button>
+      </div>
+      <div class="attach-card">
+        <span class="fic">PDF</span>
+        <div><div class="an" dir="auto">GSSG-2026-0417 · Duty Roster</div><div class="as" data-en="2 pages · 480 KB" data-ar="صفحتان · ٤٨٠ ك.ب">2 pages · 480 KB</div></div>
+        <div class="actions"><button class="mini-btn" data-en="Change" data-ar="تغيير">Change</button><button class="mini-btn danger" data-en="Remove" data-ar="إزالة">Remove</button></div>
+      </div>
+
+      <div class="send-row">
+        <button class="send-btn"><span class="wa">✆</span> <span data-en="Send to 2 groups" data-ar="إرسال إلى مجموعتين">Send to 2 groups</span></button>
+        <span class="hint" data-en="Delivers to 36 people. You can’t undo a broadcast." data-ar="سيصل إلى ٣٦ شخصاً. لا يمكن التراجع عن البثّ.">Delivers to 36 people. You can’t undo a broadcast.</span>
+      </div>
+    </div>
+
+    <!-- side phone (default view) -->
+    <div class="pv-col">
+      <span class="preview-tag">👁 <span data-en="Live preview — how it arrives" data-ar="معاينة حية — كما ستصل">Live preview — how it arrives</span></span>
+      <div class="phone"><div class="screen">
+        <div class="wa-top"><span class="back">‹</span><span class="gav">DO</span><div><div class="gn" data-en="Duty Officers — Terminal 1" data-ar="ضباط المناوبة — صالة ١">Duty Officers — Terminal 1</div><div class="gs" data-en="You, +23 others" data-ar="أنت، و٢٣ آخرين">You, +23 others</div></div></div>
+        <div class="wa-body">
+          <span class="wa-date" data-en="TODAY" data-ar="اليوم">TODAY</span>
+          <div class="bubble">
+            <div class="doc"><span class="di">PDF</span><div><div class="dn">GSSG-2026-0417.pdf</div><div class="ds" data-en="2 pages · 480 KB" data-ar="صفحتان · ٤٨٠ ك.ب">2 pages · 480 KB</div></div></div>
+            <span dir="auto" class="live-text" style="display:block;min-height:1.4em"></span>
+            <span class="time">14:32 <span class="ticks">✓✓</span></span>
+          </div>
+        </div>
+      </div></div>
+      <p class="hint" style="text-align:center;max-width:280px" data-en="Shown for the first selected group. Sends identically to both." data-ar="معروضة للمجموعة الأولى المحددة. تُرسل بالتساوي إلى المجموعتين.">Shown for the first selected group. Sends identically to both.</p>
+    </div>
+  </div>
+</main>
+
+<script>
+  const cols = document.getElementById('cols');
+  const composer = document.getElementById('composer');
+  const vswitch = document.getElementById('vswitch');
+  const msg = document.getElementById('msg');
+
+  /* Text view (default) <-> Phone view (extra): one coordinated animation */
+  vswitch.addEventListener('click', e=>{
+    const b = e.target.closest('button'); if(!b) return;
+    [...vswitch.children].forEach(x=>x.classList.toggle('on', x===b));
+    const phone = b.dataset.v==='phone';
+    cols.classList.toggle('phonemode', phone);
+    composer.classList.toggle('phonemode', phone);
+  });
+
+  /* live preview sync (both surfaces), mentions in blue */
+  const KNOWN = ['Omar Al-Rashid','Fatima Nasser','Yusuf Karim'];
+  const esc = s => s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  function render(){
+    let html = esc(msg.value);
+    for (const n of KNOWN) {
+      html = html.split('@'+n).join('<span class="mention">@'+n+'</span>');
+    }
+    document.querySelectorAll('.live-text').forEach(el=>{ el.innerHTML = html || '<span style="opacity:.45">…</span>'; });
+  }
+  msg.addEventListener('input', render);
+  render();
+
+  /* mention insert mode: real @mention vs plain name */
+  let mmodeVal = 'tag';
+  const mmode = document.getElementById('mmode');
+  mmode.addEventListener('click', e=>{
+    const b = e.target.closest('button'); if(!b) return;
+    [...mmode.children].forEach(x=>x.classList.toggle('on', x===b));
+    mmodeVal = b.dataset.m;
+  });
+  document.querySelectorAll('[data-name]').forEach(chip=>{
+    chip.addEventListener('click', ()=>{
+      const ins = (mmodeVal==='tag' ? '@' : '') + chip.dataset.name + ' ';
+      const s = msg.selectionStart ?? msg.value.length, e = msg.selectionEnd ?? msg.value.length;
+      msg.value = msg.value.slice(0,s) + ins + msg.value.slice(e);
+      msg.focus();
+      msg.selectionStart = msg.selectionEnd = s + ins.length;
+      render();
+    });
+  });
+
+  /* dark + RTL toggles */
+  const darkBtn = document.getElementById('darkToggle');
+  darkBtn.addEventListener('click', ()=>{
+    document.documentElement.classList.toggle('dark');
+    darkBtn.classList.toggle('on');
+  });
+  let rtl = false;
+  const rtlBtn = document.getElementById('rtlToggle');
+  rtlBtn.addEventListener('click', ()=>{
+    rtl = !rtl;
+    rtlBtn.classList.toggle('on', rtl);
+    document.documentElement.dir = rtl ? 'rtl' : 'ltr';
+    document.documentElement.lang = rtl ? 'ar' : 'en';
+    document.querySelectorAll('[data-en]').forEach(el=>{ el.textContent = rtl ? el.dataset.ar : el.dataset.en; });
+    document.querySelectorAll('[data-en-ph]').forEach(el=>{ el.placeholder = rtl ? el.dataset.arPh : el.dataset.enPh; });
+  });
+</script>
+</body>
+</html>

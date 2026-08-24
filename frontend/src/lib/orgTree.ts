@@ -36,8 +36,8 @@ export interface OrgLayout {
   levels: Array<{ y: number; h: number; level: number }>
 }
 
-export const NODE_W = 200
-export const NODE_H = 72
+export const NODE_W = 224
+export const NODE_H = 92
 export const SIBLING_GAP = 14
 export const ROOT_GAP = 44
 export const LEVEL_GAP = 46
@@ -46,21 +46,17 @@ export const MARGIN = 28
 export const LINE_W = 2
 export const LINE_W_LIN = 3
 
-const positionWeights: ReadonlyArray<readonly [RegExp, number]> = [
-  [/company commander|commander|administration manager|مدير الإدارة|رئيس السرية/i, 100],
-  [/deputy|نائب الرئيس/i, 90],
-  [/shift supervisor|department head|مشرف وردية|رئيس قسم/i, 80],
-  [/post leader|supervisor|رئيس نقطة|مشرف/i, 60],
-  [/security guard|clerk|حارس أمن|كاتب/i, 20],
-]
-
-function seniorityWeight(person: OrgPerson): number {
-  const position = `${person.position ?? ''} ${person.position_ar ?? ''}`
-  return positionWeights.find(([pattern]) => pattern.test(position))?.[1] ?? 20
-}
+const orgCollator = new Intl.Collator('en', { numeric: true, sensitivity: 'base' })
 
 export function compareOrgPeople(a: OrgPerson, b: OrgPerson): number {
-  return seniorityWeight(b) - seniorityWeight(a) || a.id.localeCompare(b.id)
+  const rank = (a.rank_order ?? Number.MAX_SAFE_INTEGER) - (b.rank_order ?? Number.MAX_SAFE_INTEGER)
+  if (rank !== 0) return rank
+
+  const designation = orgCollator.compare(
+    a.designation_en ?? a.designation_ar ?? '',
+    b.designation_en ?? b.designation_ar ?? '',
+  )
+  return designation || orgCollator.compare(a.id, b.id)
 }
 
 /** Turn the flat reporting relation into a stable, cycle-safe forest. */

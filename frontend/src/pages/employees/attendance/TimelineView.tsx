@@ -102,7 +102,7 @@ export function TimelineView({
 
             <div className="py-2">
               {[...posts.entries()].map(([post, postRows]) => {
-                const missing = postRows.filter((row) => rowState(row, input) === 'missing').length
+                const absent = postRows.filter((row) => rowState(row, input) === 'absent').length
                 const leave = postRows.filter((row) => rowState(row, input) === 'leave').length
                 return (
                   <div
@@ -176,9 +176,11 @@ export function TimelineView({
                               className={`absolute -ms-[5.5px] h-[11px] w-[11px] rounded-full ring-2 ring-surface ${
                                 state === 'late'
                                   ? 'bg-warning'
-                                  : state === 'single'
+                                  : state === 'unpaired'
                                     ? 'bg-surface ring-[2.5px] ring-accent'
-                                    : 'bg-success'
+                                    : state === 'grace'
+                                      ? 'bg-caution'
+                                      : 'bg-success'
                               }`}
                               style={{ left: `${left}%`, top: `${8 + fan * 3}px` }}
                             />
@@ -188,9 +190,9 @@ export function TimelineView({
                     </span>
 
                     <span className="text-end font-mono text-[0.72em] text-muted-foreground">
-                      {postRows.length - missing - leave}/{postRows.length - leave}
-                      {missing > 0 && (
-                        <b className="text-accent"> {t('attendance.timeline.missingGutter', { count: missing })}</b>
+                      {postRows.length - absent - leave}/{postRows.length - leave}
+                      {absent > 0 && (
+                        <b className="text-accent"> {t('attendance.timeline.missingGutter', { count: absent })}</b>
                       )}
                     </span>
                   </div>

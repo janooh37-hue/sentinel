@@ -18,6 +18,9 @@ class OrgNode(ORMBase):
     duty_post: str | None
     status: str
     supervisor_id: str | None
+    designation_en: str | None = None
+    designation_ar: str | None = None
+    rank_order: int | None = None
 
 
 class OrgSupervisorUpdate(BaseModel):

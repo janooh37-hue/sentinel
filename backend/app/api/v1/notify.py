@@ -4,7 +4,7 @@
   GET  /notify/status                  — most recent attempt for a record
   POST /notify/{msg_id}/refresh-delivery — re-check delivery for one message
 
-send/status require ``employees.notify``; refresh requires ``books.manage``.
+send/status require ``employees.notify``; refresh requires ``books.edit``.
 """
 
 from __future__ import annotations
@@ -73,7 +73,7 @@ def get_status(
 def refresh_delivery(
     msg_id: int,
     db: Annotated[Session, Depends(get_db)],
-    _user: Annotated[User, Depends(require_capability("books.manage"))],
+    _user: Annotated[User, Depends(require_capability("books.edit"))],
 ) -> NotifyMessageRead:
     row = notify_dispatch.refresh_delivery(db, msg_id)
     if row is None:

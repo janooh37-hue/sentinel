@@ -172,6 +172,62 @@ def set_user_override(
     _invalidate_caps_cache(db, user_id)
 
 
+def set_user_overrides(
+    db: Session,
+    user_id: int,
+    items: list[tuple[str, str | None, datetime | None]],
+    *,
+    actor: User | None = None,
+) -> None:
+    """Apply a batch of override changes all-or-nothing (one commit).
+
+    Validates every item BEFORE touching the session so a bad capability or a
+    sensitive grant refuses the whole batch. Reuses set_user_override's rules;
+    the per-item commit is skipped by writing rows directly.
+    """
+    if actor is not None and actor.id == user_id:
+        raise AppError(
+            "FORBIDDEN_OVERRIDE", "You cannot change your own permissions.", http_status=400
+        )
+    # Collapse duplicate capabilities keeping the LAST occurrence. Production
+    # sessions run autoflush=False, so two items for one capability would both
+    # reach db.add() before any flush assigns the first a PK → IntegrityError
+    # at commit (500) or silently partial application. dict keeps insertion
+    # order, so non-duplicate batches are unchanged.
+    collapsed: dict[str, tuple[str | None, datetime | None]] = {}
+    for capability, effect, expires_at in items:
+        collapsed[capability] = (effect, expires_at)
+    items = [(cap, eff, exp) for cap, (eff, exp) in collapsed.items()]
+    for capability, effect, _expires in items:
+        if capability not in CAPABILITY_IDS:
+            raise AppError("UNKNOWN_CAPABILITY", f"Unknown capability {capability!r}")
+        if effect not in ("grant", "deny", None):
+            raise AppError("INVALID_EFFECT", f"Effect must be grant/deny/null, got {effect!r}")
+        if effect == "grant" and capability in _SENSITIVE_CAPS:
+            raise AppError(
+                "FORBIDDEN_OVERRIDE",
+                f"{capability!r} cannot be granted via a per-user override; "
+                "it is granted by the admin role only.",
+                http_status=400,
+            )
+    for capability, effect, expires_at in items:
+        existing = db.get(UserPermission, (user_id, capability))
+        if effect is None:
+            if existing is not None:
+                db.delete(existing)
+        elif existing is None:
+            db.add(
+                UserPermission(
+                    user_id=user_id, capability=capability, effect=effect, expires_at=expires_at
+                )
+            )
+        else:
+            existing.effect = effect
+            existing.expires_at = expires_at
+    db.commit()
+    _invalidate_caps_cache(db, user_id)
+
+
 # ─── Expiry sweep ─────────────────────────────────────────────────────────────
 
 
@@ -216,5 +272,6 @@ __all__ = [
     "role_default_caps",
     "seed_role_defaults",
     "set_user_override",
+    "set_user_overrides",
     "sweep_expired_grants",
 ]

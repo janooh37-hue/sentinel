@@ -18,9 +18,15 @@ vi.mock('react-i18next', () => ({
 vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }))
 vi.mock('@/lib/useCapabilities', () => ({
   useCapabilities: () => ({
-    capabilities: new Set(capabilityState.canManage ? ['violations.manage'] : []),
+    capabilities: new Set(
+      capabilityState.canManage
+        ? ['violations.create', 'violations.edit', 'violations.delete']
+        : [],
+    ),
     isLoading: false,
-    has: (capability: string) => capability === 'violations.manage' && capabilityState.canManage,
+    has: (capability: string) =>
+      capabilityState.canManage &&
+      ['violations.create', 'violations.edit', 'violations.delete'].includes(capability),
   }),
 }))
 vi.mock('@/lib/api', () => ({

@@ -36,6 +36,7 @@ from app.core.classifications import CLASSIFICATIONS
 from app.db.models import Book, BookEditSession, BookVersion, Document, User
 from app.db.session import get_db
 from app.schemas.book import (
+    ApprovalLogResponse,
     ApproverOptionRead,
     BookAnnotationCreate,
     BookAnnotationRead,
@@ -72,6 +73,7 @@ from app.services import (
     book_service,
     book_template_service,
     included_papers_service,
+    perm_service,
     word_book_service,
 )
 from app.services.book_service import LIST_DEFAULT_LIMIT, LIST_MAX_LIMIT
@@ -157,9 +159,10 @@ def book_facets(
 
 @router.get("/word-templates", response_model=list[WordTemplateRead])
 def list_word_templates(
-    _user: Annotated[User, Depends(require_capability("books.manage"))],
+    _user: Annotated[User, Depends(require_capability("books.edit"))],
 ) -> list[WordTemplateRead]:
-    """Shared General Book boilerplate library (Word path)."""
+    """Shared General Book boilerplate library (Word path). Readable by record
+    composers; renaming/deleting stays on ``books.templates``."""
     return [
         WordTemplateRead(name=t.name, modified_at=t.modified_at, kind=t.kind)
         for t in book_template_service.list_templates()
@@ -170,7 +173,7 @@ def list_word_templates(
 def rename_word_template(
     name: str,
     payload: RenameTemplateRequest,
-    _user: Annotated[User, Depends(require_capability("books.manage"))],
+    _user: Annotated[User, Depends(require_capability("books.templates"))],
 ) -> WordTemplateRead:
     """Rename a template in the shared General Book library."""
     info = book_template_service.rename_template(name, payload.new_name)
@@ -180,9 +183,10 @@ def rename_word_template(
 @router.get("/word-templates/{name}/table", response_model=WordTemplateTableRead)
 def get_word_template_table_schema(
     name: str,
-    _user: Annotated[User, Depends(require_capability("books.manage"))],
+    _user: Annotated[User, Depends(require_capability("books.edit"))],
 ) -> WordTemplateTableRead:
-    """Return table detection result for a shared General Book template."""
+    """Return table detection result for a shared General Book template
+    (read — same gate as the template list)."""
     has_table, columns = book_template_service.table_schema_for(name)
     return WordTemplateTableRead(has_table=has_table, columns=columns)
 
@@ -190,7 +194,7 @@ def get_word_template_table_schema(
 @router.delete("/word-templates/{name}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_word_template(
     name: str,
-    _user: Annotated[User, Depends(require_capability("books.manage"))],
+    _user: Annotated[User, Depends(require_capability("books.templates"))],
 ) -> Response:
     """Delete a template from the shared General Book library."""
     book_template_service.delete_template(name)
@@ -201,7 +205,7 @@ def delete_word_template(
 def create_word_session(
     payload: WordBookCreate,
     db: Annotated[Session, Depends(get_db)],
-    user: Annotated[User, Depends(require_capability("books.manage"))],
+    user: Annotated[User, Depends(require_capability("books.create"))],
 ) -> WordSessionRead:
     """Create a General Book, or a no-ref Report when a signer is given, with a
     Word-editable working docx."""
@@ -244,7 +248,7 @@ def create_word_session(
 def finish_word_session(
     book_id: int,
     db: Annotated[Session, Depends(get_db)],
-    user: Annotated[User, Depends(require_capability("books.manage"))],
+    user: Annotated[User, Depends(require_capability("books.edit"))],
 ) -> BookRead:
     """Finish the active Word editing session: move docx, create BookVersion + Document, optional PDF."""
     row = word_book_service.finish_word_session(db, user=user, book_id=book_id)
@@ -258,7 +262,7 @@ def finish_word_session(
 def word_session_preview(
     book_id: int,
     db: Annotated[Session, Depends(get_db)],
-    _user: Annotated[User, Depends(require_capability("books.manage"))],
+    _user: Annotated[User, Depends(require_capability("books.edit"))],
     encoding: Annotated[str | None, Query(pattern="^base64$")] = None,
 ) -> Response:
     """PDF preview of the active Word session's working docx (regenerates on change).
@@ -285,7 +289,7 @@ def word_session_preview(
 def reopen_word_session(
     book_id: int,
     db: Annotated[Session, Depends(get_db)],
-    user: Annotated[User, Depends(require_capability("books.manage"))],
+    user: Annotated[User, Depends(require_capability("books.edit"))],
 ) -> WordSessionRead:
     """Re-open a finished book for Word editing — copies the latest version's docx
     into a fresh working file and returns a new session token + word_url."""
@@ -307,7 +311,7 @@ def reopen_word_session(
 def discard_word_session(
     book_id: int,
     db: Annotated[Session, Depends(get_db)],
-    user: Annotated[User, Depends(require_capability("books.manage"))],
+    user: Annotated[User, Depends(require_capability("books.edit"))],
 ) -> BookRead:
     """Discard the active Word editing session; void the book if it has no committed versions."""
     row = word_book_service.discard_word_session(db, user=user, book_id=book_id)
@@ -326,10 +330,10 @@ def save_book_as_template(
     book_id: int,
     payload: SaveAsTemplateRequest,
     db: Annotated[Session, Depends(get_db)],
-    _user: Annotated[User, Depends(require_capability("books.manage"))],
+    _user: Annotated[User, Depends(require_capability("books.templates"))],
 ) -> WordTemplateRead:
     """Copy a finished General Book into the shared template library
-    (retokenized + validated; content becomes visible to all books.manage users)."""
+    (retokenized + validated; content becomes visible to all books.templates users)."""
     info = book_template_service.save_book_as_template(db, book_id=book_id, name=payload.name)
     return WordTemplateRead(name=info.name, modified_at=info.modified_at)
 
@@ -509,26 +513,74 @@ def list_awaiting(
 @router.get("/awaiting-scan", response_model=list[BookRead])
 def list_awaiting_scan(
     db: Annotated[Session, Depends(get_db)],
-    user: Annotated[User, Depends(require_capability("books.manage"))],
+    user: Annotated[User, Depends(require_capability("books.edit"))],
     scope: Annotated[str, Query(pattern="^(mine|all)$")] = "mine",
 ) -> list[BookRead]:
     """Records stranded at ``awaiting_scan`` past 24h, oldest first.
 
     ``scope=mine`` (default) is the caller's own; ``scope=all`` is everyone's,
-    so an admin can clear records stranded by a user who lacks books.manage.
+    so an admin can clear records stranded by a user who lacks books.edit.
 
     Declared before ``/{book_id}`` so the literal ``awaiting-scan`` segment isn't
     swallowed by the int path param — same reason as ``/awaiting`` above.
-    Authority is ``books.manage``: the same capability filing the scan requires.
+    Authority is ``books.edit``: the same capability filing the scan requires.
     """
     rows = book_service.list_awaiting_scan(db, user_id=None if scope == "all" else user.id)
     return [BookRead.model_validate(r) for r in rows]
 
 
+def _approval_log_gate(
+    db: Annotated[Session, Depends(get_db)],
+    user: Annotated[User, Depends(get_current_user)],
+    scope: Annotated[Literal["sent", "received"], Query()] = "received",
+) -> User:
+    """Per-scope authority for the approvals log.
+
+    ``received`` mirrors GET /books/awaiting — you need ``books.approve`` to
+    have a decision queue at all. ``sent`` is any authenticated user: everyone
+    who can submit owns their outbox. Declared as a dependency (not inline in
+    the handler) so the OpenAPI security picture matches require_capability's.
+    """
+    if scope == "received" and not perm_service.has_capability(db, user, "books.approve"):
+        raise AppError(
+            "FORBIDDEN",
+            "Missing capability: books.approve",
+            http_status=403,
+            details={"capability": "books.approve"},
+        )
+    return user
+
+
+@router.get("/approval-log", response_model=ApprovalLogResponse)
+def get_approval_log(
+    db: Annotated[Session, Depends(get_db)],
+    user: Annotated[User, Depends(_approval_log_gate)],
+    scope: Annotated[Literal["sent", "received"], Query()] = "received",
+    limit: int = Query(LIST_DEFAULT_LIMIT, ge=1, le=LIST_MAX_LIMIT),
+    offset: int = Query(0, ge=0),
+) -> ApprovalLogResponse:
+    """The approvals log — ``scope=sent`` (records I submitted) or
+    ``scope=received`` (my pending decisions + my verdicts from the last 30
+    days). Paged like GET /books; rows are flattened ApprovalLogItem payloads.
+
+    Declared before ``/{book_id}`` so the literal ``approval-log`` segment isn't
+    swallowed by the int path param — same reason as ``/awaiting`` above.
+    """
+    if scope == "sent":
+        items, total = book_service.approval_log_sent(
+            db, user_id=user.id, limit=limit, offset=offset
+        )
+    else:
+        items, total = book_service.approval_log_received(
+            db, user_id=user.id, limit=limit, offset=offset
+        )
+    return ApprovalLogResponse(items=items, total=total, limit=limit, offset=offset)
+
+
 @router.get("/approvers", response_model=list[ApproverOptionRead])
 def list_approvers(
     db: Annotated[Session, Depends(get_db)],
-    _user: Annotated[User, Depends(require_capability("books.manage"))],
+    _user: Annotated[User, Depends(require_capability("books.edit"))],
 ) -> list[ApproverOptionRead]:
     """Active users who hold ``books.approve`` — for the submit-for-approval picker.
 
@@ -540,7 +592,7 @@ def list_approvers(
 @router.get("/reviewer-candidates", response_model=list[ApproverOptionRead])
 def list_reviewer_candidates(
     db: Annotated[Session, Depends(get_db)],
-    _user: Annotated[User, Depends(require_capability("books.manage"))],
+    _user: Annotated[User, Depends(require_capability("books.edit"))],
 ) -> list[ApproverOptionRead]:
     """Active accounts pickable as reviewers (any active user; no signature gate).
 
@@ -744,13 +796,13 @@ def get_version_fields(
     book_id: int,
     version_id: int,
     db: Annotated[Session, Depends(get_db)],
-    _user: Annotated[User, Depends(require_capability("books.manage"))],
+    _user: Annotated[User, Depends(require_capability("books.edit"))],
 ) -> dict[str, object]:
     """Return the raw stored ``fields`` blob for one book version — backs the
     ApplicationPage revise-mode prefill. Deliberately not on ``BookRead`` (the
     detail payload only exposes ``has_fields``).
 
-    Requires ``books.manage`` (not ``books.view``) because this backs the
+    Requires ``books.edit`` (not ``books.view``) because this backs the
     revise/edit write-path: the caller fetches these fields in order to submit
     a revised generation, which is a managed write operation.
     """
@@ -830,7 +882,7 @@ def delete_annotation(
 def create_book(
     payload: BookCreate,
     db: Annotated[Session, Depends(get_db)],
-    _user: Annotated[User, Depends(require_capability("books.manage"))],
+    _user: Annotated[User, Depends(require_capability("books.create"))],
 ) -> BookRead:
     row = book_service.create_book(db, payload)
     return BookRead.model_validate(row)
@@ -841,7 +893,7 @@ def update_book(
     book_id: int,
     payload: BookUpdate,
     db: Annotated[Session, Depends(get_db)],
-    _user: Annotated[User, Depends(require_capability("books.manage"))],
+    _user: Annotated[User, Depends(require_capability("books.edit"))],
 ) -> BookRead:
     row = book_service.update_book(db, book_id, payload)
     return BookRead.model_validate(row)
@@ -851,7 +903,7 @@ def update_book(
 def delete_book(
     book_id: int,
     db: Annotated[Session, Depends(get_db)],
-    _user: Annotated[User, Depends(require_capability("books.manage"))],
+    _user: Annotated[User, Depends(require_capability("books.delete"))],
 ) -> Response:
     book_service.delete_book(db, book_id)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
@@ -867,7 +919,7 @@ def submit_for_approval(
     book_id: int,
     payload: BookSubmitRequest,
     db: Annotated[Session, Depends(get_db)],
-    user: Annotated[User, Depends(require_capability("books.manage"))],
+    user: Annotated[User, Depends(require_capability("books.submit"))],
 ) -> BookRead:
     row = book_service.submit_for_approval(
         db,
@@ -983,7 +1035,7 @@ def add_reviewers(
     book_id: int,
     payload: ReviewersAddRequest,
     db: Annotated[Session, Depends(get_db)],
-    _user: Annotated[User, Depends(require_capability("books.manage"))],
+    _user: Annotated[User, Depends(require_capability("books.edit"))],
 ) -> BookRead:
     """Append advisory reviewer steps to the current pending version."""
     row = book_service.add_reviewers(db, book_id, user_ids=payload.user_ids)
@@ -997,7 +1049,7 @@ def remove_reviewer(
     book_id: int,
     user_id: int,
     db: Annotated[Session, Depends(get_db)],
-    _user: Annotated[User, Depends(require_capability("books.manage"))],
+    _user: Annotated[User, Depends(require_capability("books.edit"))],
 ) -> BookRead:
     """Remove a pending reviewer step from the current version."""
     row = book_service.remove_reviewer(db, book_id, user_id=user_id)
@@ -1015,14 +1067,14 @@ def remove_reviewer(
 async def add_book_attachment(
     book_id: int,
     db: Annotated[Session, Depends(get_db)],
-    user: Annotated[User, Depends(require_capability("books.manage"))],
+    user: Annotated[User, Depends(require_capability("books.edit"))],
     upload: Annotated[UploadFile, File(alias="file")],
     as_signed: Annotated[bool, Form()] = False,
 ) -> BookRead:
     """File an attachment. ``awaiting_scan`` books flip silently (the scan is the
     signature). For a ``none``/``pending`` book, ``as_signed=true`` records the
     upload as the signed copy and approves the record; otherwise it is filed as a
-    plain attachment. Authority is ``books.manage`` for every path."""
+    plain attachment. Authority is ``books.edit`` for every path."""
     data = await upload.read()
     row = book_service.add_attachment(
         db, book_id, upload.filename or "scan", data, user=user, as_signed=as_signed
@@ -1065,7 +1117,7 @@ def delete_book_attachment(
     book_id: int,
     index: int,
     db: Annotated[Session, Depends(get_db)],
-    _user: Annotated[User, Depends(require_capability("books.manage"))],
+    _user: Annotated[User, Depends(require_capability("books.edit"))],
 ) -> BookRead:
     """Delete one plain attachment by its ``attachment_paths`` index (undo a
     wrongly-uploaded scan). Does not touch a signed copy — see
@@ -1085,7 +1137,7 @@ async def replace_book_attachment(
     book_id: int,
     index: int,
     db: Annotated[Session, Depends(get_db)],
-    _user: Annotated[User, Depends(require_capability("books.manage"))],
+    _user: Annotated[User, Depends(require_capability("books.edit"))],
     upload: Annotated[UploadFile, File(alias="file")],
 ) -> BookRead:
     """Replace one plain attachment's bytes, keeping its index (fix a wrong upload)."""
@@ -1100,7 +1152,7 @@ async def replace_book_attachment(
 async def replace_signed_copy(
     book_id: int,
     db: Annotated[Session, Depends(get_db)],
-    user: Annotated[User, Depends(require_capability("books.manage"))],
+    user: Annotated[User, Depends(require_capability("books.edit"))],
     upload: Annotated[UploadFile, File(alias="file")],
 ) -> BookRead:
     """Replace the signed copy's bytes, keeping the record approved."""
@@ -1117,7 +1169,7 @@ async def replace_signed_copy(
 def unfile_signed_copy(
     book_id: int,
     db: Annotated[Session, Depends(get_db)],
-    user: Annotated[User, Depends(require_capability("books.manage"))],
+    user: Annotated[User, Depends(require_capability("books.edit"))],
 ) -> BookRead:
     """Undo a filed signed copy and revert the record's approval state."""
     row = book_service.unfile_signed_copy(db, book_id, user=user)

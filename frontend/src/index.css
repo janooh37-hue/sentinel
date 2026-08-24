@@ -42,6 +42,10 @@
   --color-warning: var(--warning);
   --color-warning-foreground: var(--warning-foreground);
   --color-warning-soft: var(--warning-soft);
+  /* Attendance's middle rung: arrived after the start but inside the grace.
+     Distinct from `--warning`, which is the amber of a real exception. */
+  --color-caution: var(--caution);
+  --color-caution-soft: var(--caution-soft);
   --color-info: var(--info);
   --color-info-soft: var(--info-soft);
   --color-destructive: var(--destructive);
@@ -110,6 +114,8 @@
   --warning: #92400e;
   --warning-foreground: #ffffff;
   --warning-soft: #fbedd8;
+  --caution: #ca8a04;
+  --caution-soft: #fef3c7;
   --info: #1d4ed8;
   --info-soft: #e0e8f8;
   --destructive: #dc2626;
@@ -180,6 +186,81 @@
   --wa-mention: #027eb5;
   --wa-meta: #667781;
   --wa-doc-wash: rgba(0, 0, 0, 0.05);
+
+  /* Monthly time sheet — the workbook's own conditional-format fills. Light is
+     the paper hex so screen and print agree; dark mixes the hue into the
+     surface, because #FFC7CE at full strength on #131826 is a flashbang.
+     Semantic — never hardcode these hex in components: a cell renders
+     `data-code="AL"` and the rules below resolve the pair.
+     The token segment is the SLUG, never the code: `SL ` carries a trailing
+     space on the wire (the workbook's $AO$5 COUNTIF matches it) which a CSS
+     identifier cannot, and `-` is spelled OFFROSTER. */
+  --code-P-fill: transparent;         --code-P-ink: var(--text);
+  --code-AL-fill: #bdd7ee;            --code-AL-ink: #10243a;
+  --code-SL-fill: #c6e0b4;            --code-SL-ink: #17300f;
+  --code-AB-fill: #ffc7ce;            --code-AB-ink: #9c0006;
+  --code-TR-fill: #cc99ff;            --code-TR-ink: #2e0b52;
+  --code-NG-fill: #ff9900;            --code-NG-ink: #3a2200;
+  --code-OFFROSTER-fill: transparent; --code-OFFROSTER-ink: var(--text-faint);
+  --code-X-fill: #990033;             --code-X-ink: #ffffff;
+
+  /* Sheet metrics. The grid deliberately opts out of the em-relative scale
+     (UI spec §3.3): 31 columns is a fixed count, so the sheet gets its own
+     three-stop zoom instead of tracking the Aa slider. 668px is the current
+     626px identity block plus the page gutters; the rest divides by 31, so all
+     31 columns land on screen from ~1560px up. Never under 26px (unreadable)
+     or over 46px (the row stops scanning as one line). Declared on `:root` — a
+     pseudo-class (0,1,0) that outranks `html` (0,0,1) whatever the source order
+     (UI spec §14). */
+  --cell: clamp(26px, calc((100vw - 668px) / 31), 46px);
+  --row: 28px;
+  /* The sheet's hairline, as a WIDTH. It gets a token because the row PITCH has
+     to contain it: under `border-collapse: separate` with `box-sizing:
+     border-box`, a `td`'s bottom rule ADDS to the row box, so a cell sized
+     `var(--row)` makes the row `var(--row) + 1px`, and the sheet then walks
+     away from the loading skeleton — which is `var(--row)` exactly — at one
+     pixel per row: 24px across the skeleton's rows, 275px on a full roster.
+     That is precisely the jump locked rule 6 exists to prevent. Measured in
+     Chromium at 1600x900 before this token existed: `--row` 28px, row rect
+     29px, pitch 29px, against a 28px skeleton row.
+
+     So `--row` is the pitch, rule included, and the cell gives the pixel back
+     (`.ts-cell`, below). Both sheet axes are now arithmetic out of one
+     declaration each — `--id-block` across, `--row` down — and a change to this
+     width moves the border and the cell in the same substitution instead of
+     drifting them apart. */
+  --ts-rule: 1px;
+  /* The two fixed bands the sheet is framed by, as block sizes: the sticky day
+     header and the sticky per-day headcount. Tokens for the same reason `--row`
+     is one — the loading skeleton has to hold the header band open, or the whole
+     roster drops by its height the moment the month lands, which is locked rule
+     6 again and 34px of it rather than one pixel per row.
+
+     Both are `border-box`, so the cell's hairline lives inside the number, and
+     both are FIXED across the three zoom stops because their type is: the day
+     number is 11px, its weekday letter 8.5px and the headcount 10.5px at every
+     stop, none of them `var(--cell-font)`. They used to be `max(34px, var(--row))`
+     and `max(26px, var(--row))` in effect, because the header and footer `<tr>`
+     each re-declared `block-size: var(--row)` and a row cannot be shorter than
+     its own declared height — so the header measured 34/34/38 and the footer
+     26/28/38 across compact/default/roomy, three heights nobody chose. The two
+     `<tr>`s no longer declare anything; these are the heights. */
+  --ts-head: 34px;
+  --ts-foot: 26px;
+  --cell-font: 11px;
+  /* The identity block, one column at a time — the paper's A..E band. The
+     widths began with the locked mockup (`docs/timesheet-mockups.css:780-784`);
+     the name column is deliberately 68px wider for live roster names.
+     `--id-block` is their SUM rather than a second literal, because the loading
+     skeleton and grid must start the first day column at the same 626px
+     offset. Move a column and both surfaces move in the same substitution.
+     Fixed across the zoom stops, like the 668px allowance in `--cell`. */
+  --id-no: 38px;
+  --id-id: 74px;
+  --id-name: 264px;
+  --id-nat: 82px;
+  --id-desig: 168px;
+  --id-block: calc(var(--id-no) + var(--id-id) + var(--id-name) + var(--id-nat) + var(--id-desig));
 }
 
 [data-theme="dark"] {
@@ -203,6 +284,8 @@
   --warning: #fbbf24;
   --warning-foreground: #1c1f24;
   --warning-soft: #3a2a10;
+  --caution: #facc15;
+  --caution-soft: #3b2f11;
   --info: #60a5fa;
   --info-soft: #1c2940;
   --destructive: #f87171;
@@ -256,6 +339,433 @@
   --wa-mention: #53bdeb;
   --wa-meta: #8696a0;
   --wa-doc-wash: rgba(255, 255, 255, 0.06);
+
+  /* Monthly time sheet — same hue, mixed into the dark surface with the ink
+     lifted. `P` and `-` stay transparent, so they inherit the theme's text.
+     The `X` pair is the only one the UI spec does not tabulate (§3.2 predates
+     the red block and §15 gives only the print value), derived here by §3.2's
+     own mix-into-surface rule. */
+  --code-AL-fill: color-mix(in oklab, #bdd7ee 24%, var(--surface));  --code-AL-ink: #bdd7ee;
+  --code-SL-fill: color-mix(in oklab, #c6e0b4 24%, var(--surface));  --code-SL-ink: #c6e0b4;
+  --code-AB-fill: color-mix(in oklab, #ffc7ce 26%, var(--surface));  --code-AB-ink: #ff9aa6;
+  --code-TR-fill: color-mix(in oklab, #cc99ff 26%, var(--surface));  --code-TR-ink: #d9b3ff;
+  --code-NG-fill: color-mix(in oklab, #ff9900 34%, var(--surface));  --code-NG-ink: #ffbb55;
+  --code-X-fill: color-mix(in oklab, #990033 66%, var(--surface));   --code-X-ink: #ffd7de;
+}
+
+/* The code fills, resolved once. `index.css` has no `@layer`, so these bare
+   attribute selectors sit unlayered and outrank a Tailwind utility on the same
+   element — which is what a cell wants. `AB` and `NG` carry weight as well as
+   colour: the two codes that mean "something went wrong" are the two the eye
+   should catch first (UI spec §3.2). Every fill is paired with its letter, so
+   nothing here is signalled by colour alone. */
+[data-code='P'] { background: var(--code-P-fill); color: var(--code-P-ink); }
+[data-code='AL'] { background: var(--code-AL-fill); color: var(--code-AL-ink); }
+[data-code='SL'] { background: var(--code-SL-fill); color: var(--code-SL-ink); }
+[data-code='AB'] { background: var(--code-AB-fill); color: var(--code-AB-ink); font-weight: 600; }
+[data-code='TR'] { background: var(--code-TR-fill); color: var(--code-TR-ink); }
+[data-code='NG'] { background: var(--code-NG-fill); color: var(--code-NG-ink); font-weight: 600; }
+[data-code='-'] { background: var(--code-OFFROSTER-fill); color: var(--code-OFFROSTER-ink); }
+[data-code='X'] { background: var(--code-X-fill); color: var(--code-X-ink); font-weight: 600; }
+/* A day the month does not have: the column stays so the grid never reflows
+   between months, but it holds nothing (UI spec §5). */
+[data-code=''] { background: transparent; color: transparent; }
+
+/* The sheet's three zoom stops. Scoped to the shell, not `html`, because the
+   zoom is page state, not an app setting. */
+[data-ts-density='compact'] {
+  --cell: clamp(22px, calc((100vw - 668px) / 31), 34px);
+  --row: 24px;
+  --cell-font: 10px;
+}
+[data-ts-density='roomy'] {
+  --cell: clamp(34px, calc((100vw - 668px) / 31), 58px);
+  --row: 38px;
+  --cell-font: 13px;
+}
+
+/* Loading is a designed state (UI spec §9): 31 columns at the real pitch, so
+   the grid does not resize when the month lands. One element per row instead of
+   31 — a skeleton is not worth 400 nodes.
+
+   The PITCH is the contract with Task 8's grid: one row per `var(--row)`, no
+   gap and no container padding, day columns starting at exactly `--id-block`.
+   `block-size` is 6px short of the row so the bars read as separate rows
+   without costing the row any height — the shrinkage is inside the pitch, not
+   added to it. */
+.ts-skeleton-cells {
+  background-image: repeating-linear-gradient(
+    90deg,
+    var(--surface-tinted) 0 calc(var(--cell) - 2px),
+    transparent calc(var(--cell) - 2px) var(--cell)
+  );
+  inline-size: calc(var(--cell) * var(--ts-days));
+  block-size: calc(var(--row) - 6px);
+}
+
+/* ------------------------------------------------------------- the sheet ---
+   806 cells on one screen, so the cell pattern is ONE rule here rather than
+   twenty utility classes repeated 806 times, and the fills stay where UI spec
+   §3.2 puts them: a cell renders `data-code={slug}` and nothing else.
+
+   Unlayered, like the `[data-code]` rules above, so a cell's own styling is
+   not fighting a Tailwind utility for specificity.
+
+   Column widths are declared INLINE on the header row (`table-layout: fixed`
+   takes them from there, UI spec §5), which is also the only form a jsdom test
+   can read back. What lives here is everything a per-element style cannot
+   carry: the sticky offsets, the hover and focus rings, the pseudo-element
+   markers, and the preview wash. */
+.ts-sheet {
+  table-layout: fixed;
+  border-collapse: separate;
+  border-spacing: 0;
+  font-size: 12px;
+}
+
+.ts-sheet th,
+.ts-sheet td {
+  padding: 0;
+  border-block-end: var(--ts-rule) solid var(--hairline);
+  border-inline-end: var(--ts-rule) solid var(--hairline);
+  background: var(--surface);
+}
+
+/* The day header is sticky at the top of the ONE scroll region; the identity
+   columns are sticky at its reading-start edge. Both stay put while 275 rows
+   pass under them, which is the only reason a vertical scan works. */
+.ts-sheet thead th {
+  position: sticky;
+  inset-block-start: 0;
+  z-index: 3;
+  background: var(--surface-raised);
+  font-weight: 600;
+  font-size: 10.5px;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+  block-size: var(--ts-head);
+  white-space: nowrap;
+}
+
+.ts-sheet thead th.ts-day {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text);
+  text-align: center;
+}
+
+.ts-sheet thead th.ts-day small {
+  display: block;
+  font-family: var(--font-sans);
+  font-size: 8.5px;
+  font-weight: 500;
+  letter-spacing: 0.06em;
+  color: var(--text-faint);
+}
+
+/* A day the month does not have: the column stays so the grid never reflows
+   between months, and the header says so quietly (UI spec §5). */
+.ts-sheet thead th.ts-day[data-out='1'] {
+  color: var(--text-faint);
+  background: var(--bg);
+}
+
+.ts-sheet .ts-stick {
+  position: sticky;
+  z-index: 4;
+  background: var(--surface);
+}
+
+.ts-sheet thead .ts-stick,
+.ts-sheet tfoot .ts-stick {
+  z-index: 5;
+  background: var(--surface-raised);
+}
+
+/* Offsets out of the same tokens `--id-block` is summed from, so a column
+   cannot move without the frozen block moving with it. */
+.ts-sheet .ts-c-no { inset-inline-start: 0; text-align: center; }
+.ts-sheet .ts-c-id { inset-inline-start: var(--id-no); }
+.ts-sheet .ts-c-name { inset-inline-start: calc(var(--id-no) + var(--id-id)); }
+
+.ts-sheet .ts-c-no,
+.ts-sheet .ts-c-id {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+/* A ledger row is one line high, ALWAYS. One long name that wraps makes its
+   neighbours a different height and destroys the scan down a day column, which
+   is the whole reason the grid exists — so the identity columns clip and keep
+   the full value in `title` (UI spec §5). */
+.ts-sheet .ts-c-name,
+.ts-sheet .ts-c-nat,
+.ts-sheet .ts-c-desig {
+  padding-inline: 9px;
+  text-align: start;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ts-sheet .ts-c-name b { font-weight: 600; font-size: 12px; }
+
+.ts-sheet .ts-c-nat,
+.ts-sheet .ts-c-desig {
+  color: var(--text-muted);
+  font-size: 11.5px;
+}
+
+.ts-sheet tbody tr:hover .ts-stick { background: var(--surface-tinted); }
+.ts-sheet tbody tr[data-selected='1'] .ts-stick { background: var(--primary-soft); }
+/* A sweep in progress must not also light up whatever row the pointer crosses.
+   The attribute is on the grid's WRAPPER, not on the table: `TimesheetGrid`
+   holds one ref, the outer `<div>` that carries the capture-phase handlers, and
+   `onPointerDown` sets `data-dragging` there. Written `.ts-sheet[data-dragging]`
+   this rule could never match, and a sweep tinted every row it crossed —
+   measured in Chromium mid-sweep: the crossed row's identity cells resolved
+   `--surface-tinted` (#f0eee8), the same as a plain hover. Descendant, so it
+   keys the element that actually carries the flag; still one attribute more
+   specific than the hover and selected rules above, which is what makes it
+   win. */
+[data-dragging='1'] .ts-sheet tbody tr:hover .ts-stick { background: var(--surface); }
+
+/* The rank-group separator: the paper's sort order, made visible. */
+.ts-sheet tr.ts-group th {
+  position: sticky;
+  inset-inline-start: 0;
+  background: var(--surface-raised);
+  text-align: start;
+  padding-inline: 10px;
+  font-size: 10.5px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+}
+
+/* The statistics gap: two printed blank rows, drawn as one quiet band — how
+   the client's eye finds the surplus-headcount block. Still a whole number of
+   row pitches, so the sheet stays on the grid Task 7 locked. */
+.ts-sheet tr.ts-gap td {
+  block-size: calc(var(--row) * 2);
+  background: var(--bg);
+  border-inline-end: 0;
+}
+
+/* The per-day headcount, sticky at the foot of the scroll region. Not on the
+   paper, and the cheapest drift detector there is: a day under the contracted
+   post count is the visible form of "the month overshot" (UI spec §5). */
+.ts-sheet tfoot th,
+.ts-sheet tfoot td {
+  position: sticky;
+  inset-block-end: 0;
+  z-index: 3;
+  background: var(--surface-raised);
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  text-align: center;
+  color: var(--text-muted);
+  block-size: var(--ts-foot);
+}
+
+.ts-sheet tfoot th.ts-stick {
+  text-align: start;
+  padding-inline: 9px;
+  font-family: var(--font-sans);
+  font-size: 11px;
+}
+
+.ts-sheet tfoot td[data-low='1'] { color: var(--accent); font-weight: 700; }
+
+/* EXTENSION — cell-as-button (UI spec §7), the dense sibling of DESIGN.md
+   §2.3 row-as-button. The rings are INSET: an outset ring is clipped by the
+   neighbouring cells and reads as a smear across the row. No hover lift and no
+   shadow either — 806 lifting targets is nausea, so the ring is the whole
+   affordance. */
+.ts-cellcell { position: relative; }
+
+.ts-cell {
+  display: block;
+  inline-size: 100%;
+  /* The pitch minus its own hairline: the `td`'s bottom rule is a border, so it
+     adds to the row box, and the row has to measure `var(--row)` for the
+     loading skeleton to sit on the same grid (locked rule 6). Never
+     `var(--row)` — that is a 1px-per-row drift. The inline border is not
+     subtracted anywhere because `table-layout: fixed` takes the declared
+     border-box widths from the header row, so it already sits inside them. */
+  block-size: calc(var(--row) - var(--ts-rule));
+  font-family: var(--font-mono);
+  font-size: var(--cell-font);
+  font-weight: 500;
+  line-height: 1;
+  text-align: center;
+  border: 0;
+  border-radius: 3px;
+  cursor: pointer;
+  transition: box-shadow var(--motion-fast) linear;
+}
+
+.ts-cell:hover { box-shadow: inset 0 0 0 2px var(--primary); }
+
+.ts-cell:focus-visible {
+  outline: none;
+  box-shadow: inset 0 0 0 2px var(--primary), inset 0 0 0 4px var(--surface);
+}
+
+/* A corrected cell is marked STRUCTURALLY as well as by fill, so an override
+   still reads as an override in the statistics variant, where the fill has
+   been rewritten by the transform. */
+.ts-cell[data-edited='1'] { box-shadow: inset 0 0 0 1px var(--primary); }
+
+.ts-cell[data-edited='1']::after {
+  content: '';
+  position: absolute;
+  inset-block-start: 2px;
+  inset-inline-end: 2px;
+  inline-size: 4px;
+  block-size: 4px;
+  border-radius: var(--radius-pill);
+  background: var(--primary);
+}
+
+.ts-cell[data-locked='1'] { cursor: default; }
+.ts-cell[data-locked='1']:hover { box-shadow: none; }
+
+/* While a sweep is live nothing is committed: the swept cells are ringed and
+   washed by an attribute, never by React state. Committing per move would
+   repaint the grid and tear the cell out from under the pointer (UI spec §15
+   change 3). */
+.ts-cell[data-preview='1'] { box-shadow: inset 0 0 0 2px var(--primary); }
+
+.ts-cell[data-preview='1']::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 3px;
+  background: color-mix(in oklab, var(--primary) 18%, transparent);
+  pointer-events: none;
+}
+
+@keyframes ts-commit {
+  from { transform: scale(0.82); }
+  to { transform: none; }
+}
+
+/* The entire motion budget for editing (UI spec §7). */
+.ts-cell[data-commit='1'] { animation: ts-commit var(--motion-fast) var(--ease-spring); }
+
+@media (prefers-reduced-motion: reduce) {
+  .ts-cell[data-commit='1'] { animation: none; }
+}
+
+/* The three fixed overlays: the picker, the live sweep count, and the row
+   counts. All `fixed`, because each has to survive the scroll that focusing a
+   cell causes instead of being clipped by the region that scrolled.
+
+   Anchored at the flow origin and moved with `transform`, so nothing here
+   names `left` or `top`. The placement code converts a viewport coordinate
+   into a translation, and in RTL it subtracts the origin `inset-inline-start:
+   0` gives it — a pointer coordinate is physical, a transform is physical, and
+   the layout stays logical. */
+.ts-popover,
+.ts-dragtag,
+.ts-tally {
+  position: fixed;
+  inset-block-start: 0;
+  inset-inline-start: 0;
+  z-index: 72;
+}
+
+.ts-dragtag,
+.ts-tally {
+  pointer-events: none;
+  background: var(--surface-raised);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  box-shadow: 0 8px 24px -8px color-mix(in oklab, var(--text) 30%, transparent);
+}
+
+.ts-dragtag {
+  padding: 3px 8px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text);
+}
+
+/* The dock's panel host, and the panels that open out of it (UI spec §16.2).
+
+   A3's whole premise is that the page never scrolls and only the grid does
+   (§16.1), so a panel may not push the grid down or reflow it: the host is the
+   positioning context, and the panel is taken OUT OF FLOW and grown upward from
+   the dock's own block-start edge.
+
+   `inset-block-end: 100%` rather than a viewport offset, so the panel follows
+   the dock whatever the dock's height turns out to be — the dock wraps at
+   narrow widths and a `calc(var(--dock) + 10px)` copied from the mockup would
+   then overlap it. Nothing here names `top` or `left`; `inset-inline: 0` spans
+   the dock in either direction.
+
+   The z-index has to beat the sheet's own sticky furniture, which runs 3..5 on
+   the day header, the frozen identity columns and the headcount footer. */
+.ts-panelhost {
+  position: relative;
+  z-index: 40;
+}
+
+/* `overflow: auto` with a capped block size is deliberate, and it is the locked
+   mockup's own rule. A panel is transient furniture rather than page furniture:
+   content past 46vh must be reachable WITHOUT the page gaining a scrollbar,
+   which is exactly what the shell's `overflow: hidden` forbids. */
+.ts-panel {
+  position: absolute;
+  /* The dock's own content is inset by `px-4 md:px-6`, so the panel matches it
+     rather than running edge-to-edge with its border lining up with nothing
+     above or below. Two stops because the dock has two; a viewport IS physical,
+     which is why the query is `min-width` while the layout stays logical. */
+  inset-inline: 1rem;
+  inset-block-end: 100%;
+  max-block-size: 46vh;
+  overflow: auto;
+  margin-block-end: 10px;
+  padding: 13px 15px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--surface-raised);
+  box-shadow: 0 -18px 48px -18px color-mix(in oklab, var(--text) 34%, transparent);
+  animation: ts-panel-in var(--motion-fast) var(--ease-out-expo);
+}
+
+@media (min-width: 48rem) {
+  .ts-panel { inset-inline: 1.5rem; }
+}
+
+@keyframes ts-panel-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ts-panel { animation: none; }
+}
+
+/* The share bar in the code tally: a proportion, not a control. Its width is
+   the only inline style any of these components sets, because the number IS the
+   datum. */
+.ts-share {
+  display: block;
+  block-size: 6px;
+  border-radius: 3px;
+  background: var(--primary);
+}
+
+/* UI spec §14: letter-spacing plus uppercase tears joined Arabic letters apart
+   and there is no uppercase to apply. Neutralised on `:lang(ar)` — never on
+   `html[lang="ar"]`, because the sheet's designations are English inside an
+   Arabic page. */
+[data-ts-caps]:lang(ar) {
+  letter-spacing: 0;
+  text-transform: none;
 }
 
 /* Discrete font-scale stops. The AaSlider snaps to one of these four
@@ -859,16 +1369,80 @@ body {
   .print-register {
     page: register;
   }
+  /* The duty register is a wide document: shift, unit, post, G-number and a
+     clock all have to sit on one line, and four name columns only fit across
+     the long edge. Landscape is therefore the page, not a preference.
+
+     The SIDE margins are padding on the element, not page margins, because
+     "Margins: None" in the print dialog zeroes every @page margin and the
+     register's outermost column — الحالة, and the last stat of the strip —
+     then prints off the left edge of the paper. Inline padding is applied to
+     every fragment of a broken box, so it survives that setting on every
+     sheet. Block padding is NOT: it would inset only the first and last page,
+     so the top and bottom stay on @page where they belong. */
+  @page attendance {
+    size: A4 landscape;
+    margin: 10mm 0;
+  }
+  .print-attendance {
+    page: attendance;
+    padding-inline: 10mm;
+  }
+  /* Two hazards this sheet has to survive, both invisible on screen:
+
+     1. `[data-font-scale]` sets html{font-size} to 16/19/22/24px, and almost
+        every size in the app is em/rem-relative — an operator reading at the
+        largest stop would otherwise print a register 50% larger and spill it
+        over twice the paper. The sheet is a fixed-geometry document, so it
+        pins the root size.
+     2. A dark-theme operator would print dark-theme ink (near-white --text,
+        colours picked for a dark ground) onto white paper. Re-pinning the raw
+        light values here is enough: `@theme inline` inlines these vars into
+        every utility, so `text-warning` inside the sheet resolves light again
+        without a single override on the elements themselves. */
+  .print-attendance {
+    --text: #1c1f24;
+    --text-muted: #5a6068;
+    --text-faint: #8b9098;
+    --primary: #0d2845;
+    --accent: #c8102e;
+    --success: #047857;
+    --warning: #92400e;
+    --caution: #ca8a04;
+    --info: #1d4ed8;
+    --destructive: #dc2626;
+    --border: #e6e4dd;
+    --border-strong: #d4d1c8;
+    --hairline: #efece5;
+    color: #000;
+  }
+  /* The roster layout spills onto several sheets, and a sheet with no crest and
+     no printed-at stamp cannot be filed. A table header/footer GROUP is the one
+     mechanism a browser repeats on every fragment of a broken table, so the
+     roster carries its masthead in `thead` and its provenance in `tfoot` — the
+     display values are declared here because no utility class covers them. */
+  .print-attendance thead {
+    display: table-header-group;
+  }
+  .print-attendance tfoot {
+    display: table-footer-group;
+  }
   /* The desk that hosts the sheet pads the document on screen (px-6); on paper
      that padding is another ~13mm off the width. */
   :has(> .print-paper) {
     padding: 0 !important;
   }
+  /* `font-size` is pinned for EVERY printed document, not just this sheet:
+     `[data-font-scale]` moves html{font-size} to 16/19/22/24px for reading
+     comfort, and nearly every length in the app is rem/em-relative, so an
+     operator at the largest stop would print a differently-sized document than
+     the one beside them. Paper geometry must not depend on a screen setting. */
   html,
   body {
     height: auto !important;
     overflow: visible !important;
     background: #fff !important;
+    font-size: 16px !important;
   }
   /* Uncage the shell: h-screen / flex-1 / overflow-hidden / min-h-0 otherwise
      clamp the content to one screen and clip the rest. */
@@ -877,8 +1451,15 @@ body {
     overflow: visible !important;
   }
   /* :not(canvas) — the sheet needs its own max-height cap below, and this rule
-     would out-specify it. */
-  #root *:not(canvas) {
+     would out-specify it.
+
+     The duty register is exempt, and that exemption is load-bearing: it clips
+     long Arabic post names with `truncate` (overflow:hidden) inside fixed
+     column widths, and uncaging it made every one of them spill across the
+     neighbouring column — «فرع الأمن والحراسة - مسؤول وحدة الأمن الداخلي»
+     printed on top of the shift name, and the strip ran off the paper. It is
+     a document, not a scroll cage: it has nothing to uncage. */
+  #root *:not(canvas):not(.print-attendance, .print-attendance *) {
     overflow: visible !important;
     max-height: none !important;
   }
@@ -948,7 +1529,7 @@ body {
 
 /* ORG-tree — approved Duty Locations hierarchy chart. */
 .org-tree-view { min-height: 520px; }
-.org-canvas { position: relative; flex: 1; min-height: 360px; overflow: hidden; cursor: grab; background-color: var(--bg); background-image: linear-gradient(to right, color-mix(in srgb, var(--org-conn) 18%, transparent) 1px, transparent 1px), linear-gradient(to bottom, color-mix(in srgb, var(--org-conn) 18%, transparent) 1px, transparent 1px), linear-gradient(to right, color-mix(in srgb, var(--org-conn) 9%, transparent) 1px, transparent 1px), linear-gradient(to bottom, color-mix(in srgb, var(--org-conn) 9%, transparent) 1px, transparent 1px); background-size: 96px 96px, 96px 96px, 24px 24px, 24px 24px; }
+.org-canvas { position: relative; flex: 1; min-height: 360px; overflow: hidden; cursor: grab; touch-action: none; user-select: none; -webkit-user-select: none; background-color: var(--bg); background-image: linear-gradient(to right, color-mix(in srgb, var(--org-conn) 18%, transparent) 1px, transparent 1px), linear-gradient(to bottom, color-mix(in srgb, var(--org-conn) 18%, transparent) 1px, transparent 1px), linear-gradient(to right, color-mix(in srgb, var(--org-conn) 9%, transparent) 1px, transparent 1px), linear-gradient(to bottom, color-mix(in srgb, var(--org-conn) 9%, transparent) 1px, transparent 1px); background-size: 96px 96px, 96px 96px, 24px 24px, 24px 24px; }
 /* PHYSICAL left/top on purpose: this is a coordinate space, not text flow.
    With logical `inset-inline-start` these all anchor to the right edge under
    RTL and a positive translateX throws the whole tree off-screen. RTL is
@@ -963,12 +1544,15 @@ body {
 .org-item { transition: transform .26s var(--ease-out-expo); }
 .org-card { position: relative; display: flex; height: 100%; flex-direction: column; justify-content: center; gap: 7px; overflow: hidden; border: 1px solid rgb(255 255 255 / 8%); border-radius: var(--radius-md); background: var(--org-card); padding: 11px 12px; text-align: start; color: #fff; box-shadow: var(--shadow-md); transition: border-color var(--motion-fast), box-shadow var(--motion-fast), opacity var(--motion-fast), transform var(--motion-fast); cursor: pointer; }
 .org-card:hover { border-color: rgb(255 255 255 / 34%); transform: translateY(-1px); }
+.org-card:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .org-card-main { display: flex; min-width: 0; align-items: center; gap: 9px; }
 .org-avatar, .org-picker-avatar { display: grid; flex: none; place-items: center; border-radius: 999px; font-weight: 700; }
 .org-card .org-avatar { width: 32px; height: 32px; background: rgb(255 255 255 / 14%); font-size: .78em; }
-.org-card p, .org-card small { display: block; overflow: hidden; margin: 0; white-space: nowrap; text-overflow: ellipsis; }
-.org-card p { font-size: .9em; font-weight: 600; line-height: 1.2; }
-.org-card small { margin-block-start: 2px; color: #a8bcd4; font-size: .75em; line-height: 1.15; }
+/* Names are the one thing on this card that must never lose information —
+   two lines beats a silently truncated surname. Position/duty stay single-line
+   (shorter, less identity-critical) and carry a `title` for the full text. */
+.org-card p { display: -webkit-box; overflow: hidden; margin: 0; -webkit-box-orient: vertical; -webkit-line-clamp: 2; font-size: .9em; font-weight: 600; line-height: 1.2; }
+.org-card small { display: block; overflow: hidden; margin: 0; margin-block-start: 2px; white-space: nowrap; text-overflow: ellipsis; color: #a8bcd4; font-size: .75em; line-height: 1.15; }
 .org-card-foot { display: flex; min-width: 0; align-items: center; gap: 7px; color: #93a7bf; font-family: var(--font-mono); font-size: .66em; }
 .org-card-foot > span, .org-card-foot > button { border-radius: 5px; background: rgb(255 255 255 / 8%); padding: 1px 5px; }
 .org-card-foot > button { margin-inline-start: auto; border: 0; color: #cfe0f0; cursor: pointer; }
@@ -977,7 +1561,9 @@ body {
 .org-node-layer.is-tracing .org-card:not(.is-traced), .org-card.is-dimmed, .org-card.is-dragging { opacity: .28; }
 .org-card.is-drop { border-color: #7fd4ad; box-shadow: 0 0 0 3px rgb(4 120 87 / 35%); }
 .org-card.is-nodrop { border-color: var(--accent); box-shadow: 0 0 0 3px rgb(200 16 46 / 30%); cursor: not-allowed; }
-.org-collapse-pip { position: absolute; inset-inline-start: 50%; bottom: -11px; z-index: 12; display: grid; width: 22px; height: 22px; place-items: center; transform: translateX(-50%); border: 1px solid var(--border-strong); border-radius: 999px; background: var(--surface); color: var(--primary); box-shadow: var(--shadow-sm); }
+/* PHYSICAL left: the pip lives in the mirrored coordinate plane (see above),
+   so logical inset-inline-start would shove it 100% off-centre under RTL. */
+.org-collapse-pip { position: absolute; left: 50%; bottom: -11px; z-index: 12; display: grid; width: 22px; height: 22px; place-items: center; transform: translateX(-50%); border: 1px solid var(--border-strong); border-radius: 999px; background: var(--surface); color: var(--primary); box-shadow: var(--shadow-sm); }
 .org-edit-button, .org-grip { position: absolute; inset-block-start: 6px; z-index: 13; }
 .org-edit-button { inset-inline-end: 6px; display: grid; width: 22px; height: 22px; place-items: center; border: 1px solid rgb(255 255 255 / 28%); border-radius: 7px; background: rgb(255 255 255 / 14%); color: #fff; }
 .org-grip { inset-inline-start: 6px; color: rgb(255 255 255 / 50%); cursor: grab; }
@@ -998,6 +1584,7 @@ body {
 .org-orphan-banner > span { display: flex; flex-wrap: wrap; gap: 6px; }
 .org-orphan-chip { border: 1px solid var(--hairline); border-radius: 6px; background: var(--surface); padding: 3px 6px; font-size: .72em; }
 .org-hint { position: absolute; inset-block-end: 6px; inset-inline-start: 14px; z-index: 30; margin: 0; border: 1px solid var(--border); border-radius: 999px; background: color-mix(in srgb, var(--surface) 86%, transparent); padding: 5px 10px; color: var(--text-muted); font-size: .72em; backdrop-filter: blur(4px); }
+@media (width <= 640px) { .org-hint { display: none; } }
 .org-zoom-bar { position: absolute; inset-block-end: 14px; inset-inline-end: 14px; z-index: 30; display: flex; gap: 6px; }
 .org-zoom-bar button { display: grid; width: 32px; height: 32px; place-items: center; padding: 0; color: var(--primary); box-shadow: var(--shadow-sm); }
 .org-zoom-bar .org-center-button { display: inline-flex; width: auto; padding-inline: 11px; }
@@ -1024,9 +1611,14 @@ body {
 .org-picker-id { font-family: var(--font-mono); font-size: .72em; }
 .org-picker-root b { color: var(--accent); }
 .org-drag-ghost { position: fixed; z-index: 60; display: flex; width: var(--node-w, 200px); height: var(--node-h, 72px); align-items: center; gap: 9px; transform: translate(-50%, -50%) rotate(-1.5deg); border-radius: var(--radius-md); background: var(--org-card); padding: 11px 12px; color: #fff; pointer-events: none; filter: drop-shadow(0 12px 24px rgb(13 40 69 / 30%)); }
-/* Fullscreen: the rail+chart card becomes the screen. Every wrapper in the
-   chain (card -> grid -> section) has to stretch too, or the chart keeps its
-   520px min-height and leaves the bottom of the screen blank. */
+/* Fullscreen: the rail+chart card becomes the screen. Tag-scoped on purpose:
+   a blanket `> div` here previously also matched the org-drag-ghost/org-popover
+   portals (they mount as direct children of this same fullscreen host), and
+   `height:100%` on a position:fixed div resolves against the viewport — so a
+   drag in fullscreen stretched the drag ghost into a full-height navy bar.
+   `nav`/`section` are the only two real children (UnitRail, the chart section);
+   CSS Grid's default item stretch already sizes them without this rule, but it
+   stays as an explicit belt-and-suspenders that can never again catch a portal. */
 [data-org-tree-fullscreen-host]:fullscreen { height: 100%; border: 0; border-radius: 0; box-shadow: none; }
-[data-org-tree-fullscreen-host]:fullscreen > div { height: 100%; align-items: stretch; }
+[data-org-tree-fullscreen-host]:fullscreen > nav, [data-org-tree-fullscreen-host]:fullscreen > section { height: 100%; align-items: stretch; }
 [data-org-tree-fullscreen-host]:fullscreen .org-tree-view { height: 100%; }

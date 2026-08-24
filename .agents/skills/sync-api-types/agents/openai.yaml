@@ -1,0 +1,5 @@
+interface:
+  display_name: "Sync API Types"
+  short_description: "Regenerate FastAPI OpenAPI and TypeScript types"
+policy:
+  allow_implicit_invocation: false

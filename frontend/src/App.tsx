@@ -38,6 +38,9 @@ const ApplicationPage = lazy(() =>
 const BooksPage = lazy(() =>
   import('@/pages/books/BooksPage').then((m) => ({ default: m.BooksPage })),
 )
+const ApprovalsPage = lazy(() =>
+  import('@/pages/books/ApprovalsPage').then((m) => ({ default: m.ApprovalsPage })),
+)
 const BookRecordPage = lazy(() =>
   import('@/pages/books/BookRecordPage').then((m) => ({ default: m.BookRecordPage })),
 )
@@ -68,6 +71,11 @@ const EmployeesOrgTreePage = lazy(() =>
 )
 const EmployeeDetailPage = lazy(() =>
   import('@/pages/employees/EmployeeDetailPage').then((m) => ({ default: m.EmployeeDetailPage })),
+)
+// The monthly time sheet is a subpage of Employees, not a top-nav entry, so it
+// is code-split here and routed beside the employee routes below.
+const TimesheetPage = lazy(() =>
+  import('@/pages/timesheet/TimesheetPage').then((m) => ({ default: m.TimesheetPage })),
 )
 const AccessRequestsPage = lazy(() =>
   import('@/pages/access/AccessRequestsPage').then((m) => ({ default: m.AccessRequestsPage })),
@@ -220,6 +228,16 @@ function Shell(): React.JSX.Element {
             <Routes>
               <Route path="/" element={<DashboardRoute />} />
               <Route path="/employees" element={<EmployeeLookupPage />} />
+              {/* A static segment outranks a dynamic one in React Router's route
+                  ranking, so this is not swallowed by `/employees/:id`. */}
+              <Route
+                path="/employees/timesheet"
+                element={
+                  <RequireCapability cap="timesheet.view">
+                    <TimesheetPage />
+                  </RequireCapability>
+                }
+              />
               {/* Static segment: react-router ranks it above /employees/:id
                   regardless of order, and employee ids are G-numbers anyway. */}
               <Route
@@ -241,11 +259,14 @@ function Shell(): React.JSX.Element {
               <Route path="/employees/:id" element={<EmployeeDetailPage />} />
               <Route path="/application" element={<ApplicationPage />} />
               <Route path="/books" element={<BooksPage />} />
+              {/* Static segment outranks /books/:id in react-router's ranking —
+                  same pattern as /employees/timesheet. */}
+              <Route path="/books/approvals" element={<ApprovalsPage />} />
               <Route path="/books/:id" element={<BookRecordPage />} />
               <Route
                 path="/scan-back"
                 element={
-                  <RequireCapability cap="books.manage">
+                  <RequireCapability cap="books.edit">
                     <ScanBackPage />
                   </RequireCapability>
                 }

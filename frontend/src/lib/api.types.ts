@@ -492,6 +492,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/auth/users/{user_id}/permissions/bulk": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Set User Permissions Bulk
+         * @description Apply several override changes in one all-or-nothing call.
+         */
+        put: operations["set_user_permissions_bulk_api_v1_auth_users__user_id__permissions_bulk_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/announcements/groups": {
         parameters: {
             query?: never;
@@ -1027,6 +1047,230 @@ export interface paths {
          * @description File the Duty Resumption (return) form and complete the leave.
          */
         post: operations["file_leave_return_api_v1_leaves__leave_id__return_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/timesheet/designations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Designations */
+        get: operations["list_designations_api_v1_timesheet_designations_get"];
+        put?: never;
+        /** Create Designation */
+        post: operations["create_designation_api_v1_timesheet_designations_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/timesheet/designations/{designation_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Rename Designation */
+        patch: operations["rename_designation_api_v1_timesheet_designations__designation_id__patch"];
+        trace?: never;
+    };
+    "/api/v1/timesheet/designations/order": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Reorder Designations */
+        put: operations["reorder_designations_api_v1_timesheet_designations_order_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/timesheet/{year}/{month}/roster": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Set Roster */
+        put: operations["set_roster_api_v1_timesheet__year___month__roster_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/timesheet/{year}/{month}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Month */
+        get: operations["get_month_api_v1_timesheet__year___month__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Patch Month
+         * @description The post count and any filler choices, applied as one unit.
+         *
+         *     Both writers are handed ``commit=False`` and the transaction is closed once
+         *     here: each of them commits on its own by default, so a bad filler halfway
+         *     down the list would otherwise persist the post count and the fillers before
+         *     it and still answer with a failure.
+         */
+        patch: operations["patch_month_api_v1_timesheet__year___month__patch"];
+        trace?: never;
+    };
+    "/api/v1/timesheet/{year}/{month}/cell": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Set Cell */
+        put: operations["set_cell_api_v1_timesheet__year___month__cell_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/timesheet/{year}/{month}/close": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Close Month */
+        post: operations["close_month_api_v1_timesheet__year___month__close_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/timesheet/{year}/{month}/reopen": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Reopen Month */
+        post: operations["reopen_month_api_v1_timesheet__year___month__reopen_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/timesheet/{year}/{month}/start-ack": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Acknowledge Start
+         * @description Accept a mid-month joiner's starting point.
+         *
+         *     Idempotent, and deliberately allowed on a closed month: it changes no cell,
+         *     so refusing it after the seal would strand the flag forever.
+         */
+        post: operations["acknowledge_start_api_v1_timesheet__year___month__start_ack_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/timesheet/{year}/{month}/export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Export Month
+         * @description Both deliverables come from here — and downloading one freezes the month.
+         *
+         *     The preflight runs before the seal, so a refused download freezes nothing.
+         *     The grid built for the check is the one rendered: ``close_month`` snapshots
+         *     exactly it, so re-rendering after the seal would be the same bytes twice.
+         */
+        get: operations["export_month_api_v1_timesheet__year___month__export_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/timesheet/employee/{employee_id}/{year}/{month}/export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Export Employee
+         * @description One employee's own sheet. Freezes nothing, so ``timesheet.view`` is enough.
+         *
+         *     ``months=2`` is the resignation and termination handover HR asked for: the
+         *     month of departure and the one before it, earlier sheet first, named for the
+         *     later month. ``render_single`` cannot produce a second sheet, so the span
+         *     renderer takes both grids.
+         *
+         *     The span renderer tolerates a month he was not on the roster for, and the
+         *     name follows it: someone who finished in the **earlier** month is exactly the
+         *     handover this parameter exists for, so the later month's name is used
+         *     whenever it can be resolved and the earlier grid names the file otherwise.
+         *     A man on neither month still 404s, out of ``render_single_span``.
+         */
+        get: operations["export_employee_api_v1_timesheet_employee__employee_id___year___month__export_get"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -1652,7 +1896,7 @@ export interface paths {
         /**
          * Save Book As Template
          * @description Copy a finished General Book into the shared template library
-         *     (retokenized + validated; content becomes visible to all books.manage users).
+         *     (retokenized + validated; content becomes visible to all books.templates users).
          */
         post: operations["save_book_as_template_api_v1_books__book_id__save_as_template_post"];
         delete?: never;
@@ -1736,13 +1980,38 @@ export interface paths {
          * @description Records stranded at ``awaiting_scan`` past 24h, oldest first.
          *
          *     ``scope=mine`` (default) is the caller's own; ``scope=all`` is everyone's,
-         *     so an admin can clear records stranded by a user who lacks books.manage.
+         *     so an admin can clear records stranded by a user who lacks books.edit.
          *
          *     Declared before ``/{book_id}`` so the literal ``awaiting-scan`` segment isn't
          *     swallowed by the int path param — same reason as ``/awaiting`` above.
-         *     Authority is ``books.manage``: the same capability filing the scan requires.
+         *     Authority is ``books.edit``: the same capability filing the scan requires.
          */
         get: operations["list_awaiting_scan_api_v1_books_awaiting_scan_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/books/approval-log": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Approval Log
+         * @description The approvals log — ``scope=sent`` (records I submitted) or
+         *     ``scope=received`` (my pending decisions + my verdicts from the last 30
+         *     days). Paged like GET /books; rows are flattened ApprovalLogItem payloads.
+         *
+         *     Declared before ``/{book_id}`` so the literal ``approval-log`` segment isn't
+         *     swallowed by the int path param — same reason as ``/awaiting`` above.
+         */
+        get: operations["get_approval_log_api_v1_books_approval_log_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1863,7 +2132,7 @@ export interface paths {
          *     ApplicationPage revise-mode prefill. Deliberately not on ``BookRead`` (the
          *     detail payload only exposes ``has_fields``).
          *
-         *     Requires ``books.manage`` (not ``books.view``) because this backs the
+         *     Requires ``books.edit`` (not ``books.view``) because this backs the
          *     revise/edit write-path: the caller fetches these fields in order to submit
          *     a revised generation, which is a managed write operation.
          */
@@ -2118,7 +2387,7 @@ export interface paths {
          * @description File an attachment. ``awaiting_scan`` books flip silently (the scan is the
          *     signature). For a ``none``/``pending`` book, ``as_signed=true`` records the
          *     upload as the signed copy and approves the record; otherwise it is filed as a
-         *     plain attachment. Authority is ``books.manage`` for every path.
+         *     plain attachment. Authority is ``books.edit`` for every path.
          */
         post: operations["add_book_attachment_api_v1_books__book_id__attachments_post"];
         delete?: never;
@@ -4762,6 +5031,80 @@ export interface components {
             signature_boldness?: number | null;
             dashboard_layout?: components["schemas"]["DashboardLayout"] | null;
         };
+        /**
+         * ApprovalLogItem
+         * @description One flattened approvals-log row (either scope).
+         *
+         *     Carries exactly what an operator needs to recognise the record and where it
+         *     sits in the chain — ref, subject, category, state, the people involved, the
+         *     two timestamps, the verdict, and the current version's ``document_id`` so
+         *     the client can paint a page-1 thumbnail without fetching the detail payload.
+         *
+         *     Inherits ORMBase so every timestamp serializes with an offset (the
+         *     test_schema_utc_serialization guard). The service tags each stamp with its
+         *     real zone before construction — step stamps as UTC, the off-chain
+         *     ``Book.created_at`` fallback as Dubai wall-clock — and aware values pass
+         *     through ORMBase's validator untouched.
+         */
+        ApprovalLogItem: {
+            /** Book Id */
+            book_id: number;
+            /** Ref Number */
+            ref_number: string;
+            /** Subject */
+            subject?: string | null;
+            /** Category Name Ar */
+            category_name_ar?: string | null;
+            /** Category Name En */
+            category_name_en?: string | null;
+            /** Status */
+            status: string;
+            /**
+             * Priority
+             * @default Normal
+             */
+            priority: string;
+            /** Submitted By User Id */
+            submitted_by_user_id?: number | null;
+            /** Submitted By Name */
+            submitted_by_name?: string | null;
+            /** Doc Manager User Id */
+            doc_manager_user_id?: number | null;
+            /** Doc Manager Name */
+            doc_manager_name?: string | null;
+            /** Approver Name */
+            approver_name?: string | null;
+            /** Reviewer Names */
+            reviewer_names?: string[];
+            /** Submitted At */
+            submitted_at?: string | null;
+            /** Decided At */
+            decided_at?: string | null;
+            /** Verdict */
+            verdict?: ("approved" | "rejected" | "returned") | null;
+            /** Document Id */
+            document_id?: number | null;
+            /** Your Step Kind */
+            your_step_kind?: string | null;
+            /** Your Step State */
+            your_step_state?: string | null;
+            /** Your Step Decided At */
+            your_step_decided_at?: string | null;
+        };
+        /**
+         * ApprovalLogResponse
+         * @description Paged approvals log — mirrors the BookListResponse envelope shape.
+         */
+        ApprovalLogResponse: {
+            /** Items */
+            items: components["schemas"]["ApprovalLogItem"][];
+            /** Total */
+            total: number;
+            /** Limit */
+            limit: number;
+            /** Offset */
+            offset: number;
+        };
         /** ApproveRequest */
         ApproveRequest: {
             /**
@@ -4929,9 +5272,12 @@ export interface components {
          *     punch yields ``punch_count == 1`` with both bounds equal, and a client must
          *     present it as "seen at", never as a span.
          *
-         *     ``judgment_due_at`` is when the duty stops running and the evaluator is
-         *     willing to call it: before that instant a missing punch is an arrival still
-         *     pending, not an exception, and a client must not flag it.
+         *     ``judgment_due_at`` is when the duty stops running and a lone punch may be
+         *     called unpaired: before that instant one punch is an arrival still waiting for
+         *     its departure, not an exception. ``absence_due_at`` is the earlier boundary,
+         *     twice the grace past the start, after which a case with no punch at all is an
+         *     absence. ``grace_minutes`` is the policy's own grace, published so a client
+         *     names the same arrival late as the evaluator does instead of guessing.
          */
         AttendanceDayRowRead: {
             /** Employee Id */
@@ -4976,6 +5322,10 @@ export interface components {
             on_leave: boolean;
             /** Judgment Due At */
             judgment_due_at?: string | null;
+            /** Absence Due At */
+            absence_due_at?: string | null;
+            /** Grace Minutes */
+            grace_minutes?: number | null;
         };
         /** AttendanceExceptionRead */
         AttendanceExceptionRead: {
@@ -6929,6 +7279,12 @@ export interface components {
              * @default 0
              */
             punch_count: number;
+            /** Absence Due At */
+            absence_due_at?: string | null;
+            /** Judgment Due At */
+            judgment_due_at?: string | null;
+            /** Grace Minutes */
+            grace_minutes?: number | null;
             /** Punches */
             punches?: components["schemas"]["EmployeeAttendancePunchRead"][];
         };
@@ -8520,6 +8876,12 @@ export interface components {
             status: string;
             /** Supervisor Id */
             supervisor_id: string | null;
+            /** Designation En */
+            designation_en?: string | null;
+            /** Designation Ar */
+            designation_ar?: string | null;
+            /** Rank Order */
+            rank_order?: number | null;
         };
         /** OrgSupervisorUpdate */
         OrgSupervisorUpdate: {
@@ -9500,6 +9862,14 @@ export interface components {
             has_signature: boolean;
         };
         /**
+         * SetPermissionBulkRequest
+         * @description Apply several override changes in one all-or-nothing call.
+         */
+        SetPermissionBulkRequest: {
+            /** Items */
+            items: components["schemas"]["SetPermissionRequest"][];
+        };
+        /**
          * SetPermissionRequest
          * @description Set or clear a single per-user capability override.
          *
@@ -9804,6 +10174,224 @@ export interface components {
             has_code: boolean;
             /** Notifies Employee */
             notifies_employee: boolean;
+        };
+        /**
+         * TimesheetCellUpdate
+         * @description Force one cell. ``code: null`` clears it back to the derived value.
+         */
+        TimesheetCellUpdate: {
+            /** Employee Id */
+            employee_id: string;
+            /** Day */
+            day: number;
+            /** Code */
+            code?: string | null;
+            /** Note */
+            note?: string | null;
+        };
+        /**
+         * TimesheetDesignationCreate
+         * @description A user-created catalog designation.
+         */
+        TimesheetDesignationCreate: {
+            /** Name En */
+            name_en: string;
+            /** Name Ar */
+            name_ar: string;
+            /**
+             * Sheet
+             * @enum {string}
+             */
+            sheet: "main" | "drivers";
+        };
+        /**
+         * TimesheetDesignationOrder
+         * @description The full designation catalog in its new order — every id, exactly once.
+         */
+        TimesheetDesignationOrder: {
+            /** Ids */
+            ids: number[];
+        };
+        /**
+         * TimesheetDesignationRead
+         * @description One printable designation from the catalog.
+         */
+        TimesheetDesignationRead: {
+            /** Id */
+            id: number;
+            /** Name En */
+            name_en: string;
+            /** Name Ar */
+            name_ar: string;
+            /** Rank Order */
+            rank_order: number;
+            /** Sheet */
+            sheet: string;
+            /** Active */
+            active: boolean;
+            /** System Key */
+            system_key: string | null;
+        };
+        /**
+         * TimesheetDesignationUpdate
+         * @description The two printable names changed by a catalog rename.
+         */
+        TimesheetDesignationUpdate: {
+            /** Name En */
+            name_en: string;
+            /** Name Ar */
+            name_ar: string;
+        };
+        /**
+         * TimesheetFillerUpdate
+         * @description The code statistics block 2 prints for one employee.
+         */
+        TimesheetFillerUpdate: {
+            /** Employee Id */
+            employee_id: string;
+            /** Code */
+            code: string;
+        };
+        /**
+         * TimesheetGridResponse
+         * @description One month of one workbook, live or sealed.
+         */
+        TimesheetGridResponse: {
+            /** Year */
+            year: number;
+            /** Month */
+            month: number;
+            /** Days In Month */
+            days_in_month: number;
+            /** Sheet */
+            sheet: string;
+            /** Post Count */
+            post_count: number;
+            /** Rows */
+            rows: components["schemas"]["TimesheetRow"][];
+            /** Blocking */
+            blocking: components["schemas"]["TimesheetIssue"][];
+            /** Warnings */
+            warnings: components["schemas"]["TimesheetIssue"][];
+            /** Removed */
+            removed: components["schemas"]["TimesheetRemoved"][];
+            /** Closed At */
+            closed_at: string | null;
+            /** Closed By */
+            closed_by: string | null;
+        };
+        /**
+         * TimesheetIssue
+         * @description One preflight finding. Blocking stops a download; a warning never does.
+         *
+         *     Reported per employee, never nested inside a row: ``warnings`` is recomputed
+         *     live even on a closed month, so an ``employee_id`` here may name someone with
+         *     no row in the same response (a departure, or someone hired after the seal).
+         */
+        TimesheetIssue: {
+            /** Employee Id */
+            employee_id: string;
+            /** Kind */
+            kind: string;
+            /** Detail */
+            detail: string;
+        };
+        /**
+         * TimesheetPeriodPatch
+         * @description The month's contracted post count and any block-2 filler choices.
+         */
+        TimesheetPeriodPatch: {
+            /** Post Count */
+            post_count?: number | null;
+            /** Fillers */
+            fillers?: components["schemas"]["TimesheetFillerUpdate"][];
+        };
+        /**
+         * TimesheetRemoved
+         * @description Someone who finished last month and is therefore off this roster.
+         */
+        TimesheetRemoved: {
+            /** Employee Id */
+            employee_id: string;
+            /** Name En */
+            name_en: string;
+            /**
+             * End Date
+             * Format: date
+             */
+            end_date: string;
+            /** Last Day */
+            last_day: number;
+            /** Month */
+            month: number;
+            /** Year */
+            year: number;
+        };
+        /**
+         * TimesheetRosterAssignmentWrite
+         * @description One employee's designation from an effective month onward.
+         */
+        TimesheetRosterAssignmentWrite: {
+            /** Employee Id */
+            employee_id: string;
+            /** Designation Id */
+            designation_id: number | null;
+        };
+        /**
+         * TimesheetRosterBatch
+         * @description A non-empty atomic month roster update.
+         */
+        TimesheetRosterBatch: {
+            /** Assignments */
+            assignments: components["schemas"]["TimesheetRosterAssignmentWrite"][];
+        };
+        /**
+         * TimesheetRow
+         * @description One printed row: the identity block, 31 cells, and both statistics.
+         */
+        TimesheetRow: {
+            /** Employee Id */
+            employee_id: string;
+            /** Row No */
+            row_no: number;
+            /** Name En */
+            name_en: string;
+            /** Nationality En */
+            nationality_en: string | null;
+            /** Designation En */
+            designation_en: string | null;
+            /** Designation Ar */
+            designation_ar: string | null;
+            /** Rank Order */
+            rank_order: number | null;
+            /** Codes */
+            codes: (string | null)[];
+            /** Stat Codes */
+            stat_codes: (string | null)[];
+            /** Stat Block */
+            stat_block: number;
+            /** Stat Filler */
+            stat_filler: string | null;
+            /** Joined Day */
+            joined_day: number | null;
+            /** Left Day */
+            left_day: number | null;
+            /** Start Confirmed */
+            start_confirmed: boolean;
+            /** Notes */
+            notes: {
+                [key: string]: string;
+            };
+            /** Designation Id */
+            designation_id?: number | null;
+        };
+        /**
+         * TimesheetStartAckRequest
+         * @description Accept a mid-month joiner's starting point. Changes no cell.
+         */
+        TimesheetStartAckRequest: {
+            /** Employee Id */
+            employee_id: string;
         };
         /** TransferAdminRequest */
         TransferAdminRequest: {
@@ -11444,6 +12032,43 @@ export interface operations {
             };
         };
     };
+    set_user_permissions_bulk_api_v1_auth_users__user_id__permissions_bulk_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                user_id: number;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SetPermissionBulkRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UserPermissionRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     list_groups_api_v1_announcements_groups_get: {
         parameters: {
             query?: never;
@@ -12843,6 +13468,478 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["LeaveRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_designations_api_v1_timesheet_designations_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TimesheetDesignationRead"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_designation_api_v1_timesheet_designations_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TimesheetDesignationCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TimesheetDesignationRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    rename_designation_api_v1_timesheet_designations__designation_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                designation_id: number;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TimesheetDesignationUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TimesheetDesignationRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    reorder_designations_api_v1_timesheet_designations_order_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TimesheetDesignationOrder"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TimesheetDesignationRead"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    set_roster_api_v1_timesheet__year___month__roster_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                year: number;
+                month: number;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TimesheetRosterBatch"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_month_api_v1_timesheet__year___month__get: {
+        parameters: {
+            query?: {
+                sheet?: "main" | "drivers";
+            };
+            header?: never;
+            path: {
+                year: number;
+                month: number;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TimesheetGridResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    patch_month_api_v1_timesheet__year___month__patch: {
+        parameters: {
+            query?: {
+                sheet?: "main" | "drivers";
+            };
+            header?: never;
+            path: {
+                year: number;
+                month: number;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TimesheetPeriodPatch"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TimesheetGridResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    set_cell_api_v1_timesheet__year___month__cell_put: {
+        parameters: {
+            query?: {
+                sheet?: "main" | "drivers";
+            };
+            header?: never;
+            path: {
+                year: number;
+                month: number;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TimesheetCellUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TimesheetGridResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    close_month_api_v1_timesheet__year___month__close_post: {
+        parameters: {
+            query?: {
+                sheet?: "main" | "drivers";
+            };
+            header?: never;
+            path: {
+                year: number;
+                month: number;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TimesheetGridResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    reopen_month_api_v1_timesheet__year___month__reopen_post: {
+        parameters: {
+            query?: {
+                sheet?: "main" | "drivers";
+            };
+            header?: never;
+            path: {
+                year: number;
+                month: number;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TimesheetGridResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    acknowledge_start_api_v1_timesheet__year___month__start_ack_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                year: number;
+                month: number;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TimesheetStartAckRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    export_month_api_v1_timesheet__year___month__export_get: {
+        parameters: {
+            query?: {
+                sheet?: "main" | "drivers";
+                variant?: "attendance" | "statistics";
+            };
+            header?: never;
+            path: {
+                year: number;
+                month: number;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    export_employee_api_v1_timesheet_employee__employee_id___year___month__export_get: {
+        parameters: {
+            query?: {
+                months?: number;
+            };
+            header?: never;
+            path: {
+                employee_id: string;
+                year: number;
+                month: number;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
                 };
             };
             /** @description Validation Error */
@@ -14359,6 +15456,41 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["BookRead"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_approval_log_api_v1_books_approval_log_get: {
+        parameters: {
+            query?: {
+                scope?: "sent" | "received";
+                limit?: number;
+                offset?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApprovalLogResponse"];
                 };
             };
             /** @description Validation Error */

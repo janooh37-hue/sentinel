@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>تصميم ٣ — بوابة الموظف · GSSG Manager</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Arabic:wght@400;500;700&family=IBM+Plex+Mono:wght@400;500;600;700&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  /* ─── GSSG design tokens (mirrors frontend/src/index.css) ─── */
+  :root {
+    --bg:#f5f4f1; --surface:#ffffff; --surface-raised:#fafaf6; --surface-tinted:#f0eee8;
+    --primary:#0d2845; --primary-hover:#1d3a5e; --primary-soft:#e8edf3; --on-primary:#ffffff;
+    --accent:#c8102e; --accent-soft:#fbe5e8;
+    --success:#047857; --success-soft:#d6f0e4;
+    --warning:#92400e; --warning-soft:#fbedd8;
+    --info:#1d4ed8; --info-soft:#e0e8f8;
+    --text:#1c1f24; --text-muted:#5a6068; --text-faint:#8b9098;
+    --border:#e6e4dd; --border-strong:#d4d1c8; --hairline:#efece5;
+    --hero-grad:linear-gradient(135deg,#0a1f3a 0%,#0d2845 50%,#1d3a5e 100%);
+    --r-sm:8px; --r-md:12px; --r-lg:16px; --r-pill:99px;
+    --sans:"Noto Sans Arabic","Inter",system-ui,sans-serif;
+    --mono:"IBM Plex Mono",ui-monospace,Consolas,"Noto Sans Arabic",monospace;
+    --ease:cubic-bezier(0.16,1,0.3,1);
+  }
+  * { box-sizing:border-box; margin:0; padding:0; }
+  body { background:var(--bg); color:var(--text); font-family:var(--sans); font-size:16px; line-height:1.55; }
+  .mono { font-family:var(--mono); }
+
+  /* ─── Faux app chrome ─── */
+  .appbar { background:var(--surface); border-bottom:1px solid var(--hairline); }
+  .appbar-in { max-width:1180px; margin:0 auto; padding:0 32px; height:60px; display:flex; align-items:center; gap:28px; }
+  .brand { display:flex; align-items:center; gap:10px; }
+  .brand-logo { width:34px; height:34px; border-radius:50%; background:var(--hero-grad); display:grid; place-items:center; color:#fff; font-weight:800; font-size:11px; font-family:"Inter",sans-serif; }
+  .brand b { font-size:15px; font-family:"Inter",sans-serif; }
+  .brand span { display:block; font-size:10.5px; color:var(--text-muted); line-height:1.2; }
+  .nav { display:flex; gap:4px; margin-inline-start:8px; }
+  .nav a { padding:19px 13px; font-size:13.5px; color:var(--text-muted); text-decoration:none; border-bottom:2px solid transparent; }
+  .nav a.on { color:var(--primary); font-weight:700; border-bottom-color:var(--primary); }
+  .appbar-tools { margin-inline-start:auto; display:flex; gap:10px; }
+  .tool-dot { width:32px; height:32px; border-radius:50%; background:var(--surface-tinted); }
+
+  .design-tag { display:inline-flex; align-items:center; gap:8px; margin:20px auto 0; padding:5px 12px; border-radius:var(--r-pill); background:var(--primary); color:#fff; font-size:11.5px; font-weight:700; letter-spacing:.06em; }
+  .design-tag i { font-style:normal; opacity:.65; font-weight:500; }
+  .tag-row { max-width:1180px; margin:0 auto; padding:0 32px; }
+
+  /* ─── Navy hero band with embedded search ─── */
+  .heroband { position:relative; overflow:hidden; background:var(--hero-grad); color:#fff; margin:14px 0 0; }
+  .heroband::before { content:""; position:absolute; inset-inline-end:-90px; top:-110px; width:320px; height:320px; border-radius:50%; background:rgba(255,255,255,.045); }
+  .heroband::after { content:""; position:absolute; inset-inline-start:8%; bottom:-140px; width:260px; height:260px; border-radius:50%; background:rgba(255,255,255,.035); }
+  .heroband-in { position:relative; z-index:2; max-width:760px; margin:0 auto; padding:44px 32px 52px; text-align:center; }
+  .heroband .eyebrow { font-size:11px; font-weight:600; letter-spacing:.22em; text-transform:uppercase; opacity:.65; }
+  .heroband h1 { font-size:27px; font-weight:700; letter-spacing:-.01em; margin:8px 0 4px; }
+  .heroband p { font-size:13.5px; opacity:.75; }
+
+  .searchwrap { position:relative; margin-top:22px; }
+  .searchbox { display:flex; align-items:center; gap:12px; background:#fff; border-radius:var(--r-pill); padding:0 20px; height:56px; box-shadow:0 18px 44px -18px rgba(0,0,0,.5); }
+  .searchbox svg { flex:none; color:var(--text-faint); }
+  .searchbox input { flex:1; min-width:0; border:0; outline:0; font:inherit; font-size:16px; color:var(--text); background:transparent; }
+  .searchbox input::placeholder { color:var(--text-faint); }
+  .searchbox .go { flex:none; border:0; cursor:pointer; font:inherit; font-size:13px; font-weight:700; color:#fff; background:var(--accent); border-radius:var(--r-pill); padding:8px 20px; }
+  .searchbox .go:hover { background:#a30d24; }
+  .under { display:flex; justify-content:center; gap:18px; margin-top:13px; font-size:12px; opacity:.65; }
+  .under b { font-weight:600; }
+
+  /* ─── Card cluster ─── */
+  .page { max-width:1180px; margin:0 auto; padding:0 32px 80px; }
+  .cluster { max-width:1020px; margin:-26px auto 0; position:relative; z-index:3; }
+
+  /* Completeness segments strip */
+  .segstrip { display:flex; align-items:center; gap:14px; background:var(--surface); border:1px solid var(--hairline); border-radius:var(--r-lg); box-shadow:0 14px 34px -22px rgba(13,40,69,.35); padding:14px 20px; margin-bottom:20px; }
+  .segstrip .lbl { font-size:12.5px; font-weight:700; white-space:nowrap; }
+  .segs { flex:1; display:flex; gap:4px; }
+  .seg { flex:1; height:9px; border-radius:3px; background:var(--primary); }
+  .seg.gap { background:var(--warning-soft); border:1px dashed #ddba7a; }
+  .segstrip .num { font-family:var(--mono); font-size:12.5px; font-weight:700; color:var(--primary); white-space:nowrap; }
+  .segstrip .hint { font-size:11.5px; color:var(--warning); font-weight:600; white-space:nowrap; }
+
+  .deck { display:grid; grid-template-columns:390px 1fr; gap:20px; align-items:start; }
+  @media (max-width:920px){ .deck { grid-template-columns:1fr; } }
+
+  /* ID card */
+  .idcard { position:relative; overflow:hidden; border-radius:18px; background:var(--hero-grad); color:#fff; padding:22px 24px 20px; box-shadow:0 22px 48px -20px rgba(10,31,58,.55); }
+  .idcard::before { content:""; position:absolute; inset-inline-end:-40px; bottom:-70px; width:190px; height:190px; border-radius:50%; background:rgba(255,255,255,.05); }
+  .idcard .card-head { display:flex; justify-content:space-between; align-items:center; font-size:10px; letter-spacing:.2em; text-transform:uppercase; opacity:.6; margin-bottom:18px; }
+  .idcard .photo { width:84px; height:84px; border-radius:14px; background:rgba(255,255,255,.14); box-shadow:0 0 0 2px rgba(255,255,255,.22); display:grid; place-items:center; font-size:27px; font-weight:700; }
+  .idcard .row { display:flex; gap:16px; align-items:center; }
+  .idcard h2 { font-size:19px; font-weight:700; line-height:1.3; }
+  .idcard .en { font-family:"Inter",sans-serif; font-size:10.5px; letter-spacing:.09em; text-transform:uppercase; opacity:.55; margin-top:2px; }
+  .idcard .gnum { font-family:var(--mono); font-size:15px; font-weight:600; letter-spacing:.12em; margin-top:8px; }
+  .idcard .facts { display:grid; grid-template-columns:1fr 1fr; gap:10px 18px; margin-top:18px; padding-top:14px; border-top:1px solid rgba(255,255,255,.14); }
+  .idcard .f .fk { font-size:9.5px; letter-spacing:.16em; text-transform:uppercase; opacity:.55; }
+  .idcard .f .fv { font-size:13px; font-weight:600; margin-top:1px; }
+  .idcard .f .fv.miss { color:#fbbf24; font-weight:700; font-size:12px; }
+  .pill { display:inline-flex; align-items:center; gap:6px; border-radius:var(--r-pill); padding:2.5px 10px; font-size:11px; font-weight:700; }
+  .pill i { font-style:normal; width:6px; height:6px; border-radius:50%; background:currentColor; }
+  .pill.ok { background:rgba(52,211,153,.18); color:#6ee7b7; }
+
+  .id-actions { display:flex; gap:8px; margin-top:14px; }
+  .btn { flex:1; display:inline-flex; justify-content:center; align-items:center; gap:7px; border:0; cursor:pointer; font:inherit; font-size:12px; font-weight:600; border-radius:var(--r-pill); padding:8px 10px; white-space:nowrap; }
+  .btn.pri { background:var(--surface); color:var(--primary); }
+  .btn.ghost { background:rgba(255,255,255,.12); color:#fff; border:1px solid rgba(255,255,255,.25); }
+
+  /* Tiles column */
+  .tiles { display:grid; grid-template-columns:1fr 1fr; gap:14px; }
+  @media (max-width:560px){ .tiles { grid-template-columns:1fr; } }
+  .tile { background:var(--surface); border:1px solid var(--hairline); border-radius:var(--r-lg); padding:16px 18px; }
+  .tile .t-head { display:flex; align-items:center; gap:9px; margin-bottom:10px; }
+  .tile .t-ic { flex:none; width:32px; height:32px; border-radius:10px; background:var(--primary-soft); color:var(--primary); display:grid; place-items:center; }
+  .tile h4 { font-size:13px; font-weight:700; }
+  .tile .t-sub { font-size:10.5px; color:var(--text-faint); letter-spacing:.06em; }
+  .tile .val { font-family:var(--mono); font-size:14px; font-weight:600; letter-spacing:.02em; }
+  .tile .sub { font-size:11.5px; color:var(--text-muted); margin-top:2px; }
+
+  /* expiry meter inside a tile */
+  .exp { margin-top:10px; }
+  .exp .bar { height:6px; border-radius:var(--r-pill); background:var(--surface-tinted); overflow:hidden; }
+  .exp .bar i { display:block; height:100%; width:19%; background:#d97706; border-radius:var(--r-pill); }
+  .exp .cap { display:flex; justify-content:space-between; font-size:10.5px; color:var(--warning); font-weight:700; margin-top:5px; }
+  .exp .cap .d { font-family:var(--mono); }
+
+  /* missing tile state */
+  .tile.miss { border:1.5px dashed var(--border-strong); background:var(--surface-raised); }
+  .tile.miss .t-ic { background:var(--warning-soft); color:var(--warning); }
+  .tile.miss .val { font-family:var(--sans); font-size:12.5px; color:var(--warning); font-weight:700; }
+  .tile.miss .addbtn { margin-top:10px; width:100%; border:1px dashed var(--border-strong); background:var(--surface); color:var(--info); cursor:pointer; font:inherit; font-size:12px; font-weight:600; border-radius:var(--r-md); padding:7px; }
+  .tile.miss .addbtn:hover { border-color:var(--info); }
+  .tile.ok-full .t-ic { background:var(--success-soft); color:var(--success); }
+
+  /* work + finance wide tiles */
+  .tile.wide { grid-column:1 / -1; }
+  .wgrid { display:grid; grid-template-columns:repeat(3,1fr); gap:10px 20px; }
+  @media (max-width:560px){ .wgrid { grid-template-columns:1fr 1fr; } }
+  .wf .wk { font-size:10px; letter-spacing:.12em; text-transform:uppercase; color:var(--text-faint); }
+  .wf .wv { font-size:13.5px; font-weight:600; margin-top:1px; }
+  .wf .wv.m { font-family:var(--mono); font-size:12.5px; }
+</style>
+</head>
+<body>
+
+<header class="appbar"><div class="appbar-in">
+  <div class="brand">
+    <div class="brand-logo">GSSG</div>
+    <div><b>GSSG</b><span>المجموعة العالمية للخدمات الأمنية</span></div>
+  </div>
+  <nav class="nav">
+    <a href="#">لوحة التحكم</a><a href="#" class="on">الموظفون</a><a href="#">المراسلات</a><a href="#">الإجازات</a><a href="#">الخدمات</a><a href="#">المستندات</a>
+  </nav>
+  <div class="appbar-tools"><div class="tool-dot"></div><div class="tool-dot"></div><div class="tool-dot"></div></div>
+</div></header>
+
+<div class="tag-row"><div class="design-tag">تصميم ٣ <i>·</i> بوابة الموظف — بحث في الواجهة + بطاقات</div></div>
+
+<!-- Hero band with embedded search -->
+<section class="heroband">
+  <div class="heroband-in">
+    <div class="eyebrow">العمليات · الموظفون</div>
+    <h1>عن مَن تبحث؟</h1>
+    <p>نشط، في إجازة، أو منتهي الخدمة — كل ملف يظهر في البحث</p>
+    <div class="searchwrap">
+      <div class="searchbox">
+        <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.3-3.3"/></svg>
+        <input type="text" placeholder="اكتب الاسم أو الرقم الوظيفي…" value="عبدالله على سالم">
+        <button class="go">بحث</button>
+      </div>
+      <div class="under"><span><b>٣٠٠</b> موظف في السجل</span><span>·</span><span>آخر بحث: <b>G3260</b> · <b>G3254</b></span></div>
+    </div>
+  </div>
+</section>
+
+<div class="page">
+  <div class="cluster">
+
+    <!-- Completeness segments -->
+    <div class="segstrip">
+      <span class="lbl">اكتمال الملف</span>
+      <div class="segs">
+        <div class="seg"></div><div class="seg"></div><div class="seg"></div><div class="seg"></div><div class="seg"></div>
+        <div class="seg"></div><div class="seg"></div><div class="seg"></div><div class="seg"></div>
+        <div class="seg gap"></div><div class="seg gap"></div><div class="seg gap"></div><div class="seg gap"></div><div class="seg gap"></div>
+      </div>
+      <span class="num">٩ / ١٤</span>
+      <span class="hint">٥ بيانات ناقصة ↓</span>
+    </div>
+
+    <div class="deck">
+
+      <!-- ID card -->
+      <div class="idcard">
+        <div class="card-head"><span>بطاقة موظف · GSSG</span><span class="mono">EMP FILE</span></div>
+        <div class="row">
+          <div class="photo">عب</div>
+          <div>
+            <h2>عبدالله على سالم خميس العبرى</h2>
+            <div class="en">Abdulla Ali Salem Khamis Alabri</div>
+            <div class="gnum">G-3190</div>
+          </div>
+        </div>
+        <div class="facts">
+          <div class="f"><div class="fk">المسمى الوظيفي</div><div class="fv">قائم بأعمال مساعد مشرف</div></div>
+          <div class="f"><div class="fk">الحالة</div><div class="fv"><span class="pill ok"><i></i>نشط</span></div></div>
+          <div class="f"><div class="fk">الجنسية</div><div class="fv miss">⚠ غير مسجّلة</div></div>
+          <div class="f"><div class="fk">تاريخ الالتحاق</div><div class="fv mono" style="font-size:12.5px">2019-03-12</div></div>
+        </div>
+        <div class="id-actions">
+          <button class="btn pri">إنشاء مستند</button>
+          <button class="btn ghost">إضافة إجازة</button>
+          <button class="btn ghost">تعديل</button>
+        </div>
+      </div>
+
+      <!-- Document & data tiles -->
+      <div class="tiles">
+
+        <div class="tile">
+          <div class="t-head">
+            <div class="t-ic"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="9" cy="10" r="2"/><path d="M15 8h4M15 12h4M7 16h10"/></svg></div>
+            <div><h4>الهوية الإماراتية</h4><div class="t-sub">EMIRATES ID</div></div>
+          </div>
+          <div class="val">784-1990-1234567-1</div>
+          <div class="exp">
+            <div class="bar"><i></i></div>
+            <div class="cap"><span>⚠ تنتهي قريباً</span><span class="d">2026-09-14 · ٦٨ يوماً</span></div>
+          </div>
+        </div>
+
+        <div class="tile miss">
+          <div class="t-head">
+            <div class="t-ic"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 3h9l5 5v13H6z"/><path d="M15 3v5h5"/></svg></div>
+            <div><h4>جواز السفر</h4><div class="t-sub">PASSPORT</div></div>
+          </div>
+          <div class="val">غير مسجّل — الرقم وتاريخ الانتهاء</div>
+          <button class="addbtn">+ إضافة بيانات الجواز</button>
+        </div>
+
+        <div class="tile miss">
+          <div class="t-head">
+            <div class="t-ic"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 4-6 8-6s8 2 8 6"/></svg></div>
+            <div><h4>بيانات شخصية</h4><div class="t-sub">PERSONAL</div></div>
+          </div>
+          <div class="val">الجنسية وتاريخ الميلاد غير مسجّلَين</div>
+          <button class="addbtn">+ إكمال البيانات الشخصية</button>
+        </div>
+
+        <div class="tile miss">
+          <div class="t-head">
+            <div class="t-ic"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 10h18M3 6h18M7 14h4"/><rect x="3" y="4" width="18" height="16" rx="2"/></svg></div>
+            <div><h4>الحساب البنكي</h4><div class="t-sub">IBAN</div></div>
+          </div>
+          <div class="val">الآيبان غير مسجّل</div>
+          <button class="addbtn">+ إضافة الآيبان</button>
+        </div>
+
+        <div class="tile wide ok-full">
+          <div class="t-head">
+            <div class="t-ic"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 7h18v13H3z"/><path d="M8 7V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg></div>
+            <div><h4>بيانات العمل</h4><div class="t-sub">EMPLOYMENT — مكتملة</div></div>
+          </div>
+          <div class="wgrid">
+            <div class="wf"><div class="wk">القسم</div><div class="wv">العمليات</div></div>
+            <div class="wf"><div class="wk">الوحدة</div><div class="wv">وحدة أبوظبي</div></div>
+            <div class="wf"><div class="wk">النقطة</div><div class="wv">برج المها</div></div>
+            <div class="wf"><div class="wk">تاريخ الالتحاق</div><div class="wv m">2019-03-12</div></div>
+            <div class="wf"><div class="wk">الالتحاق بالشركة</div><div class="wv m">2019-03-12</div></div>
+            <div class="wf"><div class="wk">رقم التواصل</div><div class="wv m">0501234567</div></div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+</div>
+</body>
+</html>

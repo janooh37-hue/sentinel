@@ -10,6 +10,7 @@
 
 import { useQuery } from '@tanstack/react-query'
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { flushSync } from 'react-dom'
 import { useTranslation } from 'react-i18next'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 
@@ -20,6 +21,8 @@ import { useCapabilities } from '@/lib/useCapabilities'
 import { pickEmployeeName } from '@/lib/employeeName'
 
 import { AttentionQueue } from './AttentionQueue'
+import type { PrintLayout } from './AttendancePrintSheet'
+import { AttendancePrintSheet } from './AttendancePrintSheet'
 import type { AttendanceView } from './AttendanceToolbar'
 import { AttendanceToolbar } from './AttendanceToolbar'
 import type { DayStripEntry } from './AttendanceToolbar'
@@ -52,6 +55,11 @@ export function AttendancePage(): React.JSX.Element {
   const shiftCode = params.get('shift')
   const view: AttendanceView = isView(params.get('view')) ? (params.get('view') as AttendanceView) : 'register'
   const [search, setSearch] = useState('')
+  // Which sheet the operator asked for. Held in state rather than the URL: it
+  // describes one print run, not a view of the day worth linking to. Rendering
+  // is switched BEFORE the dialog opens, so React has committed the right
+  // layout by the time the browser paints the preview.
+  const [printLayout, setPrintLayout] = useState<PrintLayout>('sheet')
   const { has } = useCapabilities()
   const hasIntegrationView = has('workforce.integration.manage')
 
@@ -142,6 +150,16 @@ export function AttendancePage(): React.JSX.Element {
     [navigate],
   )
 
+  // `window.print()` blocks the thread, so the layout it is meant to print has
+  // to be in the DOM before the call — a plain setState would still be pending
+  // and the dialog would preview the previous sheet. `flushSync` commits first,
+  // which is precisely what it exists for; an effect would only turn the same
+  // ordering into a cascading render.
+  const requestPrint = useCallback((layout: PrintLayout) => {
+    flushSync(() => setPrintLayout(layout))
+    window.print()
+  }, [])
+
   // ← / → change the day, 1–4 pick a shift, `/` focuses the search field.
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent): void => {
@@ -207,7 +225,12 @@ export function AttendancePage(): React.JSX.Element {
       {/* shrink-0: this is a flex item in a column whose sibling is tall, and
           without it the band collapses to a few pixels and swallows the page
           title, the Arabic label and the section tabs. */}
+      {/* The whole screen tree is print-hidden: the paper is the dedicated
+          sheet below, not this layout. A named `@page` forces a break, so any
+          in-flow box left visible beside it costs a blank sheet — the same
+          hazard documented in index.css and guarded for the Toaster in App. */}
       <section
+        data-print-hide
         className="relative shrink-0 overflow-hidden pt-[18px] text-white"
         style={{ background: 'var(--hero-grad)' }}
       >
@@ -231,7 +254,7 @@ export function AttendancePage(): React.JSX.Element {
         </div>
       </section>
 
-      <div className="mx-auto w-full max-w-[1400px] px-8 pb-10 pt-4">
+      <div className="mx-auto w-full max-w-[1400px] px-8 pb-10 pt-4" data-print-hide>
         <AttendanceToolbar
           operationalDate={operationalDate}
           dayStrip={dayStrip}
@@ -244,12 +267,12 @@ export function AttendancePage(): React.JSX.Element {
           onShiftChange={(code) => setParam('shift', code)}
           onViewChange={(next) => setParam('view', next === 'register' ? null : next)}
           onSearchChange={setSearch}
-          onPrint={() => window.print()}
+          onPrint={requestPrint}
         />
 
         <div className="grid gap-3.5 lg:grid-cols-[minmax(0,1fr)_320px]">
           <div className="min-w-0">{body()}</div>
-          <div className="mt-3 lg:mt-3" data-print-hide>
+          <div className="mt-3 lg:mt-3">
             <AttentionQueue
               rows={allRows}
               now={now}
@@ -258,6 +281,19 @@ export function AttendancePage(): React.JSX.Element {
           </div>
         </div>
       </div>
+
+      {/* Prints the rows on screen, filters and all: a register that quietly
+          dropped the shift chip or the search box would put names on paper the
+          operator never saw, or omit ones they did. The sheet declares the
+          filter instead. */}
+      <AttendancePrintSheet
+        layout={printLayout}
+        rows={rows}
+        now={now}
+        operationalDate={operationalDate}
+        shiftCode={shiftCode}
+        search={search}
+      />
     </div>
   )
 }
