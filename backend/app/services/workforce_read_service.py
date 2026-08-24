@@ -130,6 +130,7 @@ def list_exceptions(
         result.append(
             {
                 **_person_fields(db, case),
+                "case_id": case.id,
                 "presence_state": evaluation.presence_state,
                 "reason_code": evaluation.reason_code,
                 "late_minutes": evaluation.late_minutes,
@@ -295,6 +296,7 @@ def list_attendance_day(
         result.append(
             {
                 **_person_fields(db, case),
+                "case_id": case.id,
                 "presence_state": presence_state,
                 "reason_code": evaluation.reason_code if evaluation else None,
                 "first_punch_at": first_at,

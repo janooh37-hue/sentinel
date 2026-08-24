@@ -350,12 +350,16 @@ class RosterRowRead(ORMBase):
 
 
 class AttendanceExceptionRead(RosterRowRead):
+    case_id: int
+
     late_minutes: int | None = Field(default=None, ge=0)
     early_exit_minutes: int | None = Field(default=None, ge=0)
     missing_checkout: bool | None = None
 
 
 class AttendanceDayRowRead(RosterRowRead):
+    case_id: int
+
     """One person's scheduled shift on one operational date, with punch facts.
 
     ``first_punch_at`` / ``last_punch_at`` are the earliest and latest punches

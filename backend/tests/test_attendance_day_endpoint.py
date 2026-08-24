@@ -109,6 +109,31 @@ def test_shift_code_filter_narrows_the_day(db_session) -> None:
     assert len(narrowed) == len(everything) // 2
 
 
+def test_double_shift_rows_publish_their_exact_case_ids(db_session) -> None:
+    fixture = build_attendance_day(
+        db_session, operational_date=DAY, posts=[("البوابة الرئيسية", 1)]
+    )
+    scope = resolve_workforce_scope(db_session, fixture.admin)
+
+    rows = workforce_read_service.list_attendance_day(
+        db_session, scope=scope, operational_date=DAY
+    )
+
+    employee = fixture.employees[0]
+    expected = {
+        case.shift_code_snapshot: case.id
+        for case in fixture.cases
+        if case.employee_id == employee.id
+    }
+    assert expected.keys() == {"morning", "night"}
+    actual = {
+        row["shift_code"]: row["case_id"]
+        for row in rows
+        if row["employee_id"] == employee.id
+    }
+    assert actual == expected
+
+
 def test_rows_group_by_the_duty_hierarchy_the_register_prints(db_session) -> None:
     fixture = build_attendance_day(
         db_session,
