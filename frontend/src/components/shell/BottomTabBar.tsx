@@ -6,6 +6,7 @@ import { NavLink } from 'react-router-dom'
 
 import { cn } from '@/lib/utils'
 import { useCapabilities } from '@/lib/useCapabilities'
+import { prefetchRouteForPath } from '@/lib/prefetchRoute'
 
 import {
   DEFAULT_SLOT_IDS,
@@ -242,6 +243,8 @@ export function BottomTabBar(): React.JSX.Element {
                   to={entry.to}
                   end={entry.to === '/'}
                   aria-label={label}
+                  onPointerEnter={() => prefetchRouteForPath(entry.to)}
+                  onFocus={() => prefetchRouteForPath(entry.to)}
                   onPointerDown={(event) => startLongPress(slotIndex, event)}
                   onPointerMove={moveLongPress}
                   onPointerUp={cancelLongPress}

@@ -21,6 +21,28 @@ import { useAuth } from '@/lib/authContext'
 import { useIsMobile } from '@/lib/useIsMobile'
 import { useLockState } from '@/lib/useLockState'
 import { type Page, PAGE_PATHS, buildPagePath } from '@/lib/pageNav'
+import {
+  loadAccessRequestsPage,
+  loadApplicationPage,
+  loadApprovalsPage,
+  loadAttendancePage,
+  loadBookRecordPage,
+  loadBooksPage,
+  loadDashboardPage,
+  loadDutyLocationsPage,
+  loadEmployeeDetailPage,
+  loadEmployeesOrgTreePage,
+  loadExpiryPage,
+  loadIntakePage,
+  loadLeavesPage,
+  loadLedgerPage,
+  loadPermitsPage,
+  loadScanBackPage,
+  loadScanInboxPage,
+  loadSendToGroupPage,
+  loadSettingsPage,
+  loadTimesheetPage,
+} from '@/lib/routeLoaders'
 import { useNotificationStream } from '@/hooks/useNotificationStream'
 import { TopProgressBar } from './components/refresh/TopProgressBar'
 import { useRefreshHeartbeat } from './hooks/useRefreshHeartbeat'
@@ -31,75 +53,30 @@ import '@/lib/i18n'
 
 // Code-split the HugeRTE-using pages (Application, Ledger) and the larger
 // list pages — each carries its own ~30-80 KB of feature code that doesn't
-// belong in the initial bundle.
-const ApplicationPage = lazy(() =>
-  import('@/pages/application/ApplicationPage').then((m) => ({ default: m.ApplicationPage })),
-)
-const BooksPage = lazy(() =>
-  import('@/pages/books/BooksPage').then((m) => ({ default: m.BooksPage })),
-)
-const ApprovalsPage = lazy(() =>
-  import('@/pages/books/ApprovalsPage').then((m) => ({ default: m.ApprovalsPage })),
-)
-const BookRecordPage = lazy(() =>
-  import('@/pages/books/BookRecordPage').then((m) => ({ default: m.BookRecordPage })),
-)
-const LeavesPage = lazy(() =>
-  import('@/pages/leaves/LeavesPage').then((m) => ({ default: m.LeavesPage })),
-)
-const PermitsPage = lazy(() =>
-  import('@/pages/permits/PermitsPage').then((m) => ({ default: m.PermitsPage })),
-)
-const LedgerPage = lazy(() =>
-  import('@/pages/ledger/LedgerPage').then((m) => ({ default: m.LedgerPage })),
-)
-const SettingsPage = lazy(() =>
-  import('@/pages/settings/SettingsPage').then((m) => ({ default: m.SettingsPage })),
-)
-const DashboardPage = lazy(() =>
-  import('@/pages/dashboard/DashboardPage').then((m) => ({ default: m.DashboardPage })),
-)
-const AttendancePage = lazy(() =>
-  import('@/pages/employees/attendance/AttendancePage').then((m) => ({
-    default: m.AttendancePage,
-  })),
-)
-const EmployeesOrgTreePage = lazy(() =>
-  import('@/pages/employees/orgTree/EmployeesOrgTreePage').then((m) => ({
-    default: m.EmployeesOrgTreePage,
-  })),
-)
-const EmployeeDetailPage = lazy(() =>
-  import('@/pages/employees/EmployeeDetailPage').then((m) => ({ default: m.EmployeeDetailPage })),
-)
+// belong in the initial bundle. The import functions live in routeLoaders.ts
+// so nav surfaces can prefetch a chunk on hover/focus before lazy() needs it.
+const ApplicationPage = lazy(loadApplicationPage)
+const BooksPage = lazy(loadBooksPage)
+const ApprovalsPage = lazy(loadApprovalsPage)
+const BookRecordPage = lazy(loadBookRecordPage)
+const LeavesPage = lazy(loadLeavesPage)
+const PermitsPage = lazy(loadPermitsPage)
+const LedgerPage = lazy(loadLedgerPage)
+const SettingsPage = lazy(loadSettingsPage)
+const DashboardPage = lazy(loadDashboardPage)
+const AttendancePage = lazy(loadAttendancePage)
+const EmployeesOrgTreePage = lazy(loadEmployeesOrgTreePage)
+const EmployeeDetailPage = lazy(loadEmployeeDetailPage)
 // The monthly time sheet is a subpage of Employees, not a top-nav entry, so it
 // is code-split here and routed beside the employee routes below.
-const TimesheetPage = lazy(() =>
-  import('@/pages/timesheet/TimesheetPage').then((m) => ({ default: m.TimesheetPage })),
-)
-const AccessRequestsPage = lazy(() =>
-  import('@/pages/access/AccessRequestsPage').then((m) => ({ default: m.AccessRequestsPage })),
-)
-const ExpiryPage = lazy(() =>
-  import('@/pages/expiry/ExpiryPage').then((m) => ({ default: m.ExpiryPage })),
-)
-const IntakePage = lazy(() =>
-  import('@/pages/intake/IntakePage').then((m) => ({ default: m.IntakePage })),
-)
-const DutyLocationsPage = lazy(() =>
-  import('@/pages/dutyLocations/DutyLocationsPage').then((m) => ({
-    default: m.DutyLocationsPage,
-  })),
-)
-const ScanInboxPage = lazy(() =>
-  import('@/pages/scanInbox/ScanInboxPage').then((m) => ({ default: m.ScanInboxPage })),
-)
-const SendToGroupPage = lazy(() =>
-  import('@/pages/announcements/SendToGroupPage').then((m) => ({ default: m.SendToGroupPage })),
-)
-const ScanBackPage = lazy(() =>
-  import('@/pages/scanBack/ScanBackPage').then((m) => ({ default: m.ScanBackPage })),
-)
+const TimesheetPage = lazy(loadTimesheetPage)
+const AccessRequestsPage = lazy(loadAccessRequestsPage)
+const ExpiryPage = lazy(loadExpiryPage)
+const IntakePage = lazy(loadIntakePage)
+const DutyLocationsPage = lazy(loadDutyLocationsPage)
+const ScanInboxPage = lazy(loadScanInboxPage)
+const SendToGroupPage = lazy(loadSendToGroupPage)
+const ScanBackPage = lazy(loadScanBackPage)
 
 const queryClient = new QueryClient({
   defaultOptions: {

@@ -3,7 +3,51 @@
 // Push handlers (Task 2) added below.
 
 self.addEventListener('install', () => self.skipWaiting())
-self.addEventListener('activate', (e) => e.waitUntil(self.clients.claim()))
+
+// Hashed build assets (/assets/*) are content-addressed and immutable, so
+// they are cached cache-first under a versioned name. Everything else —
+// navigations, /api/ — falls through to the network untouched.
+const ASSETS_CACHE = 'gssg-assets-v1'
+
+self.addEventListener('activate', (e) =>
+  e.waitUntil(
+    (async () => {
+      // Drop asset caches from older SW versions so stale chunks can't pile up.
+      const keys = await caches.keys()
+      await Promise.all(
+        keys
+          .filter((k) => k.startsWith('gssg-assets-') && k !== ASSETS_CACHE)
+          .map((k) => caches.delete(k)),
+      )
+      await self.clients.claim()
+    })(),
+  ),
+)
+
+self.addEventListener('fetch', (event) => {
+  const url = new URL(event.request.url)
+  if (
+    event.request.method !== 'GET' ||
+    url.origin !== self.location.origin ||
+    !url.pathname.startsWith('/assets/')
+  ) {
+    return // no respondWith — the request proceeds as if the SW weren't here
+  }
+  event.respondWith(
+    (async () => {
+      const hit = await caches.match(event.request)
+      if (hit) return hit
+      const response = await fetch(event.request)
+      // Only cache real successes: opaque/error responses would poison an
+      // immutable-URL cache until the version bumps.
+      if (response.ok) {
+        const cache = await caches.open(ASSETS_CACHE)
+        await cache.put(event.request, response.clone())
+      }
+      return response
+    })(),
+  )
+})
 
 // --- Push handlers (Task 2) ---
 self.addEventListener('push', (event) => {
