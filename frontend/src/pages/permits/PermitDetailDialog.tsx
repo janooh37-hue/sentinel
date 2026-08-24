@@ -2,7 +2,7 @@
  * PermitDetailDialog — the read + manage surface for one permit.
  *
  * Fetches the permit fresh (so the people list is always current), shows the
- * header facts, and — for users with `permits.manage` — hosts the amendment
+ * header facts, and — for users with `permits.edit` — hosts the amendment
  * actions: add / remove person, renew, revoke, delete. Renew and revoke use
  * inline panels (not nested modals) to keep the Radix dialog stack shallow;
  * delete uses the AlertDialog-based ConfirmDialog.
@@ -62,7 +62,9 @@ export function PermitDetailDialog({ permitId, open, onOpenChange, onEdit }: Pro
   const { t, i18n } = useTranslation()
   const qc = useQueryClient()
   const { has } = useCapabilities()
-  const canManage = has('permits.manage')
+  const canEdit = has('permits.edit')
+  const canRevoke = has('permits.revoke')
+  const canDelete = has('permits.delete')
 
   const query = useQuery({
     queryKey: ['permit', permitId],
@@ -321,7 +323,7 @@ export function PermitDetailDialog({ permitId, open, onOpenChange, onEdit }: Pro
   const approvalState = (permit?.approval_state ?? 'none') as PermitApprovalState
   // Only a letter that isn't already in the loop can be (re-)sent.
   const canSend =
-    canManage &&
+    canEdit &&
     !isRevoked &&
     Boolean(permit?.book_id) &&
     ['none', 'rejected', 'returned'].includes(approvalState)
@@ -438,7 +440,7 @@ export function PermitDetailDialog({ permitId, open, onOpenChange, onEdit }: Pro
                       <Button type="button" variant="outline" size="sm" onClick={() => void previewDoc()}>
                         {t('permits.paper.preview')}
                       </Button>
-                      {canManage && !isRevoked && (
+                      {canEdit && !isRevoked && (
                         <>
                           <Button
                             type="button"
@@ -461,7 +463,7 @@ export function PermitDetailDialog({ permitId, open, onOpenChange, onEdit }: Pro
                       )}
                     </div>
                   </div>
-                ) : canManage && !isRevoked ? (
+                ) : canEdit && !isRevoked ? (
                   <button
                     type="button"
                     disabled={uploadDoc.isPending}
@@ -509,12 +511,12 @@ export function PermitDetailDialog({ permitId, open, onOpenChange, onEdit }: Pro
                           <RowDocButton
                             docName={p.id_doc_name}
                             label={t('permits.person.idDoc')}
-                            canManage={canManage && !isRevoked}
+                            canManage={canEdit && !isRevoked}
                             busy={personDoc.isPending}
                             onUpload={(file) => personDoc.mutate({ personId: p.id, file })}
                             onPreview={() => void previewPersonDoc(p.id)}
                           />
-                          {canManage && !isRevoked && (
+                          {canEdit && !isRevoked && (
                             <button
                               type="button"
                               aria-label={t('permits.actions.removePerson')}
@@ -530,8 +532,8 @@ export function PermitDetailDialog({ permitId, open, onOpenChange, onEdit }: Pro
                   </ul>
                 )}
 
-                {/* Add person (manage + not revoked) */}
-                {canManage && !isRevoked && (
+                {/* Add person (edit + not revoked) */}
+                {canEdit && !isRevoked && (
                   <div className="flex flex-col gap-2">
                     <div className="grid grid-cols-1 gap-2 sm:grid-cols-[1.3fr_1fr_1fr_1fr_auto]">
                       <label className="flex flex-col gap-1">
@@ -622,13 +624,13 @@ export function PermitDetailDialog({ permitId, open, onOpenChange, onEdit }: Pro
                         <div className="min-w-0">
                           <div className="truncate font-medium text-foreground" dir="auto">
                             <span className="font-mono">{v.plate_no ?? t('permits.vehicle.noPlate')}</span>
-                            {!(canManage && !isRevoked) && v.plate_emirate && (
+                            {!(canEdit && !isRevoked) && v.plate_emirate && (
                               <span className="ms-1.5 text-xs font-normal text-muted-foreground">
                                 {v.plate_emirate}
                               </span>
                             )}
                           </div>
-                          {canManage && !isRevoked && (
+                          {canEdit && !isRevoked && (
                             <select
                               className={`${inputCls} mt-1 h-8 w-40`}
                               aria-label={`${t('permits.vehicle.plateEmirate')}${v.plate_no ? ` — ${v.plate_no}` : ''}`}
@@ -663,12 +665,12 @@ export function PermitDetailDialog({ permitId, open, onOpenChange, onEdit }: Pro
                           <RowDocButton
                             docName={v.license_doc_name}
                             label={t('permits.vehicle.licence')}
-                            canManage={canManage && !isRevoked}
+                            canManage={canEdit && !isRevoked}
                             busy={vehicleDoc.isPending}
                             onUpload={(file) => vehicleDoc.mutate({ vehicleId: v.id, file })}
                             onPreview={() => void previewVehicleDoc(v.id)}
                           />
-                          {canManage && !isRevoked && (
+                          {canEdit && !isRevoked && (
                             <button
                               type="button"
                               aria-label={t('permits.vehicle.remove')}
@@ -684,8 +686,8 @@ export function PermitDetailDialog({ permitId, open, onOpenChange, onEdit }: Pro
                   </ul>
                 )}
 
-                {/* Add vehicle (manage + not revoked) */}
-                {canManage && !isRevoked && (
+                {/* Add vehicle (edit + not revoked) */}
+                {canEdit && !isRevoked && (
                   <div className="flex flex-col gap-2">
                     <div className="grid grid-cols-1 gap-2 sm:grid-cols-[1fr_0.9fr_1fr_auto]">
                       <input
@@ -915,16 +917,18 @@ export function PermitDetailDialog({ permitId, open, onOpenChange, onEdit }: Pro
         </div>
 
         {/* Footer actions */}
-        {permit && canManage && (
+        {permit && (canDelete || canEdit || canRevoke) && (
           <div className="flex flex-wrap justify-end gap-2 border-t border-border px-4 py-3">
-            <Button
-              type="button"
-              variant="ghost"
-              className="text-destructive hover:text-destructive"
-              onClick={() => setDeleteOpen(true)}
-            >
-              {t('permits.actions.delete')}
-            </Button>
+            {canDelete && (
+              <Button
+                type="button"
+                variant="ghost"
+                className="text-destructive hover:text-destructive"
+                onClick={() => setDeleteOpen(true)}
+              >
+                {t('permits.actions.delete')}
+              </Button>
+            )}
             <div className="flex-1" />
             {permit.book_id && (
               <Button
@@ -948,32 +952,38 @@ export function PermitDetailDialog({ permitId, open, onOpenChange, onEdit }: Pro
                     {t('permits.detail.sendForApproval')}
                   </Button>
                 )}
-                <Button type="button" variant="outline" onClick={() => onEdit(permit)}>
-                  {t('permits.actions.edit')}
-                </Button>
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => {
-                    setRenewValidity({ value: 1, unit: 'month' })
-                    setRenewCustomOpen(false)
-                    setRenewReason('')
-                    setRenewOpen((v) => !v)
-                    setRevokeOpen(false)
-                  }}
-                >
-                  {t('permits.actions.renew')}
-                </Button>
-                <Button
-                  type="button"
-                  variant="destructive"
-                  onClick={() => {
-                    setRevokeOpen((v) => !v)
-                    setRenewOpen(false)
-                  }}
-                >
-                  {t('permits.actions.revoke')}
-                </Button>
+                {canEdit && (
+                  <Button type="button" variant="outline" onClick={() => onEdit(permit)}>
+                    {t('permits.actions.edit')}
+                  </Button>
+                )}
+                {canEdit && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => {
+                      setRenewValidity({ value: 1, unit: 'month' })
+                      setRenewCustomOpen(false)
+                      setRenewReason('')
+                      setRenewOpen((v) => !v)
+                      setRevokeOpen(false)
+                    }}
+                  >
+                    {t('permits.actions.renew')}
+                  </Button>
+                )}
+                {canRevoke && (
+                  <Button
+                    type="button"
+                    variant="destructive"
+                    onClick={() => {
+                      setRevokeOpen((v) => !v)
+                      setRenewOpen(false)
+                    }}
+                  >
+                    {t('permits.actions.revoke')}
+                  </Button>
+                )}
               </>
             )}
           </div>

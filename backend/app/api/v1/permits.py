@@ -140,7 +140,7 @@ def list_permits_detailed(
 def create_permit(
     payload: PermitCreate,
     db: Annotated[Session, Depends(get_db)],
-    user: Annotated[User, Depends(require_capability("permits.manage"))],
+    user: Annotated[User, Depends(require_capability("permits.create"))],
 ) -> PermitRead:
     row = permit_service.create_permit(db, payload, actor=user.email)
     return permit_service.to_read(row, db=db)
@@ -148,7 +148,7 @@ def create_permit(
 
 @router.post("/scan-vehicle-licence", response_model=VehicleLicenceScan)
 async def scan_vehicle_licence(
-    _user: Annotated[User, Depends(require_capability("permits.manage"))],
+    _user: Annotated[User, Depends(require_capability("permits.edit"))],
     upload: Annotated[UploadFile, File(alias="file")],
 ) -> VehicleLicenceScan:
     return permit_service.scan_vehicle_licence(await upload.read())
@@ -156,7 +156,7 @@ async def scan_vehicle_licence(
 
 @router.post("/scan-emirates-id", response_model=PersonIdScan)
 async def scan_emirates_id(
-    _user: Annotated[User, Depends(require_capability("permits.manage"))],
+    _user: Annotated[User, Depends(require_capability("permits.edit"))],
     upload: Annotated[UploadFile, File(alias="file")],
 ) -> PersonIdScan:
     return permit_service.scan_emirates_id(await upload.read())
@@ -177,7 +177,7 @@ def update_permit(
     permit_id: int,
     payload: PermitUpdate,
     db: Annotated[Session, Depends(get_db)],
-    user: Annotated[User, Depends(require_capability("permits.manage"))],
+    user: Annotated[User, Depends(require_capability("permits.edit"))],
 ) -> PermitRead:
     row = permit_service.update_permit(db, permit_id, payload, actor=user.email)
     return permit_service.to_read(row, db=db)
@@ -188,7 +188,7 @@ def renew_permit(
     permit_id: int,
     payload: PermitRenew,
     db: Annotated[Session, Depends(get_db)],
-    user: Annotated[User, Depends(require_capability("permits.manage"))],
+    user: Annotated[User, Depends(require_capability("permits.edit"))],
 ) -> PermitRead:
     row = permit_service.renew_permit(
         db,
@@ -205,7 +205,7 @@ def revoke_permit(
     permit_id: int,
     payload: PermitRevoke,
     db: Annotated[Session, Depends(get_db)],
-    user: Annotated[User, Depends(require_capability("permits.manage"))],
+    user: Annotated[User, Depends(require_capability("permits.revoke"))],
 ) -> PermitRead:
     row = permit_service.revoke_permit(db, permit_id, reason=payload.reason, actor=user.email)
     return permit_service.to_read(row, db=db)
@@ -215,7 +215,7 @@ def revoke_permit(
 def submit_permit_approval(
     permit_id: int,
     db: Annotated[Session, Depends(get_db)],
-    user: Annotated[User, Depends(require_capability("permits.manage"))],
+    user: Annotated[User, Depends(require_capability("permits.edit"))],
 ) -> PermitRead:
     """Send the permit's 1/5 letter into the book approval chain."""
     row = permit_service.submit_permit_book(db, permit_id, actor=user.email)
@@ -226,7 +226,7 @@ def submit_permit_approval(
 def delete_permit(
     permit_id: int,
     db: Annotated[Session, Depends(get_db)],
-    user: Annotated[User, Depends(require_capability("permits.manage"))],
+    user: Annotated[User, Depends(require_capability("permits.delete"))],
 ) -> Response:
     permit_service.soft_delete_permit(db, permit_id, actor=user.email)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
@@ -237,7 +237,7 @@ def add_person(
     permit_id: int,
     payload: PermitPersonCreate,
     db: Annotated[Session, Depends(get_db)],
-    user: Annotated[User, Depends(require_capability("permits.manage"))],
+    user: Annotated[User, Depends(require_capability("permits.edit"))],
 ) -> PermitRead:
     row = permit_service.add_person(db, permit_id, payload, actor=user.email)
     return permit_service.to_read(row, db=db)
@@ -248,7 +248,7 @@ def remove_person(
     permit_id: int,
     person_id: int,
     db: Annotated[Session, Depends(get_db)],
-    user: Annotated[User, Depends(require_capability("permits.manage"))],
+    user: Annotated[User, Depends(require_capability("permits.edit"))],
 ) -> PermitRead:
     row = permit_service.remove_person(db, permit_id, person_id, actor=user.email)
     return permit_service.to_read(row, db=db)
@@ -259,7 +259,7 @@ async def upload_person_document(
     permit_id: int,
     person_id: int,
     db: Annotated[Session, Depends(get_db)],
-    user: Annotated[User, Depends(require_capability("permits.manage"))],
+    user: Annotated[User, Depends(require_capability("permits.edit"))],
     upload: Annotated[UploadFile, File(alias="file")],
 ) -> PermitRead:
     data = await upload.read()
@@ -289,7 +289,7 @@ def add_vehicle(
     permit_id: int,
     payload: PermitVehicleCreate,
     db: Annotated[Session, Depends(get_db)],
-    user: Annotated[User, Depends(require_capability("permits.manage"))],
+    user: Annotated[User, Depends(require_capability("permits.edit"))],
 ) -> PermitRead:
     row = permit_service.add_vehicle(db, permit_id, payload, actor=user.email)
     return permit_service.to_read(row, db=db)
@@ -301,7 +301,7 @@ def update_vehicle(
     vehicle_id: int,
     payload: PermitVehicleUpdate,
     db: Annotated[Session, Depends(get_db)],
-    user: Annotated[User, Depends(require_capability("permits.manage"))],
+    user: Annotated[User, Depends(require_capability("permits.edit"))],
 ) -> PermitRead:
     row = permit_service.update_vehicle(db, permit_id, vehicle_id, payload, actor=user.email)
     return permit_service.to_read(row, db=db)
@@ -312,7 +312,7 @@ def remove_vehicle(
     permit_id: int,
     vehicle_id: int,
     db: Annotated[Session, Depends(get_db)],
-    user: Annotated[User, Depends(require_capability("permits.manage"))],
+    user: Annotated[User, Depends(require_capability("permits.edit"))],
 ) -> PermitRead:
     row = permit_service.remove_vehicle(db, permit_id, vehicle_id, actor=user.email)
     return permit_service.to_read(row, db=db)
@@ -323,7 +323,7 @@ async def upload_vehicle_document(
     permit_id: int,
     vehicle_id: int,
     db: Annotated[Session, Depends(get_db)],
-    user: Annotated[User, Depends(require_capability("permits.manage"))],
+    user: Annotated[User, Depends(require_capability("permits.edit"))],
     upload: Annotated[UploadFile, File(alias="file")],
 ) -> PermitRead:
     data = await upload.read()
@@ -350,7 +350,7 @@ def download_vehicle_document(
 async def upload_permit_document(
     permit_id: int,
     db: Annotated[Session, Depends(get_db)],
-    user: Annotated[User, Depends(require_capability("permits.manage"))],
+    user: Annotated[User, Depends(require_capability("permits.edit"))],
     upload: Annotated[UploadFile, File(alias="file")],
 ) -> PermitRead:
     data = await upload.read()
@@ -374,7 +374,7 @@ def download_permit_document(
 def remove_permit_document(
     permit_id: int,
     db: Annotated[Session, Depends(get_db)],
-    user: Annotated[User, Depends(require_capability("permits.manage"))],
+    user: Annotated[User, Depends(require_capability("permits.edit"))],
 ) -> PermitRead:
     row = permit_service.remove_document(db, permit_id, actor=user.email)
     return permit_service.to_read(row, db=db)
@@ -400,7 +400,7 @@ def record_visit(
     permit_id: int,
     payload: PermitVisitCreate,
     db: Annotated[Session, Depends(get_db)],
-    user: Annotated[User, Depends(require_capability("permits.manage"))],
+    user: Annotated[User, Depends(require_capability("permits.edit"))],
 ) -> PermitVisitRead:
     row = permit_service.record_visit(db, permit_id, payload, actor=user.email)
     return PermitVisitRead.model_validate(row)

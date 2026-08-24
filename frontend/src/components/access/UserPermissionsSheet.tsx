@@ -4,8 +4,12 @@
  * Opened from the Active-users three-dots menu (one fixed user, no picker).
  * Roles set the default capability bundles; the admin layers per-user grant/deny
  * overrides on top. Toggle each capability between Default (inherit the role
- * preset) / Grant / Deny. The backend resolves the effective set and enforces it
- * on every request — this is the management surface, not the security boundary.
+ * preset) / Grant / Deny. A sticky search box filters the matrix by raw id,
+ * catalog label/description, or their localized equivalents; each domain header
+ * carries a compact toggle that applies the chosen state to every capability in
+ * the domain through a single bulk call. The backend resolves the effective set
+ * and enforces it on every request — this is the management surface, not the
+ * security boundary.
  *
  * Capabilities are grouped by domain (collapsible). Admin users always have every
  * capability (lockout protection), so the controls are disabled for them.
@@ -21,7 +25,7 @@ import { useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
-import { ChevronDown, ShieldCheck } from 'lucide-react'
+import { ChevronDown, Search, ShieldCheck, X } from 'lucide-react'
 
 import {
   api,
@@ -50,15 +54,40 @@ function roleChipClass(role: 'operator' | 'manager' | 'admin'): string {
       : 'bg-surface-tinted text-muted-foreground'
 }
 
+/** Search matcher shared by the domain filter and the results counter so the
+ * two can never drift apart (raw id, catalog label/description, localized
+ * label/description). */
+function capMatches(
+  cap: CapabilityRead,
+  query: string,
+  t: ReturnType<typeof useTranslation>['t'],
+): boolean {
+  const q = query.trim().toLowerCase()
+  if (!q) return true
+  const localized = t(`access.permissions.caps.${cap.id}`, { defaultValue: '' }).toLowerCase()
+  const localizedDesc = t(`perms.caps.${cap.id}.desc`, { defaultValue: '' }).toLowerCase()
+  return (
+    cap.id.toLowerCase().includes(q) ||
+    cap.label.toLowerCase().includes(q) ||
+    cap.description.toLowerCase().includes(q) ||
+    localized.includes(q) ||
+    localizedDesc.includes(q)
+  )
+}
+
 /** Tri-state segmented control: Default / Grant / Deny. */
 function EffectToggle({
   value,
   disabled,
   onChange,
+  size = 'row',
+  groupLabel,
 }: {
   value: Effect
   disabled: boolean
   onChange: (next: Effect) => void
+  size?: 'row' | 'header'
+  groupLabel?: string
 }): React.JSX.Element {
   const { t } = useTranslation()
   const options: { id: Effect; label: string; active: string }[] = [
@@ -70,6 +99,7 @@ function EffectToggle({
     <div
       className="inline-flex shrink-0 overflow-hidden rounded-md border border-border"
       role="group"
+      aria-label={groupLabel}
     >
       {options.map((opt) => {
         const selected = value === opt.id
@@ -81,8 +111,8 @@ function EffectToggle({
             aria-pressed={selected}
             onClick={() => onChange(opt.id)}
             className={cn(
-              'px-3 py-1.5 text-xs font-medium transition-colors',
-              'border-e border-border last:border-e-0',
+              size === 'header' ? 'px-2.5 py-1 text-[11px]' : 'px-3 py-1.5 text-xs',
+              'font-medium transition-colors border-e border-border last:border-e-0',
               selected ? opt.active : 'bg-surface text-muted-foreground hover:bg-surface-tinted',
               disabled && 'cursor-not-allowed opacity-50',
             )}
@@ -101,40 +131,69 @@ function DomainGroup({
   perms,
   isAdmin,
   onSet,
+  onBulk,
   saving,
+  query,
 }: {
   domain: string
   caps: CapabilityRead[]
   perms: UserPermissionRead
   isAdmin: boolean
   onSet: (capability: string, effect: Effect) => void
+  onBulk: (caps: CapabilityRead[], effect: Effect) => void
   saving: string | null
+  query: string
 }): React.JSX.Element {
   const { t } = useTranslation()
   const [open, setOpen] = useState(true)
   const roleDefaults = new Set(perms.role_defaults)
 
+  const visible = useMemo(() => {
+    if (!query.trim()) return caps
+    return caps.filter((c) => capMatches(c, query, t))
+  }, [caps, query, t])
+
+  if (query.trim() && visible.length === 0) return <></>
+
+  // Uniform header state only when every capability in the domain shares it.
+  const effects = caps.map((c) => (perms.overrides[c.id] ?? 'default') as Effect)
+  const uniform = effects.every((e) => e === effects[0]) ? effects[0] : null
+
   return (
     <Card>
       <CardHeader className="py-3">
-        <button
-          type="button"
-          onClick={() => setOpen((v) => !v)}
-          className="flex flex-1 items-center justify-between gap-2 text-start"
-          aria-expanded={open}
-        >
-          <CardTitle className="text-base">
-            {t(`access.permissions.domains.${domain}`, domain)}
-          </CardTitle>
-          <ChevronDown
-            className={cn('h-4 w-4 text-muted-foreground transition-transform', open && 'rotate-180')}
-            strokeWidth={1.7}
-          />
-        </button>
+        <div className="flex items-center justify-between gap-2">
+          <button
+            type="button"
+            onClick={() => setOpen((v) => !v)}
+            className="flex flex-1 items-center justify-between gap-2 text-start"
+            aria-expanded={open}
+          >
+            <CardTitle className="text-base">
+              {t(`access.permissions.domains.${domain}`, domain)}
+              <span className="ms-2 rounded border border-border px-1.5 font-mono text-[0.7em] text-muted-foreground">
+                {visible.length}
+              </span>
+            </CardTitle>
+            <ChevronDown
+              className={cn('h-4 w-4 text-muted-foreground transition-transform', open && 'rotate-180')}
+              strokeWidth={1.7}
+            />
+          </button>
+          {!isAdmin && (
+            <EffectToggle
+              size="header"
+              value={uniform ?? 'default'}
+              disabled={saving === `domain:${domain}`}
+              groupLabel={t('access.permissions.bulkApply', { defaultValue: 'Apply to all' })}
+              onChange={(next) => onBulk(caps, next)}
+            />
+          )}
+        </div>
       </CardHeader>
       {open && (
         <CardContent className="divide-y divide-border/60 p-0">
-          {caps.map((cap) => {
+          {visible.map((cap) => {
             const isDefault = roleDefaults.has(cap.id)
             const override = perms.overrides[cap.id]
             const value: Effect = override ?? 'default'
@@ -201,6 +260,7 @@ export function UserPermissionsSheet({
 }): React.JSX.Element {
   const { t } = useTranslation()
   const queryClient = useQueryClient()
+  const [query, setQuery] = useState('')
 
   const capsQuery = useQuery({ queryKey: ['capabilities'], queryFn: () => api.listCapabilities() })
   const permsQuery = useQuery({
@@ -219,10 +279,27 @@ export function UserPermissionsSheet({
     onError: () => toast.error(t('access.permissions.saveError')),
     onSettled: () => setSaving(null),
   })
+  const bulkMutation = useMutation({
+    mutationFn: ({ items }: { items: Array<{ capability: string; effect: PermissionEffect | null }> }) =>
+      api.setUserPermissionsBulk(user.id, items),
+    onSuccess: (data) => {
+      queryClient.setQueryData(['user-permissions', user.id], data)
+      toast.success(t('access.permissions.savedBulk', { defaultValue: 'Permissions updated.' }))
+    },
+    onError: () => toast.error(t('access.permissions.saveError')),
+    onSettled: () => setSaving(null),
+  })
 
   function handleSet(capability: string, effect: Effect): void {
     setSaving(capability)
     setMutation.mutate({ capability, effect: effect === 'default' ? null : effect })
+  }
+
+  function handleBulk(caps: CapabilityRead[], effect: Effect): void {
+    setSaving(`domain:${caps[0]?.domain}`)
+    bulkMutation.mutate({
+      items: caps.map((c) => ({ capability: c.id, effect: effect === 'default' ? null : effect })),
+    })
   }
 
   // Group capabilities by domain, preserving catalog order.
@@ -241,6 +318,13 @@ export function UserPermissionsSheet({
   }, [capsQuery.data])
 
   const perms = permsQuery.data
+  const totalCaps = capsQuery.data?.length ?? 0
+  const visibleCount = query.trim()
+    ? grouped.reduce(
+        (n, g) => n + g.caps.filter((c) => capMatches(c, query, t)).length,
+        0,
+      )
+    : totalCaps
 
   return (
     <Sheet open onOpenChange={(o) => { if (!o) onClose() }}>
@@ -278,6 +362,35 @@ export function UserPermissionsSheet({
           </SheetClose>
         </div>
 
+        {/* Search — sticky under the header */}
+        <div className="border-b border-border bg-background px-6 py-3">
+          <div className="flex min-h-10 items-center gap-2.5 rounded-lg border border-border bg-surface px-3 focus-within:border-primary focus-within:ring-2 focus-within:ring-primary/10">
+            <Search className="h-4 w-4 shrink-0 text-muted-foreground" strokeWidth={1.8} aria-hidden />
+            <input
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder={t('access.permissions.searchPlaceholder', { defaultValue: 'Search permissions…' })}
+              aria-label={t('access.permissions.searchPlaceholder', { defaultValue: 'Search permissions…' })}
+              className="min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground"
+            />
+            {query.trim() && (
+              <button
+                type="button"
+                onClick={() => setQuery('')}
+                className="flex items-center gap-1 rounded p-1 text-xs font-medium text-muted-foreground hover:text-foreground"
+              >
+                <X className="h-3.5 w-3.5" strokeWidth={2} aria-hidden />
+                {t('access.permissions.clearSearch', { defaultValue: 'Clear' })}
+              </button>
+            )}
+          </div>
+          {query.trim() && (
+            <p role="status" className="mt-2 text-xs text-muted-foreground">
+              {t('access.permissions.results', { count: visibleCount, defaultValue: '{{count}} matching' })}
+            </p>
+          )}
+        </div>
+
         {/* Scrollable matrix */}
         <div className="flex-1 space-y-4 overflow-y-auto px-6 py-5">
           {capsQuery.isError ? (
@@ -296,6 +409,15 @@ export function UserPermissionsSheet({
                   <Skeleton className="h-40 w-full" />
                   <Skeleton className="h-40 w-full" />
                 </div>
+              ) : query.trim() && visibleCount === 0 ? (
+                <EmptyState
+                  message={t('access.permissions.noResults', { defaultValue: 'No permissions match' })}
+                  description={t('access.permissions.noResultsHint', {
+                    defaultValue: 'Try a different term or clear the search.',
+                  })}
+                  actionLabel={t('access.permissions.clearSearch', { defaultValue: 'Clear' })}
+                  onAction={() => setQuery('')}
+                />
               ) : (
                 grouped.map(({ domain, caps }) => (
                   <DomainGroup
@@ -305,7 +427,9 @@ export function UserPermissionsSheet({
                     perms={perms}
                     isAdmin={perms.is_admin}
                     onSet={handleSet}
+                    onBulk={handleBulk}
                     saving={saving}
+                    query={query}
                   />
                 ))
               )}

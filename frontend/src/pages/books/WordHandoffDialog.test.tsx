@@ -13,6 +13,7 @@ import { toast } from 'sonner'
 import { WordHandoffDialog } from './WordHandoffDialog'
 import * as apiMod from '@/lib/api'
 import type { WordSessionRead, BookRead } from '@/lib/api'
+import { useCapabilities } from '@/lib/useCapabilities'
 
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
@@ -76,6 +77,8 @@ vi.mock('@/components/books/SavedRecordActions', () => ({
     `saved:${bookId}`,
   ),
 }))
+vi.mock('@/lib/useCapabilities', () => ({ useCapabilities: vi.fn() }))
+const mockUseCapabilities = vi.mocked(useCapabilities)
 
 
 const FAKE_SESSION: WordSessionRead = {
@@ -118,6 +121,11 @@ function makeWrapper(qc: QueryClient) {
 
 beforeEach(() => {
   vi.clearAllMocks()
+  mockUseCapabilities.mockReturnValue({
+    capabilities: new Set(['books.templates']),
+    isLoading: false,
+    has: () => true,
+  })
 })
 
 describe('WordHandoffDialog', () => {
@@ -405,6 +413,50 @@ describe('WordHandoffDialog', () => {
     await user.type(input, 'قالبي')
     await user.click(screen.getByText('حفظ'))
     await waitFor(() => expect(saveSpy).toHaveBeenCalledWith(42, 'قالبي'))
+  })
+
+  it('finished General Book view hides Save as template without books.templates', async () => {
+    const user = userEvent.setup()
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    mockUseCapabilities.mockReturnValue({
+      capabilities: new Set(),
+      isLoading: false,
+      has: () => false,
+    })
+    vi.spyOn(apiMod.api, 'getBook').mockResolvedValue(bookWith('2026-07-17T10:05:00Z'))
+    const finished = {
+      ...bookWith(null),
+      versions: [
+        {
+          id: 1,
+          version_no: 1,
+          template_id: 'General Book',
+          pdf_url: '/api/v1/documents/9/download?format=pdf',
+          docx_url: '/api/v1/documents/9/download?format=docx',
+        },
+      ],
+    } as unknown as BookRead
+    vi.spyOn(apiMod.api, 'finishWordSession').mockResolvedValue(finished)
+    const saveSpy = vi.spyOn(apiMod.api, 'saveBookAsTemplate')
+
+    render(
+      createElement(WordHandoffDialog, {
+        session: FAKE_SESSION,
+        open: true,
+        onClose: vi.fn(),
+      }),
+      { wrapper: makeWrapper(qc) },
+    )
+
+    await waitFor(() => {
+      const btn = screen.getByText('إنهاء التحرير').closest('button')
+      expect(btn?.disabled).toBe(false)
+    })
+    await user.click(screen.getByText('إنهاء التحرير'))
+    await screen.findByTestId('doc-pdf-canvas')
+
+    expect(screen.queryByText('حفظ كقالب')).toBeNull()
+    expect(saveSpy).not.toHaveBeenCalled()
   })
 
   it('Finish with no PDF yet shows the pending hint instead of the canvas', async () => {

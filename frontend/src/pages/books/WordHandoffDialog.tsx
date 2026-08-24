@@ -25,6 +25,7 @@ import { toast } from 'sonner'
 
 import { api, apiErrorMessage } from '@/lib/api'
 import { bidi } from '@/lib/bidi'
+import { useCapabilities } from '@/lib/useCapabilities'
 import { cn } from '@/lib/utils'
 import type { BookRead, WordSessionRead } from '@/lib/api'
 
@@ -51,6 +52,7 @@ interface Props {
 export function WordHandoffDialog({ session, open, onClose }: Props): React.JSX.Element | null {
   const { t, i18n } = useTranslation()
   const isAr = i18n.language.startsWith('ar')
+  const { has } = useCapabilities()
   const qc = useQueryClient()
   const [discardOpen, setDiscardOpen] = useState(false)
   // Set once Finish succeeds — flips the dialog to the rendered-PDF view so
@@ -139,8 +141,11 @@ export function WordHandoffDialog({ session, open, onClose }: Props): React.JSX.
     const latest = versions.length > 0 ? versions[versions.length - 1] : null
     // The permit letter is a General Book on its own paper — structurally
     // identical, so it retokenizes into shared boilerplate just the same.
+    // Saving into the shared library is books.templates (template-admin),
+    // not the books.edit that gates the surrounding Word flow.
     const canSaveAsTemplate =
-      latest?.template_id === 'General Book' || latest?.template_id === 'Security Permit'
+      has('books.templates') &&
+      (latest?.template_id === 'General Book' || latest?.template_id === 'Security Permit')
     const pdfUrl = latest?.pdf_url ?? null
     const docxUrl = latest?.docx_url ?? undefined
     return (

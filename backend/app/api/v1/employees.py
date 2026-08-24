@@ -122,7 +122,7 @@ def list_employees(
 def create_employee(
     payload: EmployeeCreate,
     db: Annotated[Session, Depends(get_db)],
-    _user: Annotated[User, Depends(require_capability("employees.edit"))],
+    _user: Annotated[User, Depends(require_capability("employees.create"))],
 ) -> EmployeeRead:
     row = employee_service.create_employee(db, payload)
     return EmployeeRead.model_validate(row).model_copy(update=_photo_fields(db, row.id))
@@ -265,7 +265,7 @@ def create_employee_violation(
     employee_id: str,
     payload: ViolationCreate,
     db: Annotated[Session, Depends(get_db)],
-    _user: Annotated[User, Depends(require_capability("violations.manage"))],
+    _user: Annotated[User, Depends(require_capability("violations.create"))],
 ) -> ViolationRead:
     row = violation_service.create(db, employee_id, payload)
     return ViolationRead.model_validate(row)
@@ -276,7 +276,7 @@ def update_violation(
     violation_id: int,
     payload: ViolationUpdate,
     db: Annotated[Session, Depends(get_db)],
-    _user: Annotated[User, Depends(require_capability("violations.manage"))],
+    _user: Annotated[User, Depends(require_capability("violations.edit"))],
 ) -> ViolationRead:
     return ViolationRead.model_validate(violation_service.update(db, violation_id, payload))
 
@@ -285,7 +285,7 @@ def update_violation(
 def delete_violation(
     violation_id: int,
     db: Annotated[Session, Depends(get_db)],
-    _user: Annotated[User, Depends(require_capability("violations.manage"))],
+    _user: Annotated[User, Depends(require_capability("violations.delete"))],
 ) -> Response:
     violation_service.delete(db, violation_id)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
@@ -314,7 +314,7 @@ def get_employee_vault(
 async def upload_to_vault(
     employee_id: str,
     db: Annotated[Session, Depends(get_db)],
-    _user: Annotated[User, Depends(require_capability("employees.edit"))],
+    _user: Annotated[User, Depends(require_capability("employees.vault.manage"))],
     kind: Annotated[str, Form()],
     upload: Annotated[UploadFile, File(alias="file")],
 ) -> VaultEntry:
@@ -343,7 +343,7 @@ def delete_vault_file(
     kind: str,
     filename: str,
     db: Annotated[Session, Depends(get_db)],
-    _user: Annotated[User, Depends(require_capability("employees.edit"))],
+    _user: Annotated[User, Depends(require_capability("employees.vault.manage"))],
 ) -> Response:
     employee_service.get_employee(db, employee_id)
     vault_service.delete_file(db, employee_id, kind, filename)

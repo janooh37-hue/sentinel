@@ -252,7 +252,7 @@ export function NavBellPopover(): React.JSX.Element {
             </button>
           )}
 
-          {/* Signed copy never filed — books.manage-gated inside useScanBack */}
+          {/* Signed copy never filed — books.edit-gated inside useScanBack */}
           {scanBackCount > 0 && (
             <button
               type="button"

@@ -1,8 +1,10 @@
 /**
  * Violations tab.
  *
- * Users with `violations.manage` see `ViolationsTable` (live-fetched, full
- * CRUD). Everyone else sees the read-only snapshot from the aggregate response.
+ * Users with any violations write capability (`violations.create` /
+ * `violations.edit` / `violations.delete`) see `ViolationsTable` (live-fetched,
+ * full CRUD). Everyone else sees the read-only snapshot from the aggregate
+ * response.
  */
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
@@ -191,11 +193,17 @@ function ViolationsManage({
   rows,
   highlightedId,
   targetNotFound,
+  canCreate,
+  canEdit,
+  canDelete,
 }: {
   employeeId: string
   rows: ViolationRead[]
   highlightedId: number | null
   targetNotFound: boolean
+  canCreate: boolean
+  canEdit: boolean
+  canDelete: boolean
 }): React.JSX.Element {
   const { t } = useTranslation()
   const qc = useQueryClient()
@@ -234,6 +242,9 @@ function ViolationsManage({
       highlightedId={highlightedId}
       targetNotFound={targetNotFound}
       employeeId={employeeId}
+      canCreate={canCreate}
+      canEdit={canEdit}
+      canDelete={canDelete}
       onCreate={async (v) => {
         await createMut.mutateAsync(v)
       }}
@@ -253,8 +264,10 @@ export function ViolationsTab({
 }: Props): React.JSX.Element {
   const { has } = useCapabilities()
   const { t } = useTranslation()
-  const canManage = has('violations.manage')
-  const shouldLoadFull = canManage || openId != null
+  const canCreate = has('violations.create')
+  const canEdit = has('violations.edit')
+  const canDelete = has('violations.delete')
+  const shouldLoadFull = canCreate || canEdit || canDelete || openId != null
   const fullQuery = useQuery({
     queryKey: ['violations', employeeId],
     queryFn: () => api.listViolations(employeeId),
@@ -296,13 +309,16 @@ export function ViolationsTab({
     )
   }
 
-  if (canManage) {
+  if (canCreate || canEdit || canDelete) {
     return (
       <ViolationsManage
         employeeId={employeeId}
         rows={manageRows}
         highlightedId={highlightedId}
         targetNotFound={targetNotFound}
+        canCreate={canCreate}
+        canEdit={canEdit}
+        canDelete={canDelete}
       />
     )
   }

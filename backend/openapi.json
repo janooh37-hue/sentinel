@@ -1517,6 +1517,75 @@
         }
       }
     },
+    "/api/v1/auth/users/{user_id}/permissions/bulk": {
+      "put": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "Set User Permissions Bulk",
+        "description": "Apply several override changes in one all-or-nothing call.",
+        "operationId": "set_user_permissions_bulk_api_v1_auth_users__user_id__permissions_bulk_put",
+        "parameters": [
+          {
+            "name": "user_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "User Id"
+            }
+          },
+          {
+            "name": "gssg_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Gssg Session"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetPermissionBulkRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserPermissionRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/announcements/groups": {
       "get": {
         "tags": [
@@ -7606,7 +7675,7 @@
           "books"
         ],
         "summary": "Save Book As Template",
-        "description": "Copy a finished General Book into the shared template library\n(retokenized + validated; content becomes visible to all books.manage users).",
+        "description": "Copy a finished General Book into the shared template library\n(retokenized + validated; content becomes visible to all books.templates users).",
         "operationId": "save_book_as_template_api_v1_books__book_id__save_as_template_post",
         "parameters": [
           {
@@ -8041,7 +8110,7 @@
           "books"
         ],
         "summary": "List Awaiting Scan",
-        "description": "Records stranded at ``awaiting_scan`` past 24h, oldest first.\n\n``scope=mine`` (default) is the caller's own; ``scope=all`` is everyone's,\nso an admin can clear records stranded by a user who lacks books.manage.\n\nDeclared before ``/{book_id}`` so the literal ``awaiting-scan`` segment isn't\nswallowed by the int path param — same reason as ``/awaiting`` above.\nAuthority is ``books.manage``: the same capability filing the scan requires.",
+        "description": "Records stranded at ``awaiting_scan`` past 24h, oldest first.\n\n``scope=mine`` (default) is the caller's own; ``scope=all`` is everyone's,\nso an admin can clear records stranded by a user who lacks books.edit.\n\nDeclared before ``/{book_id}`` so the literal ``awaiting-scan`` segment isn't\nswallowed by the int path param — same reason as ``/awaiting`` above.\nAuthority is ``books.edit``: the same capability filing the scan requires.",
         "operationId": "list_awaiting_scan_api_v1_books_awaiting_scan_get",
         "parameters": [
           {
@@ -8620,7 +8689,7 @@
           "books"
         ],
         "summary": "Get Version Fields",
-        "description": "Return the raw stored ``fields`` blob for one book version — backs the\nApplicationPage revise-mode prefill. Deliberately not on ``BookRead`` (the\ndetail payload only exposes ``has_fields``).\n\nRequires ``books.manage`` (not ``books.view``) because this backs the\nrevise/edit write-path: the caller fetches these fields in order to submit\na revised generation, which is a managed write operation.",
+        "description": "Return the raw stored ``fields`` blob for one book version — backs the\nApplicationPage revise-mode prefill. Deliberately not on ``BookRead`` (the\ndetail payload only exposes ``has_fields``).\n\nRequires ``books.edit`` (not ``books.view``) because this backs the\nrevise/edit write-path: the caller fetches these fields in order to submit\na revised generation, which is a managed write operation.",
         "operationId": "get_version_fields_api_v1_books__book_id__versions__version_id__fields_get",
         "parameters": [
           {
@@ -9563,7 +9632,7 @@
           "books"
         ],
         "summary": "Add Book Attachment",
-        "description": "File an attachment. ``awaiting_scan`` books flip silently (the scan is the\nsignature). For a ``none``/``pending`` book, ``as_signed=true`` records the\nupload as the signed copy and approves the record; otherwise it is filed as a\nplain attachment. Authority is ``books.manage`` for every path.",
+        "description": "File an attachment. ``awaiting_scan`` books flip silently (the scan is the\nsignature). For a ``none``/``pending`` book, ``as_signed=true`` records the\nupload as the signed copy and approves the record; otherwise it is filed as a\nplain attachment. Authority is ``books.edit`` for every path.",
         "operationId": "add_book_attachment_api_v1_books__book_id__attachments_post",
         "parameters": [
           {
@@ -36571,6 +36640,25 @@
         ],
         "title": "SessionUser",
         "description": "The signed-in user, shaped for the frontend auth context."
+      },
+      "SetPermissionBulkRequest": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/SetPermissionRequest"
+            },
+            "type": "array",
+            "maxItems": 200,
+            "minItems": 1,
+            "title": "Items"
+          }
+        },
+        "type": "object",
+        "required": [
+          "items"
+        ],
+        "title": "SetPermissionBulkRequest",
+        "description": "Apply several override changes in one all-or-nothing call."
       },
       "SetPermissionRequest": {
         "properties": {

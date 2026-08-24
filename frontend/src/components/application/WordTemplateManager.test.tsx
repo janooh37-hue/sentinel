@@ -11,6 +11,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 
 import { WordTemplateManager } from './WordTemplateManager'
 import * as apiMod from '@/lib/api'
+import { useCapabilities } from '@/lib/useCapabilities'
 
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
@@ -33,6 +34,9 @@ vi.mock('react-i18next', () => ({
 
 vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }))
 
+vi.mock('@/lib/useCapabilities', () => ({ useCapabilities: vi.fn() }))
+const mockUseCapabilities = vi.mocked(useCapabilities)
+
 function makeWrapper(qc: QueryClient) {
   return ({ children }: { children: ReactNode }) =>
     createElement(QueryClientProvider, { client: qc }, children)
@@ -40,6 +44,11 @@ function makeWrapper(qc: QueryClient) {
 
 beforeEach(() => {
   vi.clearAllMocks()
+  mockUseCapabilities.mockReturnValue({
+    capabilities: new Set(['books.templates']),
+    isLoading: false,
+    has: () => true,
+  })
 })
 
 describe('WordTemplateManager', () => {
@@ -94,6 +103,31 @@ describe('WordTemplateManager', () => {
 
     await screen.findByText('base')
     expect(screen.queryByRole('button', { name: 'حذف' })).toBeNull()
+  })
+
+  it('hides rename/delete without books.templates but still lists', async () => {
+    mockUseCapabilities.mockReturnValue({
+      capabilities: new Set(),
+      isLoading: false,
+      has: () => false,
+    })
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    vi.spyOn(apiMod.api, 'listWordTemplates').mockResolvedValue([
+      { name: 'الصيانة.docx', modified_at: '2026-07-19T10:00:00', kind: 'custom' },
+    ])
+    const renameSpy = vi.spyOn(apiMod.api, 'renameWordTemplate')
+    const deleteSpy = vi.spyOn(apiMod.api, 'deleteWordTemplate')
+
+    render(
+      createElement(WordTemplateManager, { open: true, onOpenChange: vi.fn() }),
+      { wrapper: makeWrapper(qc) },
+    )
+
+    expect(await screen.findByText('الصيانة')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'إعادة تسمية' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'حذف' })).toBeNull()
+    expect(renameSpy).not.toHaveBeenCalled()
+    expect(deleteSpy).not.toHaveBeenCalled()
   })
 
   it('lists templates without the .docx suffix and renames one', async () => {

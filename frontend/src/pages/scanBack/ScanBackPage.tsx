@@ -64,7 +64,7 @@ export function ScanBackPage(): React.JSX.Element {
             <button type="button" className={chip(scope === 'mine')} onClick={() => setScope('mine')}>
               {t('scanBack.scope.mine')}
             </button>
-            {has('books.manage') && (
+            {has('books.edit') && (
               <button type="button" className={chip(scope === 'all')} onClick={() => setScope('all')}>
                 {t('scanBack.scope.all')}
               </button>

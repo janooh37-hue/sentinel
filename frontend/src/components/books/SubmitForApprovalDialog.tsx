@@ -14,7 +14,7 @@
  *    excluding the currently-selected approver.
  *  - Submit calls api.submitBook, invalidates ['books'], ['books','awaiting'],
  *    ['dashboard'], shows a toast, calls onClose()
- *  - Gated behind books.manage (caller already gates the trigger)
+ *  - Gated behind books.submit (caller already gates the trigger)
  */
 
 import { useState } from 'react'
@@ -39,7 +39,7 @@ export function SubmitForApprovalDialog({ bookId, onClose }: Props): React.JSX.E
   const navigate = useNavigate()
   const qc = useQueryClient()
   const { has } = useCapabilities()
-  const canManage = has('books.manage')
+  const canManage = has('books.submit')
   const canApprove = has('books.approve')
 
   const [priority, setPriority] = useState<'Normal' | 'High'>('Normal')

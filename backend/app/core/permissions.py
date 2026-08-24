@@ -44,20 +44,35 @@ CAPABILITIES: Final[tuple[Capability, ...]] = (
         "See the employee directory and individual employee records.",
     ),
     Capability(
+        "employees.create",
+        "employees",
+        "Create employees",
+        "Add new employees to the directory.",
+    ),
+    Capability(
         "employees.edit",
         "employees",
-        "Create / edit employees + vault",
-        "Add and edit employees and manage their document vault.",
+        "Edit employee profiles",
+        "Edit profiles, photos, signature, and passport data.",
+    ),
+    Capability(
+        "employees.vault.manage",
+        "employees",
+        "Manage document vaults",
+        "Upload and organise files inside employee vaults.",
     ),
     Capability(
         "employees.notify",
         "employees",
         "Notify employees",
-        "Send WhatsApp (with SMS fallback) confirmations to employees for leaves, duty resumptions, and violations.",
+        "Send WhatsApp (with SMS fallback) confirmations to employees for leaves, "
+        "duty resumptions, and violations.",
     ),
-    Capability("leaves.view", "leaves", "View leaves", "See leave records and their status."),
     Capability(
-        "leaves.edit", "leaves", "Edit / delete leaves", "Create, edit, and delete leave records."
+        "leaves.view",
+        "leaves",
+        "View leaves",
+        "See leave records and their status.",
     ),
     Capability(
         "timesheet.view",
@@ -71,12 +86,47 @@ CAPABILITIES: Final[tuple[Capability, ...]] = (
         "Correct and close the time sheet",
         "Mark absence, correct cells, set the post count, and close or reopen a month.",
     ),
-    Capability("violations.view", "violations", "View violations", "See recorded violations."),
     Capability(
-        "violations.manage",
+        "leaves.create",
+        "leaves",
+        "Create leaves",
+        "Record new leave requests.",
+    ),
+    Capability(
+        "leaves.edit",
+        "leaves",
+        "Edit leaves",
+        "Amend leaves, attach certificates, and record duty returns.",
+    ),
+    Capability(
+        "leaves.delete",
+        "leaves",
+        "Delete leaves",
+        "Remove leave records.",
+    ),
+    Capability(
+        "violations.view",
         "violations",
-        "Create / edit / delete violations",
-        "Record, edit, and remove violations.",
+        "View violations",
+        "See recorded violations.",
+    ),
+    Capability(
+        "violations.create",
+        "violations",
+        "Create violations",
+        "Record new violations.",
+    ),
+    Capability(
+        "violations.edit",
+        "violations",
+        "Edit violations",
+        "Correct violation details.",
+    ),
+    Capability(
+        "violations.delete",
+        "violations",
+        "Delete violations",
+        "Remove violations.",
     ),
     Capability(
         "documents.generate",
@@ -90,17 +140,34 @@ CAPABILITIES: Final[tuple[Capability, ...]] = (
         "Scan documents with OCR",
         "Upload scans and run OCR to import documents.",
     ),
-    Capability("books.view", "books", "View books", "Browse the records/books register."),
     Capability(
-        "books.manage",
+        "books.view",
         "books",
-        "Create / edit / delete books",
-        "Create records, edit them, submit for approval, and delete.",
+        "View records",
+        "Browse the records register.",
+    ),
+    Capability(
+        "books.create",
+        "books",
+        "Create records",
+        "Start new records from forms or templates.",
+    ),
+    Capability(
+        "books.edit",
+        "books",
+        "Edit records & attachments",
+        "Edit fields, reviewers, attachments, and file scan-backs.",
+    ),
+    Capability(
+        "books.submit",
+        "books",
+        "Submit for approval",
+        "Send records into the approval chain.",
     ),
     Capability(
         "books.approve",
         "books",
-        "Approve / reject books",
+        "Approve / reject records",
         "Approve, sign, or reject documents in the approval queue.",
     ),
     Capability(
@@ -112,23 +179,64 @@ CAPABILITIES: Final[tuple[Capability, ...]] = (
         "Admin-grade: it overrides who signed what.",
     ),
     Capability(
+        "books.templates",
+        "books",
+        "Manage Word templates",
+        "Edit the shared Word templates records are composed from.",
+    ),
+    Capability(
+        "books.delete",
+        "books",
+        "Delete records",
+        "Move records to the bin.",
+    ),
+    Capability(
         "permits.view",
         "permits",
         "View security permits",
         "See the security-zone entry-permit register and its status.",
     ),
     Capability(
-        "permits.manage",
+        "permits.create",
         "permits",
-        "Manage security permits",
-        "Issue, renew, amend, and revoke security-zone entry permits.",
+        "Issue permits",
+        "Register new security-zone entry permits.",
     ),
-    Capability("ledger.view", "ledger", "View ledger", "Read correspondence ledger entries."),
+    Capability(
+        "permits.edit",
+        "permits",
+        "Amend & renew permits",
+        "Edit people, vehicles, and documents; renew permits.",
+    ),
+    Capability(
+        "permits.revoke",
+        "permits",
+        "Revoke permits",
+        "Revoke active entry permits.",
+    ),
+    Capability(
+        "permits.delete",
+        "permits",
+        "Delete permits",
+        "Remove permit records.",
+    ),
+    Capability(
+        "ledger.view",
+        "ledger",
+        "View correspondence log",
+        "Read correspondence ledger entries.",
+    ),
+    Capability(
+        "ledger.create",
+        "ledger",
+        "Create entries & drafts",
+        "Compose new entries, drafts, contacts, and recipient lists.",
+    ),
     Capability(
         "ledger.edit",
         "ledger",
-        "Edit ledger entries + drafts",
-        "Create and edit ledger entries and email drafts.",
+        "Edit entries & address book",
+        "Edit entries and lists, flag, star, and attach files.",
     ),
     Capability(
         "ledger.send",
@@ -136,9 +244,30 @@ CAPABILITIES: Final[tuple[Capability, ...]] = (
         "Send email from the ledger",
         "Send email messages from the ledger as yourself.",
     ),
-    Capability("email.manage", "email", "Manage your mailbox", "Link and sync your own mailbox."),
-    Capability("settings.view", "settings", "View settings", "See application settings."),
-    Capability("settings.edit", "settings", "Change settings", "Change application settings."),
+    Capability(
+        "ledger.delete",
+        "ledger",
+        "Delete entries & drafts",
+        "Remove entries, drafts, contacts, and lists.",
+    ),
+    Capability(
+        "email.manage",
+        "email",
+        "Manage your mailbox",
+        "Link and sync your own mailbox.",
+    ),
+    Capability(
+        "settings.view",
+        "settings",
+        "View settings",
+        "See application settings.",
+    ),
+    Capability(
+        "settings.edit",
+        "settings",
+        "Change settings",
+        "Change application settings.",
+    ),
     Capability(
         "submitters.manage",
         "submitters",
@@ -156,12 +285,6 @@ CAPABILITIES: Final[tuple[Capability, ...]] = (
         "users",
         "Manage users + permissions",
         "Manage user accounts and their permissions (admin-only).",
-    ),
-    Capability(
-        "system.admin",
-        "system",
-        "Admin key + v3 migration",
-        "Use the admin key and run system/migration tools (admin-only).",
     ),
     Capability(
         "messages.broadcast",
@@ -217,6 +340,12 @@ CAPABILITIES: Final[tuple[Capability, ...]] = (
         "Manage workforce integration",
         "Manage workforce provider status, mappings, tests, and synchronization.",
     ),
+    Capability(
+        "system.admin",
+        "system",
+        "Admin key + v3 migration",
+        "Use the admin key and run system/migration tools (admin-only).",
+    ),
 )
 
 CAPABILITY_IDS: Final[frozenset[str]] = frozenset(c.id for c in CAPABILITIES)
@@ -226,10 +355,10 @@ ALL_CAPABILITIES: Final[frozenset[str]] = CAPABILITY_IDS
 
 
 # ─── Role presets ───────────────────────────────────────────────────────────────
-# Operator: read-only across the app + the two daily-work write surfaces
-# (document generation, ledger entries). Manager: adds the management write
-# capabilities. Admin: everything.
-
+# Operator: read-only across the app + the daily-work write surfaces (document
+# generation, ledger entries/drafts incl. their deletion — ledger.delete was
+# held pre-split and is preserved). Manager: adds the management writes.
+# Admin: everything.
 _OPERATOR_CAPS: Final[frozenset[str]] = frozenset(
     {
         "app.access",
@@ -242,32 +371,51 @@ _OPERATOR_CAPS: Final[frozenset[str]] = frozenset(
         "books.view",
         "permits.view",
         "ledger.view",
+        "ledger.create",
         "ledger.edit",
-        "ledger.send",  # Phase 3: send as yourself
-        "email.manage",  # Phase 3: link/sync your OWN mailbox
+        "ledger.send",
+        "ledger.delete",
+        "email.manage",
         "settings.view",
         "workforce.self.view",
     }
 )
 
-_MANAGER_CAPS: Final[frozenset[str]] = (
-    _OPERATOR_CAPS
-    | frozenset(
-        {
-            "employees.edit",
-            "employees.notify",
-            "leaves.edit",
-            "timesheet.edit",
-            "violations.manage",
-            "books.manage",
-            "books.approve",
-            "permits.manage",
-            "ledger.send",
-            "submitters.manage",
-            "editor_templates.manage",
-        }
-    )
-) - frozenset({"workforce.self.view"})
+# Atomic equivalents of the old bundled manager grants, plus the newer
+# per-domain grants upstream presets carry (timesheet). Workforce is
+# intentionally absent: it always needs an explicit grant + scope.
+_MANAGER_EXTRA: Final[frozenset[str]] = frozenset(
+    {
+        "employees.create",
+        "employees.edit",
+        "employees.vault.manage",
+        "employees.notify",
+        "leaves.create",
+        "leaves.edit",
+        "leaves.delete",
+        "violations.create",
+        "violations.edit",
+        "violations.delete",
+        "books.create",
+        "books.edit",
+        "books.submit",
+        "books.templates",
+        "books.delete",
+        "books.approve",
+        "permits.create",
+        "permits.edit",
+        "permits.revoke",
+        "permits.delete",
+        "ledger.delete",
+        "submitters.manage",
+        "editor_templates.manage",
+        "timesheet.edit",
+    }
+)
+
+_MANAGER_CAPS: Final[frozenset[str]] = (_OPERATOR_CAPS | _MANAGER_EXTRA) - frozenset(
+    {"workforce.self.view"}
+)
 
 ROLE_DEFAULTS: Final[dict[str, frozenset[str]]] = {
     OPERATOR_ROLE: _OPERATOR_CAPS,

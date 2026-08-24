@@ -20,8 +20,8 @@ function daysAgo(n: number): string {
 }
 
 vi.mock('@/lib/useCapabilities', () => ({
-  useCapabilities: () => ({ has: (c: string) => c === 'books.manage',
-                            capabilities: new Set(['books.manage']), isLoading: false }),
+  useCapabilities: () => ({ has: (c: string) => c === 'books.edit',
+                            capabilities: new Set(['books.edit']), isLoading: false }),
 }))
 vi.mock('@/lib/api', async (orig) => ({
   ...(await orig<Record<string, unknown>>()),

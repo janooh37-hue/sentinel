@@ -81,7 +81,7 @@ def actionable_items(db: Session, user: User) -> list[ActionableItem]:
     scans, emails) plus ``scanback``, which ``relevant_counts`` no longer
     tracks (its count was dropped — nothing read it, and it cost an
     ``awaiting_scan`` query per connected user per SSE tick; this push path
-    and its ``books.manage`` gate are unaffected) — returns the actual items
+    and its ``books.edit`` gate are unaffected) — returns the actual items
     (with ids) so the notifier pushes each one exactly once and the click
     deep-links to it. Org-wide
     **leaves** are intentionally excluded here: they have no owner, so a
@@ -134,9 +134,9 @@ def actionable_items(db: Session, user: User) -> list[ActionableItem]:
             )
         )
 
-    # Stranded scan-backs — same books.manage gate as the bell count: a push is
+    # Stranded scan-backs — same books.edit gate as the scan-back list: a push is
     # only worth sending to someone who can actually file the scan.
-    if perm_service.has_capability(db, user, "books.manage"):
+    if perm_service.has_capability(db, user, "books.edit"):
         for book in book_service.list_awaiting_scan(db, user_id=user.id):
             items.append(
                 ActionableItem(
