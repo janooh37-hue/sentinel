@@ -135,3 +135,6 @@ backend/scripts/_run_sample_report.bat
 # design mockup screenshots and reference images (large binaries, local only)
 mockups/shots/
 mockups/refreance/
+
+# Agent worktrees
+.worktrees/
