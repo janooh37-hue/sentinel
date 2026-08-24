@@ -212,7 +212,7 @@ def _seed_coverage_cases(db: Session, admin: Any) -> None:
             shift_code_snapshot=morning.code,
             department_snapshot=employee.department,
             duty_unit_snapshot=employee.duty_unit,
-            duty_post_snapshot=None,
+            duty_post_snapshot=f"Post {chr(64 + index)}",
             scheduled_start_at=occurrence.starts_at,
             scheduled_end_at=occurrence.ends_at,
             operational_date=TODAY,
@@ -327,6 +327,64 @@ def test_dashboard_scope_filters_can_narrow_but_never_widen_a_manager_scope(
 
     assert response.status_code == 200
     assert [row["department"] for row in response.json()["items"]] == ["Operations"]
+
+
+@pytest.mark.parametrize(
+    ("scope_kind", "duty_post"),
+    [("duty_unit", None), ("duty_post", "Post A")],
+)
+def test_narrow_scope_managers_can_traverse_coverage_ancestors_without_leakage(
+    workforce_api_db: Session,
+    scope_kind: str,
+    duty_post: str | None,
+) -> None:
+    from app.db.workforce_models import UserWorkforceScope
+
+    manager = _create_user(workforce_api_db, email=f"{scope_kind}-coverage@test.ae", role="manager")
+    _grant(workforce_api_db, manager, "workforce.dashboard.view")
+    _seed_coverage_cases(workforce_api_db, manager)
+    workforce_api_db.add(
+        UserWorkforceScope(
+            user_id=manager.id,
+            scope_kind=scope_kind,
+            department="Operations",
+            duty_unit="Gate A",
+            duty_post=duty_post,
+            created_by_user_id=manager.id,
+        )
+    )
+    workforce_api_db.commit()
+
+    with _client_for(workforce_api_db, manager) as client:
+        organization = client.get(
+            "/api/v1/workforce/dashboard/coverage",
+            params={"operational_date": TODAY.isoformat(), "parent_kind": "organization"},
+        )
+        department = client.get(
+            "/api/v1/workforce/dashboard/coverage",
+            params={"operational_date": TODAY.isoformat(), "parent_kind": "department", "department": "Operations"},
+        )
+        unit = client.get(
+            "/api/v1/workforce/dashboard/coverage",
+            params={
+                "operational_date": TODAY.isoformat(),
+                "parent_kind": "duty_unit",
+                "department": "Operations",
+                "duty_unit": "Gate A",
+            },
+        )
+
+    assert organization.status_code == 200
+    assert department.status_code == 200
+    assert unit.status_code == 200
+    assert [row["department"] for row in organization.json()["items"]] == ["Operations"]
+    assert [row["duty_unit"] for row in department.json()["items"]] == ["Gate A"]
+    assert [row["duty_post"] for row in unit.json()["items"]] == ["Post A"]
+    rendered = json.dumps([organization.json(), department.json(), unit.json()])
+    assert "Gate B" not in rendered
+    assert "Post B" not in rendered
+    assert "G-COVERAGE-A" not in rendered
+    assert "Coverage A" not in rendered
 
 
 def test_coverage_children_are_bounded_paginated_and_never_person_records(

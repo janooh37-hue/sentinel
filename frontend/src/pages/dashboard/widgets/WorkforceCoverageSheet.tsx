@@ -159,11 +159,12 @@ export function WorkforceCoverageSheet({
             ) : (
               <div className="space-y-3">
                 <ul className="space-y-2" aria-label={levelTitle}>
-                  {rows.map((row) => {
-                    const name = rowName(row)
-                    const isNavigable = parentKind !== 'duty_unit' && row.child_count > 0
+                  {rows.map((row, index) => {
+                    const identifier = rowName(row)
+                    const name = identifier?.trim() || t('dashboard.workforcePulse.coverage.unassigned')
+                    const isNavigable = Boolean(identifier?.trim()) && parentKind !== 'duty_unit' && row.child_count > 0
                     return (
-                      <li key={`${row.kind}:${name}`} className="rounded-xl border border-hairline bg-surface-raised">
+                      <li key={`${row.kind}:${identifier ?? 'unassigned'}:${index}`} className="rounded-xl border border-hairline bg-surface-raised">
                         {isNavigable ? (
                           <button
                             type="button"
@@ -202,8 +203,8 @@ export function WorkforceCoverageSheet({
   )
 }
 
-function rowName(row: WorkforceCoverageRow): string {
-  return row.kind === 'department' ? row.department ?? '' : row.kind === 'duty_unit' ? row.duty_unit ?? '' : row.duty_post ?? ''
+function rowName(row: WorkforceCoverageRow): string | null {
+  return row.kind === 'department' ? row.department : row.kind === 'duty_unit' ? row.duty_unit : row.duty_post
 }
 
 function CoverageRow({ row, name, expandable = false }: { row: WorkforceCoverageRow; name: string; expandable?: boolean }): React.JSX.Element {

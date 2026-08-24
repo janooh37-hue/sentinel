@@ -2935,6 +2935,7 @@
         "allDepartments": "كل الإدارات",
         "empty": "لا توجد مجموعات تغطية لهذا المستوى.",
         "pendingVerification": "بانتظار التحقق",
+        "unassigned": "غير معيّن",
         "loadMore": "عرض المزيد",
         "level": {
           "organization": "الإدارات",

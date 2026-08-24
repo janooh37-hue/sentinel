@@ -162,6 +162,28 @@ def _assert_scope_filter(scope: WorkforceScope, *, department: str | None, duty_
     )
 
 
+def _intersect_coverage_scope(
+    scope: WorkforceScope,
+    *,
+    department: str | None,
+    duty_unit: str | None,
+) -> WorkforceScope:
+    """Allow a selected hierarchy ancestor without widening a narrower grant."""
+    if department is None and duty_unit is None:
+        return scope
+    for entry in scope.entries:
+        if entry.scope_kind == "organization":
+            return intersect_workforce_scope(scope, department=department, duty_unit=duty_unit)
+        if entry.scope_kind == "self":
+            continue
+        if entry.department is not None and entry.department != department:
+            continue
+        if duty_unit is not None and entry.scope_kind != "department" and entry.duty_unit != duty_unit:
+            continue
+        return intersect_workforce_scope(scope, department=department, duty_unit=duty_unit)
+    raise AppError("FORBIDDEN", "Requested filter is outside workforce scope.", http_status=403)
+
+
 def _require_organization_schedule_scope(db: Session, user: User) -> None:
     """Crew identity and anchors are organization-wide, never hierarchy-local."""
 
@@ -345,7 +367,7 @@ def get_dashboard_coverage(
         raise ValidationFailedError("WORKFORCE_COVERAGE_PARENT_INVALID", "Duty-unit coverage requires only a department filter.")
     if parent_kind == "duty_unit" and (department is None or duty_unit is None):
         raise ValidationFailedError("WORKFORCE_COVERAGE_PARENT_INVALID", "Duty-post coverage requires department and duty-unit filters.")
-    scope = _assert_scope_filter(_scope(db, user), department=department, duty_unit=duty_unit, duty_post=None)
+    scope = _intersect_coverage_scope(_scope(db, user), department=department, duty_unit=duty_unit)
     rows = workforce_dashboard_service.get_coverage_children(
         db,
         scope=scope,

@@ -114,4 +114,40 @@ describe('WorkforceCoverageSheet', () => {
     await waitFor(() => expect(api.getWorkforceCoverage).toHaveBeenLastCalledWith(expect.objectContaining({ parent_kind: 'organization', cursor: 'page-two' })))
     expect(await screen.findByRole('button', { name: 'Operations' })).toBeInTheDocument()
   })
+
+  it('labels a blank duty unit as unassigned without making it navigable', async () => {
+    vi.mocked(api.getWorkforceCoverage).mockImplementation(async (params) => {
+      if (params.parent_kind === 'organization') {
+        return { items: [{ kind: 'department' as const, department: 'Security', scheduled: 1, excused: 0, expected: 1, evaluated_count: 1, pending_or_error_excluded_count: 0, working: 1, child_count: 1 }] }
+      }
+      return { items: [{ kind: 'duty_unit' as const, department: 'Security', duty_unit: '', scheduled: 1, excused: 0, expected: 1, evaluated_count: 1, pending_or_error_excluded_count: 0, working: 1, child_count: 1 }] }
+    })
+
+    renderSheet(true)
+    const user = userEvent.setup()
+    await user.click(await screen.findByRole('button', { name: 'Security' }))
+
+    expect(await screen.findByText('Unassigned')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Unassigned' })).not.toBeInTheDocument()
+  })
+
+  it('labels a null duty post as unassigned without making it navigable', async () => {
+    vi.mocked(api.getWorkforceCoverage).mockImplementation(async (params) => {
+      if (params.parent_kind === 'organization') {
+        return { items: [{ kind: 'department' as const, department: 'Security', scheduled: 1, excused: 0, expected: 1, evaluated_count: 1, pending_or_error_excluded_count: 0, working: 1, child_count: 1 }] }
+      }
+      if (params.parent_kind === 'department') {
+        return { items: [{ kind: 'duty_unit' as const, department: 'Security', duty_unit: 'Gate A', scheduled: 1, excused: 0, expected: 1, evaluated_count: 1, pending_or_error_excluded_count: 0, working: 1, child_count: 1 }] }
+      }
+      return { items: [{ kind: 'duty_post' as const, department: 'Security', duty_unit: 'Gate A', duty_post: null, scheduled: 1, excused: 0, expected: 1, evaluated_count: 1, pending_or_error_excluded_count: 0, working: 1, child_count: 1 }] }
+    })
+
+    renderSheet(true)
+    const user = userEvent.setup()
+    await user.click(await screen.findByRole('button', { name: 'Security' }))
+    await user.click(await screen.findByRole('button', { name: 'Gate A' }))
+
+    expect(await screen.findByText('Unassigned')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Unassigned' })).not.toBeInTheDocument()
+  })
 })

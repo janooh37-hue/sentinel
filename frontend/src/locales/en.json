@@ -2744,6 +2744,7 @@
         "allDepartments": "All departments",
         "empty": "No coverage groups are available for this level.",
         "pendingVerification": "Pending verification",
+        "unassigned": "Unassigned",
         "loadMore": "Load more",
         "level": {
           "organization": "Departments",
