@@ -2667,7 +2667,8 @@
         "employees": "From Employees",
         "leaves": "From Leaves",
         "records": "From Records",
-        "ledger": "From Ledger"
+        "ledger": "From Ledger",
+        "workforce": "From Workforce"
       },
       "topFull": "Top zone is full (max {{count}})",
       "topOnlyBigCards": "Only big cards can go in the Top zone",

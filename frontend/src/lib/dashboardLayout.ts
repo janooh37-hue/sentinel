@@ -37,10 +37,10 @@ export const DEFAULT_CANVAS_WIDTH: CanvasWidth = 'compact'
  * from where the widget's own action navigates — see DashboardPage's
  * `renderWidget` and the widget components' links; keep in step with them.
  */
-export type WidgetSource = 'employees' | 'leaves' | 'records' | 'ledger'
-export const WIDGET_SOURCES = ['employees', 'leaves', 'records', 'ledger'] as const
+export type WidgetSource = 'employees' | 'leaves' | 'records' | 'ledger' | 'workforce'
+export const WIDGET_SOURCES = ['employees', 'leaves', 'records', 'ledger', 'workforce'] as const
 
-/** All 13 canonical widget ids (order = catalog order in the editor). */
+/** All 14 canonical widget ids (order = catalog order in the editor). */
 export const WIDGET_IDS = [
   'pending',
   'workspace',
@@ -55,6 +55,7 @@ export const WIDGET_IDS = [
   'recent_docs',
   'recent_ledger',
   'pending_departures',
+  'workforce_pulse',
 ] as const
 
 export type WidgetId = (typeof WIDGET_IDS)[number]
@@ -80,6 +81,7 @@ export const WIDGET_SIZE: Record<WidgetId, WidgetSize> = {
   recent_docs: 'panel',
   recent_ledger: 'panel',
   pending_departures: 'panel',
+  workforce_pulse: 'panel',
 }
 
 /**
@@ -92,6 +94,7 @@ export const WIDGET_SIZE: Record<WidgetId, WidgetSize> = {
  *   • leaves   — on_leave_today, upcoming_leave open a leave
  *   • ledger   — ledger, recent_ledger open a ledger entry; email sync is the
  *                inbound-mail feed behind the ledger inbox
+ *   • workforce — workforce_pulse opens the Workforce Pulse drill-down
  */
 export const WIDGET_SOURCE: Record<WidgetId, WidgetSource> = {
   pending: 'records',
@@ -107,6 +110,7 @@ export const WIDGET_SOURCE: Record<WidgetId, WidgetSource> = {
   recent_docs: 'employees',
   recent_ledger: 'ledger',
   pending_departures: 'employees',
+  workforce_pulse: 'workforce',
 }
 
 export const LOWER_ZONES = ['under_workspace', 'under_quick_actions'] as const

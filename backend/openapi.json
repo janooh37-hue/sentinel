@@ -27190,7 +27190,8 @@
               "waiting_approvals",
               "expiring_soon",
               "recent_ledger",
-              "pending_departures"
+              "pending_departures",
+              "workforce_pulse"
             ],
             "title": "Id"
           },

@@ -37,6 +37,7 @@ DASHBOARD_WIDGET_IDS = (
     "expiring_soon",
     "recent_ledger",
     "pending_departures",
+    "workforce_pulse",
 )
 DASHBOARD_QUICK_ACTION_IDS = (
     "General Book",
@@ -73,6 +74,7 @@ DashboardWidgetId = Literal[
     "expiring_soon",
     "recent_ledger",
     "pending_departures",
+    "workforce_pulse",
 ]
 DashboardQuickActionId = Literal[
     "General Book",
