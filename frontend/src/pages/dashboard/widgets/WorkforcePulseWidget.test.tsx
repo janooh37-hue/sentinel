@@ -64,6 +64,28 @@ function snapshot(overrides: Partial<WorkforceSnapshot> = {}): WorkforceSnapshot
     ...overrides,
   }
 }
+function selfSnapshot(): WorkforceSnapshot {
+  return snapshot({
+    sync_health: null,
+    readiness: null,
+    current_shift: {
+      scheduled: 0,
+      excused: 0,
+      evaluated_count: 0,
+      pending_or_error_excluded_count: 0,
+      working: null,
+    },
+    self: {
+      employee_id: 'G100',
+      presence_state: 'on_duty',
+      reason_code: 'verified_punch',
+      scheduled_start_at: '2026-08-24T08:00:00',
+      scheduled_end_at: '2026-08-24T16:00:00',
+    },
+    aggregate: undefined,
+  })
+}
+
 
 function renderWidget(onOpenCoverage = vi.fn()) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
@@ -92,7 +114,7 @@ beforeEach(() => {
 
 describe('WorkforcePulseWidget', () => {
   it.each([
-    ['self', SELF_ACCESS, snapshot(), /My shift/],
+    ['self', SELF_ACCESS, selfSnapshot(), /My shift/],
     ['aggregate', AGGREGATE_ACCESS, snapshot({ aggregate: { scheduled: 8, working: 7 } }), /Current shift/],
     [
       'schedules missing',
@@ -111,6 +133,19 @@ describe('WorkforcePulseWidget', () => {
     expect(await screen.findByText(expected)).toBeInTheDocument()
   })
 
+  it('renders self presence, reason, and scheduled timestamps without aggregate metrics', async () => {
+    vi.mocked(api.getWorkforceAccess).mockResolvedValue(SELF_ACCESS)
+    vi.mocked(api.getWorkforceSnapshot).mockResolvedValue(selfSnapshot())
+
+    renderWidget()
+
+    expect(await screen.findByText('On duty')).toBeInTheDocument()
+    expect(screen.getByText('verified_punch')).toBeInTheDocument()
+    expect(screen.getByText('8:00 AM')).toBeInTheDocument()
+    expect(screen.getByText('4:00 PM')).toBeInTheDocument()
+    expect(screen.queryByText('Scheduled')).not.toBeInTheDocument()
+  })
+
   it('states that no Workforce scope is assigned without requesting a snapshot', async () => {
     vi.mocked(api.getWorkforceAccess).mockResolvedValue({ workforce_access_tier: 'none', scopes: [] })
 
@@ -127,6 +162,36 @@ describe('WorkforcePulseWidget', () => {
 
     await waitFor(() => expect(container).toBeEmptyDOMElement())
     expect(api.getWorkforceAccess).not.toHaveBeenCalled()
+    expect(api.getWorkforceSnapshot).not.toHaveBeenCalled()
+  })
+
+  it('omits an unverified aggregate working count instead of rendering zero', async () => {
+    vi.mocked(api.getWorkforceAccess).mockResolvedValue(AGGREGATE_ACCESS)
+    vi.mocked(api.getWorkforceSnapshot).mockResolvedValue(
+      snapshot({
+        aggregate: { scheduled: 0 },
+        current_shift: {
+          scheduled: 0,
+          excused: 0,
+          evaluated_count: 0,
+          pending_or_error_excluded_count: 0,
+          working: null,
+        },
+      }),
+    )
+
+    renderWidget()
+
+    expect(await screen.findByText('Current shift')).toBeInTheDocument()
+    expect(screen.queryByText('On duty')).not.toBeInTheDocument()
+  })
+
+  it('shows an access error instead of a disabled snapshot skeleton', async () => {
+    vi.mocked(api.getWorkforceAccess).mockRejectedValue(new Error('access unavailable'))
+
+    renderWidget()
+
+    expect(await screen.findByText("Couldn't load this. Check your connection and try again.")).toBeInTheDocument()
     expect(api.getWorkforceSnapshot).not.toHaveBeenCalled()
   })
 

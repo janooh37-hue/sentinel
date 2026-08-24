@@ -2691,7 +2691,20 @@
       "title": "Workforce Pulse",
       "openCoverage": "Open coverage",
       "self": {
-        "heading": "My shift"
+        "heading": "My shift",
+        "status": "Status",
+        "reason": "Reason",
+        "start": "Starts",
+        "end": "Ends",
+        "presence": {
+          "scheduled": "Scheduled",
+          "on_duty": "On duty",
+          "completed": "Completed",
+          "absent": "Absent",
+          "excused_leave": "Excused leave",
+          "off": "Off duty",
+          "unknown": "Not yet verified"
+        }
       },
       "aggregate": {
         "heading": "Current shift"

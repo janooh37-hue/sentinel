@@ -2882,7 +2882,20 @@
       "title": "نبض القوى العاملة",
       "openCoverage": "فتح التغطية",
       "self": {
-        "heading": "ورديتي"
+        "heading": "ورديتي",
+        "status": "الحالة",
+        "reason": "السبب",
+        "start": "تبدأ",
+        "end": "تنتهي",
+        "presence": {
+          "scheduled": "مجدولة",
+          "on_duty": "على رأس العمل",
+          "completed": "مكتملة",
+          "absent": "غائب",
+          "excused_leave": "إجازة معتمدة",
+          "off": "خارج الوردية",
+          "unknown": "لم يتم التحقق بعد"
+        }
       },
       "aggregate": {
         "heading": "الوردية الحالية"

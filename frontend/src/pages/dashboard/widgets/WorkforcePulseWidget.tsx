@@ -49,6 +49,25 @@ function Metric({ label, value }: { label: string; value: number }): React.JSX.E
   )
 }
 
+function Detail({ label, value }: { label: string; value: string }): React.JSX.Element {
+  return (
+    <div className="rounded-lg bg-surface-tinted px-3 py-2">
+      <dt className="font-mono text-[0.68em] uppercase tracking-wide text-muted-foreground">{label}</dt>
+      <dd className="mt-0.5 text-sm font-semibold text-foreground">{value}</dd>
+    </div>
+  )
+}
+
+function formatShiftTime(value: string | null | undefined, locale: string, timezone: string): string {
+  if (!value) return '—'
+  const hasOffset = /(?:Z|[+-]\d{2}:?\d{2})$/.test(value)
+  return new Intl.DateTimeFormat(locale, {
+    hour: 'numeric',
+    minute: '2-digit',
+    timeZone: hasOffset ? timezone : 'UTC',
+  }).format(new Date(hasOffset ? value : `${value}Z`))
+}
+
 function StateMessage({ icon: Icon, title, detail }: { icon: typeof AlertTriangle; title: string; detail: string }): React.JSX.Element {
   return (
     <div className="flex items-start gap-3 px-5 py-5" role="status" aria-live="polite">
@@ -62,7 +81,7 @@ function StateMessage({ icon: Icon, title, detail }: { icon: typeof AlertTriangl
 }
 
 export function WorkforcePulseWidget({ onOpenCoverage }: WorkforcePulseWidgetProps): React.JSX.Element | null {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   const { has, isLoading: capabilitiesLoading } = useCapabilities()
   const canViewSelf = has('workforce.self.view')
   const canViewAggregate = has('workforce.dashboard.view')
@@ -105,13 +124,13 @@ export function WorkforcePulseWidget({ onOpenCoverage }: WorkforcePulseWidgetPro
         ) : null}
       </div>
 
-      {!state && (accessQuery.isPending || snapshotQuery.isPending) ? (
+      {accessQuery.isError || snapshotQuery.isError ? (
+        <EmptyState icon={CircleAlert} message={t('common.loadError')} className="py-8" />
+      ) : !state && (accessQuery.isPending || snapshotQuery.isPending) ? (
         <div className="space-y-3 px-5 py-5" aria-label={t('common.loading')}>
           <Skeleton className="h-4 w-1/3" />
           <Skeleton className="h-14 w-full" />
         </div>
-      ) : accessQuery.isError || snapshotQuery.isError ? (
-        <EmptyState icon={CircleAlert} message={t('common.loadError')} className="py-8" />
       ) : state?.kind === 'no_scope' ? (
         <StateMessage icon={ShieldAlert} title={t('dashboard.workforcePulse.noScope.title')} detail={t('dashboard.workforcePulse.noScope.detail')} />
       ) : state?.kind === 'setup' ? (
@@ -133,12 +152,15 @@ export function WorkforcePulseWidget({ onOpenCoverage }: WorkforcePulseWidgetPro
           coverageLabel={t('dashboard.workforcePulse.metrics.coverage')}
         />
       ) : state?.kind === 'self' ? (
-        <PulseMetrics
+        <SelfPulse
           heading={t('dashboard.workforcePulse.self.heading')}
           snapshot={state.snapshot}
-          scheduledLabel={t('dashboard.workforcePulse.metrics.scheduled')}
-          workingLabel={t('dashboard.workforcePulse.metrics.working')}
-          coverageLabel={t('dashboard.workforcePulse.metrics.coverage')}
+          locale={i18n.language}
+          statusLabel={t('dashboard.workforcePulse.self.status')}
+          presenceLabel={t(`dashboard.workforcePulse.self.presence.${state.snapshot.self?.presence_state ?? 'unknown'}`)}
+          reasonLabel={t('dashboard.workforcePulse.self.reason')}
+          startLabel={t('dashboard.workforcePulse.self.start')}
+          endLabel={t('dashboard.workforcePulse.self.end')}
         />
       ) : null}
     </section>
@@ -159,13 +181,47 @@ function PulseMetrics({
   coverageLabel: string
 }): React.JSX.Element {
   const coverage = snapshot.current_shift.verified_coverage_percent
+  const working = snapshot.current_shift.working
   return (
     <div className="px-5 py-5" role="status" aria-live="polite">
       <p className="mb-3 text-sm font-semibold text-foreground">{heading}</p>
       <dl className="grid grid-cols-2 gap-2 sm:grid-cols-3">
         <Metric label={scheduledLabel} value={snapshot.current_shift.scheduled} />
-        <Metric label={workingLabel} value={snapshot.current_shift.working ?? 0} />
+        {working != null ? <Metric label={workingLabel} value={working} /> : null}
         {coverage != null ? <Metric label={coverageLabel} value={coverage} /> : null}
+      </dl>
+    </div>
+  )
+}
+
+function SelfPulse({
+  heading,
+  snapshot,
+  locale,
+  statusLabel,
+  presenceLabel,
+  reasonLabel,
+  startLabel,
+  endLabel,
+}: {
+  heading: string
+  snapshot: WorkforceSnapshot
+  locale: string
+  statusLabel: string
+  presenceLabel: string
+  reasonLabel: string
+  startLabel: string
+  endLabel: string
+}): React.JSX.Element {
+  const self = snapshot.self
+  return (
+    <div className="px-5 py-5" role="status" aria-live="polite">
+      <p className="mb-3 text-sm font-semibold text-foreground">{heading}</p>
+      <dl className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+        <Detail label={statusLabel} value={presenceLabel} />
+        <Detail label={reasonLabel} value={self?.reason_code ?? '—'} />
+        <Detail label={startLabel} value={formatShiftTime(self?.scheduled_start_at, locale, snapshot.timezone)} />
+        <Detail label={endLabel} value={formatShiftTime(self?.scheduled_end_at, locale, snapshot.timezone)} />
       </dl>
     </div>
   )
