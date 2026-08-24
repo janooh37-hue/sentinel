@@ -4139,6 +4139,21 @@
       "reviewAll": "Review all",
       "openFile": "Open attendance file"
     },
+    "review": {
+      "title": "Attendance review",
+      "review": "Review {{name}}",
+      "sourceFacts": "Source facts",
+      "automaticEvaluations": "Automatic evaluations",
+      "humanCorrections": "Human corrections",
+      "assignment": "Captured assignment",
+      "department": "Captured department",
+      "crew": "Captured crew",
+      "shift": "Captured shift",
+      "scheduledWindow": "Scheduled window",
+      "effectiveResult": "Effective result",
+      "revoked": "revoked",
+      "loadFailed": "Attendance case could not be loaded."
+    },
     "hero": {
       "title": "ATTENDANCE TODAY",
       "seen": "seen",

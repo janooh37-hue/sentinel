@@ -4433,6 +4433,21 @@
       "reviewAll": "مراجعة الكل",
       "openFile": "فتح ملف الحضور"
     },
+    "review": {
+      "title": "مراجعة الحضور",
+      "review": "مراجعة {{name}}",
+      "sourceFacts": "حقائق المصدر",
+      "automaticEvaluations": "التقييمات التلقائية",
+      "humanCorrections": "التصحيحات البشرية",
+      "assignment": "التكليف المسجل",
+      "department": "القسم المسجل",
+      "crew": "الفريق المسجل",
+      "shift": "الوردية المسجلة",
+      "scheduledWindow": "الوقت المجدول",
+      "effectiveResult": "النتيجة النهائية",
+      "revoked": "أُلغي",
+      "loadFailed": "تعذر تحميل حالة الحضور."
+    },
     "hero": {
       "title": "حضور اليوم",
       "seen": "حاضر",

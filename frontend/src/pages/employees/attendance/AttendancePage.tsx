@@ -21,6 +21,7 @@ import { useCapabilities } from '@/lib/useCapabilities'
 import { pickEmployeeName } from '@/lib/employeeName'
 
 import { AttentionQueue } from './AttentionQueue'
+import { AttendanceCorrectionDrawer } from './AttendanceCorrectionDrawer'
 import type { PrintLayout } from './AttendancePrintSheet'
 import { AttendancePrintSheet } from './AttendancePrintSheet'
 import type { AttendanceView } from './AttendanceToolbar'
@@ -60,9 +61,10 @@ export function AttendancePage(): React.JSX.Element {
   // is switched BEFORE the dialog opens, so React has committed the right
   // layout by the time the browser paints the preview.
   const [printLayout, setPrintLayout] = useState<PrintLayout>('sheet')
+  const [selectedCaseId, setSelectedCaseId] = useState<number | null>(null)
   const { has } = useCapabilities()
   const hasIntegrationView = has('workforce.integration.manage')
-
+  const canReview = has('workforce.people.view') && has('workforce.attendance.review')
   const setParam = useCallback(
     (key: string, value: string | null) => {
       setParams(
@@ -92,6 +94,12 @@ export function AttendancePage(): React.JSX.Element {
     queryKey: ['attendance-day', operationalDate] as const,
     queryFn: () => api.listAttendanceDay({ operational_date: operationalDate, limit: 500 }),
     staleTime: 30_000,
+  })
+
+  const exceptionsQuery = useQuery({
+    queryKey: ['attendance-exceptions', operationalDate, shiftCode] as const,
+    queryFn: () => api.listAttendanceExceptions({ operational_date: operationalDate, limit: 500 }),
+    enabled: canReview,
   })
 
   const allRows = useMemo<AttendanceRow[]>(() => dayQuery.data?.items ?? [], [dayQuery.data])
@@ -275,8 +283,10 @@ export function AttendancePage(): React.JSX.Element {
           <div className="mt-3 lg:mt-3">
             <AttentionQueue
               rows={allRows}
+              exceptionRows={canReview && !exceptionsQuery.isPending ? exceptionsQuery.data?.items ?? [] : undefined}
               now={now}
               onOpenEmployee={openEmployee}
+              onReviewCase={canReview ? setSelectedCaseId : undefined}
             />
           </div>
         </div>
@@ -294,6 +304,7 @@ export function AttendancePage(): React.JSX.Element {
         shiftCode={shiftCode}
         search={search}
       />
+      <AttendanceCorrectionDrawer caseId={selectedCaseId} onClose={() => setSelectedCaseId(null)} />
     </div>
   )
 }
