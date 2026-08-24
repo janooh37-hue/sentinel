@@ -1,16 +1,89 @@
 import * as Dialog from '@radix-ui/react-dialog'
-import { useQuery } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { X } from 'lucide-react'
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { toast } from 'sonner'
 
-import { api } from '@/lib/api'
+import { ConfirmDialog } from '@/components/ui/confirm-dialog'
+import { api, ApiError, apiErrorMessage } from '@/lib/api'
+import type { AttendanceCase } from '@/lib/api'
 import { pickEmployeeName } from '@/lib/employeeName'
+import { useCapabilities } from '@/lib/useCapabilities'
 import { cn } from '@/lib/utils'
+
+import {
+  buildAdjustmentPayload,
+  draftFromEffective,
+  type AttendanceCorrectionDraft,
+  type AttendanceEffective,
+  type AttendancePresenceState,
+} from './attendanceCorrectionForm'
 
 interface Props {
   caseId: number | null
   onClose: () => void
+}
+
+const PRESENCE_STATES: readonly AttendancePresenceState[] = [
+  'scheduled',
+  'on_duty',
+  'completed',
+  'absent',
+  'excused_leave',
+  'off',
+  'unknown',
+]
+
+function isOptionalString(value: unknown): value is string | null {
+  return value === null || typeof value === 'string'
+}
+
+function isOptionalNumber(value: unknown): value is number | null {
+  return value === null || typeof value === 'number'
+}
+
+function isOptionalBoolean(value: unknown): value is boolean | null {
+  return value === null || typeof value === 'boolean'
+}
+
+function isOptionalPresenceState(value: unknown): value is AttendancePresenceState | null {
+  return value === null || PRESENCE_STATES.some((state) => state === value)
+}
+
+function effectiveFromCase(attendanceCase: AttendanceCase | undefined): AttendanceEffective | null {
+  const value = attendanceCase?.effective
+  if (!value) return null
+  const presenceState = value.presence_state
+  const firstInAt = value.first_in_at
+  const latestInAt = value.latest_in_at
+  const finalOutAt = value.final_out_at
+  const lateMinutes = value.late_minutes
+  const earlyExitMinutes = value.early_exit_minutes
+  const missingCheckout = value.missing_checkout
+  if (
+    !isOptionalPresenceState(presenceState)
+    || !isOptionalString(firstInAt)
+    || !isOptionalString(latestInAt)
+    || !isOptionalString(finalOutAt)
+    || !isOptionalNumber(lateMinutes)
+    || !isOptionalNumber(earlyExitMinutes)
+    || !isOptionalBoolean(missingCheckout)
+  ) return null
+  return {
+    presence_state: presenceState,
+    first_in_at: firstInAt,
+    latest_in_at: latestInAt,
+    final_out_at: finalOutAt,
+    late_minutes: lateMinutes,
+    early_exit_minutes: earlyExitMinutes,
+    missing_checkout: missingCheckout,
+  }
+}
+
+function effectiveAdjustmentId(attendanceCase: AttendanceCase | undefined): number | null {
+  const value = attendanceCase?.effective
+  return value && typeof value.adjustment_id === 'number' ? value.adjustment_id : null
 }
 
 function display(value: unknown): string {
@@ -43,19 +116,97 @@ function Facts({ items }: { items: ReadonlyArray<readonly [string, unknown]> }):
 
 export function AttendanceCorrectionDrawer({ caseId, onClose }: Props): React.JSX.Element {
   const { t, i18n } = useTranslation()
+  const { has: hasCapability } = useCapabilities()
+  const queryClient = useQueryClient()
   const priorFocusRef = useRef<HTMLElement | null>(null)
+  const [draft, setDraft] = useState<AttendanceCorrectionDraft | null>(null)
+  const [actionError, setActionError] = useState<string | null>(null)
+  const [conflictWarning, setConflictWarning] = useState<string | null>(null)
+  const [liveMessage, setLiveMessage] = useState<string | null>(null)
+  const [revokeReason, setRevokeReason] = useState('')
+  const [revokeTarget, setRevokeTarget] = useState<{ id: number; reason: string } | null>(null)
   const caseQuery = useQuery({
     queryKey: ['attendance-case', caseId] as const,
     queryFn: () => api.getAttendanceCase(caseId as number),
     enabled: caseId !== null,
   })
   const attendanceCase = caseQuery.data?.data
+  const effective = effectiveFromCase(attendanceCase)
+  const canCorrect = hasCapability('workforce.attendance.correct')
+  const etag = caseQuery.data?.etag ?? ''
+  const activeAdjustmentId = effectiveAdjustmentId(attendanceCase)
+  const effectiveAdjustment = attendanceCase?.adjustments?.find((adjustment) => adjustment.id === activeAdjustmentId)
 
   useEffect(() => {
+    setDraft(null)
+    setActionError(null)
+    setConflictWarning(null)
+    setLiveMessage(null)
+    setRevokeReason('')
     if (caseId !== null) {
       priorFocusRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null
     }
   }, [caseId])
+
+  useEffect(() => {
+    if (draft === null && effective !== null) setDraft(draftFromEffective(effective))
+  }, [draft, effective])
+
+  const reloadEvidence = async (resetDraft: boolean): Promise<void> => {
+    const result = await caseQuery.refetch()
+    if (resetDraft && result.data?.data) {
+      const refreshedEffective = effectiveFromCase(result.data.data)
+      if (refreshedEffective) setDraft(draftFromEffective(refreshedEffective))
+    }
+  }
+
+  const invalidateAttendance = async (): Promise<void> => {
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: ['attendance-case', caseId] }),
+      queryClient.invalidateQueries({ queryKey: ['attendance-exceptions'] }),
+      queryClient.invalidateQueries({ queryKey: ['attendance-day'] }),
+      queryClient.invalidateQueries({ queryKey: ['employee-attendance'] }),
+      queryClient.invalidateQueries({ queryKey: ['workforce', 'snapshot'] }),
+      queryClient.invalidateQueries({ queryKey: ['notification-counts'] }),
+    ])
+  }
+
+  const recoverConflict = async (error: unknown): Promise<void> => {
+    if (error instanceof ApiError && error.code === 'ATTENDANCE_CASE_VERSION_CONFLICT') {
+      await reloadEvidence(false)
+      setConflictWarning(t('attendance.review.conflictWarning'))
+      return
+    }
+    setActionError(apiErrorMessage(error))
+  }
+
+  const correctionMutation = useMutation({
+    mutationFn: (payload: ReturnType<typeof buildAdjustmentPayload>) =>
+      api.createAttendanceAdjustment(caseId as number, etag, payload),
+    retry: false,
+    onSuccess: async () => {
+      await invalidateAttendance()
+      await reloadEvidence(true)
+      const message = t('attendance.review.correctionSaved')
+      setLiveMessage(message)
+      toast.success(message)
+    },
+    onError: recoverConflict,
+  })
+
+  const revokeMutation = useMutation({
+    mutationFn: (target: { id: number; reason: string }) =>
+      api.revokeAttendanceAdjustment(caseId as number, target.id, etag, { reason: target.reason }),
+    retry: false,
+    onSuccess: async () => {
+      await invalidateAttendance()
+      await reloadEvidence(true)
+      const message = t('attendance.review.correctionRevoked')
+      setLiveMessage(message)
+      toast.success(message)
+    },
+    onError: recoverConflict,
+  })
 
   const restoreFocus = (): void => {
     priorFocusRef.current?.focus()
@@ -185,9 +336,159 @@ export function AttendanceCorrectionDrawer({ caseId, onClose }: Props): React.JS
                     ))}
                   </ol>
                 </EvidenceSection>
+
+                {canCorrect && effective && draft && (
+                  <EvidenceSection title={t('attendance.review.correction')}>
+                    {conflictWarning && <p role="alert" className="mb-3 rounded-md bg-amber-50 px-3 py-2 text-[0.8em] text-amber-900">{conflictWarning}</p>}
+                    {actionError && <p role="alert" className="mb-3 rounded-md bg-accent/10 px-3 py-2 text-[0.8em] text-accent">{actionError}</p>}
+                    {liveMessage && <p role="status" aria-live="polite" className="sr-only">{liveMessage}</p>}
+                    <form
+                      className="grid gap-3"
+                      onSubmit={(event) => {
+                        event.preventDefault()
+                        setActionError(null)
+                        setConflictWarning(null)
+                        try {
+                          correctionMutation.mutate(buildAdjustmentPayload(effective, draft))
+                        } catch (error) {
+                          const code = error instanceof Error ? error.message : ''
+                          setActionError(
+                            code === 'CORRECTION_REASON_REQUIRED'
+                              ? t('attendance.review.reasonRequired')
+                              : code === 'CORRECTION_UNCHANGED'
+                                ? t('attendance.review.unchanged')
+                                : apiErrorMessage(error),
+                          )
+                        }
+                      }}
+                    >
+                      <div className="grid grid-cols-2 gap-3">
+                        <label className="grid gap-1 text-[0.78em] font-medium" htmlFor="correction-presence">
+                          {t('attendance.review.correctionPresence')}
+                          <select
+                            id="correction-presence"
+                            value={draft.presenceState ?? ''}
+                            onChange={(event) => {
+                              const presenceState = PRESENCE_STATES.find((state) => state === event.target.value) ?? null
+                              setDraft({ ...draft, presenceState })
+                            }}
+                            className="h-9 rounded-md border border-input bg-surface px-2 text-sm"
+                          >
+                            <option value="">{t('attendance.review.noOverride')}</option>
+                            {PRESENCE_STATES.map((state) => <option key={state} value={state}>{codeLabel('presence', state)}</option>)}
+                          </select>
+                        </label>
+                        <label className="grid gap-1 text-[0.78em] font-medium" htmlFor="correction-missing-checkout">
+                          {t('attendance.review.missingCheckout')}
+                          <select
+                            id="correction-missing-checkout"
+                            value={draft.missingCheckout === null ? '' : String(draft.missingCheckout)}
+                            onChange={(event) => setDraft({
+                              ...draft,
+                              missingCheckout: event.target.value === '' ? null : event.target.value === 'true',
+                            })}
+                            className="h-9 rounded-md border border-input bg-surface px-2 text-sm"
+                          >
+                            <option value="">{t('attendance.review.noOverride')}</option>
+                            <option value="true">{t('common.yes')}</option>
+                            <option value="false">{t('common.no')}</option>
+                          </select>
+                        </label>
+                      </div>
+                      <div className="grid grid-cols-3 gap-3">
+                        {([
+                          ['correction-first-in', 'firstInAt', 'firstIn'],
+                          ['correction-latest-in', 'latestInAt', 'latestIn'],
+                          ['correction-final-out', 'finalOutAt', 'finalOut'],
+                        ] as const).map(([id, field, label]) => (
+                          <label key={id} className="grid gap-1 text-[0.78em] font-medium" htmlFor={id}>
+                            {t(`attendance.review.${label}`)}
+                            <input
+                              id={id}
+                              type="datetime-local"
+                              value={draft[field]}
+                              onChange={(event) => setDraft({ ...draft, [field]: event.target.value })}
+                              className="h-9 min-w-0 rounded-md border border-input bg-surface px-2 text-sm"
+                            />
+                          </label>
+                        ))}
+                      </div>
+                      <div className="grid grid-cols-2 gap-3">
+                        {([
+                          ['correction-late-minutes', 'lateMinutes', 'lateMinutes'],
+                          ['correction-early-exit-minutes', 'earlyExitMinutes', 'earlyExitMinutes'],
+                        ] as const).map(([id, field, label]) => (
+                          <label key={id} className="grid gap-1 text-[0.78em] font-medium" htmlFor={id}>
+                            {t(`attendance.review.${label}`)}
+                            <input
+                              id={id}
+                              min="0"
+                              type="number"
+                              value={draft[field]}
+                              onChange={(event) => setDraft({ ...draft, [field]: event.target.value })}
+                              className="h-9 rounded-md border border-input bg-surface px-2 text-sm"
+                            />
+                          </label>
+                        ))}
+                      </div>
+                      <label className="grid gap-1 text-[0.78em] font-medium" htmlFor="correction-reason">
+                        {t('attendance.review.correctionReason')}
+                        <textarea
+                          id="correction-reason"
+                          required
+                          value={draft.reason}
+                          onChange={(event) => setDraft({ ...draft, reason: event.target.value })}
+                          className="min-h-20 rounded-md border border-input bg-surface px-2 py-1.5 text-sm"
+                        />
+                      </label>
+                      <button
+                        type="submit"
+                        disabled={correctionMutation.isPending || draft.reason.trim() === '' || etag === ''}
+                        className="h-9 self-start rounded-md bg-primary px-3 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        {correctionMutation.isPending ? t('common.loading') : t('attendance.review.saveCorrection')}
+                      </button>
+                    </form>
+
+                    {effectiveAdjustment && (
+                      <div className="mt-5 border-t border-hairline pt-4">
+                        <label className="grid gap-1 text-[0.78em] font-medium" htmlFor="revoke-reason">
+                          {t('attendance.review.revokeReason')}
+                          <textarea
+                            id="revoke-reason"
+                            required
+                            value={revokeReason}
+                            onChange={(event) => setRevokeReason(event.target.value)}
+                            className="min-h-16 rounded-md border border-input bg-surface px-2 py-1.5 text-sm"
+                          />
+                        </label>
+                        <button
+                          type="button"
+                          disabled={revokeMutation.isPending || revokeReason.trim() === '' || etag === ''}
+                          onClick={() => setRevokeTarget({ id: effectiveAdjustment.id, reason: revokeReason.trim() })}
+                          className="mt-3 h-9 rounded-md border border-accent px-3 text-sm font-semibold text-accent disabled:cursor-not-allowed disabled:opacity-50"
+                        >
+                          {t('attendance.review.revokeCorrection')}
+                        </button>
+                      </div>
+                    )}
+                  </EvidenceSection>
+                )}
               </>
             )}
           </div>
+          <ConfirmDialog
+            open={revokeTarget !== null}
+            onOpenChange={(open) => { if (!open) setRevokeTarget(null) }}
+            title={t('attendance.review.confirmRevokeTitle')}
+            description={t('attendance.review.confirmRevokeDescription')}
+            confirmLabel={t('attendance.review.confirmRevoke')}
+            destructive
+            onConfirm={() => {
+              if (revokeTarget) revokeMutation.mutate(revokeTarget)
+              setRevokeTarget(null)
+            }}
+          />
         </Dialog.Content>
       </Dialog.Portal>
     </Dialog.Root>

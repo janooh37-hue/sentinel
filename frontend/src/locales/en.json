@@ -4200,7 +4200,22 @@
         "created": "Correction created",
         "revoked": "Correction revoked"
       },
-      "loadFailed": "Attendance case could not be loaded."
+      "loadFailed": "Attendance case could not be loaded.",
+      "correction": "Correction",
+      "correctionPresence": "Correction presence",
+      "noOverride": "No override",
+      "correctionReason": "Correction reason",
+      "saveCorrection": "Save correction",
+      "correctionSaved": "Correction saved.",
+      "reasonRequired": "A correction reason is required.",
+      "unchanged": "Change at least one attendance value before saving.",
+      "conflictWarning": "This attendance case changed. Compare the refreshed evidence before submitting your preserved draft.",
+      "revokeReason": "Revoke reason",
+      "revokeCorrection": "Revoke correction",
+      "confirmRevokeTitle": "Revoke this correction?",
+      "confirmRevokeDescription": "This correction will no longer be effective. The reason will be recorded in the audit trail.",
+      "confirmRevoke": "Confirm revoke",
+      "correctionRevoked": "Correction revoked."
     },
     "hero": {
       "title": "ATTENDANCE TODAY",

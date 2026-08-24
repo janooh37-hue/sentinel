@@ -4494,7 +4494,22 @@
         "created": "تم إنشاء التصحيح",
         "revoked": "تم إلغاء التصحيح"
       },
-      "loadFailed": "تعذر تحميل حالة الحضور."
+      "loadFailed": "تعذر تحميل حالة الحضور.",
+      "correction": "تصحيح الحضور",
+      "correctionPresence": "حالة التصحيح",
+      "noOverride": "دون تجاوز",
+      "correctionReason": "سبب التصحيح",
+      "saveCorrection": "حفظ التصحيح",
+      "correctionSaved": "تم حفظ التصحيح.",
+      "reasonRequired": "سبب التصحيح مطلوب.",
+      "unchanged": "غيّر قيمة حضور واحدة على الأقل قبل الحفظ.",
+      "conflictWarning": "تغيّرت حالة الحضور. قارن البيانات المُحدَّثة قبل إرسال مسودتك المحفوظة.",
+      "revokeReason": "سبب الإلغاء",
+      "revokeCorrection": "إلغاء التصحيح",
+      "confirmRevokeTitle": "هل تريد إلغاء هذا التصحيح؟",
+      "confirmRevokeDescription": "لن يعود هذا التصحيح فعالاً، وسيُسجل السبب في سجل المراجعة.",
+      "confirmRevoke": "تأكيد الإلغاء",
+      "correctionRevoked": "تم إلغاء التصحيح."
     },
     "hero": {
       "title": "حضور اليوم",
