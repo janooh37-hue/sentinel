@@ -35,6 +35,20 @@ export type EmployeeAttendanceHistory = components['schemas']['EmployeeAttendanc
 export type EmployeeAttendanceHistoryDay =
   components['schemas']['EmployeeAttendanceHistoryDayRead']
 export type WorkforceIntegrationStatus = components['schemas']['IntegrationStatusRead']
+export type WorkforceAccess = components['schemas']['WorkforceAccessRead']
+export type WorkforceSnapshot = components['schemas']['WorkforceSnapshotRead']
+export type WorkforceCoverageRow = components['schemas']['CoverageRowRead']
+export type WorkforceCoveragePage = components['schemas']['CursorPage_CoverageRowRead_']
+
+export interface WorkforceCoverageParams {
+  operational_date: string
+  parent_kind: 'department' | 'duty_unit' | 'duty_post'
+  department?: string
+  duty_unit?: string
+  duty_post?: string
+  limit?: number
+  cursor?: string
+}
 
 export interface ListAttendanceDayParams {
   operational_date: string
@@ -1077,6 +1091,11 @@ export const api = {
     ),
   getWorkforceIntegrationStatus: () =>
     request<WorkforceIntegrationStatus>('GET', '/workforce/integration/status'),
+  getWorkforceAccess: () => request<WorkforceAccess>('GET', '/workforce/access/me'),
+  getWorkforceSnapshot: () =>
+    request<WorkforceSnapshot>('GET', '/workforce/dashboard/snapshot'),
+  getWorkforceCoverage: (params: WorkforceCoverageParams) =>
+    request<WorkforceCoveragePage>('GET', `/workforce/dashboard/coverage${qs({ ...params })}`),
   getEmployeeAttendanceHistory: (employeeId: string, params: EmployeeAttendanceParams) =>
     request<EmployeeAttendanceHistory>(
       'GET',
