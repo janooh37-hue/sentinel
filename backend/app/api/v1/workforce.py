@@ -89,6 +89,7 @@ from app.services.workforce_scope_service import (
     encode_cursor,
     intersect_workforce_scope,
     normalize_scope_entry,
+    normalize_scope_value,
     resolve_workforce_scope,
     scope_allows,
 )
@@ -361,6 +362,8 @@ def get_dashboard_coverage(
     limit: Annotated[int, Query(ge=1, le=_MAX_LIMIT)] = 100,
     cursor: str | None = None,
 ) -> dict[str, Any]:
+    department = normalize_scope_value(department)
+    duty_unit = normalize_scope_value(duty_unit)
     if parent_kind == "organization" and (department is not None or duty_unit is not None):
         raise ValidationFailedError("WORKFORCE_COVERAGE_PARENT_INVALID", "Organization coverage cannot include a parent filter.")
     if parent_kind == "department" and (department is None or duty_unit is not None):

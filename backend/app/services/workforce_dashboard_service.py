@@ -32,6 +32,7 @@ from app.db.workforce_models import (
     WorkShiftDefinition,
     WorkShiftOccurrence,
 )
+from app.services.workforce_scope_service import normalize_scope_value, scope_allows
 
 _ORGANIZATION_TIMEZONE = ZoneInfo("Asia/Dubai")
 _ACTIVE_EMPLOYEE_STATUS = "active"
@@ -80,16 +81,14 @@ def _scope_allows(
     employee_id: str | None = None,
 ) -> bool:
     """Delegate hierarchy matching to the canonical authorization service."""
-    from app.services.workforce_scope_service import scope_allows
-
     return scope_allows(
         scope,
         # Aggregate rows (duty events) carry no person; a sentinel keeps the
         # check purely hierarchical so a self-only scope never matches them.
         employee_id=employee_id if employee_id is not None else _NON_EMPLOYEE_ROW,
-        department=department,
-        duty_unit=duty_unit,
-        duty_post=duty_post,
+        department=normalize_scope_value(department),
+        duty_unit=normalize_scope_value(duty_unit),
+        duty_post=normalize_scope_value(duty_post),
     )
 
 def _is_active_employee(status: str | None) -> bool:
@@ -702,13 +701,14 @@ def get_coverage_children(
     if parent_kind == "organization":
         child_kind, fields = "department", ("department_snapshot",)
     elif parent_kind == "department":
-        cases = [case for case in cases if case.department_snapshot == department]
+        cases = [case for case in cases if normalize_scope_value(case.department_snapshot) == department]
         child_kind, fields = "duty_unit", ("department_snapshot", "duty_unit_snapshot")
     elif parent_kind == "duty_unit":
         cases = [
             case
             for case in cases
-            if case.department_snapshot == department and case.duty_unit_snapshot == duty_unit
+            if normalize_scope_value(case.department_snapshot) == department
+            and normalize_scope_value(case.duty_unit_snapshot) == duty_unit
         ]
         child_kind, fields = "duty_post", ("department_snapshot", "duty_unit_snapshot", "duty_post_snapshot")
     else:
@@ -717,7 +717,7 @@ def get_coverage_children(
     health = _stream_health(db, now=datetime.now(UTC))
     buckets: dict[tuple[str | None, ...], list[AttendanceCase]] = defaultdict(list)
     for case in cases:
-        buckets[tuple(getattr(case, field) for field in fields)].append(case)
+        buckets[tuple(normalize_scope_value(getattr(case, field)) for field in fields)].append(case)
     result: list[dict[str, Any]] = []
     for key, bucket in buckets.items():
         metrics = _case_metrics(db, cases=bucket, sync_health=health, live_leave_by_employee=live)
