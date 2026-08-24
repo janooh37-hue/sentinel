@@ -161,7 +161,12 @@ describe('EmployeeActivitySection', () => {
     await waitFor(() => expect(api.listEmployeeActivity).toHaveBeenLastCalledWith(
       expect.objectContaining({ kind: 'duty_location' }),
     ))
-    expect(screen.getByRole('link', { name: /open employee activity/i })).toHaveAttribute('href', '/employees/G500?tab=activity')
+    const dutyRow = screen.getByRole('link', { name: /open employee activity/i })
+    expect(dutyRow).toHaveAttribute('href', '/employees/G500?tab=activity')
+    expect(dutyRow.querySelector('span[aria-hidden="true"]')).toHaveStyle({
+      background: 'var(--primary-soft)',
+      color: 'var(--primary-on-soft)',
+    })
   })
 
   it('resets to the first page when employee or type changes', async () => {

@@ -27,6 +27,7 @@ vi.mock('react-i18next', () => ({
 describe('DutyLocationActivity', () => {
   afterEach(() => {
     language.value = 'en'
+    document.documentElement.dir = ''
   })
 
   it('renders a transfer from the historical origin to the destination', () => {
@@ -59,13 +60,16 @@ describe('DutyLocationActivity', () => {
     expect(screen.getByText('Security / North Gate')).toBeInTheDocument()
   })
 
-  it('uses Arabic labels while preserving logical origin-to-destination order', () => {
+  it('inherits RTL direction and isolates Latin location labels in origin-to-destination order', () => {
     language.value = 'ar'
-    render(<DutyLocationActivity item={{ event_type: 'transfer', from_unit: 'الإدارة', to_unit: 'العمليات' }} />)
+    document.documentElement.dir = 'rtl'
+    render(<DutyLocationActivity item={{ event_type: 'transfer', from_unit: 'Administration', to_unit: 'Operations' }} />)
 
     expect(screen.getByText('تم النقل')).toBeInTheDocument()
     const movement = screen.getByTestId('duty-location-movement')
-    expect(movement).toHaveAttribute('dir', 'auto')
-    expect(movement.textContent?.indexOf('الإدارة')).toBeLessThan(movement.textContent?.indexOf('العمليات') ?? -1)
+    expect(movement).not.toHaveAttribute('dir')
+    expect(movement.querySelectorAll('bdi')).toHaveLength(2)
+    expect(movement.textContent?.indexOf('Administration')).toBeLessThan(movement.textContent?.indexOf('Operations') ?? -1)
+    expect(movement.querySelector('svg')).toHaveClass('rtl:rotate-180')
   })
 })

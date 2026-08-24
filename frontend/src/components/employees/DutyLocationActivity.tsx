@@ -20,10 +20,10 @@ export function DutyLocationActivity({ item }: { item: DutyLocationActivityValue
       <span className="block font-semibold text-foreground">
         {t(`employees.activity.dutyLocation.${item.event_type ?? 'transfer'}`)}
       </span>
-      <span data-testid="duty-location-movement" dir="auto" className="mt-0.5 flex min-w-0 flex-wrap items-center gap-1.5 text-muted-foreground">
+      <span data-testid="duty-location-movement" className="mt-0.5 flex min-w-0 flex-wrap items-center gap-1.5 text-muted-foreground">
         {from ? (
           <>
-            <span>{from}</span>
+            <bdi dir="auto">{from}</bdi>
             <svg aria-hidden className="h-3.5 w-3.5 shrink-0 rtl:rotate-180" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
               <path d="M2 8h11m-4-4 4 4-4 4" strokeLinecap="round" strokeLinejoin="round" />
             </svg>
@@ -31,7 +31,7 @@ export function DutyLocationActivity({ item }: { item: DutyLocationActivityValue
         ) : (
           <span className="text-faint">{t('employees.activity.dutyLocation.historyBegins')}</span>
         )}
-        <span>{to}</span>
+        <bdi dir="auto">{to}</bdi>
       </span>
       {item.reason ? <span dir="auto" className="mt-0.5 block text-faint">{item.reason}</span> : null}
     </span>

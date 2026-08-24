@@ -32,8 +32,8 @@ const KIND_STYLES: Record<EmployeeActivityKind, { soft: string; color: string; i
     icon: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M3.5 5.5h17v13h-17zM3.5 6.5 12 13l8.5-6.5" /></svg>,
   },
   duty_location: {
-    soft: '#e8eff8',
-    color: '#28557a',
+    soft: 'var(--primary-soft)',
+    color: 'var(--primary-on-soft)',
     icon: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M12 21s7-6 7-12a7 7 0 1 0-14 0c0 6 7 12 7 12Zm0-9.5h.01" /></svg>,
   },
 }
