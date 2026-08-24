@@ -385,7 +385,7 @@ export function UserPermissionsSheet({
             )}
           </div>
           {query.trim() && (
-            <p className="mt-2 text-xs text-muted-foreground">
+            <p role="status" className="mt-2 text-xs text-muted-foreground">
               {t('access.permissions.results', { count: visibleCount, defaultValue: '{{count}} matching' })}
             </p>
           )}

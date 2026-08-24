@@ -42,6 +42,16 @@ void i18n.use(initReactI18next).init({
 
 vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }))
 
+// WordHandoffDialog calls useCapabilities (books.templates gate) — grant it so
+// these tests exercise the actions surface, not the template affordance.
+vi.mock('@/lib/useCapabilities', () => ({
+  useCapabilities: () => ({
+    capabilities: new Set(['books.templates']),
+    isLoading: false,
+    has: () => true,
+  }),
+}))
+
 // Base book fixture
 const BASE_BOOK: BookRead = {
   id: 1,

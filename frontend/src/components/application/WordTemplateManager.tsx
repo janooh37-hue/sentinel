@@ -5,6 +5,9 @@
  * Names display WITHOUT the .docx suffix everywhere (an Arabic name glued to
  * a Latin suffix is a bidi mess); the backend re-appends it via
  * safe_template_name.
+ *
+ * Rename/delete mutate the shared library, so they need ``books.templates``;
+ * the list itself stays readable (reads are books.edit on the backend).
  */
 
 import { useState } from 'react'
@@ -14,6 +17,7 @@ import { Loader2, Pencil, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
 
 import { api, apiErrorMessage } from '@/lib/api'
+import { useCapabilities } from '@/lib/useCapabilities'
 import {
   DialogRoot,
   DialogContent,
@@ -41,6 +45,10 @@ export function WordTemplateManager({
 }: Props): React.JSX.Element {
   const { t, i18n } = useTranslation()
   const isAr = i18n.language.startsWith('ar')
+  const { has } = useCapabilities()
+  // Mutating the shared library is template-admin; the read-only list renders
+  // regardless (backend serves GETs to books.edit holders).
+  const canManageTemplates = has('books.templates')
   const qc = useQueryClient()
   const [editing, setEditing] = useState<string | null>(null) // full name incl. .docx
   const [newName, setNewName] = useState('')
@@ -159,18 +167,20 @@ export function WordTemplateManager({
                         {new Date(tpl.modified_at).toLocaleDateString(isAr ? 'ar-AE' : 'en-GB')}
                       </bdi>
                     </span>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setEditing(tpl.name)
-                        setNewName(stripDocx(tpl.name))
-                      }}
-                      className="inline-flex shrink-0 items-center gap-1 rounded-lg border border-hairline px-2 py-1.5 text-[0.74em] font-semibold text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                    >
-                      <Pencil className="h-3 w-3" aria-hidden />
-                      {t('books.word.renameTemplate')}
-                    </button>
-                    {tpl.kind !== 'base' && (
+                    {canManageTemplates && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setEditing(tpl.name)
+                          setNewName(stripDocx(tpl.name))
+                        }}
+                        className="inline-flex shrink-0 items-center gap-1 rounded-lg border border-hairline px-2 py-1.5 text-[0.74em] font-semibold text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                      >
+                        <Pencil className="h-3 w-3" aria-hidden />
+                        {t('books.word.renameTemplate')}
+                      </button>
+                    )}
+                    {canManageTemplates && tpl.kind !== 'base' && (
                       <button
                         type="button"
                         disabled={deleteMutation.isPending}

@@ -129,8 +129,8 @@ describe('UserPermissionsSheet', () => {
   it('renders capability descriptions in the editor', async () => {
     renderSheet()
 
-    // Localized descriptions (perms.caps.<id>.desc, landed by Task 9) take
-    // priority over the catalog description, which is only the defaultValue.
+    // Localized descriptions (perms.caps.<id>.desc) take priority over the
+    // catalog description, which is only the defaultValue.
     const desc1 = await screen.findByText('Approve, sign, or reject documents in the approval queue.')
     expect(desc1).toBeInTheDocument()
 
@@ -168,8 +168,8 @@ describe('UserPermissionsSheet — search + bulk', () => {
       ],
     })
 
-    // The en.json value for this key lands in Task 9; until then the component's
-    // defaultValue renders, which is what we assert against.
+    // The en.json value for this key resolves to the same string as the
+    // component's defaultValue, which is what we assert against.
     const input = await screen.findByPlaceholderText('Search permissions…')
     await userEvent.type(input, 'books')
     expect(screen.getByText('books.view')).toBeVisible() // raw id match

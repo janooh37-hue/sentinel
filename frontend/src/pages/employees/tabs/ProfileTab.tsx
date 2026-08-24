@@ -354,6 +354,9 @@ export function ProfileTab({
   const { has } = useCapabilities()
   const qc = useQueryClient()
   const canEdit = has('employees.edit')
+  // Vault uploads/replace/delete are their own atomic capability — profile
+  // edits don't cover vault contents (mirrors the backend route gate).
+  const canManageVault = has('employees.vault.manage')
 
   const [transferOpen, setTransferOpen] = useState(false)
   const [fixingField, setFixingField] = useState<string | null>(null)
@@ -491,7 +494,7 @@ export function ProfileTab({
                   kind="uae_id"
                   docNumber={employee.uae_id_no ?? null}
                   entry={tree.folders.uae_id?.[0] ?? null}
-                  canEdit={canEdit}
+                  canManageVault={canManageVault}
                   onChanged={invalidateVault}
                 />
                 <IdentityDocCard
@@ -499,7 +502,7 @@ export function ProfileTab({
                   kind="passport"
                   docNumber={employee.passport_no ?? null}
                   entry={tree.folders.passport?.[0] ?? null}
-                  canEdit={canEdit}
+                  canManageVault={canManageVault}
                   onChanged={invalidateVault}
                 />
               </div>
