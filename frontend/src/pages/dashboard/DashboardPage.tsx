@@ -42,6 +42,7 @@ import type {
   DashboardRecentLedger,
   DashboardSummary,
   DashboardUpcomingItem,
+  WorkforceSnapshot,
 } from '@/lib/api'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { Badge } from '@/components/ui/badge'
@@ -56,6 +57,7 @@ import { BooksAwaitingWidget } from '@/pages/dashboard/widgets/BooksAwaitingWidg
 import { ExpiringSoonWidget } from '@/pages/dashboard/widgets/ExpiringSoonWidget'
 import { PendingDeparturesWidget } from '@/pages/dashboard/widgets/PendingDeparturesWidget'
 import { WaitingApprovalsCard } from '@/pages/dashboard/widgets/WaitingApprovalsCard'
+import { WorkforceCoverageSheet } from '@/pages/dashboard/widgets/WorkforceCoverageSheet'
 import { WorkforcePulseWidget } from '@/pages/dashboard/widgets/WorkforcePulseWidget'
 import {
   DEFAULT_CANVAS_WIDTH,
@@ -207,7 +209,8 @@ export function DashboardPage({ onNavigate }: DashboardPageProps): React.JSX.Ele
 
   const [widgetDialogOpen, setWidgetDialogOpen] = useState(false)
   const [quickActionsDialogOpen, setQuickActionsDialogOpen] = useState(false)
-  const [, setCoverageOpen] = useState(false)
+  const [coverageOpen, setCoverageOpen] = useState(false)
+  const coverageOperationalDate = qc.getQueryData<WorkforceSnapshot>(['workforce', 'snapshot'])?.operational_date ?? ''
 
   // Labels for every widget id — fed into the Customize dialog.
   const widgetLabels = useMemo<Record<WidgetId, string>>(() => {
@@ -670,6 +673,11 @@ export function DashboardPage({ onNavigate }: DashboardPageProps): React.JSX.Ele
             { onSuccess: () => setQuickActionsDialogOpen(false) },
           )
         }}
+      />
+      <WorkforceCoverageSheet
+        open={coverageOpen}
+        onOpenChange={setCoverageOpen}
+        operationalDate={coverageOperationalDate}
       />
 
     </div>

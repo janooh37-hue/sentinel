@@ -2735,6 +2735,29 @@
       "withheld": {
         "title": "Pending verification",
         "detail": "Attendance verification is still in progress."
+      },
+      "coverage": {
+        "title": "Coverage",
+        "operationalDate": "Operational date: {{date}}",
+        "back": "Back",
+        "breadcrumb": "Coverage hierarchy",
+        "allDepartments": "All departments",
+        "empty": "No coverage groups are available for this level.",
+        "pendingVerification": "Pending verification",
+        "level": {
+          "department": "Departments",
+          "duty_unit": "Duty units",
+          "duty_post": "Duty posts"
+        },
+        "metrics": {
+          "scheduled": "Scheduled",
+          "excused": "Excused",
+          "expected": "Expected",
+          "evaluated": "Evaluated",
+          "excluded": "Excluded",
+          "working": "On duty",
+          "gap": "Gap"
+        }
       }
     },
     "widgetLabels": {

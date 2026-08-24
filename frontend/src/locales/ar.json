@@ -2926,6 +2926,29 @@
       "withheld": {
         "title": "بانتظار التحقق",
         "detail": "لا يزال التحقق من الحضور قيد التنفيذ."
+      },
+      "coverage": {
+        "title": "التغطية",
+        "operationalDate": "التاريخ التشغيلي: {{date}}",
+        "back": "رجوع",
+        "breadcrumb": "تدرج التغطية",
+        "allDepartments": "كل الإدارات",
+        "empty": "لا توجد مجموعات تغطية لهذا المستوى.",
+        "pendingVerification": "بانتظار التحقق",
+        "level": {
+          "department": "الإدارات",
+          "duty_unit": "وحدات الواجب",
+          "duty_post": "مواقع الواجب"
+        },
+        "metrics": {
+          "scheduled": "المجدول",
+          "excused": "المعفى",
+          "expected": "المتوقع",
+          "evaluated": "المقيّم",
+          "excluded": "المستبعد",
+          "working": "على رأس العمل",
+          "gap": "الفجوة"
+        }
       }
     },
     "widgetLabels": {
