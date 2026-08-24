@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import date, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 
 from sqlalchemy.orm import Session
 
@@ -13,6 +13,7 @@ from app.db.models import (
     LedgerEntry,
     Violation,
 )
+from app.db.workforce_models import DutyAssignmentEvent
 from app.services import employee_activity_service
 
 BASE = datetime(2026, 8, 10, 9, 0)
@@ -312,3 +313,123 @@ def test_private_email_rows_and_total_are_owner_scoped(db_session: Session):
 
     assert [x.source_id for x in result.items] == [92, 90]
     assert result.total == 2
+
+
+def test_activity_merges_recorded_duty_location_events_and_paginates(
+    db_session: Session, admin_user
+):
+    _employee(db_session, employee_id="G1001")
+    _employee(db_session, employee_id="G1002")
+    _category_and_book(db_session, book_id=72, ref_number="HR-0072", employee_id="G1001")
+    db_session.add_all([
+        Document(
+            id=72,
+            employee_id="G1001",
+            template_id="Employment Certificate",
+            ref_number="HR-0072",
+            docx_path="output/fake.docx",
+            submission_id="00000000-0000-0000-0000-000000000072",
+            created_at=datetime(2026, 8, 22, 8),
+        ),
+        DutyAssignmentEvent(
+            employee_id="G1001",
+            event_type="initial_placement",
+            from_department=None,
+            from_unit=None,
+            from_post=None,
+            to_department="Security",
+            to_unit="Main Gate",
+            to_post="Gate 1",
+            effective_at=datetime(2026, 8, 1, 8, tzinfo=UTC).replace(tzinfo=None),
+            actor_user_id=admin_user.id,
+            reason="Initial placement",
+        ),
+        DutyAssignmentEvent(
+            employee_id="G1001",
+            event_type="transfer",
+            from_department="Security",
+            from_unit="Main Gate",
+            from_post="Gate 1",
+            to_department="Security",
+            to_unit="Administration",
+            to_post="Reception",
+            effective_at=datetime(2026, 8, 20, 8, tzinfo=UTC).replace(tzinfo=None),
+            actor_user_id=admin_user.id,
+            reason="Duty transfer",
+        ),
+        DutyAssignmentEvent(
+            employee_id="G1001",
+            event_type="transfer",
+            from_department="Security",
+            from_unit="Administration",
+            from_post="Reception",
+            to_department="Security",
+            to_unit="Control Room",
+            to_post="Dispatch",
+            effective_at=datetime(2026, 8, 23, 8, tzinfo=UTC).replace(tzinfo=None),
+            actor_user_id=admin_user.id,
+            reason="Duty transfer",
+        ),
+        DutyAssignmentEvent(
+            employee_id="G1001",
+            event_type="baseline",
+            from_department=None,
+            from_unit=None,
+            from_post=None,
+            to_department="Security",
+            to_unit="Legacy",
+            to_post=None,
+            effective_at=datetime(2026, 7, 1, 8, tzinfo=UTC).replace(tzinfo=None),
+            actor_user_id=admin_user.id,
+            reason="Seed baseline",
+        ),
+        DutyAssignmentEvent(
+            employee_id="G1002",
+            event_type="transfer",
+            from_department="Security",
+            from_unit="Main Gate",
+            from_post="Gate 2",
+            to_department="Security",
+            to_unit="Administration",
+            to_post="Reception",
+            effective_at=datetime(2026, 8, 24, 8, tzinfo=UTC).replace(tzinfo=None),
+            actor_user_id=admin_user.id,
+            reason="Other employee transfer",
+        ),
+    ])
+    db_session.commit()
+
+    duty_locations = employee_activity_service.list_employee_activity(
+        db_session,
+        owner_user_id=admin_user.id,
+        employee_id="G1001",
+        kind="duty_location",
+        limit=25,
+        offset=0,
+    )
+    merged_page = employee_activity_service.list_employee_activity(
+        db_session,
+        owner_user_id=admin_user.id,
+        employee_id="G1001",
+        limit=2,
+        offset=1,
+    )
+
+    assert duty_locations.total == 3
+    assert [row.event_type for row in duty_locations.items] == [
+        "transfer",
+        "transfer",
+        "initial_placement",
+    ]
+    assert [row.to_unit for row in duty_locations.items] == [
+        "Control Room",
+        "Administration",
+        "Main Gate",
+    ]
+    assert duty_locations.items[1].from_unit == "Main Gate"
+    assert all(row.event_type != "baseline" for row in duty_locations.items)
+    assert merged_page.total == 4
+    assert [(row.kind, row.title) for row in merged_page.items] == [
+        ("document", "Employment Certificate"),
+        ("duty_location", "transfer"),
+    ]

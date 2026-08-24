@@ -7,7 +7,8 @@ from pydantic import BaseModel
 
 from app.schemas._base import ORMBase
 
-EmployeeActivityKind = Literal["document", "leave", "violation", "ledger"]
+DutyLocationEventType = Literal["initial_placement", "transfer"]
+EmployeeActivityKind = Literal["document", "leave", "violation", "ledger", "duty_location"]
 
 
 class EmployeeActivityItemRead(ORMBase):
@@ -25,6 +26,15 @@ class EmployeeActivityItemRead(ORMBase):
     direction: str | None = None
     channel: str | None = None
     reference: str
+
+    event_type: DutyLocationEventType | None = None
+    from_department: str | None = None
+    from_unit: str | None = None
+    from_post: str | None = None
+    to_department: str | None = None
+    to_unit: str | None = None
+    to_post: str | None = None
+    reason: str | None = None
 
 
 class EmployeeActivityListRead(BaseModel):
