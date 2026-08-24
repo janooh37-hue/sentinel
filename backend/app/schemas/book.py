@@ -419,3 +419,63 @@ class ApproverOptionRead(BaseModel):
     name: str
     # True for the admin-set default manager — the picker preselects them.
     is_default: bool = False
+
+
+# ---------------------------------------------------------------------------
+# Approvals log (#31) — GET /books/approval-log?scope=sent|received
+# ---------------------------------------------------------------------------
+
+
+class ApprovalLogItem(ORMBase):
+    """One flattened approvals-log row (either scope).
+
+    Carries exactly what an operator needs to recognise the record and where it
+    sits in the chain — ref, subject, category, state, the people involved, the
+    two timestamps, the verdict, and the current version's ``document_id`` so
+    the client can paint a page-1 thumbnail without fetching the detail payload.
+
+    Inherits ORMBase so every timestamp serializes with an offset (the
+    test_schema_utc_serialization guard). The service tags each stamp with its
+    real zone before construction — step stamps as UTC, the off-chain
+    ``Book.created_at`` fallback as Dubai wall-clock — and aware values pass
+    through ORMBase's validator untouched.
+    """
+
+    book_id: int
+    ref_number: str
+    subject: str | None = None
+    category_name_ar: str | None = None
+    category_name_en: str | None = None
+    # Book.approval_state: none | pending | awaiting_scan | approved | rejected | returned
+    status: str
+    priority: str = "Normal"
+    submitted_by_user_id: int | None = None
+    submitted_by_name: str | None = None
+    # The doc's named manager resolved to a login account (the usual approver).
+    doc_manager_user_id: int | None = None
+    doc_manager_name: str | None = None
+    # Current chain, resolved to display names: the signing approver + advisory reviewers.
+    approver_name: str | None = None
+    reviewer_names: list[str] = Field(default_factory=list)
+    # When the record entered its current approval chain (oldest step's
+    # created_at; falls back to the row's creation stamp off-chain).
+    submitted_at: datetime | None = None
+    # When the final verdict landed (None while still in flight).
+    decided_at: datetime | None = None
+    verdict: Literal["approved", "rejected", "returned"] | None = None
+    # Current version's generated document — thumbnail source; None for drafts
+    # and v3-imported records.
+    document_id: int | None = None
+    # Received-scope relationship info: the caller's own step on this record.
+    your_step_kind: str | None = None
+    your_step_state: str | None = None
+    your_step_decided_at: datetime | None = None
+
+
+class ApprovalLogResponse(BaseModel):
+    """Paged approvals log — mirrors the BookListResponse envelope shape."""
+
+    items: list[ApprovalLogItem]
+    total: int
+    limit: int
+    offset: int

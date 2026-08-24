@@ -8100,6 +8100,93 @@
         }
       }
     },
+    "/api/v1/books/approval-log": {
+      "get": {
+        "tags": [
+          "books"
+        ],
+        "summary": "Get Approval Log",
+        "description": "The approvals log — ``scope=sent`` (records I submitted) or\n``scope=received`` (my pending decisions + my verdicts from the last 30\ndays). Paged like GET /books; rows are flattened ApprovalLogItem payloads.\n\nDeclared before ``/{book_id}`` so the literal ``approval-log`` segment isn't\nswallowed by the int path param — same reason as ``/awaiting`` above.",
+        "operationId": "get_approval_log_api_v1_books_approval_log_get",
+        "parameters": [
+          {
+            "name": "scope",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "enum": [
+                "sent",
+                "received"
+              ],
+              "type": "string",
+              "default": "received",
+              "title": "Scope"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 500,
+              "minimum": 1,
+              "default": 100,
+              "title": "Limit"
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "default": 0,
+              "title": "Offset"
+            }
+          },
+          {
+            "name": "gssg_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Gssg Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApprovalLogResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/books/approvers": {
       "get": {
         "tags": [
@@ -22033,6 +22120,247 @@
         "type": "object",
         "title": "AppSettingsUpdate",
         "description": "PATCH semantics — every field is optional."
+      },
+      "ApprovalLogItem": {
+        "properties": {
+          "book_id": {
+            "type": "integer",
+            "title": "Book Id"
+          },
+          "ref_number": {
+            "type": "string",
+            "title": "Ref Number"
+          },
+          "subject": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Subject"
+          },
+          "category_name_ar": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Category Name Ar"
+          },
+          "category_name_en": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Category Name En"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "priority": {
+            "type": "string",
+            "title": "Priority",
+            "default": "Normal"
+          },
+          "submitted_by_user_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Submitted By User Id"
+          },
+          "submitted_by_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Submitted By Name"
+          },
+          "doc_manager_user_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Doc Manager User Id"
+          },
+          "doc_manager_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Doc Manager Name"
+          },
+          "approver_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Approver Name"
+          },
+          "reviewer_names": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Reviewer Names"
+          },
+          "submitted_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Submitted At"
+          },
+          "decided_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decided At"
+          },
+          "verdict": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "approved",
+                  "rejected",
+                  "returned"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Verdict"
+          },
+          "document_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Document Id"
+          },
+          "your_step_kind": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Your Step Kind"
+          },
+          "your_step_state": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Your Step State"
+          },
+          "your_step_decided_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Your Step Decided At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "book_id",
+          "ref_number",
+          "status"
+        ],
+        "title": "ApprovalLogItem",
+        "description": "One flattened approvals-log row (either scope).\n\nCarries exactly what an operator needs to recognise the record and where it\nsits in the chain — ref, subject, category, state, the people involved, the\ntwo timestamps, the verdict, and the current version's ``document_id`` so\nthe client can paint a page-1 thumbnail without fetching the detail payload.\n\nInherits ORMBase so every timestamp serializes with an offset (the\ntest_schema_utc_serialization guard). The service tags each stamp with its\nreal zone before construction — step stamps as UTC, the off-chain\n``Book.created_at`` fallback as Dubai wall-clock — and aware values pass\nthrough ORMBase's validator untouched."
+      },
+      "ApprovalLogResponse": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ApprovalLogItem"
+            },
+            "type": "array",
+            "title": "Items"
+          },
+          "total": {
+            "type": "integer",
+            "title": "Total"
+          },
+          "limit": {
+            "type": "integer",
+            "title": "Limit"
+          },
+          "offset": {
+            "type": "integer",
+            "title": "Offset"
+          }
+        },
+        "type": "object",
+        "required": [
+          "items",
+          "total",
+          "limit",
+          "offset"
+        ],
+        "title": "ApprovalLogResponse",
+        "description": "Paged approvals log — mirrors the BookListResponse envelope shape."
       },
       "ApproveRequest": {
         "properties": {

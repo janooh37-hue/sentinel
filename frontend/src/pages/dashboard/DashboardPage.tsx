@@ -34,6 +34,7 @@ import {
 } from 'lucide-react'
 
 import { api } from '@/lib/api'
+import { APPROVALS_RECEIVED_DEEPLINK } from '@/lib/approvals'
 import type {
   AppSettingsRead,
   DashboardOnLeaveItem,
@@ -326,7 +327,7 @@ export function DashboardPage({ onNavigate }: DashboardPageProps): React.JSX.Ele
         )
       case 'waiting_approvals':
         return zone === 'top' ? (
-          <WaitingApprovalsCard onReview={() => navigate('/books?status=pending')} />
+          <WaitingApprovalsCard onReview={() => navigate(APPROVALS_RECEIVED_DEEPLINK)} />
         ) : (
           <BooksAwaitingWidget />
         )

@@ -11,13 +11,15 @@
 
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { Link } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { formatDistanceToNow, parseISO, type Locale } from 'date-fns'
 import { ar as arLocale } from 'date-fns/locale'
-import { Check, ChevronRight, Inbox, X } from 'lucide-react'
+import { ArrowLeftRight, Check, ChevronRight, Inbox, X } from 'lucide-react'
 
 import { api, ApiError, type BookRead, apiErrorMessage } from '@/lib/api'
+import { APPROVALS_RECEIVED_DEEPLINK } from '@/lib/approvals'
 import { useCapabilities } from '@/lib/useCapabilities'
 import { BookDetailDrawer } from '@/components/books/BookDetailDrawer'
 import { EmptyState } from '@/components/ui/empty-state'
@@ -245,6 +247,19 @@ export function BooksAwaitingWidget(): React.JSX.Element | null {
               />
             ))
           )}
+        </div>
+
+        {/* Footer — into the full approvals log (received tab preselected). */}
+        <div className="border-t border-hairline px-5 py-2.5">
+          <Link
+            to={APPROVALS_RECEIVED_DEEPLINK}
+            data-testid="approvals-full-log-link"
+            className="flex items-center gap-1.5 text-[0.78em] font-semibold text-muted-foreground transition-colors hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            <ArrowLeftRight className="h-3.5 w-3.5" strokeWidth={1.8} aria-hidden />
+            {t('books.approvals.viewFullLog')}
+            <ChevronRight className="h-3 w-3 rtl:-scale-x-100" strokeWidth={2} aria-hidden />
+          </Link>
         </div>
       </section>
 
