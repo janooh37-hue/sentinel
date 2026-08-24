@@ -6,7 +6,12 @@ import json
 from datetime import date, datetime, time, timedelta
 
 from app.db.models import AuditLog
-from app.db.workforce_models import AttendanceAdjustment, AttendanceEvaluation, AttendancePunchAssignment
+from app.db.workforce_models import (
+    AttendanceAdjustment,
+    AttendanceEvaluation,
+    AttendanceEvaluationPunchSource,
+    AttendancePunchAssignment,
+)
 from app.services import perm_service, workforce_admin_service
 from tests.conftest import make_user
 from tests.factories.attendance import add_punch, build_attendance_day, local
@@ -31,8 +36,7 @@ def test_case_reads_historical_typed_evidence_without_punch_inference(api_db) ->
     employee.department = "Different Department"
     employee.duty_unit = "Different Unit"
     employee.duty_post = "Different Post"
-
-    add_punch(
+    punch = add_punch(
         api_db,
         provider_person=fixture.provider_people[employee.id],
         occurred_at=local(DAY, time(8, 9)),
@@ -56,6 +60,13 @@ def test_case_reads_historical_typed_evidence_without_punch_inference(api_db) ->
     )
     api_db.add(second)
     api_db.flush()
+    api_db.add(
+        AttendanceEvaluationPunchSource(
+            evaluation_id=second.id,
+            punch_id=punch.id,
+            ordinal=1,
+        )
+    )
 
     reason = "Verified against supervisor register"
     adjustment = AttendanceAdjustment(
@@ -184,9 +195,12 @@ def test_case_punches_exclude_events_assigned_to_an_overlapping_case(api_db) -> 
     # evidence windows overlap completely.
     other_case.scheduled_start_at = target_case.scheduled_start_at + timedelta(minutes=1)
     other_case.scheduled_end_at = target_case.scheduled_end_at
+    evaluation = api_db.query(AttendanceEvaluation).filter_by(
+        attendance_case_id=target_case.id, revision=1
+    ).one()
     person = fixture.provider_people[employee.id]
     owned = add_punch(api_db, provider_person=person, occurred_at=local(DAY, time(8, 5)))
-    add_punch(api_db, provider_person=person, occurred_at=local(DAY, time(8, 6)))
+    unassigned = add_punch(api_db, provider_person=person, occurred_at=local(DAY, time(8, 6)))
     assigned_elsewhere = add_punch(api_db, provider_person=person, occurred_at=local(DAY, time(8, 7)))
     api_db.add_all(
         [
@@ -197,6 +211,12 @@ def test_case_punches_exclude_events_assigned_to_an_overlapping_case(api_db) -> 
                 punch_id=assigned_elsewhere.id,
                 attendance_case_id=other_case.id,
                 algorithm_version="test",
+            ),
+            AttendanceEvaluationPunchSource(
+                evaluation_id=evaluation.id, punch_id=owned.id, ordinal=1
+            ),
+            AttendanceEvaluationPunchSource(
+                evaluation_id=evaluation.id, punch_id=unassigned.id, ordinal=2
             ),
         ]
     )
@@ -258,4 +278,52 @@ def test_case_keeps_legacy_created_audit_with_adjustment_reason_fallback(api_db)
     assert [row["reason"] for row in audit] == [
         "Legacy supervisor register",
         "Legacy revocation",
+    ]
+
+
+def test_case_uses_persisted_evaluation_sources_after_mapping_changes(api_db) -> None:
+    fixture = build_attendance_day(api_db, operational_date=DAY, posts=[("Gate 1", 1)])
+    employee = fixture.employees[0]
+    case = next(case for case in fixture.cases if case.shift_code_snapshot == "morning")
+    first = api_db.query(AttendanceEvaluation).filter_by(
+        attendance_case_id=case.id, revision=1
+    ).one()
+    punch = add_punch(
+        api_db,
+        provider_person=fixture.provider_people[employee.id],
+        occurred_at=local(DAY, time(8, 9)),
+        device_name="Historical Terminal",
+    )
+    second = AttendanceEvaluation(
+        attendance_case_id=case.id,
+        revision=2,
+        provider_person_id=first.provider_person_id,
+        presence_state="completed",
+        reason_code="automatic_revision",
+        algorithm_version="test-v2",
+        input_fingerprint="case-source-revision-2",
+        evaluated_at=datetime(2026, 8, 24, 12, 1),
+    )
+    api_db.add(second)
+    api_db.flush()
+    api_db.add_all(
+        [
+            AttendanceEvaluationPunchSource(
+                evaluation_id=first.id, punch_id=punch.id, ordinal=1
+            ),
+            AttendanceEvaluationPunchSource(
+                evaluation_id=second.id, punch_id=punch.id, ordinal=1
+            ),
+        ]
+    )
+    person = fixture.provider_people[employee.id]
+    person.mapping_state = "unmapped"
+    person.employee_id = None
+    api_db.commit()
+
+    response = _client(api_db, fixture.admin).get(f"/api/v1/workforce/attendance/cases/{case.id}")
+
+    assert response.status_code == 200, response.text
+    assert response.json()["punches"] == [
+        {"occurred_at": "2026-08-24T04:09:00Z", "device_name": "Historical Terminal"}
     ]

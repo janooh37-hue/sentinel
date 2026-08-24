@@ -17,6 +17,7 @@ from app.db.workforce_models import (
     AttendanceAdjustment,
     AttendanceCase,
     AttendanceEvaluation,
+    AttendanceEvaluationPunchSource,
     AttendanceEvaluationQueue,
     AttendanceProviderPerson,
     AttendancePunch,
@@ -445,33 +446,21 @@ def _adjustment_read(row: AttendanceAdjustment) -> dict[str, Any]:
         "supersedes_adjustment_id": row.supersedes_adjustment_id,
     }
 def _case_punches(db: Session, case: AttendanceCase) -> list[dict[str, Any]]:
-    """Return stored provider events in the evaluator's evidence window.
-
-    The terminal does not supply reliable direction, so this is deliberately a
-    source-event projection rather than an arrival/departure interpretation.
-    """
-    person = _verified_people(db, {case.employee_id}).get(case.employee_id)
-    policy = effective_policy(db, case)
-    if person is None or policy is None:
-        return []
-    window_start, window_end = _punch_window(db, case, policy)
+    """Return the immutable provider events recorded by the case evaluations."""
     return [
         {"occurred_at": _as_utc_aware(row.occurred_at), "device_name": row.device_name}
         for row in db.scalars(
             select(AttendancePunch)
-            .outerjoin(
-                AttendancePunchAssignment,
-                AttendancePunchAssignment.punch_id == AttendancePunch.id,
+            .join(
+                AttendanceEvaluationPunchSource,
+                AttendanceEvaluationPunchSource.punch_id == AttendancePunch.id,
             )
-            .where(
-                AttendancePunch.provider_person_id == person.id,
-                AttendancePunch.occurred_at >= window_start,
-                AttendancePunch.occurred_at <= window_end,
-                or_(
-                    AttendancePunchAssignment.punch_id.is_(None),
-                    AttendancePunchAssignment.attendance_case_id == case.id,
-                ),
+            .join(
+                AttendanceEvaluation,
+                AttendanceEvaluation.id == AttendanceEvaluationPunchSource.evaluation_id,
             )
+            .where(AttendanceEvaluation.attendance_case_id == case.id)
+            .distinct()
             .order_by(AttendancePunch.occurred_at, AttendancePunch.id)
         )
     ]
