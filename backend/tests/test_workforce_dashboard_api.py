@@ -385,6 +385,8 @@ def test_narrow_scope_managers_can_traverse_coverage_ancestors_without_leakage(
     assert "Post B" not in rendered
     assert "G-COVERAGE-A" not in rendered
     assert "Coverage A" not in rendered
+    assert "G-COVERAGE-B" not in rendered
+    assert "Coverage B" not in rendered
 
 
 def test_coverage_children_are_bounded_paginated_and_never_person_records(
