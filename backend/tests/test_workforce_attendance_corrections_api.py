@@ -128,6 +128,45 @@ def test_case_reads_historical_typed_evidence_without_punch_inference(api_db) ->
     assert "direction" not in response.text
 
 
+def test_exceptions_endpoint_orders_nonempty_mixed_severity_rows(api_db) -> None:
+    fixture = build_attendance_day(
+        api_db,
+        operational_date=DAY,
+        posts=[("Gate 1", 5)],
+    )
+    for case in fixture.cases:
+        evaluation = api_db.query(AttendanceEvaluation).filter_by(attendance_case_id=case.id, revision=1).one()
+        evaluation.presence_state = "completed"
+        evaluation.late_minutes = None
+        evaluation.early_exit_minutes = None
+        evaluation.missing_checkout = False
+    cases = [case for case in fixture.cases if case.shift_code_snapshot == "morning"][:5]
+    expected = []
+    for case, presence, late, early, missing in (
+        (cases[0], "completed", 5, 0, False),
+        (cases[1], "unknown", 0, 0, False),
+        (cases[2], "absent", 0, 0, False),
+        (cases[3], "completed", 0, 4, False),
+        (cases[4], "completed", 0, 0, True),
+    ):
+        evaluation = api_db.query(AttendanceEvaluation).filter_by(attendance_case_id=case.id, revision=1).one()
+        evaluation.presence_state = presence
+        evaluation.late_minutes = late or None
+        evaluation.early_exit_minutes = early or None
+        evaluation.missing_checkout = missing
+        expected.append(case.employee_id)
+    api_db.commit()
+
+    response = _client(api_db, fixture.admin).get(
+        f"/api/v1/workforce/attendance/exceptions?operational_date={DAY.isoformat()}&limit=20"
+    )
+
+    assert response.status_code == 200, response.text
+    assert [item["employee_id"] for item in response.json()["items"][:5]] == [
+        expected[2], expected[4], expected[0], expected[3], expected[1]
+    ]
+
+
 def test_case_denies_out_of_scope_user_without_disclosing_evidence(api_db) -> None:
     fixture = build_attendance_day(api_db, operational_date=DAY, posts=[("Gate 1", 1)])
     case = next(case for case in fixture.cases if case.shift_code_snapshot == "morning")
