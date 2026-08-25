@@ -12,7 +12,7 @@ from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
 from app.api.errors import NotFoundError, ValidationFailedError
-from app.db.models import AuditLog, Employee
+from app.db.models import AuditLog, Employee, User
 from app.db.workforce_models import (
     AttendanceAdjustment,
     AttendanceCase,
@@ -117,6 +117,7 @@ def list_exceptions(
     operational_date: date | None = None,
     presence: str | None = None,
     exception: str | None = None,
+    corrected: bool | None = None,
 ) -> list[dict[str, Any]]:
     query = select(AttendanceCase)
     if operational_date is not None:
@@ -126,10 +127,11 @@ def list_exceptions(
     adjustments = active_attendance_adjustments(db, [case.id for case in cases])
     result: list[dict[str, Any]] = []
     for case in cases:
-        effective = _effective_evaluation_values(
-            latest.get(case.id), adjustments.get(case.id)
-        )
+        adjustment = adjustments.get(case.id)
+        effective = _effective_evaluation_values(latest.get(case.id), adjustment)
         if effective is None:
+            continue
+        if corrected is True and adjustment is None:
             continue
         if presence and effective["presence_state"] != presence:
             continue
@@ -141,20 +143,30 @@ def list_exceptions(
         )
         if exception and not has_exception:
             continue
-        if not has_exception:
+        # The corrected view is the door back to a case a correction removed
+        # from this queue: it lists every actively corrected case regardless
+        # of whether its effective state still looks like an exception.
+        if corrected is not True and not has_exception:
             continue
-        result.append(
-            {
-                **_person_fields(db, case),
-                "case_id": case.id,
-                "presence_state": effective["presence_state"],
-                "reason_code": effective["reason_code"],
-                "late_minutes": effective["late_minutes"],
-                "early_exit_minutes": effective["early_exit_minutes"],
-                "missing_checkout": effective["missing_checkout"],
-            }
-        )
+        row: dict[str, Any] = {
+            **_person_fields(db, case),
+            "case_id": case.id,
+            "presence_state": effective["presence_state"],
+            "reason_code": effective["reason_code"],
+            "late_minutes": effective["late_minutes"],
+            "early_exit_minutes": effective["early_exit_minutes"],
+            "missing_checkout": effective["missing_checkout"],
+        }
+        if adjustment is not None:
+            row["corrected_at"] = adjustment.created_at
+            row["correction_reason"] = adjustment.reason
+            row["corrected_by"] = _user_email(db, adjustment.created_by_user_id)
+        result.append(row)
     return sorted(result, key=lambda row: (row["scheduled_start_at"], row["employee_id"]))
+
+
+def _user_email(db: Session, user_id: int) -> str | None:
+    return db.scalar(select(User.email).where(User.id == user_id))
 
 
 

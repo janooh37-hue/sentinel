@@ -672,3 +672,75 @@ def test_case_snapshot_pairs_evidence_body_with_its_concurrency_version(api_db) 
 
     assert snapshot.body["effective"]["adjustment_id"] == first.id
     assert snapshot.etag != workforce_admin_service.attendance_case_etag(api_db, case.id)
+
+
+def test_corrected_filter_lists_active_corrections_and_survives_revocation(api_db) -> None:
+    """The queue's "corrected" section: reachable cases for undoing a mistake.
+
+    A correction removes a case from the default exception queue the moment the
+    effective state stops looking like an exception — correct, but it also
+    closes the only door to the revoke button. ``corrected=true`` is the second
+    door: every case carrying an active correction, with who/when/why attached.
+    Revocation closes it again: the case returns to the plain exception queue.
+    """
+    fixture = build_attendance_day(api_db, operational_date=DAY, posts=[("Gate 1", 1)])
+    case = next(c for c in fixture.cases if c.shift_code_snapshot == "morning")
+    client = _client(api_db, fixture.admin)
+    workforce_admin_service.apply_adjustment(
+        api_db,
+        case_id=case.id,
+        payload=_adjustment_payload(
+            {
+                "presence_state": "absent",
+                "first_in_at": None,
+                "latest_in_at": None,
+                "final_out_at": None,
+                "late_minutes": None,
+                "early_exit_minutes": None,
+                "missing_checkout": False,
+            },
+            reason="Arrived on time, punch missed",
+            replacement_presence_state="completed",
+        ),
+        if_match=workforce_admin_service.attendance_case_etag(api_db, case.id),
+        actor=fixture.admin,
+    )
+    api_db.commit()
+
+    corrected = client.get(
+        f"/api/v1/workforce/attendance/exceptions?operational_date={DAY.isoformat()}"
+        "&corrected=true&limit=50"
+    )
+    assert corrected.status_code == 200
+    rows = [r for r in corrected.json()["items"] if r["case_id"] == case.id]
+    assert len(rows) == 1
+    assert rows[0]["presence_state"] == "completed"
+    assert rows[0]["correction_reason"] == "Arrived on time, punch missed"
+    assert rows[0]["corrected_by"] == fixture.admin.email
+    assert rows[0]["corrected_at"] is not None
+
+    # The default queue still excludes the now-completed case.
+    default = client.get(
+        f"/api/v1/workforce/attendance/exceptions?operational_date={DAY.isoformat()}&limit=50"
+    )
+    assert all(r["case_id"] != case.id for r in default.json()["items"])
+
+    workforce_admin_service.revoke_adjustment(
+        api_db,
+        case_id=case.id,
+        adjustment_id=workforce_admin_service.active_attendance_adjustments(api_db, [case.id])[case.id].id,
+        reason="Duplicate register entry",
+        if_match=workforce_admin_service.attendance_case_etag(api_db, case.id),
+        actor=fixture.admin,
+    )
+    api_db.commit()
+
+    after_revoke = client.get(
+        f"/api/v1/workforce/attendance/exceptions?operational_date={DAY.isoformat()}"
+        "&corrected=true&limit=50"
+    )
+    assert all(r["case_id"] != case.id for r in after_revoke.json()["items"])
+    restored = client.get(
+        f"/api/v1/workforce/attendance/exceptions?operational_date={DAY.isoformat()}&limit=50"
+    )
+    assert any(r["case_id"] == case.id for r in restored.json()["items"])

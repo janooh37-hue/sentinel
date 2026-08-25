@@ -5600,6 +5600,12 @@ export interface components {
             early_exit_minutes?: number | null;
             /** Missing Checkout */
             missing_checkout?: boolean | null;
+            /** Corrected At */
+            corrected_at?: string | null;
+            /** Corrected By */
+            corrected_by?: string | null;
+            /** Correction Reason */
+            correction_reason?: string | null;
         };
         /** AttendancePolicyWrite */
         AttendancePolicyWrite: {
@@ -21165,6 +21171,7 @@ export interface operations {
                 operational_date?: string | null;
                 presence?: string | null;
                 exception?: string | null;
+                corrected?: boolean | null;
                 limit?: number;
                 cursor?: string | null;
             };

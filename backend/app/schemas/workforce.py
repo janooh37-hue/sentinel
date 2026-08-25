@@ -356,6 +356,11 @@ class AttendanceExceptionRead(RosterRowRead):
     early_exit_minutes: int | None = Field(default=None, ge=0)
     missing_checkout: bool | None = None
 
+    """Audit facts for the queue's corrected section; None on plain rows."""
+    corrected_at: datetime | None = None
+    corrected_by: str | None = None
+    correction_reason: str | None = None
+
 
 class AttendanceDayRowRead(RosterRowRead):
     case_id: int

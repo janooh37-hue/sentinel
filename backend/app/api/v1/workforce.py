@@ -455,9 +455,9 @@ def get_roster(operational_date: date, user: Annotated[User, Depends(require_cap
 
 
 @router.get("/attendance/exceptions", response_model=CursorPage[AttendanceExceptionRead])
-def get_attendance_exceptions(user: Annotated[User, Depends(require_capability("workforce.attendance.review"))], people_user: Annotated[User, Depends(require_capability("workforce.people.view"))], db: Annotated[Session, Depends(get_db)], operational_date: date | None = None, presence: str | None = None, exception: str | None = None, limit: Annotated[int, Query(ge=1, le=_MAX_LIMIT)] = 100, cursor: str | None = None) -> dict[str, Any]:
+def get_attendance_exceptions(user: Annotated[User, Depends(require_capability("workforce.attendance.review"))], people_user: Annotated[User, Depends(require_capability("workforce.people.view"))], db: Annotated[Session, Depends(get_db)], operational_date: date | None = None, presence: str | None = None, exception: str | None = None, corrected: bool | None = None, limit: Annotated[int, Query(ge=1, le=_MAX_LIMIT)] = 100, cursor: str | None = None) -> dict[str, Any]:
     scope = _scope(db, user)
-    rows = workforce_read_service.list_exceptions(db, scope=scope, operational_date=operational_date, presence=presence, exception=exception)
+    rows = workforce_read_service.list_exceptions(db, scope=scope, operational_date=operational_date, presence=presence, exception=exception, corrected=corrected)
     def severity(row: dict[str, Any]) -> tuple[int, str, int]:
         if row.get("presence_state") == "absent":
             return (0, row["employee_id"], row["case_id"])
@@ -471,7 +471,7 @@ def get_attendance_exceptions(user: Annotated[User, Depends(require_capability("
             return (4, row["employee_id"], row["case_id"])
         return (5, row["employee_id"], row["case_id"])
     rows = sorted(rows, key=severity)
-    items, next_cursor = _cursor_page(rows, endpoint="exceptions", scope=scope, filters={"operational_date": operational_date, "presence": presence, "exception": exception}, limit=limit, cursor=cursor)
+    items, next_cursor = _cursor_page(rows, endpoint="exceptions", scope=scope, filters={"operational_date": operational_date, "presence": presence, "exception": exception, "corrected": corrected}, limit=limit, cursor=cursor)
     return {"items": items, "next_cursor": next_cursor}
 
 

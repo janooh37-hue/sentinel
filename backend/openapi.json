@@ -18696,6 +18696,22 @@
             }
           },
           {
+            "name": "corrected",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Corrected"
+            }
+          },
+          {
             "name": "limit",
             "in": "query",
             "required": false,
@@ -24210,6 +24226,40 @@
               }
             ],
             "title": "Missing Checkout"
+          },
+          "corrected_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Corrected At"
+          },
+          "corrected_by": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Corrected By"
+          },
+          "correction_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Correction Reason"
           }
         },
         "additionalProperties": false,
