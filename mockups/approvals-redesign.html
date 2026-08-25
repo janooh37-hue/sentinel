@@ -231,18 +231,13 @@
     white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
   }
   .rec-body { flex: 1; overflow: auto; padding: 18px 16px 24px; }
+  .rec-meta { padding-bottom: 14px; margin-bottom: 16px; border-bottom: 1px solid var(--hairline); }
   .rec-subject { margin: 0; font-size: 1.05em; font-weight: 700; }
-  .rec-status-row { display: flex; align-items: center; gap: 8px; margin-top: 8px; }
-  .rec-grid { display: grid; grid-template-columns: auto 1fr; gap: 7px 14px; margin: 16px 0; font-size: .78em; }
-  .rec-grid dt { color: var(--text-muted); }
-  .rec-grid dd { margin: 0; font-weight: 550; }
-  .rec-doc-card {
-    display: flex; align-items: center; gap: 12px; padding: 12px;
-    border: 1px solid var(--border); border-radius: 12px; background: var(--surface);
-  }
-  .rec-doc-card .grow { flex: 1; min-width: 0; }
-  .rec-doc-card .fname { font-size: .8em; font-weight: 600; font-family: "IBM Plex Mono", ui-monospace, Consolas, monospace; }
-  .rec-doc-card .fmeta { font-size: .68em; color: var(--text-muted); margin-top: 2px; }
+  .rec-status-row { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+  .rec-status-row .priority { font-size: .68em; font-weight: 600; color: var(--text-muted); }
+  .rec-status-row .priority.high { color: var(--accent); }
+  .rec-parties { margin: 8px 0 0; font-size: .78em; color: var(--text-muted); }
+  .rec-doc { width: 100%; margin: 0; box-shadow: none; border: 1px solid var(--border); border-radius: 8px; }
   .rec-actions { display: flex; gap: 8px; padding: 12px 16px; border-top: 1px solid var(--hairline); background: var(--surface-raised); }
   .rec-btn {
     flex: 1; appearance: none; cursor: pointer; font: inherit; font-size: .82em; font-weight: 700;
@@ -307,10 +302,14 @@
   @media print {
     body { background: #fff; }
     body > *:not(.pv-root) { display: none !important; }
-    .pv-scrim, .pv-bar, .rec-sheet, .toast { display: none !important; }
+    .pv-scrim, .pv-bar, .toast, .rec-head, .rec-actions, .rec-meta, .rec-verdict { display: none !important; }
     .pv-shell { position: static; padding: 0; }
     .pv-viewport { overflow: visible; border: 0; border-radius: 0; background: #fff; }
+    .rec-sheet { position: static; width: auto; border: 0; box-shadow: none; transform: none !important; display: block; background: #fff; }
+    .rec-body { overflow: visible; padding: 0; }
     .pv-doc { zoom: 1 !important; box-shadow: none; margin: 0 auto; }
+    .pv-root.print-rec .pv-shell { display: none !important; }
+    .pv-root:not(.print-rec) .rec-sheet { display: none !important; }
   }
 </style>
 </head>
@@ -615,6 +614,7 @@
     <div class="rec-head">
       <button class="pv-btn" id="recClose" aria-label="Close record"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg></button>
       <h2 id="recTitle"></h2>
+      <button class="pv-btn" id="recPrint" aria-label="Print"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9V2h12v7"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><path d="M6 14h12v8H6z"/></svg></button>
       <span class="ref" id="recRef"></span>
     </div>
     <div class="rec-body" id="recBody"></div>
@@ -671,11 +671,8 @@
     };
   }
 
-  function renderDoc() {
-    const d = rowData(cur.row), ar = cur.lang === 'ar';
-    document.getElementById('pvRef').textContent = d.ref;
-    document.getElementById('pvSubject').textContent = d.subject;
-    pvDoc.innerHTML = `
+  function docMarkup(d, ar) {
+    return `
       <div class="doc-head">
         <div class="doc-logo">GS</div>
         <div class="doc-org"><b>GSSG MANAGER</b><span>${ar ? 'إدارة الموارد البشرية والوثائق' : 'Human Resources & Documents'}</span></div>
@@ -696,44 +693,33 @@
         <div class="doc-stamp">GSSG<br>${ar ? 'رسمية' : 'OFFICIAL'}</div>
       </div>`;
   }
+  function renderDoc() {
+    const d = rowData(cur.row), ar = cur.lang === 'ar';
+    document.getElementById('pvRef').textContent = d.ref;
+    document.getElementById('pvSubject').textContent = d.subject;
+    pvDoc.innerHTML = docMarkup(d, ar);
+  }
 
   function renderRecord() {
     const d = rowData(cur.row), lang = cur.lang, ar = lang === 'ar';
     document.getElementById('recTitle').textContent = T(lang, 'Full record', 'السجل الكامل');
     document.getElementById('recRef').textContent = d.ref;
-    const priority = d.high
-      ? `<dd style="color:var(--accent);font-weight:700">${T(lang, 'High', 'عالية')}</dd>`
-      : `<dd>${T(lang, 'Normal', 'عادية')}</dd>`;
     let verdict = '';
     if (d.status === 'approved') verdict = `<div class="rec-verdict ok">${ICONS.approved}${T(lang, 'Approved · ', 'تم الاعتماد · ')}${d.date.replace('decided ', '').replace('قرر في ', '')}</div>`;
     if (d.status === 'rejected') verdict = `<div class="rec-verdict no">${ICONS.rejected}${T(lang, 'Rejected · ', 'تم الرفض · ')}${d.date.replace('decided ', '').replace('قرر في ', '')}</div>`;
     if (d.status === 'returned') verdict = `<div class="rec-verdict ret">${ICONS.returned}${T(lang, 'Returned to sender · ', 'أُعيد إلى المُرسل · ')}${d.date.replace('decided ', '').replace('قرر في ', '')}</div>`;
     recBody.innerHTML = `
-      <p class="rec-subject">${d.subject}</p>
-      <div class="rec-status-row">
-        <span class="pill ${d.status}">${ICONS[d.status]}${PILL_LABEL[d.status][ar ? 1 : 0]}</span>
-        <span class="when">${d.date}</span>
-      </div>
-      <dl class="rec-grid">
-        <dt>${ar ? 'المرجع' : 'Reference'}</dt><dd class="ref">${d.ref}</dd>
-        <dt>${ar ? 'مقدَّم من' : 'Submitted by'}</dt><dd>${d.from}</dd>
-        <dt>${ar ? 'إلى' : 'Assigned to'}</dt><dd>${d.to}</dd>
-        <dt>${ar ? 'الأولوية' : 'Priority'}</dt>${priority}
-      </dl>
-      <div class="rec-doc-card">
-        <div class="thumb" id="recThumb" role="button" tabindex="0" aria-label="${ar ? 'معاينة المستند' : 'Preview document'}"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#8b9098" stroke-width="1.8"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg></div>
-        <div class="grow">
-          <div class="fname">${d.ref}.pdf</div>
-          <div class="fmeta">${ar ? 'اضغط للمعاينة · قرّب بإصبعين' : 'Tap to preview · pinch to zoom'}</div>
+      <div class="rec-meta">
+        <p class="rec-subject">${d.subject}</p>
+        <div class="rec-status-row">
+          <span class="pill ${d.status}">${ICONS[d.status]}${PILL_LABEL[d.status][ar ? 1 : 0]}</span>
+          <span class="when">${d.date}</span>
+          <span class="priority${d.high ? ' high' : ''}">${d.high ? T(lang, 'High priority', 'أولوية عالية') : T(lang, 'Normal priority', 'أولوية عادية')}</span>
         </div>
-        <button class="pv-btn" id="recPreviewBtn">${ar ? 'معاينة' : 'Preview'}</button>
+        <p class="rec-parties">${d.from} ${ar ? '←' : '→'} ${d.to}</p>
       </div>
-      ${verdict}`;
-    const pv = () => { pvRoot.classList.remove('rec-only'); setZoom(1); renderDoc(); };
-    document.getElementById('recPreviewBtn').onclick = pv;
-    const rt = document.getElementById('recThumb');
-    rt.onclick = pv;
-    rt.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); pv(); } });
+      ${verdict}
+      <div class="pv-doc rec-doc">${docMarkup(d, ar)}</div>`;
     renderActions(d, lang);
   }
 
@@ -811,12 +797,14 @@
     syncOverlay();
     renderRecord();
     if (pvRoot.hidden) { pvRoot.classList.add('rec-only'); pvRoot.hidden = false; }
+    pvRoot.classList.add('print-rec');
     recSheet.classList.add('open');
     document.getElementById('recClose').focus();
   }
   function closeRecord() {
     recSheet.classList.remove('open');
     if (pvRoot.classList.contains('rec-only')) { pvRoot.hidden = true; pvRoot.classList.remove('rec-only'); }
+    pvRoot.classList.remove('print-rec');
   }
 
   // ── Zoom: buttons, ctrl+wheel, double-click, pinch ──────────────────
@@ -854,6 +842,7 @@
   document.getElementById('pvScrim').onclick = () => (recSheet.classList.contains('open') ? closeRecord() : closePreview());
   document.getElementById('pvRecord').onclick = () => openRecord(cur.row);
   document.getElementById('pvPrint').onclick = () => window.print();
+  document.getElementById('recPrint').onclick = () => window.print();
   document.addEventListener('keydown', e => {
     if (e.key !== 'Escape' || pvRoot.hidden) return;
     recSheet.classList.contains('open') ? closeRecord() : closePreview();
