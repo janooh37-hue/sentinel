@@ -19,6 +19,7 @@ from sqlalchemy.orm import Session
 from app.core import leave_lifecycle
 from app.db.models import AppSetting, Employee, Leave
 from app.db.workforce_models import (
+    AttendanceAdjustment,
     AttendanceCase,
     AttendanceEvaluation,
     AttendanceEvaluationQueue,
@@ -33,6 +34,10 @@ from app.db.workforce_models import (
     WorkShiftOccurrence,
 )
 from app.services.workforce_scope_service import normalize_scope_value, scope_allows
+from app.services.workforce_admin_service import (
+    active_attendance_adjustments,
+    overlay_attendance_adjustment,
+)
 
 _ORGANIZATION_TIMEZONE = ZoneInfo("Asia/Dubai")
 _ACTIVE_EMPLOYEE_STATUS = "active"
@@ -259,8 +264,15 @@ def _case_metrics(
     cases: list[AttendanceCase],
     sync_health: dict[str, dict[str, Any]],
     live_leave_by_employee: dict[str, str],
+    latest: dict[int, AttendanceEvaluation] | None = None,
+    adjustments: dict[int, AttendanceAdjustment] | None = None,
 ) -> dict[str, Any]:
-    latest = _latest_evaluations(db, (case.id for case in cases))
+    latest = latest if latest is not None else _latest_evaluations(db, (case.id for case in cases))
+    adjustments = (
+        adjustments
+        if adjustments is not None
+        else active_attendance_adjustments(db, (case.id for case in cases))
+    )
     queued = _queued_case_ids(db, cases)
     scheduled = len(cases)
     excused = sum(case.employee_id in live_leave_by_employee for case in cases)
@@ -273,7 +285,10 @@ def _case_metrics(
         working: int | None = None
     else:
         working = sum(
-            latest[case.id].presence_state in {"on_duty", "completed"}
+            overlay_attendance_adjustment(
+                {"presence_state": latest[case.id].presence_state},
+                adjustments.get(case.id),
+            )["presence_state"] in {"on_duty", "completed"}
             for case in evaluable
             if case.employee_id not in live_leave_by_employee
         )
@@ -337,10 +352,19 @@ def _self_block(db: Session, *, employee_id: str, as_of_naive: datetime, operati
     if case is None:
         return {"employee_id": employee_id, "presence_state": None, "reason_code": None, "scheduled_start_at": None, "scheduled_end_at": None}
     latest = _latest_evaluations(db, [case.id]).get(case.id)
+    adjustment = active_attendance_adjustments(db, [case.id]).get(case.id)
+    effective = (
+        overlay_attendance_adjustment(
+            {"presence_state": latest.presence_state, "reason_code": latest.reason_code},
+            adjustment,
+        )
+        if latest is not None
+        else None
+    )
     return {
         "employee_id": employee_id,
-        "presence_state": latest.presence_state if latest else None,
-        "reason_code": latest.reason_code if latest else None,
+        "presence_state": effective["presence_state"] if effective else None,
+        "reason_code": effective["reason_code"] if effective else None,
         "scheduled_start_at": case.scheduled_start_at,
         "scheduled_end_at": case.scheduled_end_at,
     }
@@ -715,12 +739,21 @@ def get_coverage_children(
         raise ValueError("parent_kind must be organization, department, or duty_unit")
     live = _live_leaves(db, operational_date=operational_date)
     health = _stream_health(db, now=datetime.now(UTC))
+    latest = _latest_evaluations(db, (case.id for case in cases))
+    adjustments = active_attendance_adjustments(db, (case.id for case in cases))
     buckets: dict[tuple[str | None, ...], list[AttendanceCase]] = defaultdict(list)
     for case in cases:
         buckets[tuple(normalize_scope_value(getattr(case, field)) for field in fields)].append(case)
     result: list[dict[str, Any]] = []
     for key, bucket in buckets.items():
-        metrics = _case_metrics(db, cases=bucket, sync_health=health, live_leave_by_employee=live)
+        metrics = _case_metrics(
+            db,
+            cases=bucket,
+            sync_health=health,
+            live_leave_by_employee=live,
+            latest=latest,
+            adjustments=adjustments,
+        )
         department_value = key[0]
         unit_value = key[1] if len(key) > 1 else None
         post_value = key[2] if len(key) > 2 else None
@@ -749,6 +782,8 @@ def get_workforce_analytics(
         if _case_in_scope(case, scope)
     ]
     live = _live_leaves(db, operational_date=operational_date)
+    latest = _latest_evaluations(db, (case.id for case in cases))
+    adjustments = active_attendance_adjustments(db, (case.id for case in cases))
     by_department: dict[str | None, list[AttendanceCase]] = defaultdict(list)
     by_shift: dict[str, list[AttendanceCase]] = defaultdict(list)
     for case in cases:
@@ -762,12 +797,29 @@ def get_workforce_analytics(
                 "department": department,
                 "duty_unit": None,
                 "duty_post": None,
-                **_case_metrics(db, cases=bucket, sync_health=health, live_leave_by_employee=live),
+                **_case_metrics(
+                    db,
+                    cases=bucket,
+                    sync_health=health,
+                    live_leave_by_employee=live,
+                    latest=latest,
+                    adjustments=adjustments,
+                ),
                 "child_count": len({case.duty_unit_snapshot for case in bucket}),
             }
         )
     shift_roster = [
-        {"shift_code": shift_code, **_case_metrics(db, cases=bucket, sync_health=health, live_leave_by_employee=live)}
+        {
+            "shift_code": shift_code,
+            **_case_metrics(
+                db,
+                cases=bucket,
+                sync_health=health,
+                live_leave_by_employee=live,
+                latest=latest,
+                adjustments=adjustments,
+            ),
+        }
         for shift_code, bucket in sorted(by_shift.items())
     ]
     # The widget's denominator is active employees in scope; resigned or

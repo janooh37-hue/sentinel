@@ -158,7 +158,7 @@ export function AttendanceCorrectionDrawer({ caseId, onClose }: Props): React.JS
     setDraftEtag(etag)
   }, [caseSnapshotIsCurrent, draftEtag, effective, etag])
 
-  const reloadEvidence = async (resetDraft: boolean): Promise<void> => {
+  const reloadEvidence = async (resetDraft: boolean) => {
     const result = await caseQuery.refetch()
     if (resetDraft && result.data?.data) {
       const refreshedEffective = effectiveFromCase(result.data.data)
@@ -167,6 +167,7 @@ export function AttendanceCorrectionDrawer({ caseId, onClose }: Props): React.JS
         setDraftEtag(result.data.etag)
       }
     }
+    return result.data
   }
 
   const invalidateAttendance = async (): Promise<void> => {
@@ -182,7 +183,12 @@ export function AttendanceCorrectionDrawer({ caseId, onClose }: Props): React.JS
 
   const recoverConflict = async (error: unknown): Promise<void> => {
     if (error instanceof ApiError && error.code === 'ATTENDANCE_CASE_VERSION_CONFLICT') {
-      await reloadEvidence(false)
+      const conflictedDraft = draft
+      const refreshed = await reloadEvidence(false)
+      if (conflictedDraft && refreshed?.etag) {
+        setDraft(conflictedDraft)
+        setDraftEtag(refreshed.etag)
+      }
       setConflictWarning(t('attendance.review.conflictWarning'))
       return
     }

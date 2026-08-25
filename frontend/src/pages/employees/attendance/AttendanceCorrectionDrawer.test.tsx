@@ -35,6 +35,8 @@ vi.mock('@/lib/api', async (orig) => {
 })
 
 
+import { ApiError } from '@/lib/api'
+
 import { AttendanceCorrectionDrawer } from './AttendanceCorrectionDrawer'
 
 const CASE = {
@@ -262,5 +264,29 @@ describe('AttendanceCorrectionDrawer', () => {
     expect(save).toBeDisabled()
     await user.click(save)
     expect(createAttendanceAdjustment).not.toHaveBeenCalled()
+  })
+
+  it('restores the conflicted draft on refreshed evidence without retrying', async () => {
+    const user = userEvent.setup()
+    hasCapability.mockReturnValue(true)
+    getAttendanceCase
+      .mockResolvedValueOnce({ data: CASE, etag: 'case-v1' })
+      .mockResolvedValue({ data: { ...CASE, effective: { ...CASE.effective, late_minutes: 9 } }, etag: 'case-v2' })
+    createAttendanceAdjustment.mockRejectedValue(
+      new ApiError(412, 'ATTENDANCE_CASE_VERSION_CONFLICT', 'Case changed'),
+    )
+    renderDrawer()
+
+    await screen.findByText('Correction')
+    await user.selectOptions(screen.getByLabelText('Correction presence'), 'absent')
+    await user.type(screen.getByLabelText('Correction reason'), 'Supervisor register')
+    await user.click(screen.getByRole('button', { name: 'Save correction' }))
+
+    expect(await screen.findByText(/This attendance case changed/)).toBeInTheDocument()
+    await waitFor(() => expect(getAttendanceCase).toHaveBeenCalledTimes(2))
+    expect(screen.getByLabelText('Correction presence')).toHaveValue('absent')
+    expect(screen.getByLabelText('Correction reason')).toHaveValue('Supervisor register')
+    expect(screen.getByRole('button', { name: 'Save correction' })).toBeEnabled()
+    expect(createAttendanceAdjustment).toHaveBeenCalledOnce()
   })
 })

@@ -23,7 +23,13 @@ from sqlalchemy.pool import StaticPool
 from app.api.deps import get_current_user
 from app.db.session import attach_sqlite_pragmas, get_db
 from app.main import app
-from app.services import perm_service
+from app.services import (
+    perm_service,
+    workforce_admin_service,
+    workforce_dashboard_service,
+    workforce_read_service,
+)
+from app.services.workforce_scope_service import resolve_workforce_scope
 
 # The snapshot route derives its operational date from the real clock, so the
 # fixture anchors to "now" instead of a fixed calendar day. A hardcoded date
@@ -244,6 +250,124 @@ def _seed_coverage_cases(db: Session, admin: Any) -> None:
         )
     )
     db.commit()
+
+def test_correction_and_revocation_update_roster_and_every_dashboard_metric(
+    workforce_api_db: Session,
+) -> None:
+    from app.db.models import AppSetting
+    from app.db.workforce_models import AttendanceCase, AttendanceEvaluation
+
+    admin = _create_user(workforce_api_db, email="correction-dashboard@test.ae", role="admin")
+    _seed_coverage_cases(workforce_api_db, admin)
+    workforce_api_db.add(AppSetting(key="workforce.stale_after_minutes", value=json.dumps(60)))
+    workforce_api_db.commit()
+    case = workforce_api_db.scalar(
+        select(AttendanceCase).where(AttendanceCase.employee_id == "G-COVERAGE-A")
+    )
+    assert case is not None
+    evaluation = workforce_api_db.scalar(
+        select(AttendanceEvaluation).where(AttendanceEvaluation.attendance_case_id == case.id)
+    )
+    assert evaluation is not None
+    scope = resolve_workforce_scope(workforce_api_db, admin)
+    now = NOW.replace(tzinfo=UTC)
+
+    correction = workforce_admin_service.apply_adjustment(
+        workforce_api_db,
+        case_id=case.id,
+        payload={
+            "replacement_presence_state": "absent",
+            "replacement_first_in_at": evaluation.first_in_at,
+            "replacement_latest_in_at": evaluation.latest_in_at,
+            "replacement_final_out_at": evaluation.final_out_at,
+            "replacement_late_minutes": evaluation.late_minutes,
+            "replacement_early_exit_minutes": evaluation.early_exit_minutes,
+            "replacement_missing_checkout": evaluation.missing_checkout,
+            "reason": "Confirmed post absence",
+        },
+        if_match=workforce_admin_service.attendance_case_etag(workforce_api_db, case.id),
+        actor=admin,
+    )
+
+    corrected_roster = next(
+        row
+        for row in workforce_read_service.list_roster(
+            workforce_api_db, scope=scope, operational_date=TODAY
+        )
+        if row["employee_id"] == case.employee_id
+    )
+    corrected_snapshot = workforce_dashboard_service.get_workforce_snapshot(
+        workforce_api_db,
+        scope=scope,
+        self_employee_id=case.employee_id,
+        include_aggregate=True,
+        now=now,
+    ).value
+    corrected_analytics = workforce_dashboard_service.get_workforce_analytics(
+        workforce_api_db, scope=scope, now=now
+    ).value
+    corrected_coverage = workforce_dashboard_service.get_coverage_children(
+        workforce_api_db,
+        scope=scope,
+        operational_date=TODAY,
+        parent_kind="department",
+        department="Operations",
+        now=now,
+    )
+
+    assert corrected_roster["presence_state"] == "absent"
+    assert corrected_snapshot["self"]["presence_state"] == "absent"
+    assert corrected_snapshot["current_shift"]["working"] == 1
+    assert corrected_analytics["department_coverage"][0]["working"] == 1
+    assert {row["duty_unit"]: row["working"] for row in corrected_coverage} == {
+        "Gate A": 0,
+        "Gate B": 1,
+    }
+
+    workforce_admin_service.revoke_adjustment(
+        workforce_api_db,
+        case_id=case.id,
+        adjustment_id=correction.id,
+        reason="Automatic attendance restored",
+        if_match=workforce_admin_service.attendance_case_etag(workforce_api_db, case.id),
+        actor=admin,
+    )
+    workforce_api_db.flush()
+
+    restored_roster = next(
+        row
+        for row in workforce_read_service.list_roster(
+            workforce_api_db, scope=scope, operational_date=TODAY
+        )
+        if row["employee_id"] == case.employee_id
+    )
+    restored_snapshot = workforce_dashboard_service.get_workforce_snapshot(
+        workforce_api_db,
+        scope=scope,
+        self_employee_id=case.employee_id,
+        include_aggregate=True,
+        now=now,
+    ).value
+    restored_analytics = workforce_dashboard_service.get_workforce_analytics(
+        workforce_api_db, scope=scope, now=now
+    ).value
+    restored_coverage = workforce_dashboard_service.get_coverage_children(
+        workforce_api_db,
+        scope=scope,
+        operational_date=TODAY,
+        parent_kind="department",
+        department="Operations",
+        now=now,
+    )
+
+    assert restored_roster["presence_state"] == "on_duty"
+    assert restored_snapshot["self"]["presence_state"] == "on_duty"
+    assert restored_snapshot["current_shift"]["working"] == 2
+    assert restored_analytics["department_coverage"][0]["working"] == 2
+    assert {row["duty_unit"]: row["working"] for row in restored_coverage} == {
+        "Gate A": 1,
+        "Gate B": 1,
+    }
 
 
 def _contains_value(value: Any, needle: str) -> bool:

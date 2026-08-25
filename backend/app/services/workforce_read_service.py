@@ -36,7 +36,9 @@ from app.services.attendance_evaluation_service import effective_policy
 from app.services.workforce_scope_service import scope_allows
 from app.services.workforce_admin_service import (
     active_attendance_adjustment,
+    active_attendance_adjustments,
     attendance_case_etag_for,
+    overlay_attendance_adjustment,
 )
 
 
@@ -53,28 +55,6 @@ def _latest_evaluations(db: Session, case_ids: list[int]) -> dict[int, Attendanc
         latest.setdefault(row.attendance_case_id, row)
     return latest
 
-def _active_adjustments(
-    db: Session, case_ids: list[int]
-) -> dict[int, AttendanceAdjustment]:
-    """The one unrevoked correction leaf for each projected case."""
-    if not case_ids:
-        return {}
-    rows_by_case: dict[int, list[AttendanceAdjustment]] = {}
-    for row in db.scalars(
-        select(AttendanceAdjustment)
-        .where(AttendanceAdjustment.attendance_case_id.in_(case_ids))
-        .order_by(
-            AttendanceAdjustment.attendance_case_id,
-            AttendanceAdjustment.created_at,
-            AttendanceAdjustment.id,
-        )
-    ):
-        rows_by_case.setdefault(row.attendance_case_id, []).append(row)
-    return {
-        case_id: active
-        for case_id, rows in rows_by_case.items()
-        if (active := active_attendance_adjustment(rows)) is not None
-    }
 
 
 def _case_allowed(case: AttendanceCase, scope: Any) -> bool:
@@ -114,14 +94,17 @@ def list_roster(db: Session, *, scope: Any, operational_date: date) -> list[dict
         if _case_allowed(case, scope)
     ]
     latest = _latest_evaluations(db, [case.id for case in cases])
+    adjustments = active_attendance_adjustments(db, [case.id for case in cases])
     result: list[dict[str, Any]] = []
     for case in cases:
-        evaluation = latest.get(case.id)
+        effective = _effective_evaluation_values(
+            latest.get(case.id), adjustments.get(case.id)
+        )
         result.append(
             {
                 **_person_fields(db, case),
-                "presence_state": evaluation.presence_state if evaluation else None,
-                "reason_code": evaluation.reason_code if evaluation else None,
+                "presence_state": effective["presence_state"] if effective else None,
+                "reason_code": effective["reason_code"] if effective else None,
             }
         )
     return sorted(result, key=lambda row: (row["scheduled_start_at"], row["employee_id"]))
@@ -140,7 +123,7 @@ def list_exceptions(
         query = query.where(AttendanceCase.operational_date == operational_date)
     cases = [case for case in db.scalars(query) if _case_allowed(case, scope)]
     latest = _latest_evaluations(db, [case.id for case in cases])
-    adjustments = _active_adjustments(db, [case.id for case in cases])
+    adjustments = active_attendance_adjustments(db, [case.id for case in cases])
     result: list[dict[str, Any]] = []
     for case in cases:
         effective = _effective_evaluation_values(
@@ -316,7 +299,7 @@ def list_attendance_day(
         return []
 
     latest = _latest_evaluations(db, [case.id for case in cases])
-    adjustments = _active_adjustments(db, [case.id for case in cases])
+    adjustments = active_attendance_adjustments(db, [case.id for case in cases])
     people = _verified_people(db, {case.employee_id for case in cases})
 
     result: list[dict[str, Any]] = []
@@ -389,7 +372,7 @@ def employee_attendance_range(
         if _case_allowed(case, scope)
     ]
     latest = _latest_evaluations(db, [case.id for case in cases])
-    adjustments = _active_adjustments(db, [case.id for case in cases])
+    adjustments = active_attendance_adjustments(db, [case.id for case in cases])
     person = _verified_people(db, {employee_id}).get(employee_id)
 
     days: list[dict[str, Any]] = []
@@ -477,25 +460,9 @@ def _effective_evaluation_values(
     evaluation: AttendanceEvaluation | None,
     adjustment: AttendanceAdjustment | None,
 ) -> dict[str, Any] | None:
-    """Overlay the active full correction snapshot without reinterpreting nulls."""
     if evaluation is None:
         return None
-    values = _evaluation_read(evaluation)
-    if adjustment is None:
-        return values
-    values.update(
-        {
-            "presence_state": adjustment.replacement_presence_state,
-            "first_in_at": adjustment.replacement_first_in_at,
-            "latest_in_at": adjustment.replacement_latest_in_at,
-            "final_out_at": adjustment.replacement_final_out_at,
-            "late_minutes": adjustment.replacement_late_minutes,
-            "early_exit_minutes": adjustment.replacement_early_exit_minutes,
-            "missing_checkout": adjustment.replacement_missing_checkout,
-            "adjustment_id": adjustment.id,
-        }
-    )
-    return values
+    return overlay_attendance_adjustment(_evaluation_read(evaluation), adjustment)
 
 
 def _adjustment_read(row: AttendanceAdjustment) -> dict[str, Any]:
