@@ -4497,7 +4497,7 @@
       "loadFailed": "تعذر تحميل حالة الحضور.",
       "correction": "تصحيح الحضور",
       "correctionPresence": "حالة التصحيح",
-      "noOverride": "دون تجاوز",
+      "noOverride": "مسح القيمة",
       "correctionReason": "سبب التصحيح",
       "saveCorrection": "حفظ التصحيح",
       "correctionSaved": "تم حفظ التصحيح.",

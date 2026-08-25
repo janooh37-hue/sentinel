@@ -4203,7 +4203,7 @@
       "loadFailed": "Attendance case could not be loaded.",
       "correction": "Correction",
       "correctionPresence": "Correction presence",
-      "noOverride": "No override",
+      "noOverride": "Clear value",
       "correctionReason": "Correction reason",
       "saveCorrection": "Save correction",
       "correctionSaved": "Correction saved.",

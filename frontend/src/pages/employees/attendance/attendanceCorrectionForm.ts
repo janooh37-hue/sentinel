@@ -56,6 +56,10 @@ function optionalUtc(value: string): string | null {
   return value === '' ? null : localDubaiInputToUtc(value)
 }
 
+function snapshotUtc(draftValue: string, effectiveValue: string | null): string | null {
+  return draftValue === toLocalInput(effectiveValue) ? effectiveValue : optionalUtc(draftValue)
+}
+
 export function draftFromEffective(effective: AttendanceEffective): AttendanceCorrectionDraft {
   return {
     presenceState: effective.presence_state,
@@ -75,9 +79,9 @@ export function buildAdjustmentPayload(
 ): AttendanceAdjustmentWrite {
   const reason = draft.reason.trim()
   if (reason === '') throw new Error('CORRECTION_REASON_REQUIRED')
-  const firstInAt = optionalUtc(draft.firstInAt)
-  const latestInAt = optionalUtc(draft.latestInAt)
-  const finalOutAt = optionalUtc(draft.finalOutAt)
+  const firstInAt = snapshotUtc(draft.firstInAt, effective.first_in_at)
+  const latestInAt = snapshotUtc(draft.latestInAt, effective.latest_in_at)
+  const finalOutAt = snapshotUtc(draft.finalOutAt, effective.final_out_at)
   const lateMinutes = optionalMinutes(draft.lateMinutes)
   const earlyExitMinutes = optionalMinutes(draft.earlyExitMinutes)
   if (

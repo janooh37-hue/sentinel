@@ -24,9 +24,9 @@ describe('buildAdjustmentPayload', () => {
       reason: ' Supervisor register ',
     })).toEqual({
       replacement_presence_state: 'completed',
-      replacement_first_in_at: '2026-08-19T01:00:00.000Z',
-      replacement_latest_in_at: '2026-08-19T01:05:00.000Z',
-      replacement_final_out_at: '2026-08-19T09:00:00.000Z',
+      replacement_first_in_at: '2026-08-19T01:00:00Z',
+      replacement_latest_in_at: '2026-08-19T01:05:00Z',
+      replacement_final_out_at: '2026-08-19T09:00:00Z',
       replacement_late_minutes: 5,
       replacement_early_exit_minutes: 2,
       replacement_missing_checkout: false,
@@ -41,8 +41,8 @@ describe('buildAdjustmentPayload', () => {
     })).toEqual({
       replacement_presence_state: 'on_duty',
       replacement_first_in_at: '2026-08-19T02:15:00.000Z',
-      replacement_latest_in_at: '2026-08-19T01:05:00.000Z',
-      replacement_final_out_at: '2026-08-19T09:00:00.000Z',
+      replacement_latest_in_at: '2026-08-19T01:05:00Z',
+      replacement_final_out_at: '2026-08-19T09:00:00Z',
       replacement_late_minutes: 5,
       replacement_early_exit_minutes: 2,
       replacement_missing_checkout: false,
@@ -50,6 +50,24 @@ describe('buildAdjustmentPayload', () => {
     })
   })
 
+
+  it('preserves exact effective UTC timestamps when only presence changes', () => {
+    const precise = {
+      ...effective,
+      first_in_at: '2026-08-19T01:00:12.345Z',
+      latest_in_at: '2026-08-19T01:05:23.456Z',
+      final_out_at: '2026-08-19T09:00:34.567Z',
+    }
+    expect(buildAdjustmentPayload(precise, {
+      ...draftFromEffective(precise),
+      presenceState: 'completed',
+      reason: 'Supervisor register',
+    })).toMatchObject({
+      replacement_first_in_at: '2026-08-19T01:00:12.345Z',
+      replacement_latest_in_at: '2026-08-19T01:05:23.456Z',
+      replacement_final_out_at: '2026-08-19T09:00:34.567Z',
+    })
+  })
   it('rejects a blank reason and an otherwise unchanged correction', () => {
     expect(() => buildAdjustmentPayload(effective, draftFromEffective(effective))).toThrow('CORRECTION_REASON_REQUIRED')
     expect(() => buildAdjustmentPayload(effective, {
