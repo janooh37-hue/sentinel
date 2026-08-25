@@ -122,29 +122,36 @@ beforeEach(() => {
   vi.clearAllMocks()
   hasCapability.mockReturnValue(true)
   listAttendanceDay.mockResolvedValue({ items: DAY_ROWS, next_cursor: null })
-  listAttendanceExceptions.mockResolvedValue({
-    items: [
-      {
-        employee_id: 'G-9001',
-        name_en: 'Ahmed Ali',
-        name_ar: null,
-        department: 'Security',
-        duty_unit: 'Main Gate',
-        duty_post: 'Gate 1',
-        crew_code: 'A',
-        shift_code: 'morning',
-        presence_state: 'late',
-        reason_code: 'late_arrival',
-        scheduled_start_at: MORNING_START,
-        scheduled_end_at: MORNING_END,
-        case_id: 42,
-        late_minutes: 12,
-        early_exit_minutes: null,
-        missing_checkout: false,
-      },
-    ],
-    next_cursor: null,
-  })
+  listAttendanceExceptions.mockImplementation((params: { corrected?: boolean } = {}) =>
+    Promise.resolve(
+      params.corrected
+        ? // The corrected view starts empty; the corrected-section test fills it.
+          { items: [], next_cursor: null }
+        : {
+            items: [
+              {
+                employee_id: 'G-9001',
+                name_en: 'Ahmed Ali',
+                name_ar: null,
+                department: 'Security',
+                duty_unit: 'Main Gate',
+                duty_post: 'Gate 1',
+                crew_code: 'A',
+                shift_code: 'morning',
+                presence_state: 'late',
+                reason_code: 'late_arrival',
+                scheduled_start_at: MORNING_START,
+                scheduled_end_at: MORNING_END,
+                late_minutes: 47,
+                early_exit_minutes: null,
+                missing_checkout: false,
+                case_id: 42,
+              },
+            ],
+            next_cursor: null,
+          },
+    ),
+  )
   getAttendanceCase.mockResolvedValue({ data: null, etag: 'case-v1' })
 })
 
@@ -302,6 +309,53 @@ describe('AttendancePage', () => {
     expect(within(queue).queryByRole('button', { name: /Review Ahmed Ali/i })).not.toBeInTheDocument()
   })
 
+
+  it('lists corrected cases so a mistake can be reopened and revoked', async () => {
+    // A correction removes its case from the queue above; this section is the
+    // only door back to the revoke button, so it must carry who/when/why.
+    const user = userEvent.setup()
+    listAttendanceExceptions.mockImplementation((params: { corrected?: boolean } = {}) =>
+      Promise.resolve(
+        params.corrected
+          ? {
+              items: [
+                {
+                  employee_id: 'G-9001',
+                  name_en: 'Ahmed Ali',
+                  name_ar: null,
+                  department: 'Security',
+                  duty_unit: 'Main Gate',
+                  duty_post: 'Gate 1',
+                  crew_code: 'A',
+                  shift_code: 'morning',
+                  presence_state: 'completed',
+                  reason_code: null,
+                  scheduled_start_at: MORNING_START,
+                  scheduled_end_at: MORNING_END,
+                  late_minutes: 0,
+                  early_exit_minutes: null,
+                  missing_checkout: false,
+                  case_id: 7,
+                  corrected_at: '2026-08-19T12:00:00Z',
+                  corrected_by: 'admin@gssg.test',
+                  correction_reason: 'Arrived on time, punch missed',
+                },
+              ],
+              next_cursor: null,
+            }
+          : { items: [], next_cursor: null },
+      ),
+    )
+    renderPage()
+
+    const section = await screen.findByTestId('attendance-corrected-section')
+    expect(within(section).getByText('Corrected')).toBeInTheDocument()
+    expect(
+      within(section).getByText('Corrected by admin@gssg.test: Arrived on time, punch missed'),
+    ).toBeInTheDocument()
+    await user.click(within(section).getByRole('button', { name: /Review Ahmed Ali/i }))
+    await waitFor(() => expect(getAttendanceCase).toHaveBeenCalledWith(7))
+  })
   it('does not request review exceptions for non-reviewers', async () => {
     hasCapability.mockImplementation((cap) => cap !== 'workforce.attendance.review')
     renderPage()

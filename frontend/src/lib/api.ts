@@ -64,6 +64,7 @@ export interface ListAttendanceExceptionsParams {
   operational_date?: string
   presence?: string
   exception?: string
+  corrected?: boolean
   limit?: number
   cursor?: string
 }

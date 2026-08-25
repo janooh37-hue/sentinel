@@ -4484,6 +4484,8 @@
       "sourceFacts": "حقائق المصدر",
       "automaticEvaluations": "التقييمات التلقائية",
       "humanCorrections": "التصحيحات البشرية",
+      "corrected": "مُصحَّح",
+      "correctionLine": "صحّحها {{by}}: {{reason}}",
       "assignment": "التكليف المسجل",
       "department": "القسم المسجل",
       "crew": "الفريق المسجل",

@@ -16,6 +16,7 @@ import {
 interface Props {
   rows: readonly AttendanceRow[]
   exceptionRows?: readonly AttendanceException[]
+  correctedRows?: readonly AttendanceException[]
   now: Date
   graceMinutes?: number
   onOpenEmployee: (employeeId: string) => void
@@ -25,6 +26,7 @@ interface Props {
 export function AttentionQueue({
   rows,
   exceptionRows,
+  correctedRows,
   now,
   graceMinutes,
   onOpenEmployee,
@@ -131,6 +133,64 @@ export function AttentionQueue({
             )
           })}
         </ul>
+      )}
+
+      {/* The door back to a corrected case: a correction removes it from the
+          queue above the moment its effective state stops looking like an
+          exception, and this section is the only way back to the revoke
+          button. Undefined (not loaded / not reviewing) hides it entirely. */}
+      {reviewingExceptions && correctedRows !== undefined && correctedRows.length > 0 && (
+        <div className="border-t border-hairline" data-testid="attendance-corrected-section">
+          <header className="flex items-center gap-2.5 px-4 py-2.5">
+            <h4 className="text-[0.75em] font-bold text-muted-foreground">
+              {t('attendance.review.corrected')}
+            </h4>
+            <span className="rounded-full bg-surface-tinted px-2 py-0.5 font-mono text-[0.7em] font-bold text-muted-foreground">
+              {correctedRows.length}
+            </span>
+          </header>
+          <ul>
+            {correctedRows.map((row) => {
+              const name = pickEmployeeName({ name_en: row.name_en, name_ar: row.name_ar ?? null }, i18n.language)
+              return (
+                <li key={row.case_id} className="border-b border-hairline px-4 py-2.5 last:border-b-0">
+                  <div className="flex items-center gap-2.5">
+                    <button
+                      type="button"
+                      onClick={() => onOpenEmployee(row.employee_id)}
+                      className="min-w-0 flex-1 text-start focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    >
+                      <span className="block text-[0.8em] font-semibold leading-snug">{name}</span>
+                      <span className="block truncate text-[0.68em] text-faint">
+                        {row.duty_post} · {t(`attendance.shift.${row.shift_code}`, row.shift_code ?? '')} · {row.employee_id}
+                      </span>
+                    </button>
+                    <span className="shrink-0 font-mono text-[0.72em] font-bold text-info">
+                      {t(`attendance.review.presence.${row.presence_state}`, row.presence_state ?? '')}
+                    </span>
+                  </div>
+                  {(row.correction_reason ?? row.corrected_by) && (
+                    <p className="mt-0.5 truncate text-[0.68em] text-muted-foreground">
+                      {t('attendance.review.correctionLine', {
+                        by: row.corrected_by ?? '',
+                        reason: row.correction_reason ?? '',
+                      })}
+                    </p>
+                  )}
+                  {onReviewCase && (
+                    <button
+                      type="button"
+                      onClick={() => onReviewCase(row.case_id)}
+                      className="mt-2 inline-flex min-h-8 items-center rounded-lg border border-hairline px-2.5 text-[0.72em] font-semibold text-primary transition-colors hover:bg-surface-tinted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    >
+                      {t('attendance.review.review', { name })}
+                    </button>
+                  )}
+                </li>
+              )
+            })}
+          </ul>
+        </div>
       )}
     </aside>
   )

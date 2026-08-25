@@ -4182,6 +4182,8 @@
       "sourceFacts": "Source facts",
       "automaticEvaluations": "Automatic evaluations",
       "humanCorrections": "Human corrections",
+      "corrected": "Corrected",
+      "correctionLine": "Corrected by {{by}}: {{reason}}",
       "assignment": "Captured assignment",
       "department": "Captured department",
       "crew": "Captured crew",

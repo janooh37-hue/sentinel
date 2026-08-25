@@ -102,6 +102,15 @@ export function AttendancePage(): React.JSX.Element {
     enabled: canReview,
   })
 
+  // Same key prefix as the queue above, so a successful correction or revocation
+  // invalidates this view too: the case moves between the two sections live.
+  const correctedQuery = useQuery({
+    queryKey: ['attendance-exceptions', operationalDate, 'corrected'] as const,
+    queryFn: () =>
+      api.listAttendanceExceptions({ operational_date: operationalDate, corrected: true, limit: 500 }),
+    enabled: canReview,
+  })
+
   const allRows = useMemo<AttendanceRow[]>(() => dayQuery.data?.items ?? [], [dayQuery.data])
   // Judge against the instant the payload was produced: counts and rows must
   // never disagree about whether a window had opened.
@@ -288,6 +297,7 @@ export function AttendancePage(): React.JSX.Element {
             <AttentionQueue
               rows={allRows}
               exceptionRows={exceptionsQuery.isSuccess ? exceptionsQuery.data.items : undefined}
+              correctedRows={correctedQuery.isSuccess ? correctedQuery.data.items : undefined}
               now={now}
               onOpenEmployee={openEmployee}
               onReviewCase={exceptionsQuery.isSuccess ? setSelectedCaseId : undefined}
