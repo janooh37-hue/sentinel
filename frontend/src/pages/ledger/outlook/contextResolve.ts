@@ -15,7 +15,7 @@
  */
 
 import { extractGNumbers } from '@/lib/employeeDetection'
-import type { EmployeeRead, EmployeeStatsRead, LedgerEntryRead } from '@/lib/api'
+import type { ActivityItemRead, EmployeeRead, EmployeeStatsRead, LedgerEntryRead } from '@/lib/api'
 
 /** The employees an open mail/record is about. */
 export interface ResolvedPeople {
@@ -111,9 +111,7 @@ export function leaveBalanceLabel(stats: EmployeeStatsRead): string {
 }
 
 /** Emoji prefix for a recent-activity row, by its unified kind. */
-export function activityEmoji(
-  kind: 'document' | 'leave' | 'violation' | 'ledger',
-): string {
+export function activityEmoji(kind: ActivityItemRead['kind']): string {
   switch (kind) {
     case 'document':
       return '📕'
@@ -123,5 +121,7 @@ export function activityEmoji(
       return '⚠️'
     case 'ledger':
       return '✉️'
+    case 'absence':
+      return '🚫'
   }
 }

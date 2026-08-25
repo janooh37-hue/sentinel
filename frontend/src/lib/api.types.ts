@@ -775,6 +775,41 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/employees/{employee_id}/absences": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Employee Absences */
+        get: operations["list_employee_absences_api_v1_employees__employee_id__absences_get"];
+        put?: never;
+        /** Create Employee Absences */
+        post: operations["create_employee_absences_api_v1_employees__employee_id__absences_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/employees/{employee_id}/absences/{absence_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete Employee Absence */
+        delete: operations["delete_employee_absence_api_v1_employees__employee_id__absences__absence_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/employees/{employee_id}/vault": {
         parameters: {
             query?: never;
@@ -4856,6 +4891,53 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /**
+         * AbsenceCreate
+         * @description Mark every day in ``[start_date, end_date]`` (inclusive) as absent.
+         */
+        AbsenceCreate: {
+            /**
+             * Start Date
+             * Format: date
+             */
+            start_date: string;
+            /**
+             * End Date
+             * Format: date
+             */
+            end_date: string;
+            /** Note */
+            note?: string | null;
+        };
+        /**
+         * AbsenceCreateResult
+         * @description The days recorded, and the requested days refused as off-roster.
+         */
+        AbsenceCreateResult: {
+            /** Created */
+            created: components["schemas"]["AbsenceRead"][];
+            /** Skipped Off Roster */
+            skipped_off_roster: string[];
+        };
+        /** AbsenceRead */
+        AbsenceRead: {
+            /** Id */
+            id: number;
+            /** Employee Id */
+            employee_id: string;
+            /**
+             * Date
+             * Format: date
+             */
+            date: string;
+            /** Note */
+            note: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+        };
         /** ActivityItemRead */
         ActivityItemRead: {
             /**
@@ -4867,7 +4949,7 @@ export interface components {
              * Kind
              * @enum {string}
              */
-            kind: "document" | "leave" | "violation" | "ledger";
+            kind: "document" | "leave" | "violation" | "ledger" | "absence";
             /** Summary */
             summary: string;
             /** Ref Id */
@@ -7486,6 +7568,8 @@ export interface components {
             recent_leaves: components["schemas"]["RecentLeaveRead"][];
             /** Recent Violations */
             recent_violations: components["schemas"]["RecentViolationRead"][];
+            /** Recent Absences */
+            recent_absences: components["schemas"]["RecentAbsenceRead"][];
             /** Recent Ledger */
             recent_ledger: components["schemas"]["RecentLedgerRead"][];
             /** Recent Activity */
@@ -7636,6 +7720,8 @@ export interface components {
             leaves_allowed_days: number;
             /** Violations */
             violations: number;
+            /** Absence Days */
+            absence_days: number;
             /** Ledger Count */
             ledger_count: number;
             /** Tenure Years */
@@ -8153,6 +8239,8 @@ export interface components {
             submission_id?: string | null;
             /** Documents */
             documents?: components["schemas"]["JobDocumentItem"][] | null;
+            /** Superseded Absence Dates */
+            superseded_absence_dates?: string[];
             /** Error Code */
             error_code?: string | null;
             /** Error Message */
@@ -9432,6 +9520,18 @@ export interface components {
             keys: components["schemas"]["PushKeys"];
             /** Locale */
             locale?: string | null;
+        };
+        /** RecentAbsenceRead */
+        RecentAbsenceRead: {
+            /** Id */
+            id: number;
+            /**
+             * Date
+             * Format: date
+             */
+            date: string;
+            /** Note */
+            note?: string | null;
         };
         /** RecentDocumentRead */
         RecentDocumentRead: {
@@ -12664,6 +12764,108 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["ViolationRead"];
                 };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_employee_absences_api_v1_employees__employee_id__absences_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                employee_id: string;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AbsenceRead"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_employee_absences_api_v1_employees__employee_id__absences_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                employee_id: string;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AbsenceCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AbsenceCreateResult"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_employee_absence_api_v1_employees__employee_id__absences__absence_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                employee_id: string;
+                absence_id: number;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Validation Error */
             422: {

@@ -161,6 +161,12 @@ export type ActivityItemRead = components['schemas']['ActivityItemRead']
 export type ViolationRead = components['schemas']['ViolationRead']
 export type ViolationCreate = components['schemas']['ViolationCreate']
 export type ViolationUpdate = components['schemas']['ViolationUpdate']
+// Absence records — day-level facts on the employee, recorded from the
+// Services gallery (no document); the time sheet reads them as AB.
+export type AbsenceRead = components['schemas']['AbsenceRead']
+export type AbsenceCreate = components['schemas']['AbsenceCreate']
+export type AbsenceCreateResult = components['schemas']['AbsenceCreateResult']
+export type RecentAbsenceRead = components['schemas']['RecentAbsenceRead']
 
 // The backend now returns the employee's bilingual name alongside each leave
 // row so the Records table can render a name instead of a raw G-number. These
@@ -1107,6 +1113,20 @@ export const api = {
   // --- leaves (employee sub-resource, read-only) ---
   listEmployeeLeaves: (employeeId: string) =>
     request<LeaveRead[]>('GET', `/employees/${encodeURIComponent(employeeId)}/leaves`),
+  // --- absences (employee sub-resource; record-only, no document) ---
+  listEmployeeAbsences: (employeeId: string) =>
+    request<AbsenceRead[]>('GET', `/employees/${encodeURIComponent(employeeId)}/absences`),
+  createEmployeeAbsences: (employeeId: string, body: AbsenceCreate) =>
+    request<AbsenceCreateResult>(
+      'POST',
+      `/employees/${encodeURIComponent(employeeId)}/absences`,
+      body,
+    ),
+  deleteEmployeeAbsence: (employeeId: string, absenceId: number) =>
+    request<void>(
+      'DELETE',
+      `/employees/${encodeURIComponent(employeeId)}/absences/${absenceId}`,
+    ),
 
   // --- leaves (Phase 06 — standalone collection) ---
   listLeaves: (params: {

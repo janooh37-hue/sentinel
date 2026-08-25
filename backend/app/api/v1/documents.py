@@ -176,6 +176,9 @@ class JobStatusResponse(BaseModel):
     book_id: int | None = None
     submission_id: str | None = None
     documents: list[JobDocumentItem] | None = None
+    #: Days whose recorded absences the generated leave overwrote. The client
+    #: announces the overwrite from these ("absence from X to Y overwritten").
+    superseded_absence_dates: list[date] = Field(default_factory=list)
     error_code: str | None = None
     error_message: str | None = None
 
@@ -300,6 +303,7 @@ def _run_generation(
             book_id=result.book_id,
             submission_id=result.submission_id,
             documents=registry_docs,
+            superseded_absence_dates=result.superseded_absences,
         )
     except AppError as exc:
         set_failed(job_id, error_code=exc.code, error_message=exc.message)
@@ -437,6 +441,7 @@ def get_job_status(
         status=job.status,
         submission_id=job.submission_id,
         documents=pydantic_docs,
+        superseded_absence_dates=job.superseded_absence_dates,
         error_code=job.error_code,
         error_message=job.error_message,
     )
