@@ -146,12 +146,178 @@
   .pill.returned  { background: var(--info-soft); color: var(--info); }
   .when { font-family: "IBM Plex Mono", ui-monospace, Consolas, monospace; font-size: 0.68em; font-variant-numeric: tabular-nums; color: var(--text-faint); }
   .waiting { font-size: 0.68em; font-weight: 600; color: var(--warning); }
+  /* ── Document preview lightbox ──────────────────────────────────────── */
+  .thumb { cursor: pointer; transition: box-shadow 150ms ease, border-color 150ms ease; }
+  .thumb:hover { border-color: var(--primary); box-shadow: 0 0 0 3px var(--primary-soft); }
+  .pv-root { position: fixed; inset: 0; z-index: 60; color: var(--text); }
+  .pv-root[hidden] { display: none; }
+  .pv-root.rec-only .pv-shell { display: none; }
+  .pv-scrim { position: absolute; inset: 0; background: rgba(6, 9, 15, .62); }
+  .pv-shell {
+    position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center;
+    padding: clamp(8px, 2.5vh, 24px) clamp(8px, 3vw, 24px); pointer-events: none;
+  }
+  .pv-bar {
+    pointer-events: auto; width: min(860px, 100%); display: flex; align-items: center; gap: 8px;
+    background: var(--surface); border: 1px solid var(--border); border-bottom: 0;
+    border-radius: 12px 12px 0 0; padding: 8px 10px;
+  }
+  .pv-title { flex: 1; min-width: 0; font-size: .85em; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .pv-title .ref { margin-inline-end: 8px; }
+  .pv-btn {
+    appearance: none; cursor: pointer; font: inherit; font-size: .72em; font-weight: 600;
+    display: inline-flex; align-items: center; gap: 6px; min-height: 30px; flex: none;
+    border: 1px solid var(--border); border-radius: 8px; padding: 4px 10px;
+    background: var(--surface); color: var(--text-muted);
+    transition: background-color 150ms ease, color 150ms ease;
+  }
+  .pv-btn:hover { background: var(--surface-tinted); color: var(--text); }
+  .pv-btn.primary { background: var(--primary); border-color: var(--primary); color: var(--on-primary); }
+  .pv-btn.primary:hover { background: var(--primary-hover); color: var(--on-primary); }
+  .pv-zoom { display: inline-flex; align-items: center; border: 1px solid var(--border); border-radius: 8px; padding: 1px; flex: none; }
+  .pv-zoom .pv-btn { border: 0; }
+  .pv-zoom .zval {
+    width: 42px; text-align: center; font-family: "IBM Plex Mono", ui-monospace, Consolas, monospace;
+    font-size: .68em; color: var(--text-muted); font-variant-numeric: tabular-nums;
+  }
+  .pv-viewport {
+    pointer-events: auto; width: min(860px, 100%); flex: 1; overflow: auto; -webkit-overflow-scrolling: touch;
+    background: var(--surface-tinted); border: 1px solid var(--border); border-top: 0;
+    border-radius: 0 0 12px 12px; touch-action: pan-x pan-y;
+  }
+  .pv-doc {
+    width: min(600px, 100%); margin: 20px auto; background: #fff; color: #1c1f24;
+    padding: clamp(24px, 5vw, 52px); border-radius: 3px; box-shadow: 0 12px 32px rgba(0,0,0,.28);
+  }
+  .doc-head { display: flex; align-items: center; gap: 12px; padding-bottom: 14px; border-bottom: 2px solid #0d2845; }
+  .doc-logo {
+    flex: none; width: 34px; height: 34px; border-radius: 8px; background: #0d2845; color: #fff;
+    display: grid; place-items: center; font-weight: 800; font-size: 12px;
+  }
+  .doc-org b { display: block; font-size: 13px; letter-spacing: .04em; }
+  .doc-org span { font-size: 10.5px; color: #5a6068; }
+  .doc-refline {
+    display: flex; justify-content: space-between; gap: 12px; margin: 14px 0 4px;
+    font-family: "IBM Plex Mono", ui-monospace, Consolas, monospace; font-size: 10.5px; color: #5a6068;
+  }
+  .doc-title { margin: 18px 0 10px; font-size: 15px; font-weight: 700; text-align: center; }
+  .doc-meta { margin: 0 0 14px; font-size: 11.5px; color: #5a6068; }
+  .doc-meta b { color: #1c1f24; font-weight: 600; }
+  .doc-body p { margin: 0 0 10px; font-size: 12px; line-height: 1.7; }
+  .doc-sig { margin-top: 22px; display: flex; justify-content: space-between; align-items: flex-end; }
+  .doc-sig .name { font-size: 12px; font-weight: 700; border-top: 1px solid #1c1f24; padding-top: 4px; margin-top: 26px; }
+  .doc-stamp {
+    flex: none; width: 74px; height: 74px; border: 2px solid rgba(13,40,69,.45); border-radius: 99px;
+    display: grid; place-items: center; transform: rotate(-12deg);
+    color: rgba(13,40,69,.55); font-size: 9px; font-weight: 800; letter-spacing: .12em; text-align: center;
+  }
+
+  /* ── Full record sheet ──────────────────────────────────────────────── */
+  .rec-sheet {
+    position: absolute; top: 0; bottom: 0; inset-inline-end: 0; width: min(440px, 100%);
+    background: var(--bg); border-inline-start: 1px solid var(--border);
+    box-shadow: -30px 0 70px rgba(0,0,0,.4);
+    display: flex; flex-direction: column;
+    transform: translateX(-100vw); transition: transform 280ms cubic-bezier(0.22, 1, 0.36, 1);
+  }
+  [dir="rtl"] .rec-sheet { transform: translateX(100vw); }
+  .rec-sheet.open { transform: translateX(0); }
+  .rec-head {
+    display: flex; align-items: center; gap: 10px; padding: 12px 16px;
+    border-bottom: 1px solid var(--hairline); background: var(--surface-raised);
+  }
+  .rec-head h2 {
+    margin: 0; font-size: .95em; font-weight: 700; flex: 1; min-width: 0;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .rec-body { flex: 1; overflow: auto; padding: 18px 16px 24px; }
+  .rec-subject { margin: 0; font-size: 1.05em; font-weight: 700; }
+  .rec-status-row { display: flex; align-items: center; gap: 8px; margin-top: 8px; }
+  .rec-grid { display: grid; grid-template-columns: auto 1fr; gap: 7px 14px; margin: 16px 0; font-size: .78em; }
+  .rec-grid dt { color: var(--text-muted); }
+  .rec-grid dd { margin: 0; font-weight: 550; }
+  .rec-doc-card {
+    display: flex; align-items: center; gap: 12px; padding: 12px;
+    border: 1px solid var(--border); border-radius: 12px; background: var(--surface);
+  }
+  .rec-doc-card .grow { flex: 1; min-width: 0; }
+  .rec-doc-card .fname { font-size: .8em; font-weight: 600; font-family: "IBM Plex Mono", ui-monospace, Consolas, monospace; }
+  .rec-doc-card .fmeta { font-size: .68em; color: var(--text-muted); margin-top: 2px; }
+  .rec-actions { display: flex; gap: 8px; padding: 12px 16px; border-top: 1px solid var(--hairline); background: var(--surface-raised); }
+  .rec-btn {
+    flex: 1; appearance: none; cursor: pointer; font: inherit; font-size: .82em; font-weight: 700;
+    border-radius: 10px; padding: 11px 12px; min-height: 44px;
+    display: inline-flex; align-items: center; justify-content: center; gap: 7px;
+    border: 1px solid var(--border); background: var(--surface); color: var(--text);
+    transition: background-color 150ms ease, color 150ms ease;
+  }
+  .rec-btn.approve { background: var(--primary); border-color: var(--primary); color: var(--on-primary); }
+  .rec-btn.approve:hover { background: var(--primary-hover); }
+  .rec-btn.reject { color: var(--accent); border-color: color-mix(in srgb, var(--accent) 40%, transparent); }
+  .rec-btn.reject:hover { background: var(--accent-soft); }
+  .rec-reason { flex: 1; }
+  .rec-reason textarea {
+    width: 100%; font: inherit; font-size: .8em; color: var(--text); background: var(--surface);
+    border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; min-height: 74px; resize: vertical;
+  }
+  .rec-reason .confirm { margin-top: 8px; width: 100%; }
+  .rec-verdict {
+    margin-top: 14px; padding: 12px 14px; border-radius: 10px; font-size: .78em; font-weight: 600;
+    display: flex; gap: 8px; align-items: center;
+  }
+  .rec-verdict.ok { background: var(--success-soft); color: var(--success); }
+  .rec-verdict.no { background: var(--accent-soft); color: var(--accent); }
+  .rec-verdict.ret { background: var(--info-soft); color: var(--info); }
+  .toast {
+    position: fixed; bottom: 22px; inset-inline-start: 50%; transform: translateX(-50%);
+    background: var(--primary); color: var(--on-primary); font-size: .78em; font-weight: 600;
+    border-radius: 99px; padding: 9px 18px; box-shadow: 0 10px 26px rgba(0,0,0,.3);
+    opacity: 0; transition: opacity 200ms ease; pointer-events: none; z-index: 80; white-space: nowrap;
+  }
+  [dir="rtl"] .toast { transform: translateX(50%); }
+  .toast.show { opacity: 1; }
+
+  @media (max-width: 640px) {
+    .page { padding: 14px 12px 32px; }
+    .row { padding: 12px 14px; gap: 10px; }
+    .section-head { padding: 10px 14px 8px; }
+    .row .thumb { width: 44px; height: 44px; }
+    .pv-shell { padding: 0; }
+    .pv-bar { width: 100%; border-radius: 0; border-inline: 0; border-top: 0; }
+    .pv-viewport { width: 100%; border: 0; border-radius: 0; }
+    .pv-btn .pv-label { display: none; }
+    .pv-btn { padding: 6px 9px; min-height: 38px; }
+    .rec-sheet {
+      width: 100%; inset-inline: 0; top: auto; height: 94%;
+      border: 0; border-radius: 16px 16px 0 0; box-shadow: 0 -24px 60px rgba(0,0,0,.45);
+      transform: translateY(105%);
+    }
+    [dir="rtl"] .rec-sheet { transform: translateY(105%); }
+    .rec-sheet.open { transform: translateY(0); }
+    .rec-sheet::before {
+      content: ""; position: absolute; top: 8px; inset-inline-start: 50%; margin-inline-start: -18px;
+      width: 36px; height: 4px; border-radius: 99px; background: var(--border);
+    }
+    .rec-body { padding-bottom: 20px; }
+    .rec-actions {
+      position: fixed; bottom: 0; inset-inline: 0;
+      padding: 12px 16px calc(12px + env(safe-area-inset-bottom));
+    }
+  }
+  @media print {
+    body { background: #fff; }
+    body > *:not(.pv-root) { display: none !important; }
+    .pv-scrim, .pv-bar, .rec-sheet, .toast { display: none !important; }
+    .pv-shell { position: static; padding: 0; }
+    .pv-viewport { overflow: visible; border: 0; border-radius: 0; background: #fff; }
+    .pv-doc { zoom: 1 !important; box-shadow: none; margin: 0 auto; }
+  }
 </style>
 </head>
 <body>
 
 <!-- ══════════════════ Frame 1 · English · light ══════════════════ -->
-<div class="frame-label"><span>EN · Light · Received tab</span></div>
+<div class="frame-label"><span>EN · Light · click row = record, thumbnail = preview</span></div>
 <section class="page" data-theme="light" lang="en" dir="ltr" data-frame>
   <header class="page-head">
     <div>
@@ -289,7 +455,7 @@
 </section>
 
 <!-- ══════════════════ Frame 2 · Arabic · RTL ══════════════════ -->
-<div class="frame-label"><span>AR · RTL · نفس الإطار</span><button class="theme-toggle" onclick="flip(this)">تبديل المظهر</button></div>
+<div class="frame-label"><span>AR · RTL · اضغط الصف للسجل، المصغّر للمعاينة</span><button class="theme-toggle" onclick="flip(this)">تبديل المظهر</button></div>
 <section class="page" data-theme="light" lang="ar" dir="rtl" data-frame>
   <header class="page-head">
     <div>
@@ -426,6 +592,37 @@
   </div>
 </section>
 
+<!-- ══════════════════ Overlay · document preview + full record ══════════════════ -->
+<div class="pv-root" id="pvRoot" data-theme="light" lang="en" dir="ltr" hidden>
+  <div class="pv-scrim" id="pvScrim"></div>
+  <div class="pv-shell">
+    <div class="pv-bar">
+      <button class="pv-btn" id="pvClose" aria-label="Close preview"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
+      <div class="pv-title"><span class="ref" id="pvRef"></span><span id="pvSubject"></span></div>
+      <div class="pv-zoom" role="group" aria-label="Zoom">
+        <button class="pv-btn" id="zOut" aria-label="Zoom out"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M5 12h14"/></svg></button>
+        <span class="zval" id="zVal">100%</span>
+        <button class="pv-btn" id="zIn" aria-label="Zoom in"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></button>
+      </div>
+      <button class="pv-btn" id="pvPrint"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9V2h12v7"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><path d="M6 14h12v8H6z"/></svg><span class="pv-label" id="pvPrintLbl">Print</span></button>
+      <button class="pv-btn primary" id="pvRecord"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M9 15h6M9 11h2"/></svg><span class="pv-label" id="pvRecordLbl">Full record</span></button>
+    </div>
+    <div class="pv-viewport" id="pvViewport">
+      <div class="pv-doc" id="pvDoc"></div>
+    </div>
+  </div>
+  <aside class="rec-sheet" id="recSheet" role="dialog" aria-modal="true">
+    <div class="rec-head">
+      <button class="pv-btn" id="recClose" aria-label="Close record"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg></button>
+      <h2 id="recTitle"></h2>
+      <span class="ref" id="recRef"></span>
+    </div>
+    <div class="rec-body" id="recBody"></div>
+    <div class="rec-actions" id="recActions"></div>
+  </aside>
+  <div class="toast" id="pvToast" role="status"></div>
+</div>
+
 <script>
   // Theme flip for quick dark-mode review of any frame.
   function flip(btn) {
@@ -433,6 +630,246 @@
     frame.dataset.theme = frame.dataset.theme === 'light' ? 'dark' : 'light';
     btn.textContent = frame.dataset.theme === 'light' ? 'تبديل المظهر' : 'Toggle theme';
   }
+
+  // ── Preview + record overlay ─────────────────────────────────────────
+  const T = (lang, en, ar) => (lang === 'ar' ? ar : en);
+  const pvRoot = document.getElementById('pvRoot');
+  const pvViewport = document.getElementById('pvViewport');
+  const pvDoc = document.getElementById('pvDoc');
+  const recSheet = document.getElementById('recSheet');
+  const recBody = document.getElementById('recBody');
+  const recActions = document.getElementById('recActions');
+  const zVal = document.getElementById('zVal');
+  const pvToast = document.getElementById('pvToast');
+  let cur = null; // { row, frame, lang }
+  let zoom = 1;
+  let toastTimer = null;
+
+  const ICONS = {
+    pending: '<svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>',
+    approved: '<svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>',
+    rejected: '<svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg>',
+    returned: '<svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m9 14-4-4 4-4"/><path d="M5 10h11a4 4 0 0 1 4 4v2"/></svg>'
+  };
+  const PILL_LABEL = {
+    pending: ['Pending', 'قيد الاعتماد'], approved: ['Approved', 'معتمد'],
+    rejected: ['Rejected', 'مرفوض'], returned: ['Returned', 'معاد']
+  };
+
+  function rowData(row) {
+    const lang = cur.lang;
+    const parts = row.querySelector('.row-meta').textContent.split(lang === 'ar' ? '←' : '→').map(s => s.trim());
+    const pill = row.querySelector('.pill');
+    const status = [...pill.classList].find(c => PILL_LABEL[c]) || 'pending';
+    return {
+      ref: row.querySelector('.ref').textContent.trim(),
+      subject: row.querySelector('.subject').textContent.trim(),
+      from: parts[0], to: parts[1] || '', status,
+      high: !!row.querySelector('.high-flag'),
+      date: row.querySelector('.when').textContent.trim(),
+      waitingEl: row.querySelector('.waiting')
+    };
+  }
+
+  function renderDoc() {
+    const d = rowData(cur.row), ar = cur.lang === 'ar';
+    document.getElementById('pvRef').textContent = d.ref;
+    document.getElementById('pvSubject').textContent = d.subject;
+    pvDoc.innerHTML = `
+      <div class="doc-head">
+        <div class="doc-logo">GS</div>
+        <div class="doc-org"><b>GSSG MANAGER</b><span>${ar ? 'إدارة الموارد البشرية والوثائق' : 'Human Resources & Documents'}</span></div>
+      </div>
+      <div class="doc-refline"><span>${ar ? 'الرقم' : 'Ref'}: ${d.ref}</span><span>${ar ? 'التاريخ' : 'Date'}: ${d.date.replace(/^decided |^قرر في /, '')}</span></div>
+      <h3 class="doc-title">${d.subject}</h3>
+      <p class="doc-meta">${ar ? 'مقدَّم من' : 'Submitted by'} <b>${d.from}</b> ${ar ? 'إلى' : 'to'} <b>${d.to}</b></p>
+      <div class="doc-body">
+        <p>${ar
+          ? 'تشير إلى أن الطلب المشار إليه أعلاه، المقدَّم من ' + d.from + '، قد تمت معالجته عبر نظام GSSG Manager ويُعرض الآن للمراجعة واتخاذ القرار وفق الصلاحيات المعتمدة.'
+          : 'This is to certify that the request referenced above, submitted by ' + d.from + ', has been processed through the GSSG Manager document workflow and is presented for review and decision under the delegated approval authority.'}</p>
+        <p>${ar
+          ? 'تم التحقق من السجل المرفق مقابل ملف الموظف، وأي تعديل لاحق يتطلب طلباً رسمياً من القسم المُصدر قبل التوقيع النهائي.'
+          : 'The attached record has been verified against the employee file. Any subsequent amendment requires a formal request through the issuing department before final sign-off.'}</p>
+      </div>
+      <div class="doc-sig">
+        <div class="name">${d.from}</div>
+        <div class="doc-stamp">GSSG<br>${ar ? 'رسمية' : 'OFFICIAL'}</div>
+      </div>`;
+  }
+
+  function renderRecord() {
+    const d = rowData(cur.row), lang = cur.lang, ar = lang === 'ar';
+    document.getElementById('recTitle').textContent = T(lang, 'Full record', 'السجل الكامل');
+    document.getElementById('recRef').textContent = d.ref;
+    const priority = d.high
+      ? `<dd style="color:var(--accent);font-weight:700">${T(lang, 'High', 'عالية')}</dd>`
+      : `<dd>${T(lang, 'Normal', 'عادية')}</dd>`;
+    let verdict = '';
+    if (d.status === 'approved') verdict = `<div class="rec-verdict ok">${ICONS.approved}${T(lang, 'Approved · ', 'تم الاعتماد · ')}${d.date.replace('decided ', '').replace('قرر في ', '')}</div>`;
+    if (d.status === 'rejected') verdict = `<div class="rec-verdict no">${ICONS.rejected}${T(lang, 'Rejected · ', 'تم الرفض · ')}${d.date.replace('decided ', '').replace('قرر في ', '')}</div>`;
+    if (d.status === 'returned') verdict = `<div class="rec-verdict ret">${ICONS.returned}${T(lang, 'Returned to sender · ', 'أُعيد إلى المُرسل · ')}${d.date.replace('decided ', '').replace('قرر في ', '')}</div>`;
+    recBody.innerHTML = `
+      <p class="rec-subject">${d.subject}</p>
+      <div class="rec-status-row">
+        <span class="pill ${d.status}">${ICONS[d.status]}${PILL_LABEL[d.status][ar ? 1 : 0]}</span>
+        <span class="when">${d.date}</span>
+      </div>
+      <dl class="rec-grid">
+        <dt>${ar ? 'المرجع' : 'Reference'}</dt><dd class="ref">${d.ref}</dd>
+        <dt>${ar ? 'مقدَّم من' : 'Submitted by'}</dt><dd>${d.from}</dd>
+        <dt>${ar ? 'إلى' : 'Assigned to'}</dt><dd>${d.to}</dd>
+        <dt>${ar ? 'الأولوية' : 'Priority'}</dt>${priority}
+      </dl>
+      <div class="rec-doc-card">
+        <div class="thumb" id="recThumb" role="button" tabindex="0" aria-label="${ar ? 'معاينة المستند' : 'Preview document'}"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#8b9098" stroke-width="1.8"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg></div>
+        <div class="grow">
+          <div class="fname">${d.ref}.pdf</div>
+          <div class="fmeta">${ar ? 'اضغط للمعاينة · قرّب بإصبعين' : 'Tap to preview · pinch to zoom'}</div>
+        </div>
+        <button class="pv-btn" id="recPreviewBtn">${ar ? 'معاينة' : 'Preview'}</button>
+      </div>
+      ${verdict}`;
+    const pv = () => { pvRoot.classList.remove('rec-only'); setZoom(1); renderDoc(); };
+    document.getElementById('recPreviewBtn').onclick = pv;
+    const rt = document.getElementById('recThumb');
+    rt.onclick = pv;
+    rt.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); pv(); } });
+    renderActions(d, lang);
+  }
+
+  function renderActions(d, lang) {
+    const ar = lang === 'ar';
+    if (d.status !== 'pending') { recActions.innerHTML = ''; recActions.style.display = 'none'; return; }
+    recActions.style.display = '';
+    recActions.innerHTML = `
+      <button class="rec-btn reject" id="btnReject">${ar ? '✕ رفض' : '✕ Reject'}</button>
+      <button class="rec-btn approve" id="btnApprove">${ar ? '✓ اعتماد' : '✓ Approve'}</button>`;
+    document.getElementById('btnApprove').onclick = () => applyVerdict('approved');
+    document.getElementById('btnReject').onclick = showReason;
+  }
+
+  function showReason() {
+    const ar = cur.lang === 'ar';
+    recActions.innerHTML = `
+      <div class="rec-reason">
+        <textarea id="reasonTxt" placeholder="${ar ? 'سبب الرفض (مطلوب)' : 'Rejection reason (required)'}"></textarea>
+        <button class="rec-btn reject confirm" id="btnConfirm">${ar ? 'تأكيد الرفض' : 'Confirm rejection'}</button>
+      </div>`;
+    const txt = document.getElementById('reasonTxt');
+    document.getElementById('btnConfirm').onclick = () => {
+      if (!txt.value.trim()) { txt.focus(); return; }
+      applyVerdict('rejected');
+    };
+    txt.focus();
+  }
+
+  function applyVerdict(status) {
+    const d = rowData(cur.row), ar = cur.lang === 'ar';
+    const pill = cur.row.querySelector('.pill');
+    pill.className = 'pill ' + status;
+    pill.innerHTML = ICONS[status] + PILL_LABEL[status][ar ? 1 : 0];
+    if (d.waitingEl) d.waitingEl.remove();
+    cur.row.querySelector('.when').textContent = ar ? 'قرر الآن' : 'decided now';
+    toast(ar ? d.ref + ': تم ' + (status === 'approved' ? 'الاعتماد' : 'الرفض')
+             : d.ref + (status === 'approved' ? ' approved' : ' rejected'));
+    renderRecord();
+  }
+
+  function toast(msg) {
+    pvToast.textContent = msg;
+    pvToast.classList.add('show');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => pvToast.classList.remove('show'), 2400);
+  }
+
+  function syncOverlay() {
+    pvRoot.dataset.theme = cur.frame.dataset.theme;
+    pvRoot.lang = cur.lang;
+    pvRoot.dir = cur.frame.dir;
+    document.getElementById('pvPrintLbl').textContent = T(cur.lang, 'Print', 'طباعة');
+    document.getElementById('pvRecordLbl').textContent = T(cur.lang, 'Full record', 'السجل الكامل');
+  }
+  function openPreview(row) {
+    cur = { row, frame: row.closest('.page'), lang: row.closest('.page').lang };
+    syncOverlay();
+    pvViewport.scrollTop = 0;
+    setZoom(1);
+    renderDoc();
+    pvRoot.hidden = false;
+    document.getElementById('pvClose').focus();
+  }
+  function closePreview() {
+    if (recSheet.classList.contains('open')) {
+      pvRoot.classList.add('rec-only'); // collapse to record-only view
+    } else {
+      pvRoot.hidden = true;
+      pvRoot.classList.remove('rec-only');
+    }
+  }
+  function openRecord(row) {
+    cur = { row, frame: row.closest('.page'), lang: row.closest('.page').lang };
+    syncOverlay();
+    renderRecord();
+    if (pvRoot.hidden) { pvRoot.classList.add('rec-only'); pvRoot.hidden = false; }
+    recSheet.classList.add('open');
+    document.getElementById('recClose').focus();
+  }
+  function closeRecord() {
+    recSheet.classList.remove('open');
+    if (pvRoot.classList.contains('rec-only')) { pvRoot.hidden = true; pvRoot.classList.remove('rec-only'); }
+  }
+
+  // ── Zoom: buttons, ctrl+wheel, double-click, pinch ──────────────────
+  function setZoom(nz) {
+    zoom = Math.min(3, Math.max(0.5, nz));
+    pvDoc.style.zoom = zoom;
+    zVal.textContent = Math.round(zoom * 100) + '%';
+  }
+  document.getElementById('zIn').onclick = () => setZoom(zoom + 0.25);
+  document.getElementById('zOut').onclick = () => setZoom(zoom - 0.25);
+  pvViewport.addEventListener('wheel', e => {
+    if (!e.ctrlKey && !e.metaKey) return;
+    e.preventDefault();
+    setZoom(zoom + (e.deltaY < 0 ? 0.15 : -0.15));
+  }, { passive: false });
+  pvViewport.addEventListener('dblclick', () => setZoom(zoom > 1.05 ? 1 : 2));
+  let pinch = null;
+  pvViewport.addEventListener('touchstart', e => {
+    if (e.touches.length === 2) {
+      const [a, b] = e.touches;
+      pinch = { d: Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY), z: zoom };
+    } else pinch = null;
+  }, { passive: true });
+  pvViewport.addEventListener('touchmove', e => {
+    if (!pinch || e.touches.length !== 2) return;
+    e.preventDefault();
+    const [a, b] = e.touches;
+    setZoom(pinch.z * (Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY) / pinch.d));
+  }, { passive: false });
+  pvViewport.addEventListener('touchend', () => { pinch = null; }, { passive: true });
+
+  // ── Wiring ───────────────────────────────────────────────────────────
+  document.getElementById('pvClose').onclick = closePreview;
+  document.getElementById('recClose').onclick = closeRecord;
+  document.getElementById('pvScrim').onclick = () => (recSheet.classList.contains('open') ? closeRecord() : closePreview());
+  document.getElementById('pvRecord').onclick = () => openRecord(cur.row);
+  document.getElementById('pvPrint').onclick = () => window.print();
+  document.addEventListener('keydown', e => {
+    if (e.key !== 'Escape' || pvRoot.hidden) return;
+    recSheet.classList.contains('open') ? closeRecord() : closePreview();
+  });
+  document.querySelectorAll('.page').forEach(frame => {
+    frame.querySelectorAll('.row').forEach(row => {
+      row.addEventListener('click', () => openRecord(row));
+      row.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openRecord(row); } });
+      const thumb = row.querySelector('.thumb');
+      thumb.setAttribute('role', 'button');
+      thumb.tabIndex = 0;
+      thumb.setAttribute('aria-label', frame.lang === 'ar' ? 'معاينة المستند' : 'Preview document');
+      thumb.addEventListener('click', e => { e.stopPropagation(); openPreview(row); });
+      thumb.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.stopPropagation(); e.preventDefault(); openPreview(row); } });
+    });
+  });
 </script>
 </body>
 </html>
