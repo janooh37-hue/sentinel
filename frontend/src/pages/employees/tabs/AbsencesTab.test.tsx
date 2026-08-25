@@ -1,10 +1,9 @@
 /**
- * AbsencesTab — the record-side list on the employee file.
+ * AbsencesTab — the record-side register on the employee file.
  *
  * Behaviours pinned here:
- *   1. The aggregate snapshot renders while the full list query is in flight,
- *      and the full list replaces it when it lands.
- *   2. Removing a day confirms, DELETEs, and refreshes the list.
+ *   1. Episodes come from the episodes query (grouped day runs).
+ *   2. Removing an episode confirms, DELETEs its day range, and refreshes.
  *   3. Without leaves.edit the remove affordance is hidden.
  *   4. An employee with no absences gets the empty state.
  */
@@ -13,15 +12,18 @@ import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-const { listEmployeeAbsences, deleteEmployeeAbsence, hasCapability } = vi.hoisted(() => ({
-  listEmployeeAbsences: vi.fn(),
-  deleteEmployeeAbsence: vi.fn(),
+const { listEmployeeAbsenceEpisodes, deleteEmployeeAbsenceRange, hasCapability } = vi.hoisted(() => ({
+  listEmployeeAbsenceEpisodes: vi.fn(),
+  deleteEmployeeAbsenceRange: vi.fn(),
   hasCapability: vi.fn<(cap: string) => boolean>(),
 }))
 
 vi.mock('@/lib/api', async (orig) => {
   const real = await orig<typeof import('@/lib/api')>()
-  return { ...real, api: { ...real.api, listEmployeeAbsences, deleteEmployeeAbsence } }
+  return {
+    ...real,
+    api: { ...real.api, listEmployeeAbsenceEpisodes, deleteEmployeeAbsenceRange },
+  }
 })
 
 vi.mock('@/lib/useCapabilities', () => ({
@@ -32,17 +34,23 @@ vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }))
 
 import { AbsencesTab } from './AbsencesTab'
 
-const SNAPSHOT = [{ id: 1, date: '2026-07-09', note: 'from snapshot' }]
-const FULL = [
-  { id: 2, employee_id: 'G1001', date: '2026-07-10', note: 'full list', created_at: '2026-07-10T08:00:00' },
-  { id: 1, employee_id: 'G1001', date: '2026-07-09', note: 'from snapshot', created_at: '2026-07-09T08:00:00' },
-]
+const RECORD = {
+  employee_id: 'G1001',
+  employee_name_en: 'John Doe',
+  employee_name_ar: null,
+  duty_post: null,
+  duty_unit: null,
+  episodes: [
+    { start_date: '2026-07-09', end_date: '2026-07-10', days: 2, notes: 'no call' },
+    { start_date: '2026-07-12', end_date: '2026-07-12', days: 1, notes: null },
+  ],
+}
 
 function renderTab() {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   return render(
     <QueryClientProvider client={client}>
-      <AbsencesTab employeeId="G1001" absences={SNAPSHOT} />
+      <AbsencesTab employeeId="G1001" />
     </QueryClientProvider>,
   )
 }
@@ -50,48 +58,46 @@ function renderTab() {
 beforeEach(() => {
   vi.clearAllMocks()
   hasCapability.mockReturnValue(true)
-  listEmployeeAbsences.mockResolvedValue(FULL)
+  listEmployeeAbsenceEpisodes.mockResolvedValue(RECORD)
 })
 
 describe('AbsencesTab', () => {
-  it('shows the aggregate snapshot first, then the fetched list', async () => {
+  it('lists the episode runs with start, end, total, and notes', async () => {
     renderTab()
-    expect(screen.getByText('from snapshot')).toBeInTheDocument()
-    expect(await screen.findByText('full list')).toBeInTheDocument()
-    expect(listEmployeeAbsences).toHaveBeenCalledWith('G1001')
+    expect(await screen.findByText('Jul 9, 2026')).toBeInTheDocument()
+    // The one-day run shows Jul 12 twice: start and end of the same row.
+    expect(screen.getAllByText('Jul 12, 2026')).toHaveLength(2)
+    expect(screen.getByText('no call')).toBeInTheDocument()
+    expect(listEmployeeAbsenceEpisodes).toHaveBeenCalledWith('G1001')
   })
 
-  it('confirms and deletes a day', async () => {
-    deleteEmployeeAbsence.mockResolvedValue(undefined)
+  it('confirms and deletes an episode by day range', async () => {
+    deleteEmployeeAbsenceRange.mockResolvedValue(undefined)
     renderTab()
     const user = userEvent.setup()
 
-    await screen.findByText('full list')
+    await screen.findByText('Jul 9, 2026')
     const rows = screen.getAllByRole('button', { name: 'Delete' })
     await user.click(rows[0])
-
     const dialog = screen.getByRole('dialog')
-    expect(within(dialog).getByText(/Remove the absence on/)).toBeInTheDocument()
+    expect(within(dialog).getByText(/Remove the absence from Jul 9, 2026 to Jul 10, 2026/)).toBeInTheDocument()
     await user.click(within(dialog).getByRole('button', { name: 'Delete' }))
 
-    await waitFor(() => expect(deleteEmployeeAbsence).toHaveBeenCalledWith('G1001', 2))
+    await waitFor(() =>
+      expect(deleteEmployeeAbsenceRange).toHaveBeenCalledWith('G1001', '2026-07-09', '2026-07-10'),
+    )
   })
 
   it('hides the remove affordance without leaves.edit', async () => {
     hasCapability.mockImplementation((cap) => cap !== 'leaves.edit')
     renderTab()
-    expect(await screen.findByText('full list')).toBeInTheDocument()
+    expect(await screen.findByText('Jul 9, 2026')).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Delete' })).not.toBeInTheDocument()
   })
 
   it('renders the empty state when nothing is recorded', async () => {
-    listEmployeeAbsences.mockResolvedValue([])
-    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
-    render(
-      <QueryClientProvider client={client}>
-        <AbsencesTab employeeId="G1001" absences={[]} />
-      </QueryClientProvider>,
-    )
+    listEmployeeAbsenceEpisodes.mockResolvedValue({ ...RECORD, episodes: [] })
+    renderTab()
     expect(
       await screen.findByText('No absences recorded for this employee.'),
     ).toBeInTheDocument()

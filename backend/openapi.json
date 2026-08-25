@@ -2893,15 +2893,14 @@
             }
           }
         }
-      }
-    },
-    "/api/v1/employees/{employee_id}/absences/{absence_id}": {
+      },
       "delete": {
         "tags": [
           "employees"
         ],
-        "summary": "Delete Employee Absence",
-        "operationId": "delete_employee_absence_api_v1_employees__employee_id__absences__absence_id__delete",
+        "summary": "Delete Employee Absences",
+        "description": "Un-mark a whole episode (any day range) from the register.",
+        "operationId": "delete_employee_absences_api_v1_employees__employee_id__absences_delete",
         "parameters": [
           {
             "name": "employee_id",
@@ -2913,12 +2912,23 @@
             }
           },
           {
-            "name": "absence_id",
-            "in": "path",
+            "name": "start_date",
+            "in": "query",
             "required": true,
             "schema": {
-              "type": "integer",
-              "title": "Absence Id"
+              "type": "string",
+              "format": "date",
+              "title": "Start Date"
+            }
+          },
+          {
+            "name": "end_date",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "date",
+              "title": "End Date"
             }
           },
           {
@@ -2941,6 +2951,64 @@
         "responses": {
           "204": {
             "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/employees/{employee_id}/absences/episodes": {
+      "get": {
+        "tags": [
+          "employees"
+        ],
+        "summary": "List Employee Absence Episodes",
+        "operationId": "list_employee_absence_episodes_api_v1_employees__employee_id__absences_episodes_get",
+        "parameters": [
+          {
+            "name": "employee_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Employee Id"
+            }
+          },
+          {
+            "name": "gssg_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Gssg Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AbsenceRecordRead"
+                }
+              }
+            }
           },
           "422": {
             "description": "Validation Error",
@@ -21844,6 +21912,43 @@
         "title": "AbsenceCreateResult",
         "description": "The days recorded, and the requested days refused as off-roster."
       },
+      "AbsenceEpisodeRead": {
+        "properties": {
+          "start_date": {
+            "type": "string",
+            "format": "date",
+            "title": "Start Date"
+          },
+          "end_date": {
+            "type": "string",
+            "format": "date",
+            "title": "End Date"
+          },
+          "days": {
+            "type": "integer",
+            "title": "Days"
+          },
+          "notes": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Notes"
+          }
+        },
+        "type": "object",
+        "required": [
+          "start_date",
+          "end_date",
+          "days"
+        ],
+        "title": "AbsenceEpisodeRead",
+        "description": "One contiguous run of absence days — a register row."
+      },
       "AbsenceRead": {
         "properties": {
           "id": {
@@ -21885,6 +21990,72 @@
           "created_at"
         ],
         "title": "AbsenceRead"
+      },
+      "AbsenceRecordRead": {
+        "properties": {
+          "employee_id": {
+            "type": "string",
+            "title": "Employee Id"
+          },
+          "employee_name_en": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Employee Name En"
+          },
+          "employee_name_ar": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Employee Name Ar"
+          },
+          "duty_post": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Duty Post"
+          },
+          "duty_unit": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Duty Unit"
+          },
+          "episodes": {
+            "items": {
+              "$ref": "#/components/schemas/AbsenceEpisodeRead"
+            },
+            "type": "array",
+            "title": "Episodes"
+          }
+        },
+        "type": "object",
+        "required": [
+          "employee_id",
+          "episodes"
+        ],
+        "title": "AbsenceRecordRead",
+        "description": "The employee's absence register: who, and the episode rows."
       },
       "ActivityItemRead": {
         "properties": {

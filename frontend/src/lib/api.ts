@@ -204,10 +204,13 @@ export type ViolationRead = components['schemas']['ViolationRead']
 export type ViolationCreate = components['schemas']['ViolationCreate']
 export type ViolationUpdate = components['schemas']['ViolationUpdate']
 // Absence records — day-level facts on the employee, recorded from the
-// Services gallery (no document); the time sheet reads them as AB.
+// Services gallery (no document); the time sheet reads them as AB. The
+// register groups contiguous days into episodes (one row per run).
 export type AbsenceRead = components['schemas']['AbsenceRead']
 export type AbsenceCreate = components['schemas']['AbsenceCreate']
 export type AbsenceCreateResult = components['schemas']['AbsenceCreateResult']
+export type AbsenceEpisodeRead = components['schemas']['AbsenceEpisodeRead']
+export type AbsenceRecordRead = components['schemas']['AbsenceRecordRead']
 export type RecentAbsenceRead = components['schemas']['RecentAbsenceRead']
 
 // The backend now returns the employee's bilingual name alongside each leave
@@ -1217,16 +1220,21 @@ export const api = {
   // --- absences (employee sub-resource; record-only, no document) ---
   listEmployeeAbsences: (employeeId: string) =>
     request<AbsenceRead[]>('GET', `/employees/${encodeURIComponent(employeeId)}/absences`),
+  listEmployeeAbsenceEpisodes: (employeeId: string) =>
+    request<AbsenceRecordRead>(
+      'GET',
+      `/employees/${encodeURIComponent(employeeId)}/absences/episodes`,
+    ),
   createEmployeeAbsences: (employeeId: string, body: AbsenceCreate) =>
     request<AbsenceCreateResult>(
       'POST',
       `/employees/${encodeURIComponent(employeeId)}/absences`,
       body,
     ),
-  deleteEmployeeAbsence: (employeeId: string, absenceId: number) =>
+  deleteEmployeeAbsenceRange: (employeeId: string, startDate: string, endDate: string) =>
     request<void>(
       'DELETE',
-      `/employees/${encodeURIComponent(employeeId)}/absences/${absenceId}`,
+      `/employees/${encodeURIComponent(employeeId)}/absences?start_date=${startDate}&end_date=${endDate}`,
     ),
 
   // --- leaves (Phase 06 — standalone collection) ---

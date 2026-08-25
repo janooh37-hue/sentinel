@@ -126,32 +126,92 @@ def test_list_for_employee_unknown_employee(db_session):
         absence_service.list_for_employee(db_session, "G9999")
 
 
-def test_delete_removes_the_row(db_session):
+def test_delete_range_removes_the_whole_run(db_session):
     _emp(db_session)
-    created = absence_service.add_range(
-        db_session, "G1001", start=date(2026, 7, 9), end=date(2026, 7, 9)
-    ).created
+    absence_service.add_range(db_session, "G1001", start=date(2026, 7, 9), end=date(2026, 7, 11))
 
-    absence_service.delete(db_session, "G1001", created[0].id)
+    removed = absence_service.delete_range(db_session, "G1001", date(2026, 7, 9), date(2026, 7, 11))
 
+    assert removed == 3
     assert db_session.query(Absence).count() == 0
 
 
-def test_delete_is_scoped_to_the_employee(db_session):
+def test_delete_range_only_touches_its_window(db_session):
+    _emp(db_session)
+    absence_service.add_range(db_session, "G1001", start=date(2026, 7, 1), end=date(2026, 7, 10))
+
+    absence_service.delete_range(db_session, "G1001", date(2026, 7, 3), date(2026, 7, 7))
+
+    dates = _dates(db_session.query(Absence).all())
+    assert dates == [
+        date(2026, 7, 1),
+        date(2026, 7, 2),
+        date(2026, 7, 8),
+        date(2026, 7, 9),
+        date(2026, 7, 10),
+    ]
+
+
+def test_delete_range_is_scoped_to_the_employee(db_session):
     _emp(db_session)
     _emp(db_session, "G1002")
-    created = absence_service.add_range(
-        db_session, "G1001", start=date(2026, 7, 9), end=date(2026, 7, 9)
-    ).created
+    absence_service.add_range(db_session, "G1001", start=date(2026, 7, 9), end=date(2026, 7, 9))
 
-    with pytest.raises(NotFoundError):
-        absence_service.delete(db_session, "G1002", created[0].id)
+    absence_service.delete_range(db_session, "G1002", date(2026, 7, 9), date(2026, 7, 9))
+
+    assert db_session.query(Absence).count() == 1
 
 
-def test_delete_unknown_id(db_session):
+def test_delete_range_rejects_an_inverted_range(db_session):
     _emp(db_session)
+    with pytest.raises(ValidationFailedError):
+        absence_service.delete_range(db_session, "G1001", date(2026, 7, 9), date(2026, 7, 8))
+
+
+def test_list_episodes_merges_touching_days_into_one_row(db_session):
+    """Adding a day that extends a run updates that row's end — the register
+    shows one row per contiguous run, not one row per day."""
+    _emp(db_session)
+    absence_service.add_range(db_session, "G1001", start=date(2026, 7, 9), end=date(2026, 7, 10))
+    absence_service.add_range(db_session, "G1001", start=date(2026, 7, 11), end=date(2026, 7, 11))
+
+    episodes = absence_service.list_episodes(db_session, "G1001")
+
+    assert len(episodes) == 1
+    assert episodes[0].start == date(2026, 7, 9)
+    assert episodes[0].end == date(2026, 7, 11)
+    assert episodes[0].day_count == 3
+
+
+def test_list_episodes_splits_on_any_gap_including_one_day(db_session):
+    """A single day between runs — a sick-leave day, a rest day — starts a new row."""
+    _emp(db_session)
+    absence_service.add_range(db_session, "G1001", start=date(2026, 7, 9), end=date(2026, 7, 10))
+    absence_service.add_range(db_session, "G1001", start=date(2026, 7, 12), end=date(2026, 7, 12))
+
+    episodes = absence_service.list_episodes(db_session, "G1001")
+
+    assert [(e.start, e.end, e.day_count) for e in episodes] == [
+        (date(2026, 7, 9), date(2026, 7, 10), 2),
+        (date(2026, 7, 12), date(2026, 7, 12), 1),
+    ]
+
+
+def test_list_episodes_joins_distinct_notes_in_day_order(db_session):
+    _emp(db_session)
+    db_session.add(Absence(employee_id="G1001", date=date(2026, 7, 9), note="no call"))
+    db_session.add(Absence(employee_id="G1001", date=date(2026, 7, 10), note=None))
+    db_session.add(Absence(employee_id="G1001", date=date(2026, 7, 11), note="no call"))
+    db_session.commit()
+
+    episodes = absence_service.list_episodes(db_session, "G1001")
+
+    assert episodes[0].notes == "no call"
+
+
+def test_list_episodes_unknown_employee(db_session):
     with pytest.raises(NotFoundError):
-        absence_service.delete(db_session, "G1001", 4242)
+        absence_service.list_episodes(db_session, "G9999")
 
 
 def test_supersede_returns_the_dates_it_removed(db_session):

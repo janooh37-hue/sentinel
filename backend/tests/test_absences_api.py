@@ -164,36 +164,67 @@ def test_get_unknown_employee_is_a_service_404(client):
     assert response.json()["error"]["code"] == "EMPLOYEE_NOT_FOUND"
 
 
-def test_delete_unmarks_the_day(client, db_session):
-    created = client.post(
+def test_delete_range_unmarks_the_episode(client, db_session):
+    client.post(
         "/api/v1/employees/G1001/absences",
-        json={"start_date": "2026-07-09", "end_date": "2026-07-09"},
-    ).json()["created"]
+        json={"start_date": "2026-07-09", "end_date": "2026-07-11"},
+    )
 
-    response = client.request("DELETE", f"/api/v1/employees/G1001/absences/{created[0]['id']}")
+    response = client.delete(
+        "/api/v1/employees/G1001/absences",
+        params={"start_date": "2026-07-09", "end_date": "2026-07-11"},
+    )
 
     assert response.status_code == 204
     assert db_session.query(Absence).count() == 0
 
 
-def test_delete_twice_is_a_service_404(client):
-    created = client.post(
+def test_delete_range_rejects_an_inverted_range(client):
+    response = client.delete(
         "/api/v1/employees/G1001/absences",
-        json={"start_date": "2026-07-09", "end_date": "2026-07-09"},
-    ).json()["created"]
-    client.request("DELETE", f"/api/v1/employees/G1001/absences/{created[0]['id']}")
+        params={"start_date": "2026-07-11", "end_date": "2026-07-09"},
+    )
 
-    response = client.request("DELETE", f"/api/v1/employees/G1001/absences/{created[0]['id']}")
+    assert response.status_code == 422
+    assert response.json()["error"]["code"] == "ABSENCE_RANGE_INVERTED"
 
+
+def test_get_episodes_merges_touching_days_and_stamps_the_employee(client):
+    client.post(
+        "/api/v1/employees/G1001/absences",
+        json={"start_date": "2026-07-09", "end_date": "2026-07-10", "note": "no call"},
+    )
+    client.post(
+        "/api/v1/employees/G1001/absences",
+        json={"start_date": "2026-07-12", "end_date": "2026-07-12"},
+    )
+
+    response = client.get("/api/v1/employees/G1001/absences/episodes")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["employee_id"] == "G1001"
+    assert body["employee_name_en"]
+    episodes = body["episodes"]
+    assert [(e["start_date"], e["end_date"], e["days"]) for e in episodes] == [
+        ("2026-07-09", "2026-07-10", 2),
+        ("2026-07-12", "2026-07-12", 1),
+    ]
+    assert episodes[0]["notes"] == "no call"
+    assert episodes[1]["notes"] is None
+
+
+def test_get_episodes_unknown_employee_is_a_service_404(client):
+    response = client.get("/api/v1/employees/G9999/absences/episodes")
     assert response.status_code == 404
-    assert response.json()["error"]["code"] == "ABSENCE_NOT_FOUND"
+    assert response.json()["error"]["code"] == "EMPLOYEE_NOT_FOUND"
 
 
 def test_viewer_can_read_but_not_write(viewer_client, client):
-    created = client.post(
+    client.post(
         "/api/v1/employees/G1001/absences",
         json={"start_date": "2026-07-09", "end_date": "2026-07-09"},
-    ).json()["created"]
+    )
 
     assert viewer_client.get("/api/v1/employees/G1001/absences").status_code == 200
 
@@ -204,8 +235,9 @@ def test_viewer_can_read_but_not_write(viewer_client, client):
     assert denied_post.status_code == 403
     assert denied_post.json()["error"]["details"]["capability"] == "leaves.edit"
 
-    denied_delete = viewer_client.request(
-        "DELETE", f"/api/v1/employees/G1001/absences/{created[0]['id']}"
+    denied_delete = viewer_client.delete(
+        "/api/v1/employees/G1001/absences",
+        params={"start_date": "2026-07-09", "end_date": "2026-07-09"},
     )
     assert denied_delete.status_code == 403
     assert denied_delete.json()["error"]["details"]["capability"] == "leaves.edit"

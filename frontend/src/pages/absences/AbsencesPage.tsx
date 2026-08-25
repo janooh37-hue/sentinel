@@ -19,11 +19,12 @@ import { useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { useNavigate, useSearchParams } from 'react-router-dom'
-import { ChevronLeft, ChevronRight, Trash2 } from 'lucide-react'
+import { ChevronLeft, ChevronRight, ClipboardCopy, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
 
 import { api, apiErrorMessage } from '@/lib/api'
-import type { AbsenceRead } from '@/lib/api'
+import type { AbsenceEpisodeRead, AbsenceRecordRead } from '@/lib/api'
+import { copyTable } from '@/lib/copyTable'
 import { todayIso } from '@/lib/leaveDateMath'
 import { useCapabilities } from '@/lib/useCapabilities'
 import { Button } from '@/components/ui/button'
@@ -46,22 +47,22 @@ export function AbsencesPage(): React.JSX.Element {
   const [start, setStart] = useState(todayIso)
   const [end, setEnd] = useState(todayIso)
   const [note, setNote] = useState('')
-  const [deleting, setDeleting] = useState<AbsenceRead | null>(null)
+  const [deleting, setDeleting] = useState<AbsenceEpisodeRead | null>(null)
 
+  // Register tables want compact dates; the weekday makes cells too wide.
   const dateFmt = useMemo(
     () =>
       new Intl.DateTimeFormat(i18n.language, {
         year: 'numeric',
         month: 'short',
         day: 'numeric',
-        weekday: 'short',
       }),
     [i18n.language],
   )
 
   const absencesQuery = useQuery({
-    queryKey: ['employee-absences', employeeId],
-    queryFn: () => api.listEmployeeAbsences(employeeId as string),
+    queryKey: ['employee-absence-episodes', employeeId],
+    queryFn: () => api.listEmployeeAbsenceEpisodes(employeeId as string),
     enabled: !!employeeId,
   })
 
@@ -73,6 +74,7 @@ export function AbsencesPage(): React.JSX.Element {
         note: note.trim() || null,
       }),
     onSuccess: (result) => {
+      void qc.invalidateQueries({ queryKey: ['employee-absence-episodes', employeeId] })
       void qc.invalidateQueries({ queryKey: ['employee-absences', employeeId] })
       void qc.invalidateQueries({ queryKey: ['employee-detail', employeeId] })
       const created = result.created.length
@@ -92,9 +94,10 @@ export function AbsencesPage(): React.JSX.Element {
   })
 
   const deleteMutation = useMutation({
-    mutationFn: (absenceId: number) =>
-      api.deleteEmployeeAbsence(employeeId as string, absenceId),
+    mutationFn: (episode: AbsenceEpisodeRead) =>
+      api.deleteEmployeeAbsenceRange(employeeId as string, episode.start_date, episode.end_date),
     onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['employee-absence-episodes', employeeId] })
       void qc.invalidateQueries({ queryKey: ['employee-absences', employeeId] })
       void qc.invalidateQueries({ queryKey: ['employee-detail', employeeId] })
       toast.success(t('absences.deleted'))
@@ -104,7 +107,58 @@ export function AbsencesPage(): React.JSX.Element {
 
   const canSubmit =
     !!employeeId && !!start && !!end && start <= end && canEdit && !createMutation.isPending
-  const absences = absencesQuery.data ?? []
+  const record: AbsenceRecordRead | undefined = absencesQuery.data
+  const episodes = record?.episodes ?? []
+  const employeeName = isAr
+    ? (record?.employee_name_ar ?? record?.employee_name_en ?? '')
+    : (record?.employee_name_en ?? '')
+  const postUnit = [record?.duty_post, record?.duty_unit].filter(Boolean).join(' / ')
+
+  /** Register copy for the clipboard: HTML keeps the blue header on paste
+   * into Word/Excel; the TSV twin keeps plain editors usable. */
+  const buildRegisterCopy = (): { html: string; text: string } => {
+    const esc = (s: string) =>
+      s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    const headers = [
+      '#',
+      t('absences.table.id'),
+      t('absences.table.name'),
+      t('absences.table.start'),
+      t('absences.table.end'),
+      t('absences.table.totalDays'),
+      t('absences.table.postUnit'),
+      t('absences.table.notes'),
+    ]
+    const rows = episodes.map((e, i) => [
+      String(i + 1),
+      record?.employee_id ?? '',
+      employeeName,
+      dateFmt.format(new Date(`${e.start_date}T00:00:00`)),
+      dateFmt.format(new Date(`${e.end_date}T00:00:00`)),
+      String(e.days),
+      postUnit,
+      e.notes ?? '',
+    ])
+    const cell = (v: string, extra = '') =>
+      `<td style="border:1px solid #d1d5db;padding:6px 12px;color:#000;background:#fff;${extra}">${esc(v)}</td>`
+    const head = headers
+      .map(
+        (h) =>
+          `<th style="border:1px solid #1d4ed8;background:#1d4ed8;color:#ffffff;padding:6px 12px;text-align:start">${esc(h)}</th>`,
+      )
+      .join('')
+    const body = rows
+      .map((r) => {
+        const [num, id, name, startD, endD, total, unit, notes] = r
+        // The name column is black on white by request, same as the rest of
+        // the body — stated explicitly so a pasted theme can't restyle it.
+        return `<tr>${cell(num)}${cell(id, 'font-family:Consolas,monospace')}${cell(name)}${cell(startD)}${cell(endD)}${cell(total)}${cell(unit)}${cell(notes)}</tr>`
+      })
+      .join('')
+    const html = `<table dir="${isAr ? 'rtl' : 'ltr'}" style="border-collapse:collapse;font-family:'Segoe UI',Arial,sans-serif;font-size:11pt"><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table>`
+    const text = [headers, ...rows].map((r) => r.join('\t')).join('\n')
+    return { html, text }
+  }
 
   return (
     <div className="flex flex-1 flex-col overflow-auto bg-background">
@@ -204,45 +258,80 @@ export function AbsencesPage(): React.JSX.Element {
               )}
             </div>
 
-            {employeeId && (
-              <section className="mt-6" aria-label={t('absences.list.title')}>
-                <h3 className="mb-2 text-[0.95em] font-semibold text-foreground">
+          </div>
+
+          {employeeId && (
+            <section className="mt-8" aria-label={t('absences.list.title')}>
+              <div className="mb-2 flex items-center justify-between gap-3">
+                <h3 className="text-[0.95em] font-semibold text-foreground">
                   {t('absences.list.title')}
                 </h3>
-                {absences.length === 0 ? (
-                  <div className="rounded-2xl bg-surface p-8 text-center text-[0.9em] text-muted-foreground">
-                    {t('absences.list.empty')}
-                  </div>
-                ) : (
-                  <div className="overflow-hidden rounded-2xl border border-hairline bg-surface">
-                    {absences.map((a) => (
-                      <div
-                        key={a.id}
-                        className="flex items-center gap-3 border-b border-hairline px-4 py-2.5 last:border-b-0"
-                      >
-                        <div className="font-mono text-[0.86em] text-foreground">
-                          {dateFmt.format(new Date(`${a.date}T00:00:00`))}
-                        </div>
-                        <div className="min-w-0 flex-1 truncate text-[0.86em] text-muted-foreground" dir="auto">
-                          {a.note ?? ''}
-                        </div>
-                        {canEdit && (
-                          <button
-                            type="button"
-                            onClick={() => setDeleting(a)}
-                            aria-label={t('common.delete')}
-                            className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                          >
-                            <Trash2 className="h-4 w-4" strokeWidth={1.8} aria-hidden />
-                          </button>
-                        )}
-                      </div>
-                    ))}
-                  </div>
+                {episodes.length > 0 && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="h-8 gap-1.5 px-3 text-[0.82em]"
+                    onClick={async () => {
+                      await copyTable(buildRegisterCopy())
+                      toast.success(t('absences.copied'))
+                    }}
+                  >
+                    <ClipboardCopy className="h-4 w-4" strokeWidth={1.8} aria-hidden />
+                    {t('absences.copy')}
+                  </Button>
                 )}
-              </section>
-            )}
-          </div>
+              </div>
+              {episodes.length === 0 ? (
+                <div className="rounded-2xl bg-surface p-8 text-center text-[0.9em] text-muted-foreground">
+                  {t('absences.list.empty')}
+                </div>
+              ) : (
+                <div className="overflow-x-auto rounded-2xl border border-hairline bg-surface">
+                  <table className="w-full min-w-[720px] border-collapse text-[0.86em]">
+                    <thead>
+                      <tr className="border-b border-hairline bg-primary text-primary-foreground">
+                        <th className="px-3 py-2 text-start font-semibold">#</th>
+                        <th className="px-3 py-2 text-start font-semibold">{t('absences.table.id')}</th>
+                        <th className="px-3 py-2 text-start font-semibold">{t('absences.table.name')}</th>
+                        <th className="px-3 py-2 text-start font-semibold">{t('absences.table.start')}</th>
+                        <th className="px-3 py-2 text-start font-semibold">{t('absences.table.end')}</th>
+                        <th className="px-3 py-2 text-start font-semibold">{t('absences.table.totalDays')}</th>
+                        <th className="px-3 py-2 text-start font-semibold">{t('absences.table.postUnit')}</th>
+                        <th className="px-3 py-2 text-start font-semibold">{t('absences.table.notes')}</th>
+                        {canEdit && <th className="px-3 py-2" aria-label={t('common.delete')} />}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {episodes.map((e, i) => (
+                        <tr key={`${e.start_date}-${e.end_date}`} className="border-b border-hairline last:border-b-0">
+                          <td className="px-3 py-2 text-muted-foreground">{i + 1}</td>
+                          <td className="px-3 py-2 font-mono">{record?.employee_id}</td>
+                          <td className="px-3 py-2" dir="auto">{employeeName}</td>
+                          <td className="px-3 py-2 font-mono">{dateFmt.format(new Date(`${e.start_date}T00:00:00`))}</td>
+                          <td className="px-3 py-2 font-mono">{dateFmt.format(new Date(`${e.end_date}T00:00:00`))}</td>
+                          <td className="px-3 py-2 font-mono">{e.days}</td>
+                          <td className="px-3 py-2" dir="auto">{postUnit}</td>
+                          <td className="max-w-[240px] truncate px-3 py-2 text-muted-foreground" dir="auto">{e.notes ?? ''}</td>
+                          {canEdit && (
+                            <td className="px-3 py-2 text-end">
+                              <button
+                                type="button"
+                                onClick={() => setDeleting(e)}
+                                aria-label={t('common.delete')}
+                                className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                              >
+                                <Trash2 className="h-4 w-4" strokeWidth={1.8} aria-hidden />
+                              </button>
+                            </td>
+                          )}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </section>
+          )}
         </div>
       </div>
 
@@ -251,13 +340,15 @@ export function AbsencesPage(): React.JSX.Element {
         onOpenChange={(open) => {
           if (!open) setDeleting(null)
         }}
-        title={t('absences.list.confirmDelete', {
-          date: deleting ? dateFmt.format(new Date(`${deleting.date}T00:00:00`)) : '',
+        title={t('absences.list.confirmDeleteRange', {
+          start: deleting ? dateFmt.format(new Date(`${deleting.start_date}T00:00:00`)) : '',
+          end: deleting ? dateFmt.format(new Date(`${deleting.end_date}T00:00:00`)) : '',
+          count: deleting?.days ?? 0,
         })}
         confirmLabel={t('common.delete')}
         destructive
         onConfirm={async () => {
-          if (deleting) await deleteMutation.mutateAsync(deleting.id)
+          if (deleting) await deleteMutation.mutateAsync(deleting)
         }}
       />
     </div>

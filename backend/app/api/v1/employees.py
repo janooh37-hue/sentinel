@@ -34,7 +34,13 @@ from app.db.models import Employee, User, VaultFile
 from app.db.session import get_db
 from app.schemas import employee_activity as activity_schemas
 from app.schemas import employee_detail as detail_schemas
-from app.schemas.absence import AbsenceCreate, AbsenceCreateResult, AbsenceRead
+from app.schemas.absence import (
+    AbsenceCreate,
+    AbsenceCreateResult,
+    AbsenceEpisodeRead,
+    AbsenceRead,
+    AbsenceRecordRead,
+)
 from app.schemas.employee import (
     EmployeeCreate,
     EmployeeListItem,
@@ -308,6 +314,32 @@ def list_employee_absences(
     return [AbsenceRead.model_validate(r) for r in rows]
 
 
+@router.get("/{employee_id}/absences/episodes", response_model=AbsenceRecordRead)
+def list_employee_absence_episodes(
+    employee_id: str,
+    db: Annotated[Session, Depends(get_db)],
+    _user: Annotated[User, Depends(require_capability("leaves.view"))],
+) -> AbsenceRecordRead:
+    emp = absence_service._get_employee_or_404(db, employee_id)
+    episodes = absence_service.list_episodes(db, employee_id)
+    return AbsenceRecordRead(
+        employee_id=emp.id,
+        employee_name_en=emp.name_en,
+        employee_name_ar=emp.name_ar,
+        duty_post=emp.duty_post,
+        duty_unit=emp.duty_unit,
+        episodes=[
+            AbsenceEpisodeRead(
+                start_date=e.start,
+                end_date=e.end,
+                days=e.day_count,
+                notes=e.notes,
+            )
+            for e in episodes
+        ],
+    )
+
+
 @router.post(
     "/{employee_id}/absences",
     response_model=AbsenceCreateResult,
@@ -333,14 +365,16 @@ def create_employee_absences(
     )
 
 
-@router.delete("/{employee_id}/absences/{absence_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_employee_absence(
+@router.delete("/{employee_id}/absences", status_code=status.HTTP_204_NO_CONTENT)
+def delete_employee_absences(
     employee_id: str,
-    absence_id: int,
+    start_date: Annotated[date, Query()],
+    end_date: Annotated[date, Query()],
     db: Annotated[Session, Depends(get_db)],
     _user: Annotated[User, Depends(require_capability("leaves.edit"))],
 ) -> Response:
-    absence_service.delete(db, employee_id, absence_id)
+    """Un-mark a whole episode (any day range) from the register."""
+    absence_service.delete_range(db, employee_id, start_date, end_date)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 

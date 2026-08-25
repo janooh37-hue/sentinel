@@ -38,4 +38,30 @@ class AbsenceCreateResult(BaseModel):
     skipped_off_roster: list[date_t]
 
 
-__all__ = ["AbsenceCreate", "AbsenceCreateResult", "AbsenceRead"]
+class AbsenceEpisodeRead(BaseModel):
+    """One contiguous run of absence days — a register row."""
+
+    start_date: date_t
+    end_date: date_t
+    days: int
+    notes: str | None = None
+
+
+class AbsenceRecordRead(BaseModel):
+    """The employee's absence register: who, and the episode rows."""
+
+    employee_id: str
+    employee_name_en: str | None = None
+    employee_name_ar: str | None = None
+    duty_post: str | None = None
+    duty_unit: str | None = None
+    episodes: list[AbsenceEpisodeRead]
+
+
+__all__ = [
+    "AbsenceCreate",
+    "AbsenceCreateResult",
+    "AbsenceEpisodeRead",
+    "AbsenceRead",
+    "AbsenceRecordRead",
+]
