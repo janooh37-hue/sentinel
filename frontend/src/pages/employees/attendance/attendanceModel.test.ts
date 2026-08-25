@@ -82,7 +82,7 @@ describe('rowState', () => {
   })
 
   it('calls a start with no punch absent once twice the grace has passed', () => {
-    const noPunch = row({ punch_count: 0, first_punch_at: null, last_punch_at: null })
+    const noPunch = row({ punch_count: 0, first_punch_at: null, last_punch_at: null, presence_state: 'scheduled' })
     expect(rowState(noPunch, BEFORE_START)).toBe('pending')
     expect(rowState(noPunch, INSIDE_GRACE_WINDOW)).toBe('pending')
     expect(rowState(noPunch, BEFORE_ABSENCE)).toBe('pending')
@@ -119,7 +119,7 @@ describe('rowState', () => {
     // 16:00 Dubai the morning start went unanswered but the night duty has not
     // even begun. A whole-day flag would call the night crew absent.
     const nowAt4pmDubai = { now: new Date('2026-08-19T12:00:00Z') }
-    const morning = row({ punch_count: 0, first_punch_at: null, last_punch_at: null })
+    const morning = row({ punch_count: 0, first_punch_at: null, last_punch_at: null, presence_state: 'scheduled' })
     const night = row({
       shift_code: 'night',
       scheduled_start_at: '2026-08-19T17:00:00',
@@ -129,6 +129,7 @@ describe('rowState', () => {
       punch_count: 0,
       first_punch_at: null,
       last_punch_at: null,
+      presence_state: 'scheduled',
     })
 
     expect(rowState(morning, nowAt4pmDubai)).toBe('absent')
@@ -142,6 +143,7 @@ describe('rowState', () => {
       judgment_due_at: null,
       punch_count: 0,
       first_punch_at: null,
+      presence_state: 'scheduled',
     })
     expect(rowState(noPolicy, SETTLED)).toBe('pending')
   })
@@ -151,6 +153,47 @@ describe('rowState', () => {
     expect(
       rowState(row({ presence_state: 'excused_leave', punch_count: 0 }), SETTLED),
     ).toBe('leave')
+  })
+  it('reads a corrected present day as verified even with no punch', () => {
+    // The evaluator only rules `completed` from punches, so a completed row
+    // with zero punches is a supervisor's correction: the register must show
+    // the person present, not keep calling them absent.
+    const corrected = row({
+      punch_count: 0,
+      first_punch_at: null,
+      last_punch_at: null,
+      presence_state: 'completed',
+      late_minutes: 0,
+    })
+    expect(rowState(corrected, SETTLED)).toBe('verified')
+    expect(needsDecision(rowState(corrected, SETTLED))).toBe(false)
+    expect(postSummary([corrected], SETTLED).seen).toBe(1)
+    expect(postSummary([corrected], SETTLED).exceptions).toBe(0)
+    expect(shiftCounts([corrected], SETTLED)['morning']).toEqual({ seen: 1, due: 1 })
+  })
+
+  it('reads a corrected absence as absent even beside punches', () => {
+    // The reverse correction: the supervisor rules the day absent although the
+    // mirror recorded a punch. The correction outranks the hardware.
+    const correctedAbsent = row({
+      punch_count: 1,
+      first_punch_at: '2026-08-19T00:52:00',
+      last_punch_at: null,
+      presence_state: 'absent',
+      late_minutes: 0,
+    })
+    expect(rowState(correctedAbsent, SETTLED)).toBe('absent')
+    expect(needsDecision(rowState(correctedAbsent, SETTLED))).toBe(true)
+  })
+
+  it('reads a corrected on-duty day as present mid-duty', () => {
+    const correctedOnDuty = row({
+      punch_count: 0,
+      first_punch_at: null,
+      last_punch_at: null,
+      presence_state: 'on_duty',
+    })
+    expect(rowState(correctedOnDuty, RUNNING)).toBe('verified')
   })
 })
 
@@ -186,7 +229,7 @@ describe('postSummary', () => {
   it('counts each exception once', () => {
     const rows = [
       row({ employee_id: 'A' }),
-      row({ employee_id: 'B', punch_count: 0, first_punch_at: null }),
+      row({ employee_id: 'B', punch_count: 0, first_punch_at: null, presence_state: 'scheduled' }),
       row({ employee_id: 'C', punch_count: 1, last_punch_at: null }),
       row({ employee_id: 'D', late_minutes: 47 }),
     ]
@@ -200,7 +243,7 @@ describe('orderByAttention', () => {
     const rows = [
       row({ employee_id: 'ok' }),
       row({ employee_id: 'late-small', late_minutes: 35 }),
-      row({ employee_id: 'absent', punch_count: 0, first_punch_at: null }),
+      row({ employee_id: 'absent', punch_count: 0, first_punch_at: null, presence_state: 'scheduled' }),
       row({ employee_id: 'late-big', late_minutes: 62 }),
       row({ employee_id: 'unpaired', punch_count: 1, last_punch_at: null }),
       row({ employee_id: 'leave', on_leave: true, punch_count: 0 }),
@@ -243,8 +286,8 @@ describe('shiftCounts', () => {
   it('reports seen over due per shift, excluding leave', () => {
     const rows = [
       row({ employee_id: 'A', shift_code: 'morning' }),
-      row({ employee_id: 'B', shift_code: 'morning', punch_count: 0, first_punch_at: null }),
-      row({ employee_id: 'C', shift_code: 'night', punch_count: 0, first_punch_at: null }),
+      row({ employee_id: 'B', shift_code: 'morning', punch_count: 0, first_punch_at: null, presence_state: 'scheduled' }),
+      row({ employee_id: 'C', shift_code: 'night', punch_count: 0, first_punch_at: null, presence_state: 'scheduled' }),
       row({ employee_id: 'D', shift_code: 'night', on_leave: true, punch_count: 0 }),
     ]
 
