@@ -323,9 +323,7 @@ export function EmployeeDetailPage(): React.JSX.Element {
             {tab === 'leaves' && (
               <LeavesTab employeeId={data.employee.id} leaves={data.recent_leaves} />
             )}
-            {tab === 'absences' && (
-              <AbsencesTab employeeId={data.employee.id} absences={data.recent_absences} />
-            )}
+            {tab === 'absences' && <AbsencesTab employeeId={data.employee.id} />}
             {tab === 'violations' && (
               <ViolationsTab
                 employeeId={data.employee.id}

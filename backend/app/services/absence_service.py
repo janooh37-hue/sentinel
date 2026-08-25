@@ -127,20 +127,71 @@ def add_range(
     return AddRangeResult(created=created, skipped_off_roster=skipped)
 
 
-def delete(db: Session, employee_id: str, absence_id: int) -> None:
-    """Un-mark one day. Scoped to the employee so a guessed id can't cross records."""
+@dataclass
+class Episode:
+    """A contiguous run of absence days — one row in the register table."""
 
-    row = db.execute(
-        select(Absence).where(Absence.id == absence_id, Absence.employee_id == employee_id)
-    ).scalar_one_or_none()
-    if row is None:
-        raise NotFoundError(
-            "ABSENCE_NOT_FOUND",
-            f"Absence {absence_id} does not exist on employee {employee_id!r}",
-            id=absence_id,
+    rows: list[Absence]
+
+    @property
+    def start(self) -> date:
+        return self.rows[0].date
+
+    @property
+    def end(self) -> date:
+        return self.rows[-1].date
+
+    @property
+    def day_count(self) -> int:
+        return len(self.rows)
+
+    @property
+    def notes(self) -> str | None:
+        """Distinct non-null day notes in day order, joined for the register."""
+        seen: list[str] = []
+        for row in self.rows:
+            if row.note and row.note not in seen:
+                seen.append(row.note)
+        return "; ".join(seen) if seen else None
+
+
+def list_episodes(db: Session, employee_id: str) -> list[Episode]:
+    """Group the employee's absence days into contiguous episodes.
+
+    Days that touch (``d`` then ``d + 1``) form one row — adding a new day
+    that extends a run updates that row's end date. Any gap, including a
+    single day (a sick-leave day in between, a rest day), starts a new row.
+    """
+    _get_employee_or_404(db, employee_id)
+    rows = list(
+        db.execute(
+            select(Absence).where(Absence.employee_id == employee_id).order_by(Absence.date)
+        ).scalars()
+    )
+    episodes: list[Episode] = []
+    for row in rows:
+        if episodes and row.date == episodes[-1].end + timedelta(days=1):
+            episodes[-1].rows.append(row)
+        else:
+            episodes.append(Episode(rows=[row]))
+    return episodes
+
+
+def delete_range(db: Session, employee_id: str, start: date, end: date) -> int:
+    """Un-mark every day in ``[start, end]``. Scoped to the employee.
+
+    This is how an episode row is removed from the register: the UI deletes
+    the whole run, not day by day. Returns the number of days removed.
+    """
+    if start > end:
+        raise ValidationFailedError(
+            "ABSENCE_RANGE_INVERTED",
+            f"start_date {start} is after end_date {end}",
+            start_date=str(start),
+            end_date=str(end),
         )
-    db.delete(row)
-    db.commit()
+    removed = delete_absences_covered_by(db, employee_id, start, end)
+    return len(removed)
 
 
 def delete_absences_covered_by(
@@ -183,8 +234,10 @@ def delete_absences_covered_by(
 
 __all__ = [
     "AddRangeResult",
+    "Episode",
     "add_range",
-    "delete",
     "delete_absences_covered_by",
+    "delete_range",
+    "list_episodes",
     "list_for_employee",
 ]

@@ -3002,10 +3002,21 @@
     "list": {
       "title": "Recorded absences",
       "empty": "No absences recorded for this employee.",
-      "confirmDelete": "Remove the absence on {{date}}?"
+      "confirmDeleteRange": "Remove the absence from {{start}} to {{end}} ({{count}} day(s))?"
     },
     "deleted": "Absence removed.",
-    "overwritten": "This leave overwrote {{count}} recorded absence day(s) ({{from}} → {{to}})."
+    "overwritten": "This leave overwrote {{count}} recorded absence day(s) ({{from}} → {{to}}).",
+    "table": {
+      "id": "ID",
+      "name": "Name",
+      "start": "Start date",
+      "end": "End date",
+      "totalDays": "Total days",
+      "postUnit": "Post unit",
+      "notes": "Notes"
+    },
+    "copy": "Copy table",
+    "copied": "Table copied to the clipboard."
   },
   "dutyLocations": {
     "tile": {
