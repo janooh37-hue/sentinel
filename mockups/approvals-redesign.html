@@ -1,0 +1,438 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>GSSG Manager — Approvals redesign mockup</title>
+<style>
+  /* ── GSSG tokens (verbatim from DESIGN.md §1.1) ─────────────────────── */
+  [data-theme="light"] {
+    --bg: #f5f4f1; --surface: #ffffff; --surface-raised: #fafaf6; --surface-tinted: #f0eee8;
+    --primary: #0d2845; --primary-hover: #1d3a5e; --primary-soft: #e8edf3; --on-primary: #ffffff;
+    --accent: #c8102e; --accent-soft: #fbe5e8;
+    --success: #047857; --success-soft: #d6f0e4;
+    --warning: #b45309; --warning-soft: #fbedd8;
+    --info: #1d4ed8; --info-soft: #e0e8f8;
+    --text: #1c1f24; --text-muted: #5a6068; --text-faint: #8b9098;
+    --border: #e6e4dd; --hairline: #efece5;
+  }
+  [data-theme="dark"] {
+    --bg: #0a0e18; --surface: #131826; --surface-raised: #1a2034; --surface-tinted: #1f263b;
+    --primary: #5778cf; --primary-hover: #7491db; --primary-soft: #1c2849; --on-primary: #0a0e18;
+    --accent: #ef4858; --accent-soft: #3a1820;
+    --success: #34d399; --success-soft: #142d23;
+    --warning: #fbbf24; --warning-soft: #3a2a10;
+    --info: #60a5fa; --info-soft: #1c2940;
+    --text: #e6e9f2; --text-muted: #8a93a7; --text-faint: #5f6678;
+    --border: #2a3148; --hairline: #1f263b;
+  }
+  :root { color-scheme: light dark; }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: #26221c;
+    font-family: "Inter", ui-sans-serif, system-ui, "Segoe UI", sans-serif;
+  }
+  .frame-label {
+    max-width: 720px; margin: 28px auto 10px; padding: 0 4px;
+    font-size: 12px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase;
+    color: #b7ad9c; display: flex; justify-content: space-between; align-items: center;
+  }
+  .theme-toggle {
+    font: inherit; text-transform: none; letter-spacing: 0; cursor: pointer;
+    background: none; border: 1px solid #55503f; color: #d8cfbe;
+    border-radius: 99px; padding: 4px 12px;
+  }
+  [lang="ar"] .frame-label { font-family: "Noto Sans Arabic", "Inter", sans-serif; }
+
+  /* ── The redesigned page ────────────────────────────────────────────── */
+  .page {
+    max-width: 720px; margin: 0 auto 40px; padding: 22px 24px 40px;
+    background: var(--bg); color: var(--text);
+    border-radius: 16px; box-shadow: 0 20px 50px rgba(0,0,0,.35);
+    font-size: 17px; line-height: 1.45;
+  }
+  [dir="rtl"] .page { font-family: "Noto Sans Arabic", "Inter", system-ui, sans-serif; }
+
+  header.page-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; margin-bottom: 18px; }
+  h1 { margin: 0; font-size: 1.45em; font-weight: 700; letter-spacing: -0.01em; }
+  .head-sub { margin-top: 2px; font-size: 0.8em; color: var(--text-muted); }
+  .head-sub b { color: var(--warning); font-weight: 600; }
+  .icon-btn {
+    width: 32px; height: 32px; border-radius: 8px; border: 1px solid var(--border);
+    background: var(--surface); color: var(--text-muted);
+    display: grid; place-items: center; cursor: pointer; transition: background-color 150ms ease, color 150ms ease;
+  }
+  .icon-btn:hover { background: var(--surface-tinted); color: var(--text); }
+
+  /* Tabs with counts */
+  .toolbar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 14px; }
+  .tabs { display: inline-flex; gap: 2px; background: var(--surface-tinted); border-radius: 99px; padding: 3px; }
+  .tab {
+    appearance: none; border: 0; cursor: pointer; border-radius: 99px; background: transparent;
+    padding: 6px 14px; font: inherit; font-size: 0.8em; font-weight: 600;
+    color: var(--text-muted); display: inline-flex; align-items: center; gap: 7px;
+    transition: color 150ms ease, background-color 150ms ease;
+  }
+  .tab:hover { color: var(--text); }
+  .tab[aria-selected="true"] { background: var(--primary); color: var(--on-primary); }
+  .tab .n { font-family: "IBM Plex Mono", ui-monospace, Consolas, monospace; font-variant-numeric: tabular-nums; font-size: 0.85em; opacity: .75; }
+
+  .filters { margin-inline-start: auto; display: flex; gap: 6px; flex-wrap: wrap; }
+  .chip {
+    appearance: none; cursor: pointer; font: inherit; font-size: 0.75em; font-weight: 600;
+    border-radius: 99px; padding: 4px 11px; display: inline-flex; gap: 6px; align-items: center;
+    border: 1px solid transparent; color: var(--text-muted); background: transparent;
+    transition: background-color 150ms ease, color 150ms ease, border-color 150ms ease;
+  }
+  .chip:hover { background: var(--surface-tinted); color: var(--text); }
+  .chip[aria-pressed="true"] { border-color: color-mix(in srgb, var(--primary) 35%, transparent); background: color-mix(in srgb, var(--primary) 10%, transparent); color: var(--primary); }
+  .chip .n { font-family: "IBM Plex Mono", ui-monospace, Consolas, monospace; font-variant-numeric: tabular-nums; font-weight: 500; opacity: .7; }
+
+  /* ── The ledger ─────────────────────────────────────────────────────── */
+  .ledger { border: 1px solid var(--border); border-radius: 16px; background: var(--surface); overflow: hidden; }
+  .section-head {
+    display: flex; align-items: center; gap: 9px;
+    padding: 11px 20px 9px; background: var(--surface-raised);
+    border-bottom: 1px solid var(--hairline);
+    font-size: 0.72em; font-weight: 600; letter-spacing: .08em; text-transform: uppercase;
+    color: var(--text-muted);
+  }
+  .section-head .dot { width: 7px; height: 7px; border-radius: 99px; }
+  .section-head .n { font-family: "IBM Plex Mono", ui-monospace, Consolas, monospace; font-weight: 500; color: var(--text); }
+  .section-head + .section-head-guard { border-top: 0; }
+  .divider { border: 0; border-top: 1px solid var(--hairline); margin: 0; }
+
+  .row {
+    display: flex; align-items: center; gap: 14px;
+    padding: 13px 20px; cursor: pointer; position: relative;
+    transition: background-color 150ms ease;
+  }
+  .row:hover { background: var(--surface-raised); }
+  .row:focus-visible { outline: 2px solid var(--primary); outline-offset: -2px; border-radius: 8px; }
+
+  /* Fake document thumbnail */
+  .thumb {
+    flex: none; width: 52px; height: 36px; border-radius: 6px;
+    border: 1px solid var(--border); background: #fff;
+    display: grid; place-items: center;
+  }
+  [data-theme="dark"] .thumb { background: var(--surface-tinted); }
+  .thumb svg { display: block; }
+
+  .row-main { min-width: 0; flex: 1; }
+  .row-title { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
+  .ref {
+    flex: none; font-family: "IBM Plex Mono", ui-monospace, Consolas, monospace;
+    font-size: 0.72em; font-weight: 500; color: var(--text-muted);
+    direction: ltr; unicode-bidi: isolate;
+  }
+  .subject {
+    margin: 0; font-size: 0.92em; font-weight: 550; color: var(--text);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .high-flag { flex: none; font-size: 0.65em; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--accent); }
+  .row-meta { margin-top: 3px; font-size: 0.72em; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .row-meta .who { color: var(--text); }
+
+  .row-side { flex: none; display: flex; flex-direction: column; align-items: flex-end; gap: 4px; }
+  .pill {
+    font-size: 0.65em; font-weight: 700; letter-spacing: .05em; text-transform: uppercase;
+    border-radius: 99px; padding: 3px 9px; display: inline-flex; align-items: center; gap: 5px;
+  }
+  .pill svg { flex: none; }
+  .pill.pending   { background: var(--warning-soft); color: var(--warning); }
+  .pill.approved  { background: var(--success-soft); color: var(--success); }
+  .pill.rejected  { background: var(--accent-soft); color: var(--accent); }
+  .pill.returned  { background: var(--info-soft); color: var(--info); }
+  .when { font-family: "IBM Plex Mono", ui-monospace, Consolas, monospace; font-size: 0.68em; font-variant-numeric: tabular-nums; color: var(--text-faint); }
+  .waiting { font-size: 0.68em; font-weight: 600; color: var(--warning); }
+</style>
+</head>
+<body>
+
+<!-- ══════════════════ Frame 1 · English · light ══════════════════ -->
+<div class="frame-label"><span>EN · Light · Received tab</span></div>
+<section class="page" data-theme="light" lang="en" dir="ltr" data-frame>
+  <header class="page-head">
+    <div>
+      <h1>Approvals</h1>
+      <p class="head-sub">6 records &middot; <b>3 awaiting your decision</b></p>
+    </div>
+    <button class="icon-btn" aria-label="Refresh">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3v6h-6"/></svg>
+    </button>
+  </header>
+
+  <div class="toolbar">
+    <div class="tabs" role="tablist" aria-label="Approvals">
+      <button class="tab" role="tab" aria-selected="true">Received <span class="n">6</span></button>
+      <button class="tab" role="tab" aria-selected="false">Sent <span class="n">12</span></button>
+    </div>
+    <div class="filters" role="group" aria-label="Filter by status">
+      <button class="chip" aria-pressed="true">All <span class="n">6</span></button>
+      <button class="chip" aria-pressed="false">Pending <span class="n">3</span></button>
+      <button class="chip" aria-pressed="false">Approved <span class="n">1</span></button>
+      <button class="chip" aria-pressed="false">Rejected <span class="n">1</span></button>
+      <button class="chip" aria-pressed="false">Returned <span class="n">1</span></button>
+    </div>
+  </div>
+
+  <div class="ledger">
+    <div class="section-head">
+      <span class="dot" style="background:var(--warning)"></span>
+      Awaiting your decision <span class="n">3</span>
+    </div>
+
+    <div class="row" role="button" tabindex="0">
+      <div class="thumb" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#8b9098" stroke-width="1.8"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg></div>
+      <div class="row-main">
+        <div class="row-title">
+          <span class="ref">GS-0412</span>
+          <p class="subject">Leave Clearance Form — M. Al Mansouri</p>
+          <span class="high-flag">High</span>
+        </div>
+        <p class="row-meta">Fatima Al Mansouri → Ahmed Al Suwaidi</p>
+      </div>
+      <div class="row-side">
+        <span class="pill pending"><svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>Pending</span>
+        <span class="when">18 Aug</span>
+        <span class="waiting">6 days waiting</span>
+      </div>
+    </div>
+    <hr class="divider">
+
+    <div class="row" role="button" tabindex="0">
+      <div class="thumb" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#8b9098" stroke-width="1.8"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg></div>
+      <div class="row-main">
+        <div class="row-title">
+          <span class="ref">NAT-0642</span>
+          <p class="subject">Warning Notice — Attendance</p>
+        </div>
+        <p class="row-meta">Khalid Rashid → Ahmed Al Suwaidi</p>
+      </div>
+      <div class="row-side">
+        <span class="pill pending"><svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>Pending</span>
+        <span class="when">21 Aug</span>
+        <span class="waiting">3 days waiting</span>
+      </div>
+    </div>
+    <hr class="divider">
+
+    <div class="row" role="button" tabindex="0">
+      <div class="thumb" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#8b9098" stroke-width="1.8"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg></div>
+      <div class="row-main">
+        <div class="row-title">
+          <span class="ref">HR-1189</span>
+          <p class="subject">Experience Certificate</p>
+        </div>
+        <p class="row-meta">Maryam Obaid → Ahmed Al Suwaidi</p>
+      </div>
+      <div class="row-side">
+        <span class="pill pending"><svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>Pending</span>
+        <span class="when">23 Aug</span>
+        <span class="waiting">1 day waiting</span>
+      </div>
+    </div>
+
+    <div class="section-head" style="border-top:1px solid var(--hairline)">
+      <span class="dot" style="background:var(--text-faint)"></span>
+      Recent verdicts <span class="n">3</span>
+    </div>
+
+    <div class="row" role="button" tabindex="0">
+      <div class="thumb" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#8b9098" stroke-width="1.8"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg></div>
+      <div class="row-main">
+        <div class="row-title">
+          <span class="ref">GS-0401</span>
+          <p class="subject">Salary Certificate</p>
+        </div>
+        <p class="row-meta">Omar Hareb → Ahmed Al Suwaidi</p>
+      </div>
+      <div class="row-side">
+        <span class="pill approved"><svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>Approved</span>
+        <span class="when">decided 14 Aug</span>
+      </div>
+    </div>
+    <hr class="divider">
+
+    <div class="row" role="button" tabindex="0">
+      <div class="thumb" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#8b9098" stroke-width="1.8"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg></div>
+      <div class="row-main">
+        <div class="row-title">
+          <span class="ref">NAT-0598</span>
+          <p class="subject">NOC — Vehicle Registration</p>
+        </div>
+        <p class="row-meta">Salem Khamis → Ahmed Al Suwaidi</p>
+      </div>
+      <div class="row-side">
+        <span class="pill returned"><svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m9 14-4-4 4-4"/><path d="M5 10h11a4 4 0 0 1 4 4v2"/></svg>Returned</span>
+        <span class="when">decided 11 Aug</span>
+      </div>
+    </div>
+    <hr class="divider">
+
+    <div class="row" role="button" tabindex="0">
+      <div class="thumb" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#8b9098" stroke-width="1.8"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg></div>
+      <div class="row-main">
+        <div class="row-title">
+          <span class="ref">HR-1176</span>
+          <p class="subject">Contract Renewal Letter</p>
+        </div>
+        <p class="row-meta">Aisha Dhahi → Ahmed Al Suwaidi</p>
+      </div>
+      <div class="row-side">
+        <span class="pill rejected"><svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg>Rejected</span>
+        <span class="when">decided 5 Aug</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════════════ Frame 2 · Arabic · RTL ══════════════════ -->
+<div class="frame-label"><span>AR · RTL · نفس الإطار</span><button class="theme-toggle" onclick="flip(this)">تبديل المظهر</button></div>
+<section class="page" data-theme="light" lang="ar" dir="rtl" data-frame>
+  <header class="page-head">
+    <div>
+      <h1>الاعتمادات</h1>
+      <p class="head-sub">6 سجلات &middot; <b>3 بانتظار قرارك</b></p>
+    </div>
+    <button class="icon-btn" aria-label="تحديث">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3v6h-6"/></svg>
+    </button>
+  </header>
+
+  <div class="toolbar">
+    <div class="tabs" role="tablist" aria-label="الاعتمادات">
+      <button class="tab" role="tab" aria-selected="true">الواردة إليّ <span class="n">6</span></button>
+      <button class="tab" role="tab" aria-selected="false">المرسلة مني <span class="n">12</span></button>
+    </div>
+    <div class="filters" role="group" aria-label="تصفية حسب الحالة">
+      <button class="chip" aria-pressed="true">الكل <span class="n">6</span></button>
+      <button class="chip" aria-pressed="false">قيد الاعتماد <span class="n">3</span></button>
+      <button class="chip" aria-pressed="false">معتمد <span class="n">1</span></button>
+      <button class="chip" aria-pressed="false">مرفوض <span class="n">1</span></button>
+      <button class="chip" aria-pressed="false">معاد <span class="n">1</span></button>
+    </div>
+  </div>
+
+  <div class="ledger">
+    <div class="section-head">
+      <span class="dot" style="background:var(--warning)"></span>
+      بانتظار قرارك <span class="n">3</span>
+    </div>
+
+    <div class="row" role="button" tabindex="0">
+      <div class="thumb" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#8b9098" stroke-width="1.8"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg></div>
+      <div class="row-main">
+        <div class="row-title">
+          <span class="ref">GS-0412</span>
+          <p class="subject">نموذج إخلاء طرف — م. المنصوري</p>
+          <span class="high-flag">عالية</span>
+        </div>
+        <p class="row-meta">فاطمة المنصوري ← أحمد السويدي</p>
+      </div>
+      <div class="row-side">
+        <span class="pill pending"><svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>قيد الاعتماد</span>
+        <span class="when">18 أغسطس</span>
+        <span class="waiting">بانتظار منذ 6 أيام</span>
+      </div>
+    </div>
+    <hr class="divider">
+
+    <div class="row" role="button" tabindex="0">
+      <div class="thumb" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#8b9098" stroke-width="1.8"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg></div>
+      <div class="row-main">
+        <div class="row-title">
+          <span class="ref">NAT-0642</span>
+          <p class="subject">إخطار إنذار — الحضور</p>
+        </div>
+        <p class="row-meta">خالد راشد ← أحمد السويدي</p>
+      </div>
+      <div class="row-side">
+        <span class="pill pending"><svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>قيد الاعتماد</span>
+        <span class="when">21 أغسطس</span>
+        <span class="waiting">بانتظار منذ 3 أيام</span>
+      </div>
+    </div>
+    <hr class="divider">
+
+    <div class="row" role="button" tabindex="0">
+      <div class="thumb" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#8b9098" stroke-width="1.8"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg></div>
+      <div class="row-main">
+        <div class="row-title">
+          <span class="ref">HR-1189</span>
+          <p class="subject">شهادة خبرة</p>
+        </div>
+        <p class="row-meta">مريم عبيد ← أحمد السويدي</p>
+      </div>
+      <div class="row-side">
+        <span class="pill pending"><svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>قيد الاعتماد</span>
+        <span class="when">23 أغسطس</span>
+        <span class="waiting">بانتظار منذ يوم واحد</span>
+      </div>
+    </div>
+
+    <div class="section-head" style="border-top:1px solid var(--hairline)">
+      <span class="dot" style="background:var(--text-faint)"></span>
+      قرارات حديثة <span class="n">3</span>
+    </div>
+
+    <div class="row" role="button" tabindex="0">
+      <div class="thumb" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#8b9098" stroke-width="1.8"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg></div>
+      <div class="row-main">
+        <div class="row-title">
+          <span class="ref">GS-0401</span>
+          <p class="subject">شهادة راتب</p>
+        </div>
+        <p class="row-meta">عمر حارب ← أحمد السويدي</p>
+      </div>
+      <div class="row-side">
+        <span class="pill approved"><svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>معتمد</span>
+        <span class="when">قرر في 14 أغسطس</span>
+      </div>
+    </div>
+    <hr class="divider">
+
+    <div class="row" role="button" tabindex="0">
+      <div class="thumb" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#8b9098" stroke-width="1.8"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg></div>
+      <div class="row-main">
+        <div class="row-title">
+          <span class="ref">NAT-0598</span>
+          <p class="subject">لا مانع — تسجيل مركبة</p>
+        </div>
+        <p class="row-meta">سالم خميس ← أحمد السويدي</p>
+      </div>
+      <div class="row-side">
+        <span class="pill returned"><svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m9 14-4-4 4-4"/><path d="M5 10h11a4 4 0 0 1 4 4v2"/></svg>معاد</span>
+        <span class="when">قرر في 11 أغسطس</span>
+      </div>
+    </div>
+    <hr class="divider">
+
+    <div class="row" role="button" tabindex="0">
+      <div class="thumb" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#8b9098" stroke-width="1.8"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg></div>
+      <div class="row-main">
+        <div class="row-title">
+          <span class="ref">HR-1176</span>
+          <p class="subject">خطاب تجديد عقد</p>
+        </div>
+        <p class="row-meta">عائشة الظاهي ← أحمد السويدي</p>
+      </div>
+      <div class="row-side">
+        <span class="pill rejected"><svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg>مرفوض</span>
+        <span class="when">قرر في 5 أغسطس</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<script>
+  // Theme flip for quick dark-mode review of any frame.
+  function flip(btn) {
+    const frame = btn.closest('.frame-label').nextElementSibling;
+    frame.dataset.theme = frame.dataset.theme === 'light' ? 'dark' : 'light';
+    btn.textContent = frame.dataset.theme === 'light' ? 'تبديل المظهر' : 'Toggle theme';
+  }
+</script>
+</body>
+</html>
