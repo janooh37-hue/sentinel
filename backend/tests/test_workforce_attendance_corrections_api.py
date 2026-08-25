@@ -20,6 +20,20 @@ from tests.test_workforce_api_permissions import _client
 
 DAY = date(2026, 8, 24)
 
+def _adjustment_payload(effective: dict[str, object], *, reason: str, **changes: object) -> dict[str, object]:
+    payload = {
+        "replacement_presence_state": effective["presence_state"],
+        "replacement_first_in_at": effective["first_in_at"],
+        "replacement_latest_in_at": effective["latest_in_at"],
+        "replacement_final_out_at": effective["final_out_at"],
+        "replacement_late_minutes": effective["late_minutes"],
+        "replacement_early_exit_minutes": effective["early_exit_minutes"],
+        "replacement_missing_checkout": effective["missing_checkout"],
+        "reason": reason,
+    }
+    payload.update(changes)
+    return payload
+
 
 def test_case_reads_historical_typed_evidence_without_punch_inference(api_db) -> None:
     fixture = build_attendance_day(api_db, operational_date=DAY, posts=[("Gate 1", 1)])
@@ -364,6 +378,55 @@ def test_case_uses_persisted_evaluation_sources_after_mapping_changes(api_db) ->
     ]
 
 
+
+def test_adjustment_requires_a_complete_effective_snapshot(api_db) -> None:
+    fixture = build_attendance_day(api_db, operational_date=DAY, posts=[("Gate 1", 1)])
+    case = next(case for case in fixture.cases if case.shift_code_snapshot == "morning")
+    client = _client(api_db, fixture.admin)
+    etag = client.get(f"/api/v1/workforce/attendance/cases/{case.id}").headers["etag"]
+
+    response = client.post(
+        f"/api/v1/workforce/attendance/cases/{case.id}/adjustments",
+        headers={"If-Match": etag},
+        json={"replacement_presence_state": "completed", "reason": "Incomplete correction"},
+    )
+
+    assert response.status_code == 422
+
+
+def test_adjustment_full_snapshot_preserves_prior_values_and_persists_explicit_clears(api_db) -> None:
+    fixture = build_attendance_day(api_db, operational_date=DAY, posts=[("Gate 1", 1)])
+    case = next(case for case in fixture.cases if case.shift_code_snapshot == "morning")
+    client = _client(api_db, fixture.admin)
+    initial = client.get(f"/api/v1/workforce/attendance/cases/{case.id}")
+
+    first = client.post(
+        f"/api/v1/workforce/attendance/cases/{case.id}/adjustments",
+        headers={"If-Match": initial.headers["etag"]},
+        json=_adjustment_payload(
+            initial.json()["effective"],
+            reason="Late arrival verified",
+            replacement_late_minutes=7,
+        ),
+    )
+    assert first.status_code == 201, first.text
+    after_first = client.get(f"/api/v1/workforce/attendance/cases/{case.id}")
+    assert after_first.json()["effective"]["late_minutes"] == 7
+
+    second = client.post(
+        f"/api/v1/workforce/attendance/cases/{case.id}/adjustments",
+        headers={"If-Match": after_first.headers["etag"]},
+        json=_adjustment_payload(
+            after_first.json()["effective"],
+            reason="Exit evidence unavailable",
+            replacement_final_out_at=None,
+        ),
+    )
+    assert second.status_code == 201, second.text
+    effective = client.get(f"/api/v1/workforce/attendance/cases/{case.id}").json()["effective"]
+    assert effective["late_minutes"] == 7
+    assert effective["final_out_at"] is None
+
 def test_case_etag_serializes_adjustments_across_reload_and_rejects_stale_writes(api_db) -> None:
     fixture = build_attendance_day(api_db, operational_date=DAY, posts=[("Gate 1", 1)])
     case = next(case for case in fixture.cases if case.shift_code_snapshot == "morning")
@@ -372,10 +435,11 @@ def test_case_etag_serializes_adjustments_across_reload_and_rejects_stale_writes
     case_response = client.get(f"/api/v1/workforce/attendance/cases/{case.id}")
     assert case_response.status_code == 200, case_response.text
     version_1 = case_response.headers["etag"]
+    effective_1 = case_response.json()["effective"]
 
     missing = client.post(
         f"/api/v1/workforce/attendance/cases/{case.id}/adjustments",
-        json={"replacement_presence_state": "completed", "reason": "Missing version"},
+        json=_adjustment_payload(effective_1, reason="Missing version", replacement_presence_state="completed"),
     )
     assert missing.status_code == 409
     assert missing.json()["error"]["code"] == "ATTENDANCE_CASE_VERSION_CONFLICT"
@@ -384,7 +448,7 @@ def test_case_etag_serializes_adjustments_across_reload_and_rejects_stale_writes
     created = client.post(
         f"/api/v1/workforce/attendance/cases/{case.id}/adjustments",
         headers={"If-Match": version_1},
-        json={"replacement_presence_state": "completed", "reason": "Supervisor register"},
+        json=_adjustment_payload(effective_1, reason="Supervisor register", replacement_presence_state="completed"),
     )
     assert created.status_code == 201, created.text
     version_2 = created.headers["etag"]
@@ -393,7 +457,7 @@ def test_case_etag_serializes_adjustments_across_reload_and_rejects_stale_writes
     stale = client.post(
         f"/api/v1/workforce/attendance/cases/{case.id}/adjustments",
         headers={"If-Match": version_1},
-        json={"replacement_presence_state": "absent", "reason": "Stale review"},
+        json=_adjustment_payload(effective_1, reason="Stale review", replacement_presence_state="absent"),
     )
     assert stale.status_code == 409
     assert stale.json()["error"]["code"] == "ATTENDANCE_CASE_VERSION_CONFLICT"
@@ -414,18 +478,21 @@ def test_case_etag_reveals_active_predecessor_after_revoking_superseder(api_db) 
     fixture = build_attendance_day(api_db, operational_date=DAY, posts=[("Gate 1", 1)])
     case = next(case for case in fixture.cases if case.shift_code_snapshot == "morning")
     client = _client(api_db, fixture.admin)
-    version_1 = client.get(f"/api/v1/workforce/attendance/cases/{case.id}").headers["etag"]
+    case_response = client.get(f"/api/v1/workforce/attendance/cases/{case.id}")
+    version_1 = case_response.headers["etag"]
+    effective_1 = case_response.json()["effective"]
 
     first = client.post(
         f"/api/v1/workforce/attendance/cases/{case.id}/adjustments",
         headers={"If-Match": version_1},
-        json={"replacement_presence_state": "completed", "reason": "First register"},
+        json=_adjustment_payload(effective_1, reason="First register", replacement_presence_state="completed"),
     )
     assert first.status_code == 201, first.text
+    first_effective = client.get(f"/api/v1/workforce/attendance/cases/{case.id}").json()["effective"]
     second = client.post(
         f"/api/v1/workforce/attendance/cases/{case.id}/adjustments",
         headers={"If-Match": first.headers["etag"]},
-        json={"replacement_presence_state": "absent", "reason": "Superseding register"},
+        json=_adjustment_payload(first_effective, reason="Superseding register", replacement_presence_state="absent"),
     )
     assert second.status_code == 201, second.text
     version_3 = second.headers["etag"]
@@ -446,7 +513,7 @@ def test_case_etag_reveals_active_predecessor_after_revoking_superseder(api_db) 
     stale = client.post(
         f"/api/v1/workforce/attendance/cases/{case.id}/adjustments",
         headers={"If-Match": version_3},
-        json={"replacement_presence_state": "completed", "reason": "Stale second review"},
+        json=_adjustment_payload(first_effective, reason="Stale second review", replacement_presence_state="completed"),
     )
     assert stale.status_code == 409
     assert stale.json()["error"]["code"] == "ATTENDANCE_CASE_VERSION_CONFLICT"

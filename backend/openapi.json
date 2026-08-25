@@ -23034,6 +23034,13 @@
         "additionalProperties": false,
         "type": "object",
         "required": [
+          "replacement_presence_state",
+          "replacement_first_in_at",
+          "replacement_latest_in_at",
+          "replacement_final_out_at",
+          "replacement_late_minutes",
+          "replacement_early_exit_minutes",
+          "replacement_missing_checkout",
           "reason"
         ],
         "title": "AttendanceAdjustmentWrite"

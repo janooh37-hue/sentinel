@@ -21,6 +21,17 @@ function jsonResponse(body: unknown, etag?: string): Response {
   })
 }
 
+const FULL_ADJUSTMENT = {
+  replacement_presence_state: 'completed' as const,
+  replacement_first_in_at: '2026-08-19T01:00:00.000Z',
+  replacement_latest_in_at: '2026-08-19T01:05:00.000Z',
+  replacement_final_out_at: '2026-08-19T09:00:00.000Z',
+  replacement_late_minutes: 5,
+  replacement_early_exit_minutes: 2,
+  replacement_missing_checkout: false,
+  reason: 'Supervisor register',
+}
+
 describe('Attendance correction API client', () => {
   it('forwards attendance exception filters', async () => {
     fetchMock.mockResolvedValueOnce(jsonResponse({ items: [], next_cursor: null }))
@@ -63,10 +74,7 @@ describe('Attendance correction API client', () => {
   it('creates an adjustment with the supplied case ETag', async () => {
     fetchMock.mockResolvedValueOnce(jsonResponse({ id: 8, case_id: 42 }, '"case-v2"'))
 
-    await api.createAttendanceAdjustment(42, '"case-v1"', {
-      replacement_presence_state: 'completed',
-      reason: 'Supervisor register',
-    })
+    await api.createAttendanceAdjustment(42, '"case-v1"', FULL_ADJUSTMENT)
 
     expect(fetchMock).toHaveBeenLastCalledWith(
       '/api/v1/workforce/attendance/cases/42/adjustments',
@@ -76,10 +84,7 @@ describe('Attendance correction API client', () => {
           'content-type': 'application/json',
           'If-Match': '"case-v1"',
         }),
-        body: JSON.stringify({
-          replacement_presence_state: 'completed',
-          reason: 'Supervisor register',
-        }),
+        body: JSON.stringify(FULL_ADJUSTMENT),
       }),
     )
   })
@@ -104,10 +109,7 @@ describe('Attendance correction API client', () => {
 
   it('rejects a write without a current case ETag', async () => {
     await expect(
-      api.createAttendanceAdjustment(42, '', {
-        replacement_presence_state: 'completed',
-        reason: 'Supervisor register',
-      }),
+      api.createAttendanceAdjustment(42, '', FULL_ADJUSTMENT),
     ).rejects.toMatchObject({
       status: 400,
       code: 'MISSING_ETAG',

@@ -75,31 +75,28 @@ export function buildAdjustmentPayload(
 ): AttendanceAdjustmentWrite {
   const reason = draft.reason.trim()
   if (reason === '') throw new Error('CORRECTION_REASON_REQUIRED')
-  const payload: AttendanceAdjustmentWrite = { reason }
-
-  if (draft.presenceState !== effective.presence_state) {
-    payload.replacement_presence_state = draft.presenceState
-  }
-  if (draft.firstInAt !== toLocalInput(effective.first_in_at)) {
-    payload.replacement_first_in_at = optionalUtc(draft.firstInAt)
-  }
-  if (draft.latestInAt !== toLocalInput(effective.latest_in_at)) {
-    payload.replacement_latest_in_at = optionalUtc(draft.latestInAt)
-  }
-  if (draft.finalOutAt !== toLocalInput(effective.final_out_at)) {
-    payload.replacement_final_out_at = optionalUtc(draft.finalOutAt)
-  }
+  const firstInAt = optionalUtc(draft.firstInAt)
+  const latestInAt = optionalUtc(draft.latestInAt)
+  const finalOutAt = optionalUtc(draft.finalOutAt)
   const lateMinutes = optionalMinutes(draft.lateMinutes)
-  if (lateMinutes !== effective.late_minutes) {
-    payload.replacement_late_minutes = lateMinutes
-  }
   const earlyExitMinutes = optionalMinutes(draft.earlyExitMinutes)
-  if (earlyExitMinutes !== effective.early_exit_minutes) {
-    payload.replacement_early_exit_minutes = earlyExitMinutes
+  if (
+    draft.presenceState === effective.presence_state
+    && draft.firstInAt === toLocalInput(effective.first_in_at)
+    && draft.latestInAt === toLocalInput(effective.latest_in_at)
+    && draft.finalOutAt === toLocalInput(effective.final_out_at)
+    && lateMinutes === effective.late_minutes
+    && earlyExitMinutes === effective.early_exit_minutes
+    && draft.missingCheckout === effective.missing_checkout
+  ) throw new Error('CORRECTION_UNCHANGED')
+  return {
+    reason,
+    replacement_presence_state: draft.presenceState,
+    replacement_first_in_at: firstInAt,
+    replacement_latest_in_at: latestInAt,
+    replacement_final_out_at: finalOutAt,
+    replacement_late_minutes: lateMinutes,
+    replacement_early_exit_minutes: earlyExitMinutes,
+    replacement_missing_checkout: draft.missingCheckout,
   }
-  if (draft.missingCheckout !== effective.missing_checkout) {
-    payload.replacement_missing_checkout = draft.missingCheckout
-  }
-  if (Object.keys(payload).length === 1) throw new Error('CORRECTION_UNCHANGED')
-  return payload
 }

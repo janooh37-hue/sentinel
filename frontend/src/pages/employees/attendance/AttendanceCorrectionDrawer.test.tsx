@@ -180,6 +180,12 @@ describe('AttendanceCorrectionDrawer', () => {
 
     await waitFor(() => expect(createAttendanceAdjustment).toHaveBeenCalledWith(42, 'case-v1', {
       replacement_presence_state: 'absent',
+      replacement_first_in_at: '2026-08-19T01:00:00.000Z',
+      replacement_latest_in_at: '2026-08-19T01:05:00.000Z',
+      replacement_final_out_at: '2026-08-19T09:00:00.000Z',
+      replacement_late_minutes: 5,
+      replacement_early_exit_minutes: 2,
+      replacement_missing_checkout: false,
       reason: 'Supervisor register',
     }))
     expect(invalidate).toHaveBeenCalledWith({ queryKey: ['attendance-case', 42] })

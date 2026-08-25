@@ -490,13 +490,13 @@ class EmployeeAttendanceHistoryRead(BaseModel):
 class AttendanceAdjustmentWrite(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    replacement_presence_state: PresenceState | None = None
-    replacement_first_in_at: UtcDateTime | None = None
-    replacement_latest_in_at: UtcDateTime | None = None
-    replacement_final_out_at: UtcDateTime | None = None
-    replacement_late_minutes: int | None = Field(default=None, ge=0)
-    replacement_early_exit_minutes: int | None = Field(default=None, ge=0)
-    replacement_missing_checkout: bool | None = None
+    replacement_presence_state: PresenceState | None
+    replacement_first_in_at: UtcDateTime | None
+    replacement_latest_in_at: UtcDateTime | None
+    replacement_final_out_at: UtcDateTime | None
+    replacement_late_minutes: int | None = Field(ge=0)
+    replacement_early_exit_minutes: int | None = Field(ge=0)
+    replacement_missing_checkout: bool | None
     reason: str = Field(min_length=1, max_length=1024)
 
 

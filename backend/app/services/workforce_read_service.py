@@ -575,7 +575,7 @@ def get_attendance_case_snapshot(
             "early_exit_minutes": active.replacement_early_exit_minutes,
             "missing_checkout": active.replacement_missing_checkout,
         }
-        effective.update({key: value for key, value in replacements.items() if value is not None})
+        effective.update(replacements)
         effective["adjustment_id"] = active.id
     employee = _employee_row(db, case.employee_id)
     body = {

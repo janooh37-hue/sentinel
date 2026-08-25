@@ -5285,19 +5285,19 @@ export interface components {
         /** AttendanceAdjustmentWrite */
         AttendanceAdjustmentWrite: {
             /** Replacement Presence State */
-            replacement_presence_state?: ("scheduled" | "on_duty" | "completed" | "absent" | "excused_leave" | "off" | "unknown") | null;
+            replacement_presence_state: ("scheduled" | "on_duty" | "completed" | "absent" | "excused_leave" | "off" | "unknown") | null;
             /** Replacement First In At */
-            replacement_first_in_at?: string | null;
+            replacement_first_in_at: string | null;
             /** Replacement Latest In At */
-            replacement_latest_in_at?: string | null;
+            replacement_latest_in_at: string | null;
             /** Replacement Final Out At */
-            replacement_final_out_at?: string | null;
+            replacement_final_out_at: string | null;
             /** Replacement Late Minutes */
-            replacement_late_minutes?: number | null;
+            replacement_late_minutes: number | null;
             /** Replacement Early Exit Minutes */
-            replacement_early_exit_minutes?: number | null;
+            replacement_early_exit_minutes: number | null;
             /** Replacement Missing Checkout */
-            replacement_missing_checkout?: boolean | null;
+            replacement_missing_checkout: boolean | null;
             /** Reason */
             reason: string;
         };

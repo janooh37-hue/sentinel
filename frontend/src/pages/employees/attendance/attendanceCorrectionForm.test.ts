@@ -17,24 +17,35 @@ const effective: AttendanceEffective = {
 }
 
 describe('buildAdjustmentPayload', () => {
-  it('sends only changed fields and trims the mandatory reason', () => {
+  it('builds a complete effective snapshot and trims the mandatory reason', () => {
     expect(buildAdjustmentPayload(effective, {
       ...draftFromEffective(effective),
       presenceState: 'completed',
       reason: ' Supervisor register ',
     })).toEqual({
       replacement_presence_state: 'completed',
+      replacement_first_in_at: '2026-08-19T01:00:00.000Z',
+      replacement_latest_in_at: '2026-08-19T01:05:00.000Z',
+      replacement_final_out_at: '2026-08-19T09:00:00.000Z',
+      replacement_late_minutes: 5,
+      replacement_early_exit_minutes: 2,
+      replacement_missing_checkout: false,
       reason: 'Supervisor register',
     })
   })
-
   it('converts a Dubai wall-clock input to UTC only when it changed', () => {
     expect(buildAdjustmentPayload(effective, {
       ...draftFromEffective(effective),
       firstInAt: '2026-08-19T06:15',
       reason: 'Corrected terminal time',
     })).toEqual({
+      replacement_presence_state: 'on_duty',
       replacement_first_in_at: '2026-08-19T02:15:00.000Z',
+      replacement_latest_in_at: '2026-08-19T01:05:00.000Z',
+      replacement_final_out_at: '2026-08-19T09:00:00.000Z',
+      replacement_late_minutes: 5,
+      replacement_early_exit_minutes: 2,
+      replacement_missing_checkout: false,
       reason: 'Corrected terminal time',
     })
   })
