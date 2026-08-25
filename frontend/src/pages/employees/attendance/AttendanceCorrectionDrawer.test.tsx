@@ -228,6 +228,8 @@ describe('AttendanceCorrectionDrawer', () => {
     await user.type(screen.getByLabelText('Correction reason'), 'Supervisor register')
     await user.click(screen.getByRole('button', { name: 'Save correction' }))
     await waitFor(() => expect(createAttendanceAdjustment).toHaveBeenCalledOnce())
+    await waitFor(() => expect(invalidate).toHaveBeenCalledWith({ queryKey: ['workforce', 'coverage'] }))
+    invalidate.mockClear()
 
     const revoke = screen.getByRole('button', { name: 'Revoke correction' })
     expect(revoke).toBeDisabled()
@@ -241,7 +243,7 @@ describe('AttendanceCorrectionDrawer', () => {
       'case-v2',
       { reason: 'Duplicate entry' },
     ))
-    expect(invalidate).toHaveBeenCalledWith({ queryKey: ['workforce', 'snapshot'] })
+    await waitFor(() => expect(invalidate).toHaveBeenCalledWith({ queryKey: ['workforce', 'snapshot'] }))
     expect(invalidate).toHaveBeenCalledWith({ queryKey: ['workforce', 'coverage'] })
   })
 
