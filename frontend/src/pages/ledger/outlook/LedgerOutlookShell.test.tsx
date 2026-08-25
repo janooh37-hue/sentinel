@@ -6,6 +6,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { LedgerEntryRead, LedgerListItem } from '@/lib/api'
 import { api } from '@/lib/api'
 import { LedgerOutlookShell } from './LedgerOutlookShell'
+import { activityEmoji } from './contextResolve'
 
 vi.mock('@/lib/api', async (orig) => {
   const real = await orig<typeof import('@/lib/api')>()
@@ -114,5 +115,11 @@ describe('LedgerOutlookShell activity deep links', () => {
     await userEvent.click(retry)
     await waitFor(() => expect(screen.getByTestId('reading-pane')).toHaveTextContent('42'))
     await waitFor(() => expect(screen.getByTestId('location')).toHaveTextContent('?keep=1'))
+  })
+})
+
+describe('activityEmoji', () => {
+  it('supports duty location history in the unified activity feed', () => {
+    expect(activityEmoji('duty_location')).toBe('📍')
   })
 })

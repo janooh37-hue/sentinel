@@ -177,8 +177,25 @@ def get_employee_detail(db: Session, employee_id: str) -> sx.EmployeeDetailRead 
         )
     ]
 
+    recent_duty_events = list(
+        db.scalars(
+            select(models.DutyAssignmentEvent)
+            .where(models.DutyAssignmentEvent.employee_id == emp.id)
+            .where(
+                models.DutyAssignmentEvent.event_type.in_(("initial_placement", "transfer"))
+            )
+            .order_by(models.DutyAssignmentEvent.effective_at.desc())
+            .limit(ACTIVITY_LIMIT)
+        )
+    )
+
     activity = _build_activity(
-        recent_docs, recent_leaves, recent_violations, recent_ledger, recent_absences
+        recent_docs,
+        recent_leaves,
+        recent_violations,
+        recent_ledger,
+        recent_absences,
+        recent_duty_events,
     )
 
     recent_sms = [
@@ -225,6 +242,7 @@ def _build_activity(
     violations: list[sx.RecentViolationRead],
     ledger: list[sx.RecentLedgerRead],
     absences: list[sx.RecentAbsenceRead],
+    duty_events: list[models.DutyAssignmentEvent],
 ) -> list[sx.ActivityItemRead]:
     items: list[sx.ActivityItemRead] = []
     for d in docs:
@@ -274,6 +292,23 @@ def _build_activity(
                 kind="absence",
                 summary=a.note or "Absence",
                 ref_id=a.id,
+            )
+        )
+    for event in duty_events:
+        items.append(
+            sx.ActivityItemRead(
+                when=event.effective_at,
+                kind="duty_location",
+                summary=event.event_type,
+                ref_id=event.id,
+                event_type=event.event_type,
+                from_department=event.from_department,
+                from_unit=event.from_unit,
+                from_post=event.from_post,
+                to_department=event.to_department,
+                to_unit=event.to_unit,
+                to_post=event.to_post,
+                reason=event.reason,
             )
         )
     items.sort(key=lambda x: x.when, reverse=True)

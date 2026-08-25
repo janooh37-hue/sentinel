@@ -361,6 +361,7 @@
       "leave": "Leave",
       "violation": "Violations",
       "ledger": "Correspondence",
+      "duty_location": "Duty location",
       "employee": "Employee",
       "activity": "Activity",
       "type": "Type",
@@ -371,6 +372,14 @@
       "openLeave": "Open leave",
       "openViolation": "Open violation",
       "openLedger": "Open correspondence",
+      "dutyLocation": {
+        "label": "Duty location",
+        "initial_placement": "Initial placement",
+        "transfer": "Transferred",
+        "unassigned": "Unassigned",
+        "openEmployeeActivity": "Open employee activity",
+        "historyBegins": "History begins at"
+      },
       "loadMore": "Load more activity",
       "loading": "Loading recent activity",
       "showing": "Showing {{shown}} of {{total}} recent entries",
@@ -2659,7 +2668,8 @@
         "employees": "From Employees",
         "leaves": "From Leaves",
         "records": "From Records",
-        "ledger": "From Ledger"
+        "ledger": "From Ledger",
+        "workforce": "From Workforce"
       },
       "topFull": "Top zone is full (max {{count}})",
       "topOnlyBigCards": "Only big cards can go in the Top zone",
@@ -2678,6 +2688,81 @@
       "maxVisibleHint": "Max {{count}} widgets visible at a time",
       "quickActionsMaxVisibleHint": "Max {{count}} quick actions visible at a time"
     },
+    "workforcePulse": {
+      "title": "Workforce Pulse",
+      "openCoverage": "Open coverage",
+      "self": {
+        "heading": "My shift",
+        "status": "Status",
+        "reason": "Reason",
+        "start": "Starts",
+        "end": "Ends",
+        "presence": {
+          "scheduled": "Scheduled",
+          "on_duty": "On duty",
+          "completed": "Completed",
+          "absent": "Absent",
+          "excused_leave": "Excused leave",
+          "off": "Off duty",
+          "unknown": "Not yet verified"
+        }
+      },
+      "aggregate": {
+        "heading": "Current shift"
+      },
+      "metrics": {
+        "scheduled": "Scheduled",
+        "working": "On duty",
+        "coverage": "Coverage"
+      },
+      "noScope": {
+        "title": "No Workforce scope assigned",
+        "detail": "Ask an administrator to assign a Workforce scope."
+      },
+      "setup": {
+        "title": "{{missing}} setup required",
+        "detail": "Workforce data is unavailable until {{missing}} is configured.",
+        "missing": {
+          "schedules": "Schedule",
+          "policy": "Policy",
+          "mappings": "Mapping",
+          "integration": "Integration"
+        }
+      },
+      "stale": {
+        "title": "Attendance source is stale",
+        "detail": "Current attendance data is not fresh enough to show."
+      },
+      "withheld": {
+        "title": "Pending verification",
+        "detail": "Attendance verification is still in progress."
+      },
+      "coverage": {
+        "title": "Coverage",
+        "operationalDate": "Operational date: {{date}}",
+        "back": "Back",
+        "breadcrumb": "Coverage hierarchy",
+        "allDepartments": "All departments",
+        "empty": "No coverage groups are available for this level.",
+        "pendingVerification": "Pending verification",
+        "unassigned": "Unassigned",
+        "loadMore": "Load more",
+        "level": {
+          "organization": "Departments",
+          "department": "Duty units",
+          "duty_unit": "Duty posts"
+        },
+        "metrics": {
+          "scheduled": "Scheduled",
+          "excused": "Excused",
+          "expected": "Expected",
+          "evaluated": "Evaluated",
+          "excluded": "Excluded",
+          "working": "On duty",
+          "gap": "Gap"
+        }
+      }
+    },
     "widgetLabels": {
       "pending": "Documents Completed",
       "workspace": "My Workspace",
@@ -2694,7 +2779,8 @@
       "waiting_approvals_aria_other": "Waiting approvals: {{count}}. Review.",
       "expiring_soon": "Expiring Soon",
       "recent_ledger": "Recent Ledger",
-      "pending_departures": "Pending Departures"
+      "pending_departures": "Pending Departures",
+      "workforce_pulse": "Workforce Pulse"
     },
     "quickActionLabels": {
       "general_book": "General Book",
@@ -4078,6 +4164,84 @@
       "none": "Nothing needs a decision today.",
       "reviewAll": "Review all",
       "openFile": "Open attendance file"
+    },
+    "review": {
+      "title": "Attendance review",
+      "review": "Review {{name}}",
+      "sourceFacts": "Source facts",
+      "automaticEvaluations": "Automatic evaluations",
+      "humanCorrections": "Human corrections",
+      "assignment": "Captured assignment",
+      "department": "Captured department",
+      "crew": "Captured crew",
+      "shift": "Captured shift",
+      "scheduledWindow": "Scheduled window",
+      "effectiveResult": "Effective result",
+      "baseEvaluation": "Base evaluation",
+      "supersedes": "Supersedes correction",
+      "replacementPresence": "Presence",
+      "firstIn": "First in",
+      "latestIn": "Latest in",
+      "finalOut": "Final out",
+      "lateMinutes": "Late minutes",
+      "earlyExitMinutes": "Early exit minutes",
+      "missingCheckout": "Missing checkout",
+      "reason": "Reason",
+      "revoked": "revoked",
+      "exceptionsFailed": "Review exceptions unavailable. Showing the derived attention queue.",
+      "presence": {
+        "scheduled": "Scheduled",
+        "on_duty": "On duty",
+        "completed": "Completed",
+        "absent": "Absent",
+        "excused_leave": "Excused leave",
+        "off": "Off",
+        "unknown": "Unknown",
+        "late": "Late"
+      },
+      "reasons": {
+        "punch_out_recorded": "Exit recorded",
+        "no_in_after_threshold": "No arrival after threshold",
+        "scheduled_before_absence_boundary": "Awaiting absence threshold",
+        "punch_recorded_directionless": "Punch recorded",
+        "punch_in_active": "On-duty punch",
+        "shift_ended": "Shift ended",
+        "sync_stale": "Sync data is stale",
+        "policy_missing": "Policy is missing",
+        "punch_sequence_invalid": "Punch sequence is invalid",
+        "late_arrival": "Late arrival",
+        "missing_checkout": "Missing checkout",
+        "early_exit": "Early exit",
+        "identity_conflict": "Identity conflict",
+        "identity_unverified": "Identity is unverified",
+        "employment_status_unknown": "Employment status is unknown",
+        "punch_out_only_inferred": "Exit-only punch inferred",
+        "punch_order_inferred": "Punch order inferred",
+        "attendance_adjustment_changed": "Attendance adjustment changed",
+        "leave_national_service": "National service leave",
+        "leave_sick": "Sick leave",
+        "leave_annual": "Annual leave"
+      },
+      "auditActions": {
+        "created": "Correction created",
+        "revoked": "Correction revoked"
+      },
+      "loadFailed": "Attendance case could not be loaded.",
+      "correction": "Correction",
+      "correctionPresence": "Correction presence",
+      "noOverride": "Clear value",
+      "correctionReason": "Correction reason",
+      "saveCorrection": "Save correction",
+      "correctionSaved": "Correction saved.",
+      "reasonRequired": "A correction reason is required.",
+      "unchanged": "Change at least one attendance value before saving.",
+      "conflictWarning": "This attendance case changed. Compare the refreshed evidence before submitting your preserved draft.",
+      "revokeReason": "Revoke reason",
+      "revokeCorrection": "Revoke correction",
+      "confirmRevokeTitle": "Revoke this correction?",
+      "confirmRevokeDescription": "This correction will no longer be effective. The reason will be recorded in the audit trail.",
+      "confirmRevoke": "Confirm revoke",
+      "correctionRevoked": "Correction revoked."
     },
     "hero": {
       "title": "ATTENDANCE TODAY",

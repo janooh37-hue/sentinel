@@ -16,14 +16,20 @@ from zoneinfo import ZoneInfo
 
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, select
 from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
 
 from app.api.deps import get_current_user
 from app.db.session import attach_sqlite_pragmas, get_db
 from app.main import app
-from app.services import perm_service
+from app.services import (
+    perm_service,
+    workforce_admin_service,
+    workforce_dashboard_service,
+    workforce_read_service,
+)
+from app.services.workforce_scope_service import resolve_workforce_scope
 
 # The snapshot route derives its operational date from the real clock, so the
 # fixture anchors to "now" instead of a fixed calendar day. A hardcoded date
@@ -212,7 +218,7 @@ def _seed_coverage_cases(db: Session, admin: Any) -> None:
             shift_code_snapshot=morning.code,
             department_snapshot=employee.department,
             duty_unit_snapshot=employee.duty_unit,
-            duty_post_snapshot=None,
+            duty_post_snapshot=f"Post {chr(64 + index)}",
             scheduled_start_at=occurrence.starts_at,
             scheduled_end_at=occurrence.ends_at,
             operational_date=TODAY,
@@ -244,6 +250,124 @@ def _seed_coverage_cases(db: Session, admin: Any) -> None:
         )
     )
     db.commit()
+
+def test_correction_and_revocation_update_roster_and_every_dashboard_metric(
+    workforce_api_db: Session,
+) -> None:
+    from app.db.models import AppSetting
+    from app.db.workforce_models import AttendanceCase, AttendanceEvaluation
+
+    admin = _create_user(workforce_api_db, email="correction-dashboard@test.ae", role="admin")
+    _seed_coverage_cases(workforce_api_db, admin)
+    workforce_api_db.add(AppSetting(key="workforce.stale_after_minutes", value=json.dumps(60)))
+    workforce_api_db.commit()
+    case = workforce_api_db.scalar(
+        select(AttendanceCase).where(AttendanceCase.employee_id == "G-COVERAGE-A")
+    )
+    assert case is not None
+    evaluation = workforce_api_db.scalar(
+        select(AttendanceEvaluation).where(AttendanceEvaluation.attendance_case_id == case.id)
+    )
+    assert evaluation is not None
+    scope = resolve_workforce_scope(workforce_api_db, admin)
+    now = NOW.replace(tzinfo=UTC)
+
+    correction = workforce_admin_service.apply_adjustment(
+        workforce_api_db,
+        case_id=case.id,
+        payload={
+            "replacement_presence_state": "absent",
+            "replacement_first_in_at": evaluation.first_in_at,
+            "replacement_latest_in_at": evaluation.latest_in_at,
+            "replacement_final_out_at": evaluation.final_out_at,
+            "replacement_late_minutes": evaluation.late_minutes,
+            "replacement_early_exit_minutes": evaluation.early_exit_minutes,
+            "replacement_missing_checkout": evaluation.missing_checkout,
+            "reason": "Confirmed post absence",
+        },
+        if_match=workforce_admin_service.attendance_case_etag(workforce_api_db, case.id),
+        actor=admin,
+    )
+
+    corrected_roster = next(
+        row
+        for row in workforce_read_service.list_roster(
+            workforce_api_db, scope=scope, operational_date=TODAY
+        )
+        if row["employee_id"] == case.employee_id
+    )
+    corrected_snapshot = workforce_dashboard_service.get_workforce_snapshot(
+        workforce_api_db,
+        scope=scope,
+        self_employee_id=case.employee_id,
+        include_aggregate=True,
+        now=now,
+    ).value
+    corrected_analytics = workforce_dashboard_service.get_workforce_analytics(
+        workforce_api_db, scope=scope, now=now
+    ).value
+    corrected_coverage = workforce_dashboard_service.get_coverage_children(
+        workforce_api_db,
+        scope=scope,
+        operational_date=TODAY,
+        parent_kind="department",
+        department="Operations",
+        now=now,
+    )
+
+    assert corrected_roster["presence_state"] == "absent"
+    assert corrected_snapshot["self"]["presence_state"] == "absent"
+    assert corrected_snapshot["current_shift"]["working"] == 1
+    assert corrected_analytics["department_coverage"][0]["working"] == 1
+    assert {row["duty_unit"]: row["working"] for row in corrected_coverage} == {
+        "Gate A": 0,
+        "Gate B": 1,
+    }
+
+    workforce_admin_service.revoke_adjustment(
+        workforce_api_db,
+        case_id=case.id,
+        adjustment_id=correction.id,
+        reason="Automatic attendance restored",
+        if_match=workforce_admin_service.attendance_case_etag(workforce_api_db, case.id),
+        actor=admin,
+    )
+    workforce_api_db.flush()
+
+    restored_roster = next(
+        row
+        for row in workforce_read_service.list_roster(
+            workforce_api_db, scope=scope, operational_date=TODAY
+        )
+        if row["employee_id"] == case.employee_id
+    )
+    restored_snapshot = workforce_dashboard_service.get_workforce_snapshot(
+        workforce_api_db,
+        scope=scope,
+        self_employee_id=case.employee_id,
+        include_aggregate=True,
+        now=now,
+    ).value
+    restored_analytics = workforce_dashboard_service.get_workforce_analytics(
+        workforce_api_db, scope=scope, now=now
+    ).value
+    restored_coverage = workforce_dashboard_service.get_coverage_children(
+        workforce_api_db,
+        scope=scope,
+        operational_date=TODAY,
+        parent_kind="department",
+        department="Operations",
+        now=now,
+    )
+
+    assert restored_roster["presence_state"] == "on_duty"
+    assert restored_snapshot["self"]["presence_state"] == "on_duty"
+    assert restored_snapshot["current_shift"]["working"] == 2
+    assert restored_analytics["department_coverage"][0]["working"] == 2
+    assert {row["duty_unit"]: row["working"] for row in restored_coverage} == {
+        "Gate A": 1,
+        "Gate B": 1,
+    }
 
 
 def _contains_value(value: Any, needle: str) -> bool:
@@ -294,7 +418,7 @@ def test_aggregate_dashboard_routes_require_dashboard_capability(
         analytics = client.get("/api/v1/workforce/dashboard/analytics")
         coverage = client.get(
             "/api/v1/workforce/dashboard/coverage",
-            params={"operational_date": TODAY.isoformat(), "parent_kind": "department"},
+            params={"operational_date": TODAY.isoformat(), "parent_kind": "organization"},
         )
 
     assert analytics.status_code == 403
@@ -308,6 +432,7 @@ def test_dashboard_scope_filters_can_narrow_but_never_widen_a_manager_scope(
 
     manager = _create_user(workforce_api_db, email="scoped-manager@test.ae", role="manager")
     _grant(workforce_api_db, manager, "workforce.dashboard.view")
+    _seed_coverage_cases(workforce_api_db, manager)
     workforce_api_db.add(
         UserWorkforceScope(
             user_id=manager.id,
@@ -321,14 +446,122 @@ def test_dashboard_scope_filters_can_narrow_but_never_widen_a_manager_scope(
     with _client_for(workforce_api_db, manager) as client:
         response = client.get(
             "/api/v1/workforce/dashboard/coverage",
+            params={"operational_date": TODAY.isoformat(), "parent_kind": "organization"},
+        )
+
+    assert response.status_code == 200
+    assert [row["department"] for row in response.json()["items"]] == ["Operations"]
+
+
+@pytest.mark.parametrize(
+    ("scope_kind", "duty_post"),
+    [("duty_unit", None), ("duty_post", "Post A")],
+)
+def test_narrow_scope_managers_can_traverse_coverage_ancestors_without_leakage(
+    workforce_api_db: Session,
+    scope_kind: str,
+    duty_post: str | None,
+) -> None:
+    from app.db.workforce_models import UserWorkforceScope
+
+    manager = _create_user(workforce_api_db, email=f"{scope_kind}-coverage@test.ae", role="manager")
+    _grant(workforce_api_db, manager, "workforce.dashboard.view")
+    _seed_coverage_cases(workforce_api_db, manager)
+    workforce_api_db.add(
+        UserWorkforceScope(
+            user_id=manager.id,
+            scope_kind=scope_kind,
+            department="Operations",
+            duty_unit="Gate A",
+            duty_post=duty_post,
+            created_by_user_id=manager.id,
+        )
+    )
+    workforce_api_db.commit()
+
+    with _client_for(workforce_api_db, manager) as client:
+        organization = client.get(
+            "/api/v1/workforce/dashboard/coverage",
+            params={"operational_date": TODAY.isoformat(), "parent_kind": "organization"},
+        )
+        department = client.get(
+            "/api/v1/workforce/dashboard/coverage",
+            params={"operational_date": TODAY.isoformat(), "parent_kind": "department", "department": "Operations"},
+        )
+        unit = client.get(
+            "/api/v1/workforce/dashboard/coverage",
             params={
                 "operational_date": TODAY.isoformat(),
-                "parent_kind": "department",
-                "department": "Personnel",
+                "parent_kind": "duty_unit",
+                "department": "Operations",
+                "duty_unit": "Gate A",
             },
         )
 
-    assert response.status_code == 403
+    assert organization.status_code == 200
+    assert department.status_code == 200
+    assert unit.status_code == 200
+    assert [row["department"] for row in organization.json()["items"]] == ["Operations"]
+    assert [row["duty_unit"] for row in department.json()["items"]] == ["Gate A"]
+    assert [row["duty_post"] for row in unit.json()["items"]] == ["Post A"]
+    rendered = json.dumps([organization.json(), department.json(), unit.json()])
+    assert "Gate B" not in rendered
+    assert "Post B" not in rendered
+    assert "G-COVERAGE-A" not in rendered
+    assert "Coverage A" not in rendered
+    assert "G-COVERAGE-B" not in rendered
+    assert "Coverage B" not in rendered
+
+
+def test_coverage_normalizes_legacy_snapshot_whitespace_before_scope_intersection(
+    workforce_api_db: Session,
+) -> None:
+    from app.db.workforce_models import AttendanceCase, UserWorkforceScope
+
+    manager = _create_user(workforce_api_db, email="whitespace-coverage@test.ae", role="manager")
+    _grant(workforce_api_db, manager, "workforce.dashboard.view")
+    _seed_coverage_cases(workforce_api_db, manager)
+    for case in workforce_api_db.scalars(select(AttendanceCase)).all():
+        case.department_snapshot = f" {case.department_snapshot} "
+        case.duty_unit_snapshot = f" {case.duty_unit_snapshot} "
+        case.duty_post_snapshot = f" {case.duty_post_snapshot} "
+    workforce_api_db.add(
+        UserWorkforceScope(
+            user_id=manager.id,
+            scope_kind="duty_post",
+            department="Operations",
+            duty_unit="Gate A",
+            duty_post="Post A",
+            created_by_user_id=manager.id,
+        )
+    )
+    workforce_api_db.commit()
+
+    with _client_for(workforce_api_db, manager) as client:
+        organization = client.get(
+            "/api/v1/workforce/dashboard/coverage",
+            params={"operational_date": TODAY.isoformat(), "parent_kind": "organization"},
+        )
+        department = client.get(
+            "/api/v1/workforce/dashboard/coverage",
+            params={"operational_date": TODAY.isoformat(), "parent_kind": "department", "department": " Operations "},
+        )
+        unit = client.get(
+            "/api/v1/workforce/dashboard/coverage",
+            params={
+                "operational_date": TODAY.isoformat(),
+                "parent_kind": "duty_unit",
+                "department": " Operations ",
+                "duty_unit": " Gate A ",
+            },
+        )
+
+    assert organization.status_code == 200
+    assert department.status_code == 200
+    assert unit.status_code == 200
+    assert [row["department"] for row in organization.json()["items"]] == ["Operations"]
+    assert [row["duty_unit"] for row in department.json()["items"]] == ["Gate A"]
+    assert [row["duty_post"] for row in unit.json()["items"]] == ["Post A"]
 
 
 def test_coverage_children_are_bounded_paginated_and_never_person_records(
@@ -346,6 +579,10 @@ def test_coverage_children_are_bounded_paginated_and_never_person_records(
                 "department": "Operations",
                 "limit": 501,
             },
+        )
+        root = client.get(
+            "/api/v1/workforce/dashboard/coverage",
+            params={"operational_date": TODAY.isoformat(), "parent_kind": "organization"},
         )
         first = client.get(
             "/api/v1/workforce/dashboard/coverage",
@@ -371,6 +608,8 @@ def test_coverage_children_are_bounded_paginated_and_never_person_records(
         )
 
     assert rejected_limit.status_code == 422
+    assert root.status_code == 200
+    assert [row["kind"] for row in root.json()["items"]] == ["department"]
     assert set(first_page) == {"items", "next_cursor"}
     assert len(first_page["items"]) == 1
     assert first_page["next_cursor"]
@@ -382,6 +621,29 @@ def test_coverage_children_are_bounded_paginated_and_never_person_records(
     assert "G-COVERAGE-B" not in rendered
     assert "Coverage A" not in rendered
     assert "Coverage B" not in rendered
+
+
+def test_coverage_requires_the_matching_parent_filters(workforce_api_db: Session) -> None:
+    admin = _create_user(workforce_api_db, email="coverage-validation@test.ae", role="admin")
+    _seed_coverage_cases(workforce_api_db, admin)
+
+    with _client_for(workforce_api_db, admin) as client:
+        organization_with_parent = client.get(
+            "/api/v1/workforce/dashboard/coverage",
+            params={"operational_date": TODAY.isoformat(), "parent_kind": "organization", "department": "Operations"},
+        )
+        department_without_parent = client.get(
+            "/api/v1/workforce/dashboard/coverage",
+            params={"operational_date": TODAY.isoformat(), "parent_kind": "department"},
+        )
+        post_without_unit = client.get(
+            "/api/v1/workforce/dashboard/coverage",
+            params={"operational_date": TODAY.isoformat(), "parent_kind": "duty_unit", "department": "Operations"},
+        )
+
+    assert organization_with_parent.status_code == 422
+    assert department_without_parent.status_code == 422
+    assert post_without_unit.status_code == 422
 
 
 def test_analytics_folds_small_nationality_groups_without_person_leakage(

@@ -34,7 +34,7 @@ ScopeKind = Literal["organization", "department", "duty_unit", "duty_post", "sel
 _PERSISTED_SCOPE_KINDS = frozenset({"organization", "department", "duty_unit", "duty_post"})
 
 
-def _normalized_value(value: str | None) -> str | None:
+def normalize_scope_value(value: str | None) -> str | None:
     """Trim an optional hierarchy value; blank input is absent, never a scope."""
     if value is None:
         return None
@@ -93,9 +93,9 @@ def normalize_scope_entry(
     the grant's own and, for a post, the unit that contains it.
     """
     normalized_kind = scope_kind.strip()
-    normalized_department = _normalized_value(department)
-    normalized_unit = _normalized_value(duty_unit)
-    normalized_post = _normalized_value(duty_post)
+    normalized_department = normalize_scope_value(department)
+    normalized_unit = normalize_scope_value(duty_unit)
+    normalized_post = normalize_scope_value(duty_post)
 
     if normalized_kind == "organization":
         if any((normalized_department, normalized_unit, normalized_post)):
@@ -140,9 +140,9 @@ class WorkforceScope:
             "entries",
             tuple(sorted(set(self.entries), key=_entry_sort_key)),
         )
-        object.__setattr__(self, "requested_department", _normalized_value(self.requested_department))
-        object.__setattr__(self, "requested_duty_unit", _normalized_value(self.requested_duty_unit))
-        object.__setattr__(self, "requested_duty_post", _normalized_value(self.requested_duty_post))
+        object.__setattr__(self, "requested_department", normalize_scope_value(self.requested_department))
+        object.__setattr__(self, "requested_duty_unit", normalize_scope_value(self.requested_duty_unit))
+        object.__setattr__(self, "requested_duty_post", normalize_scope_value(self.requested_duty_post))
 
     @property
     def is_organization(self) -> bool:
@@ -192,12 +192,12 @@ class WorkforceScope:
         normalized before comparison so accidental surrounding whitespace in
         legacy employee data does not silently widen an assigned scope.
         """
-        normalized_employee_id = _normalized_value(employee_id)
+        normalized_employee_id = normalize_scope_value(employee_id)
         if normalized_employee_id is None:
             return False
-        normalized_department = _normalized_value(department)
-        normalized_unit = _normalized_value(duty_unit)
-        normalized_post = _normalized_value(duty_post)
+        normalized_department = normalize_scope_value(department)
+        normalized_unit = normalize_scope_value(duty_unit)
+        normalized_post = normalize_scope_value(duty_post)
 
         if (
             self.requested_department is not None
@@ -240,7 +240,7 @@ def resolve_workforce_scope(db: Session, user: User) -> WorkforceScope:
         return WorkforceScope(entries=(WorkforceScopeEntry(scope_kind="organization"),))
 
     entries: list[WorkforceScopeEntry] = []
-    employee_id = _normalized_value(user.employee_id)
+    employee_id = normalize_scope_value(user.employee_id)
     if employee_id is not None:
         entries.append(WorkforceScopeEntry(scope_kind="self", employee_id=employee_id))
 
@@ -280,9 +280,9 @@ def intersect_workforce_scope(
     a prior restriction or add a new allow-list leg.
     """
     requested = (
-        ("requested_department", _normalized_value(department)),
-        ("requested_duty_unit", _normalized_value(duty_unit)),
-        ("requested_duty_post", _normalized_value(duty_post)),
+        ("requested_department", normalize_scope_value(department)),
+        ("requested_duty_unit", normalize_scope_value(duty_unit)),
+        ("requested_duty_post", normalize_scope_value(duty_post)),
     )
     current = {
         "requested_department": scope.requested_department,
@@ -365,6 +365,7 @@ __all__ = [
     "encode_cursor",
     "intersect_workforce_scope",
     "normalize_scope_entry",
+    "normalize_scope_value",
     "resolve_workforce_scope",
     "scope_allows",
 ]

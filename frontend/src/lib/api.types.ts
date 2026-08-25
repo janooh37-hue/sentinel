@@ -1774,7 +1774,8 @@ export interface paths {
         };
         /**
          * List Word Templates
-         * @description Shared General Book boilerplate library (Word path).
+         * @description Shared General Book boilerplate library (Word path). Readable by record
+         *     composers; renaming/deleting stays on ``books.templates``.
          */
         get: operations["list_word_templates_api_v1_books_word_templates_get"];
         put?: never;
@@ -1818,7 +1819,8 @@ export interface paths {
         };
         /**
          * Get Word Template Table Schema
-         * @description Return table detection result for a shared General Book template.
+         * @description Return table detection result for a shared General Book template
+         *     (read — same gate as the template list).
          */
         get: operations["get_word_template_table_schema_api_v1_books_word_templates__name__table_get"];
         put?: never;
@@ -3058,7 +3060,11 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Send Attachment To Vault */
+        /**
+         * Send Attachment To Vault
+         * @description File a ledger attachment into an employee's document vault (vault-write
+         *     gate — profile edits don't cover vault contents).
+         */
         post: operations["send_attachment_to_vault_api_v1_ledger_entries__entry_id__attachments__attachment_index__send_to_vault_post"];
         delete?: never;
         options?: never;
@@ -4949,11 +4955,27 @@ export interface components {
              * Kind
              * @enum {string}
              */
-            kind: "document" | "leave" | "violation" | "ledger" | "absence";
+            kind: "document" | "leave" | "violation" | "ledger" | "absence" | "duty_location";
             /** Summary */
             summary: string;
             /** Ref Id */
             ref_id: number;
+            /** Event Type */
+            event_type?: ("initial_placement" | "transfer") | null;
+            /** From Department */
+            from_department?: string | null;
+            /** From Unit */
+            from_unit?: string | null;
+            /** From Post */
+            from_post?: string | null;
+            /** To Department */
+            to_department?: string | null;
+            /** To Unit */
+            to_unit?: string | null;
+            /** To Post */
+            to_post?: string | null;
+            /** Reason */
+            reason?: string | null;
         };
         /**
          * AddressBookContactCreate
@@ -5291,8 +5313,31 @@ export interface components {
              */
             hint_ar: string;
         };
-        /** AttendanceAdjustmentWrite */
-        AttendanceAdjustmentWrite: {
+        /** AttendanceAdjustmentAuditRead */
+        AttendanceAdjustmentAuditRead: {
+            /** Adjustment Id */
+            adjustment_id: number;
+            /**
+             * Action
+             * @enum {string}
+             */
+            action: "created" | "revoked";
+            /** Actor */
+            actor?: string | null;
+            /**
+             * Occurred At
+             * Format: date-time
+             */
+            occurred_at: string;
+            /** Reason */
+            reason: string;
+        };
+        /** AttendanceAdjustmentRead */
+        AttendanceAdjustmentRead: {
+            /** Id */
+            id: number;
+            /** Base Evaluation Id */
+            base_evaluation_id: number;
             /** Replacement Presence State */
             replacement_presence_state?: ("scheduled" | "on_duty" | "completed" | "absent" | "excused_leave" | "off" | "unknown") | null;
             /** Replacement First In At */
@@ -5309,6 +5354,44 @@ export interface components {
             replacement_missing_checkout?: boolean | null;
             /** Reason */
             reason: string;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Revoked At */
+            revoked_at?: string | null;
+            /** Supersedes Adjustment Id */
+            supersedes_adjustment_id?: number | null;
+        };
+        /** AttendanceAdjustmentWrite */
+        AttendanceAdjustmentWrite: {
+            /** Replacement Presence State */
+            replacement_presence_state: ("scheduled" | "on_duty" | "completed" | "absent" | "excused_leave" | "off" | "unknown") | null;
+            /** Replacement First In At */
+            replacement_first_in_at: string | null;
+            /** Replacement Latest In At */
+            replacement_latest_in_at: string | null;
+            /** Replacement Final Out At */
+            replacement_final_out_at: string | null;
+            /** Replacement Late Minutes */
+            replacement_late_minutes: number | null;
+            /** Replacement Early Exit Minutes */
+            replacement_early_exit_minutes: number | null;
+            /** Replacement Missing Checkout */
+            replacement_missing_checkout: boolean | null;
+            /** Reason */
+            reason: string;
+        };
+        /** AttendanceCasePunchRead */
+        AttendanceCasePunchRead: {
+            /**
+             * Occurred At
+             * Format: date-time
+             */
+            occurred_at: string;
+            /** Device Name */
+            device_name?: string | null;
         };
         /** AttendanceCaseRead */
         AttendanceCaseRead: {
@@ -5316,6 +5399,10 @@ export interface components {
             id: number;
             /** Employee Id */
             employee_id: string;
+            /** Name En */
+            name_en: string;
+            /** Name Ar */
+            name_ar?: string | null;
             /**
              * Operational Date
              * Format: date
@@ -5331,36 +5418,34 @@ export interface components {
              * Format: date-time
              */
             scheduled_end_at: string;
+            /** Department Snapshot */
+            department_snapshot?: string | null;
+            /** Duty Unit Snapshot */
+            duty_unit_snapshot?: string | null;
+            /** Duty Post Snapshot */
+            duty_post_snapshot?: string | null;
+            /** Crew Code Snapshot */
+            crew_code_snapshot?: string | null;
+            /** Crew Name Snapshot */
+            crew_name_snapshot?: string | null;
+            /** Shift Code Snapshot */
+            shift_code_snapshot: string;
+            /** Organization Snapshot State */
+            organization_snapshot_state: string;
+            /** Punches */
+            punches?: components["schemas"]["AttendanceCasePunchRead"][];
             /** Effective */
             effective?: {
                 [key: string]: unknown;
             } | null;
             /** Evaluations */
-            evaluations: {
-                [key: string]: unknown;
-            }[];
+            evaluations?: components["schemas"]["AttendanceEvaluationRead"][];
             /** Adjustments */
-            adjustments: {
-                [key: string]: unknown;
-            }[];
+            adjustments?: components["schemas"]["AttendanceAdjustmentRead"][];
+            /** Adjustment Audit */
+            adjustment_audit?: components["schemas"]["AttendanceAdjustmentAuditRead"][];
         };
-        /**
-         * AttendanceDayRowRead
-         * @description One person's scheduled shift on one operational date, with punch facts.
-         *
-         *     ``first_punch_at`` / ``last_punch_at`` are the earliest and latest punches
-         *     inside this case's policy match window. They are timestamps of events, not a
-         *     check-in and a check-out: this provider reports no direction, so a single
-         *     punch yields ``punch_count == 1`` with both bounds equal, and a client must
-         *     present it as "seen at", never as a span.
-         *
-         *     ``judgment_due_at`` is when the duty stops running and a lone punch may be
-         *     called unpaired: before that instant one punch is an arrival still waiting for
-         *     its departure, not an exception. ``absence_due_at`` is the earlier boundary,
-         *     twice the grace past the start, after which a case with no punch at all is an
-         *     absence. ``grace_minutes`` is the policy's own grace, published so a client
-         *     names the same arrival late as the evaluator does instead of guessing.
-         */
+        /** AttendanceDayRowRead */
         AttendanceDayRowRead: {
             /** Employee Id */
             employee_id: string;
@@ -5386,6 +5471,8 @@ export interface components {
             scheduled_start_at?: string | null;
             /** Scheduled End At */
             scheduled_end_at?: string | null;
+            /** Case Id */
+            case_id: number;
             /** First Punch At */
             first_punch_at?: string | null;
             /** Last Punch At */
@@ -5408,6 +5495,34 @@ export interface components {
             absence_due_at?: string | null;
             /** Grace Minutes */
             grace_minutes?: number | null;
+        };
+        /** AttendanceEvaluationRead */
+        AttendanceEvaluationRead: {
+            /** Id */
+            id: number;
+            /** Revision */
+            revision: number;
+            /** Presence State */
+            presence_state?: ("scheduled" | "on_duty" | "completed" | "absent" | "excused_leave" | "off" | "unknown") | null;
+            /** Reason Code */
+            reason_code?: string | null;
+            /** First In At */
+            first_in_at?: string | null;
+            /** Latest In At */
+            latest_in_at?: string | null;
+            /** Final Out At */
+            final_out_at?: string | null;
+            /** Late Minutes */
+            late_minutes?: number | null;
+            /** Early Exit Minutes */
+            early_exit_minutes?: number | null;
+            /** Missing Checkout */
+            missing_checkout?: boolean | null;
+            /**
+             * Evaluated At
+             * Format: date-time
+             */
+            evaluated_at: string;
         };
         /** AttendanceExceptionRead */
         AttendanceExceptionRead: {
@@ -5435,6 +5550,8 @@ export interface components {
             scheduled_start_at?: string | null;
             /** Scheduled End At */
             scheduled_end_at?: string | null;
+            /** Case Id */
+            case_id: number;
             /** Late Minutes */
             late_minutes?: number | null;
             /** Early Exit Minutes */
@@ -6787,7 +6904,7 @@ export interface components {
              * Id
              * @enum {string}
              */
-            id: "pending" | "workspace" | "violations" | "drafts" | "ledger" | "on_leave_today" | "upcoming_leave" | "recent_docs" | "email_sync_status" | "waiting_approvals" | "expiring_soon" | "recent_ledger" | "pending_departures";
+            id: "pending" | "workspace" | "violations" | "drafts" | "ledger" | "on_leave_today" | "upcoming_leave" | "recent_docs" | "email_sync_status" | "waiting_approvals" | "expiring_soon" | "recent_ledger" | "pending_departures" | "workforce_pulse";
             /**
              * Visible
              * @default true
@@ -7295,7 +7412,7 @@ export interface components {
              * Kind
              * @enum {string}
              */
-            kind: "document" | "leave" | "violation" | "ledger";
+            kind: "document" | "leave" | "violation" | "ledger" | "duty_location";
             /** Source Id */
             source_id: number;
             /** Target Id */
@@ -7325,6 +7442,22 @@ export interface components {
             channel?: string | null;
             /** Reference */
             reference: string;
+            /** Event Type */
+            event_type?: ("initial_placement" | "transfer") | null;
+            /** From Department */
+            from_department?: string | null;
+            /** From Unit */
+            from_unit?: string | null;
+            /** From Post */
+            from_post?: string | null;
+            /** To Department */
+            to_department?: string | null;
+            /** To Unit */
+            to_unit?: string | null;
+            /** To Post */
+            to_post?: string | null;
+            /** Reason */
+            reason?: string | null;
         };
         /** EmployeeActivityListRead */
         EmployeeActivityListRead: {
@@ -12503,7 +12636,7 @@ export interface operations {
         parameters: {
             query?: {
                 employee_id?: string | null;
-                kind?: ("document" | "leave" | "violation" | "ledger") | null;
+                kind?: ("document" | "leave" | "violation" | "ledger" | "duty_location") | null;
                 limit?: number;
                 offset?: number;
             };
@@ -20780,7 +20913,6 @@ export interface operations {
                 parent_kind: string;
                 department?: string | null;
                 duty_unit?: string | null;
-                duty_post?: string | null;
                 limit?: number;
                 cursor?: string | null;
             };

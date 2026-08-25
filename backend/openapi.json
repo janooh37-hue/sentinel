@@ -2243,7 +2243,8 @@
                     "document",
                     "leave",
                     "violation",
-                    "ledger"
+                    "ledger",
+                    "duty_location"
                   ],
                   "type": "string"
                 },
@@ -7322,7 +7323,7 @@
           "books"
         ],
         "summary": "List Word Templates",
-        "description": "Shared General Book boilerplate library (Word path).",
+        "description": "Shared General Book boilerplate library (Word path). Readable by record\ncomposers; renaming/deleting stays on ``books.templates``.",
         "operationId": "list_word_templates_api_v1_books_word_templates_get",
         "parameters": [
           {
@@ -7495,7 +7496,7 @@
           "books"
         ],
         "summary": "Get Word Template Table Schema",
-        "description": "Return table detection result for a shared General Book template.",
+        "description": "Return table detection result for a shared General Book template\n(read — same gate as the template list).",
         "operationId": "get_word_template_table_schema_api_v1_books_word_templates__name__table_get",
         "parameters": [
           {
@@ -13076,6 +13077,7 @@
           "ledger"
         ],
         "summary": "Send Attachment To Vault",
+        "description": "File a ledger attachment into an employee's document vault (vault-write\ngate — profile edits don't cover vault contents).",
         "operationId": "send_attachment_to_vault_api_v1_ledger_entries__entry_id__attachments__attachment_index__send_to_vault_post",
         "parameters": [
           {
@@ -18187,7 +18189,7 @@
             "required": true,
             "schema": {
               "type": "string",
-              "pattern": "^(department|duty_unit|duty_post)$",
+              "pattern": "^(organization|department|duty_unit)$",
               "title": "Parent Kind"
             }
           },
@@ -18221,22 +18223,6 @@
                 }
               ],
               "title": "Duty Unit"
-            }
-          },
-          {
-            "name": "duty_post",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Duty Post"
             }
           },
           {
@@ -21914,7 +21900,8 @@
               "leave",
               "violation",
               "ledger",
-              "absence"
+              "absence",
+              "duty_location"
             ],
             "title": "Kind"
           },
@@ -21925,6 +21912,98 @@
           "ref_id": {
             "type": "integer",
             "title": "Ref Id"
+          },
+          "event_type": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "initial_placement",
+                  "transfer"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Event Type"
+          },
+          "from_department": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "From Department"
+          },
+          "from_unit": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "From Unit"
+          },
+          "from_post": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "From Post"
+          },
+          "to_department": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "To Department"
+          },
+          "to_unit": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "To Unit"
+          },
+          "to_post": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "To Post"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
           }
         },
         "type": "object",
@@ -22954,6 +23033,191 @@
         ],
         "title": "AttachmentSlotRead"
       },
+      "AttendanceAdjustmentAuditRead": {
+        "properties": {
+          "adjustment_id": {
+            "type": "integer",
+            "title": "Adjustment Id"
+          },
+          "action": {
+            "type": "string",
+            "enum": [
+              "created",
+              "revoked"
+            ],
+            "title": "Action"
+          },
+          "actor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Actor"
+          },
+          "occurred_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Occurred At"
+          },
+          "reason": {
+            "type": "string",
+            "title": "Reason"
+          }
+        },
+        "type": "object",
+        "required": [
+          "adjustment_id",
+          "action",
+          "occurred_at",
+          "reason"
+        ],
+        "title": "AttendanceAdjustmentAuditRead"
+      },
+      "AttendanceAdjustmentRead": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "base_evaluation_id": {
+            "type": "integer",
+            "title": "Base Evaluation Id"
+          },
+          "replacement_presence_state": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "scheduled",
+                  "on_duty",
+                  "completed",
+                  "absent",
+                  "excused_leave",
+                  "off",
+                  "unknown"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Replacement Presence State"
+          },
+          "replacement_first_in_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Replacement First In At"
+          },
+          "replacement_latest_in_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Replacement Latest In At"
+          },
+          "replacement_final_out_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Replacement Final Out At"
+          },
+          "replacement_late_minutes": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Replacement Late Minutes"
+          },
+          "replacement_early_exit_minutes": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Replacement Early Exit Minutes"
+          },
+          "replacement_missing_checkout": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Replacement Missing Checkout"
+          },
+          "reason": {
+            "type": "string",
+            "title": "Reason"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "revoked_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Revoked At"
+          },
+          "supersedes_adjustment_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Supersedes Adjustment Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "base_evaluation_id",
+          "reason",
+          "created_at"
+        ],
+        "title": "AttendanceAdjustmentRead"
+      },
       "AttendanceAdjustmentWrite": {
         "properties": {
           "replacement_presence_state": {
@@ -23060,9 +23324,41 @@
         "additionalProperties": false,
         "type": "object",
         "required": [
+          "replacement_presence_state",
+          "replacement_first_in_at",
+          "replacement_latest_in_at",
+          "replacement_final_out_at",
+          "replacement_late_minutes",
+          "replacement_early_exit_minutes",
+          "replacement_missing_checkout",
           "reason"
         ],
         "title": "AttendanceAdjustmentWrite"
+      },
+      "AttendanceCasePunchRead": {
+        "properties": {
+          "occurred_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Occurred At"
+          },
+          "device_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Device Name"
+          }
+        },
+        "type": "object",
+        "required": [
+          "occurred_at"
+        ],
+        "title": "AttendanceCasePunchRead"
       },
       "AttendanceCaseRead": {
         "properties": {
@@ -23073,6 +23369,21 @@
           "employee_id": {
             "type": "string",
             "title": "Employee Id"
+          },
+          "name_en": {
+            "type": "string",
+            "title": "Name En"
+          },
+          "name_ar": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name Ar"
           },
           "operational_date": {
             "type": "string",
@@ -23089,6 +23400,76 @@
             "format": "date-time",
             "title": "Scheduled End At"
           },
+          "department_snapshot": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Department Snapshot"
+          },
+          "duty_unit_snapshot": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Duty Unit Snapshot"
+          },
+          "duty_post_snapshot": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Duty Post Snapshot"
+          },
+          "crew_code_snapshot": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Crew Code Snapshot"
+          },
+          "crew_name_snapshot": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Crew Name Snapshot"
+          },
+          "shift_code_snapshot": {
+            "type": "string",
+            "title": "Shift Code Snapshot"
+          },
+          "organization_snapshot_state": {
+            "type": "string",
+            "title": "Organization Snapshot State"
+          },
+          "punches": {
+            "items": {
+              "$ref": "#/components/schemas/AttendanceCasePunchRead"
+            },
+            "type": "array",
+            "title": "Punches"
+          },
           "effective": {
             "anyOf": [
               {
@@ -23103,19 +23484,24 @@
           },
           "evaluations": {
             "items": {
-              "additionalProperties": true,
-              "type": "object"
+              "$ref": "#/components/schemas/AttendanceEvaluationRead"
             },
             "type": "array",
             "title": "Evaluations"
           },
           "adjustments": {
             "items": {
-              "additionalProperties": true,
-              "type": "object"
+              "$ref": "#/components/schemas/AttendanceAdjustmentRead"
             },
             "type": "array",
             "title": "Adjustments"
+          },
+          "adjustment_audit": {
+            "items": {
+              "$ref": "#/components/schemas/AttendanceAdjustmentAuditRead"
+            },
+            "type": "array",
+            "title": "Adjustment Audit"
           }
         },
         "additionalProperties": false,
@@ -23123,11 +23509,12 @@
         "required": [
           "id",
           "employee_id",
+          "name_en",
           "operational_date",
           "scheduled_start_at",
           "scheduled_end_at",
-          "evaluations",
-          "adjustments"
+          "shift_code_snapshot",
+          "organization_snapshot_state"
         ],
         "title": "AttendanceCaseRead"
       },
@@ -23262,6 +23649,10 @@
             ],
             "title": "Scheduled End At"
           },
+          "case_id": {
+            "type": "integer",
+            "title": "Case Id"
+          },
           "first_punch_at": {
             "anyOf": [
               {
@@ -23350,10 +23741,134 @@
         "type": "object",
         "required": [
           "employee_id",
-          "name_en"
+          "name_en",
+          "case_id"
         ],
-        "title": "AttendanceDayRowRead",
-        "description": "One person's scheduled shift on one operational date, with punch facts.\n\n``first_punch_at`` / ``last_punch_at`` are the earliest and latest punches\ninside this case's policy match window. They are timestamps of events, not a\ncheck-in and a check-out: this provider reports no direction, so a single\npunch yields ``punch_count == 1`` with both bounds equal, and a client must\npresent it as \"seen at\", never as a span.\n\n``judgment_due_at`` is when the duty stops running and a lone punch may be\ncalled unpaired: before that instant one punch is an arrival still waiting for\nits departure, not an exception. ``absence_due_at`` is the earlier boundary,\ntwice the grace past the start, after which a case with no punch at all is an\nabsence. ``grace_minutes`` is the policy's own grace, published so a client\nnames the same arrival late as the evaluator does instead of guessing."
+        "title": "AttendanceDayRowRead"
+      },
+      "AttendanceEvaluationRead": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "revision": {
+            "type": "integer",
+            "title": "Revision"
+          },
+          "presence_state": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "scheduled",
+                  "on_duty",
+                  "completed",
+                  "absent",
+                  "excused_leave",
+                  "off",
+                  "unknown"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Presence State"
+          },
+          "reason_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason Code"
+          },
+          "first_in_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "First In At"
+          },
+          "latest_in_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Latest In At"
+          },
+          "final_out_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Final Out At"
+          },
+          "late_minutes": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Late Minutes"
+          },
+          "early_exit_minutes": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Early Exit Minutes"
+          },
+          "missing_checkout": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Missing Checkout"
+          },
+          "evaluated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Evaluated At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "revision",
+          "evaluated_at"
+        ],
+        "title": "AttendanceEvaluationRead"
       },
       "AttendanceExceptionRead": {
         "properties": {
@@ -23486,6 +24001,10 @@
             ],
             "title": "Scheduled End At"
           },
+          "case_id": {
+            "type": "integer",
+            "title": "Case Id"
+          },
           "late_minutes": {
             "anyOf": [
               {
@@ -23526,7 +24045,8 @@
         "type": "object",
         "required": [
           "employee_id",
-          "name_en"
+          "name_en",
+          "case_id"
         ],
         "title": "AttendanceExceptionRead"
       },
@@ -27385,7 +27905,8 @@
               "waiting_approvals",
               "expiring_soon",
               "recent_ledger",
-              "pending_departures"
+              "pending_departures",
+              "workforce_pulse"
             ],
             "title": "Id"
           },
@@ -28718,7 +29239,8 @@
               "document",
               "leave",
               "violation",
-              "ledger"
+              "ledger",
+              "duty_location"
             ],
             "title": "Kind"
           },
@@ -28816,6 +29338,98 @@
           "reference": {
             "type": "string",
             "title": "Reference"
+          },
+          "event_type": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "initial_placement",
+                  "transfer"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Event Type"
+          },
+          "from_department": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "From Department"
+          },
+          "from_unit": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "From Unit"
+          },
+          "from_post": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "From Post"
+          },
+          "to_department": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "To Department"
+          },
+          "to_unit": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "To Unit"
+          },
+          "to_post": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "To Post"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
           }
         },
         "type": "object",
