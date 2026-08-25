@@ -53,6 +53,29 @@ def _latest_evaluations(db: Session, case_ids: list[int]) -> dict[int, Attendanc
         latest.setdefault(row.attendance_case_id, row)
     return latest
 
+def _active_adjustments(
+    db: Session, case_ids: list[int]
+) -> dict[int, AttendanceAdjustment]:
+    """The one unrevoked correction leaf for each projected case."""
+    if not case_ids:
+        return {}
+    rows_by_case: dict[int, list[AttendanceAdjustment]] = {}
+    for row in db.scalars(
+        select(AttendanceAdjustment)
+        .where(AttendanceAdjustment.attendance_case_id.in_(case_ids))
+        .order_by(
+            AttendanceAdjustment.attendance_case_id,
+            AttendanceAdjustment.created_at,
+            AttendanceAdjustment.id,
+        )
+    ):
+        rows_by_case.setdefault(row.attendance_case_id, []).append(row)
+    return {
+        case_id: active
+        for case_id, rows in rows_by_case.items()
+        if (active := active_attendance_adjustment(rows)) is not None
+    }
+
 
 def _case_allowed(case: AttendanceCase, scope: Any) -> bool:
     return scope_allows(
@@ -117,18 +140,21 @@ def list_exceptions(
         query = query.where(AttendanceCase.operational_date == operational_date)
     cases = [case for case in db.scalars(query) if _case_allowed(case, scope)]
     latest = _latest_evaluations(db, [case.id for case in cases])
+    adjustments = _active_adjustments(db, [case.id for case in cases])
     result: list[dict[str, Any]] = []
     for case in cases:
-        evaluation = latest.get(case.id)
-        if evaluation is None:
+        effective = _effective_evaluation_values(
+            latest.get(case.id), adjustments.get(case.id)
+        )
+        if effective is None:
             continue
-        if presence and evaluation.presence_state != presence:
+        if presence and effective["presence_state"] != presence:
             continue
         has_exception = bool(
-            (evaluation.late_minutes or 0) > 0
-            or (evaluation.early_exit_minutes or 0) > 0
-            or evaluation.missing_checkout
-            or evaluation.presence_state in {"absent", "unknown"}
+            (effective["late_minutes"] or 0) > 0
+            or (effective["early_exit_minutes"] or 0) > 0
+            or effective["missing_checkout"]
+            or effective["presence_state"] in {"absent", "unknown"}
         )
         if exception and not has_exception:
             continue
@@ -138,11 +164,11 @@ def list_exceptions(
             {
                 **_person_fields(db, case),
                 "case_id": case.id,
-                "presence_state": evaluation.presence_state,
-                "reason_code": evaluation.reason_code,
-                "late_minutes": evaluation.late_minutes,
-                "early_exit_minutes": evaluation.early_exit_minutes,
-                "missing_checkout": evaluation.missing_checkout,
+                "presence_state": effective["presence_state"],
+                "reason_code": effective["reason_code"],
+                "late_minutes": effective["late_minutes"],
+                "early_exit_minutes": effective["early_exit_minutes"],
+                "missing_checkout": effective["missing_checkout"],
             }
         )
     return sorted(result, key=lambda row: (row["scheduled_start_at"], row["employee_id"]))
@@ -290,12 +316,15 @@ def list_attendance_day(
         return []
 
     latest = _latest_evaluations(db, [case.id for case in cases])
+    adjustments = _active_adjustments(db, [case.id for case in cases])
     people = _verified_people(db, {case.employee_id for case in cases})
 
     result: list[dict[str, Any]] = []
     for case in cases:
-        evaluation = latest.get(case.id)
-        presence_state = evaluation.presence_state if evaluation else None
+        adjustment = adjustments.get(case.id)
+        effective = _effective_evaluation_values(
+            latest.get(case.id), adjustment
+        )
         policy = effective_policy(db, case)
         first_at, last_at, count = _punch_bounds(
             db, case=case, person=people.get(case.employee_id), policy=policy
@@ -304,13 +333,17 @@ def list_attendance_day(
             {
                 **_person_fields(db, case),
                 "case_id": case.id,
-                "presence_state": presence_state,
-                "reason_code": evaluation.reason_code if evaluation else None,
+                "presence_state": effective["presence_state"] if effective else None,
+                "reason_code": effective["reason_code"] if effective else None,
                 "first_punch_at": first_at,
                 "last_punch_at": last_at,
                 "punch_count": count,
-                "late_minutes": _late_minutes(case, first_at),
-                "on_leave": presence_state == "excused_leave",
+                "late_minutes": (
+                    effective["late_minutes"]
+                    if adjustment is not None and effective
+                    else _late_minutes(case, first_at)
+                ),
+                "on_leave": effective is not None and effective["presence_state"] == "excused_leave",
                 "judgment_due_at": _judgment_due_at(case, policy),
                 "grace_minutes": policy.grace_minutes if policy is not None else None,
                 "absence_due_at": _absence_due_at(case, policy),
@@ -356,11 +389,15 @@ def employee_attendance_range(
         if _case_allowed(case, scope)
     ]
     latest = _latest_evaluations(db, [case.id for case in cases])
+    adjustments = _active_adjustments(db, [case.id for case in cases])
     person = _verified_people(db, {employee_id}).get(employee_id)
 
     days: list[dict[str, Any]] = []
     for case in cases:
-        evaluation = latest.get(case.id)
+        adjustment = adjustments.get(case.id)
+        effective = _effective_evaluation_values(
+            latest.get(case.id), adjustment
+        )
         policy = effective_policy(db, case)
         first_at, _last_at, count = _punch_bounds(db, case=case, person=person, policy=policy)
         punches: list[dict[str, Any]] = []
@@ -384,9 +421,13 @@ def employee_attendance_range(
                 "shift_code": case.shift_code_snapshot,
                 "scheduled_start_at": case.scheduled_start_at,
                 "scheduled_end_at": case.scheduled_end_at,
-                "presence_state": evaluation.presence_state if evaluation else None,
-                "reason_code": evaluation.reason_code if evaluation else None,
-                "late_minutes": _late_minutes(case, first_at),
+                "presence_state": effective["presence_state"] if effective else None,
+                "reason_code": effective["reason_code"] if effective else None,
+                "late_minutes": (
+                    effective["late_minutes"]
+                    if adjustment is not None and effective
+                    else _late_minutes(case, first_at)
+                ),
                 "punch_count": count,
                 "grace_minutes": policy.grace_minutes if policy is not None else None,
                 "absence_due_at": _absence_due_at(case, policy),
@@ -431,6 +472,30 @@ def _evaluation_read(row: AttendanceEvaluation) -> dict[str, Any]:
         "missing_checkout": row.missing_checkout,
         "evaluated_at": row.evaluated_at,
     }
+
+def _effective_evaluation_values(
+    evaluation: AttendanceEvaluation | None,
+    adjustment: AttendanceAdjustment | None,
+) -> dict[str, Any] | None:
+    """Overlay the active full correction snapshot without reinterpreting nulls."""
+    if evaluation is None:
+        return None
+    values = _evaluation_read(evaluation)
+    if adjustment is None:
+        return values
+    values.update(
+        {
+            "presence_state": adjustment.replacement_presence_state,
+            "first_in_at": adjustment.replacement_first_in_at,
+            "latest_in_at": adjustment.replacement_latest_in_at,
+            "final_out_at": adjustment.replacement_final_out_at,
+            "late_minutes": adjustment.replacement_late_minutes,
+            "early_exit_minutes": adjustment.replacement_early_exit_minutes,
+            "missing_checkout": adjustment.replacement_missing_checkout,
+            "adjustment_id": adjustment.id,
+        }
+    )
+    return values
 
 
 def _adjustment_read(row: AttendanceAdjustment) -> dict[str, Any]:
@@ -564,19 +629,7 @@ def get_attendance_case_snapshot(
     )
     latest = evaluations[-1] if evaluations else None
     active = active_attendance_adjustment(adjustments)
-    effective: dict[str, Any] | None = _evaluation_read(latest) if latest else None
-    if effective is not None and active is not None:
-        replacements = {
-            "presence_state": active.replacement_presence_state,
-            "first_in_at": active.replacement_first_in_at,
-            "latest_in_at": active.replacement_latest_in_at,
-            "final_out_at": active.replacement_final_out_at,
-            "late_minutes": active.replacement_late_minutes,
-            "early_exit_minutes": active.replacement_early_exit_minutes,
-            "missing_checkout": active.replacement_missing_checkout,
-        }
-        effective.update(replacements)
-        effective["adjustment_id"] = active.id
+    effective = _effective_evaluation_values(latest, active)
     employee = _employee_row(db, case.employee_id)
     body = {
         "id": case.id,

@@ -34,7 +34,6 @@ vi.mock('@/lib/api', async (orig) => {
   }
 })
 
-import { ApiError } from '@/lib/api'
 
 import { AttendanceCorrectionDrawer } from './AttendanceCorrectionDrawer'
 
@@ -180,9 +179,9 @@ describe('AttendanceCorrectionDrawer', () => {
 
     await waitFor(() => expect(createAttendanceAdjustment).toHaveBeenCalledWith(42, 'case-v1', {
       replacement_presence_state: 'absent',
-      replacement_first_in_at: '2026-08-19T01:00:00.000Z',
-      replacement_latest_in_at: '2026-08-19T01:05:00.000Z',
-      replacement_final_out_at: '2026-08-19T09:00:00.000Z',
+      replacement_first_in_at: '2026-08-19T01:00:00',
+      replacement_latest_in_at: '2026-08-19T01:05:00',
+      replacement_final_out_at: '2026-08-19T09:00:00',
       replacement_late_minutes: 5,
       replacement_early_exit_minutes: 2,
       replacement_missing_checkout: false,
@@ -240,24 +239,28 @@ describe('AttendanceCorrectionDrawer', () => {
     ))
   })
 
-  it('preserves the unsaved draft and refreshes evidence after a version conflict without retrying', async () => {
+  it('does not submit a cached draft after the case ETag refreshes', async () => {
     const user = userEvent.setup()
     hasCapability.mockReturnValue(true)
     getAttendanceCase
       .mockResolvedValueOnce({ data: CASE, etag: 'case-v1' })
       .mockResolvedValue({ data: { ...CASE, effective: { ...CASE.effective, late_minutes: 9 } }, etag: 'case-v2' })
-    createAttendanceAdjustment.mockRejectedValue(new ApiError(412, 'ATTENDANCE_CASE_VERSION_CONFLICT', 'Case changed'))
-    renderDrawer()
+    const { client } = renderDrawer()
 
     await screen.findByText('Correction')
     await user.selectOptions(screen.getByLabelText('Correction presence'), 'absent')
     await user.type(screen.getByLabelText('Correction reason'), 'Supervisor register')
-    await user.click(screen.getByRole('button', { name: 'Save correction' }))
 
-    expect(await screen.findByText(/This attendance case changed/)).toBeInTheDocument()
-    expect(screen.getByLabelText('Correction presence')).toHaveValue('absent')
-    expect(screen.getByLabelText('Correction reason')).toHaveValue('Supervisor register')
-    expect(createAttendanceAdjustment).toHaveBeenCalledOnce()
-    expect(getAttendanceCase).toHaveBeenCalledTimes(2)
+    await client.invalidateQueries({ queryKey: ['attendance-case', 42] })
+
+    await waitFor(() => expect(getAttendanceCase).toHaveBeenCalledTimes(2))
+    await waitFor(() => expect(screen.getByLabelText('Correction presence')).toHaveValue('completed'))
+    expect(screen.getByLabelText('Correction reason')).toHaveValue('')
+    expect(screen.getByLabelText('Late minutes')).toHaveValue(9)
+
+    const save = screen.getByRole('button', { name: 'Save correction' })
+    expect(save).toBeDisabled()
+    await user.click(save)
+    expect(createAttendanceAdjustment).not.toHaveBeenCalled()
   })
 })

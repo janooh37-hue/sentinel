@@ -7,7 +7,7 @@ import { toast } from 'sonner'
 
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import { api, ApiError, apiErrorMessage } from '@/lib/api'
-import type { AttendanceCase } from '@/lib/api'
+import type { AttendanceAdjustmentWrite, AttendanceCase } from '@/lib/api'
 import { pickEmployeeName } from '@/lib/employeeName'
 import { useCapabilities } from '@/lib/useCapabilities'
 import { cn } from '@/lib/utils'
@@ -120,11 +120,12 @@ export function AttendanceCorrectionDrawer({ caseId, onClose }: Props): React.JS
   const queryClient = useQueryClient()
   const priorFocusRef = useRef<HTMLElement | null>(null)
   const [draft, setDraft] = useState<AttendanceCorrectionDraft | null>(null)
+  const [draftEtag, setDraftEtag] = useState<string | null>(null)
   const [actionError, setActionError] = useState<string | null>(null)
   const [conflictWarning, setConflictWarning] = useState<string | null>(null)
   const [liveMessage, setLiveMessage] = useState<string | null>(null)
   const [revokeReason, setRevokeReason] = useState('')
-  const [revokeTarget, setRevokeTarget] = useState<{ id: number; reason: string } | null>(null)
+  const [revokeTarget, setRevokeTarget] = useState<{ id: number; reason: string; etag: string } | null>(null)
   const caseQuery = useQuery({
     queryKey: ['attendance-case', caseId] as const,
     queryFn: () => api.getAttendanceCase(caseId as number),
@@ -134,11 +135,14 @@ export function AttendanceCorrectionDrawer({ caseId, onClose }: Props): React.JS
   const effective = effectiveFromCase(attendanceCase)
   const canCorrect = hasCapability('workforce.attendance.correct')
   const etag = caseQuery.data?.etag ?? ''
+  const caseSnapshotIsCurrent = caseQuery.isSuccess && !caseQuery.isFetching && etag !== ''
+  const draftIsCurrent = caseSnapshotIsCurrent && draft !== null && draftEtag === etag
   const activeAdjustmentId = effectiveAdjustmentId(attendanceCase)
   const effectiveAdjustment = attendanceCase?.adjustments?.find((adjustment) => adjustment.id === activeAdjustmentId)
 
   useEffect(() => {
     setDraft(null)
+    setDraftEtag(null)
     setActionError(null)
     setConflictWarning(null)
     setLiveMessage(null)
@@ -149,14 +153,19 @@ export function AttendanceCorrectionDrawer({ caseId, onClose }: Props): React.JS
   }, [caseId])
 
   useEffect(() => {
-    if (draft === null && effective !== null) setDraft(draftFromEffective(effective))
-  }, [draft, effective])
+    if (!caseSnapshotIsCurrent || effective === null || draftEtag === etag) return
+    setDraft(draftFromEffective(effective))
+    setDraftEtag(etag)
+  }, [caseSnapshotIsCurrent, draftEtag, effective, etag])
 
   const reloadEvidence = async (resetDraft: boolean): Promise<void> => {
     const result = await caseQuery.refetch()
     if (resetDraft && result.data?.data) {
       const refreshedEffective = effectiveFromCase(result.data.data)
-      if (refreshedEffective) setDraft(draftFromEffective(refreshedEffective))
+      if (refreshedEffective) {
+        setDraft(draftFromEffective(refreshedEffective))
+        setDraftEtag(result.data.etag)
+      }
     }
   }
 
@@ -181,8 +190,10 @@ export function AttendanceCorrectionDrawer({ caseId, onClose }: Props): React.JS
   }
 
   const correctionMutation = useMutation({
-    mutationFn: (payload: ReturnType<typeof buildAdjustmentPayload>) =>
-      api.createAttendanceAdjustment(caseId as number, etag, payload),
+    mutationFn: ({ etag: mutationEtag, payload }: {
+      etag: string
+      payload: AttendanceAdjustmentWrite
+    }) => api.createAttendanceAdjustment(caseId as number, mutationEtag, payload),
     retry: false,
     onSuccess: async () => {
       await invalidateAttendance()
@@ -195,8 +206,8 @@ export function AttendanceCorrectionDrawer({ caseId, onClose }: Props): React.JS
   })
 
   const revokeMutation = useMutation({
-    mutationFn: (target: { id: number; reason: string }) =>
-      api.revokeAttendanceAdjustment(caseId as number, target.id, etag, { reason: target.reason }),
+    mutationFn: (target: { id: number; reason: string; etag: string }) =>
+      api.revokeAttendanceAdjustment(caseId as number, target.id, target.etag, { reason: target.reason }),
     retry: false,
     onSuccess: async () => {
       await invalidateAttendance()
@@ -348,8 +359,13 @@ export function AttendanceCorrectionDrawer({ caseId, onClose }: Props): React.JS
                         event.preventDefault()
                         setActionError(null)
                         setConflictWarning(null)
+                        const baselineEtag = draftEtag
+                        if (!draftIsCurrent || baselineEtag === null) return
                         try {
-                          correctionMutation.mutate(buildAdjustmentPayload(effective, draft))
+                          correctionMutation.mutate({
+                            etag: baselineEtag,
+                            payload: buildAdjustmentPayload(effective, draft),
+                          })
                         } catch (error) {
                           const code = error instanceof Error ? error.message : ''
                           setActionError(
@@ -443,7 +459,7 @@ export function AttendanceCorrectionDrawer({ caseId, onClose }: Props): React.JS
                       </label>
                       <button
                         type="submit"
-                        disabled={correctionMutation.isPending || draft.reason.trim() === '' || etag === ''}
+                        disabled={correctionMutation.isPending || draft.reason.trim() === '' || !draftIsCurrent}
                         className="h-9 self-start rounded-md bg-primary px-3 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
                       >
                         {correctionMutation.isPending ? t('common.loading') : t('attendance.review.saveCorrection')}
@@ -464,8 +480,12 @@ export function AttendanceCorrectionDrawer({ caseId, onClose }: Props): React.JS
                         </label>
                         <button
                           type="button"
-                          disabled={revokeMutation.isPending || revokeReason.trim() === '' || etag === ''}
-                          onClick={() => setRevokeTarget({ id: effectiveAdjustment.id, reason: revokeReason.trim() })}
+                          disabled={revokeMutation.isPending || revokeReason.trim() === '' || !caseSnapshotIsCurrent}
+                          onClick={() => {
+                            if (caseSnapshotIsCurrent) {
+                              setRevokeTarget({ id: effectiveAdjustment.id, reason: revokeReason.trim(), etag })
+                            }
+                          }}
                           className="mt-3 h-9 rounded-md border border-accent px-3 text-sm font-semibold text-accent disabled:cursor-not-allowed disabled:opacity-50"
                         >
                           {t('attendance.review.revokeCorrection')}
@@ -485,7 +505,9 @@ export function AttendanceCorrectionDrawer({ caseId, onClose }: Props): React.JS
             confirmLabel={t('attendance.review.confirmRevoke')}
             destructive
             onConfirm={() => {
-              if (revokeTarget) revokeMutation.mutate(revokeTarget)
+              if (revokeTarget && caseSnapshotIsCurrent && revokeTarget.etag === etag) {
+                revokeMutation.mutate(revokeTarget)
+              }
               setRevokeTarget(null)
             }}
           />

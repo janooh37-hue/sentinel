@@ -427,6 +427,133 @@ def test_adjustment_full_snapshot_preserves_prior_values_and_persists_explicit_c
     assert effective["late_minutes"] == 7
     assert effective["final_out_at"] is None
 
+
+def test_active_full_snapshot_correction_overlays_every_attendance_projection_and_revocation_restores_automatic(api_db) -> None:
+    fixture = build_attendance_day(
+        api_db,
+        operational_date=DAY,
+        posts=[("Gate 1", 1)],
+        punches={None: [time(5, 17)]},
+    )
+    case = next(case for case in fixture.cases if case.shift_code_snapshot == "morning")
+    automatic = api_db.query(AttendanceEvaluation).filter_by(
+        attendance_case_id=case.id, revision=1
+    ).one()
+    automatic.presence_state = "completed"
+    automatic.first_in_at = datetime(2026, 8, 24, 1, 17)
+    automatic.latest_in_at = datetime(2026, 8, 24, 1, 17)
+    automatic.final_out_at = datetime(2026, 8, 24, 9, 0)
+    automatic.late_minutes = 17
+    automatic.early_exit_minutes = 0
+    automatic.missing_checkout = True
+    api_db.flush()
+    scope = resolve_workforce_scope(api_db, fixture.admin)
+
+    correction = workforce_admin_service.apply_adjustment(
+        api_db,
+        case_id=case.id,
+        payload={
+            "replacement_presence_state": "completed",
+            "replacement_first_in_at": None,
+            "replacement_latest_in_at": None,
+            "replacement_final_out_at": None,
+            "replacement_late_minutes": None,
+            "replacement_early_exit_minutes": None,
+            "replacement_missing_checkout": False,
+            "reason": "Supervisor register clears unsupported timestamps",
+        },
+        if_match=workforce_admin_service.attendance_case_etag(api_db, case.id),
+        actor=fixture.admin,
+    )
+
+    corrected_day = next(
+        row
+        for row in workforce_read_service.list_attendance_day(
+            api_db, scope=scope, operational_date=DAY
+        )
+        if row["case_id"] == case.id
+    )
+    corrected_range = next(
+        row
+        for row in workforce_read_service.employee_attendance_range(
+            api_db,
+            scope=scope,
+            employee_id=case.employee_id,
+            from_date=DAY,
+            to_date=DAY,
+        )["days"]
+        if row["shift_code"] == case.shift_code_snapshot
+    )
+    corrected_case = workforce_read_service.get_attendance_case(
+        api_db, scope=scope, case_id=case.id
+    )
+    corrected_exceptions = workforce_read_service.list_exceptions(
+        api_db, scope=scope, operational_date=DAY
+    )
+
+    assert corrected_day["late_minutes"] is None
+    assert corrected_range["late_minutes"] is None
+    assert all(row["case_id"] != case.id for row in corrected_exceptions)
+    assert corrected_case["effective"] == {
+        "id": automatic.id,
+        "revision": automatic.revision,
+        "presence_state": "completed",
+        "reason_code": automatic.reason_code,
+        "first_in_at": None,
+        "latest_in_at": None,
+        "final_out_at": None,
+        "late_minutes": None,
+        "early_exit_minutes": None,
+        "missing_checkout": False,
+        "evaluated_at": automatic.evaluated_at,
+        "adjustment_id": correction.id,
+    }
+
+    workforce_admin_service.revoke_adjustment(
+        api_db,
+        case_id=case.id,
+        adjustment_id=correction.id,
+        reason="Automatic evidence was sufficient",
+        if_match=workforce_admin_service.attendance_case_etag(api_db, case.id),
+        actor=fixture.admin,
+    )
+    api_db.flush()
+
+    restored_day = next(
+        row
+        for row in workforce_read_service.list_attendance_day(
+            api_db, scope=scope, operational_date=DAY
+        )
+        if row["case_id"] == case.id
+    )
+    restored_range = next(
+        row
+        for row in workforce_read_service.employee_attendance_range(
+            api_db,
+            scope=scope,
+            employee_id=case.employee_id,
+            from_date=DAY,
+            to_date=DAY,
+        )["days"]
+        if row["shift_code"] == case.shift_code_snapshot
+    )
+    restored_case = workforce_read_service.get_attendance_case(
+        api_db, scope=scope, case_id=case.id
+    )
+    restored_exceptions = workforce_read_service.list_exceptions(
+        api_db, scope=scope, operational_date=DAY
+    )
+
+    assert restored_day["late_minutes"] == 17
+    assert restored_range["late_minutes"] == 17
+    assert any(row["case_id"] == case.id for row in restored_exceptions)
+    assert restored_case["effective"]["first_in_at"] == automatic.first_in_at
+    assert restored_case["effective"]["latest_in_at"] == automatic.latest_in_at
+    assert restored_case["effective"]["final_out_at"] == automatic.final_out_at
+    assert restored_case["effective"]["late_minutes"] == 17
+    assert restored_case["effective"]["early_exit_minutes"] == 0
+    assert restored_case["effective"]["missing_checkout"] is True
+    assert restored_case["effective"].get("adjustment_id") is None
 def test_case_etag_serializes_adjustments_across_reload_and_rejects_stale_writes(api_db) -> None:
     fixture = build_attendance_day(api_db, operational_date=DAY, posts=[("Gate 1", 1)])
     case = next(case for case in fixture.cases if case.shift_code_snapshot == "morning")
