@@ -194,6 +194,7 @@ describe('AttendanceCorrectionDrawer', () => {
     expect(invalidate).toHaveBeenCalledWith({ queryKey: ['attendance-day'] })
     expect(invalidate).toHaveBeenCalledWith({ queryKey: ['employee-attendance'] })
     expect(invalidate).toHaveBeenCalledWith({ queryKey: ['workforce', 'snapshot'] })
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: ['workforce', 'coverage'] })
     expect(invalidate).toHaveBeenCalledWith({ queryKey: ['notification-counts'] })
   })
 
@@ -219,7 +220,8 @@ describe('AttendanceCorrectionDrawer', () => {
       .mockResolvedValue({ data: CASE, etag: 'case-v2' })
     createAttendanceAdjustment.mockResolvedValue({ data: { id: 5, case_id: 42 }, etag: 'case-v2' })
     revokeAttendanceAdjustment.mockResolvedValue({ data: { id: 4, revoked_at: '2026-08-19T11:00:00Z' }, etag: 'case-v3' })
-    renderDrawer()
+    const { client } = renderDrawer()
+    const invalidate = vi.spyOn(client, 'invalidateQueries')
 
     await screen.findByText('Correction')
     await user.selectOptions(screen.getByLabelText('Correction presence'), 'absent')
@@ -239,6 +241,8 @@ describe('AttendanceCorrectionDrawer', () => {
       'case-v2',
       { reason: 'Duplicate entry' },
     ))
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: ['workforce', 'snapshot'] })
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: ['workforce', 'coverage'] })
   })
 
   it('does not submit a cached draft after the case ETag refreshes', async () => {

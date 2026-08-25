@@ -177,6 +177,7 @@ export function AttendanceCorrectionDrawer({ caseId, onClose }: Props): React.JS
       queryClient.invalidateQueries({ queryKey: ['attendance-day'] }),
       queryClient.invalidateQueries({ queryKey: ['employee-attendance'] }),
       queryClient.invalidateQueries({ queryKey: ['workforce', 'snapshot'] }),
+      queryClient.invalidateQueries({ queryKey: ['workforce', 'coverage'] }),
       queryClient.invalidateQueries({ queryKey: ['notification-counts'] }),
     ])
   }
